@@ -1,0 +1,23 @@
+Name:                hermit
+Version:             0.0
+Synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
+Description:	     HERMIT uses Haskell to express semi-formal models,
+		     efficient implementations, and provide a bridging DSL
+		     to describe via stepwise refinement the connection between
+		     these models and implementations. The key transformation
+		     in the bridging DSL is the worker/wrapper transformation.
+
+Category:            Language, Formal Methods, Optimization, Transformation, Refactoring, Reflection
+License:             BSD3
+License-file:        LICENSE
+Author:              Andy Gill
+Maintainer:          Andy Gill <andygill@ku.edu>
+Stability:	     vaporware
+build-type: 	     Simple
+Cabal-Version:       >= 1.6
+
+Library
+       Build-Depends: base >= 4 && < 5
+
+  Exposed-modules:
+       Language.HERMIT
