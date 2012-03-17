@@ -21,3 +21,4 @@ Library
 
   Exposed-modules:
        Language.HERMIT
+  Hs-Source-Dirs: src
