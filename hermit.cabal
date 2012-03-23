@@ -30,6 +30,9 @@ Library
        Language.HERMIT.Plugin
        Language.HERMIT.Hermitage
        Language.HERMIT.Types
+       Language.HERMIT.HermitEnv
+       Language.HERMIT.HermitMonad
+       Language.HERMIT.Inline
 
   Other-modules:
        Language.Core.Quote

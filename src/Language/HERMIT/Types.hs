@@ -5,44 +5,8 @@ module Language.HERMIT.Types where
 import GhcPlugins
 import qualified Data.Map as Map
 
-----------------------------------------------------------------------------
--- The transformation/HERMIT monad
-newtype HermitM a = HermitM a    -- id, for now
-
-instance Monad HermitM where
-        return a = HermitM a
-
-----------------------------------------------------------------------------
-
--- The bindings here are lazy by choice, so that we can avoid the cost
--- of building the environment, if we never use it.
-data HermitEnv = HermitEnv
-        { hermitBindings :: Map.Map Id HermitBinding    -- ^ all (important) bindings in scope
-        , hermitDepth    :: Int                         -- ^ depth of bindings
-        }
-
-data HermitBinding
-        = LAM  Int -- all you know is that lambda bound this
-
-
-
-hermitBindingDepth :: HermitBinding -> Int
-hermitBindingDepth (LAM d) = d
-
--- A binding you know nothing about, except it may shadow something.
--- If so, do not worry about it here, just remember the binding a the depth.
--- When we want to inline a value from the environment,
--- we *then* check to see what is free in the inlinee, and see
--- if any of the frees will stop the validity of the inlining.
-
-addHermitEnvLambdaBinding :: Id -> HermitEnv -> HermitEnv
-addHermitEnvLambdaBinding n env
-        = env { hermitBindings = Map.insert n (LAM next_depth) (hermitBindings env)
-              , hermitDepth    = next_depth
-              }
-  where
-        next_depth = succ (hermitDepth env)
-
+import Language.HERMIT.HermitEnv
+import Language.HERMIT.HermitMonad
 
 ----------------------------------------------------------------------------
 
@@ -144,6 +108,22 @@ instance Term (Bind Id) where
   select _              = Nothing
   inject                = BindBlob
 
+  allR rr = rewrite $ \ c e -> case e of
+          NonRec n e1 -> do
+                   e1' <- apply (extractR rr) c e1
+                   return $ NonRec n e1'
+          Rec bds -> do
+                  -- Notice how we add the scoping bindings
+                  -- here before decending into the rhss.
+                  -- SAls
+                   let c' = addHermitBinding (Rec bds) c
+                   bds' <- sequence
+                        [ do e' <- apply (extractR rr) c' e
+                             return (n,e')
+                        | (n,e) <- bds
+                        ]
+                   return $ Rec bds'
+
 instance Term (Expr Id) where
   type Generic (Expr Id) = Blob
 
@@ -162,29 +142,23 @@ instance Term (Expr Id) where
                 do e' <- apply (extractR rr) (addHermitEnvLambdaBinding b c) e
                    return $ Lam b e'
           Let bds e ->
-                do let c' = c
-                   bds' <- apply (extractR rr)
-                                 (case bds of
-                                    NonRec {} -> c   -- use original env
-                                    Rec {}    -> c') -- use augmented env
-                                 bds
+                do
+                   -- use *original* env, because the bindingds are self-binding,
+                   -- if they are recursive. See allR (Rec ...) for details.
+                   bds' <- apply (extractR rr) c bds
+                   let c' = addHermitBinding bds c
                    e'   <- apply (extractR rr) c' e
                    return $ Let bds' e'
 
-
-{-
-          Let bds e ->
-          Case e b t alts ->
-                do
-          Cast e c  ->
+          Cast e cast ->
+                do e' <- apply (extractR rr) c e
+                   return $ Cast e' cast
           Tick tk e ->
-          Type t    ->
-          Coercion c ->
-  | Lam   b (Expr b)
-  | Let   (Bind b) (Expr b)
-  | Case  (Expr b) b Type [Alt b]       -- See #case_invariant#
-  | Cast  (Expr b) Coercion
-  | Tick  (Tickish Id) (Expr b)
-  | Type  Type
-  | Coercion Coercion
--}
+                do e' <- apply (extractR rr) c e
+                   return $ Tick tk e'
+                -- Not sure about this. Should be descend into the type here?
+                -- If we do so, we should also descend into the types
+                -- inside Coercion, Id, etc.
+          Type _ty -> return $ e
+          Coercion _c -> return $ e
+
