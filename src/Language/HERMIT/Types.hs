@@ -10,7 +10,6 @@ import Language.HERMIT.HermitMonad
 
 ----------------------------------------------------------------------------
 
-
 -- | Our unit of operation and key type, a 'Translate'.
 newtype Translate exp1 exp2 = Translate (HermitEnv -> exp1 -> HermitM exp2)
 
@@ -114,8 +113,7 @@ instance Term (Bind Id) where
                    return $ NonRec n e1'
           Rec bds -> do
                   -- Notice how we add the scoping bindings
-                  -- here before decending into the rhss.
-                  -- SAls
+                  -- here *before* decending into the rhss.
                    let c' = addHermitBinding (Rec bds) c
                    bds' <- sequence
                         [ do e' <- apply (extractR rr) c' e
@@ -143,7 +141,7 @@ instance Term (Expr Id) where
                    return $ Lam b e'
           Let bds e ->
                 do
-                   -- use *original* env, because the bindingds are self-binding,
+                   -- use *original* env, because the bindings are self-binding,
                    -- if they are recursive. See allR (Rec ...) for details.
                    bds' <- apply (extractR rr) c bds
                    let c' = addHermitBinding bds c
