@@ -37,6 +37,7 @@ Library
   Other-modules:
        Language.Core.Quote
        Language.HERMIT.Pass
-
+       Language.HERMIT.DSL
+       
   Hs-Source-Dirs: src
 
