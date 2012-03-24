@@ -32,7 +32,7 @@ Library
        Language.HERMIT.Types
        Language.HERMIT.HermitEnv
        Language.HERMIT.HermitMonad
-       Language.HERMIT.Inline
+       Language.HERMIT.Primitives.Inline
 
   Other-modules:
        Language.Core.Quote
