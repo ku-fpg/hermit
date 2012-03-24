@@ -21,7 +21,8 @@ Library
          ghc >= 7.4,
          syb,
          template-haskell,
-         containers
+         containers,
+         editline
 
   default-language: Haskell2010
 
