@@ -12,10 +12,10 @@ main = print (fib 10)
 fib :: Int -> Int
 fib n = if n < 2 then 1 else fib(n-1) + fib (n-2)
 
-rewrite_fib :: H ()
-rewrite_fib = do
-        consider 'fib $ do
-                return ()
+rewrite_fib :: H
+rewrite_fib =
+        consider 'fib []
+
 
 
 
