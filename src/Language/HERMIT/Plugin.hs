@@ -4,21 +4,24 @@ import GhcPlugins
 import Control.Monad
 import Data.List
 
-import Language.HERMIT.Pass
+import Language.HERMIT.Hermitage
+import Language.HERMIT.Pass             -- for now
 
 plugin :: Plugin
 plugin = defaultPlugin {
-  installCoreToDos = install
+  installCoreToDos = install $ new $ return
   }
 
-install :: [CommandLineOption] -> [CoreToDo] -> CoreM [CoreToDo]
-install opts todos = do
+install :: (ModGuts -> CoreM ModGuts) -> [CommandLineOption] -> [CoreToDo] -> CoreM [CoreToDo]
+install fn opts todos = do
     liftIO $ print opts
     let filename = head $ filter (isSuffixOf ".hermit") opts
-        myPass = CoreDoPluginPass "PrintCore" $ writeProgram filename
-        allPasses = if (elem  "back" opts)
-                    then todos ++ [myPass]
-                    else myPass : todos
+        myPass = CoreDoPluginPass "HERMIT" $ \ core0 -> do
+                writeProgram ("BEFORE." ++ filename) core0
+                core1 <- fn core0
+                writeProgram ("AFTER." ++ filename) core1
+        -- at front, for now
+        allPasses = myPass : todos
 
     reinitializeGlobals
     return allPasses

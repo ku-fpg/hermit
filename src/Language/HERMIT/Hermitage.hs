@@ -4,6 +4,10 @@ module Language.HERMIT.Hermitage where
 
 import GhcPlugins
 
+import Language.HERMIT.HermitEnv
+import Language.HERMIT.HermitMonad
+import Language.HERMIT.Types
+
 -- abstact outside this module
 data Hermitage a = Hermiage
 --        { close :: IO () }
@@ -28,4 +32,5 @@ getForeground = undefined
 -- | getBackground gets the background of the Hermitage,
 -- getBackground
 
-
+applyRewrite :: Rewrite a -> Hermitage a -> IO (Hermitage a)
+applyRewrite = undefined
