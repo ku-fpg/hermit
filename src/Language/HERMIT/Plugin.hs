@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+
 module Language.HERMIT.Plugin (plugin) where
 
 import GhcPlugins
@@ -6,6 +8,7 @@ import Data.List
 
 import Language.HERMIT.Hermitage as Hermitage
 import Language.HERMIT.Pass             -- for now
+import Language.HERMIT.Focus
 
 plugin :: Plugin
 plugin = defaultPlugin {
@@ -13,7 +16,7 @@ plugin = defaultPlugin {
   installCoreToDos = install hermitPass
   }
 
-install :: ([String] -> Hermitage () ModGuts -> CoreM (Hermitage () ModGuts))
+install :: ([String] -> Hermitage Everything ModGuts -> CoreM (Hermitage Everything ModGuts))
         -> [CommandLineOption]
         -> [CoreToDo] -> CoreM [CoreToDo]
 install fn opts todos = do

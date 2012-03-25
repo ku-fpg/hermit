@@ -1,4 +1,4 @@
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE PatternGuards, DataKinds #-}
 
 module Language.HERMIT.Pass (hermitPass, ppProgram, writeProgram) where
 
@@ -9,8 +9,9 @@ import Control.Monad
 
 import Language.HERMIT.Hermitage as Hermitage
 import Language.HERMIT.CommandLine as CommandLine
+import Language.HERMIT.Focus
 
-hermitPass :: [String] -> Hermitage () ModGuts -> CoreM (Hermitage () ModGuts)
+hermitPass :: [String] -> Hermitage Everything ModGuts -> CoreM (Hermitage Everything ModGuts)
 -- run the command-line option
 hermitPass ["cl"]  h      = do
         liftIO $ print "command line!"
