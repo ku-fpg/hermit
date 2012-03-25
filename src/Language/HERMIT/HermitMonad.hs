@@ -20,6 +20,10 @@ instance Monad HermitM where
         (FailM msg) >>= _ = FailM msg
         fail msg = FailM msg
 
+catchH :: HermitM a -> (String -> HermitM a) -> HermitM a
+catchH (HermitM m) k = HermitM m
+catchH (FailM msg) k = k msg
+
 ----------------------------------------------------------------------------
 
 runHermitM :: HermitM a -> CoreM (Either String a)

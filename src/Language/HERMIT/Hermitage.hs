@@ -38,12 +38,14 @@ getForeground :: Hermitage cxt a -> CoreM a
 getForeground age = do
         res <- getForeground' age
         case res of
-          Right a -> return a
-          Left msg -> error $ "getForeground failed, should never happend, with msg " ++ msg
+          Right [a] -> return a
+          Right [] -> fail $ "no foreground matches"
+          Right _  -> fail $ "multiple foreground matches"
+          Left msg -> fail $ "getForeground failed, should never happend; msg = " ++ msg
 
 
 -- internal version of getForeground that can fail.
-getForeground' :: Hermitage cxt a -> CoreM (Either String a)
+getForeground' :: Hermitage cxt a -> CoreM (Either String [a])
 getForeground' age = runHermitM (apply (focusTranslate (ageFocus age)) (ageEnv age) (ageModGuts age))
 
 -- this focuses in to a sub-expresssion. It will do error checking, hence the
@@ -52,11 +54,17 @@ getForeground' age = runHermitM (apply (focusTranslate (ageFocus age)) (ageEnv a
 focusHermitage :: Zoom a x
                -> Hermitage cxt a
                -> CoreM (Either HermitMessage (Hermitage (a :< cxt) x))
-focusHermitage zoom age = return $ Right $ Hermitage
-        { ageModGuts    = ageModGuts age
-        , ageFocus      = ageFocus age `AppendFocus` zoom
-        , ageEnv = ageEnv age
-        }
+focusHermitage zoom age = do
+        res <- getForeground' age'
+        case res of
+          Right [a] -> return $ Right $ age'
+          _         -> return $ Left $ UnableToFocusMessage
+    where
+        age' = Hermitage
+                { ageModGuts    = ageModGuts age
+                , ageFocus      = ageFocus age `AppendFocus` zoom
+                , ageEnv = ageEnv age
+                }
 
 
 -- always works

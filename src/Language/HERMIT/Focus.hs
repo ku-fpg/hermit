@@ -28,6 +28,7 @@ import GhcPlugins
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.Types
+import Language.HERMIT.KURE
 
 import Control.Arrow
 import qualified Control.Category as Cat
@@ -47,7 +48,7 @@ data Focus :: Context -> * -> * where
 -- Zoom says, if you have 'b', I can zoom there, and the 'a' is our context stack.
 data Zoom a b = Zoom
         { rewriteD :: Rewrite b -> Rewrite a
-        , projectD :: Translate a b
+        , projectD :: Translate a [b]
         }
 
 -- | 'unappendFocus' removes the top zoom, and throws it away.
@@ -58,9 +59,9 @@ focusRewrite :: Focus cxt b -> Rewrite b -> Rewrite ModGuts
 focusRewrite InitialFocus      rr = rr
 focusRewrite (AppendFocus f z) rr = focusRewrite f (rewriteD z rr)
 
-focusTranslate :: Focus cxt b -> Translate ModGuts b
-focusTranslate InitialFocus      = Cat.id
-focusTranslate (AppendFocus f z) = focusTranslate f >>> projectD z
+focusTranslate :: Focus cxt b -> Translate ModGuts [b]
+focusTranslate InitialFocus      = pureT (\ x -> [x])
+focusTranslate (AppendFocus f z) = focusTranslate f >>> listU (projectD z)
 
 ------------------------------------------------------------------
 
@@ -72,7 +73,23 @@ data Focus :: * -> * -> * where
     FocusOnExpr    :: (Expr Id -> Bool) -> Focus c (Expr Id) -- new focus using a expression predicated.
 -}
 
+-- Right now, this searches *everything* for the match. Later, we'll
+-- have some way of optimizing this to be more focused (pun) and efficent.
+
+
 focusOnBinding :: (Term a) => Zoom a (Bind Id)
-focusOnBinding = error "focusOnBinding"
+focusOnBinding = error "?"
+
+focusOnRewrite :: (Term a, Term b, a ~ Generic a, Generic a ~ Generic b)
+               => (b -> Bool) -> Rewrite b -> Rewrite (Generic a)
+focusOnRewrite pred rr =
+        promoteR (acceptR pred >-> rr) <+
+        allR (focusOnRewrite pred rr)
+
+focusOnTranslate :: (Term a, Term b, a ~ Generic a, Generic a ~ Generic b)
+               => (b -> Bool) -> Translate (Generic a) [b]
+focusOnTranslate pred =
+        promoteU (acceptR pred >-> pureT (\ a -> [a]))  <+
+        crushU (focusOnTranslate pred)
 
 ------------------------------------------------------------------
