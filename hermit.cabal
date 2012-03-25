@@ -33,6 +33,8 @@ Library
        Language.HERMIT.Types
        Language.HERMIT.HermitEnv
        Language.HERMIT.HermitMonad
+       Language.HERMIT.CommandLine
+       Language.HERMIT.Focus
        Language.HERMIT.Primitives.Inline
 
   Other-modules:

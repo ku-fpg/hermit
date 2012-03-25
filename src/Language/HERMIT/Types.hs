@@ -9,6 +9,9 @@ import Data.Monoid
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 
+import qualified Control.Category as Cat
+import Control.Arrow
+
 ----------------------------------------------------------------------------
 
 -- | Our unit of operation and key type, a 'Translate'.
@@ -21,6 +24,14 @@ apply (Translate t) env exp1 = t env exp1
 -- | 'translate' is the standard way of building a 'Translate'.
 translate :: (HermitEnv -> exp1 -> HermitM exp2) -> Translate exp1 exp2
 translate = Translate
+
+instance Cat.Category Translate where
+   id = translate $ \ _ e -> return e
+   (.) rr1 rr2 = translate $ \ c e -> apply rr2 c e >>= apply rr1 c
+
+instance Arrow Translate where
+   arr f = translate (\ c e -> return (f e))
+   first rr = translate $ \ c (b,d) -> do e <- apply rr c b ; return (e,d)
 
 -- Type synonym for endomorphic translation.
 type Rewrite exp = Translate exp exp

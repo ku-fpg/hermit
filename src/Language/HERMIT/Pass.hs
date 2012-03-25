@@ -8,13 +8,14 @@ import PprCore -- compiler/coreSyn/PprCore.lhs
 import Control.Monad
 
 import Language.HERMIT.Hermitage as Hermitage
+import Language.HERMIT.CommandLine as CommandLine
 
-hermitPass :: [String] -> Hermitage () ModGuts -> IO (Hermitage () ModGuts)
+hermitPass :: [String] -> Hermitage () ModGuts -> CoreM (Hermitage () ModGuts)
 -- run the command-line option
 hermitPass ["cl"]  h      = do
-        print "command line!"
-        Hermitage.commandLine h
--- find a function, interprete it
+        liftIO $ print "command line!"
+        CommandLine.commandLine h
+-- find a function, interprete it (TODO)
 hermitPass ['@':nm]  h    = return h
 -- Need better error message here
 hermitPass other        h = error $ "hermitPass failed" ++ show other

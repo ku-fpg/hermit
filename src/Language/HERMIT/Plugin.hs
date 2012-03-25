@@ -13,7 +13,7 @@ plugin = defaultPlugin {
   installCoreToDos = install hermitPass
   }
 
-install :: ([String] -> Hermitage () ModGuts -> IO (Hermitage () ModGuts))
+install :: ([String] -> Hermitage () ModGuts -> CoreM (Hermitage () ModGuts))
         -> [CommandLineOption]
         -> [CoreToDo] -> CoreM [CoreToDo]
 install fn opts todos = do

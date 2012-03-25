@@ -60,3 +60,6 @@ addHermitBinding (Rec bds) env
 
 lookupHermitBinding :: Id -> HermitEnv -> Maybe HermitBinding
 lookupHermitBinding n env = Map.lookup n (hermitBindings env)
+
+initHermitEnv :: HermitEnv
+initHermitEnv = HermitEnv (Map.empty) 0
