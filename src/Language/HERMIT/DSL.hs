@@ -7,6 +7,11 @@ module Language.HERMIT.DSL where
 import Data.Monoid
 import Language.Haskell.TH.Syntax as Syn
 
+-- There is a relationship between this DSL,
+-- and the Hermitage API.
+-- TO CONSIDER: Maybe they can be merged.
+-- We could use an 'H a' here, where a is the object under consideration.
+
 -- The deep embedding of our DSL
 data H :: * where
         Consider        :: Syn.Name -> [H]              -> H

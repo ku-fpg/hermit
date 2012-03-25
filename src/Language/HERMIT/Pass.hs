@@ -9,7 +9,7 @@ import Control.Monad
 
 import Language.HERMIT.Hermitage as Hermitage
 
-hermitPass :: [String] -> Hermitage ModGuts -> IO (Hermitage ModGuts)
+hermitPass :: [String] -> Hermitage () ModGuts -> IO (Hermitage () ModGuts)
 -- run the command-line option
 hermitPass ["cl"]  h      = do
         print "command line!"

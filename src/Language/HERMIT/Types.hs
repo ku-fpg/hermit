@@ -4,6 +4,7 @@ module Language.HERMIT.Types where
 
 import GhcPlugins
 import qualified Data.Map as Map
+import Data.Monoid
 
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
@@ -87,6 +88,9 @@ class Term exp where
   -- | 'allR' applies 'Generic' rewrites to all the (interesting) children of this node.
   allR :: Rewrite (Generic exp) -> Rewrite exp
 
+ -- | 'crushU' applies a 'Generic' Translate to a common, 'Monoid'al result, to all the interesting children of this node.
+  crushU :: (Monoid result) => Translate (Generic exp) result -> Translate exp result
+
 instance Term Blob where
   type Generic Blob = Blob
 
@@ -160,3 +164,13 @@ instance Term (Expr Id) where
           Type _ty -> return $ e
           Coercion _c -> return $ e
 
+  crushU t = translate $ \ c e -> case e of
+          Var {} -> return mempty
+          Lit {} -> return mempty
+          App e1 e2 ->
+                do r1' <- apply (extractU t) c e1
+                   r2' <- apply (extractU t) c e2
+                   return $ r1' `mappend` r2'
+          Lam b e ->
+                do e' <- apply (extractU t) (addHermitEnvLambdaBinding b c) e
+                   return $ e'
