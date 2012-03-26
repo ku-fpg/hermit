@@ -185,3 +185,12 @@ instance Term (Expr Id) where
           Lam b e ->
                 do e' <- apply (extractU t) (addHermitEnvLambdaBinding b c) e
                    return $ e'
+
+-- Need to define thse
+appR :: Rewrite (Expr Id) -> Rewrite (Expr Id) -> Rewrite (Expr Id)
+appR r1 r2 = rewrite $ \ c e -> case e of
+          App e1 e2 ->
+                do e1' <- apply r1 c e1
+                   e2' <- apply r2 c e2
+                   return $ App e1' e2'
+          _ -> fail "appR: not App"
