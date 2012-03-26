@@ -1,4 +1,6 @@
-{-# LANGUAGE RankNTypes, ScopedTypeVariables, FlexibleInstances, KindSignatures, GADTs, DataKinds, TypeOperators #-}
+{-# LANGUAGE RankNTypes, ScopedTypeVariables, FlexibleInstances, KindSignatures,
+    GADTs, DataKinds, TypeOperators, FlexibleContexts
+  #-}
 
 -- Our Focus module
 
@@ -13,7 +15,8 @@ ghc: panic! (the 'impossible' happened)
  -}
 
 
-module Language.HERMIT.Focus
+module Language.HERMIT.Focus where
+{-
         ( Context(..)
         , Focus(..)
         , Zoom
@@ -22,7 +25,7 @@ module Language.HERMIT.Focus
         , focusTranslate
         , focusOnBinding
         , ) where
-
+-}
 import GhcPlugins
 
 import Language.HERMIT.HermitEnv
@@ -45,7 +48,7 @@ data Focus :: Context -> * -> * where
     AppendFocus  :: Focus cxt b -> Zoom b c -> Focus (b :< cxt) c
 
 -- Invarient, The project gets the same thing as the rewrite transformes
--- Zoom says, if you have 'b', I can zoom there, and the 'a' is our context stack.
+-- Zoom says, if you have 'b', I can zoom there from an 'a'.
 data Zoom a b = Zoom
         { rewriteD :: Rewrite b -> Rewrite a
         , projectD :: Translate a [b]
@@ -76,9 +79,24 @@ data Focus :: * -> * -> * where
 -- Right now, this searches *everything* for the match. Later, we'll
 -- have some way of optimizing this to be more focused (pun) and efficent.
 
+focusOnBinding :: (Generic a ~ Generic (Bind Id), Term a) => Zoom a (Bind Id)
+focusOnBinding = focusOn $ \ bnds ->
+        case bnds of
+          NonRec {} | True -> True
+          Rec bds' -> True
 
-focusOnBinding :: (Term a) => Zoom a (Bind Id)
-focusOnBinding = error "?"
+
+focusOn
+  :: ( Term a, Term b
+     , Generic a ~ Generic b
+     , Term (Generic a)
+     , Term (Generic b)
+     )
+  => (b -> Bool) -> Zoom a b
+focusOn pred = Zoom
+        { rewriteD = extractR . focusOnRewrite pred
+        , projectD = extractU $ focusOnTranslate pred
+        }
 
 focusOnRewrite :: (Term a, Term b, a ~ Generic a, Generic a ~ Generic b)
                => (b -> Bool) -> Rewrite b -> Rewrite (Generic a)

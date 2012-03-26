@@ -23,7 +23,7 @@ commandLine h = do
 -- The arguments here should be bundled into a datastructure.
 -- (except the Hermitage c a, because the polymorphism here would stop simple updates.)
 
-commands :: forall c a . (Term a, Show2 a) => EditLine -> Int -> H.Hermitage c a -> CoreM (H.Hermitage c a)
+commands :: forall c a . (Term a, Show2 a, Generic a ~ Blob) => EditLine -> Int -> H.Hermitage c a -> CoreM (H.Hermitage c a)
 commands el n h = do
          liftIO $ setPrompt el (return $ show n ++ "> ")
          maybeLine <- liftIO $ elGets el

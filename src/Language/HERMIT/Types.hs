@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies, FlexibleInstances, FlexibleContexts #-}
 
 module Language.HERMIT.Types where
 
@@ -83,7 +83,7 @@ data Blob
         | ExprBlob      (Expr Id)
         | TypeBlob      Type
 
-class Term exp where
+class (Generic exp ~ Generic (Generic exp)) => Term exp where
   -- | 'Generic' is a sum of all the interesting sub-types, transitively, of @exp@.
   -- We use @Generic e ~ e@ to signify that something is its own Generic.
   -- Simple expression types might be their own sole 'Generic', more complex examples
