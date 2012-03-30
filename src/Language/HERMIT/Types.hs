@@ -11,6 +11,40 @@ import Language.HERMIT.HermitMonad
 
 import qualified Control.Category as Cat
 import Control.Arrow
+import Control.Monad
+
+----------------------------------------------------------------------------
+-- The transformation/HERMIT monad
+data HermitM :: * -> * where
+        HermitM :: CoreM a      -> HermitM a
+        FailM   :: String       -> HermitM a
+        YieldM  :: Context Blob
+                -> HermitM a
+                -> HermitM a
+
+instance Monad HermitM where
+        return a = HermitM (return a)
+        (HermitM m) >>= k = HermitM $ do
+                r <- m
+                case k r of
+                  HermitM m' -> m'
+        (FailM msg) >>= _ = FailM msg
+        (YieldM cxt r) >>= k = YieldM cxt (r >>= k)
+        fail msg = FailM msg
+
+yieldM :: Context Blob -> HermitM ()
+yieldM blob = YieldM blob (return ())
+
+catchH :: HermitM a -> (String -> HermitM a) -> HermitM a
+catchH (HermitM m) k = HermitM m
+catchH (FailM msg) k = k msg
+catchH (YieldM b r) k = YieldM b (r `catchH` k)
+
+----------------------------------------------------------------------------
+
+runHermitM :: HermitM a -> CoreM (Either String a)
+runHermitM (HermitM m) = liftM Right m
+runHermitM (FailM str) = return $ Left str
 
 ----------------------------------------------------------------------------
 
@@ -220,3 +254,24 @@ appR r1 r2 = rewrite $ \ c e -> case e of
           _ -> fail "appR: not App"
 -}
 
+--------------------------------------------------------
+
+yieldR :: (Term a, Generic a ~ Blob) => Rewrite a
+yieldR = rewrite $ \ cxt@(Context _ a) -> do
+                yieldM (fmap inject cxt)
+                return a
+
+rewriteTransformerToTranslate
+        :: (Term b, Generic b ~ Blob)
+        => (Rewrite b -> Rewrite a)
+        -> Translate a [Context (Generic b)]
+rewriteTransformerToTranslate rrT = translate $ \ (Context c a) -> do
+        collectYieldM (apply (rrT yieldR) (Context c a))
+
+collectYieldM :: HermitM a -> HermitM [Context Blob]
+collectYieldM m = case m of
+                    HermitM _   -> return []
+                    FailM   msg -> fail msg
+                    YieldM x r  -> do
+                            xs <- collectYieldM r
+                            return (x : xs)
