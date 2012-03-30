@@ -36,14 +36,14 @@ import Language.HERMIT.KURE
 import Control.Arrow
 import qualified Control.Category as Cat
 
--- Context is *Kind*.
-data Context where
-        Everything :: Context
-        (:<) :: a -> Context -> Context
+-- CXT is *Kind*.
+data CXT where
+        Everything :: CXT
+        (:<) :: a -> CXT -> CXT
 
 infixr 5 :<
 
-data Focus :: Context -> * -> * where
+data Focus :: CXT -> * -> * where
     InitialFocus ::                            Focus Everything ModGuts
     AppendFocus  :: Focus cxt b -> Zoom b c -> Focus (b :< cxt) c
 
@@ -64,7 +64,7 @@ focusRewrite (AppendFocus f z) rr = focusRewrite f (rewriteD z rr)
 
 focusTranslate :: Focus cxt b -> Translate ModGuts [b]
 focusTranslate InitialFocus      = pureT (\ x -> [x])
-focusTranslate (AppendFocus f z) = focusTranslate f >>> listU (projectD z)
+focusTranslate (AppendFocus f z) = focusTranslate f >-> listU (projectD z)
 
 ------------------------------------------------------------------
 

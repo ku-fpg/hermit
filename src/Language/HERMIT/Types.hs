@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies, FlexibleInstances, FlexibleContexts, GADTs #-}
 
 module Language.HERMIT.Types where
 
@@ -15,73 +15,48 @@ import Control.Arrow
 ----------------------------------------------------------------------------
 
 -- | Our unit of operation and key type, a 'Translate'.
-newtype Translate exp1 exp2 = Translate (HermitEnv -> exp1 -> HermitM exp2)
+newtype HermitT exp1 exp2 = HermitT (exp1 -> HermitM exp2)
 
 -- | 'apply' directly applies a 'Translate' value to an argument.
-apply :: Translate exp1 exp2 -> HermitEnv -> exp1 -> HermitM exp2
-apply (Translate t) env exp1 = t env exp1
+apply :: HermitT exp1 exp2 -> exp1 -> HermitM exp2
+apply (HermitT t) exp1 = t exp1
+
+instance Cat.Category HermitT where
+   id = HermitT $ \  e -> return e
+   (.) rr1 rr2 = HermitT $ \ e -> apply rr2 e >>= apply rr1
+
+instance Arrow HermitT where
+   arr f = HermitT (\ e -> return (f e))
+   first rr = HermitT $ \ (b,d) -> do e <- apply rr b ; return (e,d)
+
+----------------------------------------------------------------------------
+-- TODO: figure this out, we use it quite a bit
+type Translate exp1 exp2 = HermitT (Context exp1) exp2
 
 -- | 'translate' is the standard way of building a 'Translate'.
-translate :: (HermitEnv -> exp1 -> HermitM exp2) -> Translate exp1 exp2
-translate = Translate
+translate :: (Context exp1 -> HermitM exp2) -> Translate exp1 exp2
+translate = HermitT
 
-instance Cat.Category Translate where
-   id = translate $ \ _ e -> return e
-   (.) rr1 rr2 = translate $ \ c e -> apply rr2 c e >>= apply rr1 c
 
-instance Arrow Translate where
-   arr f = translate (\ c e -> return (f e))
-   first rr = translate $ \ c (b,d) -> do e <- apply rr c b ; return (e,d)
-
--- Type synonym for endomorphic translation.
+----------------------------------------------------------------------------
+-- Type synonym for endomorphic translation of values *with context* on the input.
 type Rewrite exp = Translate exp exp
 
 -- | 'rewrite' is our primitive way of building a Rewrite,
 --
 -- @rewrite $ \\ _ e -> return e@ /is/ (now) an identity rewrite.
-rewrite :: (HermitEnv -> exp -> HermitM exp) -> Rewrite exp
-rewrite = translate
+
+rewrite :: (Context exp -> HermitM exp) -> Rewrite exp
+rewrite f = translate f
 
 ---------------------------------------------------------------------
 
--- | 'extractR' converts a 'Rewrite' over a 'Generic' into a rewrite over a specific expression type.
-extractR  :: (Term exp) => Rewrite  (Generic exp) -> Rewrite  exp	-- at *this* type
-extractR rr = rewrite $ \ c e -> do
-            e' <- apply rr c (inject e)
-            case select e' of
-                Nothing -> fail "extractR"
-                Just r -> return r
+data Context exp = Context HermitEnv exp
 
--- | 'extractU' converts a 'Translate' taking a 'Generic' into a translate over a specific expression type.
-extractU  :: (Term exp) => Translate  (Generic exp) r -> Translate  exp r
-extractU rr = translate $ \ c e -> apply rr c (inject e)
+instance Functor Context where
+        fmap f (Context env e) = Context env (f e)
 
--- | 'promoteR' promotes a 'Rewrite' into a 'Generic' 'Rewrite'; other types inside Generic cause failure.
--- 'try' can be used to convert a failure-by-default promotion into a 'id-by-default' promotion.
-promoteR  :: (Term exp) => Rewrite  exp -> Rewrite  (Generic exp)
-promoteR rr = rewrite $ \ c e -> do
-               case select e of
-                 Nothing -> fail "promoteR"
-                 Just e' -> do
-                    r <- apply rr c e'
-                    return (inject r)
-
--- | 'promoteU' promotes a 'Translate' into a 'Generic' 'Translate'; other types inside Generic cause failure.
-promoteU  :: (Term exp) => Translate  exp r -> Translate  (Generic exp) r
-promoteU rr = translate $ \ c e -> do
-               case select e of
-                 Nothing -> fail "promoteI"
-                 Just e' -> apply rr c e'
-
-----------------------------------------------------------------------------
-
-
--- To rename
-data Blob
-        = ModGutsBlob   ModGuts
-        | BindBlob      (Bind Id)
-        | ExprBlob      (Expr Id)
-        | TypeBlob      Type
+---------------------------------------------------------------------
 
 class (Generic exp ~ Generic (Generic exp)) => Term exp where
   -- | 'Generic' is a sum of all the interesting sub-types, transitively, of @exp@.
@@ -99,8 +74,50 @@ class (Generic exp ~ Generic (Generic exp)) => Term exp where
   -- | 'allR' applies 'Generic' rewrites to all the (interesting) children of this node.
   allR :: Rewrite (Generic exp) -> Rewrite exp
 
- -- | 'crushU' applies a 'Generic' Translate to a common, 'Monoid'al result, to all the interesting children of this node.
+  -- | 'crushU' applies a 'Generic' Translate to a common, 'Monoid'al result, to all the interesting children of this node.
   crushU :: (Monoid result) => Translate (Generic exp) result -> Translate exp result
+
+---------------------------------------------------------------------
+
+-- | 'extractR' converts a 'Rewrite' over a 'Generic' into a rewrite over a specific expression type.
+extractR  :: (Term exp) => Rewrite (Generic exp) -> Rewrite exp	-- at *this* type
+extractR rr = rewrite $ \ cxt -> do
+            e' <- apply rr (fmap inject cxt)
+            case select e' of
+                Nothing -> fail "extractR"
+                Just r -> return r
+
+-- | 'extractU' converts a 'Translate' taking a 'Generic' into a translate over a specific expression type.
+extractU  :: (Term exp) => Translate (Generic exp) r -> Translate exp r
+extractU rr = translate $ apply rr . fmap inject
+
+-- | 'promoteR' promotes a 'Rewrite' into a 'Generic' 'Rewrite'; other types inside Generic cause failure.
+-- 'try' can be used to convert a failure-by-default promotion into a 'id-by-default' promotion.
+promoteR  :: (Term exp) => Rewrite  exp -> Rewrite  (Generic exp)
+promoteR rr = rewrite $ \ (Context c e) -> do
+               case select e of
+                 Nothing -> fail "promoteR"
+                 Just e' -> do
+                    r <- apply rr (Context c e')
+                    return (inject r)
+
+-- | 'promoteU' promotes a 'Translate' into a 'Generic' 'Translate'; other types inside Generic cause failure.
+promoteU  :: (Term exp) => Translate  exp r -> Translate  (Generic exp) r
+promoteU rr = translate $ \ (Context c e) -> do
+               case select e of
+                 Nothing -> fail "promoteI"
+                 Just e' -> apply rr (Context c e')
+
+----------------------------------------------------------------------------
+
+
+-- To rename
+data Blob
+        = ModGutsBlob   ModGuts
+        | BindBlob      (Bind Id)
+        | ExprBlob      (Expr Id)
+        | TypeBlob      Type
+
 
 instance Term Blob where
   type Generic Blob = Blob
@@ -115,27 +132,31 @@ instance Term ModGuts where
   select _              = Nothing
   inject                = ModGutsBlob
 
+
+
 instance Term (Bind Id) where
   type Generic (Bind Id) = Blob
+--  data Context (Bind Id) = BindBlobContext (Bind Id)
 
   select (BindBlob expr) = return expr
   select _              = Nothing
   inject                = BindBlob
 
-  allR rr = rewrite $ \ c e -> case e of
+  allR rr = rewrite $ \ (Context c e) -> case e of
           NonRec n e1 -> do
-                   e1' <- apply (extractR rr) c e1
+                   e1' <- apply (extractR rr) (Context c e1)
                    return $ NonRec n e1'
           Rec bds -> do
                   -- Notice how we add the scoping bindings
                   -- here *before* decending into the rhss.
-                   let c' = addHermitBinding (Rec bds) c
+                   let env' = addHermitBinding (Rec bds) c
                    bds' <- sequence
-                        [ do e' <- apply (extractR rr) c' e
+                        [ do e' <- apply (extractR rr) (Context env' e)
                              return (n,e')
                         | (n,e) <- bds
                         ]
                    return $ Rec bds'
+
 
 instance Term (Expr Id) where
   type Generic (Expr Id) = Blob
@@ -144,30 +165,30 @@ instance Term (Expr Id) where
   select _              = Nothing
   inject                = ExprBlob
 
-  allR rr = rewrite $ \ c e -> case e of
+
+  allR rr = rewrite $ \ (Context c e) -> case e of
           Var {} -> return e
           Lit {} -> return e
           App e1 e2 ->
-                do e1' <- apply (extractR rr) c e1
-                   e2' <- apply (extractR rr) c e2
+                do e1' <- apply (extractR rr) (Context c e1)
+                   e2' <- apply (extractR rr) (Context c e2)
                    return $ App e1' e2'
           Lam b e ->
-                do e' <- apply (extractR rr) (addHermitEnvLambdaBinding b c) e
+                do e' <- apply (extractR rr) (Context (addHermitEnvLambdaBinding b c) e)
                    return $ Lam b e'
           Let bds e ->
                 do
                    -- use *original* env, because the bindings are self-binding,
                    -- if they are recursive. See allR (Rec ...) for details.
-                   bds' <- apply (extractR rr) c bds
+                   bds' <- apply (extractR rr) (Context c bds)
                    let c' = addHermitBinding bds c
-                   e'   <- apply (extractR rr) c' e
+                   e'   <- apply (extractR rr) (Context c' e)
                    return $ Let bds' e'
-
           Cast e cast ->
-                do e' <- apply (extractR rr) c e
+                do e' <- apply (extractR rr) (Context c e)
                    return $ Cast e' cast
           Tick tk e ->
-                do e' <- apply (extractR rr) c e
+                do e' <- apply (extractR rr) (Context c e)
                    return $ Tick tk e'
                 -- Not sure about this. Should be descend into the type here?
                 -- If we do so, we should also descend into the types
@@ -175,17 +196,20 @@ instance Term (Expr Id) where
           Type _ty -> return $ e
           Coercion _c -> return $ e
 
-  crushU t = translate $ \ c e -> case e of
+  crushU t = translate $ \ (Context c e) -> case e of
           Var {} -> return mempty
           Lit {} -> return mempty
           App e1 e2 ->
-                do r1' <- apply (extractU t) c e1
-                   r2' <- apply (extractU t) c e2
+                do r1' <- apply (extractU t) (Context c e1)
+                   r2' <- apply (extractU t) (Context c e2)
                    return $ r1' `mappend` r2'
           Lam b e ->
-                do e' <- apply (extractU t) (addHermitEnvLambdaBinding b c) e
+                do e' <- apply (extractU t) (Context (addHermitEnvLambdaBinding b c) e)
                    return $ e'
 
+          _ -> error "TODO: complete please"
+
+{-
 -- Need to define thse
 appR :: Rewrite (Expr Id) -> Rewrite (Expr Id) -> Rewrite (Expr Id)
 appR r1 r2 = rewrite $ \ c e -> case e of
@@ -194,3 +218,5 @@ appR r1 r2 = rewrite $ \ c e -> case e of
                    e2' <- apply r2 c e2
                    return $ App e1' e2'
           _ -> fail "appR: not App"
+-}
+

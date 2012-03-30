@@ -12,7 +12,7 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.Types
 import qualified Language.HERMIT.Hermitage as H
-import Language.HERMIT.Focus (Context(..), focusOnBinding)
+import Language.HERMIT.Focus (CXT(..), focusOnBinding)
 
 commandLine :: H.Hermitage Everything ModGuts -> CoreM (H.Hermitage Everything ModGuts)
 commandLine h = do

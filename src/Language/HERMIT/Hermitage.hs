@@ -16,7 +16,7 @@ import Language.HERMIT.Focus
 
 
 -- abstact outside this module
-data Hermitage (c :: Context) a = Hermitage
+data Hermitage (c :: CXT) a = Hermitage
         { ageModGuts :: ModGuts
         , ageFocus   :: Focus c a
         , ageEnv     :: HermitEnv
@@ -46,7 +46,7 @@ getForeground age = do
 
 -- internal version of getForeground that can fail.
 getForeground' :: Hermitage cxt a -> CoreM (Either String [a])
-getForeground' age = runHermitM (apply (focusTranslate (ageFocus age)) (ageEnv age) (ageModGuts age))
+getForeground' age = runHermitM (apply (focusTranslate (ageFocus age)) (Context (ageEnv age) (ageModGuts age)))
 
 -- this focuses in to a sub-expresssion. It will do error checking, hence the
 -- need for the the CoreM.
@@ -78,7 +78,7 @@ unfocusHermitage age = Hermitage
 
 applyRewrite :: Rewrite a -> Hermitage cxt a -> CoreM (Either HermitMessage (Hermitage cxt a))
 applyRewrite rr age = do
-        res <- runHermitM (apply (focusRewrite (ageFocus age) rr) (ageEnv age) (ageModGuts age))
+        res <- runHermitM (apply (focusRewrite (ageFocus age) rr) (Context (ageEnv age) (ageModGuts age)))
         case res of
           Right guts2 -> return (Right $ age { ageModGuts = guts2 })
           Left msg -> return (Left $ HermitMessage msg)

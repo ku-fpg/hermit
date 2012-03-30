@@ -13,7 +13,7 @@ import Language.HERMIT.HermitEnv as Env
 -- be prompted to more general cases.
 
 inline :: Id -> Rewrite CoreExpr
-inline n = rewrite $ \ c e -> case e of
+inline n = rewrite $ \ (Context c e) -> case e of
         Var n0 | n == n0 -> -- A candiate for inlining
                 case Env.lookupHermitBinding n0 c of
                   Nothing -> fail $ "inline failed, can not find " ++ show n0 ++ "  in Env"
