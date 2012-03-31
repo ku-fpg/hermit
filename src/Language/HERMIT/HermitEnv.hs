@@ -10,6 +10,8 @@ import qualified Data.Map as Map
 data HermitEnv = HermitEnv
         { hermitBindings :: Map.Map Id HermitBinding    -- ^ all (important) bindings in scope
         , hermitDepth    :: Int                         -- ^ depth of bindings
+        , hermitPath     :: [Int]                       -- ^ path to the current node from the root.
+                                                        --   The list is reversed (deepest node at head of list).
         }
 
 data HermitBinding
@@ -24,6 +26,12 @@ hermitBindingDepth :: HermitBinding -> Int
 
 hermitBindingDepth (LAM d)  = d
 hermitBindingDepth (BIND d _ _) = d
+
+hermitBindingPath :: HermitEnv -> [Int]
+hermitBindingPath = hermitPath
+
+(@@) :: HermitEnv -> Int -> HermitEnv
+(@@) env n = env { hermitPath = n : hermitPath env }
 
 -- A binding you know nothing about, except it may shadow something.
 -- If so, do not worry about it here, just remember the binding a the depth.
@@ -62,4 +70,4 @@ lookupHermitBinding :: Id -> HermitEnv -> Maybe HermitBinding
 lookupHermitBinding n env = Map.lookup n (hermitBindings env)
 
 initHermitEnv :: HermitEnv
-initHermitEnv = HermitEnv (Map.empty) 0
+initHermitEnv = HermitEnv (Map.empty) 0 []
