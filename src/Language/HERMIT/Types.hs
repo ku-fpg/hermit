@@ -71,6 +71,13 @@ instance Arrow HermitT where
    arr f = HermitT (\ e -> return (f e))
    first rr = HermitT $ \ (b,d) -> do e <- apply rr b ; return (e,d)
 
+instance Monad (HermitT a) where
+        return a = HermitT $ \ _ -> return a
+        (HermitT m) >>= k = HermitT $ \ e -> do
+                        r <- m e
+                        case k r of
+                          HermitT f -> f e
+
 ----------------------------------------------------------------------------
 -- TODO: figure this out, we use it quite a bit
 type Translate exp1 exp2 = HermitT (Context exp1) exp2
