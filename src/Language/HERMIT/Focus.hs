@@ -88,6 +88,8 @@ focusOnBinding = focusOn $ \ bnds ->
           NonRec {} | True -> True
           Rec bds' -> True
 
+focusOnPath :: (Generic a ~ Generic b, Term a, Term b, Term (Generic b)) => [Int] -> Rewrite a -> Rewrite b
+focusOnPath path = extractR .  pathFinder path . promoteR
 
 focusOn
   :: ( Term a, Term b
