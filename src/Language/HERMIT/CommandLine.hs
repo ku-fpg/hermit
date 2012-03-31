@@ -12,9 +12,9 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.Types
 import qualified Language.HERMIT.Hermitage as H
-import Language.HERMIT.Focus (CXT(..), focusOnBinding)
+import Language.HERMIT.Focus
 
-commandLine :: H.Hermitage Everything ModGuts -> CoreM (H.Hermitage Everything ModGuts)
+commandLine :: H.Hermitage H.Everything ModGuts -> CoreM (H.Hermitage H.Everything ModGuts)
 commandLine h = do
     el <- liftIO $ elInit "hermit"
     liftIO $ setEditor el Emacs
@@ -37,10 +37,11 @@ commands el n h = do
                  liftIO $ putStrLn $ "User input: " ++ show line'
                  case words line' of
                     ["?"] -> do
-                        a <- H.getForeground h
+                        let (Context _ e) = H.getForeground h
                         liftIO $ putStrLn "Foreground: "
-                        liftIO $ putStrLn (show2 a)
+                        liftIO $ putStrLn (show2 e)
                         commands el n h
+{-
                     ["focus"] -> do
                         res <- H.focusHermitage (focusOnBinding) h
                         case res of
@@ -49,8 +50,9 @@ commands el n h = do
                              commands el n h
                            Right h1 -> do
                              commands el (succ n) h1
-                             let h2 = H.unfocusHermitage h1
+                             h2 <- H.unfocusHermitage h1
                              commands el n h2
+-}
                     other -> do
                         liftIO $ putStrLn $ "do not understand " ++ show other
                         commands el n h

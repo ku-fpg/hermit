@@ -26,6 +26,9 @@ module Language.HERMIT.Focus where
         , focusOnBinding
         , ) where
 -}
+
+
+-- TODO: remove but KEEP focusOnRewrite, preserve the comment above
 import GhcPlugins
 
 import Language.HERMIT.HermitEnv
@@ -35,7 +38,7 @@ import Language.HERMIT.KURE
 
 import Control.Arrow
 import qualified Control.Category as Cat
-
+{-
 -- CXT is *Kind*.
 data CXT where
         Everything :: CXT
@@ -75,11 +78,11 @@ data Focus :: * -> * -> * where
     FocusOnRhs     :: Id -> Focus c (Expr Id) -- new focus is left-hand-side of the binding of a specific Id.
     FocusOnExpr    :: (Expr Id -> Bool) -> Focus c (Expr Id) -- new focus using a expression predicated.
 -}
-
+-}
 -- Right now, this searches *everything* for the match. Later, we'll
 -- have some way of optimizing this to be more focused (pun) and efficent.
 
-focusOnBinding :: (Generic a ~ Generic (Bind Id), Term a) => Zoom a (Bind Id)
+focusOnBinding :: (Generic a ~ Generic (Bind Id), Term a) => Rewrite (Bind Id) -> Rewrite a
 focusOnBinding = focusOn $ \ bnds ->
         case bnds of
           NonRec {} | True -> True
@@ -92,18 +95,17 @@ focusOn
      , Term (Generic a)
      , Term (Generic b)
      )
-  => (b -> Bool) -> Zoom a b
-focusOn pred = Zoom
-        { rewriteD = extractR . focusOnRewrite pred
-        , projectD = extractU $ focusOnTranslate pred
-        }
+  => (b -> Bool) -> Rewrite b -> Rewrite a
+focusOn pred = extractR . focusOnRewrite pred
 
+-- This will need moved out
 focusOnRewrite :: (Term a, Term b, a ~ Generic a, Generic a ~ Generic b)
                => (b -> Bool) -> Rewrite b -> Rewrite (Generic a)
 focusOnRewrite pred rr =
         promoteR (acceptR pred >-> rr) <+
         allR (focusOnRewrite pred rr)
 
+{-
 focusOnTranslate :: (Term a, Term b, a ~ Generic a, Generic a ~ Generic b)
                => (b -> Bool) -> Translate (Generic a) [b]
 focusOnTranslate pred =
@@ -111,3 +113,4 @@ focusOnTranslate pred =
         crushU (focusOnTranslate pred)
 
 ------------------------------------------------------------------
+-}
