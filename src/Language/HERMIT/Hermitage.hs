@@ -81,6 +81,10 @@ focusHermitage zoom h = focus (apply zoomT $ getForeground h)
                   SuccessR [Context c e] -> case select e of
                                      Nothing -> error "JDGjksdfgh"
                                      Just x  -> return $ Right $ Hermitage (Context c x) zoom h
+                  SuccessR [] -> return $ Left $ HermitMessage "no down expressions found"
+                  SuccessR xs -> return $ Left $ HermitMessage $ "to many down expressions found: " ++ show (length xs)
+                  FailR msg -> return $ Left $ HermitMessage msg
+                  YieldR {} -> return $ Left $ TransformationContainedIllegalYield
 
 unfocusHermitage :: Hermitage (a :< cxt) x -> CoreM (Either HermitMessage (Hermitage cxt a))
 unfocusHermitage (Hermitage (Context _ a) rrT rest) = applyRewrite (rrT $ constT a) rest
