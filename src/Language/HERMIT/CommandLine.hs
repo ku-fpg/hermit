@@ -41,18 +41,21 @@ commands el n h = do
                         liftIO $ putStrLn "Foreground: "
                         liftIO $ putStrLn (show2 e)
                         commands el n h
-{-
                     ["focus"] -> do
                         res <- H.focusHermitage (focusOnBinding) h
                         case res of
-                           Left msg -> do
+                          Left msg -> do
                              liftIO $ print msg
                              commands el n h
-                           Right h1 -> do
+                          Right h1 -> do
                              commands el (succ n) h1
-                             h2 <- H.unfocusHermitage h1
-                             commands el n h2
--}
+                             res <- H.unfocusHermitage h1
+                             case res of
+                               Left msg -> do
+                                 liftIO $ print msg
+                                 commands el n h
+                               Right h2 -> do
+                                 commands el n h2
                     other -> do
                         liftIO $ putStrLn $ "do not understand " ++ show other
                         commands el n h
