@@ -65,11 +65,30 @@ commands el n h = do
 class Show2 a where
         show2 :: a -> String
 
+instance Show2 Blob where
+        show2 (ModGutsBlob   m) = show2 m
+        show2 (ProgramBlob   p) =  show2 p
+        show2 (BindBlob      bd) = show2 bd
+        show2 (ExprBlob      e) = show2 e
+
+
 instance Show2 ModGuts where
-        show2 _ = "ModGuts"
+        show2 modGuts =
+                "[ModGuts for " ++ showSDoc (ppr (mg_module modGuts)) ++ "]\n" ++
+                 show (length (mg_binds modGuts)) ++ " binding group(s)"
+
+instance Show2 CoreProgram where
+        show2 codeProg =
+                "[Code Program]\n" ++
+                showSDoc (ppr codeProg)
 
 instance Show2 (Expr Id) where
-        show2 _ = "Expr Id"
+        show2 expr =
+                "[Expr]\n" ++
+                showSDoc (ppr expr)
+
 
 instance Show2 (Bind Id) where
-        show2 _ = "Bind I"
+        show2 bind =
+                "[Bind]\n" ++
+                showSDoc (ppr bind)
