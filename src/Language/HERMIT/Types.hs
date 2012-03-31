@@ -15,37 +15,45 @@ import Control.Monad
 
 ----------------------------------------------------------------------------
 -- The transformation/HERMIT monad
-data HermitM :: * -> * where
-        HermitM :: CoreM a      -> HermitM a
-        FailM   :: String       -> HermitM a
-        YieldM  :: Context Blob
-                -> HermitM a
-                -> HermitM a
+newtype HermitM a = HermitM { runHermitM :: CoreM (HermitR a) }
+
+data HermitR :: * -> * where
+        SuccessR :: a                   -> HermitR a
+        FailR    :: String               -> HermitR a
+        YieldR   :: a  -> [Context Blob] -> HermitR a
 
 instance Monad HermitM where
-        return a = HermitM (return a)
+        return a = HermitM (return $ SuccessR a)
         (HermitM m) >>= k = HermitM $ do
                 r <- m
-                case k r of
-                  HermitM m' -> m'
-        (FailM msg) >>= _ = FailM msg
-        (YieldM cxt r) >>= k = YieldM cxt (r >>= k)
-        fail msg = FailM msg
+                case r of
+                  SuccessR a -> runHermitM (k a)
+                  FailR msg  -> return $ FailR msg
+                  YieldR a c1 -> do
+                           r' <- runHermitM (k a)
+                           case r' of
+                             SuccessR a  -> return $ SuccessR a
+                             FailR msg   -> return $ FailR msg
+                             YieldR a c2 -> return $ YieldR a (c1 ++ c2)
+        fail msg = HermitM (return $ FailR msg)
 
 yieldM :: Context Blob -> HermitM ()
-yieldM blob = YieldM blob (return ())
+yieldM blob = HermitM $ return $ YieldR () [blob]
 
 catchH :: HermitM a -> (String -> HermitM a) -> HermitM a
-catchH (HermitM m) k = HermitM m
-catchH (FailM msg) k = k msg
-catchH (YieldM b r) k = YieldM b (r `catchH` k)
+catchH (HermitM m) k = HermitM $ do
+        r <- m
+        case r of
+          SuccessR a -> return $ SuccessR a
+          FailR msg  -> runHermitM (k msg)
+          YieldR a c -> return $ YieldR a c
 
 ----------------------------------------------------------------------------
-
+{-
 runHermitM :: HermitM a -> CoreM (Either String a)
 runHermitM (HermitM m) = liftM Right m
 runHermitM (FailM str) = return $ Left str
-
+-}
 ----------------------------------------------------------------------------
 
 -- | Our unit of operation and key type, a 'Translate'.
@@ -269,9 +277,9 @@ rewriteTransformerToTranslate rrT = translate $ \ (Context c a) -> do
         collectYieldM (apply (rrT yieldR) (Context c a))
 
 collectYieldM :: HermitM a -> HermitM [Context Blob]
-collectYieldM m = case m of
-                    HermitM _   -> return []
-                    FailM   msg -> fail msg
-                    YieldM x r  -> do
-                            xs <- collectYieldM r
-                            return (x : xs)
+collectYieldM (HermitM m) = HermitM $ do
+        r <- m
+        case r of
+          SuccessR _     -> return $ SuccessR []
+          FailR   msg    -> return $ FailR msg
+          YieldR _ cxts  -> return $ SuccessR cxts

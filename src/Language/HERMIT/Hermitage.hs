@@ -74,10 +74,11 @@ focusHermitage zoom h = focus (apply zoomT $ getForeground h)
         zoomT = rewriteTransformerToTranslate zoom
 
         focus :: HermitM [Context Blob] -> CoreM (Either HermitMessage (Hermitage (a :< cxt) x))
-        focus (HermitM m) = do
-                res <- m
+        focus m = do
+                res <- runHermitM m
                 case res of
-                  [Context c e] -> case select e of
+                  -- TODO: complete
+                  SuccessR [Context c e] -> case select e of
                                      Nothing -> error "JDGjksdfgh"
                                      Just x  -> return $ Right $ Hermitage (Context c x) zoom h
 
@@ -91,9 +92,12 @@ applyRewrite :: forall a cxt
 applyRewrite rr h = applyRewrite2 (getBackground h) (apply rr (getForeground h))
   where
       applyRewrite2 :: (a -> Hermitage cxt a) -> HermitM a -> CoreM (Either HermitMessage (Hermitage cxt a))
-      applyRewrite2  cons (HermitM m)  = liftM (Right . cons) m
-      applyRewrite2  cons (FailM msg)  = return $ Left $ HermitMessage msg
-      applyRewrite2  cons (YieldM m _) = return $ Left $ TransformationContainedIllegalYield
+      applyRewrite2  cons m  = do
+              r <- runHermitM m
+              case r of
+                SuccessR a -> return $ Right (getBackground h a)
+                FailR msg  -> return $ Left $ HermitMessage msg
+                YieldR {}  -> return $ Left $ TransformationContainedIllegalYield
 
 ------------------------------------------------------------------
 
