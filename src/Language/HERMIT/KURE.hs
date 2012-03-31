@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies, FlexibleInstances, ScopedTypeVariables #-}
 
 module Language.HERMIT.KURE where
 
@@ -9,6 +9,7 @@ import Control.Monad
 
 import Language.HERMIT.Types
 import Language.HERMIT.HermitMonad
+import Language.HERMIT.HermitEnv
 
 --infixl 3 <+, >->, .+, !->
 --infixr 3 ?
@@ -173,3 +174,21 @@ innermostR s = bottomupR (tryR (s >-> innermostR s))
 -- fold a tree using a single translation for each node.
 foldU :: ( e ~ Generic e, Term e, Monoid r) => Translate (Generic e) r -> Translate (Generic e) r
 foldU s = concatT [ s, crushU (foldU s) ]
+---------------------------------------------------------------------
+
+-- | pathT finds the current path.
+pathT :: Translate a Path
+pathT = translate $ \ (Context c _) -> return (hermitBindingPath c)
+
+---------------------------------------------------------------------
+-- Path stuff
+
+pathFinder :: forall e . (Term e, e ~ Generic e) => [Int] -> Rewrite (Generic e) -> Rewrite (Generic e)
+pathFinder []     rr = rr
+pathFinder (p:ps) rr = allR child
+   where
+        child :: Rewrite (Generic e)
+        child =  pathT >>= \ (Path (t:_)) ->
+                        if p == 0 then pathFinder ps rr
+                                  else idR
+
