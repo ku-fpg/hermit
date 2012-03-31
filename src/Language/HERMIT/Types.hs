@@ -32,7 +32,7 @@ instance Monad HermitM where
                   YieldR a c1 -> do
                            r' <- runHermitM (k a)
                            case r' of
-                             SuccessR a  -> return $ SuccessR a
+                             SuccessR a  -> return $ YieldR a c1
                              FailR msg   -> return $ FailR msg
                              YieldR a c2 -> return $ YieldR a (c1 ++ c2)
         fail msg = HermitM (return $ FailR msg)
