@@ -175,6 +175,10 @@ instance Term ModGuts where
   select _              = Nothing
   inject                = ModGutsBlob
 
+  allR rr = rewrite $ \ (Context c modGuts) -> do
+          binds' <- apply (extractR rr) (Context c (mg_binds modGuts))
+          return (modGuts { mg_binds = binds' })
+
 instance Term CoreProgram where
   type Generic CoreProgram = Blob
 
