@@ -169,6 +169,7 @@ instance Term Blob where
   inject   = id
 
   allR rr = rewrite $ \ (Context c blob) -> case blob of
+          -- Going from Blob to sub-Blog is the one case where you do not augment the path
           ModGutsBlob modGuts -> liftM ModGutsBlob $ apply (allR rr) (Context c modGuts)
           ProgramBlob prog    -> liftM ProgramBlob $ apply (allR rr) (Context c prog)
           BindBlob    bind    -> liftM BindBlob    $ apply (allR rr) (Context c bind)
@@ -182,7 +183,7 @@ instance Term ModGuts where
   inject                = ModGutsBlob
 
   allR rr = rewrite $ \ (Context c modGuts) -> do
-          binds' <- apply (extractR rr) (Context c (mg_binds modGuts))
+          binds' <- apply (extractR rr) (Context (c @@ 0) (mg_binds modGuts))
           return (modGuts { mg_binds = binds' })
 
 instance Term CoreProgram where
@@ -195,9 +196,9 @@ instance Term CoreProgram where
   allR rr = rewrite $ \ (Context c prog) -> case prog of
           [] -> return []
           (bd:bds) -> do
-              bd'  <- apply (extractR rr) (Context c  bd)
+              bd'  <- apply (extractR rr) (Context (c @@ 0) bd)
               let c' = addHermitBinding bd c
-              bds' <- apply (extractR rr) (Context c' bds)
+              bds' <- apply (extractR rr) (Context (c' @@ 1) bds)
               return $ bd' : bds'
 
 instance Term (Bind Id) where
@@ -210,16 +211,16 @@ instance Term (Bind Id) where
 
   allR rr = rewrite $ \ (Context c e) -> case e of
           NonRec n e1 -> do
-                   e1' <- apply (extractR rr) (Context c e1)
+                   e1' <- apply (extractR rr) (Context (c @@ 0) e1)
                    return $ NonRec n e1'
           Rec bds -> do
                   -- Notice how we add the scoping bindings
                   -- here *before* decending into the rhss.
                    let env' = addHermitBinding (Rec bds) c
                    bds' <- sequence
-                        [ do e' <- apply (extractR rr) (Context env' e)
+                        [ do e' <- apply (extractR rr) (Context (env' @@ i) e)
                              return (n,e')
-                        | (n,e) <- bds
+                        | ((n,e),i) <- zip bds [0..]
                         ]
                    return $ Rec bds'
 
@@ -236,25 +237,25 @@ instance Term (Expr Id) where
           Var {} -> return e
           Lit {} -> return e
           App e1 e2 ->
-                do e1' <- apply (extractR rr) (Context c e1)
-                   e2' <- apply (extractR rr) (Context c e2)
+                do e1' <- apply (extractR rr) (Context (c @@ 0) e1)
+                   e2' <- apply (extractR rr) (Context (c @@ 1) e2)
                    return $ App e1' e2'
           Lam b e ->
-                do e' <- apply (extractR rr) (Context (addHermitEnvLambdaBinding b c) e)
+                do e' <- apply (extractR rr) (Context (addHermitEnvLambdaBinding b c @@ 1) e)
                    return $ Lam b e'
           Let bds e ->
                 do
                    -- use *original* env, because the bindings are self-binding,
                    -- if they are recursive. See allR (Rec ...) for details.
-                   bds' <- apply (extractR rr) (Context c bds)
+                   bds' <- apply (extractR rr) (Context (c @@ 0) bds)
                    let c' = addHermitBinding bds c
-                   e'   <- apply (extractR rr) (Context c' e)
+                   e'   <- apply (extractR rr) (Context (c' @@ 1) e)
                    return $ Let bds' e'
           Cast e cast ->
-                do e' <- apply (extractR rr) (Context c e)
+                do e' <- apply (extractR rr) (Context (c @@ 0) e)
                    return $ Cast e' cast
           Tick tk e ->
-                do e' <- apply (extractR rr) (Context c e)
+                do e' <- apply (extractR rr) (Context (c @@ 0) e)
                    return $ Tick tk e'
                 -- Not sure about this. Should be descend into the type here?
                 -- If we do so, we should also descend into the types
