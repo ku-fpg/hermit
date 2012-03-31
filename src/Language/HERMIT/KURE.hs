@@ -189,6 +189,6 @@ pathFinder (p:ps) rr = allR child
    where
         child :: Rewrite (Generic e)
         child =  pathT >>= \ (Path (t:_)) ->
-                        if p == 0 then pathFinder ps rr
+                        if p == t then pathFinder ps rr
                                   else idR
 
