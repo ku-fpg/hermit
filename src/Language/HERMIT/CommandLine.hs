@@ -27,6 +27,9 @@ commandLine h = do
 
 commands :: forall c a . (Term a, Show2 a, Generic a ~ Blob) => EditLine -> Int -> H.Hermitage c a -> CoreM (H.Hermitage c a)
 commands el n h = do
+         let (Context _ e) = H.getForeground h
+--         liftIO $ putStrLn "Foreground: "
+         liftIO $ putStrLn (show2 e)
          liftIO $ setPrompt el (return $ show n ++ "> ")
          maybeLine <- liftIO $ elGets el
          case maybeLine of
