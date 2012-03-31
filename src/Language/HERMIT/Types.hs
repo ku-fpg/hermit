@@ -168,6 +168,12 @@ instance Term Blob where
   select _ = Nothing
   inject   = id
 
+  allR rr = rewrite $ \ (Context c blob) -> case blob of
+          ModGutsBlob modGuts -> liftM ModGutsBlob $ apply (allR rr) (Context c modGuts)
+          ProgramBlob prog    -> liftM ProgramBlob $ apply (allR rr) (Context c prog)
+          BindBlob    bind    -> liftM BindBlob    $ apply (allR rr) (Context c bind)
+          ExprBlob    expr    -> liftM ExprBlob    $ apply (allR rr) (Context c expr)
+
 instance Term ModGuts where
   type Generic ModGuts = Blob
 
