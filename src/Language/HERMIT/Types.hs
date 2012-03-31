@@ -172,7 +172,7 @@ data Blob
 instance Term Blob where
   type Generic Blob = Blob
 
-  select _ = Nothing
+  select   = Just
   inject   = id
 
   allR rr = rewrite $ \ (Context c blob) -> case blob of
@@ -249,7 +249,7 @@ instance Term (Expr Id) where
                    e2' <- apply (extractR rr) (Context (c @@ 1) e2)
                    return $ App e1' e2'
           Lam b e ->
-                do e' <- apply (extractR rr) (Context (addHermitEnvLambdaBinding b c @@ 1) e)
+                do e' <- apply (extractR rr) (Context (addHermitEnvLambdaBinding b c @@ 0) e)
                    return $ Lam b e'
           Let bds e ->
                 do
