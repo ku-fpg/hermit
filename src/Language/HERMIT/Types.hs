@@ -156,6 +156,7 @@ promoteU rr = translate $ \ (Context c e) -> do
 -- To rename
 data Blob
         = ModGutsBlob   ModGuts
+        | ProgramBlob   CoreProgram
         | BindBlob      (Bind Id)
         | ExprBlob      (Expr Id)
         | TypeBlob      Type
@@ -174,7 +175,20 @@ instance Term ModGuts where
   select _              = Nothing
   inject                = ModGutsBlob
 
+instance Term CoreProgram where
+  type Generic CoreProgram = Blob
 
+  select (ProgramBlob guts) = return guts
+  select _              = Nothing
+  inject                = ProgramBlob
+
+  allR rr = rewrite $ \ (Context c prog) -> case prog of
+          [] -> return []
+          (bd:bds) -> do
+              bd'  <- apply (extractR rr) (Context c  bd)
+              let c' = addHermitBinding bd c
+              bds' <- apply (extractR rr) (Context c' bds)
+              return $ bd' : bds'
 
 instance Term (Bind Id) where
   type Generic (Bind Id) = Blob
