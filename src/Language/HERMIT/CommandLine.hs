@@ -7,12 +7,14 @@ module Language.HERMIT.CommandLine where
 import GhcPlugins
 
 import System.Console.Editline
+import Data.Char
 
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.Types
 import qualified Language.HERMIT.Hermitage as H
 import Language.HERMIT.Focus
+import Language.HERMIT.KURE
 
 commandLine :: H.Hermitage H.Everything ModGuts -> CoreM (H.Hermitage H.Everything ModGuts)
 commandLine h = do
@@ -41,8 +43,21 @@ commands el n h = do
                         liftIO $ putStrLn "Foreground: "
                         liftIO $ putStrLn (show2 e)
                         commands el n h
-                    ["focus"] -> do
-                        res <- H.focusHermitage (focusOnBinding) h
+                    ["focus",nstr] | all isDigit nstr ->
+                        focusCommand (focusOnPath [read nstr] :: Rewrite (Generic a) -> Rewrite a)
+                    ["focusP",nstr] | all isDigit nstr ->
+                        focusCommand (focusOnPath [read nstr] :: Rewrite CoreProgram -> Rewrite a)
+                    ["focusB",nstr] | all isDigit nstr ->
+                        focusCommand (focusOnPath [read nstr] :: Rewrite (Bind Id) -> Rewrite a)
+                    ["focusE",nstr] | all isDigit nstr ->
+                        focusCommand (focusOnPath [read nstr] :: Rewrite (Expr Id) -> Rewrite a)
+                    other -> do
+                        liftIO $ putStrLn $ "do not understand " ++ show other
+                        commands el n h
+  where
+    focusCommand :: (Term b, Show2 b, Generic b ~ Blob) => (Rewrite b -> Rewrite a) -> CoreM (H.Hermitage c a)
+    focusCommand kick =  do
+                        res <- H.focusHermitage kick h
                         case res of
                           Left msg -> do
                              liftIO $ print msg
@@ -56,9 +71,6 @@ commands el n h = do
                                  commands el n h
                                Right h2 -> do
                                  commands el n h2
-                    other -> do
-                        liftIO $ putStrLn $ "do not understand " ++ show other
-                        commands el n h
 
 
 -- Later, this will have depth, and other pretty print options.
