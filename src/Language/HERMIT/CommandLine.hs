@@ -78,11 +78,11 @@ class Show2 a where
         show2 :: a -> String
 
 instance Show2 Blob where
-        show2 (ModGutsBlob   m) = show2 m
-        show2 (ProgramBlob   p) =  show2 p
+        show2 (ModGutsBlob   m)  = show2 m
+        show2 (ProgramBlob   p)  =  show2 p
         show2 (BindBlob      bd) = show2 bd
-        show2 (ExprBlob      e) = show2 e
-
+        show2 (ExprBlob      e)  = show2 e
+        show2 (AltBlob       a)  = show2 a
 
 instance Show2 ModGuts where
         show2 modGuts =
@@ -98,6 +98,11 @@ instance Show2 (Expr Id) where
         show2 expr =
                 "[Expr]\n" ++
                 showSDoc (ppr expr)
+
+instance Show2 (Alt Id) where
+        show2 alt =
+                "[alt]\n" ++
+                showSDoc (ppr alt)
 
 
 instance Show2 (Bind Id) where

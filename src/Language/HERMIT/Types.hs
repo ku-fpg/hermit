@@ -166,6 +166,7 @@ data Blob
         | ProgramBlob   CoreProgram
         | BindBlob      (Bind Id)
         | ExprBlob      (Expr Id)
+        | AltBlob       (Alt Id)
         | TypeBlob      Type
 
 
@@ -182,6 +183,7 @@ instance Term Blob where
           ProgramBlob prog    -> liftM ProgramBlob $ apply (allR rr) (Context c prog)
           BindBlob    bind    -> liftM BindBlob    $ apply (allR rr) (Context c bind)
           ExprBlob    expr    -> liftM ExprBlob    $ apply (allR rr) (Context c expr)
+          AltBlob     alt     -> liftM AltBlob     $ apply (allR rr) (Context c alt)
 
 instance Term ModGuts where
   type Generic ModGuts = Blob
@@ -259,6 +261,15 @@ instance Term (Expr Id) where
                    let c' = addHermitBinding bds c
                    e'   <- apply (extractR rr) (Context (c' @@ 1) e)
                    return $ Let bds' e'
+          Case e b ty alts ->
+                do e' <- apply (extractR rr) (Context (c @@ 0) e)
+                   let c' = addHermitBinding (NonRec b e) c
+                   alts' <-
+                        sequence [ apply (extractR rr) (Context (c' @@ i) alt)
+                                 | (alt,i) <- zip alts [1..]
+                                 ]
+                   return $ Case e b ty alts
+
           Cast e cast ->
                 do e' <- apply (extractR rr) (Context (c @@ 0) e)
                    return $ Cast e' cast
@@ -283,6 +294,19 @@ instance Term (Expr Id) where
                    return $ e'
 
           _ -> error "TODO: complete please"
+
+instance Term (Alt Id) where
+  type Generic (Alt Id) = Blob
+
+  select (AltBlob expr) = return expr
+  select _              = Nothing
+  inject                = AltBlob
+
+
+  allR rr = rewrite $ \ (Context c (con,bs,e)) -> do
+                        let c' = foldr addHermitEnvLambdaBinding c bs
+                        e' <- apply (extractR rr) (Context (c' @@ 0) e)
+                        return (con,bs,e')
 
 {-
 -- Need to define thse
