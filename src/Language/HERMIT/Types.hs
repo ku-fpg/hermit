@@ -176,7 +176,8 @@ instance Term Blob where
   inject   = id
 
   allR rr = rewrite $ \ (Context c blob) -> case blob of
-          -- Going from Blob to sub-Blog is the one case where you do not augment the path
+          -- Going from Blob to sub-Blog is the one case where you do not augment the path,
+          -- but instead direct traffic.
           ModGutsBlob modGuts -> liftM ModGutsBlob $ apply (allR rr) (Context c modGuts)
           ProgramBlob prog    -> liftM ProgramBlob $ apply (allR rr) (Context c prog)
           BindBlob    bind    -> liftM BindBlob    $ apply (allR rr) (Context c bind)
@@ -315,3 +316,5 @@ collectYieldM (HermitM m) = HermitM $ do
           SuccessR _     -> return $ SuccessR []
           FailR   msg    -> return $ FailR msg
           YieldR _ cxts  -> return $ SuccessR cxts
+
+-----------------------------------------------------------
