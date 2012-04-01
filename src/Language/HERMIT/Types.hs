@@ -341,4 +341,19 @@ collectYieldM (HermitM m) = HermitM $ do
           FailR   msg    -> return $ FailR msg
           YieldR _ cxts  -> return $ SuccessR cxts
 
------------------------------------------------------------
+
+
+----------------------------------------------------------------
+-- Need to write these for our entire grammar. These
+-- are scoping aware combinators.
+
+appR :: Translate (Expr Id) a1
+     -> Translate (Expr Id) a2
+     -> (a1 -> a2 -> HermitM a)
+     -> Translate (Expr Id) a
+appR lhs rhs comp = translate $ \ (Context c e) -> case e of
+        App e1 e2 -> do
+                e1' <- apply lhs (Context (c @@ 0) e1)
+                e2' <- apply rhs (Context (c @@ 1) e2)
+                comp e1' e2'
+        _ -> fail "no match for App"
