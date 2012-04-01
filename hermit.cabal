@@ -36,6 +36,7 @@ Library
        Language.HERMIT.CommandLine
        Language.HERMIT.Focus
        Language.HERMIT.KURE
+       Language.HERMIT.Primitive
        Language.HERMIT.Primitive.Inline
 
   Other-modules:
