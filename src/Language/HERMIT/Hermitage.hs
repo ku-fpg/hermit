@@ -93,10 +93,10 @@ applyRewrite :: forall a cxt
               . Rewrite a
              -> Hermitage cxt a
              -> CoreM (Either HermitMessage (Hermitage cxt a))
-applyRewrite rr h = applyRewrite2 (getBackground h) (apply rr (getForeground h))
+applyRewrite rr h = applyRewrite2 (apply rr (getForeground h))
   where
-      applyRewrite2 :: (a -> Hermitage cxt a) -> HermitM a -> CoreM (Either HermitMessage (Hermitage cxt a))
-      applyRewrite2  cons m  = do
+      applyRewrite2 :: HermitM a -> CoreM (Either HermitMessage (Hermitage cxt a))
+      applyRewrite2 m  = do
               r <- runHermitM m
               case r of
                 SuccessR a -> return $ Right (getBackground h a)
