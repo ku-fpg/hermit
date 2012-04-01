@@ -268,7 +268,7 @@ instance Term (Expr Id) where
                         sequence [ apply (extractR rr) (Context (c' @@ i) alt)
                                  | (alt,i) <- zip alts [1..]
                                  ]
-                   return $ Case e b ty alts
+                   return $ Case e b ty alts'
 
           Cast e cast ->
                 do e' <- apply (extractR rr) (Context (c @@ 0) e)
