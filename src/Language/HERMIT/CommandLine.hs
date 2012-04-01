@@ -16,7 +16,7 @@ import qualified Language.HERMIT.Hermitage as H
 import Language.HERMIT.Focus
 import Language.HERMIT.KURE
 
-import Language.HERMIT.Primitives.Inline
+import Language.HERMIT.Primitive.Inline
 
 commandLine :: H.Hermitage H.Everything ModGuts -> CoreM (H.Hermitage H.Everything ModGuts)
 commandLine h = do
