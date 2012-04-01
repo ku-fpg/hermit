@@ -16,6 +16,8 @@ import qualified Language.HERMIT.Hermitage as H
 import Language.HERMIT.Focus
 import Language.HERMIT.KURE
 
+import Language.HERMIT.Primitives.Inline
+
 commandLine :: H.Hermitage H.Everything ModGuts -> CoreM (H.Hermitage H.Everything ModGuts)
 commandLine h = do
     el <- liftIO $ elInit "hermit"
@@ -46,10 +48,16 @@ commands el n h = do
                         liftIO $ putStrLn "Foreground: "
                         liftIO $ putStrLn (show2 e)
                         commands el n h
-                    ["focus",nstr] | all isDigit nstr ->
+                    [nstr] | all isDigit nstr ->
                         focusCommand (focusOnPath [read nstr] :: Rewrite (Generic a) -> Rewrite a)
-                    ["focusP",nstr] | all isDigit nstr ->
-                        focusCommand (focusOnPath [read nstr] :: Rewrite CoreProgram -> Rewrite a)
+                    ["*inline"] -> do
+                        res <- H.applyRewrite (extractR $ bottomupR $ promoteR $ tryR $ inline) h
+                        case res of
+                          Left msg -> do
+                             liftIO $ print msg
+                             commands el n h
+                          Right h1 -> do
+                             commands el n h1
                     ["focusB",nstr] | all isDigit nstr ->
                         focusCommand (focusOnPath [read nstr] :: Rewrite (Bind Id) -> Rewrite a)
                     ["focusE",nstr] | all isDigit nstr ->
@@ -66,14 +74,14 @@ commands el n h = do
                              liftIO $ print msg
                              commands el n h
                           Right h1 -> do
-                             commands el (succ n) h1
-                             res <- H.unfocusHermitage h1
+                             h2 <- commands el (succ n) h1
+                             res <- H.unfocusHermitage h2
                              case res of
                                Left msg -> do
                                  liftIO $ print msg
                                  commands el n h
-                               Right h2 -> do
-                                 commands el n h2
+                               Right h3 -> do
+                                 commands el n h3
 
 
 -- Later, this will have depth, and other pretty print options.
