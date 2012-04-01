@@ -1,7 +1,11 @@
 {-# LANGUAGE KindSignatures, GADTs #-}
 module Language.Core.Quote where
 
+import GhcPlugins
+import qualified Language.Haskell.TH as TH
+
 import Control.Applicative
+
 
 data Q :: * -> * where
         Q :: (QEnv -> [a]) -> Q a     -- no error msg, yet
@@ -26,7 +30,6 @@ runQ (Q f) core = case f $ QEnv [] core of
               []  -> Left "no parse"
               _   -> Left "multiple parses"
 
-
 infixl 4 <@>
 
 -- match application
@@ -40,6 +43,8 @@ app (Q qa) (Q qb) = Q $ \ (QEnv env core) -> case core of
                         return (v1,v2)
         _       -> []
 
+-- I can not remember what this does?
+-- Something about jumping over the big lambdas?
 normalizeQEnv :: QEnv -> QEnv
 normalizeQEnv other = other
 
@@ -51,21 +56,27 @@ machInt = Q $ \ (QEnv env core) -> case core of
                 Lit (MachInt i) -> [i]
                 _               -> []
 
-
+{-
 var :: Q String
 var = Q $ \ (QEnv env core) -> case core of
                 Var str -> [str]
                 _       -> []
-
-ident :: Name -> Q ()
+-}
+{-
+ident :: TH.Name -> Q ()
 ident nm = Q $ \ (QEnv env core) -> case core of
-                Var str | nm == str -> [()]
+                Var v | nm `cmpName` (idName v) -> [()]
                 _       -> []
 
 
+-- Hacks till we can find the correct way of doing these.
+cmpName :: TH.Name -> Name -> Bool
+cmpName = undefined
+-}
+
 ---------------------------------------------------
 -- test
-
+{-
 data EXP0 = PRINT EXP1
         deriving Show
 data EXP1 = VAR String
@@ -82,8 +93,8 @@ exp0 = PRINT <$ ident "print" <@> exp1
 exp1 :: Q EXP1
 exp1 = VAR <$> var              <|>
        INTEGER <$> machInt
-
-
+-}
+{-
 ---------------------------------------------------
 -- import
 
@@ -131,3 +142,4 @@ data Coercion = Coercion_
 data Tickish a = Tickish_
 data DataCon = DataCon_
 
+-}
