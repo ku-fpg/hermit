@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeFamilies, FlexibleInstances #-}
 
-module Language.HERMIT.Primitives.Inline where
+module Language.HERMIT.Primitive.Inline where
 
 import GhcPlugins
 import qualified Data.Map as Map
