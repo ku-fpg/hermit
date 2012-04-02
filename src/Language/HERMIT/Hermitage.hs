@@ -112,3 +112,28 @@ data HermitMessage
         | HermitMessage String
         deriving (Show)
 
+------------------------------------------------------------------
+
+
+handle :: (Monad m) => Either a b -> (b -> m (Either a c)) -> m (Either a c)
+handle (Left msg) _ = return $ Left $ msg
+handle (Right a)  m = m a
+
+data Hermit :: * -> * where
+   Focus :: (Term a, Term x) => (Rewrite x -> Rewrite a) -> [ Hermit x ] -> Hermit a
+   Apply :: Rewrite a                                                    -> Hermit a
+
+runHermits :: [Hermit a] -> Hermitage cxt a -> CoreM (Either HermitMessage (Hermitage cxt a))
+runHermits []         h = return $ Right $ h
+runHermits (cmd:cmds) h = do
+        ret <- runHermit cmd h
+        handle ret $ \ h1 -> runHermits cmds h1
+
+runHermit :: Hermit a -> Hermitage cxt a -> CoreM (Either HermitMessage (Hermitage cxt a))
+runHermit (Focus kick inners) h = do
+        ret <- focusHermitage kick h
+        handle ret $ \ h1 -> do
+                ret <- runHermits inners h1
+                handle ret $ \ h2 ->
+                        unfocusHermitage h2
+runHermit (Apply rr) h = applyRewrite rr h
