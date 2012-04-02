@@ -23,7 +23,10 @@ import Language.HERMIT.HermitEnv
 (<+) :: Translate a b -> Translate a b -> Translate a b
 (<+) rr1 rr2 = translate $ \ (Context c e) -> apply rr1 (Context c e) `catchH` (\ _ -> apply rr2 (Context c e))
 
-(>->) :: Translate a b -> Translate b c -> Translate a c
+infixl 3 >->
+
+-- Should this be Rewrite b -> Translate b c -> Translate b c
+(>->) :: Translate b b -> Translate b c -> Translate b c
 (>->) rr1 rr2 = translate $ \ (Context c e0)  -> do
         e1 <- apply rr1 (Context c e0)
         e2 <- apply rr2 (Context c e1)
