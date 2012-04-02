@@ -18,15 +18,34 @@ import Language.HERMIT.KURE
 
 import Language.HERMIT.Primitive.Inline
 
-commandLine :: H.Hermitage H.Everything ModGuts -> CoreM (H.Hermitage H.Everything ModGuts)
-commandLine h = do
+commandLine :: ModGuts -> CoreM ModGuts
+commandLine modGuts = do
     el <- liftIO $ elInit "hermit"
     liftIO $ setEditor el Emacs
-    commands el 0 h
+    let getCmd :: forall cxt . H.Hermitage cxt Blob -> IO H.HermitCmd
+        getCmd lh = do
+          let (Context _ e) = H.getForeground lh
+          putStrLn (show2 e)
+--         liftIO $ setPrompt el (return $ show n ++ "> ")
+          setPrompt el (return "hermit> ")
+          let loop = do
+                maybeLine <- elGets el
+                case maybeLine of
+                   Nothing -> return H.PopFocusCmd
+                   Just line -> do
+                     case words (init line) of
+                       nstrs | all isDigit (concat nstrs) ->
+                         return $ H.FocusCmd (focusOnPath (map read nstrs) :: Rewrite Blob -> Rewrite Blob)
+                       ["*inline"] -> return $ H.ApplyCmd (extractR $ bottomupR $ promoteR $ tryR $ inline)
+                       _ -> do putStrLn $ "do not understand " ++ show line
+                               loop
+          loop
 
--- The arguments here should be bundled into a datastructure.
--- (except the Hermitage c a, because the polymorphism here would stop simple updates.)
+    H.runHermitCmds getCmd print modGuts
+--    commands el 0 h
 
+
+--- THIS CODE IS OLD
 commands :: forall c a . (Term a, Show2 a, Generic a ~ Blob) => EditLine -> Int -> H.Hermitage c a -> CoreM (H.Hermitage c a)
 commands el n h = do
          let (Context _ e) = H.getForeground h

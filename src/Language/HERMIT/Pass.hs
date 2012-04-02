@@ -11,7 +11,7 @@ import Language.HERMIT.Hermitage as Hermitage
 import Language.HERMIT.CommandLine as CommandLine
 import Language.HERMIT.Focus
 
-hermitPass :: [String] -> Hermitage Everything ModGuts -> CoreM (Hermitage Everything ModGuts)
+hermitPass :: [String] -> ModGuts -> CoreM ModGuts
 -- run the command-line option
 hermitPass ["cl"]  h      = do
         liftIO $ print "command line!"

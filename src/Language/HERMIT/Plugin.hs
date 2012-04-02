@@ -16,7 +16,7 @@ plugin = defaultPlugin {
   installCoreToDos = install hermitPass
   }
 
-install :: ([String] -> Hermitage Everything ModGuts -> CoreM (Hermitage Everything ModGuts))
+install :: ([String] -> ModGuts -> CoreM ModGuts)
         -> [CommandLineOption]
         -> [CoreToDo] -> CoreM [CoreToDo]
 install fn opts todos = do
@@ -24,7 +24,7 @@ install fn opts todos = do
     let filename = "HERMIT.out" -- head $ filter (isSuffixOf ".hermit") opts
         myPass = CoreDoPluginPass "HERMIT" $ \ core0 -> do
                 writeProgram ("BEFORE." ++ filename) core0
-                core1 <- Hermitage.new (hermitPass opts) core0
+                core1 <- hermitPass opts core0
                 writeProgram ("AFTER." ++ filename) core1
         -- at front, for now
         allPasses = myPass : todos

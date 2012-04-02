@@ -23,7 +23,7 @@ data CXT where
 
 -- abstact outside this module
 data Hermitage :: CXT -> * -> * where
-    HermitageRoot   :: Context ModGuts          -> Hermitage Everything ModGuts
+    HermitageRoot   :: Context a                -> Hermitage Everything a
     Hermitage       :: Context a
                     -> (Rewrite a -> Rewrite b)
                     -> Hermitage cxt b          -> Hermitage (b :< cxt) a
@@ -137,3 +137,54 @@ runHermit (Focus kick inners) h = do
                 handle ret $ \ h2 ->
                         unfocusHermitage h2
 runHermit (Apply rr) h = applyRewrite rr h
+
+-------------------------------------------------------------------------------
+
+data HermitCmd :: * where
+   FocusCmd     :: (Rewrite Blob -> Rewrite Blob)               -> HermitCmd
+   PopFocusCmd                                                  :: HermitCmd
+   ApplyCmd     :: Rewrite Blob                                 -> HermitCmd
+
+-- The arguments here should be bundled into a datastructure.
+-- (except the Hermitage c a, because the polymorphism here would stop simple updates.)
+
+-- The untyped version
+
+runHermitCmds
+        :: (forall cxt . Hermitage cxt Blob -> IO HermitCmd)  -- waiting for commands
+        -> (String -> IO ())                                    -- where to send errors
+        -> ModGuts -> CoreM ModGuts
+runHermitCmds getCmd errorMsg modGuts = do
+        HermitageRoot (Context _ (ModGutsBlob modGuts')) <- loop (HermitageRoot (Context initHermitEnv (ModGutsBlob modGuts)))
+        return modGuts'
+ where
+    loop :: Hermitage cxt Blob -> CoreM (Hermitage cxt Blob)
+    loop h = do
+        rep <- liftIO $ getCmd h
+        case rep of
+           PopFocusCmd -> return h
+           FocusCmd kick -> do
+                res <- focusHermitage kick h
+                case res of
+                  Left msg -> do
+                     liftIO $ errorMsg $ show msg
+                     loop h
+                  Right h1 -> do
+                       h2 <- loop h1
+                       res <- unfocusHermitage h2
+                       case res of
+                         Left msg -> do
+                           -- This was bad, the unfocus failed. Should never happen
+                           -- The entire recursive call has been thrown away (back to h)
+                           liftIO $ errorMsg $ show msg
+                           loop h
+                         Right h3 -> do
+                           loop h3
+           ApplyCmd rr -> do
+                res <- applyRewrite rr h
+                case res of
+                  Left msg -> do
+                     liftIO $ errorMsg $ show msg
+                     loop h
+                  Right h1 -> do
+                     loop h1
