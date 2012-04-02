@@ -107,12 +107,18 @@ instance Functor Context where
 
 ---------------------------------------------------------------------
 
+-- Lifting this out:
+-- TODO: remove this, replace with Blob everywhere.
+-- Perhaps rename Blog to Generic :: *
+
+type Generic exp = Blob
+
 class (Generic exp ~ Generic (Generic exp)) => Term exp where
   -- | 'Generic' is a sum of all the interesting sub-types, transitively, of @exp@.
   -- We use @Generic e ~ e@ to signify that something is its own Generic.
   -- Simple expression types might be their own sole 'Generic', more complex examples
   -- will have a new datatype for the 'Generic', which will also be an instance of class 'Term'.
-  type Generic exp
+
 
   -- | 'select' looks in a 'Generic', to get the exp inside, or fails.
   select :: Generic exp -> Maybe exp
@@ -171,7 +177,7 @@ data Blob
 
 
 instance Term Blob where
-  type Generic Blob = Blob
+--  type Generic Blob = Blob
 
   select   = Just
   inject   = id
@@ -186,7 +192,7 @@ instance Term Blob where
           AltBlob     alt     -> liftM AltBlob     $ apply (allR rr) (Context c alt)
 
 instance Term ModGuts where
-  type Generic ModGuts = Blob
+--  type Generic ModGuts = Blob
 
   select (ModGutsBlob guts) = return guts
   select _              = Nothing
@@ -197,7 +203,7 @@ instance Term ModGuts where
           return (modGuts { mg_binds = binds' })
 
 instance Term CoreProgram where
-  type Generic CoreProgram = Blob
+--  type Generic CoreProgram = Blob
 
   select (ProgramBlob guts) = return guts
   select _              = Nothing
@@ -212,7 +218,7 @@ instance Term CoreProgram where
               return $ bd' : bds'
 
 instance Term (Bind Id) where
-  type Generic (Bind Id) = Blob
+--  type Generic (Bind Id) = Blob
 --  data Context (Bind Id) = BindBlobContext (Bind Id)
 
   select (BindBlob expr) = return expr
@@ -236,7 +242,7 @@ instance Term (Bind Id) where
 
 
 instance Term (Expr Id) where
-  type Generic (Expr Id) = Blob
+--  type Generic (Expr Id) = Blob
 
   select (ExprBlob expr) = return expr
   select _              = Nothing
@@ -296,7 +302,7 @@ instance Term (Expr Id) where
           _ -> error "TODO: complete please"
 
 instance Term (Alt Id) where
-  type Generic (Alt Id) = Blob
+--  type Generic (Alt Id) = Blob
 
   select (AltBlob expr) = return expr
   select _              = Nothing
