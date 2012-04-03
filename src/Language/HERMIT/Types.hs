@@ -353,13 +353,73 @@ collectYieldM (HermitM m) = HermitM $ do
 -- Need to write these for our entire grammar. These
 -- are scoping aware combinators.
 
-appR :: Translate (Expr Id) a1
+appT :: Translate (Expr Id) a1
      -> Translate (Expr Id) a2
-     -> (a1 -> a2 -> HermitM a)
+     -> (a1 -> a2 -> a)
      -> Translate (Expr Id) a
-appR lhs rhs comp = translate $ \ (Context c e) -> case e of
+appT lhs rhs comp = translate $ \ (Context c e) -> case e of
         App e1 e2 -> do
                 e1' <- apply lhs (Context (c @@ 0) e1)
                 e2' <- apply rhs (Context (c @@ 1) e2)
-                comp e1' e2'
+                return $ comp e1' e2'
         _ -> fail "no match for App"
+
+lamT :: Translate (Expr Id) a1
+     -> (Id -> a1 -> a)
+     -> Translate (Expr Id) a
+lamT tt comb = translate $ \ (Context c e) -> case e of
+        Lam b e -> do
+                e' <- apply tt (Context (addHermitEnvLambdaBinding b c @@ 0) e)
+                return $ comb b e'
+        _ -> fail "no match for Lam"
+
+letT :: Translate (Bind Id) a1
+     -> Translate (Expr Id) a2
+     -> (a1 -> a2 -> a)
+     -> Translate (Expr Id) a
+letT bdsT exprT comb = translate $ \ (Context c e) -> case e of
+        Let bds e -> do
+                -- use *original* env, because the bindings are self-binding,
+                -- if they are recursive. See allR (Rec ...) for details.
+                bds' <- apply bdsT (Context (c @@ 0) bds)
+                let c' = addHermitBinding bds c
+                e'   <- apply exprT (Context (c' @@ 1) e)
+                return $ comb bds' e'
+        _ -> fail "no match for Let"
+
+caseT :: Translate (Expr Id) a1
+      -> Translate (Alt Id) a2          -- Not a list. (Can use pathT to select one alt)
+      -> (a1 -> Id -> Type -> [a2] -> a)
+      -> Translate (Expr Id) a
+caseT exprT altT comb = translate $ \ (Context c e) -> case e of
+        Case e b ty alts -> do
+                e' <- apply exprT (Context (c @@ 0) e)
+                let c' = addHermitBinding (NonRec b e) c
+                alts' <- sequence [ apply altT (Context (c' @@ i) alt)
+                                  | (alt,i) <- zip alts [1..]
+                                  ]
+                return $ comb e' b ty alts'
+        _ -> fail "no match for Case"
+
+castT :: Translate (Expr Id) a1
+     -> (a1 -> Coercion -> a)
+     -> Translate (Expr Id) a
+castT tt comb = translate $ \ (Context c e) -> case e of
+        Cast e cast -> do
+                e' <- apply tt (Context (c @@ 0) e)
+                return $ comb e' cast
+        _ -> fail "no match for Cast"
+
+tickT :: Translate (Expr Id) a1
+     -> (Tickish Id -> a1 -> a)
+     -> Translate (Expr Id) a
+tickT tt comb = translate $ \ (Context c e) -> case e of
+        Tick tk e -> do
+                e' <- apply tt (Context (c @@ 0) e)
+                return $ comb tk e'
+        _ -> fail "no match for Tick"
+
+{-
+          Type _ty -> return $ e
+          Coercion _c -> return $ e
+-}
