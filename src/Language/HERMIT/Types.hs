@@ -350,8 +350,24 @@ collectYieldM (HermitM m) = HermitM $ do
 
 
 ----------------------------------------------------------------
+-- Bind
+
+----------------------------------------------------------------
 -- Need to write these for our entire grammar. These
 -- are scoping aware combinators.
+
+-- Expr
+varT :: (Id -> a)
+     -> Translate (Expr Id) a
+varT comb = translate $ \ (Context c e) -> case e of
+        Var n -> return $ comb n
+        _ -> fail "no match for Var"
+
+litT :: (Literal -> a)
+     -> Translate (Expr Id) a
+litT comb = translate $ \ (Context c e) -> case e of
+        Lit i -> return $ comb i
+        _ -> fail "no match for Lit"
 
 appT :: Translate (Expr Id) a1
      -> Translate (Expr Id) a2
@@ -419,7 +435,15 @@ tickT tt comb = translate $ \ (Context c e) -> case e of
                 return $ comb tk e'
         _ -> fail "no match for Tick"
 
-{-
-          Type _ty -> return $ e
-          Coercion _c -> return $ e
--}
+typeT :: (Type -> a)
+     -> Translate (Expr Id) a
+typeT comb = translate $ \ (Context c e) -> case e of
+        Type i -> return $ comb i
+        _ -> fail "no match for Type"
+
+coercionT :: (Coercion -> a)
+     -> Translate (Expr Id) a
+coercionT comb = translate $ \ (Context c e) -> case e of
+        Coercion i -> return $ comb i
+        _ -> fail "no match for Coercion"
+
