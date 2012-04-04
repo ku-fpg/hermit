@@ -120,7 +120,7 @@ handle (Left msg) _ = return $ Left $ msg
 handle (Right a)  m = m a
 
 data Hermit :: * -> * where
-   Focus :: (Term a, Term x) => (Rewrite x -> Rewrite a) -> [ Hermit x ] -> Hermit a
+   Focus :: (Term a, Term x, Generic x ~ Blob) => (Rewrite x -> Rewrite a) -> [ Hermit x ] -> Hermit a
    Apply :: Rewrite a                                                    -> Hermit a
 
 runHermits :: [Hermit a] -> Hermitage cxt a -> CoreM (Either HermitMessage (Hermitage cxt a))
