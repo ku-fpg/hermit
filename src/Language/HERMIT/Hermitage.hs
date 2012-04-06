@@ -2,7 +2,12 @@
 
 -- A Hermitage is a place of quiet reflection.
 
-module Language.HERMIT.Hermitage where
+module Language.HERMIT.Hermitage (
+        Hermitage,
+        HermitCmd(..),
+        getForeground,
+        runHermitCmds
+) where
 
 import GhcPlugins
 
@@ -14,24 +19,29 @@ import Language.HERMIT.Types
 import Language.HERMIT.KURE
 
 
-
+{-
 -- CXT is *Kind*.
 data CXT where
         Everything :: CXT
-        (:<) :: a -> CXT -> CXT
+        Select :: forall a . a -> CXT -> CXT
 
+We use not-promoted until #5881 is pushed
+-}
+
+data Everything = Everything
+data Select a b = Select
 
 -- abstact outside this module
-data Hermitage :: CXT -> * -> * where
+data Hermitage :: * -> * -> * where
     HermitageRoot   :: Context a                -> Hermitage Everything a
     Hermitage       :: Context a
                     -> (Rewrite a -> Rewrite b)
-                    -> Hermitage cxt b          -> Hermitage (b :< cxt) a
+                    -> Hermitage cxt b          -> Hermitage (Select b cxt) a
 
 {-
         = Hermitage
         { ageModGuts :: ModGuts
-        , ageFocus   :: Focus c a
+        , ageSelect   :: Select c a
         , ageEnv     :: HermitEnv
         }
 -}
@@ -66,14 +76,14 @@ focusHermitage :: forall x a cxt
                 . (Term x, Generic x ~ Blob)
                => (Rewrite x -> Rewrite a)
                -> Hermitage cxt a
-               -> CoreM (Either HermitMessage (Hermitage (a :< cxt) x))
+               -> CoreM (Either HermitMessage (Hermitage (Select a cxt) x))
 focusHermitage zoom h = focus (apply zoomT $ getForeground h)
 
     where
         zoomT :: Translate a [Context (Generic x)]
         zoomT = rewriteTransformerToTranslate zoom
 
-        focus :: HermitM [Context Blob] -> CoreM (Either HermitMessage (Hermitage (a :< cxt) x))
+        focus :: HermitM [Context Blob] -> CoreM (Either HermitMessage (Hermitage (Select a cxt) x))
         focus m = do
                 res <- runHermitM m
                 case res of
@@ -86,7 +96,7 @@ focusHermitage zoom h = focus (apply zoomT $ getForeground h)
                   FailR msg -> return $ Left $ HermitMessage msg
                   YieldR {} -> return $ Left $ TransformationContainedIllegalYield
 
-unfocusHermitage :: Hermitage (a :< cxt) x -> CoreM (Either HermitMessage (Hermitage cxt a))
+unfocusHermitage :: Hermitage (Select a cxt) x -> CoreM (Either HermitMessage (Hermitage cxt a))
 unfocusHermitage (Hermitage (Context _ a) rrT rest) = applyRewrite (rrT $ constT a) rest
 
 applyRewrite :: forall a cxt
