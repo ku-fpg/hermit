@@ -37,6 +37,16 @@ commandLine modGuts = do
                      case words (init line) of
                        nstrs | all isDigit (concat nstrs) && not (null nstrs) ->
                          return $ H.FocusCmd (focusOnPath (map read nstrs) :: Rewrite Blob -> Rewrite Blob)
+                       cmds -> case parser (unwords cmds) of
+                                 Left msg -> do
+                                     putStrLn $ "parse failure: " ++ show msg
+                                     loop
+                                 Right expr -> case interpHExpr expr of
+                                                 Right (RE_RR rr) -> return $ H.ApplyCmd rr
+                                                 other -> do
+                                                         putStrLn $ "Non-rewrite found"
+                                                         loop
+
                        ["*inline"] -> return $ H.ApplyCmd (extractR $ bottomupR $ promoteR $ tryR $ inline)
                        _ -> do putStrLn $ "do not understand " ++ show line
                                loop
