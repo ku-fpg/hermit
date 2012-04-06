@@ -20,14 +20,6 @@ all_rewrites = Map.unions
         [ fmap promoteR expr_rewrites
         ]
 
-ho_rewrites :: Map String (Rewrite Blob -> Rewrite Blob)
-ho_rewrites = Map.fromList
-        [ ("bottomup",          bottomupR)
-        , ("topdown",           topdownR)
-        , ("try",               tryR)
-        ]
-
-
 expr_rewrites :: Map String (Rewrite CoreExpr)
 expr_rewrites = Map.fromList
         [ ("inline",            Inline.inline)
@@ -37,65 +29,108 @@ expr_rewrites = Map.fromList
 --        , ("case-of-known-constructor", ...)
         ]
 
+ho_rewrites :: Map String (Rewrite Blob -> Rewrite Blob)
+ho_rewrites = Map.fromList
+        [ ("bottomup",          bottomupR)
+        , ("topdown",           topdownR)
+        , ("try",               tryR)
+        ]
 
 selects :: Map String (TH.Name -> Rewrite Blob -> Rewrite Blob)
 selects = Map.fromList
         [ ("consider",          considerK)
+--        , ("inside",            insideK)
         ]
-
 
 considerK :: TH.Name -> Rewrite Blob -> Rewrite Blob
 considerK = undefined
 
--- Cheap and cherful parser
-parser :: String -> Either String (Rewrite Blob)
-parser str =
-        case parseExpr str of
-          [] -> Left $ "bad parse for: " ++ str
-          ((e,""):_) -> interpHExpr e
+------------------------------------------------------------------------------------
+
+parseRewrite :: String -> Either String (Rewrite Blob)
+parseRewrite str = do
+        expr <- parser str
+        re   <- interpHExpr expr
+        case re of
+           RE_RR rr -> return rr
+           _ -> Left $ "parsed, interp, returned non RR"
+
+{-
+parseRewriteRewrite  :: String -> Either String (Rewrite Blob -> Rewrite Blob)
+parseRewriteRewrite  str = do
+        expr <- parser str
+        re   <- interpHExpr expr
+        case re of
+           RE_RR rr -> return rr
+           _ -> Left $ "parsed, interp, returned non RR"
+-}
+------------------------------------------------------------------------------------
+
+
+data RewriteElem
+        = RE_RR      (Rewrite Blob)
+        | RE_RR_RR   (Rewrite Blob -> Rewrite Blob)
+        | RE_N_RR    (TH.Name -> Rewrite Blob)
+        | RE_N_RR_RR (TH.Name -> (Rewrite Blob -> Rewrite Blob))
+        | RE_N       TH.Name
 
 -- Very hacky (for now)
-interpHExpr :: HExpr -> Either String (Rewrite Blob)
-interpHExpr (HVar str) =
-        case Map.lookup str all_rewrites of
-          Just rr -> Right $ rr
-          Nothing -> Left $ "can not find : " ++ show str
+interpHExpr :: HExpr -> Either String RewriteElem
+interpHExpr (HLit str)
+        = Right $ RE_N (TH.mkName str)
+interpHExpr (HVar str)
+        | Just rr <- Map.lookup str all_rewrites
+        = Right $ RE_RR rr
+        | Just rr <- Map.lookup str ho_rewrites
+        = Right $ RE_RR_RR rr
+        | Just rr <- Map.lookup str selects
+        = Right $ RE_N_RR_RR rr
+        | otherwise
+        = Left $ "can not find : " ++ show str
 interpHExpr (HApp e1 e2) = do
-        r <- interpHExprHO e1
+        r <- interpHExpr e1
         case r of
-          RRRR f -> do
+          RE_RR rr -> Left $ "type error: a rewrite has been applied to an argument"
+          RE_RR_RR ff -> do
                   a2 <- interpHExpr e2
-                  return (f a2)
+                  case a2 of
+                    RE_RR rr -> return $ RE_RR (ff rr)
+                    _ -> Left $ "type error: lhs not a RR"
+          RE_N_RR ff -> do
+                  a2 <- interpHExpr e2
+                  case a2 of
+                    RE_N rr -> return $ RE_RR (ff rr)
+                    _ -> Left $ "type error: lhs not a N"
+          RE_N_RR_RR ff -> do
+                  a2 <- interpHExpr e2
+                  case a2 of
+                    RE_N rr -> return $ RE_RR_RR (ff rr)
+                    _ -> Left $ "type error: lhs not a N"
+          RE_N nm -> Left $ "type error: names can not be used as functions"
 
-data HOR
-        = RRRR (Rewrite Blob -> Rewrite Blob)
-
-
-interpHExprHO :: HExpr -> Either String HOR
-interpHExprHO (HVar str) =
-        case Map.lookup str ho_rewrites of
-          Just rr -> Right $ RRRR rr
-          Nothing -> Left $ "can not find : " ++ show str
-{-
-interpHExprHO (HApp e1 e2) = do
-        HOR k rr <- interpHExprHO e1
-        a2 <- k e2
-        return (HOR (rr a2)
--}
-interpHExprHO _ = Left $ "bad higher-orderness"
-
-data HType = HRR        -- R a
-           | HRR2RR     -- R a -> R a
+--------------------------------------------------------------
 
 data HExpr = HVar String
+           | HLit String
            | HApp HExpr HExpr
         deriving Show
+
+-- Cheap and cheerful parser
+parser :: String -> Either String HExpr
+parser str =
+        case parseExpr str of
+          ((e,""):_) -> return e
+          _ -> Left $ "bad parse for: " ++ str
 
 parseExpr0 :: ReadS HExpr
 parseExpr0 = \ inp ->
         [ (HVar str,inp1)
         | (str,inp1) <- parseToken inp
         , all isAlpha str
+        ] ++
+        [ (HLit str,inp2)
+        | ("#",inp1) <- parseToken inp
+        , (str,inp2) <- parseToken inp1
         ] ++
         [ (e,inp3)
         | ("(",inp1) <- parseToken inp
