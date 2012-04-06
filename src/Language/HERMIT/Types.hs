@@ -346,6 +346,23 @@ collectYieldM (HermitM m) = HermitM $ do
           YieldR _ cxts  -> return $ SuccessR cxts
 
 
+-- Hack till Neil's KURE comes online.
+rewriteTransformerToKick
+        :: (Term b, Generic b ~ Blob)
+        => (Rewrite b -> Rewrite a)
+        -> Translate a (Context b, b -> HermitM a)
+rewriteTransformerToKick rrT = translate $ \ (Context c a) -> do
+        res <- collectYieldM (apply (rrT yieldR) (Context c a))
+        case res of
+          [cxt@(Context c b)] ->
+            case select b of
+              Nothing -> fail "rewriteTransformerToKick/select failed"
+              Just b' -> return
+                ( Context c b'
+                , \ b -> apply (rrT (arr (const b))) (Context c a)
+                )
+          [] -> fail "no inner rewrite for rewriteTransformerToKick"
+          _  -> fail "to many inner rewrite for rewriteTransformerToKick"
 
 ----------------------------------------------------------------
 -- Bind
