@@ -34,7 +34,7 @@ commandLine modGuts = do
                    Nothing -> return H.PopFocusCmd
                    Just line -> do
                      case words (init line) of
-                       nstrs | all isDigit (concat nstrs) ->
+                       nstrs | all isDigit (concat nstrs) && non (null nstrs) ->
                          return $ H.FocusCmd (focusOnPath (map read nstrs) :: Rewrite Blob -> Rewrite Blob)
                        ["*inline"] -> return $ H.ApplyCmd (extractR $ bottomupR $ promoteR $ tryR $ inline)
                        _ -> do putStrLn $ "do not understand " ++ show line
