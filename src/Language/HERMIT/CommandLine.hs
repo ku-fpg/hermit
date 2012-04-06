@@ -44,7 +44,7 @@ commandLine modGuts = do
     H.runHermitCmds getCmd print modGuts
 --    commands el 0 h
 
-
+{-
 --- THIS CODE IS OLD
 commands :: forall c a . (Term a, Show2 a, Generic a ~ Blob) => EditLine -> Int -> H.Hermitage c a -> CoreM (H.Hermitage c a)
 commands el n h = do
@@ -102,6 +102,7 @@ commands el n h = do
                                Right h3 -> do
                                  commands el n h3
 
+-}
 
 -- Later, this will have depth, and other pretty print options.
 class Show2 a where
