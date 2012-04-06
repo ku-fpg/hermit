@@ -15,6 +15,7 @@ import Language.HERMIT.Types
 import qualified Language.HERMIT.Hermitage as H
 import Language.HERMIT.Focus
 import Language.HERMIT.KURE
+import Language.HERMIT.Dictionary
 
 import Language.HERMIT.Primitive.Inline
 
@@ -34,7 +35,7 @@ commandLine modGuts = do
                    Nothing -> return H.PopFocusCmd
                    Just line -> do
                      case words (init line) of
-                       nstrs | all isDigit (concat nstrs) && non (null nstrs) ->
+                       nstrs | all isDigit (concat nstrs) && not (null nstrs) ->
                          return $ H.FocusCmd (focusOnPath (map read nstrs) :: Rewrite Blob -> Rewrite Blob)
                        ["*inline"] -> return $ H.ApplyCmd (extractR $ bottomupR $ promoteR $ tryR $ inline)
                        _ -> do putStrLn $ "do not understand " ++ show line
