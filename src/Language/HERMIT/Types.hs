@@ -316,8 +316,62 @@ instance Term (Expr Id) where
 
           _ -> error "TODO: complete please"
 
+  oneL 0 = (( appT contextT idR  $ \ cxt e2       -> (cxt, \ e1 -> return $ App e1 e2) )        `glueL` promoteL )
+        <+ (( lamT contextT      $ \ v cxt        -> (cxt, \ e1 -> return $ Lam v e1) )         `glueL` promoteL )
+        <+ (( letT contextT idR  $ \ cxt e2       -> (cxt, \ bd -> return $ Let bd e2) )        `glueL` promoteL )
+        <+ (( caseT contextT idR $ \ cxt v t alts -> (cxt, \ e1 -> return $ Case e1 v t alts) ) `glueL` promoteL )
+        <+ (( castT contextT     $ \ cxt c        -> (cxt, \ e1 -> return $ Cast e1 c) )        `glueL` promoteL )
+        <+ (( tickT contextT     $ \ t cxt        -> (cxt, \ e1 -> return $ Tick t e1) )        `glueL` promoteL )
+  oneL 1 = (( appT idR contextT  $ \ e1 cxt       -> (cxt, \ e2 -> return $ App e1 e2) )        `glueL` promoteL )
+        <+ (( letT idR contextT  $ \ bd cxt       -> (cxt, \ e2 -> return $ Let bd e2) )        `glueL` promoteL )
+        <+ caseOneL 1
+  oneL n = caseOneL n
+
+caseOneL n = do
+        sz <- caseT idR idR $ \ _ _ _ alts -> length alts
+        if n >= 1 && n <= sz
+          then failL -- (( caseT idR' contextT $ \ cxt v t alts -> (cxt, \ e1 -> return $ Case e1 v t alts) ) `glueL` promoteL )
+          else failL
+
+--        <+ (( caseT contextT idR $ \ cxt v t alts -> (cxt, \ e1 -> return $ Case e1 v t alts) ) `glueL` promoteL )
+
+--         foo cxt $ \ e1 -> App e1 e2 )
+
+foo :: (Monad m, Term a, Term exp)
+     => Context a -> (exp -> a1) -> (Context (Generic a), Generic exp -> m a1)
+foo cxt f =
+             ( fmap inject cxt
+              , \ e -> case select e of
+                         Nothing -> fail ""
+                         Just e1 -> return (f e1)
+              )
+
 idR :: Rewrite exp
 idR = rewrite $ \ (Context _ e) -> return e
+
+contextT :: Translate e (Context e)
+contextT = translate $ return . id
+
+instance Term [Alt Id] where
+  type Generic [Alt Id] = Blob
+
+  select (AltListBlob expr) = return expr
+  select _              = Nothing
+  inject                = AltListBlob
+
+  allR rr = ( consT (extractR rr) (extractR rr) $ \ x xs -> x : xs )
+         <+ ( nilT                              $ [] )
+
+  crushU tt = ( consT (extractU tt) (extractU tt) $ mappend )
+           <+ ( nilT                              $ mempty )
+
+  crushU tt = ( consT (extractU tt) (extractU tt) $ mappend )
+           <+ ( nilT                              $ mempty )
+
+  oneL 0 = consT contextT idR  (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2) )        `glueL` promoteL
+  oneL 1 = consT idR contextT  (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2) )        `glueL` promoteL
+  oneL _ = failL
+
 
 instance Term (Alt Id) where
   type Generic (Alt Id) = Blob
@@ -326,11 +380,12 @@ instance Term (Alt Id) where
   select _              = Nothing
   inject                = AltBlob
 
-
   allR rr = rewrite $ \ (Context c (con,bs,e)) -> do
                         let c' = foldr addHermitEnvLambdaBinding c bs
                         e' <- apply (extractR rr) (Context (c' @@ 0) e)
                         return (con,bs,e')
+
+
 
 {-
 -- Need to define thse
