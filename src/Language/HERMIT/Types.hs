@@ -299,6 +299,9 @@ instance Term (Expr Id) where
 
           _ -> error "TODO: complete please"
 
+idR :: Rewrite exp
+idR = rewrite $ \ (Context _ e) -> return e
+
 instance Term (Alt Id) where
   type Generic (Alt Id) = Blob
 
@@ -461,4 +464,12 @@ coercionT :: (Coercion -> a)
 coercionT comb = translate $ \ (Context c e) -> case e of
         Coercion i -> return $ comb i
         _ -> fail "no match for Coercion"
+
+------------------------------------
+
+-- Moved from KURE in HERMIT
+
+-- | like a catch, '<+' does the first translate, and if it fails, then does the second translate.
+(<+) :: Translate a b -> Translate a b -> Translate a b
+(<+) rr1 rr2 = translate $ \ (Context c e) -> apply rr1 (Context c e) `catchH` (\ _ -> apply rr2 (Context c e))
 

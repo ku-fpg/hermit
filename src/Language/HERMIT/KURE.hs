@@ -20,8 +20,8 @@ import Language.HERMIT.HermitEnv
 -- The Translate combinators.
 
 -- | like a catch, '<+' does the first translate, and if it fails, then does the second translate.
-(<+) :: Translate a b -> Translate a b -> Translate a b
-(<+) rr1 rr2 = translate $ \ (Context c e) -> apply rr1 (Context c e) `catchH` (\ _ -> apply rr2 (Context c e))
+--(<+) :: Translate a b -> Translate a b -> Translate a b
+--(<+) rr1 rr2 = translate $ \ (Context c e) -> apply rr1 (Context c e) `catchH` (\ _ -> apply rr2 (Context c e))
 
 infixl 3 >->
 
@@ -110,8 +110,9 @@ acceptR fn = translate $ \ (Context c expA) -> if fn expA
 	            else fail "accept failed"
 
 -- | identity rewrite.
-idR :: Rewrite exp
-idR = rewrite $ \ (Context _ e) -> return e
+-- Moved int Types
+--idR :: Rewrite exp
+--idR = rewrite $ \ (Context _ e) -> return e
 
 -- | failing rewrite.
 failR :: String -> Rewrite a
