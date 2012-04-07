@@ -178,12 +178,13 @@ promoteL = lens $ \ cxt -> do
 ----------------------------------------------------------------------------
 
 
--- To rename
+-- To rename to Core
 data Blob
         = ModGutsBlob   ModGuts
         | ProgramBlob   CoreProgram
         | BindBlob      (Bind Id)
         | ExprBlob      (Expr Id)
+        | AltListBlob   [Alt Id]
         | AltBlob       (Alt Id)
         | TypeBlob      Type
 
