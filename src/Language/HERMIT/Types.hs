@@ -145,6 +145,12 @@ extractR rr = rewrite $ \ cxt -> do
 extractU  :: (Term exp) => Translate (Generic exp) r -> Translate exp r
 extractU rr = translate $ apply rr . fmap inject
 
+extractL :: (Term exp) => Lens (Generic exp) exp
+extractL = lens $ \ (Context c a) -> do
+        case select a of
+           Nothing -> fail "extractL"
+           Just a' -> return (Context c a', return . inject)
+
 -- | 'promoteR' promotes a 'Rewrite' into a 'Generic' 'Rewrite'; other types inside Generic cause failure.
 -- 'try' can be used to convert a failure-by-default promotion into a 'id-by-default' promotion.
 promoteR  :: (Term exp) => Rewrite  exp -> Rewrite  (Generic exp)
@@ -161,6 +167,13 @@ promoteU rr = translate $ \ (Context c e) -> do
                case select e of
                  Nothing -> fail "promoteI"
                  Just e' -> apply rr (Context c e')
+
+promoteL  :: (Term exp) => Lens exp (Generic exp)
+promoteL = lens $ \ cxt -> do
+              return (fmap inject cxt, \ b -> case select b of
+                                                Nothing -> fail "promoteL"
+                                                Just b' -> return b')
+
 
 ----------------------------------------------------------------------------
 
