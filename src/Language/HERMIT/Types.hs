@@ -467,6 +467,25 @@ coercionT comb = translate $ \ (Context c e) -> case e of
 
 ------------------------------------
 
+consT :: Translate a a1
+      -> Translate [a] a2
+      -> (a1 -> a2 -> b)
+      -> Translate [a] b
+consT t1 t2 f = translate $ \ (Context c e) -> case e of
+        (x:xs) -> do
+                r1 <- apply t1 (Context (c @@ 0) x)
+                r2 <- apply t2 (Context (c @@ 1) xs)
+                return $ f r1 r2
+        _ -> fail "no match for consT"
+
+nilT :: b
+     -> Translate [a] b
+nilT b = translate $ \ (Context c e) -> case e of
+        [] -> return b
+        _ -> fail "no match for nilT"
+
+------------------------------------
+
 -- Moved from KURE in HERMIT
 
 -- | like a catch, '<+' does the first translate, and if it fails, then does the second translate.
