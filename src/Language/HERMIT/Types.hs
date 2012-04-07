@@ -131,6 +131,9 @@ class (Generic exp ~ Generic (Generic exp)) => Term exp where
   -- | 'crushU' applies a 'Generic' Translate to a common, 'Monoid'al result, to all the interesting children of this node.
   crushU :: (Monoid result) => Translate (Generic exp) result -> Translate exp result
 
+  -- | 'oneL' generates a single-level Lens that focuses on specific (numbered) child.
+  oneL :: Int -> Lens exp (Generic exp)
+
 ---------------------------------------------------------------------
 
 -- | 'extractR' converts a 'Rewrite' over a 'Generic' into a rewrite over a specific expression type.
@@ -380,6 +383,39 @@ rewriteTransformerToKick rrT = translate $ \ (Context c a) -> do
                 )
           [] -> fail "no inner rewrite for rewriteTransformerToKick"
           _  -> fail "to many inner rewrite for rewriteTransformerToKick"
+----------------------------------------------------------------
+-- Lens, to be put back into KURE
+
+type Lens a b = Translate a (Context b, b -> HermitM a)
+
+-- lens :: Lens a b -> Context a -> HermitM (Context b, b -> HermitM a)
+lens :: (Context a -> HermitM (Context b, b -> HermitM a)) -> Lens a b
+lens = translate
+
+--applyL :: Lens a b -> Context a -> HermitM (Context b, b -> HermitM a)
+--applyL (Lens (HermitT tt)) = tt
+
+idL :: Lens a a
+idL = lens $ \ cxt -> return (cxt, return)
+
+failL :: Lens a b
+failL = lens $ \ cxt -> fail "noLens"
+
+glueL :: Lens a b -> Lens b c -> Lens a c
+glueL lens1 lens2 = lens $ \ cxt -> do
+        (c_b,fn_b_a) <- apply lens1 cxt
+        (c_c,fn_c_b) <- apply lens2 c_b
+        return (c_c,fn_c_b >=> fn_b_a)
+
+--instance Cat.Category Lens where
+--   id = idL
+--   (.) = flip glueL
+
+rewriteL :: Lens a b -> Rewrite b -> Rewrite a
+rewriteL lens rr = rewrite $ \ cxt@(Context c a) -> do
+        (c_b,fn_b_a) <- apply lens cxt
+        b <- apply rr c_b
+        fn_b_a b
 
 ----------------------------------------------------------------
 -- Bind
