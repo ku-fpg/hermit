@@ -93,7 +93,7 @@ instance Term ModGuts where
           return (modGuts { mg_binds = binds' })
 
   oneL 0 = modGutsT contextT (\ modGuts cxt -> (cxt, \ prog -> return $ modGuts { mg_binds = prog })) `glueL` promoteL
-  oneL _ = failL
+  oneL _ = failL "not lens for ModGuts"
 
 modGutsT :: Translate CoreProgram a1
          -> (ModGuts -> a1 -> a)                -- slightly different; passes in *all* of the original
@@ -119,7 +119,7 @@ instance Term CoreProgram where
 
   oneL 0 = consBindT contextT idR (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2)) `glueL` promoteL
   oneL 1 = consBindT idR contextT (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2)) `glueL` promoteL
-  oneL _ = failL
+  oneL _ = failL "no lens for CoreProgram"
 
 consBindT :: (a ~ CoreBind)
       => Translate a a1
@@ -164,7 +164,7 @@ instance Term (Bind Id) where
             -- find the number of binds
             sz <- recT (const idR) length
             if n < 0 || n >= sz
-                then failL
+                then failL "no lens for CoreBind"
                      -- if in range, then figure out context
                 else recT (\ _ -> contextT)
                           (\ bds -> (snd (bds !! n)
@@ -284,7 +284,7 @@ instance Term (Expr Id) where
         caseOneL = do
             sz <- caseT idR (const idR) $ \ _ _ _ alts -> length alts
             if n < 1 || n > sz
-                then failL
+                then failL "no lens for Expr"
                 else caseT idR (const contextT)
                                (\ e v t alts -> ( alts !! (n - 1)
                                                   , \ alt -> return $ Case e v t
@@ -342,7 +342,7 @@ instance Term (Alt Id) where
                         return (con,bs,e')
 
   oneL 0 = altT contextT (\ con bs cxt -> (cxt, \ e1 -> return $ (con,bs,e1))) `glueL` promoteL
-  oneL _ = failL
+  oneL _ = failL "no lens for Alt"
 
 altT :: Translate (Expr Id) a1
      -> (AltCon -> [Id] -> a1 -> a)

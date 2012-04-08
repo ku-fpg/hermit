@@ -329,8 +329,8 @@ lens = translate
 idL :: Lens a a
 idL = lens $ \ cxt -> return (cxt, return)
 
-failL :: Lens a b
-failL = lens $ \ cxt -> fail "noLens"
+failL :: String -> Lens a b
+failL msg = lens $ \ cxt -> fail msg
 
 glueL :: Lens a b -> Lens b c -> Lens a c
 glueL lens1 lens2 = lens $ \ cxt -> do
