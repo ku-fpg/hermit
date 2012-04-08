@@ -38,7 +38,7 @@ Library
        Language.HERMIT.KURE
        Language.HERMIT.Primitive
        Language.HERMIT.Dictionary
-       Language.HERMIT.Command
+       Language.HERMIT.Expr
        Language.HERMIT.Primitive.Inline
 
   Other-modules:

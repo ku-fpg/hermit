@@ -9,7 +9,7 @@ import Data.Map(Map)
 
 import Language.HERMIT.Types
 import Language.HERMIT.KURE
-import Language.HERMIT.Command
+import qualified Language.HERMIT.Expr as Expr
 
 import qualified Language.Haskell.TH as TH
 
@@ -63,10 +63,10 @@ data BaseCommand
         | TOP           -- pop until at the top of the tree
 
 -- Very hacky (for now)
-interpCommand :: Command -> Either String TypedCommand
-interpCommand (HLit str)
+interpCommand :: Expr.Expr -> Either String TypedCommand
+interpCommand (Expr.Lit str)
         = Right $ RE_N (TH.mkName str)
-interpCommand (HVar str)
+interpCommand (Expr.Var str)
         | Just rr <- Map.lookup str all_rewrites
         = Right $ RE_RR rr
         | Just rr <- Map.lookup str ho_rewrites
@@ -75,7 +75,7 @@ interpCommand (HVar str)
         = Right $ RE_N_RR_RR rr
         | otherwise
         = Left $ "can not find : " ++ show str
-interpCommand (HApp e1 e2) = do
+interpCommand (Expr.App e1 e2) = do
         r <- interpCommand e1
         case r of
           RE_RR rr -> Left $ "type error: a rewrite has been applied to an argument"
