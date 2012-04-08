@@ -352,6 +352,16 @@ translateL :: Lens a b -> Translate a b
 translateL = fmap (\ (Context _ b,_) -> b)
 
 
+-- Path stuff
+
+-- A 'Path' is a route through a specific tree, to a specific node.
+-- The first element of the list is the top node.
+newtype Path = Path [Int]
+
+manyL :: forall e . (Term e, e ~ Generic e) => Path -> Lens (Generic e) (Generic e)
+manyL (Path [])     = idL
+manyL (Path (p:ps)) = oneL p `glueL` manyL (Path ps)
+
 
 {-
 
