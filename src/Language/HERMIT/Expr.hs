@@ -29,7 +29,7 @@ parseExpr0 = \ inp ->
         , all isAlphaNum str
         ] ++
         [ (Lit str,inp2)
-        | ("#",inp1) <- parseToken inp
+        | ("'",inp1) <- parseToken inp
         , (str,inp2) <- parseToken inp1
         ] ++
         [ (e,inp3)
@@ -60,6 +60,13 @@ item str = \ inp ->
         ]
 
 parseToken :: ReadS String
-parseToken = \ inp -> if all isSpace inp then [] else lex inp
+parseToken []       = []
+parseToken (' ':cs) = parseToken cs
+parseToken ('(':cs) = [("(",cs)]
+parseToken (')':cs) = [(")",cs)]
+parseToken ('\'':cs) = [("'",cs)]
+parseToken (c:cs)    | isAlphaNum c = lex (c:cs)
+parseToken _         = []
+
 
 
