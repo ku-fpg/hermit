@@ -56,6 +56,13 @@ instance Term Core where
           ExprCore    expr    -> liftM ExprCore    $ apply (allR rr) (Context c expr)
           AltCore     alt     -> liftM AltCore     $ apply (allR rr) (Context c alt)
 
+  crushU tt = translate $ \ (Context c blob) -> case blob of
+          ModGutsCore x -> apply (crushU tt) (Context c x)
+          ProgramCore x -> apply (crushU tt) (Context c x)
+          BindCore x    -> apply (crushU tt) (Context c x)
+          ExprCore x    -> apply (crushU tt) (Context c x)
+          AltCore x     -> apply (crushU tt) (Context c x)
+
   oneL n = translate $ \ (Context c blob) -> case blob of
           -- Going from Core to sub-Blog is the one case where you do not augment the path,
           -- but instead direct traffic.
@@ -92,6 +99,8 @@ instance Term ModGuts where
           binds' <- apply (extractR rr) (Context (c @@ 0) (mg_binds modGuts))
           return (modGuts { mg_binds = binds' })
 
+  crushU tt = modGutsT (extractU tt) $ \ _modGuts r -> r
+
   oneL 0 = modGutsT contextT (\ modGuts cxt -> (cxt, \ prog -> return $ modGuts { mg_binds = prog })) `glueL` promoteL
   oneL _ = failL "not lens for ModGuts"
 
@@ -116,6 +125,9 @@ instance Term CoreProgram where
               let c' = addHermitBinding bd c
               bds' <- apply (extractR rr) (Context (c' @@ 1) bds)
               return $ bd' : bds'
+
+  crushU tt = consBindT (extractU tt) (extractU tt) (\ x xs -> x `mappend` xs)
+           <+ nilT mempty
 
   oneL 0 = consBindT contextT idR (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2)) `glueL` promoteL
   oneL 1 = consBindT idR contextT (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2)) `glueL` promoteL
@@ -155,6 +167,9 @@ instance Term (Bind Id) where
                         | ((n,e),i) <- zip bds [0..]
                         ]
                    return $ Rec bds'
+
+  crushU tt = nonRecT (extractU tt) (\ _ r -> r)
+           <+ recT    (const $ extractU tt) (mconcat . map snd)
 
   oneL n = case n of 0 -> nonrec <+ rec
                      n -> rec
@@ -255,18 +270,16 @@ instance Term (Expr Id) where
           Type _ty -> return $ e
           Coercion _c -> return $ e
 
-  crushU t = translate $ \ (Context c e) -> case e of
-          Var {} -> return mempty
-          Lit {} -> return mempty
-          App e1 e2 ->
-                do r1' <- apply (extractU t) (Context c e1)
-                   r2' <- apply (extractU t) (Context c e2)
-                   return $ r1' `mappend` r2'
-          Lam b e ->
-                do e' <- apply (extractU t) (Context (addHermitEnvLambdaBinding b c) e)
-                   return $ e'
-
-          _ -> error "TODO: complete please"
+  crushU tt = varT (\ _ -> mempty)
+           <+ litT (\ _ -> mempty)
+           <+ appT (extractU tt) (extractU tt) mappend
+           <+ lamT (extractU tt) (\ _ r -> r)
+           <+ letT (extractU tt) (extractU tt) mappend
+           <+ caseT (extractU tt) (const $ extractU tt) (\ r v t rs -> mconcat (r : rs))
+           <+ castT (extractU tt) (\ r _ -> r)
+           <+ tickT (extractU tt) (\ _ r -> r)
+           <+ typeT (\ _ -> mempty)
+           <+ coercionT (\ _ -> mempty)
 
   oneL n = case n of
       0 -> (( appT contextT idR  $ \ cxt e2       -> (cxt, \ e1 -> return $ App e1 e2) )        `glueL` promoteL )
@@ -340,6 +353,8 @@ instance Term (Alt Id) where
                         let c' = foldr addHermitEnvLambdaBinding c bs
                         e' <- apply (extractR rr) (Context (c' @@ 0) e)
                         return (con,bs,e')
+
+  crushU tt = altT (extractU tt) $ \ con bs r -> r
 
   oneL 0 = altT contextT (\ con bs cxt -> (cxt, \ e1 -> return $ (con,bs,e1))) `glueL` promoteL
   oneL _ = failL "no lens for Alt"
