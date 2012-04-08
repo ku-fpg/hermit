@@ -78,6 +78,11 @@ instance Monad (HermitT a) where
                         case k r of
                           HermitT f -> f e
 
+
+instance Functor (HermitT a) where
+        fmap f m = m >>= return . f
+
+
 ----------------------------------------------------------------------------
 -- TODO: figure this out, we use it quite a bit
 type Translate exp1 exp2 = HermitT (Context exp1) exp2
@@ -593,6 +598,9 @@ rewriteL lens rr = rewrite $ \ cxt@(Context c a) -> do
         (c_b,fn_b_a) <- apply lens cxt
         b <- apply rr c_b
         fn_b_a b
+
+translateL :: Lens a b -> Translate a b
+translateL = fmap (\ (Context _ b,_) -> b)
 
 ----------------------------------------------------------------
 -- Bind
