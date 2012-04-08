@@ -35,7 +35,6 @@ Library
        Language.HERMIT.CommandLine
        Language.HERMIT.Focus
        Language.HERMIT.KURE
-       Language.HERMIT.Primitive
        Language.HERMIT.Dictionary
        Language.HERMIT.Expr
        Language.HERMIT.Command
