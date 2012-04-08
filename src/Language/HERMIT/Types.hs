@@ -20,7 +20,6 @@ newtype HermitM a = HermitM { runHermitM :: CoreM (HermitR a) }
 data HermitR :: * -> * where
         SuccessR :: a                   -> HermitR a
         FailR    :: String               -> HermitR a
-        YieldR   :: a  -> [Context Core] -> HermitR a
 
 instance Monad HermitM where
         return a = HermitM (return $ SuccessR a)
@@ -29,16 +28,7 @@ instance Monad HermitM where
                 case r of
                   SuccessR a -> runHermitM (k a)
                   FailR msg  -> return $ FailR msg
-                  YieldR a c1 -> do
-                           r' <- runHermitM (k a)
-                           case r' of
-                             SuccessR a  -> return $ YieldR a c1
-                             FailR msg   -> return $ FailR msg
-                             YieldR a c2 -> return $ YieldR a (c1 ++ c2)
         fail msg = HermitM (return $ FailR msg)
-
-yieldM :: Context Core -> HermitM ()
-yieldM blob = HermitM $ return $ YieldR () [blob]
 
 catchH :: HermitM a -> (String -> HermitM a) -> HermitM a
 catchH (HermitM m) k = HermitM $ do
@@ -46,7 +36,6 @@ catchH (HermitM m) k = HermitM $ do
         case r of
           SuccessR a -> return $ SuccessR a
           FailR msg  -> runHermitM (k msg)
-          YieldR a c -> return $ YieldR a c
 
 ----------------------------------------------------------------------------
 {-
@@ -526,46 +515,6 @@ appR r1 r2 = rewrite $ \ c e -> case e of
 -}
 
 --------------------------------------------------------
-
-yieldR :: (Term a, Generic a ~ Core) => Rewrite a
-yieldR = rewrite $ \ cxt@(Context _ a) -> do
-                yieldM (fmap inject cxt)
-                return a
-
-rewriteTransformerToTranslate
-        :: (Term b, Generic b ~ Core)
-        => (Rewrite b -> Rewrite a)
-        -> Translate a [Context (Generic b)]
-rewriteTransformerToTranslate rrT = translate $ \ (Context c a) -> do
-        collectYieldM (apply (rrT yieldR) (Context c a))
-
-collectYieldM :: HermitM a -> HermitM [Context Core]
-collectYieldM (HermitM m) = HermitM $ do
-        r <- m
-        case r of
-          SuccessR _     -> return $ SuccessR []
-          FailR   msg    -> return $ FailR msg
-          YieldR _ cxts  -> return $ SuccessR cxts
-
-
--- Hack till Neil's KURE comes online.
-rewriteTransformerToKick
-        :: (Term b, Generic b ~ Core)
-        => (Rewrite b -> Rewrite a)
-        -> Translate a (Context b, b -> HermitM a)
-rewriteTransformerToKick rrT = translate $ \ (Context c a) -> do
-        res <- collectYieldM (apply (rrT yieldR) (Context c a))
-        case res of
-          [cxt@(Context c b)] ->
-            case select b of
-              Nothing -> fail "rewriteTransformerToKick/select failed"
-              Just b' -> return
-                ( Context c b'
-                , \ b -> apply (rrT (arr (const b))) (Context c a)
-                )
-          [] -> fail "no inner rewrite for rewriteTransformerToKick"
-          _  -> fail "to many inner rewrite for rewriteTransformerToKick"
-----------------------------------------------------------------
 -- Lens, to be put back into KURE
 
 type Lens a b = Translate a (Context b, b -> HermitM a)
