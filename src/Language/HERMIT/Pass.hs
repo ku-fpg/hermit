@@ -7,7 +7,6 @@ import PprCore -- compiler/coreSyn/PprCore.lhs
 
 import Control.Monad
 
-import Language.HERMIT.Hermitage as Hermitage
 import Language.HERMIT.CommandLine as CommandLine
 import Language.HERMIT.Focus
 

@@ -6,7 +6,6 @@ import GhcPlugins
 import Control.Monad
 import Data.List
 
-import Language.HERMIT.Hermitage as Hermitage
 import Language.HERMIT.Pass             -- for now
 import Language.HERMIT.Focus
 
