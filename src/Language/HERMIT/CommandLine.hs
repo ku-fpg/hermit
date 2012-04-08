@@ -16,6 +16,7 @@ import qualified Language.HERMIT.Hermitage as H
 import Language.HERMIT.Focus
 import Language.HERMIT.KURE
 import Language.HERMIT.Dictionary
+import Language.HERMIT.Command
 
 import Language.HERMIT.Primitive.Inline
 
@@ -35,13 +36,15 @@ commandLine modGuts = do
                    Nothing -> return H.PopFocusCmd
                    Just line -> do
                      case words (init line) of
-                       nstrs | all isDigit (concat nstrs) && not (null nstrs) ->
-                         return $ H.FocusCmd (focusOnPath (map read nstrs) :: Rewrite Blob -> Rewrite Blob)
-                       cmds -> case parser (unwords cmds) of
+                       [nstr] | all isDigit nstr ->
+                         return $ H.FocusCmd (rewriteL (oneL (read nstr)) :: Rewrite Blob -> Rewrite Blob)
+--                       nstrs | all isDigit (concat nstrs) && not (null nstrs) ->
+--                         return $ H.FocusCmd (focusOnPath (map read nstrs) :: Rewrite Blob -> Rewrite Blob)
+                       cmds -> case parseCommand (unwords cmds) of
                                  Left msg -> do
                                      putStrLn $ "parse failure: " ++ show msg
                                      loop
-                                 Right expr -> case interpHExpr expr of
+                                 Right expr -> case interpCommand expr of
                                                  Right (RE_RR rr) -> return $ H.ApplyCmd rr
                                                  other -> do
                                                          putStrLn $ "Non-rewrite found"
