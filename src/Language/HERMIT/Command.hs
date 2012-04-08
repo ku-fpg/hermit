@@ -8,7 +8,9 @@ module Language.HERMIT.Command
 import GhcPlugins
 
 import Language.HERMIT.Types
+import Language.HERMIT.KURE
 import Language.HERMIT.HermitEnv
+import Language.HERMIT.HermitMonad
 
 -- | 'Command' is what you send to the HERMIT kernel.
 data Command :: * where

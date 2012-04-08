@@ -6,6 +6,7 @@ import GhcPlugins
 import qualified Data.Map as Map
 
 import Language.HERMIT.Types
+import Language.HERMIT.KURE
 import Language.HERMIT.HermitEnv as Env
 
 -- The implementation of inline, an important transformation.
