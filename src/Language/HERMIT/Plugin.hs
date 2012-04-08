@@ -7,7 +7,6 @@ import Control.Monad
 import Data.List
 
 import Language.HERMIT.Pass             -- for now
-import Language.HERMIT.Focus
 
 plugin :: Plugin
 plugin = defaultPlugin {

@@ -12,7 +12,6 @@ import Data.Char
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.Types
-import Language.HERMIT.Focus
 import Language.HERMIT.KURE
 import Language.HERMIT.Dictionary
 import Language.HERMIT.Command

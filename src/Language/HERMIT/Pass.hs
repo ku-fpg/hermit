@@ -8,7 +8,6 @@ import PprCore -- compiler/coreSyn/PprCore.lhs
 import Control.Monad
 
 import Language.HERMIT.CommandLine as CommandLine
-import Language.HERMIT.Focus
 
 hermitPass :: [String] -> ModGuts -> CoreM ModGuts
 -- run the command-line option
