@@ -10,7 +10,7 @@ import qualified Data.Map as Map
 data HermitEnv = HermitEnv
         { hermitBindings :: Map.Map Id HermitBinding    -- ^ all (important) bindings in scope
         , hermitDepth    :: Int                         -- ^ depth of bindings
-        , hermitPath     :: Path                        -- ^ path to the current node from the root.
+        , hermitPath     :: ContextPath                 -- ^ path to the current node from the root.
         }
 
 data HermitBinding
@@ -22,19 +22,20 @@ data HermitBinding
                 (Expr Id)       -- Value (can not be inlined without checking for scoping issues)
 
 
-newtype Path = Path [Int]       -- ^ A list of node childen taken to get here. The head is the *last* branch.
+-- | A list of node childen taken to get here. The head is the *last* branch.
+newtype ContextPath = ContextPath [Int]
 
 hermitBindingDepth :: HermitBinding -> Int
 
 hermitBindingDepth (LAM d)  = d
 hermitBindingDepth (BIND d _ _) = d
 
-hermitBindingPath :: HermitEnv -> Path
+hermitBindingPath :: HermitEnv -> ContextPath
 hermitBindingPath = hermitPath
 
 (@@) :: HermitEnv -> Int -> HermitEnv
 (@@) env n = env { hermitPath = case hermitPath env of
-                                  Path ns -> Path (n : ns) }
+                                  ContextPath ns -> ContextPath (n : ns) }
 
 -- A binding you know nothing about, except it may shadow something.
 -- If so, do not worry about it here, just remember the binding a the depth.
@@ -73,4 +74,4 @@ lookupHermitBinding :: Id -> HermitEnv -> Maybe HermitBinding
 lookupHermitBinding n env = Map.lookup n (hermitBindings env)
 
 initHermitEnv :: HermitEnv
-initHermitEnv = HermitEnv (Map.empty) 0 (Path [])
+initHermitEnv = HermitEnv (Map.empty) 0 (ContextPath [])
