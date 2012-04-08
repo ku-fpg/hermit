@@ -37,7 +37,9 @@ Library
        Language.HERMIT.Dictionary
        Language.HERMIT.Expr
        Language.HERMIT.Command
+
        Language.HERMIT.Primitive.Inline
+       Language.HERMIT.Primitive.Consider
 
   Other-modules:
        Language.Core.Quote

@@ -7,15 +7,15 @@ import GhcPlugins
 import qualified Data.Map as Map
 import Data.Map(Map)
 import Data.Char
+import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.Types
 import Language.HERMIT.KURE
 import qualified Language.HERMIT.Expr as Expr
 import Language.HERMIT.Command
 
-import qualified Language.Haskell.TH as TH
-
 import qualified Language.HERMIT.Primitive.Inline as Inline
+import qualified Language.HERMIT.Primitive.Consider as Consider
 
 all_rewrites :: Map String (Rewrite Core)
 all_rewrites = Map.unions
@@ -40,14 +40,12 @@ ho_rewrites = Map.fromList
 
 selects :: Map String (TH.Name -> Lens Core Core)
 selects = Map.fromList
-        [ ("consider",          consider)
+        [ ("consider",          \ nm -> Consider.consider nm `glueL` promoteL)
 --        , ("inside",            insideK)
 --      select-case                             -- select the next case down
 --      select-let                              -- select the next let down??
         ]
 
-consider :: TH.Name -> Lens Core Core
-consider = undefined
 
 ------------------------------------------------------------------------------------
 -- The union of all possible results from a "well-typed" commands, from this dictionary.
