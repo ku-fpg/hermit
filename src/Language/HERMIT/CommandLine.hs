@@ -12,7 +12,6 @@ import Data.Char
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.Types
-import qualified Language.HERMIT.Hermitage as H
 import Language.HERMIT.Focus
 import Language.HERMIT.KURE
 import Language.HERMIT.Dictionary
@@ -25,9 +24,9 @@ commandLine :: ModGuts -> CoreM ModGuts
 commandLine modGuts = do
     el <- liftIO $ elInit "hermit"
     liftIO $ setEditor el Emacs
-    let getCmd :: forall cxt . H.Hermitage cxt Blob -> IO Command
+    let getCmd :: Context Blob -> IO Command
         getCmd lh = do
-          let (Context _ e) = H.getForeground lh
+          let (Context _ e) = lh
           putStrLn (show2 e)
 --         liftIO $ setPrompt el (return $ show n ++ "> ")
           setPrompt el (return "hermit> ")
@@ -47,7 +46,7 @@ commandLine modGuts = do
                                                          loop
           loop
 
-    H.runHermitCmds getCmd print modGuts
+    runCommands getCmd print modGuts
 --    commands el 0 h
 
 {-

@@ -21,7 +21,7 @@ import Language.HERMIT.Types
 import Language.HERMIT.KURE
 import Language.HERMIT.Command
 
-
+{-
 {-
 -- CXT is *Kind*.
 data CXT where
@@ -163,41 +163,4 @@ data HermitCmd :: * where
 
 -- The untyped version
 
-runHermitCmds
-        :: (forall cxt . Hermitage cxt Blob -> IO Command)  -- waiting for commands
-        -> (String -> IO ())                                    -- where to send errors
-        -> ModGuts -> CoreM ModGuts
-runHermitCmds getCmd errorMsg modGuts = do
-        HermitageRoot (Context _ (ModGutsBlob modGuts')) <- loop (HermitageRoot (Context initHermitEnv (ModGutsBlob modGuts)))
-        return modGuts'
- where
-    loop :: Hermitage cxt Blob -> CoreM (Hermitage cxt Blob)
-    loop h = do
-        rep <- liftIO $ getCmd h
-        case rep of
-           PopFocus -> return h
-           PushFocus kick -> do
-                res <- focusHermitage (rewriteL kick) h
-                case res of
-                  Left msg -> do
-                     liftIO $ errorMsg $ show msg
-                     loop h
-                  Right h1 -> do
-                       h2 <- loop h1
-                       res <- unfocusHermitage h2
-                       case res of
-                         Left msg -> do
-                           -- This was bad, the unfocus failed. Should never happen
-                           -- The entire recursive call has been thrown away (back to h)
-                           liftIO $ errorMsg $ show msg
-                           loop h
-                         Right h3 -> do
-                           loop h3
-           Apply rr -> do
-                res <- applyRewrite rr h
-                case res of
-                  Left msg -> do
-                     liftIO $ errorMsg $ show msg
-                     loop h
-                  Right h1 -> do
-                     loop h1
+-}
