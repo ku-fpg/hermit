@@ -12,21 +12,21 @@ import Language.HERMIT.HermitEnv
 
 -- | 'Command' is what you send to the HERMIT kernel.
 data Command :: * where
-   Apply        :: Rewrite Blob         -> Command
-   PushFocus    :: Lens Blob Blob       -> Command
+   Apply        :: Rewrite Core         -> Command
+   PushFocus    :: Lens Core Core       -> Command
    PopFocus                             :: Command
    ResetFocus                           :: Command
    Message      :: String               -> Command
 
 runCommands
-        :: (Context Blob -> IO Command)                 -- waiting for commands
+        :: (Context Core -> IO Command)                 -- waiting for commands
         -> (String -> IO ())                            -- where to send errors
         -> ModGuts -> CoreM ModGuts
 runCommands getCmd errorMsg modGuts = do
-        Context _ (ModGutsBlob modGuts') <- loop (Context initHermitEnv (ModGutsBlob modGuts))
+        Context _ (ModGutsCore modGuts') <- loop (Context initHermitEnv (ModGutsCore modGuts))
         return modGuts'
  where
-    loop :: Context Blob -> CoreM (Context Blob)
+    loop :: Context Core -> CoreM (Context Core)
     loop cxt@(Context c b) = do
         rep <- liftIO $ getCmd cxt
         case rep of

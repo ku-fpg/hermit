@@ -20,7 +20,7 @@ newtype HermitM a = HermitM { runHermitM :: CoreM (HermitR a) }
 data HermitR :: * -> * where
         SuccessR :: a                   -> HermitR a
         FailR    :: String               -> HermitR a
-        YieldR   :: a  -> [Context Blob] -> HermitR a
+        YieldR   :: a  -> [Context Core] -> HermitR a
 
 instance Monad HermitM where
         return a = HermitM (return $ SuccessR a)
@@ -37,7 +37,7 @@ instance Monad HermitM where
                              YieldR a c2 -> return $ YieldR a (c1 ++ c2)
         fail msg = HermitM (return $ FailR msg)
 
-yieldM :: Context Blob -> HermitM ()
+yieldM :: Context Core -> HermitM ()
 yieldM blob = HermitM $ return $ YieldR () [blob]
 
 catchH :: HermitM a -> (String -> HermitM a) -> HermitM a
@@ -108,7 +108,7 @@ instance Functor Context where
 ---------------------------------------------------------------------
 
 -- Lifting this out:
--- TODO: remove this, replace with Blob everywhere.
+-- TODO: remove this, replace with Core everywhere.
 -- Perhaps rename Blog to Generic :: *
 
 
@@ -182,44 +182,44 @@ promoteL = lens $ \ cxt -> do
 
 
 -- To rename to Core
-data Blob
-        = ModGutsBlob   ModGuts
-        | ProgramBlob   CoreProgram
-        | BindBlob      (Bind Id)
-        | ExprBlob      (Expr Id)
---        | AltListBlob   [Alt Id]
-        | AltBlob       (Alt Id)
-        | TypeBlob      Type
+data Core
+        = ModGutsCore   ModGuts
+        | ProgramCore   CoreProgram
+        | BindCore      (Bind Id)
+        | ExprCore      (Expr Id)
+--        | AltListCore   [Alt Id]
+        | AltCore       (Alt Id)
+        | TypeCore      Type
 
 
-instance Term Blob where
-  type Generic Blob = Blob
+instance Term Core where
+  type Generic Core = Core
 
   select   = Just
   inject   = id
 
   allR rr = rewrite $ \ (Context c blob) -> case blob of
-          -- Going from Blob to sub-Blog is the one case where you do not augment the path,
+          -- Going from Core to sub-Blog is the one case where you do not augment the path,
           -- but instead direct traffic.
-          ModGutsBlob modGuts -> liftM ModGutsBlob $ apply (allR rr) (Context c modGuts)
-          ProgramBlob prog    -> liftM ProgramBlob $ apply (allR rr) (Context c prog)
-          BindBlob    bind    -> liftM BindBlob    $ apply (allR rr) (Context c bind)
-          ExprBlob    expr    -> liftM ExprBlob    $ apply (allR rr) (Context c expr)
-          AltBlob     alt     -> liftM AltBlob     $ apply (allR rr) (Context c alt)
+          ModGutsCore modGuts -> liftM ModGutsCore $ apply (allR rr) (Context c modGuts)
+          ProgramCore prog    -> liftM ProgramCore $ apply (allR rr) (Context c prog)
+          BindCore    bind    -> liftM BindCore    $ apply (allR rr) (Context c bind)
+          ExprCore    expr    -> liftM ExprCore    $ apply (allR rr) (Context c expr)
+          AltCore     alt     -> liftM AltCore     $ apply (allR rr) (Context c alt)
 
   oneL n = translate $ \ (Context c blob) -> case blob of
-          -- Going from Blob to sub-Blog is the one case where you do not augment the path,
+          -- Going from Core to sub-Blog is the one case where you do not augment the path,
           -- but instead direct traffic.
-          ModGutsBlob x -> act (Context c x)
-          ProgramBlob x -> act (Context c x)
-          BindBlob x    -> act (Context c x)
-          ExprBlob x    -> act (Context c x)
-          AltBlob x     -> act (Context c x)
+          ModGutsCore x -> act (Context c x)
+          ProgramCore x -> act (Context c x)
+          BindCore x    -> act (Context c x)
+          ExprCore x    -> act (Context c x)
+          AltCore x     -> act (Context c x)
 
      where
-               act :: (Term a, Generic a ~ Blob)
+               act :: (Term a, Generic a ~ Core)
                  => (Context a)
-                 -> HermitM (Context (Generic a), Generic a -> HermitM Blob)
+                 -> HermitM (Context (Generic a), Generic a -> HermitM Core)
                act cxt = do
                  (cb, fn) <- apply (oneL n) cxt
                  return $ (fmap inject cb, \ b -> case select b of
@@ -227,17 +227,17 @@ instance Term Blob where
                                                Just b -> liftM inject (fn b))
 
 {-
-          ProgramBlob prog    -> liftM ProgramBlob $ apply (allR rr) (Context c prog)
-          BindBlob    bind    -> liftM BindBlob    $ apply (allR rr) (Context c bind)
-          ExprBlob    expr    -> liftM ExprBlob    $ apply (allR rr) (Context c expr)
-          AltBlob     alt     -> liftM AltBlob     $ apply (allR rr) (Context c alt)
+          ProgramCore prog    -> liftM ProgramCore $ apply (allR rr) (Context c prog)
+          BindCore    bind    -> liftM BindCore    $ apply (allR rr) (Context c bind)
+          ExprCore    expr    -> liftM ExprCore    $ apply (allR rr) (Context c expr)
+          AltCore     alt     -> liftM AltCore     $ apply (allR rr) (Context c alt)
 -}
 instance Term ModGuts where
-  type Generic ModGuts = Blob
+  type Generic ModGuts = Core
 
-  select (ModGutsBlob guts) = return guts
+  select (ModGutsCore guts) = return guts
   select _              = Nothing
-  inject                = ModGutsBlob
+  inject                = ModGutsCore
 
   allR rr = rewrite $ \ (Context c modGuts) -> do
           binds' <- apply (extractR rr) (Context (c @@ 0) (mg_binds modGuts))
@@ -254,11 +254,11 @@ modGutsT tt comp = translate $ \ (Context c modGuts) -> do
         return $ comp modGuts p1'
 
 instance Term CoreProgram where
-  type Generic CoreProgram = Blob
+  type Generic CoreProgram = Core
 
-  select (ProgramBlob guts) = return guts
+  select (ProgramCore guts) = return guts
   select _              = Nothing
-  inject                = ProgramBlob
+  inject                = ProgramCore
 
   allR rr = rewrite $ \ (Context c prog) -> case prog of
           [] -> return []
@@ -286,11 +286,11 @@ consBindT t1 t2 f = translate $ \ (Context c e) -> case e of
         _ -> fail "no match for consT"
 
 instance Term (Bind Id) where
-  type Generic (Bind Id) = Blob
+  type Generic (Bind Id) = Core
 
-  select (BindBlob expr) = return expr
+  select (BindCore expr) = return expr
   select _              = Nothing
-  inject                = BindBlob
+  inject                = BindCore
 
   allR rr = rewrite $ \ (Context c e) -> case e of
           NonRec n e1 -> do
@@ -360,11 +360,11 @@ nonRecT tt comp = translate $ \ (Context c e) -> case e of
         _ -> fail "nonRecT: not NonRec"
 
 instance Term (Expr Id) where
-  type Generic (Expr Id) = Blob
+  type Generic (Expr Id) = Core
 
-  select (ExprBlob expr) = return expr
+  select (ExprCore expr) = return expr
   select _              = Nothing
-  inject                = ExprBlob
+  inject                = ExprCore
 
 
   allR rr = rewrite $ \ (Context c e) -> case e of
@@ -466,11 +466,11 @@ contextT = translate $ return . id
 
 {-
 instance Term [Alt Id] where
-  type Generic [Alt Id] = Blob
+  type Generic [Alt Id] = Core
 
-  select (AltListBlob expr) = return expr
+  select (AltListCore expr) = return expr
   select _              = Nothing
-  inject                = AltListBlob
+  inject                = AltListCore
 
   allR rr = ( consT (extractR rr) (extractR rr) $ \ x xs -> x : xs )
          <+ ( nilT                              $ [] )
@@ -487,11 +487,11 @@ instance Term [Alt Id] where
 -}
 
 instance Term (Alt Id) where
-  type Generic (Alt Id) = Blob
+  type Generic (Alt Id) = Core
 
-  select (AltBlob expr) = return expr
+  select (AltCore expr) = return expr
   select _              = Nothing
-  inject                = AltBlob
+  inject                = AltCore
 
   allR rr = rewrite $ \ (Context c (con,bs,e)) -> do
                         let c' = foldr addHermitEnvLambdaBinding c bs
@@ -522,19 +522,19 @@ appR r1 r2 = rewrite $ \ c e -> case e of
 
 --------------------------------------------------------
 
-yieldR :: (Term a, Generic a ~ Blob) => Rewrite a
+yieldR :: (Term a, Generic a ~ Core) => Rewrite a
 yieldR = rewrite $ \ cxt@(Context _ a) -> do
                 yieldM (fmap inject cxt)
                 return a
 
 rewriteTransformerToTranslate
-        :: (Term b, Generic b ~ Blob)
+        :: (Term b, Generic b ~ Core)
         => (Rewrite b -> Rewrite a)
         -> Translate a [Context (Generic b)]
 rewriteTransformerToTranslate rrT = translate $ \ (Context c a) -> do
         collectYieldM (apply (rrT yieldR) (Context c a))
 
-collectYieldM :: HermitM a -> HermitM [Context Blob]
+collectYieldM :: HermitM a -> HermitM [Context Core]
 collectYieldM (HermitM m) = HermitM $ do
         r <- m
         case r of
@@ -545,7 +545,7 @@ collectYieldM (HermitM m) = HermitM $ do
 
 -- Hack till Neil's KURE comes online.
 rewriteTransformerToKick
-        :: (Term b, Generic b ~ Blob)
+        :: (Term b, Generic b ~ Core)
         => (Rewrite b -> Rewrite a)
         -> Translate a (Context b, b -> HermitM a)
 rewriteTransformerToKick rrT = translate $ \ (Context c a) -> do

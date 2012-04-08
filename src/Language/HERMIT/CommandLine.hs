@@ -24,7 +24,7 @@ commandLine :: ModGuts -> CoreM ModGuts
 commandLine modGuts = do
     el <- liftIO $ elInit "hermit"
     liftIO $ setEditor el Emacs
-    let getCmd :: Context Blob -> IO Command
+    let getCmd :: Context Core -> IO Command
         getCmd lh = do
           let (Context _ e) = lh
           putStrLn (show2 e)
@@ -51,7 +51,7 @@ commandLine modGuts = do
 
 {-
 --- THIS CODE IS OLD
-commands :: forall c a . (Term a, Show2 a, Generic a ~ Blob) => EditLine -> Int -> H.Hermitage c a -> CoreM (H.Hermitage c a)
+commands :: forall c a . (Term a, Show2 a, Generic a ~ Core) => EditLine -> Int -> H.Hermitage c a -> CoreM (H.Hermitage c a)
 commands el n h = do
          let (Context _ e) = H.getForeground h
 --         liftIO $ putStrLn "Foreground: "
@@ -90,7 +90,7 @@ commands el n h = do
                         liftIO $ putStrLn $ "do not understand " ++ show other
                         commands el n h
   where
-    focusCommand :: (Term b, Show2 b, Generic b ~ Blob) => (Rewrite b -> Rewrite a) -> CoreM (H.Hermitage c a)
+    focusCommand :: (Term b, Show2 b, Generic b ~ Core) => (Rewrite b -> Rewrite a) -> CoreM (H.Hermitage c a)
     focusCommand kick =  do
                         res <- H.focusHermitage kick h
                         case res of
@@ -113,12 +113,12 @@ commands el n h = do
 class Show2 a where
         show2 :: a -> String
 
-instance Show2 Blob where
-        show2 (ModGutsBlob   m)  = show2 m
-        show2 (ProgramBlob   p)  =  show2 p
-        show2 (BindBlob      bd) = show2 bd
-        show2 (ExprBlob      e)  = show2 e
-        show2 (AltBlob       a)  = show2 a
+instance Show2 Core where
+        show2 (ModGutsCore   m)  = show2 m
+        show2 (ProgramCore   p)  =  show2 p
+        show2 (BindCore      bd) = show2 bd
+        show2 (ExprCore      e)  = show2 e
+        show2 (AltCore       a)  = show2 a
 
 instance Show2 ModGuts where
         show2 modGuts =

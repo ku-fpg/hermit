@@ -8,7 +8,7 @@ import Language.HERMIT.Types
 
 import qualified Language.HERMIT.Primitive.Inline as Inline
 
-all_prims :: Map String (Rewrite Blob)
+all_prims :: Map String (Rewrite Core)
 all_prims = Map.unions
         [ fmap promoteR expr_prims
         ]

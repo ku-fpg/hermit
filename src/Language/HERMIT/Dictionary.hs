@@ -17,7 +17,7 @@ import qualified Language.Haskell.TH as TH
 
 import qualified Language.HERMIT.Primitive.Inline as Inline
 
-all_rewrites :: Map String (Rewrite Blob)
+all_rewrites :: Map String (Rewrite Core)
 all_rewrites = Map.unions
         [ fmap promoteR expr_rewrites
         ]
@@ -31,14 +31,14 @@ expr_rewrites = Map.fromList
 --        , ("case-of-known-constructor", ...)
         ]
 
-ho_rewrites :: Map String (Rewrite Blob -> Rewrite Blob)
+ho_rewrites :: Map String (Rewrite Core -> Rewrite Core)
 ho_rewrites = Map.fromList
         [ ("bottomup",          bottomupR)
         , ("topdown",           topdownR)
         , ("try",               tryR)
         ]
 
-selects :: Map String (TH.Name -> Lens Blob Blob)
+selects :: Map String (TH.Name -> Lens Core Core)
 selects = Map.fromList
         [ ("consider",          consider)
 --        , ("inside",            insideK)
@@ -46,7 +46,7 @@ selects = Map.fromList
 --      select-let                              -- select the next let down??
         ]
 
-consider :: TH.Name -> Lens Blob Blob
+consider :: TH.Name -> Lens Core Core
 consider = undefined
 
 ------------------------------------------------------------------------------------
@@ -60,8 +60,8 @@ interpExpr expr =
           Right (Right cmd) -> Right $ cmd
 
 data PartialCommand
-        = RE_RR_RR   (Rewrite Blob -> Rewrite Blob)
-        | RE_N_L     (TH.Name -> Lens Blob Blob)
+        = RE_RR_RR   (Rewrite Core -> Rewrite Core)
+        | RE_N_L     (TH.Name -> Lens Core Core)
         | RE_N       TH.Name
 
 interpExpr' :: Expr.Expr -> Either String (Either PartialCommand Command)
