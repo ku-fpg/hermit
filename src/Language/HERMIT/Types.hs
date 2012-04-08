@@ -481,4 +481,8 @@ nilT b = translate $ \ (Context c e) -> case e of
         _ -> fail "no match for nilT"
 
 ------------------------------------
+-- | pathT finds the current path.
+pathT :: Translate a ContextPath
+pathT = fmap (\ (Context c _) -> hermitBindingPath c) contextT
 
+---------------------------------------------------------------------
