@@ -19,14 +19,14 @@ data Expr
 parseExpr :: String -> Either String Expr
 parseExpr str =
         case parseExpr1 str of
-          ((e,""):_) -> Right e
+          ((e,str):_) | all isSpace str -> Right e
           _ -> Left $ "bad parse for: " ++ str
 
 parseExpr0 :: ReadS Expr
 parseExpr0 = \ inp ->
         [ (Var str,inp1)
         | (str,inp1) <- parseToken inp
-        , all isAlpha str
+        , all isAlphaNum str
         ] ++
         [ (Lit str,inp2)
         | ("#",inp1) <- parseToken inp
@@ -60,6 +60,6 @@ item str = \ inp ->
         ]
 
 parseToken :: ReadS String
-parseToken = \ inp -> if null inp then [] else lex inp
+parseToken = \ inp -> if all isSpace inp then [] else lex inp
 
 

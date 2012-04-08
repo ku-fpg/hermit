@@ -6,10 +6,12 @@ module Language.HERMIT.Dictionary where
 import GhcPlugins
 import qualified Data.Map as Map
 import Data.Map(Map)
+import Data.Char
 
 import Language.HERMIT.Types
 import Language.HERMIT.KURE
 import qualified Language.HERMIT.Expr as Expr
+import Language.HERMIT.Command
 
 import qualified Language.Haskell.TH as TH
 
@@ -36,65 +38,78 @@ ho_rewrites = Map.fromList
         , ("try",               tryR)
         ]
 
-selects :: Map String (TH.Name -> Rewrite Blob -> Rewrite Blob)
+selects :: Map String (TH.Name -> Lens Blob Blob)
 selects = Map.fromList
-        [ ("consider",          considerK)
+        [ ("consider",          consider)
 --        , ("inside",            insideK)
 --      select-case                             -- select the next case down
 --      select-let                              -- select the next let down??
         ]
 
-considerK :: TH.Name -> Rewrite Blob -> Rewrite Blob
-considerK = undefined
+consider :: TH.Name -> Lens Blob Blob
+consider = undefined
 
 ------------------------------------------------------------------------------------
 -- The union of all possible results from a "well-typed" commands, from this dictionary.
 
-data TypedCommand
-        = RE_RR      (Rewrite Blob)
-        | RE_RR_RR   (Rewrite Blob -> Rewrite Blob)
-        | RE_N_RR_RR (TH.Name -> (Rewrite Blob -> Rewrite Blob))
-        | RE_N_RR    (TH.Name -> Rewrite Blob)
+interpExpr :: Expr.Expr -> Either String Command
+interpExpr expr =
+        case interpExpr' expr of
+          Left msg -> Left msg
+          Right (Left _) -> Left $ "interpExpr: bad type of expression"
+          Right (Right cmd) -> Right $ cmd
+
+data PartialCommand
+        = RE_RR_RR   (Rewrite Blob -> Rewrite Blob)
+        | RE_N_L     (TH.Name -> Lens Blob Blob)
         | RE_N       TH.Name
-        | RE_B       BaseCommand
 
-data BaseCommand
-        = POP
-        | TOP           -- pop until at the top of the tree
-
--- Very hacky (for now)
-interpCommand :: Expr.Expr -> Either String TypedCommand
-interpCommand (Expr.Lit str)
-        = Right $ RE_N (TH.mkName str)
-interpCommand (Expr.Var str)
+interpExpr' :: Expr.Expr -> Either String (Either PartialCommand Command)
+interpExpr' (Expr.Lit str)
+        = Right $ Left $ RE_N (TH.mkName str)
+interpExpr' (Expr.Var "pop")
+        = Right $ Right $ PopFocus
+interpExpr' (Expr.Var "reset")
+        = Right $ Right $ ResetFocus
+interpExpr' (Expr.Var str)
+        | all isDigit str
+        = Right $ Right $ PushFocus $ oneL (read str)
+interpExpr' (Expr.Var str)
         | Just rr <- Map.lookup str all_rewrites
-        = Right $ RE_RR rr
-        | Just rr <- Map.lookup str ho_rewrites
-        = Right $ RE_RR_RR rr
+        = Right $ Right $ Apply rr
         | Just rr <- Map.lookup str selects
-        = Right $ RE_N_RR_RR rr
+        = Right $ Left $ RE_N_L rr
+        | Just rr <- Map.lookup str ho_rewrites
+        = Right $ Left $ RE_RR_RR rr
         | otherwise
         = Left $ "can not find : " ++ show str
-interpCommand (Expr.App e1 e2) = do
-        r <- interpCommand e1
-        case r of
+interpExpr' (Expr.App e1 e2) = do
+        r1 <- interpExpr' e1
+        r2 <- interpExpr' e2
+        case (r1,r2) of
+          (Left (RE_RR_RR ff), Right (Apply rr)) -> return $ Right $ Apply $ ff rr
+          (Left (RE_N_L ff),   Left  (RE_N nm))  -> return $ Right $ PushFocus $ ff nm
+          _ -> Left "type error in expression"
+
+{-
           RE_RR rr -> Left $ "type error: a rewrite has been applied to an argument"
           RE_RR_RR ff -> do
-                  a2 <- interpCommand e2
+                  a2 <- interpExpr' e2
                   case a2 of
                     RE_RR rr -> return $ RE_RR (ff rr)
                     _ -> Left $ "type error: lhs not a RR"
           RE_N_RR ff -> do
-                  a2 <- interpCommand e2
+                  a2 <- interpExpr' e2
                   case a2 of
                     RE_N rr -> return $ RE_RR (ff rr)
                     _ -> Left $ "type error: lhs not a N"
           RE_N_RR_RR ff -> do
-                  a2 <- interpCommand e2
+                  a2 <- interpExpr' e2
                   case a2 of
                     RE_N rr -> return $ RE_RR_RR (ff rr)
                     _ -> Left $ "type error: lhs not a N"
           RE_N nm -> Left $ "type error: names can not be used as functions"
+-}
 
 --------------------------------------------------------------
 

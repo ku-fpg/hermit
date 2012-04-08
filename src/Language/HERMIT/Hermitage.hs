@@ -2,12 +2,14 @@
 
 -- A Hermitage is a place of quiet reflection.
 
-module Language.HERMIT.Hermitage (
+module Language.HERMIT.Hermitage where
+{-
         Hermitage,
         HermitCmd(..),
         getForeground,
         runHermitCmds
 ) where
+-}
 
 import GhcPlugins
 
@@ -17,6 +19,7 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.Types
 import Language.HERMIT.KURE
+import Language.HERMIT.Command
 
 
 {-
@@ -128,7 +131,7 @@ data HermitMessage
 handle :: (Monad m) => Either a b -> (b -> m (Either a c)) -> m (Either a c)
 handle (Left msg) _ = return $ Left $ msg
 handle (Right a)  m = m a
-
+{-
 data Hermit :: * -> * where
    Focus :: (Term a, Term x, Generic x ~ Blob) => (Rewrite x -> Rewrite a) -> [ Hermit x ] -> Hermit a
    Apply :: Rewrite a                                                    -> Hermit a
@@ -147,21 +150,21 @@ runHermit (Focus kick inners) h = do
                 handle ret $ \ h2 ->
                         unfocusHermitage h2
 runHermit (Apply rr) h = applyRewrite rr h
-
+-}
 -------------------------------------------------------------------------------
-
+{-
 data HermitCmd :: * where
    FocusCmd     :: (Rewrite Blob -> Rewrite Blob)               -> HermitCmd
    PopFocusCmd                                                  :: HermitCmd
    ApplyCmd     :: Rewrite Blob                                 -> HermitCmd
-
+-}
 -- The arguments here should be bundled into a datastructure.
 -- (except the Hermitage c a, because the polymorphism here would stop simple updates.)
 
 -- The untyped version
 
 runHermitCmds
-        :: (forall cxt . Hermitage cxt Blob -> IO HermitCmd)  -- waiting for commands
+        :: (forall cxt . Hermitage cxt Blob -> IO Command)  -- waiting for commands
         -> (String -> IO ())                                    -- where to send errors
         -> ModGuts -> CoreM ModGuts
 runHermitCmds getCmd errorMsg modGuts = do
@@ -172,9 +175,9 @@ runHermitCmds getCmd errorMsg modGuts = do
     loop h = do
         rep <- liftIO $ getCmd h
         case rep of
-           PopFocusCmd -> return h
-           FocusCmd kick -> do
-                res <- focusHermitage kick h
+           PopFocus -> return h
+           PushFocus kick -> do
+                res <- focusHermitage (rewriteL kick) h
                 case res of
                   Left msg -> do
                      liftIO $ errorMsg $ show msg
@@ -190,7 +193,7 @@ runHermitCmds getCmd errorMsg modGuts = do
                            loop h
                          Right h3 -> do
                            loop h3
-           ApplyCmd rr -> do
+           Apply rr -> do
                 res <- applyRewrite rr h
                 case res of
                   Left msg -> do

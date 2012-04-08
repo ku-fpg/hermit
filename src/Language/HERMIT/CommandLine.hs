@@ -16,6 +16,7 @@ import qualified Language.HERMIT.Hermitage as H
 import Language.HERMIT.Focus
 import Language.HERMIT.KURE
 import Language.HERMIT.Dictionary
+import Language.HERMIT.Command
 import qualified Language.HERMIT.Expr as Expr
 
 import Language.HERMIT.Primitive.Inline
@@ -24,7 +25,7 @@ commandLine :: ModGuts -> CoreM ModGuts
 commandLine modGuts = do
     el <- liftIO $ elInit "hermit"
     liftIO $ setEditor el Emacs
-    let getCmd :: forall cxt . H.Hermitage cxt Blob -> IO H.HermitCmd
+    let getCmd :: forall cxt . H.Hermitage cxt Blob -> IO Command
         getCmd lh = do
           let (Context _ e) = H.getForeground lh
           putStrLn (show2 e)
@@ -33,26 +34,17 @@ commandLine modGuts = do
           let loop = do
                 maybeLine <- elGets el
                 case maybeLine of
-                   Nothing -> return H.PopFocusCmd
+                   Nothing -> return PopFocus
                    Just line -> do
-                     case words (init line) of
-                       [nstr] | all isDigit nstr ->
-                         return $ H.FocusCmd (rewriteL (oneL (read nstr)) :: Rewrite Blob -> Rewrite Blob)
---                       nstrs | all isDigit (concat nstrs) && not (null nstrs) ->
---                         return $ H.FocusCmd (focusOnPath (map read nstrs) :: Rewrite Blob -> Rewrite Blob)
-                       cmds -> case Expr.parseExpr (unwords cmds) of
+                     case Expr.parseExpr line of
                                  Left msg -> do
                                      putStrLn $ "parse failure: " ++ show msg
                                      loop
-                                 Right expr -> case interpCommand expr of
-                                                 Right (RE_RR rr) -> return $ H.ApplyCmd rr
-                                                 other -> do
-                                                         putStrLn $ "Non-rewrite found"
+                                 Right expr -> case interpExpr expr of
+                                                 Right cmd -> return $ cmd
+                                                 Left msg -> do
+                                                         putStrLn $ "Non-rewrite found: " ++  msg
                                                          loop
-
-                       ["*inline"] -> return $ H.ApplyCmd (extractR $ bottomupR $ promoteR $ tryR $ inline)
-                       _ -> do putStrLn $ "do not understand " ++ show line
-                               loop
           loop
 
     H.runHermitCmds getCmd print modGuts
