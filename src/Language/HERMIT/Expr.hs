@@ -63,7 +63,7 @@ parseExpr0 :: ReadS Expr
 parseExpr0 = \ inp ->
         [ (Var str,inp1)
         | (str,inp1) <- parseToken inp
-        , all isAlphaNum str
+        , all isId str
         ] ++
         [ (Lit str,inp2)
         | ("'",inp1) <- parseToken inp
@@ -106,8 +106,11 @@ parseToken ('{':cs) = [("{",cs)]
 parseToken ('}':cs) = [("}",cs)]
 parseToken (';':cs) = [(";",cs)]
 parseToken ('\'':cs) = [("'",cs)]
-parseToken (c:cs)    | isAlphaNum c || c `elem` "._" = lex (c:cs)
+parseToken (c:cs)    | isId c
+                     = [ span cond (c:cs) ]
+  where cond c = isId c || c `elem` "._"
 parseToken _         = []
 
+isId c = isAlphaNum c || c `elem` "._"
 
 
