@@ -1,0 +1,4 @@
+consider 'fib
+  bottomup (try inline)
+.
+
