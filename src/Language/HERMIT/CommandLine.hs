@@ -6,7 +6,6 @@ module Language.HERMIT.CommandLine where
 
 import GhcPlugins
 
-import System.Console.Editline
 import Data.Char
 
 import Language.HERMIT.HermitEnv
@@ -19,20 +18,19 @@ import qualified Language.HERMIT.Expr as Expr
 
 import Language.HERMIT.Primitive.Inline
 
-commandLine :: ModGuts -> CoreM ModGuts
-commandLine modGuts = do
-    el <- liftIO $ elInit "hermit"
-    liftIO $ setEditor el Emacs
+
+
+commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
+commandLine gets modGuts = do
     let getCmd :: Context Core -> IO Command
         getCmd lh = do
           let (Context _ e) = lh
           putStrLn (show2 e)
---         liftIO $ setPrompt el (return $ show n ++ "> ")
-          setPrompt el (return "hermit> ")
           let loop = do
-                maybeLine <- elGets el
+                maybeLine <- gets
                 case maybeLine of
                    Nothing -> return PopFocus
+                   Just line | all isSpace line -> loop
                    Just line -> do
                      case Expr.parseExpr line of
                                  Left msg -> do

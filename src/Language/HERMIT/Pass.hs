@@ -5,8 +5,11 @@ module Language.HERMIT.Pass (hermitPass, ppProgram, writeProgram) where
 import GhcPlugins
 import PprCore -- compiler/coreSyn/PprCore.lhs
 
+import System.Console.Editline
+
 import Data.List
 import Control.Monad
+import System.IO
 
 import Language.HERMIT.CommandLine as CommandLine
 
@@ -19,7 +22,14 @@ hermitPass :: [String] -> ModGuts -> CoreM ModGuts
 -- run the command-line option
 hermitPass nms modGuts = case candidates of
         [ ('/' : '-': []) ] -> do
-                CommandLine.commandLine modGuts
+                -- Command Line Interp (via the readline API)
+                el <- liftIO $ elInit "hermit"
+                liftIO $ setEditor el Emacs
+                liftIO $ setPrompt el (return "hermit> ")
+                CommandLine.commandLine (elGets el) modGuts
+        [ ('/' : filename) ] -> do
+                gets <- liftIO $ openFile2 filename
+                CommandLine.commandLine gets modGuts
         _ -> return modGuts
    where
            modName = showSDoc (ppr (mg_module modGuts))
@@ -33,6 +43,17 @@ hermitPass ['@':nm]  h    = return h
 -- Need better error message here
 hermitPass other        h = error $ "hermitPass failed" ++ show other
 -}
+
+-- TOFIX: never actually closes
+openFile2 :: FilePath -> IO (IO (Maybe String))
+openFile2 fileName = do
+        h <- openFile fileName ReadMode
+        return $ do
+                b <- hIsEOF h
+                if b then return Nothing
+                     else do str <- hGetLine h
+                             return (Just $ str ++ "\n")
+
 ppProgram :: ModGuts -> CoreM ModGuts
 ppProgram = bindsOnlyPass printBinds
 

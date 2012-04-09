@@ -5,5 +5,5 @@ boot::
 
 comp::
 	ghc-7.4.1 -fplugin=Language.HERMIT.Plugin Main.hs \
-		  -fplugin-opt=Language.HERMIT.Plugin:main:Main/-  \
+		  -fplugin-opt=Language.HERMIT.Plugin:main:Main/Main.hermit  \
 		  -fforce-recomp -O2
