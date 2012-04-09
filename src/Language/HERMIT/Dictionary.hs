@@ -65,6 +65,8 @@ data PartialCommand
 interpExpr' :: Expr.Expr -> Either String (Either PartialCommand Command)
 interpExpr' (Expr.Lit str)
         = Right $ Left $ RE_N (TH.mkName str)
+interpExpr' (Expr.Var ".")
+        = Right $ Right $ PopFocus
 interpExpr' (Expr.Var "pop")
         = Right $ Right $ PopFocus
 interpExpr' (Expr.Var "reset")
