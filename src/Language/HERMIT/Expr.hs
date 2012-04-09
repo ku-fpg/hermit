@@ -22,6 +22,43 @@ parseExpr str =
           ((e,str):_) | all isSpace str -> Right e
           _ -> Left $ "bad parse for: " ++ str
 
+parseExprs :: String -> Either String [Expr]
+parseExprs str =
+        case parseExprs' str of
+          ((e,str):_) | all isSpace str -> Right e
+          _ -> Left $ "bad parse for: " ++ str
+
+---------------------------------------------
+
+parseExprs' :: ReadS [Expr]
+parseExprs' =
+        parseExpr1 `bind` (\ a ->
+        many (some (item ";") `bind` \ _ -> parseExpr1) `bind` (\ as ->
+        (\ inp -> [(a:as,inp)])))
+
+bind :: ReadS a -> (a -> ReadS b) -> ReadS b
+bind m k = \ inp ->
+        [ (b,inp2)
+        | (a,inp1) <- m inp
+        , (b,inp2) <- k a inp1
+        ]
+
+
+
+
+many p = \ inp ->
+     some p inp ++
+     [ ([], inp) ]
+
+some p = \ inp ->
+     [ (x:xs,inp2)
+     | (x,inp1)  <- p inp
+     , (xs,inp2) <- many p inp1
+     ]
+
+
+
+
 parseExpr0 :: ReadS Expr
 parseExpr0 = \ inp ->
         [ (Var str,inp1)
@@ -41,14 +78,14 @@ parseExpr1 :: ReadS Expr
 parseExpr1 = \ inp ->
         [ (foldl App e es,inp2)
         | (e,inp1) <- parseExpr0 inp
-        , (es,inp2) <- parseExprs inp1
+        , (es,inp2) <- parseExprs1 inp1
         ]
 
-parseExprs :: ReadS [Expr]
-parseExprs = \ inp ->
+parseExprs1 :: ReadS [Expr]
+parseExprs1 = \ inp ->
         [ (e:es,inp2)
         | (e,inp1) <- parseExpr0 inp
-        , (es,inp2) <- parseExprs inp1
+        , (es,inp2) <- parseExprs1 inp1
         ] ++
         [ ([], inp) ]
 
@@ -61,11 +98,15 @@ item str = \ inp ->
 
 parseToken :: ReadS String
 parseToken []       = []
-parseToken (' ':cs) = parseToken cs
+parseToken ('\n':cs) = [(";",cs)]               -- yes, really
+parseToken (c:cs)    | isSpace c = parseToken cs
 parseToken ('(':cs) = [("(",cs)]
 parseToken (')':cs) = [(")",cs)]
+parseToken ('{':cs) = [("{",cs)]
+parseToken ('}':cs) = [("}",cs)]
+parseToken (';':cs) = [(";",cs)]
 parseToken ('\'':cs) = [("'",cs)]
-parseToken (c:cs)    | isAlphaNum c = lex (c:cs)
+parseToken (c:cs)    | isAlphaNum c || c `elem` "._" = lex (c:cs)
 parseToken _         = []
 
 
