@@ -20,6 +20,14 @@ data Command :: * where
    ResetFocus                           :: Command
    Message      :: String               -> Command
 
+instance Show Command where
+   show (Apply _)       = "Apply -"
+   show (PushFocus _)   = "PushFocus -"
+   show (PopFocus)      = "PopFocus"
+   show (ResetFocus)    = "ResetFocus"
+   show (Message _)     = "Message"
+
+
 runCommands
         :: (Context Core -> IO Command)                 -- waiting for commands
         -> (String -> IO ())                            -- where to send errors
