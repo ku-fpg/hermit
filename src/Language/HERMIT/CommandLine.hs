@@ -31,6 +31,7 @@ commandLine gets modGuts = do
                 case maybeLine of
                    Nothing -> return PopFocus
                    Just line | all isSpace line -> loop
+                   Just ('-':'-': _) -> loop       -- comment
                    Just line -> do
                      case Expr.parseExpr line of
                                  Left msg -> do

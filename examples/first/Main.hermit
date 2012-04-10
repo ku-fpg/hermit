@@ -1,3 +1,4 @@
+-- First example; unroll fib once.
 consider 'fib
   bottomup (try inline)
 .
