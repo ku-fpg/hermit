@@ -1,4 +1,4 @@
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE ExistentialQuantification, DeriveDataTypeable, TypeFamilies, RankNTypes, GADTs #-}
 -- The main namespace. Things tend to be untyped, because the API is accessed via (untyped) names.
 
 module Language.HERMIT.Dictionary where
@@ -7,6 +7,8 @@ import GhcPlugins
 import qualified Data.Map as Map
 import Data.Map(Map)
 import Data.Char
+import Data.Typeable
+import Data.Dynamic
 import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.Types
@@ -17,14 +19,16 @@ import Language.HERMIT.Command
 import qualified Language.HERMIT.Primitive.Inline as Inline
 import qualified Language.HERMIT.Primitive.Consider as Consider
 
-all_rewrites :: Map String (Rewrite Core)
-all_rewrites = Map.unions
-        [ fmap promoteR expr_rewrites
+commands :: Map String Command
+commands = Map.fromList
+        [ (".",                 PopFocus)
+        , ("pop",               PopFocus)
+        , ("reset",             ResetFocus)
         ]
 
-expr_rewrites :: Map String (Rewrite CoreExpr)
-expr_rewrites = Map.fromList
-        [ ("inline",            Inline.inline)
+rewrites :: Map String (Rewrite Core)
+rewrites = Map.fromList
+        [ ("inline",            promoteR Inline.inline)
 --        , ("eta-expand",...)
 --        , ("eta-reduction",...)
 --        , ("beta-reduction",...)
@@ -47,6 +51,14 @@ selects = Map.fromList
         ]
 
 
+dictionary :: Map String Dynamic
+dictionary = Map.unions
+        [ fmap (toDyn . CommandBox)                                             commands
+        , fmap (toDyn . RewriteCoreBox)                                         rewrites
+        , fmap (toDyn . (\ f (RewriteCoreBox r) -> RewriteCoreBox (f r)))       ho_rewrites
+        , fmap (toDyn . (\ f (NameBox r) -> LensCoreCoreBox (f r)))             selects
+        ]
+
 ------------------------------------------------------------------------------------
 -- The union of all possible results from a "well-typed" commands, from this dictionary.
 
@@ -54,62 +66,56 @@ interpExpr :: Expr.Expr -> Either String Command
 interpExpr expr =
         case interpExpr' expr of
           Left msg -> Left msg
-          Right (Left _) -> Left $ "interpExpr: bad type of expression"
-          Right (Right cmd) -> Right $ cmd
+          Right dyn -> runInterp dyn
+             [ Interp $ \ (CommandBox cmd)       -> Right $ cmd
+             , Interp $ \ (RewriteCoreBox rr)    -> Right $ Apply rr
+             , Interp $ \ (LensCoreCoreBox lens) -> Right $ PushFocus lens
+             ]
+             (Left $ "interpExpr: bad type of expression")
 
-data PartialCommand
-        = RE_RR_RR   (Rewrite Core -> Rewrite Core)
-        | RE_N_L     (TH.Name -> Lens Core Core)
-        | RE_N       TH.Name
+data Interp :: * -> * where
+   Interp :: (Typeable a) => (a -> b) -> Interp b
 
-interpExpr' :: Expr.Expr -> Either String (Either PartialCommand Command)
+runInterp :: Dynamic -> [Interp b] -> b -> b
+runInterp dyn []                bad = bad
+runInterp dyn (Interp f : rest) bad = case fromDynamic dyn of
+   Just v -> f v
+   Nothing -> runInterp dyn rest bad
+
+--------------------------------------------------------------------------
+-- Using boxes round things stop us needing deriving Dynamic everywhere.
+
+data NameBox = NameBox TH.Name
+        deriving (Typeable)
+
+data RewriteCoreBox = RewriteCoreBox (Rewrite Core)
+        deriving (Typeable)
+
+data LensCoreCoreBox = LensCoreCoreBox (Lens Core Core)
+        deriving (Typeable)
+
+data CommandBox = CommandBox Command
+        deriving (Typeable)
+
+--------------------------------------------------------------------------
+
+interpExpr' :: Expr.Expr -> Either String Dynamic -- (Either PartialCommand Command)
 interpExpr' (Expr.Lit str)
-        = Right $ Left $ RE_N (TH.mkName str)
-interpExpr' (Expr.Var ".")
-        = Right $ Right $ PopFocus
-interpExpr' (Expr.Var "pop")
-        = Right $ Right $ PopFocus
-interpExpr' (Expr.Var "reset")
-        = Right $ Right $ ResetFocus
+        = Right $ toDyn $ NameBox $ TH.mkName str
 interpExpr' (Expr.Var str)
         | all isDigit str
-        = Right $ Right $ PushFocus $ oneL (read str)
+        = Right $ toDyn $ LensCoreCoreBox $ oneL (read str)
 interpExpr' (Expr.Var str)
-        | Just rr <- Map.lookup str all_rewrites
-        = Right $ Right $ Apply rr
-        | Just rr <- Map.lookup str selects
-        = Right $ Left $ RE_N_L rr
-        | Just rr <- Map.lookup str ho_rewrites
-        = Right $ Left $ RE_RR_RR rr
+        | Just dyn <- Map.lookup str dictionary
+        = Right $ dyn
         | otherwise
         = Left $ "can not find : " ++ show str
 interpExpr' (Expr.App e1 e2) = do
         r1 <- interpExpr' e1
         r2 <- interpExpr' e2
-        case (r1,r2) of
-          (Left (RE_RR_RR ff), Right (Apply rr)) -> return $ Right $ Apply $ ff rr
-          (Left (RE_N_L ff),   Left  (RE_N nm))  -> return $ Right $ PushFocus $ ff nm
-          _ -> Left "type error in expression"
-
-{-
-          RE_RR rr -> Left $ "type error: a rewrite has been applied to an argument"
-          RE_RR_RR ff -> do
-                  a2 <- interpExpr' e2
-                  case a2 of
-                    RE_RR rr -> return $ RE_RR (ff rr)
-                    _ -> Left $ "type error: lhs not a RR"
-          RE_N_RR ff -> do
-                  a2 <- interpExpr' e2
-                  case a2 of
-                    RE_N rr -> return $ RE_RR (ff rr)
-                    _ -> Left $ "type error: lhs not a N"
-          RE_N_RR_RR ff -> do
-                  a2 <- interpExpr' e2
-                  case a2 of
-                    RE_N rr -> return $ RE_RR_RR (ff rr)
-                    _ -> Left $ "type error: lhs not a N"
-          RE_N nm -> Left $ "type error: names can not be used as functions"
--}
+        case dynApply r1 r2 of
+           Nothing -> Left "apply failed"
+           Just res -> return res
 
 --------------------------------------------------------------
 
