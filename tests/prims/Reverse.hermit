@@ -1,0 +1,7 @@
+consider 'main
+  bottomup (try inline)
+  1
+  0
+-- attempting a type-level beta-reduce
+  beta-reduce
+.
