@@ -59,6 +59,13 @@ dictionary = Map.unions
         , fmap (toDyn . (\ f (NameBox r) -> LensCoreCoreBox (f r)))             selects
         ]
 
+help :: [String]
+help = [ key ++ " :: " ++ show (dynTypeRep val)
+       | (key,val) <- Map.toList dictionary
+       ]
+
+
+
 ------------------------------------------------------------------------------------
 -- The union of all possible results from a "well-typed" commands, from this dictionary.
 
