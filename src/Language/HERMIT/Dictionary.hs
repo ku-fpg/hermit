@@ -16,6 +16,7 @@ import Language.HERMIT.KURE
 import qualified Language.HERMIT.Expr as Expr
 import Language.HERMIT.Command
 
+import qualified Language.HERMIT.Primitive.New as New
 import qualified Language.HERMIT.Primitive.Inline as Inline
 import qualified Language.HERMIT.Primitive.Consider as Consider
 
@@ -29,11 +30,12 @@ commands = Map.fromList
 rewrites :: Map String (Rewrite Core)
 rewrites = Map.fromList
         [ ("inline",            promoteR Inline.inline)
+        , ("beta-reduce",       promoteR New.beta_reduce)
+        ]
+
 --        , ("eta-expand",...)
 --        , ("eta-reduction",...)
---        , ("beta-reduction",...)
 --        , ("case-of-known-constructor", ...)
-        ]
 
 ho_rewrites :: Map String (Rewrite Core -> Rewrite Core)
 ho_rewrites = Map.fromList
