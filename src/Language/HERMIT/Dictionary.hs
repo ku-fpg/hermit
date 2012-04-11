@@ -70,6 +70,7 @@ interpExpr expr =
              [ Interp $ \ (CommandBox cmd)       -> Right $ cmd
              , Interp $ \ (RewriteCoreBox rr)    -> Right $ Apply rr
              , Interp $ \ (LensCoreCoreBox lens) -> Right $ PushFocus lens
+             , Interp $ \ (IntBox i)             -> Right $ PushFocus $ oneL i
              ]
              (Left $ "interpExpr: bad type of expression")
 
@@ -97,6 +98,9 @@ data LensCoreCoreBox = LensCoreCoreBox (Lens Core Core)
 data CommandBox = CommandBox Command
         deriving (Typeable)
 
+data IntBox = IntBox Int
+        deriving (Typeable)
+
 --------------------------------------------------------------------------
 
 interpExpr' :: Expr.Expr -> Either String Dynamic -- (Either PartialCommand Command)
@@ -104,7 +108,7 @@ interpExpr' (Expr.Lit str)
         = Right $ toDyn $ NameBox $ TH.mkName str
 interpExpr' (Expr.Var str)
         | all isDigit str
-        = Right $ toDyn $ LensCoreCoreBox $ oneL (read str)
+        = Right $ toDyn $ IntBox $ (read str)
 interpExpr' (Expr.Var str)
         | Just dyn <- Map.lookup str dictionary
         = Right $ dyn
