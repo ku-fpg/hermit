@@ -38,8 +38,10 @@ Library
        Language.HERMIT.Expr
        Language.HERMIT.Command
 
-       Language.HERMIT.Primitive.Inline
        Language.HERMIT.Primitive.Consider
+       Language.HERMIT.Primitive.Inline
+       Language.HERMIT.Primitive.New
+
 
   Other-modules:
        Language.Core.Quote
