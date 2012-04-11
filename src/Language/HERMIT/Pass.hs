@@ -26,7 +26,15 @@ hermitPass nms modGuts = case candidates of
                 el <- liftIO $ elInit "hermit"
                 liftIO $ setEditor el Emacs
                 liftIO $ setPrompt el (return "hermit> ")
-                CommandLine.commandLine (elGets el) modGuts
+                let append = appendFile ".hermitlog"
+                liftIO $ append "\n-- starting new session\n"
+                let get = do str <- elGets el
+                             case str of
+                               Nothing -> do append "-- ^D\n"
+                                             return Nothing
+                               Just msg -> do append msg
+                                              return $ Just msg
+                CommandLine.commandLine get modGuts
         [ ('/' : filename) ] -> do
                 gets <- liftIO $ openFile2 filename
                 CommandLine.commandLine gets modGuts
