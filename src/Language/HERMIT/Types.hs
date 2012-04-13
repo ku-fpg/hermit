@@ -6,19 +6,11 @@ import GhcPlugins hiding (empty)
 
 import Language.KURE
 
-import qualified Data.Map as Map
-import Data.Monoid
+import Language.HERMIT.HermitEnv
+import Language.HERMIT.HermitMonad
 
-import HermitEnv
-import HermitMonad
--- import Language.HERMIT.HermitEnv
--- import Language.HERMIT.HermitMonad
--- import Language.HERMIT.KURE
-
-import qualified Control.Category as Cat
-import Control.Arrow
 import Control.Applicative
-import Control.Monad
+import Data.Monoid
 
 ----------------------------------------------------------------------------
 
@@ -49,11 +41,11 @@ instance Walker HermitEnv HermitM Core where
   allR rr = rewrite $ \ c blob -> case blob of
           -- Going from Core to sub-Core is the one case where you do not augment the path,
           -- but instead direct traffic.
-          ModGutsCore modGuts -> liftA ModGutsCore $ apply (allR rr) c modGuts
-          ProgramCore prog    -> liftA ProgramCore $ apply (allR rr) c prog
-          BindCore    bind    -> liftA BindCore    $ apply (allR rr) c bind
-          ExprCore    expr    -> liftA ExprCore    $ apply (allR rr) c expr
-          AltCore     alt     -> liftA AltCore     $ apply (allR rr) c alt
+          ModGutsCore modGuts -> ModGutsCore <$> apply (allR rr) c modGuts
+          ProgramCore prog    -> ProgramCore <$> apply (allR rr) c prog
+          BindCore    bind    -> BindCore    <$> apply (allR rr) c bind
+          ExprCore    expr    -> ExprCore    <$> apply (allR rr) c expr
+          AltCore     alt     -> AltCore     <$> apply (allR rr) c alt
 
   crushT tt = translate $ \ c blob -> case blob of
           ModGutsCore x -> apply (crushT tt) c x
@@ -74,9 +66,8 @@ instance Walker HermitEnv HermitM Core where
      where
                act :: (WalkerH a, Generic a ~ Core)
                  => HermitEnv -> a -> HermitM ((HermitEnv, Generic a), Generic a -> HermitM Core)
-               act c a = do
-                 ((c',b), fn) <- apply (chooseL n) c a
-                 return ((c',inject b), retractWithMA (liftA inject . fn))
+               act c a = do ((c',b), fn) <- apply (chooseL n) c a
+                            return ((c',inject b), retractWith (liftA inject . fn))
 
 ---------------------------------------------------------------------
 
@@ -94,7 +85,7 @@ instance Walker HermitEnv HermitM ModGuts where
           binds' <- apply (extractR rr) (c @@ 0) (mg_binds modGuts)
           return (modGuts { mg_binds = binds' })
 
-  crushT tt = modGutsT (extractT tt) $ \ _modGuts r -> r
+  crushT tt = modGutsT (extractT tt) ( \ _ r -> r)
 
   chooseL 0 = modGutsT contextidT (\ modGuts cxt -> (cxt, \ prog -> return $ modGuts { mg_binds = prog })) `composeL` promoteL
   chooseL _ = failL
@@ -120,8 +111,7 @@ instance Walker HermitEnv HermitM CoreProgram where
           []       -> pure []
           (bd:bds) -> (:) <$> apply (extractR rr) (c @@ 0) bd <*> apply (extractR rr) (addHermitBinding bd c @@ 1) bds
 
-  crushT tt = consBindT (extractT tt) (extractT tt) (\ x xs -> x `mappend` xs)
-           <+ nilT mempty
+  crushT tt = consBindT (extractT tt) (extractT tt) mappend <+ nilT mempty
 
   chooseL 0 = consBindT contextidT idR (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2)) `composeL` promoteL
   chooseL 1 = consBindT idR contextidT (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2)) `composeL` promoteL
@@ -253,7 +243,7 @@ instance Walker HermitEnv HermitM (Expr Id) where
            <+ appT (extractT tt) (extractT tt) mappend
            <+ lamT (extractT tt) (\ _ r -> r)
            <+ letT (extractT tt) (extractT tt) mappend
-           <+ caseT (extractT tt) (const $ extractT tt) (\ r v t rs -> mconcat (r : rs))
+           <+ caseT (extractT tt) (const $ extractT tt) (\ r _ _ rs -> mconcat (r : rs))
            <+ castT (extractT tt) (\ r _ -> r)
            <+ tickT (extractT tt) (\ _ r -> r)
            <+ typeT (\ _ -> mempty)
@@ -329,9 +319,7 @@ instance Term (Alt Id) where
 
 instance Walker HermitEnv HermitM (Alt Id) where
 
-  allR rr = rewrite $ \ c (con,bs,e) -> do
-                          e' <- apply (extractR rr) (foldr addHermitEnvLambdaBinding c bs @@ 0) e
-                          return (con,bs,e')
+  allR rr = rewrite $ \ c (con,bs,e) -> (con,bs,) <$> apply (extractR rr) (foldr addHermitEnvLambdaBinding c bs @@ 0) e
 
   crushT tt = altT (extractT tt) (\ _ _ r -> r)
 
@@ -428,12 +416,12 @@ tickT tt comb = translate $ \ c e -> case e of
 
 typeT :: (Type -> a) -> TranslateH (Expr Id) a
 typeT comb = translate $ \ c e -> case e of
-                                    Type i -> return (comb i)
+                                    Type i -> pure (comb i)
                                     _      -> fail "no match for Type"
 
 coercionT :: (Coercion -> a) -> TranslateH (Expr Id) a
 coercionT comb = translate $ \ c e -> case e of
-                                        Coercion i -> return (comb i)
+                                        Coercion i -> pure (comb i)
                                         _          -> fail "no match for Coercion"
 
 ------------------------------------
@@ -448,7 +436,7 @@ consT t1 t2 f = translate $ \ c e -> case e of
 
 nilT :: b -> TranslateH [a] b
 nilT b = translate $ \ c e -> case e of
-                                [] -> return b
+                                [] -> pure b
                                 _  -> fail "no match for nilT"
 
 ------------------------------------

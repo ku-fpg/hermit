@@ -1,7 +1,6 @@
 {-# LANGUAGE TypeFamilies, FlexibleInstances #-}
 
--- module Language.HERMIT.HermitEnv where
-module HermitEnv where
+module Language.HERMIT.HermitEnv where
 
 import GhcPlugins
 import qualified Data.Map as Map
