@@ -33,6 +33,7 @@ Library
        Language.HERMIT.HermitEnv
        Language.HERMIT.HermitMonad
        Language.HERMIT.CommandLine
+       Language.HERMIT.External
        Language.HERMIT.KURE
        Language.HERMIT.Dictionary
        Language.HERMIT.Expr

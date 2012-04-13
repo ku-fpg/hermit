@@ -40,7 +40,7 @@ commandLine gets modGuts = do
                                  Right expr -> case interpExpr expr of
                                                  Right cmd -> return $ cmd
                                                  Left msg -> do
-                                                         putStrLn $ "Non-rewrite found: " ++  msg
+                                                         putStrLn $ msg
                                                          loop
           loop
 
@@ -121,7 +121,8 @@ instance Show2 Core where
 instance Show2 ModGuts where
         show2 modGuts =
                 "[ModGuts for " ++ showSDoc (ppr (mg_module modGuts)) ++ "]\n" ++
-                 show (length (mg_binds modGuts)) ++ " binding group(s)"
+                 show (length (mg_binds modGuts)) ++ " binding group(s)\n" ++
+                 show (length (mg_rules modGuts)) ++ " rule(s)\n"
 
 instance Show2 CoreProgram where
         show2 codeProg =

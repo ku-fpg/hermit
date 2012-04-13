@@ -8,8 +8,14 @@ import qualified Data.Map as Map
 import Language.HERMIT.Types
 import Language.HERMIT.KURE
 import Language.HERMIT.HermitEnv as Env
+import Language.HERMIT.External
 
--- The implementation of inline, an important transformation.
+externals :: External
+externals = external "inline" (promoteR inline)
+        [ "(Var n) ==> <defn of n>, fails otherwise"
+        ]
+
+-- | The implementation of inline, an important transformation.
 -- This *only* works on a Var of the given name. It can trivially
 -- be prompted to more general cases.
 

@@ -7,6 +7,7 @@ import GhcPlugins
 import qualified Data.Map as Map
 import Data.Map(Map)
 import Data.Char
+import Data.Monoid
 import Data.Typeable
 import Data.Dynamic
 import qualified Language.Haskell.TH as TH
@@ -14,59 +15,68 @@ import qualified Language.Haskell.TH as TH
 import Language.HERMIT.Types
 import Language.HERMIT.KURE
 import qualified Language.HERMIT.Expr as Expr
-import Language.HERMIT.Command
+import Language.HERMIT.Command as Command
+import Language.HERMIT.External
 
 import qualified Language.HERMIT.Primitive.New as New
 import qualified Language.HERMIT.Primitive.Inline as Inline
 import qualified Language.HERMIT.Primitive.Consider as Consider
 
-commands :: Map String Command
-commands = Map.fromList
-        [ (".",                 PopFocus)
-        , ("pop",               PopFocus)
-        , ("reset",             ResetFocus)
+all_externals :: External
+all_externals = mconcat $
+        -- values defined elsewhere
+        [ New.externals
+        , Inline.externals
+        , Consider.externals
+        ] ++
+        -- locally defined values
+        [ external "bottomup"   (bottomupR :: Rewrite Core -> Rewrite Core)
+            [ "promotes a rewrite to operate over an entire tree in bottom-up order"
+            ]
+        , external "topdown"    (topdownR :: Rewrite Core -> Rewrite Core)
+            [ "promotes a rewrite to operate over an entire tree in top-down order"
+            ]
+        , external "try"        (tryR :: Rewrite Core -> Rewrite Core)
+            [ "trys a rewrite, and performes an identity if this rewrite fails"
+            ]
+        , external "pop"        PopFocus
+            [ "pops one lens"
+            ]
+        , external "."          PopFocus
+            [ "pops one lens"
+            ]
+        , external "reset"      ResetFocus
+            [ "pops all lenses"
+            ]
+        , external "help"       Help
+            [ "lists commands"
+            ]
         ]
-
-rewrites :: Map String (Rewrite Core)
-rewrites = Map.fromList
-        [ ("inline",            promoteR Inline.inline)
-        , ("beta-reduce",       promoteR New.beta_reduce)
-        ]
-
---        , ("eta-expand",...)
---        , ("eta-reduction",...)
---        , ("case-of-known-constructor", ...)
-
-ho_rewrites :: Map String (Rewrite Core -> Rewrite Core)
-ho_rewrites = Map.fromList
-        [ ("bottomup",          bottomupR)
-        , ("topdown",           topdownR)
-        , ("try",               tryR)
-        ]
-
-selects :: Map String (TH.Name -> Lens Core Core)
-selects = Map.fromList
-        [ ("consider",          \ nm -> Consider.consider nm `glueL` promoteL)
---        , ("inside",            insideK)
---      select-case                             -- select the next case down
---      select-let                              -- select the next let down??
-        ]
-
 
 dictionary :: Map String Dynamic
-dictionary = Map.unions
-        [ fmap (toDyn . CommandBox)                                             commands
-        , fmap (toDyn . RewriteCoreBox)                                         rewrites
-        , fmap (toDyn . (\ f (RewriteCoreBox r) -> RewriteCoreBox (f r)))       ho_rewrites
-        , fmap (toDyn . (\ f (NameBox r) -> LensCoreCoreBox (f r)))             selects
-        ]
+dictionary = toDictionary all_externals
 
 help :: [String]
-help = [ key ++ " :: " ++ show (dynTypeRep val)
-       | (key,val) <- Map.toList dictionary
-       ]
+help = concat $ map snd $ Map.toList $ toHelp all_externals
 
+------------------------------------------------------------------------------------
 
+data CommandBox = CommandBox Command
+        deriving (Typeable)
+
+instance Extern Command where
+    type Box Command = CommandBox
+    box i = CommandBox i
+    unbox (CommandBox i) = i
+------------------------------------------------------------------------------------
+
+data Help = Help
+        deriving (Typeable)
+
+instance Extern Help where
+    type Box Help = Help
+    box i = i
+    unbox i = i
 
 ------------------------------------------------------------------------------------
 -- The union of all possible results from a "well-typed" commands, from this dictionary.
@@ -80,6 +90,7 @@ interpExpr expr =
              , Interp $ \ (RewriteCoreBox rr)    -> Right $ Apply rr
              , Interp $ \ (LensCoreCoreBox lens) -> Right $ PushFocus lens
              , Interp $ \ (IntBox i)             -> Right $ PushFocus $ oneL i
+             , Interp $ \ Help                   -> Left $ unlines $ help
              ]
              (Left $ "interpExpr: bad type of expression")
 
@@ -91,24 +102,6 @@ runInterp dyn []                bad = bad
 runInterp dyn (Interp f : rest) bad = case fromDynamic dyn of
    Just v -> f v
    Nothing -> runInterp dyn rest bad
-
---------------------------------------------------------------------------
--- Using boxes round things stop us needing deriving Dynamic everywhere.
-
-data NameBox = NameBox TH.Name
-        deriving (Typeable)
-
-data RewriteCoreBox = RewriteCoreBox (Rewrite Core)
-        deriving (Typeable)
-
-data LensCoreCoreBox = LensCoreCoreBox (Lens Core Core)
-        deriving (Typeable)
-
-data CommandBox = CommandBox Command
-        deriving (Typeable)
-
-data IntBox = IntBox Int
-        deriving (Typeable)
 
 --------------------------------------------------------------------------
 

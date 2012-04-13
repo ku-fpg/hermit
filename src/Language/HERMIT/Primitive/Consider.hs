@@ -9,12 +9,18 @@ import Data.Maybe
 import Data.Monoid
 
 import Language.HERMIT.Types
+import Language.HERMIT.External
 import Language.HERMIT.KURE
 import Language.HERMIT.HermitEnv
 
 import qualified Language.Haskell.TH as TH
 
 import Debug.Trace
+
+externals :: External
+externals = external "consider" (\ nm -> consider nm `glueL` promoteL)
+        [ "'consider <v>' focuses into the rhs of the binding <v>"
+        ]
 
 -- Focus on the Rhs of a bindings
 consider :: TH.Name -> Lens (Generic CoreExpr) CoreExpr

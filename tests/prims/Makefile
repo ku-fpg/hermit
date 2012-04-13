@@ -6,5 +6,5 @@ test::
 	perl ./test.pl Fib h
 
 	perl ./test.pl Reverse
-	perl ./test.pl Reverse i	
+	perl ./test.pl Reverse h
 
