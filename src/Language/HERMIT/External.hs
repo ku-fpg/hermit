@@ -1,8 +1,11 @@
 {-# LANGUAGE DataKinds, TypeFamilies, DeriveDataTypeable, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 
-module Language.HERMIT.External where
+module Language.HERMIT.External
+        ( module Language.HERMIT.External
+        , (<>)
+        ) where
 
-import GhcPlugins
+import GhcPlugins hiding ((<>))
 
 import Data.Dynamic
 import Data.Monoid
