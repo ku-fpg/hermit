@@ -80,6 +80,15 @@ subst :: Rewrite CoreExpr
 subst = rewrite $ \ (Context c e) -> case e of
         _ -> fail $ "subst failed (NOT implemented)"
 
+-- dead code elimination removes a let.
+-- (let v = E1 in E2) => E2, if v is not free in E2
+dce :: Rewrite CoreExpr
+dce = rewrite $ \ (Context c e) -> case e of
+        _ -> fail $ "subst failed (NOT implemented)"
+
+-- Others
+-- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
+-- let v = E1 in E2 E3 <=> E2 (let v = E1 in E3)
 
 var :: TH.Name -> Rewrite CoreExpr -> Rewrite CoreExpr
 var _ n = idR -- bottomupR (varR (\ n -> ()) ?
