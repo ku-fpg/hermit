@@ -3,8 +3,6 @@ module Language.HERMIT.HermitMonad where
 import GhcPlugins hiding (empty)
 
 import MonadUtils       -- from GHC
-import Control.Monad
-
 import Control.Applicative
 
 ----------------------------------------------------------------------------
@@ -36,22 +34,6 @@ instance Applicative HermitM where
   (HermitM f) <*> (HermitM a) = HermitM (liftA2 (<*>) f a)
 
 
-
-
-instance MonadIO HermitM where
-        liftIO = liftCoreM . liftIO
-
-instance MonadUnique HermitM where
-        getUniqueSupplyM = liftCoreM $ getUniqueSupplyM
-
-liftCoreM :: CoreM a -> HermitM a
-liftCoreM m = HermitM $ do r <- m
-                           return $ SuccessR r
-
-
-
-
-
 instance Alternative HermitR where
   empty = FailR ""
   ra <|> rb = catchHR ra (const rb) 
@@ -80,3 +62,12 @@ catchHR ra f = runHermitR SuccessR f ra
 catchH :: HermitM a -> (String -> HermitM a) -> HermitM a
 catchH (HermitM mra) f = HermitM (mra >>= runHermitR (return.SuccessR) (runHermitM.f))
 
+
+instance MonadIO HermitM where
+   liftIO = liftCoreM . liftIO
+
+instance MonadUnique HermitM where
+   getUniqueSupplyM = liftCoreM getUniqueSupplyM
+
+liftCoreM :: CoreM a -> HermitM a
+liftCoreM m = HermitM (SuccessR <$> m)
