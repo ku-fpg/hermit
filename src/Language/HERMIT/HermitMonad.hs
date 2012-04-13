@@ -1,5 +1,3 @@
-{-# LANGUAGE TypeFamilies, FlexibleInstances #-}
-
 module Language.HERMIT.HermitMonad where
 
 import GhcPlugins hiding (empty)
