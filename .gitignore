@@ -2,3 +2,7 @@ dist/
 *~
 *.hi
 *.o
+*.swp
+*.swo
+BEFORE.HERMIT.*
+AFTER.HERMIT.*
