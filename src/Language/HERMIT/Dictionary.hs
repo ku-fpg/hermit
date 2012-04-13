@@ -12,8 +12,9 @@ import Data.Typeable
 import Data.Dynamic
 import qualified Language.Haskell.TH as TH
 
+import Language.KURE
+
 import Language.HERMIT.Types
-import Language.HERMIT.KURE
 import qualified Language.HERMIT.Expr as Expr
 import Language.HERMIT.Command as Command
 import Language.HERMIT.External
@@ -30,13 +31,13 @@ all_externals = mconcat $
         , Consider.externals
         ] ++
         -- locally defined values
-        [ external "bottomup"   (bottomupR :: Rewrite Core -> Rewrite Core)
+        [ external "bottomup"   (bottomupR :: RewriteH Core -> RewriteH Core)
             [ "promotes a rewrite to operate over an entire tree in bottom-up order"
             ]
-        , external "topdown"    (topdownR :: Rewrite Core -> Rewrite Core)
+        , external "topdown"    (topdownR :: RewriteH Core -> RewriteH Core)
             [ "promotes a rewrite to operate over an entire tree in top-down order"
             ]
-        , external "try"        (tryR :: Rewrite Core -> Rewrite Core)
+        , external "try"        (tryR :: RewriteH Core -> RewriteH Core)
             [ "trys a rewrite, and performes an identity if this rewrite fails"
             ]
         , external "pop"        PopFocus
@@ -68,6 +69,7 @@ instance Extern Command where
     type Box Command = CommandBox
     box i = CommandBox i
     unbox (CommandBox i) = i
+    
 ------------------------------------------------------------------------------------
 
 data Help = Help
@@ -89,10 +91,10 @@ interpExpr expr =
              [ Interp $ \ (CommandBox cmd)       -> Right $ cmd
              , Interp $ \ (RewriteCoreBox rr)    -> Right $ Apply rr
              , Interp $ \ (LensCoreCoreBox lens) -> Right $ PushFocus lens
-             , Interp $ \ (IntBox i)             -> Right $ PushFocus $ oneL i
+             , Interp $ \ (IntBox i)             -> Right $ PushFocus $ chooseL i
              , Interp $ \ Help                   -> Left $ unlines $ help
              ]
-             (Left $ "interpExpr: bad type of expression")
+             (Left "interpExpr: bad type of expression")
 
 data Interp :: * -> * where
    Interp :: (Typeable a) => (a -> b) -> Interp b

@@ -8,9 +8,10 @@ module Language.HERMIT.Primitive.Core where
 import GhcPlugins hiding ((<>))
 import qualified Data.Map as Map
 
+import Language.KURE
+
 import Language.HERMIT.Types
 import Language.HERMIT.External
-import Language.HERMIT.KURE
 import Language.HERMIT.HermitEnv as Env
 import Language.HERMIT.HermitMonad as M
 

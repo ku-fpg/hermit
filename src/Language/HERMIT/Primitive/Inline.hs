@@ -5,8 +5,9 @@ module Language.HERMIT.Primitive.Inline where
 import GhcPlugins
 import qualified Data.Map as Map
 
+import Language.KURE
+
 import Language.HERMIT.Types
-import Language.HERMIT.KURE
 import Language.HERMIT.HermitEnv as Env
 import Language.HERMIT.External
 
@@ -19,8 +20,8 @@ externals = external "inline" (promoteR inline)
 -- This *only* works on a Var of the given name. It can trivially
 -- be prompted to more general cases.
 
-inline :: Rewrite CoreExpr
-inline = rewrite $ \ (Context c e) -> case e of
+inline :: RewriteH CoreExpr
+inline = rewrite $ \ c e -> case e of
         Var n0 -> -- A candiate for inlining
                 case Env.lookupHermitBinding n0 c of
                   Nothing -> fail $ "inline failed, can not find " ++ show n0 ++ "  in Env"

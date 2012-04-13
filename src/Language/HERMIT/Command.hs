@@ -7,15 +7,16 @@ module Language.HERMIT.Command
 
 import GhcPlugins
 
+import Language.KURE
+
 import Language.HERMIT.Types
-import Language.HERMIT.KURE
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 
 -- | 'Command' is what you send to the HERMIT kernel.
 data Command :: * where
-   Apply        :: Rewrite Core         -> Command
-   PushFocus    :: Lens Core Core       -> Command
+   Apply        :: RewriteH Core        -> Command
+   PushFocus    :: LensH Core Core      -> Command
    PopFocus                             :: Command
    ResetFocus                           :: Command
    Message      :: String               -> Command
@@ -29,40 +30,40 @@ instance Show Command where
 
 
 runCommands
-        :: (Context Core -> IO Command)                 -- waiting for commands
+        :: (HermitEnv -> Core -> IO Command)                 -- waiting for commands
         -> (String -> IO ())                            -- where to send errors
         -> ModGuts -> CoreM ModGuts
 runCommands getCmd errorMsg modGuts = do
-        Context _ (ModGutsCore modGuts') <- loop (Context initHermitEnv (ModGutsCore modGuts))
+        (_, ModGutsCore modGuts') <- loop initHermitEnv (ModGutsCore modGuts)
         return modGuts'
  where
-    loop :: Context Core -> CoreM (Context Core)
-    loop cxt@(Context c b) = do
-        rep <- liftIO $ getCmd cxt
+    loop :: HermitEnv -> Core -> CoreM (HermitEnv,Core)
+    loop c b = do
+        rep <- liftIO $ getCmd c b
         case rep of
-           PopFocus -> return cxt
+           PopFocus -> return (c,b)
            PushFocus lens -> do
-                res <- runHermitM (apply lens cxt)
+                res <- runHermitM (apply lens c b)
                 case res of
                   FailR msg -> do
                      liftIO $ errorMsg $ show msg
-                     loop cxt
-                  SuccessR (cxt1,kick) -> do
-                     cxt2@(Context c b2) <- loop cxt1
+                     loop c b
+                  SuccessR ((c1,b1),kick) -> do
+                     (c2, b2) <- loop c1 b1
                      res2 <- runHermitM (kick b2)
                      case res2 of
                         FailR msg -> do
                            liftIO $ errorMsg $ show msg
                            -- Opps, use the original context because failed to kick
-                           loop cxt
+                           loop c b
                         SuccessR b3 -> do
                            -- Remember, the Context never changes at a specific depth
-                           loop (Context c b3)
+                           loop c2 b3 -- Check that you meant c2 here, you shadowed a variable originally and I'm not sure if that was a mistake.
            Apply rr -> do
-                res <- runHermitM (apply rr cxt)
+                res <- runHermitM (apply rr c b)
                 case res of
                   FailR msg -> do
                      liftIO $ errorMsg $ show msg
-                     loop cxt
+                     loop c b
                   SuccessR b' -> do
-                     loop (Context c b')
+                     loop c b'

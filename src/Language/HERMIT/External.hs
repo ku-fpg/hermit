@@ -7,10 +7,11 @@ module Language.HERMIT.External
 
 import GhcPlugins hiding ((<>))
 
+import Language.KURE
+
 import Data.Dynamic
 import Data.Monoid
 import Language.HERMIT.Types
-import Language.HERMIT.KURE
 import Language.HERMIT.HermitMonad
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map as Map
@@ -66,10 +67,10 @@ instance Extern Int where
     box i = IntBox i
     unbox (IntBox i) = i
 
-data RewriteCoreBox = RewriteCoreBox (Rewrite Core) deriving (Typeable)
+data RewriteCoreBox = RewriteCoreBox (RewriteH Core) deriving (Typeable)
 
-instance Extern (Rewrite Core) where
-    type Box (Rewrite Core) = RewriteCoreBox
+instance Extern (RewriteH Core) where
+    type Box (RewriteH Core) = RewriteCoreBox
     box i = RewriteCoreBox i
     unbox (RewriteCoreBox i) = i
 
@@ -80,10 +81,10 @@ instance Extern TH.Name where
     box i = NameBox i
     unbox (NameBox i) = i
 
-data LensCoreCoreBox = LensCoreCoreBox (Lens Core Core)
+data LensCoreCoreBox = LensCoreCoreBox (LensH Core Core)
         deriving (Typeable)
 
-instance Extern (Lens Core Core) where
-    type Box (Lens Core Core) = LensCoreCoreBox
+instance Extern (LensH Core Core) where
+    type Box (LensH Core Core) = LensCoreCoreBox
     box i = LensCoreCoreBox i
     unbox (LensCoreCoreBox i) = i

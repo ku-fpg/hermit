@@ -6,12 +6,13 @@ module Language.HERMIT.CommandLine where
 
 import GhcPlugins
 
+import Language.KURE
+
 import Data.Char
 
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.Types
-import Language.HERMIT.KURE
 import Language.HERMIT.Dictionary
 import Language.HERMIT.Command
 import qualified Language.HERMIT.Expr as Expr
@@ -22,9 +23,8 @@ import Language.HERMIT.Primitive.Inline
 
 commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
 commandLine gets modGuts = do
-    let getCmd :: Context Core -> IO Command
-        getCmd lh = do
-          let (Context _ e) = lh
+    let getCmd :: HermitEnv -> Core -> IO Command
+        getCmd _ e = do
           putStrLn (show2 e)
           let loop = do
                 maybeLine <- gets
@@ -38,9 +38,9 @@ commandLine gets modGuts = do
                                      putStrLn $ "parse failure: " ++ show msg
                                      loop
                                  Right expr -> case interpExpr expr of
-                                                 Right cmd -> return $ cmd
+                                                 Right cmd -> return cmd
                                                  Left msg -> do
-                                                         putStrLn $ msg
+                                                         putStrLn msg
                                                          loop
           loop
 
