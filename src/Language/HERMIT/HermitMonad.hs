@@ -4,6 +4,7 @@
 module Language.HERMIT.HermitMonad where
 
 import GhcPlugins
+import MonadUtils       -- from GHC
 import qualified Data.Map as Map
 import Control.Monad
 
@@ -31,3 +32,12 @@ catchH (HermitM m) k = HermitM $ do
           SuccessR a -> return $ SuccessR a
           FailR msg  -> runHermitM (k msg)
 
+instance MonadIO HermitM where
+        liftIO = liftCoreM . liftIO
+
+instance MonadUnique HermitM where
+        getUniqueSupplyM = liftCoreM $ getUniqueSupplyM
+
+liftCoreM :: CoreM a -> HermitM a
+liftCoreM m = HermitM $ do r <- m
+                           return $ SuccessR r
