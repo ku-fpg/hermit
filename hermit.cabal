@@ -40,6 +40,7 @@ Library
        Language.HERMIT.Command
 
        Language.HERMIT.Primitive.Consider
+       Language.HERMIT.Primitive.Core
        Language.HERMIT.Primitive.Inline
        Language.HERMIT.Primitive.New
 

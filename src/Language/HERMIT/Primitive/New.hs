@@ -9,6 +9,9 @@ import qualified Data.Map as Map
 import Language.HERMIT.Types
 import Language.HERMIT.External
 import Language.HERMIT.KURE
+
+import Language.HERMIT.Primitive.Core
+
 import Language.HERMIT.HermitEnv as Env
 
 import qualified Language.Haskell.TH as TH
@@ -51,14 +54,22 @@ beta_expand = rewrite $ \ (Context c e) -> case e of
 
 eta_reduce :: Rewrite CoreExpr
 eta_reduce = rewrite $ \ (Context c e) -> case e of
-        (App (Lam v1 e1) (Var v2))
+        (Lam v1 (App e1 (Var v2)))
                 -- TODO: check that v1/v2 is not free in e1
                 | v1 == v2 -> return e1
         _ -> fail $ "eta_reduce failed"
 
 eta_expand :: TH.Name -> Rewrite CoreExpr
-eta_expand _ = rewrite $ \ (Context c e) -> case e of
-        _ -> fail $ "eta_expand failed (NOT implemented)"
+eta_expand nm = rewrite $ \ (Context c e) -> do
+        -- First find the type of of e
+        let ty = exprType e
+        liftIO $ putStr (showSDoc (ppr ty))
+        case splitAppTy_maybe ty of
+           Nothing -> fail "eta-expand failed (not function type)"
+           Just (f_ty,a_ty) -> do
+             v1 <- newVarH nm a_ty
+             liftIO $ putStr (showSDoc (ppr v1))
+             return $ Lam v1 (App e (Var v1))
 
 let_intro :: TH.Name -> Rewrite CoreExpr
 let_intro _ = rewrite $ \ (Context c e) -> case e of
