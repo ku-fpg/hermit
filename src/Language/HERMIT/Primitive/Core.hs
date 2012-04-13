@@ -44,3 +44,10 @@ newTypeVarH = undefined
 freeVarsH
 
 -}
+
+
+-- NOTE:  this is not a Translate.
+-- We directly invoke a CoreUtils function to return all Free Var's
+-- appearing anywhere in/below the CoreExpr.
+freeIds :: CoreExpr -> [Id]
+freeIds  = uniqSetToList . exprFreeIds

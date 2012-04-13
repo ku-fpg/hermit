@@ -37,6 +37,10 @@ externals = external "beta-reduce" (promoteR beta_reduce)
                 [ "(let v = E1 in E2) ==> E2[E1/v], fails otherwise"
                 , "condition: let is not-recursive"
                 ]
+         <> external "dce" (promoteR dce)
+                [ "dead code elimination removes a let. (let v = E1 in E2) ==> E2, if v is not free in E2,  fails otherwise"
+                , "condition: let is not-recursive"
+                ]
          <> external "var" (\ nm -> promoteR . var nm . extractR)
                 [ "'var <v>' applies a rewrite to all <v>"
                 ]
@@ -84,7 +88,9 @@ subst = rewrite $ \ (Context c e) -> case e of
 -- (let v = E1 in E2) => E2, if v is not free in E2
 dce :: Rewrite CoreExpr
 dce = rewrite $ \ (Context c e) -> case e of
-        _ -> fail $ "subst failed (NOT implemented)"
+        Let (NonRec n e1) e2 | (n `notElem` freeIds e2) ->
+                   return $ e2
+        _ -> fail $ "DCE failed"
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
