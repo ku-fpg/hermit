@@ -44,6 +44,9 @@ externals = external "beta-reduce" (promoteR beta_reduce)
          <> external "var" (\ nm -> promoteR . var nm . extractR)
                 [ "'var <v>' applies a rewrite to all <v>"
                 ]
+         <> external "info" (promoteR info)
+                [ "tell me what you know about this expression or binding"
+                ]
 
 beta_reduce :: Rewrite CoreExpr
 beta_reduce = rewrite $ \ (Context c e) -> case e of
@@ -67,7 +70,7 @@ eta_expand :: TH.Name -> Rewrite CoreExpr
 eta_expand nm = rewrite $ \ (Context c e) -> do
         -- First find the type of of e
         let ty = exprType e
-        liftIO $ putStr (showSDoc (ppr ty))
+        liftIO $ putStrLn (showSDoc (ppr ty))
         case splitAppTy_maybe ty of
            Nothing -> fail "eta-expand failed (not function type)"
            Just (f_ty,a_ty) -> do
@@ -95,6 +98,21 @@ dce = rewrite $ \ (Context c e) -> case e of
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
 -- let v = E1 in E2 E3 <=> E2 (let v = E1 in E3)
+
+info :: Rewrite CoreExpr
+info = rewrite $ \ (Context c e) -> do
+        let ty = exprType e
+        liftIO $ putStrLn $ "type ::= " ++ showSDoc (ppr ty)
+        case e of
+{-
+           Var v -> do
+              liftIO $ putStrLn $ "idInfo: "
+              liftIO $ putStrLn $ showSDoc (ppr $ idInfo v)
+              return e
+-}
+           _ -> return e
+
+
 
 var :: TH.Name -> Rewrite CoreExpr -> Rewrite CoreExpr
 var _ n = idR -- bottomupR (varR (\ n -> ()) ?
