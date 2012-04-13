@@ -6,9 +6,11 @@ import GhcPlugins
 import qualified Data.Map as Map
 import Data.Monoid
 
-import Language.HERMIT.HermitEnv
-import Language.HERMIT.HermitMonad
-import Language.HERMIT.KURE
+import HermitEnv
+import HermitMonad
+-- import Language.HERMIT.HermitEnv
+-- import Language.HERMIT.HermitMonad
+-- import Language.HERMIT.KURE
 
 import qualified Control.Category as Cat
 import Control.Arrow
@@ -22,13 +24,15 @@ runHermitM (FailM str) = return $ Left str
 -}
 ----------------------------------------------------------------------------
 
+type TranslateH a b = Translate HermitEnv HermitM a b
+type RewriteH a = Rewrite HermitEnv HermitM a
+type LensH a b = Lens HermitEnv HermitM a b
+
 ---------------------------------------------------------------------
 
 -- Lifting this out:
 -- TODO: remove this, replace with Core everywhere.
 -- Perhaps rename Blog to Generic :: *
-
-
 
 -- To rename to Core
 data Core
@@ -43,43 +47,42 @@ data Core
 
 instance Term Core where
   type Generic Core = Core
+{-
+instance Walker HermitEnv HermitM Core where
 
-  select   = Just
-  inject   = id
-
-  allR rr = rewrite $ \ (Context c blob) -> case blob of
+  allR rr = rewrite $ \ c blob -> case blob of
           -- Going from Core to sub-Blog is the one case where you do not augment the path,
           -- but instead direct traffic.
-          ModGutsCore modGuts -> liftM ModGutsCore $ apply (allR rr) (Context c modGuts)
-          ProgramCore prog    -> liftM ProgramCore $ apply (allR rr) (Context c prog)
-          BindCore    bind    -> liftM BindCore    $ apply (allR rr) (Context c bind)
-          ExprCore    expr    -> liftM ExprCore    $ apply (allR rr) (Context c expr)
-          AltCore     alt     -> liftM AltCore     $ apply (allR rr) (Context c alt)
+          ModGutsCore modGuts -> liftM ModGutsCore $ apply (allR rr) c modGuts
+          ProgramCore prog    -> liftM ProgramCore $ apply (allR rr) c prog
+          BindCore    bind    -> liftM BindCore    $ apply (allR rr) c bind
+          ExprCore    expr    -> liftM ExprCore    $ apply (allR rr) c expr
+          AltCore     alt     -> liftM AltCore     $ apply (allR rr) c alt
 
-  crushU tt = translate $ \ (Context c blob) -> case blob of
-          ModGutsCore x -> apply (crushU tt) (Context c x)
-          ProgramCore x -> apply (crushU tt) (Context c x)
-          BindCore x    -> apply (crushU tt) (Context c x)
-          ExprCore x    -> apply (crushU tt) (Context c x)
-          AltCore x     -> apply (crushU tt) (Context c x)
+  crushT tt = translate $ \ c blob -> case blob of
+          ModGutsCore x -> apply (crushT tt) c x
+          ProgramCore x -> apply (crushT tt) c x
+          BindCore x    -> apply (crushT tt) c x
+          ExprCore x    -> apply (crushT tt) c x
+          AltCore x     -> apply (crushT tt) c x
 
-  oneL n = translate $ \ (Context c blob) -> case blob of
+  chooseL n = translate $ \ c blob -> case blob of
           -- Going from Core to sub-Blog is the one case where you do not augment the path,
           -- but instead direct traffic.
-          ModGutsCore x -> act (Context c x)
-          ProgramCore x -> act (Context c x)
-          BindCore x    -> act (Context c x)
-          ExprCore x    -> act (Context c x)
-          AltCore x     -> act (Context c x)
+          ModGutsCore x -> act (c,x)
+          ProgramCore x -> act (c,x)
+          BindCore x    -> act (c,x)
+          ExprCore x    -> act (c,x)
+          AltCore x     -> act (c,x)
 
      where
                act :: (Term a, Generic a ~ Core)
                  => (Context a)
                  -> HermitM (Context (Generic a), Generic a -> HermitM Core)
                act cxt = do
-                 (cb, fn) <- apply (oneL n) cxt
-                 return $ (fmap inject cb, \ b -> case select b of
-                                               Nothing -> fail "oneL failed"
+                 (cb, fn) <- apply (chooseL n) cxt
+                 return $ (fmap inject cb, \ b -> case retract b of
+                                               Nothing -> fail "chooseL failed"
                                                Just b -> liftM inject (fn b))
 
 {-
@@ -91,18 +94,18 @@ instance Term Core where
 instance Term ModGuts where
   type Generic ModGuts = Core
 
-  select (ModGutsCore guts) = return guts
-  select _              = Nothing
+  retract (ModGutsCore guts) = return guts
+  retract _              = Nothing
   inject                = ModGutsCore
 
   allR rr = rewrite $ \ (Context c modGuts) -> do
           binds' <- apply (extractR rr) (Context (c @@ 0) (mg_binds modGuts))
           return (modGuts { mg_binds = binds' })
 
-  crushU tt = modGutsT (extractU tt) $ \ _modGuts r -> r
+  crushT tt = modGutsT (extractT tt) $ \ _modGuts r -> r
 
-  oneL 0 = modGutsT contextT (\ modGuts cxt -> (cxt, \ prog -> return $ modGuts { mg_binds = prog })) `glueL` promoteL
-  oneL _ = failL "not lens for ModGuts"
+  chooseL 0 = modGutsT contextT (\ modGuts cxt -> (cxt, \ prog -> return $ modGuts { mg_binds = prog })) `glueL` promoteL
+  chooseL _ = failL "not lens for ModGuts"
 
 modGutsT :: Translate CoreProgram a1
          -> (ModGuts -> a1 -> a)                -- slightly different; passes in *all* of the original
@@ -114,8 +117,8 @@ modGutsT tt comp = translate $ \ (Context c modGuts) -> do
 instance Term CoreProgram where
   type Generic CoreProgram = Core
 
-  select (ProgramCore guts) = return guts
-  select _              = Nothing
+  retract (ProgramCore guts) = return guts
+  retract _              = Nothing
   inject                = ProgramCore
 
   allR rr = rewrite $ \ (Context c prog) -> case prog of
@@ -126,12 +129,12 @@ instance Term CoreProgram where
               bds' <- apply (extractR rr) (Context (c' @@ 1) bds)
               return $ bd' : bds'
 
-  crushU tt = consBindT (extractU tt) (extractU tt) (\ x xs -> x `mappend` xs)
+  crushT tt = consBindT (extractT tt) (extractT tt) (\ x xs -> x `mappend` xs)
            <+ nilT mempty
 
-  oneL 0 = consBindT contextT idR (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2)) `glueL` promoteL
-  oneL 1 = consBindT idR contextT (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2)) `glueL` promoteL
-  oneL _ = failL "no lens for CoreProgram"
+  chooseL 0 = consBindT contextT idR (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2)) `glueL` promoteL
+  chooseL 1 = consBindT idR contextT (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2)) `glueL` promoteL
+  chooseL _ = failL "no lens for CoreProgram"
 
 consBindT :: (a ~ CoreBind)
       => Translate a a1
@@ -149,8 +152,8 @@ consBindT t1 t2 f = translate $ \ (Context c e) -> case e of
 instance Term (Bind Id) where
   type Generic (Bind Id) = Core
 
-  select (BindCore expr) = return expr
-  select _              = Nothing
+  retract (BindCore expr) = return expr
+  retract _              = Nothing
   inject                = BindCore
 
   allR rr = rewrite $ \ (Context c e) -> case e of
@@ -168,10 +171,10 @@ instance Term (Bind Id) where
                         ]
                    return $ Rec bds'
 
-  crushU tt = nonRecT (extractU tt) (\ _ r -> r)
-           <+ recT    (const $ extractU tt) (mconcat . map snd)
+  crushT tt = nonRecT (extractT tt) (\ _ r -> r)
+           <+ recT    (const $ extractT tt) (mconcat . map snd)
 
-  oneL n = case n of 0 -> nonrec <+ rec
+  chooseL n = case n of 0 -> nonrec <+ rec
                      n -> rec
      where
          nonrec = nonRecT contextT (\ v cxt -> (cxt, \ e -> return $ NonRec v e)) `glueL` promoteL
@@ -191,12 +194,12 @@ instance Term (Bind Id) where
                           ) `glueL` promoteL
 
 {-
-  oneL 0 =
+  chooseL 0 =
         <+ rec 0
-  oneL n = rec n
+  chooseL n = rec n
     where
      rec n = recT idR contextT (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2)) `glueL` promoteL
-  oneL _ = failL
+  chooseL _ = failL
 -}
 
 recT :: (Int -> Translate CoreExpr a1)
@@ -226,8 +229,8 @@ nonRecT tt comp = translate $ \ (Context c e) -> case e of
 instance Term (Expr Id) where
   type Generic (Expr Id) = Core
 
-  select (ExprCore expr) = return expr
-  select _              = Nothing
+  retract (ExprCore expr) = return expr
+  retract _              = Nothing
   inject                = ExprCore
 
 
@@ -270,18 +273,18 @@ instance Term (Expr Id) where
           Type _ty -> return $ e
           Coercion _c -> return $ e
 
-  crushU tt = varT (\ _ -> mempty)
+  crushT tt = varT (\ _ -> mempty)
            <+ litT (\ _ -> mempty)
-           <+ appT (extractU tt) (extractU tt) mappend
-           <+ lamT (extractU tt) (\ _ r -> r)
-           <+ letT (extractU tt) (extractU tt) mappend
-           <+ caseT (extractU tt) (const $ extractU tt) (\ r v t rs -> mconcat (r : rs))
-           <+ castT (extractU tt) (\ r _ -> r)
-           <+ tickT (extractU tt) (\ _ r -> r)
+           <+ appT (extractT tt) (extractT tt) mappend
+           <+ lamT (extractT tt) (\ _ r -> r)
+           <+ letT (extractT tt) (extractT tt) mappend
+           <+ caseT (extractT tt) (const $ extractT tt) (\ r v t rs -> mconcat (r : rs))
+           <+ castT (extractT tt) (\ r _ -> r)
+           <+ tickT (extractT tt) (\ _ r -> r)
            <+ typeT (\ _ -> mempty)
            <+ coercionT (\ _ -> mempty)
 
-  oneL n = case n of
+  chooseL n = case n of
       0 -> (( appT contextT idR  $ \ cxt e2       -> (cxt, \ e1 -> return $ App e1 e2) )        `glueL` promoteL )
         <+ (( lamT contextT      $ \ v cxt        -> (cxt, \ e1 -> return $ Lam v e1) )         `glueL` promoteL )
         <+ (( letT contextT idR  $ \ cxt e2       -> (cxt, \ bd -> return $ Let bd e2) )        `glueL` promoteL )
@@ -315,7 +318,7 @@ foo :: (Monad m, Term a, Term exp)
      => Context a -> (exp -> a1) -> (Context (Generic a), Generic exp -> m a1)
 foo cxt f =
              ( fmap inject cxt
-              , \ e -> case select e of
+              , \ e -> case retract e of
                          Nothing -> fail ""
                          Just e1 -> return (f e1)
               )
@@ -324,29 +327,29 @@ foo cxt f =
 instance Term [Alt Id] where
   type Generic [Alt Id] = Core
 
-  select (AltListCore expr) = return expr
-  select _              = Nothing
+  retract (AltListCore expr) = return expr
+  retract _              = Nothing
   inject                = AltListCore
 
   allR rr = ( consT (extractR rr) (extractR rr) $ \ x xs -> x : xs )
          <+ ( nilT                              $ [] )
 
-  crushU tt = ( consT (extractU tt) (extractU tt) $ mappend )
+  crushT tt = ( consT (extractT tt) (extractT tt) $ mappend )
            <+ ( nilT                              $ mempty )
 
-  crushU tt = ( consT (extractU tt) (extractU tt) $ mappend )
+  crushT tt = ( consT (extractT tt) (extractT tt) $ mappend )
            <+ ( nilT                              $ mempty )
 
-  oneL 0 = consT contextT idR  (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2) )        `glueL` promoteL
-  oneL 1 = consT idR contextT  (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2) )        `glueL` promoteL
-  oneL _ = failL
+  chooseL 0 = consT contextT idR  (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2) )        `glueL` promoteL
+  chooseL 1 = consT idR contextT  (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2) )        `glueL` promoteL
+  chooseL _ = failL
 -}
 
 instance Term (Alt Id) where
   type Generic (Alt Id) = Core
 
-  select (AltCore expr) = return expr
-  select _              = Nothing
+  retract (AltCore expr) = return expr
+  retract _              = Nothing
   inject                = AltCore
 
   allR rr = rewrite $ \ (Context c (con,bs,e)) -> do
@@ -354,10 +357,10 @@ instance Term (Alt Id) where
                         e' <- apply (extractR rr) (Context (c' @@ 0) e)
                         return (con,bs,e')
 
-  crushU tt = altT (extractU tt) $ \ con bs r -> r
+  crushT tt = altT (extractT tt) $ \ con bs r -> r
 
-  oneL 0 = altT contextT (\ con bs cxt -> (cxt, \ e1 -> return $ (con,bs,e1))) `glueL` promoteL
-  oneL _ = failL "no lens for Alt"
+  chooseL 0 = altT contextT (\ con bs cxt -> (cxt, \ e1 -> return $ (con,bs,e1))) `glueL` promoteL
+  chooseL _ = failL "no lens for Alt"
 
 altT :: Translate (Expr Id) a1
      -> (AltCon -> [Id] -> a1 -> a)
@@ -501,3 +504,4 @@ pathT :: Translate a ContextPath
 pathT = fmap (\ (Context c _) -> hermitBindingPath c) contextT
 
 ---------------------------------------------------------------------
+-}
