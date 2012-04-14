@@ -1,6 +1,6 @@
 boot::
-#	(cd ../.. ; cabal clean ; cabal install )
-	(cd ../.. ; cabal install )
+#	(cd ../.. ; make clean ; make boot )
+	(cd ../.. ; make boot )
 	make comp
 
 comp::

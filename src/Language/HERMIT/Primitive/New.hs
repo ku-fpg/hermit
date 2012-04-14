@@ -17,7 +17,6 @@ import Language.HERMIT.HermitEnv as Env
 
 import qualified Language.Haskell.TH as TH
 
-
 externals :: External
 externals = external "beta-reduce" (promoteR beta_reduce)
                 [ "((\\ v -> E1) E2) ==> let v = E2 in E1, fails otherwise"
@@ -117,4 +116,3 @@ info = rewrite $ \ c e -> do
 
 var :: TH.Name -> RewriteH CoreExpr -> RewriteH CoreExpr
 var _ n = idR -- bottomupR (varR (\ n -> ()) ?
-
