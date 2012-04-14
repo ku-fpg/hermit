@@ -19,6 +19,7 @@ import qualified Language.HERMIT.Expr as Expr
 import Language.HERMIT.Command as Command
 import Language.HERMIT.External
 
+import qualified Language.HERMIT.Primitive.Case as Case
 import qualified Language.HERMIT.Primitive.New as New
 import qualified Language.HERMIT.Primitive.Inline as Inline
 import qualified Language.HERMIT.Primitive.Consider as Consider
@@ -27,6 +28,7 @@ all_externals :: External
 all_externals = mconcat $
         -- values defined elsewhere
         [ New.externals
+        , Case.externals
         , Inline.externals
         , Consider.externals
         ] ++

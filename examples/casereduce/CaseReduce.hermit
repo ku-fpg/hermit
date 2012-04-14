@@ -1,0 +1,4 @@
+consider 'foo
+  bottomup (try inline)
+  topdown (try caseReduce)
+.

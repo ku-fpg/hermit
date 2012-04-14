@@ -39,6 +39,7 @@ Library
        Language.HERMIT.Expr
        Language.HERMIT.Command
 
+       Language.HERMIT.Primitive.Case
        Language.HERMIT.Primitive.Consider
        Language.HERMIT.Primitive.Core
        Language.HERMIT.Primitive.Inline
@@ -49,6 +50,6 @@ Library
        Language.Core.Quote
        Language.HERMIT.Pass
        Language.HERMIT.DSL
-       
+
   Hs-Source-Dirs: src
 
