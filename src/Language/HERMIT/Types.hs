@@ -277,10 +277,10 @@ instance Walker HermitEnv HermitM (Expr Id) where
         <+ (( tickT contextidT     $ \ t cxt        -> (cxt, \ e1 -> return $ Tick t e1) )        `composeL` promoteL )
       1 -> (( appT idR contextidT  $ \ e1 cxt       -> (cxt, \ e2 -> return $ App e1 e2) )        `composeL` promoteL )
         <+ (( letT idR contextidT  $ \ bd cxt       -> (cxt, \ e2 -> return $ Let bd e2) )        `composeL` promoteL )
-        <+ caseOneL
-      n -> caseOneL
+        <+ caseChooseL
+      n -> caseChooseL
     where
-        caseOneL = do
+        caseChooseL = do
             sz <- caseT idR (const idR) $ \ _ _ _ alts -> length alts
             if n < 1 || n > sz
                 then failL
@@ -297,9 +297,10 @@ instance Walker HermitEnv HermitM (Expr Id) where
 
 --         foo cxt $ \ e1 -> App e1 e2 )
 
-foo :: (Alternative m, Term a, Term exp)
-     => (HermitEnv,a) -> (exp -> a1) -> ((HermitEnv,Generic a), Generic exp -> m a1)
-foo (c,a) f = ((c,inject a), retractWithA f)
+-- I don't think "foo" is used anywhere
+-- foo :: (Alternative m, Term a, Term exp)
+--      => (HermitEnv,a) -> (exp -> a1) -> ((HermitEnv,Generic a), Generic exp -> m a1)
+-- foo (c,a) f = ((c,inject a), retractWithA f)
 
 ---------------------------------------------------------------------
 
