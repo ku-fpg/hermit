@@ -72,15 +72,18 @@ instance Walker HermitEnv HermitM Core where
        -- act c a = do (cb, fn) <- apply (chooseL n) c a
        --              return (cb, liftA inject . fn)
               
-       -- act :: (WalkerH a, Generic a ~ Core)
        --        => HermitEnv -> a -> HermitM ((HermitEnv, Core), Core -> HermitM Core)
        -- act c a = do (cb, fn) <- apply (chooseL n) c a
        --              return (cb, retractWith (liftA inject . fn))
                     
-               -- act :: (WalkerH a, Generic a ~ Core)
-               --   => HermitEnv -> a -> HermitM ((HermitEnv, Generic a), Generic a -> HermitM Core)
                -- act c a = do ((c',b), fn) <- apply (chooseL n) c a
                --              return ((c',inject b), retractWith (liftA inject . fn))
+
+                 -- act cxt = do
+                 -- (cb, fn) <- apply (chooseL n) cxt
+                 -- return $ (fmap inject cb, \ b -> case retract b of
+                 --                               Nothing -> fail "oneL failed"
+                 --                               Just b -> liftM inject (fn b))
 
 ---------------------------------------------------------------------
 
