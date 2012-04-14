@@ -10,6 +10,7 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 
 import Control.Applicative
+import Control.Arrow
 import Data.Monoid
 
 ----------------------------------------------------------------------------
@@ -64,10 +65,22 @@ instance Walker HermitEnv HermitM Core where
           AltCore x     -> act c x
 
      where
-               act :: (WalkerH a, Generic a ~ Core)
-                 => HermitEnv -> a -> HermitM ((HermitEnv, Generic a), Generic a -> HermitM Core)
-               act c a = do ((c',b), fn) <- apply (chooseL n) c a
-                            return ((c',inject b), retractWith (liftA inject . fn))
+       act :: (WalkerH a, Generic a ~ Core)
+              => HermitEnv -> a -> HermitM ((HermitEnv, Core), Core -> HermitM Core)
+       act c a = second (\ fn -> liftA inject . fn) <$> apply (chooseL n) c a
+
+       -- act c a = do (cb, fn) <- apply (chooseL n) c a
+       --              return (cb, liftA inject . fn)
+              
+       -- act :: (WalkerH a, Generic a ~ Core)
+       --        => HermitEnv -> a -> HermitM ((HermitEnv, Core), Core -> HermitM Core)
+       -- act c a = do (cb, fn) <- apply (chooseL n) c a
+       --              return (cb, retractWith (liftA inject . fn))
+                    
+               -- act :: (WalkerH a, Generic a ~ Core)
+               --   => HermitEnv -> a -> HermitM ((HermitEnv, Generic a), Generic a -> HermitM Core)
+               -- act c a = do ((c',b), fn) <- apply (chooseL n) c a
+               --              return ((c',inject b), retractWith (liftA inject . fn))
 
 ---------------------------------------------------------------------
 
@@ -216,9 +229,11 @@ instance Walker HermitEnv HermitM (Expr Id) where
   allR rr = rewrite $ \ c e -> case e of
           Var {}    -> pure e
           Lit {}    -> pure e
-          App e1 e2 -> App <$> apply (extractR rr) (c @@ 0) e1 <*> apply (extractR rr) (c @@ 1) e2
+          App e1 e2 -> App <$> apply (extractR rr) (c @@ 0) e1 
+                           <*> apply (extractR rr) (c @@ 1) e2
           Lam b e   -> Lam b <$> apply (extractR rr) (addHermitEnvLambdaBinding b c @@ 0) e
-          Let bds e -> Let <$> apply (extractR rr) (c @@ 0) bds <*> apply (extractR rr) (addHermitBinding bds c @@ 1) e
+          Let bds e -> Let <$> apply (extractR rr) (c @@ 0) bds 
+                           <*> apply (extractR rr) (addHermitBinding bds c @@ 1) e
                        -- use *original* env, because the bindings are self-binding,
                        -- if they are recursive. See allR (Rec ...) for details.
           
