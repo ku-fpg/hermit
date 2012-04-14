@@ -17,11 +17,12 @@ caseReduce = rewrite $ \ _c e -> case e of
     (Case s _ _ alts) -> case isDataCon s of
                             Nothing -> fail "caseReduce failed, not a DataCon"
                             Just (sc, fs) -> case [ (bs, rhs) | (DataAlt dc, bs, rhs) <- alts, sc == dc ] of
-                                                [(bs,e')] -> return $ nestedLets (zip bs fs) e'
+                                                [(bs,e')] -> return $ nestedLets e' $ zip bs fs
                                                 []   -> fail "caseReduce failed, no matching alternative (impossible?!)"
                                                 _    -> fail "caseReduce failed, more than one matching alt (impossible?!)"
     _ -> fail "caseReduce failed, not a Case"
 
+-- TODO: finish writing isDataCon to handle all Expr constructors properly
 -- | Walk down the left spine of an App tree, looking for a DataCon
 --   and keeping track of the fields as we go.
 isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])
@@ -34,6 +35,5 @@ isDataCon expr = go expr []
           go _ _ = Nothing -- probably not true, due to ticks and whathaveyou
 
 -- | We don't want to use the recursive let here, so nest a bunch of non-recursive lets
-nestedLets :: [(b, Expr b)] -> Expr b -> Expr b
-nestedLets [] e = e
-nestedLets ((b,rhs):bs) e = Let (NonRec b rhs) $ nestedLets bs e
+nestedLets :: Expr b -> [(b, Expr b)] -> Expr b
+nestedLets e = foldr (\(b,rhs) -> Let $ NonRec b rhs) e
