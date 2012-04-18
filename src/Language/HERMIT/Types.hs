@@ -10,7 +10,7 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 
 import Control.Applicative
-import Control.Arrow
+import Control.Arrow (second)
 import Data.Monoid
 
 ----------------------------------------------------------------------------
@@ -18,8 +18,6 @@ import Data.Monoid
 type TranslateH a b = Translate HermitEnv HermitM a b
 type RewriteH a = Rewrite HermitEnv HermitM a
 type LensH a b = Lens HermitEnv HermitM a b
-
-type WalkerH a = Walker HermitEnv HermitM a
 
 ---------------------------------------------------------------------
 
@@ -37,8 +35,7 @@ data Core
 instance Term Core where
   type Generic Core = Core
 
-instance Walker HermitEnv HermitM Core where
-
+instance WalkerR HermitEnv HermitM Core where
   allR rr = rewrite $ \ c blob -> case blob of
           -- Going from Core to sub-Core is the one case where you do not augment the path,
           -- but instead direct traffic.
@@ -48,6 +45,7 @@ instance Walker HermitEnv HermitM Core where
           ExprCore    expr    -> ExprCore    <$> apply (allR rr) c expr
           AltCore     alt     -> AltCore     <$> apply (allR rr) c alt
 
+instance WalkerT HermitEnv HermitM Core where
   crushT tt = translate $ \ c blob -> case blob of
           ModGutsCore x -> apply (crushT tt) c x
           ProgramCore x -> apply (crushT tt) c x
@@ -55,6 +53,7 @@ instance Walker HermitEnv HermitM Core where
           ExprCore x    -> apply (crushT tt) c x
           AltCore x     -> apply (crushT tt) c x
 
+instance WalkerL HermitEnv HermitM Core where
   chooseL n = translate $ \ c blob -> case blob of
           -- Going from Core to sub-Core is the one case where you do not augment the path,
           -- but instead direct traffic.
@@ -65,7 +64,7 @@ instance Walker HermitEnv HermitM Core where
           AltCore x     -> act c x
 
      where
-       act :: (WalkerH a, Generic a ~ Core)
+       act :: (WalkerL HermitEnv HermitM a, Generic a ~ Core)
               => HermitEnv -> a -> HermitM ((HermitEnv, Core), Core -> HermitM Core)
        act c a = (second.result.fmap) inject <$> apply (chooseL n) c a
 
@@ -97,14 +96,15 @@ instance Injection ModGuts Core where
 instance Term ModGuts where
   type Generic ModGuts = Core
 
-instance Walker HermitEnv HermitM ModGuts where
-
+instance WalkerR HermitEnv HermitM ModGuts where
   allR rr = rewrite $ \ c modGuts -> do
           binds' <- apply (extractR rr) (c @@ 0) (mg_binds modGuts)
           return (modGuts { mg_binds = binds' })
 
+instance WalkerT HermitEnv HermitM ModGuts where
   crushT tt = modGutsT (extractT tt) ( \ _ r -> r)
 
+instance WalkerL HermitEnv HermitM ModGuts where
   chooseL 0 = modGutsT contextidT (\ modGuts cxt -> (cxt, \ prog -> return $ modGuts { mg_binds = prog })) `composeL` promoteL
   chooseL _ = failL
 
@@ -123,14 +123,15 @@ instance Injection CoreProgram Core where
 instance Term CoreProgram where
   type Generic CoreProgram = Core
 
-instance Walker HermitEnv HermitM CoreProgram where
-
+instance WalkerR HermitEnv HermitM CoreProgram where
   allR rr = rewrite $ \ c prog -> case prog of
           []       -> pure []
           (bd:bds) -> (:) <$> apply (extractR rr) (c @@ 0) bd <*> apply (extractR rr) (addHermitBinding bd c @@ 1) bds
 
+instance WalkerT HermitEnv HermitM CoreProgram where
   crushT tt = consBindT (extractT tt) (extractT tt) mappend <+ nilT mempty
 
+instance WalkerL HermitEnv HermitM CoreProgram where
   chooseL 0 = consBindT contextidT idR (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2)) `composeL` promoteL
   chooseL 1 = consBindT idR contextidT (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2)) `composeL` promoteL
   chooseL _ = failL
@@ -154,8 +155,7 @@ instance Injection (Bind Id) Core where
 instance Term (Bind Id) where
   type Generic (Bind Id) = Core
 
-instance Walker HermitEnv HermitM (Bind Id) where
-
+instance WalkerR HermitEnv HermitM (Bind Id) where
   allR rr = rewrite $ \ c e -> case e of
           NonRec n e1 -> NonRec n <$> apply (extractR rr) (c @@ 0) e1
           Rec bds     -> 
@@ -167,9 +167,11 @@ instance Walker HermitEnv HermitM (Bind Id) where
                                        | ((n,e),i) <- zip bds [0..]
                                        ]
 
+instance WalkerT HermitEnv HermitM (Bind Id) where
   crushT tt = nonRecT (extractT tt) (\ _ r -> r)
            <+ recT    (const $ extractT tt) (mconcat . map snd)
 
+instance WalkerL HermitEnv HermitM (Bind Id) where
   chooseL n = case n of 
                 0 -> nonrec <+ rec
                 n -> rec
@@ -229,8 +231,7 @@ instance Injection (Expr Id) Core where
 instance Term (Expr Id) where
   type Generic (Expr Id) = Core
 
-instance Walker HermitEnv HermitM (Expr Id) where
-
+instance WalkerR HermitEnv HermitM (Expr Id) where
   allR rr = rewrite $ \ c e -> case e of
           Var {}    -> pure e
           Lit {}    -> pure e
@@ -258,6 +259,7 @@ instance Walker HermitEnv HermitM (Expr Id) where
           Type _ty    -> pure e
           Coercion _c -> pure e
 
+instance WalkerT HermitEnv HermitM (Expr Id) where
   crushT tt = varT (\ _ -> mempty)
            <+ litT (\ _ -> mempty)
            <+ appT (extractT tt) (extractT tt) mappend
@@ -269,6 +271,7 @@ instance Walker HermitEnv HermitM (Expr Id) where
            <+ typeT (\ _ -> mempty)
            <+ coercionT (\ _ -> mempty)
 
+instance WalkerL HermitEnv HermitM (Expr Id) where
   chooseL n = case n of
       0 -> (( appT contextidT idR  $ \ cxt e2       -> (cxt, \ e1 -> return $ App e1 e2) )        `composeL` promoteL )
         <+ (( lamT contextidT      $ \ v cxt        -> (cxt, \ e1 -> return $ Lam v e1) )         `composeL` promoteL )
@@ -338,12 +341,13 @@ instance Injection (Alt Id) Core where
 instance Term (Alt Id) where
   type Generic (Alt Id) = Core
 
-instance Walker HermitEnv HermitM (Alt Id) where
-
+instance WalkerR HermitEnv HermitM (Alt Id) where
   allR rr = rewrite $ \ c (con,bs,e) -> (con,bs,) <$> apply (extractR rr) (foldr addHermitEnvLambdaBinding c bs @@ 0) e
 
+instance WalkerT HermitEnv HermitM (Alt Id) where
   crushT tt = altT (extractT tt) (\ _ _ r -> r)
 
+instance WalkerL HermitEnv HermitM (Alt Id) where
   chooseL 0 = altT contextidT (\ con bs ce -> (ce, \ e1 -> pure (con,bs,e1))) `composeL` promoteL
   chooseL _ = failL
 
