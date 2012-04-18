@@ -35,56 +35,32 @@ data Core
 instance Term Core where
   type Generic Core = Core
 
+-- Defining Walker instances for the Generic type 'Core' is almost enitrely automated by KURE.
+-- Unfortunately, you still need to pattern match on the 'Core' data type.
+
 instance WalkerR HermitEnv HermitM Core where
   allR rr = rewrite $ \ c blob -> case blob of
-          -- Going from Core to sub-Core is the one case where you do not augment the path,
-          -- but instead direct traffic.
-          ModGutsCore modGuts -> ModGutsCore <$> apply (allR rr) c modGuts
-          ProgramCore prog    -> ProgramCore <$> apply (allR rr) c prog
-          BindCore    bind    -> BindCore    <$> apply (allR rr) c bind
-          ExprCore    expr    -> ExprCore    <$> apply (allR rr) c expr
-          AltCore     alt     -> AltCore     <$> apply (allR rr) c alt
+          ModGutsCore x -> allRgeneric rr c x
+          ProgramCore x -> allRgeneric rr c x
+          BindCore x    -> allRgeneric rr c x
+          ExprCore x    -> allRgeneric rr c x
+          AltCore x     -> allRgeneric rr c x
 
 instance Monoid b => WalkerT HermitEnv HermitM Core b where
   crushT tt = translate $ \ c blob -> case blob of
-          ModGutsCore x -> apply (crushT tt) c x
-          ProgramCore x -> apply (crushT tt) c x
-          BindCore x    -> apply (crushT tt) c x
-          ExprCore x    -> apply (crushT tt) c x
-          AltCore x     -> apply (crushT tt) c x
+          ModGutsCore x -> crushTgeneric tt c x
+          ProgramCore x -> crushTgeneric tt c x
+          BindCore x    -> crushTgeneric tt c x
+          ExprCore x    -> crushTgeneric tt c x
+          AltCore x     -> crushTgeneric tt c x
 
 instance WalkerL HermitEnv HermitM Core where
   chooseL n = translate $ \ c blob -> case blob of
-          -- Going from Core to sub-Core is the one case where you do not augment the path,
-          -- but instead direct traffic.
-          ModGutsCore x -> act c x
-          ProgramCore x -> act c x
-          BindCore x    -> act c x
-          ExprCore x    -> act c x
-          AltCore x     -> act c x
-
-     where
-       act :: (WalkerL HermitEnv HermitM a, Generic a ~ Core)
-              => HermitEnv -> a -> HermitM ((HermitEnv, Core), Core -> HermitM Core)
-       act c a = (second.result.fmap) inject <$> apply (chooseL n) c a
-
-       -- act c a = do (cb, fn) <- apply (chooseL n) c a
-       --              return (cb, liftA inject . fn)
-              
-       -- act c a = do (cb, fn) <- apply (chooseL n) c a
-       --              return (cb, retractWith (liftA inject . fn))
-                    
-               -- act c a = do ((c',b), fn) <- apply (chooseL n) c a
-               --              return ((c',inject b), retractWith (liftA inject . fn))
-
-                 -- act cxt = do
-                 -- (cb, fn) <- apply (chooseL n) cxt
-                 -- return $ (fmap inject cb, \ b -> case retract b of
-                 --                               Nothing -> fail "oneL failed"
-                 --                               Just b -> liftM inject (fn b))
-
-result :: (b -> c) -> (a -> b) -> (a -> c)
-result = (.)
+          ModGutsCore x -> chooseLgeneric n c x
+          ProgramCore x -> chooseLgeneric n c x
+          BindCore x    -> chooseLgeneric n c x
+          ExprCore x    -> chooseLgeneric n c x
+          AltCore x     -> chooseLgeneric n c x
 
 ---------------------------------------------------------------------
 
