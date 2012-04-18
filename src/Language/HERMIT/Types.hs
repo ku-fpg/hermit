@@ -10,7 +10,6 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 
 import Control.Applicative
-import Control.Arrow (second)
 import Data.Monoid
 
 ----------------------------------------------------------------------------
@@ -39,28 +38,31 @@ instance Term Core where
 -- Unfortunately, you still need to pattern match on the 'Core' data type.
 
 instance WalkerR HermitEnv HermitM Core where
-  allR rr = rewrite $ \ c blob -> case blob of
+  allR rr = rewrite $ \ c core -> case core of
           ModGutsCore x -> allRgeneric rr c x
           ProgramCore x -> allRgeneric rr c x
           BindCore x    -> allRgeneric rr c x
           ExprCore x    -> allRgeneric rr c x
           AltCore x     -> allRgeneric rr c x
+--          TypeCore x    -> allRgeneric rr c x
 
 instance Monoid b => WalkerT HermitEnv HermitM Core b where
-  crushT tt = translate $ \ c blob -> case blob of
+  crushT tt = translate $ \ c core -> case core of
           ModGutsCore x -> crushTgeneric tt c x
           ProgramCore x -> crushTgeneric tt c x
           BindCore x    -> crushTgeneric tt c x
           ExprCore x    -> crushTgeneric tt c x
           AltCore x     -> crushTgeneric tt c x
+--          TypeCore x    -> crushTgeneric tt c x
 
 instance WalkerL HermitEnv HermitM Core where
-  chooseL n = translate $ \ c blob -> case blob of
+  chooseL n = translate $ \ c core -> case core of
           ModGutsCore x -> chooseLgeneric n c x
           ProgramCore x -> chooseLgeneric n c x
           BindCore x    -> chooseLgeneric n c x
           ExprCore x    -> chooseLgeneric n c x
           AltCore x     -> chooseLgeneric n c x
+--          TypeCore x    -> chooseLgeneric n c x
 
 ---------------------------------------------------------------------
 
@@ -81,7 +83,7 @@ instance  Monoid b => WalkerT HermitEnv HermitM ModGuts b where
   crushT tt = modGutsT (extractT tt) ( \ _ r -> r)
 
 instance WalkerL HermitEnv HermitM ModGuts where
-  chooseL 0 = modGutsT contextidT (\ modGuts cxt -> (cxt, \ prog -> return $ modGuts { mg_binds = prog })) `composeL` promoteL
+  chooseL 0 = modGutsT contextidT (\ modGuts c -> (c, \ prog -> return $ modGuts { mg_binds = prog })) `composeL` promoteL
   chooseL _ = failL
 
 modGutsT :: TranslateH CoreProgram a1
@@ -108,8 +110,8 @@ instance Monoid b => WalkerT HermitEnv HermitM CoreProgram b where
   crushT tt = consBindT (extractT tt) (extractT tt) mappend <+ nilT mempty
 
 instance WalkerL HermitEnv HermitM CoreProgram where
-  chooseL 0 = consBindT contextidT idR (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2)) `composeL` promoteL
-  chooseL 1 = consBindT idR contextidT (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2)) `composeL` promoteL
+  chooseL 0 = consBindT contextidT idR (\ cx e2 -> (cx, \ e1 -> return $ e1 : e2)) `composeL` promoteL
+  chooseL 1 = consBindT idR contextidT (\ e1 cx -> (cx, \ e2 -> return $ e1 : e2)) `composeL` promoteL
   chooseL _ = failL
 
 consBindT :: (a ~ CoreBind)
@@ -132,7 +134,7 @@ instance Term (Bind Id) where
   type Generic (Bind Id) = Core
 
 instance WalkerR HermitEnv HermitM (Bind Id) where
-  allR rr = rewrite $ \ c e -> case e of
+  allR rr = rewrite $ \ c bi -> case bi of
           NonRec n e1 -> NonRec n <$> apply (extractR rr) (c @@ 0) e1
           Rec bds     -> 
                   -- Notice how we add the scoping bindings
@@ -150,9 +152,9 @@ instance  Monoid b => WalkerT HermitEnv HermitM (Bind Id) b where
 instance WalkerL HermitEnv HermitM (Bind Id) where
   chooseL n = case n of 
                 0 -> nonrec <+ rec
-                n -> rec
+                _ -> rec
      where
-         nonrec = nonRecT contextidT (\ v cxt -> (cxt, pure . NonRec v)) `composeL` promoteL
+         nonrec = nonRecT contextidT (\ v cx -> (cx, pure . NonRec v)) `composeL` promoteL
          rec    = do
             -- find the number of binds
             sz <- recT (const idR) length
@@ -208,9 +210,9 @@ instance Term (Expr Id) where
   type Generic (Expr Id) = Core
 
 instance WalkerR HermitEnv HermitM (Expr Id) where
-  allR rr = rewrite $ \ c e -> case e of
-          Var {}    -> pure e
-          Lit {}    -> pure e
+  allR rr = rewrite $ \ c ei -> case ei of
+          Var {}    -> pure ei
+          Lit {}    -> pure ei
           App e1 e2 -> App <$> apply (extractR rr) (c @@ 0) e1 
                            <*> apply (extractR rr) (c @@ 1) e2
           Lam b e   -> Lam b <$> apply (extractR rr) (addHermitEnvLambdaBinding b c @@ 0) e
@@ -232,8 +234,8 @@ instance WalkerR HermitEnv HermitM (Expr Id) where
                 -- Not sure about this. Should be descend into the type here?
                 -- If we do so, we should also descend into the types
                 -- inside Coercion, Id, etc.
-          Type _ty    -> pure e
-          Coercion _c -> pure e
+          Type {}     -> pure ei
+          Coercion {} -> pure ei
 
 instance  Monoid b => WalkerT HermitEnv HermitM (Expr Id) b where
   crushT tt = varT (\ _ -> mempty)
@@ -249,17 +251,19 @@ instance  Monoid b => WalkerT HermitEnv HermitM (Expr Id) b where
 
 instance WalkerL HermitEnv HermitM (Expr Id) where
   chooseL n = case n of
-      0 -> (( appT contextidT idR  $ \ cxt e2       -> (cxt, \ e1 -> return $ App e1 e2) )        `composeL` promoteL )
-        <+ (( lamT contextidT      $ \ v cxt        -> (cxt, \ e1 -> return $ Lam v e1) )         `composeL` promoteL )
-        <+ (( letT contextidT idR  $ \ cxt e2       -> (cxt, \ bd -> return $ Let bd e2) )        `composeL` promoteL )
+      0 -> (( appT contextidT idR  $ \ cx e2       -> (cx, \ e1 -> pure $ App e1 e2) )        `composeL` promoteL )
+        <+ (( lamT contextidT      $ \ v cx        -> (cx, \ e1 -> pure $ Lam v e1) )         `composeL` promoteL )
+        <+ (( letT contextidT idR  $ \ cx e2       -> (cx, \ bd -> pure $ Let bd e2) )        `composeL` promoteL )
         <+ (( caseT contextidT (const idR)
-                                   $ \ cxt v t alts -> (cxt, \ e1 -> return $ Case e1 v t alts) ) `composeL` promoteL )
-        <+ (( castT contextidT     $ \ cxt c        -> (cxt, \ e1 -> return $ Cast e1 c) )        `composeL` promoteL )
-        <+ (( tickT contextidT     $ \ t cxt        -> (cxt, \ e1 -> return $ Tick t e1) )        `composeL` promoteL )
-      1 -> (( appT idR contextidT  $ \ e1 cxt       -> (cxt, \ e2 -> return $ App e1 e2) )        `composeL` promoteL )
-        <+ (( letT idR contextidT  $ \ bd cxt       -> (cxt, \ e2 -> return $ Let bd e2) )        `composeL` promoteL )
+                                   $ \ cx v t alts -> (cx, \ e1 -> pure $ Case e1 v t alts) ) `composeL` promoteL )
+        <+ (( castT contextidT     $ \ cx c        -> (cx, \ e1 -> pure $ Cast e1 c) )        `composeL` promoteL )
+        <+ (( tickT contextidT     $ \ t cx        -> (cx, \ e1 -> pure $ Tick t e1) )        `composeL` promoteL )
+      1 -> (( appT idR contextidT  $ \ e1 cx       -> (cx, \ e2 -> pure $ App e1 e2) )        `composeL` promoteL )
+        <+ (( letT idR contextidT  $ \ bd cx       -> (cx, \ e2 -> pure $ Let bd e2) )        `composeL` promoteL )
         <+ caseChooseL
-      n -> caseChooseL
+           
+      _ -> caseChooseL
+      
     where
         caseChooseL = do
             sz <- caseT idR (const idR) $ \ _ _ _ alts -> length alts
@@ -324,7 +328,7 @@ instance  Monoid b => WalkerT HermitEnv HermitM (Alt Id) b where
   crushT tt = altT (extractT tt) (\ _ _ r -> r)
 
 instance WalkerL HermitEnv HermitM (Alt Id) where
-  chooseL 0 = altT contextidT (\ con bs ce -> (ce, \ e1 -> pure (con,bs,e1))) `composeL` promoteL
+  chooseL 0 = altT contextidT (\ con bs cx -> (cx, \ e1 -> pure (con,bs,e1))) `composeL` promoteL
   chooseL _ = failL
 
 altT :: TranslateH (Expr Id) a1
@@ -370,10 +374,8 @@ appT lhs rhs comp = translate $ \ c e -> case e of
         App e1 e2 -> comp <$> apply lhs (c @@ 0) e1 <*> apply rhs (c @@ 1) e2
         _         -> fail "no match for App"
 
-lamT :: TranslateH (Expr Id) a1
-     -> (Id -> a1 -> a)
-     -> TranslateH (Expr Id) a
-lamT tt comb = translate $ \ c e -> case e of
+lamT :: TranslateH (Expr Id) a1 -> (Id -> a1 -> a) -> TranslateH (Expr Id) a
+lamT tt comb = translate $ \ c ei -> case ei of
         Lam b e -> comb b <$> apply tt (addHermitEnvLambdaBinding b c @@ 0) e
         _       -> fail "no match for Lam"
 
@@ -381,7 +383,7 @@ letT :: TranslateH (Bind Id) a1
      -> TranslateH (Expr Id) a2
      -> (a1 -> a2 -> a)
      -> TranslateH (Expr Id) a
-letT bdsT exprT comb = translate $ \ c e -> case e of
+letT bdsT exprT comb = translate $ \ c ei -> case ei of
         Let bds e -> comb <$> apply bdsT (c @@ 0) bds <*> apply exprT (addHermitBinding bds c @@ 1) e
                 -- use *original* env, because the bindings are self-binding,
                 -- if they are recursive. See allR (Rec ...) for details.
@@ -391,37 +393,33 @@ caseT :: TranslateH (Expr Id) a1
       -> (Int -> TranslateH (Alt Id) a2)          -- Int argument *starts* at 1.
       -> (a1 -> Id -> Type -> [a2] -> a)
       -> TranslateH (Expr Id) a
-caseT exprT altT comb = translate $ \ c e -> case e of
+caseT exprT altnT comb = translate $ \ c ei -> case ei of
         Case e b ty alts -> do
                 e' <- apply exprT (c @@ 0) e
                 let c' = addHermitBinding (NonRec b e) c
-                alts' <- sequence [ apply (altT i) (c' @@ i) alt
+                alts' <- sequence [ apply (altnT i) (c' @@ i) alt
                                   | (alt,i) <- zip alts [1..]
                                   ]
-                pure (comb e' b ty alts')
+                return (comb e' b ty alts')
         _ -> fail "no match for Case"
 
-castT :: TranslateH (Expr Id) a1
-     -> (a1 -> Coercion -> a)
-     -> TranslateH (Expr Id) a
-castT tt comb = translate $ \ c e -> case e of
+castT :: TranslateH (Expr Id) a1 -> (a1 -> Coercion -> a) -> TranslateH (Expr Id) a
+castT tt comb = translate $ \ c ei -> case ei of
         Cast e cast -> flip comb cast <$> apply tt (c @@ 0) e
         _           -> fail "no match for Cast"
 
-tickT :: TranslateH (Expr Id) a1
-     -> (Tickish Id -> a1 -> a)
-     -> TranslateH (Expr Id) a
-tickT tt comb = translate $ \ c e -> case e of
+tickT :: TranslateH (Expr Id) a1 -> (Tickish Id -> a1 -> a) -> TranslateH (Expr Id) a
+tickT tt comb = translate $ \ c ei -> case ei of
         Tick tk e -> comb tk <$> apply tt (c @@ 0) e
         _         -> fail "no match for Tick"
 
 typeT :: (Type -> a) -> TranslateH (Expr Id) a
-typeT comb = translate $ \ c e -> case e of
+typeT comb = translate $ \ _ e -> case e of
                                     Type i -> pure (comb i)
                                     _      -> fail "no match for Type"
 
 coercionT :: (Coercion -> a) -> TranslateH (Expr Id) a
-coercionT comb = translate $ \ c e -> case e of
+coercionT comb = translate $ \ _ e -> case e of
                                         Coercion i -> pure (comb i)
                                         _          -> fail "no match for Coercion"
 
@@ -436,7 +434,7 @@ consT t1 t2 f = translate $ \ c e -> case e of
         _      -> fail "no match for consT"
 
 nilT :: b -> TranslateH [a] b
-nilT b = translate $ \ c e -> case e of
+nilT b = translate $ \ _ e -> case e of
                                 [] -> pure b
                                 _  -> fail "no match for nilT"
 
