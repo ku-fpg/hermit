@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, ConstraintKinds, TupleSections #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections #-}
 
 module Language.HERMIT.Types where
 
@@ -45,7 +45,7 @@ instance WalkerR HermitEnv HermitM Core where
           ExprCore    expr    -> ExprCore    <$> apply (allR rr) c expr
           AltCore     alt     -> AltCore     <$> apply (allR rr) c alt
 
-instance WalkerT HermitEnv HermitM Core where
+instance Monoid b => WalkerT HermitEnv HermitM Core b where
   crushT tt = translate $ \ c blob -> case blob of
           ModGutsCore x -> apply (crushT tt) c x
           ProgramCore x -> apply (crushT tt) c x
@@ -101,7 +101,7 @@ instance WalkerR HermitEnv HermitM ModGuts where
           binds' <- apply (extractR rr) (c @@ 0) (mg_binds modGuts)
           return (modGuts { mg_binds = binds' })
 
-instance WalkerT HermitEnv HermitM ModGuts where
+instance  Monoid b => WalkerT HermitEnv HermitM ModGuts b where
   crushT tt = modGutsT (extractT tt) ( \ _ r -> r)
 
 instance WalkerL HermitEnv HermitM ModGuts where
@@ -128,7 +128,7 @@ instance WalkerR HermitEnv HermitM CoreProgram where
           []       -> pure []
           (bd:bds) -> (:) <$> apply (extractR rr) (c @@ 0) bd <*> apply (extractR rr) (addHermitBinding bd c @@ 1) bds
 
-instance WalkerT HermitEnv HermitM CoreProgram where
+instance Monoid b => WalkerT HermitEnv HermitM CoreProgram b where
   crushT tt = consBindT (extractT tt) (extractT tt) mappend <+ nilT mempty
 
 instance WalkerL HermitEnv HermitM CoreProgram where
@@ -167,7 +167,7 @@ instance WalkerR HermitEnv HermitM (Bind Id) where
                                        | ((n,e),i) <- zip bds [0..]
                                        ]
 
-instance WalkerT HermitEnv HermitM (Bind Id) where
+instance  Monoid b => WalkerT HermitEnv HermitM (Bind Id) b where
   crushT tt = nonRecT (extractT tt) (\ _ r -> r)
            <+ recT    (const $ extractT tt) (mconcat . map snd)
 
@@ -259,7 +259,7 @@ instance WalkerR HermitEnv HermitM (Expr Id) where
           Type _ty    -> pure e
           Coercion _c -> pure e
 
-instance WalkerT HermitEnv HermitM (Expr Id) where
+instance  Monoid b => WalkerT HermitEnv HermitM (Expr Id) b where
   crushT tt = varT (\ _ -> mempty)
            <+ litT (\ _ -> mempty)
            <+ appT (extractT tt) (extractT tt) mappend
@@ -344,7 +344,7 @@ instance Term (Alt Id) where
 instance WalkerR HermitEnv HermitM (Alt Id) where
   allR rr = rewrite $ \ c (con,bs,e) -> (con,bs,) <$> apply (extractR rr) (foldr addHermitEnvLambdaBinding c bs @@ 0) e
 
-instance WalkerT HermitEnv HermitM (Alt Id) where
+instance  Monoid b => WalkerT HermitEnv HermitM (Alt Id) b where
   crushT tt = altT (extractT tt) (\ _ _ r -> r)
 
 instance WalkerL HermitEnv HermitM (Alt Id) where
