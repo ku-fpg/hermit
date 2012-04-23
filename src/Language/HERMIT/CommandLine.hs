@@ -73,7 +73,7 @@ commands el n h = do
                     [nstr] | all isDigit nstr ->
                         focusCommand (focusOnPath [read nstr] :: Rewrite (Generic a) -> Rewrite a)
                     ["*inline"] -> do
-                        res <- H.applyRewrite (extractR $ bottomupR $ promoteR $ tryR $ inline) h
+                        res <- H.applyRewrite (extractR $ allbuR $ promoteR $ tryR $ inline) h
                         case res of
                           Left msg -> do
                              liftIO $ print msg

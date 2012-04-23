@@ -10,6 +10,7 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 
 import Control.Applicative
+import Control.Arrow (second)
 import Data.Monoid
 
 ----------------------------------------------------------------------------
@@ -34,7 +35,7 @@ data Core
 instance Term Core where
   type Generic Core = Core
 
--- Defining Walker instances for the Generic type 'Core' is almost enitrely automated by KURE.
+-- Defining Walker instances for the Generic type 'Core' is almost entirely automated by KURE.
 -- Unfortunately, you still need to pattern match on the 'Core' data type.
 
 instance WalkerR HermitEnv HermitM Core where
@@ -45,6 +46,14 @@ instance WalkerR HermitEnv HermitM Core where
           ExprCore x    -> allRgeneric rr c x
           AltCore x     -> allRgeneric rr c x
 --          TypeCore x    -> allRgeneric rr c x
+          
+  anyR rr = rewrite $ \ c core -> case core of
+          ModGutsCore x -> anyRgeneric rr c x
+          ProgramCore x -> anyRgeneric rr c x
+          BindCore x    -> anyRgeneric rr c x
+          ExprCore x    -> anyRgeneric rr c x
+          AltCore x     -> anyRgeneric rr c x
+--          TypeCore x    -> anyRgeneric rr c x
 
 instance Monoid b => WalkerT HermitEnv HermitM Core b where
   crushT tt = translate $ \ c core -> case core of
@@ -79,6 +88,8 @@ instance WalkerR HermitEnv HermitM ModGuts where
           binds' <- apply (extractR rr) (c @@ 0) (mg_binds modGuts)
           return (modGuts { mg_binds = binds' })
 
+  anyR = allR -- in the case of only one interesting child, allR and anyR behave the same
+
 instance  Monoid b => WalkerT HermitEnv HermitM ModGuts b where
   crushT tt = modGutsT (extractT tt) ( \ _ r -> r)
 
@@ -105,6 +116,14 @@ instance WalkerR HermitEnv HermitM CoreProgram where
   allR rr = rewrite $ \ c prog -> case prog of
           []       -> pure []
           (bd:bds) -> (:) <$> apply (extractR rr) (c @@ 0) bd <*> apply (extractR rr) (addHermitBinding bd c @@ 1) bds
+
+  anyR rr = rewrite $ \ c prog -> case prog of
+          []       -> empty
+          (bd:bds) -> do (b1,bd')  <- apply (attemptR (extractR rr)) (c @@ 0) bd
+                         (b2,bds') <- apply (attemptR (extractR rr)) (addHermitBinding bd c @@ 1) bds
+                         if b1 || b2 
+                          then return (bd':bds')
+                          else empty
 
 instance Monoid b => WalkerT HermitEnv HermitM CoreProgram b where
   crushT tt = consBindT (extractT tt) (extractT tt) mappend <+ nilT mempty
@@ -144,6 +163,20 @@ instance WalkerR HermitEnv HermitM (Bind Id) where
                                        [ (n,) <$> apply (extractR rr) (env' @@ i) e
                                        | ((n,e),i) <- zip bds [0..]
                                        ]
+
+  anyR rr = rewrite $ \ c bi -> case bi of
+          NonRec n e1 -> NonRec n <$> apply (extractR rr) (c @@ 0) e1
+          Rec bds     -> do let env' = addHermitBinding (Rec bds) c
+                  -- Notice how we add the scoping bindings
+                  -- here *before* decending into the rhss.
+                            (bs,bds') <- unzip <$> sequence
+                                                     [ second (n,) <$> apply (attemptR (extractR rr)) (env' @@ i) e
+                                                     | ((n,e),i) <- zip bds [0..]
+                                                     ]
+                            if or bs 
+                             then return (Rec bds')      
+                             else empty 
+                                  
 
 instance  Monoid b => WalkerT HermitEnv HermitM (Bind Id) b where
   crushT tt = nonRecT (extractT tt) (\ _ r -> r)
@@ -221,21 +254,53 @@ instance WalkerR HermitEnv HermitM (Expr Id) where
                        -- use *original* env, because the bindings are self-binding,
                        -- if they are recursive. See allR (Rec ...) for details.
           
-          Case e b ty alts ->
-                       do e' <- apply (extractR rr) (c @@ 0) e
-                          let c' = addHermitBinding (NonRec b e) c
-                          alts' <- sequence [ apply (extractR rr) (c' @@ i) alt
-                                            | (alt,i) <- zip alts [1..]
-                                            ]
-                          return $ Case e' b ty alts'
+          Case e b ty alts -> do e' <- apply (extractR rr) (c @@ 0) e
+                                 let c' = addHermitBinding (NonRec b e) c
+                                 alts' <- sequence [ apply (extractR rr) (c' @@ i) alt
+                                                   | (alt,i) <- zip alts [1..]
+                                                   ]
+                                 return (Case e' b ty alts')
 
           Cast e cast -> flip Cast cast <$> apply (extractR rr) (c @@ 0) e
           Tick tk e -> Tick tk <$> apply (extractR rr) (c @@ 0) e
-                -- Not sure about this. Should be descend into the type here?
+                -- Not sure about this. Should we descend into the type here?
                 -- If we do so, we should also descend into the types
                 -- inside Coercion, Id, etc.
           Type {}     -> pure ei
           Coercion {} -> pure ei
+          
+  
+  anyR rr = rewrite $ \ c ei -> case ei of
+          Var {}    -> empty
+          Lit {}    -> empty
+          App e1 e2 -> do (b1,e1') <- apply (attemptR (extractR rr)) (c @@ 0) e1 
+                          (b2,e2') <- apply (attemptR (extractR rr)) (c @@ 1) e2
+                          if b1 || b2
+                           then return (App e1' e2') 
+                           else empty                           
+          Lam b e   -> Lam b <$> apply (extractR rr) (addHermitEnvLambdaBinding b c @@ 0) e
+          Let bds e -> do (b1,bds') <- apply (attemptR (extractR rr)) (c @@ 0) bds 
+                          (b2,e')   <- apply (attemptR (extractR rr)) (addHermitBinding bds c @@ 1) e
+                          if b1 || b2
+                           then return (Let bds' e')
+                           else empty
+                       -- use *original* env, because the bindings are self-binding,
+                       -- if they are recursive. See allR (Rec ...) for details.
+          Case e b ty alts -> do (b1,e') <- apply (attemptR (extractR rr)) (c @@ 0) e
+                                 let c' = addHermitBinding (NonRec b e) c
+                                 (bs,alts') <- unzip <$> sequence [ apply (attemptR (extractR rr)) (c' @@ i) alt
+                                                                  | (alt,i) <- zip alts [1..]
+                                                                  ]
+                                 if or (b1:bs)              
+                                  then return (Case e' b ty alts')
+                                  else empty
+          Cast e cast -> flip Cast cast <$> apply (extractR rr) (c @@ 0) e
+          Tick tk e -> Tick tk <$> apply (extractR rr) (c @@ 0) e
+                -- Not sure about this. Should we descend into the type here?
+                -- If we do so, we should also descend into the types
+                -- inside Coercion, Id, etc.
+          Type {}     -> empty
+          Coercion {} -> empty        
 
 instance  Monoid b => WalkerT HermitEnv HermitM (Expr Id) b where
   crushT tt = varT (\ _ -> mempty)
@@ -323,6 +388,7 @@ instance Term (Alt Id) where
 
 instance WalkerR HermitEnv HermitM (Alt Id) where
   allR rr = rewrite $ \ c (con,bs,e) -> (con,bs,) <$> apply (extractR rr) (foldr addHermitEnvLambdaBinding c bs @@ 0) e
+  anyR = allR -- in the case of only one interesting child, allR and anyR behave the same
 
 instance  Monoid b => WalkerT HermitEnv HermitM (Alt Id) b where
   crushT tt = altT (extractT tt) (\ _ _ r -> r)

@@ -33,14 +33,20 @@ all_externals = mconcat $
         , Consider.externals
         ] ++
         -- locally defined values
-        [ external "bottomup"   (bottomupR :: RewriteH Core -> RewriteH Core)
-            [ "promotes a rewrite to operate over an entire tree in bottom-up order"
+        [ external "allbu"   (allbuR :: RewriteH Core -> RewriteH Core)
+            [ "promotes a rewrite to operate over an entire tree in bottom-up order, requiring success at each node"
             ]
-        , external "topdown"    (topdownR :: RewriteH Core -> RewriteH Core)
-            [ "promotes a rewrite to operate over an entire tree in top-down order"
+        , external "alltd"    (alltdR :: RewriteH Core -> RewriteH Core)
+            [ "promotes a rewrite to operate over an entire tree in top-down order, requiring success at each node"
+            ]
+        , external "anybu"   (anybuR :: RewriteH Core -> RewriteH Core)
+            [ "promotes a rewrite to operate over an entire tree in bottom-up order, requiring success at at least one node"
+            ]
+        , external "anytd"    (anytdR :: RewriteH Core -> RewriteH Core)
+            [ "promotes a rewrite to operate over an entire tree in top-down order, requiring success at at least one node"
             ]
         , external "try"        (tryR :: RewriteH Core -> RewriteH Core)
-            [ "trys a rewrite, and performes an identity if this rewrite fails"
+            [ "tries a rewrite, and performs an identity if this rewrite fails"
             ]
         , external "pop"        PopFocus
             [ "pops one lens"
