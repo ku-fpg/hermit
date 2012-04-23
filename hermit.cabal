@@ -23,7 +23,7 @@ Library
          template-haskell,
          containers,
          editline,
-         kure >= 1.1.7
+         kure >= 1.1.9
 
   default-language: Haskell2010
 
