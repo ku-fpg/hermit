@@ -9,7 +9,7 @@ import GhcPlugins
 
 import Language.KURE
 
-import Language.HERMIT.Types
+import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 

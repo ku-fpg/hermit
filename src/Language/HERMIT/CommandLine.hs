@@ -12,7 +12,7 @@ import Data.Char
 
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
-import Language.HERMIT.Types
+import Language.HERMIT.HermitKure
 import Language.HERMIT.Dictionary
 import Language.HERMIT.Command
 import qualified Language.HERMIT.Expr as Expr

@@ -11,7 +11,7 @@ import Language.KURE
 
 import Data.Dynamic
 import Data.Monoid
-import Language.HERMIT.Types
+import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitMonad
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map as Map

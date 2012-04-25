@@ -4,7 +4,7 @@ module Language.HERMIT.Primitive.Case where
 
 import GhcPlugins hiding ((<>))
 
-import Language.HERMIT.Types
+import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 import Language.KURE
 

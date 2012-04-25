@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections #-}
 
-module Language.HERMIT.Types where
+module Language.HERMIT.HermitKure where
 
 import GhcPlugins hiding (empty)
 

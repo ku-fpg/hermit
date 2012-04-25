@@ -8,7 +8,7 @@ import qualified Data.Map as Map
 
 import Language.KURE
 
-import Language.HERMIT.Types
+import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Core

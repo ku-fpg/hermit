@@ -14,7 +14,7 @@ import qualified Language.Haskell.TH as TH
 
 import Language.KURE
 
-import Language.HERMIT.Types
+import Language.HERMIT.HermitKure
 import qualified Language.HERMIT.Expr as Expr
 import Language.HERMIT.Command as Command
 import Language.HERMIT.External
