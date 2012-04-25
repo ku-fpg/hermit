@@ -1,5 +1,3 @@
-{-# LANGUAGE TypeFamilies, FlexibleInstances #-}
-
 module Language.HERMIT.HermitEnv where
 
 import GhcPlugins
