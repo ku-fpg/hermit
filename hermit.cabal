@@ -30,7 +30,7 @@ Library
   Exposed-modules:
        Language.HERMIT
        Language.HERMIT.Plugin
-       Language.HERMIT.Types
+       Language.HERMIT.HermitKure
        Language.HERMIT.HermitEnv
        Language.HERMIT.HermitMonad
        Language.HERMIT.CommandLine
