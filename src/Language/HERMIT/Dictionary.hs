@@ -23,6 +23,7 @@ import qualified Language.HERMIT.Primitive.Case as Case
 import qualified Language.HERMIT.Primitive.New as New
 import qualified Language.HERMIT.Primitive.Inline as Inline
 import qualified Language.HERMIT.Primitive.Consider as Consider
+import qualified Language.HERMIT.Primitive.Local as Local
 
 all_externals :: External
 all_externals = mconcat $
@@ -31,6 +32,7 @@ all_externals = mconcat $
         , Case.externals
         , Inline.externals
         , Consider.externals
+        , Local.externals
         ] ++
         -- locally defined values
         [ external "allbu"   (allbuR :: RewriteH Core -> RewriteH Core)
@@ -77,7 +79,7 @@ instance Extern Command where
     type Box Command = CommandBox
     box i = CommandBox i
     unbox (CommandBox i) = i
-    
+
 ------------------------------------------------------------------------------------
 
 data Help = Help
