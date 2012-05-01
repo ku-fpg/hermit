@@ -29,41 +29,27 @@ instance Show Command where
    show (Message _)     = "Message"
 
 
-runCommands
-        :: (HermitEnv -> Core -> IO Command)                 -- waiting for commands
-        -> (String -> IO ())                            -- where to send errors
-        -> ModGuts -> CoreM ModGuts
-runCommands getCmd errorMsg modGuts = do
-        (_, ModGutsCore modGuts') <- loop initHermitEnv (ModGutsCore modGuts)
+runCommands :: (HermitEnv -> Core -> IO Command)  -- waiting for commands
+            -> (String -> IO ())                  -- where to send errors
+            -> ModGuts -> CoreM ModGuts
+runCommands getCommand errMsg modGuts = do
+        ModGutsCore modGuts' <- loop initHermitEnv (ModGutsCore modGuts)
         return modGuts'
- where
-    loop :: HermitEnv -> Core -> CoreM (HermitEnv,Core)
-    loop c b = do
-        rep <- liftIO $ getCmd c b
+  where
+    loop :: HermitEnv -> Core -> CoreM Core
+    loop c a = do
+        rep <- liftIO (getCommand c a)
         case rep of
-           PopFocus -> return (c,b)
-           PushFocus lens -> do
-                res <- runHermitM (apply lens c b)
-                case res of
-                  FailR msg -> do
-                     liftIO $ errorMsg $ show msg
-                     loop c b
-                  SuccessR ((c1,b1),kick) -> do
-                     (c2, b2) <- loop c1 b1
-                     res2 <- runHermitM (kick b2)
-                     case res2 of
-                        FailR msg -> do
-                           liftIO $ errorMsg $ show msg
-                           -- Opps, use the original context because failed to kick
-                           loop c b
-                        SuccessR b3 -> do
-                           -- Remember, the Context never changes at a specific depth
-                           loop c2 b3 -- Check that you meant c2 here, you shadowed a variable originally and I'm not sure if that was a mistake.
-           Apply rr -> do
-                res <- runHermitM (apply rr c b)
-                case res of
-                  FailR msg -> do
-                     liftIO $ errorMsg $ show msg
-                     loop c b
-                  SuccessR b' -> do
-                     loop c b'
+           Apply rr    -> runHermitMR (loop c) abort (apply rr c a)
+           PopFocus    -> return a
+           PushFocus l -> runHermitMR (\ ((cb,b),kick) -> do b' <- loop cb b
+                                                             runHermitMR (loop c) abort (kick b')
+                                      ) 
+                                      abort 
+                                      (apply l c a)  
+           -- ResetFocus  -> ?
+           -- Message msg -> ?
+      where
+        -- The argument String is the field of FailR in the HermitR monad.
+        abort :: String -> CoreM Core
+        abort msg = liftIO (errMsg msg) >> loop c a

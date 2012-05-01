@@ -17,6 +17,9 @@ runHermitR :: (a -> b) -> (String -> b) -> HermitR a -> b
 runHermitR s _ (SuccessR a) = s a
 runHermitR _ f (FailR msg)  = f msg
 
+runHermitMR :: (a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b
+runHermitMR s f ma = runHermitM ma >>= runHermitR s f
+
 
 instance Functor HermitR where
   fmap f = runHermitR (SuccessR . f) FailR 
