@@ -74,6 +74,13 @@ instance Extern (RewriteH Core) where
     box i = RewriteCoreBox i
     unbox (RewriteCoreBox i) = i
 
+data TranslateCoreStringBox = TranslateCoreStringBox (TranslateH Core String) deriving (Typeable)
+
+instance Extern (TranslateH Core String) where
+    type Box (TranslateH Core String) = TranslateCoreStringBox
+    box i = TranslateCoreStringBox i
+    unbox (TranslateCoreStringBox i) = i
+
 data NameBox = NameBox (TH.Name) deriving (Typeable)
 
 instance Extern TH.Name where

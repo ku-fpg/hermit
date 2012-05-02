@@ -44,7 +44,7 @@ externals = external "beta-reduce" (promoteR beta_reduce)
          <> external "var" (\ nm -> promoteR . var nm . extractR)
                 [ "'var <v>' applies a rewrite to all <v>"
                 ]
-         <> external "info" (promoteR info)
+         <> external "info" (promoteT info)
                 [ "tell me what you know about this expression or binding"
                 ]
 
@@ -99,18 +99,22 @@ dce = rewrite $ \ c e -> case e of
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
 -- let v = E1 in E2 E3 <=> E2 (let v = E1 in E3)
 
-info :: RewriteH CoreExpr
-info = rewrite $ \ c e -> do
-        let ty = exprType e
-        liftIO $ putStrLn $ "type ::= " ++ showSDoc (ppr ty)
-        case e of
-{-
-           Var v -> do
-              liftIO $ putStrLn $ "idInfo: "
-              liftIO $ putStrLn $ showSDoc (ppr $ idInfo v)
-              return e
--}
-           _ -> return e
+info :: TranslateH CoreExpr String
+info = liftT (("type ::= " ++) . showSDoc . ppr . exprType)
+
+
+-- info :: RewriteH CoreExpr
+-- info = rewrite $ \ c e -> do
+--         let ty = exprType e
+--         liftIO $ putStrLn $ "type ::= " ++ showSDoc (ppr ty)
+--         case e of
+-- {-
+--            Var v -> do
+--               liftIO $ putStrLn $ "idInfo: "
+--               liftIO $ putStrLn $ showSDoc (ppr $ idInfo v)
+--               return e
+-- -}
+--            _ -> return e
 
 
 

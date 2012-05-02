@@ -98,11 +98,12 @@ interpExpr expr =
         case interpExpr' expr of
           Left msg -> Left msg
           Right dyn -> runInterp dyn
-             [ Interp $ \ (CommandBox cmd)       -> Right $ cmd
-             , Interp $ \ (RewriteCoreBox rr)    -> Right $ Apply rr
-             , Interp $ \ (LensCoreCoreBox lens) -> Right $ PushFocus lens
-             , Interp $ \ (IntBox i)             -> Right $ PushFocus $ chooseL i
-             , Interp $ \ Help                   -> Left $ unlines $ help
+             [ Interp $ \ (CommandBox cmd)            -> Right $ cmd
+             , Interp $ \ (RewriteCoreBox rr)         -> Right $ Apply rr
+             , Interp $ \ (TranslateCoreStringBox tt) -> Right $ Query tt
+             , Interp $ \ (LensCoreCoreBox lens)      -> Right $ PushFocus lens
+             , Interp $ \ (IntBox i)                  -> Right $ PushFocus $ chooseL i
+             , Interp $ \ Help                        -> Left $ unlines $ help
              ]
              (Left "interpExpr: bad type of expression")
 
