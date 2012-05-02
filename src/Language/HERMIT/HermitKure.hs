@@ -46,7 +46,7 @@ instance WalkerR HermitEnv HermitM Core where
           ExprCore x    -> allRgeneric rr c x
           AltCore x     -> allRgeneric rr c x
 --          TypeCore x    -> allRgeneric rr c x
-          
+
   anyR rr = rewrite $ \ c core -> case core of
           ModGutsCore x -> anyRgeneric rr c x
           ProgramCore x -> anyRgeneric rr c x
@@ -121,7 +121,7 @@ instance WalkerR HermitEnv HermitM CoreProgram where
           []       -> empty
           (bd:bds) -> do (b1,bd')  <- apply (attemptR (extractR rr)) (c @@ 0) bd
                          (b2,bds') <- apply (attemptR (extractR rr)) (addHermitBinding bd c @@ 1) bds
-                         if b1 || b2 
+                         if b1 || b2
                           then return (bd':bds')
                           else empty
 
@@ -155,7 +155,7 @@ instance Term (Bind Id) where
 instance WalkerR HermitEnv HermitM (Bind Id) where
   allR rr = rewrite $ \ c bi -> case bi of
           NonRec n e1 -> NonRec n <$> apply (extractR rr) (c @@ 0) e1
-          Rec bds     -> 
+          Rec bds     ->
                   -- Notice how we add the scoping bindings
                   -- here *before* decending into the rhss.
                          let env' = addHermitBinding (Rec bds) c
@@ -173,17 +173,17 @@ instance WalkerR HermitEnv HermitM (Bind Id) where
                                                      [ second (n,) <$> apply (attemptR (extractR rr)) (env' @@ i) e
                                                      | ((n,e),i) <- zip bds [0..]
                                                      ]
-                            if or bs 
-                             then return (Rec bds')      
-                             else empty 
-                                  
+                            if or bs
+                             then return (Rec bds')
+                             else empty
+
 
 instance  Monoid b => WalkerT HermitEnv HermitM (Bind Id) b where
   crushT tt = nonRecT (extractT tt) (\ _ r -> r)
            <+ recT    (const $ extractT tt) (mconcat . map snd)
 
 instance WalkerL HermitEnv HermitM (Bind Id) where
-  chooseL n = case n of 
+  chooseL n = case n of
                 0 -> nonrec <+ rec
                 _ -> rec
      where
@@ -216,7 +216,7 @@ recT :: (Int -> TranslateH CoreExpr a1)
       -> ([(Id,a1)] -> b)
       -> TranslateH CoreBind b
 recT tt comp = translate $ \ c e -> case e of
-        Rec bds -> 
+        Rec bds ->
           -- Notice how we add the scoping bindings
           -- here *before* decending into the rhss.
                    let c' = addHermitBinding (Rec bds) c
@@ -246,14 +246,14 @@ instance WalkerR HermitEnv HermitM (Expr Id) where
   allR rr = rewrite $ \ c ei -> case ei of
           Var {}    -> pure ei
           Lit {}    -> pure ei
-          App e1 e2 -> App <$> apply (extractR rr) (c @@ 0) e1 
+          App e1 e2 -> App <$> apply (extractR rr) (c @@ 0) e1
                            <*> apply (extractR rr) (c @@ 1) e2
           Lam b e   -> Lam b <$> apply (extractR rr) (addHermitEnvLambdaBinding b c @@ 0) e
-          Let bds e -> Let <$> apply (extractR rr) (c @@ 0) bds 
+          Let bds e -> Let <$> apply (extractR rr) (c @@ 0) bds
                            <*> apply (extractR rr) (addHermitBinding bds c @@ 1) e
                        -- use *original* env, because the bindings are self-binding,
                        -- if they are recursive. See allR (Rec ...) for details.
-          
+
           Case e b ty alts -> do e' <- apply (extractR rr) (c @@ 0) e
                                  let c' = addHermitBinding (NonRec b e) c
                                  alts' <- sequence [ apply (extractR rr) (c' @@ i) alt
@@ -268,18 +268,18 @@ instance WalkerR HermitEnv HermitM (Expr Id) where
                 -- inside Coercion, Id, etc.
           Type {}     -> pure ei
           Coercion {} -> pure ei
-          
-  
+
+
   anyR rr = rewrite $ \ c ei -> case ei of
           Var {}    -> empty
           Lit {}    -> empty
-          App e1 e2 -> do (b1,e1') <- apply (attemptR (extractR rr)) (c @@ 0) e1 
+          App e1 e2 -> do (b1,e1') <- apply (attemptR (extractR rr)) (c @@ 0) e1
                           (b2,e2') <- apply (attemptR (extractR rr)) (c @@ 1) e2
                           if b1 || b2
-                           then return (App e1' e2') 
-                           else empty                           
+                           then return (App e1' e2')
+                           else empty
           Lam b e   -> Lam b <$> apply (extractR rr) (addHermitEnvLambdaBinding b c @@ 0) e
-          Let bds e -> do (b1,bds') <- apply (attemptR (extractR rr)) (c @@ 0) bds 
+          Let bds e -> do (b1,bds') <- apply (attemptR (extractR rr)) (c @@ 0) bds
                           (b2,e')   <- apply (attemptR (extractR rr)) (addHermitBinding bds c @@ 1) e
                           if b1 || b2
                            then return (Let bds' e')
@@ -291,7 +291,7 @@ instance WalkerR HermitEnv HermitM (Expr Id) where
                                  (bs,alts') <- unzip <$> sequence [ apply (attemptR (extractR rr)) (c' @@ i) alt
                                                                   | (alt,i) <- zip alts [1..]
                                                                   ]
-                                 if or (b1:bs)              
+                                 if or (b1:bs)
                                   then return (Case e' b ty alts')
                                   else empty
           Cast e cast -> flip Cast cast <$> apply (extractR rr) (c @@ 0) e
@@ -300,7 +300,7 @@ instance WalkerR HermitEnv HermitM (Expr Id) where
                 -- If we do so, we should also descend into the types
                 -- inside Coercion, Id, etc.
           Type {}     -> empty
-          Coercion {} -> empty        
+          Coercion {} -> empty
 
 instance  Monoid b => WalkerT HermitEnv HermitM (Expr Id) b where
   crushT tt = varT (\ _ -> mempty)
@@ -313,6 +313,7 @@ instance  Monoid b => WalkerT HermitEnv HermitM (Expr Id) b where
            <+ tickT (extractT tt) (\ _ r -> r)
            <+ typeT (\ _ -> mempty)
            <+ coercionT (\ _ -> mempty)
+           <+ fail "crushT failed for all Expr constructors"
 
 instance WalkerL HermitEnv HermitM (Expr Id) where
   chooseL n = case n of
@@ -326,9 +327,9 @@ instance WalkerL HermitEnv HermitM (Expr Id) where
       1 -> (( appT idR contextidT  $ \ e1 cx       -> (cx, \ e2 -> pure $ App e1 e2) )        `composeL` promoteL )
         <+ (( letT idR contextidT  $ \ bd cx       -> (cx, \ e2 -> pure $ Let bd e2) )        `composeL` promoteL )
         <+ caseChooseL
-           
+
       _ -> caseChooseL
-      
+
     where
         caseChooseL = do
             sz <- caseT idR (const idR) $ \ _ _ _ alts -> length alts
@@ -400,7 +401,7 @@ instance WalkerL HermitEnv HermitM (Alt Id) where
 altT :: TranslateH (Expr Id) a1
      -> (AltCon -> [Id] -> a1 -> a)
      -> TranslateH (Alt Id) a
-altT tt comp = translate $ \ c (con,bs,e) -> 
+altT tt comp = translate $ \ c (con,bs,e) ->
                 comp con bs <$> apply tt (foldr addHermitEnvLambdaBinding c bs @@ 0) e
 
 {-
@@ -505,7 +506,7 @@ nilT b = translate $ \ _ e -> case e of
                                 _  -> fail "no match for nilT"
 
 ------------------------------------
-  
+
 -- | pathT finds the current path.
 pathT :: TranslateH a ContextPath
 pathT = fmap hermitBindingPath contextT

@@ -5,6 +5,9 @@ module Language.HERMIT.Primitive.New where
 
 import GhcPlugins hiding ((<>))
 import qualified Data.Map as Map
+import qualified Data.List as List
+
+import Control.Applicative
 
 import Language.KURE
 
@@ -17,6 +20,10 @@ import Language.HERMIT.HermitEnv as Env
 
 import qualified Language.Haskell.TH as TH
 
+
+promoteR'  :: (Term a) => RewriteH a -> RewriteH (Generic a)
+promoteR' rr = rewrite $ \ c e ->  liftA inject ( maybe (fail "argument is not an expr") (apply rr c)  (retract e))
+
 externals :: External
 externals = external "beta-reduce" (promoteR beta_reduce)
                 [ "((\\ v -> E1) E2) ==> let v = E2 in E1, fails otherwise"
@@ -27,11 +34,11 @@ externals = external "beta-reduce" (promoteR beta_reduce)
          <> external "eta-reduce" (promoteR eta_reduce)
                 [ "(\\ v -> E1 v) ==> E1, fails otherwise"
                 ]
-         <> external "eta-expand" (promoteR . eta_expand)
-                [ "'ext-expand v' performs E1 ==> (\\ v -> E1 v), fails otherwise"
+         <> external "eta-expand" (promoteR' . eta_expand)
+                [ "'eta-expand v' performs E1 ==> (\\ v -> E1 v), fails otherwise"
                 ]
-         <> external "let-intro" (promoteR . eta_expand)
-                [ "'let-intro v' performs E1 ==> (let v = E1 in v), fails otherwise"
+         <> external "let-intro" (promoteR' . let_intro)
+                [ "'let-intro v' performs E1 ==> (let v = E1 in v)"
                 ]
          <> external "subst" (promoteR subst)
                 [ "(let v = E1 in E2) ==> E2[E1/v], fails otherwise"
@@ -47,16 +54,19 @@ externals = external "beta-reduce" (promoteR beta_reduce)
          <> external "info" (promoteT info)
                 [ "tell me what you know about this expression or binding"
                 ]
+         <> external "freevars" (promoteT freeVarsQuery)
+                [ "List the free variables in this expression."
+                ]
 
 beta_reduce :: RewriteH CoreExpr
 beta_reduce = rewrite $ \ c e -> case e of
         (App (Lam v e1) e2) -> return (Let (NonRec v e2) e1)
-        _ -> fail "beta_reduce failed"
+        _ -> fail "beta_reduce failed. Not applied to an App."
 
 beta_expand :: RewriteH CoreExpr
 beta_expand = rewrite $ \ c e -> case e of
         (Let (NonRec v e2) e1) -> return (App (Lam v e1) e2)
-        _ -> fail "beta_expand failed"
+        _ -> fail "beta_expand failed. Not applied to a NonRec Let."
 
 
 eta_reduce :: RewriteH CoreExpr
@@ -78,9 +88,12 @@ eta_expand nm = rewrite $ \ c e -> do
              liftIO $ putStr (showSDoc (ppr v1))
              return $ Lam v1 (App e (Var v1))
 
-let_intro :: TH.Name -> RewriteH CoreExpr
-let_intro _ = rewrite $ \ c e -> case e of
-        _ -> fail "let_intro failed (NOT implemented)"
+let_intro ::  TH.Name -> RewriteH CoreExpr
+let_intro nm = rewrite $ \ c e -> do
+        -- First find the type of of e
+        let ty = exprType e
+        letvar <- newVarH nm ty
+        return $ Let (NonRec letvar e) (Var letvar)
 
 -- | 'subst' assumes that the input expression is of the form 'let v = E1 in E2'.
 subst :: RewriteH CoreExpr
@@ -93,30 +106,32 @@ dce :: RewriteH CoreExpr
 dce = rewrite $ \ c e -> case e of
         Let (NonRec n e1) e2 | (n `notElem` freeIds e2) ->
                    return $ e2
-        _ -> fail "DCE failed"
+        _ -> fail "DCE failed. Not applied to a NonRec Let."
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
 -- let v = E1 in E2 E3 <=> E2 (let v = E1 in E3)
 
+-- A few Queries.
+
+-- info currently outputs the type of the current CoreExpr
 info :: TranslateH CoreExpr String
 info = liftT (("type ::= " ++) . showSDoc . ppr . exprType)
 
+-- output a list of all free variables in the Expr.
+freeVarsQuery :: TranslateH CoreExpr String
+freeVarsQuery =
+    fmap (\ frees -> "FreeVars are: " ++ (show (map (showSDoc . ppr) (List.nub frees)))) freeVarsT
 
--- info :: RewriteH CoreExpr
--- info = rewrite $ \ c e -> do
---         let ty = exprType e
---         liftIO $ putStrLn $ "type ::= " ++ showSDoc (ppr ty)
---         case e of
--- {-
---            Var v -> do
---               liftIO $ putStrLn $ "idInfo: "
---               liftIO $ putStrLn $ showSDoc (ppr $ idInfo v)
---               return e
--- -}
---            _ -> return e
+freeVarsT :: TranslateH CoreExpr [Id]
+freeVarsT = translate $  \ c e -> apply (crushtdT (tryT (promoteT freeVarsExprT) [])) initHermitEnv (inject e)
 
-
+freeVarsExprT :: TranslateH CoreExpr [Id]
+freeVarsExprT = translate $  \ c e -> case e of
+               Var n -> case (lookupHermitBinding n c) of
+                         Just _ -> return []
+                         Nothing -> return [n]
+               _ -> return []
 
 var :: TH.Name -> RewriteH CoreExpr -> RewriteH CoreExpr
 var _ n = idR -- bottomupR (varR (\ n -> ()) ?
