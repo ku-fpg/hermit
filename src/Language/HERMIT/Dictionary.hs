@@ -50,13 +50,16 @@ all_externals = mconcat $
         , external "try"        (tryR :: RewriteH Core -> RewriteH Core)
             [ "tries a rewrite, and performs an identity if this rewrite fails"
             ]
+        , external "exit"       Exit
+            [ "exits HERMIT"
+            ]
         , external "pop"        PopFocus
             [ "pops one lens"
             ]
         , external "."          PopFocus
             [ "pops one lens"
             ]
-        , external "reset"      ResetFocus
+        , external "superpop"   SuperPopFocus
             [ "pops all lenses"
             ]
         , external "help"       Help
