@@ -5,7 +5,7 @@ module Language.HERMIT.Pass (hermitPass, ppProgram, writeProgram) where
 import GhcPlugins
 import PprCore -- compiler/coreSyn/PprCore.lhs
 
-import System.Console.Editline
+--import System.Console.Editline
 
 import Data.List
 import Control.Monad
@@ -23,12 +23,21 @@ hermitPass :: [String] -> ModGuts -> CoreM ModGuts
 hermitPass nms modGuts = case candidates of
         [ ('/' : '-': []) ] -> do
                 -- Command Line Interp (via the readline API)
+{-
                 el <- liftIO $ elInit "hermit"
                 liftIO $ setEditor el Emacs
                 liftIO $ setPrompt el (return "hermit> ")
+-}
+                let elGets :: IO (Maybe String)
+                    elGets = do putStr "hermit> "
+                                hFlush stdout
+                                str <- getLine `catch` (\ _ -> return "\EOT")
+                                case str of
+                                  "\EOT" -> return Nothing
+                                  _      -> return (Just str)
                 let append = appendFile ".hermitlog"
                 liftIO $ append "\n-- starting new session\n"
-                let get = do str <- elGets el
+                let get = do str <- elGets
                              case str of
                                Nothing -> do append "-- ^D\n"
                                              return Nothing
