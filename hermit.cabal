@@ -12,7 +12,7 @@ License:             BSD3
 License-file:        LICENSE
 Author:              Andy Gill
 Maintainer:          Andy Gill <andygill@ku.edu>
-Stability:	     vaporware
+Stability:	     pre-alpha
 build-type: 	     Simple
 Cabal-Version:       >= 1.10
 
