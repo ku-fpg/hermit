@@ -75,6 +75,11 @@ instance WalkerL HermitEnv HermitM Core where
 
 ---------------------------------------------------------------------
 
+missingChild :: Int -> LensH a b
+missingChild n = fail ("There is no child number " ++ show n ++ ".")
+
+---------------------------------------------------------------------
+
 instance Injection ModGuts Core where
   inject                     = ModGutsCore
   retract (ModGutsCore guts) = Just guts
@@ -95,7 +100,7 @@ instance  Monoid b => WalkerT HermitEnv HermitM ModGuts b where
 
 instance WalkerL HermitEnv HermitM ModGuts where
   chooseL 0 = modGutsT contextidT (\ modGuts c -> (c, \ prog -> return $ modGuts { mg_binds = prog })) `composeL` promoteL
-  chooseL _ = failL
+  chooseL n = missingChild n
 
 modGutsT :: TranslateH CoreProgram a1
          -> (ModGuts -> a1 -> a)                -- slightly different; passes in *all* of the original
@@ -118,12 +123,12 @@ instance WalkerR HermitEnv HermitM CoreProgram where
           (bd:bds) -> (:) <$> apply (extractR rr) (c @@ 0) bd <*> apply (extractR rr) (addHermitBinding bd c @@ 1) bds
 
   anyR rr = rewrite $ \ c prog -> case prog of
-          []       -> empty
+          []       -> fail "anyR failure:  CoreProgram has no children"
           (bd:bds) -> do (b1,bd')  <- apply (attemptR (extractR rr)) (c @@ 0) bd
                          (b2,bds') <- apply (attemptR (extractR rr)) (addHermitBinding bd c @@ 1) bds
                          if b1 || b2
                           then return (bd':bds')
-                          else empty
+                          else fail "anyR failure:  rewrite failed for all children of a CoreProgram"
 
 instance Monoid b => WalkerT HermitEnv HermitM CoreProgram b where
   crushT tt = consBindT (extractT tt) (extractT tt) mappend <+ nilT mempty
@@ -131,7 +136,7 @@ instance Monoid b => WalkerT HermitEnv HermitM CoreProgram b where
 instance WalkerL HermitEnv HermitM CoreProgram where
   chooseL 0 = consBindT contextidT idR (\ cx e2 -> (cx, \ e1 -> return $ e1 : e2)) `composeL` promoteL
   chooseL 1 = consBindT idR contextidT (\ e1 cx -> (cx, \ e2 -> return $ e1 : e2)) `composeL` promoteL
-  chooseL _ = failL
+  chooseL n = missingChild n
 
 consBindT :: (a ~ CoreBind)
       => TranslateH a a1
@@ -175,7 +180,7 @@ instance WalkerR HermitEnv HermitM (Bind Id) where
                                                      ]
                             if or bs
                              then return (Rec bds')
-                             else empty
+                             else fail "anyR failure:  rewrite failed for all children of a recursive binding"
 
 
 instance  Monoid b => WalkerT HermitEnv HermitM (Bind Id) b where
@@ -192,7 +197,7 @@ instance WalkerL HermitEnv HermitM (Bind Id) where
             -- find the number of binds
             sz <- recT (const idR) length
             if n < 0 || n >= sz
-                then failL
+                then missingChild n
                      -- if in range, then figure out context
                 else recT (\ _ -> contextidT)
                           (\ bds -> (snd (bds !! n)
@@ -271,19 +276,19 @@ instance WalkerR HermitEnv HermitM (Expr Id) where
 
 
   anyR rr = rewrite $ \ c ei -> case ei of
-          Var {}    -> empty
-          Lit {}    -> empty
+          Var {}    -> fail "anyR failure:  variable expression has no children"
+          Lit {}    -> fail "anyR failure:  literal expression has no children"
           App e1 e2 -> do (b1,e1') <- apply (attemptR (extractR rr)) (c @@ 0) e1
                           (b2,e2') <- apply (attemptR (extractR rr)) (c @@ 1) e2
                           if b1 || b2
                            then return (App e1' e2')
-                           else empty
+                           else fail "anyR failure:  rewrite failed for all children of an application expression"
           Lam b e   -> Lam b <$> apply (extractR rr) (addHermitEnvLambdaBinding b c @@ 0) e
           Let bds e -> do (b1,bds') <- apply (attemptR (extractR rr)) (c @@ 0) bds
                           (b2,e')   <- apply (attemptR (extractR rr)) (addHermitBinding bds c @@ 1) e
                           if b1 || b2
                            then return (Let bds' e')
-                           else empty
+                           else fail "anyR failure:  rewrite failed for all children of a let expression"
                        -- use *original* env, because the bindings are self-binding,
                        -- if they are recursive. See allR (Rec ...) for details.
           Case e b ty alts -> do (b1,e') <- apply (attemptR (extractR rr)) (c @@ 0) e
@@ -293,14 +298,14 @@ instance WalkerR HermitEnv HermitM (Expr Id) where
                                                                   ]
                                  if or (b1:bs)
                                   then return (Case e' b ty alts')
-                                  else empty
+                                  else fail "anyR failure:  rewrite failed for all children of a case expression"
           Cast e cast -> flip Cast cast <$> apply (extractR rr) (c @@ 0) e
           Tick tk e -> Tick tk <$> apply (extractR rr) (c @@ 0) e
                 -- Not sure about this. Should we descend into the type here?
                 -- If we do so, we should also descend into the types
                 -- inside Coercion, Id, etc.
-          Type {}     -> empty
-          Coercion {} -> empty
+          Type {}     -> fail "anyR failure:  type expression has no children"
+          Coercion {} -> fail "anyR failure:  coercion expression has no children"
 
 instance  Monoid b => WalkerT HermitEnv HermitM (Expr Id) b where
   crushT tt = varT (\ _ -> mempty)
@@ -334,7 +339,7 @@ instance WalkerL HermitEnv HermitM (Expr Id) where
         caseChooseL = do
             sz <- caseT idR (const idR) $ \ _ _ _ alts -> length alts
             if n < 1 || n > sz
-                then failL
+                then missingChild n
                 else caseT idR (const contextidT)
                                (\ e v t alts -> ( alts !! (n - 1)
                                                   , \ alt -> return $ Case e v t
@@ -396,7 +401,7 @@ instance  Monoid b => WalkerT HermitEnv HermitM (Alt Id) b where
 
 instance WalkerL HermitEnv HermitM (Alt Id) where
   chooseL 0 = altT contextidT (\ con bs cx -> (cx, \ e1 -> pure (con,bs,e1))) `composeL` promoteL
-  chooseL _ = failL
+  chooseL n = missingChild n
 
 altT :: TranslateH (Expr Id) a1
      -> (AltCon -> [Id] -> a1 -> a)

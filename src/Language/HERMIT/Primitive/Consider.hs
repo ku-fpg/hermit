@@ -31,7 +31,7 @@ consider nm = do
           Just cxtpath -> do
              path <- rmPrefix cxtpath
              pathL path `composeL` extractL
-          Nothing -> failL
+          Nothing -> fail "Bad error message; please improve."
 
 
 -- Take a ContextPath (always from the *Root*) from a deeper location,
