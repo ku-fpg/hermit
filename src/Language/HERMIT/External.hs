@@ -26,7 +26,7 @@ data External = External
     | Externals [External]
 
 toDictionary :: External -> Map String Dynamic
-toDictionary = Map.fromList . toD
+toDictionary = Map.fromListWithKey (\ k _ _ -> error $ "HERMIT Command Redefined: " ++ k) . toD
   where
          toD (External nm fn help) = [(nm,fn)]
          toD (Externals exts)      = concatMap toD exts
