@@ -16,7 +16,7 @@ externals = external "beta-reduce" (promoteR $ not_defined "beta-reduce")
                      , "this form of beta reduction is safe if E2 is an arbitrary expression (won't duplicate work)" ]
          <> external "dead-code" (promoteR $ not_defined "dead-code")
                      [ "let x = E1 in E2 ==> E2, if x is not used in E2, fails otherwise" ]
-         <> external "inline" (promoteR $ not_defined "inline")
+         <> external "inline-let" (promoteR $ not_defined "inline")
                      [ "'inline x': let x = E1 in ...x... ==> let x = E1 in ...E1..., fails otherwise" ]
          <> external "constructor-reuse" (promoteR $ not_defined "constructor-reuse")
                      [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ]
