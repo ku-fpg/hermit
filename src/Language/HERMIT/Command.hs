@@ -42,38 +42,38 @@ runCommands :: (HermitEnv -> Core -> IO Command)  -- waiting for commands
 runCommands getCommand output modGuts = do
         ModGutsCore modGuts' <- loop [] c0 a0
         return modGuts'
-  where        
+  where
     c0 :: HermitEnv
     c0 = initHermitEnv
-    
+
     a0 :: Core
     a0 = ModGutsCore modGuts
-    
+
     loop :: [Pop] -> HermitEnv -> Core -> CoreM Core
     loop pops c a = do rep <- liftIO (getCommand c a)
                        case rep of
-                         PushFocus l   -> runHermitMR (\ ((c',b),k) -> loop ((c,k):pops) c' b) printAndLoop (apply l c a) 
+                         PushFocus l   -> runHermitMR (\ ((c',b),k) -> loop ((c,k):pops) c' b) printAndLoop (apply l c a)
                          PopFocus      -> popAndLoop pops
                          SuperPopFocus -> popAll pops >>= loop [] c0
                          Apply rr      -> runHermitMR (loop pops c) printAndLoop (apply rr c a)
                          Query tt      -> runHermitMR printAndLoop printAndLoop (apply tt c a)
                          Message msg   -> printAndLoop msg
                          Exit          -> popAll pops
-    
-      where                     
+
+      where
         popAndLoop :: [Pop] -> CoreM Core
         popAndLoop []           = return a -- is there a reason we wanted to loop here?
                                            -- printAndLoop "Nothing to pop, already at root."
         popAndLoop ((c',k):cks) = runHermitMR (loop cks c') printAndLoop (k a)
-        
+
         popAll :: [Pop] -> CoreM Core
         popAll []  = return a
         popAll cks = runHermitMR return
                                  (\ msg -> printMsg msg >> return a0) -- if popping fails revert to initial value
-                                 (foldM (flip ($)) a (map snd cks))  
-        
+                                 (foldM (flip ($)) a (map snd cks))
+
         printMsg :: String -> CoreM ()
-        printMsg = liftIO . output . show 
-        
+        printMsg = liftIO . output . show
+
         printAndLoop :: String -> CoreM Core
         printAndLoop s = printMsg s >> loop pops c a
