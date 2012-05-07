@@ -1,6 +1,6 @@
 -- reverse script
 consider 'reverse
-  bottomup (try inline)
+  anybu inline
 .
 --
 -- From the PEPM paper:
