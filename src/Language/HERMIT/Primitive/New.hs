@@ -124,7 +124,7 @@ freeVarsQuery =
     fmap (\ frees -> "FreeVars are: " ++ (show (map (showSDoc . ppr) (List.nub frees)))) freeVarsT
 
 freeVarsT :: TranslateH CoreExpr [Id]
-freeVarsT = translate $  \ c e -> apply (crushtdT (tryT (promoteT freeVarsExprT) [])) initHermitEnv (inject e)
+freeVarsT = translate $ \ _ e -> apply (crushtdT (tryT [] (promoteT freeVarsExprT))) initHermitEnv (inject e)
 
 freeVarsExprT :: TranslateH CoreExpr [Id]
 freeVarsExprT = translate $  \ c e -> case e of

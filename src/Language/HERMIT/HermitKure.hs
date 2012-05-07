@@ -99,7 +99,7 @@ instance  Monoid b => WalkerT HermitEnv HermitM ModGuts b where
   crushT tt = modGutsT (extractT tt) ( \ _ r -> r)
 
 instance WalkerL HermitEnv HermitM ModGuts where
-  chooseL 0 = modGutsT contextidT (\ modGuts c -> (c, \ prog -> return $ modGuts { mg_binds = prog })) `composeL` promoteL
+  chooseL 0 = modGutsT exposeContextT (\ modGuts c -> (c, \ prog -> return $ modGuts { mg_binds = prog })) `composeL` promoteL
   chooseL n = missingChild n
 
 modGutsT :: TranslateH CoreProgram a1
@@ -134,8 +134,8 @@ instance Monoid b => WalkerT HermitEnv HermitM CoreProgram b where
   crushT tt = consBindT (extractT tt) (extractT tt) mappend <+ nilT mempty
 
 instance WalkerL HermitEnv HermitM CoreProgram where
-  chooseL 0 = consBindT contextidT idR (\ cx e2 -> (cx, \ e1 -> return $ e1 : e2)) `composeL` promoteL
-  chooseL 1 = consBindT idR contextidT (\ e1 cx -> (cx, \ e2 -> return $ e1 : e2)) `composeL` promoteL
+  chooseL 0 = consBindT exposeContextT idR (\ cx e2 -> (cx, \ e1 -> return $ e1 : e2)) `composeL` promoteL
+  chooseL 1 = consBindT idR exposeContextT (\ e1 cx -> (cx, \ e2 -> return $ e1 : e2)) `composeL` promoteL
   chooseL n = missingChild n
 
 consBindT :: (a ~ CoreBind)
@@ -192,14 +192,14 @@ instance WalkerL HermitEnv HermitM (Bind Id) where
                 0 -> nonrec <+ rec
                 _ -> rec
      where
-         nonrec = nonRecT contextidT (\ v cx -> (cx, pure . NonRec v)) `composeL` promoteL
+         nonrec = nonRecT exposeContextT (\ v cx -> (cx, pure . NonRec v)) `composeL` promoteL
          rec    = do
             -- find the number of binds
             sz <- recT (const idR) length
             if n < 0 || n >= sz
                 then missingChild n
                      -- if in range, then figure out context
-                else recT (\ _ -> contextidT)
+                else recT (\ _ -> exposeContextT)
                           (\ bds -> (snd (bds !! n)
                                     , \ e -> return $ Rec
                                                 [ (v', if i == n then e else e')
@@ -213,7 +213,7 @@ instance WalkerL HermitEnv HermitM (Bind Id) where
         <+ rec 0
   chooseL n = rec n
     where
-     rec n = recT idR contextidT (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2)) `composeL` promoteL
+     rec n = recT idR exposeContextT (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2)) `composeL` promoteL
   chooseL _ = failL
 -}
 
@@ -322,15 +322,15 @@ instance  Monoid b => WalkerT HermitEnv HermitM (Expr Id) b where
 
 instance WalkerL HermitEnv HermitM (Expr Id) where
   chooseL n = case n of
-      0 -> (( appT contextidT idR  $ \ cx e2       -> (cx, \ e1 -> pure $ App e1 e2) )        `composeL` promoteL )
-        <+ (( lamT contextidT      $ \ v cx        -> (cx, \ e1 -> pure $ Lam v e1) )         `composeL` promoteL )
-        <+ (( letT contextidT idR  $ \ cx e2       -> (cx, \ bd -> pure $ Let bd e2) )        `composeL` promoteL )
-        <+ (( caseT contextidT (const idR)
+      0 -> (( appT exposeContextT idR  $ \ cx e2       -> (cx, \ e1 -> pure $ App e1 e2) )        `composeL` promoteL )
+        <+ (( lamT exposeContextT      $ \ v cx        -> (cx, \ e1 -> pure $ Lam v e1) )         `composeL` promoteL )
+        <+ (( letT exposeContextT idR  $ \ cx e2       -> (cx, \ bd -> pure $ Let bd e2) )        `composeL` promoteL )
+        <+ (( caseT exposeContextT (const idR)
                                    $ \ cx v t alts -> (cx, \ e1 -> pure $ Case e1 v t alts) ) `composeL` promoteL )
-        <+ (( castT contextidT     $ \ cx c        -> (cx, \ e1 -> pure $ Cast e1 c) )        `composeL` promoteL )
-        <+ (( tickT contextidT     $ \ t cx        -> (cx, \ e1 -> pure $ Tick t e1) )        `composeL` promoteL )
-      1 -> (( appT idR contextidT  $ \ e1 cx       -> (cx, \ e2 -> pure $ App e1 e2) )        `composeL` promoteL )
-        <+ (( letT idR contextidT  $ \ bd cx       -> (cx, \ e2 -> pure $ Let bd e2) )        `composeL` promoteL )
+        <+ (( castT exposeContextT     $ \ cx c        -> (cx, \ e1 -> pure $ Cast e1 c) )        `composeL` promoteL )
+        <+ (( tickT exposeContextT     $ \ t cx        -> (cx, \ e1 -> pure $ Tick t e1) )        `composeL` promoteL )
+      1 -> (( appT idR exposeContextT  $ \ e1 cx       -> (cx, \ e2 -> pure $ App e1 e2) )        `composeL` promoteL )
+        <+ (( letT idR exposeContextT  $ \ bd cx       -> (cx, \ e2 -> pure $ Let bd e2) )        `composeL` promoteL )
         <+ caseChooseL
 
       _ -> caseChooseL
@@ -340,7 +340,7 @@ instance WalkerL HermitEnv HermitM (Expr Id) where
             sz <- caseT idR (const idR) $ \ _ _ _ alts -> length alts
             if n < 1 || n > sz
                 then missingChild n
-                else caseT idR (const contextidT)
+                else caseT idR (const exposeContextT)
                                (\ e v t alts -> ( alts !! (n - 1)
                                                   , \ alt -> return $ Case e v t
                                                               [ if i == n then alt else alt'
@@ -349,7 +349,7 @@ instance WalkerL HermitEnv HermitM (Expr Id) where
                                                   )
                                ) `composeL` promoteL
 
---        <+ (( caseT contextidT idR $ \ cxt v t alts -> (cxt, \ e1 -> return $ Case e1 v t alts) ) `composeL` promoteL )
+--        <+ (( caseT exposeContextT idR $ \ cxt v t alts -> (cxt, \ e1 -> return $ Case e1 v t alts) ) `composeL` promoteL )
 
 --         foo cxt $ \ e1 -> App e1 e2 )
 
@@ -377,8 +377,8 @@ instance Term [Alt Id] where
   crushT tt = ( consT (extractT tt) (extractT tt) $ mappend )
            <+ ( nilT                              $ mempty )
 
-  chooseL 0 = consT contextidT idR  (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2) )        `composeL` promoteL
-  chooseL 1 = consT idR contextidT  (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2) )        `composeL` promoteL
+  chooseL 0 = consT exposeContextT idR  (\ cxt e2 -> (cxt, \ e1 -> return $ e1 : e2) )        `composeL` promoteL
+  chooseL 1 = consT idR exposeContextT  (\ e1 cxt -> (cxt, \ e2 -> return $ e1 : e2) )        `composeL` promoteL
   chooseL _ = failL
 -}
 
@@ -400,7 +400,7 @@ instance  Monoid b => WalkerT HermitEnv HermitM (Alt Id) b where
   crushT tt = altT (extractT tt) (\ _ _ r -> r)
 
 instance WalkerL HermitEnv HermitM (Alt Id) where
-  chooseL 0 = altT contextidT (\ con bs cx -> (cx, \ e1 -> pure (con,bs,e1))) `composeL` promoteL
+  chooseL 0 = altT exposeContextT (\ con bs cx -> (cx, \ e1 -> pure (con,bs,e1))) `composeL` promoteL
   chooseL n = missingChild n
 
 altT :: TranslateH (Expr Id) a1
