@@ -22,7 +22,7 @@ sub compileAndRun {
 	system($str);
 	print "==> $?\n";
 	print "running $mod\n";
-	system("./${mod}");
+	system("time ./${mod}");
 	print "==> $?\n";
 }
 
