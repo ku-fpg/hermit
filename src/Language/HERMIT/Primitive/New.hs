@@ -25,13 +25,7 @@ promoteR'  :: (Term a) => RewriteH a -> RewriteH (Generic a)
 promoteR' rr = rewrite $ \ c e ->  liftA inject ( maybe (fail "argument is not an expr") (apply rr c)  (retract e))
 
 externals :: External
-externals = external "beta-reduce" (promoteR beta_reduce)
-                [ "((\\ v -> E1) E2) ==> let v = E2 in E1, fails otherwise"
-                ]
-         <> external "beta-expand" (promoteR beta_expand)
-                [ "(let v = E1 in E2) ==> (\\ v -> E2) E1, fails otherwise"
-                ]
-         <> external "eta-reduce" (promoteR eta_reduce)
+externals = external "eta-reduce" (promoteR eta_reduce)
                 [ "(\\ v -> E1 v) ==> E1, fails otherwise"
                 ]
          <> external "eta-expand" (promoteR' . eta_expand)
@@ -57,17 +51,6 @@ externals = external "beta-reduce" (promoteR beta_reduce)
          <> external "freevars" (promoteT freeVarsQuery)
                 [ "List the free variables in this expression."
                 ]
-
-beta_reduce :: RewriteH CoreExpr
-beta_reduce = rewrite $ \ c e -> case e of
-        (App (Lam v e1) e2) -> return (Let (NonRec v e2) e1)
-        _ -> fail "beta_reduce failed. Not applied to an App."
-
-beta_expand :: RewriteH CoreExpr
-beta_expand = rewrite $ \ c e -> case e of
-        (Let (NonRec v e2) e1) -> return (App (Lam v e1) e2)
-        _ -> fail "beta_expand failed. Not applied to a NonRec Let."
-
 
 eta_reduce :: RewriteH CoreExpr
 eta_reduce = rewrite $ \ c e -> case e of

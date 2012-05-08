@@ -11,9 +11,13 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 
 externals :: External
-externals = external "beta-reduce" (promoteR $ not_defined "beta-reduce")
+externals = external "beta-reduce" (promoteR beta_reduce)
                      [ "((\\ v -> E1) E2) ==> let v = E2 in E1, fails otherwise"
-                     , "this form of beta reduction is safe if E2 is an arbitrary expression (won't duplicate work)" ]
+                     , "this form of beta reduction is safe if E2 is an arbitrary"
+		     , "expression (won't duplicate work)" ]
+         <> external "beta-expand" (promoteR beta_expand)
+                [ "(let v = E1 in E2) ==> (\\ v -> E2) E1, fails otherwise"
+                ]
          <> external "dead-code" (promoteR $ not_defined "dead-code")
                      [ "let x = E1 in E2 ==> E2, if x is not used in E2, fails otherwise" ]
          <> external "inline-let" (promoteR $ not_defined "inline")
@@ -49,3 +53,16 @@ externals = external "beta-reduce" (promoteR $ not_defined "beta-reduce")
 
 not_defined :: String -> RewriteH CoreExpr
 not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
+
+------------------------------------------------------------------------------
+
+beta_reduce :: RewriteH CoreExpr
+beta_reduce = rewrite $ \ c e -> case e of
+        (App (Lam v e1) e2) -> return (Let (NonRec v e2) e1)
+        _ -> fail "beta_reduce failed. Not applied to an App."
+
+beta_expand :: RewriteH CoreExpr
+beta_expand = rewrite $ \ c e -> case e of
+        (Let (NonRec v e2) e1) -> return (App (Lam v e1) e2)
+        _ -> fail "beta_expand failed. Not applied to a NonRec Let."
+
