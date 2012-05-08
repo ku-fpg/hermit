@@ -1,5 +1,5 @@
 consider 'main
-  bottomup (try inline)
+  allbu (try inline)
   1
   0
 -- attempting a type-level beta-reduce
