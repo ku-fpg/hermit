@@ -1,4 +1,4 @@
-{-# LANGUAGE PatternGuards, DataKinds #-}
+{-# LANGUAGE PatternGuards, DataKinds, ScopedTypeVariables #-}
 
 module Language.HERMIT.Pass (hermitPass, ppProgram, writeProgram) where
 
@@ -10,6 +10,10 @@ import PprCore -- compiler/coreSyn/PprCore.lhs
 import Data.List
 import Control.Monad
 import System.IO
+
+-- The Prelude version of catch has been deprecated.
+import Prelude hiding (catch)
+import Control.Exception (catch, SomeException)
 
 import Language.HERMIT.CommandLine as CommandLine
 
@@ -31,10 +35,12 @@ hermitPass nms modGuts = case candidates of
                 let elGets :: IO (Maybe String)
                     elGets = do putStr "hermit> "
                                 hFlush stdout
-                                str <- getLine `catch` (\ _ -> return "\EOT")
-                                case str of
-                                  "\EOT" -> return Nothing
-                                  _      -> return (Just str)
+                            --    Wouldn't this be simpler?  Or can the string actually be "\EOT"?     
+                            --    liftM Just getLine `catch` (\ (_ :: SomeException) -> return Nothing) 
+                                str <- getLine `catch` (\ (_ :: SomeException) -> return "\EOT")
+                                return $ case str of
+                                           "\EOT" -> Nothing
+                                           _      -> Just str
                 let append = appendFile ".hermitlog"
                 liftIO $ append "\n-- starting new session\n"
                 let get = do str <- elGets
