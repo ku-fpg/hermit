@@ -62,8 +62,7 @@ runCommands getCommand output modGuts = do
 
       where
         popAndLoop :: [Pop] -> CoreM Core
-        popAndLoop []           = return a -- is there a reason we wanted to loop here?
-                                           -- printAndLoop "Nothing to pop, already at root."
+        popAndLoop []           = printAndLoop "Nothing to pop, already at root."
         popAndLoop ((c',k):cks) = runHermitMR (loop cks c') printAndLoop (k a)
 
         popAll :: [Pop] -> CoreM Core

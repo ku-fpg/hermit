@@ -29,7 +29,7 @@ commandLine gets modGuts = do
           let loop = do
                 maybeLine <- gets
                 case maybeLine of
-                   Nothing -> return PopFocus
+                   Nothing -> return Exit
                    Just line | all isSpace line -> loop
                    Just ('-':'-': _) -> loop       -- comment
                    Just line -> do
