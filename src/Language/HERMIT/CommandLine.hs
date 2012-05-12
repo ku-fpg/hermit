@@ -12,7 +12,7 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.HermitKure
 import Language.HERMIT.Dictionary
-import Language.HERMIT.Command
+import Language.HERMIT.Kernel
 import qualified Language.HERMIT.Expr as Expr
 
 import Language.HERMIT.Primitive.Inline
@@ -20,7 +20,7 @@ import Language.HERMIT.Primitive.Inline
 commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
 commandLine gets modGuts = runCommands (liftIO getCmd) (liftIO.printKernelOutput) modGuts
   where
-    getCmd :: IO Command
+    getCmd :: IO KernelCommand
     getCmd = do maybeLine <- gets
                 case maybeLine of
                   Nothing            -> return Exit

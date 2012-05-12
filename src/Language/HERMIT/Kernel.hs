@@ -1,10 +1,11 @@
 {-# LANGUAGE KindSignatures, GADTs #-}
 
-module Language.HERMIT.Command ( 
+module Language.HERMIT.Kernel ( 
           
-          Command(..)
+          KernelCommand(..)
         , KernelOutput(..)  
         , runCommands
+          
 ) where
 
 import GhcPlugins
@@ -16,24 +17,24 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 
--- | 'Command' is what you send to the HERMIT kernel.
-data Command :: * where
-   Exit          ::                             Command
-   Message       :: String                   -> Command
-   Apply         :: RewriteH Core            -> Command
-   Query         :: TranslateH Core String   -> Command
-   PushFocus     :: LensH Core Core          -> Command
-   PopFocus      ::                             Command
-   SuperPopFocus ::                             Command
+-- | 'KernelCommand' is what you send to the HERMIT kernel.
+data KernelCommand :: * where
+   Exit          ::                             KernelCommand
+   Message       :: String                   -> KernelCommand
+   Apply         :: RewriteH Core            -> KernelCommand
+   Query         :: TranslateH Core String   -> KernelCommand
+   PushFocus     :: LensH Core Core          -> KernelCommand
+   PopFocus      ::                             KernelCommand
+   SuperPopFocus ::                             KernelCommand
 
-instance Show Command where
+instance Show KernelCommand where
    show Exit           = "Exit"
    show (Apply _)      = "Apply"
    show (Query _)      = "Query"
    show (PushFocus _)  = "PushFocus"
    show PopFocus       = "PopFocus"
    show SuperPopFocus  = "SuperPopFocus"
-   show (Message _)    = "Message"
+   show (Message msg)  = "Message: " ++ msg
 
 -- | 'KernalOutput' is what the HERMIT kernel sends back.
 data KernelOutput :: * where
@@ -45,12 +46,12 @@ data KernelOutput :: * where
 instance Show KernelOutput where
    show (ErrorMsg msg)    = "Error message: " ++ msg
    show (QueryResult msg) = "Query result: " ++ msg
-   show (FocusChange _ _) = "Focus change."
-   show (CoreChange _)    = "Rewrite successfully applied."
+   show (FocusChange _ _) = "Focus change"
+   show (CoreChange _)    = "Core change"
 
 type Pop = (HermitEnv, Core -> HermitM Core)
 
-runCommands :: CoreM Command -> (KernelOutput -> CoreM ()) -> ModGuts -> CoreM ModGuts
+runCommands :: CoreM KernelCommand -> (KernelOutput -> CoreM ()) -> ModGuts -> CoreM ModGuts
 runCommands getCommand output modGuts = do ModGutsCore modGuts' <- newFocus [] c0 a0
                                            return modGuts'
   where

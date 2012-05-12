@@ -16,7 +16,7 @@ import Language.KURE
 
 import Language.HERMIT.HermitKure
 import qualified Language.HERMIT.Expr as Expr
-import Language.HERMIT.Command as Command
+import Language.HERMIT.Kernel
 import Language.HERMIT.External
 
 import qualified Language.HERMIT.Primitive.Case as Case
@@ -75,13 +75,13 @@ help = concat $ map snd $ Map.toList $ toHelp all_externals
 
 ------------------------------------------------------------------------------------
 
-data CommandBox = CommandBox Command
+data KernelCommandBox = KernelCommandBox KernelCommand
         deriving (Typeable)
 
-instance Extern Command where
-    type Box Command = CommandBox
-    box i = CommandBox i
-    unbox (CommandBox i) = i
+instance Extern KernelCommand where
+    type Box KernelCommand = KernelCommandBox
+    box i = KernelCommandBox i
+    unbox (KernelCommandBox i) = i
 
 ------------------------------------------------------------------------------------
 
@@ -96,12 +96,12 @@ instance Extern Help where
 ------------------------------------------------------------------------------------
 -- The union of all possible results from a "well-typed" commands, from this dictionary.
 
-interpExpr :: Expr.Expr -> Either String Command
+interpExpr :: Expr.Expr -> Either String KernelCommand
 interpExpr expr =
         case interpExpr' expr of
           Left msg -> Left msg
           Right dyn -> runInterp dyn
-             [ Interp $ \ (CommandBox cmd)            -> Right $ cmd
+             [ Interp $ \ (KernelCommandBox cmd)      -> Right $ cmd
              , Interp $ \ (RewriteCoreBox rr)         -> Right $ Apply rr
              , Interp $ \ (TranslateCoreStringBox tt) -> Right $ Query tt
              , Interp $ \ (LensCoreCoreBox lens)      -> Right $ PushFocus lens

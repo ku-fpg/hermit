@@ -36,7 +36,7 @@ Library
        Language.HERMIT.External
        Language.HERMIT.Dictionary
        Language.HERMIT.Expr
-       Language.HERMIT.Command
+       Language.HERMIT.Kernel
 
        Language.HERMIT.Primitive.Case
        Language.HERMIT.Primitive.Consider
