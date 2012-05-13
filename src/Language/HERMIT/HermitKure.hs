@@ -109,7 +109,7 @@ instance Term CoreProgram where
 instance WalkerR HermitEnv HermitM CoreProgram where
   allR rr = listBindT [] (extractR rr) (extractR rr) (:) 
   
-  anyR rr = consBindT' (attemptR $ extractR rr) (attemptR $ extractR rr) (any2children (:))
+  anyR rr = consBindT' (attemptR $ extractR rr) (attemptR $ extractR rr) (attemptAny2 (:))
 
 instance Monoid b => WalkerT HermitEnv HermitM CoreProgram b where
   crushT tt = listBindT mempty (extractT tt) (extractT tt) mappend
@@ -148,7 +148,7 @@ instance WalkerR HermitEnv HermitM CoreBind where
             <+ recT (const $ extractR rr) Rec
 
   anyR rr =    nonRecT (extractR rr) NonRec
-            <+ recT' (const $ attemptR $ extractR rr) (anyNchildren Rec . (liftA.map) (\ (v,(b,e)) -> (b,(v,e)) ))
+            <+ recT' (const $ attemptR $ extractR rr) (attemptAnyN Rec . (map.liftA) (\ (v,(b,e)) -> (b,(v,e))))
 
 instance  Monoid b => WalkerT HermitEnv HermitM CoreBind b where
   crushT tt = nonRecT (extractT tt) (\ _ r -> r) <+ recT (const $ extractT tt) (mconcat . map snd)
@@ -179,17 +179,17 @@ nonRecT tt f = translate $ \ c e -> case e of
                                       NonRec v e' -> f v <$> apply tt (c @@ 0) e'
                                       _           -> fail "nonRecT: not NonRec"
 
-recT' :: (Int -> TranslateH CoreExpr a) -> (HermitM [(Id,a)] -> HermitM b) -> TranslateH CoreBind b
+recT' :: (Int -> TranslateH CoreExpr a) -> ([HermitM (Id,a)] -> HermitM b) -> TranslateH CoreBind b
 recT' tt f = translate $ \ c e -> case e of
          Rec bds -> -- Notice how we add the scoping bindings here *before* decending into the rhss.
                     let c' = addHermitBinding (Rec bds) c
-                     in f $ sequence [ (v,) <$> apply (tt n) (c' @@ n) e
-                                     | ((v,e),n) <- zip bds [0..]
-                                     ]
+                     in f [ (v,) <$> apply (tt n) (c' @@ n) e
+                          | ((v,e),n) <- zip bds [0..]
+                          ]
          _       -> fail "recT: not Rec"
 
 recT :: (Int -> TranslateH CoreExpr a) -> ([(Id,a)] -> b) -> TranslateH CoreBind b
-recT tt f = recT' tt (liftA f)
+recT tt f = recT' tt (fmap f . sequence)
 
 ---------------------------------------------------------------------
 
@@ -241,10 +241,10 @@ instance WalkerR HermitEnv HermitM CoreExpr where
              <+ coercionT Coercion
              <+ fail "allR failed for all Expr constructors"
 
-  anyR rr =     appT' (attemptR $ extractR rr) (attemptR $ extractR rr) (any2children App)
+  anyR rr =     appT' (attemptR $ extractR rr) (attemptR $ extractR rr) (attemptAny2 App)
              <+ lamT (extractR rr) Lam
-             <+ letT' (attemptR $ extractR rr) (attemptR $ extractR rr) (any2children Let)
-             <+ caseT' (attemptR $ extractR rr) (const $ attemptR $ extractR rr) (\ b ty -> anyNplus1children (\ e alts -> Case e b ty alts))   
+             <+ letT' (attemptR $ extractR rr) (attemptR $ extractR rr) (attemptAny2 Let)
+             <+ caseT' (attemptR $ extractR rr) (const $ attemptR $ extractR rr) (\ b ty -> attemptAny1N (\ e alts -> Case e b ty alts)) 
              <+ castT (extractR rr) Cast
              <+ tickT (extractR rr) Tick
              <+ fail "anyR failed for all Expr constructors"
@@ -333,20 +333,20 @@ letT bdsT exprT f = letT' bdsT exprT (liftA2 f)
 
 caseT' :: TranslateH CoreExpr a1
       -> (Int -> TranslateH CoreAlt a2)          -- Int argument *starts* at 1.
-      -> (Id -> Type -> HermitM a1 -> HermitM [a2] -> HermitM b)
+      -> (Id -> Type -> HermitM a1 -> [HermitM a2] -> HermitM b)
       -> TranslateH CoreExpr b
 caseT' exprT altnT f = translate $ \ c ei -> case ei of
          Case e b ty alts -> f b ty (apply exprT (c @@ 0) e) $ let c' = addHermitBinding (NonRec b e) c
-                                                                in sequence [ apply (altnT n) (c' @@ n) alt
-                                                                            | (alt,n) <- zip alts [1..]
-                                                                            ]
+                                                                in [ apply (altnT n) (c' @@ n) alt
+                                                                   | (alt,n) <- zip alts [1..]
+                                                                   ]
          _ -> fail "no match for Case"
 
 caseT :: TranslateH CoreExpr a1 
       -> (Int -> TranslateH CoreAlt a2)          -- Int argument *starts* at 1.
       -> (a1 -> Id -> Type -> [a2] -> b)
       -> TranslateH CoreExpr b
-caseT exprT altnT f = caseT' exprT altnT (\ b ty me malts -> f <$> me <*> pure b <*> pure ty <*> malts)
+caseT exprT altnT f = caseT' exprT altnT (\ b ty me malts -> f <$> me <*> pure b <*> pure ty <*> sequence malts)
 
 castT :: TranslateH CoreExpr a -> (a -> Coercion -> b) -> TranslateH CoreExpr b
 castT tt f = translate $ \ c ei -> case ei of
@@ -378,21 +378,30 @@ pathT = fmap hermitBindingPath contextT
 
 -- Utilities
 
+-- NOTE: These are candidates for moving into the KURE package.
+--       It's unclear whether this approach will be common to other uses of KURE.
+
 missingChild :: Int -> LensH a b
 missingChild n = fail ("There is no child number " ++ show n ++ ".")
 
-any2children :: (a -> b -> c) -> HermitM (Bool,a) -> HermitM (Bool,b) -> HermitM c
-any2children f mba1 mba2 = do (b1,a) <- mba1 
-                              (b2,b) <- mba2
-                              if b1 || b2 then return (f a b) else fail "anyR failed for both children."
+attemptAny2 :: (a -> b -> c) -> HermitM (Bool,a) -> HermitM (Bool,b) -> HermitM c
+attemptAny2 f mba1 mba2 = do (b1,a) <- mba1 
+                             (b2,b) <- mba2
+                             if b1 || b2 
+                              then return (f a b) 
+                              else fail "anyR failed for both children."
     
-anyNchildren :: ([a] -> b) -> HermitM [(Bool,a)] -> HermitM b 
-anyNchildren f mbas = do (bs,as) <- unzip <$> mbas 
-                         if or bs then pure (f as) else fail ("anyR failed for all " ++ show (length bs) ++ " children.")
+attemptAnyN :: ([a] -> b) -> [HermitM (Bool,a)] -> HermitM b 
+attemptAnyN f mbas = do (bs,as) <- unzip <$> sequence mbas 
+                        if or bs 
+                         then return (f as) 
+                         else fail ("anyR failed for all " ++ show (length bs) ++ " children.")
 
-anyNplus1children :: (a -> [b] -> c) -> HermitM (Bool,a) -> HermitM [(Bool,b)] -> HermitM c 
-anyNplus1children f mba mbas = do (b,a)   <- mba 
-                                  (bs,as) <- unzip <$> mbas
-                                  if or (b:bs) then pure (f a as) else fail ("anyR failed for all " ++ show (1 + length bs) ++ " children.")
+attemptAny1N :: (a -> [b] -> c) -> HermitM (Bool,a) -> [HermitM (Bool,b)] -> HermitM c 
+attemptAny1N f mba mbas = do (b,a)   <- mba 
+                             (bs,as) <- unzip <$> sequence mbas
+                             if or (b:bs) 
+                               then return (f a as) 
+                               else fail ("anyR failed for all " ++ show (1 + length bs) ++ " children.")
 
 ---------------------------------------------------------------------
