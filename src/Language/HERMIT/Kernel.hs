@@ -81,7 +81,7 @@ runCommands getCommand output modGuts = do ModGutsCore modGuts' <- newFocus [] c
                                             ((c',k):cks) -> runHermitMR (newFocus cks c') errOutCont (k a)
                          SuperPopFocus -> popAll pops >>= newFocus [] c0
                          Exit          -> popAll pops
-                         Message msg   -> continue -- currently messages are ignores
+                         Message _     -> continue -- currently messages are ignored
 
       where
         continue :: CoreM Core
