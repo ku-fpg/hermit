@@ -1,6 +1,14 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections #-}
 
-module Language.HERMIT.HermitKure where
+module Language.HERMIT.HermitKure 
+       (
+         TranslateH
+       , RewriteH
+       , LensH
+       , Core(..)
+       , pathT  
+       ) 
+where
 
 import GhcPlugins hiding (empty)
 
@@ -20,12 +28,17 @@ type LensH a b = Lens HermitEnv HermitM a b
 
 ---------------------------------------------------------------------
 
+-- | NOTE: 'Type' is not included in the generic datatype. 
+--   However, we could have included it and provided the facility for descending into types.
+--   We have not done so because 
+--     (a) we do not need that functionality, and 
+--     (b) the types are complicated and we're not sure that we understand them. 
+
 data Core = ModGutsCore  ModGuts
           | ProgramCore  CoreProgram
           | BindCore     CoreBind
           | ExprCore     CoreExpr
           | AltCore      CoreAlt
-          | TypeCore     Type
 
 ---------------------------------------------------------------------
 
@@ -42,7 +55,6 @@ instance WalkerR HermitEnv HermitM Core where
           BindCore x    -> allRgeneric rr c x
           ExprCore x    -> allRgeneric rr c x
           AltCore x     -> allRgeneric rr c x
---          TypeCore x    -> allRgeneric rr c x
 
   anyR rr = rewrite $ \ c core -> case core of
           ModGutsCore x -> anyRgeneric rr c x
@@ -50,7 +62,6 @@ instance WalkerR HermitEnv HermitM Core where
           BindCore x    -> anyRgeneric rr c x
           ExprCore x    -> anyRgeneric rr c x
           AltCore x     -> anyRgeneric rr c x
---          TypeCore x    -> anyRgeneric rr c x
 
 instance Monoid b => WalkerT HermitEnv HermitM Core b where
   crushT tt = translate $ \ c core -> case core of
@@ -59,7 +70,6 @@ instance Monoid b => WalkerT HermitEnv HermitM Core b where
           BindCore x    -> crushTgeneric tt c x
           ExprCore x    -> crushTgeneric tt c x
           AltCore x     -> crushTgeneric tt c x
---          TypeCore x    -> crushTgeneric tt c x
 
 instance WalkerL HermitEnv HermitM Core where
   chooseL n = translate $ \ c core -> case core of
@@ -68,7 +78,6 @@ instance WalkerL HermitEnv HermitM Core where
           BindCore x    -> chooseLgeneric n c x
           ExprCore x    -> chooseLgeneric n c x
           AltCore x     -> chooseLgeneric n c x
---          TypeCore x    -> chooseLgeneric n c x
 
 ---------------------------------------------------------------------
 
@@ -120,7 +129,7 @@ instance WalkerL HermitEnv HermitM CoreProgram where
   chooseL n = missingChild n
 
 nilT' :: HermitM b -> TranslateH [a] b
-nilT' b = translate $ \ _ e -> if null e then b else fail "no match for nilT"
+nilT' b = translate $ \ _ as -> if null as then b else fail "no match for nilT"
 
 consBindT' :: TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH [CoreBind] b
 consBindT' t1 t2 f = translate $ \ c e -> case e of
@@ -183,8 +192,8 @@ recT' :: (Int -> TranslateH CoreExpr a) -> ([HermitM (Id,a)] -> HermitM b) -> Tr
 recT' tt f = translate $ \ c e -> case e of
          Rec bds -> -- Notice how we add the scoping bindings here *before* decending into the rhss.
                     let c' = addHermitBinding (Rec bds) c
-                     in f [ (v,) <$> apply (tt n) (c' @@ n) e
-                          | ((v,e),n) <- zip bds [0..]
+                     in f [ (v,) <$> apply (tt n) (c' @@ n) e1
+                          | ((v,e1),n) <- zip bds [0..]
                           ]
          _       -> fail "recT: not Rec"
 
@@ -235,8 +244,6 @@ instance WalkerR HermitEnv HermitM CoreExpr where
              <+ caseT (extractR rr) (const $ extractR rr) Case
              <+ castT (extractR rr) Cast
              <+ tickT (extractR rr) Tick
-  --               -- Not sure about this. Should we descend into the type here?
-  --               -- If we do so, we should also descend into the types inside Coercion, Id, etc.
              <+ typeT Type
              <+ coercionT Coercion
              <+ fail "allR failed for all Expr constructors"
@@ -293,7 +300,6 @@ instance WalkerL HermitEnv HermitM CoreExpr where
 
 ---------------------------------------------------------------------
 
--- Need to write these for our entire grammar.
 -- These are scoping aware combinators.
 -- The primed versions are the generalisations needed to define "anyR".
 
@@ -317,13 +323,13 @@ appT :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (a1 -> a2 -> b) -> T
 appT lhs rhs f = appT' lhs rhs (liftA2 f)
 
 lamT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreExpr b
-lamT tt f = translate $ \ c ei -> case ei of
-        Lam b e -> f b <$> apply tt (addHermitEnvLambdaBinding b c @@ 0) e
-        _       -> fail "no match for Lam"
+lamT tt f = translate $ \ c e -> case e of
+        Lam b e1 -> f b <$> apply tt (addHermitEnvLambdaBinding b c @@ 0) e1
+        _        -> fail "no match for Lam"
 
 letT' :: TranslateH CoreBind a1 -> TranslateH CoreExpr a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH CoreExpr b
-letT' bdsT exprT f = translate $ \ c ei -> case ei of
-        Let bds e -> f (apply bdsT (c @@ 0) bds) (apply exprT (addHermitBinding bds c @@ 1) e)
+letT' bdsT exprT f = translate $ \ c e -> case e of
+        Let bds e1 -> f (apply bdsT (c @@ 0) bds) (apply exprT (addHermitBinding bds c @@ 1) e1)
                 -- use *original* env, because the bindings are self-binding,
                 -- if they are recursive. See allR (Rec ...) for details.
         _         -> fail "no match for Let"
@@ -335,11 +341,11 @@ caseT' :: TranslateH CoreExpr a1
       -> (Int -> TranslateH CoreAlt a2)          -- Int argument *starts* at 1.
       -> (Id -> Type -> HermitM a1 -> [HermitM a2] -> HermitM b)
       -> TranslateH CoreExpr b
-caseT' exprT altnT f = translate $ \ c ei -> case ei of
-         Case e b ty alts -> f b ty (apply exprT (c @@ 0) e) $ let c' = addHermitBinding (NonRec b e) c
-                                                                in [ apply (altnT n) (c' @@ n) alt
-                                                                   | (alt,n) <- zip alts [1..]
-                                                                   ]
+caseT' exprT altnT f = translate $ \ c e -> case e of
+         Case e1 b ty alts -> f b ty (apply exprT (c @@ 0) e1) $ let c' = addHermitBinding (NonRec b e1) c
+                                                                  in [ apply (altnT n) (c' @@ n) alt
+                                                                     | (alt,n) <- zip alts [1..]
+                                                                     ]
          _ -> fail "no match for Case"
 
 caseT :: TranslateH CoreExpr a1 
@@ -349,14 +355,14 @@ caseT :: TranslateH CoreExpr a1
 caseT exprT altnT f = caseT' exprT altnT (\ b ty me malts -> f <$> me <*> pure b <*> pure ty <*> sequence malts)
 
 castT :: TranslateH CoreExpr a -> (a -> Coercion -> b) -> TranslateH CoreExpr b
-castT tt f = translate $ \ c ei -> case ei of
-        Cast e cast -> f <$> apply tt (c @@ 0) e <*> pure cast
-        _           -> fail "no match for Cast"
+castT tt f = translate $ \ c e -> case e of
+        Cast e1 cast -> f <$> apply tt (c @@ 0) e1 <*> pure cast
+        _            -> fail "no match for Cast"
 
 tickT :: TranslateH CoreExpr a -> (Tickish Id -> a -> b) -> TranslateH CoreExpr b
-tickT tt f = translate $ \ c ei -> case ei of
-        Tick tk e -> f tk <$> apply tt (c @@ 0) e
-        _         -> fail "no match for Tick"
+tickT tt f = translate $ \ c e -> case e of
+        Tick tk e1 -> f tk <$> apply tt (c @@ 0) e1
+        _          -> fail "no match for Tick"
 
 typeT :: (Type -> b) -> TranslateH CoreExpr b
 typeT f = translate $ \ _ e -> case e of
@@ -385,7 +391,7 @@ missingChild :: Int -> LensH a b
 missingChild n = fail ("There is no child number " ++ show n ++ ".")
 
 attemptAny2 :: (a -> b -> c) -> HermitM (Bool,a) -> HermitM (Bool,b) -> HermitM c
-attemptAny2 f mba1 mba2 = do (b1,a) <- mba1 
+attemptAny2 f mba1 mba2 = do (b1,a) <- mba1
                              (b2,b) <- mba2
                              if b1 || b2 
                               then return (f a b) 
