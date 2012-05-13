@@ -1,8 +1,8 @@
 -- Expr is the *untyped* command and control language for HERMIT.
 
-module Language.HERMIT.Expr
-        ( Expr(..)
-        , parseExpr
+module Language.HERMIT.HermitExpr
+        ( ExprH(..)
+        , parseExprH
         ) where
 
 import Data.Char
@@ -10,10 +10,10 @@ import Data.Char
 ---------------------------------------------
 
 -- Our local version of Expr, for things parsed from string or JSON structures.
-data Expr
-        = Var String                   -- variable names (refer to source code)
-        | Lit String                   -- commands (to be looked up in Dictionary)
-        | App Expr Expr                -- application
+data ExprH
+        = VarH String                   -- variable names (refer to source code)
+        | LitH String                   -- commands (to be looked up in Dictionary)
+        | AppH ExprH ExprH              -- application
         deriving Show
 
 ---------------------------------------------
@@ -46,48 +46,48 @@ bind m k = \ inp ->
 
 ---------------------------------------------
 
-parseExpr :: String -> Either String Expr
-parseExpr = parse parseExpr1
+parseExprH :: String -> Either String ExprH
+parseExprH = parse parseExprH1
 
-parseExprs :: String -> Either String [Expr]
-parseExprs = parse parseExprs'
+parseExprsH :: String -> Either String [ExprH]
+parseExprsH = parse parseExprsH'
 
 ---------------------------------------------
 
-parseExprs' :: ReadS [Expr]
-parseExprs' =
-        parseExpr1 `bind` (\ a ->
-        many (some (item ";") `bind` \ _ -> parseExpr1) `bind` (\ as ->
+parseExprsH' :: ReadS [ExprH]
+parseExprsH' =
+        parseExprH1 `bind` (\ a ->
+        many (some (item ";") `bind` \ _ -> parseExprH1) `bind` (\ as ->
         (\ inp -> [(a:as,inp)])))
 
-parseExpr0 :: ReadS Expr
-parseExpr0 = \ inp ->
-        [ (Var str,inp1)
+parseExprH0 :: ReadS ExprH
+parseExprH0 = \ inp ->
+        [ (VarH str,inp1)
         | (str,inp1) <- parseToken inp
         , all isId str
         ] ++
-        [ (Lit str,inp2)
+        [ (LitH str,inp2)
         | ("'",inp1) <- parseToken inp
         , (str,inp2) <- parseToken inp1
         ] ++
         [ (e,inp3)
         | ("(",inp1) <- parseToken inp
-        , (e,inp2)   <- parseExpr1 inp1
+        , (e,inp2)   <- parseExprH1 inp1
         , (")",inp3) <- parseToken inp2
         ]
         
-parseExpr1 :: ReadS Expr
-parseExpr1 = \ inp ->
-        [ (foldl App e es,inp2)
-        | (e,inp1)  <- parseExpr0 inp
-        , (es,inp2) <- parseExprs1 inp1
+parseExprH1 :: ReadS ExprH
+parseExprH1 = \ inp ->
+        [ (foldl AppH e es,inp2)
+        | (e,inp1)  <- parseExprH0 inp
+        , (es,inp2) <- parseExprsH1 inp1
         ]
 
-parseExprs1 :: ReadS [Expr]
-parseExprs1 = \ inp ->
+parseExprsH1 :: ReadS [ExprH]
+parseExprsH1 = \ inp ->
         [ (e:es,inp2)
-        | (e,inp1)  <- parseExpr0 inp
-        , (es,inp2) <- parseExprs1 inp1
+        | (e,inp1)  <- parseExprH0 inp
+        , (es,inp2) <- parseExprsH1 inp1
         ] ++
         [ ([], inp) ]
 

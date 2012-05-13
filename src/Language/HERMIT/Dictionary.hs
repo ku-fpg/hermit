@@ -3,19 +3,24 @@
 
 module Language.HERMIT.Dictionary where
 
+import Prelude hiding (lookup)
+
 import GhcPlugins
-import qualified Data.Map as Map
-import Data.Map(Map)
+
+import Data.Map
 import Data.Char
 import Data.Monoid
 import Data.Typeable
 import Data.Dynamic
+
+import Control.Monad
+
 import qualified Language.Haskell.TH as TH
 
 import Language.KURE
 
+import Language.HERMIT.HermitExpr
 import Language.HERMIT.HermitKure
-import qualified Language.HERMIT.Expr as Expr
 import Language.HERMIT.Kernel
 import Language.HERMIT.External
 
@@ -71,7 +76,7 @@ dictionary :: Map String Dynamic
 dictionary = toDictionary all_externals
 
 help :: [String]
-help = concat $ map snd $ Map.toList $ toHelp all_externals
+help = concatMap snd $ toList $ toHelp all_externals
 
 ------------------------------------------------------------------------------------
 
@@ -85,8 +90,7 @@ instance Extern KernelCommand where
 
 ------------------------------------------------------------------------------------
 
-data Help = Help
-        deriving (Typeable)
+data Help = Help deriving Typeable
 
 instance Extern Help where
     type Box Help = Help
@@ -96,17 +100,17 @@ instance Extern Help where
 ------------------------------------------------------------------------------------
 -- The union of all possible results from a "well-typed" commands, from this dictionary.
 
-interpExpr :: Expr.Expr -> Either String KernelCommand
-interpExpr expr =
+interpExprH :: ExprH -> Either String KernelCommand
+interpExprH expr =
         case interpExpr' expr of
           Left msg -> Left msg
           Right dyn -> runInterp dyn
-             [ Interp $ \ (KernelCommandBox cmd)      -> Right $ cmd
+             [ Interp $ \ (KernelCommandBox cmd)      -> Right cmd
              , Interp $ \ (RewriteCoreBox rr)         -> Right $ Apply rr
              , Interp $ \ (TranslateCoreStringBox tt) -> Right $ Query tt
              , Interp $ \ (LensCoreCoreBox lens)      -> Right $ PushFocus lens
              , Interp $ \ (IntBox i)                  -> Right $ PushFocus $ chooseL i
-             , Interp $ \ Help                        -> Left $ unlines $ help
+             , Interp $ \ Help                        -> Left  $ unlines help
              ]
              (Left "interpExpr: bad type of expression")
 
@@ -115,29 +119,20 @@ data Interp :: * -> * where
 
 runInterp :: Dynamic -> [Interp b] -> b -> b
 runInterp dyn []                bad = bad
-runInterp dyn (Interp f : rest) bad = case fromDynamic dyn of
-   Just v -> f v
-   Nothing -> runInterp dyn rest bad
+runInterp dyn (Interp f : rest) bad = maybe (runInterp dyn rest bad) f (fromDynamic dyn)
 
 --------------------------------------------------------------------------
 
-interpExpr' :: Expr.Expr -> Either String Dynamic -- (Either PartialCommand Command)
-interpExpr' (Expr.Lit str)
-        = Right $ toDyn $ NameBox $ TH.mkName str
-interpExpr' (Expr.Var str)
-        | all isDigit str
-        = Right $ toDyn $ IntBox $ (read str)
-interpExpr' (Expr.Var str)
-        | Just dyn <- Map.lookup str dictionary
-        = Right $ dyn
-        | otherwise
-        = Left $ "can not find : " ++ show str
-interpExpr' (Expr.App e1 e2) = do
-        r1 <- interpExpr' e1
-        r2 <- interpExpr' e2
-        case dynApply r1 r2 of
-           Nothing -> Left "apply failed"
-           Just res -> return res
+interpExpr' :: ExprH -> Either String Dynamic
+interpExpr' (LitH str) = Right $ toDyn $ NameBox $ TH.mkName str
+interpExpr' (VarH str) 
+  | all isDigit str                   = Right $ toDyn $ IntBox $ read str
+  | Just dyn <- lookup str dictionary = Right dyn
+  | otherwise                         = Left $ "can not find : " ++ show str
+interpExpr' (AppH e1 e2) = dynApplyMsg (interpExpr' e1) (interpExpr' e2)
+  
+dynApplyMsg :: Either String Dynamic -> Either String Dynamic -> Either String Dynamic
+dynApplyMsg f x = liftM2 dynApply f x >>= maybe (Left "apply failed") Right
 
 --------------------------------------------------------------
 
