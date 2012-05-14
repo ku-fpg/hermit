@@ -5,7 +5,7 @@
 -- Placeholder for new prims
 module Language.HERMIT.Primitive.Core where
 
-import GhcPlugins hiding ((<>))
+import GhcPlugins
 import qualified Data.Map as Map
 
 import Language.KURE

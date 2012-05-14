@@ -11,10 +11,11 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv as Env
 import Language.HERMIT.External
 
-externals :: External
-externals = external "inline" (promoteR inline)
-        [ "(Var n) ==> <defn of n>, fails otherwise"
-        ]
+externals :: [External]
+externals = [ 
+              external "inline" (promoteR inline)
+                [ "(Var n) ==> <defn of n>, fails otherwise" ]
+            ]  
 
 -- | The implementation of inline, an important transformation.
 -- This *only* works on a Var of the given name. It can trivially

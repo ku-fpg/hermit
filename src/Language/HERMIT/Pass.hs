@@ -83,9 +83,9 @@ ppProgram = bindsOnlyPass printBinds
 printBinds :: CoreProgram -> CoreM CoreProgram
 printBinds binds  = do
   putMsg $ pprCoreBindings binds
-  return $ binds
+  return binds
 
 writeProgram :: FilePath -> ModGuts -> CoreM ModGuts
 writeProgram filename =
-    bindsOnlyPass (\binds -> do liftIO $ writeFile filename $ showSDoc $ pprCoreBindings binds
-                                return binds)
+    bindsOnlyPass (\ binds -> do liftIO $ writeFile filename $ showSDoc $ pprCoreBindings binds
+                                 return binds)

@@ -1,20 +1,13 @@
 {-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 
-module Language.HERMIT.External
-        ( module Language.HERMIT.External
-        , (<>)
-        ) where
+module Language.HERMIT.External where
 
-import GhcPlugins hiding ((<>))
-
-import Language.KURE
-
-import Data.Dynamic
-import Data.Monoid
-import Language.HERMIT.HermitKure
-import Language.HERMIT.HermitMonad
-import qualified Language.Haskell.TH as TH
 import Data.Map hiding (map)
+import Data.Dynamic
+
+import qualified Language.Haskell.TH as TH
+
+import Language.HERMIT.HermitKure
 
 -----------------------------------------------------------------
 
@@ -26,35 +19,25 @@ data External = External
         , externFun  :: Dynamic
         , externHelp :: ExternalHelp
         }
-    | Externals [External]
 
 external :: Extern a => ExternalName -> a -> ExternalHelp -> External
 external nm fn help = External
         { externName = nm
-        , externFun = toDyn (box fn)
+        , externFun  = toDyn (box fn)
         , externHelp = map ("  " ++) help
         }
 
-toDictionary :: External -> Map ExternalName Dynamic
-toDictionary = fromListWithKey (\ k _ _ -> error $ "HERMIT Command Redefined: " ++ k) . toD
+toDictionary :: [External] -> Map ExternalName Dynamic
+toDictionary = fromListWithKey (\ k _ _ -> error $ "HERMIT Command Redefined: " ++ k) . map toD
   where
-         toD :: External -> [(ExternalName,Dynamic)]
-         toD (External nm fn help) = [(nm,fn)]
-         toD (Externals exts)      = concatMap toD exts
+         toD :: External -> (ExternalName,Dynamic)
+         toD (External nm fn _) = (nm,fn)
 
-toHelp :: External -> Map ExternalName ExternalHelp
-toHelp = fromList . toH
+toHelp :: [External] -> Map ExternalName ExternalHelp
+toHelp = fromList . map toH
   where
-         toH :: External -> [(ExternalName,ExternalHelp)]
-         toH (External nm fn help) = [(nm,mkHelp nm fn help)]
-         toH (Externals exts)      = concatMap toH exts
-
-         mkHelp :: ExternalName -> Dynamic -> ExternalHelp -> ExternalHelp
-         mkHelp nm fn help = (nm ++ " :: " ++ show (dynTypeRep fn)) : help
-
-instance Monoid External where
-    mempty      = Externals []
-    mappend a b = Externals [a,b]
+         toH :: External -> (ExternalName,ExternalHelp)
+         toH (External nm fn help) = (nm, (nm ++ " :: " ++ show (dynTypeRep fn)) : help)
 
 -----------------------------------------------------------------
 

@@ -2,15 +2,17 @@
 
 module Language.HERMIT.Primitive.Case where
 
-import GhcPlugins hiding ((<>))
+import GhcPlugins
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 import Language.KURE
 
-externals :: External
-externals = external "caseReduce" (promoteR caseReduce) [ "case-of-known-constructor" ]
-
+externals :: [External]
+externals = [
+              external "caseReduce" (promoteR caseReduce) [ "case-of-known-constructor" ]
+            ]
+              
 -- | Case-of-known-constructor rewrite
 caseReduce :: RewriteH CoreExpr
 caseReduce = rewrite $ \ _c e -> case e of

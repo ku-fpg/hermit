@@ -3,7 +3,7 @@
 -- Placeholder for new prims
 module Language.HERMIT.Primitive.New where
 
-import GhcPlugins hiding ((<>))
+import GhcPlugins
 import qualified Data.Map as Map
 import qualified Data.List as List
 
@@ -24,34 +24,29 @@ import qualified Language.Haskell.TH as TH
 promoteR'  :: (Term a) => RewriteH a -> RewriteH (Generic a)
 promoteR' rr = rewrite $ \ c e ->  liftA inject ( maybe (fail "argument is not an expr") (apply rr c)  (retract e))
 
-externals :: External
-externals = external "eta-reduce" (promoteR eta_reduce)
-                [ "(\\ v -> E1 v) ==> E1, fails otherwise"
-                ]
-         <> external "eta-expand" (promoteR' . eta_expand)
-                [ "'eta-expand v' performs E1 ==> (\\ v -> E1 v), fails otherwise"
-                ]
-         <> external "let-intro" (promoteR' . let_intro)
-                [ "'let-intro v' performs E1 ==> (let v = E1 in v)"
-                ]
-         <> external "subst" (promoteR subst)
+externals :: [External]
+externals = 
+         [
+           external "eta-reduce" (promoteR eta_reduce)
+                [ "(\\ v -> E1 v) ==> E1, fails otherwise" ]
+         , external "eta-expand" (promoteR' . eta_expand)
+                [ "'eta-expand v' performs E1 ==> (\\ v -> E1 v), fails otherwise" ]
+         , external "let-intro" (promoteR' . let_intro)
+                [ "'let-intro v' performs E1 ==> (let v = E1 in v)" ]
+         , external "subst" (promoteR subst)
                 [ "(let v = E1 in E2) ==> E2[E1/v], fails otherwise"
-                , "condition: let is not-recursive"
-                ]
-         <> external "dce" (promoteR dce)
+                , "condition: let is not-recursive" ]
+         , external "dce" (promoteR dce)
                 [ "dead code elimination removes a let. (let v = E1 in E2) ==> E2, if v is not free in E2,  fails otherwise"
-                , "condition: let is not-recursive"
-                ]
-         <> external "var" (\ nm -> promoteR . var nm . extractR)
-                [ "'var <v>' applies a rewrite to all <v>"
-                ]
-         <> external "info" (promoteT info)
-                [ "tell me what you know about this expression or binding"
-                ]
-         <> external "freevars" (promoteT freeVarsQuery)
-                [ "List the free variables in this expression."
-                ]
-
+                , "condition: let is not-recursive" ]
+         , external "var" (\ nm -> promoteR . var nm . extractR)
+                [ "'var <v>' applies a rewrite to all <v>" ]
+         , external "info" (promoteT info)
+                [ "tell me what you know about this expression or binding" ]
+         , external "freevars" (promoteT freeVarsQuery)
+                [ "List the free variables in this expression." ]
+         ]
+           
 eta_reduce :: RewriteH CoreExpr
 eta_reduce = rewrite $ \ c e -> case e of
         (Lam v1 (App e1 (Var v2)))

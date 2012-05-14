@@ -1,35 +1,31 @@
-{-# LANGUAGE FlexibleInstances, GADTs #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Language.HERMIT.CommandLine where
 
 import GhcPlugins
 
-import Language.KURE
-
 import Data.Char
 
 import Language.HERMIT.HermitExpr
-import Language.HERMIT.HermitEnv
-import Language.HERMIT.HermitMonad
 import Language.HERMIT.HermitKure
 import Language.HERMIT.Dictionary
 import Language.HERMIT.Kernel
 
 commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
-commandLine gets modGuts = runCommands (liftIO getCmd) (liftIO.printKernelOutput) modGuts
+commandLine gets modGuts = runCommands (liftIO getCommand) (liftIO.printKernelOutput) modGuts
   where
-    getCmd :: IO KernelCommand
-    getCmd = do maybeLine <- gets
-                case maybeLine of
-                  Nothing            -> return Exit
-                  Just ('-':'-':msg) -> return (Message msg)
-                  Just line          -> if all isSpace line 
-                                         then getCmd
-                                         else case parseExprH line of
-                                                Left  msg  -> putStrLn ("parse failure: " ++ msg) >> getCmd
-                                                Right expr -> case interpExprH expr of
-                                                                Left msg  -> putStrLn msg >> getCmd
-                                                                Right cmd -> return cmd
+    getCommand :: IO KernelCommand
+    getCommand = do maybeLine <- gets
+                    case maybeLine of
+                      Nothing            -> return Exit
+                      Just ('-':'-':msg) -> return (Message msg)
+                      Just line          -> if all isSpace line
+                                             then getCommand
+                                             else case parseExprH line of
+                                                    Left  msg  -> putStrLn ("parse failure: " ++ msg) >> getCommand
+                                                    Right expr -> case interpExprH expr of
+                                                                    Left msg  -> putStrLn msg >> getCommand
+                                                                    Right cmd -> return cmd
 
 printKernelOutput :: KernelOutput -> IO ()
 printKernelOutput (ErrorMsg msg)    = putStrLn msg

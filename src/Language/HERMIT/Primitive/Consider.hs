@@ -18,10 +18,11 @@ import qualified Language.Haskell.TH as TH
 
 import Debug.Trace
 
-externals :: External
-externals = external "consider" (\ nm -> consider nm `composeL` promoteL)
-        [ "'consider <v>' focuses into the rhs of the binding <v>"
-        ]
+externals :: [External]
+externals = [ 
+              external "consider" (\ nm -> consider nm `composeL` promoteL)
+                [ "'consider <v>' focuses into the rhs of the binding <v>"]
+            ]  
 
 -- Focus on the Rhs of a bindings
 consider :: TH.Name -> LensH (Generic CoreExpr) CoreExpr
