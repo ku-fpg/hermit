@@ -38,14 +38,15 @@ Library
        Language.HERMIT.HermitExpr
        Language.HERMIT.Kernel
 
-       Language.HERMIT.Primitive.Case
+       Language.HERMIT.Primitive.Command
+       Language.HERMIT.Primitive.Kure
        Language.HERMIT.Primitive.Consider
-       Language.HERMIT.Primitive.Core
        Language.HERMIT.Primitive.Inline
-       Language.HERMIT.Primitive.New
-       Language.HERMIT.Primitive.Local
+       Language.HERMIT.Primitive.Case
        Language.HERMIT.Primitive.Subst
-
+       Language.HERMIT.Primitive.Local
+       Language.HERMIT.Primitive.New
+       Language.HERMIT.Primitive.Core
 
   Other-modules:
        Language.Core.Quote

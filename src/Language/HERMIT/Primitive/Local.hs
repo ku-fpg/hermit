@@ -1,5 +1,3 @@
-{-# LANGUAGE TypeFamilies, FlexibleInstances #-}
-
 -- Andre Santos' Local Transformations (Ch 3 in his dissertation)
 module Language.HERMIT.Primitive.Local where
 
@@ -59,12 +57,12 @@ not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
 ------------------------------------------------------------------------------
 
 beta_reduce :: RewriteH CoreExpr
-beta_reduce = rewrite $ \ c e -> case e of
-        (App (Lam v e1) e2) -> return (Let (NonRec v e2) e1)
+beta_reduce = rewrite $ \ _ e -> case e of
+        App (Lam v e1) e2 -> return $ Let (NonRec v e2) e1
         _ -> fail "beta_reduce failed. Not applied to an App."
 
 beta_expand :: RewriteH CoreExpr
-beta_expand = rewrite $ \ c e -> case e of
-        (Let (NonRec v e2) e1) -> return (App (Lam v e1) e2)
+beta_expand = rewrite $ \ _ e -> case e of
+        Let (NonRec v e2) e1 -> return $ App (Lam v e1) e2
         _ -> fail "beta_expand failed. Not applied to a NonRec Let."
 

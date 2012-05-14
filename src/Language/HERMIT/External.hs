@@ -8,6 +8,7 @@ import Data.Dynamic
 import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.HermitKure
+import Language.HERMIT.Kernel
 
 -----------------------------------------------------------------
 
@@ -85,5 +86,19 @@ instance Extern (LensH Core Core) where
     type Box (LensH Core Core) = LensCoreCoreBox
     box i = LensCoreCoreBox i
     unbox (LensCoreCoreBox i) = i
+
+data KernelCommandBox = KernelCommandBox KernelCommand deriving Typeable
+
+instance Extern KernelCommand where
+    type Box KernelCommand = KernelCommandBox
+    box i = KernelCommandBox i
+    unbox (KernelCommandBox i) = i
+
+data Help = Help deriving Typeable
+
+instance Extern Help where
+    type Box Help = Help
+    box i = i
+    unbox i = i
 
 -----------------------------------------------------------------
