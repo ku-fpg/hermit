@@ -4,8 +4,7 @@
 module Language.HERMIT.Primitive.New where
 
 import GhcPlugins
-import qualified Data.Map as Map
-import qualified Data.List as List
+import Data.List (nub)
 
 import Control.Applicative
 
@@ -22,8 +21,8 @@ import Language.HERMIT.HermitEnv as Env
 import qualified Language.Haskell.TH as TH
 
 
-promoteR'  :: (Term a) => RewriteH a -> RewriteH (Generic a)
-promoteR' rr = rewrite $ \ c e ->  liftA inject ( maybe (fail "argument is not an expr") (apply rr c)  (retract e))
+promoteR'  :: Term a => RewriteH a -> RewriteH (Generic a)
+promoteR' rr = rewrite $ \ c e ->  liftA inject (maybe (fail "argument is not an expr") (apply rr c)  (retract e))
 
 externals :: [External]
 externals =
@@ -52,32 +51,28 @@ externals =
 
 eta_reduce :: RewriteH CoreExpr
 eta_reduce = rewrite $ \ c e -> case e of
-        (Lam v1 (App f (Var v2))) | v1 == v2 -> do
-                                        freesinFunction <- apply freeVarsT c f
-                                        case (v1 `elem` freesinFunction) of
-                                          True -> fail $ "eta_reduce failed. " ++ (showSDoc (ppr v1)) ++
-                                                 " is free in the function being applied."
-                                          False -> return f
+        Lam v1 (App f (Var v2)) | v1 == v2 -> do freesinFunction <- apply freeVarsT c f
+                                                 if v1 `elem` freesinFunction
+                                                  then fail $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++
+                                                              " is free in the function being applied."
+                                                  else return f
         _ -> fail "eta_reduce failed"
 
 eta_expand :: TH.Name -> RewriteH CoreExpr
-eta_expand nm = rewrite $ \ c e -> do
+eta_expand nm = rewrite $ \ _ e -> do
         -- First find the type of of e
         let ty = exprType e
-        liftIO $ putStrLn (showSDoc (ppr ty))
+        liftIO $ putStrLn $ showSDoc $ ppr ty
         case splitAppTy_maybe ty of
            Nothing -> fail "eta-expand failed (expression is not an App)"
-           Just (f_ty,a_ty) -> do
+           Just (_ , a_ty) -> do
              v1 <- newVarH nm a_ty
-             liftIO $ putStr (showSDoc (ppr v1))
+             liftIO $ putStr $ showSDoc $ ppr v1
              return $ Lam v1 (App e (Var v1))
 
 let_intro ::  TH.Name -> RewriteH CoreExpr
-let_intro nm = rewrite $ \ c e -> do
-        -- First find the type of of e
-        let ty = exprType e
-        letvar <- newVarH nm ty
-        return $ Let (NonRec letvar e) (Var letvar)
+let_intro nm = rewrite $ \ _ e -> do letvar <- newVarH nm (exprType e)
+                                     return $ Let (NonRec letvar e) (Var letvar)
 
 -- | 'subst' assumes that the input expression is of the form 'let v = E1 in E2'.
 subst :: RewriteH CoreExpr
@@ -87,9 +82,9 @@ subst = rewrite $ \ c e -> case e of
 -- dead code elimination removes a let.
 -- (let v = E1 in E2) => E2, if v is not free in E2
 dce :: RewriteH CoreExpr
-dce = rewrite $ \ c e -> case e of
-        Let (NonRec n e1) e2 | (n `notElem` freeIds e2) ->
-                   return $ e2
+dce = rewrite $ \ _ e -> case e of
+        Let (NonRec n e1) e2 | n `notElem` freeIds e2 -> return e2
+        -- Neil: Should there not be a case here for when n `elem` freeIds e2?
         _ -> fail "DCE failed. Not applied to a NonRec Let."
 
 -- Others
@@ -104,33 +99,28 @@ info = liftT (("type ::= " ++) . showSDoc . ppr . exprType)
 
 -- output a list of all free variables in the Expr.
 freeVarsQuery :: TranslateH CoreExpr String
-freeVarsQuery =
-    fmap (\ frees -> "FreeVars are: " ++ (show (map (showSDoc . ppr) (List.nub frees)))) freeVarsT
+freeVarsQuery = (("FreeVars are: " ++) . show . map (showSDoc.ppr) . nub) <$> freeVarsT
 
 freeVarsT :: TranslateH CoreExpr [Id]
-freeVarsT = translate $ \ _ e -> apply (crushtdT (tryT [] (promoteT freeVarsExprT))) initHermitEnv (inject e)
+freeVarsT = translate $ \ _ e -> apply (crushtdT $ tryT [] $ promoteT freeVarsExprT) initHermitEnv (inject e)
 
 freeVarsExprT :: TranslateH CoreExpr [Id]
-freeVarsExprT = translate $  \ c e -> case e of
-               Var n -> case (lookupHermitBinding n c) of
-                         Just _ -> return []
-                         Nothing -> return [n]
-               _ -> return []
+freeVarsExprT = translate $ \ c e -> return $ case e of
+                                                Var n | Nothing <- lookupHermitBinding n c  -> [n]
+                                                _                                           -> []
 
 exprTypeQueryT :: TranslateH CoreExpr String
-exprTypeQueryT = translate $ \ c exp ->
-          let typeString = case exp of
-                             Var n -> "Var"
-                             Type n -> "Type"
-                             Lit i -> "Lit"
-                             App e1 e2 -> "App"
-                             Lam b e -> "Lam"
-                             Let bds e -> "Let"
-                             Case e b ty alts -> "Case"
-                             Cast e cast -> "Cast"
-                             Tick tk e -> "Tick"
-                             Coercion i -> "Coercion"
-          in do return typeString
+exprTypeQueryT = liftT $ \ e -> case e of
+                                  Var _        -> "Var"
+                                  Type _       -> "Type"
+                                  Lit _        -> "Lit"
+                                  App _ _      -> "App"
+                                  Lam _ _      -> "Lam"
+                                  Let _ _      -> "Let"
+                                  Case _ _ _ _ -> "Case"
+                                  Cast _ _     -> "Cast"
+                                  Tick _ _     -> "Tick"
+                                  Coercion _   -> "Coercion"
 
 var :: TH.Name -> RewriteH CoreExpr -> RewriteH CoreExpr
 var _ n = idR -- bottomupR (varR (\ n -> ()) ?
