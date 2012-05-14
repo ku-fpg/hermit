@@ -44,6 +44,7 @@ Library
        Language.HERMIT.Primitive.Inline
        Language.HERMIT.Primitive.New
        Language.HERMIT.Primitive.Local
+       Language.HERMIT.Primitive.Subst
 
 
   Other-modules:

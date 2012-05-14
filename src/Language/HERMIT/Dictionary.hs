@@ -26,15 +26,17 @@ import qualified Language.HERMIT.Primitive.New as New
 import qualified Language.HERMIT.Primitive.Inline as Inline
 import qualified Language.HERMIT.Primitive.Consider as Consider
 import qualified Language.HERMIT.Primitive.Local as Local
+import qualified Language.HERMIT.Primitive.Subst as Subst
 
 all_externals :: [External]
-all_externals = 
+all_externals =
         -- values defined elsewhere
         New.externals ++
         Case.externals ++
         Inline.externals ++
         Consider.externals ++
         Local.externals ++
+        Subst.externals ++
         -- locally defined values
         [ external "allbu"      (allbuR :: RewriteH Core -> RewriteH Core)
             [ "promotes a rewrite to operate over an entire tree in bottom-up order, requiring success at each node" ]
@@ -110,12 +112,12 @@ runInterp dyn (Interp f : rest) bad = maybe (runInterp dyn rest bad) f (fromDyna
 
 interpExpr' :: ExprH -> Either String Dynamic
 interpExpr' (LitH str) = Right $ toDyn $ NameBox $ TH.mkName str
-interpExpr' (VarH str) 
+interpExpr' (VarH str)
   | all isDigit str                   = Right $ toDyn $ IntBox $ read str
   | Just dyn <- lookup str dictionary = Right dyn
   | otherwise                         = Left $ "can not find : " ++ show str
 interpExpr' (AppH e1 e2) = dynAppMsg (interpExpr' e1) (interpExpr' e2)
-  
+
 dynAppMsg :: Either String Dynamic -> Either String Dynamic -> Either String Dynamic
 dynAppMsg f x = liftM2 dynApply f x >>= maybe (Left "apply failed") Right
 

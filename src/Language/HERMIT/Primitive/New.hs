@@ -15,6 +15,7 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Core
+import Language.HERMIT.Primitive.Subst
 
 import Language.HERMIT.HermitEnv as Env
 
@@ -25,7 +26,7 @@ promoteR'  :: (Term a) => RewriteH a -> RewriteH (Generic a)
 promoteR' rr = rewrite $ \ c e ->  liftA inject ( maybe (fail "argument is not an expr") (apply rr c)  (retract e))
 
 externals :: [External]
-externals = 
+externals =
          [
            external "eta-reduce" (promoteR eta_reduce)
                 [ "(\\ v -> E1 v) ==> E1, fails otherwise" ]
@@ -45,13 +46,18 @@ externals =
                 [ "tell me what you know about this expression or binding" ]
          , external "freevars" (promoteT freeVarsQuery)
                 [ "List the free variables in this expression." ]
+         , external "expr-type" (promoteT exprTypeQueryT)
+                [ "List the type (Constructor) for this expression."]
          ]
-           
+
 eta_reduce :: RewriteH CoreExpr
 eta_reduce = rewrite $ \ c e -> case e of
-        (Lam v1 (App e1 (Var v2)))
-                -- TODO: check that v1/v2 is not free in e1
-                | v1 == v2 -> return e1
+        (Lam v1 (App f (Var v2))) | v1 == v2 -> do
+                                        freesinFunction <- apply freeVarsT c f
+                                        case (v1 `elem` freesinFunction) of
+                                          True -> fail $ "eta_reduce failed. " ++ (showSDoc (ppr v1)) ++
+                                                 " is free in the function being applied."
+                                          False -> return f
         _ -> fail "eta_reduce failed"
 
 eta_expand :: TH.Name -> RewriteH CoreExpr
@@ -60,7 +66,7 @@ eta_expand nm = rewrite $ \ c e -> do
         let ty = exprType e
         liftIO $ putStrLn (showSDoc (ppr ty))
         case splitAppTy_maybe ty of
-           Nothing -> fail "eta-expand failed (not function type)"
+           Nothing -> fail "eta-expand failed (expression is not an App)"
            Just (f_ty,a_ty) -> do
              v1 <- newVarH nm a_ty
              liftIO $ putStr (showSDoc (ppr v1))
@@ -110,6 +116,21 @@ freeVarsExprT = translate $  \ c e -> case e of
                          Just _ -> return []
                          Nothing -> return [n]
                _ -> return []
+
+exprTypeQueryT :: TranslateH CoreExpr String
+exprTypeQueryT = translate $ \ c exp ->
+          let typeString = case exp of
+                             Var n -> "Var"
+                             Type n -> "Type"
+                             Lit i -> "Lit"
+                             App e1 e2 -> "App"
+                             Lam b e -> "Lam"
+                             Let bds e -> "Let"
+                             Case e b ty alts -> "Case"
+                             Cast e cast -> "Cast"
+                             Tick tk e -> "Tick"
+                             Coercion i -> "Coercion"
+          in do return typeString
 
 var :: TH.Name -> RewriteH CoreExpr -> RewriteH CoreExpr
 var _ n = idR -- bottomupR (varR (\ n -> ()) ?
