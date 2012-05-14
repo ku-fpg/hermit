@@ -109,8 +109,8 @@ runInterp dyn (Interp f : rest) bad = maybe (runInterp dyn rest bad) f (fromDyna
 --------------------------------------------------------------------------
 
 interpExpr' :: ExprH -> Either String Dynamic
-interpExpr' (LitH str) = Right $ toDyn $ NameBox $ TH.mkName str
-interpExpr' (VarH str) 
+interpExpr' (CmdName str) = Right $ toDyn $ NameBox $ TH.mkName str
+interpExpr' (SrcName str)
   | all isDigit str                   = Right $ toDyn $ IntBox $ read str
   | Just dyn <- lookup str dictionary = Right dyn
   | otherwise                         = Left $ "can not find : " ++ show str

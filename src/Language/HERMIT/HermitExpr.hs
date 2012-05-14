@@ -11,8 +11,8 @@ import Data.Char
 
 -- Our local version of Expr, for things parsed from string or JSON structures.
 data ExprH
-        = VarH String                   -- variable names (refer to source code)
-        | LitH String                   -- commands (to be looked up in Dictionary)
+        = SrcName String                   -- variable names (refer to source code)
+        | CmdName String                   -- commands (to be looked up in Dictionary)
         | AppH ExprH ExprH              -- application
         deriving Show
 
@@ -62,11 +62,11 @@ parseExprsH' =
 
 parseExprH0 :: ReadS ExprH
 parseExprH0 = \ inp ->
-        [ (VarH str,inp1)
+        [ (SrcName str,inp1)
         | (str,inp1) <- parseToken inp
         , all isId str
         ] ++
-        [ (LitH str,inp2)
+        [ (CmdName str,inp2)
         | ("'",inp1) <- parseToken inp
         , (str,inp2) <- parseToken inp1
         ] ++
