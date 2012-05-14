@@ -109,11 +109,11 @@ runInterp dyn (Interp f : rest) bad = maybe (runInterp dyn rest bad) f (fromDyna
 --------------------------------------------------------------------------
 
 interpExpr' :: ExprH -> Either String Dynamic
-interpExpr' (CmdName str) = Right $ toDyn $ NameBox $ TH.mkName str
-interpExpr' (SrcName str)
+interpExpr' (SrcName str) = Right $ toDyn $ NameBox $ TH.mkName str
+interpExpr' (CmdName str)
   | all isDigit str                   = Right $ toDyn $ IntBox $ read str
   | Just dyn <- lookup str dictionary = Right dyn
-  | otherwise                         = Left $ "can not find : " ++ show str
+  | otherwise                         = Left $ "Unrecognised command: " ++ show str
 interpExpr' (AppH e1 e2) = dynAppMsg (interpExpr' e1) (interpExpr' e2)
   
 dynAppMsg :: Either String Dynamic -> Either String Dynamic -> Either String Dynamic
