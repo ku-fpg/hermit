@@ -80,8 +80,7 @@ help = concatMap snd $ toList $ toHelp all_externals
 
 ------------------------------------------------------------------------------------
 
-data KernelCommandBox = KernelCommandBox KernelCommand
-        deriving (Typeable)
+data KernelCommandBox = KernelCommandBox KernelCommand deriving Typeable
 
 instance Extern KernelCommand where
     type Box KernelCommand = KernelCommandBox
@@ -129,12 +128,9 @@ interpExpr' (VarH str)
   | all isDigit str                   = Right $ toDyn $ IntBox $ read str
   | Just dyn <- lookup str dictionary = Right dyn
   | otherwise                         = Left $ "can not find : " ++ show str
-interpExpr' (AppH e1 e2) = dynApplyMsg (interpExpr' e1) (interpExpr' e2)
+interpExpr' (AppH e1 e2) = dynAppMsg (interpExpr' e1) (interpExpr' e2)
   
-dynApplyMsg :: Either String Dynamic -> Either String Dynamic -> Either String Dynamic
-dynApplyMsg f x = liftM2 dynApply f x >>= maybe (Left "apply failed") Right
+dynAppMsg :: Either String Dynamic -> Either String Dynamic -> Either String Dynamic
+dynAppMsg f x = liftM2 dynApply f x >>= maybe (Left "apply failed") Right
 
---------------------------------------------------------------
-
-
-
+--------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, TypeFamilies, DeriveDataTypeable, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 
 module Language.HERMIT.External
         ( module Language.HERMIT.External
@@ -18,37 +18,43 @@ import Data.Map hiding (map)
 
 -----------------------------------------------------------------
 
+type ExternalName = String
+type ExternalHelp = [String]
+
 data External = External
-        { externName :: String
+        { externName :: ExternalName
         , externFun  :: Dynamic
-        , externHelp :: [String]
+        , externHelp :: ExternalHelp
         }
     | Externals [External]
 
-toDictionary :: External -> Map String Dynamic
-toDictionary = fromListWithKey (\ k _ _ -> error $ "HERMIT Command Redefined: " ++ k) . toD
-  where
-         toD (External nm fn help) = [(nm,fn)]
-         toD (Externals exts)      = concatMap toD exts
-
-toHelp :: External -> Map String [String]
-toHelp = fromList . toH
-  where
-         toH (External nm fn help) = [(nm,mkHelp nm fn help)]
-         toH (Externals exts)      = concatMap toH exts
-
-         mkHelp nm fn help = (nm ++ " :: " ++ show (dynTypeRep fn)) : help
-
-instance Monoid External where
-    mempty      = Externals []
-    mappend a b = Externals [a,b]
-
-external :: Extern a => String -> a -> [String] -> External
+external :: Extern a => ExternalName -> a -> ExternalHelp -> External
 external nm fn help = External
         { externName = nm
         , externFun = toDyn (box fn)
         , externHelp = map ("  " ++) help
         }
+
+toDictionary :: External -> Map ExternalName Dynamic
+toDictionary = fromListWithKey (\ k _ _ -> error $ "HERMIT Command Redefined: " ++ k) . toD
+  where
+         toD :: External -> [(ExternalName,Dynamic)]
+         toD (External nm fn help) = [(nm,fn)]
+         toD (Externals exts)      = concatMap toD exts
+
+toHelp :: External -> Map ExternalName ExternalHelp
+toHelp = fromList . toH
+  where
+         toH :: External -> [(ExternalName,ExternalHelp)]
+         toH (External nm fn help) = [(nm,mkHelp nm fn help)]
+         toH (Externals exts)      = concatMap toH exts
+
+         mkHelp :: ExternalName -> Dynamic -> ExternalHelp -> ExternalHelp
+         mkHelp nm fn help = (nm ++ " :: " ++ show (dynTypeRep fn)) : help
+
+instance Monoid External where
+    mempty      = Externals []
+    mappend a b = Externals [a,b]
 
 -----------------------------------------------------------------
 
