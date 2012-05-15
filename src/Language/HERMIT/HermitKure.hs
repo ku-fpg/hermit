@@ -1,13 +1,29 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections #-}
 
-module Language.HERMIT.HermitKure 
+module Language.HERMIT.HermitKure
        (
          TranslateH
        , RewriteH
        , LensH
        , Core(..)
-       , pathT  
-       ) 
+       -- Scoping Combinators
+       , listBindT
+       , nonRecT
+       , recT
+       , altT
+       , varT
+       , litT
+       , appT
+       , lamT
+       , letT
+       , caseT
+       , castT
+       , tickT
+       , typeT
+       , coercionT
+       -- Useful Translations
+       , pathT
+       )
 where
 
 import GhcPlugins hiding (empty)
