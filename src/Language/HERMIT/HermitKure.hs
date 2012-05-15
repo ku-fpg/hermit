@@ -21,6 +21,8 @@ module Language.HERMIT.HermitKure
        , tickT
        , typeT
        , coercionT
+       , letNonRecT
+       , letRecT
        -- Useful Translations
        , pathT
        )
@@ -44,11 +46,11 @@ type LensH a b = Lens HermitEnv HermitM a b
 
 ---------------------------------------------------------------------
 
--- | NOTE: 'Type' is not included in the generic datatype. 
+-- | NOTE: 'Type' is not included in the generic datatype.
 --   However, we could have included it and provided the facility for descending into types.
---   We have not done so because 
---     (a) we do not need that functionality, and 
---     (b) the types are complicated and we're not sure that we understand them. 
+--   We have not done so because
+--     (a) we do not need that functionality, and
+--     (b) the types are complicated and we're not sure that we understand them.
 
 data Core = ModGutsCore  ModGuts
           | ProgramCore  CoreProgram
@@ -132,8 +134,8 @@ instance Term CoreProgram where
   type Generic CoreProgram = Core
 
 instance WalkerR HermitEnv HermitM CoreProgram where
-  allR rr = listBindT [] (extractR rr) (extractR rr) (:) 
-  
+  allR rr = listBindT [] (extractR rr) (extractR rr) (:)
+
   anyR rr = consBindT' (attemptR $ extractR rr) (attemptR $ extractR rr) (attemptAny2 (:))
 
 instance Monoid b => WalkerT HermitEnv HermitM CoreProgram b where
@@ -169,7 +171,7 @@ instance Term CoreBind where
   type Generic CoreBind = Core
 
 instance WalkerR HermitEnv HermitM CoreBind where
-  allR rr =    nonRecT (extractR rr) NonRec 
+  allR rr =    nonRecT (extractR rr) NonRec
             <+ recT (const $ extractR rr) Rec
 
   anyR rr =    nonRecT (extractR rr) NonRec
@@ -251,9 +253,9 @@ instance Term CoreExpr where
   type Generic CoreExpr = Core
 
 instance WalkerR HermitEnv HermitM CoreExpr where
-  
-  allR rr =     varT Var 
-             <+ litT Lit 
+
+  allR rr =     varT Var
+             <+ litT Lit
              <+ appT (extractR rr) (extractR rr) App
              <+ lamT (extractR rr) Lam
              <+ letT (extractR rr) (extractR rr) Let
@@ -267,7 +269,7 @@ instance WalkerR HermitEnv HermitM CoreExpr where
   anyR rr =     appT' (attemptR $ extractR rr) (attemptR $ extractR rr) (attemptAny2 App)
              <+ lamT (extractR rr) Lam
              <+ letT' (attemptR $ extractR rr) (attemptR $ extractR rr) (attemptAny2 Let)
-             <+ caseT' (attemptR $ extractR rr) (const $ attemptR $ extractR rr) (\ b ty -> attemptAny1N (\ e alts -> Case e b ty alts)) 
+             <+ caseT' (attemptR $ extractR rr) (const $ attemptR $ extractR rr) (\ b ty -> attemptAny1N (\ e alts -> Case e b ty alts))
              <+ castT (extractR rr) Cast
              <+ tickT (extractR rr) Tick
              <+ fail "anyR failed for all Expr constructors"
@@ -293,7 +295,7 @@ instance WalkerL HermitEnv HermitM CoreExpr where
         <+ ( caseT exposeContextT (const idR) (\ cx v t alts -> (cx, \ e1 -> pure $ Case e1 v t alts) ) `composeL` promoteL )
         <+ ( castT exposeContextT             (\ cx c        -> (cx, \ e1 -> pure $ Cast e1 c) )        `composeL` promoteL )
         <+ ( tickT exposeContextT             (\ t cx        -> (cx, \ e1 -> pure $ Tick t e1) )        `composeL` promoteL )
-           
+
       1 -> ( appT idR exposeContextT          (\ e1 cx       -> (cx, \ e2 -> pure $ App e1 e2) )        `composeL` promoteL )
         <+ ( letT idR exposeContextT          (\ bd cx       -> (cx, \ e2 -> pure $ Let bd e2) )        `composeL` promoteL )
         <+ caseChooseL
@@ -364,7 +366,7 @@ caseT' exprT altnT f = translate $ \ c e -> case e of
                                                                      ]
          _ -> fail "no match for Case"
 
-caseT :: TranslateH CoreExpr a1 
+caseT :: TranslateH CoreExpr a1
       -> (Int -> TranslateH CoreAlt a2)          -- Int argument *starts* at 1.
       -> (a1 -> Id -> Type -> [a2] -> b)
       -> TranslateH CoreExpr b
@@ -392,6 +394,16 @@ coercionT f = liftMT $ \ e -> case e of
 
 ---------------------------------------------------------------------
 
+-- Some additional scoping combinators to export.
+
+letNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (Id -> a1 -> a2 -> b) -> TranslateH CoreExpr b
+letNonRecT t1 t2 f = letT (nonRecT t1 (,)) t2 (uncurry f)
+
+letRecT :: (Int -> TranslateH CoreExpr a1) -> TranslateH CoreExpr a2 -> ([(Id,a1)] -> a2 -> b) -> TranslateH CoreExpr b
+letRecT t1s t2 f = letT (recT t1s id) t2 f
+
+---------------------------------------------------------------------
+
 -- | pathT finds the current path.
 pathT :: TranslateH a ContextPath
 pathT = fmap hermitBindingPath contextT
@@ -409,21 +421,21 @@ missingChild n = fail ("There is no child number " ++ show n ++ ".")
 attemptAny2 :: (a -> b -> c) -> HermitM (Bool,a) -> HermitM (Bool,b) -> HermitM c
 attemptAny2 f mba1 mba2 = do (b1,a) <- mba1
                              (b2,b) <- mba2
-                             if b1 || b2 
-                              then return (f a b) 
+                             if b1 || b2
+                              then return (f a b)
                               else fail "anyR failed for both children."
-    
-attemptAnyN :: ([a] -> b) -> [HermitM (Bool,a)] -> HermitM b 
-attemptAnyN f mbas = do (bs,as) <- unzip <$> sequence mbas 
-                        if or bs 
-                         then return (f as) 
+
+attemptAnyN :: ([a] -> b) -> [HermitM (Bool,a)] -> HermitM b
+attemptAnyN f mbas = do (bs,as) <- unzip <$> sequence mbas
+                        if or bs
+                         then return (f as)
                          else fail ("anyR failed for all " ++ show (length bs) ++ " children.")
 
-attemptAny1N :: (a -> [b] -> c) -> HermitM (Bool,a) -> [HermitM (Bool,b)] -> HermitM c 
-attemptAny1N f mba mbas = do (b,a)   <- mba 
+attemptAny1N :: (a -> [b] -> c) -> HermitM (Bool,a) -> [HermitM (Bool,b)] -> HermitM c
+attemptAny1N f mba mbas = do (b,a)   <- mba
                              (bs,as) <- unzip <$> sequence mbas
-                             if or (b:bs) 
-                               then return (f a as) 
+                             if or (b:bs)
+                               then return (f a as)
                                else fail ("anyR failed for all " ++ show (1 + length bs) ++ " children.")
 
 ---------------------------------------------------------------------
