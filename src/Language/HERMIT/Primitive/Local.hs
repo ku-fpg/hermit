@@ -9,7 +9,7 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 
 externals :: [External]
-externals = 
+externals =
          [
            external "beta-reduce" (promoteR beta_reduce)
                      [ "((\\ v -> E1) E2) ==> let v = E2 in E1, fails otherwise"
@@ -47,10 +47,12 @@ externals =
                      [ "let v = ev in e ==> case ev of v -> e" ]
          , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox")
                      [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ]
-         , external "eta-expand" (promoteR $ not_defined "eta-expand")
-                     [ "e ==> \\x.e x" ]
+         , external "eta-reduce" (promoteR eta_reduce)
+                     [ "(\\ v -> E1 v) ==> E1, fails otherwise" ]
+         , external "eta-expand" (promoteR' . eta_expand)
+                     [ "'eta-expand v' performs E1 ==> (\\ v -> E1 v), fails otherwise" ]
          ]
-           
+
 not_defined :: String -> RewriteH CoreExpr
 not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
 
@@ -65,5 +67,26 @@ beta_expand :: RewriteH CoreExpr
 beta_expand = liftMT $ \ e -> case e of
         Let (NonRec v e2) e1 -> return $ App (Lam v e1) e2
         _ -> fail "beta_expand failed. Not applied to a NonRec Let."
+
+------------------------------------------------------------------------------
+
+eta_reduce :: RewriteH CoreExpr
+eta_reduce = rewrite $ \ c e -> case e of
+        Lam v1 (App f (Var v2)) | v1 == v2 -> do freesinFunction <- apply freeVarsT c f
+                                                 if v1 `elem` freesinFunction
+                                                  then fail $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++
+                                                              " is free in the function being applied."
+                                                  else return f
+        _ -> fail "eta_reduce failed"
+
+eta_expand :: TH.Name -> RewriteH CoreExpr
+eta_expand nm = liftMT $ \ e -> do
+        -- First find the type of of e
+        let ty = exprType e
+        case splitAppTy_maybe ty of
+           Nothing -> fail "eta-expand failed (expression is not an App)"
+           Just (_ , a_ty) -> do
+             v1 <- newVarH nm a_ty
+             return $ Lam v1 (App e (Var v1))
 
 ------------------------------------------------------------------------------

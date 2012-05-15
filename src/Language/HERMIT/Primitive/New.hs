@@ -27,11 +27,7 @@ promoteR' rr = rewrite $ \ c e ->  liftA inject (maybe (fail "argument is not an
 externals :: [External]
 externals =
          [
-           external "eta-reduce" (promoteR eta_reduce)
-                [ "(\\ v -> E1 v) ==> E1, fails otherwise" ]
-         , external "eta-expand" (promoteR' . eta_expand)
-                [ "'eta-expand v' performs E1 ==> (\\ v -> E1 v), fails otherwise" ]
-         , external "let-intro" (promoteR' . let_intro)
+           external "let-intro" (promoteR' . let_intro)
                 [ "'let-intro v' performs E1 ==> (let v = E1 in v)" ]
          , external "subst" (promoteR subst)
                 [ "(let v = E1 in E2) ==> E2[E1/v], fails otherwise"
@@ -48,27 +44,6 @@ externals =
          , external "expr-type" (promoteT exprTypeQueryT)
                 [ "List the type (Constructor) for this expression."]
          ]
-
-eta_reduce :: RewriteH CoreExpr
-eta_reduce = rewrite $ \ c e -> case e of
-        Lam v1 (App f (Var v2)) | v1 == v2 -> do freesinFunction <- apply freeVarsT c f
-                                                 if v1 `elem` freesinFunction
-                                                  then fail $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++
-                                                              " is free in the function being applied."
-                                                  else return f
-        _ -> fail "eta_reduce failed"
-
-eta_expand :: TH.Name -> RewriteH CoreExpr
-eta_expand nm = liftMT $ \ e -> do
-        -- First find the type of of e
-        let ty = exprType e
-        liftIO $ putStrLn $ showSDoc $ ppr ty
-        case splitAppTy_maybe ty of
-           Nothing -> fail "eta-expand failed (expression is not an App)"
-           Just (_ , a_ty) -> do
-             v1 <- newVarH nm a_ty
-             liftIO $ putStr $ showSDoc $ ppr v1
-             return $ Lam v1 (App e (Var v1))
 
 let_intro ::  TH.Name -> RewriteH CoreExpr
 let_intro nm = rewrite $ \ _ e -> do letvar <- newVarH nm (exprType e)
