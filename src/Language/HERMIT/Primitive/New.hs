@@ -59,7 +59,7 @@ eta_reduce = rewrite $ \ c e -> case e of
         _ -> fail "eta_reduce failed"
 
 eta_expand :: TH.Name -> RewriteH CoreExpr
-eta_expand nm = rewrite $ \ _ e -> do
+eta_expand nm = liftMT $ \ e -> do
         -- First find the type of of e
         let ty = exprType e
         liftIO $ putStrLn $ showSDoc $ ppr ty
@@ -82,7 +82,7 @@ subst = rewrite $ \ c e -> case e of
 -- dead code elimination removes a let.
 -- (let v = E1 in E2) => E2, if v is not free in E2
 dce :: RewriteH CoreExpr
-dce = rewrite $ \ _ e -> case e of
+dce = liftMT $ \ e -> case e of
         Let (NonRec n e1) e2 | n `notElem` freeIds e2 -> return e2
         -- Neil: Should there not be a case here for when n `elem` freeIds e2?
         _ -> fail "DCE failed. Not applied to a NonRec Let."
@@ -102,7 +102,7 @@ freeVarsQuery :: TranslateH CoreExpr String
 freeVarsQuery = (("FreeVars are: " ++) . show . map (showSDoc.ppr) . nub) <$> freeVarsT
 
 freeVarsT :: TranslateH CoreExpr [Id]
-freeVarsT = translate $ \ _ e -> apply (crushtdT $ tryT [] $ promoteT freeVarsExprT) initHermitEnv (inject e)
+freeVarsT = liftMT $ apply (crushtdT $ tryT [] $ promoteT freeVarsExprT) initHermitEnv . inject
 
 freeVarsExprT :: TranslateH CoreExpr [Id]
 freeVarsExprT = translate $ \ c e -> return $ case e of

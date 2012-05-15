@@ -13,7 +13,7 @@ externals = [
               
 -- | Case-of-known-constructor rewrite
 caseReduce :: RewriteH CoreExpr
-caseReduce = rewrite $ \ _ e -> case e of
+caseReduce = liftMT $ \ e -> case e of
     (Case s _ _ alts) -> case isDataCon s of
                             Nothing -> fail "caseReduce failed, not a DataCon"
                             Just (sc, fs) -> case [ (bs, rhs) | (DataAlt dc, bs, rhs) <- alts, sc == dc ] of

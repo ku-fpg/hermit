@@ -28,6 +28,8 @@ import qualified Language.HERMIT.Primitive.Subst as Subst
 import qualified Language.HERMIT.Primitive.Local as Local
 import qualified Language.HERMIT.Primitive.New as New
 
+--------------------------------------------------------------------------
+
 all_externals :: [External]
 all_externals =    Command.externals
                 ++ Kure.externals
@@ -44,7 +46,8 @@ dictionary = toDictionary all_externals
 help :: [String]
 help = concatMap snd $ toList $ toHelp all_externals
 
-------------------------------------------------------------------------------------
+--------------------------------------------------------------------------
+
 -- The union of all possible results from a "well-typed" commands, from this dictionary.
 
 interpExprH :: ExprH -> Either String KernelCommand

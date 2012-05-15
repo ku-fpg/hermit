@@ -129,7 +129,7 @@ instance WalkerL HermitEnv HermitM CoreProgram where
   chooseL n = missingChild n
 
 nilT' :: HermitM b -> TranslateH [a] b
-nilT' b = translate $ \ _ as -> if null as then b else fail "no match for nilT"
+nilT' b = liftMT $ \ as -> if null as then b else fail "no match for nilT"
 
 consBindT' :: TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH [CoreBind] b
 consBindT' t1 t2 f = translate $ \ c e -> case e of
@@ -305,12 +305,12 @@ instance WalkerL HermitEnv HermitM CoreExpr where
 
 -- Expr
 varT :: (Id -> b) -> TranslateH CoreExpr b
-varT f = translate $ \ _ e -> case e of
+varT f = liftMT $ \ e -> case e of
         Var n -> pure (f n)
         _     -> fail "no match for Var"
 
 litT :: (Literal -> b) -> TranslateH CoreExpr b
-litT f = translate $ \ _ e -> case e of
+litT f = liftMT $ \ e -> case e of
         Lit i -> pure (f i)
         _     -> fail "no match for Lit"
 
@@ -365,14 +365,14 @@ tickT tt f = translate $ \ c e -> case e of
         _          -> fail "no match for Tick"
 
 typeT :: (Type -> b) -> TranslateH CoreExpr b
-typeT f = translate $ \ _ e -> case e of
-                                 Type i -> pure (f i)
-                                 _      -> fail "no match for Type"
+typeT f = liftMT $ \ e -> case e of
+                            Type i -> pure (f i)
+                            _      -> fail "no match for Type"
 
 coercionT :: (Coercion -> b) -> TranslateH CoreExpr b
-coercionT f = translate $ \ _ e -> case e of
-                                     Coercion i -> pure (f i)
-                                     _          -> fail "no match for Coercion"
+coercionT f = liftMT $ \ e -> case e of
+                                Coercion i -> pure (f i)
+                                _          -> fail "no match for Coercion"
 
 ---------------------------------------------------------------------
 
