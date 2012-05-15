@@ -3,10 +3,17 @@ module Language.HERMIT.Primitive.Local where
 
 import GhcPlugins
 
+import Data.List (nub)
+import Control.Applicative
+
 import Language.KURE
 
 import Language.HERMIT.HermitKure
+import Language.HERMIT.HermitEnv as Env
 import Language.HERMIT.External
+
+import Language.HERMIT.Primitive.Core
+import qualified Language.Haskell.TH as TH
 
 externals :: [External]
 externals =
@@ -49,8 +56,10 @@ externals =
                      [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ]
          , external "eta-reduce" (promoteR eta_reduce)
                      [ "(\\ v -> E1 v) ==> E1, fails otherwise" ]
-         , external "eta-expand" (promoteR' . eta_expand)
+         , external "eta-expand" (promoteR . eta_expand)
                      [ "'eta-expand v' performs E1 ==> (\\ v -> E1 v), fails otherwise" ]
+         , external "freevars" (promoteT freeVarsQuery)
+                [ "List the free variables in this expression." ]
          ]
 
 not_defined :: String -> RewriteH CoreExpr
@@ -88,5 +97,19 @@ eta_expand nm = liftMT $ \ e -> do
            Just (_ , a_ty) -> do
              v1 <- newVarH nm a_ty
              return $ Lam v1 (App e (Var v1))
+
+------------------------------------------------------------------------------
+
+-- output a list of all free variables in the Expr.
+freeVarsQuery :: TranslateH CoreExpr String
+freeVarsQuery = (("FreeVars are: " ++) . show . map (showSDoc.ppr) . nub) <$> freeVarsT
+
+freeVarsT :: TranslateH CoreExpr [Id]
+freeVarsT = liftMT $ apply (crushtdT $ tryT [] $ promoteT freeVarsExprT) initHermitEnv . inject
+
+freeVarsExprT :: TranslateH CoreExpr [Id]
+freeVarsExprT = translate $ \ c e -> return $ case e of
+                                                Var n | Nothing <- lookupHermitBinding n c  -> [n]
+                                                _                                           -> []
 
 ------------------------------------------------------------------------------
