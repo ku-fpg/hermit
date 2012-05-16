@@ -7,6 +7,7 @@ module Language.HERMIT.HermitKure
        , LensH
        , Core(..)
        -- Scoping Combinators
+       , modGutsT
        , listBindT
        , nonRecT
        , recT
@@ -25,12 +26,16 @@ module Language.HERMIT.HermitKure
        , letRecT
        -- Useful Translations
        , pathT
+       , numCaseAltsT
+       , varIdT
+       , lamIdT
        )
 where
 
 import GhcPlugins hiding (empty)
 
 import Language.KURE
+import Language.KURE.Utilities
 
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
@@ -117,7 +122,7 @@ instance  Monoid b => WalkerT HermitEnv HermitM ModGuts b where
 
 instance WalkerL HermitEnv HermitM ModGuts where
   chooseL 0 = modGutsT exposeContextT (\ modGuts cx -> (cx, \ bds -> pure $ modGuts { mg_binds = bds })) `composeL` promoteL
-  chooseL n = missingChild n
+  chooseL n = missingChildL n
 
 -- slightly different; passes in *all* of the original
 modGutsT :: TranslateH CoreProgram a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
@@ -144,7 +149,7 @@ instance Monoid b => WalkerT HermitEnv HermitM CoreProgram b where
 instance WalkerL HermitEnv HermitM CoreProgram where
   chooseL 0 = consBindT exposeContextT idR (\ cx es -> (cx, \ e  -> pure (e:es))) `composeL` promoteL
   chooseL 1 = consBindT idR exposeContextT (\ e  cx -> (cx, \ es -> pure (e:es))) `composeL` promoteL
-  chooseL n = missingChild n
+  chooseL n = missingChildL n
 
 nilT' :: HermitM b -> TranslateH [a] b
 nilT' b = liftMT $ \ as -> if null as then b else fail "no match for nilT"
@@ -190,7 +195,7 @@ instance WalkerL HermitEnv HermitM CoreBind where
             -- find the number of binds
             sz <- recT (const idR) length
             if n < 0 || n >= sz
-                then missingChild n
+                then missingChildL n
                      -- if in range, then figure out context
                 else recT (const exposeContextT)
                           (\ bds -> (snd (bds !! n)
@@ -237,7 +242,7 @@ instance  Monoid b => WalkerT HermitEnv HermitM CoreAlt b where
 
 instance WalkerL HermitEnv HermitM CoreAlt where
   chooseL 0 = altT exposeContextT (\ con bs cx -> (cx, \ e -> pure (con,bs,e))) `composeL` promoteL
-  chooseL n = missingChild n
+  chooseL n = missingChildL n
 
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
 altT tt f = translate $ \ c (con,bs,e) -> f con bs <$> apply tt (foldr addHermitEnvLambdaBinding c bs @@ 0) e
@@ -275,46 +280,45 @@ instance WalkerR HermitEnv HermitM CoreExpr where
              <+ fail "anyR failed for all Expr constructors"
 
 instance  Monoid b => WalkerT HermitEnv HermitM CoreExpr b where
-  crushT tt = varT (\ _ -> mempty)
-           <+ litT (\ _ -> mempty)
+  crushT tt = varT (const mempty)
+           <+ litT (const mempty)
            <+ appT (extractT tt) (extractT tt) mappend
            <+ lamT (extractT tt) (\ _ r -> r)
            <+ letT (extractT tt) (extractT tt) mappend
            <+ caseT (extractT tt) (const $ extractT tt) (\ r _ _ rs -> mconcat (r:rs))
            <+ castT (extractT tt) (\ r _ -> r)
            <+ tickT (extractT tt) (\ _ r -> r)
-           <+ typeT (\ _ -> mempty)
-           <+ coercionT (\ _ -> mempty)
+           <+ typeT (const mempty)
+           <+ coercionT (const mempty)
            <+ fail "crushT failed for all Expr constructors"
 
 instance WalkerL HermitEnv HermitM CoreExpr where
-  chooseL n = case n of
-      0 -> ( appT  exposeContextT idR         (\ cx e2       -> (cx, \ e1 -> pure $ App e1 e2) )        `composeL` promoteL )
-        <+ ( lamT  exposeContextT             (\ v cx        -> (cx, \ e1 -> pure $ Lam v e1) )         `composeL` promoteL )
-        <+ ( letT  exposeContextT idR         (\ cx e2       -> (cx, \ bd -> pure $ Let bd e2) )        `composeL` promoteL )
-        <+ ( caseT exposeContextT (const idR) (\ cx v t alts -> (cx, \ e1 -> pure $ Case e1 v t alts) ) `composeL` promoteL )
-        <+ ( castT exposeContextT             (\ cx c        -> (cx, \ e1 -> pure $ Cast e1 c) )        `composeL` promoteL )
-        <+ ( tickT exposeContextT             (\ t cx        -> (cx, \ e1 -> pure $ Tick t e1) )        `composeL` promoteL )
+  chooseL 0 = ( appT  exposeContextT idR         (\ cx e2       -> (cx, \ e1 -> pure $ App e1 e2) )        `composeL` promoteL )
+           <+ ( lamT  exposeContextT             (\ v cx        -> (cx, \ e1 -> pure $ Lam v e1) )         `composeL` promoteL )
+           <+ ( letT  exposeContextT idR         (\ cx e2       -> (cx, \ bd -> pure $ Let bd e2) )        `composeL` promoteL )
+           <+ ( caseT exposeContextT (const idR) (\ cx v t alts -> (cx, \ e1 -> pure $ Case e1 v t alts) ) `composeL` promoteL )
+           <+ ( castT exposeContextT             (\ cx c        -> (cx, \ e1 -> pure $ Cast e1 c) )        `composeL` promoteL )
+           <+ ( tickT exposeContextT             (\ t cx        -> (cx, \ e1 -> pure $ Tick t e1) )        `composeL` promoteL )
 
-      1 -> ( appT idR exposeContextT          (\ e1 cx       -> (cx, \ e2 -> pure $ App e1 e2) )        `composeL` promoteL )
-        <+ ( letT idR exposeContextT          (\ bd cx       -> (cx, \ e2 -> pure $ Let bd e2) )        `composeL` promoteL )
-        <+ caseChooseL
+  chooseL 1 = ( appT idR exposeContextT          (\ e1 cx       -> (cx, \ e2 -> pure $ App e1 e2) )        `composeL` promoteL )
+           <+ ( letT idR exposeContextT          (\ bd cx       -> (cx, \ e2 -> pure $ Let bd e2) )        `composeL` promoteL )
+           <+ caseChooseL 1 `composeL` promoteL
 
-      _ -> caseChooseL
+  chooseL n = caseChooseL n `composeL` promoteL
 
-    where
-        caseChooseL = do
-            sz <- caseT idR (const idR) (\ _ _ _ alts -> length alts)
-            if n < 1 || n > sz
-                then missingChild n
-                else caseT idR (const exposeContextT)
-                               (\ e v t alts -> ( alts !! (n - 1)
-                                                , \ alt -> return $ Case e v t
-                                                              [ if i == n then alt else alt'
-                                                              | ((_,alt'),i) <- zip alts [1..]
-                                                              ]
-                                                )
-                               ) `composeL` promoteL
+
+caseChooseL :: Int -> LensH CoreExpr CoreAlt
+caseChooseL n = do sz <- numCaseAltsT
+                   if n < 1 || n > sz
+                    then missingChildL n
+                    else caseT idR (const exposeContextT)
+                                   (\ e v t calts -> ( calts !! (n - 1)
+                                                     , \ alt -> return $ Case e v t
+                                                               [ if i == n then alt else alt'
+                                                               | ((_,alt'),i) <- zip calts [1..]
+                                                               ]
+                                                     )
+                                   )
 
 ---------------------------------------------------------------------
 
@@ -404,38 +408,22 @@ letRecT t1s t2 f = letT (recT t1s id) t2 f
 
 ---------------------------------------------------------------------
 
--- | pathT finds the current path.
+-- Useful Translations
+
+-- | 'pathT' finds the current path.
 pathT :: TranslateH a ContextPath
 pathT = fmap hermitBindingPath contextT
 
----------------------------------------------------------------------
+-- | count the number of alternatives in a Case expression.
+numCaseAltsT :: TranslateH CoreExpr Int
+numCaseAltsT = caseT unitT (const unitT) (\ _ _ _ -> length)
 
--- Utilities
+-- | get the 'Id' of a variable expression.
+varIdT :: TranslateH CoreExpr Id
+varIdT = varT id
 
--- NOTE: These are candidates for moving into the KURE package.
---       It's unclear whether this approach will be common to other uses of KURE.
-
-missingChild :: Int -> LensH a b
-missingChild n = fail ("There is no child number " ++ show n ++ ".")
-
-attemptAny2 :: (a -> b -> c) -> HermitM (Bool,a) -> HermitM (Bool,b) -> HermitM c
-attemptAny2 f mba1 mba2 = do (b1,a) <- mba1
-                             (b2,b) <- mba2
-                             if b1 || b2
-                              then return (f a b)
-                              else fail "anyR failed for both children."
-
-attemptAnyN :: ([a] -> b) -> [HermitM (Bool,a)] -> HermitM b
-attemptAnyN f mbas = do (bs,as) <- unzip <$> sequence mbas
-                        if or bs
-                         then return (f as)
-                         else fail ("anyR failed for all " ++ show (length bs) ++ " children.")
-
-attemptAny1N :: (a -> [b] -> c) -> HermitM (Bool,a) -> [HermitM (Bool,b)] -> HermitM c
-attemptAny1N f mba mbas = do (b,a)   <- mba
-                             (bs,as) <- unzip <$> sequence mbas
-                             if or (b:bs)
-                               then return (f a as)
-                               else fail ("anyR failed for all " ++ show (1 + length bs) ++ " children.")
+-- | get the 'Id' of a lamba-bound variable.
+lamIdT :: TranslateH CoreExpr Id
+lamIdT = lamT unitT const
 
 ---------------------------------------------------------------------
