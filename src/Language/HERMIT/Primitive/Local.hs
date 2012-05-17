@@ -10,6 +10,7 @@ import Language.KURE
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv
+import Language.HERMIT.HermitMonad
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Core
@@ -82,13 +83,22 @@ beta_expand = liftMT $ \ e -> case e of
 ------------------------------------------------------------------------------
 
 eta_reduce :: RewriteH CoreExpr
-eta_reduce = rewrite $ \ c e -> case e of
-        Lam v1 (App f (Var v2)) | v1 == v2 -> do freesinFunction <- apply freeVarsT c f
-                                                 if v1 `elem` freesinFunction
-                                                  then fail $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++
-                                                              " is free in the function being applied."
-                                                  else return f
-        _ -> fail "eta_reduce failed"
+eta_reduce = liftMT $ \ e -> case e of
+      Lam v1 (App f (Var v2)) | v1 == v2 -> do freesinFunction <- freeVarsExpr f
+                                               if v1 `elem` freesinFunction
+                                                then fail $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++
+                                                            " is free in the function being applied."
+                                                else return f
+      _                                  -> fail "eta_reduce failed"
+
+  -- An alternative style would be:
+  --            do Lam v1 (App f (Var v2)) <- idR
+  --               guardT (v1 == v2) $ "eta_reduce failed. " ++ pp v1 ++ " /= " ++ pp v2
+  --               freesinFunction <- constMT (freeVarsExpr f)
+  --               guardT (v1 `notElem` freesinFunction) $ "eta_reduce failed. " ++ pp v1 ++ " is free in the function being applied."
+  --               return f
+  -- where
+  --   pp = showSDoc.ppr
 
 eta_expand :: TH.Name -> RewriteH CoreExpr
 eta_expand nm = liftMT $ \ e -> case splitAppTy_maybe (exprType e) of
@@ -100,13 +110,15 @@ eta_expand nm = liftMT $ \ e -> case splitAppTy_maybe (exprType e) of
 
 -- output a list of all free variables in the Expr.
 freeVarsQuery :: TranslateH CoreExpr String
-freeVarsQuery = (("FreeVars are: " ++) . show . map (showSDoc.ppr) . nub) <$> freeVarsT
+freeVarsQuery = (("FreeVars are: " ++) . show . map (showSDoc.ppr)) <$> liftMT freeVarsExpr
 
-freeVarsT :: TranslateH CoreExpr [Id]
-freeVarsT = liftMT $ apply (crushtdT $ mtryT $ promoteT freeVarsExprT) initHermitEnv . inject
-
-freeVarsExprT :: TranslateH CoreExpr [Id]
-freeVarsExprT = mtryT $ do (c,Var n) <- exposeT
-                           return $ if n `boundInHermit` c then [] else [n]
+-- notice that we pass in the (empty) initial Hermit environment.
+-- Notice the use of "mtryT".  This ensures all failures are converted to []s (the unit of the monoid).
+freeVarsExpr :: CoreExpr -> HermitM [Id]
+freeVarsExpr = fmap nub . apply (crushtdT $ mtryT $ promoteT freeVarT) initHermitEnv . inject
+  where
+    freeVarT :: TranslateH CoreExpr [Id]
+    freeVarT = do (c,Var n) <- exposeT
+                  whenT (not (n `boundInHermit` c)) (return [n])
 
 ------------------------------------------------------------------------------
