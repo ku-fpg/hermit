@@ -9,11 +9,13 @@ import Control.Applicative
 import Language.KURE
 
 import Language.HERMIT.HermitKure
-import Language.HERMIT.HermitEnv as Env
+import Language.HERMIT.HermitEnv
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Core
 import qualified Language.Haskell.TH as TH
+
+------------------------------------------------------------------------------
 
 externals :: [External]
 externals =
@@ -89,14 +91,10 @@ eta_reduce = rewrite $ \ c e -> case e of
         _ -> fail "eta_reduce failed"
 
 eta_expand :: TH.Name -> RewriteH CoreExpr
-eta_expand nm = liftMT $ \ e -> do
-        -- First find the type of of e
-        let ty = exprType e
-        case splitAppTy_maybe ty of
-           Nothing -> fail "eta-expand failed (expression is not an App)"
-           Just (_ , a_ty) -> do
-             v1 <- newVarH nm a_ty
-             return $ Lam v1 (App e (Var v1))
+eta_expand nm = liftMT $ \ e -> case splitAppTy_maybe (exprType e) of
+                                  Nothing           -> fail "eta-expand failed (expression is not an App)"
+                                  Just (_ , arg_ty) -> do v1 <- newVarH nm arg_ty
+                                                          return $ Lam v1 (App e (Var v1))
 
 ------------------------------------------------------------------------------
 
@@ -105,11 +103,10 @@ freeVarsQuery :: TranslateH CoreExpr String
 freeVarsQuery = (("FreeVars are: " ++) . show . map (showSDoc.ppr) . nub) <$> freeVarsT
 
 freeVarsT :: TranslateH CoreExpr [Id]
-freeVarsT = liftMT $ apply (crushtdT $ tryT [] $ promoteT freeVarsExprT) initHermitEnv . inject
+freeVarsT = liftMT $ apply (crushtdT $ mtryT $ promoteT freeVarsExprT) initHermitEnv . inject
 
 freeVarsExprT :: TranslateH CoreExpr [Id]
-freeVarsExprT = translate $ \ c e -> return $ case e of
-                                                Var n | Nothing <- lookupHermitBinding n c  -> [n]
-                                                _                                           -> []
+freeVarsExprT = mtryT $ do (c,Var n) <- exposeT
+                           return $ if n `boundInHermit` c then [] else [n]
 
 ------------------------------------------------------------------------------

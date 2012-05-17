@@ -1,14 +1,17 @@
 module Language.HERMIT.HermitEnv where
 
-import GhcPlugins
-import qualified Data.Map as Map
+import Prelude hiding (lookup)
+import GhcPlugins hiding (empty)
+import Data.Map
+
+------------------------------------------------------------------------
 
 -- The bindings here are lazy by choice, so that we can avoid the cost
 -- of building the environment, if we never use it.
 data HermitEnv = HermitEnv
-        { hermitBindings :: Map.Map Id HermitBinding    -- ^ all (important) bindings in scope
-        , hermitDepth    :: Int                         -- ^ depth of bindings
-        , hermitPath     :: ContextPath                 -- ^ path to the current node from the root.
+        { hermitBindings :: Map Id HermitBinding    -- ^ all (important) bindings in scope
+        , hermitDepth    :: Int                     -- ^ depth of bindings
+        , hermitPath     :: ContextPath             -- ^ path to the current node from the root.
         }
 
 data HermitBinding
@@ -23,8 +26,9 @@ data HermitBinding
 -- | A list of node childen taken to get here. The head is the *last* branch.
 newtype ContextPath = ContextPath [Int]
 
-hermitBindingDepth :: HermitBinding -> Int
+------------------------------------------------------------------------
 
+hermitBindingDepth :: HermitBinding -> Int
 hermitBindingDepth (LAM d)  = d
 hermitBindingDepth (BIND d _ _) = d
 
@@ -43,7 +47,7 @@ hermitBindingPath = hermitPath
 
 addHermitEnvLambdaBinding :: Id -> HermitEnv -> HermitEnv
 addHermitEnvLambdaBinding n env
-        = env { hermitBindings = Map.insert n (LAM next_depth) (hermitBindings env)
+        = env { hermitBindings = insert n (LAM next_depth) (hermitBindings env)
               , hermitDepth    = next_depth
               }
   where
@@ -51,25 +55,30 @@ addHermitEnvLambdaBinding n env
 
 addHermitBinding :: Bind Id -> HermitEnv -> HermitEnv
 addHermitBinding (NonRec n e) env
-        = env { hermitBindings = Map.insert n (BIND next_depth False e) (hermitBindings env)
+        = env { hermitBindings = insert n (BIND next_depth False e) (hermitBindings env)
               , hermitDepth    = next_depth
               }
   where
         next_depth = succ (hermitDepth env)
 addHermitBinding (Rec bds) env
-        = env { hermitBindings = Map.union bds_env (hermitBindings env)
+        = env { hermitBindings = union bds_env (hermitBindings env)
               , hermitDepth    = next_depth
               }
   where
         next_depth = succ (hermitDepth env)
         -- notice how all recursive binding in a binding group are at the same depth.
-        bds_env    = Map.fromList
+        bds_env    = fromList
                    [ (b,BIND next_depth True e)
                    | (b,e) <- bds
                    ]
 
 lookupHermitBinding :: Id -> HermitEnv -> Maybe HermitBinding
-lookupHermitBinding n env = Map.lookup n (hermitBindings env)
+lookupHermitBinding n env = lookup n (hermitBindings env)
+
+boundInHermit :: Id -> HermitEnv -> Bool
+boundInHermit n env = maybe False (const True) (lookupHermitBinding n env)
 
 initHermitEnv :: HermitEnv
-initHermitEnv = HermitEnv (Map.empty) 0 (ContextPath [])
+initHermitEnv = HermitEnv empty 0 (ContextPath [])
+
+------------------------------------------------------------------------
