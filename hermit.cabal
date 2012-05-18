@@ -22,7 +22,7 @@ Library
          syb,
          template-haskell,
          containers,
-         kure >= 1.2.1
+         kure >= 1.4.1
 
   default-language: Haskell2010
 

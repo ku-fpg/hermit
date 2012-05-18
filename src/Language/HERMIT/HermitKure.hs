@@ -32,7 +32,6 @@ where
 import GhcPlugins hiding (empty)
 
 import Language.KURE
-import Language.KURE.Utilities
 
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
