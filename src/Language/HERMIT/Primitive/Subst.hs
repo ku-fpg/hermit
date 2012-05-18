@@ -25,6 +25,10 @@ externals =
                 [ "Alpha rename (for Lambda's)."]
          , external "alpha-let" (promoteR alphaNonRecLet)
                 [ "Alpha rename (for Let)."]
+         , external "alpha-alt" (promoteR alphaAlt)
+                [ "Alpha rename (for a single Case Alternative)."]
+         , external "alpha-case" (promoteR alphaCase)
+                [ "Alpha renaming for each alternative of a Case.."]
          , external "let-sub" (promoteR letSubstR)
                 [ "Let substitution."]
          ]
@@ -35,21 +39,6 @@ bindList (NonRec b _) = [b]
 bindList (Rec binds) = map fst binds
 
 
-lamVar :: TranslateH CoreExpr Id
-lamVar = lamT (pure ()) const
-
-letNonRecVarAndType :: TranslateH CoreExpr (Id,Type)
-letNonRecVarAndType = letNonRecT idR (pure ()) (\ v e1 _ -> (v,exprType e1))
-
-letCaseVarAndType :: TranslateH CoreExpr (Id, Type)
-letCaseVarAndType = caseT idR (\ _ -> idR) (\ _ v ty _ -> (v, ty))
-
--- returns (DomainType,ArgType)
-lamTypes :: TranslateH CoreExpr (Type,Type)
-lamTypes = liftMT (maybe (fail "Lambda argument is a TyVar.") pure . splitFunTy_maybe . exprType)
-                                         -- Not the best error message provided here.
-                                         -- Is this really (all) that can be happening here?
-
 varNameH :: Id -> TH.Name
 varNameH = TH.mkName . showSDoc . ppr
 
@@ -57,30 +46,36 @@ varNameH = TH.mkName . showSDoc . ppr
 -- rely on a function to return a globally fresh Id,
 -- therefore, they do not require a list of Id's which must not clash.
 alphaLambda :: RewriteH CoreExpr
-alphaLambda = do v <- lamVar
-                 (dom_ty, _) <- lamTypes
-                 v' <- constMT $ newVarH (varNameH v) dom_ty
-                 lamT (substR v $ Var v') (\ _ -> Lam v')
+alphaLambda = do (Lam b e) <- idR
+                 b' <- constMT $ newVarH (varNameH b) (idType b)
+                 lamT (substR b $ Var b') (\ _ -> Lam b')
 
 
 -- Replace each var bound in a let expr with a globally fresh Id.
-
 alphaNonRecLet :: RewriteH CoreExpr
-alphaNonRecLet = do (v,ty) <- letNonRecVarAndType
-                    v' <- constMT $ newVarH (varNameH v) ty
+alphaNonRecLet = do Let (NonRec v e1) e2 <- idR
+                    v' <- constMT $ newVarH (varNameH v) (exprType e1)
                     letNonRecT idR (substR v $ Var v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
 
 alphaRecLet :: RewriteH CoreExpr
-alphaRecLet = fail "Unable to perform alpha renaming for recursiveLet."
+alphaRecLet = do (Let (Rec bds) e) <- idR
+                 let boundIds = map fst bds
+                 freshBoundIds <- sequence $ fmap (\ b -> constMT $ newVarH (varNameH b) (idType b)) boundIds
+                 letRecT (\ _ -> (foldr seqSubst idR (zip boundIds freshBoundIds)))
+                            (foldr seqSubst idR (zip boundIds freshBoundIds))
+                            (\ bds' e' -> (Let (Rec bds') e'))
+    where seqSubst (v,v') t = t >-> (substR v $ Var v')
 
 alphaLet :: RewriteH CoreExpr
-alphaLet = alphaNonRecLet >-> alphaRecLet
+alphaLet = alphaNonRecLet <+ alphaRecLet
 
-letSubstR :: RewriteH CoreExpr
-letSubstR = rewrite $ \ c exp ->
-    case exp of
-      (Let (NonRec b be) e) -> do  apply (substR b be) c e
-      _ -> fail "LetSubst failed. Expr is not a Non-recursive Let."
+-- there is no alphaCase.
+-- instead alphaAlt performs renaming over an individual Case alternative
+alphaAlt :: RewriteH CoreAlt
+alphaAlt = do (con, vs, e) <- idR
+              freshBoundIds <- sequence $ fmap (\ v' -> constMT $ newVarH (varNameH v') (idType v')) vs
+              altT (foldr seqSubst idR (zip vs freshBoundIds)) (\ _ _ e' -> (con, freshBoundIds, e'))
+    where seqSubst (v,v') t = t >-> (substR v $ Var v')
 
 -- Andy's substitution rewrite
 --  E [ v::r ] ===   let (NonRec v = r) in E
@@ -96,11 +91,11 @@ substR :: Id -> CoreExpr  -> RewriteH CoreExpr
 substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
     where -- The 6 rules from the textbook for the simple lambda calculus.
         rule12 :: RewriteH CoreExpr
-        rule12 = rewrite $ \ c exp ->
-                 case exp of
-                   Var n0 | (n0 == v)  -> return expReplacement
-                   Var n0  -> return exp
-                   _ -> fail $ "Not a matching Var"
+        rule12 = do exp@(Var n0) <- idR
+                    if (n0 == v)
+                    then return expReplacement
+                    else return exp
+
         rule345 :: RewriteH CoreExpr
         rule345 = rewrite $ \ c exp ->
                   case exp of
@@ -131,20 +126,50 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
         --  For now, it is ignored here.
         rule9 = caseT (substR v expReplacement) (\_ -> substAltR v expReplacement) Case
 
-
+-- edk !! Note, this subst handles name clashes with variables bound in the Alt form,
+-- since the scope of these bound variables is within the Alt.
 substAltR :: Id -> CoreExpr -> RewriteH CoreAlt
-substAltR v expReplacement = rewrite $ \ c exp ->
-      case exp of
-        (con, bs, e) | v `elem` bs -> return exp
-                     | (null $ List.intersect bs (freeIds expReplacement)) ->
-                         apply (altT (substR v expReplacement)  (,,)) c exp
-                     | otherwise -> fail "Do not handle clashes with Case bound variables yet."
+substAltR v expReplacement =
+    do (con, bs, e) <- idR
+       case (v `elem` bs) of
+         True -> return (con, bs, e)
+         _ ->  case (null $ List.intersect bs (freeIds expReplacement)) of
+                True -> altT (substR v expReplacement)  (,,)
+                _    -> alphaAlt >-> (altT (substR v expReplacement)  (,,))
 
 
+-- edk !! Note, this subst DOES NOT handles name clashes with variables bound in the Bind form,
+-- since the scope of these bound variables extends beyond the form.
 substBindR :: Id -> CoreExpr  -> RewriteH CoreBind
-substBindR v expReplacement = rewrite $ \ c exp ->
-       case exp of
-         (NonRec b e) | b == v -> return exp
-                      | (b `notElem` freeIds expReplacement) -> apply (nonRecT (substR v expReplacement) NonRec) c exp
-                      | otherwise -> return exp
-         _ -> fail "Do not handle recursive lets yet."
+substBindR v expReplacement = (substNonRecBindR v expReplacement) <+ (substRecBindR v expReplacement)
+
+substNonRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
+substNonRecBindR v expReplacement =
+    do exp@(NonRec b e) <- idR
+       case (b == v) of
+         True -> return exp
+         _    -> case (b `notElem` freeIds expReplacement) of
+                  True -> nonRecT (substR v expReplacement) NonRec
+                  _    -> return exp
+
+substRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
+substRecBindR v expReplacement =
+    do exp@(Rec bds) <- idR
+       let boundIds = bindList exp
+       case (v `elem` boundIds) of
+         True -> return exp
+         _    -> case (null $ List.intersect boundIds (freeIds expReplacement)) of
+                  True -> recT (\ _ -> (substR v expReplacement)) Rec
+                  _    -> return exp
+
+
+
+letSubstR :: RewriteH CoreExpr
+letSubstR = rewrite $ \ c exp ->
+    case exp of
+      (Let (NonRec b be) e) -> do  apply (substR b be) c e
+      _ -> fail "LetSubst failed. Expr is not a Non-recursive Let."
+
+-- tests ...
+alphaCase :: RewriteH CoreExpr
+alphaCase = caseT idR (\ _ -> alphaAlt) Case
