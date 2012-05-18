@@ -23,8 +23,12 @@ externals =
          [
            external "alpha" (promoteR alphaLambda)
                 [ "Alpha rename (for Lambda's)."]
-         , external "alpha-let" (promoteR alphaNonRecLet)
+         , external "alpha-let" (promoteR alphaLet)
                 [ "Alpha rename (for Let)."]
+         , external "let-sub" (promoteR letSubstR)
+                [ "Let substitution."]
+
+           -- the remaining are really just for testing.
          , external "alpha-alt" (promoteR alphaAlt)
                 [ "Alpha rename (for a single Case Alternative)."]
          , external "alpha-case" (promoteR alphaCase)
@@ -52,6 +56,9 @@ alphaLambda = do (Lam b e) <- idR
 
 
 -- Replace each var bound in a let expr with a globally fresh Id.
+alphaLet :: RewriteH CoreExpr
+alphaLet = alphaNonRecLet <+ alphaRecLet
+
 alphaNonRecLet :: RewriteH CoreExpr
 alphaNonRecLet = do Let (NonRec v e1) e2 <- idR
                     v' <- constMT $ newVarH (varNameH v) (exprType e1)
@@ -63,11 +70,8 @@ alphaRecLet = do (Let (Rec bds) e) <- idR
                  freshBoundIds <- sequence $ fmap (\ b -> constMT $ newVarH (varNameH b) (idType b)) boundIds
                  letRecT (\ _ -> (foldr seqSubst idR (zip boundIds freshBoundIds)))
                             (foldr seqSubst idR (zip boundIds freshBoundIds))
-                            (\ bds' e' -> (Let (Rec bds') e'))
+                            (\ bds' e' -> let freshBds = zip freshBoundIds (map snd bds') in (Let (Rec freshBds) e'))
     where seqSubst (v,v') t = t >-> (substR v $ Var v')
-
-alphaLet :: RewriteH CoreExpr
-alphaLet = alphaNonRecLet <+ alphaRecLet
 
 -- there is no alphaCase.
 -- instead alphaAlt performs renaming over an individual Case alternative
@@ -84,9 +88,6 @@ alphaAlt = do (con, vs, e) <- idR
 
 -- | Substitution
 
-substRG :: Id -> CoreExpr  -> RewriteH Core
-substRG v e = promoteR $ substR v e
-
 substR :: Id -> CoreExpr  -> RewriteH CoreExpr
 substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
     where -- The 6 rules from the textbook for the simple lambda calculus.
@@ -100,28 +101,29 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
         rule345 = rewrite $ \ c exp ->
                   case exp of
                     Lam b e | (b == v) -> return exp
-                    Lam b e | (b `notElem` freeIds expReplacement) ->
+                            | (b `notElem` freeIds expReplacement) ->
                                 apply (lamT (substR v expReplacement) Lam) c exp
-                    Lam b e | (v `notElem` freeIds e) -> return exp
-                    Lam b e ->
-                        apply (alphaLambda  >-> lamT (substR v expReplacement) Lam) c exp
+                            | (v `notElem` freeIds e) -> return exp
+                            | otherwise ->
+                                apply (alphaLambda  >-> lamT (substR v expReplacement) Lam) c exp
                     _ -> fail $ "not a Lambda"
 
-        rule6 = allR (substRG v expReplacement)
+        rule6 = allR (promoteR $ substR v expReplacement)
         -- like Rule 3 and 4/5 above, but for lets
         rule78 :: RewriteH CoreExpr
         rule78 = rewrite $ \ c exp ->
                  case exp of
                    Let bds e | (v `elem` (bindList bds)) -> return exp
-                   Let bds e | (null $ List.intersect (bindList bds) (freeIds expReplacement)) ->
+                             | (null $ List.intersect (bindList bds) (freeIds expReplacement)) ->
                                  apply (letT (substBindR v expReplacement)  (substR v expReplacement)  Let) c exp
-                   -- If v is not free in e, it may be free in the expression(s) bound by the let
-                   Let bds e | (v `notElem` freeIds e) ->
+                             -- If v is not free in e, it may be free in the expression(s) bound by the let
+                             | (v `notElem` freeIds e) ->
                                  apply (letT (substBindR v expReplacement) idR Let) c exp
-                   -- final case.  v is free in e, but the bound var(s) in the let appear
-                   -- free in the replacement expression.  Alpha renaming to the rescue, and try again.
-                   Let _ _ -> apply (alphaLet  >-> (letT idR (substR v expReplacement) Let)) c exp
+                             -- final case.  v is free in e, but the bound var(s) in the let appear
+                             -- free in the replacement expression.  Alpha renaming to the rescue, and try again.
+                             | otherwise -> apply (alphaLet  >-> (letT idR (substR v expReplacement) Let)) c exp
                    _ -> fail $ "not a Let"
+
         -- edk?  Do we need to worry about clashes with the VBind component of a Case?
         --  For now, it is ignored here.
         rule9 = caseT (substR v expReplacement) (\_ -> substAltR v expReplacement) Case
@@ -131,26 +133,27 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
 substAltR :: Id -> CoreExpr -> RewriteH CoreAlt
 substAltR v expReplacement =
     do (con, bs, e) <- idR
-       case (v `elem` bs) of
-         True -> return (con, bs, e)
-         _ ->  case (null $ List.intersect bs (freeIds expReplacement)) of
-                True -> altT (substR v expReplacement)  (,,)
-                _    -> alphaAlt >-> (altT (substR v expReplacement)  (,,))
+       if (v `elem` bs)
+       then return (con, bs, e)
+       else if (null $ List.intersect bs (freeIds expReplacement))
+            then altT (substR v expReplacement)  (,,)
+            else alphaAlt >-> (altT (substR v expReplacement)  (,,))
 
 
--- edk !! Note, this subst DOES NOT handles name clashes with variables bound in the Bind form,
+-- edk !! Note, this subst DOES NOT handle name clashes with variables bound in the Bind form,
 -- since the scope of these bound variables extends beyond the form.
+-- IF there is a name clash, the Bind is returned un-altered, rather than failure.
 substBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substBindR v expReplacement = (substNonRecBindR v expReplacement) <+ (substRecBindR v expReplacement)
 
 substNonRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substNonRecBindR v expReplacement =
     do exp@(NonRec b e) <- idR
-       case (b == v) of
-         True -> return exp
-         _    -> case (b `notElem` freeIds expReplacement) of
-                  True -> nonRecT (substR v expReplacement) NonRec
-                  _    -> return exp
+       if (b == v)
+       then return exp
+       else if (b `notElem` freeIds expReplacement)
+            then nonRecT (substR v expReplacement) NonRec
+            else return exp
 
 substRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substRecBindR v expReplacement =
