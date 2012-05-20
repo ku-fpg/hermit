@@ -12,6 +12,7 @@ import Language.KURE.Injection
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
+import Language.HERMIT.HermitEnv
 
 import Language.HERMIT.Primitive.Core
 
@@ -56,8 +57,14 @@ dce = liftMT $ \ e -> case e of
 -- A few Queries.
 
 -- info currently outputs the type of the current CoreExpr
+-- TODO: we need something for bindings, etc.
 info :: TranslateH CoreExpr String
-info = liftT (("type ::= " ++) . showSDoc . ppr . exprType)
+info = do ContextPath this <- pathT
+          translate $ \ cxt e -> do
+                  let hd = "Core Expr"
+                      ty = "type ::= " ++ showSDoc (ppr (exprType e))
+                      pa = "path :=  " ++ show (reverse this)
+                  return (unlines [hd,ty,pa])
 
 exprTypeQueryT :: TranslateH CoreExpr String
 exprTypeQueryT = liftT $ \ e -> case e of
