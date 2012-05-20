@@ -115,7 +115,7 @@ freeVarsQuery = (("FreeVars are: " ++) . show . map (showSDoc.ppr)) <$> liftMT f
 -- notice that we pass in the (empty) initial Hermit environment.
 -- Notice the use of "mtryT".  This ensures all failures are converted to []s (the unit of the monoid).
 freeVarsExpr :: CoreExpr -> HermitM [Id]
-freeVarsExpr = fmap nub . apply (crushtdT $ mtryT $ promoteT freeVarT) initHermitEnv . inject
+freeVarsExpr = fmap nub . apply (crushtdT $ mtryT $ promoteT freeVarT) initHermitEnv . ExprCore
   where
     freeVarT :: TranslateH CoreExpr [Id]
     freeVarT = do (c,Var n) <- exposeT

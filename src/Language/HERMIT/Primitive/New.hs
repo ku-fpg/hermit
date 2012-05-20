@@ -8,6 +8,7 @@ import GhcPlugins
 import Control.Applicative
 
 import Language.KURE
+import Language.KURE.Injection
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
@@ -18,7 +19,7 @@ import qualified Language.Haskell.TH as TH
 
 
 promoteR'  :: Term a => RewriteH a -> RewriteH (Generic a)
-promoteR' rr = rewrite $ \ c e ->  liftA inject (maybe (fail "argument is not an expr") (apply rr c)  (retract e))
+promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an expr") (apply rr c)  (retract e)
 
 externals :: [External]
 externals =
