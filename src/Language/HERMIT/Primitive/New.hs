@@ -36,6 +36,12 @@ externals =
                 [ "tell me what you know about this expression or binding" ]
          , external "expr-type" (promoteT exprTypeQueryT)
                 [ "List the type (Constructor) for this expression."]
+         , external "apply-rule" (promoteR . rules)
+                [ "apply a named GHC rule" ]
+
+           --
+         , external "hack-inline" (promoteR hack_inline)
+                [ "experiment with an internal hack, during development" ]
          ]
 
 let_intro ::  TH.Name -> RewriteH CoreExpr
@@ -81,3 +87,10 @@ exprTypeQueryT = liftT $ \ e -> case e of
 
 var :: TH.Name -> RewriteH CoreExpr -> RewriteH CoreExpr
 var _ n = idR -- bottomupR (varR (\ n -> ()) ?
+
+
+rules :: String -> RewriteH CoreExpr
+rules r = rewrite $ \ c e -> do
+        liftIO $ print ("rules",r)
+        return e
+
