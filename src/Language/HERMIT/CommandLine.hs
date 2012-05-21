@@ -75,7 +75,9 @@ instance Show2 ModGuts where
         show2 modGuts =
                 "[ModGuts for " ++ showSDoc (ppr (mg_module modGuts)) ++ "]\n" ++
                  show (length (mg_binds modGuts)) ++ " binding group(s)\n" ++
-                 show (length (mg_rules modGuts)) ++ " rule(s)\n"
+                 show (length (mg_rules modGuts)) ++ " rule(s)\n" ++
+                 showSDoc (ppr (mg_rules modGuts))
+
 
 instance Show2 CoreProgram where
         show2 codeProg =
