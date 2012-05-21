@@ -168,7 +168,9 @@ substRecBindR v expReplacement =
 letSubstR :: RewriteH CoreExpr
 letSubstR = rewrite $ \ c exp ->
     case exp of
-      (Let (NonRec b be) e) -> do  apply (substR b be) c e
+      (Let (NonRec b be) e)
+         | isId b    -> apply (substR b be) c e
+         | otherwise -> fail "LetSubst failed. (is a type variable)"
       _ -> fail "LetSubst failed. Expr is not a Non-recursive Let."
 
 -- tests ...
