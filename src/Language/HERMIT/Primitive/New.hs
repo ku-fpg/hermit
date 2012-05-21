@@ -36,6 +36,8 @@ externals =
                 [ "tell me what you know about this expression or binding" ]
          , external "expr-type" (promoteT exprTypeQueryT)
                 [ "List the type (Constructor) for this expression."]
+         , external "test" rewrite2query
+                [ "determines if a rewrite could be successfully applied" ]
          ]
 
 let_intro ::  TH.Name -> RewriteH CoreExpr
@@ -81,3 +83,10 @@ exprTypeQueryT = liftT $ \ e -> case e of
 
 var :: TH.Name -> RewriteH CoreExpr -> RewriteH CoreExpr
 var _ n = idR -- bottomupR (varR (\ n -> ()) ?
+
+
+rewrite2query :: RewriteH Core -> TranslateH Core String
+rewrite2query r = f <$> testT r
+  where
+    f True  = "Rewrite would succeed."
+    f False = "Rewrite would fail."
