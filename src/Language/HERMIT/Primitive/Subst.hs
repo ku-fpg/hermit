@@ -33,8 +33,6 @@ externals =
                 [ "Alpha rename (for a single Case Alternative)."]
          , external "alpha-case" (promoteR alphaCase)
                 [ "Alpha renaming for each alternative of a Case.."]
-         , external "let-sub" (promoteR letSubstR)
-                [ "Let substitution."]
          ]
 
 bindList :: Bind Id -> [Id]
