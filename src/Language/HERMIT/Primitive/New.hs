@@ -13,6 +13,7 @@ import Language.KURE.Injection
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 import Language.HERMIT.HermitEnv
+import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.Core
 

@@ -52,6 +52,7 @@ Library
        Language.Core.Quote
        Language.HERMIT.Pass
        Language.HERMIT.DSL
+       Language.HERMIT.GHC
 
   Hs-Source-Dirs: src
 
