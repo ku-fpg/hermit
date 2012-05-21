@@ -65,8 +65,8 @@ alphaNonRecLet = do Let (NonRec v e1) e2 <- idR
                     letNonRecT idR (substR v $ Var v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
 
 alphaRecLet :: RewriteH CoreExpr
-alphaRecLet = do (Let (Rec bds) e) <- idR
-                 let boundIds = map fst bds
+alphaRecLet = do (Let bds@(Rec _) e) <- idR
+                 let boundIds = bindList bds
                  freshBoundIds <- sequence $ fmap (\ b -> constMT $ newVarH (varNameH b) (idType b)) boundIds
                  letRecT (\ _ -> (foldr seqSubst idR (zip boundIds freshBoundIds)))
                             (foldr seqSubst idR (zip boundIds freshBoundIds))
@@ -92,10 +92,10 @@ substR :: Id -> CoreExpr  -> RewriteH CoreExpr
 substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
     where -- The 6 rules from the textbook for the simple lambda calculus.
         rule12 :: RewriteH CoreExpr
-        rule12 = do exp@(Var n0) <- idR
+        rule12 = do (Var n0) <- idR
                     if (n0 == v)
                     then return expReplacement
-                    else return exp
+                    else idR
 
         rule345 :: RewriteH CoreExpr
         rule345 = rewrite $ \ c exp ->
@@ -134,7 +134,7 @@ substAltR :: Id -> CoreExpr -> RewriteH CoreAlt
 substAltR v expReplacement =
     do (con, bs, e) <- idR
        if (v `elem` bs)
-       then return (con, bs, e)
+       then idR
        else if (null $ List.intersect bs (freeIds expReplacement))
             then altT (substR v expReplacement)  (,,)
             else alphaAlt >-> (altT (substR v expReplacement)  (,,))
@@ -148,22 +148,22 @@ substBindR v expReplacement = (substNonRecBindR v expReplacement) <+ (substRecBi
 
 substNonRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substNonRecBindR v expReplacement =
-    do exp@(NonRec b e) <- idR
+    do (NonRec b e) <- idR
        if (b == v)
-       then return exp
+       then idR
        else if (b `notElem` freeIds expReplacement)
             then nonRecT (substR v expReplacement) NonRec
-            else return exp
+            else idR
 
 substRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substRecBindR v expReplacement =
     do exp@(Rec bds) <- idR
        let boundIds = bindList exp
        case (v `elem` boundIds) of
-         True -> return exp
+         True -> idR
          _    -> case (null $ List.intersect boundIds (freeIds expReplacement)) of
                   True -> recT (\ _ -> (substR v expReplacement)) Rec
-                  _    -> return exp
+                  _    -> idR
 
 
 
