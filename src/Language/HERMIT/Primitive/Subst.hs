@@ -170,7 +170,12 @@ letSubstR = rewrite $ \ c exp ->
     case exp of
       (Let (NonRec b be) e)
          | isId b    -> apply (substR b be) c e
-         | otherwise -> fail "LetSubst failed. (is a type variable)"
+         -- For type subst, we use the GHC subst mechansim
+      (Let (NonRec b (Type bty)) e)
+         | isTyVar b -> do
+                let sub = extendTvSubst emptySubst b bty
+                return $ substExpr (text "letSubstR") sub e
+--         | otherwise -> fail "LetSubst failed. (is a type variable)"
       _ -> fail "LetSubst failed. Expr is not a Non-recursive Let."
 
 -- tests ...
