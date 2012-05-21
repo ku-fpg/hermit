@@ -9,10 +9,10 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.External
 
 externals :: [External]
-externals = [ 
+externals = [
               external "inline" (promoteR inline)
                 [ "(Var n) ==> <defn of n>, fails otherwise" ]
-            ]  
+            ]
 
 -- | The implementation of inline, an important transformation.
 -- This *only* works on a Var of the given name. It can trivially
@@ -22,7 +22,12 @@ inline :: RewriteH CoreExpr
 inline = rewrite $ \ c e -> case e of
     Var n0 -> -- A candiate for inlining
               case lookupHermitBinding n0 c of
-                Nothing       -> fail $ "inline failed, cannot find " ++ show n0 ++ "  in Env"
+                Nothing       -> do
+                  let info = idInfo n0
+                  case unfoldingInfo info of
+                    -- This was simple, once we knew where to look
+                    CoreUnfolding { uf_tmpl = uf_tmpl } -> return uf_tmpl
+                    _ -> fail $ "inline failed, cannot find " ++ show n0 ++ "  in Env or IdInfo"
                 Just (LAM {}) -> fail $ "inline failed, found lambda-bound value or type"
                 Just (BIND depth _ e')
                   -- need to check for clashes, based on the depth
