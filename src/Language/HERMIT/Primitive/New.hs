@@ -70,7 +70,11 @@ info = do ContextPath this <- pathT
                   let hd = "Core Expr"
                       ty = "type ::= " ++ showSDoc (ppr (exprType e))
                       pa = "path :=  " ++ show (reverse this)
-                  return (unlines [hd,ty,pa])
+                      extra = "extra := " ++ case e of
+                                Var v -> showSDoc (ppIdInfo v (idInfo v))
+                                _ -> "{}"
+                  return (unlines [hd,ty,pa,extra])
+
 
 exprTypeQueryT :: TranslateH CoreExpr String
 exprTypeQueryT = liftT $ \ e -> case e of
