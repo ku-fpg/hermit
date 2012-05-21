@@ -5,17 +5,20 @@ module Language.HERMIT.Dictionary where
 
 import Prelude hiding (lookup)
 
-import Data.Map
+import qualified Data.Map as M
 import Data.Char
 import Data.Dynamic
 
 import Control.Monad (liftM2)
+
+import GhcPlugins
 
 import qualified Language.Haskell.TH as TH
 
 import Language.KURE
 
 import Language.HERMIT.HermitExpr
+import Language.HERMIT.HermitKure
 import Language.HERMIT.Kernel
 import Language.HERMIT.External
 
@@ -28,23 +31,29 @@ import qualified Language.HERMIT.Primitive.Subst as Subst
 import qualified Language.HERMIT.Primitive.Local as Local
 import qualified Language.HERMIT.Primitive.New as New
 
+import Debug.Trace
 --------------------------------------------------------------------------
 
-all_externals :: [External]
-all_externals =    Command.externals
-                ++ Kure.externals
-                ++ Consider.externals
-                ++ Inline.externals
-                ++ Case.externals
-                ++ Subst.externals
-                ++ Local.externals
-                ++ New.externals
+prim_externals :: [External]
+prim_externals =    Command.externals
+                 ++ Kure.externals
+                 ++ Consider.externals
+                 ++ Inline.externals
+                 ++ Case.externals
+                 ++ Subst.externals
+                 ++ Local.externals
+                 ++ New.externals
 
-dictionary :: Map String Dynamic
+all_externals :: [External]
+all_externals =    prim_externals
+                ++ [ external "bash" (promoteR bash) bashHelp .+ MetaCmd
+                   ]
+
+dictionary :: M.Map String Dynamic
 dictionary = toDictionary all_externals
 
 help :: [String]
-help = concatMap snd $ toList $ toHelp all_externals
+help = concatMap snd $ M.toList $ toHelp all_externals
 
 --------------------------------------------------------------------------
 
@@ -77,7 +86,7 @@ interpExpr' :: ExprH -> Either String Dynamic
 interpExpr' (SrcName str) = Right $ toDyn $ NameBox $ TH.mkName str
 interpExpr' (CmdName str)
   | all isDigit str                   = Right $ toDyn $ IntBox $ read str
-  | Just dyn <- lookup str dictionary = Right dyn
+  | Just dyn <- M.lookup str dictionary = Right dyn
   | otherwise                         = Left $ "Unrecognised command: " ++ show str
 interpExpr' (StrName str)             = Right $ toDyn $ StringBox $ str
 interpExpr' (AppH e1 e2) = dynAppMsg (interpExpr' e1) (interpExpr' e2)
@@ -86,3 +95,15 @@ dynAppMsg :: Either String Dynamic -> Either String Dynamic -> Either String Dyn
 dynAppMsg f x = liftM2 dynApply f x >>= maybe (Left "apply failed") Right
 
 --------------------------------------------------------------------------
+
+-- Runs every command tagged with 'Bash' with anybuR,
+-- if any of them succeed, then it tries all of them again.
+-- Only fails if all of them fail the first time.
+bash :: RewriteH (Generic CoreExpr)
+bash = repeatR $ orR [ maybe (fail "bash: fromDynamic failed") (anybuR . unbox)
+                       $ fromDynamic $ externFun $ cmd
+                     | cmd <- all_externals, cmd `hasTag` Bash ]
+
+bashHelp :: [String]
+bashHelp = "Bash runs the following commands:"
+           : (concatMap snd $ M.toList $ toHelp $ filter (`hasTag` Bash) all_externals)
