@@ -39,10 +39,6 @@ externals =
                 [ "List the type (Constructor) for this expression."]
          , external "apply-rule" (promoteR . rules)
                 [ "apply a named GHC rule" ]
-
-           --
-         , external "hack-inline" (promoteR hack_inline)
-                [ "experiment with an internal hack, during development" ]
          ]
 
 let_intro ::  TH.Name -> RewriteH CoreExpr
