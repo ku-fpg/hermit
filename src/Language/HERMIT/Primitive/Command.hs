@@ -6,19 +6,22 @@ import Language.HERMIT.External
 ------------------------------------------------------------------------------------
 
 externals :: [External]
-externals = 
-   [ 
-     external "exit"       Exit
+externals =
+   [
+     external "exit"            Exit
        [ "exits HERMIT" ]
-   , external "pop"        PopFocus
+   , external "pop"             PopFocus
        [ "pops one lens" ]
-   , external "."          PopFocus
+   , external "."               PopFocus
        [ "pops one lens" ]
-   , external "superpop"   SuperPopFocus
+   , external "superpop"        SuperPopFocus
        [ "pops all lenses" ]
-   , external "help"       Help
-       [ "lists commands" ]
-   ]  
-   
+   , external "help [category]" (Help Nothing)
+       [ "lists commands"
+       , ""
+       , "optionally, specify a command category"
+       , "use 'help list' to see a list of categories"  ]
+   ]
+
 ------------------------------------------------------------------------------------
-  
+

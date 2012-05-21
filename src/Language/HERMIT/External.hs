@@ -25,7 +25,7 @@ data CmdCategory = CaseCmd
                  | TraversalCmd
                  | MetaCmd         -- cmds built from other commands, like bash
                  -- etc
-    deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show, Read, Bounded, Enum)
 
 
 data External = External
@@ -127,7 +127,7 @@ instance Extern KernelCommand where
     box i = KernelCommandBox i
     unbox (KernelCommandBox i) = i
 
-data Help = Help deriving Typeable
+data Help = Help (Maybe CmdCategory) deriving Typeable
 
 instance Extern Help where
     type Box Help = Help

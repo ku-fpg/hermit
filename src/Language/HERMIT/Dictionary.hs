@@ -52,8 +52,8 @@ all_externals =    prim_externals
 dictionary :: M.Map String Dynamic
 dictionary = toDictionary all_externals
 
-help :: [String]
-help = concatMap snd $ M.toList $ toHelp all_externals
+help :: [External] -> [String]
+help = concatMap snd . M.toList . toHelp
 
 --------------------------------------------------------------------------
 
@@ -69,7 +69,8 @@ interpExprH expr =
              , Interp $ \ (TranslateCoreStringBox tt) -> Right $ Query tt
              , Interp $ \ (LensCoreCoreBox l)         -> Right $ PushFocus l
              , Interp $ \ (IntBox i)                  -> Right $ PushFocus $ chooseL i
-             , Interp $ \ Help                        -> Left  $ unlines help
+             , Interp $ \ (Help cat)                  -> Left  $ unlines $ help
+                                                               $ maybe all_externals (\c -> filter (`hasTag` c) all_externals) cat
              ]
              (Left "interpExpr: bad type of expression")
 
@@ -82,17 +83,27 @@ runInterp dyn (Interp f : rest) bad = maybe (runInterp dyn rest bad) f (fromDyna
 
 --------------------------------------------------------------------------
 
+-- Why doesn't help immediately drop a Left here? Why bother making a Help command?
 interpExpr' :: ExprH -> Either String Dynamic
 interpExpr' (SrcName str) = Right $ toDyn $ NameBox $ TH.mkName str
 interpExpr' (CmdName str)
-  | all isDigit str                   = Right $ toDyn $ IntBox $ read str
+  | all isDigit str                     = Right $ toDyn $ IntBox $ read str
+  | ("help",cat) <- break isSpace str   = case dropWhile isSpace cat of
+                                            "list" -> Left $ unlines $ map show [minBound..(maxBound :: CmdCategory)]
+                                            cat'   -> Right $ toDyn $ Help $ readMaybe cat'
   | Just dyn <- M.lookup str dictionary = Right dyn
-  | otherwise                         = Left $ "Unrecognised command: " ++ show str
-interpExpr' (StrName str)             = Right $ toDyn $ StringBox $ str
+  | otherwise                           = Left $ "Unrecognised command: " ++ show str
+interpExpr' (StrName str)               = Right $ toDyn $ StringBox $ str
 interpExpr' (AppH e1 e2) = dynAppMsg (interpExpr' e1) (interpExpr' e2)
 
 dynAppMsg :: Either String Dynamic -> Either String Dynamic -> Either String Dynamic
 dynAppMsg f x = liftM2 dynApply f x >>= maybe (Left "apply failed") Right
+
+-- Surely this exists somewhere! Replace it if so.
+readMaybe :: (Read a) => String -> Maybe a
+readMaybe s = case reads s of
+                [(x,rest)] | all isSpace rest -> Just x
+                _ -> Nothing
 
 --------------------------------------------------------------------------
 
@@ -106,4 +117,4 @@ bash = repeatR $ orR [ maybe (fail "bash: fromDynamic failed") (anybuR . unbox)
 
 bashHelp :: [String]
 bashHelp = "Bash runs the following commands:"
-           : (concatMap snd $ M.toList $ toHelp $ filter (`hasTag` Bash) all_externals)
+           : (help $ filter (`hasTag` Bash) all_externals)
