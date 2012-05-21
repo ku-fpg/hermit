@@ -8,9 +8,9 @@ import Language.KURE
 
 externals :: [External]
 externals = [
-              external "caseReduce" (promoteR caseReduce) [ "case-of-known-constructor" ]
+              external "caseReduce" (promoteR caseReduce) [ "case-of-known-constructor" ] .+ Bash .+ CaseCmd
             ]
-              
+
 -- | Case-of-known-constructor rewrite
 caseReduce :: RewriteH CoreExpr
 caseReduce = liftMT $ \ e -> case e of

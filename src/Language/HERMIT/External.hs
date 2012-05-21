@@ -15,10 +15,25 @@ import Language.HERMIT.Kernel
 type ExternalName = String
 type ExternalHelp = [String]
 
+data CmdTag = Bash -- this command will be run as part of the bash command
+            | Slow -- this command is slow
+            -- etc
+    deriving (Eq, Show, Read)
+
+data CmdCategory = CaseCmd
+                 | LetCmd
+                 | TraversalCmd
+                 | MetaCmd         -- cmds built from other commands, like bash
+                 -- etc
+    deriving (Eq, Ord, Show, Read)
+
+
 data External = External
         { externName :: ExternalName
         , externFun  :: Dynamic
         , externHelp :: ExternalHelp
+        , externTags :: [CmdTag]
+        , externCats :: [CmdCategory]
         }
 
 external :: Extern a => ExternalName -> a -> ExternalHelp -> External
@@ -26,19 +41,37 @@ external nm fn help = External
         { externName = nm
         , externFun  = toDyn (box fn)
         , externHelp = map ("  " ++) help
+        , externTags = []
+        , externCats = []
         }
+
+-- Unfortunately, record update syntax seems to associate to the right.
+-- This guy saves us some parens.
+infixl .+
+
+class ExternTag a where
+    (.+) :: External -> a -> External
+    hasTag :: External -> a -> Bool
+
+instance ExternTag CmdTag where
+    ex@(External {externTags = ts}) .+ t = ex { externTags = (t:ts) }
+    hasTag (External {externTags = ts}) t = t `elem` ts
+
+instance ExternTag CmdCategory where
+    ex@(External {externCats = cs}) .+ c = ex { externCats = (c:cs) }
+    hasTag (External {externCats = cs}) c = c `elem` cs
 
 toDictionary :: [External] -> Map ExternalName Dynamic
 toDictionary = fromListWithKey (\ k _ _ -> error $ "HERMIT Command Redefined: " ++ k) . map toD
   where
          toD :: External -> (ExternalName,Dynamic)
-         toD (External nm fn _) = (nm,fn)
+         toD e = (externName e, externFun e)
 
 toHelp :: [External] -> Map ExternalName ExternalHelp
 toHelp = fromList . map toH
   where
          toH :: External -> (ExternalName,ExternalHelp)
-         toH (External nm fn help) = (nm, (nm ++ " :: " ++ show (dynTypeRep fn)) : help)
+         toH e = (externName e, (externName e ++ " :: " ++ show (dynTypeRep (externFun e))) : externHelp e)
 
 -----------------------------------------------------------------
 
