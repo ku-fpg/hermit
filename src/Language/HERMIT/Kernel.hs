@@ -1,11 +1,11 @@
 {-# LANGUAGE KindSignatures, GADTs #-}
 
-module Language.HERMIT.Kernel ( 
-          
+module Language.HERMIT.Kernel (
+
           KernelCommand(..)
-        , KernelOutput(..)  
+        , KernelOutput(..)
         , runCommands
-          
+
 ) where
 
 import GhcPlugins
@@ -63,7 +63,7 @@ runCommands getCommand output modGuts = do ModGutsCore modGuts' <- newFocus [] c
 
     queryOut :: String -> CoreM ()
     queryOut = output . QueryResult
-        
+
     errOut :: String -> CoreM ()
     errOut =  output . ErrorMsg
 
@@ -86,13 +86,13 @@ runCommands getCommand output modGuts = do ModGutsCore modGuts' <- newFocus [] c
       where
         continue :: CoreM Core
         continue = loop pops c a
-        
+
         errOutCont :: String -> CoreM Core
         errOutCont msg = errOut msg >> continue
 
         coreChange :: Core -> CoreM Core
         coreChange a' = output (CoreChange a') >> loop pops c a'
-        
+
         popAll :: [Pop] -> CoreM Core
         popAll []  = return a
         popAll cks = runHermitMR return
