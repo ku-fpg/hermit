@@ -33,8 +33,6 @@ externals =
                 [ "Alpha rename (for a single Case Alternative)."]
          , external "alpha-case" (promoteR alphaCase)
                 [ "Alpha renaming for each alternative of a Case.."]
-         , external "let-sub" (promoteR letSubstR)
-                [ "Let substitution."]
          ]
 
 bindList :: Bind Id -> [Id]
@@ -170,7 +168,9 @@ substRecBindR v expReplacement =
 letSubstR :: RewriteH CoreExpr
 letSubstR = rewrite $ \ c exp ->
     case exp of
-      (Let (NonRec b be) e) -> do  apply (substR b be) c e
+      (Let (NonRec b be) e)
+         | isId b    -> apply (substR b be) c e
+         | otherwise -> fail "LetSubst failed. (is a type variable)"
       _ -> fail "LetSubst failed. Expr is not a Non-recursive Let."
 
 -- tests ...
