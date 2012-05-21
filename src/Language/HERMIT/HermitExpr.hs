@@ -13,6 +13,7 @@ import Data.Char
 data ExprH
         = SrcName String                -- variable names (refer to source code)
         | CmdName String                -- commands (to be looked up in Dictionary)
+        | StrName String                -- literal string
         | AppH ExprH ExprH              -- application
         deriving Show
 
@@ -70,12 +71,15 @@ parseExprH0 = \ inp ->
         | ("'",inp1) <- parseToken inp
         , (str,inp2) <- parseToken inp1
         ] ++
+        [ (StrName str,inp1)
+        | (str@('"':_),inp1) <- lex inp
+        ] ++
         [ (e,inp3)
         | ("(",inp1) <- parseToken inp
         , (e,inp2)   <- parseExprH1 inp1
         , (")",inp3) <- parseToken inp2
         ]
-        
+
 parseExprH1 :: ReadS ExprH
 parseExprH1 = \ inp ->
         [ (foldl AppH e es,inp2)
@@ -92,7 +96,7 @@ parseExprsH1 = \ inp ->
         [ ([], inp) ]
 
 item :: String -> ReadS ()
-item str = \ inp -> 
+item str = \ inp ->
         [ ((),rest)
         | (tok,rest) <- parseToken inp
         , tok == str
@@ -107,6 +111,7 @@ parseToken ('{' :cs) = [("{",cs)]
 parseToken ('}' :cs) = [("}",cs)]
 parseToken (';' :cs) = [(";",cs)]
 parseToken ('\'':cs) = [("'",cs)]
+parseToken ('\"':cs) = [("\"",cs)]
 parseToken (c   :cs) | isSpace c = parseToken cs
                      | isId c    = [span isId (c:cs)]
 parseToken _         = []
@@ -115,7 +120,7 @@ parseToken _         = []
 
 isId :: Char -> Bool
 isId c = isAlphaNum c || c `elem` "._-:"
-               
+
 ---------------------------------------------
 
 

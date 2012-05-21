@@ -101,4 +101,11 @@ instance Extern Help where
     box i = i
     unbox i = i
 
+data StringBox = StringBox String deriving Typeable
+
+instance Extern String where
+    type Box String = StringBox
+    box i = StringBox i
+    unbox (StringBox i) = i
+
 -----------------------------------------------------------------

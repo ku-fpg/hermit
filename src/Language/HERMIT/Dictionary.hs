@@ -79,6 +79,7 @@ interpExpr' (CmdName str)
   | all isDigit str                   = Right $ toDyn $ IntBox $ read str
   | Just dyn <- lookup str dictionary = Right dyn
   | otherwise                         = Left $ "Unrecognised command: " ++ show str
+interpExpr' (StrName str)             = Right $ toDyn $ StringBox $ str
 interpExpr' (AppH e1 e2) = dynAppMsg (interpExpr' e1) (interpExpr' e2)
 
 dynAppMsg :: Either String Dynamic -> Either String Dynamic -> Either String Dynamic
