@@ -66,7 +66,7 @@ alphaRecLet :: RewriteH CoreExpr
 alphaRecLet = do (Let bds@(Rec _) e) <- idR
                  let boundIds = bindList bds
                  freshBoundIds <- sequence $ fmap (\ b -> constMT $ newVarH (varNameH b) (idType b)) boundIds
-                 letRecT (\ _ -> (foldr seqSubst idR (zip boundIds freshBoundIds)))
+                 letRecDefT (\ _ -> (foldr seqSubst idR (zip boundIds freshBoundIds)))
                             (foldr seqSubst idR (zip boundIds freshBoundIds))
                             (\ bds' e' -> let freshBds = zip freshBoundIds (map snd bds') in (Let (Rec freshBds) e'))
     where seqSubst (v,v') t = t >-> (substR v $ Var v')
@@ -160,7 +160,7 @@ substRecBindR v expReplacement =
        case (v `elem` boundIds) of
          True -> idR
          _    -> case (null $ List.intersect boundIds (freeIds expReplacement)) of
-                  True -> recT (\ _ -> (substR v expReplacement)) Rec
+                  True -> recDefT (\ _ -> (substR v expReplacement)) Rec
                   _    -> idR
 
 
