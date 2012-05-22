@@ -9,10 +9,10 @@ import qualified Data.List as List
 import Language.KURE
 import Control.Applicative
 
+import Language.HERMIT.HermitMonad
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv as Env
 import Language.HERMIT.External
-import Language.HERMIT.Primitive.Core
 
 import qualified Language.Haskell.TH as TH
 
@@ -70,7 +70,7 @@ alphaRecLet :: RewriteH CoreExpr
 alphaRecLet = do (Let bds@(Rec _) e) <- idR
                  let boundIds = bindList bds
                  freshBoundIds <- sequence $ fmap freshVarT boundIds
-                 letRecT (\ _ -> (foldr seqSubst idR (zip boundIds freshBoundIds)))
+                 letRecDefT (\ _ -> (foldr seqSubst idR (zip boundIds freshBoundIds)))
                             (foldr seqSubst idR (zip boundIds freshBoundIds))
                             (\ bds' e' -> let freshBds = zip freshBoundIds (map snd bds') in (Let (Rec freshBds) e'))
     where seqSubst (v,v') t = t >-> (substR v $ Var v')
@@ -155,7 +155,7 @@ substRecBindR v expReplacement =
        let boundIds = bindList exp
        whenT (v `elem` boundIds) idR
          <+ whenT (not . null $ List.intersect boundIds (freeIds expReplacement)) idR
-         <+ (recT (\ _ -> (substR v expReplacement)) Rec)
+         <+ (recDefT (\ _ -> (substR v expReplacement)) Rec)
 
 letSubstR :: RewriteH CoreExpr
 letSubstR = rewrite $ \ c exp ->

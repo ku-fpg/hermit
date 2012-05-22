@@ -1,3 +1,4 @@
 consider 'foo
-  beta-reduce
+    bash
+--  beta-reduce
 .

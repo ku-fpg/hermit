@@ -5,7 +5,7 @@ module Language.HERMIT.HermitKure
          TranslateH
        , RewriteH
        , LensH
-       , Core(..)
+       , Core(..), CoreDef(..)
        -- Scoping Combinators
        , modGutsT
        , listBindT
@@ -24,6 +24,8 @@ module Language.HERMIT.HermitKure
        , coercionT
        , letNonRecT
        , letRecT
+       , recDefT
+       , letRecDefT
        -- Useful Translations
        , pathT
        )
@@ -56,9 +58,17 @@ type LensH a b = Lens HermitEnv HermitM a b
 --     (a) we do not need that functionality, and
 --     (b) the types are complicated and we're not sure that we understand them.
 
+-- | In GHC Core, recursive definitions are encoded as (Id, CoreExpr) pairs.
+--   Here we use an isomorphic data type.
+data CoreDef = Def Id CoreExpr
+
+defToRecBind :: [CoreDef] -> CoreBind
+defToRecBind = Rec . map (\ (Def v e) -> (v,e))
+
 data Core = ModGutsCore  ModGuts
           | ProgramCore  CoreProgram
           | BindCore     CoreBind
+          | DefCore      CoreDef
           | ExprCore     CoreExpr
           | AltCore      CoreAlt
 
@@ -75,6 +85,7 @@ instance WalkerR HermitEnv HermitM Core where
           ModGutsCore x -> allRgeneric r c x
           ProgramCore x -> allRgeneric r c x
           BindCore x    -> allRgeneric r c x
+          DefCore x     -> allRgeneric r c x
           ExprCore x    -> allRgeneric r c x
           AltCore x     -> allRgeneric r c x
 
@@ -82,6 +93,7 @@ instance WalkerR HermitEnv HermitM Core where
           ModGutsCore x -> anyRgeneric r c x
           ProgramCore x -> anyRgeneric r c x
           BindCore x    -> anyRgeneric r c x
+          DefCore x     -> anyRgeneric r c x
           ExprCore x    -> anyRgeneric r c x
           AltCore x     -> anyRgeneric r c x
 
@@ -90,6 +102,7 @@ instance Monoid b => WalkerT HermitEnv HermitM Core b where
           ModGutsCore x -> crushTgeneric t c x
           ProgramCore x -> crushTgeneric t c x
           BindCore x    -> crushTgeneric t c x
+          DefCore x     -> crushTgeneric t c x
           ExprCore x    -> crushTgeneric t c x
           AltCore x     -> crushTgeneric t c x
 
@@ -98,6 +111,7 @@ instance WalkerL HermitEnv HermitM Core where
           ModGutsCore x -> chooseLgeneric n c x
           ProgramCore x -> chooseLgeneric n c x
           BindCore x    -> chooseLgeneric n c x
+          DefCore x     -> chooseLgeneric n c x
           ExprCore x    -> chooseLgeneric n c x
           AltCore x     -> chooseLgeneric n c x
 
@@ -176,13 +190,14 @@ instance Term CoreBind where
 
 instance WalkerR HermitEnv HermitM CoreBind where
   allR r = nonRecT (extractR r) NonRec
-        <+ recT (\ _ -> extractR r) Rec
+        <+ recT (\ _ -> extractR r) defToRecBind
 
   anyR r = nonRecT (extractR r) NonRec
-        <+ recT' (\ _ -> attemptExtractR r) (attemptAnyN Rec . (map.liftA) (\ (v,(b,e)) -> (b,(v,e))))
+        <+ recT' (\ _ -> attemptExtractR r) (attemptAnyN defToRecBind)
 
 instance  Monoid b => WalkerT HermitEnv HermitM CoreBind b where
-  crushT t = nonRecT (extractT t) (\ _ -> id) <+ recT (\ _ -> extractT t) (mconcat . map snd)
+  crushT t = nonRecT (extractT t) (\ _ -> id)
+          <+ recT (\ _ -> extractT t) mconcat
 
 instance WalkerL HermitEnv HermitM CoreBind where
   chooseL n = (case n of
@@ -191,30 +206,50 @@ instance WalkerL HermitEnv HermitM CoreBind where
               ) <+ missingChildL n
     where
       nonrec = nonRecT exposeT (chooseL1of2 NonRec)
-      rec    = do Rec bds <- idR
-                  guard (n >= 0 && n < length bds)
-                  recT (const exposeT)                          -- can't quite use chooseLMofN here, as we're dealing with [(Id,a)]
-                       (\ cbds -> chooseLaux (snd (cbds !! n))  -- rather than just [a] (where a is the interesting child).
-                                             (\ e -> Rec $ atIndex n (second $ const e) bds)
-                       )
-
+      rec    = do sz <- numChildrenT
+                  guard (n >= 0 && n < sz)
+                  recT (const exposeT) (chooseLMofN n defToRecBind)
 
 nonRecT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreBind b
 nonRecT t f = translate $ \ c e -> case e of
                                      NonRec v e' -> f v <$> apply t (c @@ 0) e'
                                      _           -> fail "nonRecT: not NonRec"
 
-recT' :: (Int -> TranslateH CoreExpr a) -> ([HermitM (Id,a)] -> HermitM b) -> TranslateH CoreBind b
+recT' :: (Int -> TranslateH CoreDef a) -> ([HermitM a] -> HermitM b) -> TranslateH CoreBind b
 recT' t f = translate $ \ c e -> case e of
-         Rec bds -> -- Notice how we add the scoping bindings here *before* decending into the rhss.
+         Rec bds -> -- Notice how we add the scoping bindings here *before* decending into each individual definition.
                     let c' = addHermitBinding (Rec bds) c
-                     in f [ (v,) <$> apply (t n) (c' @@ n) e1
-                          | ((v,e1),n) <- zip bds [0..]
+                     in f [ apply (t n) (c' @@ n) (Def v e) -- here we convert from (Id,CoreExpr) to CoreDef
+                          | ((v,e),n) <- zip bds [0..]
                           ]
          _       -> fail "recT: not Rec"
 
-recT :: (Int -> TranslateH CoreExpr a) -> ([(Id,a)] -> b) -> TranslateH CoreBind b
+recT :: (Int -> TranslateH CoreDef a) -> ([a] -> b) -> TranslateH CoreBind b
 recT t f = recT' t (fmap f . sequence)
+
+---------------------------------------------------------------------
+
+instance Injection CoreDef Core where
+  inject                = DefCore
+  retract (DefCore def) = Just def
+  retract _             = Nothing
+
+instance Term CoreDef where
+  type Generic CoreDef = Core
+
+instance WalkerR HermitEnv HermitM CoreDef where
+  allR r = defT (extractR r) Def
+  anyR = allR  -- only one interesting child, allR and anyR behave the same
+
+instance Monoid b => WalkerT HermitEnv HermitM CoreDef b where
+  crushT t = defT (extractT t) (\ _ -> id)
+
+instance WalkerL HermitEnv HermitM CoreDef where
+  chooseL 0 = defT exposeT (chooseL1of2 Def)
+  chooseL n = missingChildL n
+
+defT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreDef b
+defT t f = translate $ \ c (Def v e) -> f v <$> apply t (c @@ 0) e
 
 ---------------------------------------------------------------------
 
@@ -304,8 +339,8 @@ instance WalkerL HermitEnv HermitM CoreExpr where
      where
        -- Note we use index (n-1) because 0 refers to the expression being scrutinised.
        caseChooseL :: LensH CoreExpr Core
-       caseChooseL = do Case _ _ _ alts <- idR
-                        guard (n > 0 && n <= length alts)
+       caseChooseL = do sz <- numChildrenT
+                        guard (n > 0 && n < sz)
                         caseT idR (const exposeT) (\ e v t -> chooseLMofN (n-1) (Case e v t))
 
 ---------------------------------------------------------------------
@@ -391,8 +426,14 @@ coercionT f = liftMT $ \ e -> case e of
 letNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (Id -> a1 -> a2 -> b) -> TranslateH CoreExpr b
 letNonRecT t1 t2 f = letT (nonRecT t1 (,)) t2 (uncurry f)
 
-letRecT :: (Int -> TranslateH CoreExpr a1) -> TranslateH CoreExpr a2 -> ([(Id,a1)] -> a2 -> b) -> TranslateH CoreExpr b
+letRecT :: (Int -> TranslateH CoreDef a1) -> TranslateH CoreExpr a2 -> ([a1] -> a2 -> b) -> TranslateH CoreExpr b
 letRecT t1s t2 f = letT (recT t1s id) t2 f
+
+recDefT :: (Int -> TranslateH CoreExpr a1) -> ([(Id,a1)] -> b) -> TranslateH CoreBind b
+recDefT ts f = recT (\ n -> defT (ts n) (,)) f
+
+letRecDefT ::  (Int -> TranslateH CoreExpr a1) -> TranslateH CoreExpr a2 -> ([(Id,a1)] -> a2 -> b) -> TranslateH CoreExpr b
+letRecDefT t1s t2 f = letRecT (\ n -> defT (t1s n) (,)) t2 f
 
 ---------------------------------------------------------------------
 
