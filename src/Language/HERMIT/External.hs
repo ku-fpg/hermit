@@ -61,14 +61,14 @@ instance ExternTag CmdCategory where
     ex@(External {externCats = cs}) .+ c = ex { externCats = (c:cs) }
     hasTag (External {externCats = cs}) c = c `elem` cs
 
-toDictionary :: [External] -> Map ExternalName Dynamic
-toDictionary = fromListWithKey (\ k _ _ -> error $ "HERMIT Command Redefined: " ++ k) . map toD
+toDictionary :: [External] -> Map ExternalName [Dynamic]
+toDictionary = fromListWith (++) . map toD
   where
-         toD :: External -> (ExternalName,Dynamic)
-         toD e = (externName e, externFun e)
+         toD :: External -> (ExternalName,[Dynamic])
+         toD e = (externName e, [externFun e])
 
 toHelp :: [External] -> Map ExternalName ExternalHelp
-toHelp = fromList . map toH
+toHelp = fromListWith (++) . map toH
   where
          toH :: External -> (ExternalName,ExternalHelp)
          toH e = (externName e, (externName e ++ " :: " ++ show (dynTypeRep (externFun e))) : externHelp e)

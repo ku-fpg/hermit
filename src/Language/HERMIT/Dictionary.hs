@@ -49,7 +49,7 @@ all_externals =    prim_externals
                 ++ [ external "bash" (promoteR bash) bashHelp .+ MetaCmd
                    ]
 
-dictionary :: M.Map String Dynamic
+dictionary :: M.Map String [Dynamic]
 dictionary = toDictionary all_externals
 
 help :: [External] -> [String]
@@ -77,27 +77,43 @@ interpExprH expr =
 data Interp :: * -> * where
    Interp :: Typeable a => (a -> b) -> Interp b
 
-runInterp :: Dynamic -> [Interp b] -> b -> b
-runInterp _   []                bad = bad
-runInterp dyn (Interp f : rest) bad = maybe (runInterp dyn rest bad) f (fromDynamic dyn)
+runInterp :: [Dynamic] -> [Interp b] -> b -> b
+runInterp dyns interps bad = head $
+             [f a
+             | Interp f <- interps
+             , Just a <- map fromDynamic dyns
+             ] ++ [ bad ]
+
+
 
 --------------------------------------------------------------------------
 
+interpExpr :: ExprH -> Either String Dynamic
+interpExpr expr =
+        case interpExpr' expr of
+          Left msg -> Left msg
+          Right [r] -> Right r
+          Right []  -> Left $ "no valid interpretation"
+          Right _   -> Left $ "multiple valid interpretations"
+
 -- Why doesn't help immediately drop a Left here? Why bother making a Help command?
-interpExpr' :: ExprH -> Either String Dynamic
-interpExpr' (SrcName str) = Right $ toDyn $ NameBox $ TH.mkName str
+interpExpr' :: ExprH -> Either String [Dynamic]
+interpExpr' (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
 interpExpr' (CmdName str)
-  | all isDigit str                     = Right $ toDyn $ IntBox $ read str
+  | all isDigit str                     = return [ toDyn $ IntBox $ read str ]
   | ("help",cat) <- break isSpace str   = case dropWhile isSpace cat of
                                             "list" -> Left $ unlines $ map show [minBound..(maxBound :: CmdCategory)]
-                                            cat'   -> Right $ toDyn $ Help $ readMaybe cat'
-  | Just dyn <- M.lookup str dictionary = Right dyn
+                                            cat'   -> return [ toDyn $ Help $ readMaybe cat' ]
+  | Just dyn <- M.lookup str dictionary = return dyn
   | otherwise                           = Left $ "Unrecognised command: " ++ show str
-interpExpr' (StrName str)               = Right $ toDyn $ StringBox $ str
+interpExpr' (StrName str)               = return [ toDyn $ StringBox $ str ]
 interpExpr' (AppH e1 e2) = dynAppMsg (interpExpr' e1) (interpExpr' e2)
 
-dynAppMsg :: Either String Dynamic -> Either String Dynamic -> Either String Dynamic
-dynAppMsg f x = liftM2 dynApply f x >>= maybe (Left "apply failed") Right
+dynAppMsg :: Either String [Dynamic] -> Either String [Dynamic] -> Either String [Dynamic]
+dynAppMsg f x = liftM2 dynApply' f x >>= return
+   where
+           dynApply' :: [Dynamic] -> [Dynamic] -> [Dynamic]
+           dynApply' fs xs = [ r | f <- fs, x <- xs, Just r <- return (dynApply f x)]
 
 -- Surely this exists somewhere! Replace it if so.
 readMaybe :: (Read a) => String -> Maybe a
