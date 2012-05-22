@@ -46,7 +46,6 @@ Library
        Language.HERMIT.Primitive.Subst
        Language.HERMIT.Primitive.Local
        Language.HERMIT.Primitive.New
-       Language.HERMIT.Primitive.Core
 
   Other-modules:
        Language.Core.Quote

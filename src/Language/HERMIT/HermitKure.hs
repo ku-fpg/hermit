@@ -35,6 +35,7 @@ import GhcPlugins hiding (empty)
 
 import Language.KURE
 import Language.KURE.Injection
+import Language.KURE.Walker
 import Language.KURE.Utilities
 
 import Language.HERMIT.HermitEnv
