@@ -28,7 +28,6 @@ module Language.HERMIT.HermitKure
        , letRecDefT
        -- Useful Translations
        , pathT
-       , numChildrenT
        )
 where
 
