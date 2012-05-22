@@ -24,11 +24,11 @@ externals =
            external "beta-reduce" (promoteR beta_reduce)
                      [ "((\\ v -> E1) E2) ==> let v = E2 in E1, fails otherwise"
                      , "this form of beta reduction is safe if E2 is an arbitrary"
-		     , "expression (won't duplicate work)" ]
+                     , "expression (won't duplicate work)" ] .+ Bash
          , external "beta-expand" (promoteR beta_expand)
-                [ "(let v = E1 in E2) ==> (\\ v -> E2) E1, fails otherwise" ]
+                     [ "(let v = E1 in E2) ==> (\\ v -> E2) E1, fails otherwise" ]
          , external "dead-code" (promoteR $ not_defined "dead-code")
-                     [ "let x = E1 in E2 ==> E2, if x is not used in E2, fails otherwise" ]
+                     [ "let x = E1 in E2 ==> E2, if x is not used in E2, fails otherwise" ] .+ Bash
          , external "inline-let" (promoteR $ not_defined "inline")
                      [ "'inline x': let x = E1 in ...x... ==> let x = E1 in ...E1..., fails otherwise" ]
          , external "constructor-reuse" (promoteR $ not_defined "constructor-reuse")

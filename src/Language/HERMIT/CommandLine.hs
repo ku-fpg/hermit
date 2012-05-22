@@ -33,33 +33,6 @@ printKernelOutput (QueryResult msg) = putStrLn msg
 printKernelOutput (FocusChange _ a) = putStrLn (show2 a)
 printKernelOutput (CoreChange a)    = putStrLn (show2 a)
 
--- THIS CODE IS FROM BEFORE THE KernalOutput DATA TYPE
--- commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
--- commandLine gets modGuts = do
---     let getCmd :: HermitEnv -> Core -> IO Command
---         getCmd _ e = do
---           putStrLn (show2 e)
---           let loop = do
---                 maybeLine <- gets
---                 case maybeLine of
---                    Nothing -> return Exit
---                    Just line | all isSpace line -> loop
---                    Just ('-':'-': _) -> loop       -- comment
---                    Just line -> do
---                      case Expr.parseExpr line of
---                                  Left msg -> do
---                                      putStrLn $ "parse failure: " ++ show msg
---                                      loop
---                                  Right expr -> case interpExpr expr of
---                                                  Right cmd -> return cmd
---                                                  Left msg -> do
---                                                          putStrLn msg
---                                                          loop
---           loop
-
---     runCommands (liftIO getCmd) print modGuts
-
-
 -- Later, this will have depth, and other pretty print options.
 class Show2 a where
         show2 :: a -> String
