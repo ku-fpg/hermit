@@ -10,12 +10,11 @@ import Control.Applicative
 import Language.KURE
 import Language.KURE.Injection
 
+import Language.HERMIT.HermitMonad
+import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
-import Language.HERMIT.HermitEnv
 import Language.HERMIT.GHC
-
-import Language.HERMIT.Primitive.Core
 
 import qualified Language.Haskell.TH as TH
 

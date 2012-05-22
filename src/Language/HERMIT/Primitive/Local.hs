@@ -13,7 +13,6 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.External
 
-import Language.HERMIT.Primitive.Core
 import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------

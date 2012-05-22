@@ -1,10 +1,12 @@
 module Language.HERMIT.HermitMonad where
 
 import GhcPlugins hiding (empty)
-
 import MonadUtils       -- from GHC
+
 import Control.Applicative
 import Control.Monad
+
+import qualified Language.Haskell.TH as TH
 
 ----------------------------------------------------------------------------
 
@@ -87,5 +89,19 @@ instance MonadIO HermitM where
 
 instance MonadUnique HermitM where
    getUniqueSupplyM = liftCoreM getUniqueSupplyM
+
+----------------------------------------------------------------------------
+
+newVarH :: TH.Name -> Type -> HermitM Id
+newVarH nm ty = do uq <- getUniqueM
+                   let fast_str = mkFastString (show nm)
+                       name     = mkSystemVarName uq fast_str
+                   return (mkLocalId name ty)
+
+newTypeVarH :: TH.Name -> Kind -> HermitM TyVar
+newTypeVarH = undefined -- TO DO!
+
+freeIds :: CoreExpr -> [Id]
+freeIds  = uniqSetToList . exprFreeIds
 
 ----------------------------------------------------------------------------
