@@ -20,6 +20,7 @@ import Language.HERMIT.HermitMonad
 -- | 'KernelCommand' is what you send to the HERMIT kernel.
 data KernelCommand :: * where
    Exit          ::                             KernelCommand
+   Status        ::                             KernelCommand
    Message       :: String                   -> KernelCommand
    Apply         :: RewriteH Core            -> KernelCommand
    Query         :: TranslateH Core String   -> KernelCommand
@@ -29,6 +30,7 @@ data KernelCommand :: * where
 
 instance Show KernelCommand where
    show Exit           = "Exit"
+   show Status         = "Status"
    show (Apply _)      = "Apply"
    show (Query _)      = "Query"
    show (PushFocus _)  = "PushFocus"
@@ -81,6 +83,7 @@ runCommands getCommand output modGuts = do ModGutsCore modGuts' <- newFocus [] c
                                             ((c',k):cks) -> runHermitMR (newFocus cks c') errOutCont (k a)
                          SuperPopFocus -> popAll pops >>= newFocus [] c0
                          Exit          -> popAll pops
+                         Status        -> newFocus pops c a
                          Message _     -> continue -- currently messages are ignored
 
       where

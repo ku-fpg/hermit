@@ -10,6 +10,8 @@ externals =
    [
      external "exit"            Exit
        [ "exits HERMIT" ]
+   , external "status"          Status
+       [ "redisplays current state" ]
    , external "pop"             PopFocus
        [ "pops one lens" ]
    , external "."               PopFocus
