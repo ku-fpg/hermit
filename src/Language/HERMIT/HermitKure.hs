@@ -219,8 +219,8 @@ recT' :: (Int -> TranslateH CoreDef a) -> ([HermitM a] -> HermitM b) -> Translat
 recT' t f = translate $ \ c e -> case e of
          Rec bds -> -- Notice how we add the scoping bindings here *before* decending into each individual definition.
                     let c' = addHermitBinding (Rec bds) c
-                     in f [ apply (t n) (c' @@ n) (Def v e) -- here we convert from (Id,CoreExpr) to CoreDef
-                          | ((v,e),n) <- zip bds [0..]
+                     in f [ apply (t n) (c' @@ n) (Def v e') -- here we convert from (Id,CoreExpr) to CoreDef
+                          | ((v,e'),n) <- zip bds [0..]
                           ]
          _       -> fail "recT: not Rec"
 
