@@ -3,20 +3,9 @@ module Language.HERMIT.GHC where
 
 import GhcPlugins
 
-import Control.Applicative
-
-import Language.KURE
-import Language.KURE.Injection
-
-import Language.HERMIT.HermitKure
-import Language.HERMIT.External
-import Language.HERMIT.HermitEnv
-
-import Language.HERMIT.Primitive.Core
 import Data.Maybe (isJust)
 
-import qualified Language.Haskell.TH as TH
-
+--------------------------------------------------------------------------
 
 ppIdInfo :: Id -> IdInfo -> SDoc
 ppIdInfo id info
@@ -51,10 +40,12 @@ ppIdInfo id info
 
 showAttributes :: [(Bool,SDoc)] -> SDoc
 showAttributes stuff
-  | null docs = GhcPlugins.empty
+  | null docs = empty
   | otherwise = brackets (sep (punctuate comma docs))
   where
     docs = [d | (True,d) <- stuff]
+
+--------------------------------------------------------------------------
 
 
 
