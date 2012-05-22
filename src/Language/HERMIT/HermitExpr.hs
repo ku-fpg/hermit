@@ -63,11 +63,6 @@ parseExprsH' =
 
 parseExprH0 :: ReadS ExprH
 parseExprH0 = \ inp ->
-        [ (CmdName $ "help " ++ str2,inp2)
-        | (str,inp1) <- parseToken inp
-        , map toLower str == "help"
-        , (str2,inp2) <- parseToken inp1
-        ] ++
         [ (CmdName str,inp1)
         | (str,inp1) <- parseToken inp
         , all isId str

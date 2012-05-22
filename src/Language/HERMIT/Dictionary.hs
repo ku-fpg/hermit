@@ -47,13 +47,15 @@ prim_externals =    Command.externals
 all_externals :: [External]
 all_externals =    prim_externals
                 ++ [ external "bash" (promoteR bash) bashHelp .+ MetaCmd
+                   , external "help"            (help all_externals Nothing)
+                        [ "lists commands"]
+                   , external "help" (help all_externals . Just :: String -> String)
+                        [ "help with a specific cmd or path"
+                        , "use 'help ls' to see a list of path"  ]
                    ]
 
 dictionary :: M.Map String [Dynamic]
 dictionary = toDictionary all_externals
-
-help :: [External] -> [String]
-help = concatMap snd . M.toList . toHelp
 
 --------------------------------------------------------------------------
 
@@ -69,8 +71,11 @@ interpExprH expr =
              , Interp $ \ (TranslateCoreStringBox tt) -> Right $ Query tt
              , Interp $ \ (LensCoreCoreBox l)         -> Right $ PushFocus l
              , Interp $ \ (IntBox i)                  -> Right $ PushFocus $ chooseL i
+             , Interp $ \ (StringBox str)             -> Left $ str
+{-
              , Interp $ \ (Help cat)                  -> Left  $ unlines $ help
                                                                $ maybe all_externals (\c -> filter (`hasTag` c) all_externals) cat
+-}
              ]
              (Left "interpExpr: bad type of expression")
 
@@ -85,6 +90,12 @@ runInterp dyns interps bad = head $
              ] ++ [ bad ]
 
 
+make_help :: [External] -> [String]
+make_help = concatMap snd . M.toList . toHelp
+
+help :: [External] -> Maybe String -> String
+help externals Nothing     = unlines $ make_help externals
+help externals (Just path) = "<.. todo look for path as part of cmd name ..>"
 
 --------------------------------------------------------------------------
 
@@ -101,10 +112,12 @@ interpExpr' :: ExprH -> Either String [Dynamic]
 interpExpr' (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
 interpExpr' (CmdName str)
   | all isDigit str                     = return [ toDyn $ IntBox $ read str ]
+{-
   | ("help",cat) <- break isSpace str   = case dropWhile isSpace cat of
                                             "list" -> Left $ unlines $ map show [minBound..(maxBound :: CmdCategory)]
                                             cat'   -> return [ toDyn $ Help $ readMaybe cat' ]
-  | Just dyn <- M.lookup str dictionary = return dyn
+-}
+  | Just dyn <- M.lookup str dictionary = return (toDyn (StringBox str) : dyn)
   | otherwise                           = Left $ "Unrecognised command: " ++ show str
 interpExpr' (StrName str)               = return [ toDyn $ StringBox $ str ]
 interpExpr' (AppH e1 e2) = dynAppMsg (interpExpr' e1) (interpExpr' e2)
@@ -123,6 +136,8 @@ readMaybe s = case reads s of
 
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------
+
 -- Runs every command tagged with 'Bash' with anybuR,
 -- if any of them succeed, then it tries all of them again.
 -- Only fails if all of them fail the first time.
@@ -133,4 +148,4 @@ bash = repeatR $ orR [ maybe (fail "bash: fromDynamic failed") (anybuR . unbox)
 
 bashHelp :: [String]
 bashHelp = "Bash runs the following commands:"
-           : (help $ filter (`hasTag` Bash) all_externals)
+           : (make_help $ filter (`hasTag` Bash) all_externals)

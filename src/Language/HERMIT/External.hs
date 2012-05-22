@@ -127,13 +127,6 @@ instance Extern KernelCommand where
     box i = KernelCommandBox i
     unbox (KernelCommandBox i) = i
 
-data Help = Help (Maybe CmdCategory) deriving Typeable
-
-instance Extern Help where
-    type Box Help = Help
-    box i = i
-    unbox i = i
-
 data StringBox = StringBox String deriving Typeable
 
 instance Extern String where
