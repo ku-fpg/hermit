@@ -43,6 +43,7 @@ instance Show2 Core where
         show2 (BindCore      bd) = show2 bd
         show2 (ExprCore      e)  = show2 e
         show2 (AltCore       a)  = show2 a
+        show2 (DefCore       a)  = show2 a
 
 instance Show2 ModGuts where
         show2 modGuts =
@@ -57,18 +58,23 @@ instance Show2 CoreProgram where
                 "[Code Program]\n" ++
                 showSDoc (ppr codeProg)
 
-instance Show2 (Expr Id) where
+instance Show2 CoreExpr where
         show2 expr =
                 "[Expr]\n" ++
                 showSDoc (ppr expr)
 
-instance Show2 (Alt Id) where
+instance Show2 CoreAlt where
         show2 alt =
                 "[alt]\n" ++
                 showSDoc (ppr alt)
 
 
-instance Show2 (Bind Id) where
+instance Show2 CoreBind where
         show2 bind =
                 "[Bind]\n" ++
                 showSDoc (ppr bind)
+
+instance Show2 CoreDef where
+        show2 (Def v e) =
+                "[Def]\n" ++
+                showSDoc (ppr v) ++ " = " ++ showSDoc (ppr e)
