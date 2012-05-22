@@ -44,12 +44,16 @@ bindList (Rec binds) = map fst binds
 varNameH :: Id -> TH.Name
 varNameH = TH.mkName . showSDoc . ppr
 
+freshVarT :: Id -> TranslateH a Id
+freshVarT v = constMT $ newVarH (varNameH v) (idType v)
+
 -- The alpha renaming functions defined here,
 -- rely on a function to return a globally fresh Id,
 -- therefore, they do not require a list of Id's which must not clash.
+
 alphaLambda :: RewriteH CoreExpr
 alphaLambda = do (Lam b e) <- idR
-                 b' <- constMT $ newVarH (varNameH b) (idType b)
+                 b' <- freshVarT b
                  lamT (substR b $ Var b') (\ _ -> Lam b')
 
 
@@ -59,13 +63,13 @@ alphaLet = alphaNonRecLet <+ alphaRecLet
 
 alphaNonRecLet :: RewriteH CoreExpr
 alphaNonRecLet = do Let (NonRec v e1) e2 <- idR
-                    v' <- constMT $ newVarH (varNameH v) (exprType e1)
+                    v' <- freshVarT v
                     letNonRecT idR (substR v $ Var v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
 
 alphaRecLet :: RewriteH CoreExpr
 alphaRecLet = do (Let bds@(Rec _) e) <- idR
                  let boundIds = bindList bds
-                 freshBoundIds <- sequence $ fmap (\ b -> constMT $ newVarH (varNameH b) (idType b)) boundIds
+                 freshBoundIds <- sequence $ fmap freshVarT boundIds
                  letRecT (\ _ -> (foldr seqSubst idR (zip boundIds freshBoundIds)))
                             (foldr seqSubst idR (zip boundIds freshBoundIds))
                             (\ bds' e' -> let freshBds = zip freshBoundIds (map snd bds') in (Let (Rec freshBds) e'))
@@ -75,7 +79,7 @@ alphaRecLet = do (Let bds@(Rec _) e) <- idR
 -- instead alphaAlt performs renaming over an individual Case alternative
 alphaAlt :: RewriteH CoreAlt
 alphaAlt = do (con, vs, e) <- idR
-              freshBoundIds <- sequence $ fmap (\ v' -> constMT $ newVarH (varNameH v') (idType v')) vs
+              freshBoundIds <- sequence $ fmap freshVarT vs
               altT (foldr seqSubst idR (zip vs freshBoundIds)) (\ _ _ e' -> (con, freshBoundIds, e'))
     where seqSubst (v,v') t = t >-> (substR v $ Var v')
 
@@ -96,31 +100,26 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
                     else idR
 
         rule345 :: RewriteH CoreExpr
-        rule345 = rewrite $ \ c exp ->
-                  case exp of
-                    Lam b e | (b == v) -> return exp
-                            | (b `notElem` freeIds expReplacement) ->
-                                apply (lamT (substR v expReplacement) Lam) c exp
-                            | (v `notElem` freeIds e) -> return exp
-                            | otherwise ->
-                                apply (alphaLambda  >-> lamT (substR v expReplacement) Lam) c exp
-                    _ -> fail $ "not a Lambda"
+        rule345 = do (Lam b e) <- idR
+                     whenT (b == v) idR
+                       <+ whenT (v `notElem` freeIds e) idR
+                       <+ whenT (b `notElem` freeIds expReplacement)
+                                (lamT (substR v expReplacement) Lam)
+                       <+ alphaLambda  >-> rule345
 
         rule6 = allR (promoteR $ substR v expReplacement)
         -- like Rule 3 and 4/5 above, but for lets
         rule78 :: RewriteH CoreExpr
-        rule78 = rewrite $ \ c exp ->
-                 case exp of
-                   Let bds e | (v `elem` (bindList bds)) -> return exp
-                             | (null $ List.intersect (bindList bds) (freeIds expReplacement)) ->
-                                 apply (letT (substBindR v expReplacement)  (substR v expReplacement)  Let) c exp
+        rule78 = do (Let bds e) <- idR
+                    whenT (v `elem` (bindList bds)) idR
+                       <+ whenT (null $ List.intersect (bindList bds) (freeIds expReplacement))
+                                (letT (substBindR v expReplacement)  (substR v expReplacement)  Let)
                              -- If v is not free in e, it may be free in the expression(s) bound by the let
-                             | (v `notElem` freeIds e) ->
-                                 apply (letT (substBindR v expReplacement) idR Let) c exp
+                       <+ whenT (v `notElem` freeIds e)
+                                (letT (substBindR v expReplacement) idR Let)
                              -- final case.  v is free in e, but the bound var(s) in the let appear
                              -- free in the replacement expression.  Alpha renaming to the rescue, and try again.
-                             | otherwise -> apply (alphaLet  >-> (letT idR (substR v expReplacement) Let)) c exp
-                   _ -> fail $ "not a Let"
+                       <+ alphaLet  >-> rule78
 
         -- edk?  Do we need to worry about clashes with the VBind component of a Case?
         --  For now, it is ignored here.
@@ -131,11 +130,10 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
 substAltR :: Id -> CoreExpr -> RewriteH CoreAlt
 substAltR v expReplacement =
     do (con, bs, e) <- idR
-       if (v `elem` bs)
-       then idR
-       else if (null $ List.intersect bs (freeIds expReplacement))
-            then altT (substR v expReplacement)  (,,)
-            else alphaAlt >-> (altT (substR v expReplacement)  (,,))
+       whenT (v `elem` bs) idR
+          <+ whenT (null $ List.intersect bs (freeIds expReplacement))
+                   (altT (substR v expReplacement)  (,,))
+          <+ alphaAlt >-> (substAltR v expReplacement)
 
 
 -- edk !! Note, this subst DOES NOT handle name clashes with variables bound in the Bind form,
@@ -147,23 +145,17 @@ substBindR v expReplacement = (substNonRecBindR v expReplacement) <+ (substRecBi
 substNonRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substNonRecBindR v expReplacement =
     do (NonRec b e) <- idR
-       if (b == v)
-       then idR
-       else if (b `notElem` freeIds expReplacement)
-            then nonRecT (substR v expReplacement) NonRec
-            else idR
+       whenT (b == v) idR
+         <+ whenT (b `elem` (freeIds expReplacement)) idR
+         <+ (nonRecT (substR v expReplacement) NonRec)
 
 substRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substRecBindR v expReplacement =
     do exp@(Rec bds) <- idR
        let boundIds = bindList exp
-       case (v `elem` boundIds) of
-         True -> idR
-         _    -> case (null $ List.intersect boundIds (freeIds expReplacement)) of
-                  True -> recT (\ _ -> (substR v expReplacement)) Rec
-                  _    -> idR
-
-
+       whenT (v `elem` boundIds) idR
+         <+ whenT (not . null $ List.intersect boundIds (freeIds expReplacement)) idR
+         <+ (recT (\ _ -> (substR v expReplacement)) Rec)
 
 letSubstR :: RewriteH CoreExpr
 letSubstR = rewrite $ \ c exp ->
