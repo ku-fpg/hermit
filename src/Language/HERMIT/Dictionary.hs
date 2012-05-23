@@ -64,7 +64,7 @@ dictionary = toDictionary all_externals
 -- The pretty printing dictionaries
 pp_dictionary :: M.Map String (PrettyH Core)
 pp_dictionary = M.fromList
-        [ ("ast",astCorePrettyH)
+        [ ("ghc",ghcCorePrettyH)
         ]
 
 --------------------------------------------------------------------------
