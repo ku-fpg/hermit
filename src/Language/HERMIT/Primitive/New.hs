@@ -27,9 +27,6 @@ externals =
          [
            external "let-intro" (promoteR' . let_intro)
                 [ "'let-intro v' performs E1 ==> (let v = E1 in v)" ]
-         , external "dce" (promoteR dce)
-                [ "dead code elimination removes a let. (let v = E1 in E2) ==> E2, if v is not free in E2,  fails otherwise"
-                , "condition: let is not-recursive" ]
          , external "var" (\ nm -> promoteR . var nm . extractR)
                 [ "'var <v>' applies a rewrite to all <v>" ]
          , external "info" (promoteT info)
@@ -47,14 +44,6 @@ externals =
 let_intro ::  TH.Name -> RewriteH CoreExpr
 let_intro nm = rewrite $ \ _ e -> do letvar <- newVarH nm (exprType e)
                                      return $ Let (NonRec letvar e) (Var letvar)
-
--- dead code elimination removes a let.
--- (let v = E1 in E2) => E2, if v is not free in E2
-dce :: RewriteH CoreExpr
-dce = liftMT $ \ e -> case e of
-        Let (NonRec n e1) e2 | n `notElem` freeIds e2 -> return e2
-        -- Neil: Should there not be a case here for when n `elem` freeIds e2?
-        _ -> fail "DCE failed. Not applied to a NonRec Let."
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
