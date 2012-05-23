@@ -67,6 +67,9 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
                                        Right cmd -> act st cmd
 
       act st Exit   = quit (cl_cursor st)
+      act st Status = do
+              True <- showFocus st
+              loop st
       act st (PushFocus ls) = do
               let newlens = myLens st `composeL` ls
               let st' = st { cl_lenses = newlens : cl_lenses st }
