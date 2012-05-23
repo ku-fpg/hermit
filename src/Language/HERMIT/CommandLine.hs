@@ -57,27 +57,60 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
 
       act st Exit   = quit (cl_cursor st)
       act st (PushFocus ls) = do
-              let newlens = myLens st
+              let newlens = myLens st `composeL` ls
               doc <- query ast (translateL newlens >-> (pretty st))
               print doc
               loop (st { cl_lenses = newlens : cl_lenses st })
+      act st PopFocus = do
+              let st' = st { cl_lenses = case cl_lenses st of
+                                          [] -> []
+                                          (_:xs) -> xs
+                           }
+              -- something changed, to print
+              doc <- query ast (focusT (myLens st') (pretty st))
+              print doc
+              loop st'
+      act st SuperPopFocus = do
+              let st' = st { cl_lenses = []
+                           }
+              -- something changed, to print
+              doc <- query ast (focusT (myLens st')  (pretty st))
+              print doc
+              loop st'
+      act st (Query q) = do
+
+              -- something changed, to print
+              doc <- query ast (focusT (myLens st) q)
+              print doc
+              -- same state
+              loop st
+
+      act st (Apply rr) = do
+              -- something changed (you've applied)
+              ast' <- applyK kernel ast (focusR (myLens st) rr)
+              doc  <- query ast' (focusT (myLens st) (pretty st))
+              print doc
+              -- same state
+              loop (st { cl_cursor = ast' })
 
   -- recurse using the command line
-  loop $ CommandLineState [] "std" ast
+  loop $ CommandLineState [] "ghc" ast
 
   -- we're done
   quitK kernel ast
   return ()
+
+focusR = rewriteL
+
+focusT :: (Monad m) => Lens c m a b -> Translate c m b d -> Translate c m a d
+focusT lens trans = lens >-> translate (\ _ ((c,b),_) -> apply trans c b)
+
 
 {-
    Exit          ::                             KernelCommand
    Status        ::                             KernelCommand
    Message       :: String                   -> KernelCommand
    Apply         :: RewriteH Core            -> KernelCommand
-   Query         :: TranslateH Core String   -> KernelCommand
-   PushFocus     :: LensH Core Core          -> KernelCommand
-   PopFocus      ::                             KernelCommand
-   SuperPopFocus ::                             KernelCommand
 -}
 
 {-
@@ -120,48 +153,3 @@ printKernelOutput (QueryResult msg) = putStrLn msg
 printKernelOutput (FocusChange _ a) = putStrLn (show2 a)
 printKernelOutput (CoreChange a)    = putStrLn (show2 a)
 
--- Later, this will have depth, and other pretty print options.
-class Show2 a where
-        show2 :: a -> String
-
-instance Show2 Core where
-        show2 (ModGutsCore   m)  = show2 m
-        show2 (ProgramCore   p)  = show2 p
-        show2 (BindCore      bd) = show2 bd
-        show2 (ExprCore      e)  = show2 e
-        show2 (AltCore       a)  = show2 a
-        show2 (DefCore       a)  = show2 a
-
-instance Show2 ModGuts where
-        show2 modGuts =
-                "[ModGuts for " ++ showSDoc (ppr (mg_module modGuts)) ++ "]\n" ++
-                 show (length (mg_binds modGuts)) ++ " binding group(s)\n" ++
-                 show (length (mg_rules modGuts)) ++ " rule(s)\n" ++
-                 showSDoc (ppr (mg_rules modGuts))
-
-
-instance Show2 CoreProgram where
-        show2 codeProg =
-                "[Code Program]\n" ++
-                showSDoc (ppr codeProg)
-
-instance Show2 CoreExpr where
-        show2 expr =
-                "[Expr]\n" ++
-                showSDoc (ppr expr)
-
-instance Show2 CoreAlt where
-        show2 alt =
-                "[alt]\n" ++
-                showSDoc (ppr alt)
-
-
-instance Show2 CoreBind where
-        show2 bind =
-                "[Bind]\n" ++
-                showSDoc (ppr bind)
-
-instance Show2 CoreDef where
-        show2 (Def v e) =
-                "[Def]\n" ++
-                showSDoc (ppr v) ++ " = " ++ showSDoc (ppr e)
