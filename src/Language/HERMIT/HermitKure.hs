@@ -8,6 +8,8 @@ module Language.HERMIT.HermitKure
        , Core(..), CoreDef(..)
        -- Scoping Combinators
        , modGutsT
+       , nilT
+       , consBindT
        , listBindT
        , nonRecT
        , recT
@@ -35,7 +37,6 @@ import GhcPlugins hiding (empty)
 
 import Language.KURE
 import Language.KURE.Injection
-import Language.KURE.Walker
 import Language.KURE.Utilities
 
 import Language.HERMIT.HermitEnv
@@ -43,7 +44,6 @@ import Language.HERMIT.HermitMonad
 
 import Control.Applicative
 import Control.Monad (guard)
-import Data.Monoid
 
 ---------------------------------------------------------------------
 
@@ -78,10 +78,25 @@ data Core = ModGutsCore  ModGuts
 instance Term Core where
   type Generic Core = Core
 
+  numChildren (ModGutsCore x) = numChildren x
+  numChildren (ProgramCore x) = numChildren x
+  numChildren (BindCore x)    = numChildren x
+  numChildren (DefCore x)     = numChildren x
+  numChildren (ExprCore x)    = numChildren x
+  numChildren (AltCore x)     = numChildren x
+
 -- Defining Walker instances for the Generic type 'Core' is almost entirely automated by KURE.
 -- Unfortunately, you still need to pattern match on the 'Core' data type.
 
-instance WalkerR HermitEnv HermitM Core where
+instance Walker HermitEnv HermitM Core where
+  childL n = translate $ \ c core -> case core of
+          ModGutsCore x -> childLgeneric n c x
+          ProgramCore x -> childLgeneric n c x
+          BindCore x    -> childLgeneric n c x
+          DefCore x     -> childLgeneric n c x
+          ExprCore x    -> childLgeneric n c x
+          AltCore x     -> childLgeneric n c x
+
   allR r = rewrite $ \ c core -> case core of
           ModGutsCore x -> allRgeneric r c x
           ProgramCore x -> allRgeneric r c x
@@ -98,24 +113,6 @@ instance WalkerR HermitEnv HermitM Core where
           ExprCore x    -> anyRgeneric r c x
           AltCore x     -> anyRgeneric r c x
 
-instance Monoid b => WalkerT HermitEnv HermitM Core b where
-  crushT t = translate $ \ c core -> case core of
-          ModGutsCore x -> crushTgeneric t c x
-          ProgramCore x -> crushTgeneric t c x
-          BindCore x    -> crushTgeneric t c x
-          DefCore x     -> crushTgeneric t c x
-          ExprCore x    -> crushTgeneric t c x
-          AltCore x     -> crushTgeneric t c x
-
-instance WalkerL HermitEnv HermitM Core where
-  chooseL n = translate $ \ c core -> case core of
-          ModGutsCore x -> chooseLgeneric n c x
-          ProgramCore x -> chooseLgeneric n c x
-          BindCore x    -> chooseLgeneric n c x
-          DefCore x     -> chooseLgeneric n c x
-          ExprCore x    -> chooseLgeneric n c x
-          AltCore x     -> chooseLgeneric n c x
-
 ---------------------------------------------------------------------
 
 instance Injection ModGuts Core where
@@ -126,17 +123,11 @@ instance Injection ModGuts Core where
 instance Term ModGuts where
   type Generic ModGuts = Core
 
-instance WalkerR HermitEnv HermitM ModGuts where
-  allR r = modGutsT (extractR r) (\ modGuts bds -> modGuts {mg_binds = bds})
+  numChildren _ = 1
 
-  anyR = allR -- only one interesting child, allR and anyR behave the same
-
-instance  Monoid b => WalkerT HermitEnv HermitM ModGuts b where
-  crushT t = modGutsT (extractT t) ( \ _ -> id)
-
-instance WalkerL HermitEnv HermitM ModGuts where
-  chooseL 0 = modGutsT exposeT (chooseL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
-  chooseL n = missingChildL n
+instance Walker HermitEnv HermitM ModGuts where
+  childL 0 = modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
+  childL n = missingChildL n
 
 -- slightly different; passes in *all* of the original
 modGutsT :: TranslateH CoreProgram a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
@@ -145,71 +136,63 @@ modGutsT t f = translate $ \ c modGuts -> f modGuts <$> apply t (c @@ 0) (mg_bin
 ---------------------------------------------------------------------
 
 instance Injection CoreProgram Core where
-  inject                     = ProgramCore
-  retract (ProgramCore guts) = Just guts
-  retract _                  = Nothing
+  inject                    = ProgramCore
+  retract (ProgramCore bds) = Just bds
+  retract _                 = Nothing
 
 instance Term CoreProgram where
   type Generic CoreProgram = Core
 
-instance WalkerR HermitEnv HermitM CoreProgram where
-  allR r = listBindT [] (extractR r) (extractR r) (:)
+  -- we consider only the head and tail to be interesting children
+  numChildren bds = min 2 (length bds)
 
-  anyR r = consBindT' (attemptExtractR r) (attemptExtractR r) (attemptAny2 (:))
+instance Walker HermitEnv HermitM CoreProgram where
+  childL 0 = consBindT exposeT idR (childL0of2 (:))
+  childL 1 = consBindT idR exposeT (childL1of2 (:))
+  childL n = missingChildL n
 
-instance Monoid b => WalkerT HermitEnv HermitM CoreProgram b where
-  crushT t = listBindT mempty (extractT t) (extractT t) mappend
-
-instance WalkerL HermitEnv HermitM CoreProgram where
-  chooseL 0 = consBindT exposeT idR (chooseL0of2 (:))
-  chooseL 1 = consBindT idR exposeT (chooseL1of2 (:))
-  chooseL n = missingChildL n
-
-nilT' :: HermitM b -> TranslateH [a] b
-nilT' b = liftMT $ \ as -> if null as then b else fail "no match for nilT"
-
-consBindT' :: TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH [CoreBind] b
-consBindT' t1 t2 f = translate $ \ c e -> case e of
-        bd:bds -> f (apply t1 (c @@ 0) bd) (apply t2 (addHermitBinding bd c @@ 1) bds)
-        _      -> fail "no match for consBindT"
+nilT :: b -> TranslateH [a] b
+nilT b = do [] <- idR
+            return b
 
 consBindT :: TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (a1 -> a2 -> b) -> TranslateH [CoreBind] b
-consBindT t1 t2 f = consBindT' t1 t2 (liftA2 f)
+consBindT t1 t2 f = translate $ \ c e -> case e of
+        bd:bds -> f <$> apply t1 (c @@ 0) bd <*> apply t2 (addHermitBinding bd c @@ 1) bds
+        _      -> fail "no match for consBindT"
 
 listBindT :: b -> TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (a1 -> a2 -> b) -> TranslateH [CoreBind] b
-listBindT b t1 t2 f = consBindT t1 t2 f <+ nilT' (pure b)
+listBindT b t1 t2 f = nilT b <+ consBindT t1 t2 f
 
 ---------------------------------------------------------------------
 
 instance Injection CoreBind Core where
   inject                  = BindCore
-  retract (BindCore expr) = Just expr
+  retract (BindCore bnd)  = Just bnd
   retract _               = Nothing
 
 instance Term CoreBind where
   type Generic CoreBind = Core
 
-instance WalkerR HermitEnv HermitM CoreBind where
+  numChildren (NonRec _ _) = 1
+  numChildren (Rec defs)   = length defs
+
+instance Walker HermitEnv HermitM CoreBind where
+  childL n = (case n of
+                 0 -> nonrec <+ rec
+                 _ -> rec
+             ) <+ missingChildL n
+    where
+      nonrec = nonRecT exposeT (childL1of2 NonRec)
+      rec    = do sz <- liftT numChildren
+                  guard (n >= 0 && n < sz)
+                  recT (const exposeT) (childLMofN n defToRecBind)
+
   allR r = nonRecT (extractR r) NonRec
         <+ recT (\ _ -> extractR r) defToRecBind
 
   anyR r = nonRecT (extractR r) NonRec
         <+ recT' (\ _ -> attemptExtractR r) (attemptAnyN defToRecBind)
 
-instance  Monoid b => WalkerT HermitEnv HermitM CoreBind b where
-  crushT t = nonRecT (extractT t) (\ _ -> id)
-          <+ recT (\ _ -> extractT t) mconcat
-
-instance WalkerL HermitEnv HermitM CoreBind where
-  chooseL n = (case n of
-                 0 -> nonrec <+ rec
-                 _ -> rec
-              ) <+ missingChildL n
-    where
-      nonrec = nonRecT exposeT (chooseL1of2 NonRec)
-      rec    = do sz <- numChildrenT
-                  guard (n >= 0 && n < sz)
-                  recT (const exposeT) (chooseLMofN n defToRecBind)
 
 nonRecT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreBind b
 nonRecT t f = translate $ \ c e -> case e of
@@ -238,16 +221,11 @@ instance Injection CoreDef Core where
 instance Term CoreDef where
   type Generic CoreDef = Core
 
-instance WalkerR HermitEnv HermitM CoreDef where
-  allR r = defT (extractR r) Def
-  anyR = allR  -- only one interesting child, allR and anyR behave the same
+  numChildren _ = 1
 
-instance Monoid b => WalkerT HermitEnv HermitM CoreDef b where
-  crushT t = defT (extractT t) (\ _ -> id)
-
-instance WalkerL HermitEnv HermitM CoreDef where
-  chooseL 0 = defT exposeT (chooseL1of2 Def)
-  chooseL n = missingChildL n
+instance Walker HermitEnv HermitM CoreDef where
+  childL 0 = defT exposeT (childL1of2 Def)
+  childL n = missingChildL n
 
 defT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreDef b
 defT t f = translate $ \ c (Def v e) -> f v <$> apply t (c @@ 0) e
@@ -262,16 +240,11 @@ instance Injection CoreAlt Core where
 instance Term CoreAlt where
   type Generic CoreAlt = Core
 
-instance WalkerR HermitEnv HermitM CoreAlt where
-  allR r = altT (extractR r) (,,)
-  anyR = allR -- only one interesting child, allR and anyR behave the same
+  numChildren _ = 1
 
-instance  Monoid b => WalkerT HermitEnv HermitM CoreAlt b where
-  crushT t = altT (extractT t) (\ _ _ -> id)
-
-instance WalkerL HermitEnv HermitM CoreAlt where
-  chooseL 0 = altT exposeT (chooseL2of3 (,,))
-  chooseL n = missingChildL n
+instance Walker HermitEnv HermitM CoreAlt where
+  childL 0 = altT exposeT (childL2of3 (,,))
+  childL n = missingChildL n
 
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
 altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (foldr addHermitEnvLambdaBinding c bs @@ 0) e
@@ -286,7 +259,40 @@ instance Injection CoreExpr Core where
 instance Term CoreExpr where
   type Generic CoreExpr = Core
 
-instance WalkerR HermitEnv HermitM CoreExpr where
+  numChildren (Var _)         = 0
+  numChildren (Lit _)         = 0
+  numChildren (App _ _)       = 2
+  numChildren (Lam _ _)       = 1
+  numChildren (Let _ _)       = 2
+  numChildren (Case _ _ _ es) = 1 + length es
+  numChildren (Cast _ _)      = 1
+  numChildren (Tick _ _)      = 1
+  numChildren (Type _)        = 0
+  numChildren (Coercion _)    = 0
+
+instance Walker HermitEnv HermitM CoreExpr where
+
+  childL n = (case n of
+                 0  ->    appT  exposeT idR         (childL0of2 App)
+                       <+ lamT  exposeT             (childL1of2 Lam)
+                       <+ letT  exposeT idR         (childL0of2 Let)
+                       <+ caseT exposeT (const idR) (childL0of4 Case)
+                       <+ castT exposeT             (childL0of2 Cast)
+                       <+ tickT exposeT             (childL1of2 Tick)
+
+                 1  ->    appT idR exposeT (childL1of2 App)
+                       <+ letT idR exposeT (childL1of2 Let)
+                       <+ caseChooseL
+
+                 _  ->    caseChooseL
+             )
+             <+ missingChildL n
+     where
+       -- Note we use index (n-1) because 0 refers to the expression being scrutinised.
+       caseChooseL :: LensH CoreExpr Core
+       caseChooseL = do sz <- liftT numChildren
+                        guard (n > 0 && n < sz)
+                        caseT idR (const exposeT) (\ e v t -> childLMofN (n-1) (Case e v t))
 
   allR r = varT Var
         <+ litT Lit
@@ -307,42 +313,6 @@ instance WalkerR HermitEnv HermitM CoreExpr where
         <+ castT (extractR r) Cast
         <+ tickT (extractR r) Tick
         <+ fail "anyR failed for all Expr constructors"
-
-instance  Monoid b => WalkerT HermitEnv HermitM CoreExpr b where
-  crushT t = varT (const mempty)
-          <+ litT (const mempty)
-          <+ appT (extractT t) (extractT t) mappend
-          <+ lamT (extractT t) (\ _ -> id)
-          <+ letT (extractT t) (extractT t) mappend
-          <+ caseT (extractT t) (\ _ -> extractT t) (\ r _ _ rs -> mconcat (r:rs))
-          <+ castT (extractT t) const
-          <+ tickT (extractT t) (\ _ -> id)
-          <+ typeT (const mempty)
-          <+ coercionT (const mempty)
-          <+ fail "crushT failed for all Expr constructors"
-
-instance WalkerL HermitEnv HermitM CoreExpr where
-  chooseL n = (case n of
-                 0  ->    appT  exposeT idR         (chooseL0of2 App)
-                       <+ lamT  exposeT             (chooseL1of2 Lam)
-                       <+ letT  exposeT idR         (chooseL0of2 Let)
-                       <+ caseT exposeT (const idR) (chooseL0of4 Case)
-                       <+ castT exposeT             (chooseL0of2 Cast)
-                       <+ tickT exposeT             (chooseL1of2 Tick)
-
-                 1  ->    appT idR exposeT (chooseL1of2 App)
-                       <+ letT idR exposeT (chooseL1of2 Let)
-                       <+ caseChooseL
-
-                 _  ->    caseChooseL
-              )
-              <+ missingChildL n
-     where
-       -- Note we use index (n-1) because 0 refers to the expression being scrutinised.
-       caseChooseL :: LensH CoreExpr Core
-       caseChooseL = do sz <- numChildrenT
-                        guard (n > 0 && n < sz)
-                        caseT idR (const exposeT) (\ e v t -> chooseLMofN (n-1) (Case e v t))
 
 ---------------------------------------------------------------------
 

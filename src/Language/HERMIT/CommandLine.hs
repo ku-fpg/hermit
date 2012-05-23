@@ -113,11 +113,6 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
   quitK kernel ast
   return ()
 
-focusR = rewriteL
-
-focusT :: (Monad m) => Lens c m a b -> Translate c m b d -> Translate c m a d
-focusT lens trans = lens >-> translate (\ _ ((c,b),_) -> apply trans c b)
-
 
 {-
    Exit          ::                             KernelCommand

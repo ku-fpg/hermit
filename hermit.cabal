@@ -22,7 +22,7 @@ Library
                  syb,
                  template-haskell,
                  containers,
-                 kure >= 1.4.11,
+                 kure >= 1.6.1,
                  marked-pretty >= 0.1
 
 
@@ -48,7 +48,7 @@ Library
        Language.HERMIT.Primitive.Subst
        Language.HERMIT.Primitive.Local
        Language.HERMIT.Primitive.New
-       
+
        Language.HERMIT.PrettyPrinter
 
   Other-modules:

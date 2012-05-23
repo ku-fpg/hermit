@@ -80,7 +80,7 @@ interpExprH expr =
              , Interp $ \ (RewriteCoreBox rr)         -> Right $ Apply rr
              , Interp $ \ (TranslateCoreStringBox tt) -> Right $ Query tt
              , Interp $ \ (LensCoreCoreBox l)         -> Right $ PushFocus l
-             , Interp $ \ (IntBox i)                  -> Right $ PushFocus $ chooseL i
+             , Interp $ \ (IntBox i)                  -> Right $ PushFocus $ childL i
              , Interp $ \ (StringBox str)             -> Left $ str
 {-
              , Interp $ \ (Help cat)                  -> Left  $ unlines $ help
