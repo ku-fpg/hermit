@@ -27,6 +27,7 @@ data SyntaxForColor = Keyword | Syntax
 
 type PrettyH a = TranslateH a DocH
 
+-- This is the hacky old pretty printer, using the new API
 ghcCorePrettyH :: PrettyH Core
 ghcCorePrettyH =
            promoteT (ppModule :: PrettyH ModGuts)
