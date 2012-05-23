@@ -14,6 +14,7 @@ module Language.HERMIT.Kernel (
 
 import GhcPlugins
 import Control.Monad
+import Control.Exception.Base
 
 import Language.KURE
 
@@ -37,7 +38,7 @@ data Kernel = Kernel
 newtype AST = AST Int
         deriving (Eq, Ord, Show)
 
-data Msg s r = forall a . Req (s -> CoreM (a,s)) (MVar (Either String a))
+data Msg s r = forall a . Req (s -> CoreM (Either String (a,s))) (MVar (Either String a))
              | Done (s -> CoreM r)
 
 -- | 'hermitKernel' is a repository for our syntax trees.
@@ -63,37 +64,41 @@ hermitKernel callback modGuts = do
 
         let sendDone = putMVar msg . Done
 
-        let sendReq :: (M.Map AST ModGuts -> CoreM (a,M.Map AST ModGuts)) -> IO a
+        let sendReq :: (M.Map AST ModGuts -> CoreM (Either String (a,M.Map AST ModGuts))) -> IO a
             sendReq fn = do
                 rep <- newEmptyMVar
                 putMVar msg (Req fn rep)
                 res <- takeMVar rep
                 case res of
-                  Left msg -> fail msg
+                  Left msg -> do
+                        print ("sendReq",msg)
+                        fail msg
                   Right ans -> return ans
 
-        let find :: (Monad m) => AST -> M.Map AST ModGuts -> (ModGuts -> m a) -> m a
-            find name env k = case M.lookup name env of
-              Nothing -> fail $ "can not find syntax tree : " ++ show name
+        let find :: (Monad m) => AST -> M.Map AST ModGuts -> (String -> m a) -> (ModGuts -> m a) -> m a
+            find name env failing k = case M.lookup name env of
+              Nothing -> failing $ "can not find syntax tree : " ++ show name
               Just core -> k core
 
+        let fail' msg = return (Left msg)
+
         let kernel = Kernel
-                { quitK = \ name -> sendDone $ \ env -> find name env $ \ core -> return core
-                , applyK = \ name rr -> sendReq $ \ env -> find name env $ \ core ->
+                { quitK = \ name -> sendDone $ \ env -> find name env fail $ \ core -> return core
+                , applyK = \ name rr -> sendReq $ \ env -> find name env fail' $ \ core ->
                              runHermitMR
                                   (\ core' -> do
                                       syn' <- liftIO $ takeMVar syntax_names
-                                      return (syn',M.insert syn' core' env))
-                                  (\ msg -> fail msg)
+                                      return $ Right (syn',M.insert syn' core' env))
+                                  (\ msg -> return $ Left msg)
                                   (apply (extractR rr) hEnv0 core)
-                , queryK = \ name q -> sendReq $ \ env -> find name env $ \ core ->
+                , queryK = \ name q -> sendReq $ \ env -> find name env fail' $ \ core ->
                              runHermitMR
-                                  (\ reply -> return (reply,env))
-                                  (\ msg -> fail msg)
+                                  (\ reply -> return  $ Right (reply,env))
+                                  (\ msg -> return $ Left msg)
                                   (apply (extractT q) hEnv0 core)
-                , deleteK = \ name -> sendReq $ \ env -> find name env $ \ _ ->
-                             return ((), M.delete name env)
-                , listK = sendReq $ \ env -> return (M.keys env,env)
+                , deleteK = \ name -> sendReq $ \ env -> find name env fail' $ \ _ ->
+                             return $ Right ((), M.delete name env)
+                , listK = sendReq $ \ env -> return $ Right (M.keys env,env)
                 }
 
         -- We always start with syntax blob 0
@@ -103,9 +108,14 @@ hermitKernel callback modGuts = do
                 m <- liftIO $ takeMVar msg
                 case m of
                   Req fn rep -> do
-                          (a,st') <- fn st      -- TODO: catch a failure
-                          liftIO $ putMVar rep (Right a)
-                          loop st
+                          ans <- fn st
+                          case ans of
+                            Right (a,st2) -> do
+                              liftIO $ putMVar rep (Right a)
+                              loop st2
+                            Left msg -> do
+                              liftIO $ putMVar rep (Left msg)
+                              loop st
                   Done fn -> fn st
 
         pid <- liftIO $ forkIO $ callback kernel syn
