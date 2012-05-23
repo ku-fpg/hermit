@@ -40,6 +40,8 @@ externals =
                 [ "determines if a rewrite could be successfully applied" ]
          , external "apply-rule" (promoteR . rules)
                 [ "apply a named GHC rule" ]
+         , external "apply-rule" rules_help
+                [ "apply a named GHC rule (cmd)" ]
          ]
 
 let_intro ::  TH.Name -> RewriteH CoreExpr
@@ -100,4 +102,7 @@ rules :: String -> RewriteH CoreExpr
 rules r = rewrite $ \ c e -> do
         liftIO $ print ("rules",r)
         return e
+
+rules_help :: RewriteH Core
+rules_help = rewrite $ \ _ e -> do { liftIO (print "apply with no args") ; return (e :: Core) }
 
