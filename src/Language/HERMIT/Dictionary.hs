@@ -63,7 +63,7 @@ dictionary = toDictionary all_externals
 
 interpExprH :: ExprH -> Either String KernelCommand
 interpExprH expr =
-        case interpExpr' expr of
+        case interpExpr expr of
           Left msg  -> Left msg
           Right dyn -> runInterp dyn
              [ Interp $ \ (KernelCommandBox cmd)      -> Right cmd
@@ -99,28 +99,22 @@ help externals (Just path) = "<.. todo look for path as part of cmd name ..>"
 
 --------------------------------------------------------------------------
 
-interpExpr :: ExprH -> Either String Dynamic
-interpExpr expr =
-        case interpExpr' expr of
-          Left msg -> Left msg
-          Right [r] -> Right r
-          Right []  -> Left $ "no valid interpretation"
-          Right _   -> Left $ "multiple valid interpretations"
+interpExpr :: ExprH -> Either String [Dynamic]
+interpExpr expr = interpExpr' False expr
 
 -- Why doesn't help immediately drop a Left here? Why bother making a Help command?
-interpExpr' :: ExprH -> Either String [Dynamic]
-interpExpr' (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
-interpExpr' (CmdName str)
+interpExpr' :: Bool -> ExprH -> Either String [Dynamic]
+interpExpr' _   (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
+interpExpr' rhs (CmdName str)
   | all isDigit str                     = return [ toDyn $ IntBox $ read str ]
-{-
-  | ("help",cat) <- break isSpace str   = case dropWhile isSpace cat of
-                                            "list" -> Left $ unlines $ map show [minBound..(maxBound :: CmdCategory)]
-                                            cat'   -> return [ toDyn $ Help $ readMaybe cat' ]
--}
-  | Just dyn <- M.lookup str dictionary = return (toDyn (StringBox str) : dyn)
+  | Just dyn <- M.lookup str dictionary = if rhs
+                                          then return (toDyn (StringBox str) : dyn)
+                                          else return dyn
   | otherwise                           = Left $ "Unrecognised command: " ++ show str
-interpExpr' (StrName str)               = return [ toDyn $ StringBox $ str ]
-interpExpr' (AppH e1 e2) = dynAppMsg (interpExpr' e1) (interpExpr' e2)
+interpExpr' rhs (StrName str)           = if rhs
+                                          then return [ toDyn $ StringBox $ str ]
+                                          else return []
+interpExpr' _ (AppH e1 e2)              = dynAppMsg (interpExpr' False e1) (interpExpr' True e2)
 
 dynAppMsg :: Either String [Dynamic] -> Either String [Dynamic] -> Either String [Dynamic]
 dynAppMsg f x = liftM2 dynApply' f x >>= return
