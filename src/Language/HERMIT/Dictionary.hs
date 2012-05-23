@@ -90,6 +90,11 @@ interpExprH expr =
 data Interp :: * -> * where
    Interp :: Typeable a => (a -> b) -> Interp b
 
+instance Functor Interp where
+   fmap f (Interp g) = Interp (f . g)
+
+
+
 runInterp :: [Dynamic] -> [Interp b] -> b -> b
 runInterp dyns interps bad = head $
              [f a
