@@ -22,7 +22,9 @@ Library
                  syb,
                  template-haskell,
                  containers,
-                 kure >= 1.4.11
+                 kure >= 1.4.11,
+                 marked-pretty >= 0.1
+
 
   default-language: Haskell2010
 
@@ -46,6 +48,8 @@ Library
        Language.HERMIT.Primitive.Subst
        Language.HERMIT.Primitive.Local
        Language.HERMIT.Primitive.New
+       
+       Language.HERMIT.PrettyPrinter
 
   Other-modules:
        Language.Core.Quote

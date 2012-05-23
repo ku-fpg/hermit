@@ -31,6 +31,9 @@ import qualified Language.HERMIT.Primitive.Subst as Subst
 import qualified Language.HERMIT.Primitive.Local as Local
 import qualified Language.HERMIT.Primitive.New as New
 
+import Language.HERMIT.PrettyPrinter
+-- import qualified Language.HERMIT.PrettyPrinter.AST
+
 import Debug.Trace
 --------------------------------------------------------------------------
 
@@ -56,6 +59,13 @@ all_externals =    prim_externals
 
 dictionary :: M.Map String [Dynamic]
 dictionary = toDictionary all_externals
+
+--------------------------------------------------------------------------
+-- The pretty printing dictionaries
+pp_dictionary :: M.Map String (PrettyH Core)
+pp_dictionary = M.fromList
+        [ ("ast",astCorePrettyH)
+        ]
 
 --------------------------------------------------------------------------
 
