@@ -71,7 +71,7 @@ parseExprH0 = \ inp ->
         | ("'",inp1) <- parseToken inp
         , (str,inp2) <- parseToken inp1
         ] ++
-        [ (StrName str,inp1)
+        [ (StrName $ chomp '"' str,inp1)
         | (str@('"':_),inp1) <- lex inp
         ] ++
         [ (e,inp3)
@@ -79,6 +79,9 @@ parseExprH0 = \ inp ->
         , (e,inp2)   <- parseExprH1 inp1
         , (")",inp3) <- parseToken inp2
         ]
+    where chomp c [] = []
+          chomp ch s@(c:cs) | c == ch && last cs == ch = init cs
+                            | otherwise = s
 
 parseExprH1 :: ReadS ExprH
 parseExprH1 = \ inp ->

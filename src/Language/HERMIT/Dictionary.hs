@@ -5,9 +5,10 @@ module Language.HERMIT.Dictionary where
 
 import Prelude hiding (lookup)
 
-import qualified Data.Map as M
 import Data.Char
 import Data.Dynamic
+import Data.List
+import qualified Data.Map as M
 
 import Control.Monad (liftM2)
 
@@ -33,8 +34,6 @@ import qualified Language.HERMIT.Primitive.New as New
 
 import Language.HERMIT.PrettyPrinter
 -- import qualified Language.HERMIT.PrettyPrinter.AST
-
-import Debug.Trace
 --------------------------------------------------------------------------
 
 prim_externals :: [External]
@@ -50,11 +49,14 @@ prim_externals =    Command.externals
 all_externals :: [External]
 all_externals =    prim_externals
                 ++ [ external "bash" (promoteR bash) bashHelp .+ MetaCmd
-                   , external "help"            (help all_externals Nothing)
-                        [ "lists commands"]
-                   , external "help" (help all_externals . Just :: String -> String)
+                   , external "help"            (help all_externals Nothing Nothing)
+                        [ "lists all commands" ]
+                   , external "help" (help all_externals Nothing . Just :: String -> String)
                         [ "help with a specific cmd or path"
-                        , "use 'help ls' to see a list of path"  ]
+                        , "use 'help ls' to see a list of paths"
+                        , "use 'help \"let\"' to see cmds whose names contain \"let\"" ]
+                   , external "help" ((\c p -> help all_externals (Just c) (Just p)) :: String -> String -> String)
+                        [ "help ls <path> to list commands in a specific path" ]
                    ]
 
 dictionary :: M.Map String [Dynamic]
@@ -82,10 +84,6 @@ interpExprH expr =
              , Interp $ \ (LensCoreCoreBox l)         -> Right $ PushFocus l
              , Interp $ \ (IntBox i)                  -> Right $ PushFocus $ childL i
              , Interp $ \ (StringBox str)             -> Left $ str
-{-
-             , Interp $ \ (Help cat)                  -> Left  $ unlines $ help
-                                                               $ maybe all_externals (\c -> filter (`hasTag` c) all_externals) cat
--}
              ]
              (Left "interpExpr: bad type of expression")
 
@@ -103,16 +101,31 @@ runInterp dyns interps bad = head $
 make_help :: [External] -> [String]
 make_help = concatMap snd . M.toList . toHelp
 
-help :: [External] -> Maybe String -> String
-help externals Nothing     = unlines $ make_help externals
-help externals (Just path) = "<.. todo look for path as part of cmd name ..>"
+help :: [External] -> Maybe String -> Maybe String -> String
+-- 'help ls' case
+help externals Nothing (Just "ls") = help externals (Just "ls") Nothing
+-- 'help' or 'help <search string>' case
+help externals Nothing m = unlines $ make_help $ maybe externals pathPrefix m
+    where pathPrefix p = filter (isInfixOf p . externName) externals
+-- 'help ls <path>' case
+help externals (Just "ls") m = unlines $ map toLine groups
+    where fixHyphen p | last p == '-' = p
+                      | otherwise     = p ++ "-"
+          optParens s | null s = ""
+                      | otherwise = "  (" ++ s ++ ")"
+          prefix = maybe "" fixHyphen m
+          groups = groupBy ((==) `on` fst)
+                 $ sortBy (compare `on` fst)
+                   [ (fst $ span (/='-') $ drop (length prefix) n, n)
+                   | n <- map externName externals, prefix `isPrefixOf` n ]
+          toLine [] = ""
+          toLine ((d,cmd):r) = d ++ optParens (intercalate ", " [ cmd' | cmd' <- cmd : map snd r, cmd' /= d ])
 
 --------------------------------------------------------------------------
 
 interpExpr :: ExprH -> Either String [Dynamic]
-interpExpr expr = interpExpr' False expr
+interpExpr = interpExpr' False
 
--- Why doesn't help immediately drop a Left here? Why bother making a Help command?
 interpExpr' :: Bool -> ExprH -> Either String [Dynamic]
 interpExpr' _   (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
 interpExpr' rhs (CmdName str)
@@ -120,9 +133,12 @@ interpExpr' rhs (CmdName str)
   | Just dyn <- M.lookup str dictionary = if rhs
                                           then return (toDyn (StringBox str) : dyn)
                                           else return dyn
+  -- not a command, try as a string arg... worst case: dynApply fails with "bad type of expression"
+  -- best case: 'help ls' works instead of 'help "ls"'. this is likewise done in then clause above
+  | rhs                                 = return [toDyn $ StringBox str]
   | otherwise                           = Left $ "Unrecognised command: " ++ show str
 interpExpr' rhs (StrName str)           = if rhs
-                                          then return [ toDyn $ StringBox $ str ]
+                                          then return [ toDyn $ StringBox str ]
                                           else return []
 interpExpr' _ (AppH e1 e2)              = dynAppMsg (interpExpr' False e1) (interpExpr' True e2)
 
@@ -132,23 +148,15 @@ dynAppMsg f x = liftM2 dynApply' f x >>= return
            dynApply' :: [Dynamic] -> [Dynamic] -> [Dynamic]
            dynApply' fs xs = [ r | f <- fs, x <- xs, Just r <- return (dynApply f x)]
 
--- Surely this exists somewhere! Replace it if so.
-readMaybe :: (Read a) => String -> Maybe a
-readMaybe s = case reads s of
-                [(x,rest)] | all isSpace rest -> Just x
-                _ -> Nothing
-
 --------------------------------------------------------------------------
 
---------------------------------------------------------------------------
-
--- Runs every command tagged with 'Bash' with anybuR,
+-- Runs every command tagged with 'Bash' with innermostR (fix point anybuR),
 -- if any of them succeed, then it tries all of them again.
 -- Only fails if all of them fail the first time.
 bash :: RewriteH (Generic CoreExpr)
-bash = repeatR $ orR [ maybe (fail "bash: fromDynamic failed") (anybuR . unbox)
-                       $ fromDynamic $ externFun $ cmd
-                     | cmd <- all_externals, cmd `hasTag` Bash ]
+bash = innermostR $ orR [ maybe (fail "bash: fromDynamic failed") (anybuR . unbox)
+                          $ fromDynamic $ externFun $ cmd
+                        | cmd <- all_externals, cmd `hasTag` Bash ]
 
 bashHelp :: [String]
 bashHelp = "Bash runs the following commands:"

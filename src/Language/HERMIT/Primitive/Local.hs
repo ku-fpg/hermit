@@ -26,8 +26,10 @@ externals =
                      , "expression (won't duplicate work)" ] .+ Bash
          , external "beta-expand" (promoteR beta_expand)
                      [ "(let v = E1 in E2) ==> (\\ v -> E2) E1, fails otherwise" ]
-         , external "dead-code" (promoteR $ not_defined "dead-code")
-                     [ "let x = E1 in E2 ==> E2, if x is not used in E2, fails otherwise" ] .+ Bash
+         , external "dce" (promoteR dce)
+                     [ "dead code elimination removes a let."
+                     , "(let v = E1 in E2) ==> E2, if v is not free in E2, fails otherwise"
+                     , "condition: let is not-recursive" ] .+ Bash
          , external "inline-let" (promoteR $ not_defined "inline")
                      [ "'inline x': let x = E1 in ...x... ==> let x = E1 in ...E1..., fails otherwise" ]
          , external "constructor-reuse" (promoteR $ not_defined "constructor-reuse")
@@ -106,6 +108,14 @@ eta_expand nm = liftMT $ \ e -> case splitAppTy_maybe (exprType e) of
                                                           return $ Lam v1 (App e (Var v1))
 
 ------------------------------------------------------------------------------
+
+-- dead code elimination removes a let.
+-- (let v = E1 in E2) => E2, if v is not free in E2
+dce :: RewriteH CoreExpr
+dce = liftMT $ \ e -> case e of
+        Let (NonRec n e1) e2 | n `notElem` freeIds e2 -> return e2
+                             | otherwise              -> fail "DCE: no dead code"
+        _ -> fail "DCE: not applied to a NonRec Let."
 
 -- output a list of all free variables in the Expr.
 freeVarsQuery :: TranslateH CoreExpr String
