@@ -4,7 +4,7 @@ import Language.HERMIT.Kernel
 import Language.HERMIT.External
 
 ------------------------------------------------------------------------------------
-
+{-
 externals :: [External]
 externals =
    [
@@ -20,6 +20,6 @@ externals =
        [ "pops all lenses" ]
    ]
 
-
+-}
 ------------------------------------------------------------------------------------
 

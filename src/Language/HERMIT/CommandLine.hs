@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, GADTs, KindSignatures, TypeFamilies, DeriveDataTypeable #-}
 
 module Language.HERMIT.CommandLine where
 
@@ -6,7 +6,9 @@ import GhcPlugins
 
 import Data.Char
 import Control.Applicative
+import Data.Monoid
 import Control.Exception.Base
+import Data.Dynamic
 
 import qualified Data.Map as M
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
@@ -17,7 +19,49 @@ import Language.HERMIT.Dictionary
 import Language.HERMIT.Kernel
 import Language.HERMIT.PrettyPrinter
 
-import Language.KURE.Translate
+import Language.KURE
+
+import Language.HERMIT.External
+
+data ShellCommand :: * where
+   Status        ::                             ShellCommand
+   Message       :: String                   -> ShellCommand
+   PushFocus     :: LensH Core Core          -> ShellCommand
+   PopFocus      ::                             ShellCommand
+   SuperPopFocus ::                             ShellCommand
+   KernelCommand :: KernelCommand            -> ShellCommand
+
+data ShellCommandBox = ShellCommandBox ShellCommand deriving Typeable
+
+instance Extern ShellCommand where
+    type Box ShellCommand = ShellCommandBox
+    box i = ShellCommandBox i
+    unbox (ShellCommandBox i) = i
+
+
+interpShellCommand :: [Interp ShellCommand]
+interpShellCommand =
+                [ Interp $ \ (ShellCommandBox cmd)       -> cmd
+                , Interp $ \ (LensCoreCoreBox l)         -> PushFocus l
+                , Interp $ \ (IntBox i)                  -> PushFocus $ childL i
+                , Interp $ \ (StringBox str)             -> Message str
+                ]
+
+shell_externals :: [External]
+shell_externals =
+   [
+     external "exit"            Exit
+       [ "exits HERMIT" ]
+   , external "status"          Status
+       [ "redisplays current state" ]
+   , external "pop"             PopFocus
+       [ "pops one lens" ]
+   , external "."               PopFocus
+       [ "pops one lens" ]
+   , external "superpop"        SuperPopFocus
+       [ "pops all lenses" ]
+   ]
+
 
 data CommandLineState = CommandLineState
         { cl_lenses :: [LensH Core Core] -- ^ stack of lenses
@@ -28,7 +72,8 @@ data CommandLineState = CommandLineState
 commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
 commandLine gets = hermitKernel $ \ kernel ast -> do
   let quit = quitK kernel
-  let query = queryK kernel
+  let query :: AST -> TranslateH Core a -> IO a
+      query = queryK kernel
 
   let catch :: IO a -> (String -> IO a) -> IO a
       catch = catchJust (\ (err :: IOException) -> return (show err))
@@ -55,21 +100,34 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
 
           maybeLine <- gets
           case maybeLine of
-            Nothing            -> act st Exit
+            Nothing            -> kernelAct st Exit
             Just ('-':'-':msg) -> loop st
             Just line          ->
                 if all isSpace line
                 then loop st
                 else case parseExprH line of
                        Left  msg  -> putStrLn ("parse failure: " ++ msg) >> loop st
-                       Right expr -> case interpExprH expr of
+                       Right expr -> do
+                           let i0 = interpExpr (dictionary `mappend` toDictionary shell_externals) expr
+                               interps = interpShellCommand
+                                     ++  map (fmap KernelCommand) interpKernelCommand
+
+                               i1 = either Left (\ xs -> case xs of
+                                                           [] -> Left "no matches"
+                                                           [x] -> Right x
+                                                           _   -> Left "to many matches") i0
+                               i2 = either Left (\ x -> case interpExprH interps x of
+                                                          Nothing -> Left "no type matches"
+                                                          Just a -> Right a) i1
+                           case i2 of
                                        Left msg  -> putStrLn msg >> loop st
                                        Right cmd -> act st cmd
 
-      act st Exit   = quit (cl_cursor st)
+
       act st Status = do
               True <- showFocus st
               loop st
+
       act st (PushFocus ls) = do
               let newlens = myLens st `composeL` ls
               let st' = st { cl_lenses = newlens : cl_lenses st }
@@ -90,7 +148,12 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
               -- something changed, to print
               True <- showFocus st'
               loop st'
-      act st (Query q) = do
+
+      act st (KernelCommand cmd) = kernelAct st cmd
+
+      kernelAct st Exit   = quit (cl_cursor st)
+
+      kernelAct st (Query q) = do
 
               -- something changed, to print
               (do doc <- query ast (focusT (myLens st) q)
@@ -98,8 +161,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
               -- same state
               loop st
 
-
-      act st (Apply rr) = do
+      kernelAct st (Apply rr) = do
               -- something changed (you've applied)
               st2 <- (do ast' <- applyK kernel ast (focusR (myLens st) rr)
                          let st' = st { cl_cursor = ast' }
@@ -116,7 +178,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
   quitK kernel ast
   return ()
 
-
+{-
 {-
    Exit          ::                             KernelCommand
    Status        ::                             KernelCommand
@@ -164,3 +226,4 @@ printKernelOutput (QueryResult msg) = putStrLn msg
 printKernelOutput (FocusChange _ a) = putStrLn (show2 a)
 printKernelOutput (CoreChange a)    = putStrLn (show2 a)
 
+-}

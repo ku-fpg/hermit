@@ -23,7 +23,7 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.Kernel
 import Language.HERMIT.External
 
-import qualified Language.HERMIT.Primitive.Command as Command
+--import qualified Language.HERMIT.Primitive.Command as Command
 import qualified Language.HERMIT.Primitive.Kure as Kure
 import qualified Language.HERMIT.Primitive.Consider as Consider
 import qualified Language.HERMIT.Primitive.Inline as Inline
@@ -37,8 +37,8 @@ import Language.HERMIT.PrettyPrinter
 --------------------------------------------------------------------------
 
 prim_externals :: [External]
-prim_externals =    Command.externals
-                 ++ Kure.externals
+prim_externals =   {- Command.externals
+                 ++ -} Kure.externals
                  ++ Consider.externals
                  ++ Inline.externals
                  ++ Case.externals
@@ -69,31 +69,26 @@ pp_dictionary = M.fromList
         [ ("ghc",ghcCorePrettyH)
         ]
 
+
+
+--------------------------------------------------------------------------
+
+interpKernelCommand :: [Interp KernelCommand]
+interpKernelCommand =
+             [ Interp $ \ (KernelCommandBox cmd)      -> cmd
+             , Interp $ \ (RewriteCoreBox rr)         -> Apply rr
+             , Interp $ \ (TranslateCoreStringBox tt) -> Query tt
+             ]
+
+--             , Interp $ \ (LensCoreCoreBox l)         -> Right $ PushFocus l
+--             , Interp $ \ (IntBox i)                  -> Right $ PushFocus $ childL i
+--             , Interp $ \ (StringBox str)             -> Left $ str
 --------------------------------------------------------------------------
 
 -- The union of all possible results from a "well-typed" commands, from this dictionary.
 
-interpExprH :: ExprH -> Either String KernelCommand
-interpExprH expr =
-        case interpExpr expr of
-          Left msg  -> Left msg
-          Right dyn -> runInterp dyn
-             [ Interp $ \ (KernelCommandBox cmd)      -> Right cmd
-             , Interp $ \ (RewriteCoreBox rr)         -> Right $ Apply rr
-             , Interp $ \ (TranslateCoreStringBox tt) -> Right $ Query tt
-             , Interp $ \ (LensCoreCoreBox l)         -> Right $ PushFocus l
-             , Interp $ \ (IntBox i)                  -> Right $ PushFocus $ childL i
-             , Interp $ \ (StringBox str)             -> Left $ str
-             ]
-             (Left "interpExpr: bad type of expression")
-
-data Interp :: * -> * where
-   Interp :: Typeable a => (a -> b) -> Interp b
-
-instance Functor Interp where
-   fmap f (Interp g) = Interp (f . g)
-
-
+interpExprH :: [Interp a] -> Dynamic -> Maybe a
+interpExprH interps dyn = runInterp [dyn] (map (fmap Just) interps) Nothing
 
 runInterp :: [Dynamic] -> [Interp b] -> b -> b
 runInterp dyns interps bad = head $
@@ -102,6 +97,24 @@ runInterp dyns interps bad = head $
              , Just a <- map fromDynamic dyns
              ] ++ [ bad ]
 
+
+{-
+interpExprH :: M.Map String [Dynamic] -> [Interp (Either String a)] -> ExprH -> Either String a
+interpExprH env interps expr =
+        case interpExpr env expr of
+          Left msg  -> Left msg
+          Right dyn -> runInterp dyn interps
+                        (Left "interpExpr: bad type of expression")
+-}
+{-
+
+-}
+
+data Interp :: * -> * where
+   Interp :: Typeable a => (a -> b) -> Interp b
+
+instance Functor Interp where
+   fmap f (Interp g) = Interp (f . g)
 
 make_help :: [External] -> [String]
 make_help = concatMap snd . M.toList . toHelp
@@ -128,24 +141,24 @@ help externals (Just "ls") m = unlines $ map toLine groups
 
 --------------------------------------------------------------------------
 
-interpExpr :: ExprH -> Either String [Dynamic]
+interpExpr :: M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
 interpExpr = interpExpr' False
 
-interpExpr' :: Bool -> ExprH -> Either String [Dynamic]
-interpExpr' _   (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
-interpExpr' rhs (CmdName str)
+interpExpr' :: Bool -> M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
+interpExpr' _ env (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
+interpExpr' rhs env (CmdName str)
   | all isDigit str                     = return [ toDyn $ IntBox $ read str ]
-  | Just dyn <- M.lookup str dictionary = if rhs
+  | Just dyn <- M.lookup str env        = if rhs
                                           then return (toDyn (StringBox str) : dyn)
                                           else return dyn
   -- not a command, try as a string arg... worst case: dynApply fails with "bad type of expression"
   -- best case: 'help ls' works instead of 'help "ls"'. this is likewise done in then clause above
   | rhs                                 = return [toDyn $ StringBox str]
   | otherwise                           = Left $ "Unrecognised command: " ++ show str
-interpExpr' rhs (StrName str)           = if rhs
+interpExpr' rhs env (StrName str)           = if rhs
                                           then return [ toDyn $ StringBox str ]
                                           else return []
-interpExpr' _ (AppH e1 e2)              = dynAppMsg (interpExpr' False e1) (interpExpr' True e2)
+interpExpr' _ env (AppH e1 e2)              = dynAppMsg (interpExpr' False env e1) (interpExpr' True env e2)
 
 dynAppMsg :: Either String [Dynamic] -> Either String [Dynamic] -> Either String [Dynamic]
 dynAppMsg f x = liftM2 dynApply' f x >>= return

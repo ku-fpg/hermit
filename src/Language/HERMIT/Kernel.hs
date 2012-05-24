@@ -3,8 +3,8 @@
 module Language.HERMIT.Kernel (
 
           KernelCommand(..)
-        , KernelOutput(..)
-        , runCommands
+--        , KernelOutput(..)
+--        , runCommands
 
         , hermitKernel
         , Kernel(..)
@@ -130,24 +130,24 @@ hermitKernel callback modGuts = do
 -- | 'KernelCommand' is what you send to the HERMIT kernel.
 data KernelCommand :: * where
    Exit          ::                             KernelCommand
-   Status        ::                             KernelCommand
-   Message       :: String                   -> KernelCommand
+--   Status        ::                             KernelCommand
+--   Message       :: String                   -> KernelCommand
    Apply         :: RewriteH Core            -> KernelCommand
-   Query         :: TranslateH Core String   -> KernelCommand
-   PushFocus     :: LensH Core Core          -> KernelCommand
-   PopFocus      ::                             KernelCommand
-   SuperPopFocus ::                             KernelCommand
+   Query          :: TranslateH Core String   -> KernelCommand  -- strange stuff
+--   PushFocus     :: LensH Core Core          -> KernelCommand
+--   PopFocus      ::                             KernelCommand
+--   SuperPopFocus ::                             KernelCommand
 
 instance Show KernelCommand where
    show Exit           = "Exit"
-   show Status         = "Status"
+---   show Status         = "Status"
    show (Apply _)      = "Apply"
    show (Query _)      = "Query"
-   show (PushFocus _)  = "PushFocus"
-   show PopFocus       = "PopFocus"
-   show SuperPopFocus  = "SuperPopFocus"
-   show (Message msg)  = "Message: " ++ msg
-
+--   show (PushFocus _)  = "PushFocus"
+--   show PopFocus       = "PopFocus"
+--   show SuperPopFocus  = "SuperPopFocus"
+--   show (Message msg)  = "Message: " ++ msg
+{-
 -- | 'KernalOutput' is what the HERMIT kernel sends back.
 data KernelOutput :: * where
    ErrorMsg    :: String            -> KernelOutput
@@ -212,3 +212,4 @@ runCommands getCommand output modGuts = do ModGutsCore modGuts' <- newFocus [] c
         popAll cks = runHermitMR return
                                  ( \ msg -> errOut (msg ++ " Reverting to initial state.") >> return a0)
                                  (foldM (flip ($)) a (map snd cks))
+-}
