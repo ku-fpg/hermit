@@ -75,6 +75,8 @@ data CommandLineState = CommandLineState
 
 commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
 commandLine gets = hermitKernel $ \ kernel ast -> do
+  let dict = dictionary shell_externals
+
   let quit = quitK kernel
   let query :: AST -> TranslateH Core a -> IO a
       query = queryK kernel
@@ -113,7 +115,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
                        Left  msg  -> putStrLn ("parse failure: " ++ msg) >> loop st
                        Right expr ->
                            case interpExprH
-                                        (toDictionary shell_externals)
+                                        dict
                                         (interpShellCommand
                                            ++  map (fmap KernelCommand) interpKernelCommand)
                                         expr of
@@ -145,6 +147,8 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
               -- something changed, to print
               True <- showFocus st'
               loop st'
+
+      act st (Message msg) = putStrLn msg >> loop st
 
       act st (KernelCommand cmd) = kernelAct st cmd
 

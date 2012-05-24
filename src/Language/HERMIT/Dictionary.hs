@@ -45,15 +45,12 @@ prim_externals =    Kure.externals
                  ++ Local.externals
                  ++ New.externals
 
-all_externals :: [External]
-all_externals =    prim_externals
-
 -- create the dictionary
 dictionary :: [External] -> M.Map String [Dynamic]
 dictionary my_externals = toDictionary all_externals
   where
         all_externals = prim_externals ++ my_externals ++
-                [ external "bash" (promoteR bash) bashHelp .+ MetaCmd
+                [ external "bash" (promoteR (bash all_externals)) (bashHelp all_externals) .+ MetaCmd
                    , external "help"            (help all_externals Nothing Nothing)
                         [ "lists all commands" ]
                    , external "help" (help all_externals Nothing . Just :: String -> String)
@@ -101,11 +98,11 @@ help externals (Just "ls") m = unlines $ map toLine groups
 -- Runs every command tagged with 'Bash' with innermostR (fix point anybuR),
 -- if any of them succeed, then it tries all of them again.
 -- Only fails if all of them fail the first time.
-bash :: RewriteH (Generic CoreExpr)
-bash = innermostR $ orR [ maybe (fail "bash: fromDynamic failed") (anybuR . unbox)
+bash :: [External] -> RewriteH (Generic CoreExpr)
+bash all_externals = innermostR $ orR [ maybe (fail "bash: fromDynamic failed") (anybuR . unbox)
                           $ fromDynamic $ externFun $ cmd
                         | cmd <- all_externals, cmd `hasTag` Bash ]
 
-bashHelp :: [String]
-bashHelp = "Bash runs the following commands:"
+bashHelp :: [External] -> [String]
+bashHelp all_externals = "Bash runs the following commands:"
            : (make_help $ filter (`hasTag` Bash) all_externals)
