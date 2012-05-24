@@ -6,6 +6,7 @@ import GhcPlugins
 
 import Data.Char
 import Control.Applicative
+import Data.List (intercalate)
 import Data.Monoid
 import Control.Exception.Base
 import Data.Dynamic
@@ -112,6 +113,13 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
               loop st'
 
       act st (Message msg) = putStrLn msg >> loop st
+
+      act st (SetPretty pp) = do
+              st' <- maybe (do putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
+                               return st)
+                           (const $ return $ st { cl_pretty = pp })
+                           (M.lookup pp pp_dictionary)
+              loop st'
 
       act st (KernelCommand cmd) = kernelAct st cmd
 

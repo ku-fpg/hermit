@@ -17,6 +17,7 @@ data ShellCommand :: * where
    PushFocus     :: LensH Core Core          -> ShellCommand
    PopFocus      ::                             ShellCommand
    SuperPopFocus ::                             ShellCommand
+   SetPretty     :: String                   -> ShellCommand
    KernelCommand :: KernelCommand            -> ShellCommand
 
 data ShellCommandBox = ShellCommandBox ShellCommand deriving Typeable
@@ -48,4 +49,7 @@ shell_externals = map (.+ Shell)
        [ "pops one lens" ]
    , external "superpop"        SuperPopFocus
        [ "pops all lenses" ]
+   , external "setpp"           SetPretty
+       [ "set the pretty printer"
+       , "use 'setpp ls' to list available pretty printers" ]
    ]
