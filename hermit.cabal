@@ -54,6 +54,7 @@ Library
        Language.HERMIT.Shell.Dispatch
 
        Language.HERMIT.PrettyPrinter
+       Language.HERMIT.PrettyPrinter.AST
 
   Other-modules:
        Language.Core.Quote

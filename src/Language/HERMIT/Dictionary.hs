@@ -35,7 +35,7 @@ import qualified Language.HERMIT.Primitive.GHC as GHC
 
 
 import Language.HERMIT.PrettyPrinter
--- import qualified Language.HERMIT.PrettyPrinter.AST
+import Language.HERMIT.PrettyPrinter.AST
 --------------------------------------------------------------------------
 
 prim_externals :: [External]
@@ -70,6 +70,8 @@ dictionary my_externals = toDictionary all_externals
 pp_dictionary :: M.Map String (PrettyH Core)
 pp_dictionary = M.fromList
         [ ("ghc",ghcCorePrettyH)
+        , ("ast",astCorePrettyH True)
+        , ("astFull",astCorePrettyH False)
         ]
 
 --------------------------------------------------------------------------
