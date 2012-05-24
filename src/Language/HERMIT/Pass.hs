@@ -15,7 +15,7 @@ import System.IO
 import Prelude hiding (catch)
 import Control.Exception (catch, SomeException)
 
-import Language.HERMIT.CommandLine as CommandLine
+import Language.HERMIT.Shell.Dispatch as CommandLine
 
 
 -- Syntax:
@@ -35,8 +35,8 @@ hermitPass nms modGuts = case candidates of
                 let elGets :: IO (Maybe String)
                     elGets = do putStr "hermit> "
                                 hFlush stdout
-                            --    Wouldn't this be simpler?  Or can the string actually be "\EOT"?     
-                            --    liftM Just getLine `catch` (\ (_ :: SomeException) -> return Nothing) 
+                            --    Wouldn't this be simpler?  Or can the string actually be "\EOT"?
+                            --    liftM Just getLine `catch` (\ (_ :: SomeException) -> return Nothing)
                                 str <- getLine `catch` (\ (_ :: SomeException) -> return "\EOT")
                                 return $ case str of
                                            "\EOT" -> Nothing
