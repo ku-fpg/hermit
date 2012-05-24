@@ -55,6 +55,7 @@ Library
 
        Language.HERMIT.PrettyPrinter
        Language.HERMIT.PrettyPrinter.AST
+       Language.HERMIT.PrettyPrinter.Clean
 
   Other-modules:
        Language.Core.Quote

@@ -1,7 +1,6 @@
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
-module Language.HERMIT.PrettyPrinter.AST where
+module Language.HERMIT.PrettyPrinter.Clean where
 
-import Data.Char (isSpace)
 import Data.Traversable (sequenceA)
 
 import qualified GhcPlugins as GHC
@@ -11,17 +10,8 @@ import Language.KURE
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
-listify :: (MDoc a -> MDoc a -> MDoc a) -> [MDoc a] -> MDoc a
-listify _  []     = text "[]"
-listify op (d:ds) = op (text "[ " <> d) (foldr (\e es -> op (text ", " <> e) es) (text "]") ds)
-
--- | like vcat and hcat, only make the list syntax explicit
-vlist, hlist :: [MDoc a] -> MDoc a
-vlist = listify ($$)
-hlist = listify (<+>)
-
-corePrettyH :: Bool -> PrettyH Core
-corePrettyH hideNotes =
+corePrettyH :: PrettyH Core
+corePrettyH =
        promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
     <+ promoteT (ppProgram  :: PrettyH GHC.CoreProgram)
     <+ promoteT (ppCoreBind :: PrettyH GHC.CoreBind)
@@ -29,6 +19,9 @@ corePrettyH hideNotes =
     <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
     <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
   where
+
+    hideNotes = True
+
     -- Only use for base types!
     ppShow :: (Show a) => a -> MDoc b
     ppShow = text . show
@@ -36,16 +29,19 @@ corePrettyH hideNotes =
     -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
     -- that we are eliding infomation here.
     ppSDoc :: (GHC.Outputable a) => a -> MDoc b
-    ppSDoc = toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showSDoc . GHC.ppr
-        where toDoc s | any isSpace s = parens (text s)
-                      | otherwise     = text s
+    ppSDoc = parens . text . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showSDoc . GHC.ppr
+
+    -- | @prePunctuate p [d1, ... dn] = [d1, p \<> d2, ... p \<> dn-1, p \<> dn]@
+    listify :: [MDoc a] -> MDoc a
+    listify []     = text "[]"
+    listify (d:ds) = text "[ " <> d $$ (foldr (\e es -> text ", " <> e $$ es) (text "]") ds)
 
     ppModGuts :: PrettyH GHC.ModGuts
     ppModGuts = liftT (ppSDoc . GHC.mg_module)
 
     -- DocH is not a monoid, so we can't use listT here
-    ppProgram :: PrettyH GHC.CoreProgram -- CoreProgram = [CoreBind]
-    ppProgram = translate $ \ c -> fmap vlist . sequenceA . map (apply ppCoreBind c)
+    ppProgram :: PrettyH GHC.CoreProgram
+    ppProgram = translate $ \ c -> fmap vcat . sequenceA . map (apply ppCoreBind c)
 
     ppCoreExpr :: PrettyH GHC.CoreExpr
     ppCoreExpr = varT (\i -> text "Var" <+> ppSDoc i)
@@ -57,7 +53,7 @@ corePrettyH hideNotes =
                         text "Case" $$ nest 2 (parens s)
                                     $$ nest 2 (ppSDoc b)
                                     $$ nest 2 (ppSDoc ty)
-                                    $$ nest 2 (vlist alts))
+                                    $$ nest 2 (listify (map parens alts)))
               <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
               <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
               <+ typeT (\ty -> text "Type" $$ nest 2 (ppSDoc ty))
@@ -65,11 +61,11 @@ corePrettyH hideNotes =
 
     ppCoreBind :: PrettyH GHC.CoreBind
     ppCoreBind = nonRecT ppCoreExpr (\i e -> text "NonRec" <+> ppSDoc i $$ nest 2 (parens e))
-              <+ recT (const ppCoreDef) (\bnds -> text "Rec" $$ nest 2 (vlist bnds))
+              <+ recT (const ppCoreDef) (\bnds -> text "Rec" $$ nest 2 (vcat $ map parens bnds))
 
     ppCoreAlt :: PrettyH GHC.CoreAlt
     ppCoreAlt = altT ppCoreExpr $ \ con ids e -> text "Alt" <+> ppSDoc con
-                                                            <+> (hlist $ map ppSDoc ids)
+                                                            <+> (hsep $ map ppSDoc ids)
                                                             $$ nest 2 (parens e)
 
     -- GHC uses a tuple, which we print here. The CoreDef type is our doing.

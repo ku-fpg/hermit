@@ -35,7 +35,9 @@ import qualified Language.HERMIT.Primitive.GHC as GHC
 
 
 import Language.HERMIT.PrettyPrinter
-import Language.HERMIT.PrettyPrinter.AST
+import qualified Language.HERMIT.PrettyPrinter.AST as AST
+import qualified Language.HERMIT.PrettyPrinter.Clean as Clean
+
 --------------------------------------------------------------------------
 
 prim_externals :: [External]
@@ -69,9 +71,10 @@ dictionary my_externals = toDictionary all_externals
 -- The pretty printing dictionaries
 pp_dictionary :: M.Map String (PrettyH Core)
 pp_dictionary = M.fromList
-        [ ("ghc",ghcCorePrettyH)
-        , ("ast",astCorePrettyH True)
-        , ("astFull",astCorePrettyH False)
+        [ ("ghc",    ghcCorePrettyH)
+        , ("clean",   Clean.corePrettyH)
+        , ("ast",     AST.corePrettyH True)
+        , ("astFull", AST.corePrettyH False)
         ]
 
 --------------------------------------------------------------------------
