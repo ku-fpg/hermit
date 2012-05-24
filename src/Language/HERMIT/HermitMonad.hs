@@ -101,8 +101,4 @@ newVarH nm ty = do uq <- getUniqueM
 newTypeVarH :: TH.Name -> Kind -> HermitM TyVar
 newTypeVarH = undefined -- TO DO!
 
--- note: exprFreeIds is only value-level free variables
-freeIds :: CoreExpr -> [Var]
-freeIds  = uniqSetToList . exprFreeVars
-
 ----------------------------------------------------------------------------

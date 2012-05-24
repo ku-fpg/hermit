@@ -13,6 +13,8 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.External
 
+import Language.HERMIT.Primitive.GHC
+
 import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------
@@ -62,8 +64,6 @@ externals =
                      [ "(\\ v -> E1 v) ==> E1, fails otherwise" ]
          , external "eta-expand" (promoteR . eta_expand)
                      [ "'eta-expand v' performs E1 ==> (\\ v -> E1 v), fails otherwise" ]
-         , external "freevars" (promoteT freeVarsQuery)
-                [ "List the free variables in this expression." ]
          ]
 
 not_defined :: String -> RewriteH CoreExpr
@@ -85,8 +85,7 @@ beta_expand = liftMT $ \ e -> case e of
 
 eta_reduce :: RewriteH CoreExpr
 eta_reduce = liftMT $ \ e -> case e of
-      Lam v1 (App f (Var v2)) | v1 == v2 -> do freesinFunction <- freeVarsExpr f
-                                               if v1 `elem` freesinFunction
+      Lam v1 (App f (Var v2)) | v1 == v2 -> do if v1 `elem` freeIds f
                                                 then fail $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++
                                                             " is free in the function being applied."
                                                 else return f
@@ -117,9 +116,9 @@ dce = liftMT $ \ e -> case e of
                              | otherwise              -> fail "DCE: no dead code"
         _ -> fail "DCE: not applied to a NonRec Let."
 
--- output a list of all free variables in the Expr.
-freeVarsQuery :: TranslateH CoreExpr String
-freeVarsQuery = (("FreeVars are: " ++) . show . map (showSDoc.ppr)) <$> liftMT freeVarsExpr
+------------------------------------------------------------------------------
+
+-- NOT IN USE.  Use the GHC version instead.
 
 -- notice that we pass in the (empty) initial Hermit environment.
 -- Notice the use of "mtryT".  This ensures all failures are converted to []s (the unit of the monoid).

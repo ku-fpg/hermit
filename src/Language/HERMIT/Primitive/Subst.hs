@@ -13,6 +13,7 @@ import Language.HERMIT.HermitMonad
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv as Env
 import Language.HERMIT.External
+import Language.HERMIT.Primitive.GHC(freeIds)
 
 import qualified Language.Haskell.TH as TH
 
