@@ -27,7 +27,6 @@ import Language.HERMIT.External
 import qualified Language.HERMIT.Primitive.Kure as Kure
 import qualified Language.HERMIT.Primitive.Consider as Consider
 import qualified Language.HERMIT.Primitive.Inline as Inline
-import qualified Language.HERMIT.Primitive.Case as Case
 import qualified Language.HERMIT.Primitive.Subst as Subst
 import qualified Language.HERMIT.Primitive.Local as Local
 import qualified Language.HERMIT.Primitive.New as New
@@ -44,7 +43,6 @@ prim_externals :: [External]
 prim_externals =    Kure.externals
                  ++ Consider.externals
                  ++ Inline.externals
-                 ++ Case.externals
                  ++ Subst.externals
                  ++ Local.externals
                  ++ New.externals
