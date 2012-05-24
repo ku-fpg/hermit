@@ -25,48 +25,7 @@ import Language.HERMIT.Shell.Command
 import Language.KURE
 
 import Language.HERMIT.External
-{-
-data ShellCommand :: * where
-   Status        ::                             ShellCommand
-   Message       :: String                   -> ShellCommand
-   PushFocus     :: LensH Core Core          -> ShellCommand
-   PopFocus      ::                             ShellCommand
-   SuperPopFocus ::                             ShellCommand
-   KernelCommand :: KernelCommand            -> ShellCommand
 
-data ShellCommandBox = ShellCommandBox ShellCommand deriving Typeable
-
-instance Extern ShellCommand where
-    type Box ShellCommand = ShellCommandBox
-    box i = ShellCommandBox i
-    unbox (ShellCommandBox i) = i
-
-
-interpShellCommand :: [Interp ShellCommand]
-interpShellCommand =
-                [ Interp $ \ (ShellCommandBox cmd)       -> cmd
-                , Interp $ \ (LensCoreCoreBox l)         -> PushFocus l
-                , Interp $ \ (IntBox i)                  -> PushFocus $ childL i
-                , Interp $ \ (StringBox str)             -> Message str
-                ]
-
-shell_externals :: [External]
-shell_externals =
-   [
--- TODO: restore Exit
---     external "exit"            Exit
---       [ "exits HERMIT" ]
-     external "status"          Status
-       [ "redisplays current state" ]
-   , external "pop"             PopFocus
-       [ "pops one lens" ]
-   , external "."               PopFocus
-       [ "pops one lens" ]
-   , external "superpop"        SuperPopFocus
-       [ "pops all lenses" ]
-   ]
-
--}
 data CommandLineState = CommandLineState
         { cl_lenses :: [LensH Core Core] -- ^ stack of lenses
         , cl_pretty :: String            -- ^ which pretty printer to use
@@ -178,53 +137,3 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
   -- we're done
   quitK kernel ast
   return ()
-
-{-
-{-
-   Exit          ::                             KernelCommand
-   Status        ::                             KernelCommand
-   Message       :: String                   -> KernelCommand
-   Apply         :: RewriteH Core            -> KernelCommand
--}
-
-{-
-        runCommands (liftIO getCommand) (liftIO.printKernelOutput) modGuts
-  where
-    getCommand :: IO KernelCommand
-    getCommand = do maybeLine <- gets
-                    case maybeLine of
-                      Nothing            -> return Exit
-                      Just ('-':'-':msg) -> return (Message msg)
-                      Just line          -> if all isSpace line
-                                             then getCommand
-                                             else case parseExprH line of
-                                                    Left  msg  -> putStrLn ("parse failure: " ++ msg) >> getCommand
-                                                    Right expr -> case interpExprH expr of
-                                                                    Left msg  -> putStrLn msg >> getCommand
-                                                                    Right cmd -> return cmd
--}
-
-
-commandLine2 :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
-commandLine2 gets modGuts = runCommands (liftIO getCommand) (liftIO.printKernelOutput) modGuts
-  where
-    getCommand :: IO KernelCommand
-    getCommand = do maybeLine <- gets
-                    case maybeLine of
-                      Nothing            -> return Exit
-                      Just ('-':'-':msg) -> return (Message msg)
-                      Just line          -> if all isSpace line
-                                             then getCommand
-                                             else case parseExprH line of
-                                                    Left  msg  -> putStrLn ("parse failure: " ++ msg) >> getCommand
-                                                    Right expr -> case interpExprH expr of
-                                                                    Left msg  -> putStrLn msg >> getCommand
-                                                                    Right cmd -> return cmd
-
-printKernelOutput :: KernelOutput -> IO ()
-printKernelOutput (ErrorMsg msg)    = putStrLn msg
-printKernelOutput (QueryResult msg) = putStrLn msg
-printKernelOutput (FocusChange _ a) = putStrLn (show2 a)
-printKernelOutput (CoreChange a)    = putStrLn (show2 a)
-
--}
