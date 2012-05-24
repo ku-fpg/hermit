@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances, ScopedTypeVariables, GADTs, KindSignatures, TypeFamilies, DeriveDataTypeable #-}
 
-module Language.HERMIT.CommandLine where
+module Language.HERMIT.Shell.Dispatch where
 
 import GhcPlugins
 
@@ -14,6 +14,7 @@ import qualified Data.Map as M
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 import Language.HERMIT.HermitExpr
+import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitKure
 import Language.HERMIT.Kernel
 import Language.HERMIT.Dictionary
@@ -83,7 +84,10 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
 
 
       act st Status = do
-              True <- showFocus st
+--              True <- showFocus st
+              print "starting"
+              ContextPath doc <- query (cl_cursor st) (focusT (myLens st) pathT)
+              print (reverse doc)
               loop st
 
       act st (PushFocus ls) = do
@@ -116,14 +120,14 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
       kernelAct st (Query q) = do
 
               -- something changed, to print
-              (do doc <- query ast (focusT (myLens st) q)
+              (do doc <- query (cl_cursor st) (focusT (myLens st) q)
                   print doc) `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg
               -- same state
               loop st
 
       kernelAct st (Apply rr) = do
               -- something changed (you've applied)
-              st2 <- (do ast' <- applyK kernel ast (focusR (myLens st) rr)
+              st2 <- (do ast' <- applyK kernel (cl_cursor st) (focusR (myLens st) rr)
                          let st' = st { cl_cursor = ast' }
                          showFocus st'
                          return st') `catch` \  msg -> do
