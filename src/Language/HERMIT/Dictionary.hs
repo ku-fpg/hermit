@@ -37,8 +37,7 @@ import Language.HERMIT.PrettyPrinter
 --------------------------------------------------------------------------
 
 prim_externals :: [External]
-prim_externals =   {- Command.externals
-                 ++ -} Kure.externals
+prim_externals =    Kure.externals
                  ++ Consider.externals
                  ++ Inline.externals
                  ++ Case.externals
@@ -48,7 +47,13 @@ prim_externals =   {- Command.externals
 
 all_externals :: [External]
 all_externals =    prim_externals
-                ++ [ external "bash" (promoteR bash) bashHelp .+ MetaCmd
+
+-- create the dictionary
+dictionary :: [External] -> M.Map String [Dynamic]
+dictionary my_externals = toDictionary all_externals
+  where
+        all_externals = prim_externals ++ my_externals ++
+                [ external "bash" (promoteR bash) bashHelp .+ MetaCmd
                    , external "help"            (help all_externals Nothing Nothing)
                         [ "lists all commands" ]
                    , external "help" (help all_externals Nothing . Just :: String -> String)
@@ -59,8 +64,6 @@ all_externals =    prim_externals
                         [ "help ls <path> to list commands in a specific path" ]
                    ]
 
-dictionary :: M.Map String [Dynamic]
-dictionary = toDictionary all_externals
 
 --------------------------------------------------------------------------
 -- The pretty printing dictionaries
@@ -69,47 +72,8 @@ pp_dictionary = M.fromList
         [ ("ghc",ghcCorePrettyH)
         ]
 
-
-
 --------------------------------------------------------------------------
 
-{-
---             , Interp $ \ (LensCoreCoreBox l)         -> Right $ PushFocus l
---             , Interp $ \ (IntBox i)                  -> Right $ PushFocus $ childL i
---             , Interp $ \ (StringBox str)             -> Left $ str
---------------------------------------------------------------------------
-
--- The union of all possible results from a "well-typed" commands, from this dictionary.
-
-interpExprH :: [Interp a] -> Dynamic -> Maybe a
-interpExprH interps dyn = runInterp [dyn] (map (fmap Just) interps) Nothing
-
-runInterp :: [Dynamic] -> [Interp b] -> b -> b
-runInterp dyns interps bad = head $
-             [f a
-             | Interp f <- interps
-             , Just a <- map fromDynamic dyns
-             ] ++ [ bad ]
-
-
-{-
-interpExprH :: M.Map String [Dynamic] -> [Interp (Either String a)] -> ExprH -> Either String a
-interpExprH env interps expr =
-        case interpExpr env expr of
-          Left msg  -> Left msg
-          Right dyn -> runInterp dyn interps
-                        (Left "interpExpr: bad type of expression")
--}
-{-
-
--}
-
-data Interp :: * -> * where
-   Interp :: Typeable a => (a -> b) -> Interp b
-
-instance Functor Interp where
-   fmap f (Interp g) = Interp (f . g)
--}
 make_help :: [External] -> [String]
 make_help = concatMap snd . M.toList . toHelp
 
@@ -134,34 +98,6 @@ help externals (Just "ls") m = unlines $ map toLine groups
           toLine ((d,cmd):r) = d ++ optParens (intercalate ", " [ cmd' | cmd' <- cmd : map snd r, cmd' /= d ])
 
 --------------------------------------------------------------------------
-{-
-interpExpr :: M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
-interpExpr = interpExpr' False
-
-interpExpr' :: Bool -> M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
-interpExpr' _ env (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
-interpExpr' rhs env (CmdName str)
-  | all isDigit str                     = return [ toDyn $ IntBox $ read str ]
-  | Just dyn <- M.lookup str env        = if rhs
-                                          then return (toDyn (StringBox str) : dyn)
-                                          else return dyn
-  -- not a command, try as a string arg... worst case: dynApply fails with "bad type of expression"
-  -- best case: 'help ls' works instead of 'help "ls"'. this is likewise done in then clause above
-  | rhs                                 = return [toDyn $ StringBox str]
-  | otherwise                           = Left $ "Unrecognised command: " ++ show str
-interpExpr' rhs env (StrName str)           = if rhs
-                                          then return [ toDyn $ StringBox str ]
-                                          else return []
-interpExpr' _ env (AppH e1 e2)              = dynAppMsg (interpExpr' False env e1) (interpExpr' True env e2)
-
-dynAppMsg :: Either String [Dynamic] -> Either String [Dynamic] -> Either String [Dynamic]
-dynAppMsg f x = liftM2 dynApply' f x >>= return
-   where
-           dynApply' :: [Dynamic] -> [Dynamic] -> [Dynamic]
-           dynApply' fs xs = [ r | f <- fs, x <- xs, Just r <- return (dynApply f x)]
--}
---------------------------------------------------------------------------
-
 -- Runs every command tagged with 'Bash' with innermostR (fix point anybuR),
 -- if any of them succeed, then it tries all of them again.
 -- Only fails if all of them fail the first time.

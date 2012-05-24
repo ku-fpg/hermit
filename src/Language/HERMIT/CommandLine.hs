@@ -113,7 +113,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
                        Left  msg  -> putStrLn ("parse failure: " ++ msg) >> loop st
                        Right expr ->
                            case interpExprH
-                                        (dictionary `mappend` toDictionary shell_externals)
+                                        (toDictionary shell_externals)
                                         (interpShellCommand
                                            ++  map (fmap KernelCommand) interpKernelCommand)
                                         expr of
