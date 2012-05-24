@@ -34,8 +34,9 @@ interpShellCommand =
                 , Interp $ \ (StringBox str)             -> Message str
                 ]
 
+
 shell_externals :: [External]
-shell_externals =
+shell_externals = map (.+ Shell)
    [
      external "exit"            Exit
        [ "exits HERMIT" ]

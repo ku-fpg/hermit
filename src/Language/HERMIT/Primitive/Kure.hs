@@ -11,7 +11,7 @@ import Language.HERMIT.External
      --   (>->) :: Monad m => Translate c m a b -> Translate c m b d -> Translate c m a d
 
 externals :: [External]
-externals =
+externals = map (.+ KURE)
    [ external "id"         (idR :: RewriteH Core)
        [ "perform the identity"]
    , external "catch"      ((<+) :: RewriteH Core -> RewriteH Core -> RewriteH Core)

@@ -23,7 +23,7 @@ promoteR'  :: Term a => RewriteH a -> RewriteH (Generic a)
 promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an expr") (apply rr c)  (retract e)
 
 externals :: [External]
-externals =
+externals = map (.+ Experiment)
          [
            external "let-intro" (promoteR' . let_intro)
                 [ "'let-intro v' performs E1 ==> (let v = E1 in v)" ]

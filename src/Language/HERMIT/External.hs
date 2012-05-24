@@ -4,6 +4,7 @@ module Language.HERMIT.External where
 
 import Data.Map hiding (map)
 import Data.Dynamic
+import Data.List
 
 import qualified Language.Haskell.TH as TH
 
@@ -17,6 +18,14 @@ type ExternalHelp = [String]
 
 data CmdTag = Bash -- this command will be run as part of the bash command
             | Slow -- this command is slow
+            | KURE -- a KURE command
+            | GHC  -- a tunnel into GHC
+            | Local     -- local thing, O(1)
+            | Eval      -- the arrow of evaluation
+            | Lens      -- focuses into a specific node
+            | Context   -- something that uses the context
+            | Experiment -- things we are trying out
+            | Shell     -- Shell commands
             -- etc
     deriving (Eq, Show, Read)
 
@@ -62,16 +71,29 @@ instance ExternTag CmdCategory where
     hasTag (External {externCats = cs}) c = c `elem` cs
 
 toDictionary :: [External] -> Map ExternalName [Dynamic]
-toDictionary = fromListWith (++) . map toD
+toDictionary
+        -- TODO: check names are uniquely-prefixed
+        | otherwise = fromListWith (++) . map toD
   where
          toD :: External -> (ExternalName,[Dynamic])
-         toD e = (externName e, [externFun e])
+         toD e = (externName e,[externFun e])
 
 toHelp :: [External] -> Map ExternalName ExternalHelp
 toHelp = fromListWith (++) . map toH
   where
          toH :: External -> (ExternalName,ExternalHelp)
-         toH e = (externName e, (externName e ++ " :: " ++ show (dynTypeRep (externFun e))) : externHelp e)
+         toH e = (externName e, spaceout (externName e ++ " :: " ++ fixup (show (dynTypeRep (externFun e))))
+                                         (show (externTags e)) : externHelp e)
+
+         spaceout xs ys = xs ++ take (width - (length xs + length ys)) (repeat ' ') ++ ys
+
+         width = 78
+
+         fixup :: String -> String
+         fixup xs | "Box" `isPrefixOf` xs = fixup (drop 3 xs)
+         fixup (x:xs)                     = x : fixup xs
+         fixup []                         = []
+
 
 -----------------------------------------------------------------
 

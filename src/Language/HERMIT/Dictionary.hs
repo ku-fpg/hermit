@@ -31,6 +31,8 @@ import qualified Language.HERMIT.Primitive.Case as Case
 import qualified Language.HERMIT.Primitive.Subst as Subst
 import qualified Language.HERMIT.Primitive.Local as Local
 import qualified Language.HERMIT.Primitive.New as New
+import qualified Language.HERMIT.Primitive.GHC as GHC
+
 
 import Language.HERMIT.PrettyPrinter
 -- import qualified Language.HERMIT.PrettyPrinter.AST
@@ -44,6 +46,7 @@ prim_externals =    Kure.externals
                  ++ Subst.externals
                  ++ Local.externals
                  ++ New.externals
+                 ++ GHC.externals
 
 -- create the dictionary
 dictionary :: [External] -> M.Map String [Dynamic]

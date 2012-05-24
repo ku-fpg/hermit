@@ -9,7 +9,8 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.External
 
 externals :: [External]
-externals = [
+externals = map (.+ Context)
+            [
               external "inline" (promoteR inline)
                 [ "(Var n) ==> <defn of n>, fails otherwise" ]
             ]

@@ -14,7 +14,8 @@ import Language.HERMIT.HermitEnv
 import qualified Language.Haskell.TH as TH
 
 externals :: [External]
-externals = [
+externals = map (.+ Lens)
+            [
               external "consider" consider
                 [ "'consider <v>' focuses into the rhs of the binding <v>" ]
             ]

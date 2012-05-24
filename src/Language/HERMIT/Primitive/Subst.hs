@@ -17,9 +17,8 @@ import Language.HERMIT.External
 import qualified Language.Haskell.TH as TH
 
 
-
 externals :: [External]
-externals =
+externals = map (.+ Experiment)
          [
            external "alpha" (promoteR alphaLambda)
                 [ "Alpha rename (for Lambda's)."]

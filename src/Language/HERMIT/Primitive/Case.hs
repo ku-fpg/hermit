@@ -7,8 +7,10 @@ import Language.HERMIT.External
 import Language.KURE
 
 externals :: [External]
-externals = [
+externals =
+            [
               external "case-reduce" (promoteR caseReduce) [ "case-of-known-constructor" ] .+ Bash .+ CaseCmd
+              .+ Local
             ]
 
 -- | Case-of-known-constructor rewrite
