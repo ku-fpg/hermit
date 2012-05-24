@@ -37,9 +37,9 @@ interpShellCommand =
 shell_externals :: [External]
 shell_externals =
    [
---     external "exit"            Exit
---       [ "exits HERMIT" ]
-     external "status"          Status
+     external "exit"            Exit
+       [ "exits HERMIT" ]
+   , external "status"          Status
        [ "redisplays current state" ]
    , external "pop"             PopFocus
        [ "pops one lens" ]
