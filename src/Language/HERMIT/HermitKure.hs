@@ -6,28 +6,29 @@ module Language.HERMIT.HermitKure
        , RewriteH
        , LensH
        , Core(..), CoreDef(..)
-       -- Scoping Combinators
-       , modGutsT
-       , nilT
-       , consBindT
-       , listBindT
-       , nonRecT
-       , recT
-       , altT
+       -- | Congruence combinators
+       --   IMPORTANT: the @T@ versions only succeed if ALL child 'Translate's succeed,
+       --   whereas the @R@ versions succeed if ANY child 'Translate' succeeds.
+       , modGutsT, modGutsR
+       , consBindT, consBindR
+       , nonRecT, nonRecR
+       , recT, recR
+       , defT, defR
+       , altT, altR
        , varT
        , litT
-       , appT
-       , lamT
-       , letT
-       , caseT
-       , castT
-       , tickT
+       , appT, appR
+       , lamT, lamR
+       , letT, letR
+       , caseT, caseR
+       , castT, castR
+       , tickT, tickR
        , typeT
        , coercionT
-       , letNonRecT
-       , letRecT
-       , recDefT
-       , letRecDefT
+       , letNonRecT, letNonRecR
+       , letRecT, letRecR
+       , recDefT, recDefR
+       , letRecDefT, letRecDefR
        -- Useful Translations
        , pathT
        )
@@ -44,6 +45,8 @@ import Language.HERMIT.HermitMonad
 
 import Control.Applicative
 import Control.Monad (guard)
+
+import Data.Monoid
 
 ---------------------------------------------------------------------
 
@@ -97,6 +100,14 @@ instance Walker HermitEnv HermitM Core where
           ExprCore x    -> childLgeneric n c x
           AltCore x     -> childLgeneric n c x
 
+  allT t = translate $ \ c core -> case core of
+          ModGutsCore x -> allTgeneric t c x
+          ProgramCore x -> allTgeneric t c x
+          BindCore x    -> allTgeneric t c x
+          DefCore x     -> allTgeneric t c x
+          ExprCore x    -> allTgeneric t c x
+          AltCore x     -> allTgeneric t c x
+
   allR r = rewrite $ \ c core -> case core of
           ModGutsCore x -> allRgeneric r c x
           ProgramCore x -> allRgeneric r c x
@@ -129,9 +140,12 @@ instance Walker HermitEnv HermitM ModGuts where
   childL 0 = modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
   childL n = missingChildL n
 
--- slightly different; passes in *all* of the original
+-- slightly different to the other; passes in *all* of the original
 modGutsT :: TranslateH CoreProgram a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
 modGutsT t f = translate $ \ c modGuts -> f modGuts <$> apply t (c @@ 0) (mg_binds modGuts)
+
+modGutsR :: RewriteH CoreProgram -> RewriteH ModGuts
+modGutsR r = modGutsT r (\ modguts bds -> modguts {mg_binds = bds})
 
 ---------------------------------------------------------------------
 
@@ -151,17 +165,16 @@ instance Walker HermitEnv HermitM CoreProgram where
   childL 1 = consBindT idR exposeT (childL1of2 (:))
   childL n = missingChildL n
 
-nilT :: b -> TranslateH [a] b
-nilT b = do [] <- idR
-            return b
+consBindT' :: TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH [CoreBind] b
+consBindT' t1 t2 f = translate $ \ c e -> case e of
+        bd:bds -> f (apply t1 (c @@ 0) bd) (apply t2 (addHermitBinding bd c @@ 1) bds)
+        _      -> fail "no match for consBind"
 
 consBindT :: TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (a1 -> a2 -> b) -> TranslateH [CoreBind] b
-consBindT t1 t2 f = translate $ \ c e -> case e of
-        bd:bds -> f <$> apply t1 (c @@ 0) bd <*> apply t2 (addHermitBinding bd c @@ 1) bds
-        _      -> fail "no match for consBindT"
+consBindT t1 t2 f = consBindT' t1 t2 (liftA2 f)
 
-listBindT :: b -> TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (a1 -> a2 -> b) -> TranslateH [CoreBind] b
-listBindT b t1 t2 f = nilT b <+ consBindT t1 t2 f
+consBindR :: RewriteH CoreBind -> RewriteH [CoreBind] -> RewriteH [CoreBind]
+consBindR r1 r2 = consBindT' (attemptR r1) (attemptR r2) (attemptAny2 (:))
 
 ---------------------------------------------------------------------
 
@@ -187,17 +200,22 @@ instance Walker HermitEnv HermitM CoreBind where
                   guard (n >= 0 && n < sz)
                   recT (const exposeT) (childLMofN n defToRecBind)
 
+  allT t = nonRecT (extractT t) (\ _ -> id)
+        <+ recT (\ _ -> extractT t) mconcat
+
+  anyR r = nonRecR (extractR r)
+        <+ recR (\ _ -> extractR r)
+
   allR r = nonRecT (extractR r) NonRec
         <+ recT (\ _ -> extractR r) defToRecBind
-
-  anyR r = nonRecT (extractR r) NonRec
-        <+ recT' (\ _ -> attemptExtractR r) (attemptAnyN defToRecBind)
-
 
 nonRecT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreBind b
 nonRecT t f = translate $ \ c e -> case e of
                                      NonRec v e' -> f v <$> apply t (c @@ 0) e'
-                                     _           -> fail "nonRecT: not NonRec"
+                                     _           -> fail "not NonRec constructor"
+
+nonRecR :: RewriteH CoreExpr -> RewriteH CoreBind
+nonRecR r = nonRecT r NonRec
 
 recT' :: (Int -> TranslateH CoreDef a) -> ([HermitM a] -> HermitM b) -> TranslateH CoreBind b
 recT' t f = translate $ \ c e -> case e of
@@ -206,10 +224,13 @@ recT' t f = translate $ \ c e -> case e of
                      in f [ apply (t n) (c' @@ n) (Def v e') -- here we convert from (Id,CoreExpr) to CoreDef
                           | ((v,e'),n) <- zip bds [0..]
                           ]
-         _       -> fail "recT: not Rec"
+         _       -> fail "not Rec constructor"
 
 recT :: (Int -> TranslateH CoreDef a) -> ([a] -> b) -> TranslateH CoreBind b
-recT t f = recT' t (fmap f . sequence)
+recT ts f = recT' ts (fmap f . sequence)
+
+recR :: (Int -> RewriteH CoreDef) -> RewriteH CoreBind
+recR rs = recT' (attemptR . rs) (attemptAnyN defToRecBind)
 
 ---------------------------------------------------------------------
 
@@ -230,6 +251,9 @@ instance Walker HermitEnv HermitM CoreDef where
 defT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreDef b
 defT t f = translate $ \ c (Def v e) -> f v <$> apply t (c @@ 0) e
 
+defR :: RewriteH CoreExpr -> RewriteH CoreDef
+defR r = defT r Def
+
 ---------------------------------------------------------------------
 
 instance Injection CoreAlt Core where
@@ -248,6 +272,9 @@ instance Walker HermitEnv HermitM CoreAlt where
 
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
 altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (foldr addHermitEnvLambdaBinding c bs @@ 0) e
+
+altR :: RewriteH CoreExpr -> RewriteH CoreAlt
+altR r = altT r (,,)
 
 ---------------------------------------------------------------------
 
@@ -294,6 +321,26 @@ instance Walker HermitEnv HermitM CoreExpr where
                         guard (n > 0 && n < sz)
                         caseT idR (const exposeT) (\ e v t -> childLMofN (n-1) (Case e v t))
 
+  allT t = varT (\ _ -> mempty)
+        <+ litT (\ _ -> mempty)
+        <+ appT (extractT t) (extractT t) mappend
+        <+ lamT (extractT t) (\ _ -> id)
+        <+ letT (extractT t) (extractT t) mappend
+        <+ caseT (extractT t) (\ _ -> extractT t) (\ r _ _ rs -> mconcat (r:rs))
+        <+ castT (extractT t) const
+        <+ tickT (extractT t) (\ _ -> id)
+        <+ typeT (\ _ -> mempty)
+        <+ coercionT (\ _ -> mempty)
+        <+ fail "allT failed for all Expr constructors"
+
+  anyR r = appR (extractR r) (extractR r)
+        <+ lamR (extractR r)
+        <+ letR (extractR r) (extractR r)
+        <+ caseR (extractR r) (\ _ -> extractR r)
+        <+ castR (extractR r)
+        <+ tickR (extractR r)
+        <+ fail "anyR failed for all Expr constructors"
+
   allR r = varT Var
         <+ litT Lit
         <+ appT (extractR r) (extractR r) App
@@ -306,18 +353,7 @@ instance Walker HermitEnv HermitM CoreExpr where
         <+ coercionT Coercion
         <+ fail "allR failed for all Expr constructors"
 
-  anyR r = appT' (attemptExtractR r) (attemptExtractR r) (attemptAny2 App)
-        <+ lamT (extractR r) Lam
-        <+ letT' (attemptExtractR r) (attemptExtractR r) (attemptAny2 Let)
-        <+ caseT' (attemptExtractR r) (\ _ -> attemptExtractR r) (\ b ty -> attemptAny1N (\ e -> Case e b ty))
-        <+ castT (extractR r) Cast
-        <+ tickT (extractR r) Tick
-        <+ fail "anyR failed for all Expr constructors"
-
 ---------------------------------------------------------------------
-
--- These are scoping aware combinators.
--- The primed versions are the generalisations needed to define "anyR".
 
 -- Expr
 varT :: (Id -> b) -> TranslateH CoreExpr b
@@ -330,6 +366,7 @@ litT f = liftMT $ \ e -> case e of
         Lit i -> pure (f i)
         _     -> fail "no match for Lit"
 
+
 appT' :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH CoreExpr b
 appT' t1 t2 f = translate $ \ c e -> case e of
          App e1 e2 -> f (apply t1 (c @@ 0) e1) (apply t2 (c @@ 1) e2)
@@ -338,10 +375,18 @@ appT' t1 t2 f = translate $ \ c e -> case e of
 appT :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (a1 -> a2 -> b) -> TranslateH CoreExpr b
 appT t1 t2 = appT' t1 t2 . liftA2
 
+appR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
+appR r1 r2 = appT' (attemptR r1) (attemptR r2) (attemptAny2 App)
+
+
 lamT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreExpr b
 lamT t f = translate $ \ c e -> case e of
         Lam b e1 -> f b <$> apply t (addHermitEnvLambdaBinding b c @@ 0) e1
         _        -> fail "no match for Lam"
+
+lamR :: RewriteH CoreExpr -> RewriteH CoreExpr
+lamR r = lamT r Lam
+
 
 letT' :: TranslateH CoreBind a1 -> TranslateH CoreExpr a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH CoreExpr b
 letT' t1 t2 f = translate $ \ c e -> case e of
@@ -353,32 +398,49 @@ letT' t1 t2 f = translate $ \ c e -> case e of
 letT :: TranslateH CoreBind a1 -> TranslateH CoreExpr a2 -> (a1 -> a2 -> b) -> TranslateH CoreExpr b
 letT t1 t2 = letT' t1 t2 . liftA2
 
+letR :: RewriteH CoreBind -> RewriteH CoreExpr -> RewriteH CoreExpr
+letR r1 r2 = letT' (attemptR r1) (attemptR r2) (attemptAny2 Let)
+
+
 caseT' :: TranslateH CoreExpr a1
       -> (Int -> TranslateH CoreAlt a2)          -- Int argument *starts* at 1.
       -> (Id -> Type -> HermitM a1 -> [HermitM a2] -> HermitM b)
       -> TranslateH CoreExpr b
-caseT' t1 t2 f = translate $ \ c e -> case e of
-         Case e1 b ty alts -> f b ty (apply t1 (c @@ 0) e1) $ let c' = addHermitBinding (NonRec b e1) c
-                                                                  in [ apply (t2 n) (c' @@ n) alt
-                                                                     | (alt,n) <- zip alts [1..]
-                                                                     ]
+caseT' t ts f = translate $ \ c e -> case e of
+         Case e1 b ty alts -> f b ty (apply t (c @@ 0) e1) $ let c' = addHermitBinding (NonRec b e1) c
+                                                                 in [ apply (ts n) (c' @@ n) alt
+                                                                    | (alt,n) <- zip alts [1..]
+                                                                    ]
          _ -> fail "no match for Case"
 
 caseT :: TranslateH CoreExpr a1
       -> (Int -> TranslateH CoreAlt a2)          -- Int argument *starts* at 1.
       -> (a1 -> Id -> Type -> [a2] -> b)
       -> TranslateH CoreExpr b
-caseT t1 t2 f = caseT' t1 t2 (\ b ty me malts -> f <$> me <*> pure b <*> pure ty <*> sequence malts)
+caseT t ts f = caseT' t ts (\ b ty me malts -> f <$> me <*> pure b <*> pure ty <*> sequence malts)
+
+caseR :: RewriteH CoreExpr
+      -> (Int -> RewriteH CoreAlt)          -- Int argument *starts* at 1.
+      -> RewriteH CoreExpr
+caseR r rs = caseT' (attemptR r) (attemptR . rs) (\ b ty -> attemptAny1N (\ e -> Case e b ty))
+
 
 castT :: TranslateH CoreExpr a -> (a -> Coercion -> b) -> TranslateH CoreExpr b
 castT t f = translate $ \ c e -> case e of
         Cast e1 cast -> f <$> apply t (c @@ 0) e1 <*> pure cast
         _            -> fail "no match for Cast"
 
+castR :: RewriteH CoreExpr -> RewriteH CoreExpr
+castR r = castT r Cast
+
+
 tickT :: TranslateH CoreExpr a -> (Tickish Id -> a -> b) -> TranslateH CoreExpr b
 tickT t f = translate $ \ c e -> case e of
         Tick tk e1 -> f tk <$> apply t (c @@ 0) e1
         _          -> fail "no match for Tick"
+
+tickR :: RewriteH CoreExpr -> RewriteH CoreExpr
+tickR r = tickT r Tick
 
 typeT :: (Type -> b) -> TranslateH CoreExpr b
 typeT f = liftMT $ \ e -> case e of
@@ -392,19 +454,31 @@ coercionT f = liftMT $ \ e -> case e of
 
 ---------------------------------------------------------------------
 
--- Some additional scoping combinators to export.
+-- Some additional congruence combinators to export.
 
 letNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (Id -> a1 -> a2 -> b) -> TranslateH CoreExpr b
 letNonRecT t1 t2 f = letT (nonRecT t1 (,)) t2 (uncurry f)
 
+letNonRecR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
+letNonRecR r1 r2 = letR (nonRecR r1) r2
+
 letRecT :: (Int -> TranslateH CoreDef a1) -> TranslateH CoreExpr a2 -> ([a1] -> a2 -> b) -> TranslateH CoreExpr b
-letRecT t1s t2 f = letT (recT t1s id) t2 f
+letRecT ts t f = letT (recT ts id) t f
+
+letRecR :: (Int -> RewriteH CoreDef) -> RewriteH CoreExpr -> RewriteH CoreExpr
+letRecR rs r = letR (recR rs) r
 
 recDefT :: (Int -> TranslateH CoreExpr a1) -> ([(Id,a1)] -> b) -> TranslateH CoreBind b
 recDefT ts f = recT (\ n -> defT (ts n) (,)) f
 
-letRecDefT ::  (Int -> TranslateH CoreExpr a1) -> TranslateH CoreExpr a2 -> ([(Id,a1)] -> a2 -> b) -> TranslateH CoreExpr b
-letRecDefT t1s t2 f = letRecT (\ n -> defT (t1s n) (,)) t2 f
+recDefR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
+recDefR rs = recR (\ n -> defR (rs n))
+
+letRecDefT :: (Int -> TranslateH CoreExpr a1) -> TranslateH CoreExpr a2 -> ([(Id,a1)] -> a2 -> b) -> TranslateH CoreExpr b
+letRecDefT ts t f = letRecT (\ n -> defT (ts n) (,)) t f
+
+letRecDefR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr -> RewriteH CoreExpr
+letRecDefR rs r = letRecR (\ n -> defR (rs n)) r
 
 ---------------------------------------------------------------------
 
