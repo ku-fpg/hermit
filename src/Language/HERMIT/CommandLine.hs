@@ -15,14 +15,17 @@ import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 import Language.HERMIT.HermitExpr
 import Language.HERMIT.HermitKure
+import Language.HERMIT.Kernel
 import Language.HERMIT.Dictionary
 import Language.HERMIT.Kernel
 import Language.HERMIT.PrettyPrinter
+import Language.HERMIT.Interp
+import Language.HERMIT.Shell.Command
 
 import Language.KURE
 
 import Language.HERMIT.External
-
+{-
 data ShellCommand :: * where
    Status        ::                             ShellCommand
    Message       :: String                   -> ShellCommand
@@ -50,9 +53,10 @@ interpShellCommand =
 shell_externals :: [External]
 shell_externals =
    [
-     external "exit"            Exit
-       [ "exits HERMIT" ]
-   , external "status"          Status
+-- TODO: restore Exit
+--     external "exit"            Exit
+--       [ "exits HERMIT" ]
+     external "status"          Status
        [ "redisplays current state" ]
    , external "pop"             PopFocus
        [ "pops one lens" ]
@@ -62,7 +66,7 @@ shell_externals =
        [ "pops all lenses" ]
    ]
 
-
+-}
 data CommandLineState = CommandLineState
         { cl_lenses :: [LensH Core Core] -- ^ stack of lenses
         , cl_pretty :: String            -- ^ which pretty printer to use
@@ -107,21 +111,14 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
                 then loop st
                 else case parseExprH line of
                        Left  msg  -> putStrLn ("parse failure: " ++ msg) >> loop st
-                       Right expr -> do
-                           let i0 = interpExpr (dictionary `mappend` toDictionary shell_externals) expr
-                               interps = interpShellCommand
-                                     ++  map (fmap KernelCommand) interpKernelCommand
-
-                               i1 = either Left (\ xs -> case xs of
-                                                           [] -> Left "no matches"
-                                                           [x] -> Right x
-                                                           _   -> Left "to many matches") i0
-                               i2 = either Left (\ x -> case interpExprH interps x of
-                                                          Nothing -> Left "no type matches"
-                                                          Just a -> Right a) i1
-                           case i2 of
-                                       Left msg  -> putStrLn msg >> loop st
-                                       Right cmd -> act st cmd
+                       Right expr ->
+                           case interpExprH
+                                        (dictionary `mappend` toDictionary shell_externals)
+                                        (interpShellCommand
+                                           ++  map (fmap KernelCommand) interpKernelCommand)
+                                        expr of
+                            Left msg  -> putStrLn msg >> loop st
+                            Right cmd -> act st cmd
 
 
       act st Status = do

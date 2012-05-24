@@ -1,11 +1,11 @@
-{-# LANGUAGE KindSignatures, GADTs, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE KindSignatures, GADTs, RankNTypes, ScopedTypeVariables, TypeFamilies, DeriveDataTypeable #-}
 
 module Language.HERMIT.Kernel (
 
           KernelCommand(..)
 --        , KernelOutput(..)
 --        , runCommands
-
+        , interpKernelCommand
         , hermitKernel
         , Kernel(..)
         , AST
@@ -15,12 +15,15 @@ module Language.HERMIT.Kernel (
 import GhcPlugins
 import Control.Monad
 import Control.Exception.Base
+import Data.Dynamic
 
 import Language.KURE
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
+import Language.HERMIT.Interp
+import Language.HERMIT.External
 
 import qualified Data.Map as M
 import Control.Concurrent
@@ -33,6 +36,13 @@ data Kernel = Kernel
         , deleteK ::            AST                      -> IO ()
         , listK   ::                                        IO [AST]
         }
+
+interpKernelCommand :: [Interp KernelCommand]
+interpKernelCommand =
+             [ Interp $ \ (KernelCommandBox cmd)      -> cmd
+             , Interp $ \ (RewriteCoreBox rr)         -> Apply rr
+             , Interp $ \ (TranslateCoreStringBox tt) -> Query tt
+             ]
 
 -- a name of a syntax tree
 newtype AST = AST Int
@@ -137,6 +147,15 @@ data KernelCommand :: * where
 --   PushFocus     :: LensH Core Core          -> KernelCommand
 --   PopFocus      ::                             KernelCommand
 --   SuperPopFocus ::                             KernelCommand
+
+
+data KernelCommandBox = KernelCommandBox KernelCommand deriving Typeable
+
+instance Extern KernelCommand where
+    type Box KernelCommand = KernelCommandBox
+    box i = KernelCommandBox i
+    unbox (KernelCommandBox i) = i
+
 
 instance Show KernelCommand where
    show Exit           = "Exit"

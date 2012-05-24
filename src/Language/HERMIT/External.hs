@@ -8,7 +8,7 @@ import Data.Dynamic
 import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.HermitKure
-import Language.HERMIT.Kernel
+--import Language.HERMIT.Kernel
 
 -----------------------------------------------------------------
 
@@ -120,12 +120,8 @@ instance Extern (LensH Core Core) where
     box i = LensCoreCoreBox i
     unbox (LensCoreCoreBox i) = i
 
-data KernelCommandBox = KernelCommandBox KernelCommand deriving Typeable
-
-instance Extern KernelCommand where
-    type Box KernelCommand = KernelCommandBox
-    box i = KernelCommandBox i
-    unbox (KernelCommandBox i) = i
+{-
+-}
 
 data StringBox = StringBox String deriving Typeable
 

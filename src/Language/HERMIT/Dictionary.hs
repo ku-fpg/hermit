@@ -73,13 +73,7 @@ pp_dictionary = M.fromList
 
 --------------------------------------------------------------------------
 
-interpKernelCommand :: [Interp KernelCommand]
-interpKernelCommand =
-             [ Interp $ \ (KernelCommandBox cmd)      -> cmd
-             , Interp $ \ (RewriteCoreBox rr)         -> Apply rr
-             , Interp $ \ (TranslateCoreStringBox tt) -> Query tt
-             ]
-
+{-
 --             , Interp $ \ (LensCoreCoreBox l)         -> Right $ PushFocus l
 --             , Interp $ \ (IntBox i)                  -> Right $ PushFocus $ childL i
 --             , Interp $ \ (StringBox str)             -> Left $ str
@@ -115,7 +109,7 @@ data Interp :: * -> * where
 
 instance Functor Interp where
    fmap f (Interp g) = Interp (f . g)
-
+-}
 make_help :: [External] -> [String]
 make_help = concatMap snd . M.toList . toHelp
 
@@ -140,7 +134,7 @@ help externals (Just "ls") m = unlines $ map toLine groups
           toLine ((d,cmd):r) = d ++ optParens (intercalate ", " [ cmd' | cmd' <- cmd : map snd r, cmd' /= d ])
 
 --------------------------------------------------------------------------
-
+{-
 interpExpr :: M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
 interpExpr = interpExpr' False
 
@@ -165,7 +159,7 @@ dynAppMsg f x = liftM2 dynApply' f x >>= return
    where
            dynApply' :: [Dynamic] -> [Dynamic] -> [Dynamic]
            dynApply' fs xs = [ r | f <- fs, x <- xs, Just r <- return (dynApply f x)]
-
+-}
 --------------------------------------------------------------------------
 
 -- Runs every command tagged with 'Bash' with innermostR (fix point anybuR),
