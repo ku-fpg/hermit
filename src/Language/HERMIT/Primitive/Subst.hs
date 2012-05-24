@@ -97,43 +97,38 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
         rule12 = do (Var n0) <- idR
                     if (n0 == v)
                     then return expReplacement
-                    else idR
+                    else fail "Var does not match substitution"
 
         rule345 :: RewriteH CoreExpr
         rule345 = do (Lam b e) <- idR
-                     whenT (b == v) idR
-                       <+ whenT (v `notElem` freeIds e) idR
-                       <+ whenT (b `notElem` freeIds expReplacement)
-                                (lamT (substR v expReplacement) Lam)
-                       <+ alphaLambda  >-> rule345
+                     guardT (b == v) "Subtitution var clashes with Lam"
+                     guardT (v `notElem` freeIds e) "Substitution var not used in body of Lam"
+                     whenT (b `notElem` freeIds expReplacement)
+                           (lamR (substR v expReplacement))
+                        <+ alphaLambda  >-> rule345
 
         rule6 = allR (promoteR $ substR v expReplacement)
         -- like Rule 3 and 4/5 above, but for lets
         rule78 :: RewriteH CoreExpr
         rule78 = do (Let bds e) <- idR
-                    whenT (v `elem` (bindList bds)) idR
-                       <+ whenT (null $ List.intersect (bindList bds) (freeIds expReplacement))
-                                (letT (substBindR v expReplacement)  (substR v expReplacement)  Let)
-                             -- If v is not free in e, it may be free in the expression(s) bound by the let
-                       <+ whenT (v `notElem` freeIds e)
-                                (letT (substBindR v expReplacement) idR Let)
-                             -- final case.  v is free in e, but the bound var(s) in the let appear
-                             -- free in the replacement expression.  Alpha renaming to the rescue, and try again.
-                       <+ alphaLet  >-> rule78
+                    guardT (v `elem` (bindList bds)) "Substitution var clashes with Let var"
+                    whenT (null $ List.intersect (bindList bds) (freeIds expReplacement))
+                          (letR (substBindR v expReplacement)  (substR v expReplacement))
+                     <+ alphaLet  >-> (letR (substBindR v expReplacement)  (substR v expReplacement))
 
         -- edk?  Do we need to worry about clashes with the VBind component of a Case?
         --  For now, it is ignored here.
-        rule9 = caseT (substR v expReplacement) (\_ -> substAltR v expReplacement) Case
+        rule9 = caseR (substR v expReplacement) (\_ -> substAltR v expReplacement)
 
 -- edk !! Note, this subst handles name clashes with variables bound in the Alt form,
 -- since the scope of these bound variables is within the Alt.
 substAltR :: Id -> CoreExpr -> RewriteH CoreAlt
 substAltR v expReplacement =
     do (con, bs, e) <- idR
-       whenT (v `elem` bs) idR
-          <+ whenT (null $ List.intersect bs (freeIds expReplacement))
-                   (altT (substR v expReplacement)  (,,))
-          <+ alphaAlt >-> (substAltR v expReplacement)
+       guardT (v `elem` bs) "Substitution var clashes with Alt binders"
+       whenT (null $ List.intersect bs (freeIds expReplacement))
+             (altR (substR v expReplacement))
+          <+ alphaAlt >-> (altR (substR v expReplacement))
 
 
 -- edk !! Note, this subst DOES NOT handle name clashes with variables bound in the Bind form,
@@ -145,17 +140,17 @@ substBindR v expReplacement = (substNonRecBindR v expReplacement) <+ (substRecBi
 substNonRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substNonRecBindR v expReplacement =
     do (NonRec b e) <- idR
-       whenT (b == v) idR
-         <+ whenT (b `elem` (freeIds expReplacement)) idR
-         <+ (nonRecT (substR v expReplacement) NonRec)
+       guardT (b == v) "Substitution var clashes wth Let bound var"
+       guardT (b `elem` (freeIds expReplacement)) "Let bound var is free in substitution expr."
+       nonRecR (substR v expReplacement)
 
 substRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substRecBindR v expReplacement =
     do exp@(Rec bds) <- idR
        let boundIds = bindList exp
-       whenT (v `elem` boundIds) idR
-         <+ whenT (not . null $ List.intersect boundIds (freeIds expReplacement)) idR
-         <+ (recDefT (\ _ -> (substR v expReplacement)) Rec)
+       guardT (v `elem` boundIds) "Substitution var clashes wth Let bound var"
+       guardT (not . null $ List.intersect boundIds (freeIds expReplacement)) "Let bound var is free in substitution expr."
+       recDefR (\ _ -> substR v expReplacement)
 
 letSubstR :: RewriteH CoreExpr
 letSubstR = rewrite $ \ c exp ->
@@ -172,4 +167,4 @@ letSubstR = rewrite $ \ c exp ->
 
 -- tests ...
 alphaCase :: RewriteH CoreExpr
-alphaCase = caseT idR (\ _ -> alphaAlt) Case
+alphaCase = caseR idR (\ _ -> alphaAlt)
