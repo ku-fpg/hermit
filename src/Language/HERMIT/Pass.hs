@@ -32,12 +32,40 @@ hermitPass nms modGuts = case candidates of
                 liftIO $ setEditor el Emacs
                 liftIO $ setPrompt el (return "hermit> ")
 -}
+                let myGetLine :: IO String
+                    myGetLine = do
+                            hSetBuffering stdin NoBuffering
+                            hSetEcho stdin False
+                            fn []
+                       where
+                           fn ('\n':xs) = return (reverse xs)
+                           fn xs = do
+                                 c <- getChar
+                                 fn' c xs
+
+                           fn' c "[\ESC" = do
+                                   putChar 'K'
+                                   hFlush stdout
+                                   return ("esc-" ++ [c])
+                           fn' '\DEL' [] = fn []
+                           fn' '\DEL' xs = do
+                                 putStr "\ESC[D \ESC[D"
+                                 hFlush stdout
+                                 fn (tail xs)
+                           fn' c xs = do
+--                                 print (c,xs)
+                                 putChar c
+                                 hFlush stdout
+                                 fn (c : xs)
+--                           fn' ('\DEL') [] =
+
+
                 let elGets :: IO (Maybe String)
                     elGets = do putStr "hermit> "
                                 hFlush stdout
                             --    Wouldn't this be simpler?  Or can the string actually be "\EOT"?
                             --    liftM Just getLine `catch` (\ (_ :: SomeException) -> return Nothing)
-                                str <- getLine `catch` (\ (_ :: SomeException) -> return "\EOT")
+                                str <- myGetLine `catch` (\ (_ :: SomeException) -> return "\EOT")
                                 return $ case str of
                                            "\EOT" -> Nothing
                                            _      -> Just str
