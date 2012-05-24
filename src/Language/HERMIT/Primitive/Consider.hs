@@ -13,13 +13,11 @@ import Language.HERMIT.HermitEnv
 
 import qualified Language.Haskell.TH as TH
 
--- import Debug.Trace
-
 externals :: [External]
-externals = [ 
+externals = [
               external "consider" consider
                 [ "'consider <v>' focuses into the rhs of the binding <v>" ]
-            ]  
+            ]
 
 -- Focus on the Rhs of a bindings
 consider :: TH.Name -> LensH Core Core
@@ -32,9 +30,8 @@ consider nm = do First cxtpaths <- tdpruneT $ promoteT $ findPathTo nm
 -- and return the Path to *this* node.
 rmPrefix :: ContextPath -> TranslateH Core Path
 rmPrefix (ContextPath path) = do ContextPath this <- pathT
-                                 if this `isSuffixOf` path 
-                                   then return $ drop (length this) $ reverse path
-                                   else fail "rmPrefix failure"
+                                 guardT (this `isSuffixOf` path) "rmPrefix failure"
+                                 return $ drop (length this) $ reverse path
 
 findPathTo :: TH.Name -> TranslateH CoreBind (First ContextPath)
 findPathTo nm = translate $ \ c e -> let ContextPath ps = hermitBindingPath c in
@@ -55,6 +52,3 @@ failNameNotFound nm = fail $ "Name \"" ++ show nm ++ "\" not found."
 -- Hacks till we can find the correct way of doing these.
 cmpName :: TH.Name -> Name -> Bool
 cmpName th_nm ghc_nm = TH.nameBase th_nm == occNameString (nameOccName ghc_nm)
-        -- | trace (show (TH.nameBase th_nm,occNameString (nameOccName ghc_nm))) False = undefined
-        -- | TH.nameBase th_nm == occNameString (nameOccName ghc_nm) = True
-        -- | otherwise = False
