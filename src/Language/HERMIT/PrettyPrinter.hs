@@ -25,7 +25,10 @@ data Attr = PathAttr [Int]
           | Color SyntaxForColor
     deriving Show
 
-data SyntaxForColor = KeywordColor | SyntaxColor | VarColor
+data SyntaxForColor             -- (suggestion)
+        = KeywordColor          -- bold
+        | SyntaxColor
+        | VarColor
     deriving Show
 
 attr :: Attr -> DocH -> DocH
