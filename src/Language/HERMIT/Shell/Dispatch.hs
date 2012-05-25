@@ -170,9 +170,9 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
 -- Here is our render for the pretty printing output
 
 renderShellDoc :: DocH -> IO ()
-renderShellDoc doc = PP.fullRender PP.PageMode 80 1.5 marker (\ _ -> putStrLn "") doc [Black]
-  where
-          marker :: PP.TextDetails HermitMark -> ([Color] -> IO ()) -> ([Color ]-> IO ())
+renderShellDoc doc = PP.fullRender PP.PageMode 80 1.5 marker (\ _ -> putStrLn "") doc [Nothing]
+  where   -- color = Nothing means set back to terminal default
+          marker :: PP.TextDetails HermitMark -> ([Maybe Color] -> IO ()) -> ([Maybe Color]-> IO ())
           marker m rest cols = case m of
                   PP.Chr ch   -> putChar ch >> rest cols
                   PP.Str str  -> putStr str >> rest cols
@@ -184,9 +184,9 @@ renderShellDoc doc = PP.fullRender PP.PageMode 80 1.5 marker (\ _ -> putStrLn ""
                                     SyntaxColor  -> Green
                                     KeywordColor -> Magenta
                         setSGR [ SetColor Foreground Dull col ]
-                        rest (col : cols)
+                        rest (Just col : cols)
                   PP.Mark (PopAttr) -> do
                         let (_:cols') = cols
-                        setSGR [ SetColor Foreground Dull (head cols') ]
+                        setSGR [maybe Reset (SetColor Foreground Dull) (head cols')]
                         rest cols'
 

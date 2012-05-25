@@ -75,7 +75,7 @@ getEditor = do
                          ]
                   putStr prompt
                   setSGR [ SetConsoleIntensity NormalIntensity
-                         , SetColor Foreground Dull Black
+                         , Reset
                          ]
                   hFlush stdout
                   str <- myGetLine `catch` (\ (_ :: SomeException) -> return "\EOT")
