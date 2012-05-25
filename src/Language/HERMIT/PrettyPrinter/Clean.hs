@@ -66,7 +66,7 @@ corePrettyH  =
 
     -- DocH is not a monoid, so we can't use listT here
     ppProgram :: PrettyH GHC.CoreProgram -- CoreProgram = [CoreBind]
-    ppProgram = translate $ \ c -> fmap vlist . sequenceA . map (apply ppCoreBind c)
+    ppProgram = translate $ \ c -> fmap vcat . sequenceA . map (apply ppCoreBind c)
 
     ppCoreExpr :: PrettyH GHC.CoreExpr
     ppCoreExpr = ppCoreExprR >-> liftT normalExpr
@@ -107,8 +107,8 @@ corePrettyH  =
     ppCoreAlt :: PrettyH GHC.CoreAlt
     ppCoreAlt = altT ppCoreExpr $ \ con ids e -> case con of
                   GHC.DataAlt dcon -> hang (ppSDoc dcon <+> ppIds ids) 2 e
---                  LitAlt lit   ->
---                  DEFAULT      ->
+                  GHC.LitAlt lit   -> hang (ppSDoc lit <+> ppIds ids) 2 e
+                  GHC.DEFAULT      -> text "_" <+> ppIds ids <+> e
           where
                  ppIds ids | null ids  = text "\x2192"
                            | otherwise = hsep (map ppSDoc ids) <+> text "\x2192"
@@ -120,6 +120,6 @@ corePrettyH  =
     ppDefFun :: GHC.Id -> RetExpr -> DocH
     ppDefFun i e = case e of
                     RetLam vs e0 -> hang (pre <+> text "\x03BB" <+> hsep vs <+> text "\x2192") 2 e0
-                    _ -> normalExpr e
+                    _ -> hang pre 2 (normalExpr e)
         where
             pre = varColor (ppSDoc i) <+> text "="
