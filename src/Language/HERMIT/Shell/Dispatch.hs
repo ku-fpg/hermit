@@ -2,14 +2,14 @@
 
 module Language.HERMIT.Shell.Dispatch where
 
+import Prelude hiding (catch)
+
 import GhcPlugins hiding (L)
 
 import Data.Char
 import Control.Applicative
 import Data.List (intercalate)
-import Data.Monoid
-import Control.Exception.Base
-import Data.Dynamic
+import Control.Exception.Base hiding (catch)
 
 import qualified Data.Map as M
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
@@ -18,7 +18,6 @@ import System.Console.ANSI
 import Language.HERMIT.HermitExpr
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitKure
-import Language.HERMIT.Kernel
 import Language.HERMIT.Dictionary
 import Language.HERMIT.Kernel
 import Language.HERMIT.PrettyPrinter
@@ -26,8 +25,6 @@ import Language.HERMIT.Interp
 import Language.HERMIT.Shell.Command
 
 import Language.KURE
-
-import Language.HERMIT.External
 
 data CommandLineState = CommandLineState
         { cl_lens   :: LensH Core Core  -- ^ stack of lenses
@@ -40,6 +37,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
   let dict = dictionary shell_externals
 
   let quit = quitK kernel
+
   let query :: AST -> TranslateH Core a -> IO a
       query = queryK kernel
 
@@ -51,7 +49,8 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
                    Just pp -> pp
                    Nothing -> pure (PP.text "<<pretty>>")
 
-  let showFocus st = (do
+  let showFocus :: CommandLineState -> IO Bool
+      showFocus st = (do
         doc <- query (cl_cursor st) (focusT (cl_lens st) (pretty st))
         renderShellDoc doc
         return True) `catch` \ msg -> do
@@ -80,7 +79,10 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
                             Left msg  -> putStrLn msg >> loop st
                             Right cmd -> act st cmd
 
+      showFocusLoop :: CommandLineState -> IO ()
+      showFocusLoop st = whenM (showFocus st) (loop st)
 
+      act :: CommandLineState -> ShellCommand -> IO ()
       act st Status = do
 --              True <- showFocus st
               print "starting"
@@ -90,16 +92,9 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
       act st (PushFocus ls) = do
               let new_lens = cl_lens st `composeL` ls
               -- below is a common ending
-              opt_res <- query (cl_cursor st) (attemptA (focusT new_lens (pure ())))
-              case opt_res of
-                Nothing -> do
-                   -- bell (still print for now)
-                   True <- showFocus st
-                   loop st
-                Just () -> do
-                   let st' = st { cl_lens = new_lens }
-                   True <- showFocus st'
-                   loop st'
+              condM (query (cl_cursor st) (testA new_lens))
+                    (showFocusLoop st)
+                    (showFocusLoop $ st {cl_lens = new_lens})
       act st (Direction dir) = do
               ContextPath c_path      <- query (cl_cursor st) (focusT (cl_lens st) pathT)
               child_count <- query (cl_cursor st) (focusT (cl_lens st) (liftT numChildren))
@@ -112,21 +107,10 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
                        _               -> cl_lens st
               -- TODO: fix to ring bell if stuck
               -- something changed, to print
-              opt_res <- query (cl_cursor st) (attemptA (focusT new_lens (pure ())))
-              case opt_res of
-                Nothing -> do
-                   -- bell (still print for now)
-                   True <- showFocus st
-                   loop st
-                Just () -> do
-                   let st' = st { cl_lens = new_lens }
-                   True <- showFocus st'
-                   loop st'
-      act st SuperPopFocus = do
-              let st' = st { cl_lens = idL }
-              -- something changed, to print
-              True <- showFocus st'
-              loop st'
+              condM (query (cl_cursor st) (testA new_lens))
+                    (showFocusLoop st) -- bell (still print for now)
+                    (showFocusLoop $ st {cl_lens = new_lens})
+      act st SuperPopFocus = showFocusLoop $ st {cl_lens = idL} -- something changed, to print
 
       act st (Message msg) = putStrLn msg >> loop st
 
@@ -144,8 +128,8 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
       kernelAct st (Query q) = do
 
               -- something changed, to print
-              (do doc <- query (cl_cursor st) (focusT (cl_lens st) q)
-                  print doc) `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg
+              (query (cl_cursor st) (focusT (cl_lens st) q) >>= print)
+                `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg
               -- same state
               loop st
 

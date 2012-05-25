@@ -22,7 +22,7 @@ Library
                  syb,
                  template-haskell,
                  containers,
-                 kure >= 1.6.7,
+                 kure >= 1.6.9,
                  marked-pretty >= 0.1,
                  ansi-terminal >= 0.5.5
 
