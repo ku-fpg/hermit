@@ -15,7 +15,7 @@ data ShellCommand :: * where
    Status        ::                             ShellCommand
    Message       :: String                   -> ShellCommand
    PushFocus     :: LensH Core Core          -> ShellCommand
-   PopFocus      ::                             ShellCommand
+--   PopFocus      ::                             ShellCommand
    SuperPopFocus ::                             ShellCommand
    SetPretty     :: String                   -> ShellCommand
    KernelCommand :: KernelCommand            -> ShellCommand
@@ -47,10 +47,6 @@ shell_externals = map (.+ Shell) $
        [ "exits HERMIT" ]
    , external "status"          Status
        [ "redisplays current state" ]
-   , external "pop"             PopFocus
-       [ "pops one lens" ]
-   , external "."               PopFocus
-       [ "pops one lens" ]
    , external "left"            (Direction L)
        [ "move to the next child"]
    , external "right"           (Direction R)
@@ -69,8 +65,6 @@ shell_externals = map (.+ Shell) $
        [ "move to the first child"]
    , external "root"            SuperPopFocus
        [ "move to root of tree" ]
-   , external "superpop"        SuperPopFocus
-       [ "pops all lenses" ]
    , external "setpp"           SetPretty
        [ "set the pretty printer"
        , "use 'setpp ls' to list available pretty printers" ]
