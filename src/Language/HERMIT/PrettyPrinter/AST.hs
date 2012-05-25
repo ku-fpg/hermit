@@ -60,7 +60,7 @@ corePrettyH hideNotes =
                                     $$ nest 2 (vlist alts))
               <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
               <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
-              <+ typeT (\ty -> text "Type" $$ nest 2 (ppSDoc ty))
+              <+ typeT (\ty -> text "Type" <+> nest 2 (ppSDoc ty))
               <+ coercionT (\co -> text "Coercion" $$ nest 2 (ppSDoc co))
 
     ppCoreBind :: PrettyH GHC.CoreBind
