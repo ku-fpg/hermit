@@ -90,7 +90,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
       act st (PushFocus ls) = do
               let new_lens = cl_lens st `composeL` ls
               -- below is a common ending
-              opt_res <- query (cl_cursor st) (attemptT (focusT new_lens (pure ())))
+              opt_res <- query (cl_cursor st) (attemptA (focusT new_lens (pure ())))
               case opt_res of
                 Nothing -> do
                    -- bell (still print for now)
@@ -112,7 +112,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
                        _               -> cl_lens st
               -- TODO: fix to ring bell if stuck
               -- something changed, to print
-              opt_res <- query (cl_cursor st) (attemptT (focusT new_lens (pure ())))
+              opt_res <- query (cl_cursor st) (attemptA (focusT new_lens (pure ())))
               case opt_res of
                 Nothing -> do
                    -- bell (still print for now)
