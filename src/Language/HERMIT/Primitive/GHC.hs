@@ -14,7 +14,9 @@ import Language.HERMIT.External
 externals :: [External]
 externals = map (.+ GHC)
          [ external "let-subst" (promoteR letSubstR)
-                [ "Let substitution [via GHC]"]
+                [ "Let substitution [via GHC]"
+                , "let x = E1 in E2, where x is free is E2 ==> E2[E1/x], fails otherwise"
+                , "only matches non-recursive lets" ]                           .+ Local .+ Bash
          , external "freevars" (promoteT freeIdsQuery)
                 [ "List the free variables in this expression [via GHC]" ]
          , external "deshadow-binds" (promoteR deShadowBindsR)
