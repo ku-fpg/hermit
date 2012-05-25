@@ -19,6 +19,10 @@ data ShellCommand :: * where
    SuperPopFocus ::                             ShellCommand
    SetPretty     :: String                   -> ShellCommand
    KernelCommand :: KernelCommand            -> ShellCommand
+   Direction     :: Direction                -> ShellCommand
+
+data Direction = L | R | U | D
+        deriving Show
 
 data ShellCommandBox = ShellCommandBox ShellCommand deriving Typeable
 
@@ -37,7 +41,7 @@ interpShellCommand =
 
 
 shell_externals :: [External]
-shell_externals = map (.+ Shell)
+shell_externals = map (.+ Shell) $
    [
      external "exit"            Exit
        [ "exits HERMIT" ]
@@ -47,6 +51,24 @@ shell_externals = map (.+ Shell)
        [ "pops one lens" ]
    , external "."               PopFocus
        [ "pops one lens" ]
+   , external "left"            (Direction L)
+       [ "move to the next child"]
+   , external "right"           (Direction R)
+       [ "move to the previous child"]
+   , external "up"              (Direction U)
+       [ "move to the parent"]
+   , external "down"            (Direction D)
+       [ "move to the first child"]
+   , external "esc-D"            (Direction L)
+       [ "move to the next child"]
+   , external "esc-C"           (Direction R)
+       [ "move to the previous child"]
+   , external "esc-A"              (Direction U)
+       [ "move to the parent"]
+   , external "esc-B"            (Direction D)
+       [ "move to the first child"]
+   , external "root"            SuperPopFocus
+       [ "move to root of tree" ]
    , external "superpop"        SuperPopFocus
        [ "pops all lenses" ]
    , external "setpp"           SetPretty

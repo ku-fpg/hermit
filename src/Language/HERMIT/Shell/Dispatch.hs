@@ -2,7 +2,7 @@
 
 module Language.HERMIT.Shell.Dispatch where
 
-import GhcPlugins
+import GhcPlugins hiding (L)
 
 import Data.Char
 import Control.Applicative
@@ -30,9 +30,9 @@ import Language.KURE
 import Language.HERMIT.External
 
 data CommandLineState = CommandLineState
-        { cl_lenses :: [LensH Core Core] -- ^ stack of lenses
-        , cl_pretty :: String            -- ^ which pretty printer to use
-        , cl_cursor :: AST               -- ^ the current AST
+        { cl_lens   :: LensH Core Core  -- ^ stack of lenses
+        , cl_pretty :: String           -- ^ which pretty printer to use
+        , cl_cursor :: AST              -- ^ the current AST
         }
 
 commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
@@ -51,12 +51,8 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
                    Just pp -> pp
                    Nothing -> pure (PP.text "<<pretty>>")
 
-  let myLens st = case cl_lenses st of
-                    [] -> idL
-                    (ls:_) -> ls
-
   let showFocus st = (do
-        doc <- query (cl_cursor st) (focusT (myLens st) (pretty st))
+        doc <- query (cl_cursor st) (focusT (cl_lens st) (pretty st))
         renderShellDoc doc
         return True) `catch` \ msg -> do
                         putStrLn $ "Error thrown: " ++ msg
@@ -64,7 +60,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
 
   let loop :: CommandLineState -> IO ()
       loop st = do
-          print (length (cl_lenses st), cl_pretty st,cl_cursor st)
+          print (cl_pretty st,cl_cursor st)
 
           maybeLine <- gets
           case maybeLine of
@@ -88,10 +84,10 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
       act st Status = do
 --              True <- showFocus st
               print "starting"
-              ContextPath doc <- query (cl_cursor st) (focusT (myLens st) pathT)
+              ContextPath doc <- query (cl_cursor st) (focusT (cl_lens st) pathT)
               print (reverse doc)
               loop st
-
+{-
       act st (PushFocus ls) = do
               let newlens = myLens st `composeL` ls
               let st' = st { cl_lenses = newlens : cl_lenses st }
@@ -106,9 +102,31 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
               -- something changed, to print
               True <- showFocus st'
               loop st'
+-}
+      act st (Direction dir) = do
+              ContextPath c_path      <- query (cl_cursor st) (focusT (cl_lens st) pathT)
+              child_count <- query (cl_cursor st) (focusT (cl_lens st) (liftT numChildren))
+              print (c_path,child_count,dir)
+              let new_lens = case (dir, c_path) of
+                       (U, _ : rest)              -> pathL $ reverse rest
+                       (D, _)                     -> pathL $ reverse (0 : c_path)
+                       (R, kid : rest)            -> pathL $ reverse ((kid + 1) : rest)
+                       (L, kid : rest)  | kid > 0 -> pathL $ reverse ((kid - 1) : rest)
+                       _               -> cl_lens st
+              -- TODO: fix to ring bell if stuck
+              -- something changed, to print
+              opt_res <- query (cl_cursor st) (attemptT (focusT new_lens (pure ())))
+              case opt_res of
+                Nothing -> do
+                   -- bell (still print for now)
+                   True <- showFocus st
+                   loop st
+                Just () -> do
+                   let st' = st { cl_lens = new_lens }
+                   True <- showFocus st'
+                   loop st'
       act st SuperPopFocus = do
-              let st' = st { cl_lenses = []
-                           }
+              let st' = st { cl_lens = idL }
               -- something changed, to print
               True <- showFocus st'
               loop st'
@@ -129,14 +147,14 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
       kernelAct st (Query q) = do
 
               -- something changed, to print
-              (do doc <- query (cl_cursor st) (focusT (myLens st) q)
+              (do doc <- query (cl_cursor st) (focusT (cl_lens st) q)
                   print doc) `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg
               -- same state
               loop st
 
       kernelAct st (Apply rr) = do
               -- something changed (you've applied)
-              st2 <- (do ast' <- applyK kernel (cl_cursor st) (focusR (myLens st) rr)
+              st2 <- (do ast' <- applyK kernel (cl_cursor st) (focusR (cl_lens st) rr)
                          let st' = st { cl_cursor = ast' }
                          showFocus st'
                          return st') `catch` \  msg -> do
@@ -145,7 +163,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
               loop st2
 
   -- recurse using the command line
-  loop $ CommandLineState [] "ghc" ast
+  loop $ CommandLineState idL "ghc" ast
 
   -- we're done
   quitK kernel ast
