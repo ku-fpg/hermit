@@ -16,7 +16,7 @@ import Prelude hiding (catch)
 import Control.Exception (catch, SomeException)
 
 import Language.HERMIT.Shell.Dispatch as CommandLine
-
+import System.Console.Getline
 
 -- Syntax:
 --   FullModuleName(filename),    <-- reads Module.hermit
@@ -26,52 +26,12 @@ hermitPass :: [String] -> ModGuts -> CoreM ModGuts
 -- run the command-line option
 hermitPass nms modGuts = case candidates of
         [ ('/' : '-': []) ] -> do
-                -- Command Line Interp (via the readline API)
-{-
-                el <- liftIO $ elInit "hermit"
-                liftIO $ setEditor el Emacs
-                liftIO $ setPrompt el (return "hermit> ")
--}
-                let myGetLine :: IO String
-                    myGetLine = do
-                            hSetBuffering stdin NoBuffering
-                            hSetEcho stdin False
-                            fn []
-                       where
-                           fn ('\n':xs) = return (reverse xs)
-                           fn xs = do
-                                 c <- getChar
-                                 fn' c xs
 
-                           fn' c "[\ESC" = do
-                                   putChar 'K'
-                                   hFlush stdout
-                                   return ("esc-" ++ [c])
-                           fn' '\DEL' [] = fn []
-                           fn' '\DEL' xs = do
-                                 putStr "\ESC[D \ESC[D"
-                                 hFlush stdout
-                                 fn (tail xs)
-                           fn' c xs = do
---                                 print (c,xs)
-                                 putChar c
-                                 hFlush stdout
-                                 fn (c : xs)
---                           fn' ('\DEL') [] =
+                elGets <- liftIO getEditor
 
-
-                let elGets :: IO (Maybe String)
-                    elGets = do putStr "hermit> "
-                                hFlush stdout
-                            --    Wouldn't this be simpler?  Or can the string actually be "\EOT"?
-                            --    liftM Just getLine `catch` (\ (_ :: SomeException) -> return Nothing)
-                                str <- myGetLine `catch` (\ (_ :: SomeException) -> return "\EOT")
-                                return $ case str of
-                                           "\EOT" -> Nothing
-                                           _      -> Just str
                 let append = appendFile ".hermitlog"
                 liftIO $ append "\n-- starting new session\n"
-                let get = do str <- elGets
+                let get = do str <- elGets "hermit> "
                              case str of
                                Nothing -> do append "-- ^D\n"
                                              return Nothing

@@ -2,7 +2,7 @@
 
 module Language.HERMIT.PrettyPrinter where
 
-import GhcPlugins
+import GhcPlugins hiding ((<>))
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 import Language.HERMIT.HermitKure
@@ -18,12 +18,21 @@ type DocH = MDoc HermitMark
 data HermitMark
         = PushAttr Attr
         | PopAttr
+    deriving Show
 
 -- These are the attributes
 data Attr = PathAttr [Int]
           | Color SyntaxForColor
+    deriving Show
 
-data SyntaxForColor = Keyword | Syntax
+data SyntaxForColor = KeywordColor | SyntaxColor | VarColor
+    deriving Show
+
+attr :: Attr -> DocH -> DocH
+attr a p = mark (PushAttr a) <> p <> mark PopAttr
+
+varColor :: DocH -> DocH
+varColor = attr (Color VarColor)
 
 type PrettyH a = TranslateH a DocH
 

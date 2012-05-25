@@ -13,6 +13,7 @@ import Data.Dynamic
 
 import qualified Data.Map as M
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
+import System.Console.ANSI
 
 import Language.HERMIT.HermitExpr
 import Language.HERMIT.HermitEnv
@@ -56,7 +57,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
 
   let showFocus st = (do
         doc <- query (cl_cursor st) (focusT (myLens st) (pretty st))
-        print doc
+        renderShellDoc doc
         return True) `catch` \ msg -> do
                         putStrLn $ "Error thrown: " ++ msg
                         return False
@@ -149,3 +150,28 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
   -- we're done
   quitK kernel ast
   return ()
+
+
+-- Here is our render for the pretty printing output
+
+renderShellDoc :: DocH -> IO ()
+renderShellDoc doc = PP.fullRender PP.PageMode 80 1.5 marker (\ _ -> putStrLn "") doc [Black]
+  where
+          marker :: PP.TextDetails HermitMark -> ([Color] -> IO ()) -> ([Color ]-> IO ())
+          marker m rest cols = case m of
+                  PP.Chr ch   -> putChar ch >> rest cols
+                  PP.Str str  -> putStr str >> rest cols
+                  PP.PStr str -> putStr str >> rest cols
+
+                  PP.Mark (PushAttr (Color c)) -> do
+                        let col = case c of
+                                    VarColor     -> Blue
+                                    SyntaxColor  -> Green
+                                    KeywordColor -> Magenta
+                        setSGR [ SetColor Foreground Dull col ]
+                        rest (col : cols)
+                  PP.Mark (PopAttr) -> do
+                        let (_:cols') = cols
+                        setSGR [ SetColor Foreground Dull (head cols') ]
+                        rest cols'
+

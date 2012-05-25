@@ -23,7 +23,8 @@ Library
                  template-haskell,
                  containers,
                  kure >= 1.6.3,
-                 marked-pretty >= 0.1
+                 marked-pretty >= 0.1,
+                 ansi-terminal >= 0.5.5
 
 
   default-language: Haskell2010
@@ -63,6 +64,10 @@ Library
        Language.HERMIT.Pass
        Language.HERMIT.DSL
        Language.HERMIT.GHC
+
+       System.Console.Getline
+
+
 
   Hs-Source-Dirs: src
 
