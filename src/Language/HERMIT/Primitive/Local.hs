@@ -5,6 +5,7 @@ import GhcPlugins
 
 import Data.List (nub)
 import Control.Applicative
+import Control.Monad (guard)
 
 import Language.KURE
 
@@ -58,20 +59,11 @@ beta_expand = liftMT $ \ e -> case e of
 
 eta_reduce :: RewriteH CoreExpr
 eta_reduce = liftMT $ \ e -> case e of
-      Lam v1 (App f (Var v2)) | v1 == v2 -> do if v1 `elem` freeIds f
-                                                then fail $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++
-                                                            " is free in the function being applied."
-                                                else return f
-      _                                  -> fail "eta_reduce failed"
-
-  -- An alternative style would be:
-  --            do Lam v1 (App f (Var v2)) <- idR
-  --               guardT (v1 == v2) $ "eta_reduce failed. " ++ pp v1 ++ " /= " ++ pp v2
-  --               freesinFunction <- constMT (freeVarsExpr f)
-  --               guardT (v1 `notElem` freesinFunction) $ "eta_reduce failed. " ++ pp v1 ++ " is free in the function being applied."
-  --               return f
-  -- where
-  --   pp = showSDoc.ppr
+      Lam v1 (App f (Var v2)) -> do guardFail (v1 == v2) "eta_reduce failed, variables are not equal."
+                                    guardFail (v1 `notElem` freeIds f) $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++
+                                                                         "is free in the function being applied."
+                                    return f
+      _                       -> fail "eta_reduce failed"
 
 eta_expand :: TH.Name -> RewriteH CoreExpr
 eta_expand nm = liftMT $ \ e -> case splitAppTy_maybe (exprType e) of
@@ -100,6 +92,7 @@ freeVarsExpr = fmap nub . apply (crushtdT $ promoteT freeVarT) initHermitEnv . E
   where
     freeVarT :: TranslateH CoreExpr [Id]
     freeVarT = do (c,Var n) <- exposeT
-                  whenT (not (n `boundInHermit` c)) (return [n])
+                  guard (not (n `boundInHermit` c))
+                  return [n]
 
 ------------------------------------------------------------------------------
