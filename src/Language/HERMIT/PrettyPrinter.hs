@@ -37,6 +37,9 @@ attr a p = mark (PushAttr a) <> p <> mark PopAttr
 varColor :: DocH -> DocH
 varColor = attr (Color VarColor)
 
+keywordColor :: DocH -> DocH
+keywordColor = attr (Color KeywordColor)
+
 type PrettyH a = TranslateH a DocH
 
 -- This is the hacky old pretty printer, using the new API
