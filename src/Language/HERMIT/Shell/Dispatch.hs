@@ -87,22 +87,19 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
               ContextPath doc <- query (cl_cursor st) (focusT (cl_lens st) pathT)
               print (reverse doc)
               loop st
-{-
       act st (PushFocus ls) = do
-              let newlens = myLens st `composeL` ls
-              let st' = st { cl_lenses = newlens : cl_lenses st }
-              good <- showFocus st'
-              if good then loop st'
-                      else loop st
-      act st PopFocus = do
-              let st' = st { cl_lenses = case cl_lenses st of
-                                          [] -> []
-                                          (_:xs) -> xs
-                           }
-              -- something changed, to print
-              True <- showFocus st'
-              loop st'
--}
+              let new_lens = cl_lens st `composeL` ls
+              -- below is a common ending
+              opt_res <- query (cl_cursor st) (attemptT (focusT new_lens (pure ())))
+              case opt_res of
+                Nothing -> do
+                   -- bell (still print for now)
+                   True <- showFocus st
+                   loop st
+                Just () -> do
+                   let st' = st { cl_lens = new_lens }
+                   True <- showFocus st'
+                   loop st'
       act st (Direction dir) = do
               ContextPath c_path      <- query (cl_cursor st) (focusT (cl_lens st) pathT)
               child_count <- query (cl_cursor st) (focusT (cl_lens st) (liftT numChildren))
