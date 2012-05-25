@@ -95,6 +95,8 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
               condM (query (cl_cursor st) (testA new_lens))
                     (showFocusLoop st)
                     (showFocusLoop $ st {cl_lens = new_lens})
+
+{-
       act st (Direction dir) = do
               ContextPath c_path      <- query (cl_cursor st) (focusT (cl_lens st) pathT)
               child_count <- query (cl_cursor st) (focusT (cl_lens st) (liftT numChildren))
@@ -110,6 +112,32 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
               condM (query (cl_cursor st) (testA new_lens))
                     (showFocusLoop st) -- bell (still print for now)
                     (showFocusLoop $ st {cl_lens = new_lens})
+-}
+
+      act st (Direction dir) = do
+              ContextPath c_path      <- query (cl_cursor st) (focusT (cl_lens st) pathT)
+              child_count <- query (cl_cursor st) (focusT (cl_lens st) (liftT numChildren))
+              print (c_path,child_count,dir)
+              let new_lens = case (dir, c_path) of
+                       (U, _ : rest)              -> pathL $ reverse rest
+                       (D, _)                     -> pathL $ reverse (0 : c_path)
+                       (R, kid : rest)            -> pathL $ reverse ((kid + 1) : rest)
+                       (L, kid : rest)  | kid > 0 -> pathL $ reverse ((kid - 1) : rest)
+                       _               -> cl_lens st
+              -- TODO: fix to ring bell if stuck
+              -- something changed, to print
+              opt_res <- query (cl_cursor st) (attemptA (focusT new_lens (pure ())))
+              case opt_res of
+                Nothing -> do
+                   -- bell (still print for now)
+                   True <- showFocus st
+                   loop st
+                Just () -> do
+                   let st' = st { cl_lens = new_lens }
+                   True <- showFocus st'
+                   loop st'
+
+
       act st SuperPopFocus = showFocusLoop $ st {cl_lens = idL} -- something changed, to print
 
       act st (Message msg) = putStrLn msg >> loop st
