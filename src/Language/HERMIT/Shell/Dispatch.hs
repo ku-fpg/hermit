@@ -155,24 +155,35 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
 
 -- Here is our render for the pretty printing output
 
+data Highlight
+        = HL_Color Color
+        | HL_Bold
+
+doHighlight :: [Highlight] -> IO ()
+doHighlight [] = setSGR [Reset]
+doHighlight hls = do setSGR [ Reset ]
+                     setSGR $ bold ++ cols
+   where
+        bold = take 1 [ SetConsoleIntensity BoldIntensity | HL_Bold <- hls ]
+        cols = take 1 [ SetColor Foreground Dull col | HL_Color col <- hls ]
+
 renderShellDoc :: DocH -> IO ()
-renderShellDoc doc = PP.fullRender PP.PageMode 80 1 marker (\ _ -> putStrLn "") doc [Nothing]
+renderShellDoc doc = PP.fullRender PP.PageMode 80 1 marker (\ _ -> putStrLn "") doc []
   where   -- color = Nothing means set back to terminal default
-          marker :: PP.TextDetails HermitMark -> ([Maybe Color] -> IO ()) -> ([Maybe Color]-> IO ())
+          marker :: PP.TextDetails HermitMark -> ([Highlight] -> IO ()) -> ([Highlight]-> IO ())
           marker m rest cols = case m of
                   PP.Chr ch   -> putChar ch >> rest cols
                   PP.Str str  -> putStr str >> rest cols
                   PP.PStr str -> putStr str >> rest cols
-
                   PP.Mark (PushAttr (Color c)) -> do
-                        let col = case c of
-                                    VarColor     -> Blue
-                                    SyntaxColor  -> Green
-                                    KeywordColor -> Magenta
-                        setSGR [ SetColor Foreground Dull col ]
-                        rest (Just col : cols)
+                        let cols' = case c of
+                                    VarColor     -> HL_Color Blue : cols
+                                    SyntaxColor  -> HL_Color Green : cols
+                                    KeywordColor -> HL_Bold : cols
+                        doHighlight cols'
+                        rest cols'
                   PP.Mark (PopAttr) -> do
                         let (_:cols') = cols
-                        setSGR [maybe Reset (SetColor Foreground Dull) (head cols')]
+                        doHighlight cols'
                         rest cols'
 
