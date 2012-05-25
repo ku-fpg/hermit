@@ -7,7 +7,7 @@ sub compileAndRun {
 	my ($style,$mod) = @_;
 	print "compiling $mod, using ($style)\n";
 	$str = "ghc-7.4.1 ${mod}.hs " .
-               "    -fforce-recomp -O2 -dcore-lint ";
+               "    -fforce-recomp -O2 -dcore-lint -fsimple-list-literals ";
 
 	if ($style eq "h") {
 	    $str .= "-fplugin=Language.HERMIT.Plugin " .
