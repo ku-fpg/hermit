@@ -34,7 +34,7 @@ argExpr other       = parens (normalExpr other)
 
 normalExpr :: RetExpr -> DocH
 normalExpr (RetLam vs e0) = hang (text "\x03BB" <+> hsep vs <+> text "\x2192") 2 e0
-normalExpr (RetLet vs e0) = sep [ text "let" <+> vcat vs, text "in" <+> e0 ]
+normalExpr (RetLet vs e0) = sep [ keywordColor (text "let") <+> vcat vs, keywordColor (text "in") <+> e0 ]
 normalExpr (RetApp fn xs) = sep ( fn : map (nest 2) xs )
 normalExpr (RetExpr e0)    = e0
 normalExpr (RetAtom e0)    = e0
@@ -93,7 +93,7 @@ corePrettyH  =
 
     ppCoreExpr0 :: PrettyH GHC.CoreExpr
     ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b ty alts ->
-                        (text "case" <+> s <+> text "of" <+> ppSDoc b) $$
+                        (keywordColor (text "case") <+> s <+> keywordColor (text "of") <+> ppSDoc b) $$
                           nest 2 (vcat alts))
               <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
               <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
@@ -102,7 +102,7 @@ corePrettyH  =
 
     ppCoreBind :: PrettyH GHC.CoreBind
     ppCoreBind = nonRecT ppCoreExprR ppDefFun
-              <+ recT (const ppCoreDef) (\ bnds -> text "\x03BC" <+> vcat bnds)
+              <+ recT (const ppCoreDef) (\ bnds -> keywordColor (text "\x03BC") <+> vcat bnds)
 
     ppCoreAlt :: PrettyH GHC.CoreAlt
     ppCoreAlt = altT ppCoreExpr $ \ con ids e -> case con of
