@@ -35,7 +35,7 @@ argExpr other       = parens (normalExpr other)
 normalExpr :: RetExpr -> DocH
 normalExpr (RetLam vs e0) = hang (text "\x03BB" <+> hsep vs <+> text "\x2192") 2 e0
 normalExpr (RetLet vs e0) = sep [ text "let" <+> vcat vs, text "in" <+> e0 ]
-normalExpr (RetApp fn xs) = fn <+> sep xs
+normalExpr (RetApp fn xs) = sep ( fn : map (nest 2) xs )
 normalExpr (RetExpr e0)    = e0
 normalExpr (RetAtom e0)    = e0
 
@@ -92,25 +92,34 @@ corePrettyH  =
               <+ typeT (\ _ -> text "\x25c6")
 
     ppCoreExpr0 :: PrettyH GHC.CoreExpr
-    ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\s b ty alts ->
-                        text "Case" $$ nest 2 (parens s)
-                                    $$ nest 2 (ppSDoc b)
-                                    $$ nest 2 (ppSDoc ty)
-                                    $$ nest 2 (vlist alts))
+    ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b ty alts ->
+                        (text "case" <+> s <+> text "of" <+> ppSDoc b) $$
+                          nest 2 (vcat alts))
               <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
               <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
 --              <+ typeT (\ty -> text "Type" <+> nest 2 (ppSDoc ty))
               <+ coercionT (\co -> text "Coercion" $$ nest 2 (ppSDoc co))
 
     ppCoreBind :: PrettyH GHC.CoreBind
-    ppCoreBind = nonRecT ppCoreExpr (\i e -> ppSDoc i <+> text "=" <+> e)
+    ppCoreBind = nonRecT ppCoreExprR ppDefFun
               <+ recT (const ppCoreDef) (\ bnds -> text "\x03BC" <+> vcat bnds)
 
     ppCoreAlt :: PrettyH GHC.CoreAlt
-    ppCoreAlt = altT ppCoreExpr $ \ con ids e -> text "Alt" <+> ppSDoc con
-                                                            <+> (hlist $ map ppSDoc ids)
-                                                            $$ nest 2 (parens e)
+    ppCoreAlt = altT ppCoreExpr $ \ con ids e -> case con of
+                  GHC.DataAlt dcon -> hang (ppSDoc dcon <+> ppIds ids) 2 e
+--                  LitAlt lit   ->
+--                  DEFAULT      ->
+          where
+                 ppIds ids | null ids  = text "\x2192"
+                           | otherwise = hsep (map ppSDoc ids) <+> text "\x2192"
 
     -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
     ppCoreDef :: PrettyH CoreDef
-    ppCoreDef = defT ppCoreExpr $ \ i e -> varColor (ppSDoc i) <+> text "=" <+> e
+    ppCoreDef = defT ppCoreExprR ppDefFun
+
+    ppDefFun :: GHC.Id -> RetExpr -> DocH
+    ppDefFun i e = case e of
+                    RetLam vs e0 -> hang (pre <+> text "\x03BB" <+> hsep vs <+> text "\x2192") 2 e0
+                    _ -> normalExpr e
+        where
+            pre = varColor (ppSDoc i) <+> text "="
