@@ -79,7 +79,7 @@ exprTypeQueryT = liftT $ \ e -> case e of
                                   Coercion _   -> "Coercion"
 
 rewrite2query :: RewriteH Core -> TranslateH Core String
-rewrite2query r = f <$> testT r
+rewrite2query r = f <$> testA r
   where
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."

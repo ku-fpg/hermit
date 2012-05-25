@@ -31,7 +31,7 @@ consider nm = do First cxtpaths <- tdpruneT $ promoteT $ findPathTo nm
 -- and return the Path to *this* node.
 rmPrefix :: ContextPath -> TranslateH Core Path
 rmPrefix (ContextPath path) = do ContextPath this <- pathT
-                                 guardT (this `isSuffixOf` path) "rmPrefix failure"
+                                 guardFail (this `isSuffixOf` path) "rmPrefix failure"
                                  return $ drop (length this) $ reverse path
 
 findPathTo :: TH.Name -> TranslateH CoreBind (First ContextPath)
