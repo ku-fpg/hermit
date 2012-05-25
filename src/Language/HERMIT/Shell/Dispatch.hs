@@ -170,7 +170,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
 -- Here is our render for the pretty printing output
 
 renderShellDoc :: DocH -> IO ()
-renderShellDoc doc = PP.fullRender PP.PageMode 80 1.5 marker (\ _ -> putStrLn "") doc [Nothing]
+renderShellDoc doc = PP.fullRender PP.PageMode 80 1 marker (\ _ -> putStrLn "") doc [Nothing]
   where   -- color = Nothing means set back to terminal default
           marker :: PP.TextDetails HermitMark -> ([Maybe Color] -> IO ()) -> ([Maybe Color]-> IO ())
           marker m rest cols = case m of
