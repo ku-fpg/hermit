@@ -28,9 +28,9 @@ data RetExpr
         | RetAtom DocH         -- parens not needed
 
 
-argExpr :: RetExpr -> DocH
-argExpr (RetAtom e) = e
-argExpr other       = parens (normalExpr other)
+atomExpr :: RetExpr -> DocH
+atomExpr (RetAtom e) = e
+atomExpr other       = parens (normalExpr other)
 
 normalExpr :: RetExpr -> DocH
 normalExpr (RetLam vs e0) = hang (text "\x03BB" <+> hsep vs <+> text "\x2192") 2 e0
@@ -81,8 +81,8 @@ corePrettyH opts =
                                               _             -> RetLet [bd] (normalExpr e))
                <+ appT ppCoreExprR ppCoreExprR
                                    (\ e1 e2 -> case e1 of
-                                              RetApp f xs   -> RetApp f (xs ++ [argExpr e2])
-                                              _             -> RetApp (normalExpr e1) [argExpr e2])
+                                              RetApp f xs   -> RetApp f (xs ++ [atomExpr e2])
+                                              _             -> RetApp (atomExpr e1) [atomExpr e2])
                <+ (ppCoreAtom0 >-> liftT RetAtom)
                <+ (ppCoreExpr0 >-> liftT RetExpr)
 
