@@ -54,6 +54,13 @@ corePrettyH opts =
     ppShow :: (Show a) => a -> MDoc b
     ppShow = text . show
 
+    ppVar :: GHC.Var -> DocH
+    ppVar = varColor . text . GHC.occNameString . GHC.nameOccName . GHC.varName
+
+    -- binders are vars that is bound by lambda or case, etc.
+    ppBinder :: GHC.Var -> DocH
+    ppBinder = ppVar
+
     -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
     -- that we are eliding infomation here.
     ppSDoc :: (GHC.Outputable a) => a -> MDoc b
@@ -73,8 +80,8 @@ corePrettyH opts =
 
     ppCoreExprR :: TranslateH GHC.CoreExpr RetExpr
     ppCoreExprR = lamT ppCoreExprR (\ v e -> case e of
-                                              RetLam vs e0  -> RetLam (varColor (ppSDoc v) : vs) e0
-                                              _             -> RetLam [varColor (ppSDoc v)] (normalExpr e))
+                                              RetLam vs e0  -> RetLam (ppVar (v) : vs) e0
+                                              _             -> RetLam [ppVar (v)] (normalExpr e))
                <+ letT ppCoreBind ppCoreExprR
                                    (\ bd e -> case e of
                                               RetLet vs e0  -> RetLet (bd : vs) e0
@@ -87,13 +94,13 @@ corePrettyH opts =
                <+ (ppCoreExpr0 >-> liftT RetExpr)
 
     ppCoreAtom0 :: PrettyH GHC.CoreExpr
-    ppCoreAtom0 = varT (\i -> varColor (ppSDoc i))
+    ppCoreAtom0 = varT (\i -> ppVar (i))
               <+ litT (\i -> ppSDoc i)
-              <+ typeT (\ _ -> text "\x25c6")
+              <+ typeT (\ _ -> text "\x25B5") -- "\x221E") -- "\x25c6")
 
     ppCoreExpr0 :: PrettyH GHC.CoreExpr
     ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b ty alts ->
-                        (keywordColor (text "case") <+> s <+> keywordColor (text "of") <+> ppSDoc b) $$
+                        (keywordColor (text "case") <+> s <+> keywordColor (text "of") <+> ppBinder b) $$
                           nest 2 (vcat alts))
               <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
               <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
@@ -111,7 +118,7 @@ corePrettyH opts =
                   GHC.DEFAULT      -> text "_" <+> ppIds ids <+> e
           where
                  ppIds ids | null ids  = text "\x2192"
-                           | otherwise = hsep (map ppSDoc ids) <+> text "\x2192"
+                           | otherwise = hsep (map ppBinder ids) <+> text "\x2192"
 
     -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
     ppCoreDef :: PrettyH CoreDef
@@ -122,4 +129,4 @@ corePrettyH opts =
                     RetLam vs e0 -> hang (pre <+> text "\x03BB" <+> hsep vs <+> text "\x2192") 2 e0
                     _ -> hang pre 2 (normalExpr e)
         where
-            pre = varColor (ppSDoc i) <+> text "="
+            pre = ppBinder i <+> text "="
