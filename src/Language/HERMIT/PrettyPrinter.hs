@@ -30,6 +30,7 @@ data SyntaxForColor             -- (suggestion)
         = KeywordColor          -- bold
         | SyntaxColor
         | VarColor
+        | TypeColor
     deriving Show
 
 attr :: Attr -> DocH -> DocH
@@ -40,6 +41,9 @@ varColor = attr (Color VarColor)
 
 keywordColor :: DocH -> DocH
 keywordColor = attr (Color KeywordColor)
+
+markColor :: SyntaxForColor -> DocH -> DocH
+markColor = attr . Color
 
 type PrettyH a = TranslateH a DocH
 
