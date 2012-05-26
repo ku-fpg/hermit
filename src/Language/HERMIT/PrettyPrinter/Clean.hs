@@ -27,18 +27,28 @@ data RetExpr
         | RetExpr DocH
         | RetAtom DocH         -- parens not needed
 
+symbol :: Char -> DocH
+symbol = markColor SyntaxColor . char
+
+ppParens :: DocH -> DocH
+ppParens p = symbol '(' <> p <> symbol ')' -- :: markColor SyntaxColor
 
 atomExpr :: RetExpr -> DocH
 atomExpr (RetAtom e) = e
-atomExpr other       = parens (normalExpr other)
+atomExpr other       = ppParens (normalExpr other)
 
 normalExpr :: RetExpr -> DocH
-normalExpr (RetLam vs e0) = hang (text "\x03BB" <+> hsep vs <+> text "\x2192") 2 e0
+normalExpr (RetLam vs e0) = hang (symbol '\x03BB' <+> hsep vs <+> symbol '\x2192') 2 e0
 normalExpr (RetLet vs e0) = sep [ keywordColor (text "let") <+> vcat vs, keywordColor (text "in") <+> e0 ]
 normalExpr (RetApp fn xs) = sep ( fn : map (nest 2) xs )
 normalExpr (RetExpr e0)    = e0
 normalExpr (RetAtom e0)    = e0
 
+typeSymbol :: DocH
+typeSymbol = markColor TypeColor (char '\x25C3')
+
+typeBindSymbol :: DocH
+typeBindSymbol = markColor TypeColor (char '\x25BE')
 
 corePrettyH :: PrettyOptions -> PrettyH Core
 corePrettyH opts =
@@ -54,18 +64,18 @@ corePrettyH opts =
     ppShow :: (Show a) => a -> MDoc b
     ppShow = text . show
 
-    ppParens = parens -- :: markColor SyntaxColor
-
     ppVar :: GHC.Var -> DocH
     ppVar var
             | isInfix name = ppParens $ varColor $ text name
             | otherwise    = varColor $ text name
       where name = GHC.occNameString $ GHC.nameOccName $ GHC.varName var
-            isInfix (n:_) = n `elem` "!@#$%^&*-=:?/\\<>"
+            isInfix = all (\ n -> n `elem` "!@#$%^&*-=:?/\\<>'")
 
     -- binders are vars that is bound by lambda or case, etc.
     ppBinder :: GHC.Var -> DocH
-    ppBinder = ppVar
+    ppBinder var
+            | GHC.isTyVar var = typeBindSymbol
+            | otherwise   = ppVar var
 
     -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
     -- that we are eliding infomation here.
@@ -98,7 +108,7 @@ corePrettyH opts =
                                               _             -> RetApp (atomExpr e1) [atomExpr e2])
                <+ varT (\ i -> RetAtom (ppVar i))
                <+ litT (\ i -> RetAtom (ppSDoc i))
-               <+ typeT (\ _ -> RetAtom (markColor TypeColor (text "\x25B5")))
+               <+ typeT (\ _ -> RetAtom typeSymbol)
                <+ (ppCoreExpr0 >-> liftT RetExpr)
 
     ppCoreExpr0 :: PrettyH GHC.CoreExpr
@@ -118,10 +128,10 @@ corePrettyH opts =
     ppCoreAlt = altT ppCoreExpr $ \ con ids e -> case con of
                   GHC.DataAlt dcon -> hang (ppSDoc dcon <+> ppIds ids) 2 e
                   GHC.LitAlt lit   -> hang (ppSDoc lit <+> ppIds ids) 2 e
-                  GHC.DEFAULT      -> text "_" <+> ppIds ids <+> e
+                  GHC.DEFAULT      -> symbol '_' <+> ppIds ids <+> e
           where
-                 ppIds ids | null ids  = text "\x2192"
-                           | otherwise = hsep (map ppBinder ids) <+> text "\x2192"
+                 ppIds ids | null ids  = symbol '\x2192'
+                           | otherwise = hsep (map ppBinder ids) <+> symbol '\x2192'
 
     -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
     ppCoreDef :: PrettyH CoreDef
@@ -129,7 +139,7 @@ corePrettyH opts =
 
     ppDefFun :: GHC.Id -> RetExpr -> DocH
     ppDefFun i e = case e of
-                    RetLam vs e0 -> hang (pre <+> text "\x03BB" <+> hsep vs <+> text "\x2192") 2 e0
+                    RetLam vs e0 -> hang (pre <+> symbol '\x03BB' <+> hsep vs <+> symbol '\x2192') 2 e0
                     _ -> hang pre 2 (normalExpr e)
         where
-            pre = ppBinder i <+> text "="
+            pre = ppBinder i <+> symbol '='
