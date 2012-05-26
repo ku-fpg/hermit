@@ -31,6 +31,7 @@ data SyntaxForColor             -- (suggestion)
         | SyntaxColor
         | VarColor
         | TypeColor
+        | LitColor
     deriving Show
 
 attr :: Attr -> DocH -> DocH

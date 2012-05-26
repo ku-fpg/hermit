@@ -54,8 +54,14 @@ corePrettyH opts =
     ppShow :: (Show a) => a -> MDoc b
     ppShow = text . show
 
+    ppParens = parens -- :: markColor SyntaxColor
+
     ppVar :: GHC.Var -> DocH
-    ppVar = varColor . text . GHC.occNameString . GHC.nameOccName . GHC.varName
+    ppVar var
+            | isInfix name = ppParens $ varColor $ text name
+            | otherwise    = varColor $ text name
+      where name = GHC.occNameString $ GHC.nameOccName $ GHC.varName var
+            isInfix (n:_) = n `elem` "!@#$%^&*-=:?/\\<>"
 
     -- binders are vars that is bound by lambda or case, etc.
     ppBinder :: GHC.Var -> DocH
@@ -80,8 +86,8 @@ corePrettyH opts =
 
     ppCoreExprR :: TranslateH GHC.CoreExpr RetExpr
     ppCoreExprR = lamT ppCoreExprR (\ v e -> case e of
-                                              RetLam vs e0  -> RetLam (ppVar (v) : vs) e0
-                                              _             -> RetLam [ppVar (v)] (normalExpr e))
+                                              RetLam vs e0  -> RetLam (ppBinder v : vs) e0
+                                              _             -> RetLam [ppBinder v] (normalExpr e))
                <+ letT ppCoreBind ppCoreExprR
                                    (\ bd e -> case e of
                                               RetLet vs e0  -> RetLet (bd : vs) e0
@@ -90,13 +96,10 @@ corePrettyH opts =
                                    (\ e1 e2 -> case e1 of
                                               RetApp f xs   -> RetApp f (xs ++ [atomExpr e2])
                                               _             -> RetApp (atomExpr e1) [atomExpr e2])
-               <+ (ppCoreAtom0 >-> liftT RetAtom)
+               <+ varT (\ i -> RetAtom (ppVar i))
+               <+ litT (\ i -> RetAtom (ppSDoc i))
+               <+ typeT (\ _ -> RetAtom (markColor TypeColor (text "\x25B5")))
                <+ (ppCoreExpr0 >-> liftT RetExpr)
-
-    ppCoreAtom0 :: PrettyH GHC.CoreExpr
-    ppCoreAtom0 = varT (\i -> ppVar (i))
-              <+ litT (\i -> ppSDoc i)
-              <+ typeT (\ _ -> text "\x25B5") -- "\x221E") -- "\x25c6")
 
     ppCoreExpr0 :: PrettyH GHC.CoreExpr
     ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b ty alts ->

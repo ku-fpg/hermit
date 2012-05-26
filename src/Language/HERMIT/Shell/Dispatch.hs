@@ -164,31 +164,30 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
 
 -- Here is our render for the pretty printing output
 
-data Highlight
-        = HL_Color Color
-        | HL_Bold
-
-doHighlight :: [Highlight] -> IO ()
-doHighlight [] = setSGR [Reset]
-doHighlight hls = do setSGR [ Reset ]
-                     setSGR $ bold ++ cols
-   where
-        bold = take 1 [ SetConsoleIntensity BoldIntensity | HL_Bold <- hls ]
-        cols = take 1 [ SetColor Foreground Dull col | HL_Color col <- hls ]
+doHighlight :: [Attr] -> IO ()
+doHighlight [] =
+        setSGR [Reset]
+doHighlight (Color col:_) = do
+        setSGR [ Reset ]
+        setSGR $ case col of
+           KeywordColor -> [ SetConsoleIntensity BoldIntensity
+                           , SetColor Foreground Dull Blue
+                           ]
+           SyntaxColor  -> [ SetColor Foreground Dull Red ]
+           VarColor     -> []   -- as is
+           TypeColor    -> [ SetColor Foreground Dull Green ]
+           LitColor     -> [ SetColor Foreground Dull Cyan ]
 
 renderShellDoc :: DocH -> IO ()
-renderShellDoc doc = PP.fullRender PP.PageMode 80 1 marker (\ _ -> putStrLn "") doc []
+renderShellDoc doc = PP.fullRender PP.PageMode 80 1.5 marker (\ _ -> putStrLn "") doc []
   where   -- color = Nothing means set back to terminal default
-          marker :: PP.TextDetails HermitMark -> ([Highlight] -> IO ()) -> ([Highlight]-> IO ())
+          marker :: PP.TextDetails HermitMark -> ([Attr] -> IO ()) -> ([Attr]-> IO ())
           marker m rest cols = case m of
                   PP.Chr ch   -> putChar ch >> rest cols
                   PP.Str str  -> putStr str >> rest cols
                   PP.PStr str -> putStr str >> rest cols
-                  PP.Mark (PushAttr (Color c)) -> do
-                        let cols' = case c of
-                                    VarColor     -> HL_Color Blue : cols
-                                    SyntaxColor  -> HL_Color Green : cols
-                                    KeywordColor -> HL_Bold : cols
+                  PP.Mark (PushAttr attr) -> do
+                        let cols' = attr : cols
                         doHighlight cols'
                         rest cols'
                   PP.Mark (PopAttr) -> do
