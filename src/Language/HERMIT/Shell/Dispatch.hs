@@ -82,6 +82,12 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
       showFocusLoop :: CommandLineState -> IO ()
       showFocusLoop st = whenM (showFocus st) (loop st)
 
+      -- TODO: fix to ring bell if stuck
+      showNewLens :: CommandLineState -> LensH Core Core -> IO ()
+      showNewLens st new_lens = condM (query (cl_cursor st) (testA new_lens))
+                                      (showFocusLoop $ st {cl_lens = new_lens})
+                                      (showFocusLoop st) -- bell (still print for now)
+
       act :: CommandLineState -> ShellCommand -> IO ()
       act st Status = do
 --              True <- showFocus st
@@ -92,9 +98,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
       act st (PushFocus ls) = do
               let new_lens = cl_lens st `composeL` ls
               -- below is a common ending
-              condM (query (cl_cursor st) (testA new_lens))
-                    (showFocusLoop st)
-                    (showFocusLoop $ st {cl_lens = new_lens})
+              showNewLens st new_lens
 
       act st (Direction dir) = do
               ContextPath c_path      <- query (cl_cursor st) (focusT (cl_lens st) pathT)
@@ -106,11 +110,8 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
                        (R, kid : rest)            -> pathL $ reverse ((kid + 1) : rest)
                        (L, kid : rest)  | kid > 0 -> pathL $ reverse ((kid - 1) : rest)
                        _               -> cl_lens st
-              -- TODO: fix to ring bell if stuck
               -- something changed, to print
-              condM (query (cl_cursor st) (testA new_lens))
-                    (showFocusLoop $ st {cl_lens = new_lens})
-                    (showFocusLoop st) -- bell (still print for now)
+              showNewLens st new_lens
 
       act st SuperPopFocus = showFocusLoop $ st {cl_lens = idL} -- something changed, to print
 
