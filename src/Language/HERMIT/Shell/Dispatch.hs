@@ -7,6 +7,7 @@ import Prelude hiding (catch)
 import GhcPlugins hiding (L)
 
 import Data.Char
+import Data.Dynamic
 import Control.Applicative
 import Data.List (intercalate)
 import Data.Default (def)
@@ -35,8 +36,13 @@ data CommandLineState = CommandLineState
         }
 
 commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
-commandLine gets = hermitKernel $ \ kernel ast -> do
-  let dict = dictionary shell_externals
+commandLine gets modGuts = do
+  liftIO $ print (length (mg_rules modGuts))
+  let dict = dictionary shell_externals modGuts
+  commandLine2 dict gets modGuts
+
+commandLine2 :: M.Map String [Dynamic] -> IO (Maybe String) -> ModGuts -> CoreM ModGuts
+commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
 
   let quit = quitK kernel
 

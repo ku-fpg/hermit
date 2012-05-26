@@ -47,13 +47,13 @@ prim_externals =    Kure.externals
                  ++ Subst.externals
                  ++ Local.externals
                  ++ New.externals
-                 ++ GHC.externals
 
--- create the dictionary
-dictionary :: [External] -> M.Map String [Dynamic]
-dictionary my_externals = toDictionary all_externals
+-- create the dictionary; can reference local modguts.
+dictionary :: [External] -> ModGuts -> M.Map String [Dynamic]
+dictionary my_externals modGuts = toDictionary all_externals
   where
-        all_externals = prim_externals ++ my_externals ++
+          -- The GHC.externals here is a bit of a hack. Not sure about this
+        all_externals = prim_externals ++ my_externals ++ GHC.externals modGuts ++
                 [ external "bash" (promoteR (bash all_externals)) (bashHelp all_externals) .+ MetaCmd
                    , external "help"            (help all_externals Nothing Nothing)
                         [ "lists all commands" ]
@@ -64,7 +64,6 @@ dictionary my_externals = toDictionary all_externals
                    , external "help" ((\c p -> help all_externals (Just c) (Just p)) :: String -> String -> String)
                         [ "help ls <path> to list commands in a specific path" ]
                    ]
-
 
 --------------------------------------------------------------------------
 -- The pretty printing dictionaries
