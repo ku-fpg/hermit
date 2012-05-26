@@ -7,6 +7,7 @@ import GhcPlugins hiding ((<>))
 import Text.PrettyPrint.MarkedHughesPJ as PP
 import Language.HERMIT.HermitKure
 import Control.Applicative
+import Data.Default
 
 import Language.KURE
 
@@ -41,6 +42,30 @@ keywordColor :: DocH -> DocH
 keywordColor = attr (Color KeywordColor)
 
 type PrettyH a = TranslateH a DocH
+
+-- These are *recommendations* to the pretty printer.
+
+data PrettyOptions = PrettyOptions
+        { po_fullyQualified  :: Bool            -- Do you show fully qualified names?
+        , po_hideTypes       :: Bool            -- Do you hide types, and type arguments, as <>?
+        , po_typesForBinders :: Bool            -- Do you give the types for all bindings?
+        , po_highlight       :: Maybe Path      -- This region should be highlighted (for sub-expression)
+        , po_depth           :: Maybe Int       -- below this depth are ..., Nothing => infinite
+        , po_notes           :: Bool            -- ^ notes might be added to output
+        } deriving Show
+
+instance Default PrettyOptions where
+  def = PrettyOptions
+        { po_fullyQualified  = False
+        , po_hideTypes       = True
+        , po_typesForBinders = True
+        , po_highlight       = Nothing
+        , po_depth           = Nothing
+        , po_notes           = False
+        }
+
+-- Other options for pretty printing:
+-- * Does a top level program should function names, or complete listings?
 
 -- This is the hacky old pretty printer, using the new API
 ghcCorePrettyH :: PrettyH Core

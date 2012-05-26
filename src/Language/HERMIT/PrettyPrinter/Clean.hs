@@ -40,8 +40,8 @@ normalExpr (RetExpr e0)    = e0
 normalExpr (RetAtom e0)    = e0
 
 
-corePrettyH :: PrettyH Core
-corePrettyH  =
+corePrettyH :: PrettyOptions -> PrettyH Core
+corePrettyH opts =
        promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
     <+ promoteT (ppProgram  :: PrettyH GHC.CoreProgram)
     <+ promoteT (ppCoreBind :: PrettyH GHC.CoreBind)

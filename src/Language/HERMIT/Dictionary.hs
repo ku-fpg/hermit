@@ -8,6 +8,7 @@ import Prelude hiding (lookup)
 import Data.Char
 import Data.Dynamic
 import Data.List
+import Data.Default (def)
 import qualified Data.Map as M
 
 import Control.Monad (liftM2)
@@ -67,13 +68,19 @@ dictionary my_externals = toDictionary all_externals
 
 --------------------------------------------------------------------------
 -- The pretty printing dictionaries
-pp_dictionary :: M.Map String (PrettyH Core)
+pp_dictionary :: M.Map String (PrettyOptions -> PrettyH Core)
 pp_dictionary = M.fromList
-        [ ("ghc",    ghcCorePrettyH)
-        , ("clean",   Clean.corePrettyH)
-        , ("ast",     AST.corePrettyH True)
-        , ("astFull", AST.corePrettyH False)
+        [ ("clean",  Clean.corePrettyH)
+        , ("ast",    AST.corePrettyH)
         ]
+
+-- each pretty printer can suggest some options
+pp_opt_dictionary :: M.Map String PrettyOptions
+pp_opt_dictionary = M.fromList
+        [ ("clean", def)
+        , ("ast",  def)
+        ]
+
 
 --------------------------------------------------------------------------
 

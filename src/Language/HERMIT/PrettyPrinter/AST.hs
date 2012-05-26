@@ -20,8 +20,8 @@ vlist, hlist :: [MDoc a] -> MDoc a
 vlist = listify ($$)
 hlist = listify (<+>)
 
-corePrettyH :: Bool -> PrettyH Core
-corePrettyH hideNotes =
+corePrettyH :: PrettyOptions -> PrettyH Core
+corePrettyH opts =
        promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
     <+ promoteT (ppProgram  :: PrettyH GHC.CoreProgram)
     <+ promoteT (ppCoreBind :: PrettyH GHC.CoreBind)
@@ -29,6 +29,8 @@ corePrettyH hideNotes =
     <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
     <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
   where
+    hideNotes = po_notes opts
+
     -- Only use for base types!
     ppShow :: (Show a) => a -> MDoc b
     ppShow = text . show

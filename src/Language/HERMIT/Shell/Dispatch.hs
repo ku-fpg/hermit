@@ -9,6 +9,7 @@ import GhcPlugins hiding (L)
 import Data.Char
 import Control.Applicative
 import Data.List (intercalate)
+import Data.Default (def)
 import Control.Exception.Base hiding (catch)
 
 import qualified Data.Map as M
@@ -29,6 +30,7 @@ import Language.KURE
 data CommandLineState = CommandLineState
         { cl_lens   :: LensH Core Core  -- ^ stack of lenses
         , cl_pretty :: String           -- ^ which pretty printer to use
+        , cl_pretty_opts :: PrettyOptions -- ^ The options for the pretty printer
         , cl_cursor :: AST              -- ^ the current AST
         }
 
@@ -46,8 +48,8 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
 
   let pretty :: CommandLineState -> PrettyH Core
       pretty st = case M.lookup (cl_pretty st) pp_dictionary of
-                   Just pp -> pp
-                   Nothing -> pure (PP.text "<<pretty>>")
+                   Just pp -> pp (cl_pretty_opts st)
+                   Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty st ++ ">>")
 
   let showFocus :: CommandLineState -> IO Bool
       showFocus st = (do
@@ -147,7 +149,7 @@ commandLine gets = hermitKernel $ \ kernel ast -> do
               loop st2
 
   -- recurse using the command line
-  loop $ CommandLineState idL "ghc" ast
+  loop $ CommandLineState idL "clean" def ast
 
   -- we're done
   quitK kernel ast
