@@ -2,15 +2,17 @@
 -- | JSON pretty printer
 module Language.HERMIT.PrettyPrinter.JSON where
 
+import Control.Arrow
+
 import Data.Aeson
 import Data.Aeson.Types
-import Data.Traversable (sequenceA)
 import qualified Data.Text as T
 
 import qualified GhcPlugins as GHC
 import Language.HERMIT.HermitKure
 import Language.HERMIT.PrettyPrinter
 import Language.KURE
+import Language.KURE.Injection
 
 corePrettyH :: PrettyOptions -> TranslateH Core Value
 corePrettyH _opts =
@@ -30,11 +32,11 @@ corePrettyH _opts =
     ppSDoc = String . T.pack . GHC.showSDoc . GHC.ppr
 
     ppModGuts :: TranslateH GHC.ModGuts Value
-    ppModGuts = liftT (ppSDoc . GHC.mg_module)
+    ppModGuts = arr (ppSDoc . GHC.mg_module)
 
     -- DocH is not a monoid, so we can't use listT here
     ppProgram :: TranslateH GHC.CoreProgram Value -- CoreProgram = [CoreBind]
-    ppProgram = translate $ \ c -> fmap toJSON . sequenceA . map (apply ppCoreBind c)
+    ppProgram = translate $ \ c -> fmap toJSON . mapM (apply ppCoreBind c)
 
     ppCoreExpr :: TranslateH GHC.CoreExpr Value
     ppCoreExpr = varT (\i -> object [mkCon "Var", "value" .= ppSDoc i])
