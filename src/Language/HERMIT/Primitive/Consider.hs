@@ -1,6 +1,7 @@
 module Language.HERMIT.Primitive.Consider where
 
-import GhcPlugins
+import GhcPlugins as GHC
+import Convert
 
 import Data.List
 import Data.Monoid
@@ -19,6 +20,9 @@ externals = map (.+ Lens)
             [
               external "consider" consider
                 [ "'consider <v>' focuses into a named binding <v>" ]
+        -- This is in the wrong place
+            , external "var" (promoteR . var :: TH.Name -> RewriteH Core)
+                [ "var <v> succeeded for variable v, and fails otherwise"]
             ]
 
 -- Focus on a bindings
@@ -54,3 +58,10 @@ failNameNotFound nm = fail $ "Name \"" ++ show nm ++ "\" not found."
 -- Hacks till we can find the correct way of doing these.
 cmpName :: TH.Name -> Name -> Bool
 cmpName th_nm ghc_nm = TH.nameBase th_nm == occNameString (nameOccName ghc_nm)
+
+var :: TH.Name -> RewriteH CoreExpr
+var nm = contextfreeT $ \ e -> do
+  liftIO $ print ("VAR",GHC.showSDoc . GHC.ppr $ thRdrNameGuesses $ nm)
+  case e of
+    Var n0 | nm `cmpName` idName n0 -> return e
+    _ -> fail $ "failed to find Var " ++ show nm
