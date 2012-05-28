@@ -60,7 +60,10 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
   let showFocus :: CommandLineState -> IO Bool
       showFocus st = (do
         doc <- query (cl_cursor st) (focusT (cl_lens st) (pretty st))
-        renderShellDoc doc
+        let (UnicodeTerminal pretty) = renderCode doc
+        pretty
+--        let (LaTeXVerbatim pretty) = renderCode doc
+--        putStrLn pretty
         return True) `catch` \ msg -> do
                         putStrLn $ "Error thrown: " ++ msg
                         return False
@@ -161,40 +164,53 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
   quitK kernel ast
   return ()
 
+newtype UnicodeTerminal = UnicodeTerminal (IO ())
 
--- Here is our render for the pretty printing output
+terminal :: IO () -> UnicodeTerminal -> UnicodeTerminal
+terminal m (UnicodeTerminal r) = UnicodeTerminal (m >> r)
 
-doHighlight :: [Attr] -> IO ()
-doHighlight [] =
-        setSGR [Reset]
-doHighlight (Color col:_) = do
-        setSGR [ Reset ]
-        setSGR $ case col of
-           KeywordColor -> [ SetConsoleIntensity BoldIntensity
-                           , SetColor Foreground Dull Blue
-                           ]
-           SyntaxColor  -> [ SetColor Foreground Dull Red ]
-           VarColor     -> []   -- as is
-           TypeColor    -> [ SetColor Foreground Dull Green ]
-           LitColor     -> [ SetColor Foreground Dull Cyan ]
-doHighlight (_:rest) = doHighlight rest
+instance RenderCode UnicodeTerminal where
+        rPutStr (SpecialFont:_) txt = terminal $ do
+                putStr [ code | Just (Unicode code) <- map renderSpecialFont txt ]
+        rPutStr _              txt  = terminal $ do
+                putStr txt
 
-renderShellDoc :: DocH -> IO ()
-renderShellDoc doc = PP.fullRender PP.PageMode 80 1.5 marker (\ _ -> putStrLn "") doc []
-  where   putStr' (SpecialFont:_) txt = putStr [ code | Just (Unicode code) <- map renderSpecialFont txt ]
-          putStr' _              txt = putStr txt
+        rDoHighlight _ [] = terminal $ do
+                setSGR [Reset]
+        rDoHighlight _ (Color col:_) = terminal $ do
+                setSGR [ Reset ]
+                setSGR $ case col of
+                        KeywordColor -> [ SetConsoleIntensity BoldIntensity
+                                        , SetColor Foreground Dull Blue
+                                        ]
+                        SyntaxColor  -> [ SetColor Foreground Dull Red ]
+                        VarColor     -> []   -- as is
+                        TypeColor    -> [ SetColor Foreground Dull Green ]
+                        LitColor     -> [ SetColor Foreground Dull Cyan ]
+        rDoHighlight o (_:rest) = rDoHighlight o rest
+        rEnd = UnicodeTerminal $ return ()
 
-          marker :: PP.TextDetails HermitMark -> ([Attr] -> IO ()) -> ([Attr]-> IO ())
-          marker m rest cols = case m of
-                  PP.Chr ch   -> putStr' cols [ch] >> rest cols
-                  PP.Str str  -> putStr' cols str >> rest cols
-                  PP.PStr str -> putStr' cols str >> rest cols
-                  PP.Mark (PushAttr attr) -> do
-                        let cols' = attr : cols
-                        doHighlight cols'
-                        rest cols'
-                  PP.Mark (PopAttr) -> do
-                        let (_:cols') = cols
-                        doHighlight cols'
-                        rest cols'
+newtype LaTeXVerbatim = LaTeXVerbatim String
+
+latexVerbatim :: String -> LaTeXVerbatim -> LaTeXVerbatim
+latexVerbatim str (LaTeXVerbatim v) = LaTeXVerbatim (str ++ v)
+
+instance RenderCode LaTeXVerbatim where
+        rStart = latexVerbatim "\\begin{Verbatim}[commandchars=\\\\\\{\\}]\n"   -- be careful with escapes here
+
+        rPutStr (SpecialFont:_) txt = latexVerbatim $
+                concat [ code | Just (LaTeX code) <- map renderSpecialFont txt ]
+        rPutStr _              txt  = latexVerbatim txt
+
+        rDoHighlight False _ = latexVerbatim "}"
+        rDoHighlight _ [] = latexVerbatim $ "{"
+        rDoHighlight _ (Color col:_) = latexVerbatim $ "{" ++ case col of
+                        KeywordColor -> "\\bf\\color{blue}"
+                        SyntaxColor  -> "\\color{red}"
+                        VarColor     -> ""
+                        TypeColor    -> "\\color{green}"
+                        LitColor     -> "\\color{cyan}"
+        rDoHighlight o (_:rest) = rDoHighlight o rest
+        rEnd = LaTeXVerbatim "\n\\end{verbatim}"
+
 

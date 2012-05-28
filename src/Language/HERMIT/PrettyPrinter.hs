@@ -106,6 +106,16 @@ instance RenderSpecial Unicode where
         renderSpecial TypeSymbol          = Unicode '\x25c3'
         renderSpecial TypeBindSymbol      = Unicode '\x25BE'
 
+data LaTeX = LaTeX String
+
+instance RenderSpecial LaTeX where
+        renderSpecial LambdaSymbol        = LaTeX "\\ensuremath{\\lambda}"
+        renderSpecial TypeOfSymbol        = LaTeX "::"  -- too wide
+        renderSpecial RightArrowSymbol    = LaTeX "\\ensuremath{\\shortrightarrow}"
+        renderSpecial TypeSymbol          = LaTeX "\\ensuremath{\\triangle}"
+        renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\triangle}"    -- TO FIX/CHOOSE
+
+
 renderSpecialFont :: (RenderSpecial a) => Char -> Maybe a
 renderSpecialFont = fmap renderSpecial . flip M.lookup specialFontMap
 
@@ -115,23 +125,27 @@ specialFontMap = M.fromList
                 | s <- [minBound..maxBound]
                 ]
 
-{-
 
-fromSpecialChar :: SpecialChar -> Char
+class RenderCode a where
+        rStart       ::                     a -> a
+        rStart = id
+        rDoHighlight :: Bool -> [Attr]           -> a -> a
+        rPutStr      :: [Attr] -> String -> a -> a
+        rEnd         ::                          a
 
 
-
-
-lambdaChar :: Char
-lambdaChar = "\\"
-
-typeOfChar :: Char
-typeOfChar = ":"
-
-rightArrowChar :: Char
-rightArrowChar = ">"
--}
-
+renderCode :: RenderCode a => DocH -> a
+renderCode doc = rStart $ PP.fullRender PP.PageMode 80 1.5 marker (\ _ -> rEnd) doc []
+  where
+          marker ::  RenderCode a => PP.TextDetails HermitMark -> ([Attr] -> a) -> ([Attr]-> a)
+          marker m rest cols = case m of
+                  PP.Chr ch   -> rPutStr cols [ch] $ rest cols
+                  PP.Str str  -> rPutStr cols str $ rest cols
+                  PP.PStr str -> rPutStr cols str $ rest cols
+                  PP.Mark (PushAttr attr) ->
+                        let cols' = attr : cols in rDoHighlight True cols' $ rest cols'
+                  PP.Mark (PopAttr) -> do
+                        let (_:cols') = cols in rDoHighlight False cols' $ rest cols'
 
 -- Other options for pretty printing:
 -- * Does a top level program should function names, or complete listings?
