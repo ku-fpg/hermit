@@ -61,9 +61,11 @@ Library
 
   Other-modules:
        Language.Core.Quote
-       Language.HERMIT.Pass
        Language.HERMIT.DSL
        Language.HERMIT.GHC
+
+       Language.HERMIT.Plugin.CommandLine
+       Language.HERMIT.Plugin.Restful
 
        System.Console.Getline
 

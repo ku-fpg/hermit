@@ -11,12 +11,18 @@ sub compileAndRun {
 
 	if ($style eq "h") {
 	    $str .= "-fplugin=Language.HERMIT.Plugin " .
+                    "-fplugin-opt=Language.HERMIT.Plugin:mode=h " .
                     "-fplugin-opt=Language.HERMIT.Plugin:main:Main/${mod}.hermit ";
 	}
 
 	if ($style eq "i") {
 	    $str .= "-fplugin=Language.HERMIT.Plugin " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main/- ";
+                    "-fplugin-opt=Language.HERMIT.Plugin:mode=i ";
+	}
+
+	if ($style eq "w") {
+	    $str .= "-fplugin=Language.HERMIT.Plugin " .
+                    "-fplugin-opt=Language.HERMIT.Plugin:mode=w ";
 	}
 
 	system($str);

@@ -1,6 +1,6 @@
 {-# LANGUAGE PatternGuards, DataKinds, ScopedTypeVariables #-}
 
-module Language.HERMIT.Pass (hermitPass, ppProgram, writeProgram) where
+module Language.HERMIT.Plugin.CommandLine (passes) where
 
 import GhcPlugins
 import PprCore -- compiler/coreSyn/PprCore.lhs
@@ -15,39 +15,51 @@ import System.IO
 import Prelude hiding (catch)
 import Control.Exception (catch, SomeException)
 
-import Language.HERMIT.Shell.Dispatch as CommandLine
+import Language.HERMIT.Shell.Dispatch as Dispatch
+import Language.HERMIT.Plugin.Common
 import System.Console.Getline
 
 -- Syntax:
 --   FullModuleName(filename),    <-- reads Module.hermit
 --   FullModuleName(-)            <-- starts the interpreter
 
-hermitPass :: [String] -> ModGuts -> CoreM ModGuts
--- run the command-line option
-hermitPass nms modGuts = case candidates of
-        [ ('/' : '-': []) ] -> do
+passes :: [NamedPass]
+passes = [("i", logCore "HERMIT.out" interactive)
+         ,("h", logCore "HERMIT.out" scripted)
+         ]
 
-                elGets <- liftIO getEditor
+interactive :: HermitPass
+interactive _opts modGuts = do
+    elGets <- liftIO getEditor
 
-                let append = appendFile ".hermitlog"
-                liftIO $ append "\n-- starting new session\n"
-                let get = do str <- elGets "hermit> "
-                             case str of
-                               Nothing -> do append "-- ^D\n"
-                                             return Nothing
-                               Just msg -> do append msg
-                                              return $ Just msg
-                CommandLine.commandLine get modGuts
+    let append = appendFile ".hermitlog"
+    liftIO $ append "\n-- starting new session\n"
+    let get = do str <- elGets "hermit> "
+                 case str of
+                    Nothing -> do append "-- ^D\n"
+                                  return Nothing
+                    Just msg -> do append msg
+                                   return $ Just msg
+
+    Dispatch.commandLine get modGuts
+
+scripted :: HermitPass
+scripted opts modGuts =
+    case scripts of
         [ ('/' : filename) ] -> do
-                gets <- liftIO $ openFile2 filename
-                CommandLine.commandLine gets modGuts
+            gets <- liftIO $ openFile2 filename
+            Dispatch.commandLine gets modGuts
         _ -> return modGuts
-   where
-           modName = showSDoc (ppr (mg_module modGuts))
-           candidates = [ drop (length modName) nm
-                        | nm <- nms
-                        , modName `isPrefixOf` nm
-                        ]
+  where modName = showSDoc (ppr (mg_module modGuts))
+        scripts = [ drop (length modName) nm
+                  | nm <- opts, modName `isPrefixOf` nm ]
+
+logCore :: FilePath -> HermitPass -> HermitPass
+logCore filename pass opts modGuts = do
+    writeProgram ("BEFORE." ++ filename) modGuts
+    modGuts' <- pass opts modGuts
+    writeProgram ("AFTER." ++ filename) modGuts'
+
 {-        --
 -- find a function, interprete it (TODO)
 hermitPass ['@':nm]  h    = return h

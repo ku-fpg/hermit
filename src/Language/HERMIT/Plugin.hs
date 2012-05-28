@@ -3,29 +3,32 @@
 module Language.HERMIT.Plugin (plugin) where
 
 import GhcPlugins
-import Control.Monad
 import Data.List
+import Data.Maybe (fromJust)
 
-import Language.HERMIT.Pass             -- for now
+import Language.HERMIT.Plugin.Common
+
+import qualified Language.HERMIT.Plugin.CommandLine as CommandLine
+import qualified Language.HERMIT.Plugin.Restful as Restful
+
+passes_dict :: [NamedPass]
+passes_dict = CommandLine.passes
+           ++ Restful.passes
 
 plugin :: Plugin
-plugin = defaultPlugin {
-        -- This should get cleaned up at some point
-  installCoreToDos = install hermitPass
-  }
+plugin = defaultPlugin { installCoreToDos = install }
 
-install :: ([String] -> ModGuts -> CoreM ModGuts)
-        -> [CommandLineOption]
-        -> [CoreToDo] -> CoreM [CoreToDo]
-install fn opts todos = do
+install :: [CommandLineOption] -> [CoreToDo] -> CoreM [CoreToDo]
+install opts todos = do
     liftIO $ print opts
-    let filename = "HERMIT.out" -- head $ filter (isSuffixOf ".hermit") opts
-        myPass = CoreDoPluginPass "HERMIT" $ \ core0 -> do
-                writeProgram ("BEFORE." ++ filename) core0
-                core1 <- hermitPass opts core0
-                writeProgram ("AFTER." ++ filename) core1
+    let (modes, opts') = partition (isPrefixOf "mode=") opts
+        myPass = CoreDoPluginPass "HERMIT" $ parseMode modes opts'
         -- at front, for now
         allPasses = myPass : todos
 
     reinitializeGlobals
     return allPasses
+
+parseMode :: [CommandLineOption] -> HermitPass
+parseMode mStr = head [ p | (n,p) <- passes_dict, n `elem` modes ]
+    where modes = mapM (fromJust . stripPrefix "mode=") mStr
