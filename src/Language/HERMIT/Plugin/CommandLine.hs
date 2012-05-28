@@ -5,23 +5,12 @@ module Language.HERMIT.Plugin.CommandLine (passes) where
 import GhcPlugins
 import PprCore -- compiler/coreSyn/PprCore.lhs
 
---import System.Console.Editline
-
 import Data.List
-import Control.Monad
 import System.IO
-
--- The Prelude version of catch has been deprecated.
-import Prelude hiding (catch)
-import Control.Exception (catch, SomeException)
 
 import Language.HERMIT.Shell.Dispatch as Dispatch
 import Language.HERMIT.Plugin.Common
 import System.Console.Getline
-
--- Syntax:
---   FullModuleName(filename),    <-- reads Module.hermit
---   FullModuleName(-)            <-- starts the interpreter
 
 passes :: [NamedPass]
 passes = [("i", logCore "HERMIT.out" interactive)
@@ -76,14 +65,6 @@ openFile2 fileName = do
                 if b then return Nothing
                      else do str <- hGetLine h
                              return (Just $ str ++ "\n")
-
-ppProgram :: ModGuts -> CoreM ModGuts
-ppProgram = bindsOnlyPass printBinds
-
-printBinds :: CoreProgram -> CoreM CoreProgram
-printBinds binds  = do
-  putMsg $ pprCoreBindings binds
-  return binds
 
 writeProgram :: FilePath -> ModGuts -> CoreM ModGuts
 writeProgram filename =

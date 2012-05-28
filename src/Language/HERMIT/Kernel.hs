@@ -8,7 +8,7 @@ module Language.HERMIT.Kernel (
         , interpKernelCommand
         , hermitKernel
         , Kernel(..)
-        , AST
+        , AST(..)
 
 ) where
 
