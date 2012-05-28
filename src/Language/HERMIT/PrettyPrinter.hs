@@ -8,6 +8,7 @@ import Text.PrettyPrint.MarkedHughesPJ as PP
 import Language.HERMIT.HermitKure
 import Control.Applicative
 import Data.Default
+import qualified Data.Map as M
 
 import Language.KURE
 
@@ -24,6 +25,7 @@ data HermitMark
 -- These are the attributes
 data Attr = PathAttr [Int]
           | Color SyntaxForColor
+          | SpecialFont
     deriving Show
 
 data SyntaxForColor             -- (suggestion)
@@ -45,6 +47,10 @@ keywordColor = attr (Color KeywordColor)
 
 markColor :: SyntaxForColor -> DocH -> DocH
 markColor = attr . Color
+
+specialFont :: DocH -> DocH
+specialFont = attr SpecialFont
+
 
 type PrettyH a = TranslateH a DocH
 
@@ -68,6 +74,64 @@ instance Default PrettyOptions where
         , po_depth           = Nothing
         , po_notes           = False
         }
+
+-----------------------------------------------------------------
+
+-- The characters for special symbols, which have a special alphabet
+
+data SpecialSymbol
+        = LambdaSymbol
+        | TypeOfSymbol
+        | RightArrowSymbol
+        | TypeSymbol
+        | TypeBindSymbol
+        deriving (Show, Eq, Ord, Bounded, Enum)
+
+class RenderSpecial a where
+        renderSpecial :: SpecialSymbol -> a
+
+instance RenderSpecial Char where
+        renderSpecial LambdaSymbol        = '\\'  -- \
+        renderSpecial TypeOfSymbol        = ':'   -- ::
+        renderSpecial RightArrowSymbol    = '>'   -- ->
+        renderSpecial TypeSymbol          = 'T'   -- <<type>>>
+        renderSpecial TypeBindSymbol      = 'a'   -- a
+
+data Unicode = Unicode Char
+
+instance RenderSpecial Unicode where
+        renderSpecial LambdaSymbol        = Unicode '\x03BB'
+        renderSpecial TypeOfSymbol        = Unicode ':'           -- TODO, fix
+        renderSpecial RightArrowSymbol    = Unicode '\x2192'
+        renderSpecial TypeSymbol          = Unicode '\x25c3'
+        renderSpecial TypeBindSymbol      = Unicode '\x25BE'
+
+renderSpecialFont :: (RenderSpecial a) => Char -> Maybe a
+renderSpecialFont = fmap renderSpecial . flip M.lookup specialFontMap
+
+specialFontMap :: M.Map Char SpecialSymbol
+specialFontMap = M.fromList
+                [ (renderSpecial s,s)
+                | s <- [minBound..maxBound]
+                ]
+
+{-
+
+fromSpecialChar :: SpecialChar -> Char
+
+
+
+
+lambdaChar :: Char
+lambdaChar = "\\"
+
+typeOfChar :: Char
+typeOfChar = ":"
+
+rightArrowChar :: Char
+rightArrowChar = ">"
+-}
+
 
 -- Other options for pretty printing:
 -- * Does a top level program should function names, or complete listings?

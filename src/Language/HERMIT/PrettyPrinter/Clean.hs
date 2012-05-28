@@ -27,8 +27,15 @@ data RetExpr
         | RetExpr DocH
         | RetAtom DocH         -- parens not needed
 
+
+specialSymbol :: SpecialSymbol -> DocH
+specialSymbol = markColor SyntaxColor . specialFont . char . renderSpecial
+
 symbol :: Char -> DocH
 symbol = markColor SyntaxColor . char
+
+keyword :: String -> DocH
+keyword = markColor KeywordColor . text
 
 ppParens :: DocH -> DocH
 ppParens p = symbol '(' <> p <> symbol ')' -- :: markColor SyntaxColor
@@ -38,17 +45,17 @@ atomExpr (RetAtom e) = e
 atomExpr other       = ppParens (normalExpr other)
 
 normalExpr :: RetExpr -> DocH
-normalExpr (RetLam vs e0) = hang (symbol '\x03BB' <+> hsep vs <+> symbol '\x2192') 2 e0
+normalExpr (RetLam vs e0) = hang (specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
 normalExpr (RetLet vs e0) = sep [ keywordColor (text "let") <+> vcat vs, keywordColor (text "in") <+> e0 ]
 normalExpr (RetApp fn xs) = sep ( fn : map (nest 2) xs )
 normalExpr (RetExpr e0)    = e0
 normalExpr (RetAtom e0)    = e0
 
 typeSymbol :: DocH
-typeSymbol = markColor TypeColor (char '\x25C3')
+typeSymbol = markColor TypeColor (specialFont $ char $ renderSpecial TypeSymbol)
 
 typeBindSymbol :: DocH
-typeBindSymbol = markColor TypeColor (char '\x25BE')
+typeBindSymbol = markColor TypeColor (specialFont $ char $ renderSpecial TypeBindSymbol)
 
 corePrettyH :: PrettyOptions -> PrettyH Core
 corePrettyH opts =
@@ -85,7 +92,13 @@ corePrettyH opts =
                       | otherwise     = text s
 
     ppModGuts :: PrettyH GHC.ModGuts
-    ppModGuts = liftT (ppSDoc . GHC.mg_module)
+    ppModGuts = liftT $ \ m -> hang (keyword "module" <+> ppSDoc (GHC.mg_module m) <+> keyword "where") 2
+                               (vcat [ ppBinder v
+                                     | bnd <- GHC.mg_binds m
+                                     , v <- case bnd of
+                                              GHC.NonRec f _ -> [f]
+                                              GHC.Rec bnds -> map fst bnds
+                                   ])
 
     -- DocH is not a monoid, so we can't use listT here
     ppProgram :: PrettyH GHC.CoreProgram -- CoreProgram = [CoreBind]
@@ -130,8 +143,8 @@ corePrettyH opts =
                   GHC.LitAlt lit   -> hang (ppSDoc lit <+> ppIds ids) 2 e
                   GHC.DEFAULT      -> symbol '_' <+> ppIds ids <+> e
           where
-                 ppIds ids | null ids  = symbol '\x2192'
-                           | otherwise = hsep (map ppBinder ids) <+> symbol '\x2192'
+                 ppIds ids | null ids  = specialSymbol RightArrowSymbol
+                           | otherwise = hsep (map ppBinder ids) <+> specialSymbol RightArrowSymbol
 
     -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
     ppCoreDef :: PrettyH CoreDef
@@ -139,7 +152,7 @@ corePrettyH opts =
 
     ppDefFun :: GHC.Id -> RetExpr -> DocH
     ppDefFun i e = case e of
-                    RetLam vs e0 -> hang (pre <+> symbol '\x03BB' <+> hsep vs <+> symbol '\x2192') 2 e0
+                    RetLam vs e0 -> hang (pre <+> specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
                     _ -> hang pre 2 (normalExpr e)
         where
             pre = ppBinder i <+> symbol '='

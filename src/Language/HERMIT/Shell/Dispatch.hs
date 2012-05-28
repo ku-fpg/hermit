@@ -154,8 +154,8 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
                                         return st
               loop st2
 
-  -- recurse using the command line
-  loop $ CommandLineState idL "clean" def ast
+  -- recurse using the command line, starting with showing the first focus
+  showFocusLoop $ CommandLineState idL "clean" def ast
 
   -- we're done
   quitK kernel ast
@@ -177,15 +177,18 @@ doHighlight (Color col:_) = do
            VarColor     -> []   -- as is
            TypeColor    -> [ SetColor Foreground Dull Green ]
            LitColor     -> [ SetColor Foreground Dull Cyan ]
+doHighlight (_:rest) = doHighlight rest
 
 renderShellDoc :: DocH -> IO ()
 renderShellDoc doc = PP.fullRender PP.PageMode 80 1.5 marker (\ _ -> putStrLn "") doc []
-  where   -- color = Nothing means set back to terminal default
+  where   putStr' (SpecialFont:_) txt = putStr [ code | Just (Unicode code) <- map renderSpecialFont txt ]
+          putStr' _              txt = putStr txt
+
           marker :: PP.TextDetails HermitMark -> ([Attr] -> IO ()) -> ([Attr]-> IO ())
           marker m rest cols = case m of
-                  PP.Chr ch   -> putChar ch >> rest cols
-                  PP.Str str  -> putStr str >> rest cols
-                  PP.PStr str -> putStr str >> rest cols
+                  PP.Chr ch   -> putStr' cols [ch] >> rest cols
+                  PP.Str str  -> putStr' cols str >> rest cols
+                  PP.PStr str -> putStr' cols str >> rest cols
                   PP.Mark (PushAttr attr) -> do
                         let cols' = attr : cols
                         doHighlight cols'
