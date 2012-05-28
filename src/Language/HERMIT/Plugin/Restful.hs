@@ -8,8 +8,10 @@ import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 
+import Data.Aeson
 import Data.Default
 import Data.Dynamic
+import Data.List hiding (delete)
 import qualified Data.Map as M
 import Data.Monoid ((<>))
 import qualified Data.Text.Lazy as T
@@ -18,37 +20,48 @@ import qualified Data.Text.Lazy as T
 import Prelude hiding (catch)
 import Control.Exception hiding (catch)
 
+import Language.HERMIT.Dictionary
 import Language.HERMIT.External
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitExpr
 import Language.HERMIT.HermitKure
-import Language.HERMIT.Dictionary
-import Language.HERMIT.Kernel
-import Language.HERMIT.PrettyPrinter.AST (corePrettyH)
 import Language.HERMIT.Interp
-
+import Language.HERMIT.Kernel
 import Language.HERMIT.Plugin.Common
+import Language.HERMIT.PrettyPrinter.JSON
 
 import Language.KURE
 
+import Paths_hermit
+
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 import Web.Scotty as S
+
+import Debug.Trace
 
 passes :: [NamedPass]
 passes = [("w", restful)]
 
 restful :: HermitPass
-restful opts modGuts = hermitKernel (webapp dict) modGuts
+restful opts modGuts = hermitKernel (webapp dict indexfile) modGuts
     where dict = dictionary [] modGuts
+          indexfile = head [ o | o <- opts, ".html" `isSuffixOf` o ]
 
-webapp :: M.Map String [Dynamic] -> Kernel -> AST -> IO ()
-webapp dict kernel _initAst = do
+-- todo: get rid of state, each command from client should supply focus
+data RestfulState = RestfulState
+        { r_lens   :: LensH Core Core    -- ^ stack of lenses
+        }
+
+webapp :: M.Map String [Dynamic] -> FilePath -> Kernel -> AST -> IO ()
+webapp dict indexfile kernel _initAst = do
     state <- newTMVarIO $ RestfulState idL
 
+    dataDir <- getDataDir
+
     let respondWithFocus :: AST -> ActionM ()
-        respondWithFocus ast = do
-            r <- withState $ \ s -> queryK kernel ast (focusT (r_lens s) ppJSON)
-            html $ "<pre>" <> T.pack r <> "</pre>"
+        respondWithFocus ast@(AST i) = do
+            val <- withState $ \ s -> queryK kernel ast (focusT (r_lens s) (corePrettyH def))
+            S.json $ object ["ast" .= i, "code" .= val]
 
         withState :: (RestfulState -> IO a) -> ActionM a
         withState act = liftIO $ atomically (readTMVar state) >>= act
@@ -60,10 +73,13 @@ webapp dict kernel _initAst = do
             return r
 
     scotty 3000 $ do
-        get "/" $ redirect "/list"
+        get "/" $ file indexfile
+        get "/jquery.js" $ file $ dataDir ++ "/javascript/jquery.js"
+        get "/jquery-json.js" $ file $ dataDir ++ "/javascript/jquery-json.js"
+
         get "/list" $ do
             l <- liftIO $ listK kernel
-            json $ map show l -- todo: not show!
+            S.json [ i | AST i <- l ]
 
         get "/:ast" $ do
             ast <- param "ast"
@@ -74,26 +90,26 @@ webapp dict kernel _initAst = do
             liftIO $ deleteK kernel $ AST ast
             redirect "/list"
 
-        get "/:ast/query/:q" $ do
+        post "/:ast/query" $ do
             ast <- param "ast"
-            Query q <- parseCommand dict =<< param "q" -- todo parse this from json?
+            Query q <- parseCommand dict =<< jsonData
             res <- withState $ \s -> (liftM Right $ queryK kernel (AST ast) (focusT (r_lens s) q)) `catch` (return . Left)
             either (raise . T.pack) (S.text . T.pack . show) res
 
-        get "/:ast/apply/:rr" $ do
+        post "/:ast/apply" $ do
             ast <- param "ast"
-            Apply rr <- parseCommand dict =<< param "rr" -- todo parse this from json?
+            Apply rr <- parseCommand dict =<< jsonData
             ast' <- withState $ \s -> (liftM Right $ applyK kernel (AST ast) (focusR (r_lens s) rr))
                                       `catch` (return . Left)
-            either (raise . T.pack) respondWithFocus ast' -- todo: return ast'
+            either (raise . T.pack) respondWithFocus ast'
 
         -- todo: do we really need the ast here?
-        get "/:ast/quit" $ do
+        post "/:ast/quit" $ do
             ast <- param "ast"
-            -- take the ast and leave it empty, so any further requests are rejected
             liftIO $ quitK kernel (AST ast)
             S.text "quitting..."
 
+        -- todo: child/parent belongs in a higher-level API
         get "/:ast/child/:i" $ do
             ast <- param "ast"
             i <- param "i"
@@ -122,41 +138,38 @@ webapp dict kernel _initAst = do
                                          (return ((),s                      ))
             respondWithFocus $ AST ast
 
-{-
-                let new_lens = case (, c_path) of
-                        (R, kid : rest)            -> pathL $ reverse ((kid + 1) : rest)
-                        (L, kid : rest)  | kid > 0 -> pathL $ reverse ((kid - 1) : rest)
-                        _               -> r_lens s
--}
-
-
--- todo: move to pretty printer modules
-ppJSON :: TranslateH Core String -- todo: change
-ppJSON = corePrettyH def >>= pure . PP.render
-
 -- rather than abuse the command line parser here,
 -- need to assign each command a unique id, and call with those
-parseCommand :: M.Map String [Dynamic] -> String -> ActionM KernelCommand
-parseCommand dict s = either (raise . T.pack) return $ do
-    expr <- parseExprH s
-    interpExprH dict interpKernelCommand expr
+parseCommand :: M.Map String [Dynamic] -> ExprH -> ActionM KernelCommand
+parseCommand dict expr = either (raise . T.pack) return $ interpExprH dict interpKernelCommand expr
+
+instance FromJSON ExprH where
+   parseJSON (Object o) = do
+        con :: String <- o .: "type"
+        case con of
+            "Src" -> SrcName <$> o .: "value"
+            "Cmd" -> CmdName <$> o .: "value"
+            "Str" -> StrName <$> o .: "value"
+            "App" -> AppH <$> o .: "lhs" <*> o .: "rhs"
+
+   parseJSON _ = mzero
 
 catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
 
-data RestfulState = RestfulState
-        { r_lens   :: LensH Core Core    -- ^ stack of lenses
-        }
-
-{- not sure if it makes sense to have these and a dictionary
+{-
 data RestfulCommand :: * where
-   Status        ::                             RestfulCommand
---   Message       :: String                   -> RestfulCommand
---   PushFocus     :: LensH Core Core          -> RestfulCommand
-   Root          ::                             RestfulCommand
-   SetPretty     :: String                   -> RestfulCommand
-   KernelCommand :: KernelCommand            -> RestfulCommand
-   Child         :: Int                      -> RestfulCommand
+    WithFocus     :: LensH Core Core -> KernelCommand -> RestfulCommand
+    KernelCommand :: KernelCommand            -> RestfulCommand
+{- not sure if it makes sense to have these and a dictionary
+    Status        ::                             RestfulCommand
+--  Message       :: String                   -> RestfulCommand
+--  PushFocus     :: LensH Core Core          -> RestfulCommand
+    Root          ::                             RestfulCommand
+    SetPretty     :: String                   -> RestfulCommand
+    Child         :: Int                      -> RestfulCommand
+-}
+
 
 data RestfulCommandBox = RestfulCommandBox RestfulCommand deriving Typeable
 
@@ -168,27 +181,13 @@ instance Extern RestfulCommand where
 interpRestfulCommand :: [Interp RestfulCommand]
 interpRestfulCommand =
     [ Interp $ \ (RestfulCommandBox cmd)     -> cmd
-    , Interp $ \ (LensCoreCoreBox l)         -> PushFocus l
-    , Interp $ \ (IntBox i)                  -> PushFocus $ childL i
-    , Interp $ \ (StringBox str)             -> Message str
+    , Interp $ \ (LensCoreCoreBox l) (KernelCommandBox c) -> WithFocus l c -- no idea if this makes sense
+    , Interp $ \ (IntBox i)                  -> WithFocus $ childL i
+--    , Interp $ \ (StringBox str)             -> Message str
     ]
+
+restful_externals :: [External]
+restful_externals = map (.+ Restful) $
+   [  external "focus" WithFocus [ "apply kernel command with focus" ]
+   ]
 -}
-
-{-
-      kernelAct st (Query q) = do
-
-              (query (cl_cursor st) (focusT (cl_lens st) q) >>= print)
-                `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg
-              loop st
-
-      kernelAct st (Apply rr) = do
-              st2 <- (do ast' <- applyK kernel (cl_cursor st) (focusR (cl_lens st) rr)
-                         let st' = st { cl_cursor = ast' }
-                         showFocus st'
-                         return st') `catch` \  msg -> do
-                                        putStrLn $ "Error thrown: " ++ msg
-                                        return st
-              loop st2
-
--}
-

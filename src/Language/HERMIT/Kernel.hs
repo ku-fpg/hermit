@@ -9,6 +9,7 @@ module Language.HERMIT.Kernel (
         , hermitKernel
         , Kernel(..)
         , AST(..)
+        , KernelCommandBox(..)
 
 ) where
 

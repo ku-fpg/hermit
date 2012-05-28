@@ -8,3 +8,6 @@ test::
 	perl ./test.pl Reverse
 	perl ./test.pl Reverse h
 
+web::
+	(cd ../../; make)
+	perl ./test.pl Case w

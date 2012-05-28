@@ -26,6 +26,7 @@ data CmdTag = Bash -- this command will be run as part of the bash command
             | Context   -- something that uses the context
             | Experiment -- things we are trying out
             | Shell     -- Shell commands
+            | Restful    -- RESTful API commands
             | Unimplemented
             -- etc
     deriving (Eq, Show, Read)

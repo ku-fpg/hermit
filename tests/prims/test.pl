@@ -22,7 +22,8 @@ sub compileAndRun {
 
 	if ($style eq "w") {
 	    $str .= "-fplugin=Language.HERMIT.Plugin " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:mode=w ";
+                    "-fplugin-opt=Language.HERMIT.Plugin:mode=w " .
+                    "-fplugin-opt=Language.HERMIT.Plugin:testrest.html";
 	}
 
 	system($str);

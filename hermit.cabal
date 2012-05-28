@@ -16,8 +16,13 @@ Stability:           pre-alpha
 build-type:          Simple
 Cabal-Version:       >= 1.10
 
+data-files:
+    javascript/jquery.js
+    javascript/jquery-json.js
+
 Library
   Build-Depends: base >= 4 && < 5,
+                 aeson,
                  ansi-terminal >= 0.5.5,
                  containers,
                  data-default >= 0.4,
@@ -63,6 +68,7 @@ Library
        Language.HERMIT.PrettyPrinter
        Language.HERMIT.PrettyPrinter.AST
        Language.HERMIT.PrettyPrinter.Clean
+       Language.HERMIT.PrettyPrinter.JSON
 
   Other-modules:
        Language.Core.Quote
@@ -71,6 +77,8 @@ Library
 
        Language.HERMIT.Plugin.CommandLine
        Language.HERMIT.Plugin.Restful
+
+       Paths_hermit
 
        System.Console.Getline
 
