@@ -11,13 +11,12 @@ import Data.List
 import Data.Default (def)
 import qualified Data.Map as M
 
-import Control.Monad (liftM2)
-
 import GhcPlugins
 
 import qualified Language.Haskell.TH as TH
 
 import Language.KURE
+import Language.KURE.Injection
 
 import Language.HERMIT.HermitExpr
 import Language.HERMIT.HermitKure
@@ -54,7 +53,7 @@ dictionary my_externals modGuts = toDictionary all_externals
   where
           -- The GHC.externals here is a bit of a hack. Not sure about this
         all_externals = prim_externals ++ my_externals ++ GHC.externals modGuts ++
-                [ external "bash" (promoteR (bash all_externals)) (bashHelp all_externals) .+ MetaCmd
+                [ external "bash" (promoteR (bash all_externals) :: RewriteH Core) (bashHelp all_externals) .+ MetaCmd
                    , external "help"            (help all_externals Nothing Nothing)
                         [ "lists all commands" ]
                    , external "help" (help all_externals Nothing . Just :: String -> String)
@@ -110,7 +109,7 @@ help externals (Just "ls") m = unlines $ map toLine groups
 -- Runs every command tagged with 'Bash' with innermostR (fix point anybuR),
 -- if any of them succeed, then it tries all of them again.
 -- Only fails if all of them fail the first time.
-bash :: [External] -> RewriteH (Generic CoreExpr)
+bash :: [External] -> RewriteH Core
 bash all_externals = innermostR $ orR [ maybe (fail "bash: fromDynamic failed") (anybuR . unbox)
                           $ fromDynamic $ externFun $ cmd
                         | cmd <- all_externals, cmd `hasTag` Bash ]

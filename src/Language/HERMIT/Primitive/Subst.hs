@@ -6,8 +6,10 @@ import GhcPlugins hiding (empty)
 import qualified Data.List as List
 
 import Control.Applicative
+import Control.Arrow
 
 import Language.KURE
+import Language.KURE.Injection
 
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.HermitKure
@@ -20,17 +22,17 @@ import qualified Language.Haskell.TH as TH
 externals :: [External]
 externals = map (.+ Experiment)
          [
-           external "alpha" (promoteR alphaLambda)
+           external "alpha" (promoteR alphaLambda :: RewriteH Core)
                 [ "Alpha rename (for Lambda's)."]
-         , external "alpha-let" (promoteR alphaLet)
+         , external "alpha-let" (promoteR alphaLet :: RewriteH Core)
                 [ "Alpha rename (for Let)."]
-         , external "let-sub" (promoteR letSubstR)
+         , external "let-sub" (promoteR letSubstR :: RewriteH Core)
                 [ "Let substitution."]
 
            -- the remaining are really just for testing.
-         , external "alpha-alt" (promoteR alphaAlt)
+         , external "alpha-alt" (promoteR alphaAlt :: RewriteH Core)
                 [ "Alpha rename (for a single Case Alternative)."]
-         , external "alpha-case" (promoteR alphaCase)
+         , external "alpha-case" (promoteR alphaCase :: RewriteH Core)
                 [ "Alpha renaming for each alternative of a Case."]
          ]
 
@@ -44,7 +46,7 @@ varNameH :: Id -> TH.Name
 varNameH = TH.mkName . showSDoc . ppr
 
 freshVarT :: Id -> TranslateH a Id
-freshVarT v = constMT $ newVarH (varNameH v) (idType v)
+freshVarT v = constT $ newVarH (varNameH v) (idType v)
 
 -- The alpha renaming functions defined here,
 -- rely on a function to return a globally fresh Id,
@@ -71,7 +73,7 @@ alphaRecLet = do Let bds@(Rec _) e <- idR
                  letRecDefT (\ _ -> (foldr seqSubst idR (zip boundIds freshBoundIds)))
                             (foldr seqSubst idR (zip boundIds freshBoundIds))
                             (\ bds' e' -> let freshBds = zip freshBoundIds (map snd bds') in Let (Rec freshBds) e')
-    where seqSubst (v,v') t = t >-> (trySubstR v $ Var v')
+    where seqSubst (v,v') t = t >>> (trySubstR v $ Var v')
 
 -- there is no alphaCase.
 -- instead alphaAlt performs renaming over an individual Case alternative
@@ -79,7 +81,7 @@ alphaAlt :: RewriteH CoreAlt
 alphaAlt = do (con, vs, e) <- idR
               freshBoundIds <- sequence $ fmap freshVarT vs
               altT (foldr seqSubst idR (zip vs freshBoundIds)) (\ _ _ e' -> (con, freshBoundIds, e'))
-    where seqSubst (v,v') t = t >-> (trySubstR v $ Var v')
+    where seqSubst (v,v') t = t >>> (trySubstR v $ Var v')
 
 -- Andy's substitution rewrite
 --  E [ v::r ] ===   let (NonRec v = r) in E
@@ -103,7 +105,7 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
                      guardFail (b == v) "Subtitution var clashes with Lam"
                      guardFail (v `notElem` freeIds e) "Substitution var not used in body of Lam"
                      if b `elem` freeIds expReplacement
-                      then alphaLambda >-> rule345
+                      then alphaLambda >>> rule345
                       else lamR (substR v expReplacement)
 
         rule6 = anyR (promoteR $ substR v expReplacement)
@@ -113,7 +115,7 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
                     guardFail (v `elem` bindList bds) "Substitution var clashes with Let var"
                     if null $ List.intersect (bindList bds) (freeIds expReplacement)
                      then letAnyR (substBindR v expReplacement) (substR v expReplacement)
-                     else alphaLet >-> rule78
+                     else alphaLet >>> rule78
 
         -- edk?  Do we need to worry about clashes with the VBind component of a Case?
         --  For now, it is ignored here.
@@ -127,7 +129,7 @@ substAltR v expReplacement =
        guardFail (v `elem` bs) "Substitution var clashes with Alt binders"
        if null $ List.intersect bs (freeIds expReplacement)
         then altR (substR v expReplacement)
-        else alphaAlt >-> altR (substR v expReplacement)
+        else alphaAlt >>> altR (substR v expReplacement)
 
 
 -- edk !! Note, this subst DOES NOT handle name clashes with variables bound in the Bind form,

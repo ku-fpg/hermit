@@ -6,6 +6,7 @@ module Language.HERMIT.Primitive.New where
 import GhcPlugins
 
 import Control.Applicative
+import Control.Arrow
 
 import Language.KURE
 import Language.KURE.Injection
@@ -25,15 +26,15 @@ promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an ex
 externals :: [External]
 externals = map (.+ Experiment)
          [
-           external "let-intro" (promoteR' . let_intro)
+           external "let-intro" (promoteR' . let_intro :: TH.Name -> RewriteH Core)
                 [ "'let-intro v' performs E1 ==> (let v = E1 in v)" ]
-         , external "var" (\ nm -> promoteR . var nm . extractR)
-                [ "'var <v>' applies a rewrite to all <v>" ]
-         , external "info" (promoteT info)
+         , external "var" (\ nm -> promoteR . var nm . extractR :: RewriteH Core -> RewriteH Core)
+                [ "'var <v>' applies a rewrite to all <v>" ] .+ Unimplemented
+         , external "info" (promoteT info :: TranslateH Core String)
                 [ "tell me what you know about this expression or binding" ] .+ Unimplemented
-         , external "expr-type" (promoteT exprTypeQueryT)
+         , external "expr-type" (promoteT exprTypeQueryT :: TranslateH Core String)
                 [ "List the type (Constructor) for this expression."]
-         , external "test" rewrite2query
+         , external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
                 [ "determines if a rewrite could be successfully applied" ]
          ]
 
@@ -62,20 +63,20 @@ info = do ContextPath this <- pathT
 
 
 exprTypeQueryT :: TranslateH CoreExpr String
-exprTypeQueryT = liftT $ \ e -> case e of
-                                  Var _        -> "Var"
-                                  Type _       -> "Type"
-                                  Lit _        -> "Lit"
-                                  App _ _      -> "App"
-                                  Lam _ _      -> "Lam"
-                                  Let _ _      -> "Let"
-                                  Case _ _ _ _ -> "Case"
-                                  Cast _ _     -> "Cast"
-                                  Tick _ _     -> "Tick"
-                                  Coercion _   -> "Coercion"
+exprTypeQueryT = arr $ \ e -> case e of
+                                Var _        -> "Var"
+                                Type _       -> "Type"
+                                Lit _        -> "Lit"
+                                App _ _      -> "App"
+                                Lam _ _      -> "Lam"
+                                Let _ _      -> "Let"
+                                Case _ _ _ _ -> "Case"
+                                Cast _ _     -> "Cast"
+                                Tick _ _     -> "Tick"
+                                Coercion _   -> "Coercion"
 
-rewrite2query :: RewriteH Core -> TranslateH Core String
-rewrite2query r = f <$> testA r
+testQuery :: RewriteH Core -> TranslateH Core String
+testQuery r = f <$> testM r
   where
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."

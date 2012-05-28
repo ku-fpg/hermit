@@ -3,6 +3,7 @@ module Language.HERMIT.Primitive.Inline where
 import GhcPlugins
 
 import Language.KURE
+import Language.KURE.Injection
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv
@@ -11,7 +12,7 @@ import Language.HERMIT.External
 externals :: [External]
 externals = map (.+ Context)
             [
-              external "inline" (promoteR inline)
+              external "inline" (promoteR inline :: RewriteH Core)
                 [ "(Var n) ==> <defn of n>, fails otherwise" ]
             ]
 

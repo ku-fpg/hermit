@@ -1,6 +1,8 @@
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
 module Language.HERMIT.PrettyPrinter.AST where
 
+import Control.Arrow hiding ((<+>))
+
 import Data.Char (isSpace)
 import Data.Traversable (sequenceA)
 
@@ -8,6 +10,7 @@ import qualified GhcPlugins as GHC
 import Language.HERMIT.HermitKure
 import Language.HERMIT.PrettyPrinter
 import Language.KURE
+import Language.KURE.Injection
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
@@ -43,7 +46,7 @@ corePrettyH opts =
                       | otherwise     = text s
 
     ppModGuts :: PrettyH GHC.ModGuts
-    ppModGuts = liftT (ppSDoc . GHC.mg_module)
+    ppModGuts = arr (ppSDoc . GHC.mg_module)
 
     -- DocH is not a monoid, so we can't use listT here
     ppProgram :: PrettyH GHC.CoreProgram -- CoreProgram = [CoreBind]

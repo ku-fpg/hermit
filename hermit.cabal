@@ -27,7 +27,7 @@ Library
                  containers,
                  data-default >= 0.4,
                  ghc >= 7.4,
-                 kure >= 1.6.9,
+                 kure >= 1.8.1,
                  marked-pretty >= 0.1,
                  scotty >= 0.4.2 && < 0.5,
                  stm,

@@ -4,9 +4,10 @@ module Language.HERMIT.Primitive.Local.Case where
 import GhcPlugins
 
 import Data.List (nub)
-import Control.Applicative
+import Control.Arrow
 
 import Language.KURE
+import Language.KURE.Injection
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv
@@ -24,21 +25,21 @@ externals :: [External]
 externals = map (.+ CaseCmd) $
          [ -- I'm not sure this is possible. In core, v2 can only be a Constructor, Lit, or DEFAULT
            -- In the last case, v1 is already inlined in e. So we can't construct v2 as a Var.
-           external "case-elimination" (promoteR $ not_defined "case-elimination")
+           external "case-elimination" (promoteR $ not_defined "case-elimination" :: RewriteH Core)
                      [ "case v1 of v2 -> e ==> e[v1/v2]" ]                                         .+ Unimplemented
            -- Again, don't think the lhs of this rule is possible to construct in core.
-         , external "default-binding-elim" (promoteR $ not_defined "default-binding-elim")
+         , external "default-binding-elim" (promoteR $ not_defined "default-binding-elim" :: RewriteH Core)
                      [ "case v of ...;w -> e ==> case v of ...;w -> e[v/w]" ]                      .+ Unimplemented
            -- Again, don't think the lhs of this rule is possible to construct in core.
-         , external "case-merging" (promoteR $ not_defined "case-merging")
+         , external "case-merging" (promoteR $ not_defined "case-merging" :: RewriteH Core)
                      [ "case v of ...; d -> case v of alt -> e ==> case v of ...; alt -> e[v/d]" ] .+ Unimplemented
-         , external "let-float-case" (promoteR letFloatCase)
+         , external "let-float-case" (promoteR letFloatCase :: RewriteH Core)
                      [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]
-         , external "case-float-app" (promoteR caseFloatApp)
+         , external "case-float-app" (promoteR caseFloatApp :: RewriteH Core)
                      [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]
-         , external "case-float-case" (promoteR caseFloatCase)
+         , external "case-float-case" (promoteR caseFloatCase :: RewriteH Core)
                      [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ]
-         , external "case-reduce" (promoteR caseReduce)
+         , external "case-reduce" (promoteR caseReduce :: RewriteH Core)
                      [ "case-of-known-constructor"
                      , "case C v1..vn of C w1..wn -> e ==> e[v1/w1..vn/wn]" ]                      .+ Bash
          ]
@@ -47,24 +48,21 @@ not_defined :: String -> RewriteH CoreExpr
 not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
 
 letFloatCase :: RewriteH CoreExpr
-letFloatCase = do
-    Case (Let rec e) b ty alts <- idR
-    pure $ Let rec (Case e b ty alts)
+letFloatCase = do Case (Let rec e) b ty alts <- idR
+                  return $ Let rec (Case e b ty alts)
 
 caseFloatApp :: RewriteH CoreExpr
-caseFloatApp = do
-    App (Case s b ty alts) v <- idR
-    pure $ Case s b ty [ (con, ids, App e v) | (con, ids, e) <- alts ]
+caseFloatApp = do App (Case s b ty alts) v <- idR
+                  return $ Case s b ty [ (con, ids, App e v) | (con, ids, e) <- alts ]
 
 caseFloatCase :: RewriteH CoreExpr
-caseFloatCase = do
-    Case (Case s1 b1 ty1 alts1) b2 ty2 alts2 <- idR
-    pure $ Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ]
+caseFloatCase = do Case (Case s1 b1 ty1 alts1) b2 ty2 alts2 <- idR
+                   return $ Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ]
 
 -- | Case-of-known-constructor rewrite
 caseReduce :: RewriteH CoreExpr
-caseReduce = letTransform >-> repeatR letSubstR
-    where letTransform = liftMT $ \ e -> case e of
+caseReduce = letTransform >>> repeatR letSubstR
+    where letTransform = contextfreeT $ \ e -> case e of
             (Case s _ _ alts) -> case isDataCon s of
                                     Nothing -> fail "caseReduce failed, not a DataCon"
                                     Just (sc, fs) -> case [ (bs, rhs) | (DataAlt dc, bs, rhs) <- alts, sc == dc ] of

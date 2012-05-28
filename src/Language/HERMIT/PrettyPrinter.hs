@@ -7,10 +7,12 @@ import GhcPlugins hiding ((<>))
 import Text.PrettyPrint.MarkedHughesPJ as PP
 import Language.HERMIT.HermitKure
 import Control.Applicative
+import Control.Arrow
 import Data.Default
 import qualified Data.Map as M
 
 import Language.KURE
+import Language.KURE.Injection
 
 
 -- A HERMIT document
@@ -162,15 +164,15 @@ ghcCorePrettyH =
   where
 
         ppH :: (Outputable a) => PrettyH a
-        ppH = liftT (PP.text . showSDoc . ppr)
+        ppH = arr (PP.text . showSDoc . ppr)
 
         ppModule :: PrettyH ModGuts
-        ppModule = liftT mg_module >-> ppH
+        ppModule = mg_module ^>> ppH
 
         ppDef :: PrettyH CoreDef
-        ppDef = liftT (\ (Def v e) -> (v,e)) >-> ppH
+        ppDef = (\ (Def v e) -> (v,e)) ^>> ppH
 
---        liftT (PP.text . ppr . mg_module)
+--        arr (PP.text . ppr . mg_module)
 
 -- Later, this will have depth, and other pretty print options.
 class Show2 a where
