@@ -28,8 +28,6 @@ externals = map (.+ Experiment)
          [
            external "let-intro" (promoteR' . let_intro :: TH.Name -> RewriteH Core)
                 [ "'let-intro v' performs E1 ==> (let v = E1 in v)" ]
-         , external "var" (\ nm -> promoteR . var nm . extractR :: RewriteH Core -> RewriteH Core)
-                [ "'var <v>' applies a rewrite to all <v>" ] .+ Unimplemented
          , external "info" (promoteT info :: TranslateH Core String)
                 [ "tell me what you know about this expression or binding" ] .+ Unimplemented
          , external "expr-type" (promoteT exprTypeQueryT :: TranslateH Core String)
@@ -80,7 +78,3 @@ testQuery r = f <$> testM r
   where
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."
-
-var :: TH.Name -> RewriteH CoreExpr -> RewriteH CoreExpr
-var _ n = idR -- bottomupR (varR (\ n -> ()) ?
-
