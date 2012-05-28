@@ -122,7 +122,7 @@ corePrettyH opts =
 
     ppCoreBind :: PrettyH GHC.CoreBind
     ppCoreBind = nonRecT ppCoreExprR ppDefFun
-              <+ recT (const ppCoreDef) (\ bnds -> keywordColor (text "\x03BC") <+> vcat bnds)
+              <+ recT (const ppCoreDef) (\ bnds -> keywordColor (text "rec") <+> vcat bnds)
 
     ppCoreAlt :: PrettyH GHC.CoreAlt
     ppCoreAlt = altT ppCoreExpr $ \ con ids e -> case con of
