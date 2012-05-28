@@ -3,9 +3,11 @@ module Language.HERMIT.Primitive.GHC where
 import GhcPlugins hiding (freeVars)
 
 import Control.Applicative
+import Control.Arrow
 import qualified Data.Map as Map
 
 import Language.KURE
+import Language.KURE.Injection
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
@@ -16,20 +18,21 @@ import Language.HERMIT.External
 
 externals :: ModGuts -> [External]
 externals modGuts = map (.+ GHC)
-         [ external "let-subst" (promoteR letSubstR)
+         [ external "let-subst" (promoteR letSubstR :: RewriteH Core)
                 [ "Let substitution [via GHC]"
                 , "let x = E1 in E2, where x is free is E2 ==> E2[E1/x], fails otherwise"
                 , "only matches non-recursive lets" ]                           .+ Local .+ Bash
-         , external "freevars" (promoteT freeIdsQuery)
+         , external "freevars" (promoteT freeIdsQuery :: TranslateH Core String)
                 [ "List the free variables in this expression [via GHC]" ]
-         , external "deshadow-binds" (promoteR deShadowBindsR)
+         , external "deshadow-binds" (promoteR deShadowBindsR :: RewriteH Core)
                 [ "Deshadow a program [via GHC]" ]
-         , external "apply-rule" (promoteR . rules rulesEnv)
+         , external "apply-rule" (promoteR . rules rulesEnv :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ]
          , external "apply-rule" (rules_help rulesEnv)
                 [ "list rules that can be used" ]
          ]
   where
+          rulesEnv :: Map.Map String (RewriteH CoreExpr)
           rulesEnv = rulesToEnv (mg_rules modGuts)
 
 ------------------------------------------------------------------------
@@ -53,10 +56,10 @@ freeIdsQuery :: TranslateH CoreExpr String
 freeIdsQuery = (("FreeVars are: " ++) . show . map (showSDoc.ppr)) <$> freeIdsT
 
 freeIdsT :: TranslateH CoreExpr [Id]
-freeIdsT = liftT freeIds
+freeIdsT = arr freeIds
 
 freeVarsT :: TranslateH CoreExpr [Id]
-freeVarsT = liftT freeVars
+freeVarsT = arr freeVars
 
 -- note: exprFreeVars get *all* free variables, including types
 -- note: shadows the freeVars in GHC that operates on the AnnCore.
@@ -77,7 +80,7 @@ freeIds  = uniqSetToList . exprFreeIds
 -- (Actually, within a single /type/ there might still be shadowing, because
 -- 'substTy' is a no-op for the empty substitution, but that's probably OK.)
 deShadowBindsR :: RewriteH CoreProgram
-deShadowBindsR = liftT deShadowBinds
+deShadowBindsR = arr deShadowBinds
 
 ------------------------------------------------------------------------
 {-
@@ -97,7 +100,7 @@ rulesToEnv rules = Map.fromList
         ]
 
 rulesToRewriteH :: [CoreRule] -> RewriteH CoreExpr
-rulesToRewriteH rules = liftMT $ \ e -> do
+rulesToRewriteH rules = contextfreeT $ \ e -> do
         -- First, we normalize the lhs, so we can match it
         (Var fn,args) <- return $ collectArgs e
         -- Question: does this include Id's, or Var's (which include type names)

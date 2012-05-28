@@ -4,6 +4,7 @@
 module Language.HERMIT.Plugin.Restful (passes) where
 
 import Control.Applicative
+import Control.Arrow
 import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
@@ -99,13 +100,13 @@ webapp dict kernel _initAst = do
             i <- param "i"
             unless (i >= 0) $ raise "child cannot be negative"
 
-            kids <- withState $ \s -> queryK kernel (AST ast) (focusT (r_lens s) (liftT numChildren))
+            kids <- withState $ \s -> queryK kernel (AST ast) (focusT (r_lens s) (arr numChildren))
             unless (i < kids) $ raise $ "only " <> T.pack (show kids) <> " children"
 
             modifyState $ \s -> do
                 ContextPath c_path <- queryK kernel (AST ast) (focusT (r_lens s) pathT)
                 let new_lens = pathL $ reverse (i : c_path)
-                condM (queryK kernel (AST ast) (testA new_lens))
+                condM (queryK kernel (AST ast) (testM new_lens))
                       (return ((),s { r_lens = new_lens }))
                       (return ((),s                      ))
             respondWithFocus $ AST ast
@@ -117,7 +118,7 @@ webapp dict kernel _initAst = do
                 case c_path of
                     [] -> return ((), s)
                     (_:rest) -> do let new_lens = pathL $ reverse rest
-                                   condM (queryK kernel (AST ast) (testA new_lens))
+                                   condM (queryK kernel (AST ast) (testM new_lens))
                                          (return ((),s { r_lens = new_lens }))
                                          (return ((),s                      ))
             respondWithFocus $ AST ast

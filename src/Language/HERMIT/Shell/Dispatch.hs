@@ -9,6 +9,7 @@ import GhcPlugins hiding (L)
 import Data.Char
 import Data.Dynamic
 import Control.Applicative
+import Control.Arrow
 import Data.List (intercalate)
 import Data.Default (def)
 import Control.Exception.Base hiding (catch)
@@ -95,7 +96,7 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
 
       -- TODO: fix to ring bell if stuck
       showNewLens :: CommandLineState -> LensH Core Core -> IO ()
-      showNewLens st new_lens = condM (query (cl_cursor st) (testA new_lens))
+      showNewLens st new_lens = condM (query (cl_cursor st) (testM new_lens))
                                       (showFocusLoop $ st {cl_lens = new_lens})
                                       (showFocusLoop st) -- bell (still print for now)
 
@@ -113,7 +114,7 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
 
       act st (Direction dir) = do
               ContextPath c_path      <- query (cl_cursor st) (focusT (cl_lens st) pathT)
-              child_count <- query (cl_cursor st) (focusT (cl_lens st) (liftT numChildren))
+              child_count <- query (cl_cursor st) (focusT (cl_lens st) (arr numChildren))
               print (c_path,child_count,dir)
               let new_lens = case (dir, c_path) of
                        (U, _ : rest)              -> pathL $ reverse rest

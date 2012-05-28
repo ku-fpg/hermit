@@ -6,6 +6,7 @@ import Data.List
 import Data.Monoid
 
 import Language.KURE
+import Language.KURE.Injection
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External

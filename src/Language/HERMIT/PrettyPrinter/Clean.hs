@@ -1,6 +1,8 @@
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
 module Language.HERMIT.PrettyPrinter.Clean where
 
+import Control.Arrow hiding ((<+>))
+
 import Data.Char (isSpace)
 import Data.Traversable (sequenceA)
 
@@ -8,6 +10,7 @@ import qualified GhcPlugins as GHC
 import Language.HERMIT.HermitKure
 import Language.HERMIT.PrettyPrinter
 import Language.KURE
+import Language.KURE.Injection
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
@@ -92,7 +95,7 @@ corePrettyH opts =
                       | otherwise     = text s
 
     ppModGuts :: PrettyH GHC.ModGuts
-    ppModGuts = liftT $ \ m -> hang (keyword "module" <+> ppSDoc (GHC.mg_module m) <+> keyword "where") 2
+    ppModGuts =   arr $ \ m -> hang (keyword "module" <+> ppSDoc (GHC.mg_module m) <+> keyword "where") 2
                                (vcat [ ppBinder v
                                      | bnd <- GHC.mg_binds m
                                      , v <- case bnd of
@@ -105,7 +108,7 @@ corePrettyH opts =
     ppProgram = translate $ \ c -> fmap vcat . sequenceA . map (apply ppCoreBind c)
 
     ppCoreExpr :: PrettyH GHC.CoreExpr
-    ppCoreExpr = ppCoreExprR >-> liftT normalExpr
+    ppCoreExpr = ppCoreExprR >>^ normalExpr
 
     ppCoreExprR :: TranslateH GHC.CoreExpr RetExpr
     ppCoreExprR = lamT ppCoreExprR (\ v e -> case e of
@@ -122,7 +125,7 @@ corePrettyH opts =
                <+ varT (\ i -> RetAtom (ppVar i))
                <+ litT (\ i -> RetAtom (ppSDoc i))
                <+ typeT (\ _ -> RetAtom typeSymbol)
-               <+ (ppCoreExpr0 >-> liftT RetExpr)
+               <+ (ppCoreExpr0 >>^ RetExpr)
 
     ppCoreExpr0 :: PrettyH GHC.CoreExpr
     ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b ty alts ->

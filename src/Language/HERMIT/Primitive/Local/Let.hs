@@ -7,6 +7,7 @@ import Data.List (nub)
 import Control.Applicative
 
 import Language.KURE
+import Language.KURE.Injection
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv
@@ -22,17 +23,17 @@ import qualified Language.Haskell.TH as TH
 
 externals :: [External]
 externals = map (.+ LetCmd) $
-         [ external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse")
+         [ external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
                      [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Unimplemented
-         , external "let-float-app" (promoteR letFloatApp)
+         , external "let-float-app" (promoteR letFloatApp :: RewriteH Core)
                      [ "(let v = ev in e) x ==> let v = ev in e x" ]
-         , external "let-float-let" (promoteR letFloatLet)
+         , external "let-float-let" (promoteR letFloatLet :: RewriteH Core)
                      [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ]
-         , external "case-float-let" (promoteR caseFloatLet)
+         , external "case-float-let" (promoteR caseFloatLet :: RewriteH Core)
                      [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ]
-         , external "let-to-case" (promoteR letToCase)
+         , external "let-to-case" (promoteR letToCase :: RewriteH Core)
                      [ "let v = ev in e ==> case ev of v -> e" ]
-         , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox")
+         , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
                      [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ] .+ Unimplemented
          ]
 

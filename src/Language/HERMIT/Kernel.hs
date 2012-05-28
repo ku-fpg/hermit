@@ -18,6 +18,7 @@ import Control.Exception.Base
 import Data.Dynamic
 
 import Language.KURE
+import Language.KURE.Injection
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv

@@ -43,6 +43,7 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 
 import Control.Applicative
+import Control.Arrow
 import Control.Monad (guard)
 
 import Data.Monoid
@@ -173,7 +174,7 @@ instance Walker HermitEnv HermitM CoreProgram where
   anyR r = consBindAnyR (extractR r) (extractR r)
 
 nilT :: b -> TranslateH [a] b
-nilT b = liftMT $ \ e -> case e of
+nilT b = contextfreeT $ \ e -> case e of
                            [] -> pure b
                            _  -> fail "no match for []"
 
@@ -211,7 +212,7 @@ instance Walker HermitEnv HermitM CoreBind where
              ) <+ missingChildL n
     where
       nonrec = nonRecT exposeT (childL1of2 NonRec)
-      rec    = do sz <- liftT numChildren
+      rec    = do sz <- arr numChildren
                   guard (n >= 0 && n < sz)
                   recT (const exposeT) (childLMofN n defToRecBind)
 
@@ -335,7 +336,7 @@ instance Walker HermitEnv HermitM CoreExpr where
      where
        -- Note we use index (n-1) because 0 refers to the expression being scrutinised.
        caseChooseL :: LensH CoreExpr Core
-       caseChooseL = do sz <- liftT numChildren
+       caseChooseL = do sz <- arr numChildren
                         guard (n > 0 && n < sz)
                         caseT idR (const exposeT) (\ e v t -> childLMofN (n-1) (Case e v t))
 
@@ -375,12 +376,12 @@ instance Walker HermitEnv HermitM CoreExpr where
 
 -- Expr
 varT :: (Id -> b) -> TranslateH CoreExpr b
-varT f = liftMT $ \ e -> case e of
+varT f = contextfreeT $ \ e -> case e of
         Var n -> pure (f n)
         _     -> fail "no match for Var"
 
 litT :: (Literal -> b) -> TranslateH CoreExpr b
-litT f = liftMT $ \ e -> case e of
+litT f = contextfreeT $ \ e -> case e of
         Lit i -> pure (f i)
         _     -> fail "no match for Lit"
 
@@ -456,8 +457,8 @@ caseAnyR r rs = caseT' (attemptR r) (attemptR . rs) (\ b ty -> attemptAny1N (\ e
 
 castT :: TranslateH CoreExpr a -> (a -> Coercion -> b) -> TranslateH CoreExpr b
 castT t f = translate $ \ c e -> case e of
-        Cast e1 cast -> f <$> apply t (c @@ 0) e1 <*> pure cast
-        _            -> fail "no match for Cast"
+                                   Cast e1 cast -> f <$> apply t (c @@ 0) e1 <*> pure cast
+                                   _            -> fail "no match for Cast"
 
 castR :: RewriteH CoreExpr -> RewriteH CoreExpr
 castR r = castT r Cast
@@ -472,14 +473,14 @@ tickR :: RewriteH CoreExpr -> RewriteH CoreExpr
 tickR r = tickT r Tick
 
 typeT :: (Type -> b) -> TranslateH CoreExpr b
-typeT f = liftMT $ \ e -> case e of
-                            Type i -> pure (f i)
-                            _      -> fail "no match for Type"
+typeT f = contextfreeT $ \ e -> case e of
+                                  Type i -> pure (f i)
+                                  _      -> fail "no match for Type"
 
 coercionT :: (Coercion -> b) -> TranslateH CoreExpr b
-coercionT f = liftMT $ \ e -> case e of
-                                Coercion i -> pure (f i)
-                                _          -> fail "no match for Coercion"
+coercionT f = contextfreeT $ \ e -> case e of
+                                      Coercion i -> pure (f i)
+                                      _          -> fail "no match for Coercion"
 
 ---------------------------------------------------------------------
 

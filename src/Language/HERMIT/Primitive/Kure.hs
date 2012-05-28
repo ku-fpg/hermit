@@ -1,5 +1,7 @@
 module Language.HERMIT.Primitive.Kure where
 
+import Control.Arrow
+
 import Language.KURE
 
 import Language.HERMIT.HermitKure
@@ -16,7 +18,7 @@ externals = map (.+ KURE)
        [ "perform the identity"]
    , external "catch"      ((<+) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "perform the first translate, and then, if it fails, perform the second rewrite" ]
-   , external "compose"    ((>->) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
+   , external "compose"    ((>>>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "compose rewrites, requiring both to succeed" ]
    , external "both"       ((>+>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "compose rewrites, allowing one to fail" ]
