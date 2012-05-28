@@ -34,7 +34,6 @@ import Language.KURE
 
 import Paths_hermit
 
-import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 import Web.Scotty as S
 
 import Debug.Trace

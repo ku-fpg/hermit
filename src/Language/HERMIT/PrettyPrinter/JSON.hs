@@ -12,19 +12,8 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.PrettyPrinter
 import Language.KURE
 
-import Text.PrettyPrint.MarkedHughesPJ as PP
-
-listify :: (MDoc a -> MDoc a -> MDoc a) -> [MDoc a] -> MDoc a
-listify _  []     = text "[]"
-listify op (d:ds) = op (text "[ " <> d) (foldr (\e es -> op (text ", " <> e) es) (text "]") ds)
-
--- | like vcat and hcat, only make the list syntax explicit
-vlist, hlist :: [MDoc a] -> MDoc a
-vlist = listify ($$)
-hlist = listify (<+>)
-
 corePrettyH :: PrettyOptions -> TranslateH Core Value
-corePrettyH opts =
+corePrettyH _opts =
        promoteT ppCoreExpr
     <+ promoteT ppProgram
     <+ promoteT ppCoreBind
@@ -38,7 +27,7 @@ corePrettyH opts =
     -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
     -- that we are eliding infomation here.
     ppSDoc :: (GHC.Outputable a) => a -> Value
-    ppSDoc = String . T.pack . render . text . GHC.showSDoc . GHC.ppr
+    ppSDoc = String . T.pack . GHC.showSDoc . GHC.ppr
 
     ppModGuts :: TranslateH GHC.ModGuts Value
     ppModGuts = liftT (ppSDoc . GHC.mg_module)
