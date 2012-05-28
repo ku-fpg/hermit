@@ -18,10 +18,10 @@ externals :: [External]
 externals = map (.+ Lens)
             [
               external "consider" consider
-                [ "'consider <v>' focuses into the rhs of the binding <v>" ]
+                [ "'consider <v>' focuses into a named binding <v>" ]
             ]
 
--- Focus on the Rhs of a bindings
+-- Focus on a bindings
 consider :: TH.Name -> LensH Core Core
 consider nm = do First cxtpaths <- tdpruneT $ promoteT $ findPathTo nm
                  case cxtpaths of
@@ -38,7 +38,7 @@ rmPrefix (ContextPath path) = do ContextPath this <- pathT
 findPathTo :: TH.Name -> TranslateH CoreBind (First ContextPath)
 findPathTo nm = translate $ \ c e -> let ContextPath ps = hermitBindingPath c in
         case e of
-          NonRec v _ | nm `cmpName` idName v -> return $ First $ Just $ ContextPath (0 : ps)
+          NonRec v _ | nm `cmpName` idName v -> return $ First $ Just $ ContextPath ps
           Rec bds -> let res = [ ContextPath (i : ps)
                                | ((v,_),i) <- zip bds [0..]
                                , nm `cmpName` idName v
