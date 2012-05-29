@@ -1,7 +1,7 @@
 -- Andre Santos' Local Transformations (Ch 3 in his dissertation)
 module Language.HERMIT.Primitive.Local where
 
-import GhcPlugins
+import GhcPlugins hiding (freeVars)
 
 import Data.List (nub)
 import Control.Applicative
@@ -78,8 +78,8 @@ eta_expand nm = contextfreeT $ \ e -> case splitAppTy_maybe (exprType e) of
 -- (let v = E1 in E2) => E2, if v is not free in E2
 dce :: RewriteH CoreExpr
 dce = contextfreeT $ \ e -> case e of
-        Let (NonRec n e1) e2 | n `notElem` freeIds e2 -> return e2
-                             | otherwise              -> fail "DCE: no dead code"
+        Let (NonRec n e1) e2 | n `notElem` freeVars e2 -> return e2
+                             | otherwise               -> fail "DCE: no dead code"
         _ -> fail "DCE: not applied to a NonRec Let."
 
 ------------------------------------------------------------------------------
