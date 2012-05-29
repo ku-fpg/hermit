@@ -114,8 +114,8 @@ instance RenderSpecial LaTeX where
         renderSpecial LambdaSymbol        = LaTeX "\\ensuremath{\\lambda}"
         renderSpecial TypeOfSymbol        = LaTeX "::"  -- too wide
         renderSpecial RightArrowSymbol    = LaTeX "\\ensuremath{\\shortrightarrow}"
-        renderSpecial TypeSymbol          = LaTeX "\\ensuremath{\\triangle}"
-        renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\triangle}"    -- TO FIX/CHOOSE
+        renderSpecial TypeSymbol          = LaTeX "\\ensuremath{\\blacktriangle}"
+        renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\triangleright}"    -- TO FIX/CHOOSE
 
 
 renderSpecialFont :: (RenderSpecial a) => Char -> Maybe a
