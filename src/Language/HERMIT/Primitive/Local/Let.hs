@@ -3,14 +3,13 @@ module Language.HERMIT.Primitive.Local.Let where
 
 import GhcPlugins
 
-import Data.List (nub)
 import Control.Applicative
+import Control.Arrow
 
 import Language.KURE
 import Language.KURE.Injection
 
 import Language.HERMIT.HermitKure
-import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.External
 
@@ -48,10 +47,18 @@ letIntro ::  TH.Name -> RewriteH CoreExpr
 letIntro nm = rewrite $ \ _ e -> do letvar <- newVarH nm (exprType e)
                                     return $ Let (NonRec letvar e) (Var letvar)
 
+-- includes type variables
+bindings :: TranslateH CoreBind [Var]
+bindings = recT (\_ -> arr (\(Def v _) -> v)) id
+        <+ nonRecT idR (\v _ -> [v])
+
 letFloatApp :: RewriteH CoreExpr
 letFloatApp = do
-    App (Let (NonRec v ev) e) x <- idR
-    pure $ Let (NonRec v ev) $ App e x
+    -- match on App (Let bnds e) x, getting the list of vars bound in bnds and the free vars in x
+    (vs, frees) <- appT (letT bindings idR const) freeVarsT (,)
+    -- if any of the frees would become bound, alpha the let first
+    let letAction = if or (map (`elem` frees) vs) then alphaLet else idR
+    appT letAction idR $ \ (Let bnds e) x -> Let bnds $ App e x
 
 letFloatArg :: RewriteH CoreExpr
 letFloatArg = do
