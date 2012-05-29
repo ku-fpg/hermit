@@ -83,7 +83,7 @@ shell_externals = map (.+ Shell) $
        [ "move to the parent"]
    , external "esc-B"            (Direction D)
        [ "move to the first child"]
-   , external "root"            SuperPopFocus
+   , external "root"            SuperPopFocus   -- call this top
        [ "move to root of tree" ]
    , external "setpp"           SetPretty
        [ "set the pretty printer"
