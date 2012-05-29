@@ -21,7 +21,7 @@ externals modGuts = map (.+ GHC)
          [ external "let-subst" (promoteR letSubstR :: RewriteH Core)
                 [ "Let substitution [via GHC]"
                 , "let x = E1 in E2, where x is free is E2 ==> E2[E1/x], fails otherwise"
-                , "only matches non-recursive lets" ]                           .+ Local .+ Bash
+                , "only matches non-recursive lets" ]                           .+ Local .+ Eval
          , external "freevars" (promoteT freeIdsQuery :: TranslateH Core String)
                 [ "List the free variables in this expression [via GHC]" ]
          , external "deshadow-binds" (promoteR deShadowBindsR :: RewriteH Core)

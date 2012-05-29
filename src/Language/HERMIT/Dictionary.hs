@@ -5,22 +5,18 @@ module Language.HERMIT.Dictionary where
 
 import Prelude hiding (lookup)
 
-import Data.Char
+import Data.Default (def)
 import Data.Dynamic
 import Data.List
-import Data.Default (def)
 import qualified Data.Map as M
+import Data.Maybe
 
 import GhcPlugins
-
-import qualified Language.Haskell.TH as TH
 
 import Language.KURE
 import Language.KURE.Injection
 
-import Language.HERMIT.HermitExpr
 import Language.HERMIT.HermitKure
-import Language.HERMIT.Kernel
 import Language.HERMIT.External
 
 --import qualified Language.HERMIT.Primitive.Command as Command
@@ -54,16 +50,20 @@ dictionary my_externals modGuts = toDictionary all_externals
   where
           -- The GHC.externals here is a bit of a hack. Not sure about this
         all_externals = prim_externals ++ my_externals ++ GHC.externals modGuts ++
-                [ external "bash" (promoteR (bash all_externals) :: RewriteH Core) (bashHelp all_externals) .+ MetaCmd
-                   , external "help"            (help all_externals Nothing Nothing)
-                        [ "lists all commands" ]
-                   , external "help" (help all_externals Nothing . Just :: String -> String)
-                        [ "help with a specific cmd or path"
-                        , "use 'help ls' to see a list of paths"
-                        , "use 'help \"let\"' to see cmds whose names contain \"let\"" ]
-                   , external "help" ((\c p -> help all_externals (Just c) (Just p)) :: String -> String -> String)
-                        [ "help ls <path> to list commands in a specific path" ]
-                   ]
+                [ external "help"            (help all_externals Nothing Nothing)
+                    [ "lists all commands" ]
+                , external "help" (help all_externals Nothing . Just :: String -> String)
+                    [ "help with a specific cmd or path"
+                    , "use 'help ls' to see a list of paths"
+                    , "use 'help \"let\"' to see cmds whose names contain \"let\"" ]
+                , external "help" ((\c p -> help all_externals (Just c) (Just p)) :: String -> String -> String)
+                    [ "help ls <path> to list commands in a specific path" ]
+{- todo: finish, by modifying Interp.hs
+                , external "help" ((\p -> intercalate ", " $ map externName $ filter (tagMatch p) all_externals) :: TagE -> String)
+                    [ "show rewrites matched by a tag predicate" ]
+-}
+                , bashExternal all_externals
+                ]
 
 --------------------------------------------------------------------------
 -- The pretty printing dictionaries
@@ -109,14 +109,27 @@ help externals (Just "ls") m = unlines $ map toLine groups
           toLine ((d,cmd):r) = d ++ optParens (intercalate ", " [ cmd' | cmd' <- cmd : map snd r, cmd' /= d ])
 
 --------------------------------------------------------------------------
+
+-- TODO: supply map of command-name -> arguments?
+-- otherwise fromDynamic will fail for any rewrite that takes arguments.
+metaCmd :: (Tag a)
+        => String                             -- ^ name of the command
+        -> [External]                         -- ^ universe of commands to search
+        -> a                                  -- ^ tag matching predicate
+        -> ([RewriteH Core] -> RewriteH Core) -- ^ means to combine the matched rewrites
+        -> [String]                           -- ^ help text preamble
+        -> External
+metaCmd name externs p combine help = external name (combine rws) (help ++ concat helps)
+    where (rws, helps) = unzip [ (rw, externName e : externHelp e)
+                               | e <- externs
+                               , tagMatch p e
+                               , Just rw <- [fmap unbox $ fromDynamic $ externFun e] ]
+
 -- Runs every command tagged with 'Bash' with innermostR (fix point anybuR),
 -- if any of them succeed, then it tries all of them again.
 -- Only fails if all of them fail the first time.
-bash :: [External] -> RewriteH Core
-bash all_externals = innermostR $ orR [ maybe (fail "bash: fromDynamic failed") (anybuR . unbox)
-                          $ fromDynamic $ externFun $ cmd
-                        | cmd <- all_externals, cmd `hasTag` Bash ]
+bashExternal es = metaCmd "bash" es (Local .& Eval .& (notT Unimplemented)) (innermostR . orR)
+                          [ "Iteratively apply the following rewrites until nothing changes." ]
 
-bashHelp :: [External] -> [String]
-bashHelp all_externals = "Bash runs the following commands:"
-           : (make_help $ filter (`hasTag` Bash) all_externals)
+bash :: [External] -> RewriteH Core
+bash = unbox . fromJust . fromDynamic . externFun . bashExternal

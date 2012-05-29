@@ -29,17 +29,17 @@ externals = map (.+ Local) $
          [ external "beta-reduce" (promoteR beta_reduce :: RewriteH Core)
                      [ "((\\ v -> E1) E2) ==> let v = E2 in E1, fails otherwise"
                      , "this form of beta reduction is safe if E2 is an arbitrary"
-                     , "expression (won't duplicate work)" ] .+ Bash
+                     , "expression (won't duplicate work)" ]                                 .+ Eval
          , external "beta-expand" (promoteR beta_expand :: RewriteH Core)
                      [ "(let v = E1 in E2) ==> (\\ v -> E2) E1, fails otherwise" ]
          , external "dead-code" (promoteR dce :: RewriteH Core)
                      [ "dead code elimination removes a let."
                      , "(let v = E1 in E2) ==> E2, if v is not free in E2, fails otherwise"
-                     , "condition: let is not-recursive" ] .+ Bash
+                     , "condition: let is not-recursive" ]                                   .+ Eval
          , external "eta-reduce" (promoteR eta_reduce :: RewriteH Core)
                      [ "(\\ v -> E1 v) ==> E1, fails otherwise" ]
          , external "eta-expand" (promoteR . eta_expand :: TH.Name -> RewriteH Core)
-                     [ "'eta-expand v' performs E1 ==> (\\ v -> E1 v), fails otherwise" ]
+                     [ "'eta-expand v' performs E1 ==> (\\ v -> E1 v), fails otherwise" ]    .+ Eval
          ]
          ++ Let.externals
          ++ Case.externals
@@ -79,7 +79,7 @@ eta_expand nm = contextfreeT $ \ e -> case splitAppTy_maybe (exprType e) of
 dce :: RewriteH CoreExpr
 dce = contextfreeT $ \ e -> case e of
         Let (NonRec n e1) e2 | n `notElem` freeVars e2 -> return e2
-                             | otherwise               -> fail "DCE: no dead code"
+                             | otherwise              -> fail "DCE: no dead code"
         _ -> fail "DCE: not applied to a NonRec Let."
 
 ------------------------------------------------------------------------------

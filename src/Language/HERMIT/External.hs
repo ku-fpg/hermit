@@ -1,4 +1,5 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts,
+             GADTs, TypeSynonymInstances, FlexibleInstances #-}
 
 module Language.HERMIT.External where
 
@@ -16,8 +17,9 @@ import Language.HERMIT.HermitKure
 type ExternalName = String
 type ExternalHelp = [String]
 
-data CmdTag = Bash -- this command will be run as part of the bash command
-            | Slow -- this command is slow
+-- Tags --------------------------------------------------------
+
+data CmdTag = Slow -- this command is slow
             | KURE -- a KURE command
             | GHC  -- a tunnel into GHC
             | Local     -- local thing, O(1)
@@ -38,6 +40,65 @@ data CmdCategory = CaseCmd
                  -- etc
     deriving (Eq, Ord, Show, Read, Bounded, Enum)
 
+-- Unfortunately, record update syntax seems to associate to the right.
+-- This guy saves us some parens.
+infixl 3 .+
+
+data TagE :: * where
+    Tag    :: (Tag a) => a -> TagE
+    NotTag :: TagE -> TagE
+    AndTag :: TagE -> TagE -> TagE
+    OrTag  :: TagE -> TagE -> TagE
+
+class Tag a where
+    toTagE :: a -> TagE
+    (.+) :: External -> a -> External
+    remTag :: a -> External -> External
+    tagMatch :: a -> External -> Bool
+
+instance Tag TagE where
+    toTagE = id
+
+    e .+ (Tag t) = e .+ t
+    e .+ (NotTag t) = remTag t e
+    e .+ (AndTag t1 t2) = e .+ t1 .+ t2
+    e .+ (OrTag t1 t2) = e .+ t1 .+ t2 -- not sure what else to do
+
+    remTag (Tag t) e = remTag t e
+    remTag (NotTag t) e = e .+ t
+    remTag (AndTag t1 t2) e = remTag t1 (remTag t2 e)
+    remTag (OrTag t1 t2) e = remTag t1 (remTag t2 e) -- again
+
+    tagMatch (Tag t)        e = tagMatch t e
+    tagMatch (NotTag t)     e = not (tagMatch t e)
+    tagMatch (AndTag t1 t2) e = tagMatch t1 e && tagMatch t2 e
+    tagMatch (OrTag  t1 t2) e = tagMatch t1 e || tagMatch t2 e
+
+instance Tag CmdTag where
+    toTagE = Tag
+    ex@(External {externTags = ts}) .+ t = ex { externTags = (t:ts) }
+    remTag t ex@(External {externTags = ts}) = ex { externTags = [ t' | t' <- ts, t' /= t ] }
+    tagMatch t (External {externTags = ts}) = t `elem` ts
+
+instance Tag CmdCategory where
+    toTagE = Tag
+    ex@(External {externCats = cs}) .+ c = ex { externCats = (c:cs) }
+    remTag c ex@(External {externCats = cs}) = ex { externCats = [ c' | c' <- cs, c' /= c ] }
+    tagMatch c (External {externCats = cs}) = c `elem` cs
+
+infixr 5 .&
+(.&) :: (Tag a, Tag b) => a -> b -> TagE
+t1 .& t2 = AndTag (toTagE t1) (toTagE t2)
+
+infixr 4 .||
+(.||) :: (Tag a, Tag b) => a -> b -> TagE
+t1 .|| t2 = OrTag (toTagE t1) (toTagE t2)
+
+-- how to make a unary operator?
+notT :: (Tag a) => a -> TagE
+notT = NotTag . toTagE
+
+-----------------------------------------------------------------
 
 data External = External
         { externName :: ExternalName
@@ -55,22 +116,6 @@ external nm fn help = External
         , externTags = []
         , externCats = []
         }
-
--- Unfortunately, record update syntax seems to associate to the right.
--- This guy saves us some parens.
-infixl .+
-
-class ExternTag a where
-    (.+) :: External -> a -> External
-    hasTag :: External -> a -> Bool
-
-instance ExternTag CmdTag where
-    ex@(External {externTags = ts}) .+ t = ex { externTags = (t:ts) }
-    hasTag (External {externTags = ts}) t = t `elem` ts
-
-instance ExternTag CmdCategory where
-    ex@(External {externCats = cs}) .+ c = ex { externCats = (c:cs) }
-    hasTag (External {externCats = cs}) c = c `elem` cs
 
 toDictionary :: [External] -> Map ExternalName [Dynamic]
 toDictionary
@@ -108,6 +153,13 @@ instance (Extern a, Extern b) => Extern (a -> b) where
     type Box (a -> b) = Box a -> Box b
     box f = box . f . unbox
     unbox f = unbox . f . box
+
+data TagBox = TagBox TagE deriving Typeable
+
+instance Extern TagE where
+    type Box TagE = TagBox
+    box t = TagBox t
+    unbox (TagBox t) = t
 
 data IntBox = IntBox Int deriving Typeable
 
