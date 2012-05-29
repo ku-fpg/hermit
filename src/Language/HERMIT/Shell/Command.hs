@@ -304,6 +304,6 @@ instance RenderCode LaTeXVerbatim where
                         TypeColor    -> "\\color{green}"
                         LitColor     -> "\\color{cyan}"
         rDoHighlight o (_:rest) = rDoHighlight o rest
-        rEnd = LaTeXVerbatim "\n\\end{verbatim}"
+        rEnd = LaTeXVerbatim "\n\\end{Verbatim}"
 
 
