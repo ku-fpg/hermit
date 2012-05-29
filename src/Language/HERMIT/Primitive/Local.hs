@@ -85,7 +85,7 @@ dce = contextfreeT $ \ e -> case e of
 ------------------------------------------------------------------------------
 
 -- NOT IN USE.  Use the GHC version instead.
-
+{-
 -- notice that we pass in the (empty) initial Hermit environment.
 -- Notice the use of "mtryT".  This ensures all failures are converted to []s (the unit of the monoid).
 freeVarsExpr :: CoreExpr -> HermitM [Id]
@@ -95,5 +95,5 @@ freeVarsExpr = fmap nub . apply (crushtdT $ promoteT freeVarT) initHermitEnv . E
     freeVarT = do (c,Var n) <- exposeT
                   guard (not (n `boundInHermit` c))
                   return [n]
-
+-}
 ------------------------------------------------------------------------------

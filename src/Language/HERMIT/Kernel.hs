@@ -102,12 +102,12 @@ hermitKernel callback modGuts = do
                                       syn' <- liftIO $ takeMVar syntax_names
                                       return $ Right (syn',M.insert syn' core' env))
                                   (\ msg -> return $ Left msg)
-                                  (apply (extractR rr) hEnv0 core)
+                                  (apply (extractR rr) (initHermitEnv core) core)
                 , queryK = \ name q -> sendReq $ \ env -> find name env fail' $ \ core ->
                              runHermitMR
                                   (\ reply -> return  $ Right (reply,env))
                                   (\ msg -> return $ Left msg)
-                                  (apply (extractT q) hEnv0 core)
+                                  (apply (extractT q) (initHermitEnv core) core)
                 , deleteK = \ name -> sendReq $ \ env -> find name env fail' $ \ _ ->
                              return $ Right ((), M.delete name env)
                 , listK = sendReq $ \ env -> return $ Right (M.keys env,env)

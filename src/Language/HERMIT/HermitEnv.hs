@@ -12,6 +12,7 @@ data HermitEnv = HermitEnv
         { hermitBindings :: Map Id HermitBinding    -- ^ all (important) bindings in scope
         , hermitDepth    :: Int                     -- ^ depth of bindings
         , hermitPath     :: ContextPath             -- ^ path to the current node from the root.
+        , hermitModGuts  :: ModGuts                 -- ^ the module
         }
 
 data HermitBinding
@@ -78,7 +79,7 @@ lookupHermitBinding n env = lookup n (hermitBindings env)
 boundInHermit :: Id -> HermitEnv -> Bool
 boundInHermit n env = maybe False (const True) (lookupHermitBinding n env)
 
-initHermitEnv :: HermitEnv
+initHermitEnv :: ModGuts -> HermitEnv
 initHermitEnv = HermitEnv empty 0 (ContextPath [])
 
 ------------------------------------------------------------------------
