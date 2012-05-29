@@ -43,7 +43,7 @@ findPathTo :: TH.Name -> TranslateH CoreBind (First ContextPath)
 findPathTo nm = translate $ \ c e -> let ContextPath ps = hermitBindingPath c in
         case e of
           NonRec v _ | nm `cmpName` idName v -> return $ First $ Just $ ContextPath ps
-          Rec bds -> let res = [ ContextPath (i : ps)
+          Rec bds -> let res = [ ContextPath ps
                                | ((v,_),i) <- zip bds [0..]
                                , nm `cmpName` idName v
                                ]
