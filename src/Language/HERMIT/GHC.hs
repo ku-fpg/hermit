@@ -1,11 +1,35 @@
--- Things that have been copied from GHC, for various reasons.
-module Language.HERMIT.GHC where
+-- Things that have been copied from GHC, or imported directly, for various reasons.
+module Language.HERMIT.GHC
+        ( ppIdInfo
+        , thRdrNameGuesses
+        , cmpTHName2Name
+        , findNameFromTH
+        , alphaTyVars
+        ) where
 
 import GhcPlugins
 
+-- hacky direct GHC imports
+import Convert (thRdrNameGuesses)
+import TysPrim          ( alphaTyVars )
+
 import Data.Maybe (isJust)
+import qualified Language.Haskell.TH as TH
 
 --------------------------------------------------------------------------
+
+-- Hacks till we can find the correct way of doing these.
+cmpTHName2Name :: TH.Name -> Name -> Bool
+cmpTHName2Name th_nm ghc_nm = TH.nameBase th_nm == occNameString (nameOccName ghc_nm)
+
+-- This is hopeless O(n), because the we could not generate the OccName's that match,
+-- for use of the GHC OccEnv.
+findNameFromTH :: GlobalRdrEnv -> TH.Name -> [Name]
+findNameFromTH rdrEnv nm =
+        [ gre_name elt
+        | elt <- concat $ occEnvElts rdrEnv
+        , cmpTHName2Name nm (gre_name elt)
+        ]
 
 ppIdInfo :: Id -> IdInfo -> SDoc
 ppIdInfo id info
