@@ -1,5 +1,19 @@
 module Main where
 
+import Data.Function (fix)
+
+-- {-# RULES "x" hermit () = fix #-}
+
+rev []     = []
+rev (x:xs) = rev xs ++ [x]
+
+--hermit :: () -> a
+--hermit = undefined
+
+f g = let x = g x in x
+
+main = print (rev "Hello, World")
+{-
 import Prelude hiding (reverse)
 
 {-# RULES "append-assoc-left" forall xs ys zs . (xs ++ ys) ++ zs = xs ++ (ys ++ zs) #-}
@@ -24,3 +38,5 @@ foo a b c = f (x + y + z)
      z = 3 + a
      {-# NOINLINE f #-}
      f x = x + 1
+
+-}

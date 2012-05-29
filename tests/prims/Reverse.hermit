@@ -1,7 +1,5 @@
-consider 'main
-  allbu (try inline)
-  1
-  0
--- attempting a type-level beta-reduce
-  beta-reduce
-.
+consider 'rev
+down
+consider 'rev
+fix-intro
+
