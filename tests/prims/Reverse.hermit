@@ -9,4 +9,25 @@ right
 let-intro 'body
 up
 let-float-arg
+up
+up
+let-float-let
+consider 'rev
+down
+apply-rule ww
 
+down
+beta-reduce
+let-subst
+
+up
+beta-reduce
+let-subst
+all-bu (try (compose (var '.) inline))
+
+-- bash
+
+up
+up
+up
+up
