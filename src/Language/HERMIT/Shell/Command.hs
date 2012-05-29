@@ -280,7 +280,7 @@ instance RenderCode UnicodeTerminal where
                         TypeColor    -> [ SetColor Foreground Dull Green ]
                         LitColor     -> [ SetColor Foreground Dull Cyan ]
         rDoHighlight o (_:rest) = rDoHighlight o rest
-        rEnd = UnicodeTerminal $ return ()
+        rEnd = UnicodeTerminal $ putStrLn ""
 
 
 newtype LaTeXVerbatim = LaTeXVerbatim String
