@@ -75,11 +75,15 @@ corePrettyH opts =
     ppShow = text . show
 
     ppVar :: GHC.Var -> DocH
-    ppVar var
+    ppVar = ppName . GHC.varName
+
+    ppName :: GHC.Name -> DocH
+    ppName nm
             | isInfix name = ppParens $ varColor $ text name
             | otherwise    = varColor $ text name
-      where name = GHC.occNameString $ GHC.nameOccName $ GHC.varName var
-            isInfix = all (\ n -> n `elem` "!@#$%^&*-=:?/\\<>'")
+      where name = GHC.occNameString $ GHC.nameOccName $ nm
+            isInfix = all (\ n -> n `elem` "!@#$%^&*-_+=:?/\\<>'")
+
 
     -- binders are vars that is bound by lambda or case, etc.
     ppBinder :: GHC.Var -> DocH
@@ -142,7 +146,7 @@ corePrettyH opts =
 
     ppCoreAlt :: PrettyH GHC.CoreAlt
     ppCoreAlt = altT ppCoreExpr $ \ con ids e -> case con of
-                  GHC.DataAlt dcon -> hang (ppSDoc dcon <+> ppIds ids) 2 e
+                  GHC.DataAlt dcon -> hang (ppName (GHC.dataConName dcon) <+> ppIds ids) 2 e
                   GHC.LitAlt lit   -> hang (ppSDoc lit <+> ppIds ids) 2 e
                   GHC.DEFAULT      -> symbol '_' <+> ppIds ids <+> e
           where
