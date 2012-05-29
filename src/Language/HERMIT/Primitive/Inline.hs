@@ -2,24 +2,32 @@ module Language.HERMIT.Primitive.Inline where
 
 import GhcPlugins
 
+import Control.Arrow
+
 import Language.KURE
 import Language.KURE.Injection
 
+import Language.HERMIT.Primitive.Consider
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.External
 
+import qualified Language.Haskell.TH as TH
+
 externals :: [External]
 externals = map (.+ Context)
-            [
-              external "inline" (promoteR inline :: RewriteH Core)
+            [ external "inline" (promoteR inline :: RewriteH Core)
                 [ "(Var n) ==> <defn of n>, fails otherwise" ]
+            , external "inline" (promoteR . inlineName :: TH.Name -> RewriteH Core)
+                [ "Restrict inlining to a given name" ]
             ]
+
+inlineName :: TH.Name -> RewriteH CoreExpr
+inlineName nm = var nm >>> inline
 
 -- | The implementation of inline, an important transformation.
 -- This *only* works on a Var of the given name. It can trivially
 -- be prompted to more general cases.
-
 inline :: RewriteH CoreExpr
 inline = rewrite $ \ c e -> case e of
     Var n0 -> -- A candiate for inlining
