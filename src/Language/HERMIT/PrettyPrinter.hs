@@ -105,8 +105,8 @@ instance RenderSpecial Unicode where
         renderSpecial LambdaSymbol        = Unicode '\x03BB'
         renderSpecial TypeOfSymbol        = Unicode ':'           -- TODO, fix
         renderSpecial RightArrowSymbol    = Unicode '\x2192'
-        renderSpecial TypeSymbol          = Unicode '\x25c3'
-        renderSpecial TypeBindSymbol      = Unicode '\x25BE'
+        renderSpecial TypeSymbol          = Unicode '\x25b2'
+        renderSpecial TypeBindSymbol      = Unicode '\x25B9'
 
 data LaTeX = LaTeX String
 
