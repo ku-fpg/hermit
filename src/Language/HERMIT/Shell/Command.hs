@@ -37,6 +37,7 @@ data ShellCommand :: * where
 --   PopFocus      ::                             ShellCommand
    SuperPopFocus ::                             ShellCommand
    SetPretty     :: String                   -> ShellCommand
+   ShellState    :: (CommandLineState -> IO CommandLineState) -> ShellCommand
    KernelCommand :: KernelCommand            -> ShellCommand
    Direction     :: Direction                -> ShellCommand
 
@@ -87,8 +88,20 @@ shell_externals = map (.+ Shell) $
    , external "setpp"           SetPretty
        [ "set the pretty printer"
        , "use 'setpp ls' to list available pretty printers" ]
+   , external "set-renderer"    changeRenderer
+       [ "set the output renderer mode"]
+   , external "set-renderer"    showRenderers
+       [ "set the output renderer mode"]
    ]
 
+showRenderers :: ShellCommand
+showRenderers = Message $ "set-renderer " ++ show (M.keys finalRenders)
+
+changeRenderer :: String -> ShellCommand
+changeRenderer renderer = ShellState $ \ st ->
+        case M.lookup renderer finalRenders of
+          Nothing -> return st          -- should fail with message
+          Just r  -> return $ st { cl_render = r }
 
 ----------------------------------------------------------------------------------
 
@@ -100,8 +113,8 @@ data CommandLineState = CommandLineState
         , cl_render      :: DocH -> IO ()   -- ^ the way of outputing to the screen
         }
 
-finalRender :: M.Map String (DocH -> IO ())
-finalRender = M.fromList
+finalRenders :: M.Map String (DocH -> IO ())
+finalRenders = M.fromList
         [ ("unicode-console", unicodeConsole)
         , ("latex", \ doc -> do
                         let (LaTeXVerbatim pretty) = renderCode doc
@@ -166,7 +179,7 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
                             Right cmd -> act st cmd
 
       showFocusLoop :: CommandLineState -> IO ()
-      showFocusLoop st = whenM (showFocus st) (loop st)
+      showFocusLoop st = whenM (showFocus st) (loop st) -- TODO: not sure about this
 
       -- TODO: fix to ring bell if stuck
       showNewLens :: CommandLineState -> LensH Core Core -> IO ()
@@ -175,6 +188,10 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
                                       (showFocusLoop st) -- bell (still print for now)
 
       act :: CommandLineState -> ShellCommand -> IO ()
+      act st (ShellState f) = do
+              st' <- f st
+              showFocusLoop st'
+
       act st Status = do
 --              True <- showFocus st
               print "starting"
