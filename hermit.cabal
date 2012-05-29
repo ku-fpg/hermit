@@ -68,6 +68,7 @@ Library
        Language.HERMIT.PrettyPrinter
        Language.HERMIT.PrettyPrinter.AST
        Language.HERMIT.PrettyPrinter.Clean
+       Language.HERMIT.PrettyPrinter.GHC
        Language.HERMIT.PrettyPrinter.JSON
 
   Other-modules:

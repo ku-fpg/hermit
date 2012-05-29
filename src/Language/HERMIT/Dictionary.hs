@@ -36,6 +36,7 @@ import qualified Language.HERMIT.Primitive.GHC as GHC
 import Language.HERMIT.PrettyPrinter
 import qualified Language.HERMIT.PrettyPrinter.AST as AST
 import qualified Language.HERMIT.PrettyPrinter.Clean as Clean
+import qualified Language.HERMIT.PrettyPrinter.GHC as GHCPP
 
 --------------------------------------------------------------------------
 
@@ -70,6 +71,7 @@ pp_dictionary :: M.Map String (PrettyOptions -> PrettyH Core)
 pp_dictionary = M.fromList
         [ ("clean",  Clean.corePrettyH)
         , ("ast",    AST.corePrettyH)
+        , ("ghc",    GHCPP.corePrettyH)
         ]
 
 -- each pretty printer can suggest some options
@@ -77,6 +79,7 @@ pp_opt_dictionary :: M.Map String PrettyOptions
 pp_opt_dictionary = M.fromList
         [ ("clean", def)
         , ("ast",  def)
+        , ("ghc",  def)
         ]
 
 
