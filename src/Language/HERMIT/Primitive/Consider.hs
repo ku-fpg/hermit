@@ -12,6 +12,7 @@ import Language.KURE.Injection
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 import Language.HERMIT.HermitEnv
+import Language.HERMIT.GHC
 
 import qualified Language.Haskell.TH as TH
 
@@ -57,7 +58,7 @@ failNameNotFound nm = fail $ "Name \"" ++ show nm ++ "\" not found."
 
 -- Hacks till we can find the correct way of doing these.
 cmpName :: TH.Name -> Name -> Bool
-cmpName th_nm ghc_nm = TH.nameBase th_nm == occNameString (nameOccName ghc_nm)
+cmpName = cmpTHName2Name
 
 var :: TH.Name -> RewriteH CoreExpr
 var nm = contextfreeT $ \ e -> do
