@@ -93,7 +93,7 @@ class RenderSpecial a where
         renderSpecial :: SpecialSymbol -> a
 
 instance RenderSpecial Char where
-        renderSpecial LambdaSymbol        = '\\'  -- \
+        renderSpecial LambdaSymbol        = '\\'  -- lambda
         renderSpecial TypeOfSymbol        = ':'   -- ::
         renderSpecial RightArrowSymbol    = '>'   -- ->
         renderSpecial TypeSymbol          = 'T'   -- <<type>>>
@@ -103,7 +103,7 @@ data Unicode = Unicode Char
 
 instance RenderSpecial Unicode where
         renderSpecial LambdaSymbol        = Unicode '\x03BB'
-        renderSpecial TypeOfSymbol        = Unicode ':'           -- TODO, fix
+        renderSpecial TypeOfSymbol        = Unicode '\x2237'     -- called PROPORTION
         renderSpecial RightArrowSymbol    = Unicode '\x2192'
         renderSpecial TypeSymbol          = Unicode '\x25b2'
         renderSpecial TypeBindSymbol      = Unicode '\x25B9'
