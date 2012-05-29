@@ -3,3 +3,10 @@ down
 consider 'rev
 fix-intro
 
+down
+down
+right
+let-intro 'body
+up
+let-float-arg
+
