@@ -27,10 +27,7 @@ promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an ex
 
 externals :: [External]
 externals = map (.+ Experiment)
-         [
-           external "let-intro" (promoteR' . let_intro :: TH.Name -> RewriteH Core)
-                [ "'let-intro v' performs E1 ==> (let v = E1 in v)" ]
-         , external "info" (promoteT info :: TranslateH Core String)
+         [ external "info" (promoteT info :: TranslateH Core String)
                 [ "tell me what you know about this expression or binding" ] .+ Unimplemented
          , external "expr-type" (promoteT exprTypeQueryT :: TranslateH Core String)
                 [ "List the type (Constructor) for this expression."]
@@ -40,9 +37,6 @@ externals = map (.+ Experiment)
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
          ]
 
-let_intro ::  TH.Name -> RewriteH CoreExpr
-let_intro nm = rewrite $ \ _ e -> do letvar <- newVarH nm (exprType e)
-                                     return $ Let (NonRec letvar e) (Var letvar)
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3

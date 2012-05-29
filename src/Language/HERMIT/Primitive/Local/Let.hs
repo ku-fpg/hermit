@@ -23,10 +23,14 @@ import qualified Language.Haskell.TH as TH
 
 externals :: [External]
 externals = map (.+ LetCmd) $
-         [ external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
+         [ external "let-intro" (promoteR . letIntro :: TH.Name -> RewriteH Core)
+                [ "e => (let v = e in v), name of v is provided" ]
+         , external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
                      [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Unimplemented
          , external "let-float-app" (promoteR letFloatApp :: RewriteH Core)
                      [ "(let v = ev in e) x ==> let v = ev in e x" ]
+         , external "let-float-arg" (promoteR letFloatArg :: RewriteH Core)
+                     [ "f (let v = ev in e) ==> let v = ev in f e" ]
          , external "let-float-let" (promoteR letFloatLet :: RewriteH Core)
                      [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ]
          , external "case-float-let" (promoteR caseFloatLet :: RewriteH Core)
@@ -40,10 +44,19 @@ externals = map (.+ LetCmd) $
 not_defined :: String -> RewriteH CoreExpr
 not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
 
+letIntro ::  TH.Name -> RewriteH CoreExpr
+letIntro nm = rewrite $ \ _ e -> do letvar <- newVarH nm (exprType e)
+                                    return $ Let (NonRec letvar e) (Var letvar)
+
 letFloatApp :: RewriteH CoreExpr
 letFloatApp = do
     App (Let (NonRec v ev) e) x <- idR
     pure $ Let (NonRec v ev) $ App e x
+
+letFloatArg :: RewriteH CoreExpr
+letFloatArg = do
+    App f (Let (NonRec v ev) e) <- idR
+    pure $ Let (NonRec v ev) $ App f e
 
 letFloatLet :: RewriteH CoreExpr
 letFloatLet = do
