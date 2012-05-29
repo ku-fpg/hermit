@@ -30,11 +30,25 @@ import Language.HERMIT.Shell.Command
 import Language.KURE
 
 data CommandLineState = CommandLineState
-        { cl_lens   :: LensH Core Core  -- ^ stack of lenses
-        , cl_pretty :: String           -- ^ which pretty printer to use
+        { cl_lens        :: LensH Core Core  -- ^ stack of lenses
+        , cl_pretty      :: String           -- ^ which pretty printer to use
         , cl_pretty_opts :: PrettyOptions -- ^ The options for the pretty printer
-        , cl_cursor :: AST              -- ^ the current AST
+        , cl_cursor      :: AST              -- ^ the current AST
+        , cl_render      :: DocH -> IO ()   -- ^ the way of outputing to the screen
         }
+
+finalRender :: M.Map String (DocH -> IO ())
+finalRender = M.fromList
+        [ ("unicode-console", unicodeConsole)
+        , ("latex", \ doc -> do
+                        let (LaTeXVerbatim pretty) = renderCode doc
+                        putStrLn pretty)
+        ]
+
+unicodeConsole :: DocH -> IO ()
+unicodeConsole doc = do
+    let (UnicodeTerminal pretty) = renderCode doc
+    pretty
 
 commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
 commandLine gets modGuts = do
@@ -61,10 +75,7 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
   let showFocus :: CommandLineState -> IO Bool
       showFocus st = (do
         doc <- query (cl_cursor st) (focusT (cl_lens st) (pretty st))
-        let (UnicodeTerminal pretty) = renderCode doc
-        pretty
---        let (LaTeXVerbatim pretty) = renderCode doc
---        putStrLn pretty
+        cl_render st doc
         return True) `catch` \ msg -> do
                         putStrLn $ "Error thrown: " ++ msg
                         return False
@@ -159,7 +170,7 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
               loop st2
 
   -- recurse using the command line, starting with showing the first focus
-  showFocusLoop $ CommandLineState idL "clean" def ast
+  showFocusLoop $ CommandLineState idL "clean" def ast unicodeConsole
 
   -- we're done
   quitK kernel ast
@@ -190,6 +201,7 @@ instance RenderCode UnicodeTerminal where
                         LitColor     -> [ SetColor Foreground Dull Cyan ]
         rDoHighlight o (_:rest) = rDoHighlight o rest
         rEnd = UnicodeTerminal $ return ()
+
 
 newtype LaTeXVerbatim = LaTeXVerbatim String
 
