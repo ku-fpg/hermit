@@ -8,7 +8,7 @@ import PprCore -- compiler/coreSyn/PprCore.lhs
 import Data.List
 import System.IO
 
-import Language.HERMIT.Shell.Dispatch as Dispatch
+import Language.HERMIT.Shell.Command as Dispatch
 import Language.HERMIT.Plugin.Common
 import System.Console.Getline
 
