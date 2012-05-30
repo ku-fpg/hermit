@@ -6,6 +6,8 @@ import GhcPlugins
 import Control.Applicative
 import Control.Arrow
 
+import Data.List
+
 import Language.KURE
 import Language.KURE.Injection
 
@@ -52,30 +54,34 @@ bindings :: TranslateH CoreBind [Var]
 bindings = recT (\_ -> arr (\(Def v _) -> v)) id
         <+ nonRecT idR (\v _ -> [v])
 
+letVarsT :: TranslateH CoreExpr [Var]
+letVarsT = letT bindings idR const
+
 letFloatApp :: RewriteH CoreExpr
 letFloatApp = do
-    -- match on App (Let bnds e) x, getting the list of vars bound in bnds and the free vars in x
-    (vs, frees) <- appT (letT bindings idR const) freeVarsT (,)
-    -- if any of the frees would become bound, alpha the let first
-    let letAction = if or (map (`elem` frees) vs) then alphaLet else idR
+    shadowed <- appT letVarsT freeVarsT intersect
+    let letAction = if null shadowed then idR else alphaLet
     appT letAction idR $ \ (Let bnds e) x -> Let bnds $ App e x
 
 letFloatArg :: RewriteH CoreExpr
 letFloatArg = do
-    App f (Let (NonRec v ev) e) <- idR
-    pure $ Let (NonRec v ev) $ App f e
+    shadowed <- appT freeVarsT letVarsT intersect
+    let letAction = if null shadowed then idR else alphaLet
+    appT idR letAction $ \ f (Let bnds e) -> Let bnds $ App f e
 
+-- todo if v used in ew
 letFloatLet :: RewriteH CoreExpr
 letFloatLet = do
     Let (NonRec v (Let (NonRec w ew) ev)) e <- idR
     pure $ Let (NonRec w ew) $ Let (NonRec v ev) e
 
+-- todo if v used in ew
 letFloatLetTop :: RewriteH CoreProgram
 letFloatLetTop = do
     (NonRec v (Let (NonRec w ew) ev) : e) <- idR
     pure $ (NonRec w ew) : (NonRec v ev) : e
 
-
+-- todo v used in s, ty, or alts
 caseFloatLet :: RewriteH CoreExpr
 caseFloatLet = do
     Let (NonRec v (Case s b ty alts)) e <- idR
