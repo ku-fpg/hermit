@@ -35,6 +35,8 @@ externals = map (.+ Experiment)
                 [ "determines if a rewrite could be successfully applied" ]
          , external "fix-intro" (promoteR fixIntro :: RewriteH Core)
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
+         , external "number-binder" (promoteR . exprNumberBinder :: Int -> RewriteH Core)
+                [ "add a number suffix onto a (lambda) binding" ]
          ]
 
 
@@ -107,37 +109,25 @@ fixIntro = translate $ \ c e -> case e of
         Rec {}       -> fail "recusive group not suitable"
         NonRec {}    -> fail "Can not take fix of a non-recusive group"
 
+
 {-
-Main.f :: forall t_a9Y. (t_a9Y -> t_a9Y) -> t_a9Y
-[GblId, Arity=1, Caf=NoCafRefs]
-Main.f =
-  \ (@ t_aa0) (g_a9T :: t_aa0 -> t_aa0) ->
-    letrec {
-      x_a9V [Occ=LoopBreaker] :: t_aa0
-      [LclId]
-      x_a9V = g_a9T x_a9V; } in
-    x_a9V
-
--- | Make a 'build' expression applied to a locally-bound worker function
-mkBuildExpr :: (MonadThings m, MonadUnique m)
-            => Type                                     -- ^ Type of list elements to be built
-            -> ((Id, Type) -> (Id, Type) -> m CoreExpr) -- ^ Function that, given information about the 'Id's
-                                                        -- of the binders for the build worker function, returns
-                                                        -- the body of that worker
-            -> m CoreExpr
-mkBuildExpr elt_ty mk_build_inside = do
-    [n_tyvar] <- newTyVars [alphaTyVar]
-    let n_ty = mkTyVarTy n_tyvar
-        c_ty = mkFunTys [elt_ty, n_ty] n_ty
-    [c, n] <- sequence [mkSysLocalM (fsLit "c") c_ty, mkSysLocalM (fsLit "n") n_ty]
-
-    build_inside <- mk_build_inside (c, c_ty) (n, n_ty)
-
-    build_id <- lookupId buildName
-    return $ Var build_id `App` Type elt_ty `App` mkLams [n_tyvar, c, n] build_inside
-  where
-    newTyVars tyvar_tmpls = do
-      uniqs <- getUniquesM
-      return (zipWith setTyVarUnique tyvar_tmpls uniqs)
+exprBinder :: TranslateH CoreExpr [(Id,ContextPath)]
+exprBinder = translate $ \ c e -> case e of
+        Lam b _            -> return [(b,hermitBindingPath c)]
+        Let (NonRec b _) _ -> return [(b,hermitBindingPath c)]
+        Let (Rec bds) _    -> return [(b,hermitBindingPath c) | b <- map fst bds ]
+        _                  -> return []
 -}
+
+exprNumberBinder :: Int -> RewriteH CoreExpr
+exprNumberBinder n = exprRenameBinder (++ show n)
+
+exprRenameBinder :: (String -> String) -> RewriteH CoreExpr
+exprRenameBinder nameMod = translate $ \ c e -> case e of
+        Lam b e -> do
+                uq <- getUniqueM
+                let name = mkSystemVarName uq $ mkFastString $ nameMod $ getOccString b
+                    ty   = idType b
+                    b'   = mkLocalId name ty
+                return $ Lam b' (Let (NonRec b (Var b')) e)
 
