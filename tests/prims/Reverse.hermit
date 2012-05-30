@@ -57,8 +57,20 @@ down
 
 all-bu (try (compose (var 'wrap) inline))
 all-bu (try (compose (var 'unwrap) inline))
-all-bu (try (compose (var 'absH) inline))
 bash
+dump "paper/wrap-unwrap-inlined.tex" "clean" "latex"
+
+1
+number-binder 0
+down
+let-subst
+number-binder 1
+down
+let-subst
+up
+up
+up
+dump "paper/wrap-unwrap-renamed.tex" "clean" "latex"
 
 
--- bash
+--all-bu (try (compose (var 'absH) inline))
