@@ -41,11 +41,13 @@ letSubstR :: RewriteH CoreExpr
 letSubstR = rewrite $ \ c exp -> case exp of
       (Let (NonRec b be) e)
          | isId b    -> do
-                let sub = extendSubst emptySubst b be
+                let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+                    sub = extendSubst empty b be
                 return $ substExpr (text "letSubstR") sub e
       (Let (NonRec b (Type bty)) e)
          | isTyVar b -> do
-                let sub = extendTvSubst emptySubst b bty
+                let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+                    sub = extendTvSubst empty b bty
                 return $ substExpr (text "letSubstR") sub e
       _ -> fail "LetSubst failed. Expr is not a (non-recursive) Let."
 
