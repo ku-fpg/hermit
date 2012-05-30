@@ -1,33 +1,60 @@
+-- set-renderer latex
+-- set-renderer unicode-console
+-- unicode-terminal
+
+-- for the HERMIT module
+exit
+
+-- START
 consider 'rev
+dump "paper/start-rev.tex" "clean" "latex"
+-- Dig 1
+
 down
 consider 'rev
 fix-intro
+dump "paper/fix-intro.tex" "clean" "latex"
+-- Dig 2
 
 down
-down
-right
-let-intro 'body
+apply-rule ww
 up
+dump "paper/after-ww.tex" "clean" "latex"
+
+-- clean up
+down
+down
+beta-reduce
+let-subst
+up
+beta-reduce
+let-subst
+up
+
+dump "paper/ww-and-clean.tex" "clean" "latex"
+
+all-bu (try (compose (var '.) inline))
+bash
+dump "paper/after-bash.tex" "clean" "latex"
+
+down
+1
+let-intro 'work
+up
+up
+dump "paper/after-let-intro.tex" "clean" "latex"
+
+down
 let-float-arg
 up
 up
 let-float-let
-consider 'rev
+dump "paper/let-pair.tex" "clean" "latex"
+
+consider 'work
 down
-apply-rule ww
-
-down
-beta-reduce
-let-subst
-
-up
-beta-reduce
-let-subst
-all-bu (try (compose (var '.) inline))
-
+all-bu (try (compose (var 'wrap) inline))
+all-bu (try (compose (var 'unwrap) inline))
+all-bu (try (compose (var 'absH) inline))
 bash
 
-up
-up
-up
-up
