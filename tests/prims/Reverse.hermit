@@ -54,11 +54,29 @@ dump "paper/let-pair.tex" "clean" "latex"
 
 consider 'work
 down
--- all-bu (try (compose (var 'wrap) inline))
-any-bu (inline 'wrap)
--- all-bu (try (compose (var 'unwrap) inline))
-any-bu (inline 'unwrap)
--- all-bu (try (compose (var 'absH) inline))
-any-bu (inline 'absH)
-bash
 
+all-bu (try (compose (var 'wrap) inline))
+all-bu (try (compose (var 'unwrap) inline))
+all-bu (try (compose (var 'absH) inline))
+1
+0
+1
+0
+2
+0
+0
+1
+
+0
+0
+beta-reduce
+let-subst
+up
+setpp ghc
+beta-reduce
+
+-- The ofender
+let-subst
+
+
+-- bash

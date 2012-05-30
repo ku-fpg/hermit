@@ -3,6 +3,8 @@ module Main where
 import HERMIT
 
 {-# RULES "ww" forall work . fix work = wrap (fix (unwrap . work . wrap)) #-}
+{-# RULES "repH" forall xs . repH xs = (xs ++) #-}
+{-# RULES "absH" forall f . absH f = f [] #-}
 
 rev []     = []
 rev (x:xs) = rev xs ++ [x]
