@@ -11,6 +11,7 @@ import Control.Arrow
 import Data.List (intercalate)
 import Data.Default (def)
 import Control.Exception.Base hiding (catch)
+import System.IO
 
 import Language.HERMIT.HermitExpr
 import Language.HERMIT.External
@@ -40,6 +41,7 @@ data ShellCommand :: * where
    ShellState    :: (CommandLineState -> IO CommandLineState) -> ShellCommand
    KernelCommand :: KernelCommand            -> ShellCommand
    Direction     :: Direction                -> ShellCommand
+   Dump          :: String -> String -> String -> ShellCommand
 
 data Direction = L | R | U | D
         deriving Show
@@ -92,6 +94,9 @@ shell_externals = map (.+ Shell) $
        [ "set the output renderer mode"]
    , external "set-renderer"    showRenderers
        [ "set the output renderer mode"]
+   , external "dump"    Dump
+       [ "dump <filename> <pretty-printer> <renderer>"]
+
    ]
 
 showRenderers :: ShellCommand
@@ -103,6 +108,10 @@ changeRenderer renderer = ShellState $ \ st ->
           Nothing -> return st          -- should fail with message
           Just r  -> return $ st { cl_render = r }
 
+
+dump :: String -> String -> String -> ShellCommand
+dump = Dump
+
 ----------------------------------------------------------------------------------
 
 data CommandLineState = CommandLineState
@@ -110,21 +119,24 @@ data CommandLineState = CommandLineState
         , cl_pretty      :: String           -- ^ which pretty printer to use
         , cl_pretty_opts :: PrettyOptions -- ^ The options for the pretty printer
         , cl_cursor      :: AST              -- ^ the current AST
-        , cl_render      :: DocH -> IO ()   -- ^ the way of outputing to the screen
+        , cl_render      :: Handle -> DocH -> IO ()   -- ^ the way of outputing to the screen
         }
 
-finalRenders :: M.Map String (DocH -> IO ())
+finalRenders :: M.Map String (Handle -> DocH -> IO ())
 finalRenders = M.fromList
-        [ ("unicode-console", unicodeConsole)
-        , ("latex", \ doc -> do
-                        let (LaTeXVerbatim pretty) = renderCode doc
-                        putStrLn pretty)
+        [ ("unicode-terminal", unicodeConsole)
+        , ("latex", \ h doc -> do
+                        let (LaTeX pretty) = renderCode doc
+                        hPutStrLn h pretty)
+        , ("ascii", \ h doc -> do
+                        let (ASCII pretty) = renderCode doc
+                        hPutStrLn h pretty)
         ]
 
-unicodeConsole :: DocH -> IO ()
-unicodeConsole doc = do
+unicodeConsole :: Handle -> DocH -> IO ()
+unicodeConsole h doc = do
     let (UnicodeTerminal pretty) = renderCode doc
-    pretty
+    pretty h
 
 commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
 commandLine gets modGuts = do
@@ -151,7 +163,7 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
   let showFocus :: CommandLineState -> IO Bool
       showFocus st = (do
         doc <- query (cl_cursor st) (focusT (cl_lens st) (pretty st))
-        cl_render st doc
+        cl_render st stdout doc
         return True) `catch` \ msg -> do
                         putStrLn $ "Error thrown: " ++ msg
                         return False
@@ -229,6 +241,17 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
 
       act st (KernelCommand cmd) = kernelAct st cmd
 
+      act st (Dump fileName pp renderer) = do
+              case (M.lookup (cl_pretty st) pp_dictionary,M.lookup renderer finalRenders) of
+                 (Just pp, Just r) -> do
+                         doc <- query (cl_cursor st) (focusT (cl_lens st) (pp (cl_pretty_opts st)))
+                         h <- openFile fileName WriteMode
+                         r h doc
+                         hClose h
+                 _ -> do putStrLn "dump: bad pretty-printer or renderer option"
+              loop st
+
+
       kernelAct st Exit   = quit (cl_cursor st)
 
       kernelAct st (Query q) = do
@@ -256,22 +279,22 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
   quitK kernel ast
   return ()
 
-newtype UnicodeTerminal = UnicodeTerminal (IO ())
+newtype UnicodeTerminal = UnicodeTerminal (Handle -> IO ())
 
-terminal :: IO () -> UnicodeTerminal -> UnicodeTerminal
-terminal m (UnicodeTerminal r) = UnicodeTerminal (m >> r)
+terminal :: (Handle -> IO ()) -> UnicodeTerminal -> UnicodeTerminal
+terminal m (UnicodeTerminal r) = UnicodeTerminal (\ h -> m h >> r h)
 
 instance RenderCode UnicodeTerminal where
-        rPutStr (SpecialFont:_) txt = terminal $ do
-                putStr [ code | Just (Unicode code) <- map renderSpecialFont txt ]
-        rPutStr _              txt  = terminal $ do
-                putStr txt
+        rPutStr (SpecialFont:_) txt = terminal $ \ h -> do
+                hPutStr h [ code | Just (Unicode code) <- map renderSpecialFont txt ]
+        rPutStr _              txt  = terminal $ \ h -> do
+                hPutStr h txt
 
-        rDoHighlight _ [] = terminal $ do
-                setSGR [Reset]
-        rDoHighlight _ (Color col:_) = terminal $ do
-                setSGR [ Reset ]
-                setSGR $ case col of
+        rDoHighlight _ [] = terminal $ \ h -> do
+                hSetSGR h [Reset]
+        rDoHighlight _ (Color col:_) = terminal $ \ h -> do
+                hSetSGR h [ Reset ]
+                hSetSGR h $ case col of
                         KeywordColor -> [ SetConsoleIntensity BoldIntensity
                                         , SetColor Foreground Dull Blue
                                         ]
@@ -280,15 +303,13 @@ instance RenderCode UnicodeTerminal where
                         TypeColor    -> [ SetColor Foreground Dull Green ]
                         LitColor     -> [ SetColor Foreground Dull Cyan ]
         rDoHighlight o (_:rest) = rDoHighlight o rest
-        rEnd = UnicodeTerminal $ putStrLn ""
+        rEnd = UnicodeTerminal $ \ h -> hPutStrLn h ""
 
 
-newtype LaTeXVerbatim = LaTeXVerbatim String
+latexVerbatim :: String -> LaTeX -> LaTeX
+latexVerbatim str (LaTeX v) = LaTeX (str ++ v)
 
-latexVerbatim :: String -> LaTeXVerbatim -> LaTeXVerbatim
-latexVerbatim str (LaTeXVerbatim v) = LaTeXVerbatim (str ++ v)
-
-instance RenderCode LaTeXVerbatim where
+instance RenderCode LaTeX where
         rStart = latexVerbatim "\\begin{Verbatim}[commandchars=\\\\\\{\\}]\n"   -- be careful with escapes here
 
         rPutStr (SpecialFont:_) txt = latexVerbatim $
@@ -304,6 +325,21 @@ instance RenderCode LaTeXVerbatim where
                         TypeColor    -> "\\color{green}"
                         LitColor     -> "\\color{cyan}"
         rDoHighlight o (_:rest) = rDoHighlight o rest
-        rEnd = LaTeXVerbatim "\n\\end{Verbatim}"
+        rEnd = LaTeX "\n\\end{Verbatim}"
+
+
+ascii :: String -> ASCII -> ASCII
+ascii str (ASCII v) = ASCII (str ++ v)
+
+instance RenderCode ASCII where
+        rStart = ascii ""
+
+        rPutStr (SpecialFont:_) txt = ascii $
+                concat [ c | Just (ASCII c) <- map renderSpecialFont txt ]
+        rPutStr _              txt  = ascii txt
+
+        rDoHighlight _ _ = ascii ""
+
+        rEnd = ASCII "\n"
 
 
