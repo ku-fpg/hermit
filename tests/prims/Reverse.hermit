@@ -3,7 +3,7 @@
 -- unicode-terminal
 
 -- for the HERMIT module
-exit
+-- exit
 
 -- START
 consider 'rev
@@ -33,7 +33,8 @@ up
 
 dump "paper/ww-and-clean.tex" "clean" "latex"
 
-all-bu (try (compose (var '.) inline))
+-- all-bu (try (compose (var '.) inline))
+any-bu (inline '.)
 bash
 dump "paper/after-bash.tex" "clean" "latex"
 
@@ -53,8 +54,11 @@ dump "paper/let-pair.tex" "clean" "latex"
 
 consider 'work
 down
-all-bu (try (compose (var 'wrap) inline))
-all-bu (try (compose (var 'unwrap) inline))
-all-bu (try (compose (var 'absH) inline))
+-- all-bu (try (compose (var 'wrap) inline))
+any-bu (inline 'wrap)
+-- all-bu (try (compose (var 'unwrap) inline))
+any-bu (inline 'unwrap)
+-- all-bu (try (compose (var 'absH) inline))
+any-bu (inline 'absH)
 bash
 
