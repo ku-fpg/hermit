@@ -11,19 +11,19 @@ sub compileAndRun {
 
 	if ($style eq "h") {
 	    $str .= "-fplugin=Language.HERMIT.Plugin " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:mode=h " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main/${mod}.hermit ";
+                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main:mode=h " .
+                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main:/${mod}.hermit ";
 	}
 
 	if ($style eq "i") {
 	    $str .= "-fplugin=Language.HERMIT.Plugin " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:mode=i ";
+                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main:mode=i ";
 	}
 
 	if ($style eq "w") {
 	    $str .= "-fplugin=Language.HERMIT.Plugin " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:mode=w " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:testrest.html";
+                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main:mode=w " .
+                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main:testrest.html";
 	}
 
 	system($str);

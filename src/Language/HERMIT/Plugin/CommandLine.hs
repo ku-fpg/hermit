@@ -24,24 +24,19 @@ interactive _opts modGuts = do
     let append = appendFile ".hermitlog"
     liftIO $ append "\n-- starting new session\n"
     let get = do str <- elGets "hermit> "
-                 case str of
-                    Nothing -> do append "-- ^D\n"
-                                  return Nothing
-                    Just msg -> do append msg
-                                   return $ Just msg
+                 maybe (append "-- ^D\n" >> return Nothing)
+                       (\m -> append m   >> return (Just m))
+                       str
 
     Dispatch.commandLine get modGuts
 
 scripted :: HermitPass
 scripted opts modGuts =
-    case scripts of
+    case opts of
         [ ('/' : filename) ] -> do
             gets <- liftIO $ openFile2 filename
             Dispatch.commandLine gets modGuts
         _ -> return modGuts
-  where modName = showSDoc (ppr (mg_module modGuts))
-        scripts = [ drop (length modName) nm
-                  | nm <- opts, modName `isPrefixOf` nm ]
 
 logCore :: FilePath -> HermitPass -> HermitPass
 logCore filename pass opts modGuts = do
