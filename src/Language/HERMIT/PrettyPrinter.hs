@@ -99,7 +99,16 @@ instance RenderSpecial Char where
         renderSpecial TypeSymbol          = 'T'   -- <<type>>>
         renderSpecial TypeBindSymbol      = 'a'   -- a
 
-data Unicode = Unicode Char
+newtype ASCII = ASCII String
+
+instance RenderSpecial ASCII where
+        renderSpecial LambdaSymbol        = ASCII "\\"  -- lambda
+        renderSpecial TypeOfSymbol        = ASCII "::"   -- ::
+        renderSpecial RightArrowSymbol    = ASCII "->"   -- ->
+        renderSpecial TypeSymbol          = ASCII "*"   -- <<type>>>
+        renderSpecial TypeBindSymbol      = ASCII "*"   -- a
+
+newtype Unicode = Unicode Char
 
 instance RenderSpecial Unicode where
         renderSpecial LambdaSymbol        = Unicode '\x03BB'
@@ -108,7 +117,7 @@ instance RenderSpecial Unicode where
         renderSpecial TypeSymbol          = Unicode '\x25b2'
         renderSpecial TypeBindSymbol      = Unicode '\x25B9'
 
-data LaTeX = LaTeX String
+newtype LaTeX = LaTeX String
 
 instance RenderSpecial LaTeX where
         renderSpecial LambdaSymbol        = LaTeX "\\ensuremath{\\lambda}"
