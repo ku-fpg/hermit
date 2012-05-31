@@ -122,7 +122,7 @@ parseToken _         = []
 ---------------------------------------------
 
 isId :: Char -> Bool
-isId c = isAlphaNum c || c `elem` "._-:"
+isId c = isAlphaNum c || c `elem` "+._-:"
 
 ---------------------------------------------
 
