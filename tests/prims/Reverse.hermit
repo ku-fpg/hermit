@@ -52,8 +52,8 @@ dump "paper/6-let-pair.tex" "clean" "latex" 80
 consider 'work
 down
 
-all-bu (try (compose (var 'wrap) inline))
-all-bu (try (compose (var 'unwrap) inline))
+any-bu (inline 'wrap)
+any-bu (inline 'unwrap)
 bash
 dump "paper/7-wrap-unwrap-inlined.tex" "clean" "latex" 80
 
