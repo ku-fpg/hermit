@@ -50,7 +50,7 @@ atomExpr other       = ppParens (normalExpr other)
 normalExpr :: RetExpr -> DocH
 normalExpr (RetLam vs e0) = hang (specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
 normalExpr (RetLet vs e0) = sep [ keywordColor (text "let") <+> vcat vs, keywordColor (text "in") <+> e0 ]
-normalExpr (RetApp fn xs) = sep ( fn : map (nest 2) xs )
+normalExpr (RetApp fn xs) = sep [ fn, nest 2 (sep xs) ]
 normalExpr (RetExpr e0)    = e0
 normalExpr (RetAtom e0)    = e0
 
