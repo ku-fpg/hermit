@@ -50,19 +50,26 @@ not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
 altVarsT :: TranslateH CoreAlt [Id]
 altVarsT = altT (pure ()) (const const)
 
+caseAltVarsT :: TranslateH CoreExpr [[Id]]
+caseAltVarsT = caseT (pure ()) (const altVarsT) $ \ _ i _ ids -> map (i:) ids
+
 letFloatCase :: RewriteH CoreExpr
 letFloatCase = do Case (Let rec e) b ty alts <- idR
                   return $ Let rec (Case e b ty alts)
 
 caseFloatApp :: RewriteH CoreExpr
-caseFloatApp = do App (Case s b ty alts) v <- idR
-                  return $ Case s b ty [ (con, ids, App e v) | (con, ids, e) <- alts ]
+caseFloatApp = do
+    captures <- appT caseAltVarsT freeVarsT (flip (map . intersect))
+    appT (caseAllR idR
+                   (\i -> (if null (captures !! (i-1)) then idR else alphaAlt)))
+         idR
+         (\(Case s b _ty alts) v -> let newTy = exprType (App (case head alts of (_,_,f) -> f) v)
+                                    in Case s b newTy [ (c, ids, App f v)
+                                                      | (c,ids,f) <- alts ])
 
 caseFloatArg :: RewriteH CoreExpr
 caseFloatArg = do
-    captures <- appT freeVarsT
-                     (caseT (pure ()) (const altVarsT) (\_ i _ ids -> map (i:) ids))
-                     (map . intersect)
+    captures <- appT freeVarsT caseAltVarsT (map . intersect)
     appT idR
          (caseAllR idR
                    (\i -> (if null (captures !! (i-1)) then idR else alphaAlt)))
