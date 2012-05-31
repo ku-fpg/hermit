@@ -5,6 +5,7 @@ module Language.HERMIT.GHC
         , cmpTHName2Name
         , findNameFromTH
         , alphaTyVars
+        , Type(..)
         ) where
 
 import GhcPlugins
@@ -12,7 +13,7 @@ import GhcPlugins
 -- hacky direct GHC imports
 import Convert (thRdrNameGuesses)
 import TysPrim          ( alphaTyVars )
-
+import TypeRep (Type(..))
 import Data.Maybe (isJust)
 import qualified Language.Haskell.TH as TH
 
