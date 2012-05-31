@@ -20,10 +20,10 @@ rev (x:xs) = rev xs ++ [x]
 
 f g = let x = g x in x
 
-main = defaultMain 
+main = defaultMain
        [ bench (show n) $ whnf (\n -> sum $ rev [1..n]) n
-       | n <- take 5 $ iterate (* 10) 1
-       ]		   
+       | n <- take 4 $ iterate (* 10) 1
+       ]
 {-
 import Prelude hiding (reverse)
 
