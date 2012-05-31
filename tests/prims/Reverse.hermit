@@ -5,13 +5,14 @@
 -- START
 consider 'rev
 dump "paper/0-start-rev.tex" "clean" "latex" 80
--- Dig 1
+
+set-pp-expr-type Omit
+dump "paper/0b-start-rev.tex" "clean" "latex" 80
 
 down
 consider 'rev
 fix-intro
 dump "paper/1-fix-intro.tex" "clean" "latex" 80
--- Dig 2
 
 down
 apply-rule ww
