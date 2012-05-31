@@ -145,8 +145,8 @@ class RenderCode a where
         rEnd         ::                          a
 
 
-renderCode :: RenderCode a => DocH -> a
-renderCode doc = rStart $ PP.fullRender PP.PageMode 70 2 marker (\ _ -> rEnd) doc []
+renderCode :: RenderCode a => Int -> DocH -> a
+renderCode w doc = rStart $ PP.fullRender PP.PageMode w 1.2 marker (\ _ -> rEnd) doc []
   where
           marker ::  RenderCode a => PP.TextDetails HermitMark -> ([Attr] -> a) -> ([Attr]-> a)
           marker m rest cols = case m of

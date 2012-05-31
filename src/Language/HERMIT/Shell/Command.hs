@@ -41,7 +41,7 @@ data ShellCommand :: * where
    ShellState    :: (CommandLineState -> IO CommandLineState) -> ShellCommand
    KernelCommand :: KernelCommand            -> ShellCommand
    Direction     :: Direction                -> ShellCommand
-   Dump          :: String -> String -> String -> ShellCommand
+   Dump          :: String -> String -> String -> Int -> ShellCommand
 
 data Direction = L | R | U | D
         deriving Show
@@ -95,8 +95,9 @@ shell_externals = map (.+ Shell) $
    , external "set-renderer"    showRenderers
        [ "set the output renderer mode"]
    , external "dump"    Dump
-       [ "dump <filename> <pretty-printer> <renderer>"]
-
+       [ "dump <filename> <pretty-printer> <renderer> <width>"]
+   , external "set-width"   (\ n -> ShellState $ \ st -> return $ st { cl_width = n })
+       ["set the width of the screen"]
    ]
 
 showRenderers :: ShellCommand
@@ -109,8 +110,6 @@ changeRenderer renderer = ShellState $ \ st ->
           Just r  -> return $ st { cl_render = r }
 
 
-dump :: String -> String -> String -> ShellCommand
-dump = Dump
 
 ----------------------------------------------------------------------------------
 
@@ -119,23 +118,24 @@ data CommandLineState = CommandLineState
         , cl_pretty      :: String           -- ^ which pretty printer to use
         , cl_pretty_opts :: PrettyOptions -- ^ The options for the pretty printer
         , cl_cursor      :: AST              -- ^ the current AST
-        , cl_render      :: Handle -> DocH -> IO ()   -- ^ the way of outputing to the screen
+        , cl_render      :: Handle -> Int -> DocH -> IO ()   -- ^ the way of outputing to the screen
+        , cl_width       :: Int                 -- ^ how wide is the screen?
         }
 
-finalRenders :: M.Map String (Handle -> DocH -> IO ())
+finalRenders :: M.Map String (Handle -> Int -> DocH -> IO ())
 finalRenders = M.fromList
         [ ("unicode-terminal", unicodeConsole)
-        , ("latex", \ h doc -> do
-                        let pretty = latexToString $ renderCode doc
+        , ("latex", \ h w doc -> do
+                        let pretty = latexToString $ renderCode w doc
                         hPutStr h pretty)
-        , ("ascii", \ h doc -> do
-                        let (ASCII pretty) = renderCode doc
+        , ("ascii", \ h w doc -> do
+                        let (ASCII pretty) = renderCode w doc
                         hPutStrLn h pretty)
         ]
 
-unicodeConsole :: Handle -> DocH -> IO ()
-unicodeConsole h doc = do
-    let (UnicodeTerminal pretty) = renderCode doc
+unicodeConsole :: Handle -> Int -> DocH -> IO ()
+unicodeConsole h w doc = do
+    let (UnicodeTerminal pretty) = renderCode w doc
     pretty h
 
 commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
@@ -163,7 +163,7 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
   let showFocus :: CommandLineState -> IO Bool
       showFocus st = (do
         doc <- query (cl_cursor st) (focusT (cl_lens st) (pretty st))
-        cl_render st stdout doc
+        cl_render st stdout (cl_width st) doc
         return True) `catch` \ msg -> do
                         putStrLn $ "Error thrown: " ++ msg
                         return False
@@ -241,12 +241,12 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
 
       act st (KernelCommand cmd) = kernelAct st cmd
 
-      act st (Dump fileName pp renderer) = do
+      act st (Dump fileName pp renderer w) = do
               case (M.lookup (cl_pretty st) pp_dictionary,M.lookup renderer finalRenders) of
                  (Just pp, Just r) -> do
                          doc <- query (cl_cursor st) (focusT (cl_lens st) (pp (cl_pretty_opts st)))
                          h <- openFile fileName WriteMode
-                         r h doc
+                         r h w doc
                          hClose h
                  _ -> do putStrLn "dump: bad pretty-printer or renderer option"
               loop st
@@ -273,7 +273,7 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
               loop st2
 
   -- recurse using the command line, starting with showing the first focus
-  showFocusLoop $ CommandLineState idL "clean" def ast unicodeConsole
+  showFocusLoop $ CommandLineState idL "clean" def ast unicodeConsole 80
 
   -- we're done
   quitK kernel ast

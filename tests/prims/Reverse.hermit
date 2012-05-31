@@ -7,19 +7,19 @@
 
 -- START
 consider 'rev
-dump "paper/start-rev.tex" "clean" "latex"
+dump "paper/start-rev.tex" "clean" "latex" 80
 -- Dig 1
 
 down
 consider 'rev
 fix-intro
-dump "paper/fix-intro.tex" "clean" "latex"
+dump "paper/fix-intro.tex" "clean" "latex" 80
 -- Dig 2
 
 down
 apply-rule ww
 up
-dump "paper/after-ww.tex" "clean" "latex"
+dump "paper/after-ww.tex" "clean" "latex" 80
 
 -- clean up
 down
@@ -31,26 +31,26 @@ beta-reduce
 let-subst
 up
 
-dump "paper/ww-and-clean.tex" "clean" "latex"
+dump "paper/ww-and-clean.tex" "clean" "latex" 80
 
 -- all-bu (try (compose (var '.) inline))
 any-bu (inline '.)
 bash
-dump "paper/after-bash.tex" "clean" "latex"
+dump "paper/after-bash.tex" "clean" "latex" 80
 
 down
 1
 let-intro 'work
 up
 up
-dump "paper/after-let-intro.tex" "clean" "latex"
+dump "paper/after-let-intro.tex" "clean" "latex" 80
 
 down
 let-float-arg
 up
 up
 let-float-let
-dump "paper/let-pair.tex" "clean" "latex"
+dump "paper/let-pair.tex" "clean" "latex" 80
 
 consider 'work
 down
@@ -58,7 +58,7 @@ down
 all-bu (try (compose (var 'wrap) inline))
 all-bu (try (compose (var 'unwrap) inline))
 bash
-dump "paper/wrap-unwrap-inlined.tex" "clean" "latex"
+dump "paper/wrap-unwrap-inlined.tex" "clean" "latex" 80
 
 1
 number-binder 0
@@ -70,7 +70,7 @@ let-subst
 up
 up
 up
-dump "paper/wrap-unwrap-renamed.tex" "clean" "latex"
+dump "paper/wrap-unwrap-renamed.tex" "clean" "latex" 80
 
 
 --all-bu (try (compose (var 'absH) inline))
