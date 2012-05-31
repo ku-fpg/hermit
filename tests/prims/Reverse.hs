@@ -5,6 +5,7 @@ import HERMIT
 {-# RULES "ww" forall work . fix work = wrap (fix (unwrap . work . wrap)) #-}
 {-# RULES "repH" forall xs . repH xs = (xs ++) #-}
 {-# RULES "absH" forall f . absH f = f [] #-}
+{-# RULES "repAppend" forall xs ys . repH (xs ++ ys) = repH xs . repH ys #-}
 
 rev []     = []
 rev (x:xs) = rev xs ++ [x]
