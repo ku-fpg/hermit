@@ -126,8 +126,8 @@ finalRenders :: M.Map String (Handle -> DocH -> IO ())
 finalRenders = M.fromList
         [ ("unicode-terminal", unicodeConsole)
         , ("latex", \ h doc -> do
-                        let (LaTeX pretty) = renderCode doc
-                        hPutStrLn h pretty)
+                        let pretty = latexToString $ renderCode doc
+                        hPutStr h pretty)
         , ("ascii", \ h doc -> do
                         let (ASCII pretty) = renderCode doc
                         hPutStrLn h pretty)
@@ -309,8 +309,14 @@ instance RenderCode UnicodeTerminal where
 latexVerbatim :: String -> LaTeX -> LaTeX
 latexVerbatim str (LaTeX v) = LaTeX (str ++ v)
 
+latexToString :: LaTeX -> String
+latexToString (LaTeX orig) = unlines $ map trunkSpaces $ lines orig where
+  trunkSpaces txt = case span isSpace txt of
+                       ([],rest) -> rest
+                       (pre,rest) -> "\\hspace{" ++ show (length pre) ++ "\\hermitspace}" ++ rest
+
 instance RenderCode LaTeX where
-        rStart = latexVerbatim "\\begin{Verbatim}[commandchars=\\\\\\{\\}]\n"   -- be careful with escapes here
+        rStart = latexVerbatim "" -- "\\begin{Verbatim}[commandchars=\\\\\\{\\}]\n"   -- be careful with escapes here
 
         rPutStr (SpecialFont:_) txt = latexVerbatim $
                 concat [ code | Just (LaTeX code) <- map renderSpecialFont txt ]
@@ -319,13 +325,13 @@ instance RenderCode LaTeX where
         rDoHighlight False _ = latexVerbatim "}"
         rDoHighlight _ [] = latexVerbatim $ "{"
         rDoHighlight _ (Color col:_) = latexVerbatim $ "{" ++ case col of
-                        KeywordColor -> "\\bf\\color{blue}"
+                        KeywordColor -> "\\color{blue}"
                         SyntaxColor  -> "\\color{red}"
                         VarColor     -> ""
                         TypeColor    -> "\\color{green}"
                         LitColor     -> "\\color{cyan}"
         rDoHighlight o (_:rest) = rDoHighlight o rest
-        rEnd = LaTeX "\n\\end{Verbatim}"
+        rEnd = LaTeX "\n" -- \\end{Verbatim}"
 
 
 ascii :: String -> ASCII -> ASCII
