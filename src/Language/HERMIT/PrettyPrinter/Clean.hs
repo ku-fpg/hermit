@@ -11,6 +11,7 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.PrettyPrinter
 import Language.KURE
 import Language.KURE.Injection
+import Language.HERMIT.GHC
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
@@ -105,7 +106,7 @@ corePrettyH opts =
 
     ppModGuts :: PrettyH GHC.ModGuts
     ppModGuts =   arr $ \ m -> hang (keyword "module" <+> ppSDoc (GHC.mg_module m) <+> keyword "where") 2
-                               (vcat [ ppIdBinder v
+                               (vcat [ (ppIdBinder v <+> specialSymbol TypeOfSymbol <+> ppCoreType (GHC.idType v))
                                      | bnd <- GHC.mg_binds m
                                      , v <- case bnd of
                                               GHC.NonRec f _ -> [f]
@@ -139,11 +140,20 @@ corePrettyH opts =
                                               _             -> RetApp (atomExpr e1) (appendArg [] e2))
                <+ varT (\ i -> RetAtom (ppVar i))
                <+ litT (\ i -> RetAtom (ppSDoc i))
-               <+ typeT (\ _ -> case po_exprTypes opts of
-                                  Show     -> RetAtom (text "<TYPE>")
+               <+ typeT (\ t -> case po_exprTypes opts of
+                                  Show     -> RetAtom (ppCoreType t)
                                   Abstract -> RetAtom typeSymbol
                                   Omit     -> RetEmpty)
                <+ (ppCoreExpr0 >>^ RetExpr)
+
+    ppCoreType :: GHC.Type -> DocH
+    ppCoreType (TyVarTy v) = ppVar v
+    ppCoreType (AppTy t1 t2) = ppParens (ppCoreType t1 <+> ppCoreType t2)
+    ppCoreType (TyConApp tyCon tys)
+        | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = ppCoreType (FunTy ty1 ty2)
+        | otherwise = ppName (GHC.getName tyCon) <+> sep (map ppCoreType tys)
+    ppCoreType (FunTy ty1 ty2) = ppCoreType ty1 <+> text "->" <+> ppCoreType ty2
+    ppCoreType (ForAllTy v ty) = text "forall" <+> ppVar v <+> ppCoreType ty
 
     ppCoreExpr0 :: PrettyH GHC.CoreExpr
     ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b ty alts ->
