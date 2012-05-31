@@ -29,7 +29,7 @@ data RetExpr
         | RetApp DocH [DocH]    -- the arguments are pre-paren'd if needed
         | RetExpr DocH
         | RetAtom DocH         -- parens not needed
-
+        | RetEmpty
 
 specialSymbol :: SpecialSymbol -> DocH
 specialSymbol = markColor SyntaxColor . specialFont . char . renderSpecial
@@ -53,6 +53,7 @@ normalExpr (RetLet vs e0) = sep [ keywordColor (text "let") <+> vcat vs, keyword
 normalExpr (RetApp fn xs) = sep [ fn, nest 2 (sep xs) ]
 normalExpr (RetExpr e0)    = e0
 normalExpr (RetAtom e0)    = e0
+normalExpr (RetEmpty)      = empty
 
 typeSymbol :: DocH
 typeSymbol = markColor TypeColor (specialFont $ char $ renderSpecial TypeSymbol)
@@ -86,10 +87,14 @@ corePrettyH opts =
 
 
     -- binders are vars that is bound by lambda or case, etc.
-    ppBinder :: GHC.Var -> DocH
-    ppBinder var
-            | GHC.isTyVar var = typeBindSymbol
-            | otherwise   = ppVar var
+    ppBinder :: GHC.Var -> Maybe DocH
+    ppBinder var = case po_exprTypes opts of
+                    Abstract | GHC.isTyVar var -> Just $ typeBindSymbol
+                    Omit     | GHC.isTyVar var -> Nothing
+                    _                          -> Just $ ppVar var
+
+    ppIdBinder :: GHC.Id -> DocH
+    ppIdBinder var = ppVar var
 
     -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
     -- that we are eliding infomation here.
@@ -100,7 +105,7 @@ corePrettyH opts =
 
     ppModGuts :: PrettyH GHC.ModGuts
     ppModGuts =   arr $ \ m -> hang (keyword "module" <+> ppSDoc (GHC.mg_module m) <+> keyword "where") 2
-                               (vcat [ ppBinder v
+                               (vcat [ ppIdBinder v
                                      | bnd <- GHC.mg_binds m
                                      , v <- case bnd of
                                               GHC.NonRec f _ -> [f]
@@ -114,26 +119,35 @@ corePrettyH opts =
     ppCoreExpr :: PrettyH GHC.CoreExpr
     ppCoreExpr = ppCoreExprR >>^ normalExpr
 
+    appendArg xs (RetEmpty) = xs
+    appendArg xs e          = xs ++ [atomExpr e]
+
+    appendBind Nothing  xs = xs
+    appendBind (Just v) xs = v : xs
+
     ppCoreExprR :: TranslateH GHC.CoreExpr RetExpr
     ppCoreExprR = lamT ppCoreExprR (\ v e -> case e of
-                                              RetLam vs e0  -> RetLam (ppBinder v : vs) e0
-                                              _             -> RetLam [ppBinder v] (normalExpr e))
+                                              RetLam vs e0  -> RetLam (appendBind (ppBinder v) vs) e0
+                                              _             -> RetLam (appendBind (ppBinder v) []) (normalExpr e))
                <+ letT ppCoreBind ppCoreExprR
                                    (\ bd e -> case e of
                                               RetLet vs e0  -> RetLet (bd : vs) e0
                                               _             -> RetLet [bd] (normalExpr e))
                <+ appT ppCoreExprR ppCoreExprR
                                    (\ e1 e2 -> case e1 of
-                                              RetApp f xs   -> RetApp f (xs ++ [atomExpr e2])
-                                              _             -> RetApp (atomExpr e1) [atomExpr e2])
+                                              RetApp f xs   -> RetApp f (appendArg xs e2)
+                                              _             -> RetApp (atomExpr e1) (appendArg [] e2))
                <+ varT (\ i -> RetAtom (ppVar i))
                <+ litT (\ i -> RetAtom (ppSDoc i))
-               <+ typeT (\ _ -> RetAtom typeSymbol)
+               <+ typeT (\ _ -> case po_exprTypes opts of
+                                  Show     -> RetAtom (text "<TYPE>")
+                                  Abstract -> RetAtom typeSymbol
+                                  Omit     -> RetEmpty)
                <+ (ppCoreExpr0 >>^ RetExpr)
 
     ppCoreExpr0 :: PrettyH GHC.CoreExpr
     ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b ty alts ->
-                        (keywordColor (text "case") <+> s <+> keywordColor (text "of") <+> ppBinder b) $$
+                        (keywordColor (text "case") <+> s <+> keywordColor (text "of") <+> ppIdBinder b) $$
                           nest 2 (vcat alts))
               <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
               <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
@@ -151,7 +165,7 @@ corePrettyH opts =
                   GHC.DEFAULT      -> symbol '_' <+> ppIds ids <+> e
           where
                  ppIds ids | null ids  = specialSymbol RightArrowSymbol
-                           | otherwise = hsep (map ppBinder ids) <+> specialSymbol RightArrowSymbol
+                           | otherwise = hsep (map ppIdBinder ids) <+> specialSymbol RightArrowSymbol
 
     -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
     ppCoreDef :: PrettyH CoreDef
@@ -162,4 +176,6 @@ corePrettyH opts =
                     RetLam vs e0 -> hang (pre <+> specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
                     _ -> hang pre 2 (normalExpr e)
         where
-            pre = ppBinder i <+> symbol '='
+            pre = case ppBinder i of
+                    Nothing -> empty
+                    Just p  -> p <+> symbol '='

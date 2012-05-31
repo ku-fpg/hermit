@@ -60,18 +60,21 @@ type PrettyH a = TranslateH a DocH
 
 data PrettyOptions = PrettyOptions
         { po_fullyQualified  :: Bool            -- Do you show fully qualified names?
-        , po_hideTypes       :: Bool            -- Do you hide types, and type arguments, as <>?
-        , po_typesForBinders :: Bool            -- Do you give the types for all bindings?
+        , po_exprTypes       :: ShowOption      -- Do you hide types, and type arguments, as <>?
+        , po_typesForBinders :: ShowOption      -- Do you give the types for all bindings?
         , po_highlight       :: Maybe Path      -- This region should be highlighted (for sub-expression)
         , po_depth           :: Maybe Int       -- below this depth are ..., Nothing => infinite
         , po_notes           :: Bool            -- ^ notes might be added to output
         } deriving Show
 
+data ShowOption = Show | Abstract | Omit
+        deriving (Eq, Ord, Show)
+
 instance Default PrettyOptions where
   def = PrettyOptions
         { po_fullyQualified  = False
-        , po_hideTypes       = True
-        , po_typesForBinders = True
+        , po_exprTypes       = Abstract
+        , po_typesForBinders = Omit
         , po_highlight       = Nothing
         , po_depth           = Nothing
         , po_notes           = False
