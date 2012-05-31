@@ -3,20 +3,18 @@ module Language.HERMIT.Primitive.Local.Case where
 
 import GhcPlugins
 
-import Data.List (nub)
+import Data.List
+import Control.Applicative
 import Control.Arrow
 
 import Language.KURE
 import Language.KURE.Injection
 
 import Language.HERMIT.HermitKure
-import Language.HERMIT.HermitEnv
-import Language.HERMIT.HermitMonad
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.GHC
-
-import qualified Language.Haskell.TH as TH
+import Language.HERMIT.Primitive.Subst hiding (letSubstR)
 
 -- NOTE: these are hard to test in small examples, as GHC does them for us, so use with caution
 ------------------------------------------------------------------------------
@@ -37,6 +35,8 @@ externals = map (.+ CaseCmd) $
                      [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]                           .+ Eval
          , external "case-float-app" (promoteR caseFloatApp :: RewriteH Core)
                      [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]                                       .+ Eval
+         , external "case-float-arg" (promoteR caseFloatArg :: RewriteH Core)
+                     [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                                         .+ Eval
          , external "case-float-case" (promoteR caseFloatCase :: RewriteH Core)
                      [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Eval
          , external "case-reduce" (promoteR caseReduce :: RewriteH Core)
@@ -47,6 +47,9 @@ externals = map (.+ CaseCmd) $
 not_defined :: String -> RewriteH CoreExpr
 not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
 
+altVarsT :: TranslateH CoreAlt [Id]
+altVarsT = altT (pure ()) (const const)
+
 letFloatCase :: RewriteH CoreExpr
 letFloatCase = do Case (Let rec e) b ty alts <- idR
                   return $ Let rec (Case e b ty alts)
@@ -54,6 +57,18 @@ letFloatCase = do Case (Let rec e) b ty alts <- idR
 caseFloatApp :: RewriteH CoreExpr
 caseFloatApp = do App (Case s b ty alts) v <- idR
                   return $ Case s b ty [ (con, ids, App e v) | (con, ids, e) <- alts ]
+
+caseFloatArg :: RewriteH CoreExpr
+caseFloatArg = do
+    captures <- appT freeVarsT
+                     (caseT (pure ()) (const altVarsT) (\_ i _ ids -> map (i:) ids))
+                     (map . intersect)
+    appT idR
+         (caseAllR idR
+                   (\i -> (if null (captures !! (i-1)) then idR else alphaAlt)))
+         (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
+                                    in Case s b newTy [ (c, ids, App f e)
+                                                      | (c,ids,e) <- alts ])
 
 caseFloatCase :: RewriteH CoreExpr
 caseFloatCase = do Case (Case s1 b1 ty1 alts1) b2 ty2 alts2 <- idR
