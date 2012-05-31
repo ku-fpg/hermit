@@ -68,7 +68,7 @@ data PrettyOptions = PrettyOptions
         } deriving Show
 
 data ShowOption = Show | Abstract | Omit
-        deriving (Eq, Ord, Show)
+        deriving (Eq, Ord, Show, Read)
 
 instance Default PrettyOptions where
   def = PrettyOptions
