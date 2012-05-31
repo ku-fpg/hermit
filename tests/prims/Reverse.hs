@@ -6,6 +6,7 @@ import HERMIT
 {-# RULES "repH" forall xs . repH xs = (xs ++) #-}
 {-# RULES "absH" forall f . absH f = f [] #-}
 {-# RULES "repAppend" forall xs ys . repH (xs ++ ys) = repH xs . repH ys #-}
+{-# RULES "repAppFusion" forall h . repH (absH h) = h #-}
 
 rev []     = []
 rev (x:xs) = rev xs ++ [x]

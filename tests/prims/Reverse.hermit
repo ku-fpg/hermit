@@ -72,33 +72,17 @@ up
 up
 dump "paper/wrap-unwrap-renamed.tex" "clean" "latex" 80
 
--- get down into the second case alt
-1
-down
-down
-2
-down
-apply-rule repAppend
+-- to get repH and absH next to each other in the second case alternative
+any-bu (apply-rule repAppend)
+any-bu (inline '.)
 bash
-up
-up
-up
-up
-up
 dump "paper/rule-rep-append.tex" "clean" "latex" 80
 
-1
-down
-down
-2
-down
--- rep/app fusion goes here
-
-up
-up
-up
-up
-up
+-- repH/absH fusion
+any-bu (apply-rule repAppFusion)
+-- this is failing
+any-bu (inline 'repH)
+bash
 dump "paper/rep-app-fusion.tex" "clean" "latex" 80
 
 --all-bu (try (compose (var 'absH) inline))
