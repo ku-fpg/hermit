@@ -80,9 +80,18 @@ dump "paper/rule-rep-append.tex" "clean" "latex" 80
 
 -- repH/absH fusion
 any-bu (apply-rule repAppFusion)
--- this is failing
-any-bu (inline 'repH)
 bash
 dump "paper/rep-app-fusion.tex" "clean" "latex" 80
+
+-- this is failing... todo: talk about in paper
+-- any-bu (inline 'repH)
+any-bu (apply-rule repH)
+-- setpp ghc
+bash
+any-bu (apply-rule append)
+bash
+any-bu (apply-rule appendNil)
+bash
+dump "paper/cleanup.tex" "clean" "latex" 80
 
 --all-bu (try (compose (var 'absH) inline))

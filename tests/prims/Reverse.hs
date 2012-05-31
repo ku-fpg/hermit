@@ -7,6 +7,10 @@ import HERMIT
 {-# RULES "absH" forall f . absH f = f [] #-}
 {-# RULES "repAppend" forall xs ys . repH (xs ++ ys) = repH xs . repH ys #-}
 {-# RULES "repAppFusion" forall h . repH (absH h) = h #-}
+-- since we can't inline ++
+-- if we could, I don't think we'd need these two rules
+{-# RULES "append" forall x xs ys . (x:xs) ++ ys = x : (xs ++ ys) #-}
+{-# RULES "appendNil" forall xs . [] ++ xs = xs #-}
 
 rev []     = []
 rev (x:xs) = rev xs ++ [x]
