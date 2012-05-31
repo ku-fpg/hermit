@@ -98,6 +98,13 @@ shell_externals = map (.+ Shell) $
        [ "dump <filename> <pretty-printer> <renderer> <width>"]
    , external "set-width"   (\ n -> ShellState $ \ st -> return $ st { cl_width = n })
        ["set the width of the screen"]
+   , external "set-pp-expr-type"
+                (\ str -> ShellState $ \ st -> case reads str :: [(ShowOption,String)] of
+                                                 [(opt,"")] -> return $ st { cl_pretty_opts =
+                                                                                 (cl_pretty_opts st) { po_exprTypes = opt }
+                                                                           }
+                                                 _ -> return $ st)
+       ["set how to show expression-level types (Show|Abstact|Omit)"]
    ]
 
 showRenderers :: ShellCommand
