@@ -83,7 +83,7 @@ corePrettyH opts =
             | isInfix name = ppParens $ varColor $ text name
             | otherwise    = varColor $ text name
       where name = GHC.occNameString $ GHC.nameOccName $ nm
-            isInfix = all (\ n -> n `elem` "!@#$%^&*-_+=:?/\\<>'")
+            isInfix = all (\ n -> n `elem` "!@#$%^&*-._+=:?/\\<>'")
 
 
     -- binders are vars that is bound by lambda or case, etc.
