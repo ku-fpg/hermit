@@ -1,5 +1,5 @@
 module Main where
-
+import Criterion.Main
 import HERMIT
 
 {-# RULES "ww" forall work . fix work = wrap (fix (unwrap . work . wrap)) #-}
@@ -20,7 +20,10 @@ rev (x:xs) = rev xs ++ [x]
 
 f g = let x = g x in x
 
-main = print (rev "Hello, World")
+main = defaultMain 
+       [ bench (show n) $ whnf (\n -> sum $ rev [1..n]) n
+       | n <- take 5 $ iterate (* 10) 1
+       ]		   
 {-
 import Prelude hiding (reverse)
 
