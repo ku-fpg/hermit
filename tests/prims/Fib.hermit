@@ -1,5 +1,5 @@
 -- First example; unroll fib once.
 consider 'fib
 dump "paper/fib.tex" "clean" "latex" 80
-all-bu (try (compose (var 'fib) inline))
+any-bu (compose (var 'fib) inline)
 dump "paper/fast-fib.tex" "clean" "latex" 80
