@@ -27,10 +27,14 @@ hlist = listify (<+>)
 data RetExpr
         = RetLam [DocH] DocH
         | RetLet [DocH] DocH
-        | RetApp DocH [DocH]    -- the arguments are pre-paren'd if needed
+        | RetApp DocH [RetExpr]
         | RetExpr DocH
         | RetAtom DocH         -- parens not needed
         | RetEmpty
+
+isAtom :: RetExpr -> Bool
+isAtom (RetAtom _) = True
+isAtom _           = False
 
 specialSymbol :: SpecialSymbol -> DocH
 specialSymbol = markColor SyntaxColor . specialFont . char . renderSpecial
@@ -51,7 +55,8 @@ atomExpr other       = ppParens (normalExpr other)
 normalExpr :: RetExpr -> DocH
 normalExpr (RetLam vs e0) = hang (specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
 normalExpr (RetLet vs e0) = sep [ keywordColor (text "let") <+> vcat vs, keywordColor (text "in") <+> e0 ]
-normalExpr (RetApp fn xs) = sep [ fn, nest 2 (sep xs) ]
+normalExpr (RetApp fn xs) = sep [ hsep (fn : map atomExpr (takeWhile isAtom xs))
+                                , nest 2 (sep (map atomExpr (dropWhile isAtom xs))) ]
 normalExpr (RetExpr e0)    = e0
 normalExpr (RetAtom e0)    = e0
 normalExpr (RetEmpty)      = empty
@@ -121,7 +126,7 @@ corePrettyH opts =
     ppCoreExpr = ppCoreExprR >>^ normalExpr
 
     appendArg xs (RetEmpty) = xs
-    appendArg xs e          = xs ++ [atomExpr e]
+    appendArg xs e          = xs ++ [e]
 
     appendBind Nothing  xs = xs
     appendBind (Just v) xs = v : xs
