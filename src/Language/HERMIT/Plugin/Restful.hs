@@ -12,6 +12,7 @@ import Data.Default
 import Data.Dynamic
 import Data.List hiding (delete)
 import qualified Data.Map as M
+import qualified Data.Text as TS
 import qualified Data.Text.Lazy as T
 
 -- The Prelude version of catch has been deprecated.
@@ -19,6 +20,7 @@ import Prelude hiding (catch)
 import Control.Exception hiding (catch)
 
 import Language.HERMIT.Dictionary
+import Language.HERMIT.External
 import Language.HERMIT.HermitExpr
 import Language.HERMIT.Interp
 import Language.HERMIT.Kernel
@@ -33,15 +35,17 @@ passes :: [NamedPass]
 passes = [("w", restful)]
 
 restful :: HermitPass
-restful opts modGuts = hermitKernel (webapp dict indexfile) modGuts
-    where dict = dictionary [] modGuts
+restful opts modGuts = hermitKernel (webapp exts indexfile) modGuts
+    where exts = all_externals [] modGuts
           indexfile = head [ o | o <- opts, ".html" `isSuffixOf` o ]
 
-webapp :: M.Map String [Dynamic] -> FilePath -> Kernel -> AST -> IO ()
-webapp dict indexfile kernel _initAst = do
+webapp :: [External] -> FilePath -> Kernel -> AST -> IO ()
+webapp exts indexfile kernel _initAst = do
     dataDir <- getDataDir
 
-    let respondWith :: AST -> ActionM ()
+    let dict = dictionary exts
+
+        respondWith :: AST -> ActionM ()
         respondWith ast@(AST i) = do
             val <- liftIO $ queryK kernel ast (corePrettyH def)
             S.json $ object ["ast" .= i, "code" .= val]
@@ -76,7 +80,7 @@ webapp dict indexfile kernel _initAst = do
             S.json [ i | AST i <- l ]
 
         addroute OPTIONS "/" $ do
-            text "help"
+            S.json exts
 
 
 -- rather than abuse the command line parser here,
@@ -97,3 +101,15 @@ instance FromJSON ExprH where
 
 catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
+
+instance ToJSON External where
+    toJSON e = object [ "name" .= externName e
+                      , "help" .= externHelp e
+                      , "tags" .= externTags e
+                      , "cats" .= externCats e ]
+
+instance ToJSON CmdTag where
+    toJSON = String . TS.pack . show
+
+instance ToJSON CmdCategory where
+    toJSON = String . TS.pack . show

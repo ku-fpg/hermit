@@ -148,7 +148,7 @@ unicodeConsole h w doc = do
 commandLine :: IO (Maybe String) -> ModGuts -> CoreM ModGuts
 commandLine gets modGuts = do
   liftIO $ print (length (mg_rules modGuts))
-  let dict = dictionary shell_externals modGuts
+  let dict = dictionary $ all_externals shell_externals modGuts
   commandLine2 dict gets modGuts
 
 commandLine2 :: M.Map String [Dynamic] -> IO (Maybe String) -> ModGuts -> CoreM ModGuts

@@ -44,25 +44,28 @@ prim_externals =    Kure.externals
                  ++ Local.externals
                  ++ New.externals
 
--- create the dictionary; can reference local modguts.
-dictionary :: [External] -> ModGuts -> M.Map String [Dynamic]
-dictionary my_externals modGuts = toDictionary all_externals
+-- The GHC.externals here is a bit of a hack. Not sure about this
+all_externals :: [External] -> ModGuts -> [External]
+all_externals my_externals guts = prim_externals ++ my_externals ++ GHC.externals guts
+
+-- create the dictionary
+dictionary :: [External] -> M.Map String [Dynamic]
+dictionary externs = toDictionary externs'
   where
-          -- The GHC.externals here is a bit of a hack. Not sure about this
-        all_externals = prim_externals ++ my_externals ++ GHC.externals modGuts ++
-                [ external "help"            (help all_externals Nothing Nothing)
+        externs' = externs ++
+                [ external "help"            (help externs Nothing Nothing)
                     [ "lists all commands" ]
-                , external "help" (help all_externals Nothing . Just :: String -> String)
+                , external "help" (help externs Nothing . Just :: String -> String)
                     [ "help with a specific cmd or path"
                     , "use 'help ls' to see a list of paths"
                     , "use 'help \"let\"' to see cmds whose names contain \"let\"" ]
-                , external "help" ((\c p -> help all_externals (Just c) (Just p)) :: String -> String -> String)
+                , external "help" ((\c p -> help externs (Just c) (Just p)) :: String -> String -> String)
                     [ "help ls <path> to list commands in a specific path" ]
 {- todo: finish, by modifying Interp.hs
-                , external "help" ((\p -> intercalate ", " $ map externName $ filter (tagMatch p) all_externals) :: TagE -> String)
+                , external "help" ((\p -> intercalate ", " $ map externName $ filter (tagMatch p) externs) :: TagE -> String)
                     [ "show rewrites matched by a tag predicate" ]
 -}
-                , bashExternal all_externals
+                , bashExternal externs
                 ]
 
 --------------------------------------------------------------------------
