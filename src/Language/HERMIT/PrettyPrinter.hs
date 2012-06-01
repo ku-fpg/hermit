@@ -128,7 +128,7 @@ newtype LaTeX = LaTeX String
 
 instance RenderSpecial LaTeX where
         renderSpecial LambdaSymbol        = LaTeX "\\ensuremath{\\lambda}"
-        renderSpecial TypeOfSymbol        = LaTeX "::"  -- too wide
+        renderSpecial TypeOfSymbol        = LaTeX ":\\!:"  -- too wide
         renderSpecial RightArrowSymbol    = LaTeX "\\ensuremath{\\shortrightarrow}"
         renderSpecial TypeSymbol          = LaTeX "\\ensuremath{\\blacktriangle}"
         renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\triangleright}"
