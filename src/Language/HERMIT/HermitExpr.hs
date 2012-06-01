@@ -85,10 +85,16 @@ parseExprH0 = \ inp ->
 
 parseExprH1 :: ReadS ExprH
 parseExprH1 = \ inp ->
-        [ (foldl AppH e es,inp2)
+        [ (mkAppH e es,inp2)
         | (e,inp1)  <- parseExprH0 inp
         , (es,inp2) <- parseExprsH1 inp1
         ]
+
+-- Infix hook: TODO
+-- infix version, only one level for now
+--mkAppH a [CmdName fn,b] | all (`elem` ".->") fn
+--                        = foldr AppH (CmdName fn) [a,b]
+mkAppH e es             = foldl AppH e es
 
 parseExprsH1 :: ReadS [ExprH]
 parseExprsH1 = \ inp ->
