@@ -4,20 +4,20 @@
 
 -- START
 consider 'rev
-dump "paper/0-start-rev.tex" "clean" "latex" 80
+dump "paper/0-start-rev.tex" "clean" "latex" 60
 
 set-pp-expr-type Omit
-dump "paper/0b-start-rev.tex" "clean" "latex" 80
+dump "paper/0b-start-rev.tex" "clean" "latex" 60
 
 down
 consider 'rev
 fix-intro
-dump "paper/1-fix-intro.tex" "clean" "latex" 80
+dump "paper/1-fix-intro.tex" "clean" "latex" 60
 
 down
 apply-rule ww
 up
-dump "paper/2-after-ww.tex" "clean" "latex" 80
+dump "paper/2-after-ww.tex" "clean" "latex" 60
 
 -- clean up
 down
@@ -29,26 +29,26 @@ beta-reduce
 let-subst
 up
 
-dump "paper/3-ww-and-clean.tex" "clean" "latex" 80
+dump "paper/3-ww-and-clean.tex" "clean" "latex" 60
 
 -- all-bu (try (compose (var '.) inline))
 any-bu (inline '.)
 bash
-dump "paper/4-after-bash.tex" "clean" "latex" 80
+dump "paper/4-after-bash.tex" "clean" "latex" 60
 
 down
 1
 let-intro 'work
 up
 up
-dump "paper/5-after-let-intro.tex" "clean" "latex" 80
+dump "paper/5-after-let-intro.tex" "clean" "latex" 60
 
 down
 let-float-arg
 up
 up
 let-float-let
-dump "paper/6-let-pair.tex" "clean" "latex" 80
+dump "paper/6-let-pair.tex" "clean" "latex" 60
 
 consider 'work
 down
@@ -56,7 +56,7 @@ down
 any-bu (inline 'wrap)
 any-bu (inline 'unwrap)
 bash
-dump "paper/7-wrap-unwrap-inlined.tex" "clean" "latex" 80
+dump "paper/7-wrap-unwrap-inlined.tex" "clean" "latex" 60
 
 1
 number-binder 0
@@ -68,12 +68,12 @@ let-subst
 up
 up
 up
-dump "paper/8-wrap-unwrap-renamed.tex" "clean" "latex" 80
+dump "paper/8-wrap-unwrap-renamed.tex" "clean" "latex" 60
 
 -- to get repH and absH next to each other in the second case alternative
 any-bu (apply-rule repAppend)
 bash
-dump "paper/9-rule-rep-append.tex" "clean" "latex" 80
+dump "paper/9-rule-rep-append.tex" "clean" "latex" 60
 
 -- doing this step right here turns out to be critical
 -- to make the rest go smoothly
@@ -87,13 +87,13 @@ up
 up
 up
 up
-dump "paper/10-eta-expand-and-case-float.tex" "clean" "latex" 80
+dump "paper/10-eta-expand-and-case-float.tex" "clean" "latex" 60
 
 -- repH/absH fusion
 any-bu (apply-rule repAppFusion)
 any-bu (inline '.)
 bash
-dump "paper/11-rep-app-fusion.tex" "clean" "latex" 80
+dump "paper/11-rep-app-fusion.tex" "clean" "latex" 60
 
 -- this is failing... todo: talk about in paper
 -- any-bu (inline 'repH)
@@ -104,6 +104,6 @@ any-bu (apply-rule append)
 bash
 any-bu (apply-rule appendNil)
 bash
-dump "paper/12-cleanup.tex" "clean" "latex" 80
+dump "paper/12-cleanup.tex" "clean" "latex" 60
 
 --all-bu (try (compose (var 'absH) inline))
