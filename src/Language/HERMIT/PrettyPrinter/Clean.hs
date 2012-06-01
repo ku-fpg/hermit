@@ -137,7 +137,9 @@ corePrettyH opts =
                <+ appT ppCoreExprR ppCoreExprR
                                    (\ e1 e2 -> case e1 of
                                               RetApp f xs   -> RetApp f (appendArg xs e2)
-                                              _             -> RetApp (atomExpr e1) (appendArg [] e2))
+                                              _             -> case e2 of -- if our only args are types, and they are omitted, don't paren
+                                                                RetEmpty -> e1
+                                                                args -> RetApp (atomExpr e1) (appendArg [] args))
                <+ varT (\ i -> RetAtom (ppVar i))
                <+ litT (\ i -> RetAtom (ppSDoc i))
                <+ typeT (\ t -> case po_exprTypes opts of
