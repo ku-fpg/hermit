@@ -102,8 +102,14 @@ instance FromJSON ExprH where
 catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
 
+rmBox :: String -> String
+rmBox [] = []
+rmBox s | "Box" `isPrefixOf` s = rmBox (drop 3 s)
+rmBox (c:cs) = c : rmBox cs
+
 instance ToJSON External where
     toJSON e = object [ "name" .= externName e
+                      , "type" .= rmBox (show (dynTypeRep (externFun e)))
                       , "help" .= externHelp e
                       , "tags" .= externTags e
                       , "cats" .= externCats e ]
