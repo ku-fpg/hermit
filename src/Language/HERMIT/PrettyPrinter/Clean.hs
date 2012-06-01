@@ -149,13 +149,13 @@ corePrettyH opts =
                <+ (ppCoreExpr0 >>^ RetExpr)
 
     ppCoreType :: GHC.Type -> DocH
-    ppCoreType (TyVarTy v) = ppVar v
+    ppCoreType (TyVarTy v)   = ppVar v
     ppCoreType (AppTy t1 t2) = ppParens (ppCoreType t1 <+> ppCoreType t2)
     ppCoreType (TyConApp tyCon tys)
         | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = ppCoreType (FunTy ty1 ty2)
         | otherwise = ppName (GHC.getName tyCon) <+> sep (map ppCoreType tys)
     ppCoreType (FunTy ty1 ty2) = ppCoreType ty1 <+> text "->" <+> ppCoreType ty2
-    ppCoreType (ForAllTy v ty) = specialSymbol ForallSymbol <+> ppVar v <+> ppCoreType ty
+    ppCoreType (ForAllTy v ty) = specialSymbol ForallSymbol <+> ppVar v <+> symbol '.' <+> ppCoreType ty
 
     ppCoreExpr0 :: PrettyH GHC.CoreExpr
     ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b ty alts ->
