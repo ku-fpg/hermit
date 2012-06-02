@@ -110,6 +110,8 @@ bash
 up
 up
 let-float-let
+any-bu (inline 'wrap)
+any-bu (apply-rule absH)
 bash
 dump "paper/12-cleanup.tex" "clean" "latex" 80
 
