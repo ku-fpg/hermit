@@ -98,12 +98,19 @@ dump "paper/11-rep-app-fusion.tex" "clean" "latex" 60
 -- this is failing... todo: talk about in paper
 -- any-bu (inline 'repH)
 any-bu (apply-rule repH)
--- setpp ghc
 bash
+-- setpp ghc
 any-bu (apply-rule append)
 bash
 any-bu (apply-rule appendNil)
 bash
-dump "paper/12-cleanup.tex" "clean" "latex" 60
+
+any-bu (apply-rule inline-fix)
+bash
+up
+up
+let-float-let
+bash
+dump "paper/12-cleanup.tex" "clean" "latex" 80
 
 --all-bu (try (compose (var 'absH) inline))
