@@ -73,7 +73,7 @@ dump "paper/8-wrap-unwrap-renamed.tex" "clean" "latex" 60
 -- to get repH and absH next to each other in the second case alternative
 any-bu (apply-rule repAppend)
 bash
-dump "paper/9-rule-rep-append.tex" "clean" "latex" 60
+dump "paper/9-rule-rep-append.tex" "clean" "latex" 80
 
 -- doing this step right here turns out to be critical
 -- to make the rest go smoothly
