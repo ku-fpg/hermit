@@ -139,12 +139,28 @@ corePrettyH opts =
                                    (\ bd e -> case e of
                                               RetLet vs e0  -> RetLet (bd : vs) e0
                                               _             -> RetLet [bd] (normalExpr e))
-               -- HACK!
+               -- HACKs
+{-
                <+ (acceptR (\ e -> case e of
                                      GHC.App (GHC.Var v) (GHC.Type t) | po_exprTypes opts == Abstract -> True
                                      _ -> False) >>>
                            (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetAtom e2) ->
                                     RetAtom (e1 <+> e2))))
+-}
+               <+ (acceptR (\ e -> case e of
+                                     GHC.App (GHC.Type _) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
+                                     GHC.App (GHC.App (GHC.Var _) (GHC.Type _)) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
+                                     _ -> False) >>>
+                           (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetLam vs e0) ->
+                                    RetExpr $ hang (e1 <+>
+                                                        symbol '(' <>
+                                                        specialSymbol LambdaSymbol <+>
+                                                        hsep vs <+>
+                                                        specialSymbol RightArrowSymbol) 2 (e0 <> symbol ')')))
+
+
+                  )
+
                <+ appT ppCoreExprR ppCoreExprR
                                    (\ e1 e2 -> case e1 of
                                               RetApp f xs   -> RetApp f (appendArg xs e2)
