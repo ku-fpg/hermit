@@ -3,6 +3,7 @@ import Criterion.Main
 import HERMIT
 
 {-# RULES "ww" forall work . fix work = wrap (fix (unwrap . work . wrap)) #-}
+{-# RULES "inline-fix" forall f . fix f = let w = f w in w #-}
 {-# RULES "repH" forall xs . repH xs = (xs ++) #-}
 {-# RULES "absH" forall f . absH f = f [] #-}
 {-# RULES "repAppend" forall xs ys . repH (xs ++ ys) = repH xs . repH ys #-}
