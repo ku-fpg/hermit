@@ -332,11 +332,11 @@ instance RenderCode LaTeX where
         rDoHighlight False _ = latexVerbatim "}"
         rDoHighlight _ [] = latexVerbatim $ "{"
         rDoHighlight _ (Color col:_) = latexVerbatim $ "{" ++ case col of
-                        KeywordColor -> "\\color{blue}"
-                        SyntaxColor  -> "\\color{red}"
+                        KeywordColor -> "\\color{hermit:keyword}"       -- blue
+                        SyntaxColor  -> "\\color{hermit:syntax}"        -- red
                         VarColor     -> ""
-                        TypeColor    -> "\\color{green}"
-                        LitColor     -> "\\color{cyan}"
+                        TypeColor    -> "\\color{hermit:type}"          -- green
+                        LitColor     -> "\\color{hermit:lit}"           -- cyan
         rDoHighlight o (_:rest) = rDoHighlight o rest
         rEnd = LaTeX "\n" -- \\end{Verbatim}"
 
