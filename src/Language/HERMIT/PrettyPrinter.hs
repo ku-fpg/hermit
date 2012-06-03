@@ -134,6 +134,18 @@ instance RenderSpecial LaTeX where
         renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\triangleright}"
         renderSpecial ForallSymbol        = LaTeX "\\ensuremath{\\forall}"
 
+
+newtype HTML = HTML String
+
+instance RenderSpecial HTML where
+        renderSpecial LambdaSymbol        = HTML "&#955;"
+        renderSpecial TypeOfSymbol        = HTML "&#8759;"
+        renderSpecial RightArrowSymbol    = HTML "&#8594;"
+        renderSpecial TypeSymbol          = HTML "&#9650;"
+        renderSpecial TypeBindSymbol      = HTML "&#9657;"
+        renderSpecial ForallSymbol        = HTML "&#8704;"
+
+
 renderSpecialFont :: (RenderSpecial a) => Char -> Maybe a
 renderSpecialFont = fmap renderSpecial . flip M.lookup specialFontMap
 

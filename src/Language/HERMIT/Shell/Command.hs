@@ -135,6 +135,9 @@ finalRenders = M.fromList
         , ("latex", \ h w doc -> do
                         let pretty = latexToString $ renderCode w doc
                         hPutStr h pretty)
+        , ("html", \ h w doc -> do
+                        let HTML pretty = renderCode w doc
+                        hPutStr h pretty)
         , ("ascii", \ h w doc -> do
                         let (ASCII pretty) = renderCode w doc
                         hPutStrLn h pretty)
@@ -339,6 +342,36 @@ instance RenderCode LaTeX where
                         LitColor     -> "\\color{hermit:lit}"           -- cyan
         rDoHighlight o (_:rest) = rDoHighlight o rest
         rEnd = LaTeX "\n" -- \\end{Verbatim}"
+
+{- | Use css to do the colors
+ -
+ - > <style type="text/css">
+ - >  .hermit-syntax {
+ - >      color: red;
+ - >  </style>
+ -}
+
+htmlVerbatim :: String -> HTML -> HTML
+htmlVerbatim str (HTML v) = HTML (str ++ v)
+
+instance RenderCode HTML where
+        rStart = htmlVerbatim ""
+
+        rPutStr (SpecialFont:_) txt = htmlVerbatim $
+                concat [ code | Just (HTML code) <- map renderSpecialFont txt ]
+        rPutStr _              txt  = htmlVerbatim txt
+
+        rDoHighlight False _ = htmlVerbatim "</span>"
+        rDoHighlight _ [] = htmlVerbatim $ "<span>"
+        rDoHighlight _ (Color col:_) = htmlVerbatim $ case col of
+                        KeywordColor -> "<span class=\"hermit-keyword\">"       -- blue
+                        SyntaxColor  -> "<span class=\"hermit-syntax\">"        -- red
+                        VarColor     -> "<span>"
+                        TypeColor    -> "<span class=\"hermit-type\">"          -- green
+                        LitColor     -> "<span class=\"hermit-lit\">"           -- cyan
+        rDoHighlight o (_:rest) = rDoHighlight o rest
+        rEnd = HTML "\n"
+
 
 
 ascii :: String -> ASCII -> ASCII
