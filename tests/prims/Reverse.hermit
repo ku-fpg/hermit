@@ -20,14 +20,7 @@ up
 dump "paper/2-after-ww.tex" "clean" "latex" 56
 
 -- clean up
-down
-down
-beta-reduce
-let-subst
-up
-beta-reduce
-let-subst
-up
+any-bu (compose beta-reduce let-subst)
 
 dump "paper/3-ww-and-clean.tex" "clean" "latex" 56
 
@@ -56,29 +49,44 @@ down
 any-bu (inline 'wrap)
 any-bu (inline 'unwrap)
 bash
-dump "paper/7-wrap-unwrap-inlined.tex" "clean" "latex" 56
-
 1
 number-binder 0
 down
-let-subst
 number-binder 1
-down
-let-subst
 up
 up
-up
+
+dump "paper/7-wrap-unwrap-inlined.tex" "clean" "latex" 56
+
+--1
+--down
+--down
+any-bu case-float-arg
+--up
+--up
+--up
+
+--1
+--number-binder 0
+--down
+--let-subst
+--number-binder 1
+--down
+--let-subst
+--up
+--up
+--up
 dump "paper/8-wrap-unwrap-renamed.tex" "clean" "latex" 56
 
-1
-down
-down
-case-float-arg
-up
-up
-up
+--1
+--down
+--down
+--case-float-arg
+--up
+--up
+--up
 dump "paper/8b-case-float-arg.tex" "clean" "latex" 56
-exit
+-- exit
 
 -- to get repH and absH next to each other in the second case alternative
 any-bu (apply-rule repAppend)
