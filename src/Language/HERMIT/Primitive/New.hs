@@ -18,6 +18,7 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
+import Language.HERMIT.Primitive.GHC
 
 import qualified Language.Haskell.TH as TH
 
@@ -35,7 +36,7 @@ externals = map (.+ Experiment)
                 [ "determines if a rewrite could be successfully applied" ]
          , external "fix-intro" (promoteR fixIntro :: RewriteH Core)
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
-         , external "number-binder" (promoteR . exprNumberBinder :: Int -> RewriteH Core)
+         , external "number-binder" (exprNumberBinder :: Int -> RewriteH Core)
                 [ "add a number suffix onto a (lambda) binding" ]
          ]
 
@@ -119,8 +120,9 @@ exprBinder = translate $ \ c e -> case e of
         _                  -> return []
 -}
 
-exprNumberBinder :: Int -> RewriteH CoreExpr
-exprNumberBinder n = exprRenameBinder (++ show n)
+exprNumberBinder :: Int -> RewriteH Core
+exprNumberBinder n = promoteR (exprRenameBinder (++ show n))
+                 >>> (childL 0 `focusR` promoteR letSubstR)
 
 exprRenameBinder :: (String -> String) -> RewriteH CoreExpr
 exprRenameBinder nameMod = translate $ \ c e -> case e of
