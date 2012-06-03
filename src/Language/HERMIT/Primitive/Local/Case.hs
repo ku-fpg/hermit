@@ -36,7 +36,7 @@ externals = map (.+ CaseCmd) $
          , external "case-float-app" (promoteR caseFloatApp :: RewriteH Core)
                      [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]                                       .+ Eval
          , external "case-float-arg" (promoteR caseFloatArg :: RewriteH Core)
-                     [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                                         .+ Eval
+                     [ "f (case s of alt -> e) ==> case s of alt -> f e" ] -- for paper                                        .+ Eval
          , external "case-float-case" (promoteR caseFloatCase :: RewriteH Core)
                      [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Eval
          , external "case-reduce" (promoteR caseReduce :: RewriteH Core)

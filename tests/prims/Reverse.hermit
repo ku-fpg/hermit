@@ -70,6 +70,16 @@ up
 up
 dump "paper/8-wrap-unwrap-renamed.tex" "clean" "latex" 56
 
+1
+down
+down
+case-float-arg
+up
+up
+up
+dump "paper/8b-case-float-arg.tex" "clean" "latex" 56
+exit
+
 -- to get repH and absH next to each other in the second case alternative
 any-bu (apply-rule repAppend)
 bash
