@@ -94,19 +94,19 @@ rulesToEnv rs = Map.fromList
         ]
 
 rulesToRewriteH :: [CoreRule] -> RewriteH CoreExpr
-rulesToRewriteH rs = contextfreeT $ \ e ->
-        -- First, we normalize the lhs, so we can match it
-        let (Var fn,args) = collectArgs e
-        -- Question: does this include Id's, or Var's (which include type names)
-        -- Assumption: Var's.
-            in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- freeVars e ])
+rulesToRewriteH rs = contextfreeT $ \ e -> do
+    -- First, we normalize the lhs, so we can match it
+    (Var fn,args) <- return $ collectArgs e
+    -- Question: does this include Id's, or Var's (which include type names)
+    -- Assumption: Var's.
+    let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- freeVars e ])
         -- The rough_args are just an attempt to try eliminate silly things
         -- that will never match
-            rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
-        -- Finally, we try match the rules
-         in case lookupRule (const True) (const NoUnfolding) in_scope fn args rs of
-              Nothing      -> fail "rule not matched"
-              Just (_,e')  -> return e'
+        rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
+    -- Finally, we try match the rules
+    case lookupRule (const True) (const NoUnfolding) in_scope fn args rs of
+        Nothing      -> fail "rule not matched"
+        Just (_,e')  -> return e'
 
 rules :: Map.Map String (RewriteH CoreExpr) -> String -> RewriteH CoreExpr
 rules mp r = case Map.lookup r mp of
