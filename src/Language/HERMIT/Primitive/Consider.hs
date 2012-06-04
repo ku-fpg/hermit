@@ -6,9 +6,6 @@ import Convert
 import Data.List
 import Data.Monoid
 
-import Language.KURE
-import Language.KURE.Injection
-
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 import Language.HERMIT.HermitEnv
@@ -41,17 +38,11 @@ rmPrefix (ContextPath path) = do ContextPath this <- pathT
                                  return $ drop (length this) $ reverse path
 
 findPathTo :: TH.Name -> TranslateH CoreBind (First ContextPath)
-findPathTo nm = translate $ \ c e -> let ContextPath ps = hermitBindingPath c in
+findPathTo nm = translate $ \ c e -> let p = return $ First $ Just $ hermitBindingPath c in
         case e of
-          NonRec v _ | nm `cmpName` idName v -> return $ First $ Just $ ContextPath ps
-          Rec bds -> let res = [ ContextPath ps
-                               | ((v,_),i) <- zip bds [0..]
-                               , nm `cmpName` idName v
-                               ]
-                      in case res of
-                           [r] -> return $ First $ Just r
-                           _   -> failNameNotFound nm
-          _ -> failNameNotFound nm
+          NonRec v _ | nm `cmpName` idName v                            -> p
+          Rec bds    | [ _ ] <- filter (cmpName nm . idName . fst) bds  -> p
+          _                                                             -> failNameNotFound nm
 
 failNameNotFound :: Monad m => TH.Name -> m a
 failNameNotFound nm = fail $ "Name \"" ++ show nm ++ "\" not found."
@@ -65,4 +56,4 @@ var nm = contextfreeT $ \ e -> do
   liftIO $ print ("VAR",GHC.showSDoc . GHC.ppr $ thRdrNameGuesses $ nm)
   case e of
     Var n0 | nm `cmpName` idName n0 -> return e
-    _ -> fail $ "failed to find Var " ++ show nm
+    _                               -> failNameNotFound nm

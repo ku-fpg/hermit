@@ -1,8 +1,9 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections #-}
 
 module Language.HERMIT.HermitKure
-       (
-         TranslateH
+       ( module Language.KURE
+       , module Language.KURE.Injection
+       , TranslateH
        , RewriteH
        , LensH
        , Core(..), CoreDef(..)

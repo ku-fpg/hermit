@@ -10,9 +10,6 @@ import OccName(varName)
 import Control.Applicative
 import Control.Arrow
 
-import Language.KURE
-import Language.KURE.Injection
-
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitKure

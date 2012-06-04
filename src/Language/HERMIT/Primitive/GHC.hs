@@ -6,9 +6,6 @@ import Control.Applicative
 import Control.Arrow
 import qualified Data.Map as Map
 
-import Language.KURE
-import Language.KURE.Injection
-
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 

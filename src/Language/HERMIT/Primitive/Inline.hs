@@ -4,9 +4,6 @@ import GhcPlugins
 
 import Control.Arrow
 
-import Language.KURE
-import Language.KURE.Injection
-
 import Language.HERMIT.Primitive.Consider
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv

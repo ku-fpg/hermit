@@ -33,9 +33,9 @@ findNameFromTH rdrEnv nm =
         ]
 
 ppIdInfo :: Id -> IdInfo -> SDoc
-ppIdInfo id info
+ppIdInfo v info
   = showAttributes
-    [ (True, pp_scope <> ppr (idDetails id))
+    [ (True, pp_scope <> ppr (idDetails v))
     , (has_arity,      ptext (sLit "Arity=") <> int arity)
     , (has_caf_info,   ptext (sLit "Caf=") <> ppr caf_info)
     , (has_strictness, ptext (sLit "Str=") <> pprStrictness str_info)
@@ -45,9 +45,9 @@ ppIdInfo id info
 	-- printed out with all binders (when debug is on);
 	-- see PprCore.pprIdBndr
   where
-    pp_scope | isGlobalId id   = ptext (sLit "GblId")
-    	     | isExportedId id = ptext (sLit "LclIdX")
-    	     | otherwise       = ptext (sLit "LclId")
+    pp_scope | isGlobalId v   = ptext (sLit "GblId")
+    	     | isExportedId v = ptext (sLit "LclIdX")
+    	     | otherwise      = ptext (sLit "LclId")
 
     arity = arityInfo info
     has_arity = arity /= 0

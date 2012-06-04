@@ -8,9 +8,6 @@ import qualified Data.List as List
 import Control.Applicative
 import Control.Arrow
 
-import Language.KURE
-import Language.KURE.Injection
-
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External

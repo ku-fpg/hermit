@@ -11,10 +11,6 @@ import Control.Arrow
 import Data.Default
 import qualified Data.Map as M
 
-import Language.KURE
-import Language.KURE.Injection
-
-
 -- A HERMIT document
 type DocH = MDoc HermitMark
 

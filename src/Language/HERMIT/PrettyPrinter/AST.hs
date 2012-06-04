@@ -9,8 +9,6 @@ import Data.Traversable (sequenceA)
 import qualified GhcPlugins as GHC
 import Language.HERMIT.HermitKure
 import Language.HERMIT.PrettyPrinter
-import Language.KURE
-import Language.KURE.Injection
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 

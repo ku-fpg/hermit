@@ -27,7 +27,6 @@ import qualified Data.Map as M
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 import System.Console.ANSI
 
-import Language.KURE
 import Data.Dynamic
 
 

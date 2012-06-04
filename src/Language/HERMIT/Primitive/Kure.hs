@@ -2,8 +2,6 @@ module Language.HERMIT.Primitive.Kure where
 
 import Control.Arrow
 
-import Language.KURE
-
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 

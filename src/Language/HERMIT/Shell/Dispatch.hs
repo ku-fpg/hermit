@@ -27,5 +27,4 @@ import Language.HERMIT.PrettyPrinter
 import Language.HERMIT.Interp
 import Language.HERMIT.Shell.Command
 
-import Language.KURE
 

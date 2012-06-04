@@ -7,9 +7,6 @@ import Data.List (nub)
 import Control.Applicative
 import Control.Monad (guard)
 
-import Language.KURE
-import Language.KURE.Injection
-
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad

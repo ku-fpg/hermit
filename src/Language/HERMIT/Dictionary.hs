@@ -13,9 +13,6 @@ import Data.Maybe
 
 import GhcPlugins
 
-import Language.KURE
-import Language.KURE.Injection
-
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 
@@ -122,7 +119,7 @@ metaCmd :: (Tag a)
         -> ([RewriteH Core] -> RewriteH Core) -- ^ means to combine the matched rewrites
         -> [String]                           -- ^ help text preamble
         -> External
-metaCmd name externs p combine help = external name (combine rws) (help ++ concat helps)
+metaCmd name externs p combine hlp = external name (combine rws) (hlp ++ concat helps)
     where (rws, helps) = unzip [ (rw, externName e : externHelp e)
                                | e <- externs
                                , tagMatch p e
@@ -131,6 +128,7 @@ metaCmd name externs p combine help = external name (combine rws) (help ++ conca
 -- Runs every command tagged with 'Bash' with innermostR (fix point anybuR),
 -- if any of them succeed, then it tries all of them again.
 -- Only fails if all of them fail the first time.
+bashExternal :: [External] -> External
 bashExternal es = metaCmd "bash" es (Local .& Eval .& (notT Unimplemented)) (innermostR . orR)
                           [ "Iteratively apply the following rewrites until nothing changes." ]
 

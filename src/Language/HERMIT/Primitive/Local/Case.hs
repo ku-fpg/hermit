@@ -7,9 +7,6 @@ import Data.List
 import Control.Applicative
 import Control.Arrow
 
-import Language.KURE
-import Language.KURE.Injection
-
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 
