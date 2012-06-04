@@ -10,6 +10,7 @@ import Control.Arrow
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 
+import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Subst hiding (letSubstR)
 
@@ -44,16 +45,16 @@ externals = map (.+ CaseCmd) $
 not_defined :: String -> RewriteH CoreExpr
 not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
 
-altVarsT :: TranslateH CoreAlt [Id]
-altVarsT = altT (pure ()) (const const)
-
-caseAltVarsT :: TranslateH CoreExpr [[Id]]
-caseAltVarsT = caseT (pure ()) (const altVarsT) $ \ _ i _ ids -> map (i:) ids
-
+-- | case (let v = e1 in e2) of alts ==> let v = e1 in case e2 of alts
 letFloatCase :: RewriteH CoreExpr
-letFloatCase = do Case (Let rec e) b ty alts <- idR
-                  return $ Let rec (Case e b ty alts)
+letFloatCase = do
+    captures <- caseT letVarsT (const (pure ())) $ \ vs _ _ _ -> vs
+    cFrees   <- freeVarsT -- so we get type variables too
+    caseT (if null (intersect cFrees captures) then idR else alphaLet)
+          (const idR)
+          (\ (Let bnds e) b ty alts -> Let bnds (Case e b ty alts))
 
+-- | (case s of alt1 -> e1; alt2 -> e2) v ==> case s of alt1 -> e1 v; alt2 -> e2 v
 caseFloatApp :: RewriteH CoreExpr
 caseFloatApp = do
     captures <- appT caseAltVarsT freeVarsT (flip (map . intersect))
@@ -64,6 +65,7 @@ caseFloatApp = do
                                     in Case s b newTy [ (c, ids, App f v)
                                                       | (c,ids,f) <- alts ])
 
+-- | f (case s of alt1 -> e1; alt2 -> e2) ==> case s of alt1 -> f e1; alt2 -> f e2
 caseFloatArg :: RewriteH CoreExpr
 caseFloatArg = do
     captures <- appT freeVarsT caseAltVarsT (map . intersect)
@@ -74,9 +76,17 @@ caseFloatArg = do
                                     in Case s b newTy [ (c, ids, App f e)
                                                       | (c,ids,e) <- alts ])
 
+-- | case (case s1 of alt11 -> e11; alt12 -> e12) of alt21 -> e21; alt22 -> e22
+--   ==>
+--   case s1 of
+--     alt11 -> case e11 of alt21 -> e21; alt22 -> e22
+--     alt12 -> case e12 of alt21 -> e21; alt22 -> e22
 caseFloatCase :: RewriteH CoreExpr
-caseFloatCase = do Case (Case s1 b1 ty1 alts1) b2 ty2 alts2 <- idR
-                   return $ Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ]
+caseFloatCase = do
+    captures <- caseT caseAltVarsT (const altFreeVarsT) $ \ vss bndr _ fs -> map (intersect (concatMap ($ bndr) fs)) vss
+    caseT (caseAllR idR (\i -> if null (captures !! (i-1)) then idR else alphaAlt))
+          (const idR)
+          (\ (Case s1 b1 ty1 alts1) b2 ty2 alts2 -> Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ])
 
 -- | Case-of-known-constructor rewrite
 caseReduce :: RewriteH CoreExpr

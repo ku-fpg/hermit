@@ -12,6 +12,7 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.External
 
+import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Subst
 
@@ -45,14 +46,6 @@ not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
 letIntro ::  TH.Name -> RewriteH CoreExpr
 letIntro nm = contextfreeT $ \ e -> do letvar <- newVarH nm (exprType e)
                                        return $ Let (NonRec letvar e) (Var letvar)
-
--- includes type variables
-bindings :: TranslateH CoreBind [Var]
-bindings = recT (\_ -> arr (\(Def v _) -> v)) id
-        <+ nonRecT idR (\v _ -> [v])
-
-letVarsT :: TranslateH CoreExpr [Var]
-letVarsT = letT bindings idR const
 
 letFloatApp :: RewriteH CoreExpr
 letFloatApp = do
