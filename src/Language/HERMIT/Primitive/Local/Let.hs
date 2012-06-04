@@ -3,9 +3,6 @@ module Language.HERMIT.Primitive.Local.Let where
 
 import GhcPlugins
 
--- import Control.Applicative
-import Control.Arrow
-
 import Data.List
 
 import Language.HERMIT.HermitKure
@@ -41,7 +38,7 @@ externals = map (.+ LetCmd) $
          ]
 
 not_defined :: String -> RewriteH CoreExpr
-not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
+not_defined nm = fail $ nm ++ " not implemented!"
 
 letIntro ::  TH.Name -> RewriteH CoreExpr
 letIntro nm = contextfreeT $ \ e -> do letvar <- newVarH nm (exprType e)
@@ -84,6 +81,6 @@ caseFloatLet = do
 
 letToCase :: RewriteH CoreExpr
 letToCase = do
-    Let (NonRec v ev) e <- idR
+    Let (NonRec v ev) _ <- idR
     caseBndr <- freshVarT v
     letT (return ()) (substR v (Var caseBndr)) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]

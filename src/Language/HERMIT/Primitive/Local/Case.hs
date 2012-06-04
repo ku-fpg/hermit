@@ -43,7 +43,7 @@ externals = map (.+ CaseCmd) $
          ]
 
 not_defined :: String -> RewriteH CoreExpr
-not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
+not_defined nm = fail $ nm ++ " not implemented!"
 
 -- | case (let v = e1 in e2) of alts ==> let v = e1 in case e2 of alts
 letFloatCase :: RewriteH CoreExpr

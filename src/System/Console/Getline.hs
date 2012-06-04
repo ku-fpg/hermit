@@ -59,7 +59,7 @@ getEditor = do
                      putChar '\n'
                      hFlush stdout
                      return ("esc-" ++ [c])
-            escPrintBracket c xs
+            escPrintBracket _c xs
                         | otherwise
                         = bell xs
 

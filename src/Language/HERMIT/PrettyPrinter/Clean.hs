@@ -75,9 +75,6 @@ corePrettyH opts =
     <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
   where
     hideNotes = True
-    -- Only use for base types!
-    ppShow :: (Show a) => a -> MDoc b
-    ppShow = text . show
 
     ppVar :: GHC.Var -> DocH
     ppVar = ppName . GHC.varName
@@ -183,7 +180,7 @@ corePrettyH opts =
     ppCoreType (ForAllTy v ty) = specialSymbol ForallSymbol <+> ppVar v <+> symbol '.' <+> ppCoreType ty
 
     ppCoreExpr0 :: PrettyH GHC.CoreExpr
-    ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b ty alts ->
+    ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b _ty alts ->
                         (keywordColor (text "case") <+> s <+> keywordColor (text "of") <+> ppIdBinder b) $$
                           nest 2 (vcat alts))
               <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))

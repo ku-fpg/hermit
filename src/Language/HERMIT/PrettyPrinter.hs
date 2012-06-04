@@ -6,7 +6,6 @@ import GhcPlugins hiding ((<>))
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 import Language.HERMIT.HermitKure
-import Control.Applicative
 import Control.Arrow
 import Data.Default
 import qualified Data.Map as M
@@ -168,8 +167,8 @@ renderCode w doc = rStart $ PP.fullRender PP.PageMode w 1.2 marker (\ _ -> rEnd)
                   PP.Chr ch   -> rPutStr cols [ch] $ rest cols
                   PP.Str str  -> rPutStr cols str $ rest cols
                   PP.PStr str -> rPutStr cols str $ rest cols
-                  PP.Mark (PushAttr attr) ->
-                        let cols' = attr : cols in rDoHighlight True cols' $ rest cols'
+                  PP.Mark (PushAttr a) ->
+                        let cols' = a : cols in rDoHighlight True cols' $ rest cols'
                   PP.Mark (PopAttr) -> do
                         let (_:cols') = cols in rDoHighlight False cols' $ rest cols'
 

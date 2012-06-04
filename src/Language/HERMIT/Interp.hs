@@ -5,16 +5,16 @@ module Language.HERMIT.Interp
         , interpExprH
         ) where
 
-import Data.Dynamic
 import Control.Monad (liftM2)
-import Language.HERMIT.External
-import Language.HERMIT.HermitKure
-import Language.HERMIT.HermitExpr
-import Data.List
+
 import Data.Char
+import Data.Dynamic
+import qualified Data.Map as M
+
 import qualified Language.Haskell.TH as TH
 
-import qualified Data.Map as M
+import Language.HERMIT.External
+import Language.HERMIT.HermitExpr
 
 interpExprH :: M.Map String [Dynamic] -> [Interp a] -> ExprH -> Either String a
 interpExprH env interps expr =
@@ -39,7 +39,7 @@ interpExpr :: M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
 interpExpr = interpExpr' False
 
 interpExpr' :: Bool -> M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
-interpExpr' _ env (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
+interpExpr' _   _   (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
 interpExpr' rhs env (CmdName str)
   | all isDigit str                     = return [ toDyn $ IntBox $ read str ]
   | Just dyn <- M.lookup str env        = if rhs
@@ -49,13 +49,13 @@ interpExpr' rhs env (CmdName str)
   -- best case: 'help ls' works instead of 'help "ls"'. this is likewise done in then clause above
   | rhs                                 = return [toDyn $ StringBox str]
   | otherwise                           = Left $ "Unrecognised command: " ++ show str
-interpExpr' rhs env (StrName str)           = if rhs
+interpExpr' rhs _   (StrName str)           = if rhs
                                           then return [ toDyn $ StringBox str ]
                                           else return []
 interpExpr' _ env (AppH e1 e2)              = dynAppMsg (interpExpr' False env e1) (interpExpr' True env e2)
 
 dynAppMsg :: Either String [Dynamic] -> Either String [Dynamic] -> Either String [Dynamic]
-dynAppMsg f x = liftM2 dynApply' f x >>= return
+dynAppMsg funs args = liftM2 dynApply' funs args >>= return
    where
            dynApply' :: [Dynamic] -> [Dynamic] -> [Dynamic]
            dynApply' fs xs = [ r | f <- fs, x <- xs, Just r <- return (dynApply f x)]

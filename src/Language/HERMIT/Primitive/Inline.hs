@@ -33,10 +33,10 @@ inline = rewrite $ \ c e -> case e of
                   let info = idInfo n0
                   case unfoldingInfo info of
                     -- This was simple, once we knew where to look
-                    CoreUnfolding { uf_tmpl = uf_tmpl } -> return uf_tmpl
+                    CoreUnfolding { uf_tmpl = uft } -> return uft
                     _ -> fail $ "inline failed, cannot find " ++ show n0 ++ "  in Env or IdInfo"
                 Just (LAM {}) -> fail $ "inline failed, found lambda-bound value or type"
-                Just (BIND depth _ e')
+                Just (BIND _depth _ e')
                   -- need to check for clashes, based on the depth
                   -- for now, just accept, and proceeded
                   -> return e'

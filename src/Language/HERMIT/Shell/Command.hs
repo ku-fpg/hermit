@@ -4,14 +4,15 @@ module Language.HERMIT.Shell.Command where
 
 import GhcPlugins hiding (L, Direction)
 
-import Data.Char
-import Data.Dynamic
 import Control.Applicative
-import Control.Arrow
+import Control.Arrow hiding (loop)
+import Control.Exception.Base hiding (catch)
+
+import Data.Char
 import Data.List (intercalate)
 import Data.Default (def)
-import Control.Exception.Base hiding (catch)
-import System.IO
+import Data.Dynamic
+import qualified Data.Map as M
 
 import Language.HERMIT.HermitExpr
 import Language.HERMIT.External
@@ -20,15 +21,14 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.Kernel
 import Language.HERMIT.PrettyPrinter
-import Language.HERMIT.Interp
 import Language.HERMIT.Dictionary
 
-import qualified Data.Map as M
-import qualified Text.PrettyPrint.MarkedHughesPJ as PP
+import Prelude hiding (catch)
+
 import System.Console.ANSI
+import System.IO
 
-import Data.Dynamic
-
+import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 data ShellCommand :: * where
    Status        ::                             ShellCommand
@@ -183,9 +183,9 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
 
           maybeLine <- gets
           case maybeLine of
-            Nothing            -> kernelAct st Exit
-            Just ('-':'-':msg) -> loop st
-            Just line          ->
+            Nothing             -> kernelAct st Exit
+            Just ('-':'-':_msg) -> loop st
+            Just line           ->
                 if all isSpace line
                 then loop st
                 else case parseExprH line of
@@ -250,7 +250,7 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
 
       act st (KernelCommand cmd) = kernelAct st cmd
 
-      act st (Dump fileName pp renderer w) = do
+      act st (Dump fileName _pp renderer w) = do
               case (M.lookup (cl_pretty st) pp_dictionary,M.lookup renderer finalRenders) of
                  (Just pp, Just r) -> do
                          doc <- query (cl_cursor st) (focusT (cl_lens st) (pp (cl_pretty_opts st)))
@@ -275,7 +275,7 @@ commandLine2 dict gets = hermitKernel $ \ kernel ast -> do
               -- something changed (you've applied)
               st2 <- (do ast' <- applyK kernel (cl_cursor st) (focusR (cl_lens st) rr)
                          let st' = st { cl_cursor = ast' }
-                         showFocus st'
+                         _ <- showFocus st'
                          return st') `catch` \  msg -> do
                                         putStrLn $ "Error thrown: " ++ msg
                                         return st

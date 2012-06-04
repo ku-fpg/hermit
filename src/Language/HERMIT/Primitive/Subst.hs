@@ -15,6 +15,7 @@ import Language.HERMIT.Primitive.GHC(freeIds)
 
 import qualified Language.Haskell.TH as TH
 
+import Prelude hiding (exp)
 
 externals :: [External]
 externals = map (.+ Experiment)
@@ -108,7 +109,7 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
         rule6 = anyR (promoteR $ substR v expReplacement)
         -- like Rule 3 and 4/5 above, but for lets
         rule78 :: RewriteH CoreExpr
-        rule78 = do Let bds e <- idR
+        rule78 = do Let bds _e <- idR
                     guardFail (v `elem` bindList bds) "Substitution var clashes with Let var"
                     if null $ List.intersect (bindList bds) (freeIds expReplacement)
                      then letAnyR (substBindR v expReplacement) (substR v expReplacement)

@@ -1,12 +1,9 @@
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
 module Language.HERMIT.PrettyPrinter.GHC where
 
-import qualified GhcPlugins as GHC
-
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
-import Data.Traversable (sequenceA)
 
 import qualified GhcPlugins as GHC
 import Language.HERMIT.HermitKure
@@ -33,10 +30,6 @@ corePrettyH opts =
     <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
   where
     hideNotes = po_notes opts
-
-    -- Only use for base types!
-    ppShow :: (Show a) => a -> MDoc b
-    ppShow = text . show
 
     -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
     -- that we are eliding infomation here.

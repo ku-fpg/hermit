@@ -21,6 +21,7 @@ data-files:
     javascript/jquery-json.js
 
 Library
+  ghc-options: -Wall -fno-warn-orphans
   Build-Depends: base >= 4 && < 5,
                  aeson,
                  ansi-terminal >= 0.5.5,
@@ -52,7 +53,6 @@ Library
        Language.HERMIT.Kernel
        Language.HERMIT.Interp
 
-       Language.HERMIT.Primitive.Command
        Language.HERMIT.Primitive.Consider
        Language.HERMIT.Primitive.GHC
        Language.HERMIT.Primitive.Inline
@@ -64,7 +64,6 @@ Library
        Language.HERMIT.Primitive.Subst
 
        Language.HERMIT.Shell.Command
-       Language.HERMIT.Shell.Dispatch
 
        Language.HERMIT.PrettyPrinter
        Language.HERMIT.PrettyPrinter.AST

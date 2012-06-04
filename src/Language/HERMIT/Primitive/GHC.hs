@@ -8,7 +8,7 @@ import qualified Data.Map as Map
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 
-
+import Prelude hiding (exp)
 
 ------------------------------------------------------------------------
 
@@ -102,7 +102,7 @@ rulesToRewriteH rs = contextfreeT $ \ e -> do
     let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- freeVars e ])
         -- The rough_args are just an attempt to try eliminate silly things
         -- that will never match
-        rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
+        _rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
     -- Finally, we try match the rules
     case lookupRule (const True) (const NoUnfolding) in_scope fn args rs of
         Nothing      -> fail "rule not matched"
