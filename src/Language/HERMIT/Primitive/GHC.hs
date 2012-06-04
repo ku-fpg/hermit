@@ -1,8 +1,7 @@
 module Language.HERMIT.Primitive.GHC where
 
-import GhcPlugins hiding (freeVars)
+import GhcPlugins hiding (freeVars,empty)
 
-import Control.Applicative
 import Control.Arrow
 import qualified Data.Map as Map
 
@@ -35,24 +34,22 @@ externals modGuts = map (.+ GHC)
 ------------------------------------------------------------------------
 
 letSubstR :: RewriteH CoreExpr
-letSubstR = rewrite $ \ c exp -> case exp of
-      (Let (NonRec b be) e)
-         | isId b    -> do
-                let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-                    sub = extendSubst empty b be
-                return $ substExpr (text "letSubstR") sub e
-      (Let (NonRec b (Type bty)) e)
-         | isTyVar b -> do
-                let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-                    sub = extendTvSubst empty b bty
-                return $ substExpr (text "letSubstR") sub e
+letSubstR = contextfreeT $ \ exp -> case exp of
+      Let (NonRec b be) e
+         | isId b    -> let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+                            sub   = extendSubst empty b be
+                         in return $ substExpr (text "letSubstR") sub e
+      Let (NonRec b (Type bty)) e
+         | isTyVar b -> let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+                            sub = extendTvSubst empty b bty
+                         in return $ substExpr (text "letSubstR") sub e
       _ -> fail "LetSubst failed. Expr is not a (non-recursive) Let."
 
 ------------------------------------------------------------------------
 
 -- output a list of all free variables in the Expr.
 freeIdsQuery :: TranslateH CoreExpr String
-freeIdsQuery = (("FreeVars are: " ++) . show . map (showSDoc.ppr)) <$> freeIdsT
+freeIdsQuery = freeIdsT >>^ (("FreeVars are: " ++) . show . map (showSDoc.ppr))
 
 freeIdsT :: TranslateH CoreExpr [Id]
 freeIdsT = arr freeIds
@@ -91,27 +88,25 @@ lookupRule :: (Activation -> Bool)	-- When rule is active
 -}
 
 rulesToEnv :: [CoreRule] -> Map.Map String (RewriteH CoreExpr)
-rulesToEnv rules = Map.fromList
-        [ ( unpackFS (ruleName rule)
-           , rulesToRewriteH [rule]
-           )
-        | rule <- rules
+rulesToEnv rs = Map.fromList
+        [ ( unpackFS (ruleName r), rulesToRewriteH [r] )
+        | r <- rs
         ]
 
 rulesToRewriteH :: [CoreRule] -> RewriteH CoreExpr
-rulesToRewriteH rules = contextfreeT $ \ e -> do
+rulesToRewriteH rs = contextfreeT $ \ e ->
         -- First, we normalize the lhs, so we can match it
-        (Var fn,args) <- return $ collectArgs e
+        let (Var fn,args) = collectArgs e
         -- Question: does this include Id's, or Var's (which include type names)
         -- Assumption: Var's.
-        let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- freeVars e ])
+            in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- freeVars e ])
         -- The rough_args are just an attempt to try eliminate silly things
         -- that will never match
-        let rough_args = map (const Nothing) args
+            rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
         -- Finally, we try match the rules
-        case lookupRule (const True) (const NoUnfolding) in_scope fn args rules of
-          Nothing -> fail "rule not matched"
-          Just (_,e)  -> return e
+         in case lookupRule (const True) (const NoUnfolding) in_scope fn args rs of
+              Nothing      -> fail "rule not matched"
+              Just (_,e')  -> return e'
 
 rules :: Map.Map String (RewriteH CoreExpr) -> String -> RewriteH CoreExpr
 rules mp r = case Map.lookup r mp of

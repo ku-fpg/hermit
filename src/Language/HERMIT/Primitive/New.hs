@@ -5,12 +5,11 @@ module Language.HERMIT.Primitive.New where
 
 import GhcPlugins as GHC hiding (varName)
 --import Convert (thRdrNameGuesses)
-import OccName(varName)
+-- import OccName(varName)
 
 import Control.Applicative
 import Control.Arrow
 
-import Language.HERMIT.HermitMonad
 import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
@@ -48,7 +47,7 @@ externals = map (.+ Experiment)
 -- TODO: we need something for bindings, etc.
 info :: TranslateH CoreExpr String
 info = do ContextPath this <- pathT
-          translate $ \ cxt e -> do
+          contextfreeT $ \ e -> do
                   let hd = "Core Expr"
                       ty = "type ::= " ++ showSDoc (ppr (exprType e))
                       pa = "path :=  " ++ show (reverse this)
@@ -84,7 +83,7 @@ fixIntro = translate $ \ c e -> case e of
                 let rdrEnv = mg_rdr_env modGuts
 
                 fixVar <- case findNameFromTH rdrEnv $  TH.mkName "Data.Function.fix" of
-                             [f] -> return f
+                             [f'] -> return f'
                              [] -> fail "can not find fix"
                              _  -> fail "to many fix's"
 
@@ -122,9 +121,9 @@ exprNumberBinder n = promoteR (exprRenameBinder (++ show n))
                  >>> (childL 0 `focusR` promoteR letSubstR)
 
 exprRenameBinder :: (String -> String) -> RewriteH CoreExpr
-exprRenameBinder nameMod = translate $ \ c e -> case e of
-        Lam b e -> do
-                uq <- getUniqueM
+exprRenameBinder nameMod =
+             do Lam b e <- idR
+                uq      <- constT getUniqueM
                 let name = mkSystemVarName uq $ mkFastString $ nameMod $ getOccString b
                     ty   = idType b
                     b'   = mkLocalId name ty

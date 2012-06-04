@@ -3,12 +3,7 @@ module Language.HERMIT.Primitive.Local where
 
 import GhcPlugins hiding (freeVars)
 
-import Data.List (nub)
-import Control.Applicative
-import Control.Monad (guard)
-
 import Language.HERMIT.HermitKure
-import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.External
 
@@ -75,8 +70,8 @@ eta_expand nm = contextfreeT $ \ e -> case splitAppTy_maybe (exprType e) of
 -- (let v = E1 in E2) => E2, if v is not free in E2
 dce :: RewriteH CoreExpr
 dce = contextfreeT $ \ e -> case e of
-        Let (NonRec n e1) e2 | n `notElem` freeVars e2 -> return e2
-                             | otherwise              -> fail "DCE: no dead code"
+        Let (NonRec n _) e2 | n `notElem` freeVars e2 -> return e2
+                            | otherwise               -> fail "DCE: no dead code"
         _ -> fail "DCE: not applied to a NonRec Let."
 
 ------------------------------------------------------------------------------

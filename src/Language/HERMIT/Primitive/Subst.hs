@@ -59,12 +59,12 @@ alphaLet :: RewriteH CoreExpr
 alphaLet = alphaNonRecLet <+ alphaRecLet
 
 alphaNonRecLet :: RewriteH CoreExpr
-alphaNonRecLet = do Let (NonRec v e1) e2 <- idR
+alphaNonRecLet = do Let (NonRec v _) _ <- idR
                     v' <- freshVarT v
                     letNonRecT idR (trySubstR v $ Var v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
 
 alphaRecLet :: RewriteH CoreExpr
-alphaRecLet = do Let bds@(Rec _) e <- idR
+alphaRecLet = do Let bds@(Rec _) _ <- idR
                  let boundIds = bindList bds
                  freshBoundIds <- sequence $ fmap freshVarT boundIds
                  letRecDefT (\ _ -> (foldr seqSubst idR (zip boundIds freshBoundIds)))
@@ -75,7 +75,7 @@ alphaRecLet = do Let bds@(Rec _) e <- idR
 -- there is no alphaCase.
 -- instead alphaAlt performs renaming over an individual Case alternative
 alphaAlt :: RewriteH CoreAlt
-alphaAlt = do (con, vs, e) <- idR
+alphaAlt = do (con, vs, _) <- idR
               freshBoundIds <- sequence $ fmap freshVarT vs
               altT (foldr seqSubst idR (zip vs freshBoundIds)) (\ _ _ e' -> (con, freshBoundIds, e'))
     where seqSubst (v,v') t = t >>> (trySubstR v $ Var v')

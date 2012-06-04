@@ -3,7 +3,7 @@ module Language.HERMIT.Primitive.Local.Let where
 
 import GhcPlugins
 
-import Control.Applicative
+-- import Control.Applicative
 import Control.Arrow
 
 import Data.List
@@ -43,8 +43,8 @@ not_defined :: String -> RewriteH CoreExpr
 not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
 
 letIntro ::  TH.Name -> RewriteH CoreExpr
-letIntro nm = rewrite $ \ _ e -> do letvar <- newVarH nm (exprType e)
-                                    return $ Let (NonRec letvar e) (Var letvar)
+letIntro nm = contextfreeT $ \ e -> do letvar <- newVarH nm (exprType e)
+                                       return $ Let (NonRec letvar e) (Var letvar)
 
 -- includes type variables
 bindings :: TranslateH CoreBind [Var]
@@ -70,27 +70,27 @@ letFloatArg = do
 letFloatLet :: RewriteH CoreExpr
 letFloatLet = do
     Let (NonRec v (Let (NonRec w ew) ev)) e <- idR
-    pure $ Let (NonRec w ew) $ Let (NonRec v ev) e
+    return $ Let (NonRec w ew) $ Let (NonRec v ev) e
 
 letFloatLetrec :: RewriteH CoreExpr
 letFloatLetrec = do
     Let (NonRec v (Let (Rec bds) ev)) e <- idR
-    pure $ Let (Rec bds) $ Let (NonRec v ev) e
+    return $ Let (Rec bds) $ Let (NonRec v ev) e
 
 -- todo if v used in ew
 letFloatLetTop :: RewriteH CoreProgram
 letFloatLetTop = do
-    (NonRec v (Let (NonRec w ew) ev) : e) <- idR
-    pure $ (NonRec w ew) : (NonRec v ev) : e
+    NonRec v (Let (NonRec w ew) ev) : e <- idR
+    return $ (NonRec w ew) : (NonRec v ev) : e
 
 -- todo v used in s, ty, or alts
 caseFloatLet :: RewriteH CoreExpr
 caseFloatLet = do
     Let (NonRec v (Case s b ty alts)) e <- idR
-    pure $ Case s b ty [ (con, ids, Let (NonRec v ec) e) | (con, ids, ec) <- alts]
+    return $ Case s b ty [ (con, ids, Let (NonRec v ec) e) | (con, ids, ec) <- alts]
 
 letToCase :: RewriteH CoreExpr
 letToCase = do
     Let (NonRec v ev) e <- idR
     caseBndr <- freshVarT v
-    letT (pure ()) (substR v (Var caseBndr)) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
+    letT (return ()) (substR v (Var caseBndr)) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
