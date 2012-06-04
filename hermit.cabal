@@ -79,6 +79,7 @@ Library
 
        Language.HERMIT.Plugin.CommandLine
        Language.HERMIT.Plugin.Restful
+       Language.HERMIT.Primitive.Common
 
        Paths_hermit
 
