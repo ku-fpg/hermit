@@ -29,7 +29,7 @@ module Language.HERMIT.HermitKure
        , letRecT, letRecAllR, letRecAnyR
        , recDefT, recDefAllR, recDefAnyR
        , letRecDefT, letRecDefAllR, letRecDefAnyR
-       -- Useful Translations
+       -- | Useful Translations
        , pathT
        )
 where
@@ -319,7 +319,8 @@ instance Term CoreExpr where
 
 instance Walker HermitEnv HermitM CoreExpr where
 
-  childL n = (case n of
+  childL n = (<+ missingChildL n) $
+               case n of
                  0  ->    appT  exposeT idR         (childL0of2 App)
                        <+ lamT  exposeT             (childL1of2 Lam)
                        <+ letT  exposeT idR         (childL0of2 Let)
@@ -332,8 +333,6 @@ instance Walker HermitEnv HermitM CoreExpr where
                        <+ caseChooseL
 
                  _  ->    caseChooseL
-             )
-             <+ missingChildL n
      where
        -- Note we use index (n-1) because 0 refers to the expression being scrutinised.
        caseChooseL :: LensH CoreExpr Core
@@ -429,29 +428,29 @@ letAnyR r1 r2 = letT' (attemptR r1) (attemptR r2) (attemptAny2 Let)
 
 
 caseT' :: TranslateH CoreExpr a1
-      -> (Int -> TranslateH CoreAlt a2)          -- Int argument *starts* at 1.
+      -> (Int -> TranslateH CoreAlt a2)
       -> (Id -> Type -> HermitM a1 -> [HermitM a2] -> HermitM b)
       -> TranslateH CoreExpr b
 caseT' t ts f = translate $ \ c e -> case e of
          Case e1 b ty alts -> f b ty (apply t (c @@ 0) e1) $ let c' = addHermitBinding (NonRec b e1) c
                                                                  in [ apply (ts n) (c' @@ n) alt
-                                                                    | (alt,n) <- zip alts [1..]
+                                                                    | (alt,n) <- zip alts [0..]
                                                                     ]
          _ -> fail "no match for Case"
 
 caseT :: TranslateH CoreExpr a1
-      -> (Int -> TranslateH CoreAlt a2)          -- Int argument *starts* at 1.
+      -> (Int -> TranslateH CoreAlt a2)
       -> (a1 -> Id -> Type -> [a2] -> b)
       -> TranslateH CoreExpr b
 caseT t ts f = caseT' t ts (\ b ty me malts -> f <$> me <*> pure b <*> pure ty <*> sequence malts)
 
 caseAllR :: RewriteH CoreExpr
-      -> (Int -> RewriteH CoreAlt)          -- Int argument *starts* at 1.
+      -> (Int -> RewriteH CoreAlt)
       -> RewriteH CoreExpr
 caseAllR r rs = caseT r rs Case
 
 caseAnyR :: RewriteH CoreExpr
-      -> (Int -> RewriteH CoreAlt)          -- Int argument *starts* at 1.
+      -> (Int -> RewriteH CoreAlt)
       -> RewriteH CoreExpr
 caseAnyR r rs = caseT' (attemptR r) (attemptR . rs) (\ b ty -> attemptAny1N (\ e -> Case e b ty))
 
