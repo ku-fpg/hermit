@@ -1,12 +1,9 @@
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
 module Language.HERMIT.PrettyPrinter.GHC where
 
-import qualified GhcPlugins as GHC
-
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
-import Data.Traversable (sequenceA)
 
 import qualified GhcPlugins as GHC
 import Language.HERMIT.HermitKure
@@ -34,7 +31,7 @@ corePrettyH opts =
   where
     hideNotes = po_notes opts
 
-    -- Only use for base types!
+    -- Only use for base types!  -- Not used anywhere?
     ppShow :: (Show a) => a -> MDoc b
     ppShow = text . show
 

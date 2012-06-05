@@ -6,7 +6,6 @@ import GhcPlugins hiding ((<>))
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 import Language.HERMIT.HermitKure
-import Control.Applicative
 import Control.Arrow
 import Data.Default
 import qualified Data.Map as M
