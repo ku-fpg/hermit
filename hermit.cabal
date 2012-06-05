@@ -16,46 +16,31 @@ Stability:           pre-alpha
 build-type:          Simple
 Cabal-Version:       >= 1.10
 
-data-files:
-    javascript/jquery.js
-    javascript/jquery-json.js
-
 Library
   ghc-options: -Wall -fno-warn-orphans
   Build-Depends: base >= 4 && < 5,
                  aeson,
-                 ansi-terminal >= 0.5.5,
                  containers,
                  data-default >= 0.4,
                  ghc >= 7.4,
-                 http-types,
                  kure >= 1.8.5,
                  marked-pretty >= 0.1,
-                 scotty >= 0.4.2 && < 0.5,
-                 stm,
-                 syb,
                  template-haskell,
-                 text,
-                 transformers,
-                 warp
+                 text
 
   default-language: Haskell2010
 
   Exposed-modules:
        Language.HERMIT
-       Language.HERMIT.HermitKure
-       Language.HERMIT.HermitEnv
-       Language.HERMIT.HermitMonad
-       Language.HERMIT.External
        Language.HERMIT.Dictionary
+       Language.HERMIT.External
+       Language.HERMIT.HermitEnv
        Language.HERMIT.HermitExpr
+       Language.HERMIT.HermitKure
+       Language.HERMIT.HermitMonad
        Language.HERMIT.Kernel
        Language.HERMIT.Interp
-
        Language.HERMIT.Plugin
-       Language.HERMIT.Plugin.Interactive
-       Language.HERMIT.Plugin.Restful
-       Language.HERMIT.Plugin.Script
 
        Language.HERMIT.Primitive.Consider
        Language.HERMIT.Primitive.GHC
@@ -66,8 +51,6 @@ Library
        Language.HERMIT.Primitive.Local.Case
        Language.HERMIT.Primitive.New
        Language.HERMIT.Primitive.Subst
-
-       Language.HERMIT.Shell.Command
 
        Language.HERMIT.PrettyPrinter
        Language.HERMIT.PrettyPrinter.AST
@@ -82,11 +65,4 @@ Library
 
        Language.HERMIT.Primitive.Common
 
-       Paths_hermit
-
-       System.Console.Getline
-
-
-
   Hs-Source-Dirs: src
-
