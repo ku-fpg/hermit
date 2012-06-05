@@ -4,7 +4,7 @@ module Language.HERMIT.Primitive.Local.Case where
 import GhcPlugins
 
 import Data.List
-import Control.Applicative
+import Data.Monoid
 import Control.Arrow
 
 import Language.HERMIT.HermitKure
@@ -45,10 +45,10 @@ not_defined :: String -> RewriteH CoreExpr
 not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
 
 altVarsT :: TranslateH CoreAlt [Id]
-altVarsT = altT (pure ()) (const const)
+altVarsT = altT mempty (\ _ vs () -> vs)
 
 caseAltVarsT :: TranslateH CoreExpr [[Id]]
-caseAltVarsT = caseT (pure ()) (const altVarsT) $ \ _ i _ ids -> map (i:) ids
+caseAltVarsT = caseT mempty (const altVarsT) $ \ () v _ vs -> map (v:) vs
 
 letFloatCase :: RewriteH CoreExpr
 letFloatCase = do Case (Let rec e) b ty alts <- idR
@@ -82,12 +82,12 @@ caseFloatCase = do Case (Case s1 b1 ty1 alts1) b2 ty2 alts2 <- idR
 caseReduce :: RewriteH CoreExpr
 caseReduce = letTransform >>> repeatR letSubstR
     where letTransform = contextfreeT $ \ e -> case e of
-            (Case s _ _ alts) -> case isDataCon s of
-                                    Nothing -> fail "caseReduce failed, not a DataCon"
-                                    Just (sc, fs) -> case [ (bs, rhs) | (DataAlt dc, bs, rhs) <- alts, sc == dc ] of
-                                                        [(bs,e')] -> return $ nestedLets e' $ zip bs fs
-                                                        []   -> fail "caseReduce failed, no matching alternative (impossible?!)"
-                                                        _    -> fail "caseReduce failed, more than one matching alt (impossible?!)"
+            Case s _ _ alts -> case isDataCon s of
+                                 Nothing -> fail "caseReduce failed, not a DataCon"
+                                 Just (sc, fs) -> case [ (bs, rhs) | (DataAlt dc, bs, rhs) <- alts, sc == dc ] of
+                                                    [(bs,e')] -> return $ nestedLets e' $ zip bs fs
+                                                    []   -> fail "caseReduce failed, no matching alternative (impossible?!)"
+                                                    _    -> fail "caseReduce failed, more than one matching alt (impossible?!)"
             _ -> fail "caseReduce failed, not a Case"
 
 -- TODO: finish writing isDataCon to handle all Expr constructors properly
