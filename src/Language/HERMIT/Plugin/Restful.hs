@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternGuards, DataKinds, ScopedTypeVariables, DeriveDataTypeable,
              OverloadedStrings, KindSignatures, GADTs, TypeFamilies #-}
 
-module Language.HERMIT.Plugin.Restful (passes) where
+module Language.HERMIT.Plugin.Restful (plugin) where
 
 import Control.Applicative
 import Control.Monad
@@ -15,6 +15,8 @@ import qualified Data.Map as M
 import qualified Data.Text as TS
 import qualified Data.Text.Lazy as T
 
+import GhcPlugins hiding (liftIO)
+
 -- The Prelude version of catch has been deprecated.
 import Prelude hiding (catch)
 import Control.Exception hiding (catch)
@@ -24,15 +26,15 @@ import Language.HERMIT.External
 import Language.HERMIT.HermitExpr
 import Language.HERMIT.Interp
 import Language.HERMIT.Kernel
-import Language.HERMIT.Plugin.Common
+import Language.HERMIT.Plugin
 import Language.HERMIT.PrettyPrinter.JSON
 
 import Network.HTTP.Types
 import Paths_hermit
 import Web.Scotty as S
 
-passes :: [NamedPass]
-passes = [("w", restful)]
+plugin :: Plugin
+plugin = hermitPlugin restful
 
 restful :: HermitPass
 restful opts modGuts = hermitKernel (webapp exts indexfile) modGuts

@@ -10,20 +10,18 @@ sub compileAndRun {
                "    -fforce-recomp -O2 -dcore-lint -fsimple-list-literals ";
 
 	if ($style eq "h") {
-	    $str .= "-fplugin=Language.HERMIT.Plugin " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main:mode=h " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main:/${mod}.hermit ";
+	    $str .= "-fplugin=Language.HERMIT.Plugin.Script " .
+                    "-fplugin-opt=Language.HERMIT.Plugin.Script:main:Main:/${mod}.hermit ";
 	}
 
 	if ($style eq "i") {
-	    $str .= "-fplugin=Language.HERMIT.Plugin " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main:mode=i ";
+	    $str .= "-fplugin=Language.HERMIT.Plugin.Interactive " .
+                    "-fplugin-opt=Language.HERMIT.Plugin.Interactive:main:Main ";
 	}
 
 	if ($style eq "w") {
-	    $str .= "-fplugin=Language.HERMIT.Plugin " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main:mode=w " .
-                    "-fplugin-opt=Language.HERMIT.Plugin:main:Main:testrest.html";
+	    $str .= "-fplugin=Language.HERMIT.Plugin.Restful " .
+                    "-fplugin-opt=Language.HERMIT.Plugin.Restful:main:Main:testrest.html";
 	}
 
 	system($str);
