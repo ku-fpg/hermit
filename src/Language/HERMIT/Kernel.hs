@@ -14,8 +14,6 @@ module Language.HERMIT.Kernel (
 ) where
 
 import GhcPlugins
-import Control.Monad
-import Control.Exception.Base
 import Data.Dynamic
 
 import Language.HERMIT.HermitKure
@@ -26,7 +24,6 @@ import Language.HERMIT.External
 
 import qualified Data.Map as M
 import Control.Concurrent
-import Control.Concurrent.MVar
 
 data Kernel = Kernel
         { quitK   ::            AST                      -> IO ()
@@ -59,13 +56,11 @@ hermitKernel :: (Kernel -> AST -> IO ())
              -> ModGuts -> CoreM ModGuts
 hermitKernel callback modGuts = do
 
-        let hEnv0 = initHermitEnv
-
         msg :: MVar (Msg (M.Map AST ModGuts) ModGuts) <- liftIO newEmptyMVar
 
         syntax_names :: MVar AST <- liftIO newEmptyMVar
 
-        liftIO $ forkIO $
+        _ <- liftIO $ forkIO $
                 let loop n = do
                         putMVar syntax_names (AST n)
                         loop (succ n)
@@ -79,9 +74,9 @@ hermitKernel callback modGuts = do
                 putMVar msg (Req fn rep)
                 res <- takeMVar rep
                 case res of
-                  Left msg -> do
-                        print ("sendReq",msg)
-                        fail msg
+                  Left m -> do
+                        print ("sendReq",m)
+                        fail m
                   Right ans -> return ans
 
         let find :: (Monad m) => AST -> M.Map AST ModGuts -> (String -> m a) -> (ModGuts -> m a) -> m a
@@ -89,7 +84,7 @@ hermitKernel callback modGuts = do
               Nothing -> failing $ "can not find syntax tree : " ++ show name
               Just core -> k core
 
-        let fail' msg = return (Left msg)
+        let fail' m = return (Left m)
 
         let kernel = Kernel
                 { quitK = \ name -> sendDone $ \ env -> find name env fail $ \ core -> return core
@@ -98,12 +93,12 @@ hermitKernel callback modGuts = do
                                   (\ core' -> do
                                       syn' <- liftIO $ takeMVar syntax_names
                                       return $ Right (syn',M.insert syn' core' env))
-                                  (\ msg -> return $ Left msg)
+                                  (\ m -> return $ Left m)
                                   (apply (extractR rr) (initHermitEnv core) core)
                 , queryK = \ name q -> sendReq $ \ env -> find name env fail' $ \ core ->
                              runHermitMR
                                   (\ reply -> return  $ Right (reply,env))
-                                  (\ msg -> return $ Left msg)
+                                  (\ m -> return $ Left m)
                                   (apply (extractT q) (initHermitEnv core) core)
                 , deleteK = \ name -> sendReq $ \ env -> find name env fail' $ \ _ ->
                              return $ Right ((), M.delete name env)
@@ -122,12 +117,12 @@ hermitKernel callback modGuts = do
                             Right (a,st2) -> do
                               liftIO $ putMVar rep (Right a)
                               loop st2
-                            Left msg -> do
-                              liftIO $ putMVar rep (Left msg)
+                            Left m' -> do
+                              liftIO $ putMVar rep (Left m')
                               loop st
                   Done fn -> fn st
 
-        pid <- liftIO $ forkIO $ callback kernel syn
+        _pid <- liftIO $ forkIO $ callback kernel syn
 
         modGuts' <- loop (M.singleton syn modGuts)
 

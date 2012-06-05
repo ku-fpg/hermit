@@ -3,6 +3,7 @@
 module Language.HERMIT.HermitExpr
         ( ExprH(..)
         , parseExprH
+        , parseExprsH
         ) where
 
 import Data.Char
@@ -79,7 +80,7 @@ parseExprH0 = \ inp ->
         , (e,inp2)   <- parseExprH1 inp1
         , (")",inp3) <- parseToken inp2
         ]
-    where chomp c [] = []
+    where chomp _  [] = []
           chomp ch s@(c:cs) | c == ch && last cs == ch = init cs
                             | otherwise = s
 
@@ -94,6 +95,7 @@ parseExprH1 = \ inp ->
 -- infix version, only one level for now
 --mkAppH a [CmdName fn,b] | all (`elem` ".->") fn
 --                        = foldr AppH (CmdName fn) [a,b]
+mkAppH :: ExprH -> [ExprH] -> ExprH
 mkAppH e es             = foldl AppH e es
 
 parseExprsH1 :: ReadS [ExprH]

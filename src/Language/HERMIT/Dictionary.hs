@@ -107,6 +107,7 @@ help externals (Just "ls") m = unlines $ map toLine groups
                    | n <- map externName externals, prefix `isPrefixOf` n ]
           toLine [] = ""
           toLine ((d,cmd):r) = d ++ optParens (intercalate ", " [ cmd' | cmd' <- cmd : map snd r, cmd' /= d ])
+help _ _ _ = error "bad help arguments"
 
 --------------------------------------------------------------------------
 

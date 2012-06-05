@@ -96,6 +96,7 @@ instance FromJSON ExprH where
             "Cmd" -> CmdName <$> o .: "value"
             "Str" -> StrName <$> o .: "value"
             "App" -> AppH <$> o .: "lhs" <*> o .: "rhs"
+            _     -> error "no parse"
 
    parseJSON _ = mzero
 

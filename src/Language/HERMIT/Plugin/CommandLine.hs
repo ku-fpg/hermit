@@ -5,7 +5,6 @@ module Language.HERMIT.Plugin.CommandLine (passes) where
 import GhcPlugins
 import PprCore -- compiler/coreSyn/PprCore.lhs
 
-import Data.List
 import System.IO
 
 import Language.HERMIT.Shell.Command as Dispatch
@@ -40,7 +39,7 @@ scripted opts modGuts =
 
 logCore :: FilePath -> HermitPass -> HermitPass
 logCore filename pass opts modGuts = do
-    writeProgram ("BEFORE." ++ filename) modGuts
+    _ <- writeProgram ("BEFORE." ++ filename) modGuts
     modGuts' <- pass opts modGuts
     writeProgram ("AFTER." ++ filename) modGuts'
 

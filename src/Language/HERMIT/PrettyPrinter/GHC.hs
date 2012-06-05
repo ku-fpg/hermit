@@ -31,10 +31,6 @@ corePrettyH opts =
   where
     hideNotes = po_notes opts
 
-    -- Only use for base types!  -- Not used anywhere?
-    ppShow :: (Show a) => a -> MDoc b
-    ppShow = text . show
-
     -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
     -- that we are eliding infomation here.
     ppSDoc :: (GHC.Outputable a) => a -> MDoc b

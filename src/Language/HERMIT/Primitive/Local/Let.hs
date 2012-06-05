@@ -3,15 +3,13 @@ module Language.HERMIT.Primitive.Local.Let where
 
 import GhcPlugins
 
--- import Control.Applicative
-import Control.Arrow
-
 import Data.List
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.HermitMonad
 import Language.HERMIT.External
 
+import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Subst
 
@@ -40,19 +38,11 @@ externals = map (.+ LetCmd) $
          ]
 
 not_defined :: String -> RewriteH CoreExpr
-not_defined nm = rewrite $ \ c e -> fail $ nm ++ " not implemented!"
+not_defined nm = fail $ nm ++ " not implemented!"
 
 letIntro ::  TH.Name -> RewriteH CoreExpr
 letIntro nm = contextfreeT $ \ e -> do letvar <- newVarH nm (exprType e)
                                        return $ Let (NonRec letvar e) (Var letvar)
-
--- includes type variables
-bindings :: TranslateH CoreBind [Var]
-bindings = recT (\_ -> arr (\(Def v _) -> v)) id
-        <+ nonRecT idR (\v _ -> [v])
-
-letVarsT :: TranslateH CoreExpr [Var]
-letVarsT = letT bindings idR const
 
 letFloatApp :: RewriteH CoreExpr
 letFloatApp = do
@@ -91,6 +81,6 @@ caseFloatLet = do
 
 letToCase :: RewriteH CoreExpr
 letToCase = do
-    Let (NonRec v ev) e <- idR
+    Let (NonRec v ev) _ <- idR
     caseBndr <- freshVarT v
     letT (return ()) (substR v (Var caseBndr)) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]

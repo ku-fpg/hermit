@@ -2,7 +2,6 @@
 module Language.Core.Quote where
 
 import GhcPlugins
-import qualified Language.Haskell.TH as TH
 
 import Control.Applicative
 
@@ -52,7 +51,7 @@ integer :: Q Integer
 integer = error "integer"
 
 machInt :: Q Integer
-machInt = Q $ \ (QEnv env core) -> case core of
+machInt = Q $ \ (QEnv _env core) -> case core of
                 Lit (MachInt i) -> [i]
                 _               -> []
 
