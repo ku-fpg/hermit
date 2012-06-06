@@ -3,18 +3,27 @@
 module Language.HERMIT.HermitKure
        ( module Language.KURE
        , module Language.KURE.Injection
+       -- * Synonyms
        , TranslateH
        , RewriteH
        , LensH
+       -- * Generic Data Type
+       -- $typenote
        , Core(..), CoreDef(..)
-       -- | Congruence combinators
+       -- * Congruence combinators
+       -- ** Modguts
        , modGutsT, modGutsR
+       -- ** Program
        , nilT
        , consBindT, consBindAllR, consBindAnyR
+       -- ** Bindings
        , nonRecT, nonRecR
        , recT, recAllR, recAnyR
+       -- ** Recursive Definitions
        , defT, defR
+       -- ** Alternatives
        , altT, altR
+       -- ** Expressions
        , varT
        , litT
        , appT, appAllR, appAnyR
@@ -25,11 +34,12 @@ module Language.HERMIT.HermitKure
        , tickT, tickR
        , typeT
        , coercionT
+       -- ** Composite Congruence Combinators
        , letNonRecT, letNonRecAllR, letNonRecAnyR
        , letRecT, letRecAllR, letRecAnyR
        , recDefT, recDefAllR, recDefAnyR
        , letRecDefT, letRecDefAllR, letRecDefAnyR
-       -- | Useful Translations
+       -- * Useful Translations
        , pathT
        )
 where
@@ -57,7 +67,8 @@ type LensH a b = Lens HermitEnv HermitM a b
 
 ---------------------------------------------------------------------
 
--- | NOTE: 'Type' is not included in the generic datatype.
+-- $typenote
+--   NOTE: 'Type' is not included in the generic datatype.
 --   However, we could have included it and provided the facility for descending into types.
 --   We have not done so because
 --     (a) we do not need that functionality, and
@@ -141,7 +152,7 @@ instance Walker HermitEnv HermitM ModGuts where
   childL 0 = modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
   childL n = missingChildL n
 
--- slightly different to the other; passes in *all* of the original
+-- | Slightly different to the others; passes in *all* of the original to the reconstruction function.
 modGutsT :: TranslateH CoreProgram a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
 modGutsT t f = translate $ \ c modGuts -> f modGuts <$> apply t (c @@ 0) (mg_binds modGuts)
 
@@ -529,7 +540,7 @@ letRecDefAnyR rs r = letRecAnyR (\ n -> defR (rs n)) r
 
 -- Useful Translations
 
--- | 'pathT' finds the current path.
+-- | Find the current path.
 pathT :: TranslateH a ContextPath
 pathT = hermitBindingPath <$> contextT
 
