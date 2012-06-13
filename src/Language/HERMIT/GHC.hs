@@ -6,6 +6,8 @@ module Language.HERMIT.GHC
         , findNameFromTH
         , alphaTyVars
         , Type(..)
+        , GhcException(..)
+        , throwGhcException
         ) where
 
 import GhcPlugins
@@ -14,6 +16,10 @@ import GhcPlugins
 import Convert (thRdrNameGuesses)
 import TysPrim          ( alphaTyVars )
 import TypeRep (Type(..))
+import Panic (GhcException(ProgramError), throwGhcException)
+
+
+
 import Data.Maybe (isJust)
 import qualified Language.Haskell.TH as TH
 
