@@ -68,10 +68,14 @@ parseStmtsH = parse parseExprsH'
 ---------------------------------------------
 
 parseExprsH' :: ReadS [StmtH ExprH]
-parseExprsH' =
-        parseTopExprH1 `bind` (\ a ->
-        many (some (item ";") `bind` \ _ -> parseTopExprH1) `bind` (\ as ->
-        (\ inp -> [(a:as,inp)])))
+parseExprsH' = \ inp ->
+        (many (item ";")                 `bind` \ _ -> -- another hack
+        (parseTopExprH1                  `bind` (\ a ->
+        (many (item ";")                 `bind` \ _ -> -- complete hack, needed fixed with real parser
+        (parseExprsH'                    `bind` (\ as ->
+        (\ inp -> [(a:as,inp)]))))))) inp ++  [ ([], inp) ]
+
+
 
 parseTopExprH1 :: ReadS (StmtH ExprH)
 parseTopExprH1 = \ inp ->
