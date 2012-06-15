@@ -2,6 +2,7 @@
 
 module Language.HERMIT.HermitExpr
         ( ExprH(..)
+        , StmtH(..)
         , parseExprH
         , parseStmtsH
         ) where
