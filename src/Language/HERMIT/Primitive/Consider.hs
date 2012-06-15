@@ -1,7 +1,7 @@
 module Language.HERMIT.Primitive.Consider where
 
 import GhcPlugins as GHC
-import Convert
+-- import Convert
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
@@ -53,10 +53,12 @@ nameBound _  _                        =  False
 cmpName :: TH.Name -> Name -> Bool
 cmpName = cmpTHName2Name
 
--- what is this meant for?
+
 var :: TH.Name -> RewriteH CoreExpr
-var nm = contextfreeT $ \ e -> do
-  liftIO $ print ("VAR",GHC.showSDoc . GHC.ppr $ thRdrNameGuesses $ nm)
-  case e of
-    Var n0 | nm `cmpName` idName n0 -> return e
-    _                               -> fail $ "Name \"" ++ show nm ++ "\" not found."
+var nm = whenM (varT $ \ v -> nm `cmpName` idName v) idR
+
+-- var nm = contextfreeT $ \ e -> do
+--   liftIO $ print ("VAR",GHC.showSDoc . GHC.ppr $ thRdrNameGuesses $ nm)
+--   case e of
+--     Var n0 | nm `cmpName` idName n0 -> return e
+--     _                               -> fail $ "Name \"" ++ show nm ++ "\" not found."
