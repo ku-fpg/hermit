@@ -3,9 +3,10 @@
 module Language.HERMIT.HermitExpr
         ( ExprH(..)
         , parseExprH
-        , parseExprsH
+        , parseStmtsH
         ) where
 
+import Control.Applicative ((<$>))
 import Data.Char
 
 ---------------------------------------------
@@ -17,6 +18,13 @@ data ExprH
         | AppH ExprH ExprH              -- application
         deriving Show
 
+data StmtH expr
+        = ExprH expr
+        | ScopeH [StmtH expr]
+        deriving Show
+
+data Box e = InfixableExpr e | Box e
+        deriving Show
 ---------------------------------------------
 
 -- Cheap and cheerful parser. Pretty hacky for now
@@ -47,34 +55,51 @@ bind m k = \ inp ->
 
 ---------------------------------------------
 
+
+-- | parse an expression.
 parseExprH :: String -> Either String ExprH
 parseExprH = parse parseExprH1
 
-parseExprsH :: String -> Either String [ExprH]
-parseExprsH = parse parseExprsH'
+-- | parse a list of statements, seperated by semicolon
+parseStmtsH :: String -> Either String [StmtH ExprH]
+parseStmtsH = parse parseExprsH'
 
 ---------------------------------------------
 
-parseExprsH' :: ReadS [ExprH]
+parseExprsH' :: ReadS [StmtH ExprH]
 parseExprsH' =
-        parseExprH1 `bind` (\ a ->
-        many (some (item ";") `bind` \ _ -> parseExprH1) `bind` (\ as ->
+        parseTopExprH1 `bind` (\ a ->
+        many (some (item ";") `bind` \ _ -> parseTopExprH1) `bind` (\ as ->
         (\ inp -> [(a:as,inp)])))
 
-parseExprH0 :: ReadS ExprH
+parseTopExprH1 :: ReadS (StmtH ExprH)
+parseTopExprH1 = \ inp ->
+        (parseExprH1 `bind` \ es -> \ inp1 -> [(ExprH es,inp1)]) inp ++
+        [ (ScopeH es,inp3)
+        | ("{",inp1) <- parseToken inp
+        , (es,inp2)   <- parseExprsH' inp1
+        , ("}",inp3) <- parseToken inp2
+        ]
+
+
+parseExprH0 :: ReadS (Box ExprH)
 parseExprH0 = \ inp ->
-        [ (CmdName str,inp1)
+        [ (Box $ CmdName str,inp1)
         | (str,inp1) <- parseToken inp
         , all isId str
         ] ++
-        [ (SrcName str,inp2)
+        [ (InfixableExpr $ CmdName str,inp1)
+        | (str,inp1) <- parseToken inp
+        , all isInfixId str
+        ] ++
+        [ (Box $ SrcName str,inp2)
         | ("'",inp1) <- parseToken inp
         , (str,inp2) <- parseToken inp1
         ] ++
-        [ (CmdName $ chomp '"' str,inp1)
+        [ (Box $ CmdName $ chomp '"' str,inp1)
         | (str@('"':_),inp1) <- lex inp
         ] ++
-        [ (e,inp3)
+        [ (Box $ e,inp3)
         | ("(",inp1) <- parseToken inp
         , (e,inp2)   <- parseExprH1 inp1
         , (")",inp3) <- parseToken inp2
@@ -84,26 +109,31 @@ parseExprH0 = \ inp ->
                             | otherwise = s
 
 parseExprH1 :: ReadS ExprH
-parseExprH1 = \ inp ->
-        [ (mkAppH e es,inp2)
-        | (e,inp1)  <- parseExprH0 inp
-        , (es,inp2) <- parseExprsH1 inp1
-        ]
+parseExprH1 = some parseExprH0 `bind` \ es -> \ inp ->
+        case mkAppH es id [] of
+          Nothing -> []
+          Just r  -> [(r,inp)]
 
 -- Infix hook: TODO
 -- infix version, only one level for now
 --mkAppH a [CmdName fn,b] | all (`elem` ".->") fn
 --                        = foldr AppH (CmdName fn) [a,b]
-mkAppH :: ExprH -> [ExprH] -> ExprH
-mkAppH e es             = foldl AppH e es
+mkAppH :: [Box ExprH] -> (ExprH -> ExprH) -> [ExprH] -> Maybe ExprH
+--mkAppH (InfixableExpr e:es)   ops rs@(_:_)     = mkAppH es (mkAppH' rs)
+mkAppH (Box e:es)             ops        rs = mkAppH es ops (rs ++ [e])
+mkAppH (InfixableExpr e:es)   ops        rs = maybe Nothing (\ lhs ->
+                                                mkAppH es (ops . AppH (AppH e lhs)) []
+                                                ) (mkAppH' rs)
+mkAppH []                     ops rs        = ops <$> mkAppH' rs
 
-parseExprsH1 :: ReadS [ExprH]
-parseExprsH1 = \ inp ->
-        [ (e:es,inp2)
-        | (e,inp1)  <- parseExprH0 inp
-        , (es,inp2) <- parseExprsH1 inp1
-        ] ++
-        [ ([], inp) ]
+mkAppH' :: [ExprH] -> Maybe ExprH
+mkAppH' (r:rs) = Just $ foldl AppH r rs
+mkAppH' []     = Nothing
+
+--mkAppH (e:es)             = foldl AppH (f e) (map f es)
+--  where f (InfixableExpr e) = e
+--        f (Box e) = e
+
 
 item :: String -> ReadS ()
 item str = \ inp ->
@@ -123,13 +153,18 @@ parseToken (';' :cs) = [(";",cs)]
 parseToken ('\'':cs) = [("'",cs)]
 parseToken ('\"':cs) = [("\"",cs)]
 parseToken (c   :cs) | isSpace c = parseToken cs
-                     | isId c    = [span isId (c:cs)]
+                     | isAlphaNum c   = [span isId (c:cs)]
+                     | isInfixId c    = [span isInfixId (c:cs)]
 parseToken _         = []
 
 ---------------------------------------------
 
 isId :: Char -> Bool
-isId c = isAlphaNum c || c `elem` "+._-:"
+isId c = isAlphaNum c || c `elem` "_-"
+
+isInfixId :: Char -> Bool
+isInfixId c = c `elem` "+._-:<>"
+
 
 ---------------------------------------------
 
