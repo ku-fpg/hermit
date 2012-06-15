@@ -443,7 +443,7 @@ caseT' :: TranslateH CoreExpr a1
       -> TranslateH CoreExpr b
 caseT' t ts f = translate $ \ c e -> case e of
          Case e1 b ty alts -> f b ty (apply t (c @@ 0) e1) $ let c' = addHermitBinding (NonRec b e1) c
-                                                                 in [ apply (ts n) (c' @@ n) alt
+                                                                 in [ apply (ts n) (c' @@ (n+1)) alt
                                                                     | (alt,n) <- zip alts [0..]
                                                                     ]
          _ -> fail "no match for Case"
