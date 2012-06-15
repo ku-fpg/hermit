@@ -44,7 +44,7 @@ externals = map (.+ KURE)
    , external "any-du"      (anyduR :: RewriteH Core -> RewriteH Core)
        [ "apply a rewrite twice, in a top-down and bottom-up way, using one single tree traversal",
          "succeeding if any succeed"]
-   , external "td-prune"    (tdpruneR :: RewriteH Core -> RewriteH Core)
+   , external "prune-td"    (prunetdR :: RewriteH Core -> RewriteH Core)
        [ "attempt to apply a rewrite in a top-down manner, prunning at successful rewrites" ]
    , external "innermost"  (innermostR :: RewriteH Core -> RewriteH Core)
        [ "a fixed-point traveral, starting with the innermost term" ]

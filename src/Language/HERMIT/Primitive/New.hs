@@ -19,8 +19,8 @@ import Language.HERMIT.Primitive.GHC
 import qualified Language.Haskell.TH as TH
 
 
-promoteR'  :: Term a => RewriteH a -> RewriteH (Generic a)
-promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an expr") (apply rr c)  (retract e)
+-- promoteR'  :: Term a => RewriteH a -> RewriteH (Generic a)
+-- promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an expr") (apply rr c)  (retract e)
 
 externals :: [External]
 externals = map (.+ Experiment)
@@ -46,15 +46,14 @@ externals = map (.+ Experiment)
 -- info currently outputs the type of the current CoreExpr
 -- TODO: we need something for bindings, etc.
 info :: TranslateH CoreExpr String
-info = do ContextPath this <- pathT
-          contextfreeT $ \ e -> do
-                  let hd = "Core Expr"
-                      ty = "type ::= " ++ showSDoc (ppr (exprType e))
-                      pa = "path :=  " ++ show (reverse this)
-                      extra = "extra := " ++ case e of
-                                Var v -> showSDoc (ppIdInfo v (idInfo v))
-                                _ -> "{}"
-                  return (unlines [hd,ty,pa,extra])
+info = translate $ \ c e ->
+          let hd = "Core Expr"
+              ty = "type ::= " ++ showSDoc (ppr (exprType e))
+              pa = "path :=  " ++ show (contextPath c)
+              extra = "extra := " ++ case e of
+                                       Var v -> showSDoc (ppIdInfo v (idInfo v))
+                                       _     -> "{}"
+           in return (unlines [hd,ty,pa,extra])
 
 
 exprTypeQueryT :: TranslateH CoreExpr String
@@ -104,7 +103,7 @@ fixIntro = translate $ \ c e -> case e of
                 -- TODO: check f is not a top-level value
                 return $ NonRec f (coreFix (Lam f e0))
         Rec {}       -> fail "recusive group not suitable"
-        NonRec {}    -> fail "Can not take fix of a non-recusive group"
+        NonRec {}    -> fail "Cannot take fix of a non-recusive group"
 
 
 {-
@@ -118,7 +117,7 @@ exprBinder = translate $ \ c e -> case e of
 
 exprNumberBinder :: Int -> RewriteH Core
 exprNumberBinder n = promoteR (exprRenameBinder (++ show n))
-                 >>> (childL 0 `focusR` promoteR letSubstR)
+                 >>> (childR 0 $ promoteR letSubstR)
 
 exprRenameBinder :: (String -> String) -> RewriteH CoreExpr
 exprRenameBinder nameMod =

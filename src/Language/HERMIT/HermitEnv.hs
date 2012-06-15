@@ -4,6 +4,8 @@ import Prelude hiding (lookup)
 import GhcPlugins hiding (empty)
 import Data.Map
 
+import Language.KURE
+
 ------------------------------------------------------------------------
 
 -- The bindings here are lazy by choice, so that we can avoid the cost
@@ -11,7 +13,7 @@ import Data.Map
 data HermitEnv = HermitEnv
         { hermitBindings :: Map Id HermitBinding    -- ^ all (important) bindings in scope
         , hermitDepth    :: Int                     -- ^ depth of bindings
-        , hermitPath     :: ContextPath             -- ^ path to the current node from the root.
+        , hermitPath     :: AbsolutePath            -- ^ path to the current node from the root.
         , hermitModGuts  :: ModGuts                 -- ^ the module
         }
 
@@ -23,22 +25,17 @@ data HermitBinding
                 Bool            -- recursive?
                 (Expr Id)       -- Value (can not be inlined without checking for scoping issues)
 
-
--- | A list of node childen taken to get here. The head is the *last* branch.
-newtype ContextPath = ContextPath [Int]
-
 ------------------------------------------------------------------------
+
+instance PathContext HermitEnv where
+  contextPath = hermitPath
 
 hermitBindingDepth :: HermitBinding -> Int
 hermitBindingDepth (LAM d)  = d
 hermitBindingDepth (BIND d _ _) = d
 
-hermitBindingPath :: HermitEnv -> ContextPath
-hermitBindingPath = hermitPath
-
 (@@) :: HermitEnv -> Int -> HermitEnv
-(@@) env n = env { hermitPath = case hermitPath env of
-                                  ContextPath ns -> ContextPath (n : ns) }
+(@@) env n = env { hermitPath = extendAbsPath n (hermitPath env) }
 
 -- A binding you know nothing about, except it may shadow something.
 -- If so, do not worry about it here, just remember the binding a the depth.
@@ -80,6 +77,6 @@ boundInHermit :: Id -> HermitEnv -> Bool
 boundInHermit n env = maybe False (const True) (lookupHermitBinding n env)
 
 initHermitEnv :: ModGuts -> HermitEnv
-initHermitEnv = HermitEnv empty 0 (ContextPath [])
+initHermitEnv = HermitEnv empty 0 rootAbsPath
 
 ------------------------------------------------------------------------

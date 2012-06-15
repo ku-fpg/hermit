@@ -39,8 +39,6 @@ module Language.HERMIT.HermitKure
        , letRecT, letRecAllR, letRecAnyR
        , recDefT, recDefAllR, recDefAnyR
        , letRecDefT, letRecDefAllR, letRecDefAnyR
-       -- * Useful Translations
-       , pathT
        )
 where
 
@@ -104,7 +102,7 @@ instance Term Core where
 -- Unfortunately, you still need to pattern match on the 'Core' data type.
 
 instance Walker HermitEnv HermitM Core where
-  childL n = translate $ \ c core -> case core of
+  childL n = lens $ \ c core -> case core of
           ModGutsCore x -> childLgeneric n c x
           ProgramCore x -> childLgeneric n c x
           BindCore x    -> childLgeneric n c x
@@ -149,7 +147,7 @@ instance Term ModGuts where
   numChildren _ = 1
 
 instance Walker HermitEnv HermitM ModGuts where
-  childL 0 = modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
+  childL 0 = translateL $ modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
   childL n = missingChildL n
 
 -- | Slightly different to the others; passes in *all* of the original to the reconstruction function.
@@ -173,8 +171,8 @@ instance Term CoreProgram where
   numChildren bds = min 2 (length bds)
 
 instance Walker HermitEnv HermitM CoreProgram where
-  childL 0 = consBindT exposeT idR (childL0of2 (:))
-  childL 1 = consBindT idR exposeT (childL1of2 (:))
+  childL 0 = translateL $ consBindT exposeT idR (childL0of2 (:))
+  childL 1 = translateL $ consBindT idR exposeT (childL1of2 (:))
   childL n = missingChildL n
 
   allT t = nilT mempty
@@ -218,10 +216,12 @@ instance Term CoreBind where
   numChildren (Rec defs)   = length defs
 
 instance Walker HermitEnv HermitM CoreBind where
-  childL n = (case n of
+  childL n = (<+ missingChildL n) $ translateL $
+               case n of
                  0 -> nonrec <+ rec
                  _ -> rec
-             ) <+ missingChildL n
+
+
     where
       nonrec = nonRecT exposeT (childL1of2 NonRec)
       rec    = do sz <- arr numChildren
@@ -276,7 +276,7 @@ instance Term CoreDef where
   numChildren _ = 1
 
 instance Walker HermitEnv HermitM CoreDef where
-  childL 0 = defT exposeT (childL1of2 Def)
+  childL 0 = translateL $ defT exposeT (childL1of2 Def)
   childL n = missingChildL n
 
 defT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreDef b
@@ -298,7 +298,7 @@ instance Term CoreAlt where
   numChildren _ = 1
 
 instance Walker HermitEnv HermitM CoreAlt where
-  childL 0 = altT exposeT (childL2of3 (,,))
+  childL 0 = translateL $ altT exposeT (childL2of3 (,,))
   childL n = missingChildL n
 
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
@@ -330,7 +330,7 @@ instance Term CoreExpr where
 
 instance Walker HermitEnv HermitM CoreExpr where
 
-  childL n = (<+ missingChildL n) $
+  childL n = (<+ missingChildL n) $ translateL $
                case n of
                  0  ->    appT  exposeT idR         (childL0of2 App)
                        <+ lamT  exposeT             (childL1of2 Lam)
@@ -346,7 +346,6 @@ instance Walker HermitEnv HermitM CoreExpr where
                  _  ->    caseChooseL
      where
        -- Note we use index (n-1) because 0 refers to the expression being scrutinised.
-       caseChooseL :: LensH CoreExpr Core
        caseChooseL = do sz <- arr numChildren
                         guard (n > 0 && n < sz)
                         caseT idR (const exposeT) (\ e v t -> childLMofN (n-1) (Case e v t))
@@ -535,13 +534,5 @@ letRecDefAllR rs r = letRecAllR (\ n -> defR (rs n)) r
 
 letRecDefAnyR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr -> RewriteH CoreExpr
 letRecDefAnyR rs r = letRecAnyR (\ n -> defR (rs n)) r
-
----------------------------------------------------------------------
-
--- Useful Translations
-
--- | Find the current path.
-pathT :: TranslateH a ContextPath
-pathT = hermitBindingPath <$> contextT
 
 ---------------------------------------------------------------------
