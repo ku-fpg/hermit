@@ -13,8 +13,7 @@ import Data.Char
 -- Our local version of Expr, for things parsed from string or JSON structures.
 data ExprH
         = SrcName String                -- variable names (refer to source code)
-        | CmdName String                -- commands (to be looked up in Dictionary)
-        | StrName String                -- literal string
+        | CmdName String                -- commands (to be looked up in Dictionary) or strings; same thing
         | AppH ExprH ExprH              -- application
         deriving Show
 
@@ -72,7 +71,7 @@ parseExprH0 = \ inp ->
         | ("'",inp1) <- parseToken inp
         , (str,inp2) <- parseToken inp1
         ] ++
-        [ (StrName $ chomp '"' str,inp1)
+        [ (CmdName $ chomp '"' str,inp1)
         | (str@('"':_),inp1) <- lex inp
         ] ++
         [ (e,inp3)

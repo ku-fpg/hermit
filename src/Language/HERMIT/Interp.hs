@@ -49,9 +49,6 @@ interpExpr' rhs env (CmdName str)
   -- best case: 'help ls' works instead of 'help "ls"'. this is likewise done in then clause above
   | rhs                                 = return [toDyn $ StringBox str]
   | otherwise                           = Left $ "Unrecognised command: " ++ show str
-interpExpr' rhs _   (StrName str)           = if rhs
-                                          then return [ toDyn $ StringBox str ]
-                                          else return []
 interpExpr' _ env (AppH e1 e2)              = dynAppMsg (interpExpr' False env e1) (interpExpr' True env e2)
 
 dynAppMsg :: Either String [Dynamic] -> Either String [Dynamic] -> Either String [Dynamic]
