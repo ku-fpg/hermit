@@ -8,6 +8,9 @@ import qualified Data.Map as Map
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
+import Language.HERMIT.GHC
+
+import Debug.Trace
 
 import Prelude hiding (exp)
 
@@ -54,28 +57,27 @@ letSubstR = contextfreeT $ \ exp -> case exp of
 -- This is quite expensive (O(n) for the size of the sub-tree)
 safeLetSubstR :: RewriteH CoreExpr
 safeLetSubstR = contextfreeT $ \ exp -> case occurAnalyseExpr exp of
+      Let (NonRec b (Type bty)) e
+         | isTyVar b -> let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+                            sub = extendTvSubst empty b bty
+                         in return $ substExpr (text "letSubstR") sub e
       Let (NonRec b be) e
          | isId b && (safeBind be || safeSubst (occInfo (idInfo b)))
                      -> let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
                             sub   = extendSubst empty b be
                          in return $ substExpr (text "letSubstR") sub e
+         | otherwise -> fail "safeLetSubstR failed (safety critera not met)"
       -- By (our) definition, types are a trivial bind
-      Let (NonRec b (Type bty)) e
-         | isTyVar b -> let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-                            sub = extendTvSubst empty b bty
-                         in return $ substExpr (text "letSubstR") sub e
       _ -> fail "LetSubst failed. Expr is not a (non-recursive) Let."
   where
           -- Lit?
-          safeBind (Var {}) = True
-          safeBind (Lam {}) = True
+          safeBind (Var {})   = True
+          safeBind (Lam {})   = True
           safeBind e@(App {}) =
-                  case collectArgs e of
-                                -- We can inline if the expected args is *more*
-                                -- that the collected args
-                    (Var f, args) -> arityInfo (idInfo f) > length args
-                    _ -> False
-          safeBind _        = False
+                 case collectArgs e of
+                  (Var f,args) -> idArity f > length (filter (not . isTypeArg) args)
+                  _            -> False
+          safeBind _          = False
 
           safeSubst NoOccInfo = False   -- unknown!
           safeSubst IAmDead   = True    -- DCE
