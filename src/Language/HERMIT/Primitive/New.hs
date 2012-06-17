@@ -16,6 +16,7 @@ import Language.HERMIT.External
 import Language.HERMIT.GHC
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Local
+import Language.HERMIT.Primitive.Inline
 
 import qualified Language.Haskell.TH as TH
 
@@ -37,7 +38,8 @@ externals = map (.+ Experiment)
                 [ "add a number suffix onto a (lambda) binding" ]
          , external "cleanup-unfold" (promoteR cleanupUnfold :: RewriteH Core)
                 [ "clean up immeduate nested fully-applied lambdas, from the bottom up"]
-
+         , external "unfold" (promoteR . unfold :: TH.Name -> RewriteH Core)
+                [ "inline a definition, and apply the arguments; tranditional unfold"]
          ]
 
 
@@ -144,16 +146,29 @@ cleanupUnfold = contextfreeT (\ e -> case e of
                 App {} -> True
                 _      -> False) >>>
              focusR (childL 0) (promoteR cleanupUnfold) >>>
-             beta_reduce >>>
+             tryR beta_reduce >>>
              tryR safeLetSubstR)
+
+unfold :: TH.Name -> RewriteH CoreExpr
+unfold nm = translate $ \ env e0 -> do
+        let n = countArguments e0
+        let sub :: RewriteH Core
+            sub = focusR (pathL $ path $ take n (repeat 0))
+                         (promoteR (inlineName nm))
+
+            sub2 :: RewriteH CoreExpr
+            sub2 = extractR sub
+
+        e1 <- apply sub2 env e0
+
+        apply cleanupUnfold env e1
 
 
 --cleanUnfold :: (LensH Core Core -> RewriteH Core) -> RewriteH Core
 --cleanUnfold f =
 
-{-
 countArguments :: CoreExpr -> Int
 countArguments (App e1 _) = countArguments e1 + 1
 countArguments _          = 0
--}
+
 
