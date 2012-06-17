@@ -8,6 +8,7 @@ module Language.HERMIT.GHC
         , Type(..)
         , GhcException(..)
         , throwGhcException
+        , exprArity
         ) where
 
 import GhcPlugins
@@ -17,7 +18,7 @@ import Convert (thRdrNameGuesses)
 import TysPrim          ( alphaTyVars )
 import TypeRep (Type(..))
 import Panic (GhcException(ProgramError), throwGhcException)
-
+import CoreArity
 
 
 import Data.Maybe (isJust)
