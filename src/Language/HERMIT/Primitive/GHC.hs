@@ -1,7 +1,8 @@
 module Language.HERMIT.Primitive.GHC where
 
 import GhcPlugins hiding (freeVars,empty)
-
+--import qualified GhcPlugins as GHC
+import qualified OccurAnal
 import Control.Arrow
 import qualified Data.Map as Map
 
@@ -16,7 +17,12 @@ externals :: ModGuts -> [External]
 externals modGuts = map (.+ GHC)
          [ external "let-subst" (promoteR letSubstR :: RewriteH Core)
                 [ "Let substitution [via GHC]"
-                , "let x = E1 in E2, where x is free is E2 ==> E2[E1/x], fails otherwise"
+                , "let x = E1 in E2 ==> E2[E1/x], fails otherwise"
+                , "only matches non-recursive lets" ]                           .+ Local
+         , external "safe-let-subst" (promoteR safeLetSubstR :: RewriteH Core)
+                [ "Safe let substitution [via GHC]"
+                , "let x = E1 in E2, safe to inline without duplicating work ==> E2[E1/x],"
+                , "fails otherwise"
                 , "only matches non-recursive lets" ]                           .+ Local .+ Eval
          , external "freevars" (promoteT freeIdsQuery :: TranslateH Core String)
                 [ "List the free variables in this expression [via GHC]" ]
@@ -44,6 +50,41 @@ letSubstR = contextfreeT $ \ exp -> case exp of
                             sub = extendTvSubst empty b bty
                          in return $ substExpr (text "letSubstR") sub e
       _ -> fail "LetSubst failed. Expr is not a (non-recursive) Let."
+
+-- This is quite expensive (O(n) for the size of the sub-tree)
+safeLetSubstR :: RewriteH CoreExpr
+safeLetSubstR = contextfreeT $ \ exp -> case occurAnalyseExpr exp of
+      Let (NonRec b be) e
+         | isId b && (safeBind be || safeSubst (occInfo (idInfo b)))
+                     -> let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+                            sub   = extendSubst empty b be
+                         in return $ substExpr (text "letSubstR") sub e
+      -- By (our) definition, types are a trivial bind
+      Let (NonRec b (Type bty)) e
+         | isTyVar b -> let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+                            sub = extendTvSubst empty b bty
+                         in return $ substExpr (text "letSubstR") sub e
+      _ -> fail "LetSubst failed. Expr is not a (non-recursive) Let."
+  where
+          -- Lit?
+          safeBind (Var {}) = True
+          safeBind (Lam {}) = True
+          safeBind e@(App {}) =
+                  case collectArgs e of
+                                -- We can inline if the expected args is *more*
+                                -- that the collected args
+                    (Var f, args) -> arityInfo (idInfo f) > length args
+                    _ -> False
+          safeBind _        = False
+
+          safeSubst NoOccInfo = False   -- unknown!
+          safeSubst IAmDead   = True    -- DCE
+          safeSubst (OneOcc inLam oneBr _)
+                              | inLam == True || oneBr == False = False   -- do not inline inside a lambda
+                                                                          -- or if in multiple case branches
+                              | otherwise = True
+          safeSubst _ = False   -- strange case, like a loop breaker
+
 
 ------------------------------------------------------------------------
 
@@ -116,5 +157,15 @@ rules mp r = case Map.lookup r mp of
 rules_help :: Map.Map String (RewriteH CoreExpr) -> String
 rules_help env = show (Map.keys env)
 
+occurAnalyseExpr :: CoreExpr -> CoreExpr
+occurAnalyseExpr = OccurAnal.occurAnalyseExpr
 
+{- Does not work (no export)
+-- Here is a hook into the occur analysis, and a way of looking at the result
+occAnalysis ::  CoreExpr -> UsageDetails
+occAnalysis = fst . occAnal (initOccEnv all_active_rules)
 
+lookupUsageDetails :: UsageDetails -> Var -> Maybe OccInfo
+lookupUsageDetails = lookupVarEnv
+
+-}
