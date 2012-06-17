@@ -15,6 +15,7 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 import Language.HERMIT.Primitive.GHC
+import Language.HERMIT.Primitive.Local
 
 import qualified Language.Haskell.TH as TH
 
@@ -34,6 +35,9 @@ externals = map (.+ Experiment)
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
          , external "number-binder" (exprNumberBinder :: Int -> RewriteH Core)
                 [ "add a number suffix onto a (lambda) binding" ]
+         , external "cleanup-unfold" (promoteR cleanupUnfold :: RewriteH Core)
+                [ "clean up immeduate nested fully-applied lambdas, from the bottom up"]
+
          ]
 
 
@@ -127,4 +131,29 @@ exprRenameBinder nameMod =
                     ty   = idType b
                     b'   = mkLocalId name ty
                 return $ Lam b' (Let (NonRec b (Var b')) e)
+
+-- | cleanupUnfold cleans a unfold operation
+--  (for example, an inline or rule application)
+-- It is used at the level of the top-redex.
+cleanupUnfold :: RewriteH CoreExpr
+cleanupUnfold = contextfreeT (\ e -> case e of
+            -- Spot the lambda
+                Lam {}  -> return e
+                _       -> fail "no lambda")
+         <+ (acceptR (\ e -> case e of
+                App {} -> True
+                _      -> False) >>>
+             focusR (childL 0) (promoteR cleanupUnfold) >>>
+             beta_reduce >>>
+             tryR safeLetSubstR)
+
+
+--cleanUnfold :: (LensH Core Core -> RewriteH Core) -> RewriteH Core
+--cleanUnfold f =
+
+{-
+countArguments :: CoreExpr -> Int
+countArguments (App e1 _) = countArguments e1 + 1
+countArguments _          = 0
+-}
 
