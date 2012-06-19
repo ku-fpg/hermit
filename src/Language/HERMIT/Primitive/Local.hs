@@ -39,14 +39,22 @@ externals = map (.+ Local) $
 ------------------------------------------------------------------------------
 
 beta_reduce :: RewriteH CoreExpr
-beta_reduce = contextfreeT $ \ e -> case e of
-        App (Lam v e1) e2 -> return $ Let (NonRec v e2) e1
-        _ -> fail "beta_reduce failed. Not applied to an App."
+beta_reduce = tagFailR "beta_reduce failed. Not applied to an App." $
+    do App (Lam v e1) e2 <- idR
+       return $ Let (NonRec v e2) e1
+
+     -- contextfreeT $ \ e -> case e of
+     --    App (Lam v e1) e2 -> return $ Let (NonRec v e2) e1
+     --    _ -> fail "beta_reduce failed. Not applied to an App."
 
 beta_expand :: RewriteH CoreExpr
-beta_expand = contextfreeT $ \ e -> case e of
-        Let (NonRec v e2) e1 -> return $ App (Lam v e1) e2
-        _ -> fail "beta_expand failed. Not applied to a NonRec Let."
+beta_expand = tagFailR "beta_expand failed. Not applied to a NonRec Let." $
+    do Let (NonRec v e2) e1 <- idR
+       return $ App (Lam v e1) e2
+
+  -- contextfreeT $ \ e -> case e of
+  --       Let (NonRec v e2) e1 -> return $ App (Lam v e1) e2
+  --       _ -> fail "beta_expand failed. Not applied to a NonRec Let."
 
 ------------------------------------------------------------------------------
 
