@@ -16,11 +16,15 @@ externals = map (.+ KURE)
        [ "perform the identity"]
    , external "catch"      ((<+) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "perform the first translate, and then, if it fails, perform the second rewrite" ]
+   , external "<+"         ((<+) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
+       [ "perform the first translate, and then, if it fails, perform the second rewrite" ]
    , external "compose"    ((>>>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "compose rewrites, requiring both to succeed" ]
    , external ">>>"        ((>>>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "compose rewrites, requiring both to succeed" ]
    , external "both"       ((>+>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
+       [ "compose rewrites, allowing one to fail" ]
+   , external ">+>"        ((>+>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "compose rewrites, allowing one to fail" ]
    , external "try"        (tryR :: RewriteH Core -> RewriteH Core)
        [ "tries a rewrite, and performs an identity if this rewrite fails" ]
