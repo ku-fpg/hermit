@@ -11,6 +11,7 @@ dump "paper/0b-start-rev.tex" "clean" "latex" 56
 
 down
 consider 'rev
+up
 fix-intro
 dump "paper/1-fix-intro.tex" "clean" "latex" 56
 
