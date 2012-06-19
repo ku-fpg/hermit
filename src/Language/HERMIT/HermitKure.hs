@@ -102,7 +102,7 @@ instance Term Core where
 -- Unfortunately, you still need to pattern match on the 'Core' data type.
 
 instance Walker HermitEnv HermitM Core where
-  childL n = lens $ \ c core -> case core of
+  childL n = lens $ translate $ \ c core -> case core of
           ModGutsCore x -> childLgeneric n c x
           ProgramCore x -> childLgeneric n c x
           BindCore x    -> childLgeneric n c x
@@ -147,8 +147,8 @@ instance Term ModGuts where
   numChildren _ = 1
 
 instance Walker HermitEnv HermitM ModGuts where
-  childL 0 = translateL $ modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
-  childL n = missingChildL n
+  childL 0 = lens $ modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
+  childL n = failR (missingChild n)
 
 -- | Slightly different to the others; passes in *all* of the original to the reconstruction function.
 modGutsT :: TranslateH CoreProgram a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
@@ -171,9 +171,9 @@ instance Term CoreProgram where
   numChildren bds = min 2 (length bds)
 
 instance Walker HermitEnv HermitM CoreProgram where
-  childL 0 = translateL $ consBindT exposeT idR (childL0of2 (:))
-  childL 1 = translateL $ consBindT idR exposeT (childL1of2 (:))
-  childL n = missingChildL n
+  childL 0 = lens $ consBindT exposeT idR (childL0of2 (:))
+  childL 1 = lens $ consBindT idR exposeT (childL1of2 (:))
+  childL n = failR (missingChild n)
 
   allT t = nilT mempty
         <+ consBindT (extractT t) (extractT t) mappend
@@ -216,7 +216,7 @@ instance Term CoreBind where
   numChildren (Rec defs)   = length defs
 
 instance Walker HermitEnv HermitM CoreBind where
-  childL n = (<+ missingChildL n) $ translateL $
+  childL n = lens $ tagFailR (missingChild n) $
                case n of
                  0 -> nonrec <+ rec
                  _ -> rec
@@ -276,8 +276,8 @@ instance Term CoreDef where
   numChildren _ = 1
 
 instance Walker HermitEnv HermitM CoreDef where
-  childL 0 = translateL $ defT exposeT (childL1of2 Def)
-  childL n = missingChildL n
+  childL 0 = lens $ defT exposeT (childL1of2 Def)
+  childL n = failR (missingChild n)
 
 defT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreDef b
 defT t f = translate $ \ c (Def v e) -> f v <$> apply t (c @@ 0) e
@@ -298,8 +298,8 @@ instance Term CoreAlt where
   numChildren _ = 1
 
 instance Walker HermitEnv HermitM CoreAlt where
-  childL 0 = translateL $ altT exposeT (childL2of3 (,,))
-  childL n = missingChildL n
+  childL 0 = lens $ altT exposeT (childL2of3 (,,))
+  childL n = failR (missingChild n)
 
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
 altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (foldr addHermitEnvLambdaBinding c bs @@ 0) e
@@ -330,7 +330,7 @@ instance Term CoreExpr where
 
 instance Walker HermitEnv HermitM CoreExpr where
 
-  childL n = (<+ missingChildL n) $ translateL $
+  childL n = lens $ tagFailR (missingChild n) $
                case n of
                  0  ->    appT  exposeT idR         (childL0of2 App)
                        <+ lamT  exposeT             (childL1of2 Lam)

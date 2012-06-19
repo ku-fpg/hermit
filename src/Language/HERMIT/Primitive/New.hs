@@ -153,7 +153,7 @@ unfold :: TH.Name -> RewriteH CoreExpr
 unfold nm = translate $ \ env e0 -> do
         let n = countArguments e0
         let sub :: RewriteH Core
-            sub = focusR (pathL $ path $ take n (repeat 0))
+            sub = focusR (pathL $ take n (repeat 0))
                          (promoteR (inlineName nm))
 
             sub2 :: RewriteH CoreExpr

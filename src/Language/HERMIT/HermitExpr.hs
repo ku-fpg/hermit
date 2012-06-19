@@ -73,7 +73,7 @@ parseExprsH' = \ inp ->
         (parseTopExprH1                  `bind` (\ a ->
         (many (item ";")                 `bind` \ _ -> -- complete hack, needed fixed with real parser
         (parseExprsH'                    `bind` (\ as ->
-        (\ inp -> [(a:as,inp)]))))))) inp ++  [ ([], inp) ]
+        (\ inp' -> [(a:as,inp')]))))))) inp ++  [ ([], inp) ]
 
 
 

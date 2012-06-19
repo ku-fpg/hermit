@@ -8,9 +8,9 @@ import qualified Data.Map as Map
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
-import Language.HERMIT.GHC
+-- import Language.HERMIT.GHC
 
-import Debug.Trace
+-- import Debug.Trace
 
 import Prelude hiding (exp)
 
