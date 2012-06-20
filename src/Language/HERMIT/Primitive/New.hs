@@ -20,6 +20,7 @@ import Language.HERMIT.Primitive.Inline
 
 import qualified Language.Haskell.TH as TH
 
+import Debug.Trace
 
 -- promoteR'  :: Term a => RewriteH a -> RewriteH (Generic a)
 -- promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an expr") (apply rr c)  (retract e)
@@ -36,10 +37,14 @@ externals = map (.+ Experiment)
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
          , external "number-binder" (exprNumberBinder :: Int -> RewriteH Core)
                 [ "add a number suffix onto a (lambda) binding" ]
+         , external "auto-number-binder" (promoteR exprAutoRenameBinder :: RewriteH Core)
+                [ "automatically add a number suffix onto a (lambda) binding" ]
          , external "cleanup-unfold" (promoteR cleanupUnfold :: RewriteH Core)
                 [ "clean up immeduate nested fully-applied lambdas, from the bottom up"]
          , external "unfold" (promoteR . unfold :: TH.Name -> RewriteH Core)
                 [ "inline a definition, and apply the arguments; tranditional unfold"]
+         , external "unshadow" (unshadow :: RewriteH Core)
+                [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
          ]
 
 
@@ -134,20 +139,44 @@ exprRenameBinder nameMod =
                     b'   = mkLocalId name ty
                 return $ Lam b' (Let (NonRec b (Var b')) e)
 
+-- Here, success is the successful renaming, but if 'id' works, thats okay.
+-- AJG: Gut feel, something not quite right here
+-- Fails for non-lambdas.
+exprAutoRenameBinder :: RewriteH CoreExpr
+exprAutoRenameBinder = do
+        -- check if lambda
+        Lam b _ <- idR
+        frees <- childL 0 `focusT` (promoteT freeVarsT) :: TranslateH CoreExpr [Var]
+        exprRenameBinder (inventNames (filter (/= b) frees)) >>> (childR 0 $ promoteR letSubstR)
+
+inventNames :: [Id] -> String -> String
+inventNames curr old | trace (show ("inventNames",names,old)) False = undefined
+   where
+           names = map getOccString curr
+inventNames curr old = head
+                     [ nm
+                     | nm <- old : [ old ++ show uq | uq <- [0..] :: [Int] ]
+                     , nm `notElem` names
+                     ]
+   where
+           names = map getOccString curr
+
+
+
+
 -- | cleanupUnfold cleans a unfold operation
 --  (for example, an inline or rule application)
 -- It is used at the level of the top-redex.
 cleanupUnfold :: RewriteH CoreExpr
-cleanupUnfold = contextfreeT (\ e -> case e of
+cleanupUnfold = (contextfreeT (\ e -> case e of
             -- Spot the lambda
                 Lam {}  -> return e
-                _       -> fail "no lambda")
+                _       -> fail "no lambda"))
          <+ (acceptR (\ e -> case e of
                 App {} -> True
                 _      -> False) >>>
              focusR (childL 0) (promoteR cleanupUnfold) >>>
-             tryR beta_reduce >>>
-             tryR safeLetSubstR)
+             tryR (beta_reduce >>> safeLetSubstR))
 
 unfold :: TH.Name -> RewriteH CoreExpr
 unfold nm = translate $ \ env e0 -> do
@@ -163,6 +192,11 @@ unfold nm = translate $ \ env e0 -> do
 
         apply cleanupUnfold env e1
 
+-- Makes every 'virtual' shadow dispear.
+-- O(n^2) right now
+-- Also, only does lambda bound things.
+unshadow :: RewriteH Core
+unshadow = anytdR (promoteR exprAutoRenameBinder)
 
 --cleanUnfold :: (LensH Core Core -> RewriteH Core) -> RewriteH Core
 --cleanUnfold f =
