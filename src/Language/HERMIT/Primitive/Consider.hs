@@ -21,33 +21,12 @@ externals = map (.+ Lens)
 
 -- Focus on a bindings
 consider :: TH.Name -> LensH Core Core
-consider = locatePruneUniqueT . nameBound
-              -- do First cxtpaths <- tdpruneT $ promoteT $ findPathTo nm
-              --    case cxtpaths of
-              --      Just cxtpath -> rmPrefix cxtpath >>= pathL
-              --      Nothing      -> failNameNotFound nm
-
--- -- Take a ContextPath (always from the *Root*) from a deeper location,
--- -- and return the Path to *this* node.
--- rmPrefix :: ContextPath -> TranslateH Core Path
--- rmPrefix (ContextPath path) = do ContextPath this <- pathT
---                                  guardFail (this `isSuffixOf` path) "rmPrefix failure"
---                                  return $ drop (length this) $ reverse path
+consider = joinTL . fmap pathL . uniquePathToT . nameBound
 
 nameBound :: TH.Name -> Core -> Bool
 nameBound nm (BindCore (NonRec v _))  =  nm `cmpName` idName v
 nameBound nm (DefCore (Def v _))      =  nm `cmpName` idName v
 nameBound _  _                        =  False
-
--- findPathTo :: TH.Name -> TranslateH CoreBind (First ContextPath)
--- findPathTo nm = translate $ \ c e -> let p = return $ First $ Just $ hermitBindingPath c in
---         case e of
---           NonRec v _ | nm `cmpName` idName v                            -> p
---           Rec bds    | [ _ ] <- filter (cmpName nm . idName . fst) bds  -> p
---           _                                                             -> failNameNotFound nm
-
--- failNameNotFound :: Monad m => TH.Name -> m a
--- failNameNotFound nm = fail $ "Name \"" ++ show nm ++ "\" not found."
 
 -- Hacks till we can find the correct way of doing these.
 cmpName :: TH.Name -> Name -> Bool
