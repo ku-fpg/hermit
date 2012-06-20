@@ -17,7 +17,7 @@ data ExprH
         = SrcName String                -- variable names (refer to source code)
         | CmdName String                -- commands (to be looked up in Dictionary) or strings; same thing
         | AppH ExprH ExprH              -- application
-        deriving Show
+        deriving (Eq, Show)
 
 data StmtH expr
         = ExprH expr
