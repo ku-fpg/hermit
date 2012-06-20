@@ -146,7 +146,7 @@ exprAutoRenameBinder :: RewriteH CoreExpr
 exprAutoRenameBinder = do
         -- check if lambda
         Lam b _ <- idR
-        frees <- childL 0 `focusT` (promoteT freeVarsT) :: TranslateH CoreExpr [Var]
+        frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreExpr [Var]
         exprRenameBinder (inventNames (filter (/= b) frees)) >>> (childR 0 $ promoteR letSubstR)
 
 inventNames :: [Id] -> String -> String
@@ -175,15 +175,15 @@ cleanupUnfold = (contextfreeT (\ e -> case e of
          <+ (acceptR (\ e -> case e of
                 App {} -> True
                 _      -> False) >>>
-             focusR (childL 0) (promoteR cleanupUnfold) >>>
+             childR 0 (promoteR cleanupUnfold) >>>
              tryR (beta_reduce >>> safeLetSubstR))
 
 unfold :: TH.Name -> RewriteH CoreExpr
 unfold nm = translate $ \ env e0 -> do
         let n = countArguments e0
         let sub :: RewriteH Core
-            sub = focusR (pathL $ take n (repeat 0))
-                         (promoteR (inlineName nm))
+            sub = pathR (take n (repeat 0))
+                        (promoteR (inlineName nm))
 
             sub2 :: RewriteH CoreExpr
             sub2 = extractR sub
