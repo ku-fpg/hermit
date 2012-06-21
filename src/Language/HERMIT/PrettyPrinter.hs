@@ -36,6 +36,9 @@ data SyntaxForColor             -- (suggestion)
 attr :: Attr -> DocH -> DocH
 attr a p = mark (PushAttr a) <> p <> mark PopAttr
 
+attrP :: Path -> DocH -> DocH
+attrP = attr . PathAttr
+
 varColor :: DocH -> DocH
 varColor = attr (Color VarColor)
 
