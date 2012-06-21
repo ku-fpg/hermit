@@ -3,6 +3,8 @@ module Language.HERMIT.Primitive.Local.Let where
 
 import GhcPlugins
 
+import Control.Arrow
+
 import Data.List
 
 import Language.HERMIT.HermitKure
@@ -27,7 +29,7 @@ externals = map (.+ LetCmd) $
                      [ "(let v = ev in e) x ==> let v = ev in e x" ] .+ Eval
          , external "let-float-arg" (promoteR letFloatArg :: RewriteH Core)
                      [ "f (let v = ev in e) ==> let v = ev in f e" ] .+ Eval
-         , external "let-float-let" (promoteR (letFloatLet <+ letFloatLetrec) <+ promoteR letFloatLetTop :: RewriteH Core)
+         , external "let-float-let" (promoteR (letFloatLet) <+ promoteR letFloatLetTop :: RewriteH Core)
                      [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Eval
          , external "case-float-let" (promoteR caseFloatLet :: RewriteH Core)
                      [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Eval
@@ -56,24 +58,18 @@ letFloatArg = do
     let letAction = if null shadowed then idR else alphaLet
     appT idR letAction $ \ f (Let bnds e) -> Let bnds $ App f e
 
--- todo if v used in ew
 letFloatLet :: RewriteH CoreExpr
-letFloatLet = do
-    Let (NonRec v (Let (NonRec w ew) ev)) e <- idR
-    return $ Let (NonRec w ew) $ Let (NonRec v ev) e
+letFloatLet = tagFailR "letFloatLet no match" $
+  do shadowed <- letNonRecT letVarsT freeVarsT (\ _ -> intersect)
+     let bdsAction = if null shadowed then idR else (nonRecR alphaLet)
+     letT bdsAction idR $ \ (NonRec v (Let bds ev)) e -> Let bds $ Let (NonRec v ev) e
 
-letFloatLetrec :: RewriteH CoreExpr
-letFloatLetrec = do
-    Let (NonRec v (Let (Rec bds) ev)) e <- idR
-    return $ Let (Rec bds) $ Let (NonRec v ev) e
-
--- todo if v used in ew
 letFloatLetTop :: RewriteH CoreProgram
 letFloatLetTop = do
     NonRec v (Let (NonRec w ew) ev) : e <- idR
     return $ (NonRec w ew) : (NonRec v ev) : e
 
--- todo v used in s, ty, or alts
+-- todo v is bound in one or more alts
 caseFloatLet :: RewriteH CoreExpr
 caseFloatLet = do
     Let (NonRec v (Case s b ty alts)) e <- idR

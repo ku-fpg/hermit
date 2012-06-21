@@ -25,7 +25,7 @@ consider = joinTL . fmap pathL . uniquePathToT . nameBound
 
 nameBound :: TH.Name -> Core -> Bool
 nameBound nm (BindCore (NonRec v _))  =  nm `cmpName` idName v
-nameBound nm (DefCore (Def v _))      =  nm `cmpName` idName v
+nameBound nm (BindCore (Rec bds))     =  any (cmpName nm . idName) $ map fst bds
 nameBound _  _                        =  False
 
 -- Hacks till we can find the correct way of doing these.
