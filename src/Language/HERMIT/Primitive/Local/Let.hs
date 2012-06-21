@@ -3,8 +3,6 @@ module Language.HERMIT.Primitive.Local.Let where
 
 import GhcPlugins
 
-import Control.Arrow
-
 import Data.List
 
 import Language.HERMIT.HermitKure
@@ -48,20 +46,20 @@ letIntro nm = contextfreeT $ \ e -> do letvar <- newVarH nm (exprType e)
 
 letFloatApp :: RewriteH CoreExpr
 letFloatApp = do
-    shadowed <- appT letVarsT freeVarsT intersect
-    let letAction = if null shadowed then idR else alphaLet
+    vs <- appT letVarsT freeVarsT intersect
+    let letAction = if null vs then idR else alphaLet
     appT letAction idR $ \ (Let bnds e) x -> Let bnds $ App e x
 
 letFloatArg :: RewriteH CoreExpr
 letFloatArg = do
-    shadowed <- appT freeVarsT letVarsT intersect
-    let letAction = if null shadowed then idR else alphaLet
+    vs <- appT freeVarsT letVarsT intersect
+    let letAction = if null vs then idR else alphaLet
     appT idR letAction $ \ f (Let bnds e) -> Let bnds $ App f e
 
 letFloatLet :: RewriteH CoreExpr
 letFloatLet = tagFailR "letFloatLet no match" $
-  do shadowed <- letNonRecT letVarsT freeVarsT (\ _ -> intersect)
-     let bdsAction = if null shadowed then idR else (nonRecR alphaLet)
+  do vs <- letNonRecT letVarsT freeVarsT (\ _ -> intersect)
+     let bdsAction = if null vs then idR else nonRecR alphaLet
      letT bdsAction idR $ \ (NonRec v (Let bds ev)) e -> Let bds $ Let (NonRec v ev) e
 
 letFloatLetTop :: RewriteH CoreProgram

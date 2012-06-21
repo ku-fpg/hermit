@@ -23,7 +23,7 @@ Library
                  containers,
                  data-default >= 0.4,
                  ghc >= 7.4,
-                 kure >= 2.1.11,
+                 kure >= 2.1.13,
                  marked-pretty >= 0.1,
                  template-haskell,
                  text

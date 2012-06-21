@@ -10,7 +10,6 @@ import Data.List
 import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.HermitKure
---import Language.HERMIT.Kernel
 
 -----------------------------------------------------------------
 
@@ -189,15 +188,13 @@ instance Extern TH.Name where
     box i = NameBox i
     unbox (NameBox i) = i
 
-data LensCoreCoreBox = LensCoreCoreBox (LensH Core Core) deriving Typeable
+data TranslateCorePathBox = TranslateCorePathBox (TranslateH Core Path) deriving Typeable
 
-instance Extern (LensH Core Core) where
-    type Box (LensH Core Core) = LensCoreCoreBox
-    box i = LensCoreCoreBox i
-    unbox (LensCoreCoreBox i) = i
+instance Extern (TranslateH Core Path) where
+    type Box (TranslateH Core Path) = TranslateCorePathBox
+    box i = TranslateCorePathBox i
+    unbox (TranslateCorePathBox i) = i
 
-{-
--}
 
 data StringBox = StringBox String deriving Typeable
 
