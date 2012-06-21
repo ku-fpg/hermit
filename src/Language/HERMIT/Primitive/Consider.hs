@@ -1,7 +1,6 @@
 module Language.HERMIT.Primitive.Consider where
 
 import GhcPlugins as GHC
--- import Convert
 
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
@@ -20,8 +19,8 @@ externals = map (.+ Lens)
             ]
 
 -- Focus on a bindings
-consider :: TH.Name -> LensH Core Core
-consider = joinTL . fmap pathL . uniquePathToT . nameBound
+consider :: TH.Name -> TranslateH Core Path
+consider = uniquePathToT . nameBound
 
 nameBound :: TH.Name -> Core -> Bool
 nameBound nm (BindCore (NonRec v _))  =  nm `cmpName` idName v
