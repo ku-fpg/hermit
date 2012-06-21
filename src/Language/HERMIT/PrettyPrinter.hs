@@ -20,7 +20,7 @@ data HermitMark
     deriving Show
 
 -- These are the attributes
-data Attr = PathAttr [Int]
+data Attr = PathAttr Path
           | Color SyntaxForColor
           | SpecialFont
     deriving Show
