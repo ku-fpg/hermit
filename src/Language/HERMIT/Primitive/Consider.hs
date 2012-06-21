@@ -20,7 +20,7 @@ externals = map (.+ Lens)
 
 -- Focus on a bindings
 consider :: TH.Name -> TranslateH Core Path
-consider = uniquePathToT . nameBound
+consider = uniquePrunePathToT . nameBound
 
 nameBound :: TH.Name -> Core -> Bool
 nameBound nm (BindCore (NonRec v _))  =  nm `cmpName` idName v
