@@ -69,11 +69,10 @@ letFloatLetTop = do
     NonRec v (Let (NonRec w ew) ev) : e <- idR
     return $ (NonRec w ew) : (NonRec v ev) : e
 
--- todo v is bound in one or more alts
-caseFloatLet :: RewriteH CoreExpr
-caseFloatLet = do
-    Let (NonRec v (Case s b ty alts)) e <- idR
-    return $ Case s b ty [ (con, ids, Let (NonRec v ec) e) | (con, ids, ec) <- alts]
+caseFloatLet = tagFailR "caseFloatLet no match" $
+  do shadowed <- letNonRecT caseAltVarsT idR (\ letVar caseVars _ -> elem letVar $ concat caseVars)
+     let bdsAction = if not shadowed then idR else (nonRecR alphaCase)
+     letT bdsAction idR $ \ (NonRec v (Case s b ty alts)) e -> Case s b ty [ (con, ids, Let (NonRec v ec) e) | (con, ids, ec) <- alts]
 
 letToCase :: RewriteH CoreExpr
 letToCase = do
