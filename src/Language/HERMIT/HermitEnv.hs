@@ -76,6 +76,9 @@ lookupHermitBinding n env = lookup n (hermitBindings env)
 boundInHermit :: Id -> HermitEnv -> Bool
 boundInHermit n env = maybe False (const True) (lookupHermitBinding n env)
 
+boundInHermitScope :: HermitEnv -> [Id]
+boundInHermitScope = keys . hermitBindings
+
 initHermitEnv :: ModGuts -> HermitEnv
 initHermitEnv = HermitEnv empty 0 rootAbsPath
 
