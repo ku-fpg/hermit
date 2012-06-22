@@ -11,6 +11,7 @@ import Control.Applicative
 import Control.Arrow
 
 import Language.HERMIT.HermitEnv
+import Language.HERMIT.HermitMonad
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
@@ -37,7 +38,7 @@ externals = map (.+ Experiment)
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
          , external "number-binder" (exprNumberBinder :: Int -> RewriteH Core)
                 [ "add a number suffix onto a (lambda) binding" ]
-         , external "auto-number-binder" (promoteR exprAutoRenameBinder :: RewriteH Core)
+         , external "auto-number-binder" (autoRenameBinder :: RewriteH Core)
                 [ "automatically add a number suffix onto a (lambda) binding" ]
          , external "cleanup-unfold" (promoteR cleanupUnfold :: RewriteH Core)
                 [ "clean up immeduate nested fully-applied lambdas, from the bottom up"]
@@ -133,21 +134,61 @@ exprNumberBinder n = promoteR (exprRenameBinder (++ show n))
 exprRenameBinder :: (String -> String) -> RewriteH CoreExpr
 exprRenameBinder nameMod =
              do Lam b e <- idR
-                uq      <- constT getUniqueM
-                let name = mkSystemVarName uq $ mkFastString $ nameMod $ getOccString b
-                    ty   = idType b
-                    b'   = mkLocalId name ty
-                return $ Lam b' (Let (NonRec b (Var b')) e)
+                (b',f) <- constT (cloneIdH nameMod b)
+                return $ Lam b' (f e)
+
+altRenameBinder :: (String -> String) -> RewriteH CoreAlt
+altRenameBinder nameMod =
+             do (con,bs,e) <- idR
+                (bs',f) <- constT (cloneIdsH nameMod bs)
+                return $ (con,bs',f e)
+
+-- This gives an new version of an Id, with the same info, and a new textual name.
+cloneIdH :: (String -> String) -> Id -> HermitM (Id,CoreExpr -> CoreExpr)
+cloneIdH nameMod b = do
+        uq <- getUniqueM
+        let name = mkSystemVarName uq $ mkFastString $ nameMod $ getOccString b
+            ty   = idType b
+            b'   = mkLocalId name ty
+        return (b', Let (NonRec b (Var b')))
+
+cloneIdsH :: (String -> String) -> [Id] -> HermitM ([Id],CoreExpr -> CoreExpr)
+cloneIdsH _       []     = return ([],id)
+cloneIdsH nameMod (b:bs) = do
+        (b',f)   <- cloneIdH  nameMod b
+        (bs',fs) <- cloneIdsH nameMod bs
+        return (b':bs',f . fs)
+
 
 -- Here, success is the successful renaming, but if 'id' works, thats okay.
 -- AJG: Gut feel, something not quite right here
 -- Fails for non-lambdas.
+
+autoRenameBinder :: RewriteH Core
+autoRenameBinder =
+        promoteR exprAutoRenameBinder
+     <+ promoteR altAutoRenameBinder
+
 exprAutoRenameBinder :: RewriteH CoreExpr
 exprAutoRenameBinder = do
         -- check if lambda
         Lam b _ <- idR
         frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreExpr [Var]
-        exprRenameBinder (inventNames (filter (/= b) frees)) >>> (childR 0 $ promoteR letSubstR)
+        bound <- translate $ \ c _ -> return (boundInHermitScope c)
+        exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> (childR 0 $ promoteR letSubstR)
+
+altAutoRenameBinder :: RewriteH CoreAlt
+altAutoRenameBinder = do
+        -- check if alt
+        (_,bs,_) <- idR
+        frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreAlt [Var]
+        bound <- translate $ \ c _ -> return (boundInHermitScope c)
+        altRenameBinder (inventNames (filter (\ i -> not (i `elem` bs)) (frees ++ bound))) >>> (childR 0 $ letSubstNR (length bs))
+
+-- remove N lets, please
+letSubstNR :: Int -> RewriteH Core
+letSubstNR 0 = idR
+letSubstNR n = (childR 1 $ letSubstNR (n - 1)) >>> promoteR letSubstR
 
 inventNames :: [Id] -> String -> String
 inventNames curr old | trace (show ("inventNames",names,old)) False = undefined
@@ -196,7 +237,7 @@ unfold nm = translate $ \ env e0 -> do
 -- O(n^2) right now
 -- Also, only does lambda bound things.
 unshadow :: RewriteH Core
-unshadow = anytdR (promoteR exprAutoRenameBinder)
+unshadow = anytdR (promoteR autoRenameBinder)
 
 --cleanUnfold :: (LensH Core Core -> RewriteH Core) -> RewriteH Core
 --cleanUnfold f =
