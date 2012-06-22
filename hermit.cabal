@@ -40,8 +40,9 @@ Library
        Language.HERMIT.HermitKure
        Language.HERMIT.HermitMonad
        Language.HERMIT.Kernel
+       Language.HERMIT.Kernel.Command
+       Language.HERMIT.Kernel.Scoped
        Language.HERMIT.Interp
-       Language.HERMIT.LensStore
        Language.HERMIT.Plugin
 
        Language.HERMIT.Primitive.Consider
