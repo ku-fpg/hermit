@@ -50,13 +50,10 @@ beta_reduce = tagFailR "beta_reduce failed. Not applied to an App." $
        return $ Let (NonRec v e2) e1
 
 
-
 betaReducePlus :: RewriteH CoreExpr
 betaReducePlus =
         tagFailR "betaReducePlus failed." $
-        observeR "betaReducePlus (start)" >>>
-        appT liftLambda idR App >>> beta_reduce >>>
-        observeR "betaReducePlus (done)"
+        appT liftLambda idR App >>> beta_reduce
   where
           -- lift lambda finds the (perhaps hidden) lambda, and brings it out
           liftLambda =
