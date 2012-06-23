@@ -27,6 +27,12 @@ externals modGuts = map (.+ GHC)
                 , "let x = E1 in E2, safe to inline without duplicating work ==> E2[E1/x],"
                 , "fails otherwise"
                 , "only matches non-recursive lets" ]                           .+ Local .+ Eval
+         , external "safe-let-subst-plus" (promoteR safeLetSubstPlusR :: RewriteH Core)
+                [ "Safe let substitution [via GHC]"
+                , "let { x = E1, ... } in E2, "
+                , "  where safe to inline without duplicating work ==> E2[E1/x,...],"
+                , "fails otherwise"
+                , "only matches non-recursive lets" ]
          , external "freevars" (promoteT freeIdsQuery :: TranslateH Core String)
                 [ "List the free variables in this expression [via GHC]" ]
          , external "deshadow-binds" (promoteR deShadowBindsR :: RewriteH Core)
@@ -86,6 +92,11 @@ safeLetSubstR = contextfreeT $ \ exp -> case occurAnalyseExpr exp of
                                                                           -- or if in multiple case branches
                               | otherwise = True
           safeSubst _ = False   -- strange case, like a loop breaker
+
+-- | 'safeLetSubstPlusR' tries to inline a stack of bindings, stopping when reaches
+-- the end of the stack of lets.
+safeLetSubstPlusR :: RewriteH CoreExpr
+safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 
 
 ------------------------------------------------------------------------
