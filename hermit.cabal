@@ -46,6 +46,7 @@ Library
        Language.HERMIT.Plugin
 
        Language.HERMIT.Primitive.Consider
+       Language.HERMIT.Primitive.Debug
        Language.HERMIT.Primitive.GHC
        Language.HERMIT.Primitive.Inline
        Language.HERMIT.Primitive.Kure

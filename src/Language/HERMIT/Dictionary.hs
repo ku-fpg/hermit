@@ -23,6 +23,7 @@ import qualified Language.HERMIT.Primitive.Inline as Inline
 import qualified Language.HERMIT.Primitive.Subst as Subst
 import qualified Language.HERMIT.Primitive.Local as Local
 import qualified Language.HERMIT.Primitive.New as New
+import qualified Language.HERMIT.Primitive.Debug as Debug
 import qualified Language.HERMIT.Primitive.GHC as GHC
 
 
@@ -30,6 +31,7 @@ import Language.HERMIT.PrettyPrinter
 import qualified Language.HERMIT.PrettyPrinter.AST as AST
 import qualified Language.HERMIT.PrettyPrinter.Clean as Clean
 import qualified Language.HERMIT.PrettyPrinter.GHC as GHCPP
+
 
 --------------------------------------------------------------------------
 
@@ -39,6 +41,7 @@ prim_externals =    Kure.externals
                  ++ Inline.externals
                  ++ Subst.externals
                  ++ Local.externals
+                 ++ Debug.externals
                  ++ New.externals
 
 -- The GHC.externals here is a bit of a hack. Not sure about this
