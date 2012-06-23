@@ -8,11 +8,15 @@ import Language.HERMIT.HermitMonad
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.GHC
+import Language.HERMIT.Primitive.Debug
 
 import qualified Language.HERMIT.Primitive.Local.Case as Case
 import qualified Language.HERMIT.Primitive.Local.Let as Let
 
 import qualified Language.Haskell.TH as TH
+
+import Control.Arrow
+
 
 ------------------------------------------------------------------------------
 
@@ -22,6 +26,8 @@ externals = map (.+ Local) $
                      [ "((\\ v -> E1) E2) ==> let v = E2 in E1, fails otherwise"
                      , "this form of beta reduction is safe if E2 is an arbitrary"
                      , "expression (won't duplicate work)" ]                                 .+ Eval
+         , external "beta-reduce-plus" (promoteR betaReducePlus :: RewriteH Core)
+                     [ "perform one or more beta-reductions"]                                .+ Eval
          , external "beta-expand" (promoteR beta_expand :: RewriteH Core)
                      [ "(let v = E1 in E2) ==> (\\ v -> E2) E1, fails otherwise" ]
          , external "dead-code" (promoteR dce :: RewriteH Core)
@@ -42,6 +48,26 @@ beta_reduce :: RewriteH CoreExpr
 beta_reduce = tagFailR "beta_reduce failed. Not applied to an App." $
     do App (Lam v e1) e2 <- idR
        return $ Let (NonRec v e2) e1
+
+
+
+betaReducePlus :: RewriteH CoreExpr
+betaReducePlus =
+        tagFailR "betaReducePlus failed." $
+        observeR "betaReducePlus (start)" >>>
+        appT liftLambda idR App >>> beta_reduce >>>
+        observeR "betaReducePlus (done)"
+  where
+          -- lift lambda finds the (perhaps hidden) lambda, and brings it out
+          liftLambda =
+                   (do e@(Lam {}) <- idR
+                       return e)
+                <+ (betaReducePlus
+                            -- let v = e in ...
+                            -- TODO: check scope here
+                        >>> (do Let bds (Lam v e) <- idR
+                                return (Lam v (Let bds e)))
+                   )
 
      -- contextfreeT $ \ e -> case e of
      --    App (Lam v e1) e2 -> return $ Let (NonRec v e2) e1
