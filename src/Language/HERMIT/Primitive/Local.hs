@@ -16,6 +16,7 @@ import qualified Language.HERMIT.Primitive.Local.Let as Let
 import qualified Language.Haskell.TH as TH
 
 import Control.Arrow
+import Control.Monad
 
 
 ------------------------------------------------------------------------------
@@ -51,20 +52,52 @@ beta_reduce = tagFailR "beta_reduce failed. Not applied to an App." $
 
 
 betaReducePlus :: RewriteH CoreExpr
-betaReducePlus =
+betaReducePlus = do
+        e <- idR
+        let (f,xs) = collectArgs e
+        when (length xs == 0) $ do
+                fail "betaReducePlus, no applications"
+
+        let (vs,e0) = collectBinders f
+
+        when (length vs < length xs) $ do
+                fail "betaReducePlus, no lambdas"
+
+
+
+
+        let (vs1,vs2) = splitAt (length xs) vs
+
+        (return
+           $ mkLets (zipWith NonRec vs1 xs)
+           $ mkLams vs2 e0) >>> observeR "beta-reduce-plus(final)"
+
+
+{-
+
         tagFailR "betaReducePlus failed." $
         appT liftLambda idR App >>> beta_reduce
   where
           -- lift lambda finds the (perhaps hidden) lambda, and brings it out
-          liftLambda =
+          liftLambda = observeR "pre-liftLambda" >>> liftLambda' >>> observeR "post-liftLambda"
+          liftLambda' =
                    (do e@(Lam {}) <- idR
                        return e)
                 <+ (betaReducePlus
+                        >>> observeR "liftLambda(UP)"
                             -- let v = e in ...
                             -- TODO: check scope here
                         >>> (do Let bds (Lam v e) <- idR
                                 return (Lam v (Let bds e)))
                    )
+-}
+
+--betaReducePlus :: RewriteH CoreExpr
+--betaReducePlus decent lift op = decent (tryR (betaReducePlus decent lift op >>> lift)) >>> op
+
+
+
+
 
      -- contextfreeT $ \ e -> case e of
      --    App (Lam v e1) e2 -> return $ Let (NonRec v e2) e1
