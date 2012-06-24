@@ -17,17 +17,22 @@ import Language.HERMIT.External
 import Language.HERMIT.GHC
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Local
+import Language.HERMIT.Primitive.Local.Case
 import Language.HERMIT.Primitive.Inline
+import Language.HERMIT.Primitive.Debug
+import Language.HERMIT.Primitive.Consider -- for cmpName
 
 import qualified Language.Haskell.TH as TH
+import qualified Data.Map as Map
 
 import Debug.Trace
+import Control.Monad
 
 -- promoteR'  :: Term a => RewriteH a -> RewriteH (Generic a)
 -- promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an expr") (apply rr c)  (retract e)
 
-externals :: [External]
-externals = map (.+ Experiment)
+externals ::  ModGuts -> [External]
+externals modGuts = map (.+ Experiment)
          [ external "info" (promoteT info :: TranslateH Core String)
                 [ "tell me what you know about this expression or binding" ] .+ Unimplemented
          , external "expr-type" (promoteT exprTypeQueryT :: TranslateH Core String)
@@ -46,7 +51,14 @@ externals = map (.+ Experiment)
                 [ "inline a definition, and apply the arguments; tranditional unfold"]
          , external "unshadow" (unshadow :: RewriteH Core)
                 [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
+         , external "push" (promoteR . push :: TH.Name -> RewriteH Core)
+                [ "push a function <v> into argument" ]
+         , external "unfold-rule" ((\ nm -> promoteR (rules rulesEnv nm >>> cleanupUnfold)) :: String -> RewriteH Core)
+                [ "apply a named GHC rule" ]
          ]
+  where
+          rulesEnv :: Map.Map String (RewriteH CoreExpr)
+          rulesEnv = rulesToEnv (mg_rules modGuts)
 
 
 -- Others

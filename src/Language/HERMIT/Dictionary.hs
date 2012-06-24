@@ -35,18 +35,19 @@ import qualified Language.HERMIT.PrettyPrinter.GHC as GHCPP
 
 --------------------------------------------------------------------------
 
-prim_externals :: [External]
-prim_externals =    Kure.externals
+prim_externals :: ModGuts -> [External]
+prim_externals modGuts
+               =    Kure.externals
                  ++ Consider.externals
                  ++ Inline.externals
                  ++ Subst.externals
                  ++ Local.externals
                  ++ Debug.externals
-                 ++ New.externals
+                 ++ New.externals modGuts
 
 -- The GHC.externals here is a bit of a hack. Not sure about this
 all_externals :: [External] -> ModGuts -> [External]
-all_externals my_externals guts = prim_externals ++ my_externals ++ GHC.externals guts
+all_externals my_externals guts = prim_externals guts ++ my_externals ++ GHC.externals guts
 
 -- create the dictionary
 dictionary :: [External] -> M.Map String [Dynamic]
