@@ -260,4 +260,19 @@ countArguments :: CoreExpr -> Int
 countArguments (App e1 _) = countArguments e1 + 1
 countArguments _          = 0
 
-
+-- push a variable into the expression
+push :: TH.Name -> RewriteH CoreExpr
+push nm = do
+        e <- idR
+        case collectArgs e of
+          (Var v,args) -> do
+                  when (not (nm `cmpName` idName v)) $ do
+                          fail $ "push did not find name " ++ show nm
+                  when (length args == 0) $ do
+                          fail $ "no argument for " ++ show nm
+                  when (not (all isTypeArg (init args))) $ do
+                          fail $ " initial arguments are not type arguments for " ++ show nm
+                  case last args of
+                     Case {} -> caseFloatArg
+                     _       -> fail "can not push, sorry"
+          _ -> fail "no function to match for push"
