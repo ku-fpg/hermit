@@ -6,6 +6,8 @@ import qualified OccurAnal
 import Control.Arrow
 import qualified Data.Map as Map
 
+import Language.HERMIT.Primitive.Debug
+
 import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 -- import Language.HERMIT.GHC
@@ -161,8 +163,8 @@ rulesToRewriteH rs = contextfreeT $ \ e -> do
         _rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
     -- Finally, we try match the rules
     case lookupRule (const True) (const NoUnfolding) in_scope fn args rs of
-        Nothing      -> fail "rule not matched"
-        Just (_,e')  -> return e'
+        Nothing         -> fail "rule not matched"
+        Just (rule,e')  -> return $ mkApps e' (drop (ruleArity rule) args)
 
 rules :: Map.Map String (RewriteH CoreExpr) -> String -> RewriteH CoreExpr
 rules mp r = case Map.lookup r mp of
