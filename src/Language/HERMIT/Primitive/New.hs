@@ -145,9 +145,14 @@ exprNumberBinder n = promoteR (exprRenameBinder (++ show n))
 
 exprRenameBinder :: (String -> String) -> RewriteH CoreExpr
 exprRenameBinder nameMod =
-             do Lam b e <- idR
+--            (do observeR "exprRenameBinder" >>> fail "observe") <+
+            (do Lam b e <- idR
                 (b',f) <- constT (cloneIdH nameMod b)
-                return $ Lam b' (f e)
+                return $ Lam b' (f e))
+         <+ (do Let (NonRec b e0) e1 <- idR
+                (b',f) <- constT (cloneIdH nameMod b)
+--                traceR $ "new name = " ++ show (nameMod $ getOccString b')
+                return $ Let (NonRec b' e0) (f e1))
 
 altRenameBinder :: (String -> String) -> RewriteH CoreAlt
 altRenameBinder nameMod =
@@ -182,12 +187,17 @@ autoRenameBinder =
      <+ promoteR altAutoRenameBinder
 
 exprAutoRenameBinder :: RewriteH CoreExpr
-exprAutoRenameBinder = do
-        -- check if lambda
+exprAutoRenameBinder =
+    (do -- check if lambda
         Lam b _ <- idR
         frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreExpr [Var]
         bound <- translate $ \ c _ -> return (boundInHermitScope c)
-        exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> (childR 0 $ promoteR letSubstR)
+        exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> (childR 0 $ promoteR letSubstR))
+ <+ (do -- check in Let
+        Let (NonRec b _) _ <- idR
+        frees <- freeVarsT :: TranslateH CoreExpr [Var]
+        bound <- translate $ \ c _ -> return (boundInHermitScope c)
+        exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> (childR 0 $ promoteR letSubstR))
 
 altAutoRenameBinder :: RewriteH CoreAlt
 altAutoRenameBinder = do
@@ -195,7 +205,7 @@ altAutoRenameBinder = do
         (_,bs,_) <- idR
         frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreAlt [Var]
         bound <- translate $ \ c _ -> return (boundInHermitScope c)
-        altRenameBinder (inventNames (filter (\ i -> not (i `elem` bs)) (frees ++ bound))) >>> (childR 0 $ letSubstNR (length bs))
+        altRenameBinder (inventNames (filter (\ i -> not (i `elem` bs)) (frees ++ bound))) >>> (childR 1 $ letSubstNR (length bs))
 
 -- remove N lets, please
 letSubstNR :: Int -> RewriteH Core
@@ -221,15 +231,7 @@ inventNames curr old = head
 --  (for example, an inline or rule application)
 -- It is used at the level of the top-redex.
 cleanupUnfold :: RewriteH CoreExpr
-cleanupUnfold = (contextfreeT (\ e -> case e of
-            -- Spot the lambda
-                Lam {}  -> return e
-                _       -> fail "no lambda"))
-         <+ (acceptR (\ e -> case e of
-                App {} -> True
-                _      -> False) >>>
-             childR 0 (promoteR cleanupUnfold) >>>
-             tryR (beta_reduce >>> safeLetSubstR))
+cleanupUnfold = betaReducePlus >>> safeLetSubstPlusR
 
 unfold :: TH.Name -> RewriteH CoreExpr
 unfold nm = translate $ \ env e0 -> do
