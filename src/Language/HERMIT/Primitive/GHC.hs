@@ -82,6 +82,8 @@ safeLetSubstR = contextfreeT $ \ exp -> case occurAnalyseExpr exp of
           safeBind e@(App {}) =
                  case collectArgs e of
                   (Var f,args) -> idArity f > length (filter (not . isTypeArg) args)
+                  (other,args) -> case collectBinders other of
+                                    (bds,_) -> length bds > length args
                   _            -> False
           safeBind _          = False
 
