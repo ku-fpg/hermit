@@ -46,7 +46,16 @@ externals modGuts = map (.+ GHC)
          ]
   where
           rulesEnv :: Map.Map String (RewriteH CoreExpr)
-          rulesEnv = rulesToEnv (mg_rules modGuts)
+          rulesEnv = rulesToEnv (mg_rules modGuts ++ other_rules)
+
+          other_rules = [ rule
+                        | top_bnds <- mg_binds modGuts
+                        , bnd <- case top_bnds of
+                                     Rec bnds -> map fst bnds
+                                     NonRec b _ -> [b]
+                        , rule <- idCoreRules bnd
+                        ]
+
 
 ------------------------------------------------------------------------
 
