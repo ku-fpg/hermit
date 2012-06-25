@@ -2,6 +2,7 @@
 module Language.HERMIT.Kernel.Scoped (ScopedKernel(..), SAST(..), scopedKernel) where
 
 import Control.Concurrent.STM
+import Control.Exception.Base (bracketOnError)
 
 import qualified Data.IntMap as I
 
@@ -35,6 +36,9 @@ get sAst m = maybe (fail "scopedKernel: invalid SAST") return (I.lookup sAst m)
 pathStackToLens :: [Path] -> Path -> LensH Core Core
 pathStackToLens base = pathL . (concat (reverse base) ++)
 
+safeTakeTMVar :: TMVar a -> (a -> IO b) -> IO b
+safeTakeTMVar mvar = bracketOnError (atomically $ takeTMVar mvar) (atomically . putTMVar mvar)
+
 scopedKernel :: (ScopedKernel -> SAST -> IO ()) -> ModGuts -> CoreM ModGuts
 scopedKernel callback = hermitKernel $ \ kernel initAST -> do
     store <- newTMVarIO $ I.fromList [(0,(initAST, [], []))]
@@ -51,8 +55,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 (ast,_,_) <- get sAst m
                                 resumeK kernel ast
             , abortS      = abortK kernel
-            , applyS      = \ (SAST sAst) rr -> do
-                                m <- atomically $ takeTMVar store
+            , applyS      = \ (SAST sAst) rr -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
                                 ast' <- applyK kernel ast (focusR (pathStackToLens base rel) rr)
                                 atomically $ do
@@ -72,8 +75,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 m <- readTMVar store
                                 (_, base, rel) <- get sAst m
                                 return $ reverse $ rel : base
-            , modPathS    = \ (SAST sAst) f -> do
-                                m <- atomically $ takeTMVar store
+            , modPathS    = \ (SAST sAst) f -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
                                 let rel' = f rel
                                 condM (fmap (&& (rel /= rel')) (queryK kernel ast (testLensT (pathStackToLens base rel'))))
@@ -81,7 +83,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                             k <- newKey
                                             putTMVar store $ I.insert k (ast, base, rel') m
                                             return $ SAST k)
-                                      (atomically $ putTMVar store m >> return (SAST sAst)) -- throw error too?
+                                      (atomically $ putTMVar store m >> return (SAST sAst))
             , beginScopeS = \ (SAST sAst) -> atomically $ do
                                 m <- takeTMVar store
                                 (ast, base, rel) <- get sAst m
@@ -92,7 +94,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 m <- takeTMVar store
                                 (ast, base, _) <- get sAst m
                                 case base of
-                                    [] -> fail "scopedKernel: no scope to end" -- will this fail undo the takeTMVar?
+                                    [] -> fail "scopedKernel: no scope to end"
                                     (rel:base') -> do
                                         k <- newKey
                                         putTMVar store $ I.insert k (ast, base', rel) m
