@@ -20,11 +20,14 @@ Library
   ghc-options: -Wall -fno-warn-orphans
   Build-Depends: base >= 4 && < 5,
                  aeson,
+                 ansi-terminal >= 0.5.5,
                  containers,
                  data-default >= 0.4,
                  ghc >= 7.4,
+                 haskeline >= 0.6.4.7 && < 0.7,
                  kure >= 2.1.13,
                  marked-pretty >= 0.1,
+                 mtl,
                  stm,
                  template-haskell,
                  text
@@ -43,7 +46,10 @@ Library
        Language.HERMIT.Kernel.Command
        Language.HERMIT.Kernel.Scoped
        Language.HERMIT.Interp
+
        Language.HERMIT.Plugin
+       Language.HERMIT.Plugin.Interactive
+       Language.HERMIT.Plugin.Script
 
        Language.HERMIT.Primitive.Consider
        Language.HERMIT.Primitive.Debug
@@ -61,6 +67,8 @@ Library
        Language.HERMIT.PrettyPrinter.Clean
        Language.HERMIT.PrettyPrinter.GHC
        Language.HERMIT.PrettyPrinter.JSON
+
+       Language.HERMIT.Shell.Command
 
   Other-modules:
        Language.Core.Quote
