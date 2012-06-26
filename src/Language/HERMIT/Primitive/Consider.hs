@@ -35,7 +35,7 @@ bindGroup _  _                        =  False
 
 -- find a specific binding's rhs.
 rhsOf :: TH.Name -> TranslateH Core Path
-rhsOf nm = uniquePrunePathToT (namedBinding nm) >>> arr (0 :)
+rhsOf nm = uniquePrunePathToT (namedBinding nm) >>> arr (++ [0])
 
 namedBinding :: TH.Name -> Core -> Bool
 namedBinding nm (BindCore (NonRec v _))  =  nm `cmpName` idName v
