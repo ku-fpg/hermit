@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Language.HERMIT.Primitive.GHC where
 
 import GhcPlugins hiding (freeVars,empty)
@@ -210,6 +211,7 @@ joinT f e0 = translate $ \ c e1 -> do
 exprEqual :: CoreExpr -> TranslateH CoreExpr ()
 exprEqual (Var v1) = do { Var v2 <- idR ; if v1 == v2 then return () else fail "var mismatch" }
 exprEqual (Lit i1) = do { Lit i2 <- idR ; if i1 == i2 then return () else fail "lit mismatch" }
+exprEqual (Type t1) = do { Type t2 <- idR ; if t1 `eqType` t2 then return () else fail "type mismatch" }
 exprEqual (App e1 e2) = appT (exprEqual e1) (exprEqual e2) $ \ () () -> ()
 exprEqual _        = fail "exprEqual fail"
 
@@ -221,15 +223,12 @@ coreEqualT (DefCore  _)     = fail "can not compare Def"
 coreEqualT (ExprCore  e)    = promoteT $ exprEqual e
 coreEqualT (AltCore  _)     = fail "can not compare Alt"
 
--- This looks at two sub-points in a tree, and succeeds if it works.
-compareCore :: Path -> Path -> TranslateH Core ()
-compareCore p1 p2 = return ()
-
 -- TODO: make this handle cmp of recusive functions, by using subst.
 
 compareValues :: TH.Name -> TH.Name -> TranslateH Core String
 compareValues n1 n2 = do
         p1 <- rhsOf n1
         p2 <- rhsOf n2
-        () <- compareCore p1 p2
+        e1 :: Core <- focusT (pathL p1) idR
+        () <- focusT (pathL p2) (coreEqualT e1)
         return $ show n1 ++ " and " ++ show n1 ++ " are equal"
