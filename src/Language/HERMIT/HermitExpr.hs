@@ -91,7 +91,8 @@ parseExprH0 :: ReadS (Box ExprH)
 parseExprH0 = \ inp ->
         [ (Box $ CmdName str,inp1)
         | (str,inp1) <- parseToken inp
-        , all isId str
+        , isId (head str) || head str == ':'    -- commands can start with :
+        , all isId (tail str)
         ] ++
         [ (InfixableExpr $ CmdName str,inp1)
         | (str,inp1) <- parseToken inp
@@ -158,6 +159,7 @@ parseToken (';' :cs) = [(";",cs)]
 parseToken ('\'':cs) = [("'",cs)]
 parseToken ('\"':cs) = [("\"",cs)]
 parseToken (c   :cs) | isSpace c = parseToken cs
+                     | c == ':'       = [let (a,b) = span isId cs in (c:a,b) ]
                      | isAlphaNum c   = [span isId (c:cs)]
                      | isInfixId c    = [span isInfixId (c:cs)]
 parseToken _         = []
