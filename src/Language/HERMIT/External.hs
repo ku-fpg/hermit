@@ -18,26 +18,23 @@ type ExternalHelp = [String]
 
 -- Tags --------------------------------------------------------
 
-data CmdTag = Slow -- this command is slow
-            | KURE -- a KURE command
-            | GHC  -- a tunnel into GHC
-            | Local     -- local thing, O(1)
-            | Eval      -- the arrow of evaluation
-            | Lens      -- focuses into a specific node
-            | Context   -- something that uses the context
-            | Experiment -- things we are trying out
-            | Shell     -- Shell commands
-            | Restful    -- RESTful API commands
+data CmdTag = CaseCmd       -- works on case statements
+            | Context       -- something that uses the context
+            | Eval          -- the arrow of evaluation (reduces a term)
+            | Experiment    -- things we are trying out
+            | GHC           -- a tunnel into GHC
+            | KURE          -- a KURE command
+            | Lens          -- focuses into a specific node
+            | LetCmd        -- works on let statements
+            | Local         -- local thing, O(1)
+            | Meta          -- combines other commands
+            | Restful       -- RESTful API commands
+            | Shell         -- Shell commands
+            | Slow          -- this command is slow
             | Unimplemented
+            -- | Other String
             -- etc
     deriving (Eq, Show, Read)
-
-data CmdCategory = CaseCmd
-                 | LetCmd
-                 | TraversalCmd
-                 | MetaCmd         -- cmds built from other commands, like bash
-                 -- etc
-    deriving (Eq, Ord, Show, Read, Bounded, Enum)
 
 -- Unfortunately, record update syntax seems to associate to the right.
 -- This guy saves us some parens.
@@ -79,12 +76,6 @@ instance Tag CmdTag where
     remTag t ex@(External {externTags = ts}) = ex { externTags = [ t' | t' <- ts, t' /= t ] }
     tagMatch t (External {externTags = ts}) = t `elem` ts
 
-instance Tag CmdCategory where
-    toTagE = Tag
-    ex@(External {externCats = cs}) .+ c = ex { externCats = (c:cs) }
-    remTag c ex@(External {externCats = cs}) = ex { externCats = [ c' | c' <- cs, c' /= c ] }
-    tagMatch c (External {externCats = cs}) = c `elem` cs
-
 infixr 5 .&
 (.&) :: (Tag a, Tag b) => a -> b -> TagE
 t1 .& t2 = AndTag (toTagE t1) (toTagE t2)
@@ -104,7 +95,6 @@ data External = External
         , externFun  :: Dynamic
         , externHelp :: ExternalHelp
         , externTags :: [CmdTag]
-        , externCats :: [CmdCategory]
         }
 
 external :: Extern a => ExternalName -> a -> ExternalHelp -> External
@@ -113,7 +103,6 @@ external nm fn help = External
         , externFun  = toDyn (box fn)
         , externHelp = map ("  " ++) help
         , externTags = []
-        , externCats = []
         }
 
 toDictionary :: [External] -> Map ExternalName [Dynamic]
