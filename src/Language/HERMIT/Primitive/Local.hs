@@ -46,7 +46,7 @@ externals = map (.+ Local) $
 ------------------------------------------------------------------------------
 
 beta_reduce :: RewriteH CoreExpr
-beta_reduce = tagFailR "beta_reduce failed. Not applied to an App." $
+beta_reduce = setFailMsg "beta_reduce failed. Not applied to an App." $
     do App (Lam v e1) e2 <- idR
        return $ Let (NonRec v e2) e1
 
@@ -104,7 +104,7 @@ betaReducePlus = do
      --    _ -> fail "beta_reduce failed. Not applied to an App."
 
 beta_expand :: RewriteH CoreExpr
-beta_expand = tagFailR "beta_expand failed. Not applied to a NonRec Let." $
+beta_expand = setFailMsg "beta_expand failed. Not applied to a NonRec Let." $
     do Let (NonRec v e2) e1 <- idR
        return $ App (Lam v e1) e2
 
@@ -116,8 +116,8 @@ beta_expand = tagFailR "beta_expand failed. Not applied to a NonRec Let." $
 
 eta_reduce :: RewriteH CoreExpr
 eta_reduce = contextfreeT $ \ e -> case e of
-      Lam v1 (App f (Var v2)) -> do guardFail (v1 == v2) "eta_reduce failed, variables are not equal."
-                                    guardFail (v1 `notElem` freeIds f) $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++
+      Lam v1 (App f (Var v2)) -> do guardMsg (v1 == v2) "eta_reduce failed, variables are not equal."
+                                    guardMsg (v1 `notElem` freeIds f) $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++
                                                                          "is free in the function being applied."
                                     return f
       _                       -> fail "eta_reduce failed"

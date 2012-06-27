@@ -76,14 +76,14 @@ hermitKernel callback modGuts = do
                 { resumeK = \ name -> sendDone $ \ env -> find name env fail $ \ core -> return core
                 , abortK  = sendDone $ \ _ -> throwGhcException (ProgramError "<HERMIT>: hard GHC abort requested")
                 , applyK = \ name rr -> sendReq $ \ env -> find name env fail' $ \ core ->
-                             runHermitMR
+                             runHM
                                   (\ core' -> do
                                       syn' <- liftIO $ takeMVar syntax_names
                                       return $ Right (syn',M.insert syn' core' env))
                                   (\ m -> return $ Left m)
                                   (apply (extractR rr) (initHermitEnv core) core)
                 , queryK = \ name q -> sendReq $ \ env -> find name env fail' $ \ core ->
-                             runHermitMR
+                             runHM
                                   (\ reply -> return  $ Right (reply,env))
                                   (\ m -> return $ Left m)
                                   (apply (extractT q) (initHermitEnv core) core)

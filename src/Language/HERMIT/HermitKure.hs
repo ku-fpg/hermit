@@ -7,6 +7,7 @@ module Language.HERMIT.HermitKure
        , TranslateH
        , RewriteH
        , LensH
+       , idR
        -- * Generic Data Type
        -- $typenote
        , Core(..), CoreDef(..)
@@ -44,7 +45,7 @@ where
 
 import GhcPlugins hiding (empty)
 
-import Language.KURE
+import Language.KURE hiding (catch)
 import Language.KURE.Injection
 import Language.KURE.Utilities
 
@@ -52,6 +53,7 @@ import Language.HERMIT.HermitEnv
 import Language.HERMIT.HermitMonad
 
 import Control.Applicative
+import qualified Control.Category
 import Control.Arrow
 
 import Data.Monoid
@@ -61,6 +63,10 @@ import Data.Monoid
 type TranslateH a b = Translate HermitEnv HermitM a b
 type RewriteH a = Rewrite HermitEnv HermitM a
 type LensH a b = Lens HermitEnv HermitM a b
+
+-- | Identity 'RewriteH'.
+idR :: RewriteH a
+idR = Control.Category.id
 
 ---------------------------------------------------------------------
 
@@ -87,7 +93,7 @@ data Core = ModGutsCore  ModGuts
 
 ---------------------------------------------------------------------
 
-instance Term Core where
+instance Node Core where
   type Generic Core = Core
 
   numChildren (ModGutsCore x) = numChildren x
@@ -140,14 +146,14 @@ instance Injection ModGuts Core where
   retract (ModGutsCore guts) = Just guts
   retract _                  = Nothing
 
-instance Term ModGuts where
+instance Node ModGuts where
   type Generic ModGuts = Core
 
   numChildren _ = 1
 
 instance Walker HermitEnv HermitM ModGuts where
   childL 0 = lens $ modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
-  childL n = failR (missingChild n)
+  childL n = failure (missingChild n)
 
 -- | Slightly different to the others; passes in *all* of the original to the reconstruction function.
 modGutsT :: TranslateH CoreProgram a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
@@ -163,7 +169,7 @@ instance Injection CoreProgram Core where
   retract (ProgramCore bds) = Just bds
   retract _                 = Nothing
 
-instance Term CoreProgram where
+instance Node CoreProgram where
   type Generic CoreProgram = Core
 
   -- we consider only the head and tail to be interesting children
@@ -172,7 +178,7 @@ instance Term CoreProgram where
 instance Walker HermitEnv HermitM CoreProgram where
   childL 0 = lens $ consBindT exposeT idR (childL0of2 (:))
   childL 1 = lens $ consBindT idR exposeT (childL1of2 (:))
-  childL n = failR (missingChild n)
+  childL n = failure (missingChild n)
 
   allT t = nilT mempty
         <+ consBindT (extractT t) (extractT t) mappend
@@ -208,14 +214,14 @@ instance Injection CoreBind Core where
   retract (BindCore bnd)  = Just bnd
   retract _               = Nothing
 
-instance Term CoreBind where
+instance Node CoreBind where
   type Generic CoreBind = Core
 
   numChildren (NonRec _ _) = 1
   numChildren (Rec defs)   = length defs
 
 instance Walker HermitEnv HermitM CoreBind where
-  childL n = lens $ tagFailR (missingChild n) $
+  childL n = lens $ setFailMsg (missingChild n) $
                case n of
                  0 -> nonrec <+ rec
                  _ -> rec
@@ -267,14 +273,14 @@ instance Injection CoreDef Core where
   retract (DefCore def) = Just def
   retract _             = Nothing
 
-instance Term CoreDef where
+instance Node CoreDef where
   type Generic CoreDef = Core
 
   numChildren _ = 1
 
 instance Walker HermitEnv HermitM CoreDef where
   childL 0 = lens $ defT exposeT (childL1of2 Def)
-  childL n = failR (missingChild n)
+  childL n = failure (missingChild n)
 
 defT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreDef b
 defT t f = translate $ \ c (Def v e) -> f v <$> apply t (c @@ 0) e
@@ -289,14 +295,14 @@ instance Injection CoreAlt Core where
   retract (AltCore expr) = Just expr
   retract _              = Nothing
 
-instance Term CoreAlt where
+instance Node CoreAlt where
   type Generic CoreAlt = Core
 
   numChildren _ = 1
 
 instance Walker HermitEnv HermitM CoreAlt where
   childL 0 = lens $ altT exposeT (childL2of3 (,,))
-  childL n = failR (missingChild n)
+  childL n = failure (missingChild n)
 
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
 altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (foldr addHermitEnvLambdaBinding c bs @@ 0) e
@@ -311,7 +317,7 @@ instance Injection CoreExpr Core where
   retract (ExprCore expr) = Just expr
   retract _               = Nothing
 
-instance Term CoreExpr where
+instance Node CoreExpr where
   type Generic CoreExpr = Core
 
   numChildren (Var _)         = 0
@@ -327,7 +333,7 @@ instance Term CoreExpr where
 
 instance Walker HermitEnv HermitM CoreExpr where
 
-  childL n = lens $ tagFailR (missingChild n) $
+  childL n = lens $ setFailMsg (missingChild n) $
                case n of
                  0  ->    appT  exposeT idR         (childL0of2 App)
                        <+ lamT  exposeT             (childL1of2 Lam)
