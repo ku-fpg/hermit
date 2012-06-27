@@ -28,24 +28,36 @@ externals = map (.+ KURE)
        [ "apply a rewrite to all children of the node, requiring success at every child" ]
    , external "any"        (anyR :: RewriteH Core -> RewriteH Core)
        [ "apply a rewrite to all children of the node, requiring success for at least one child" ]
-   , external "all-bu"      (allbuR :: RewriteH Core -> RewriteH Core)
+   , external "all-bu"     (allbuR :: RewriteH Core -> RewriteH Core)
        [ "promotes a rewrite to operate over an entire tree in bottom-up order, requiring success at each node" ]
-   , external "all-td"      (alltdR :: RewriteH Core -> RewriteH Core)
+   , external "all-td"     (alltdR :: RewriteH Core -> RewriteH Core)
        [ "promotes a rewrite to operate over an entire tree in top-down order, requiring success at every node" ]
-   , external "any-bu"      (anybuR :: RewriteH Core -> RewriteH Core)
+   , external "any-bu"     (anybuR :: RewriteH Core -> RewriteH Core)
        [ "promotes a rewrite to operate over an entire tree in bottom-up order, requiring success for at least one node" ]
-   , external "any-td"      (anytdR :: RewriteH Core -> RewriteH Core)
+   , external "any-td"     (anytdR :: RewriteH Core -> RewriteH Core)
        [ "promotes a rewrite to operate over an entire tree in top-down order, requiring success for at least one node" ]
-   , external "all-du"      (allduR :: RewriteH Core -> RewriteH Core)
+   , external "all-du"     (allduR :: RewriteH Core -> RewriteH Core)
        [ "apply a rewrite twice, in a top-down and bottom-up way, using one single tree traversal",
          "succeeding if they all succeed"]
-   , external "any-du"      (anyduR :: RewriteH Core -> RewriteH Core)
+   , external "any-du"     (anyduR :: RewriteH Core -> RewriteH Core)
        [ "apply a rewrite twice, in a top-down and bottom-up way, using one single tree traversal",
          "succeeding if any succeed"]
-   , external "prune-td"    (prunetdR :: RewriteH Core -> RewriteH Core)
+   , external "prune-td"   (prunetdR :: RewriteH Core -> RewriteH Core)
        [ "attempt to apply a rewrite in a top-down manner, prunning at successful rewrites" ]
    , external "innermost"  (innermostR :: RewriteH Core -> RewriteH Core)
        [ "a fixed-point traveral, starting with the innermost term" ]
+   , external "focus"      (hfocusR :: TranslateH Core Path -> RewriteH Core -> RewriteH Core)
+       [ "apply a rewrite to a focal point"]
+   , external "focus"      (hfocusT :: TranslateH Core Path -> TranslateH Core String -> TranslateH Core String)
+       [ "apply a query at a focal point"]
    ]
+
+hfocusR :: TranslateH Core Path -> RewriteH Core -> RewriteH Core
+hfocusR tp r = do p <- tp
+                  pathR p r
+
+hfocusT :: TranslateH Core Path -> TranslateH Core String -> TranslateH Core String
+hfocusT tp t = do p <- tp
+                  pathT p t
 
 ------------------------------------------------------------------------------------
