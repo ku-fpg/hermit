@@ -37,7 +37,7 @@ module main:Main where
   case_reduce_end :: String
   main :: IO ()
 
-beta_reduce_start and beta_reduce_end are equal
+beta_reduce_start == beta_reduce_end
 module main:Main where
   $dShow :: Show [] Char
   main :: IO ()
@@ -67,4 +67,4 @@ module main:Main where
   case_reduce_end :: String
   main :: IO ()
 
-case_reduce_start and case_reduce_end are equal
+case_reduce_start == case_reduce_end
