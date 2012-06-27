@@ -243,10 +243,10 @@ data CommandLineState = CommandLineState
         , cl_cursor      :: SAST              -- ^ the current AST
         , cl_render      :: Handle -> PrettyOptions -> DocH -> IO ()   -- ^ the way of outputing to the screen
         , cl_width       :: Int                 -- ^ how wide is the screen?
+        , cl_nav         :: Bool
         -- these three should be in a reader
         , cl_dict        :: M.Map String [Dynamic]
         , cl_kernel       :: ScopedKernel
-        , cl_nav         :: Bool
         }
 
 commandLine :: Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
@@ -270,7 +270,7 @@ commandLine behavior modGuts = do
         runInputTBehavior behavior
                 (setComplete (completeWordWithPrev Nothing ws_complete do_complete) defaultSettings)
                 (evalStateT (showFocus >> loop)
-                        $ CommandLineState "clean" def sast unicodeConsole 80 dict skernel False)
+                        $ CommandLineState "clean" def sast unicodeConsole 80 False dict skernel)
         return ()
 
 loop :: (MonadIO m, m ~ InputT IO) => StateT CommandLineState m ()
