@@ -7,6 +7,9 @@ test-fib:
 	- $(HERMIT) Fib.hs Fib.hss resume
 	./Fib
 
+interactive-rev:
+	- $(HERMIT) Reverse.hs
+
 interactive-fib:
 	$(HERMIT) Fib.hs
 
