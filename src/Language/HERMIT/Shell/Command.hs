@@ -7,6 +7,7 @@ import qualified GhcPlugins as GHC
 import Control.Applicative
 import Control.Exception.Base hiding (catch)
 import Control.Monad.State
+import Control.Monad.Error
 
 import Data.Char
 import Data.Monoid
@@ -261,7 +262,7 @@ moveLocally _ p                          = p
 
 -------------------------------------------------------------------------------
 
-type CLM m a = StateT CommandLineState m a
+type CLM m a = StateT CommandLineState (ErrorT String m) a
 
 data CommandLineState = CommandLineState
         { cl_graph       :: [(SAST,ExprH,SAST)]
@@ -310,7 +311,7 @@ commandLine behavior modGuts = do
 
         runInputTBehavior behavior
                 (setComplete (completeWordWithPrev Nothing ws_complete do_complete) defaultSettings)
-                (evalStateT (showFocus >> loop) shellState)
+                (runErrorT (evalStateT (showFocus >> loop) shellState))
 
         return ()
 
@@ -321,17 +322,29 @@ loop = do
     let SAST n = cl_cursor (cl_session st)
     maybeLine <- if cl_nav (cl_session st)
                  then liftIO $ getNavCmd
-                 else lift $ getInputLine $ "hermit<" ++ show n ++ "> "
+                 else lift $ lift $ getInputLine $ "hermit<" ++ show n ++ "> "
+
     case maybeLine of
         Nothing             -> performMetaCommand Resume
         Just ('-':'-':_msg) -> loop
         Just line           ->
             if all isSpace line
             then loop
-            else do case parseStmtsH line of
-                        Left  msg   -> liftIO $ putStrLn ("parse failure: " ++ msg)
-                        Right stmts -> evalStmts stmts
-                    loop
+            else (case parseStmtsH line of
+                        Left  msg   -> throwError ("parse failure: " ++ msg)
+                        Right stmts -> evalStmts stmts) `ourCatch` (\ msg ->
+                                do putStrLn $ "Failure: " ++ msg
+                  ) >> loop
+
+ourCatch :: (MonadIO n) => CLM IO () -> (String -> IO ()) -> CLM n ()
+ourCatch m failure = do
+                st <- get
+                res <- liftIO $ runErrorT (execStateT m st)
+                case res of
+                  Left msg -> liftIO $ failure msg
+                  Right res -> put res >> return ()
+
+
 
 evalStmts :: (MonadIO m) => [StmtH ExprH] -> CLM m ()
 evalStmts = mapM_ evalExpr . scopes
@@ -340,6 +353,7 @@ evalStmts = mapM_ evalExpr . scopes
           scopes (ExprH e:ss) = e : scopes ss
           scopes (ScopeH s:ss) = (CmdName "{" : scopes s) ++ [CmdName "}"] ++ scopes ss
 
+
 evalExpr :: (MonadIO m) => ExprH -> CLM m ()
 evalExpr expr = do
     dict <- gets cl_dict
@@ -347,9 +361,9 @@ evalExpr expr = do
                 dict
                 interpShellCommand
                 expr of
-            Left msg  -> liftIO $ putStrLn msg
+            Left msg  -> throwError $ msg
             Right cmd -> do
-                liftIO (putStrLn $ "doing : " ++ show expr)
+                -- liftIO (putStrLn $ "doing : " ++ show expr)
                 case cmd of
                   AstEffect effect   -> performAstEffect effect expr
                   ShellEffect effect -> performShellEffect effect
@@ -367,12 +381,13 @@ performAstEffect (Apply rr) expr = do
     ast' <- liftIO $ (do ast' <- applyS (cl_kernel st) (cl_cursor (cl_session st)) rr
                          return $ Right ast')
                            `catch` \ msg -> return $ Left $ "Error thrown: " ++ msg
-    either (liftIO . putStrLn) (\ast' -> do put $ newSAST expr ast' st
-                                            showFocus
-                                            return ()) ast'
+    either (throwError) (\ast' -> do put $ newSAST expr ast' st
+                                     showFocus
+                                     return ()) ast'
 performAstEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
+    -- TODO: thread this putStr into the throwError
     ast <- liftIO $ do
         p <- queryS (cl_kernel st) (cl_cursor (cl_session st)) t `catch` (\ msg -> (putStrLn $ "Error thrown: " ++ msg) >> return [])
         modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ p)
@@ -440,23 +455,21 @@ performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
 performMetaCommand Resume = get >>= \st -> liftIO $ resumeS (cl_kernel st) (cl_cursor (cl_session st))
 performMetaCommand (Dump fileName _pp renderer w) = do
     st <- get
-    liftIO $ case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
-        (Just pp, Just r) -> do
+    case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
+        (Just pp, Just r) -> liftIO $ do
             doc <- queryS (cl_kernel st) (cl_cursor (cl_session st)) (pp (cl_pretty_opts (cl_session st)))
             h <- openFile fileName WriteMode
             r h (cl_pretty_opts (cl_session st)) doc
             hClose h
-        _ -> do putStrLn "dump: bad pretty-printer or renderer option"
+        _ -> throwError "dump: bad pretty-printer or renderer option"
 performMetaCommand (LoadFile fileName) = do
         liftIO $ putStrLn $ "[including " ++ fileName ++ "]"
-        st <- get
         res <- liftIO $ try (readFile fileName)
-        st' <- liftIO $ case res of
+        case res of
           Right str -> case parseStmtsH (normalize str) of
-                        Left  msg  -> putStrLn ("parse failure: " ++ msg) >> return st
-                        Right stmts -> execStateT (evalStmts stmts) st
-          Left (err :: IOException) -> putStrLn ("IO error: " ++ show err) >> return st
-        put st'
+                        Left  msg  -> throwError ("parse failure: " ++ msg)
+                        Right stmts -> evalStmts stmts
+          Left (err :: IOException) -> throwError ("IO error: " ++ show err)
   where
    normalize = unlines
              . map (++ ";")     -- HACK!
@@ -516,8 +529,6 @@ navigation :: Navigation -> CommandLineState -> SessionState -> IO SessionState
 navigation whereTo st sess_st = do
     case whereTo of
       Goto n -> do
-              -- this check should be in the kernel
-              -- Int -> IO (Maybe SAST)
            all_nds <- listS (cl_kernel st)
            if (SAST n) `elem` all_nds
               then do
