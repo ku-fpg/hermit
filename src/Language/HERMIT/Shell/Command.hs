@@ -311,7 +311,7 @@ commandLine filesToLoad behavior modGuts = do
                          "abort"  -> Abort
                          "resume" -> Resume
                          _        -> LoadFile fileName
-                      | fileName <- filesToLoad
+                      | fileName <- reverse filesToLoad
                       , not (null fileName)
                       ] `ourCatch` \ msg -> do putStrLn $ "Booting Failure: " ++ msg
 
