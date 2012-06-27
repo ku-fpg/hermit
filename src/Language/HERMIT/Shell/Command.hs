@@ -62,7 +62,8 @@ instance Extern AstEffect where
 data ShellEffect :: * where
 
    -- This should only be the shell's state part, no the whole state
-   ShellState    :: (CommandLineState -> IO CommandLineState) -> ShellEffect
+   -- call SessionState
+   ShellState    :: (SessionState -> IO SessionState) -> ShellEffect
    deriving Typeable
 
 data QueryFun :: * where
@@ -225,16 +226,16 @@ catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
 
 pretty :: CommandLineState -> PrettyH Core
-pretty st = case M.lookup (cl_pretty st) pp_dictionary of
-                Just pp -> pp (cl_pretty_opts st)
-                Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty st ++ ">>")
+pretty st = case M.lookup (cl_pretty (cl_session st)) pp_dictionary of
+                Just pp -> pp (cl_pretty_opts (cl_session st))
+                Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty (cl_session st) ++ ">>")
 
 showFocus :: (MonadIO m) => CLM m ()
 showFocus = do
     st <- get
     liftIO ((do
         doc <- queryS (cl_kernel st) (cl_cursor st) (pretty st)
-        cl_render st stdout (cl_pretty_opts st) doc)
+        cl_render (cl_session st) stdout (cl_pretty_opts (cl_session st)) doc)
           `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg)
 
 -------------------------------------------------------------------------------
@@ -275,15 +276,22 @@ moveLocally _ p                          = p
 type CLM m a = StateT CommandLineState m a
 
 data CommandLineState = CommandLineState
+        { cl_cursor      :: SAST              -- ^ the current AST
+        -- these two should be in a reader
+        , cl_dict        :: M.Map String [Dynamic]
+        , cl_kernel       :: ScopedKernel
+        -- and the session state
+        , cl_session      :: SessionState
+        ,
+        }
+
+-- Session-local issues; things that are never saved.
+data SessionState = SessionState
         { cl_pretty      :: String           -- ^ which pretty printer to use
         , cl_pretty_opts :: PrettyOptions -- ^ The options for the pretty printer
-        , cl_cursor      :: SAST              -- ^ the current AST
         , cl_render      :: Handle -> PrettyOptions -> DocH -> IO ()   -- ^ the way of outputing to the screen
         , cl_width       :: Int                 -- ^ how wide is the screen?
         , cl_nav         :: Bool
-        -- these three should be in a reader
-        , cl_dict        :: M.Map String [Dynamic]
-        , cl_kernel       :: ScopedKernel
         }
 
 commandLine :: Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
@@ -297,21 +305,23 @@ commandLine behavior modGuts = do
                    , so_far `isPrefixOf` cmd
                    ]
 
+
     flip scopedKernel modGuts $ \ skernel sast -> do
-        -- recurse using the command line, starting with showing the first focus
---        evalStateT (runInputT defaultSettings (showFocus >> loop)) $ undefined
+
+        let sessionState = SessionState "clean" def unicodeConsole 80 False
+            shellState = CommandLineState sast dict skernel sessionState
 
         runInputTBehavior behavior
                 (setComplete (completeWordWithPrev Nothing ws_complete do_complete) defaultSettings)
-                (evalStateT (showFocus >> loop)
-                        $ CommandLineState "clean" def sast unicodeConsole 80 False dict skernel)
+                (evalStateT (showFocus >> loop) shellState)
+
         return ()
 
 loop :: (MonadIO m, m ~ InputT IO) => CLM m ()
 loop = do
     st <- get
-    liftIO $ print (cl_pretty st, cl_cursor st)
-    maybeLine <- if cl_nav st
+--    liftIO $ print (cl_pretty st, cl_cursor st)
+    maybeLine <- if cl_nav (cl_session st)
                  then liftIO $ getNavCmd
                  else lift $ getInputLine "hermit> "
     case maybeLine of
@@ -403,7 +413,11 @@ performAstEffect (PushFocus ls) = do
 -------------------------------------------------------------------------------
 
 performShellEffect :: (MonadIO m) => ShellEffect -> CLM m ()
-performShellEffect (ShellState f) = get >>= liftIO . f >>= put >> showFocus
+performShellEffect (ShellState f) = do
+        st <- get
+        s_st' <- liftIO (f (cl_session st))
+        put (st { cl_session = s_st' })
+        showFocus
 
 -------------------------------------------------------------------------------
 
@@ -430,20 +444,15 @@ performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
 performMetaCommand Resume = get >>= \st -> liftIO $ resumeS (cl_kernel st) (cl_cursor st)
 performMetaCommand (Dump fileName _pp renderer w) = do
     st <- get
-    liftIO $ case (M.lookup (cl_pretty st) pp_dictionary,lookup renderer finalRenders) of
+    liftIO $ case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
         (Just pp, Just r) -> do
-            doc <- queryS (cl_kernel st) (cl_cursor st) (pp (cl_pretty_opts st))
+            doc <- queryS (cl_kernel st) (cl_cursor st) (pp (cl_pretty_opts (cl_session st)))
             h <- openFile fileName WriteMode
-            r h (cl_pretty_opts st) doc
+            r h (cl_pretty_opts (cl_session st)) doc
             hClose h
         _ -> do putStrLn "dump: bad pretty-printer or renderer option"
 
-
 -------------------------------------------------------------------------------
-
-
-
-
 
 newtype UnicodeTerminal = UnicodeTerminal (Handle -> Maybe Path -> IO ())
 
