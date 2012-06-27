@@ -34,7 +34,15 @@ data CmdTag = CaseCmd       -- works on case statements
             | Unimplemented
             -- Other String
             -- etc
-    deriving (Eq, Show, Read)
+    deriving (Eq, Show, Read, Bounded, Enum)
+
+dictionaryOfTags :: [(CmdTag,String)]
+dictionaryOfTags = notes ++ [ (tag,show tag ++ " (unknown purpose)")
+                            | tag <- [minBound..maxBound]
+                            , not (tag `elem` (map fst notes))
+                            ]
+  where notes =
+          [(Shell,        "Shell-specific commands")]
 
 -- Unfortunately, record update syntax seems to associate to the right.
 -- This guy saves us some parens.
