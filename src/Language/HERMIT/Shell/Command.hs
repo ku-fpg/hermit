@@ -63,7 +63,7 @@ data ShellEffect :: * where
 
    -- This should only be the shell's state part, no the whole state
    -- call SessionState
-   ShellState    :: (SessionState -> IO SessionState) -> ShellEffect
+   SessionStateEffect    :: (SessionState -> IO SessionState) -> ShellEffect
    deriving Typeable
 
 data QueryFun :: * where
@@ -152,13 +152,13 @@ shell_externals = map (.+ Shell) $
        [ "move to the parent"]
    , external "esc-B"            (Direction D)
        [ "move to the first child"]
-   , external ":navigate"        (ShellState $ \ st -> return $ st { cl_nav = True })
+   , external ":navigate"        (SessionStateEffect $ \ st -> return $ st { cl_nav = True })
        [ "switch to navigate mode" ]
-   , external ":command-line"    (ShellState $ \ st -> return $ st { cl_nav = False })
+   , external ":command-line"    (SessionStateEffect $ \ st -> return $ st { cl_nav = False })
        [ "switch to command line mode" ]
    , external "top"            (Direction T)
        [ "move to root of tree" ]
-   , external "setpp"           (\ pp -> ShellState $ \ st -> do
+   , external "setpp"           (\ pp -> SessionStateEffect $ \ st -> do
        case M.lookup pp pp_dictionary of
          Nothing -> do
             liftIO $ putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
@@ -172,10 +172,10 @@ shell_externals = map (.+ Shell) $
        [ "set the output renderer mode"]
    , external "dump"    Dump
        [ "dump <filename> <pretty-printer> <renderer> <width>"]
-   , external "set-width"   (\ n -> ShellState $ \ st -> return $ st { cl_width = n })
+   , external "set-width"   (\ n -> SessionStateEffect $ \ st -> return $ st { cl_width = n })
        ["set the width of the screen"]
    , external "set-pp-expr-type"
-                (\ str -> ShellState $ \ st -> case reads str :: [(ShowOption,String)] of
+                (\ str -> SessionStateEffect $ \ st -> case reads str :: [(ShowOption,String)] of
                                                  [(opt,"")] -> return $ st { cl_pretty_opts =
                                                                                  (cl_pretty_opts st) { po_exprTypes = opt }
                                                                            }
@@ -195,7 +195,7 @@ showRenderers :: QueryFun
 showRenderers = Message $ "set-renderer " ++ show (map fst finalRenders)
 
 changeRenderer :: String -> ShellEffect
-changeRenderer renderer = ShellState $ \ st ->
+changeRenderer renderer = SessionStateEffect $ \ st ->
         case lookup renderer finalRenders of
           Nothing -> return st          -- should fail with message
           Just r  -> return $ st { cl_render = r }
@@ -355,7 +355,6 @@ evalExpr expr = do
                 -- execute command, which may change the AST or Lens
                 act cmd
 
-
 -------------------------------------------------------------------------------
 
 -- TODO: fix to ring bell if stuck
@@ -413,7 +412,7 @@ performAstEffect (PushFocus ls) = do
 -------------------------------------------------------------------------------
 
 performShellEffect :: (MonadIO m) => ShellEffect -> CLM m ()
-performShellEffect (ShellState f) = do
+performShellEffect (SessionStateEffect f) = do
         st <- get
         s_st' <- liftIO (f (cl_session st))
         put (st { cl_session = s_st' })
