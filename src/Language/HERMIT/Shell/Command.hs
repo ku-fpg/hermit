@@ -53,9 +53,6 @@ data AstEffect :: * where
    -- |
    BeginScope    :: AstEffect
    EndScope      :: AstEffect
-
-   -- | Navigate the tree of ASTs
-   Navigation    :: Navigation               -> AstEffect
    deriving Typeable
 
 instance Extern AstEffect where
@@ -64,10 +61,7 @@ instance Extern AstEffect where
     unbox i = i
 
 data ShellEffect :: * where
-
-   -- This should only be the shell's state part, no the whole state
-   -- call SessionState
-   SessionStateEffect    :: (SessionState -> IO SessionState) -> ShellEffect
+   SessionStateEffect    :: (CommandLineState -> SessionState -> IO SessionState) -> ShellEffect
    deriving Typeable
 
 data QueryFun :: * where
@@ -161,19 +155,19 @@ shell_externals = map (.+ Shell) $
        [ "move to the parent"]
    , external "esc-B"            (Direction D)
        [ "move to the first child"]
-   , external ":navigate"        (SessionStateEffect $ \ st -> return $ st { cl_nav = True })
+   , external ":navigate"        (SessionStateEffect $ \ _ st -> return $ st { cl_nav = True })
        [ "switch to navigate mode" ]
-   , external ":command-line"    (SessionStateEffect $ \ st -> return $ st { cl_nav = False })
+   , external ":command-line"    (SessionStateEffect $ \ _ st -> return $ st { cl_nav = False })
        [ "switch to command line mode" ]
    , external "top"            (Direction T)
        [ "move to root of tree" ]
-   , external ":back"            (Navigation Back)
+   , external ":back"            (SessionStateEffect $ navigation Back)
        [ "go back in the derivation" ]
-   , external ":step"            (Navigation Step)
+   , external ":step"            (SessionStateEffect $ navigation Step)
        [ "step forward in the derivation" ]
-   , external ":goto"            (Navigation . Goto)
+   , external ":goto"            (SessionStateEffect . navigation . Goto)
        [ "goto a specific step in the derivation" ]
-   , external "setpp"           (\ pp -> SessionStateEffect $ \ st -> do
+   , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st -> do
        case M.lookup pp pp_dictionary of
          Nothing -> do
             liftIO $ putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
@@ -187,10 +181,10 @@ shell_externals = map (.+ Shell) $
        [ "set the output renderer mode"]
    , external "dump"    Dump
        [ "dump <filename> <pretty-printer> <renderer> <width>"]
-   , external "set-width"   (\ n -> SessionStateEffect $ \ st -> return $ st { cl_width = n })
+   , external "set-width"   (\ n -> SessionStateEffect $ \ _ st -> return $ st { cl_width = n })
        ["set the width of the screen"]
    , external "set-pp-expr-type"
-                (\ str -> SessionStateEffect $ \ st -> case reads str :: [(ShowOption,String)] of
+                (\ str -> SessionStateEffect $ \ _ st -> case reads str :: [(ShowOption,String)] of
                                                  [(opt,"")] -> return $ st { cl_pretty_opts =
                                                                                  (cl_pretty_opts st) { po_exprTypes = opt }
                                                                            }
@@ -208,7 +202,7 @@ showRenderers :: QueryFun
 showRenderers = Message $ "set-renderer " ++ show (map fst finalRenders)
 
 changeRenderer :: String -> ShellEffect
-changeRenderer renderer = SessionStateEffect $ \ st ->
+changeRenderer renderer = SessionStateEffect $ \ _ st ->
         case lookup renderer finalRenders of
           Nothing -> return st          -- should fail with message
           Just r  -> return $ st { cl_render = r }
@@ -247,7 +241,7 @@ showFocus :: (MonadIO m) => CLM m ()
 showFocus = do
     st <- get
     liftIO ((do
-        doc <- queryS (cl_kernel st) (cl_cursor st) (pretty st)
+        doc <- queryS (cl_kernel st) (cl_cursor (cl_session st)) (pretty st)
         cl_render (cl_session st) stdout (cl_pretty_opts (cl_session st)) doc)
           `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg)
 
@@ -289,8 +283,7 @@ moveLocally _ p                          = p
 type CLM m a = StateT CommandLineState m a
 
 data CommandLineState = CommandLineState
-        { cl_cursor      :: SAST              -- ^ the current AST
-        , cl_graph       :: [(SAST,ExprH,SAST)]
+        { cl_graph       :: [(SAST,ExprH,SAST)]
         -- these two should be in a reader
         , cl_dict        :: M.Map String [Dynamic]
         , cl_kernel       :: ScopedKernel
@@ -299,13 +292,14 @@ data CommandLineState = CommandLineState
         }
 
 newSAST :: ExprH -> SAST -> CommandLineState -> CommandLineState
-newSAST expr sast st = st { cl_cursor = sast
-                          , cl_graph = (cl_cursor st, expr, sast) : cl_graph st
+newSAST expr sast st = st { cl_session = (cl_session st) { cl_cursor = sast }
+                          , cl_graph = (cl_cursor (cl_session st), expr, sast) : cl_graph st
                           }
 
 -- Session-local issues; things that are never saved.
 data SessionState = SessionState
-        { cl_pretty      :: String           -- ^ which pretty printer to use
+        { cl_cursor      :: SAST              -- ^ the current AST
+        , cl_pretty      :: String           -- ^ which pretty printer to use
         , cl_pretty_opts :: PrettyOptions -- ^ The options for the pretty printer
         , cl_render      :: Handle -> PrettyOptions -> DocH -> IO ()   -- ^ the way of outputing to the screen
         , cl_width       :: Int                 -- ^ how wide is the screen?
@@ -330,8 +324,8 @@ commandLine behavior modGuts = do
 
     flip scopedKernel modGuts $ \ skernel sast -> do
 
-        let sessionState = SessionState "clean" def unicodeConsole 80 False
-            shellState = CommandLineState sast [] dict skernel sessionState
+        let sessionState = SessionState sast "clean" def unicodeConsole 80 False
+            shellState = CommandLineState [] dict skernel sessionState
 
         runInputTBehavior behavior
                 (setComplete (completeWordWithPrev Nothing ws_complete do_complete) defaultSettings)
@@ -342,8 +336,8 @@ commandLine behavior modGuts = do
 loop :: (MonadIO m, m ~ InputT IO) => CLM m ()
 loop = do
     st <- get
---    liftIO $ print (cl_pretty st, cl_cursor st)
-    let SAST n = cl_cursor st
+--    liftIO $ print (cl_pretty st, cl_cursor (cl_session st))
+    let SAST n = cl_cursor (cl_session st)
     maybeLine <- if cl_nav (cl_session st)
                  then liftIO $ getNavCmd
                  else lift $ getInputLine $ "hermit<" ++ show n ++ "> "
@@ -389,7 +383,7 @@ performAstEffect :: (MonadIO m) => AstEffect -> ExprH -> CLM m ()
 performAstEffect (Apply rr) expr = do
     st <- get
     -- something changed (you've applied)
-    ast' <- liftIO $ (do ast' <- applyS (cl_kernel st) (cl_cursor st) rr
+    ast' <- liftIO $ (do ast' <- applyS (cl_kernel st) (cl_cursor (cl_session st)) rr
                          return $ Right ast')
                            `catch` \ msg -> return $ Left $ "Error thrown: " ++ msg
     either (liftIO . putStrLn) (\ast' -> do put $ newSAST expr ast' st
@@ -399,74 +393,35 @@ performAstEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
     ast <- liftIO $ do
-        p <- queryS (cl_kernel st) (cl_cursor st) t `catch` (\ msg -> (putStrLn $ "Error thrown: " ++ msg) >> return [])
-        modPathS (cl_kernel st) (cl_cursor st) (++ p)
+        p <- queryS (cl_kernel st) (cl_cursor (cl_session st)) t `catch` (\ msg -> (putStrLn $ "Error thrown: " ++ msg) >> return [])
+        modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ p)
     put $ newSAST expr ast st
     showFocus
 performAstEffect (Direction dir) expr = do
     st <- get
     ast <- liftIO $ do
-        child_count <- queryS (cl_kernel st) (cl_cursor st) numChildrenT
+        child_count <- queryS (cl_kernel st) (cl_cursor (cl_session st)) numChildrenT
         print (child_count, dir)
-        modPathS (cl_kernel st) (cl_cursor st) (scopePath2Path . moveLocally dir . path2ScopePath)
+        modPathS (cl_kernel st) (cl_cursor (cl_session st)) (scopePath2Path . moveLocally dir . path2ScopePath)
     put $ newSAST expr ast st
     -- something changed, to print
     showFocus
 --performAstEffect (ShellState' f) = get >>= liftIO . f >>= put >> showFocus
 performAstEffect (PushFocus ls) expr = do
     st <- get
-    ast <- liftIO $ modPathS (cl_kernel st) (cl_cursor st) (++ ls)
+    ast <- liftIO $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ ls)
     put $ newSAST expr ast st
     showFocus
 performAstEffect BeginScope expr = do
         st <- get
-        ast <- liftIO $ beginScopeS (cl_kernel st) (cl_cursor st)
+        ast <- liftIO $ beginScopeS (cl_kernel st) (cl_cursor (cl_session st))
         put $ newSAST expr ast st
         showFocus
 performAstEffect EndScope expr = do
         st <- get
-        ast <- liftIO $ endScopeS (cl_kernel st) (cl_cursor st)
+        ast <- liftIO $ endScopeS (cl_kernel st) (cl_cursor (cl_session st))
         put $ newSAST expr ast st
         showFocus
-performAstEffect (Navigation whereTo) expr = do
-    st <- get
-    liftIO $ print $ ("Graph",cl_graph st)
-    case whereTo of
-      Goto n -> do
-              -- this check should be in the kernel
-              -- Int -> IO (Maybe SAST)
-           all_nds <- liftIO $ listS (cl_kernel st)
-           if (SAST n) `elem` all_nds
-              then do
-                 put $ st { cl_cursor = SAST n }
-                 showFocus
-              else do
-                 liftIO $ putStrLn $ "Can not find AST #" ++ show n
-                 return ()
-      Step -> do
-           let ns = [ edge | edge@(s,_,_) <- cl_graph st, s == cl_cursor st ]
-           case ns of
-             [] -> do
-                 liftIO $ putStrLn $ "Can not step forward (no more steps)"
-             [(_,cmd,d) ] -> do
-                  liftIO $ print $ "performing " ++ show cmd
-                  put $ st { cl_cursor = d }
-                  showFocus
-             _ -> do
-                 liftIO $ putStrLn $ "Can not step forward (multiple choices)"
-                 return ()
-      Back -> do
-           let ns = [ edge | edge@(_,_,d) <- cl_graph st, d == cl_cursor st ]
-           case ns of
-             [] -> do
-                 liftIO $ putStrLn $ "Can not step backwards (no more steps)"
-             [(s,cmd,_) ] -> do
-                  liftIO $ print $ "undoing " ++ show cmd
-                  put $ st { cl_cursor = s }
-                  showFocus
-             _ -> do
-                 liftIO $ putStrLn $ "Can not step backwards (multiple choices, impossible!)"
-                 return ()
 
 
 -------------------------------------------------------------------------------
@@ -474,7 +429,7 @@ performAstEffect (Navigation whereTo) expr = do
 performShellEffect :: (MonadIO m) => ShellEffect -> CLM m ()
 performShellEffect (SessionStateEffect f) = do
         st <- get
-        s_st' <- liftIO (f (cl_session st))
+        s_st' <- liftIO (f st (cl_session st))
         put (st { cl_session = s_st' })
         showFocus
 
@@ -484,12 +439,12 @@ performQuery :: (MonadIO m) => QueryFun -> CLM m ()
 performQuery (Query q) = do
     st <- get
     -- something changed, to print
-    liftIO ((queryS (cl_kernel st) (cl_cursor st) q >>= putStrLn)
+    liftIO ((queryS (cl_kernel st) (cl_cursor (cl_session st)) q >>= putStrLn)
               `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg)
 performQuery Status = do
     st <- get
     liftIO $ do
-        ps <- pathS (cl_kernel st) (cl_cursor st)
+        ps <- pathS (cl_kernel st) (cl_cursor (cl_session st))
         putStrLn $ "Paths: " ++ show ps
         print $ ("Graph",cl_graph st)
     showFocus
@@ -501,12 +456,12 @@ performQuery (Message msg) = liftIO (putStrLn msg)
 
 performMetaCommand :: (MonadIO m) => MetaCommand -> CLM m ()
 performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
-performMetaCommand Resume = get >>= \st -> liftIO $ resumeS (cl_kernel st) (cl_cursor st)
+performMetaCommand Resume = get >>= \st -> liftIO $ resumeS (cl_kernel st) (cl_cursor (cl_session st))
 performMetaCommand (Dump fileName _pp renderer w) = do
     st <- get
     liftIO $ case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
         (Just pp, Just r) -> do
-            doc <- queryS (cl_kernel st) (cl_cursor st) (pp (cl_pretty_opts (cl_session st)))
+            doc <- queryS (cl_kernel st) (cl_cursor (cl_session st)) (pp (cl_pretty_opts (cl_session st)))
             h <- openFile fileName WriteMode
             r h (cl_pretty_opts (cl_session st)) doc
             hClose h
@@ -554,6 +509,47 @@ instance RenderCode UnicodeTerminal where
         rEnd = UnicodeTerminal $ \ h _ -> hPutStrLn h ""
 
 --------------------------------------------------------
+
+navigation :: Navigation -> CommandLineState -> SessionState -> IO SessionState
+navigation whereTo st sess_st = do
+    case whereTo of
+      Goto n -> do
+              -- this check should be in the kernel
+              -- Int -> IO (Maybe SAST)
+           all_nds <- listS (cl_kernel st)
+           if (SAST n) `elem` all_nds
+              then do
+                 return $ sess_st { cl_cursor = SAST n }
+              else do
+                 putStrLn $ "Can not find AST #" ++ show n
+                 return sess_st
+      Step -> do
+           let ns = [ edge | edge@(s,_,_) <- cl_graph st, s == cl_cursor (cl_session st) ]
+           case ns of
+             [] -> do
+                 putStrLn $ "Can not step forward (no more steps)"
+                 return sess_st
+             [(_,cmd,d) ] -> do
+                  print $ "performing " ++ show cmd
+                  return $ sess_st { cl_cursor = d }
+             _ -> do
+                 liftIO $ putStrLn $ "Can not step forward (multiple choices)"
+                 return sess_st
+      Back -> do
+           let ns = [ edge | edge@(_,_,d) <- cl_graph st, d == cl_cursor (cl_session st) ]
+           case ns of
+             [] -> do
+                  putStrLn $ "Can not step backwards (no more steps)"
+                  return sess_st
+             [(s,cmd,_) ] -> do
+                  print $ "undoing " ++ show cmd
+                  return $ sess_st { cl_cursor = s }
+             _ -> do
+                 putStrLn $ "Can not step backwards (multiple choices, impossible!)"
+                 return sess_st
+--------------------------------------------------------
+
+
 
 getNavCmd :: IO (Maybe String)
 getNavCmd = do
