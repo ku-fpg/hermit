@@ -51,7 +51,9 @@ data AstEffect :: * where
    -- | This changes the current location using a give path
    PushFocus     :: Path                     -> AstEffect
    -- |
-   ShellState'  :: (CommandLineState -> IO CommandLineState) -> AstEffect
+--   ShellState'  :: (CommandLineState -> IO CommandLineState) -> AstEffect
+   BeginScope    :: AstEffect
+   EndScope      :: AstEffect
    deriving Typeable
 
 instance Extern AstEffect where
@@ -181,14 +183,12 @@ shell_externals = map (.+ Shell) $
                                                                            }
                                                  _ -> return $ st)
        ["set how to show expression-level types (Show|Abstact|Omit)"]
-   , external "{"   (ShellState' $ \ st -> do ast <- beginScopeS (cl_kernel st) (cl_cursor st)
-                                              return st { cl_cursor = ast })
+   , external "{"   BeginScope
        ["push current lens onto a stack"]       -- tag as internal
-   , external "}"   (ShellState' $ \ st -> do ast <- endScopeS (cl_kernel st) (cl_cursor st)
-                                              return st { cl_cursor = ast })
-       ["pop a lens off a stack"]       -- tag as internal
-   , external "include" (\ (fileName :: String) -> ShellState' $ \ st -> includeFile fileName st)
-        ["include <filename>: includes a shell command file"]
+   , external "}"   EndScope
+       ["pop a lens off a stack"]               -- tag as internal
+--   , external "include" (\ (fileName :: String) -> ShellState' $ \ st -> includeFile fileName st)
+--        ["include <filename>: includes a shell command file"]
    ]
 
 showRenderers :: QueryFun
@@ -277,13 +277,18 @@ type CLM m a = StateT CommandLineState m a
 
 data CommandLineState = CommandLineState
         { cl_cursor      :: SAST              -- ^ the current AST
+        , cl_graph       :: [(SAST,ExprH,SAST)]
         -- these two should be in a reader
         , cl_dict        :: M.Map String [Dynamic]
         , cl_kernel       :: ScopedKernel
         -- and the session state
         , cl_session      :: SessionState
-        ,
         }
+
+newSAST :: ExprH -> SAST -> CommandLineState -> CommandLineState
+newSAST expr sast st = st { cl_cursor = sast
+                          , cl_graph = (cl_cursor st, expr, sast) : cl_graph st
+                          }
 
 -- Session-local issues; things that are never saved.
 data SessionState = SessionState
@@ -293,6 +298,10 @@ data SessionState = SessionState
         , cl_width       :: Int                 -- ^ how wide is the screen?
         , cl_nav         :: Bool
         }
+
+
+
+-------------------------------------------------------------------------------
 
 commandLine :: Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
 commandLine behavior modGuts = do
@@ -309,7 +318,7 @@ commandLine behavior modGuts = do
     flip scopedKernel modGuts $ \ skernel sast -> do
 
         let sessionState = SessionState "clean" def unicodeConsole 80 False
-            shellState = CommandLineState sast dict skernel sessionState
+            shellState = CommandLineState sast [] dict skernel sessionState
 
         runInputTBehavior behavior
                 (setComplete (completeWordWithPrev Nothing ws_complete do_complete) defaultSettings)
@@ -352,62 +361,59 @@ evalExpr expr = do
             Left msg  -> liftIO $ putStrLn msg
             Right cmd -> do
                 liftIO (putStrLn $ "doing : " ++ show expr)
-                -- execute command, which may change the AST or Lens
-                act cmd
+                case cmd of
+                  AstEffect effect   -> performAstEffect effect expr
+                  ShellEffect effect -> performShellEffect effect
+                  QueryFun query     -> performQuery query
+                  MetaCommand meta   -> performMetaCommand meta
 
 -------------------------------------------------------------------------------
 
--- TODO: fix to ring bell if stuck
-act :: (MonadIO m) => ShellCommand -> CLM m ()
-act (AstEffect effect) = performAstEffect effect
-act (ShellEffect effect) = performShellEffect effect
-act (QueryFun query) = performQuery query
-act (MetaCommand meta) = performMetaCommand meta
+-- TODO: This can be refactored. We always showFocus. Also, Perhaps return a modifier, not ()
 
-
-{-
-act (SetPretty pp) = do
-    maybe (liftIO $ putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary))
-          (const $ modify $ \ st -> st { cl_pretty = pp })
-          (M.lookup pp pp_dictionary)
--}
-
--- TODO: This needs revisited
--------------------------------------------------------------------------------
-
-performAstEffect :: (MonadIO m) => AstEffect -> CLM m ()
-performAstEffect (Apply rr) = do
+performAstEffect :: (MonadIO m) => AstEffect -> ExprH -> CLM m ()
+performAstEffect (Apply rr) expr = do
     st <- get
     -- something changed (you've applied)
     ast' <- liftIO $ (do ast' <- applyS (cl_kernel st) (cl_cursor st) rr
                          return $ Right ast')
                            `catch` \ msg -> return $ Left $ "Error thrown: " ++ msg
-    either (liftIO . putStrLn) (\ast' -> do put st { cl_cursor = ast' }
+    either (liftIO . putStrLn) (\ast' -> do put $ newSAST expr ast' st
                                             showFocus
                                             return ()) ast'
-performAstEffect (Pathfinder t) = do
+performAstEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
     ast <- liftIO $ do
         p <- queryS (cl_kernel st) (cl_cursor st) t `catch` (\ msg -> (putStrLn $ "Error thrown: " ++ msg) >> return [])
         modPathS (cl_kernel st) (cl_cursor st) (++ p)
-    put st { cl_cursor = ast }
+    put $ newSAST expr ast st
     showFocus
-performAstEffect (Direction dir) = do
+performAstEffect (Direction dir) expr = do
     st <- get
     ast <- liftIO $ do
         child_count <- queryS (cl_kernel st) (cl_cursor st) numChildrenT
         print (child_count, dir)
         modPathS (cl_kernel st) (cl_cursor st) (scopePath2Path . moveLocally dir . path2ScopePath)
-    put st { cl_cursor = ast }
+    put $ newSAST expr ast st
     -- something changed, to print
     showFocus
-performAstEffect (ShellState' f) = get >>= liftIO . f >>= put >> showFocus
-performAstEffect (PushFocus ls) = do
+--performAstEffect (ShellState' f) = get >>= liftIO . f >>= put >> showFocus
+performAstEffect (PushFocus ls) expr = do
     st <- get
     ast <- liftIO $ modPathS (cl_kernel st) (cl_cursor st) (++ ls)
-    put st { cl_cursor = ast }
+    put $ newSAST expr ast st
     showFocus
+performAstEffect BeginScope expr = do
+        st <- get
+        ast <- liftIO $ beginScopeS (cl_kernel st) (cl_cursor st)
+        put $ newSAST expr ast st
+        showFocus
+performAstEffect EndScope expr = do
+        st <- get
+        ast <- liftIO $ endScopeS (cl_kernel st) (cl_cursor st)
+        put $ newSAST expr ast st
+        showFocus
 
 -------------------------------------------------------------------------------
 
