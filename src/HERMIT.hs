@@ -1,6 +1,6 @@
 {-# LANGUAGE PatternGuards, DataKinds, ScopedTypeVariables #-}
 
-module Language.HERMIT.Plugin.Interactive (plugin) where
+module HERMIT (plugin) where
 
 import GhcPlugins
 
@@ -12,5 +12,4 @@ plugin :: Plugin
 plugin = hermitPlugin interactive
 
 interactive :: HermitPass
-interactive opts modGuts = do
-    Dispatch.commandLine opts defaultBehavior modGuts
+interactive opts modGuts = Dispatch.commandLine opts defaultBehavior modGuts

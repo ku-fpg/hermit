@@ -1,6 +1,0 @@
-consider 'foo
-dump "paper/foo-before-rule.tex" "clean" "latex" 80
-
-any-bu (apply-rule appendNil)
-bash
-dump "paper/foo-after-rule.tex" "clean" "latex" 80

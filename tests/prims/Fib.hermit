@@ -1,5 +1,0 @@
--- First example; unroll fib once.
-consider 'fib
-dump "paper/fib.tex" "clean" "latex" 60
-any-bu (inline 'fib)
-dump "paper/fast-fib.tex" "clean" "latex" 60

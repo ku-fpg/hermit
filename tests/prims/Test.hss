@@ -1,0 +1,9 @@
+-- Use an ASCII render (so we can diff)
+set-renderer ascii
+-- set-pretty-depth 0
+-- Tests: beta-reduce, let-subst
+{ rhs-of 'beta_reduce_start 
+  beta-reduce
+  let-subst
+}
+compare-values 'beta_reduce_start 'beta_reduce_end

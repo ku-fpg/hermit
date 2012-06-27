@@ -1,19 +1,6 @@
-test:: HERMIT.o
-	perl ./test.pl BetaReduce
-	perl ./test.pl BetaReduce h
+HERMIT = perl ../../scripts/hermit.pl
 
-	perl ./test.pl Fib
-	perl ./test.pl Fib h
+boot:: 
+	- $(HERMIT) Test.hs Test.hss resume | tee Test.out
+	diff -s Test.out Test.expected.out
 
-	perl ./test.pl Reverse
-	perl ./test.pl Reverse h
-
-
-.SUFFIXES: .o .hs
-HERMIT.o: HERMIT.hs
-	ghc-7.4.1 -c HERMIT.hs -fforce-recomp -O2 -dcore-lint -fsimple-list-literals
-
-
-web::
-	(cd ../../; make)
-	perl ./test.pl Case w

@@ -16,5 +16,5 @@ scripted :: HermitPass
 scripted opts modGuts =
     case opts of
         [ ('/' : filename) ] -> do
-            Dispatch.commandLine (useFile filename) modGuts
+            Dispatch.commandLine [] (useFile filename) modGuts
         _ -> return modGuts
