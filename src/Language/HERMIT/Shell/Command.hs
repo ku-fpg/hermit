@@ -262,7 +262,8 @@ moveLocally _ p                          = p
 
 -------------------------------------------------------------------------------
 
-type CLM m a = StateT CommandLineState (ErrorT String m) a
+--type CLM m a = StateT CommandLineState (ErrorT String m) a
+type CLM m a = ErrorT String (StateT CommandLineState m) a
 
 data CommandLineState = CommandLineState
         { cl_graph       :: [(SAST,ExprH,SAST)]
@@ -311,7 +312,7 @@ commandLine behavior modGuts = do
 
         runInputTBehavior behavior
                 (setComplete (completeWordWithPrev Nothing ws_complete do_complete) defaultSettings)
-                (runErrorT (evalStateT (showFocus >> loop) shellState))
+                (evalStateT (runErrorT (showFocus >> loop)) shellState)
 
         return ()
 
@@ -339,10 +340,11 @@ loop = do
 ourCatch :: (MonadIO n) => CLM IO () -> (String -> IO ()) -> CLM n ()
 ourCatch m failure = do
                 st <- get
-                res <- liftIO $ runErrorT (execStateT m st)
+                (res,st') <- liftIO $ runStateT (runErrorT m) st
+                put st'
                 case res of
                   Left msg -> liftIO $ failure msg
-                  Right res -> put res >> return ()
+                  Right () -> return ()
 
 
 
