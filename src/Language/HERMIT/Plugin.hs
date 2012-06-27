@@ -4,6 +4,7 @@ module Language.HERMIT.Plugin (HermitPass, hermitPlugin) where
 
 import GhcPlugins
 import Data.List
+import System.IO
 
 type HermitPass = [CommandLineOption] -> ModGuts -> CoreM ModGuts
 
@@ -13,13 +14,17 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
     where
         install :: [CommandLineOption] -> [CoreToDo] -> CoreM [CoreToDo]
         install opts todos = do
+            reinitializeGlobals
+
+            -- This is a bit of a hack; otherwise we lose what we've not seen
+            liftIO $ hSetBuffering stdout NoBuffering
             liftIO $ print opts
+
             let
                 myPass = CoreDoPluginPass "HERMIT" $ modFilter hp opts
                 -- at front, for now
                 allPasses = myPass : todos
 
-            reinitializeGlobals
             return allPasses
 
 -- | Determine whether to act on this module, choose plugin pass.
