@@ -13,8 +13,11 @@ import qualified Language.Haskell.TH as TH
 externals :: [External]
 externals = map (.+ Lens)
             [
-              external "consider" consider
-                [ "'consider <v>' focuses into a named binding <v>" ]
+              external "consider" considerName
+                [ "'consider <v>' focuses on a named binding <v>" ]
+            , external "consider" considerConstruct
+                [ "'consider <c>' focuses on the first construct <c>.",
+                  recognizedConsiderables]
             , external "rhs-of" rhsOf
                 [ "rhs-of 'name focuses into the right-hand-side of binding <v>" ]
         -- This is in the wrong place
@@ -23,8 +26,8 @@ externals = map (.+ Lens)
             ]
 
 -- Focus on a bindings
-consider :: TH.Name -> TranslateH Core Path
-consider = uniquePrunePathToT . bindGroup
+considerName :: TH.Name -> TranslateH Core Path
+considerName = uniquePrunePathToT . bindGroup
 
 -- find a bind group that defineds a given name
 
@@ -45,6 +48,52 @@ namedBinding _  _                        =  False
 -- Hacks till we can find the correct way of doing these.
 cmpName :: TH.Name -> Name -> Bool
 cmpName = cmpTHName2Name
+
+data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetIn | CaseOf | Casty | Ticky | TypeVar | Coerce
+
+recognizedConsiderables :: String
+recognizedConsiderables = "Recognized constructs are: " ++ show (map fst considerables)
+
+considerables ::  [(String,Considerable)]
+considerables =   [ ("bind",Binding)
+                  , ("def",Definition)
+                  , ("alt",CaseAlt)
+                  , ("var",Variable)
+                  , ("lit",Literal)
+                  , ("app",Application)
+                  , ("lam",Lambda)
+                  , ("let",LetIn)
+                  , ("case",CaseOf)
+                  , ("cast",Casty)
+                  , ("tick",Ticky)
+                  , ("type",TypeVar)
+                  , ("coerce",Coerce)
+                  ]
+
+considerConstruct :: String -> TranslateH Core Path
+considerConstruct str = case string2considerable str of
+                          Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". " ++ recognizedConsiderables ++ ".  Or did you mean \"consider '" ++ str ++ "\"?"
+                          Just c  -> firstPathToT (underConsideration c)
+
+string2considerable :: String -> Maybe Considerable
+string2considerable = flip lookup considerables
+
+underConsideration :: Considerable -> Core -> Bool
+underConsideration Binding     (BindCore _)               = True
+underConsideration Definition  (BindCore (NonRec _ _))    = True
+underConsideration Definition  (DefCore _)                = True
+underConsideration CaseAlt     (AltCore _)                = True
+underConsideration Variable    (ExprCore (Var _))         = True
+underConsideration Literal     (ExprCore (Lit _))         = True
+underConsideration Application (ExprCore (App _ _))       = True
+underConsideration Lambda      (ExprCore (Lam _ _))       = True
+underConsideration LetIn       (ExprCore (Let _ _))       = True
+underConsideration CaseOf      (ExprCore (Case _ _ _ _))  = True
+underConsideration Casty       (ExprCore (Cast _ _))      = True
+underConsideration Ticky       (ExprCore (Tick _ _))      = True
+underConsideration TypeVar     (ExprCore (Type _))        = True
+underConsideration Coerce      (ExprCore (Coercion _))    = True
+underConsideration _           _                          = False
 
 
 var :: TH.Name -> RewriteH CoreExpr
