@@ -1,6 +1,6 @@
 HERMIT=perl ../../scripts/hermit.pl
 
-boot:: HERMIT.o
+boot:: 
 	- $(HERMIT) Test.hs Test.hss resume
 
 
