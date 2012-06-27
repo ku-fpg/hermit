@@ -231,4 +231,4 @@ compareValues n1 n2 = do
         p2 <- rhsOf n2
         e1 :: Core <- focusT (pathL p1) idR
         () <- focusT (pathL p2) (coreEqualT e1)
-        return $ show n1 ++ " and " ++ show n1 ++ " are equal"
+        return $ show n1 ++ " and " ++ show n2 ++ " are equal"
