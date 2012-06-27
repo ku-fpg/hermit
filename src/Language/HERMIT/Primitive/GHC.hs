@@ -5,6 +5,7 @@ import GhcPlugins hiding (freeVars,empty)
 --import qualified GhcPlugins as GHC
 import qualified OccurAnal
 import Control.Arrow
+import Control.Applicative
 import qualified Data.Map as Map
 
 import Language.HERMIT.Primitive.Debug
@@ -208,20 +209,38 @@ joinT f e0 = translate $ \ c e1 -> do
                 apply t c e1
 -}
 
-exprEqual :: CoreExpr -> TranslateH CoreExpr ()
-exprEqual (Var v1) = do { Var v2 <- idR ; if v1 == v2 then return () else fail "var mismatch" }
-exprEqual (Lit i1) = do { Lit i2 <- idR ; if i1 == i2 then return () else fail "lit mismatch" }
-exprEqual (Type t1) = do { Type t2 <- idR ; if t1 `eqType` t2 then return () else fail "type mismatch" }
-exprEqual (App e1 e2) = appT (exprEqual e1) (exprEqual e2) $ \ () () -> ()
-exprEqual _        = fail "exprEqual fail"
+exprEqual :: CoreExpr -> CoreExpr -> Maybe Bool
+exprEqual (Var v1)       (Var v2)        = Just (v1 == v2)
+exprEqual (Lit i1)       (Lit i2)        = Just (i1 == i2)
+exprEqual (Type t1)      (Type t2)       = Just (t1 `eqType` t2)
+exprEqual (App f1 e1)    (App f2 e2)     = liftA2 (&&) (f1 `exprEqual` f2) (e1 `exprEqual` e2)
+exprEqual (Lam _ _)      (Lam _ _)       = Nothing
+exprEqual (Case _ _ _ _) (Case _ _ _ _)  = Nothing
+exprEqual (Cast _ _)     (Cast _ _)      = Nothing
+exprEqual (Tick _ _)     (Tick _ _)      = Nothing
+exprEqual (Type _)       (Type _)        = Nothing
+exprEqual (Coercion _)   (Coercion _)    = Nothing
+exprEqual _              _               = Just False
 
-coreEqualT :: Core -> TranslateH Core ()
-coreEqualT (ModGutsCore  _) = fail "can not compare ModGuts"
-coreEqualT (ProgramCore  _) = fail "can not compare Program"
-coreEqualT (BindCore  _)    = fail "can not compare Bind"
-coreEqualT (DefCore  _)     = fail "can not compare Def"
-coreEqualT (ExprCore  e)    = promoteT $ exprEqual e
-coreEqualT (AltCore  _)     = fail "can not compare Alt"
+coreEqual :: Core -> Core -> Maybe Bool
+coreEqual (ExprCore e1) (ExprCore e2) = e1 `exprEqual` e2
+coreEqual _             _             = Nothing
+
+-- exprEqual :: CoreExpr -> TranslateH CoreExpr ()
+-- exprEqual (Var v1) = do { Var v2 <- idR ; if v1 == v2 then return () else fail "var mismatch" }
+-- exprEqual (Lit i1) = do { Lit i2 <- idR ; if i1 == i2 then return () else fail "lit mismatch" }
+-- exprEqual (Type t1) = do { Type t2 <- idR ; if t1 `eqType` t2 then return () else fail "type mismatch" }
+-- exprEqual (App e1 e2) = appT (exprEqual e1) (exprEqual e2) $ \ () () -> ()
+-- exprEqual _        = fail "exprEqual fail"
+
+-- coreEqualT :: Core -> TranslateH Core ()
+-- coreEqualT (ModGutsCore  _) = fail "can not compare ModGuts"
+-- coreEqualT (ProgramCore  _) = fail "can not compare Program"
+-- coreEqualT (BindCore  _)    = fail "can not compare Bind"
+-- coreEqualT (DefCore  _)     = fail "can not compare Def"
+-- coreEqualT (ExprCore  e)    = promoteT $ exprEqual e
+-- coreEqualT (AltCore  _)     = fail "can not compare Alt"
+
 
 -- TODO: make this handle cmp of recusive functions, by using subst.
 
@@ -229,6 +248,10 @@ compareValues :: TH.Name -> TH.Name -> TranslateH Core String
 compareValues n1 n2 = do
         p1 <- rhsOf n1
         p2 <- rhsOf n2
-        e1 :: Core <- focusT (pathL p1) idR
-        () <- focusT (pathL p2) (coreEqualT e1)
-        return $ show n1 ++ " and " ++ show n2 ++ " are equal"
+        e1 :: Core <- pathT p1 idR
+        e2 :: Core <- pathT p2 idR
+        case e1 `coreEqual` e2 of
+          Nothing -> return $ show n1 ++ " and " ++ show n2 ++ " are incomparable"
+          Just b  -> return $ show n1
+                           ++ (if b then " == " else " /= ")
+                           ++ show n2
