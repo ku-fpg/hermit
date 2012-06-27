@@ -6,6 +6,7 @@ import Language.HERMIT.HermitKure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 
+import Control.Applicative
 import Control.Arrow
 
 import qualified Language.Haskell.TH as TH
@@ -38,6 +39,14 @@ namedBinding :: TH.Name -> Core -> Bool
 namedBinding nm (BindCore (NonRec v _))  =  nm `cmpName` idName v
 namedBinding nm (DefCore (Def v _))      =  nm `cmpName` idName v
 namedBinding _  _                        =  False
+
+-- find all the possible targets of consider
+considerTargets :: TranslateH Core [String]
+considerTargets = collectT (promoteT $ nonRec <+ rec) >>> arr concat
+    where nonRec = nonRecT (pure ()) (const . (:[]) . unqualified)
+          rec    = recT (const (arr (\(Def v _) -> unqualified v))) id
+          unqualified :: Id -> String
+          unqualified = reverse . takeWhile (/='.') . reverse . showPpr . idName
 
 -- Hacks till we can find the correct way of doing these.
 cmpName :: TH.Name -> Name -> Bool

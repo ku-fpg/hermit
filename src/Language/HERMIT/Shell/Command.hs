@@ -5,6 +5,7 @@ module Language.HERMIT.Shell.Command where
 import qualified GhcPlugins as GHC
 
 import Control.Applicative
+import Control.Concurrent
 import Control.Exception.Base hiding (catch)
 import Control.Monad.State
 import Control.Monad.Error
@@ -23,6 +24,7 @@ import Language.HERMIT.Interp
 import Language.HERMIT.HermitKure
 import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.PrettyPrinter
+import Language.HERMIT.Primitive.Consider
 import Language.HERMIT.Dictionary
 
 import Prelude hiding (catch)
@@ -300,7 +302,11 @@ commandLine filesToLoad behavior modGuts = do
     GHC.liftIO $ print (length (GHC.mg_rules modGuts))
     let dict = dictionary $ all_externals shell_externals modGuts
     let ws_complete = " ()"
-    let do_complete _ so_far =
+    let do_complete mvar _ ('\'':so_far) = do
+            st <- readMVar mvar
+            liftM (map (simpleCompletion . ('\'':)) . filter (so_far `isPrefixOf`))
+                $ queryS (cl_kernel st) (cl_cursor (cl_session st)) considerTargets
+        do_complete _    _ so_far =
             return [ simpleCompletion cmd
                    | cmd <- M.keys dict
                    , so_far `isPrefixOf` cmd
@@ -320,32 +326,37 @@ commandLine filesToLoad behavior modGuts = do
         let sessionState = SessionState sast "clean" def unicodeConsole 80 False False
             shellState = CommandLineState [] dict skernel sessionState
 
+        completionMVar <- newMVar shellState
+
         runInputTBehavior behavior
-                (setComplete (completeWordWithPrev Nothing ws_complete do_complete) defaultSettings)
-                (evalStateT (runErrorT (startup >> showFocus >> loop)) shellState)
+                (setComplete (completeWordWithPrev Nothing ws_complete (do_complete completionMVar)) defaultSettings)
+                (evalStateT (runErrorT (startup >> showFocus >> loop completionMVar)) shellState)
 
         return ()
 
-loop :: (MonadIO m, m ~ InputT IO) => CLM m ()
-loop = do
-    st <- get
---    liftIO $ print (cl_pretty st, cl_cursor (cl_session st))
-    let SAST n = cl_cursor (cl_session st)
-    maybeLine <- if cl_nav (cl_session st)
-                 then liftIO $ getNavCmd
-                 else lift $ lift $ getInputLine $ "hermit<" ++ show n ++ "> "
+loop :: (MonadIO m, m ~ InputT IO) => MVar CommandLineState -> CLM m ()
+loop completionMVar = loop'
+  where loop' = do
+            st <- get
+            -- so the completion can get the current state
+            liftIO $ modifyMVar_ completionMVar (const (return st))
+            -- liftIO $ print (cl_pretty st, cl_cursor (cl_session st))
+            let SAST n = cl_cursor (cl_session st)
+            maybeLine <- if cl_nav (cl_session st)
+                         then liftIO $ getNavCmd
+                         else lift $ lift $ getInputLine $ "hermit<" ++ show n ++ "> "
 
-    case maybeLine of
-        Nothing             -> performMetaCommand Resume
-        Just ('-':'-':_msg) -> loop
-        Just line           ->
-            if all isSpace line
-            then loop
-            else (case parseStmtsH line of
-                        Left  msg   -> throwError ("parse failure: " ++ msg)
-                        Right stmts -> evalStmts stmts) `ourCatch` (\ msg ->
-                                do putStrLn $ "Failure: " ++ msg
-                  ) >> loop
+            case maybeLine of
+                Nothing             -> performMetaCommand Resume
+                Just ('-':'-':_msg) -> loop'
+                Just line           ->
+                    if all isSpace line
+                    then loop'
+                    else (case parseStmtsH line of
+                                Left  msg   -> throwError ("parse failure: " ++ msg)
+                                Right stmts -> evalStmts stmts) `ourCatch` (\ msg ->
+                                        do putStrLn $ "Failure: " ++ msg
+                          ) >> loop'
 
 ourCatch :: (m ~ IO, MonadIO n) => CLM m () -> (String -> IO ()) -> CLM n ()
 ourCatch m failure = do
