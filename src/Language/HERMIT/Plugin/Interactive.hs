@@ -12,5 +12,5 @@ plugin :: Plugin
 plugin = hermitPlugin interactive
 
 interactive :: HermitPass
-interactive _opts modGuts = do
-    Dispatch.commandLine defaultBehavior modGuts
+interactive opts modGuts = do
+    Dispatch.commandLine opts defaultBehavior modGuts

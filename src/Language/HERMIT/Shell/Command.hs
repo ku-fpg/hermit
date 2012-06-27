@@ -293,8 +293,10 @@ data SessionState = SessionState
 
 -------------------------------------------------------------------------------
 
-commandLine :: Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
-commandLine behavior modGuts = do
+commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
+commandLine filesToLoad behavior modGuts = do
+    GHC.liftIO $ print ("files",filesToLoad)
+
     GHC.liftIO $ print (length (GHC.mg_rules modGuts))
     let dict = dictionary $ all_externals shell_externals modGuts
     let ws_complete = " ()"
@@ -304,6 +306,14 @@ commandLine behavior modGuts = do
                    , so_far `isPrefixOf` cmd
                    ]
 
+    let startup =
+            sequence_ [ performMetaCommand $ case fileName of
+                         "abort"  -> Abort
+                         "resume" -> Resume
+                         _        -> LoadFile fileName
+                      | fileName <- filesToLoad
+                      , not (null fileName)
+                      ] `ourCatch` \ msg -> do putStrLn $ "Booting Failure: " ++ msg
 
     flip scopedKernel modGuts $ \ skernel sast -> do
 
@@ -312,7 +322,7 @@ commandLine behavior modGuts = do
 
         runInputTBehavior behavior
                 (setComplete (completeWordWithPrev Nothing ws_complete do_complete) defaultSettings)
-                (evalStateT (runErrorT (showFocus >> loop)) shellState)
+                (evalStateT (runErrorT (startup >> showFocus >> loop)) shellState)
 
         return ()
 
@@ -337,7 +347,7 @@ loop = do
                                 do putStrLn $ "Failure: " ++ msg
                   ) >> loop
 
-ourCatch :: (MonadIO n) => CLM IO () -> (String -> IO ()) -> CLM n ()
+ourCatch :: (m ~ IO, MonadIO n) => CLM m () -> (String -> IO ()) -> CLM n ()
 ourCatch m failure = do
                 st <- get
                 (res,st') <- liftIO $ runStateT (runErrorT m) st

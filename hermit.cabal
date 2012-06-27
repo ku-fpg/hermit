@@ -35,6 +35,8 @@ Library
   default-language: Haskell2010
 
   Exposed-modules:
+       HERMIT
+
        Language.HERMIT
        Language.HERMIT.Dictionary
        Language.HERMIT.External
@@ -48,8 +50,6 @@ Library
        Language.HERMIT.Interp
 
        Language.HERMIT.Plugin
-       Language.HERMIT.Plugin.Interactive
-       Language.HERMIT.Plugin.Script
 
        Language.HERMIT.Primitive.Consider
        Language.HERMIT.Primitive.Debug
