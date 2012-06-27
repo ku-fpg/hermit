@@ -68,6 +68,7 @@ letFloatLetTop = setFailMsg "letFloatLetTop failed" $
   do NonRec v (Let (NonRec w ew) ev) : e <- idR
      return $ (NonRec w ew) : (NonRec v ev) : e
 
+caseFloatLet :: RewriteH CoreExpr
 caseFloatLet = setFailMsg "caseFloatLet failed" $
   do vs <- letNonRecT caseAltVarsT idR (\ letVar caseVars _ -> elem letVar $ concat caseVars)
      let bdsAction = if not vs then idR else (nonRecR alphaCase)

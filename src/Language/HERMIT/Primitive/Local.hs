@@ -16,8 +16,6 @@ import qualified Language.HERMIT.Primitive.Local.Let as Let
 import qualified Language.Haskell.TH as TH
 
 import Control.Arrow
-import Control.Monad
-
 
 ------------------------------------------------------------------------------
 
@@ -55,16 +53,11 @@ betaReducePlus :: RewriteH CoreExpr
 betaReducePlus = do
         e <- idR
         let (f,xs) = collectArgs e
-        when (length xs == 0) $ do
-                fail "betaReducePlus, no applications"
+        guardMsg (length xs /= 0) "betaReducePlus, no applications"
 
         let (vs,e0) = collectBinders f
 
-        when (length vs < length xs) $ do
-                fail "betaReducePlus, no lambdas"
-
-
-
+        guardMsg (length vs >= length xs) "betaReducePlus, no lambdas"
 
         let (vs1,vs2) = splitAt (length xs) vs
 
@@ -115,12 +108,11 @@ beta_expand = setFailMsg "beta_expand failed. Not applied to a NonRec Let." $
 ------------------------------------------------------------------------------
 
 eta_reduce :: RewriteH CoreExpr
-eta_reduce = contextfreeT $ \ e -> case e of
-      Lam v1 (App f (Var v2)) -> do guardMsg (v1 == v2) "eta_reduce failed, variables are not equal."
-                                    guardMsg (v1 `notElem` freeIds f) $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++
-                                                                         "is free in the function being applied."
-                                    return f
-      _                       -> fail "eta_reduce failed"
+eta_reduce = withPatFailMsg "eta_reduce failed. Not applied to Lam-App-Var" $
+    do Lam v1 (App f (Var v2)) <- idR
+       guardMsg (v1 == v2) "eta_reduce failed, variables are not equal."
+       guardMsg (v1 `notElem` freeIds f) $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++ "is free in the function being applied."
+       return f
 
 eta_expand :: TH.Name -> RewriteH CoreExpr
 eta_expand nm = contextfreeT $ \ e -> case splitAppTy_maybe (exprType e) of

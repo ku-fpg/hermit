@@ -21,15 +21,15 @@ externals :: [External]
 externals = map (.+ CaseCmd) $
          [ -- I'm not sure this is possible. In core, v2 can only be a Constructor, Lit, or DEFAULT
            -- In the last case, v1 is already inlined in e. So we can't construct v2 as a Var.
-           external "case-elimination" (promoteR $ not_defined "case-elimination" :: RewriteH Core)
-                     [ "case v1 of v2 -> e ==> e[v1/v2]" ]                                         .+ Unimplemented .+ Eval
-           -- Again, don't think the lhs of this rule is possible to construct in core.
-         , external "default-binding-elim" (promoteR $ not_defined "default-binding-elim" :: RewriteH Core)
-                     [ "case v of ...;w -> e ==> case v of ...;w -> e[v/w]" ]                      .+ Unimplemented .+ Eval
-           -- Again, don't think the lhs of this rule is possible to construct in core.
-         , external "case-merging" (promoteR $ not_defined "case-merging" :: RewriteH Core)
-                     [ "case v of ...; d -> case v of alt -> e ==> case v of ...; alt -> e[v/d]" ] .+ Unimplemented .+ Eval
-         , external "let-float-case" (promoteR letFloatCase :: RewriteH Core)
+         --   external "case-elimination" (promoteR $ not_defined "case-elimination" :: RewriteH Core)
+         --             [ "case v1 of v2 -> e ==> e[v1/v2]" ]                                         .+ Unimplemented .+ Eval
+         --   -- Again, don't think the lhs of this rule is possible to construct in core.
+         -- , external "default-binding-elim" (promoteR $ not_defined "default-binding-elim" :: RewriteH Core)
+         --             [ "case v of ...;w -> e ==> case v of ...;w -> e[v/w]" ]                      .+ Unimplemented .+ Eval
+         --   -- Again, don't think the lhs of this rule is possible to construct in core.
+         -- , external "case-merging" (promoteR $ not_defined "case-merging" :: RewriteH Core)
+         --             [ "case v of ...; d -> case v of alt -> e ==> case v of ...; alt -> e[v/d]" ] .+ Unimplemented .+ Eval
+           external "let-float-case" (promoteR letFloatCase :: RewriteH Core)
                      [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]                           .+ Eval
          , external "case-float-app" (promoteR caseFloatApp :: RewriteH Core)
                      [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]                                       .+ Eval
@@ -42,8 +42,8 @@ externals = map (.+ CaseCmd) $
                      , "case C v1..vn of C w1..wn -> e ==> e[v1/w1..vn/wn]" ]                                      .+ Eval
          ]
 
-not_defined :: String -> RewriteH CoreExpr
-not_defined nm = fail $ nm ++ " not implemented!"
+-- not_defined :: String -> RewriteH CoreExpr
+-- not_defined nm = fail $ nm ++ " not implemented!"
 
 -- | case (let v = e1 in e2) of alts ==> let v = e1 in case e2 of alts
 letFloatCase :: RewriteH CoreExpr
