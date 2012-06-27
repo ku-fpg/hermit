@@ -46,6 +46,15 @@ data ShellCommand :: * where
    Direction     :: Direction                -> ShellCommand
    Dump          :: String -> String -> String -> Int -> ShellCommand
 
+
+-- | 'KernelCommand' is what you send to the HERMIT kernel.
+data KernelCommand :: * where
+   Resume       ::                             KernelCommand
+   Abort        ::                             KernelCommand
+   Apply        :: RewriteH Core            -> KernelCommand
+   Query        :: TranslateH Core String   -> KernelCommand  -- strange stuff
+   Pathfinder   :: TranslateH Core Path     -> KernelCommand
+
 data Direction = L | R | U | D
         deriving Show
 
@@ -73,13 +82,6 @@ interpKernelCommand =
              , Interp $ \ (TranslateCorePathBox tt)   -> Pathfinder tt
              ]
 
--- | 'KernelCommand' is what you send to the HERMIT kernel.
-data KernelCommand :: * where
-   Resume       ::                             KernelCommand
-   Abort        ::                             KernelCommand
-   Apply        :: RewriteH Core            -> KernelCommand
-   Query        :: TranslateH Core String   -> KernelCommand  -- strange stuff
-   Pathfinder   :: TranslateH Core Path     -> KernelCommand
 
 data KernelCommandBox = KernelCommandBox KernelCommand deriving Typeable
 
