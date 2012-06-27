@@ -51,9 +51,11 @@ data AstEffect :: * where
    -- | This changes the current location using a give path
    PushFocus     :: Path                     -> AstEffect
    -- |
---   ShellState'  :: (CommandLineState -> IO CommandLineState) -> AstEffect
    BeginScope    :: AstEffect
    EndScope      :: AstEffect
+
+   -- | Navigate the tree of ASTs
+   Navigation    :: Navigation               -> AstEffect
    deriving Typeable
 
 instance Extern AstEffect where
@@ -94,6 +96,11 @@ instance Extern MetaCommand where
     unbox i = i
 
 data Direction = L | R | U | D | T
+        deriving Show
+
+data Navigation = Back                  -- back (up) the derivation tree
+                | Step                  -- down one step; assumes only one choice
+                | Goto Int              -- goto a specific node, if possible
         deriving Show
 
 data ShellCommandBox = ShellCommandBox ShellCommand deriving Typeable
@@ -160,6 +167,12 @@ shell_externals = map (.+ Shell) $
        [ "switch to command line mode" ]
    , external "top"            (Direction T)
        [ "move to root of tree" ]
+   , external ":back"            (Navigation Back)
+       [ "go back in the derivation" ]
+   , external ":step"            (Navigation Step)
+       [ "step forward in the derivation" ]
+   , external ":goto"            (Navigation . Goto)
+       [ "goto a specific step in the derivation" ]
    , external "setpp"           (\ pp -> SessionStateEffect $ \ st -> do
        case M.lookup pp pp_dictionary of
          Nothing -> do
@@ -330,9 +343,10 @@ loop :: (MonadIO m, m ~ InputT IO) => CLM m ()
 loop = do
     st <- get
 --    liftIO $ print (cl_pretty st, cl_cursor st)
+    let SAST n = cl_cursor st
     maybeLine <- if cl_nav (cl_session st)
                  then liftIO $ getNavCmd
-                 else lift $ getInputLine "hermit> "
+                 else lift $ getInputLine $ "hermit<" ++ show n ++ "> "
     case maybeLine of
         Nothing             -> performMetaCommand Resume
         Just ('-':'-':_msg) -> loop
@@ -414,6 +428,46 @@ performAstEffect EndScope expr = do
         ast <- liftIO $ endScopeS (cl_kernel st) (cl_cursor st)
         put $ newSAST expr ast st
         showFocus
+performAstEffect (Navigation whereTo) expr = do
+    st <- get
+    liftIO $ print $ ("Graph",cl_graph st)
+    case whereTo of
+      Goto n -> do
+              -- this check should be in the kernel
+              -- Int -> IO (Maybe SAST)
+           all_nds <- liftIO $ listS (cl_kernel st)
+           if (SAST n) `elem` all_nds
+              then do
+                 put $ st { cl_cursor = SAST n }
+                 showFocus
+              else do
+                 liftIO $ putStrLn $ "Can not find AST #" ++ show n
+                 return ()
+      Step -> do
+           let ns = [ edge | edge@(s,_,_) <- cl_graph st, s == cl_cursor st ]
+           case ns of
+             [] -> do
+                 liftIO $ putStrLn $ "Can not step forward (no more steps)"
+             [(_,cmd,d) ] -> do
+                  liftIO $ print $ "performing " ++ show cmd
+                  put $ st { cl_cursor = d }
+                  showFocus
+             _ -> do
+                 liftIO $ putStrLn $ "Can not step forward (multiple choices)"
+                 return ()
+      Back -> do
+           let ns = [ edge | edge@(_,_,d) <- cl_graph st, d == cl_cursor st ]
+           case ns of
+             [] -> do
+                 liftIO $ putStrLn $ "Can not step backwards (no more steps)"
+             [(s,cmd,_) ] -> do
+                  liftIO $ print $ "undoing " ++ show cmd
+                  put $ st { cl_cursor = s }
+                  showFocus
+             _ -> do
+                 liftIO $ putStrLn $ "Can not step backwards (multiple choices, impossible!)"
+                 return ()
+
 
 -------------------------------------------------------------------------------
 
@@ -437,6 +491,7 @@ performQuery Status = do
     liftIO $ do
         ps <- pathS (cl_kernel st) (cl_cursor st)
         putStrLn $ "Paths: " ++ show ps
+        print $ ("Graph",cl_graph st)
     showFocus
 
 
@@ -539,6 +594,7 @@ getNavCmd = do
           , ("\ESC[C", result "right")
           , ("\ESC[D", result "left")
           , ("?",      result ":nav-commands")
+          , ("f",      result ":step")
           ] ++
           [ (show n, result (show n)) | n <- [0..9] :: [Int] ]
 
