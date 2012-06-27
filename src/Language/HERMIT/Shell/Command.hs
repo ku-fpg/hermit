@@ -210,26 +210,6 @@ changeRenderer renderer = SessionStateEffect $ \ _ st ->
 
 ----------------------------------------------------------------------------------
 
-includeFile :: String -> CommandLineState -> IO CommandLineState
-includeFile fileName st = do
-        putStrLn $ "[including " ++ fileName ++ "]"
-        res <- try (readFile fileName)
-        case res of
-          Right str -> case parseStmtsH (normalize str) of
-                        Left  msg  -> putStrLn ("parse failure: " ++ msg) >> return st
-                        Right stmts -> execStateT (evalStmts stmts) st
-          Left (err :: IOException) -> putStrLn ("IO error: " ++ show err) >> return st
-  where
-   normalize = unlines
-             . map (++ ";")     -- HACK!
-             . map (rmComment)
-             . lines
-   rmComment []     = []
-   rmComment xs     | "--" `isPrefixOf` xs = [] -- we need a real parser and lexer here!
-   rmComment (x:xs) = x : rmComment xs
-
-----------------------------------------------------------------------------------
-
 catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
 
@@ -304,9 +284,9 @@ data SessionState = SessionState
         , cl_pretty_opts :: PrettyOptions -- ^ The options for the pretty printer
         , cl_render      :: Handle -> PrettyOptions -> DocH -> IO ()   -- ^ the way of outputing to the screen
         , cl_width       :: Int                 -- ^ how wide is the screen?
-        , cl_nav         :: Bool
+        , cl_nav         :: Bool        -- ^ keyboard input the the nav panel
+        , cl_loading     :: Bool        -- ^ if loading a file, be quieter. TODO: generalize
         }
-
 
 
 -------------------------------------------------------------------------------
@@ -325,7 +305,7 @@ commandLine behavior modGuts = do
 
     flip scopedKernel modGuts $ \ skernel sast -> do
 
-        let sessionState = SessionState sast "clean" def unicodeConsole 80 False
+        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False
             shellState = CommandLineState [] dict skernel sessionState
 
         runInputTBehavior behavior
@@ -467,6 +447,27 @@ performMetaCommand (Dump fileName _pp renderer w) = do
             r h (cl_pretty_opts (cl_session st)) doc
             hClose h
         _ -> do putStrLn "dump: bad pretty-printer or renderer option"
+performMetaCommand (LoadFile fileName) = do
+        liftIO $ putStrLn $ "[including " ++ fileName ++ "]"
+        st <- get
+        res <- liftIO $ try (readFile fileName)
+        st' <- liftIO $ case res of
+          Right str -> case parseStmtsH (normalize str) of
+                        Left  msg  -> putStrLn ("parse failure: " ++ msg) >> return st
+                        Right stmts -> execStateT (evalStmts stmts) st
+          Left (err :: IOException) -> putStrLn ("IO error: " ++ show err) >> return st
+        put st'
+  where
+   normalize = unlines
+             . map (++ ";")     -- HACK!
+             . map (rmComment)
+             . lines
+   rmComment []     = []
+   rmComment xs     | "--" `isPrefixOf` xs = [] -- we need a real parser and lexer here!
+   rmComment (x:xs) = x : rmComment xs
+
+
+
 
 -------------------------------------------------------------------------------
 
