@@ -41,18 +41,18 @@ data ShellCommand :: * where
    QueryFun      :: QueryFun                 -> ShellCommand
    MetaCommand   :: MetaCommand              -> ShellCommand
 
-data AstEffect :: * where
+data AstEffect
    -- | This applys a rewrite (giving a whole new lower-level AST)
-   Apply        :: RewriteH Core            -> AstEffect
+   = Apply      (RewriteH Core)
    -- | This changes the current location using a computed path
-   Pathfinder   :: TranslateH Core Path     -> AstEffect
+   | Pathfinder (TranslateH Core Path)
    -- | This changes the currect location using directions
-   Direction     :: Direction                -> AstEffect
+   | Direction  Direction
    -- | This changes the current location using a give path
-   PushFocus     :: Path                     -> AstEffect
-   -- |
-   BeginScope    :: AstEffect
-   EndScope      :: AstEffect
+   | PushFocus Path
+
+   | BeginScope
+   | EndScope
    deriving Typeable
 
 instance Extern AstEffect where
@@ -78,10 +78,11 @@ instance Extern QueryFun where
     box i = i
     unbox i = i
 
-data MetaCommand :: * where
-   Resume       ::                             MetaCommand
-   Abort        ::                             MetaCommand
-   Dump          :: String -> String -> String -> Int -> MetaCommand
+data MetaCommand
+   = Resume
+   | Abort
+   | Dump String String String Int
+   | LoadFile String  -- load a file on top of the current node
    deriving Typeable
 
 instance Extern MetaCommand where
@@ -194,8 +195,8 @@ shell_externals = map (.+ Shell) $
        ["push current lens onto a stack"]       -- tag as internal
    , external "}"   EndScope
        ["pop a lens off a stack"]               -- tag as internal
---   , external "include" (\ (fileName :: String) -> ShellState' $ \ st -> includeFile fileName st)
---        ["include <filename>: includes a shell command file"]
+   , external "load"  LoadFile
+       ["load <filename> : load a file of commands into the current derivation"]
    ]
 
 showRenderers :: QueryFun
