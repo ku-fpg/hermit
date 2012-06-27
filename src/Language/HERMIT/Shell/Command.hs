@@ -33,32 +33,72 @@ import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 import System.Console.Haskeline hiding (catch)
 
+-- There are 3 types of commands, AST effect-ful, Shell effect-ful, and Queries.
 
 data ShellCommand :: * where
-   Status        ::                             ShellCommand
-   Message       :: String                   -> ShellCommand
-   PushFocus     :: Path                     -> ShellCommand
---   PopFocus      ::                             ShellCommand
-   SuperPopFocus ::                             ShellCommand
-   SetPretty     :: String                   -> ShellCommand
-   ShellState    :: (CommandLineState -> IO CommandLineState) -> ShellCommand
-   KernelCommand :: KernelCommand            -> ShellCommand
-   Direction     :: Direction                -> ShellCommand
-   Dump          :: String -> String -> String -> Int -> ShellCommand
+   AstEffect     :: AstEffect                -> ShellCommand
+   ShellEffect   :: ShellEffect              -> ShellCommand
+   QueryFun      :: QueryFun                 -> ShellCommand
+   MetaCommand   :: MetaCommand              -> ShellCommand
 
+data AstEffect :: * where
+   -- | This applys a rewrite (giving a whole new lower-level AST)
+   Apply        :: RewriteH Core            -> AstEffect
+   -- | This changes the current location using a computed path
+   Pathfinder   :: TranslateH Core Path     -> AstEffect
+   -- | This changes the currect location using directions
+   Direction     :: Direction                -> AstEffect
+   -- | This changes the current location using a give path
+   PushFocus     :: Path                     -> AstEffect
+   -- |
+   ShellState'  :: (CommandLineState -> IO CommandLineState) -> AstEffect
+   deriving Typeable
 
--- | 'KernelCommand' is what you send to the HERMIT kernel.
-data KernelCommand :: * where
-   Resume       ::                             KernelCommand
-   Abort        ::                             KernelCommand
-   Apply        :: RewriteH Core            -> KernelCommand
-   Query        :: TranslateH Core String   -> KernelCommand  -- strange stuff
-   Pathfinder   :: TranslateH Core Path     -> KernelCommand
+instance Extern AstEffect where
+    type Box AstEffect = AstEffect
+    box i = i
+    unbox i = i
 
-data Direction = L | R | U | D
+data ShellEffect :: * where
+
+   -- This should only be the shell's state part, no the whole state
+   ShellState    :: (CommandLineState -> IO CommandLineState) -> ShellEffect
+   deriving Typeable
+
+data QueryFun :: * where
+   Query         :: TranslateH Core String   -> QueryFun  -- strange stuff
+
+   -- These two be can generalized into
+   --  (CommandLineState -> IO String)
+   Status        ::                             QueryFun
+   Message       :: String                   -> QueryFun
+   deriving Typeable
+
+instance Extern QueryFun where
+    type Box QueryFun = QueryFun
+    box i = i
+    unbox i = i
+
+data MetaCommand :: * where
+   Resume       ::                             MetaCommand
+   Abort        ::                             MetaCommand
+   Dump          :: String -> String -> String -> Int -> MetaCommand
+   deriving Typeable
+
+instance Extern MetaCommand where
+    type Box MetaCommand = MetaCommand
+    box i = i
+    unbox i = i
+
+data Direction = L | R | U | D | T
         deriving Show
 
 data ShellCommandBox = ShellCommandBox ShellCommand deriving Typeable
+
+instance Extern ShellEffect where
+    type Box ShellEffect = ShellEffect
+    box i = i
+    unbox i = i
 
 instance Extern ShellCommand where
     type Box ShellCommand = ShellCommandBox
@@ -68,34 +108,23 @@ instance Extern ShellCommand where
 interpShellCommand :: [Interp ShellCommand]
 interpShellCommand =
                 [ Interp $ \ (ShellCommandBox cmd)       -> cmd
-                , Interp $ \ (IntBox i)                  -> PushFocus [i]
-                , Interp $ \ (StringBox str)             -> Message str
+                , Interp $ \ (IntBox i)                  -> AstEffect $ PushFocus [i]
+                , Interp $ \ (RewriteCoreBox rr)         -> AstEffect $ Apply rr
+                , Interp $ \ (TranslateCorePathBox tt)   -> AstEffect $ Pathfinder tt
+                , Interp $ \ (StringBox str)             -> QueryFun $ Message str
+                , Interp $ \ (TranslateCoreStringBox tt) -> QueryFun $ Query tt
+                , Interp $ \ (effect :: AstEffect)       -> AstEffect $ effect
+                , Interp $ \ (effect :: ShellEffect)     -> ShellEffect $ effect
+                , Interp $ \ (query :: QueryFun)        -> QueryFun $ query
+                , Interp $ \ (meta :: MetaCommand)     -> MetaCommand $ meta
                 ]
 -- TODO: move this into the shell, it is completely specific to the way
 -- the shell works. What about list, for example?
 
-interpKernelCommand :: [Interp KernelCommand]
-interpKernelCommand =
-             [ Interp $ \ (KernelCommandBox cmd)      -> cmd
-             , Interp $ \ (RewriteCoreBox rr)         -> Apply rr
-             , Interp $ \ (TranslateCoreStringBox tt) -> Query tt
-             , Interp $ \ (TranslateCorePathBox tt)   -> Pathfinder tt
-             ]
-
-
-data KernelCommandBox = KernelCommandBox KernelCommand deriving Typeable
-
-instance Extern KernelCommand where
-    type Box KernelCommand = KernelCommandBox
-    box i = KernelCommandBox i
-    unbox (KernelCommandBox i) = i
-
-instance Show KernelCommand where
-   show Resume         = "Resume"
-   show Abort          = "Abort"
-   show (Apply _)      = "Apply"
-   show (Query _)      = "Query"
-   show (Pathfinder _) = "Pathfinder"
+--interpKernelCommand :: [Interp KernelCommand]
+--interpKernelCommand =
+--             [ Interp $ \ (KernelCommandBox cmd)      -> cmd
+--             ]
 
 shell_externals :: [External]
 shell_externals = map (.+ Shell) $
@@ -126,9 +155,14 @@ shell_externals = map (.+ Shell) $
        [ "switch to navigate mode" ]
    , external ":command-line"    (ShellState $ \ st -> return $ st { cl_nav = False })
        [ "switch to command line mode" ]
-   , external "root"            SuperPopFocus   -- call this top
+   , external "top"            (Direction T)
        [ "move to root of tree" ]
-   , external "setpp"           SetPretty
+   , external "setpp"           (\ pp -> ShellState $ \ st -> do
+       case M.lookup pp pp_dictionary of
+         Nothing -> do
+            liftIO $ putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
+            return st
+         Just v -> return $ st { cl_pretty = pp })
        [ "set the pretty printer"
        , "use 'setpp ls' to list available pretty printers" ]
    , external "set-renderer"    changeRenderer
@@ -146,20 +180,20 @@ shell_externals = map (.+ Shell) $
                                                                            }
                                                  _ -> return $ st)
        ["set how to show expression-level types (Show|Abstact|Omit)"]
-   , external "{"   (ShellState $ \ st -> do ast <- beginScopeS (cl_kernel st) (cl_cursor st)
-                                             return st { cl_cursor = ast })
+   , external "{"   (ShellState' $ \ st -> do ast <- beginScopeS (cl_kernel st) (cl_cursor st)
+                                              return st { cl_cursor = ast })
        ["push current lens onto a stack"]       -- tag as internal
-   , external "}"   (ShellState $ \ st -> do ast <- endScopeS (cl_kernel st) (cl_cursor st)
-                                             return st { cl_cursor = ast })
+   , external "}"   (ShellState' $ \ st -> do ast <- endScopeS (cl_kernel st) (cl_cursor st)
+                                              return st { cl_cursor = ast })
        ["pop a lens off a stack"]       -- tag as internal
-   , external "include" (\ (fileName :: String) -> ShellState $ \ st -> includeFile fileName st)
+   , external "include" (\ (fileName :: String) -> ShellState' $ \ st -> includeFile fileName st)
         ["include <filename>: includes a shell command file"]
    ]
 
-showRenderers :: ShellCommand
+showRenderers :: QueryFun
 showRenderers = Message $ "set-renderer " ++ show (map fst finalRenders)
 
-changeRenderer :: String -> ShellCommand
+changeRenderer :: String -> ShellEffect
 changeRenderer renderer = ShellState $ \ st ->
         case lookup renderer finalRenders of
           Nothing -> return st          -- should fail with message
@@ -195,7 +229,7 @@ pretty st = case M.lookup (cl_pretty st) pp_dictionary of
                 Just pp -> pp (cl_pretty_opts st)
                 Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty st ++ ">>")
 
-showFocus :: (MonadIO m) => StateT CommandLineState m ()
+showFocus :: (MonadIO m) => CLM m ()
 showFocus = do
     st <- get
     liftIO ((do
@@ -224,6 +258,7 @@ moveLocally D (ScopePath ns)             = ScopePath (0:ns)
 moveLocally U (ScopePath (_:ns))         = ScopePath ns
 moveLocally L (ScopePath (n:ns)) | n > 0 = ScopePath ((n-1):ns)
 moveLocally R (ScopePath (n:ns))         = ScopePath ((n+1):ns)
+moveLocally T _                          = ScopePath []
 moveLocally _ p                          = p
 
 -- ascendDescentPath :: DescentPath -> Maybe (Int, DescentPath)
@@ -237,7 +272,7 @@ moveLocally _ p                          = p
 
 -------------------------------------------------------------------------------
 
-type CLM a = StateT CommandLineState (InputT IO) a
+type CLM m a = StateT CommandLineState m a
 
 data CommandLineState = CommandLineState
         { cl_pretty      :: String           -- ^ which pretty printer to use
@@ -262,9 +297,6 @@ commandLine behavior modGuts = do
                    , so_far `isPrefixOf` cmd
                    ]
 
-
-
-
     flip scopedKernel modGuts $ \ skernel sast -> do
         -- recurse using the command line, starting with showing the first focus
 --        evalStateT (runInputT defaultSettings (showFocus >> loop)) $ undefined
@@ -275,7 +307,7 @@ commandLine behavior modGuts = do
                         $ CommandLineState "clean" def sast unicodeConsole 80 False dict skernel)
         return ()
 
-loop :: (MonadIO m, m ~ InputT IO) => StateT CommandLineState m ()
+loop :: (MonadIO m, m ~ InputT IO) => CLM m ()
 loop = do
     st <- get
     liftIO $ print (cl_pretty st, cl_cursor st)
@@ -283,7 +315,7 @@ loop = do
                  then liftIO $ getNavCmd
                  else lift $ getInputLine "hermit> "
     case maybeLine of
-        Nothing             -> kernelAct Resume
+        Nothing             -> performMetaCommand Resume
         Just ('-':'-':_msg) -> loop
         Just line           ->
             if all isSpace line
@@ -293,20 +325,19 @@ loop = do
                         Right stmts -> evalStmts stmts
                     loop
 
-evalStmts :: (MonadIO m) => [StmtH ExprH] -> StateT CommandLineState m ()
+evalStmts :: (MonadIO m) => [StmtH ExprH] -> CLM m ()
 evalStmts = mapM_ evalExpr . scopes
     where scopes :: [StmtH ExprH] -> [ExprH]
           scopes [] = []
           scopes (ExprH e:ss) = e : scopes ss
           scopes (ScopeH s:ss) = (CmdName "{" : scopes s) ++ [CmdName "}"] ++ scopes ss
 
-evalExpr :: (MonadIO m) => ExprH -> StateT CommandLineState m ()
+evalExpr :: (MonadIO m) => ExprH -> CLM m ()
 evalExpr expr = do
     dict <- gets cl_dict
     case interpExprH
                 dict
-                (interpShellCommand
-                   ++  map (fmap KernelCommand) interpKernelCommand)
+                interpShellCommand
                 expr of
             Left msg  -> liftIO $ putStrLn msg
             Right cmd -> do
@@ -314,26 +345,46 @@ evalExpr expr = do
                 -- execute command, which may change the AST or Lens
                 act cmd
 
+
 -------------------------------------------------------------------------------
 
 -- TODO: fix to ring bell if stuck
-act :: (MonadIO m) => ShellCommand -> StateT CommandLineState m ()
-act (ShellState f) = get >>= liftIO . f >>= put >> showFocus
+act :: (MonadIO m) => ShellCommand -> CLM m ()
+act (AstEffect effect) = performAstEffect effect
+act (ShellEffect effect) = performShellEffect effect
+act (QueryFun query) = performQuery query
+act (MetaCommand meta) = performMetaCommand meta
 
-act Status = do
-    st <- get
-    liftIO $ do
-        ps <- pathS (cl_kernel st) (cl_cursor st)
-        putStrLn $ "Paths: " ++ show ps
-    showFocus
 
-act (PushFocus ls) = do
+{-
+act (SetPretty pp) = do
+    maybe (liftIO $ putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary))
+          (const $ modify $ \ st -> st { cl_pretty = pp })
+          (M.lookup pp pp_dictionary)
+-}
+
+-- TODO: This needs revisited
+-------------------------------------------------------------------------------
+
+performAstEffect :: (MonadIO m) => AstEffect -> CLM m ()
+performAstEffect (Apply rr) = do
     st <- get
-    ast <- liftIO $ modPathS (cl_kernel st) (cl_cursor st) (++ ls)
+    -- something changed (you've applied)
+    ast' <- liftIO $ (do ast' <- applyS (cl_kernel st) (cl_cursor st) rr
+                         return $ Right ast')
+                           `catch` \ msg -> return $ Left $ "Error thrown: " ++ msg
+    either (liftIO . putStrLn) (\ast' -> do put st { cl_cursor = ast' }
+                                            showFocus
+                                            return ()) ast'
+performAstEffect (Pathfinder t) = do
+    st <- get
+    -- An extension to the Path
+    ast <- liftIO $ do
+        p <- queryS (cl_kernel st) (cl_cursor st) t `catch` (\ msg -> (putStrLn $ "Error thrown: " ++ msg) >> return [])
+        modPathS (cl_kernel st) (cl_cursor st) (++ p)
     put st { cl_cursor = ast }
     showFocus
-
-act (Direction dir) = do
+performAstEffect (Direction dir) = do
     st <- get
     ast <- liftIO $ do
         child_count <- queryS (cl_kernel st) (cl_cursor st) numChildrenT
@@ -342,25 +393,42 @@ act (Direction dir) = do
     put st { cl_cursor = ast }
     -- something changed, to print
     showFocus
-
--- note, this can't break out of { }'s now... should we change that?
-act SuperPopFocus = do
+performAstEffect (ShellState' f) = get >>= liftIO . f >>= put >> showFocus
+performAstEffect (PushFocus ls) = do
     st <- get
-    ast <- liftIO $ modPathS (cl_kernel st) (cl_cursor st) (const [])
+    ast <- liftIO $ modPathS (cl_kernel st) (cl_cursor st) (++ ls)
     put st { cl_cursor = ast }
-    showFocus -- something changed, to print
+    showFocus
 
-act (Message msg) = liftIO (putStrLn msg)
+-------------------------------------------------------------------------------
 
-act (SetPretty pp) = do
-    maybe (liftIO $ putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary))
-          (const $ modify $ \ st -> st { cl_pretty = pp })
-          (M.lookup pp pp_dictionary)
+performShellEffect :: (MonadIO m) => ShellEffect -> CLM m ()
+performShellEffect (ShellState f) = get >>= liftIO . f >>= put >> showFocus
 
-act (KernelCommand cmd) = kernelAct cmd
+-------------------------------------------------------------------------------
 
--- TODO: This needs revisited
-act (Dump fileName _pp renderer w) = do
+performQuery :: (MonadIO m) => QueryFun -> CLM m ()
+performQuery (Query q) = do
+    st <- get
+    -- something changed, to print
+    liftIO ((queryS (cl_kernel st) (cl_cursor st) q >>= putStrLn)
+              `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg)
+performQuery Status = do
+    st <- get
+    liftIO $ do
+        ps <- pathS (cl_kernel st) (cl_cursor st)
+        putStrLn $ "Paths: " ++ show ps
+    showFocus
+
+
+performQuery (Message msg) = liftIO (putStrLn msg)
+
+-------------------------------------------------------------------------------
+
+performMetaCommand :: (MonadIO m) => MetaCommand -> CLM m ()
+performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
+performMetaCommand Resume = get >>= \st -> liftIO $ resumeS (cl_kernel st) (cl_cursor st)
+performMetaCommand (Dump fileName _pp renderer w) = do
     st <- get
     liftIO $ case (M.lookup (cl_pretty st) pp_dictionary,lookup renderer finalRenders) of
         (Just pp, Just r) -> do
@@ -370,37 +438,12 @@ act (Dump fileName _pp renderer w) = do
             hClose h
         _ -> do putStrLn "dump: bad pretty-printer or renderer option"
 
+
 -------------------------------------------------------------------------------
 
-kernelAct :: (MonadIO m) => KernelCommand -> StateT CommandLineState m ()
-kernelAct Abort  = gets cl_kernel >>= (liftIO . abortS)
-kernelAct Resume = get >>= \st -> liftIO $ resumeS (cl_kernel st) (cl_cursor st)
 
-kernelAct (Query q) = do
-    st <- get
-    -- something changed, to print
-    liftIO ((queryS (cl_kernel st) (cl_cursor st) q >>= putStrLn)
-              `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg)
-    -- same state
 
-kernelAct (Apply rr) = do
-    st <- get
-    -- something changed (you've applied)
-    ast' <- liftIO $ (do ast' <- applyS (cl_kernel st) (cl_cursor st) rr
-                         return $ Right ast')
-                           `catch` \ msg -> return $ Left $ "Error thrown: " ++ msg
-    either (liftIO . putStrLn) (\ast' -> do put st { cl_cursor = ast' }
-                                            showFocus
-                                            return ()) ast'
 
-kernelAct (Pathfinder t) = do
-    st <- get
-    -- An extension to the Path
-    ast <- liftIO $ do
-        p <- queryS (cl_kernel st) (cl_cursor st) t `catch` (\ msg -> (putStrLn $ "Error thrown: " ++ msg) >> return [])
-        modPathS (cl_kernel st) (cl_cursor st) (++ p)
-    put st { cl_cursor = ast }
-    showFocus
 
 newtype UnicodeTerminal = UnicodeTerminal (Handle -> Maybe Path -> IO ())
 
