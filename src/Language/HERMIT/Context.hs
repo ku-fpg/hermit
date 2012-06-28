@@ -1,7 +1,9 @@
 module Language.HERMIT.Context
        (
+         -- * HERMIT Bindings
          HermitBinding(..)
        , hermitBindingDepth
+         -- * The HERMIT Context
        , Context(hermitBindings,hermitDepth,hermitPath,hermitModGuts)
        , initContext
        , (@@)
@@ -22,10 +24,10 @@ import Language.KURE
 
 -- | HERMIT\'s representation of variable bindings.
 data HermitBinding
-        = BIND Int Bool CoreExpr  -- ^ Binding depth, whether it is recursive, and the bound value (cannot be inlined without checking for scoping issues).
+        = BIND Int Bool CoreExpr  -- ^ Binding depth, whether it is recursive, and the bound value (which cannot be inlined without checking for scoping issues).
         | LAM Int                 -- ^ For a lambda binding you only know the depth.
 
--- | The depth of a binding.
+-- | Get the depth of a binding.
 hermitBindingDepth :: HermitBinding -> Int
 hermitBindingDepth (LAM d)      = d
 hermitBindingDepth (BIND d _ _) = d
@@ -44,14 +46,15 @@ data Context = Context
 
 ------------------------------------------------------------------------
 
+-- | The HERMIT context stores an 'AbsolutePath' to the current node in the tree.
 instance PathContext Context where
   contextPath = hermitPath
 
--- | The initial (empty) HERMIT context.
+-- | Create the initial HERMIT context by providing a 'ModGuts'.
 initContext :: ModGuts -> Context
 initContext = Context empty 0 rootAbsPath
 
--- | Update the context by extending the 'AbsolutePath' to the specified child.
+-- | Update the context by extending the stored 'AbsolutePath' to a child.
 (@@) :: Context -> Int -> Context
 (@@) env n = env { hermitPath = extendAbsPath n (hermitPath env) }
 

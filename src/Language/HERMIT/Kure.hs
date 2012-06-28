@@ -1,9 +1,15 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections #-}
 
 module Language.HERMIT.Kure
-       ( module Language.KURE
+       (
+       -- * KURE Modules
+
+       -- | All the required functionality of KURE is exported here, so other modules do not need to import KURE directly.
+         module Language.KURE
        , module Language.KURE.Injection
        -- * Synonyms
+
+       -- | In HERMIT, 'Translate', 'Rewrite' and 'Lens' always operate the same context and monad.
        , TranslateH
        , RewriteH
        , LensH
@@ -64,7 +70,7 @@ type TranslateH a b = Translate Context HermitM a b
 type RewriteH a = Rewrite Context HermitM a
 type LensH a b = Lens Context HermitM a b
 
--- | Identity 'RewriteH'.
+-- | A synonym for the identity rewrite.  Convienient to avoid importing Control.Category.
 idR :: RewriteH a
 idR = Control.Category.id
 
@@ -84,6 +90,8 @@ data CoreDef = Def Id CoreExpr
 defToRecBind :: [CoreDef] -> CoreBind
 defToRecBind = Rec . map (\ (Def v e) -> (v,e))
 
+-- | Core is the sum type of all nodes in the AST that we wish to be able to traverse.
+--   All 'Node' instances define 'Core' to be the 'Generic' type.
 data Core = ModGutsCore  ModGuts
           | ProgramCore  CoreProgram
           | BindCore     CoreBind

@@ -1,5 +1,6 @@
 module Language.HERMIT.Monad
           (
+            -- * The HERMIT Monad
             HermitM
           , runHM
           , liftCoreM
@@ -18,7 +19,7 @@ import qualified Language.Haskell.TH as TH
 
 ----------------------------------------------------------------------------
 
--- | The HERMIT monad.
+-- | The HERMIT monad is kept abstract.
 newtype HermitM a = HermitM {runHermitM :: CoreM (KureMonad a)}
 
 -- | Eliminator for 'HermitM'.

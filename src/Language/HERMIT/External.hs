@@ -32,7 +32,7 @@ data CmdTag = CaseCmd       -- works on case statements
             | Shell         -- Shell commands
             | Slow          -- this command is slow
             | Unimplemented
-            -- | Other String
+            -- Other String
             -- etc
     deriving (Eq, Show, Read)
 
