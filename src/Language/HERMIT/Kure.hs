@@ -51,7 +51,7 @@ where
 
 import GhcPlugins hiding (empty)
 
-import Language.KURE hiding (catch)
+import Language.KURE
 import Language.KURE.Injection
 import Language.KURE.Utilities
 
@@ -161,7 +161,7 @@ instance Node ModGuts where
 
 instance Walker Context HermitM ModGuts where
   childL 0 = lens $ modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
-  childL n = failure (missingChild n)
+  childL n = failT (missingChild n)
 
 -- | Slightly different to the others; passes in *all* of the original to the reconstruction function.
 modGutsT :: TranslateH CoreProgram a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
@@ -186,7 +186,7 @@ instance Node CoreProgram where
 instance Walker Context HermitM CoreProgram where
   childL 0 = lens $ consBindT exposeT idR (childL0of2 (:))
   childL 1 = lens $ consBindT idR exposeT (childL1of2 (:))
-  childL n = failure (missingChild n)
+  childL n = failT (missingChild n)
 
   allT t = nilT mempty
         <+ consBindT (extractT t) (extractT t) mappend
@@ -288,7 +288,7 @@ instance Node CoreDef where
 
 instance Walker Context HermitM CoreDef where
   childL 0 = lens $ defT exposeT (childL1of2 Def)
-  childL n = failure (missingChild n)
+  childL n = failT (missingChild n)
 
 defT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreDef b
 defT t f = translate $ \ c (Def v e) -> f v <$> apply t (c @@ 0) e
@@ -310,7 +310,7 @@ instance Node CoreAlt where
 
 instance Walker Context HermitM CoreAlt where
   childL 0 = lens $ altT exposeT (childL2of3 (,,))
-  childL n = failure (missingChild n)
+  childL n = failT (missingChild n)
 
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
 altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (foldr addLambdaBinding c bs @@ 0) e
