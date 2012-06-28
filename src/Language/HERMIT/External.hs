@@ -9,7 +9,7 @@ import Data.List
 
 import qualified Language.Haskell.TH as TH
 
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 
 -----------------------------------------------------------------
 

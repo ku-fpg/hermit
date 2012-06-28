@@ -14,7 +14,7 @@ import qualified Data.Map as M
 import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.External
-import Language.HERMIT.HermitExpr
+import Language.HERMIT.Expr
 
 interpExprH :: M.Map String [Dynamic] -> [Interp a] -> ExprH -> Either String a
 interpExprH env interps expr =

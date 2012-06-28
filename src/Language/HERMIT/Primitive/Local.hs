@@ -3,8 +3,8 @@ module Language.HERMIT.Primitive.Local where
 
 import GhcPlugins hiding (freeVars)
 
-import Language.HERMIT.HermitKure
-import Language.HERMIT.HermitMonad
+import Language.HERMIT.Kure
+import Language.HERMIT.Monad
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.GHC

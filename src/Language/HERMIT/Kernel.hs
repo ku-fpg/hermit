@@ -8,9 +8,9 @@ module Language.HERMIT.Kernel
 
 import GhcPlugins
 
-import Language.HERMIT.HermitKure
-import Language.HERMIT.HermitEnv
-import Language.HERMIT.HermitMonad
+import Language.HERMIT.Context
+import Language.HERMIT.Monad
+import Language.HERMIT.Kure
 import Language.HERMIT.GHC
 
 import qualified Data.Map as M
@@ -81,12 +81,12 @@ hermitKernel callback modGuts = do
                                       syn' <- liftIO $ takeMVar syntax_names
                                       return $ Right (syn',M.insert syn' core' env))
                                   (\ m -> return $ Left m)
-                                  (apply (extractR rr) (initHermitEnv core) core)
+                                  (apply (extractR rr) (initContext core) core)
                 , queryK = \ name q -> sendReq $ \ env -> find name env fail' $ \ core ->
                              runHM
                                   (\ reply -> return  $ Right (reply,env))
                                   (\ m -> return $ Left m)
-                                  (apply (extractT q) (initHermitEnv core) core)
+                                  (apply (extractT q) (initContext core) core)
                 , deleteK = \ name -> sendReq $ \ env -> find name env fail' $ \ _ ->
                              return $ Right ((), M.delete name env)
                 , listK = sendReq $ \ env -> return $ Right (M.keys env,env)

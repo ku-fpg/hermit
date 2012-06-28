@@ -8,7 +8,7 @@ import qualified Data.IntMap as I
 
 import GhcPlugins
 
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 import Language.HERMIT.Kernel
 
 data ScopedKernel = ScopedKernel

@@ -13,7 +13,7 @@ import Data.Maybe
 
 import GhcPlugins
 
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 import Language.HERMIT.External
 
 --import qualified Language.HERMIT.Primitive.Command as Command

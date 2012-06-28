@@ -2,7 +2,7 @@ module Language.HERMIT.Primitive.Consider where
 
 import GhcPlugins as GHC
 
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 

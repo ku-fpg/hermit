@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections #-}
 
-module Language.HERMIT.HermitKure
+module Language.HERMIT.Kure
        ( module Language.KURE
        , module Language.KURE.Injection
        -- * Synonyms
@@ -49,8 +49,8 @@ import Language.KURE hiding (catch)
 import Language.KURE.Injection
 import Language.KURE.Utilities
 
-import Language.HERMIT.HermitEnv
-import Language.HERMIT.HermitMonad
+import Language.HERMIT.Context
+import Language.HERMIT.Monad
 
 import Control.Applicative
 import qualified Control.Category
@@ -60,9 +60,9 @@ import Data.Monoid
 
 ---------------------------------------------------------------------
 
-type TranslateH a b = Translate HermitEnv HermitM a b
-type RewriteH a = Rewrite HermitEnv HermitM a
-type LensH a b = Lens HermitEnv HermitM a b
+type TranslateH a b = Translate Context HermitM a b
+type RewriteH a = Rewrite Context HermitM a
+type LensH a b = Lens Context HermitM a b
 
 -- | Identity 'RewriteH'.
 idR :: RewriteH a
@@ -106,7 +106,7 @@ instance Node Core where
 -- Defining Walker instances for the Generic type 'Core' is almost entirely automated by KURE.
 -- Unfortunately, you still need to pattern match on the 'Core' data type.
 
-instance Walker HermitEnv HermitM Core where
+instance Walker Context HermitM Core where
   childL n = lens $ translate $ \ c core -> case core of
           ModGutsCore x -> childLgeneric n c x
           ProgramCore x -> childLgeneric n c x
@@ -151,7 +151,7 @@ instance Node ModGuts where
 
   numChildren _ = 1
 
-instance Walker HermitEnv HermitM ModGuts where
+instance Walker Context HermitM ModGuts where
   childL 0 = lens $ modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
   childL n = failure (missingChild n)
 
@@ -175,7 +175,7 @@ instance Node CoreProgram where
   -- we consider only the head and tail to be interesting children
   numChildren bds = min 2 (length bds)
 
-instance Walker HermitEnv HermitM CoreProgram where
+instance Walker Context HermitM CoreProgram where
   childL 0 = lens $ consBindT exposeT idR (childL0of2 (:))
   childL 1 = lens $ consBindT idR exposeT (childL1of2 (:))
   childL n = failure (missingChild n)
@@ -195,7 +195,7 @@ nilT b = contextfreeT $ \ e -> case e of
 
 consBindT' :: TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH [CoreBind] b
 consBindT' t1 t2 f = translate $ \ c e -> case e of
-        bd:bds -> f (apply t1 (c @@ 0) bd) (apply t2 (addHermitBinding bd c @@ 1) bds)
+        bd:bds -> f (apply t1 (c @@ 0) bd) (apply t2 (addBinding bd c @@ 1) bds)
         _      -> fail "no match for consBind"
 
 consBindT :: TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (a1 -> a2 -> b) -> TranslateH [CoreBind] b
@@ -220,7 +220,7 @@ instance Node CoreBind where
   numChildren (NonRec _ _) = 1
   numChildren (Rec defs)   = length defs
 
-instance Walker HermitEnv HermitM CoreBind where
+instance Walker Context HermitM CoreBind where
   childL n = lens $ setFailMsg (missingChild n) $
                case n of
                  0 -> nonrec <+ rec
@@ -251,7 +251,7 @@ nonRecR r = nonRecT r NonRec
 recT' :: (Int -> TranslateH CoreDef a) -> ([HermitM a] -> HermitM b) -> TranslateH CoreBind b
 recT' t f = translate $ \ c e -> case e of
          Rec bds -> -- Notice how we add the scoping bindings here *before* decending into each individual definition.
-                    let c' = addHermitBinding (Rec bds) c
+                    let c' = addBinding (Rec bds) c
                      in f [ apply (t n) (c' @@ n) (Def v e') -- here we convert from (Id,CoreExpr) to CoreDef
                           | ((v,e'),n) <- zip bds [0..]
                           ]
@@ -278,7 +278,7 @@ instance Node CoreDef where
 
   numChildren _ = 1
 
-instance Walker HermitEnv HermitM CoreDef where
+instance Walker Context HermitM CoreDef where
   childL 0 = lens $ defT exposeT (childL1of2 Def)
   childL n = failure (missingChild n)
 
@@ -300,12 +300,12 @@ instance Node CoreAlt where
 
   numChildren _ = 1
 
-instance Walker HermitEnv HermitM CoreAlt where
+instance Walker Context HermitM CoreAlt where
   childL 0 = lens $ altT exposeT (childL2of3 (,,))
   childL n = failure (missingChild n)
 
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
-altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (foldr addHermitEnvLambdaBinding c bs @@ 0) e
+altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (foldr addLambdaBinding c bs @@ 0) e
 
 altR :: RewriteH CoreExpr -> RewriteH CoreAlt
 altR r = altT r (,,)
@@ -331,7 +331,7 @@ instance Node CoreExpr where
   numChildren (Type _)        = 0
   numChildren (Coercion _)    = 0
 
-instance Walker HermitEnv HermitM CoreExpr where
+instance Walker Context HermitM CoreExpr where
 
   childL n = lens $ setFailMsg (missingChild n) $
                case n of
@@ -415,7 +415,7 @@ appAnyR r1 r2 = appT' (attemptR r1) (attemptR r2) (attemptAny2 App)
 
 lamT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreExpr b
 lamT t f = translate $ \ c e -> case e of
-        Lam b e1 -> f b <$> apply t (addHermitEnvLambdaBinding b c @@ 0) e1
+        Lam b e1 -> f b <$> apply t (addLambdaBinding b c @@ 0) e1
         _        -> fail "no match for Lam"
 
 lamR :: RewriteH CoreExpr -> RewriteH CoreExpr
@@ -424,7 +424,7 @@ lamR r = lamT r Lam
 
 letT' :: TranslateH CoreBind a1 -> TranslateH CoreExpr a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH CoreExpr b
 letT' t1 t2 f = translate $ \ c e -> case e of
-        Let bds e1 -> f (apply t1 (c @@ 0) bds) (apply t2 (addHermitBinding bds c @@ 1) e1)
+        Let bds e1 -> f (apply t1 (c @@ 0) bds) (apply t2 (addBinding bds c @@ 1) e1)
                 -- use *original* env, because the bindings are self-binding,
                 -- if they are recursive. See allR (Rec ...) for details.
         _         -> fail "no match for Let"
@@ -444,7 +444,7 @@ caseT' :: TranslateH CoreExpr a1
       -> (Id -> Type -> HermitM a1 -> [HermitM a2] -> HermitM b)
       -> TranslateH CoreExpr b
 caseT' t ts f = translate $ \ c e -> case e of
-         Case e1 b ty alts -> f b ty (apply t (c @@ 0) e1) $ let c' = addHermitBinding (NonRec b e1) c
+         Case e1 b ty alts -> f b ty (apply t (c @@ 0) e1) $ let c' = addBinding (NonRec b e1) c
                                                                  in [ apply (ts n) (c' @@ (n+1)) alt
                                                                     | (alt,n) <- zip alts [0..]
                                                                     ]

@@ -7,7 +7,7 @@ import Data.List
 import Control.Arrow
 import Control.Applicative
 
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Common

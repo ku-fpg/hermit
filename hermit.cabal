@@ -38,16 +38,16 @@ Library
        HERMIT
 
        Language.HERMIT
+       Language.HERMIT.Context
        Language.HERMIT.Dictionary
+       Language.HERMIT.Expr
        Language.HERMIT.External
-       Language.HERMIT.HermitEnv
-       Language.HERMIT.HermitExpr
-       Language.HERMIT.HermitKure
-       Language.HERMIT.HermitMonad
        Language.HERMIT.Kernel
        Language.HERMIT.Kernel.Command
        Language.HERMIT.Kernel.Scoped
+       Language.HERMIT.Kure
        Language.HERMIT.Interp
+       Language.HERMIT.Monad
 
        Language.HERMIT.Plugin
 

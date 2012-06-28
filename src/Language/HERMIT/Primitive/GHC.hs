@@ -11,7 +11,7 @@ import qualified Data.Map as Map
 import Language.HERMIT.Primitive.Debug
 import Language.HERMIT.Primitive.Consider
 
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 import Language.HERMIT.External
 -- import Language.HERMIT.GHC
 

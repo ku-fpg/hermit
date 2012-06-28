@@ -1,6 +1,6 @@
 -- Expr is the *untyped* command and control language for HERMIT.
 
-module Language.HERMIT.HermitExpr
+module Language.HERMIT.Expr
         ( ExprH(..)
         , StmtH(..)
         , parseExprH
@@ -26,6 +26,7 @@ data StmtH expr
 
 data Box e = InfixableExpr e | Box e
         deriving Show
+
 ---------------------------------------------
 
 -- Cheap and cheerful parser. Pretty hacky for now

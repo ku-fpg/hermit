@@ -18,10 +18,10 @@ import Data.Dynamic
 import qualified Data.Map as M
 import Data.Maybe
 
-import Language.HERMIT.HermitExpr
+import Language.HERMIT.Expr
 import Language.HERMIT.External
 import Language.HERMIT.Interp
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.PrettyPrinter
 import Language.HERMIT.Primitive.Consider

@@ -3,7 +3,7 @@ module Language.HERMIT.Primitive.Debug where
 
 import GhcPlugins as GHC
 
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.PrettyPrinter
 

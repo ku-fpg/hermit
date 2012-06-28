@@ -6,7 +6,7 @@ import Control.Arrow hiding ((<+>))
 import Data.Char (isSpace)
 
 import qualified GhcPlugins as GHC
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 import Language.HERMIT.PrettyPrinter
 
 import Text.PrettyPrint.MarkedHughesPJ as PP

@@ -7,7 +7,7 @@ import Data.Char (isSpace)
 import Data.Traversable (sequenceA)
 
 import qualified GhcPlugins as GHC
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 import Language.HERMIT.PrettyPrinter
 import Language.HERMIT.GHC
 

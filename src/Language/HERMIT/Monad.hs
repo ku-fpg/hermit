@@ -1,4 +1,4 @@
-module Language.HERMIT.HermitMonad
+module Language.HERMIT.Monad
           (
             HermitM
           , runHM

@@ -9,7 +9,7 @@ import Data.Aeson.Types
 import qualified Data.Text as T
 
 import qualified GhcPlugins as GHC
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 import Language.HERMIT.PrettyPrinter
 
 corePrettyH :: PrettyOptions -> TranslateH Core Value

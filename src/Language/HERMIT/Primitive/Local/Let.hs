@@ -5,8 +5,8 @@ import GhcPlugins
 
 import Data.List
 
-import Language.HERMIT.HermitKure
-import Language.HERMIT.HermitMonad
+import Language.HERMIT.Kure
+import Language.HERMIT.Monad
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Common

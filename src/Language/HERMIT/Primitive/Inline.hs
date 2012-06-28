@@ -5,8 +5,8 @@ import GhcPlugins
 import Control.Arrow
 
 import Language.HERMIT.Primitive.Consider
-import Language.HERMIT.HermitKure
-import Language.HERMIT.HermitEnv
+import Language.HERMIT.Kure
+import Language.HERMIT.Context
 import Language.HERMIT.External
 
 import qualified Language.Haskell.TH as TH

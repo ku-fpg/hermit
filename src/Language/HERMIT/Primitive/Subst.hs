@@ -7,8 +7,8 @@ import qualified Data.List as List
 
 import Control.Arrow
 
-import Language.HERMIT.HermitMonad
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Monad
+import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.Primitive.GHC(freeIds)
 

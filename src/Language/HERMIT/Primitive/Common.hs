@@ -9,7 +9,7 @@ import Control.Arrow
 import Data.List
 import Data.Monoid
 
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Kure
 
 import Language.HERMIT.Primitive.GHC
 

@@ -1,0 +1,104 @@
+module Language.HERMIT.Context
+       (
+         HermitBinding(..)
+       , hermitBindingDepth
+       , Context(hermitBindings,hermitDepth,hermitPath,hermitModGuts)
+       , initContext
+       , (@@)
+       , addBinding
+       , addLambdaBinding
+       , lookupHermitBinding
+       , listBindings
+       , boundIn
+) where
+
+import Prelude hiding (lookup)
+import GhcPlugins hiding (empty)
+import Data.Map
+
+import Language.KURE
+
+------------------------------------------------------------------------
+
+-- | HERMIT\'s representation of variable bindings.
+data HermitBinding
+        = BIND Int Bool CoreExpr  -- ^ Binding depth, whether it is recursive, and the bound value (cannot be inlined without checking for scoping issues).
+        | LAM Int                 -- ^ For a lambda binding you only know the depth.
+
+-- | The depth of a binding.
+hermitBindingDepth :: HermitBinding -> Int
+hermitBindingDepth (LAM d)      = d
+hermitBindingDepth (BIND d _ _) = d
+
+------------------------------------------------------------------------
+
+-- | The HERMIT context, containing all bindings in scope and the current location in the AST.
+--   The bindings here are lazy by choice, so that we can avoid the cost
+--   of building the context if we never use it.
+data Context = Context
+        { hermitBindings :: Map Id HermitBinding    -- ^ all (important) bindings in scope
+        , hermitDepth    :: Int                     -- ^ depth of bindings
+        , hermitPath     :: AbsolutePath            -- ^ path to the current node from the root.
+        , hermitModGuts  :: ModGuts                 -- ^ the module
+        }
+
+------------------------------------------------------------------------
+
+instance PathContext Context where
+  contextPath = hermitPath
+
+-- | The initial (empty) HERMIT context.
+initContext :: ModGuts -> Context
+initContext = Context empty 0 rootAbsPath
+
+-- | Update the context by extending the 'AbsolutePath' to the specified child.
+(@@) :: Context -> Int -> Context
+(@@) env n = env { hermitPath = extendAbsPath n (hermitPath env) }
+
+-- | Add a GHC Core binding to the 'Context'.
+addBinding :: CoreBind -> Context -> Context
+addBinding (NonRec n e) env
+        = env { hermitBindings = insert n (BIND next_depth False e) (hermitBindings env)
+              , hermitDepth    = next_depth
+              }
+  where
+        next_depth = succ (hermitDepth env)
+addBinding (Rec bds) env
+        = env { hermitBindings = union bds_env (hermitBindings env)
+              , hermitDepth    = next_depth
+              }
+  where
+        next_depth = succ (hermitDepth env)
+        -- notice how all recursive binding in a binding group are at the same depth.
+        bds_env    = fromList
+                   [ (b,BIND next_depth True e)
+                   | (b,e) <- bds
+                   ]
+
+-- | Add a binding that you know nothing about, except that it may shadow something.
+-- If so, do not worry about it here, just remember the binding and the depth.
+-- When we want to inline a value from the environment,
+-- we then check to see what is free in the inlinee, and see
+-- if any of the frees will stop the validity of the inlining.
+addLambdaBinding :: Id -> Context -> Context
+addLambdaBinding n env
+        = env { hermitBindings = insert n (LAM next_depth) (hermitBindings env)
+              , hermitDepth    = next_depth
+              }
+  where
+        next_depth = succ (hermitDepth env)
+
+
+-- | Lookup the binding for an identifier in a 'Context'.
+lookupHermitBinding :: Id -> Context -> Maybe HermitBinding
+lookupHermitBinding n env = lookup n (hermitBindings env)
+
+-- | List all the identifiers bound in the 'Context'.
+listBindings :: Context -> [Id]
+listBindings = keys . hermitBindings
+
+-- | Determine if an identifier is bound in the 'Context'.
+boundIn :: Id -> Context -> Bool
+boundIn i c = i `elem` listBindings c
+
+------------------------------------------------------------------------

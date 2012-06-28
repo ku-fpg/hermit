@@ -10,9 +10,9 @@ import GhcPlugins as GHC hiding (varName)
 import Control.Applicative
 import Control.Arrow
 
-import Language.HERMIT.HermitEnv
-import Language.HERMIT.HermitMonad
-import Language.HERMIT.HermitKure
+import Language.HERMIT.Context
+import Language.HERMIT.Monad
+import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 import Language.HERMIT.Primitive.GHC
@@ -191,12 +191,12 @@ exprAutoRenameBinder =
     (do -- check if lambda
         Lam b _ <- idR
         frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreExpr [Var]
-        bound <- translate $ \ c _ -> return (boundInHermitScope c)
+        bound <- translate $ \ c _ -> return (listBindings c)
         exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> (childR 0 $ promoteR letSubstR))
  <+ (do -- check in Let
         Let (NonRec b _) _ <- idR
         frees <- freeVarsT :: TranslateH CoreExpr [Var]
-        bound <- translate $ \ c _ -> return (boundInHermitScope c)
+        bound <- translate $ \ c _ -> return (listBindings c)
         exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> (childR 0 $ promoteR letSubstR))
 
 altAutoRenameBinder :: RewriteH CoreAlt
@@ -204,7 +204,7 @@ altAutoRenameBinder = do
         -- check if alt
         (_,bs,_) <- idR
         frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreAlt [Var]
-        bound <- translate $ \ c _ -> return (boundInHermitScope c)
+        bound <- translate $ \ c _ -> return (listBindings c)
         altRenameBinder (inventNames (filter (\ i -> not (i `elem` bs)) (frees ++ bound))) >>> (childR 1 $ letSubstNR (length bs))
 
 -- remove N lets, please
