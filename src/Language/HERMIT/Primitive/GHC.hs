@@ -176,6 +176,7 @@ rulesToRewriteH rs = contextfreeT $ \ e -> do
         -- that will never match
         _rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
     -- Finally, we try match the rules
+    -- trace (showSDoc (ppr fn GhcPlugins.<+> ppr args $$ ppr rs)) $
     case lookupRule (const True) (const NoUnfolding) in_scope fn args rs of
         Nothing         -> fail "rule not matched"
         Just (rule,e')  -> return $ mkApps e' (drop (ruleArity rule) args)
