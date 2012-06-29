@@ -600,9 +600,8 @@ navigation whereTo st sess_st = do
              _ -> do
                  putStrLn $ "Can not step backwards (multiple choices, impossible!)"
                  return sess_st
+
 --------------------------------------------------------
-
-
 
 getNavCmd :: IO (Maybe String)
 getNavCmd = do
@@ -613,12 +612,12 @@ getNavCmd = do
         ec_in <- hGetEcho stdin
         hSetEcho stdin False
         putStr ("(navigation mode; use arrow keys, escape to quit, '?' for help)")
-        res <- readCh []
+        r <- readCh []
         putStr ("\n")
         hSetBuffering stdin b_in
         hSetBuffering stdout b_out
         hSetEcho stdin ec_in
-        return res
+        return r
   where
    readCh xs = do
         x <- getChar
@@ -633,10 +632,9 @@ getNavCmd = do
 
    res str _ = return (Just str)
 
-   cmds = [ ("\ESC"  , \ str ->
-                       do b <- hReady stdin
-                          if b then readCh str
-                               else res ":command-line" str)
+   cmds = [ ("\ESC" , \ str -> condM (hReady stdin)
+                                     (readCh str)
+                                     (return (Just ":command-line")))
           , ("\ESC[" , readCh)
           , ("\ESC[A", res "up")
           , ("\ESC[B", res "down")
