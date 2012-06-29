@@ -29,7 +29,7 @@ data CmdTag = Shell         -- Shell commands
             | Loop         -- Command may operate multiple times
             | Deep          -- O(n)
             | Shallow       -- O(1)
-            | Focus         -- uses path/lens to focus onto something
+            | Navigation    -- uses path/lens to focus onto something
             | Query         -- A question we ask,
             | Predicate     -- Something that passes or fails
             | Introduce     -- Introduce something, like a new name
@@ -72,7 +72,7 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
           , (Loop,        "Command may operate multiple times")
           , (Deep,         "Command may make a deep change, can be O(n)")
           , (Shallow,      "Command operates on local nodes only, O(1)")
-          , (Focus,        "Focus onto a subexpression")
+          , (Navigation,   "Navigate via focus, or directional command")
           , (Query,        "Questions we ask")
           , (Predicate,    "Something that passes or fails")
           , (Introduce,    "Introduce something, like a new name")

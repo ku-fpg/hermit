@@ -47,9 +47,9 @@ externals = map (.+ KURE)
    , external "innermost"  (innermostR :: RewriteH Core -> RewriteH Core)
        [ "a fixed-point traveral, starting with the innermost term" ] .+ Deep .+ Loop
    , external "focus"      (hfocusR :: TranslateH Core Path -> RewriteH Core -> RewriteH Core)
-       [ "apply a rewrite to a focal point"] .+ Focus .+ Deep
+       [ "apply a rewrite to a focal point"] .+ Navigation .+ Deep
    , external "focus"      (hfocusT :: TranslateH Core Path -> TranslateH Core String -> TranslateH Core String)
-       [ "apply a query at a focal point"] .+ Focus .+ Deep
+       [ "apply a query at a focal point"] .+ Navigation .+ Deep
    ]
 
 hfocusR :: TranslateH Core Path -> RewriteH Core -> RewriteH Core

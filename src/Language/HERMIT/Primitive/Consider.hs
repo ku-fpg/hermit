@@ -1,4 +1,4 @@
--- TODO: rename as Language.HERMIT.Primitive.Focus
+-- TODO: rename as Language.HERMIT.Primitive.Navigation
 module Language.HERMIT.Primitive.Consider where
 
 import GhcPlugins as GHC
@@ -13,7 +13,7 @@ import Control.Arrow
 import qualified Language.Haskell.TH as TH
 
 externals :: [External]
-externals = map (.+ Focus)
+externals = map (.+ Navigation)
             [
               external "consider" considerName
                 [ "consider '<v> focuses on a named binding <v>" ]

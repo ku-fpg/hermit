@@ -152,14 +152,6 @@ shell_externals = map (.+ Shell) $
        [ "move to the parent"]
    , external "down"            (Direction D)
        [ "move to the first child"]
-   , external "esc-D"            (Direction L)
-       [ "move to the next child"]
-   , external "esc-C"           (Direction R)
-       [ "move to the previous child"]
-   , external "esc-A"              (Direction U)
-       [ "move to the parent"]
-   , external "esc-B"            (Direction D)
-       [ "move to the first child"]
    , external ":navigate"        (SessionStateEffect $ \ _ st -> return $ st { cl_nav = True })
        [ "switch to navigate mode" ]
    , external ":command-line"    (SessionStateEffect $ \ _ st -> return $ st { cl_nav = False })
