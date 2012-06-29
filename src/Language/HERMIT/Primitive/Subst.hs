@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeFamilies, FlexibleInstances #-}
-
+-- TODO: remove this module
 module Language.HERMIT.Primitive.Subst where
 
 import GhcPlugins hiding (empty)
@@ -17,7 +17,9 @@ import qualified Language.Haskell.TH as TH
 import Prelude hiding (exp)
 
 externals :: [External]
-externals = map (.+ Experiment)
+externals = []
+{-
+map (.+ Experiment)
          [
            external "alpha" (promoteR alphaLambda :: RewriteH Core)
                 [ "Alpha rename (for Lambda's)."]
@@ -32,7 +34,7 @@ externals = map (.+ Experiment)
          , external "alpha-case" (promoteR alphaCase :: RewriteH Core)
                 [ "Alpha renaming for each alternative of a Case."]
          ]
-
+-}
 bindList :: Bind Id -> [Id]
 bindList (NonRec b _) = [b]
 

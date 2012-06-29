@@ -1,3 +1,4 @@
+-- TODO: rename as Language.HERMIT.Primitive.Focus
 module Language.HERMIT.Primitive.Consider where
 
 import GhcPlugins as GHC
@@ -12,18 +13,15 @@ import Control.Arrow
 import qualified Language.Haskell.TH as TH
 
 externals :: [External]
-externals = map ((.+ Lens) . (.+ TODO))
+externals = map (.+ Focus)
             [
               external "consider" considerName
-                [ "'consider <v>' focuses on a named binding <v>" ]
+                [ "consider '<v> focuses on a named binding <v>" ]
             , external "consider" considerConstruct
-                [ "'consider <c>' focuses on the first construct <c>.",
+                [ "consider <c> focuses on the first construct <c>.",
                   recognizedConsiderables]
             , external "rhs-of" rhsOf
                 [ "rhs-of 'name focuses into the right-hand-side of binding <v>" ]
-        -- This is in the wrong place
-            , external "var" (promoteR . var :: TH.Name -> RewriteH Core)
-                [ "var <v> succeeded for variable v, and fails otherwise"]
             ]
 
 -- focus on a binding group

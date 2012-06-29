@@ -55,6 +55,8 @@ externals modGuts = map ((.+ Experiment) . (.+ TODO))
                 [ "push a function <v> into argument" ]
          , external "unfold-rule" ((\ nm -> promoteR (rules rulesEnv nm >>> cleanupUnfold)) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ]
+         , external "var" (promoteR . var :: TH.Name -> RewriteH Core)
+                [ "var '<v> succeeded for variable v, and fails otherwise"] .+ Predicate
          ]
   where
           rulesEnv :: Map.Map String (RewriteH CoreExpr)

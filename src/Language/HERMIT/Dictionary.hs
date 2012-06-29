@@ -20,7 +20,6 @@ import Language.HERMIT.External
 import qualified Language.HERMIT.Primitive.Kure as Kure
 import qualified Language.HERMIT.Primitive.Consider as Consider
 import qualified Language.HERMIT.Primitive.Inline as Inline
-import qualified Language.HERMIT.Primitive.Subst as Subst
 import qualified Language.HERMIT.Primitive.Local as Local
 import qualified Language.HERMIT.Primitive.New as New
 import qualified Language.HERMIT.Primitive.Debug as Debug
@@ -40,7 +39,6 @@ prim_externals modGuts
                =    Kure.externals
                  ++ Consider.externals
                  ++ Inline.externals
-                 ++ Subst.externals
                  ++ Local.externals
                  ++ Debug.externals
                  ++ New.externals modGuts
@@ -55,16 +53,15 @@ dictionary externs = toDictionary externs'
   where
         msg = layoutTxt 60 (map (show . fst) dictionaryOfTags)
         externs' = externs ++
-                map (.+ Shell)
                 [ external ":help" (help_command externs' "help")
-                    [ "(this message)" ] .+ Help
+                    [ "(this message)" ] .+ Query .+ Shell
                 , external ":help" (help_command externs')
                     ([ ":help <command>|<category>|categories|all|<search-string>"
                      , "displays help about a command or category."
                      , "Multiple items may match."
                      , ""
                      , "categories: " ++ head msg
-                     ] ++ (map ("            " ++) (tail msg)))  .+ Help
+                     ] ++ (map ("            " ++) (tail msg)))  .+ Query .+ Shell
                 , bashExternal externs  .+ Eval .+ Deep .+ Loop
                 ]
 

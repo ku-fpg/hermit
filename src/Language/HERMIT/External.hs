@@ -24,21 +24,26 @@ type ExternalHelp = [String]
 -- a way of sub-dividing our confusing array of commands.
 
 data CmdTag = Shell         -- Shell commands
-            | Local         -- local thing, O(1)
             | Eval          -- the arrow of evaluation (reduces a term)
-            | GHC           -- a tunnel into GHC
             | KURE          -- a KURE command
-            | TODO          -- TODO check before the release
             | Loop         -- Command may operate multiple times
             | Deep          -- O(n)
             | Shallow       -- O(1)
             | Focus         -- uses path/lens to focus onto something
-            | Query         -- A question we ask
-            | Help          -- commands that provide help
+            | Query         -- A question we ask,
+            | Predicate     -- Something that passes or fails
+            | Introduce     -- Introduce something, like a new name
+            | Commute       -- Its all about the Commute
+            | PreCondition  -- operation has a precondition
+            | Debug         -- commands to help debugging
+
+            | TODO          -- TODO check before the release
 
 -- Unsure about these
+            | Local         -- local thing, O(1)
             | CaseCmd       -- works on case statements
             | Context       -- something that uses the context
+            | GHC           -- a tunnel into GHC
             | Experiment    -- things we are trying out
             | Lens          -- focuses into a specific node
             | LetCmd        -- works on let statements
@@ -59,17 +64,23 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
           -- These should give the user a clue about what the sub-commands
           -- might do
           [ (Shell,        "Shell-specific commands")
-          , (GHC,          "Commands that tunnel into GHC")
-          , (KURE,         "Commands the directly reflect the KURE DSL")
           , (Eval,         "The arrow of evaluation (reduces a term)")
+          , (KURE,         "Commands the directly reflect the KURE DSL")
+          , (Loop,        "Command may operate multiple times")
           , (Deep,         "Command may make a deep change, can be O(n)")
           , (Shallow,      "Command operates on local nodes only, O(1)")
-          , (TODO,         "TO BE assessed before a release")
-          , (Loop,        "Command may operate multiple times")
           , (Focus,        "Focus onto a subexpression")
           , (Query,        "Questions we ask")
-          , (Help,         "Commands that provide help and information")
+          , (Predicate,    "Something that passes or fails")
+          , (Introduce,    "Introduce something, like a new name")
+          , (Commute,      "Commute is when you swap nested terms")
+          , (PreCondition, "Operation has a (perhaps undocumented) precondition")
+          , (Debug,        "Commands specifically to help debugging")
+
+          , (TODO,         "TO BE assessed before a release")
+          , (GHC,          "Commands that tunnel into GHC")
           ]
+
 
 -- Unfortunately, record update syntax seems to associate to the right.
 -- This guy saves us some parens.

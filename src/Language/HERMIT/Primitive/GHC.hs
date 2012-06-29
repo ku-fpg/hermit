@@ -46,9 +46,9 @@ externals modGuts = map (.+ TODO)
          , external "apply-rule" (promoteR . rules rulesEnv :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ] .+ Shallow
          , external "apply-rule" (rules_help rulesEnv)
-                [ "list rules that can be used" ] .+ Help
+                [ "list rules that can be used" ] .+ Query
          , external "compare-values" compareValues
-                ["compare's the rhs of two values"]
+                ["compare's the rhs of two values"] .+ Query .+ Predicate
          ]
   where
           rulesEnv :: Map.Map String (RewriteH CoreExpr)

@@ -18,7 +18,7 @@ import Language.HERMIT.Primitive.Subst hiding (letSubstR)
 ------------------------------------------------------------------------------
 
 externals :: [External]
-externals = map (.+ CaseCmd) $
+externals =
          [ -- I'm not sure this is possible. In core, v2 can only be a Constructor, Lit, or DEFAULT
            -- In the last case, v1 is already inlined in e. So we can't construct v2 as a Var.
          --   external "case-elimination" (promoteR $ not_defined "case-elimination" :: RewriteH Core)
@@ -30,16 +30,16 @@ externals = map (.+ CaseCmd) $
          -- , external "case-merging" (promoteR $ not_defined "case-merging" :: RewriteH Core)
          --             [ "case v of ...; d -> case v of alt -> e ==> case v of ...; alt -> e[v/d]" ] .+ Unimplemented .+ Eval
            external "let-float-case" (promoteR letFloatCase :: RewriteH Core)
-                     [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]                           .+ Eval
+                     [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]  .+ Commute .+ Shallow .+ Eval
          , external "case-float-app" (promoteR caseFloatApp :: RewriteH Core)
-                     [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]                                       .+ Eval
+                     [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow
          , external "case-float-arg" (promoteR caseFloatArg :: RewriteH Core)
-                     [ "f (case s of alt -> e) ==> case s of alt -> f e" ] -- for paper                                        .+ Eval
+                     [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
          , external "case-float-case" (promoteR caseFloatCase :: RewriteH Core)
-                     [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Eval
+                     [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval
          , external "case-reduce" (promoteR caseReduce :: RewriteH Core)
                      [ "case-of-known-constructor"
-                     , "case C v1..vn of C w1..wn -> e ==> e[v1/w1..vn/wn]" ]                                      .+ Eval
+                     , "case C v1..vn of C w1..wn -> e ==> e[v1/w1..vn/wn]" ] .+ Shallow .+ Eval
          ]
 
 -- not_defined :: String -> RewriteH CoreExpr

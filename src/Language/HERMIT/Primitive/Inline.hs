@@ -14,9 +14,9 @@ import qualified Language.Haskell.TH as TH
 externals :: [External]
 externals = map ((.+ Context) . (.+ TODO))
             [ external "inline" (promoteR inline :: RewriteH Core)
-                [ "(Var n) ==> <defn of n>, fails otherwise" ]
+                [ "(Var n) ==> <defn of n>, fails otherwise" ].+ Eval .+ Deep .+ TODO
             , external "inline" (promoteR . inlineName :: TH.Name -> RewriteH Core)
-                [ "Restrict inlining to a given name" ]
+                [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
             ]
 
 inlineName :: TH.Name -> RewriteH CoreExpr
@@ -25,6 +25,7 @@ inlineName nm = var nm >>> inline
 -- | The implementation of inline, an important transformation.
 -- This *only* works on a Var of the given name. It can trivially
 -- be prompted to more general cases.
+-- TODO: check the scoping for the inline operation; we can mess things up here.
 inline :: RewriteH CoreExpr
 inline = rewrite $ \ c e -> case e of
     Var n0 -> -- A candiate for inlining
