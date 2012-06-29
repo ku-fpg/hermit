@@ -8,7 +8,7 @@ import Language.HERMIT.External
 import Language.HERMIT.PrettyPrinter
 
 externals :: [External]
-externals =
+externals = map (.+ TODO)
          [ external "trace" (traceR :: String -> RewriteH Core)
                 [ "give a side-effect message as output when processing this command" ]
          , external "observe" (observeR :: String -> RewriteH Core)

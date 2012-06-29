@@ -23,11 +23,11 @@ externals = map (.+ KURE)
    , external "try"        (tryR :: RewriteH Core -> RewriteH Core)
        [ "tries a rewrite, and performs an identity if this rewrite fails" ]
    , external "repeat"     (repeatR :: RewriteH Core -> RewriteH Core)
-       [ "repeats a rewrite until it would fail" ] .+ Cycle
+       [ "repeats a rewrite until it would fail" ] .+ Loop
    , external "all"        (allR :: RewriteH Core -> RewriteH Core)
-       [ "apply a rewrite to all children of the node, requiring success at every child" ]
+       [ "apply a rewrite to all children of the node, requiring success at every child" ] .+ Shallow
    , external "any"        (anyR :: RewriteH Core -> RewriteH Core)
-       [ "apply a rewrite to all children of the node, requiring success for at least one child" ]
+       [ "apply a rewrite to all children of the node, requiring success for at least one child" ] .+ Shallow
    , external "all-bu"     (allbuR :: RewriteH Core -> RewriteH Core)
        [ "promotes a rewrite to operate over an entire tree in bottom-up order, requiring success at each node" ] .+ Deep
    , external "all-td"     (alltdR :: RewriteH Core -> RewriteH Core)
@@ -45,7 +45,7 @@ externals = map (.+ KURE)
    , external "prune-td"   (prunetdR :: RewriteH Core -> RewriteH Core)
        [ "attempt to apply a rewrite in a top-down manner, prunning at successful rewrites" ] .+ Deep
    , external "innermost"  (innermostR :: RewriteH Core -> RewriteH Core)
-       [ "a fixed-point traveral, starting with the innermost term" ] .+ Deep .+ Cycle
+       [ "a fixed-point traveral, starting with the innermost term" ] .+ Deep .+ Loop
    , external "focus"      (hfocusR :: TranslateH Core Path -> RewriteH Core -> RewriteH Core)
        [ "apply a rewrite to a focal point"] .+ Focus .+ Deep
    , external "focus"      (hfocusT :: TranslateH Core Path -> TranslateH Core String -> TranslateH Core String)

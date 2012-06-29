@@ -29,10 +29,12 @@ data CmdTag = Shell         -- Shell commands
             | GHC           -- a tunnel into GHC
             | KURE          -- a KURE command
             | TODO          -- TODO check before the release
-            | Cycle         -- Command may operate multiple times
+            | Loop         -- Command may operate multiple times
             | Deep          -- O(n)
             | Shallow       -- O(1)
             | Focus         -- uses path/lens to focus onto something
+            | Query         -- A question we ask
+            | Help          -- commands that provide help
 
 -- Unsure about these
             | CaseCmd       -- works on case statements
@@ -63,9 +65,10 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
           , (Deep,         "Command may make a deep change, can be O(n)")
           , (Shallow,      "Command operates on local nodes only, O(1)")
           , (TODO,         "TO BE assessed before a release")
-          , (Cycle,        "Command may operate multiple times")
+          , (Loop,        "Command may operate multiple times")
           , (Focus,        "Focus onto a subexpression")
-
+          , (Query,        "Questions we ask")
+          , (Help,         "Commands that provide help and information")
           ]
 
 -- Unfortunately, record update syntax seems to associate to the right.

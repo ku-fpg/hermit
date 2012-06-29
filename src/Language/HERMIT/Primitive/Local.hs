@@ -20,7 +20,7 @@ import Control.Arrow
 ------------------------------------------------------------------------------
 
 externals :: [External]
-externals = map (.+ Local) $
+externals = map ((.+ Local) . (.+ TODO)) $
          [ external "beta-reduce" (promoteR beta_reduce :: RewriteH Core)
                      [ "((\\ v -> E1) E2) ==> let v = E2 in E1, fails otherwise"
                      , "this form of beta reduction is safe if E2 is an arbitrary"

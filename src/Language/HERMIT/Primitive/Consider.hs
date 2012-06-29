@@ -12,7 +12,7 @@ import Control.Arrow
 import qualified Language.Haskell.TH as TH
 
 externals :: [External]
-externals = map (.+ Lens)
+externals = map ((.+ Lens) . (.+ TODO))
             [
               external "consider" considerName
                 [ "'consider <v>' focuses on a named binding <v>" ]

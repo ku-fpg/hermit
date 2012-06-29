@@ -12,7 +12,7 @@ import Language.HERMIT.External
 import qualified Language.Haskell.TH as TH
 
 externals :: [External]
-externals = map (.+ Context)
+externals = map ((.+ Context) . (.+ TODO))
             [ external "inline" (promoteR inline :: RewriteH Core)
                 [ "(Var n) ==> <defn of n>, fails otherwise" ]
             , external "inline" (promoteR . inlineName :: TH.Name -> RewriteH Core)

@@ -23,30 +23,30 @@ import Prelude hiding (exp)
 ------------------------------------------------------------------------
 
 externals :: ModGuts -> [External]
-externals modGuts = map (.+ GHC)
+externals modGuts = map (.+ TODO)
          [ external "let-subst" (promoteR letSubstR :: RewriteH Core)
                 [ "Let substitution [via GHC]"
                 , "let x = E1 in E2 ==> E2[E1/x], fails otherwise"
-                , "only matches non-recursive lets" ]                           .+ Local
+                , "only matches non-recursive lets" ]                           .+ Deep
          , external "safe-let-subst" (promoteR safeLetSubstR :: RewriteH Core)
                 [ "Safe let substitution [via GHC]"
                 , "let x = E1 in E2, safe to inline without duplicating work ==> E2[E1/x],"
                 , "fails otherwise"
-                , "only matches non-recursive lets" ]                           .+ Local .+ Eval
+                , "only matches non-recursive lets" ]                           .+ Deep .+ Eval
          , external "safe-let-subst-plus" (promoteR safeLetSubstPlusR :: RewriteH Core)
                 [ "Safe let substitution [via GHC]"
                 , "let { x = E1, ... } in E2, "
                 , "  where safe to inline without duplicating work ==> E2[E1/x,...],"
                 , "fails otherwise"
-                , "only matches non-recursive lets" ]
+                , "only matches non-recursive lets" ]  .+ Deep .+ Eval
          , external "freevars" (promoteT freeIdsQuery :: TranslateH Core String)
-                [ "List the free variables in this expression [via GHC]" ]
+                [ "List the free variables in this expression [via GHC]" ] .+ Query .+ Deep
          , external "deshadow-binds" (promoteR deShadowBindsR :: RewriteH Core)
-                [ "Deshadow a program [via GHC]" ]
+                [ "Deshadow a program " ] .+ Deep
          , external "apply-rule" (promoteR . rules rulesEnv :: String -> RewriteH Core)
-                [ "apply a named GHC rule" ]
+                [ "apply a named GHC rule" ] .+ Shallow
          , external "apply-rule" (rules_help rulesEnv)
-                [ "list rules that can be used" ]
+                [ "list rules that can be used" ] .+ Help
          , external "compare-values" compareValues
                 ["compare's the rhs of two values"]
          ]

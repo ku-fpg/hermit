@@ -57,27 +57,15 @@ dictionary externs = toDictionary externs'
         externs' = externs ++
                 map (.+ Shell)
                 [ external ":help" (help_command externs' "help")
-                    [ "(this message)" ]
+                    [ "(this message)" ] .+ Help
                 , external ":help" (help_command externs')
                     ([ ":help <command>|<category>|categories|all|<search-string>"
                      , "displays help about a command or category."
                      , "Multiple items may match."
                      , ""
                      , "categories: " ++ head msg
-                     ] ++ (map ("            " ++) (tail msg)))
-{-
-                , external "help" (help externs Nothing . Just :: String -> String)
-                    [ "help with a specific cmd or path"
-                    , "use 'help ls' to see a list of paths"
-                    , "use 'help \"let\"' to see cmds whose names contain \"let\"" ]
-                , external "help" ((\c p -> help externs (Just c) (Just p)) :: String -> String -> String)
-                    [ "help ls <path> to list commands in a specific path" ]
--}
-{- todo: finish, by modifying Interp.hs
-                , external "help" ((\p -> intercalate ", " $ map externName $ filter (tagMatch p) externs) :: TagE -> String)
-                    [ "show rewrites matched by a tag predicate" ]
--}
-                , bashExternal externs
+                     ] ++ (map ("            " ++) (tail msg)))  .+ Help
+                , bashExternal externs  .+ Eval .+ Deep .+ Loop
                 ]
 
 --------------------------------------------------------------------------
@@ -167,8 +155,9 @@ metaCmd name externs p combine hlp = external name (combine rws) (hlp ++ concat 
 -- Runs every command tagged with 'Bash' with innermostR (fix point anybuR),
 -- if any of them succeed, then it tries all of them again.
 -- Only fails if all of them fail the first time.
+-- TODO: We need to think harder about bash.
 bashExternal :: [External] -> External
-bashExternal es = metaCmd "bash" es (Local .& Eval .& (notT Unimplemented)) (innermostR . orR)
+bashExternal es = metaCmd "bash" es (Eval .& (notT Loop)) (innermostR . orR)
                           [ "Iteratively apply the following rewrites until nothing changes." ]
 
 bash :: [External] -> RewriteH Core

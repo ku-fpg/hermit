@@ -32,7 +32,7 @@ import Control.Monad
 -- promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an expr") (apply rr c)  (retract e)
 
 externals ::  ModGuts -> [External]
-externals modGuts = map (.+ Experiment)
+externals modGuts = map ((.+ Experiment) . (.+ TODO))
          [ external "info" (promoteT info :: TranslateH Core String)
                 [ "tell me what you know about this expression or binding" ] .+ Unimplemented
          , external "expr-type" (promoteT exprTypeQueryT :: TranslateH Core String)

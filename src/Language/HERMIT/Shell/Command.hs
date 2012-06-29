@@ -68,7 +68,7 @@ data ShellEffect :: * where
    deriving Typeable
 
 data QueryFun :: * where
-   Query         :: TranslateH Core String   -> QueryFun  -- strange stuff
+   QueryT         :: TranslateH Core String   -> QueryFun  -- strange stuff
 
    -- These two be can generalized into
    --  (CommandLineState -> IO String)
@@ -120,7 +120,7 @@ interpShellCommand =
                 , Interp $ \ (RewriteCoreBox rr)         -> AstEffect $ Apply rr
                 , Interp $ \ (TranslateCorePathBox tt)   -> AstEffect $ Pathfinder tt
                 , Interp $ \ (StringBox str)             -> QueryFun $ Message str
-                , Interp $ \ (TranslateCoreStringBox tt) -> QueryFun $ Query tt
+                , Interp $ \ (TranslateCoreStringBox tt) -> QueryFun $ QueryT tt
                 , Interp $ \ (effect :: AstEffect)       -> AstEffect $ effect
                 , Interp $ \ (effect :: ShellEffect)     -> ShellEffect $ effect
                 , Interp $ \ (query :: QueryFun)        -> QueryFun $ query
@@ -455,7 +455,7 @@ performShellEffect (SessionStateEffect f) = do
 -------------------------------------------------------------------------------
 
 performQuery :: (MonadIO m) => QueryFun -> CLM m ()
-performQuery (Query q) = do
+performQuery (QueryT q) = do
     st <- get
     -- something changed, to print
     liftIO ((queryS (cl_kernel st) (cl_cursor (cl_session st)) q >>= putStrLn)
