@@ -53,15 +53,25 @@ all_externals my_externals guts = prim_externals guts ++ my_externals ++ GHC.ext
 dictionary :: [External] -> M.Map String [Dynamic]
 dictionary externs = toDictionary externs'
   where
+        msg = layoutTxt 60 (map (show . fst) dictionaryOfTags)
         externs' = externs ++
-                [ external "help"            (help externs Nothing Nothing)
-                    [ "lists all commands" ]
+                map (.+ Shell)
+                [ external ":help" (help_command externs' "help")
+                    [ "(this message)" ]
+                , external ":help" (help_command externs')
+                    ([ ":help <Category|All|command|search-string> displays help about"
+                     , "a category or command. Multiple items may match."
+                     , ""
+                     , "Categories: " ++ head msg
+                     ] ++ (map ("            " ++) (tail msg)))
+{-
                 , external "help" (help externs Nothing . Just :: String -> String)
                     [ "help with a specific cmd or path"
                     , "use 'help ls' to see a list of paths"
                     , "use 'help \"let\"' to see cmds whose names contain \"let\"" ]
                 , external "help" ((\c p -> help externs (Just c) (Just p)) :: String -> String -> String)
                     [ "help ls <path> to list commands in a specific path" ]
+-}
 {- todo: finish, by modifying Interp.hs
                 , external "help" ((\p -> intercalate ", " $ map externName $ filter (tagMatch p) externs) :: TagE -> String)
                     [ "show rewrites matched by a tag predicate" ]
@@ -91,6 +101,16 @@ pp_opt_dictionary = M.fromList
 
 make_help :: [External] -> [String]
 make_help = concatMap snd . M.toList . toHelp
+
+help_command :: [External] -> String -> String
+help_command externals m = unlines $ make_help $ pathPrefix m
+    where pathPrefix p = filter (isInfixOf p . externName) externals
+
+layoutTxt :: Int -> [String] -> [String]
+layoutTxt n (w1:w2:ws) | length w1 + length w2 >= n = w1 : layoutTxt n (w2:ws)
+                       | otherwise = layoutTxt n ((w1 ++ " " ++ w2) : ws)
+layoutTxt n other = other
+
 
 help :: [External] -> Maybe String -> Maybe String -> String
 -- 'help ls' case
