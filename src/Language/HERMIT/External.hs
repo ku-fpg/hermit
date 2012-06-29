@@ -40,7 +40,7 @@ data CmdTag = CaseCmd       -- works on case statements
     deriving (Eq, Show, Read, Bounded, Enum)
 
 dictionaryOfTags :: [(CmdTag,String)]
-dictionaryOfTags = notes ++ [ (tag,show tag ++ " (unknown purpose)")
+dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
                             | tag <- [minBound..maxBound]
                             , not (tag `elem` (map fst notes))
                             ]

@@ -107,6 +107,15 @@ help_command :: [External] -> String -> String
 help_command externals m
         | [(cat :: CmdTag,"")] <- reads m
         = unlines $ make_help $ filter (tagMatch cat) externals
+help_command externals "all"
+        = unlines $ make_help $ externals
+help_command externals "categories" = unlines $
+                [ "categories" ] ++
+                [ "----------" ] ++
+                [ txt ++ " " ++ take (16 - length txt) (repeat '.') ++ " " ++ desc
+                | (cmd,desc) <- dictionaryOfTags
+                , let txt = show cmd
+                ]
 
 help_command externals m = unlines $ make_help $ pathPrefix m
     where pathPrefix p = filter (isInfixOf p . externName) externals
