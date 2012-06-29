@@ -38,19 +38,22 @@ data CmdTag = Shell         -- Shell commands
             | Debug         -- commands to help debugging
 
             | TODO          -- TODO check before the release
+            | Unimplemented -- Something is not finished yet, do not used
+            | Experiment    -- things we are trying out
+
 
 -- Unsure about these
+{-
             | Local         -- local thing, O(1)
             | CaseCmd       -- works on case statements
             | Context       -- something that uses the context
             | GHC           -- a tunnel into GHC
-            | Experiment    -- things we are trying out
             | Lens          -- focuses into a specific node
             | LetCmd        -- works on let statements
             | Meta          -- combines other commands
             | Restful       -- RESTful API commands
             | Slow          -- this command is slow
-            | Unimplemented
+-}
             -- Other String
             -- etc
     deriving (Eq, Show, Read, Bounded, Enum)
@@ -78,7 +81,8 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
           , (Debug,        "Commands specifically to help debugging")
 
           , (TODO,         "TO BE assessed before a release")
-          , (GHC,          "Commands that tunnel into GHC")
+          , (Unimplemented,"Something is not finished yet; do not used")
+          , (Experiment,   "Things we are trying out")
           ]
 
 
