@@ -56,7 +56,9 @@ considerTargets = collectT (promoteT $ nonRec <+ rec) >>> arr concat
 
 -- | Get the unqualified name from an Id/Var.
 unqualified :: Id -> String
-unqualified = reverse . takeWhile (/='.') . reverse . showPpr . idName
+unqualified = checkCompose . reverse . showPpr . idName
+    where checkCompose ('.':_) = "."
+          checkCompose other   = reverse (takeWhile (/='.') other)
 -- TODO: Does GHC provide this?
 
 -- Hacks till we can find the correct way of doing these.

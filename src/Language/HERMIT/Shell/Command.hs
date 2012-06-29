@@ -13,7 +13,7 @@ import Control.Monad.Error
 
 import Data.Char
 import Data.Monoid
-import Data.List (intercalate, isPrefixOf)
+import Data.List (intercalate, isPrefixOf, nub)
 import Data.Default (def)
 import Data.Dynamic
 import qualified Data.Map as M
@@ -321,7 +321,7 @@ shellComplete :: MVar CommandLineState -> String -> String -> IO [Completion]
 shellComplete mvar rPrev so_far = do
     st <- readMVar mvar
     targetQuery <- completionQuery st (completionType rPrev)
-    liftM (map simpleCompletion . filter (so_far `isPrefixOf`))
+    liftM (map simpleCompletion . nub . filter (so_far `isPrefixOf`))
         $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
 
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
