@@ -20,19 +20,28 @@ type ExternalHelp = [String]
 
 -- Requirement: commands can not have the same name as any CmdTag
 -- (Or the help function will not find it)
+-- These should be USER_FACING, because they give the user
+-- a way of sub-dividing our confusing array of commands.
 
-data CmdTag = CaseCmd       -- works on case statements
-            | Context       -- something that uses the context
+data CmdTag = Shell         -- Shell commands
+            | Local         -- local thing, O(1)
             | Eval          -- the arrow of evaluation (reduces a term)
-            | Experiment    -- things we are trying out
             | GHC           -- a tunnel into GHC
             | KURE          -- a KURE command
+            | TODO          -- TODO check before the release
+            | Cycle         -- Command may operate multiple times
+            | Deep          -- O(n)
+            | Shallow       -- O(1)
+            | Focus         -- uses path/lens to focus onto something
+
+-- Unsure about these
+            | CaseCmd       -- works on case statements
+            | Context       -- something that uses the context
+            | Experiment    -- things we are trying out
             | Lens          -- focuses into a specific node
             | LetCmd        -- works on let statements
-            | Local         -- local thing, O(1)
             | Meta          -- combines other commands
             | Restful       -- RESTful API commands
-            | Shell         -- Shell commands
             | Slow          -- this command is slow
             | Unimplemented
             -- Other String
@@ -45,7 +54,19 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
                             , not (tag `elem` (map fst notes))
                             ]
   where notes =
-          [(Shell,        "Shell-specific commands")]
+          -- These should give the user a clue about what the sub-commands
+          -- might do
+          [ (Shell,        "Shell-specific commands")
+          , (GHC,          "Commands that tunnel into GHC")
+          , (KURE,         "Commands the directly reflect the KURE DSL")
+          , (Eval,         "The arrow of evaluation (reduces a term)")
+          , (Deep,         "Command may make a deep change, can be O(n)")
+          , (Shallow,      "Command operates on local nodes only, O(1)")
+          , (TODO,         "TO BE assessed before a release")
+          , (Cycle,        "Command may operate multiple times")
+          , (Focus,        "Focus onto a subexpression")
+
+          ]
 
 -- Unfortunately, record update syntax seems to associate to the right.
 -- This guy saves us some parens.
