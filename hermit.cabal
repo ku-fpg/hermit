@@ -43,7 +43,6 @@ Library
        Language.HERMIT.Expr
        Language.HERMIT.External
        Language.HERMIT.Kernel
-       Language.HERMIT.Kernel.Command
        Language.HERMIT.Kernel.Scoped
        Language.HERMIT.Kure
        Language.HERMIT.Interp
