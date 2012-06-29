@@ -345,7 +345,7 @@ commandLine filesToLoad behavior modGuts = do
 
         completionMVar <- newMVar shellState
 
-        runInputTBehavior behavior
+        _ <- runInputTBehavior behavior
                 (setComplete (completeWordWithPrev Nothing ws_complete (do_complete completionMVar)) defaultSettings)
                 (evalStateT (runErrorT (startup >> showFocus >> loop completionMVar)) shellState)
 

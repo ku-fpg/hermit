@@ -100,7 +100,7 @@ help_command externals m
         = unlines $ make_help $ filter (tagMatch ct) externals
 help_command externals "all"
         = unlines $ make_help $ externals
-help_command externals "categories" = unlines $
+help_command _ "categories" = unlines $
                 [ "categories" ] ++
                 [ "----------" ] ++
                 [ txt ++ " " ++ take (16 - length txt) (repeat '.') ++ " " ++ desc
