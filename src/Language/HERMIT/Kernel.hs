@@ -1,93 +1,89 @@
-{-# LANGUAGE KindSignatures, GADTs, RankNTypes, ScopedTypeVariables, TypeFamilies, DeriveDataTypeable #-}
+{-# LANGUAGE GADTs, RankNTypes, ScopedTypeVariables, TypeFamilies, DeriveDataTypeable #-}
 
 module Language.HERMIT.Kernel
         ( -- * The HERMIT Kernel
-          hermitKernel
-        , Kernel(..)
-        , AST(..)
+          AST
+        , Kernel
+        , hermitKernel
+        , resumeK
+        , abortK
+        , applyK
+        , queryK
+        , deleteK
+        , listK
 ) where
 
-import GhcPlugins
+import Prelude hiding (lookup)
+
+import GhcPlugins hiding (singleton)
 
 import Language.HERMIT.Context
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.GHC
 
-import qualified Data.Map as M
+import Data.Map
 import Control.Concurrent
 
+-- | A 'Kernel' is a repository for Core syntax trees.
+--   For now, operations on a 'Kernel' are sequential, but later
+--   it will be possible to have two 'applyK's running in parallel.
 data Kernel = Kernel
-        { resumeK ::            AST                      -> IO ()
-        , abortK  ::                                        IO ()
-        , applyK  ::            AST -> RewriteH Core     -> IO AST
-        , queryK  :: forall a . AST -> TranslateH Core a -> IO a
-        , deleteK ::            AST                      -> IO ()
-        , listK   ::                                        IO [AST]
+        { resumeK ::            AST                      -> IO ()    -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
+        , abortK  ::                                        IO ()    -- ^ Halt the 'Kernel' and abort GHC without compiling.
+        , applyK  ::            AST -> RewriteH Core     -> IO AST   -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
+        , queryK  :: forall a . AST -> TranslateH Core a -> IO a     -- ^ Apply a 'TranslateH' to the 'AST' and return the resulting value.
+        , deleteK ::            AST                      -> IO ()    -- ^ Delete the internal record of the specified 'AST'.
+        , listK   ::                                        IO [AST] -- ^ List all the 'AST's tracked by the 'Kernel'.
         }
 
--- | An 'AST' is just a name for a specific Core tree.
-newtype AST = AST Int deriving (Eq, Ord, Show)
+-- | A /handle/ for a specific version of the 'ModGuts'.
+newtype AST = AST Int -- ^ Currently 'AST's are identified by an 'Int' label.
+              deriving (Eq, Ord, Show)
 
 data Msg s r = forall a . Req (s -> CoreM (Either String (a,s))) (MVar (Either String a))
              | Done (s -> CoreM r)
 
--- | 'hermitKernel' is a repository for our syntax trees.
--- For now, operations are sequential, but later
--- it will be possible to have two applyK's running in parallel.
---
--- The callback is only every called once.
-hermitKernel :: (Kernel -> AST -> IO ())
-             -> ModGuts -> CoreM ModGuts
+-- | Start a HERMIT client by providing an IO function that takes the initial 'Kernel' and inital 'AST' handle.
+--   The 'Modguts' to 'CoreM' Modguts' function required by GHC Plugins is returned.
+--   The callback is only ever called once.
+hermitKernel :: (Kernel -> AST -> IO ()) -> ModGuts -> CoreM ModGuts
 hermitKernel callback modGuts = do
 
-        msg :: MVar (Msg (M.Map AST ModGuts) ModGuts) <- liftIO newEmptyMVar
+        msg :: MVar (Msg (Map AST ModGuts) ModGuts) <- liftIO newEmptyMVar
 
         syntax_names :: MVar AST <- liftIO newEmptyMVar
 
-        _ <- liftIO $ forkIO $
-                let loop n = do
-                        putMVar syntax_names (AST n)
-                        loop (succ n)
-                 in loop 0
+        _ <- liftIO $ forkIO $ let loop n = do putMVar syntax_names (AST n)
+                                               loop (succ n)
+                                in loop 0
 
-        let sendDone :: (M.Map AST ModGuts -> CoreM ModGuts) -> IO ()
+        let sendDone :: (Map AST ModGuts -> CoreM ModGuts) -> IO ()
             sendDone = putMVar msg . Done
 
-        let sendReq :: (M.Map AST ModGuts -> CoreM (Either String (a,M.Map AST ModGuts))) -> IO a
-            sendReq fn = do
-                rep <- newEmptyMVar
-                putMVar msg (Req fn rep)
-                res <- takeMVar rep
-                case res of
-                  Left m    -> fail m
-                  Right ans -> return ans
-
-        let find :: (Monad m) => AST -> M.Map AST ModGuts -> (String -> m a) -> (ModGuts -> m a) -> m a
-            find name env failing k = case M.lookup name env of
-              Nothing -> failing $ "can not find syntax tree : " ++ show name
-              Just core -> k core
-
-        let fail' m = return (Left m)
+        let sendReq :: (Map AST ModGuts -> CoreM (Either String (a,Map AST ModGuts))) -> IO a
+            sendReq fn = do rep <- newEmptyMVar
+                            putMVar msg (Req fn rep)
+                            takeMVar rep >>= either fail return
 
         let kernel = Kernel
-                { resumeK = \ name -> sendDone $ \ env -> find name env fail $ \ core -> return core
+                { resumeK = \ name -> sendDone $ \ env -> find name env fail return
                 , abortK  = sendDone $ \ _ -> throwGhcException (ProgramError "<HERMIT>: hard GHC abort requested")
                 , applyK = \ name rr -> sendReq $ \ env -> find name env fail' $ \ core ->
                              runHM
                                   (\ core' -> do
                                       syn' <- liftIO $ takeMVar syntax_names
-                                      return $ Right (syn',M.insert syn' core' env))
-                                  (\ m -> return $ Left m)
+                                      return' (syn',insert syn' core' env))
+                                  fail'
                                   (apply (extractR rr) (initContext core) core)
                 , queryK = \ name q -> sendReq $ \ env -> find name env fail' $ \ core ->
                              runHM
-                                  (\ reply -> return  $ Right (reply,env))
-                                  (\ m -> return $ Left m)
+                                  (\ reply -> return' (reply,env))
+                                  fail'
                                   (apply (extractT q) (initContext core) core)
                 , deleteK = \ name -> sendReq $ \ env -> find name env fail' $ \ _ ->
-                             return $ Right ((), M.delete name env)
-                , listK = sendReq $ \ env -> return $ Right (M.keys env,env)
+                             return' ((), delete name env)
+                , listK = sendReq $ \ env -> return' (keys env,env)
                 }
 
         -- We always start with syntax blob 0
@@ -96,22 +92,26 @@ hermitKernel callback modGuts = do
         let loop st = do
                 m <- liftIO $ takeMVar msg
                 case m of
-                  Req fn rep -> do
-                          ans <- fn st
-                          case ans of
-                            Right (a,st2) -> do
-                              liftIO $ putMVar rep (Right a)
-                              loop st2
-                            Left m' -> do
-                              liftIO $ putMVar rep (Left m')
-                              loop st
+                  Req fn rep -> do ans <- fn st
+                                   case ans of
+                                     Right (a,st2) -> do liftIO $ putMVar rep (Right a)
+                                                         loop st2
+                                     Left m' -> do liftIO $ putMVar rep (Left m')
+                                                   loop st
                   Done fn -> fn st
 
         _pid <- liftIO $ forkIO $ callback kernel syn
 
-        modGuts' <- loop (M.singleton syn modGuts)
+        loop (singleton syn modGuts)
 
         -- (Kill the pid'd thread? do we need to?)
 
-        return modGuts'
 
+find :: Monad m => AST -> Map AST ModGuts -> (String -> m a) -> (ModGuts -> m a) -> m a
+find name env failing k = maybe (failing $ "cannot find syntax tree : " ++ show name) k (lookup name env)
+
+fail' :: Monad m => a -> m (Either a b)
+fail' = return . Left
+
+return' :: Monad m => b -> m (Either a b)
+return' = return . Right
