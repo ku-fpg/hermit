@@ -9,7 +9,6 @@ import Data.Default (def)
 import Data.Dynamic
 import Data.List
 import qualified Data.Map as M
-import Data.Maybe
 
 import GhcPlugins
 
@@ -97,8 +96,8 @@ make_help = concatMap snd . M.toList . toHelp
 
 help_command :: [External] -> String -> String
 help_command externals m
-        | [(cat :: CmdTag,"")] <- reads m
-        = unlines $ make_help $ filter (tagMatch cat) externals
+        | [(ct :: CmdTag,"")] <- reads m
+        = unlines $ make_help $ filter (tagMatch ct) externals
 help_command externals "all"
         = unlines $ make_help $ externals
 help_command externals "categories" = unlines $
@@ -115,7 +114,7 @@ help_command externals m = unlines $ make_help $ pathPrefix m
 layoutTxt :: Int -> [String] -> [String]
 layoutTxt n (w1:w2:ws) | length w1 + length w2 >= n = w1 : layoutTxt n (w2:ws)
                        | otherwise = layoutTxt n ((w1 ++ " " ++ w2) : ws)
-layoutTxt n other = other
+layoutTxt _ other = other
 
 
 help :: [External] -> Maybe String -> Maybe String -> String

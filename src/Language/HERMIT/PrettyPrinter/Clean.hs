@@ -133,12 +133,12 @@ corePrettyH opts =
            return $ ret (rootPath absPath)
 
     ppCoreExprPR :: TranslateH GHC.CoreExpr (Path -> RetExpr)
-    ppCoreExprPR = lamT ppCoreExprR (\ v e p -> case e of
+    ppCoreExprPR = lamT ppCoreExprR (\ v e _ -> case e of
                                               RetLam vs e0  -> RetLam (appendBind (ppBinder v) vs) e0
                                               _             -> RetLam (appendBind (ppBinder v) []) (normalExpr e))
 
                <+ letT ppCoreBind ppCoreExprR
-                                   (\ bd e p -> case e of
+                                   (\ bd e _ -> case e of
                                               RetLet vs e0  -> RetLet (bd : vs) e0
                                               _             -> RetLet [bd] (normalExpr e))
                -- HACKs
@@ -153,7 +153,7 @@ corePrettyH opts =
                                      GHC.App (GHC.Type _) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
                                      GHC.App (GHC.App (GHC.Var _) (GHC.Type _)) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
                                      _ -> False) >>>
-                           (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetLam vs e0) p ->
+                           (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetLam vs e0) _ ->
                                     RetExpr $ hang (e1 <+>
                                                         symbol '(' <>
                                                         specialSymbol LambdaSymbol <+>
@@ -164,7 +164,7 @@ corePrettyH opts =
                   )
 
                <+ appT ppCoreExprR ppCoreExprR
-                                   (\ e1 e2 p -> case e1 of
+                                   (\ e1 e2 _ -> case e1 of
                                               RetApp f xs   -> RetApp f (appendArg xs e2)
                                               _             -> case e2 of -- if our only args are types, and they are omitted, don't paren
                                                                 RetEmpty -> e1

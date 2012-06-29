@@ -19,13 +19,13 @@ import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Local.Case
 import Language.HERMIT.Primitive.Inline
-import Language.HERMIT.Primitive.Debug
+-- import Language.HERMIT.Primitive.Debug
 import Language.HERMIT.Primitive.Consider -- for cmpName
 
 import qualified Language.Haskell.TH as TH
 import qualified Data.Map as Map
 
-import Debug.Trace
+-- import Debug.Trace
 import Control.Monad
 
 -- promoteR'  :: Term a => RewriteH a -> RewriteH (Generic a)

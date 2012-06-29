@@ -207,7 +207,7 @@ renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\
                   PP.Str str  -> special str `mappend` rest cols
                   PP.PStr str -> special str `mappend` rest cols
                   PP.Mark (PopAttr)    -> rest (tail cols)
-                  PP.Mark (PushAttr a) -> error "renderCode: can not have marks inside special symbols"
+                  PP.Mark (PushAttr _) -> error "renderCode: can not have marks inside special symbols"
           marker m rest cols = case m of
                   PP.Chr ch   -> rPutStr [ch] `mappend` rest cols
                   PP.Str str  -> rPutStr str `mappend` rest cols

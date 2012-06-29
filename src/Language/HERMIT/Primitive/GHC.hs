@@ -8,7 +8,7 @@ import Control.Arrow
 import Control.Applicative
 import qualified Data.Map as Map
 
-import Language.HERMIT.Primitive.Debug
+-- import Language.HERMIT.Primitive.Debug
 import Language.HERMIT.Primitive.Consider
 
 import Language.HERMIT.Kure
@@ -68,12 +68,12 @@ externals modGuts = map (.+ TODO)
 letSubstR :: RewriteH CoreExpr
 letSubstR = contextfreeT $ \ exp -> case exp of
       Let (NonRec b be) e
-         | isId b    -> let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-                            sub   = extendSubst empty b be
+         | isId b    -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+                            sub      = extendSubst emptySub b be
                          in return $ substExpr (text "letSubstR") sub e
       Let (NonRec b (Type bty)) e
-         | isTyVar b -> let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-                            sub = extendTvSubst empty b bty
+         | isTyVar b -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+                            sub      = extendTvSubst emptySub b bty
                          in return $ substExpr (text "letSubstR") sub e
       _ -> fail "LetSubst failed. Expr is not a (non-recursive) Let."
 
@@ -81,13 +81,13 @@ letSubstR = contextfreeT $ \ exp -> case exp of
 safeLetSubstR :: RewriteH CoreExpr
 safeLetSubstR = contextfreeT $ \ exp -> case occurAnalyseExpr exp of
       Let (NonRec b (Type bty)) e
-         | isTyVar b -> let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-                            sub = extendTvSubst empty b bty
+         | isTyVar b -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+                            sub      = extendTvSubst emptySub b bty
                          in return $ substExpr (text "letSubstR") sub e
       Let (NonRec b be) e
          | isId b && (safeBind be || safeSubst (occInfo (idInfo b)))
-                     -> let empty = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-                            sub   = extendSubst empty b be
+                     -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+                            sub      = extendSubst emptySub b be
                          in return $ substExpr (text "letSubstR") sub e
          | otherwise -> fail "safeLetSubstR failed (safety critera not met)"
       -- By (our) definition, types are a trivial bind
@@ -98,10 +98,9 @@ safeLetSubstR = contextfreeT $ \ exp -> case occurAnalyseExpr exp of
           safeBind (Lam {})   = True
           safeBind e@(App {}) =
                  case collectArgs e of
-                  (Var f,args) -> idArity f > length (filter (not . isTypeArg) args)
-                  (other,args) -> case collectBinders other of
-                                    (bds,_) -> length bds > length args
-                  _            -> False
+                   (Var f,args) -> idArity f > length (filter (not . isTypeArg) args)
+                   (other,args) -> case collectBinders other of
+                                     (bds,_) -> length bds > length args
           safeBind _          = False
 
           safeSubst NoOccInfo = False   -- unknown!
@@ -216,9 +215,9 @@ exprEqual (Type t1)      (Type t2)       = Just (t1 `eqType` t2)
 exprEqual (App f1 e1)    (App f2 e2)     = liftA2 (&&) (f1 `exprEqual` f2) (e1 `exprEqual` e2)
 exprEqual (Lam _ _)      (Lam _ _)       = Nothing
 exprEqual (Case _ _ _ _) (Case _ _ _ _)  = Nothing
+exprEqual (Let _ _)      (Let _ _)       = Nothing
 exprEqual (Cast _ _)     (Cast _ _)      = Nothing
 exprEqual (Tick _ _)     (Tick _ _)      = Nothing
-exprEqual (Type _)       (Type _)        = Nothing
 exprEqual (Coercion _)   (Coercion _)    = Nothing
 exprEqual _              _               = Just False
 
@@ -234,12 +233,12 @@ coreEqual _             _             = Nothing
 -- exprEqual _        = fail "exprEqual fail"
 
 -- coreEqualT :: Core -> TranslateH Core ()
--- coreEqualT (ModGutsCore  _) = fail "can not compare ModGuts"
--- coreEqualT (ProgramCore  _) = fail "can not compare Program"
--- coreEqualT (BindCore  _)    = fail "can not compare Bind"
--- coreEqualT (DefCore  _)     = fail "can not compare Def"
+-- coreEqualT (ModGutsCore  _) = fail "cannot compare ModGuts"
+-- coreEqualT (ProgramCore  _) = fail "cannot compare Program"
+-- coreEqualT (BindCore  _)    = fail "cannot compare Bind"
+-- coreEqualT (DefCore  _)     = fail "cannot compare Def"
 -- coreEqualT (ExprCore  e)    = promoteT $ exprEqual e
--- coreEqualT (AltCore  _)     = fail "can not compare Alt"
+-- coreEqualT (AltCore  _)     = fail "cannot compare Alt"
 
 
 -- TODO: make this handle cmp of recusive functions, by using subst.

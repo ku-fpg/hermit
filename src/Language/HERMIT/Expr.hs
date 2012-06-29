@@ -1,7 +1,8 @@
--- Expr is the *untyped* command and control language for HERMIT.
-
 module Language.HERMIT.Expr
-        ( ExprH(..)
+        ( -- * HERMIT Expressions
+
+          -- | This is the /untyped/ command and control language for HERMIT.
+          ExprH(..)
         , StmtH(..)
         , parseExprH
         , parseStmtsH
@@ -12,11 +13,11 @@ import Data.Char
 
 ---------------------------------------------
 
--- Our local version of Expr, for things parsed from string or JSON structures.
+-- | A simple expression language AST, for things parsed from 'String' or JSON structures.
 data ExprH
-        = SrcName String                -- variable names (refer to source code)
-        | CmdName String                -- commands (to be looked up in Dictionary) or strings; same thing
-        | AppH ExprH ExprH              -- application
+        = SrcName String                -- ^ Variable names (refers to source code).
+        | CmdName String                -- ^ Commands (to be looked up in 'Language.HERMIT.Dictionary').
+        | AppH ExprH ExprH              -- ^ Application.
         deriving (Eq, Show)
 
 data StmtH expr
@@ -58,11 +59,11 @@ bind m k = \ inp ->
 ---------------------------------------------
 
 
--- | parse an expression.
+-- | Parse an expression.
 parseExprH :: String -> Either String ExprH
 parseExprH = parse parseExprH1
 
--- | parse a list of statements, seperated by semicolon
+-- | Parse a list of statements, seperated by semicolons.
 parseStmtsH :: String -> Either String [StmtH ExprH]
 parseStmtsH = parse parseExprsH'
 

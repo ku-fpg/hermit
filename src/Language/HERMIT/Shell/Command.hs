@@ -177,7 +177,7 @@ shell_externals = map (.+ Shell) $
          Nothing -> do
             liftIO $ putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
             return st
-         Just v -> return $ st { cl_pretty = pp })
+         Just _ -> return $ st { cl_pretty = pp })
        [ "set the pretty printer"
        , "use 'setpp ls' to list available pretty printers" ]
    , external "set-renderer"    changeRenderer
@@ -418,12 +418,12 @@ performAstEffect :: (MonadIO m) => AstEffect -> ExprH -> CLM m ()
 performAstEffect (Apply rr) expr = do
     st <- get
     -- something changed (you've applied)
-    ast' <- liftIO $ (do ast' <- applyS (cl_kernel st) (cl_cursor (cl_session st)) rr
-                         return $ Right ast')
-                           `catch` \ msg -> return $ Left $ "Error thrown: " ++ msg
+    eiast <- liftIO $ (do ast' <- applyS (cl_kernel st) (cl_cursor (cl_session st)) rr
+                          return $ Right ast')
+                            `catch` \ msg -> return $ Left $ "Error thrown: " ++ msg
     either (throwError) (\ast' -> do put $ newSAST expr ast' st
                                      showFocus
-                                     return ()) ast'
+                                     return ()) eiast
 performAstEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
@@ -493,7 +493,7 @@ performQuery (Message msg) = liftIO (putStrLn msg)
 performMetaCommand :: (MonadIO m) => MetaCommand -> CLM m ()
 performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
 performMetaCommand Resume = get >>= \st -> liftIO $ resumeS (cl_kernel st) (cl_cursor (cl_session st))
-performMetaCommand (Dump fileName _pp renderer w) = do
+performMetaCommand (Dump fileName _pp renderer _) = do
     st <- get
     case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
         (Just pp, Just r) -> liftIO $ do
@@ -531,7 +531,7 @@ instance RenderSpecial UnicodeTerminal where
                 where (Unicode ch) = renderSpecial sym
 
 instance Monoid UnicodeTerminal where
-        mempty = UnicodeTerminal $ \ h _ -> return ()
+        mempty = UnicodeTerminal $ \ _ _ -> return ()
         mappend (UnicodeTerminal f1) (UnicodeTerminal f2) = UnicodeTerminal $ \ h p -> f1 h p >> f2 h p
 
 finalRenders :: [(String,Handle -> PrettyOptions -> DocH -> IO ())]
@@ -541,8 +541,8 @@ finalRenders =
 
 unicodeConsole :: Handle -> PrettyOptions -> DocH -> IO ()
 unicodeConsole h w doc = do
-    let (UnicodeTerminal pretty) = renderCode w doc
-    pretty h Nothing
+    let (UnicodeTerminal prty) = renderCode w doc
+    prty h Nothing
 
 
 instance RenderCode UnicodeTerminal where
@@ -627,25 +627,25 @@ getNavCmd = do
           Just f -> f
           Nothing -> reset) str
 
-   reset str = do
+   reset _ = do
         putStr "\BEL"
         readCh []
 
-   result str _ = return (Just str)
+   res str _ = return (Just str)
 
    cmds = [ ("\ESC"  , \ str ->
                        do b <- hReady stdin
                           if b then readCh str
-                               else result ":command-line" str)
+                               else res ":command-line" str)
           , ("\ESC[" , readCh)
-          , ("\ESC[A", result "up")
-          , ("\ESC[B", result "down")
-          , ("\ESC[C", result "right")
-          , ("\ESC[D", result "left")
-          , ("?",      result ":nav-commands")
-          , ("f",      result ":step")
+          , ("\ESC[A", res "up")
+          , ("\ESC[B", res "down")
+          , ("\ESC[C", res "right")
+          , ("\ESC[D", res "left")
+          , ("?",      res ":nav-commands")
+          , ("f",      res ":step")
           ] ++
-          [ (show n, result (show n)) | n <- [0..9] :: [Int] ]
+          [ (show n, res (show n)) | n <- [0..9] :: [Int] ]
 
 
 
