@@ -2,3 +2,4 @@ consider 'fib
 fix-intro
 0
 unfold-rule ww
+innermost ((inline '.) <+ beta-reduce-plus <+ safe-let-subst)
