@@ -62,7 +62,14 @@ dictionary externs = toDictionary externs'
                      , ""
                      , "categories: " ++ head msg
                      ] ++ (map ("            " ++) (tail msg)))  .+ Query .+ Shell
-                , bashExternal externs  .+ Eval .+ Deep .+ Loop
+                -- Runs every command matching the tag predicate with innermostR (fix point anybuR),
+                -- Only fails if all of them fail the first time.
+                , let bashPredicate = Eval .& (notT Loop)
+                  in external "bash"
+                              (metaCmd externs bashPredicate (innermostR . orR))
+                              (metaHelp externs bashPredicate
+                                [ "Iteratively apply the following rewrites until nothing changes:" ])
+                              .+ Eval .+ Deep .+ Loop
                 ]
 
 --------------------------------------------------------------------------
@@ -134,28 +141,26 @@ help _ _ _ = error "bad help arguments"
 
 --------------------------------------------------------------------------
 
+-- TODO: We need to think harder about bash/metaCmd.
+
 -- TODO: supply map of command-name -> arguments?
 -- otherwise fromDynamic will fail for any rewrite that takes arguments.
 metaCmd :: (Tag a)
-        => String                             -- ^ name of the command
-        -> [External]                         -- ^ universe of commands to search
+        => [External]                         -- ^ universe of commands to search
         -> a                                  -- ^ tag matching predicate
         -> ([RewriteH Core] -> RewriteH Core) -- ^ means to combine the matched rewrites
+        -> RewriteH Core
+metaCmd externs p = ($ [ rw | e <- externs
+                            , tagMatch p e
+                            , Just rw <- [fmap unbox $ fromDynamic $ externFun e] ])
+
+metaHelp :: (Tag a)
+        => [External]                         -- ^ universe of commands to search
+        -> a                                  -- ^ tag matching predicate
         -> [String]                           -- ^ help text preamble
-        -> External
-metaCmd name externs p combine hlp = external name (combine rws) (hlp ++ concat helps)
-    where (rws, helps) = unzip [ (rw, externName e : externHelp e)
-                               | e <- externs
-                               , tagMatch p e
-                               , Just rw <- [fmap unbox $ fromDynamic $ externFun e] ]
-
--- Runs every command tagged with 'Bash' with innermostR (fix point anybuR),
--- if any of them succeed, then it tries all of them again.
--- Only fails if all of them fail the first time.
--- TODO: We need to think harder about bash.
-bashExternal :: [External] -> External
-bashExternal es = metaCmd "bash" es (Eval .& (notT Loop)) (innermostR . orR)
-                          [ "Iteratively apply the following rewrites until nothing changes." ]
-
-bash :: [External] -> RewriteH Core
-bash = unbox . fromJust . fromDynamic . externFun . bashExternal
+        -> [String]
+metaHelp externs p = (++ [ externName e
+                         | e <- externs
+                         , tagMatch p e
+                         -- necessary so we don't list things that don't type correctly
+                         , Just (_ :: RewriteH Core) <- [fmap unbox $ fromDynamic $ externFun e] ])
