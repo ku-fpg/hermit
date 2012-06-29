@@ -1,4 +1,4 @@
 consider 'fib
 fix-intro
 0
-apply-rule ww -- this fails
+unfold-rule ww
