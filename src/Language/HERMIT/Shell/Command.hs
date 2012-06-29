@@ -232,6 +232,7 @@ showFocus = do
 
 -------------------------------------------------------------------------------
 
+-- TODO: change ScopedKernel to use this interface instead of Path?
 newtype ScopePath = ScopePath [Int]
 
 emptyScopePath :: ScopePath
@@ -287,7 +288,7 @@ data SessionState = SessionState
 -------------------------------------------------------------------------------
 
 data CompletionType = BindingsC   -- complete with names that are let bound
-                    | VariablesC  -- complete with names that occur (roughly: can be inlined)
+                    | InlineC     -- complete with names that can be inlined
                     | UnknownC    -- add to completionType function
                     | AmbiguousC  -- completionType function needs to be more specific
 
@@ -297,14 +298,14 @@ completionType = go . dropWhile isSpace
                     []  -> UnknownC
                     [t] -> t
                     _   -> AmbiguousC
-          opts = [ ("inline"  , VariablesC)
-                 , ("consider", BindingsC )
-                 , ("rhs-of"  , BindingsC )
+          opts = [ ("inline"  , InlineC  )
+                 , ("consider", BindingsC)
+                 , ("rhs-of"  , BindingsC)
                  ]
 
 completionQuery :: CompletionType -> IO (TranslateH Core [String])
 completionQuery BindingsC  = return considerTargets
-completionQuery VariablesC = return inlineTargets
+completionQuery InlineC    = return inlineTargets
 -- Need to add to opts in completionType function.
 completionQuery UnknownC   = putStrLn "\nCannot tab complete: unknown completion type." >> return (pure [])
 -- Need to modify opts in completionType function. No key can be a suffix of another key.
