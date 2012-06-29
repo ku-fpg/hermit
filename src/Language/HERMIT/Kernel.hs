@@ -1,10 +1,11 @@
 {-# LANGUAGE KindSignatures, GADTs, RankNTypes, ScopedTypeVariables, TypeFamilies, DeriveDataTypeable #-}
 
 module Language.HERMIT.Kernel
-        (hermitKernel
+        ( -- * The HERMIT Kernel
+          hermitKernel
         , Kernel(..)
         , AST(..)
-        ) where
+) where
 
 import GhcPlugins
 
@@ -25,9 +26,8 @@ data Kernel = Kernel
         , listK   ::                                        IO [AST]
         }
 
--- a name of a syntax tree
-newtype AST = AST Int
-        deriving (Eq, Ord, Show)
+-- | An 'AST' is just a name for a specific Core tree.
+newtype AST = AST Int deriving (Eq, Ord, Show)
 
 data Msg s r = forall a . Req (s -> CoreM (Either String (a,s))) (MVar (Either String a))
              | Done (s -> CoreM r)
@@ -60,9 +60,7 @@ hermitKernel callback modGuts = do
                 putMVar msg (Req fn rep)
                 res <- takeMVar rep
                 case res of
-                  Left m -> do
-                        print ("sendReq",m)
-                        fail m
+                  Left m    -> fail m
                   Right ans -> return ans
 
         let find :: (Monad m) => AST -> M.Map AST ModGuts -> (String -> m a) -> (ModGuts -> m a) -> m a
