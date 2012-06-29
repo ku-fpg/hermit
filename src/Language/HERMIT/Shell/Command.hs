@@ -5,6 +5,7 @@ module Language.HERMIT.Shell.Command where
 import qualified GhcPlugins as GHC
 
 import Control.Applicative
+import Control.Arrow hiding (loop)
 import Control.Concurrent
 import Control.Exception.Base hiding (catch)
 import Control.Monad.State
@@ -18,15 +19,15 @@ import Data.Dynamic
 import qualified Data.Map as M
 import Data.Maybe
 
+import Language.HERMIT.Dictionary
 import Language.HERMIT.Expr
 import Language.HERMIT.External
 import Language.HERMIT.Interp
-import Language.HERMIT.Kure
 import Language.HERMIT.Kernel.Scoped
+import Language.HERMIT.Kure
 import Language.HERMIT.PrettyPrinter
 import Language.HERMIT.Primitive.Consider
 import Language.HERMIT.Primitive.Inline
-import Language.HERMIT.Dictionary
 
 import Prelude hiding (catch)
 
@@ -286,29 +287,42 @@ data SessionState = SessionState
 
 -------------------------------------------------------------------------------
 
-data CompletionType = BindingsC   -- complete with names that are let bound
-                    | InlineC     -- complete with names that can be inlined
-                    | UnknownC    -- add to completionType function
-                    | AmbiguousC  -- completionType function needs to be more specific
+data CompletionType = ConsiderC -- complete with possible arguments to consider
+                    | InlineC   -- complete with names that can be inlined
+                    | CommandC  -- complete using dictionary commands (default)
+                    | AmbiguousC [CompletionType]  -- completionType function needs to be more specific
+    deriving (Show)
 
+-- todo: reverse rPrev and parse it, to better figure out what possiblities are in context?
+--       for instance, completing "any-bu (inline " should be different than completing just "inline "
+--       this would also allow typed completion?
 completionType :: String -> CompletionType
 completionType = go . dropWhile isSpace
-    where go str = case [ ty | (nm, ty) <- opts, reverse nm `isPrefixOf` str ] of
-                    []  -> UnknownC
-                    [t] -> t
-                    _   -> AmbiguousC
+    where go rPrev = case [ ty | (nm, ty) <- opts, reverse nm `isPrefixOf` rPrev ] of
+                        []  -> CommandC
+                        [t] -> t
+                        ts  -> AmbiguousC ts
           opts = [ ("inline"  , InlineC  )
-                 , ("consider", BindingsC)
-                 , ("rhs-of"  , BindingsC)
+                 , ("consider", ConsiderC)
+                 , ("rhs-of"  , ConsiderC)
                  ]
 
-completionQuery :: CompletionType -> IO (TranslateH Core [String])
-completionQuery BindingsC  = return considerTargets
-completionQuery InlineC    = return inlineTargets
--- Need to add to opts in completionType function.
-completionQuery UnknownC   = putStrLn "\nCannot tab complete: unknown completion type." >> return (pure [])
+completionQuery :: CommandLineState -> CompletionType -> IO (TranslateH Core [String])
+completionQuery _ ConsiderC = return $ considerTargets >>> arr ((++ (map fst considerables)) . map ('\'':))
+completionQuery _ InlineC   = return $ inlineTargets   >>> arr (map ('\'':))
+completionQuery s CommandC  = return $ pure (M.keys (cl_dict s))
 -- Need to modify opts in completionType function. No key can be a suffix of another key.
-completionQuery AmbiguousC = putStrLn "\nCannot tab complete: ambiguous completion type." >> return (pure [])
+completionQuery _ (AmbiguousC ts) = do
+    putStrLn "\nCannot tab complete: ambiguous completion type."
+    putStrLn $ "Possibilities: " ++ (intercalate ", " $ map show ts)
+    return (pure [])
+
+shellComplete :: MVar CommandLineState -> String -> String -> IO [Completion]
+shellComplete mvar rPrev so_far = do
+    st <- readMVar mvar
+    targetQuery <- completionQuery st (completionType rPrev)
+    liftM (map simpleCompletion . filter (so_far `isPrefixOf`))
+        $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
 
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
 commandLine filesToLoad behavior modGuts = do
@@ -317,16 +331,6 @@ commandLine filesToLoad behavior modGuts = do
     GHC.liftIO $ print (length (GHC.mg_rules modGuts))
     let dict = dictionary $ all_externals shell_externals modGuts
     let ws_complete = " ()"
-    let do_complete mvar prev ('\'':so_far) = do
-            st <- readMVar mvar
-            targetQuery <- completionQuery (completionType prev)
-            liftM (map (simpleCompletion . ('\'':)) . filter (so_far `isPrefixOf`))
-                $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
-        do_complete _    _ so_far =
-            return [ simpleCompletion cmd
-                   | cmd <- M.keys dict
-                   , so_far `isPrefixOf` cmd
-                   ]
 
     let startup =
             sequence_ [ performMetaCommand $ case fileName of
@@ -345,7 +349,7 @@ commandLine filesToLoad behavior modGuts = do
         completionMVar <- newMVar shellState
 
         _ <- runInputTBehavior behavior
-                (setComplete (completeWordWithPrev Nothing ws_complete (do_complete completionMVar)) defaultSettings)
+                (setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings)
                 (evalStateT (runErrorT (startup >> showFocus >> loop completionMVar)) shellState)
 
         return ()
