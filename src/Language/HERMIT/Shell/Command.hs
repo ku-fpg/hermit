@@ -97,9 +97,13 @@ instance Extern MetaCommand where
 data Direction = L | R | U | D | T
         deriving Show
 
+
+-- TODO: Use another word, Navigation is a more general concept
+-- Perhaps VersionNavigation
 data Navigation = Back                  -- back (up) the derivation tree
                 | Step                  -- down one step; assumes only one choice
                 | Goto Int              -- goto a specific node, if possible
+                | GotoTag String        -- goto a specific named tag
         deriving Show
 
 data ShellCommandBox = ShellCommandBox ShellCommand deriving Typeable
@@ -159,11 +163,13 @@ shell_externals = map (.+ Shell) $
    , external "top"            (Direction T)
        [ "move to root of tree" ]
    , external ":back"            (SessionStateEffect $ navigation Back)
-       [ "go back in the derivation" ]
+       [ "go back in the derivation" ]                                          .+ VersionControl
    , external ":step"            (SessionStateEffect $ navigation Step)
-       [ "step forward in the derivation" ]
+       [ "step forward in the derivation" ]                                     .+ VersionControl
    , external ":goto"            (SessionStateEffect . navigation . Goto)
-       [ "goto a specific step in the derivation" ]
+       [ "goto a specific step in the derivation" ]                             .+ VersionControl
+   , external ":goto"            (SessionStateEffect . navigation . GotoTag)
+       [ "goto a named step in the derivation" ]
    , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st -> do
        case M.lookup pp pp_dictionary of
          Nothing -> do
@@ -253,10 +259,11 @@ type CLM m a = ErrorT String (StateT CommandLineState m) a
 
 data CommandLineState = CommandLineState
         { cl_graph       :: [(SAST,ExprH,SAST)]
+        , cl_tags        :: [(String,SAST)]
         -- these two should be in a reader
         , cl_dict        :: M.Map String [Dynamic]
         , cl_kernel       :: ScopedKernel
-        -- and the session state
+        -- and the session state (perhaps in a seperate state?)
         , cl_session      :: SessionState
         }
 
@@ -273,7 +280,7 @@ data SessionState = SessionState
         , cl_render      :: Handle -> PrettyOptions -> DocH -> IO ()   -- ^ the way of outputing to the screen
         , cl_width       :: Int                 -- ^ how wide is the screen?
         , cl_nav         :: Bool        -- ^ keyboard input the the nav panel
-        , cl_loading     :: Bool        -- ^ if loading a file, be quieter. TODO: generalize
+        , cl_loading     :: Bool        -- ^ if loading a file, show commands as they run. TODO: generalize
         }
 
 
@@ -333,7 +340,7 @@ commandLine filesToLoad behavior modGuts = do
     flip scopedKernel modGuts $ \ skernel sast -> do
 
         let sessionState = SessionState sast "clean" def unicodeConsole 80 False False
-            shellState = CommandLineState [] dict skernel sessionState
+            shellState = CommandLineState [] [] dict skernel sessionState
 
         completionMVar <- newMVar shellState
 
@@ -395,7 +402,9 @@ evalExpr expr = do
                 expr of
             Left msg  -> throwError $ msg
             Right cmd -> do
-                -- liftIO (putStrLn $ "doing : " ++ show expr)
+                condM (gets (cl_loading . cl_session))
+                      (liftIO (putStrLn $ "doing : " ++ show expr))
+                      (return ())
                 case cmd of
                   AstEffect effect   -> performAstEffect effect expr
                   ShellEffect effect -> performShellEffect effect
@@ -457,9 +466,11 @@ performAstEffect EndScope expr = do
 performShellEffect :: (MonadIO m) => ShellEffect -> CLM m ()
 performShellEffect (SessionStateEffect f) = do
         st <- get
-        s_st' <- liftIO (f st (cl_session st))
-        put (st { cl_session = s_st' })
-        showFocus
+        opt <- liftIO (fmap Right (f st (cl_session st)) `catch` \ str -> return (Left str))
+        case opt of
+          Right s_st' -> do put (st { cl_session = s_st' })
+                            showFocus
+          Left err -> throwError err
 
 -------------------------------------------------------------------------------
 
@@ -500,7 +511,10 @@ performMetaCommand (LoadFile fileName) = do
         case res of
           Right str -> case parseStmtsH (normalize str) of
                         Left  msg  -> throwError ("parse failure: " ++ msg)
-                        Right stmts -> evalStmts stmts
+                        Right stmts -> do
+                            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = True } }
+                            evalStmts stmts
+                            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = False } }
           Left (err :: IOException) -> throwError ("IO error: " ++ show err)
   where
    normalize = unlines
@@ -566,32 +580,31 @@ navigation whereTo st sess_st = do
               then do
                  return $ sess_st { cl_cursor = SAST n }
               else do
-                 putStrLn $ "Can not find AST #" ++ show n
-                 return sess_st
+                 fail $ "Can not find AST #" ++ show n
+      GotoTag tag -> do
+           case lookup tag (cl_tags st) of
+              Just sast -> return $ sess_st { cl_cursor = sast }
+              _ -> fail $ "Can not find tag " ++ show tag
       Step -> do
            let ns = [ edge | edge@(s,_,_) <- cl_graph st, s == cl_cursor (cl_session st) ]
            case ns of
              [] -> do
-                 putStrLn $ "Can not step forward (no more steps)"
-                 return sess_st
-             [(_,cmd,d) ] -> do
-                  print $ "performing " ++ show cmd
+                 fail $ "Can not step forward (no more steps)"
+             [(_,_,d) ] -> do
+                     -- TODO: give message
                   return $ sess_st { cl_cursor = d }
              _ -> do
-                 liftIO $ putStrLn $ "Can not step forward (multiple choices)"
-                 return sess_st
+                 fail "Can not step forward (multiple choices)"
       Back -> do
            let ns = [ edge | edge@(_,_,d) <- cl_graph st, d == cl_cursor (cl_session st) ]
            case ns of
              [] -> do
-                  putStrLn $ "Can not step backwards (no more steps)"
-                  return sess_st
+                  fail $ "Can not step backwards (no more steps)"
              [(s,cmd,_) ] -> do
-                  print $ "undoing " ++ show cmd
+                  -- TODO: give message about undoing
                   return $ sess_st { cl_cursor = s }
              _ -> do
-                 putStrLn $ "Can not step backwards (multiple choices, impossible!)"
-                 return sess_st
+                 fail $ "Can not step backwards (multiple choices, impossible!)"
 
 --------------------------------------------------------
 

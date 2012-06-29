@@ -1,0 +1,4 @@
+consider 'fib
+fix-intro
+0
+apply-rule ww -- this fails

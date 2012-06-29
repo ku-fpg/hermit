@@ -36,6 +36,7 @@ data CmdTag = Shell         -- Shell commands
             | Commute       -- Its all about the Commute
             | PreCondition  -- operation has a precondition
             | Debug         -- commands to help debugging
+            | VersionControl-- Version Control
 
             | TODO          -- TODO check before the release
             | Unimplemented -- Something is not finished yet, do not used
@@ -79,6 +80,7 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
           , (Commute,      "Commute is when you swap nested terms")
           , (PreCondition, "Operation has a (perhaps undocumented) precondition")
           , (Debug,        "Commands specifically to help debugging")
+          , (VersionControl,"Version Control for Core Syntax")
 
           , (TODO,         "TO BE assessed before a release")
           , (Unimplemented,"Something is not finished yet; do not used")

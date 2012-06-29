@@ -1,4 +1,0 @@
--- First example; unroll fib once.
-consider 'fib
-  anybu inline
-.
