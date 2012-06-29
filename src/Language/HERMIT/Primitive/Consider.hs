@@ -26,13 +26,23 @@ externals = map (.+ Focus)
 
 -- focus on a binding group
 considerName :: TH.Name -> TranslateH Core Path
-considerName = uniquePrunePathToT . namedBinding
+considerName = uniquePrunePathToT . bindGroup
+
+-- find a binding group that contains a name.
+-- this is slightly different than namedBinding below,
+-- as it will take us to the rec in a let rec, rather than
+-- the actual binding. TODO: modify considerName or rhsOf
+-- so we only need one of these?
+bindGroup :: TH.Name -> Core -> Bool
+bindGroup nm (BindCore (NonRec v _))  =  nm `cmpName` idName v
+bindGroup nm (BindCore (Rec bds))     =  any (cmpName nm . idName) $ map fst bds
+bindGroup _  _                        =  False
 
 -- find a specific binding's rhs.
 rhsOf :: TH.Name -> TranslateH Core Path
 rhsOf nm = uniquePrunePathToT (namedBinding nm) >>> arr (++ [0])
 
--- find a binding group that contains a name.
+-- find a named binding.
 namedBinding :: TH.Name -> Core -> Bool
 namedBinding nm (BindCore (NonRec v _))  =  nm `cmpName` idName v
 namedBinding nm (DefCore (Def v _))      =  nm `cmpName` idName v

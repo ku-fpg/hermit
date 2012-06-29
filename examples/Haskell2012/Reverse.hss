@@ -20,7 +20,7 @@ up
 dump "paper/2-after-ww.tex" "clean" "latex" 56
 
 -- clean up
-any-bu (compose beta-reduce let-subst)
+any-bu (beta-reduce >>> let-subst)
 
 dump "paper/3-ww-and-clean.tex" "clean" "latex" 56
 
