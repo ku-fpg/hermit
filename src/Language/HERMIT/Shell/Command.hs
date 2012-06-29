@@ -273,7 +273,7 @@ data SessionState = SessionState
         , cl_render      :: Handle -> PrettyOptions -> DocH -> IO ()   -- ^ the way of outputing to the screen
         , cl_width       :: Int                 -- ^ how wide is the screen?
         , cl_nav         :: Bool        -- ^ keyboard input the the nav panel
-        , cl_loading     :: Bool        -- ^ if loading a file, be quieter. TODO: generalize
+        , cl_loading     :: Bool        -- ^ if loading a file, show commands as they run. TODO: generalize
         }
 
 
@@ -395,7 +395,9 @@ evalExpr expr = do
                 expr of
             Left msg  -> throwError $ msg
             Right cmd -> do
-                -- liftIO (putStrLn $ "doing : " ++ show expr)
+                condM (gets (cl_loading . cl_session))
+                      (liftIO (putStrLn $ "doing : " ++ show expr))
+                      (return ())
                 case cmd of
                   AstEffect effect   -> performAstEffect effect expr
                   ShellEffect effect -> performShellEffect effect
@@ -500,7 +502,10 @@ performMetaCommand (LoadFile fileName) = do
         case res of
           Right str -> case parseStmtsH (normalize str) of
                         Left  msg  -> throwError ("parse failure: " ++ msg)
-                        Right stmts -> evalStmts stmts
+                        Right stmts -> do
+                            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = True } }
+                            evalStmts stmts
+                            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = False } }
           Left (err :: IOException) -> throwError ("IO error: " ++ show err)
   where
    normalize = unlines
