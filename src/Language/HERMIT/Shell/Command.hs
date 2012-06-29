@@ -461,9 +461,11 @@ performAstEffect EndScope expr = do
 performShellEffect :: (MonadIO m) => ShellEffect -> CLM m ()
 performShellEffect (SessionStateEffect f) = do
         st <- get
-        s_st' <- liftIO (f st (cl_session st))
-        put (st { cl_session = s_st' })
-        showFocus
+        opt <- liftIO (fmap Right (f st (cl_session st)) `catch` \ str -> return (Left str))
+        case opt of
+          Right s_st' -> do put (st { cl_session = s_st' })
+                            showFocus
+          Left err -> throwError err
 
 -------------------------------------------------------------------------------
 
