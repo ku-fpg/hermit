@@ -159,11 +159,13 @@ shell_externals = map (.+ Shell) $
    , external "top"            (Direction T)
        [ "move to root of tree" ]
    , external ":back"            (SessionStateEffect $ navigation Back)
-       [ "go back in the derivation" ]
+       [ "go back in the derivation" ]                                          .+ VersionControl
    , external ":step"            (SessionStateEffect $ navigation Step)
-       [ "step forward in the derivation" ]
+       [ "step forward in the derivation" ]                                     .+ VersionControl
    , external ":goto"            (SessionStateEffect . navigation . Goto)
-       [ "goto a specific step in the derivation" ]
+       [ "goto a specific step in the derivation" ]                             .+ VersionControl
+   , external ":goto"            (SessionStateEffect . navigation . GotoTag)
+       [ "goto a named step in the derivation" ]
    , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st -> do
        case M.lookup pp pp_dictionary of
          Nothing -> do
