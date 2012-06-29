@@ -63,7 +63,7 @@ dictionary externs = toDictionary externs'
                      ] ++ (map ("            " ++) (tail msg)))  .+ Query .+ Shell
                 -- Runs every command matching the tag predicate with innermostR (fix point anybuR),
                 -- Only fails if all of them fail the first time.
-                , let bashPredicate = Shallow .& Eval .& (notT Loop)
+                , let bashPredicate = Bash -- Shallow .& Eval .& (notT Loop)
                   in external "bash"
                               (metaCmd externs bashPredicate (innermostR . orR))
                               (metaHelp externs bashPredicate

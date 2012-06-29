@@ -37,6 +37,7 @@ data CmdTag = Shell         -- Shell commands
             | PreCondition  -- operation has a precondition
             | Debug         -- commands to help debugging
             | VersionControl-- Version Control
+            | Bash          -- commands that are run by bash
 
             | TODO          -- TODO check before the release
             | Unimplemented -- Something is not finished yet, do not used
@@ -81,6 +82,7 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
           , (PreCondition, "Operation has a (perhaps undocumented) precondition")
           , (Debug,        "Commands specifically to help debugging")
           , (VersionControl,"Version Control for Core Syntax")
+          , (Bash,         "Commands that run as part of the bash command.")
 
           , (TODO,         "TO BE assessed before a release")
           , (Unimplemented,"Something is not finished yet; do not used")

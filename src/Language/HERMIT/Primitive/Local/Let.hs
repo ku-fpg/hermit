@@ -24,13 +24,13 @@ externals =
          -- , external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
          --             [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Unimplemented .+ Eval
          , external "let-float-app" (promoteR letFloatApp :: RewriteH Core)
-                     [ "(let v = ev in e) x ==> let v = ev in e x" ]                    .+ Commute .+ Shallow
+                     [ "(let v = ev in e) x ==> let v = ev in e x" ]                    .+ Commute .+ Shallow .+ Bash
          , external "let-float-arg" (promoteR letFloatArg :: RewriteH Core)
-                     [ "f (let v = ev in e) ==> let v = ev in f e" ]                    .+ Commute .+ Shallow
+                     [ "f (let v = ev in e) ==> let v = ev in f e" ]                    .+ Commute .+ Shallow .+ Bash
          , external "let-float-let" (promoteR (letFloatLet) <+ promoteR letFloatLetTop :: RewriteH Core)
-                     [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow
+                     [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow .+ Bash
          , external "case-float-let" (promoteR caseFloatLet :: RewriteH Core)
-                     [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow
+                     [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow .+ Bash
          , external "let-to-case" (promoteR letToCase :: RewriteH Core)
                      [ "let v = ev in e ==> case ev of v -> e" ] .+ Commute .+ Shallow .+ PreCondition
          -- , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
