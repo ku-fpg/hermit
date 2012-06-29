@@ -18,6 +18,9 @@ type ExternalHelp = [String]
 
 -- Tags --------------------------------------------------------
 
+-- Requirement: commands can not have the same name as any CmdTag
+-- (Or the help function will not find it)
+
 data CmdTag = CaseCmd       -- works on case statements
             | Context       -- something that uses the context
             | Eval          -- the arrow of evaluation (reduces a term)

@@ -1,4 +1,4 @@
-{-# LANGUAGE KindSignatures, GADTs #-}
+{-# LANGUAGE KindSignatures, GADTs, ScopedTypeVariables #-}
 -- The main namespace. Things tend to be untyped, because the API is accessed via (untyped) names.
 
 module Language.HERMIT.Dictionary where
@@ -59,10 +59,11 @@ dictionary externs = toDictionary externs'
                 [ external ":help" (help_command externs' "help")
                     [ "(this message)" ]
                 , external ":help" (help_command externs')
-                    ([ ":help <Category|All|command|search-string> displays help about"
-                     , "a category or command. Multiple items may match."
+                    ([ ":help <command>|<category>|categories|all|<search-string>"
+                     , "displays help about a command or category."
+                     , "Multiple items may match."
                      , ""
-                     , "Categories: " ++ head msg
+                     , "categories: " ++ head msg
                      ] ++ (map ("            " ++) (tail msg)))
 {-
                 , external "help" (help externs Nothing . Just :: String -> String)
@@ -103,6 +104,10 @@ make_help :: [External] -> [String]
 make_help = concatMap snd . M.toList . toHelp
 
 help_command :: [External] -> String -> String
+help_command externals m
+        | [(cat :: CmdTag,"")] <- reads m
+        = unlines $ make_help $ filter (tagMatch cat) externals
+
 help_command externals m = unlines $ make_help $ pathPrefix m
     where pathPrefix p = filter (isInfixOf p . externName) externals
 
