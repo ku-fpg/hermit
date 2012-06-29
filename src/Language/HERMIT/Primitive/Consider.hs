@@ -45,8 +45,11 @@ considerTargets :: TranslateH Core [String]
 considerTargets = collectT (promoteT $ nonRec <+ rec) >>> arr concat
     where nonRec = nonRecT (pure ()) (const . (:[]) . unqualified)
           rec    = recT (const (arr (\(Def v _) -> unqualified v))) id
-          unqualified :: Id -> String
-          unqualified = reverse . takeWhile (/='.') . reverse . showPpr . idName
+
+-- | Get the unqualified name from an Id/Var.
+unqualified :: Id -> String
+unqualified = reverse . takeWhile (/='.') . reverse . showPpr . idName
+-- TODO: Does GHC provide this?
 
 -- Hacks till we can find the correct way of doing these.
 cmpName :: TH.Name -> Name -> Bool

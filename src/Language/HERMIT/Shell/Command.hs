@@ -25,6 +25,7 @@ import Language.HERMIT.Kure
 import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.PrettyPrinter
 import Language.HERMIT.Primitive.Consider
+import Language.HERMIT.Primitive.Inline
 import Language.HERMIT.Dictionary
 
 import Prelude hiding (catch)
@@ -253,18 +254,8 @@ moveLocally R (ScopePath (n:ns))         = ScopePath ((n+1):ns)
 moveLocally T _                          = ScopePath []
 moveLocally _ p                          = p
 
--- ascendDescentPath :: DescentPath -> Maybe (Int, DescentPath)
--- ascendDescentPath (DescentPath [])     = Nothing
--- ascendDescentPath (DescentPath (n:ns)) = Just (n,ns)
-
--- descendDescentPath :: Int -> DescentPath -> DescentPath
-
--- scopePathL :: ScopePath -> LensH Core Core
--- scopePathL = pathL . reverse
-
 -------------------------------------------------------------------------------
 
---type CLM m a = StateT CommandLineState (ErrorT String m) a
 type CLM m a = ErrorT String (StateT CommandLineState m) a
 
 data CommandLineState = CommandLineState
@@ -295,6 +286,30 @@ data SessionState = SessionState
 
 -------------------------------------------------------------------------------
 
+data CompletionType = BindingsC   -- complete with names that are let bound
+                    | VariablesC  -- complete with names that occur (roughly: can be inlined)
+                    | UnknownC    -- add to completionType function
+                    | AmbiguousC  -- completionType function needs to be more specific
+
+completionType :: String -> CompletionType
+completionType = go . dropWhile isSpace
+    where go str = case [ ty | (nm, ty) <- opts, reverse nm `isPrefixOf` str ] of
+                    []  -> UnknownC
+                    [t] -> t
+                    _   -> AmbiguousC
+          opts = [ ("inline"  , VariablesC)
+                 , ("consider", BindingsC )
+                 , ("rhs-of"  , BindingsC )
+                 ]
+
+completionQuery :: CompletionType -> IO (TranslateH Core [String])
+completionQuery BindingsC  = return considerTargets
+completionQuery VariablesC = return inlineTargets
+-- Need to add to opts in completionType function.
+completionQuery UnknownC   = putStrLn "\nCannot tab complete: unknown completion type." >> return (pure [])
+-- Need to modify opts in completionType function. No key can be a suffix of another key.
+completionQuery AmbiguousC = putStrLn "\nCannot tab complete: ambiguous completion type." >> return (pure [])
+
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
 commandLine filesToLoad behavior modGuts = do
     GHC.liftIO $ print ("files",filesToLoad)
@@ -302,10 +317,11 @@ commandLine filesToLoad behavior modGuts = do
     GHC.liftIO $ print (length (GHC.mg_rules modGuts))
     let dict = dictionary $ all_externals shell_externals modGuts
     let ws_complete = " ()"
-    let do_complete mvar _ ('\'':so_far) = do
+    let do_complete mvar prev ('\'':so_far) = do
             st <- readMVar mvar
+            targetQuery <- completionQuery (completionType prev)
             liftM (map (simpleCompletion . ('\'':)) . filter (so_far `isPrefixOf`))
-                $ queryS (cl_kernel st) (cl_cursor (cl_session st)) considerTargets
+                $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
         do_complete _    _ so_far =
             return [ simpleCompletion cmd
                    | cmd <- M.keys dict

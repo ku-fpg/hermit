@@ -41,3 +41,9 @@ inline = rewrite $ \ c e -> case e of
                   -- for now, just accept, and proceeded
                   -> return e'
     _      -> fail "inline failed (No variable)"
+
+-- | Get list of possible inline targets. Used by shell for completion.
+inlineTargets :: TranslateH Core [String]
+inlineTargets = collectT $ promoteT $ condM (testM inline)
+                                            (varT unqualified)
+                                            (fail "cannot be inlined")
