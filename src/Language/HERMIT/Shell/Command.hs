@@ -97,9 +97,13 @@ instance Extern MetaCommand where
 data Direction = L | R | U | D | T
         deriving Show
 
+
+-- TODO: Use another word, Navigation is a more general concept
+-- Perhaps VersionNavigation
 data Navigation = Back                  -- back (up) the derivation tree
                 | Step                  -- down one step; assumes only one choice
                 | Goto Int              -- goto a specific node, if possible
+                | GotoTag String        -- goto a specific named tag
         deriving Show
 
 data ShellCommandBox = ShellCommandBox ShellCommand deriving Typeable
@@ -255,10 +259,11 @@ type CLM m a = ErrorT String (StateT CommandLineState m) a
 
 data CommandLineState = CommandLineState
         { cl_graph       :: [(SAST,ExprH,SAST)]
+        , cl_tags        :: [(String,SAST)]
         -- these two should be in a reader
         , cl_dict        :: M.Map String [Dynamic]
         , cl_kernel       :: ScopedKernel
-        -- and the session state
+        -- and the session state (perhaps in a seperate state?)
         , cl_session      :: SessionState
         }
 
@@ -335,7 +340,7 @@ commandLine filesToLoad behavior modGuts = do
     flip scopedKernel modGuts $ \ skernel sast -> do
 
         let sessionState = SessionState sast "clean" def unicodeConsole 80 False False
-            shellState = CommandLineState [] dict skernel sessionState
+            shellState = CommandLineState [] [] dict skernel sessionState
 
         completionMVar <- newMVar shellState
 
@@ -575,32 +580,31 @@ navigation whereTo st sess_st = do
               then do
                  return $ sess_st { cl_cursor = SAST n }
               else do
-                 putStrLn $ "Can not find AST #" ++ show n
-                 return sess_st
+                 fail $ "Can not find AST #" ++ show n
+      GotoTag tag -> do
+           case lookup tag (cl_tags st) of
+              Just sast -> return $ sess_st { cl_cursor = sast }
+              _ -> fail $ "Can not find tag " ++ show tag
       Step -> do
            let ns = [ edge | edge@(s,_,_) <- cl_graph st, s == cl_cursor (cl_session st) ]
            case ns of
              [] -> do
-                 putStrLn $ "Can not step forward (no more steps)"
-                 return sess_st
-             [(_,cmd,d) ] -> do
-                  print $ "performing " ++ show cmd
+                 fail $ "Can not step forward (no more steps)"
+             [(_,_,d) ] -> do
+                     -- TODO: give message
                   return $ sess_st { cl_cursor = d }
              _ -> do
-                 liftIO $ putStrLn $ "Can not step forward (multiple choices)"
-                 return sess_st
+                 fail "Can not step forward (multiple choices)"
       Back -> do
            let ns = [ edge | edge@(_,_,d) <- cl_graph st, d == cl_cursor (cl_session st) ]
            case ns of
              [] -> do
-                  putStrLn $ "Can not step backwards (no more steps)"
-                  return sess_st
+                  fail $ "Can not step backwards (no more steps)"
              [(s,cmd,_) ] -> do
-                  print $ "undoing " ++ show cmd
+                  -- TODO: give message about undoing
                   return $ sess_st { cl_cursor = s }
              _ -> do
-                 putStrLn $ "Can not step backwards (multiple choices, impossible!)"
-                 return sess_st
+                 fail $ "Can not step backwards (multiple choices, impossible!)"
 
 --------------------------------------------------------
 
