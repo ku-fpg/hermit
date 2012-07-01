@@ -67,7 +67,7 @@ addBinding (NonRec n e) env
   where
         next_depth = succ (hermitDepth env)
 addBinding (Rec bds) env
-        = env { hermitBindings = union bds_env (hermitBindings env)
+        = env { hermitBindings = bds_env `union` hermitBindings env
               , hermitDepth    = next_depth
               }
   where

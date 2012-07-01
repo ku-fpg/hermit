@@ -25,8 +25,7 @@ data StmtH expr
         | ScopeH [StmtH expr]
         deriving Show
 
-data Box e = InfixableExpr e | Box e
-        deriving Show
+data Box e = InfixableExpr e | Box e deriving Show
 
 ---------------------------------------------
 
@@ -38,19 +37,19 @@ parse p str = case p str of
                 _                                -> Left $ "Bad parse for: " ++ str
 
 many :: ReadS a -> ReadS [a]
-many p = \ inp ->
+many p inp =
      some p inp ++
      [ ([], inp) ]
 
 some :: ReadS a -> ReadS [a]
-some p = \ inp ->
+some p inp =
      [ (x:xs,inp2)
      | (x,inp1)  <- p inp
      , (xs,inp2) <- many p inp1
      ]
 
 bind :: ReadS a -> (a -> ReadS b) -> ReadS b
-bind m k = \ inp ->
+bind m k inp =
         [ (b,inp2)
         | (a,inp1) <- m inp
         , (b,inp2) <- k a inp1
@@ -70,7 +69,7 @@ parseStmtsH = parse parseExprsH'
 ---------------------------------------------
 
 parseExprsH' :: ReadS [StmtH ExprH]
-parseExprsH' = \ inp ->
+parseExprsH' inp =
         (many (item ";")                 `bind` \ _ -> -- another hack
         (parseTopExprH1                  `bind` (\ a ->
         (many (item ";")                 `bind` \ _ -> -- complete hack, needed fixed with real parser
@@ -80,8 +79,8 @@ parseExprsH' = \ inp ->
 
 
 parseTopExprH1 :: ReadS (StmtH ExprH)
-parseTopExprH1 = \ inp ->
-        (parseExprH1 `bind` \ es -> \ inp1 -> [(ExprH es,inp1)]) inp ++
+parseTopExprH1 inp =
+        (parseExprH1 `bind` \ es inp1 -> [(ExprH es,inp1)]) inp ++
         [ (ScopeH es,inp3)
         | ("{",inp1) <- parseToken inp
         , (es,inp2)   <- parseExprsH' inp1
@@ -90,24 +89,24 @@ parseTopExprH1 = \ inp ->
 
 
 parseExprH0 :: ReadS (Box ExprH)
-parseExprH0 = \ inp ->
-        [ (Box $ CmdName str,inp1)
+parseExprH0 inp =
+        [ (Box (CmdName str),inp1)
         | (str,inp1) <- parseToken inp
         , isId (head str) || head str == ':'    -- commands can start with :
         , all isId (tail str)
         ] ++
-        [ (InfixableExpr $ CmdName str,inp1)
+        [ (InfixableExpr (CmdName str),inp1)
         | (str,inp1) <- parseToken inp
         , all isInfixId str
         ] ++
-        [ (Box $ SrcName str,inp2)
+        [ (Box (SrcName str),inp2)
         | ("'",inp1) <- parseToken inp
         , (str,inp2) <- parseToken inp1
         ] ++
-        [ (Box $ CmdName $ chomp '"' str,inp1)
+        [ (Box (CmdName $ chomp '"' str),inp1)
         | (str@('"':_),inp1) <- lex inp
         ] ++
-        [ (Box $ e,inp3)
+        [ (Box e,inp3)
         | ("(",inp1) <- parseToken inp
         , (e,inp2)   <- parseExprH1 inp1
         , (")",inp3) <- parseToken inp2
@@ -117,7 +116,7 @@ parseExprH0 = \ inp ->
                             | otherwise = s
 
 parseExprH1 :: ReadS ExprH
-parseExprH1 = some parseExprH0 `bind` \ es -> \ inp ->
+parseExprH1 = some parseExprH0 `bind` \ es inp ->
         case mkAppH es id [] of
           Nothing -> []
           Just r  -> [(r,inp)]
@@ -144,7 +143,7 @@ mkAppH' []     = Nothing
 
 
 item :: String -> ReadS ()
-item str = \ inp ->
+item str inp =
         [ ((),rest)
         | (tok,rest) <- parseToken inp
         , tok == str
