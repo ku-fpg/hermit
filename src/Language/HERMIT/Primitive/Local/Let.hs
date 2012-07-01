@@ -65,8 +65,8 @@ letFloatLet = setFailMsg "letFloatLet failed" $
 
 letFloatLetTop :: RewriteH CoreProgram
 letFloatLetTop = setFailMsg "letFloatLetTop failed" $
-  do NonRec v (Let (NonRec w ew) ev) : e <- idR
-     return $ (NonRec w ew) : (NonRec v ev) : e
+  do NonRec v (Let (NonRec w ew) ev) : bds <- idR
+     return (NonRec w ew : NonRec v ev : bds)
 
 caseFloatLet :: RewriteH CoreExpr
 caseFloatLet = setFailMsg "caseFloatLet failed" $
