@@ -58,6 +58,7 @@ data AstEffect
 
    | BeginScope
    | EndScope
+   | Tag String                 -- Adding a tag
    deriving Typeable
 
 instance Extern AstEffect where
@@ -158,6 +159,8 @@ shell_externals = map (.+ Shell) $
        [ "move to the parent"]
    , external "down"            (Direction D)
        [ "move to the first child"]
+   , external "tag"             Tag
+       [ "tag <label> names the current AST with a label" ]
    , external ":navigate"        (SessionStateEffect $ \ _ st -> return $ st { cl_nav = True })
        [ "switch to navigate mode" ]
    , external ":command-line"    (SessionStateEffect $ \ _ st -> return $ st { cl_nav = False })
@@ -466,6 +469,9 @@ performAstEffect EndScope expr = do
         ast <- liftIO $ endScopeS (cl_kernel st) (cl_cursor (cl_session st))
         put $ newSAST expr ast st
         showFocus
+performAstEffect (Tag tag) expr = do
+        st <- get
+        put (st { cl_tags = (tag, (cl_cursor (cl_session st))) : cl_tags st })
 
 
 -------------------------------------------------------------------------------
