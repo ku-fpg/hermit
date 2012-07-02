@@ -166,6 +166,8 @@ shell_externals = map (.+ Shell) $
        [ "move to root of tree" ]
    , external ":back"            (SessionStateEffect $ navigation Back)
        [ "go back in the derivation" ]                                          .+ VersionControl
+   , external "log"             (Inquiry $ showDerivationTree)
+       [ "go back in the derivation" ]                                          .+ VersionControl
    , external ":step"            (SessionStateEffect $ navigation Step)
        [ "step forward in the derivation" ]                                     .+ VersionControl
    , external ":goto"            (SessionStateEffect . navigation . Goto)
@@ -658,6 +660,31 @@ getNavCmd = do
           ] ++
           [ (show n, res (show n)) | n <- [0..9] :: [Int] ]
 
+
+showDerivationTree :: CommandLineState -> SessionState -> IO String
+showDerivationTree st ss = return $ unlines $ showRefactorTrail graph 0 me
+  where
+          graph = [ (a,[show b],c) | (SAST a,b,SAST c) <- cl_graph st ]
+          SAST me = cl_cursor ss
+
+showRefactorTrail :: (Eq a, Show a) => [(a,[String],a)] -> a -> a -> [String]
+showRefactorTrail db a me =
+        case [ (b,c) | (a0,b,c) <- db, a == a0 ] of
+           [] -> [show' 3 a ++ " " ++ dot]
+           ((b,c):bs) ->
+                      [show' 3 a ++ " " ++ dot ++ if (not (null bs)) then "->" else ""] ++
+                      ["    " ++ "| " ++ txt | txt <- b ] ++
+                      showRefactorTrail db c me ++
+                      if null bs
+                      then []
+                      else [[]] ++
+                          showRefactorTrail [ (a',b',c') | (a',b',c') <- db
+                                                          , not (a == a' && c == c')
+                                                          ]  a me
+
+  where
+          dot = if a == me then "*" else "o"
+          show' n a = take (n - length (show a)) (repeat ' ') ++ show a
 
 
 
