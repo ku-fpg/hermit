@@ -662,29 +662,34 @@ getNavCmd = do
 
 
 showDerivationTree :: CommandLineState -> SessionState -> IO String
-showDerivationTree st ss = return $ unlines $ showRefactorTrail graph 0 me
+showDerivationTree st ss = return $ unlines $ showRefactorTrail graph tags 0 me
   where
           graph = [ (a,[show b],c) | (SAST a,b,SAST c) <- cl_graph st ]
+          tags  = [ (n,nm) | (nm,SAST n) <- cl_tags st ]
           SAST me = cl_cursor ss
 
-showRefactorTrail :: (Eq a, Show a) => [(a,[String],a)] -> a -> a -> [String]
-showRefactorTrail db a me =
+showRefactorTrail :: (Eq a, Show a) => [(a,[String],a)] -> [(a,String)] -> a -> a -> [String]
+showRefactorTrail db tags a me =
         case [ (b,c) | (a0,b,c) <- db, a == a0 ] of
-           [] -> [show' 3 a ++ " " ++ dot]
+           [] -> [show' 3 a ++ " " ++ dot ++ tags_txt]
            ((b,c):bs) ->
-                      [show' 3 a ++ " " ++ dot ++ if (not (null bs)) then "->" else ""] ++
+                      [show' 3 a ++ " " ++ dot ++ (if (not (null bs)) then "->" else "") ++ tags_txt ] ++
                       ["    " ++ "| " ++ txt | txt <- b ] ++
-                      showRefactorTrail db c me ++
+                      showRefactorTrail db tags c me ++
                       if null bs
                       then []
                       else [[]] ++
                           showRefactorTrail [ (a',b',c') | (a',b',c') <- db
                                                           , not (a == a' && c == c')
-                                                          ]  a me
+                                                          ]  tags a me
 
   where
           dot = if a == me then "*" else "o"
           show' n a = take (n - length (show a)) (repeat ' ') ++ show a
+          tags_txt = concat [ " " ++ txt
+                            | (n,txt) <- tags
+                            , n == a
+                            ]
 
 
 
