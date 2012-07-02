@@ -76,6 +76,7 @@ data QueryFun :: * where
    --  (CommandLineState -> IO String)
    Status        ::                             QueryFun
    Message       :: String                   -> QueryFun
+   Inquiry        ::(CommandLineState -> SessionState -> IO String) -> QueryFun
    deriving Typeable
 
 instance Extern QueryFun where
@@ -490,9 +491,12 @@ performQuery Status = do
         ps <- pathS (cl_kernel st) (cl_cursor (cl_session st))
         putStrLn $ "Paths: " ++ show ps
         print $ ("Graph",cl_graph st)
-    showFocus
-
-
+        print $ ("This",cl_cursor (cl_session st))
+performQuery (Inquiry f) = do
+    st <- get
+    liftIO $ do
+        msg <- f st (cl_session st)
+        putStrLn $ msg
 performQuery (Message msg) = liftIO (putStrLn msg)
 
 -------------------------------------------------------------------------------
