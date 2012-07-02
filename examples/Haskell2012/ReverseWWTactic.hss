@@ -1,0 +1,4 @@
+rhs-of 'rev
+consider 'rev
+load "../fib/WWTactic.hss"
+-- proceed with rest of derivation
