@@ -27,6 +27,7 @@ import qualified Data.Map as Map
 
 -- import Debug.Trace
 import Control.Monad
+import MonadUtils (MonadIO) -- GHC's MonadIO
 
 -- promoteR'  :: Term a => RewriteH a -> RewriteH (Generic a)
 -- promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an expr") (apply rr c)  (retract e)
@@ -101,26 +102,27 @@ testQuery r = f <$> testM r
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."
 
+findFn :: (MonadUnique m, MonadIO m) => ModGuts -> String -> m Id
+findFn modguts nm = do
+    namedFn <- case findNameFromTH (mg_rdr_env modguts) $ TH.mkName nm of
+        [f] -> return f
+        [] -> fail $ "cannot find " ++ nm
+        _  -> fail $ "too many " ++ nm ++ " found"
+
+    liftIO $ print ("VAR", GHC.showSDoc . GHC.ppr $ namedFn)
+
+    uq <- getUniqueM
+    let n_tyvar = GHC.setTyVarUnique (head alphaTyVars) uq
+        n_ty = GHC.mkTyVarTy n_tyvar
+        ty = mkForAllTy n_tyvar $ mkFunTy (mkFunTy n_ty n_ty) n_ty
+        namedId = GHC.mkVanillaGlobal namedFn ty
+        --                mkGlobalVar :: IdDetails -> Name -> Type -> IdInfo -> Id
+    return namedId
+
 fixIntro :: RewriteH CoreBind
 fixIntro = translate $ \ c e -> case e of
         Rec [(f,e0)] -> do
-                let modGuts = hermitModGuts c
-                let rdrEnv = mg_rdr_env modGuts
-
-                fixVar <- case findNameFromTH rdrEnv $  TH.mkName "Data.Function.fix" of
-                             [f'] -> return f'
-                             [] -> fail "can not find fix"
-                             _  -> fail "to many fix's"
-
-                liftIO $ print ("VAR",GHC.showSDoc . GHC.ppr $ fixVar)
-
-                uq <- getUniqueM
-                let n_tyvar = GHC.setTyVarUnique (head alphaTyVars) uq
-                let n_ty = GHC.mkTyVarTy n_tyvar
-
-                let fixType = mkForAllTy n_tyvar $ mkFunTy (mkFunTy n_ty n_ty) n_ty
-                let fixId = GHC.mkVanillaGlobal fixVar fixType
---                mkGlobalVar :: IdDetails -> Name -> Type -> IdInfo -> Id
+                fixId <- findFn (hermitModGuts c) "Data.Function.fix"
 
                 let coreFix = App (App (Var fixId) (Type (idType f)))
 --                let coreFix = App (Lit (mkMachString "<<FIX>>"))
