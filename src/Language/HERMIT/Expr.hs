@@ -20,6 +20,7 @@ data ExprH
         | AppH ExprH ExprH              -- ^ Application.
         deriving (Eq, Show)
 
+-- | Nested lists to represent scoping structure.
 data StmtH expr
         = ExprH expr
         | ScopeH [StmtH expr]

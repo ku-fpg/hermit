@@ -1,14 +1,17 @@
-{-# LANGUAGE DataKinds #-}
-
-module Language.HERMIT.Plugin (HermitPass, hermitPlugin) where
+module Language.HERMIT.Plugin
+       ( -- * The HERMIT Plugin
+         HermitPass
+       , hermitPlugin
+)  where
 
 import GhcPlugins
 import Data.List
 import System.IO
 
+-- | Given a list of 'CommandLineOption's, produce the 'ModGuts' to 'ModGuts' function required to build a plugin.
 type HermitPass = [CommandLineOption] -> ModGuts -> CoreM ModGuts
 
--- Build a hermit plugin. This mainly handles the per-module options.
+-- | Build a hermit plugin. This mainly handles the per-module options.
 hermitPlugin :: HermitPass -> Plugin
 hermitPlugin hp = defaultPlugin { installCoreToDos = install }
     where
@@ -36,5 +39,5 @@ modFilter hp opts guts | null modOpts = return guts -- don't process this module
 -- | Filter options to those pertaining to this module, stripping module prefix.
 filterOpts :: [CommandLineOption] -> ModGuts -> [CommandLineOption]
 filterOpts opts guts = [ drop len nm | nm <- opts, modName `isPrefixOf` nm ]
-    where modName = showSDoc (ppr (mg_module guts))
+    where modName = showSDoc (ppr $ mg_module guts)
           len = length modName + 1 -- for the colon

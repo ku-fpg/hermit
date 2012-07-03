@@ -1,7 +1,9 @@
 {-# LANGUAGE KindSignatures, GADTs #-}
 
 module Language.HERMIT.Interp
-        ( Interp(..)
+        ( -- * The HERMIT Interpreter
+          Interp
+        , interp
         , interpExprH
         ) where
 
@@ -16,10 +18,11 @@ import qualified Language.Haskell.TH as TH
 import Language.HERMIT.External
 import Language.HERMIT.Expr
 
+-- | Interpret an 'ExprH' by looking up the appropriate 'Dynamic'(s) in the provided 'Data.Map', then interpreting the 'Dynamic'(s) with the provided 'Interp's, returning the first interpretation to succeed (or an error string if none succeed).
 interpExprH :: M.Map String [Dynamic] -> [Interp a] -> ExprH -> Either String a
-interpExprH env interps expr =
-          either Left (\ dyns -> runInterp dyns (map (fmap Right) interps) (Left $ "no type match"))
-        $ interpExpr env expr
+interpExprH env interps =
+          either Left (\ dyns -> runInterp dyns (map (fmap Right) interps) (Left "no type match"))
+          . interpExpr env
 
 runInterp :: [Dynamic] -> [Interp b] -> b -> b
 runInterp dyns interps bad = head $
@@ -28,8 +31,13 @@ runInterp dyns interps bad = head $
              , Just a <- map fromDynamic dyns
              ] ++ [ bad ]
 
+-- | An 'Interp' @a@ is a /possible/ means of converting a 'Typeable' value to a value of type @a@.
 data Interp :: * -> * where
    Interp :: Typeable a => (a -> b) -> Interp b
+
+-- | The primitive way of building an 'Interp'.
+interp :: Typeable a => (a -> b) -> Interp b
+interp = Interp
 
 instance Functor Interp where
    fmap f (Interp g) = Interp (f . g)
@@ -42,9 +50,9 @@ interpExpr' :: Bool -> M.Map String [Dynamic] -> ExprH -> Either String [Dynamic
 interpExpr' _   _   (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
 interpExpr' rhs env (CmdName str)
   | all isDigit str                     = return [ toDyn $ IntBox $ read str ]
-  | Just dyn <- M.lookup str env        = if rhs
-                                          then return (toDyn (StringBox str) : dyn)
-                                          else return dyn
+  | Just dyn <- M.lookup str env        = return $ if rhs
+                                                     then toDyn (StringBox str) : dyn
+                                                     else dyn
   -- not a command, try as a string arg... worst case: dynApply fails with "bad type of expression"
   -- best case: 'help ls' works instead of 'help "ls"'. this is likewise done in then clause above
   | rhs                                 = return [toDyn $ StringBox str]
@@ -52,7 +60,7 @@ interpExpr' rhs env (CmdName str)
 interpExpr' _ env (AppH e1 e2)              = dynAppMsg (interpExpr' False env e1) (interpExpr' True env e2)
 
 dynAppMsg :: Either String [Dynamic] -> Either String [Dynamic] -> Either String [Dynamic]
-dynAppMsg funs args = liftM2 dynApply' funs args >>= return
+dynAppMsg = liftM2 dynApply'
    where
            dynApply' :: [Dynamic] -> [Dynamic] -> [Dynamic]
            dynApply' fs xs = [ r | f <- fs, x <- xs, Just r <- return (dynApply f x)]

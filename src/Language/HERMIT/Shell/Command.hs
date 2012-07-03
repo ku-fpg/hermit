@@ -116,21 +116,21 @@ instance Extern ShellEffect where
 
 instance Extern ShellCommand where
     type Box ShellCommand = ShellCommandBox
-    box i = ShellCommandBox i
+    box = ShellCommandBox
     unbox (ShellCommandBox i) = i
 
 interpShellCommand :: [Interp ShellCommand]
 interpShellCommand =
-                [ Interp $ \ (ShellCommandBox cmd)       -> cmd
-                , Interp $ \ (IntBox i)                  -> AstEffect $ PushFocus [i]
-                , Interp $ \ (RewriteCoreBox rr)         -> AstEffect $ Apply rr
-                , Interp $ \ (TranslateCorePathBox tt)   -> AstEffect $ Pathfinder tt
-                , Interp $ \ (StringBox str)             -> QueryFun $ Message str
-                , Interp $ \ (TranslateCoreStringBox tt) -> QueryFun $ QueryT tt
-                , Interp $ \ (effect :: AstEffect)       -> AstEffect $ effect
-                , Interp $ \ (effect :: ShellEffect)     -> ShellEffect $ effect
-                , Interp $ \ (query :: QueryFun)        -> QueryFun $ query
-                , Interp $ \ (meta :: MetaCommand)     -> MetaCommand $ meta
+                [ interp $ \ (ShellCommandBox cmd)       -> cmd
+                , interp $ \ (IntBox i)                  -> AstEffect (PushFocus [i])
+                , interp $ \ (RewriteCoreBox rr)         -> AstEffect (Apply rr)
+                , interp $ \ (TranslateCorePathBox tt)   -> AstEffect (Pathfinder tt)
+                , interp $ \ (StringBox str)             -> QueryFun (Message str)
+                , interp $ \ (TranslateCoreStringBox tt) -> QueryFun (QueryT tt)
+                , interp $ \ (effect :: AstEffect)       -> AstEffect effect
+                , interp $ \ (effect :: ShellEffect)     -> ShellEffect effect
+                , interp $ \ (query :: QueryFun)         -> QueryFun query
+                , interp $ \ (meta :: MetaCommand)       -> MetaCommand meta
                 ]
 -- TODO: move this into the shell, it is completely specific to the way
 -- the shell works. What about list, for example?
@@ -558,8 +558,7 @@ unicodeConsole h w doc = do
 instance RenderCode UnicodeTerminal where
         rPutStr txt  = UnicodeTerminal $ \ h _ -> hPutStr h txt
 
-        rDoHighlight _ [] = UnicodeTerminal $ \ h _ -> do
-                hSetSGR h [Reset]
+        rDoHighlight _ [] = UnicodeTerminal $ \ h _ -> hSetSGR h [Reset]
         rDoHighlight _ (Color col:_) = UnicodeTerminal $ \ h _ -> do
                 hSetSGR h [ Reset ]
                 hSetSGR h $ case col of
@@ -576,39 +575,30 @@ instance RenderCode UnicodeTerminal where
 --------------------------------------------------------
 
 navigation :: Navigation -> CommandLineState -> SessionState -> IO SessionState
-navigation whereTo st sess_st = do
+navigation whereTo st sess_st =
     case whereTo of
       Goto n -> do
            all_nds <- listS (cl_kernel st)
-           if (SAST n) `elem` all_nds
-              then do
-                 return $ sess_st { cl_cursor = SAST n }
-              else do
-                 fail $ "Can not find AST #" ++ show n
-      GotoTag tag -> do
-           case lookup tag (cl_tags st) of
-              Just sast -> return $ sess_st { cl_cursor = sast }
-              _ -> fail $ "Can not find tag " ++ show tag
+           if SAST n `elem` all_nds
+              then return $ sess_st { cl_cursor = SAST n }
+              else fail $ "Can not find AST #" ++ show n
+      GotoTag tag -> case lookup tag (cl_tags st) of
+                       Just sast -> return $ sess_st { cl_cursor = sast }
+                       Nothing   -> fail $ "Can not find tag " ++ show tag
       Step -> do
            let ns = [ edge | edge@(s,_,_) <- cl_graph st, s == cl_cursor (cl_session st) ]
            case ns of
-             [] -> do
-                 fail $ "Can not step forward (no more steps)"
-             [(_,_,d) ] -> do
-                     -- TODO: give message
-                  return $ sess_st { cl_cursor = d }
-             _ -> do
-                 fail "Can not step forward (multiple choices)"
+             [] -> fail "Cannot step forward (no more steps)"
+             [(_,_,d) ] -> -- TODO: give message
+                           return $ sess_st { cl_cursor = d }
+             _ -> fail "Cannot step forward (multiple choices)"
       Back -> do
            let ns = [ edge | edge@(_,_,d) <- cl_graph st, d == cl_cursor (cl_session st) ]
            case ns of
-             [] -> do
-                  fail $ "Can not step backwards (no more steps)"
-             [(s,cmd,_) ] -> do
-                  -- TODO: give message about undoing
-                  return $ sess_st { cl_cursor = s }
-             _ -> do
-                 fail $ "Can not step backwards (multiple choices, impossible!)"
+             []         -> fail "Cannot step backwards (no more steps)"
+             [(s,_,_) ] -> -- TODO: give message about undoing
+                           return $ sess_st { cl_cursor = s }
+             _          -> fail "Cannot step backwards (multiple choices, impossible!)"
 
 --------------------------------------------------------
 
