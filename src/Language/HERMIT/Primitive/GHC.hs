@@ -244,14 +244,13 @@ coreEqual _             _             = Nothing
 
 -- TODO: make this handle cmp of recusive functions, by using subst.
 
-compareValues :: TH.Name -> TH.Name -> TranslateH Core String
+compareValues :: TH.Name -> TH.Name -> TranslateH Core ()
 compareValues n1 n2 = do
         p1 <- rhsOf n1
         p2 <- rhsOf n2
         e1 :: Core <- pathT p1 idR
         e2 :: Core <- pathT p2 idR
         case e1 `coreEqual` e2 of
-          Nothing -> return $ show n1 ++ " and " ++ show n2 ++ " are incomparable"
-          Just b  -> return $ show n1
-                           ++ (if b then " == " else " /= ")
-                           ++ show n2
+          Nothing    -> fail $ show n1 ++ " and " ++ show n2 ++ " are incomparable"
+          Just False -> fail $ show n1 ++ " and " ++ show n2 ++ " are not equal"
+          Just True  -> return ()
