@@ -1,4 +1,4 @@
 rhs-of 'rev
 consider 'rev
-load "../fib/WWTactic.hss"
+load "../fib/WWSplitTactic.hss"
 -- proceed with rest of derivation

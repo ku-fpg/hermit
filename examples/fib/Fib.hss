@@ -1,3 +1,38 @@
+-- do the w/w split
 consider 'fib
-load "WWTactic.hss"
+load "WWSplitTactic.hss"
+
 -- now ready to start neil's derivation
+rhs-of 'work
+
+-- work = unwrap (f (wrap work))
+--   extensionality (eta-expand)
+eta-expand 'n
+
+-- work n = unwrap (f (wrap work)) n
+--   unfold 'unwrap
+-- safe-let-subst fails on h = f (wrap work): unfold 'unwrap
+{ 0; 0; 0; inline 'unwrap; up; up; innermost (beta-reduce-plus <+ let-subst) }
+
+-- work n = (f (wrap work) n, f (wrap work) (n+1))
+--   case 'n
+-- work 0     = (f (wrap work) 0, f (wrap work) 1)
+-- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
+--   unfold 'f
+-- work 0     = (0, 1)
+-- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
+--   unfold 'work
+-- work 0     = (0, 1)
+-- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
+--   wrap . unwrap = id (precondition)
+-- work 0     = (0, 1)
+-- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
+--   let-intro x2, let-float-tuple
+-- work 0     = (0, 1)
+-- work (n+1) = let (x,y) = (f (wrap work) n, f (wrap work) (n+1)) in (y,x+y)
+--   fold 'unwrap
+-- work 0     = (0, 1)
+-- work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
+--   fold 'work
+-- work 0     = (0, 1)
+-- work (n+1) = let (x,y) = work n in (y,x+y)
