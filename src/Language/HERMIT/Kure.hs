@@ -370,7 +370,6 @@ instance Walker Context HermitM CoreExpr where
         <+ tickT (extractT t) (\ _ -> id)
         <+ typeT (\ _ -> mempty)
         <+ coercionT (\ _ -> mempty)
-        <+ fail "allT failed for all Expr constructors"
 
   allR r = varT Var
         <+ litT Lit
@@ -382,7 +381,6 @@ instance Walker Context HermitM CoreExpr where
         <+ tickR (extractR r)
         <+ typeT Type
         <+ coercionT Coercion
-        <+ fail "allR failed for all Expr constructors"
 
   anyR r = appAnyR (extractR r) (extractR r)
         <+ lamR (extractR r)

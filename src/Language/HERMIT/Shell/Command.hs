@@ -151,7 +151,7 @@ shell_externals = map (.+ Shell)
    [
      external "resume"          Resume    -- HERMIT Kernel Exit
        [ "stops HERMIT; resumes compile" ]
-   , external "quit"           Abort     -- UNIX Exit
+   , external "abort"           Abort     -- UNIX Exit
        [ "hard UNIX-style exit; does not return to GHC; does not save" ]
    , external "status"          Status
        [ "redisplays current state" ]
@@ -233,7 +233,7 @@ pretty st = case M.lookup (cl_pretty (cl_session st)) pp_dictionary of
                 Just pp -> pp (cl_pretty_opts (cl_session st))
                 Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty (cl_session st) ++ ">>")
 
-showFocus :: (MonadIO m) => CLM m ()
+showFocus :: MonadIO m => CLM m ()
 showFocus = do
     st <- get
     liftIO ((do
@@ -386,9 +386,9 @@ loop completionMVar = loop'
                     if all isSpace line
                     then loop'
                     else (case parseStmtsH line of
-                                Left  msg   -> throwError ("parse failure: " ++ msg)
+                                Left  msg   -> throwError ("Parse failure: " ++ msg)
                                 Right stmts -> evalStmts stmts)
-                         `ourCatch` (\ msg -> putStrLn $ "Failure: " ++ msg)
+                         `ourCatch` putStrLn
                            >> loop'
 
 ourCatch :: (m ~ IO, MonadIO n) => CLM m () -> (String -> IO ()) -> CLM n ()
@@ -432,13 +432,13 @@ evalExpr expr = do
 
 -- TODO: This can be refactored. We always showFocus. Also, Perhaps return a modifier, not ()
 
-performAstEffect :: (MonadIO m) => AstEffect -> ExprH -> CLM m ()
+performAstEffect :: MonadIO m => AstEffect -> ExprH -> CLM m ()
 performAstEffect (Apply rr) expr = do
     st <- get
     -- something changed (you've applied)
     eiast <- liftIO $ (do ast' <- applyS (cl_kernel st) (cl_cursor (cl_session st)) rr
                           return $ Right ast')
-                            `catch` \ msg -> return $ Left $ "Error thrown: " ++ msg
+                            `catch` \ msg -> return $ Left $ "Rewrite Failed: " ++ msg
     either throwError (\ast' -> do put $ newSAST expr ast' st
                                    showFocus
                                    return ()) eiast
@@ -447,7 +447,7 @@ performAstEffect (Pathfinder t) expr = do
     -- An extension to the Path
     -- TODO: thread this putStr into the throwError
     ast <- liftIO $ do
-        p <- queryS (cl_kernel st) (cl_cursor (cl_session st)) t `catch` (\ msg -> putStrLn ("Error thrown: " ++ msg) >> return [])
+        p <- queryS (cl_kernel st) (cl_cursor (cl_session st)) t `catch` (\ msg -> putStrLn ("Cannot find path: " ++ msg) >> return [])
         modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ p)
     put $ newSAST expr ast st
     showFocus
@@ -499,7 +499,7 @@ performQuery (QueryT q) = do
     st <- get
     -- something changed, to print
     liftIO ((queryS (cl_kernel st) (cl_cursor (cl_session st)) q >>= putStrLn)
-              `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg)
+              `catch` \ msg -> putStrLn $ "Query Failed: " ++ msg)
 performQuery Status = do
     st <- get
     liftIO $ do
@@ -514,7 +514,7 @@ performQuery (Message msg) = liftIO (putStrLn msg)
 
 -------------------------------------------------------------------------------
 
-performMetaCommand :: (MonadIO m) => MetaCommand -> CLM m ()
+performMetaCommand :: MonadIO m => MetaCommand -> CLM m ()
 performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
 performMetaCommand Resume = do st <- get
                                liftIO $ resumeS (cl_kernel st) (cl_cursor $ cl_session st)

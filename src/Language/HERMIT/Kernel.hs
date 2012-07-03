@@ -68,7 +68,7 @@ hermitKernel callback modGuts = do
 
         let kernel = Kernel
                 { resumeK = \ name -> sendDone $ \ env -> find name env fail return
-                , abortK  = sendDone $ \ _ -> throwGhcException (ProgramError "<HERMIT>: hard GHC abort requested")
+                , abortK  = sendDone $ \ _ -> throwGhcException (ProgramError "Exiting HERMIT and aborting GHC compilation.")
                 , applyK = \ name rr -> sendReq $ \ env -> find name env fail' $ \ core ->
                              runHM
                                   (\ core' -> do
