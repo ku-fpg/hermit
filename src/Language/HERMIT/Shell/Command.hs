@@ -660,7 +660,7 @@ getNavCmd = do
 showDerivationTree :: CommandLineState -> SessionState -> IO String
 showDerivationTree st ss = return $ unlines $ showRefactorTrail graph tags 0 me
   where
-          graph = [ (a,[show b],c) | (SAST a,b,SAST c) <- cl_graph st ]
+          graph = [ (a,[unparseExprH b],c) | (SAST a,b,SAST c) <- cl_graph st ]
           tags  = [ (n,nm) | (nm,SAST n) <- cl_tags st ]
           SAST me = cl_cursor ss
 
