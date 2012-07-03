@@ -11,7 +11,6 @@ sub compile {
 
 	$str .= "-fplugin=HERMIT ";
 
-	push(@opts,"");  # This is so we have at least one main:Main
 	foreach (@opts) {
 	    $str .= "-fplugin-opt=HERMIT:main:Main:$_ ";
 	}
