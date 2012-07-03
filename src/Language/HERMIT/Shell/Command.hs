@@ -58,6 +58,7 @@ data AstEffect
 
    | BeginScope
    | EndScope
+   | Tag String                 -- Adding a tag
    deriving Typeable
 
 instance Extern AstEffect where
@@ -76,6 +77,7 @@ data QueryFun :: * where
    --  (CommandLineState -> IO String)
    Status        ::                             QueryFun
    Message       :: String                   -> QueryFun
+   Inquiry        ::(CommandLineState -> SessionState -> IO String) -> QueryFun
    deriving Typeable
 
 instance Extern QueryFun where
@@ -157,6 +159,8 @@ shell_externals = map (.+ Shell) $
        [ "move to the parent"]
    , external "down"            (Direction D)
        [ "move to the first child"]
+   , external "tag"             Tag
+       [ "tag <label> names the current AST with a label" ]
    , external ":navigate"        (SessionStateEffect $ \ _ st -> return $ st { cl_nav = True })
        [ "switch to navigate mode" ]
    , external ":command-line"    (SessionStateEffect $ \ _ st -> return $ st { cl_nav = False })
@@ -164,6 +168,8 @@ shell_externals = map (.+ Shell) $
    , external "top"            (Direction T)
        [ "move to root of tree" ]
    , external ":back"            (SessionStateEffect $ navigation Back)
+       [ "go back in the derivation" ]                                          .+ VersionControl
+   , external "log"             (Inquiry $ showDerivationTree)
        [ "go back in the derivation" ]                                          .+ VersionControl
    , external ":step"            (SessionStateEffect $ navigation Step)
        [ "step forward in the derivation" ]                                     .+ VersionControl
@@ -463,6 +469,9 @@ performAstEffect EndScope expr = do
         ast <- liftIO $ endScopeS (cl_kernel st) (cl_cursor (cl_session st))
         put $ newSAST expr ast st
         showFocus
+performAstEffect (Tag tag) expr = do
+        st <- get
+        put (st { cl_tags = (tag, (cl_cursor (cl_session st))) : cl_tags st })
 
 
 -------------------------------------------------------------------------------
@@ -490,9 +499,12 @@ performQuery Status = do
         ps <- pathS (cl_kernel st) (cl_cursor (cl_session st))
         putStrLn $ "Paths: " ++ show ps
         print $ ("Graph",cl_graph st)
-    showFocus
-
-
+        print $ ("This",cl_cursor (cl_session st))
+performQuery (Inquiry f) = do
+    st <- get
+    liftIO $ do
+        msg <- f st (cl_session st)
+        putStrLn $ msg
 performQuery (Message msg) = liftIO (putStrLn msg)
 
 -------------------------------------------------------------------------------
@@ -644,6 +656,36 @@ getNavCmd = do
           ] ++
           [ (show n, res (show n)) | n <- [0..9] :: [Int] ]
 
+
+showDerivationTree :: CommandLineState -> SessionState -> IO String
+showDerivationTree st ss = return $ unlines $ showRefactorTrail graph tags 0 me
+  where
+          graph = [ (a,[show b],c) | (SAST a,b,SAST c) <- cl_graph st ]
+          tags  = [ (n,nm) | (nm,SAST n) <- cl_tags st ]
+          SAST me = cl_cursor ss
+
+showRefactorTrail :: (Eq a, Show a) => [(a,[String],a)] -> [(a,String)] -> a -> a -> [String]
+showRefactorTrail db tags a me =
+        case [ (b,c) | (a0,b,c) <- db, a == a0 ] of
+           [] -> [show' 3 a ++ " " ++ dot ++ tags_txt]
+           ((b,c):bs) ->
+                      [show' 3 a ++ " " ++ dot ++ (if (not (null bs)) then "->" else "") ++ tags_txt ] ++
+                      ["    " ++ "| " ++ txt | txt <- b ] ++
+                      showRefactorTrail db tags c me ++
+                      if null bs
+                      then []
+                      else [[]] ++
+                          showRefactorTrail [ (a',b',c') | (a',b',c') <- db
+                                                          , not (a == a' && c == c')
+                                                          ]  tags a me
+
+  where
+          dot = if a == me then "*" else "o"
+          show' n a = take (n - length (show a)) (repeat ' ') ++ show a
+          tags_txt = concat [ " " ++ txt
+                            | (n,txt) <- tags
+                            , n == a
+                            ]
 
 
 
