@@ -6,10 +6,14 @@ module Language.HERMIT.Expr
         , StmtH(..)
         , parseExprH
         , parseStmtsH
+        , unparseExprH
+        , unparseStmtH
+        , unparseStmtsH
         ) where
 
 import Control.Applicative ((<$>))
 import Data.Char
+import Data.List
 
 ---------------------------------------------
 
@@ -27,6 +31,29 @@ data StmtH expr
         deriving Show
 
 data Box e = InfixableExpr e | Box e deriving Show
+
+---------------------------------------------
+
+unparseExprH :: ExprH -> String
+unparseExprH (SrcName nm) = "'" ++ nm
+unparseExprH (CmdName nm)
+        |  all isId nm = nm
+        | otherwise    = show nm     -- with quotes
+unparseExprH (AppH (AppH (CmdName nm) e1) e2)
+        | all isInfixId nm
+        = unparseAtom e1 ++ " " ++ nm ++ " " ++ unparseAtom e2
+unparseExprH (AppH e1 e2) = unparseExprH e1 ++ " " ++ unparseAtom e2
+
+unparseAtom e@(AppH {}) = "(" ++ unparseExprH e ++ ")"
+unparseAtom e           = unparseExprH e
+
+
+unparseStmtH :: StmtH ExprH -> String
+unparseStmtH (ExprH expr) = unparseExprH expr
+unparseStmtH (ScopeH stmts) = "{ " ++ unparseStmtsH stmts ++ "}"
+
+unparseStmtsH :: [StmtH ExprH] -> String
+unparseStmtsH stmts = intercalate " ; " (map unparseStmtH stmts)
 
 ---------------------------------------------
 
@@ -122,12 +149,8 @@ parseExprH1 = some parseExprH0 `bind` \ es inp ->
           Nothing -> []
           Just r  -> [(r,inp)]
 
--- Infix hook: TODO
--- infix version, only one level for now
---mkAppH a [CmdName fn,b] | all (`elem` ".->") fn
---                        = foldr AppH (CmdName fn) [a,b]
+-- TODO: Assoc to the right, want assoc to the left.
 mkAppH :: [Box ExprH] -> (ExprH -> ExprH) -> [ExprH] -> Maybe ExprH
---mkAppH (InfixableExpr e:es)   ops rs@(_:_)     = mkAppH es (mkAppH' rs)
 mkAppH (Box e:es)             ops        rs = mkAppH es ops (rs ++ [e])
 mkAppH (InfixableExpr e:es)   ops        rs = maybe Nothing (\ lhs ->
                                                 mkAppH es (ops . AppH (AppH e lhs)) []
