@@ -90,6 +90,7 @@ data MetaCommand
    | Abort
    | Dump String String String Int
    | LoadFile String  -- load a file on top of the current node
+   | SaveFile String
    deriving Typeable
 
 instance Extern MetaCommand where
@@ -206,6 +207,8 @@ shell_externals = map (.+ Shell) $
        ["pop a lens off a stack"]               -- tag as internal
    , external "load"  LoadFile
        ["load <filename> : load a file of commands into the current derivation"]
+   , external "save"  SaveFile
+       ["save <filename> : save the current complete derivation into a file"]
    ]
 
 showRenderers :: QueryFun
@@ -522,7 +525,7 @@ performMetaCommand (Dump fileName _pp renderer _) = do
             hClose h
         _ -> throwError "dump: bad pretty-printer or renderer option"
 performMetaCommand (LoadFile fileName) = do
-        liftIO $ putStrLn $ "[including " ++ fileName ++ "]"
+        liftIO $ putStrLn $ "[loading " ++ fileName ++ "]"
         res <- liftIO $ try (readFile fileName)
         case res of
           Right str -> case parseStmtsH (normalize str) of
@@ -540,6 +543,12 @@ performMetaCommand (LoadFile fileName) = do
    rmComment []     = []
    rmComment xs     | "--" `isPrefixOf` xs = [] -- we need a real parser and lexer here!
    rmComment (x:xs) = x : rmComment xs
+
+performMetaCommand (SaveFile fileName) = do
+        st <- get
+        liftIO $ putStrLn $ "[saving " ++ fileName ++ "]"
+        -- no checks to see if you are clobering; be careful
+        liftIO $ writeFile fileName $ showGraph (cl_graph st) (cl_tags st) (SAST 0)
 
 
 
@@ -688,4 +697,13 @@ showRefactorTrail db tags a me =
                             ]
 
 
-
+showGraph :: [(SAST,ExprH,SAST)] -> [(String,SAST)] -> SAST -> String
+showGraph graph tags this@(SAST n) =
+        (if length paths > 1 then "tag " ++ show n ++ "\n" else "") ++
+        concat (intercalate
+                [":goto " ++ show n ++ "\n"]
+                [ [ unparseExprH b ++ "\n" ++ showGraph graph tags c ]
+                | (b,c) <- paths
+                ])
+  where
+          paths = [ (b,c) | (a,b,c) <- graph, a == this ]
