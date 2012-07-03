@@ -346,9 +346,7 @@ shellComplete mvar rPrev so_far = do
 -- | The first argument is a list of files to load.
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
 commandLine filesToLoad behavior modGuts = do
-    GHC.liftIO $ print ("files",filesToLoad)
-
-    GHC.liftIO $ print (length (GHC.mg_rules modGuts))
+--    GHC.liftIO $ print ("files",filesToLoad)
     let dict = dictionary $ all_externals shell_externals modGuts
     let ws_complete = " ()"
 
