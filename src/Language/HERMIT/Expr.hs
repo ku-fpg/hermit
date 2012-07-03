@@ -44,12 +44,13 @@ unparseExprH (AppH (AppH (CmdName nm) e1) e2)
         = unparseAtom e1 ++ " " ++ nm ++ " " ++ unparseAtom e2
 unparseExprH (AppH e1 e2) = unparseExprH e1 ++ " " ++ unparseAtom e2
 
+unparseAtom :: ExprH -> String
 unparseAtom e@(AppH {}) = "(" ++ unparseExprH e ++ ")"
 unparseAtom e           = unparseExprH e
 
 
 unparseStmtH :: StmtH ExprH -> String
-unparseStmtH (ExprH expr) = unparseExprH expr
+unparseStmtH (ExprH expr)   = unparseExprH expr
 unparseStmtH (ScopeH stmts) = "{ " ++ unparseStmtsH stmts ++ "}"
 
 unparseStmtsH :: [StmtH ExprH] -> String

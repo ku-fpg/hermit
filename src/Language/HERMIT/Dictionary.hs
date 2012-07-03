@@ -1,14 +1,17 @@
-{-# LANGUAGE KindSignatures, GADTs, ScopedTypeVariables #-}
--- The main namespace. Things tend to be untyped, because the API is accessed via (untyped) names.
+{-# LANGUAGE GADTs, ScopedTypeVariables #-}
 
-module Language.HERMIT.Dictionary where
-
-import Prelude hiding (lookup)
+module Language.HERMIT.Dictionary
+       ( -- * The HERMIT Dictionary
+         -- | This is the main namespace. Things tend to be untyped, because the API is accessed via (untyped) names.
+         all_externals
+       , dictionary
+       , pp_dictionary
+)  where
 
 import Data.Default (def)
 import Data.Dynamic
 import Data.List
-import qualified Data.Map as M
+import Data.Map (Map, fromList, toList)
 
 import GhcPlugins
 
@@ -43,11 +46,12 @@ prim_externals modGuts
                  ++ New.externals modGuts
 
 -- The GHC.externals here is a bit of a hack. Not sure about this
+-- | Augment a list of 'External's by adding all of HERMIT's primitive 'External's, plus any GHC RULES pragmas in the module.
 all_externals :: [External] -> ModGuts -> [External]
 all_externals my_externals guts = prim_externals guts ++ my_externals ++ GHC.externals guts
 
--- create the dictionary
-dictionary :: [External] -> M.Map String [Dynamic]
+-- | Create the dictionary.
+dictionary :: [External] -> Map String [Dynamic]
 dictionary externs = toDictionary externs'
   where
         msg = layoutTxt 60 (map (show . fst) dictionaryOfTags)
@@ -60,7 +64,7 @@ dictionary externs = toDictionary externs'
                      , "Multiple items may match."
                      , ""
                      , "categories: " ++ head msg
-                     ] ++ (map ("            " ++) (tail msg)))  .+ Query .+ Shell
+                     ] ++ map ("            " ++) (tail msg))  .+ Query .+ Shell
                 -- Runs every command matching the tag predicate with innermostR (fix point anybuR),
                 -- Only fails if all of them fail the first time.
                 , let bashPredicate = Bash -- Shallow .& Eval .& (notT Loop)
@@ -72,17 +76,19 @@ dictionary externs = toDictionary externs'
                 ]
 
 --------------------------------------------------------------------------
--- The pretty printing dictionaries
-pp_dictionary :: M.Map String (PrettyOptions -> PrettyH Core)
-pp_dictionary = M.fromList
+
+-- | The pretty-printing dictionaries.
+pp_dictionary :: Map String (PrettyOptions -> PrettyH Core)
+pp_dictionary = fromList
         [ ("clean",  Clean.corePrettyH)
         , ("ast",    AST.corePrettyH)
         , ("ghc",    GHCPP.corePrettyH)
         ]
 
--- each pretty printer can suggest some options
-pp_opt_dictionary :: M.Map String PrettyOptions
-pp_opt_dictionary = M.fromList
+-- (This isn't used anywhere currently.)
+-- | Each pretty printer can suggest some options
+pp_opt_dictionary :: Map String PrettyOptions
+pp_opt_dictionary = fromList
         [ ("clean", def)
         , ("ast",  def)
         , ("ghc",  def)
@@ -92,18 +98,18 @@ pp_opt_dictionary = M.fromList
 --------------------------------------------------------------------------
 
 make_help :: [External] -> [String]
-make_help = concatMap snd . M.toList . toHelp
+make_help = concatMap snd . toList . toHelp
 
 help_command :: [External] -> String -> String
 help_command externals m
         | [(ct :: CmdTag,"")] <- reads m
         = unlines $ make_help $ filter (tagMatch ct) externals
 help_command externals "all"
-        = unlines $ make_help $ externals
+        = unlines $ make_help externals
 help_command _ "categories" = unlines $
                 [ "categories" ] ++
                 [ "----------" ] ++
-                [ txt ++ " " ++ take (16 - length txt) (repeat '.') ++ " " ++ desc
+                [ txt ++ " " ++ replicate (16 - length txt) '.' ++ " " ++ desc
                 | (cmd,desc) <- dictionaryOfTags
                 , let txt = show cmd
                 ]
@@ -116,7 +122,7 @@ layoutTxt n (w1:w2:ws) | length w1 + length w2 >= n = w1 : layoutTxt n (w2:ws)
                        | otherwise = layoutTxt n ((w1 ++ " " ++ w2) : ws)
 layoutTxt _ other = other
 
-
+-- (This isn't used anywhere currently.)
 help :: [External] -> Maybe String -> Maybe String -> String
 -- 'help ls' case
 help externals Nothing (Just "ls") = help externals (Just "ls") Nothing
@@ -144,7 +150,7 @@ help _ _ _ = error "bad help arguments"
 
 -- TODO: supply map of command-name -> arguments?
 -- otherwise fromDynamic will fail for any rewrite that takes arguments.
-metaCmd :: (Tag a)
+metaCmd :: Tag a
         => [External]                         -- ^ universe of commands to search
         -> a                                  -- ^ tag matching predicate
         -> ([RewriteH Core] -> RewriteH Core) -- ^ means to combine the matched rewrites
@@ -153,7 +159,7 @@ metaCmd externs p = ($ [ rw | e <- externs
                             , tagMatch p e
                             , Just rw <- [fmap unbox $ fromDynamic $ externFun e] ])
 
-metaHelp :: (Tag a)
+metaHelp :: Tag a
         => [External]                         -- ^ universe of commands to search
         -> a                                  -- ^ tag matching predicate
         -> [String]                           -- ^ help text preamble

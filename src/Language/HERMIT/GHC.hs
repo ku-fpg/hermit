@@ -1,6 +1,7 @@
--- Things that have been copied from GHC, or imported directly, for various reasons.
 module Language.HERMIT.GHC
-        ( ppIdInfo
+        (
+        -- | Things that have been copied from GHC, or imported directly, for various reasons.
+          ppIdInfo
         , thRdrNameGuesses
         , cmpTHName2Name
         , findNameFromTH
@@ -9,29 +10,28 @@ module Language.HERMIT.GHC
         , GhcException(..)
         , throwGhcException
         , exprArity
-        ) where
+) where
 
 import GhcPlugins
 
 -- hacky direct GHC imports
 import Convert (thRdrNameGuesses)
-import TysPrim          ( alphaTyVars )
+import TysPrim (alphaTyVars)
 import TypeRep (Type(..))
 import Panic (GhcException(ProgramError), throwGhcException)
 import CoreArity
-
 
 import Data.Maybe (isJust)
 import qualified Language.Haskell.TH as TH
 
 --------------------------------------------------------------------------
 
--- Hacks till we can find the correct way of doing these.
+-- | Hacks untill we can find the correct way of doing these.
 cmpTHName2Name :: TH.Name -> Name -> Bool
 cmpTHName2Name th_nm ghc_nm = TH.nameBase th_nm == occNameString (nameOccName ghc_nm)
 
--- This is hopeless O(n), because the we could not generate the OccName's that match,
--- for use of the GHC OccEnv.
+-- | This is hopeless O(n), because the we could not generate the 'OccName's that match,
+-- for use of the GHC 'OccEnv'.
 findNameFromTH :: GlobalRdrEnv -> TH.Name -> [Name]
 findNameFromTH rdrEnv nm =
         [ gre_name elt
@@ -39,6 +39,7 @@ findNameFromTH rdrEnv nm =
         , cmpTHName2Name nm (gre_name elt)
         ]
 
+-- | Pretty-print an identifier.
 ppIdInfo :: Id -> IdInfo -> SDoc
 ppIdInfo v info
   = showAttributes

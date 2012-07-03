@@ -1,5 +1,3 @@
-{-# LANGUAGE PatternGuards, DataKinds, ScopedTypeVariables #-}
-
 module HERMIT (plugin) where
 
 import GhcPlugins

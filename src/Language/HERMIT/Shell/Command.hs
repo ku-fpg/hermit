@@ -1,6 +1,9 @@
 {-# LANGUAGE FlexibleInstances, ScopedTypeVariables, GADTs, KindSignatures, TypeFamilies, DeriveDataTypeable #-}
 
-module Language.HERMIT.Shell.Command where
+module Language.HERMIT.Shell.Command
+       ( -- * The HERMIT Command-line Shell
+         commandLine
+) where
 
 import qualified GhcPlugins as GHC
 
@@ -144,7 +147,7 @@ interpShellCommand =
 --             ]
 
 shell_externals :: [External]
-shell_externals = map (.+ Shell) $
+shell_externals = map (.+ Shell)
    [
      external "resume"          Resume    -- HERMIT Kernel Exit
        [ "stops HERMIT; resumes compile" ]
@@ -170,7 +173,7 @@ shell_externals = map (.+ Shell) $
        [ "move to root of tree" ]
    , external ":back"            (SessionStateEffect $ navigation Back)
        [ "go back in the derivation" ]                                          .+ VersionControl
-   , external "log"             (Inquiry $ showDerivationTree)
+   , external "log"             (Inquiry showDerivationTree)
        [ "go back in the derivation" ]                                          .+ VersionControl
    , external ":step"            (SessionStateEffect $ navigation Step)
        [ "step forward in the derivation" ]                                     .+ VersionControl
@@ -178,7 +181,7 @@ shell_externals = map (.+ Shell) $
        [ "goto a specific step in the derivation" ]                             .+ VersionControl
    , external ":goto"            (SessionStateEffect . navigation . GotoTag)
        [ "goto a named step in the derivation" ]
-   , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st -> do
+   , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st ->
        case M.lookup pp pp_dictionary of
          Nothing -> do
             liftIO $ putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
@@ -199,7 +202,7 @@ shell_externals = map (.+ Shell) $
                                                  [(opt,"")] -> return $ st { cl_pretty_opts =
                                                                                  (cl_pretty_opts st) { po_exprTypes = opt }
                                                                            }
-                                                 _ -> return $ st)
+                                                 _ -> return st)
        ["set how to show expression-level types (Show|Abstact|Omit)"]
    , external "{"   BeginScope
        ["push current lens onto a stack"]       -- tag as internal
@@ -317,13 +320,13 @@ completionType = go . dropWhile isSpace
                  ]
 
 completionQuery :: CommandLineState -> CompletionType -> IO (TranslateH Core [String])
-completionQuery _ ConsiderC = return $ considerTargets >>> arr ((++ (map fst considerables)) . map ('\'':))
+completionQuery _ ConsiderC = return $ considerTargets >>> arr ((++ map fst considerables) . map ('\'':))
 completionQuery _ InlineC   = return $ inlineTargets   >>> arr (map ('\'':))
 completionQuery s CommandC  = return $ pure (M.keys (cl_dict s))
 -- Need to modify opts in completionType function. No key can be a suffix of another key.
 completionQuery _ (AmbiguousC ts) = do
     putStrLn "\nCannot tab complete: ambiguous completion type."
-    putStrLn $ "Possibilities: " ++ (intercalate ", " $ map show ts)
+    putStrLn $ "Possibilities: " ++ intercalate ", " (map show ts)
     return (pure [])
 
 shellComplete :: MVar CommandLineState -> String -> String -> IO [Completion]
@@ -333,6 +336,7 @@ shellComplete mvar rPrev so_far = do
     liftM (map simpleCompletion . nub . filter (so_far `isPrefixOf`))
         $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
 
+-- | The first argument is a list of files to load.
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
 commandLine filesToLoad behavior modGuts = do
     GHC.liftIO $ print ("files",filesToLoad)
@@ -348,7 +352,7 @@ commandLine filesToLoad behavior modGuts = do
                          _        -> LoadFile fileName
                       | fileName <- reverse filesToLoad
                       , not (null fileName)
-                      ] `ourCatch` \ msg -> do putStrLn $ "Booting Failure: " ++ msg
+                      ] `ourCatch` \ msg -> putStrLn $ "Booting Failure: " ++ msg
 
     flip scopedKernel modGuts $ \ skernel sast -> do
 
@@ -372,8 +376,8 @@ loop completionMVar = loop'
             -- liftIO $ print (cl_pretty st, cl_cursor (cl_session st))
             let SAST n = cl_cursor (cl_session st)
             maybeLine <- if cl_nav (cl_session st)
-                         then liftIO $ getNavCmd
-                         else lift $ lift $ getInputLine $ "hermit<" ++ show n ++ "> "
+                           then liftIO getNavCmd
+                           else lift $ lift $ getInputLine $ "hermit<" ++ show n ++ "> "
 
             case maybeLine of
                 Nothing             -> performMetaCommand Resume
@@ -383,9 +387,9 @@ loop completionMVar = loop'
                     then loop'
                     else (case parseStmtsH line of
                                 Left  msg   -> throwError ("parse failure: " ++ msg)
-                                Right stmts -> evalStmts stmts) `ourCatch` (\ msg ->
-                                        do putStrLn $ "Failure: " ++ msg
-                          ) >> loop'
+                                Right stmts -> evalStmts stmts)
+                         `ourCatch` (\ msg -> putStrLn $ "Failure: " ++ msg)
+                           >> loop'
 
 ourCatch :: (m ~ IO, MonadIO n) => CLM m () -> (String -> IO ()) -> CLM n ()
 ourCatch m failure = do
@@ -413,7 +417,7 @@ evalExpr expr = do
                 dict
                 interpShellCommand
                 expr of
-            Left msg  -> throwError $ msg
+            Left msg  -> throwError msg
             Right cmd -> do
                 condM (gets (cl_loading . cl_session))
                       (liftIO (putStrLn $ "doing : " ++ show expr))
@@ -435,15 +439,15 @@ performAstEffect (Apply rr) expr = do
     eiast <- liftIO $ (do ast' <- applyS (cl_kernel st) (cl_cursor (cl_session st)) rr
                           return $ Right ast')
                             `catch` \ msg -> return $ Left $ "Error thrown: " ++ msg
-    either (throwError) (\ast' -> do put $ newSAST expr ast' st
-                                     showFocus
-                                     return ()) eiast
+    either throwError (\ast' -> do put $ newSAST expr ast' st
+                                   showFocus
+                                   return ()) eiast
 performAstEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
     -- TODO: thread this putStr into the throwError
     ast <- liftIO $ do
-        p <- queryS (cl_kernel st) (cl_cursor (cl_session st)) t `catch` (\ msg -> (putStrLn $ "Error thrown: " ++ msg) >> return [])
+        p <- queryS (cl_kernel st) (cl_cursor (cl_session st)) t `catch` (\ msg -> putStrLn ("Error thrown: " ++ msg) >> return [])
         modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ p)
     put $ newSAST expr ast st
     showFocus
@@ -474,7 +478,7 @@ performAstEffect EndScope expr = do
         showFocus
 performAstEffect (Tag tag) expr = do
         st <- get
-        put (st { cl_tags = (tag, (cl_cursor (cl_session st))) : cl_tags st })
+        put (st { cl_tags = (tag, cl_cursor (cl_session st)) : cl_tags st })
 
 
 -------------------------------------------------------------------------------
@@ -501,20 +505,19 @@ performQuery Status = do
     liftIO $ do
         ps <- pathS (cl_kernel st) (cl_cursor (cl_session st))
         putStrLn $ "Paths: " ++ show ps
-        print $ ("Graph",cl_graph st)
-        print $ ("This",cl_cursor (cl_session st))
+        print ("Graph",cl_graph st)
+        print ("This",cl_cursor (cl_session st))
 performQuery (Inquiry f) = do
     st <- get
-    liftIO $ do
-        msg <- f st (cl_session st)
-        putStrLn $ msg
+    liftIO (f st (cl_session st) >>= putStrLn)
 performQuery (Message msg) = liftIO (putStrLn msg)
 
 -------------------------------------------------------------------------------
 
 performMetaCommand :: (MonadIO m) => MetaCommand -> CLM m ()
 performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
-performMetaCommand Resume = get >>= \st -> liftIO $ resumeS (cl_kernel st) (cl_cursor (cl_session st))
+performMetaCommand Resume = do st <- get
+                               liftIO $ resumeS (cl_kernel st) (cl_cursor $ cl_session st)
 performMetaCommand (Dump fileName _pp renderer _) = do
     st <- get
     case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
@@ -538,7 +541,7 @@ performMetaCommand (LoadFile fileName) = do
   where
    normalize = unlines
              . map (++ ";")     -- HACK!
-             . map (rmComment)
+             . map rmComment
              . lines
    rmComment []     = []
    rmComment xs     | "--" `isPrefixOf` xs = [] -- we need a real parser and lexer here!
@@ -631,9 +634,9 @@ getNavCmd = do
         hSetBuffering stdout NoBuffering
         ec_in <- hGetEcho stdin
         hSetEcho stdin False
-        putStr ("(navigation mode; use arrow keys, escape to quit, '?' for help)")
+        putStr "(navigation mode; use arrow keys, escape to quit, '?' for help)"
         r <- readCh []
-        putStr ("\n")
+        putStr "\n"
         hSetBuffering stdin b_in
         hSetBuffering stdout b_out
         hSetEcho stdin ec_in
@@ -642,9 +645,7 @@ getNavCmd = do
    readCh xs = do
         x <- getChar
         let str = xs ++ [x]
-        (case lookup str cmds of
-          Just f -> f
-          Nothing -> reset) str
+        (fromMaybe reset $ lookup str cmds) str
 
    reset _ = do
         putStr "\BEL"
@@ -678,20 +679,20 @@ showRefactorTrail db tags a me =
         case [ (b,c) | (a0,b,c) <- db, a == a0 ] of
            [] -> [show' 3 a ++ " " ++ dot ++ tags_txt]
            ((b,c):bs) ->
-                      [show' 3 a ++ " " ++ dot ++ (if (not (null bs)) then "->" else "") ++ tags_txt ] ++
+                      [show' 3 a ++ " " ++ dot ++ (if not (null bs) then "->" else "") ++ tags_txt ] ++
                       ["    " ++ "| " ++ txt | txt <- b ] ++
                       showRefactorTrail db tags c me ++
                       if null bs
                       then []
-                      else [[]] ++
+                      else [] :
                           showRefactorTrail [ (a',b',c') | (a',b',c') <- db
                                                           , not (a == a' && c == c')
                                                           ]  tags a me
 
   where
           dot = if a == me then "*" else "o"
-          show' n a = take (n - length (show a)) (repeat ' ') ++ show a
-          tags_txt = concat [ " " ++ txt
+          show' n a = replicate (n - length (show a)) ' ' ++ show a
+          tags_txt = concat [ ' ' : txt
                             | (n,txt) <- tags
                             , n == a
                             ]
