@@ -1,0 +1,147 @@
+Example: the last function
+--------------------------
+
+Consider the following definition for the function that returns
+the last element of a list, which produces an error message in
+the case that it is applied to an empty list:
+
+   last       :: [a] -> a
+   last []     = error "last: []"
+   last [x]    = x
+   last (_:xs) = last xs
+
+While correct, this definition is inefficient, because it checks if
+the argument list is empty at every recursive call of the function,
+whereas we know from the context that once we reach the recursive
+call the argument is guaranteed to be non-empty.  We now show how to
+eliminate this inefficiency using the worker/wrapper transformation.
+
+Step 1: redefine last using fix
+
+   last         :: [a] -> a
+   last          = fix body
+
+   body         :: ([a] -> [a]) -> ([a] -> [a])
+   body l []     = error "last: []"
+   body l [x]    = x
+   body l (_:xs) = l xs
+
+Step 2: think about the new type
+
+We seek to transform our function of type [a] -> a into a worker of
+type a -> [a] -> a, whose first and second argument are the head and
+tail of a list, and is thereby only applicable to non-empty lists.
+
+Step 3: define the conversion functions
+
+   unwrap       :: ([a] -> a) -> (a -> [a] -> a)
+   unwrap f x xs = f (x:xs)
+
+   wrap         :: (a -> [a] -> a) -> ([a] -> a)
+   wrap f []     = error "last: []"
+   wrap f (x:xs) = f x xs
+
+Step 4: verify the worker/wrapper assumption
+
+It is straightfoward to show that wrap . unwrap = id, but only if we
+restrict our attention to argument functions of type [a] -> a that
+map the empty list to error "last: []":
+
+     (wrap . unwrap) f xs
+   =    applying .
+     wrap (unwrap f) xs
+   =    applying wrap
+     case xs of
+        []     -> error "last: []"
+        (x:xs) -> unwrap f x xs
+   =    applying unwrap
+     case xs of
+        []     -> error "last: []"
+        (x:xs) -> f (x:xs)
+   =    assuming f [] = error "last: []"
+     case xs of
+        []     -> f []
+        (x:xs) -> f (x:xs)
+   =    distribution over case
+     f (case xs of
+           []     -> []
+           (x:xs) -> x:xs)
+   =    eliminating the case
+     f xs
+
+Note that the distribtion step requires that the function f is
+strict, or that the list xs is not undefined.  However, strictness
+of f automatically follows from our assumption that f maps [] to
+bottom (the result of error) and monotonicity of f.
+
+Hence for this example, the simple worker/wrapper assumption wrap .
+unwrap = id is not always valid.  However, because body l maps 
+[] to error "last: []" by definition, we do have the weaker 
+worker/wrapper assumption wrap . unwrap . body = body.
+
+Step 5: apply the worker/wrapper transformation
+
+   last :: [a] -> a
+   last = wrap work
+
+   work :: a -> [a] -> a
+   work = fix (unwrap . body . wrap)
+
+Step 6: simplify the new definition
+
+     last xs 
+   =    applying last
+     wrap work xs
+   =    applying wrap
+     case xs of
+        []     -> error "last: []"
+        (x:xs) -> work x xs
+
+That is, we have obtained the expected wrapper for the efficient version
+of last that deals once and for all with the empty list case:
+
+   last       :: [a] -> a
+   last []     = error "last: []"
+   last (x:xs) = work x xs
+
+Step 7: simplify the worker
+
+First of all, we redefine work using explicit recursion,
+
+   work x [] = x
+   work _ xs = wrap work xs
+
+which transformation can be verified as follows:
+
+      work x xs
+   =     applying work
+      fix (unwrap . body . wrap)
+   =     computation
+      (unwrap . body . wrap) (fix (unwrap . body . wrap)) x xs
+   =     unwappling work
+      (unwrap . body . wrap) work x xs
+   =     applying .
+      unwrap (body (wrap work)) x xs
+   =     applying unwrap
+      body (wrap work) (x:xs)
+   =     applying body
+      case xs of
+        [] -> x
+        _   -> wrap work xs
+
+Finally, we simplify the second equation in the new definition
+for the worker, by exploiting the fact that from the first equation
+and the top-to-bottom nature of pattern matching, we know that the
+argument list is not empty, and hence of the form (x:xs):
+
+      work _ (x:xs)
+   =     applying work
+      wrap work (x:xs)
+   =     applying wrap
+      work x xs
+
+In conclusion, we have derived the following definition:
+
+   work         :: a -> [a] -> a
+   work x []     = x
+   work _ (x:xs) = work x xs
