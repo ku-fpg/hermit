@@ -349,19 +349,7 @@ shellComplete mvar rPrev so_far = do
 -- | The first argument is a list of files to load.
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
 commandLine filesToLoad behavior modGuts = do
---    GHC.liftIO $ print ("files",filesToLoad)
     rb :: GHC.RuleBase <- GHC.getRuleBase
-    GHC.liftIO $ print ("RULES", GHC.showSDoc $ GHC.pprRuleBase rb)
-
-{-
-  where
-          rulesEnv :: Map.Map String (RewriteH CoreExpr)
-          rulesEnv = rulesToEnv (mg_rules modGuts ++ other_rules)
-
-
-
--}
-
     let other_rules = [ rule
                         | top_bnds <- GHC.mg_binds modGuts
                         , bnd <- case top_bnds of
