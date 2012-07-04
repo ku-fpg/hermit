@@ -23,8 +23,8 @@ import Prelude hiding (exp)
 
 ------------------------------------------------------------------------
 
-externals :: ModGuts -> [External]
-externals modGuts = map (.+ TODO)
+externals :: ExternalReader -> [External]
+externals er = map (.+ TODO)
          [ external "let-subst" (promoteR letSubstR :: RewriteH Core)
                 [ "Let substitution [via GHC]"
                 , "let x = E1 in E2 ==> E2[E1/x], fails otherwise"
@@ -44,25 +44,13 @@ externals modGuts = map (.+ TODO)
                 [ "List the free variables in this expression [via GHC]" ] .+ Query .+ Deep
          , external "deshadow-binds" (promoteR deShadowBindsR :: RewriteH Core)
                 [ "Deshadow a program " ] .+ Deep
-         , external "apply-rule" (promoteR . rules rulesEnv :: String -> RewriteH Core)
+         , external "apply-rule" (promoteR . rules (er_rules er) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ] .+ Shallow
-         , external "apply-rule" (rules_help rulesEnv)
+         , external "apply-rule" (rules_help (er_rules er))
                 [ "list rules that can be used" ] .+ Query
          , external "compare-values" compareValues
                 ["compare's the rhs of two values"] .+ Query .+ Predicate
          ]
-  where
-          rulesEnv :: Map.Map String (RewriteH CoreExpr)
-          rulesEnv = rulesToEnv (mg_rules modGuts ++ other_rules)
-
-          other_rules = [ rule
-                        | top_bnds <- mg_binds modGuts
-                        , bnd <- case top_bnds of
-                                     Rec bnds -> map fst bnds
-                                     NonRec b _ -> [b]
-                        , rule <- idCoreRules bnd
-                        ]
-
 
 ------------------------------------------------------------------------
 

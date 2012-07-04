@@ -23,7 +23,6 @@ import Language.HERMIT.Primitive.Inline
 import Language.HERMIT.Primitive.Consider -- for cmpName
 
 import qualified Language.Haskell.TH as TH
-import qualified Data.Map as Map
 
 -- import Debug.Trace
 import Control.Monad
@@ -32,8 +31,8 @@ import MonadUtils (MonadIO) -- GHC's MonadIO
 -- promoteR'  :: Term a => RewriteH a -> RewriteH (Generic a)
 -- promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an expr") (apply rr c)  (retract e)
 
-externals ::  ModGuts -> [External]
-externals modGuts = map ((.+ Experiment) . (.+ TODO))
+externals ::  ExternalReader -> [External]
+externals er = map ((.+ Experiment) . (.+ TODO))
          [ external "info" (promoteT info :: TranslateH Core String)
                 [ "tell me what you know about this expression or binding" ] .+ Unimplemented
          , external "expr-type" (promoteT exprTypeQueryT :: TranslateH Core String)
@@ -54,14 +53,11 @@ externals modGuts = map ((.+ Experiment) . (.+ TODO))
                 [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
          , external "push" (promoteR . push :: TH.Name -> RewriteH Core)
                 [ "push a function <v> into argument" ]
-         , external "unfold-rule" ((\ nm -> promoteR (rules rulesEnv nm >>> cleanupUnfold)) :: String -> RewriteH Core)
+         , external "unfold-rule" ((\ nm -> promoteR (rules (er_rules er) nm >>> cleanupUnfold)) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ]
          , external "var" (promoteR . var :: TH.Name -> RewriteH Core)
                 [ "var '<v> succeeded for variable v, and fails otherwise"] .+ Predicate
          ]
-  where
-          rulesEnv :: Map.Map String (RewriteH CoreExpr)
-          rulesEnv = rulesToEnv (mg_rules modGuts)
 
 
 -- Others

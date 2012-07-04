@@ -32,6 +32,9 @@ import Language.HERMIT.PrettyPrinter
 import Language.HERMIT.Primitive.Consider
 import Language.HERMIT.Primitive.Inline
 
+import Language.HERMIT.Primitive.GHC
+
+
 import Prelude hiding (catch)
 
 import System.Console.ANSI
@@ -347,7 +350,32 @@ shellComplete mvar rPrev so_far = do
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
 commandLine filesToLoad behavior modGuts = do
 --    GHC.liftIO $ print ("files",filesToLoad)
-    let dict = dictionary $ all_externals shell_externals modGuts
+    rb :: GHC.RuleBase <- GHC.getRuleBase
+    GHC.liftIO $ print ("RULES", GHC.showSDoc $ GHC.pprRuleBase rb)
+
+{-
+  where
+          rulesEnv :: Map.Map String (RewriteH CoreExpr)
+          rulesEnv = rulesToEnv (mg_rules modGuts ++ other_rules)
+
+
+
+-}
+
+    let other_rules = [ rule
+                        | top_bnds <- GHC.mg_binds modGuts
+                        , bnd <- case top_bnds of
+                                     GHC.Rec bnds -> map fst bnds
+                                     GHC.NonRec b _ -> [b]
+                        , rule <- GHC.idCoreRules bnd
+                        ]
+    let er = ExternalReader
+                { er_rules = rulesToEnv $
+                                   GHC.mg_rules modGuts
+                                ++ other_rules
+                                ++ concat (GHC.nameEnvElts rb)
+                }
+    let dict = dictionary $ all_externals shell_externals er
     let ws_complete = " ()"
 
     let startup =
