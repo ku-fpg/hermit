@@ -635,14 +635,16 @@ navigation whereTo st sess_st =
            let ns = [ edge | edge@(s,_,_) <- cl_graph st, s == cl_cursor (cl_session st) ]
            case ns of
              [] -> fail "Cannot step forward (no more steps)"
-             [(_,_,d) ] -> -- TODO: give message
+             [(_,cmd,d) ] -> do
+                           putStrLn $ "step : " ++ unparseExprH cmd
                            return $ sess_st { cl_cursor = d }
              _ -> fail "Cannot step forward (multiple choices)"
       Back -> do
            let ns = [ edge | edge@(_,_,d) <- cl_graph st, d == cl_cursor (cl_session st) ]
            case ns of
              []         -> fail "Cannot step backwards (no more steps)"
-             [(s,_,_) ] -> -- TODO: give message about undoing
+             [(s,cmd,_) ] -> do
+                           putStrLn $ "back, unstepping : " ++ unparseExprH cmd
                            return $ sess_st { cl_cursor = s }
              _          -> fail "Cannot step backwards (multiple choices, impossible!)"
 
