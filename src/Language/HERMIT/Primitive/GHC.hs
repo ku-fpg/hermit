@@ -80,7 +80,25 @@ letSubstR = contextfreeT $ \ exp -> case exp of
 
 -- This is quite expensive (O(n) for the size of the sub-tree)
 safeLetSubstR :: RewriteH CoreExpr
-safeLetSubstR = contextfreeT $ \ exp -> case occurAnalyseExpr exp of
+safeLetSubstR = translate $ \ env exp ->
+    let   -- Lit?
+          safeBind (Var {})   = True
+          safeBind (Lam {})   = True
+          safeBind e@(App {}) =
+                 case collectArgs e of
+                   (Var f,args) -> arityOf env f > length (filter (not . isTypeArg) args)
+                   (other,args) -> case collectBinders other of
+                                     (bds,_) -> length bds > length args
+          safeBind _          = False
+
+          safeSubst NoOccInfo = False   -- unknown!
+          safeSubst IAmDead   = True    -- DCE
+          safeSubst (OneOcc inLam oneBr _)
+                              | inLam == True || oneBr == False = False   -- do not inline inside a lambda
+                                                                          -- or if in multiple case branches
+                              | otherwise = True
+          safeSubst _ = False   -- strange case, like a loop breaker
+   in case occurAnalyseExpr exp of
       Let (NonRec b (Type bty)) e
          | isTyVar b -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
                             sub      = extendTvSubst emptySub b bty
@@ -93,24 +111,6 @@ safeLetSubstR = contextfreeT $ \ exp -> case occurAnalyseExpr exp of
          | otherwise -> fail "safeLetSubstR failed (safety critera not met)"
       -- By (our) definition, types are a trivial bind
       _ -> fail "LetSubst failed. Expr is not a (non-recursive) Let."
-  where
-          -- Lit?
-          safeBind (Var {})   = True
-          safeBind (Lam {})   = True
-          safeBind e@(App {}) =
-                 case collectArgs e of
-                   (Var f,args) -> idArity f > length (filter (not . isTypeArg) args)
-                   (other,args) -> case collectBinders other of
-                                     (bds,_) -> length bds > length args
-          safeBind _          = False
-
-          safeSubst NoOccInfo = False   -- unknown!
-          safeSubst IAmDead   = True    -- DCE
-          safeSubst (OneOcc inLam oneBr _)
-                              | inLam == True || oneBr == False = False   -- do not inline inside a lambda
-                                                                          -- or if in multiple case branches
-                              | otherwise = True
-          safeSubst _ = False   -- strange case, like a loop breaker
 
 -- | 'safeLetSubstPlusR' tries to inline a stack of bindings, stopping when reaches
 -- the end of the stack of lets.
