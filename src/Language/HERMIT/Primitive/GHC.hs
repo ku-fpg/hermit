@@ -33,7 +33,7 @@ externals modGuts = map (.+ TODO)
                 [ "Safe let substitution [via GHC]"
                 , "let x = E1 in E2, safe to inline without duplicating work ==> E2[E1/x],"
                 , "fails otherwise"
-                , "only matches non-recursive lets" ]                           .+ Deep .+ Eval
+                , "only matches non-recursive lets" ]                           .+ Deep .+ Eval .+ Bash
          , external "safe-let-subst-plus" (promoteR safeLetSubstPlusR :: RewriteH Core)
                 [ "Safe let substitution [via GHC]"
                 , "let { x = E1, ... } in E2, "
