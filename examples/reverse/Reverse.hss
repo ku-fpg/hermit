@@ -22,10 +22,8 @@ consider 'rev
 
  }
  
-XXX
-
 -- Normalize to two definitions; first is recursive.
-{ 0 ; 0 ; let-float-let }
+-- { 0 ; 0 ; let-float-let }
 
 -- Unfold wrap and unwrap
 { consider 'work
@@ -37,18 +35,20 @@ XXX
 bash    -- TADA
 
 
-quit
+-- And force the worker/wrapper through
+   prune-td (unfold '.)
+   bash
+   any-bu (eta-expand 'ys >>> any-bu (apply-rule "[] ++")) ; bash
+   any-bu (apply-rule "repH ++") ; bash
+   prune-td (unfold '.)
+   prune-td (unfold '.)
+   any-bu (apply-rule "repH (:)") ; bash
+   any-bu (apply-rule "repH []") ; bash
+   prune-td (unfold '.)
+   any-bu (apply-rule "[] ++") ; bash
+   { consider case ; eta-expand 'ys ; { consider app ; case-float-app } }
+   any-bu (unfold-rule "rep-abs-fusion") 
+   prune-td (unfold 'fix)
+   bash
 
--- move the repH down to allow fusion
-any-td (push 'repH)
--- and push the repH through append
-any-td (unfold-rule repAppend) ; prune-td (unfold '.)
-any-bu (unfold-rule repAppFusion)
-any-td (unfold-rule repH)
-unshadow
-
-any-bu (unfold-rule append) 
-any-bu (unfold-rule inline-fix) 
-
-
---any-bu (apply-rule appendNil) ; bash
+   
