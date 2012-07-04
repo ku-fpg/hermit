@@ -461,6 +461,7 @@ evalExpr expr = do
 -------------------------------------------------------------------------------
 
 -- TODO: This can be refactored. We always showFocus. Also, Perhaps return a modifier, not ()
+-- TODO: All of these should through an exception if they fail to execute the command as given.
 
 performAstEffect :: MonadIO m => AstEffect -> ExprH -> CLM m ()
 performAstEffect (Apply rr) expr = do
@@ -476,11 +477,14 @@ performAstEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
     -- TODO: thread this putStr into the throwError
-    ast <- liftIO $ do
-        p <- queryS (cl_kernel st) (cl_cursor (cl_session st)) t `catch` (\ msg -> putStrLn ("Cannot find path: " ++ msg) >> return [])
-        modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ p)
-    put $ newSAST expr ast st
-    showFocus
+    opt <- liftIO $ liftM Right (queryS (cl_kernel st) (cl_cursor (cl_session st)) t)
+                       `catch` (\ msg -> return (Left msg))
+    case opt of
+          Right p -> do ast <- liftIO $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ p)
+                        put $ newSAST expr ast st
+                        showFocus
+          Left msg -> fail $ "Can not find path: " ++ msg
+
 performAstEffect (Direction dir) expr = do
     st <- get
     ast <- liftIO $ do
