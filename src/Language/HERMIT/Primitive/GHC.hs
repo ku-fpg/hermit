@@ -2,7 +2,7 @@
 module Language.HERMIT.Primitive.GHC where
 
 import GhcPlugins hiding (freeVars,empty)
---import qualified GhcPlugins as GHC
+import qualified Language.HERMIT.GHC as GHC
 import qualified OccurAnal
 import Control.Arrow
 import Control.Applicative
@@ -13,6 +13,7 @@ import Language.HERMIT.Primitive.Consider
 
 import Language.HERMIT.Kure
 import Language.HERMIT.External
+import Language.HERMIT.Context
 -- import Language.HERMIT.GHC
 
 import qualified Language.Haskell.TH as TH
@@ -254,3 +255,18 @@ compareValues n1 n2 = do
           Nothing    -> fail $ show n1 ++ " and " ++ show n2 ++ " are incomparable"
           Just False -> fail $ show n1 ++ " and " ++ show n2 ++ " are not equal"
           Just True  -> return ()
+
+--------------------------------------------------------
+
+-- try figure out the arity of an Id
+arityOf:: Context -> Id -> Int
+arityOf env nm =
+     case lookupHermitBinding nm env of
+        Nothing       -> idArity nm
+        Just (LAM {}) -> 0
+        -- Note: the exprArity will call idArity if
+        -- it hits an id; perhaps we should do the counting
+        -- The advantage of idArity is it will terminate, though.
+        Just (BIND _ _ e) -> GHC.exprArity e
+
+
