@@ -10,6 +10,7 @@ sub compile {
                "    -fforce-recomp -O2 -dcore-lint -fsimple-list-literals ";
 
 	$str .= "-fplugin=HERMIT ";
+	$str .= "-fplugin-opt=HERMIT:main:Main ";
 
 	foreach (@opts) {
 	    $str .= "-fplugin-opt=HERMIT:main:Main:$_ ";
