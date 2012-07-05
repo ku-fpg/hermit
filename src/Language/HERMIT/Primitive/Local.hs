@@ -115,10 +115,10 @@ eta_reduce = withPatFailMsg "eta_reduce failed. Not applied to Lam-App-Var" $
        return f
 
 eta_expand :: TH.Name -> RewriteH CoreExpr
-eta_expand nm = contextfreeT $ \ e -> case splitAppTy_maybe (exprType e) of
-                                  Nothing           -> fail "eta-expand failed (expression is not an App)"
-                                  Just (_ , arg_ty) -> do v1 <- newVarH nm arg_ty
-                                                          return $ Lam v1 (App e (Var v1))
+eta_expand nm = contextfreeT $ \ e -> case splitFunTy_maybe (exprType e) of
+                                  Nothing          -> fail "eta-expand failed (expression is not an App)"
+                                  Just (arg_ty, _) -> do v1 <- newVarH nm arg_ty
+                                                         return $ Lam v1 (App e (Var v1))
 
 ------------------------------------------------------------------------------
 
