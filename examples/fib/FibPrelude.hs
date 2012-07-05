@@ -18,4 +18,4 @@ wrap h = fst . h
 
 {-# INLINE unwrap #-}
 unwrap :: (Nat -> Nat) -> Nat -> (Nat, Nat)
-unwrap h n = (h n, h (n+1))
+unwrap h n = (h n, h (Succ n))

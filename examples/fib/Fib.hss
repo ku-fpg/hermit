@@ -11,13 +11,16 @@ eta-expand 'n
 
 -- work n = unwrap (f (wrap work)) n
 --   unfold 'unwrap
--- safe-let-subst fails on h = f (wrap work): unfold 'unwrap
-{ 0; 0; 0; inline 'unwrap; up; up; innermost (beta-reduce-plus <+ let-subst) }
+0; unfold 'unwrap
 
 -- work n = (f (wrap work) n, f (wrap work) (n+1))
 --   case 'n
 -- work 0     = (f (wrap work) 0, f (wrap work) 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
+case-split 'n
+{ 1 ; 0; any-bu (inline 'n) }
+{ 2 ; 0; 1; any-bu (inline 'n) }
+
 --   unfold 'f
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
