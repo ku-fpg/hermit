@@ -12,9 +12,9 @@ main = defaultMain
 
 -- beginning of neil's derivation
 fib :: Nat -> Nat
-fib 0 = 0
-fib 1 = 1
-fib n = fib (n-1) + fib (n-2)
+fib Zero = Zero
+fib (Succ Zero) = Succ Zero
+fib (Succ (Succ n)) = fib (n+1) + fib n
 
 {- todo?:
     if-to-case:
