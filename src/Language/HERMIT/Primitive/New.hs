@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies, FlexibleInstances, TemplateHaskell #-}
 
 -- Placeholder for new prims
 module Language.HERMIT.Primitive.New where
@@ -57,8 +57,9 @@ externals er = map ((.+ Experiment) . (.+ TODO))
                 [ "apply a named GHC rule" ]
          , external "var" (promoteR . var :: TH.Name -> RewriteH Core)
                 [ "var '<v> succeeded for variable v, and fails otherwise"] .+ Predicate
+         , external "case-split" (promoteR . caseSplit :: TH.Name -> RewriteH Core)
+                [ "case split" ]
          ] ++
-
          [ external "any-app" (withUnfold :: RewriteH Core -> RewriteH Core)
                 [ "any-app (.. unfold command ..) applies an unfold commands to all applications"
                 , "preference is given to applications with applications with more arguments"
@@ -135,6 +136,27 @@ fixIntro = translate $ \ c e -> case e of
         Rec {}       -> fail "recusive group not suitable"
         NonRec {}    -> fail "Cannot take fix of a non-recusive group"
 
+
+-- ^ Case split a free variable in an expression:
+--
+-- Assume expression e which mentions x :: [a]
+--
+-- e ==> case x of x
+--         [] -> e
+--         (a:b) -> e
+caseSplit :: TH.Name -> RewriteH CoreExpr
+caseSplit nm = do
+    frees <- freeIdsT
+    contextfreeT $ \ e -> do
+        case [ i | i <- frees, cmpTHName2Name nm (idName i) ] of
+            []    -> fail "caseSplit: provided name is not free"
+            (i:_) -> do
+                let dcs = tyConDataCons (tyConAppTyCon (idType i))
+                    aNms = map (:[]) $ cycle ['a'..'z']
+                dcsAndVars <- mapM (\dc -> do
+                                        as <- sequence [ newVarH (TH.mkName a) ty | (a,ty) <- zip aNms $ dataConRepArgTys dc ]
+                                        return (dc,as)) dcs
+                return $ Case (Var i) i (exprType e) [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
 
 {-
 exprBinder :: TranslateH CoreExpr [(Id,ContextPath)]
