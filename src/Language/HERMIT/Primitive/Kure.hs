@@ -14,6 +14,8 @@ externals :: [External]
 externals = map (.+ KURE)
    [ external "id"         (idR :: RewriteH Core)
        [ "perform the identity"] .+ Shallow
+   , external "fail"       (fail :: String -> RewriteH Core)
+       [ "a failing rewrite"]
    , external "<+"         ((<+) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "perform the first translate, and then, if it fails, perform the second rewrite" ]
    , external ">>>"        ((>>>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
