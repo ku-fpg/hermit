@@ -57,6 +57,12 @@ externals er = map ((.+ Experiment) . (.+ TODO))
                 [ "apply a named GHC rule" ]
          , external "var" (promoteR . var :: TH.Name -> RewriteH Core)
                 [ "var '<v> succeeded for variable v, and fails otherwise"] .+ Predicate
+         ] ++
+
+         [ external "any-app" (withUnfold :: RewriteH Core -> RewriteH Core)
+                [ "any-app (.. unfold command ..) applies an unfold commands to all applications"
+                , "preference is given to applications with applications with more arguments"
+                ] .+ Deep
          ]
 
 
@@ -246,6 +252,17 @@ unfold nm = translate $ \ env e0 -> do
         e1 <- apply sub2 env e0
 
         apply cleanupUnfold env e1
+
+
+-- match in a top-down manner,
+withUnfold :: RewriteH Core -> RewriteH Core
+withUnfold rr = readerT $ \ e -> case e of
+        ExprCore (App {}) -> childR 1 rec >+> (rr <+ childR 0 rec)
+        _                 -> anyR rec
+   where
+
+        rec :: RewriteH Core
+        rec = withUnfold rr
 
 -- Makes every 'virtual' shadow dispear.
 -- O(n^2) right now
