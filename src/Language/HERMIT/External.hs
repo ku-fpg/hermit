@@ -29,6 +29,7 @@ module Language.HERMIT.External
        , IntBox(..)
        , RewriteCoreBox(..)
        , TranslateCoreStringBox(..)
+       , TranslateCoreCheckBox(..)
        , NameBox(..)
        , TranslateCorePathBox(..)
        , StringBox(..)
@@ -282,6 +283,13 @@ instance Extern (TranslateH Core String) where
     type Box (TranslateH Core String) = TranslateCoreStringBox
     box = TranslateCoreStringBox
     unbox (TranslateCoreStringBox i) = i
+
+data TranslateCoreCheckBox = TranslateCoreCheckBox (TranslateH Core ()) deriving Typeable
+
+instance Extern (TranslateH Core ()) where
+    type Box (TranslateH Core ()) = TranslateCoreCheckBox
+    box = TranslateCoreCheckBox
+    unbox (TranslateCoreCheckBox i) = i
 
 data NameBox = NameBox (TH.Name) deriving Typeable
 

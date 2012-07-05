@@ -1,0 +1,54 @@
+-- set-renderer latex
+-- set-renderer unicode-console
+-- unicode-terminal
+
+-- This is the outer rev, with the big lambda
+consider 'rev
+ { down
+   consider 'rev
+   fix-intro
+-- We've now got a fix version of rev
+
+   { down
+      apply-rule ww ;
+      cleanup-unfold 
+      { 1 ; let-intro 'work }
+      let-float-arg 
+   }
+
+
+   prune-td (unfold '.)
+   prune-td (unfold '.)
+
+ }
+ 
+XXX
+
+-- Normalize to two definitions; first is recursive.
+{ 0 ; 0 ; let-float-let }
+
+-- Unfold wrap and unwrap
+{ consider 'work
+  prune-td (unfold 'wrap)
+  prune-td (unfold 'unwrap)
+  unshadow
+}
+
+bash    -- TADA
+
+
+quit
+
+-- move the repH down to allow fusion
+any-td (push 'repH)
+-- and push the repH through append
+any-td (unfold-rule repAppend) ; prune-td (unfold '.)
+any-bu (unfold-rule repAppFusion)
+any-td (unfold-rule repH)
+unshadow
+
+any-bu (unfold-rule append) 
+any-bu (unfold-rule inline-fix) 
+
+
+--any-bu (apply-rule appendNil) ; bash

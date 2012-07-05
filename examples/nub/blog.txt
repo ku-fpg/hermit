@@ -1,0 +1,387 @@
+A few days ago, I set a quick challenge to <em>derive</em> an efficient
+version of <code>nub</code> over <code>Int</code> from a textbook
+definition of <code>nub</code>. So, starting from
+
+<code>
+nub :: [Int] -> [Int]
+nub [] = []
+nub (x:xs) = x : nub (filter (\y -> not (x == y)) xs)
+</code>
+
+<em>derive</em> an O(n log n) version of nub. Specifically, I called
+for the derivation of a new function <code>nub'</code>, which has the
+type
+
+<code>
+nub' :: [Int] -> Set Int -> [Int]
+</code>
+
+and a wrapper function that calls this new function, defined
+
+<code>
+nub :: [Int] -> [Int]
+nub = nub' xs empty
+</code>
+
+There are many solutions, and many, many possible implementations
+of <code>nub'</code>. Thanks to everyone that submitted an answer.
+The neatest implementation of <code>nub</code> I saw was
+<code>
+nub = map head . group . sort
+</code>
+
+<b>Using the worker/wrapper transformation</b>
+
+Here is a possible solution, and a systematic way of solving the problem
+of finding an efficient nub for Int's, using recent work on the
+worker/wrapper transformation.  I argue that this problem can be
+solved by thinking only about about changing the
+<em>data-structures</em> use by <code>nub</code>, and letting the function definition follows.
+
+<b>Discovery</b>
+
+A quick look at our original code shows that <code>nub</code>
+reconstitutes the argument list many different times, using filter. If
+we had a way of allowing filter to be cheaper, rather than costing O(n)
+in the length of the list, then nub would be cheaper. We need a new
+type of list which has different properties that traditional lists!
+So, what would these properties be?
+
+The first thing we can do is enumerate what happens to the the consumed list.
+There are only two things going on
+
+<ul>
+<li>The list is deconstructed, using pattern matching. 
+</li>
+<li>The list is selectively reconstructed, using filter,
+based on a single lack-of-membership test.
+</li>
+</ul>
+
+If we think of this in abstract terms, we have two combinators
+over a datatype <code>R</code>
+
+<code>
+type R = [Int]
+
+caseR   :: R -> Maybe (Int,R)
+
+filterR :: Int -> R -> R
+</code>
+
+<code>caseR</code> is a combinator for taking <code>R</code> apart,
+returning the head of the list, and the tail of the list, or <code>Nothing</code>
+(to signify an empty list).
+<code>filterR</code> is a combinator for building a new list with a
+specific element, well, filtered.
+
+We could implement these functions as follows
+
+<code>
+type R = [Int]
+
+caseR   :: R -> Maybe (Int,R)
+caseR []     = Nothing
+caseR (x:xs) = Just (x,xs)
+
+filterR :: Int -> R -> R
+filterR x xs = filter (\ y -> not (x == y)) xs
+</code>
+
+So far we have simply
+<ul>
+<li>observed that the slowness of nub is due to the way the argument is used;</li>
+<li>then observed the actors on this type are pattern matching and filtering.</li>
+</ul>
+All check-list like things.
+
+<b>Invention</b>
+
+Now we have some fun. Can we invent a better version of <code>R</code>?
+How about
+
+<code>
+data R = R [Int] (Set Int)
+
+nextR :: R -> Maybe (Int,R) 
+nextR (R xs except) = 
+  case dropWhile (\ x -> x `member` except) xs of
+    [] -> Nothing
+    (x:xs) -> Just (x,R xs except)
+
+filterR :: Int -> R -> R
+filterR v (R xs except) = R xs (insert v except)
+</code>
+
+This data-structure is optimized for the API of <code>R</code>.  Yes, a bit of
+invention, but nothing deep, and nothing recursive.  We need to
+maintain the ordering of the original list, so we use a list. We need
+to sometimes exclude specific elements, so we have a set of things
+to exclude. 
+
+<em>I argue that inventing a better <code>R</code> in the only imagination needed
+to solve the problem.</em>
+
+<b>Changing of the type</b>
+
+So, to solve our puzzle, we need to convert a function that uses
+<code>[Int]</code> into a function that uses our optimized
+<code>R</code>. So we need coercion functions. By convention, these are called
+<code>c2a</code> (concrete to alternative) and <code>a2c</code>
+(alternative to concrete).
+
+<code>
+c2a :: [Int] -> R
+c2a xs = R xs empty
+
+a2c :: R -> [Int]
+a2c (R xs except) = Prelude.filter (\ v -> not (member v except)) xs
+</code>
+
+These obey a simple rule:
+<code>
+a2c . c2a = id
+</code>
+
+Proof:
+<code>
+a2c . c2a :: [Int] -> [Int]
+{ apply . }
+==> \ xs -> a2c (c2a xs)
+{ inline a2c, c2a }
+==> \ xs -> case (R xs empty) of
+              (R xs except) -> Prelude.filter (\ v -> not (member v except)) xs
+{ case-of-known-constructor }
+==> \ xs -> Prelude.filter (\ v -> not (member v empty)) xs
+{ member v empty = False }
+==> \ xs -> Prelude.filter (\ v -> not False) xs
+{ not False = True }
+==> \ xs -> Prelude.filter (\ v -> True) xs
+{ property of filter }
+==> \ xs -> xs
+{ QED }
+</code>
+
+But we need to convert the <code>nub</code> function! So we have (again
+by naming convention) the <code>wrap</code> and <code>unwrap</code>
+function.
+
+<code>
+wrap :: (R -> [Int]) -> ([Int] -> [Int])
+wrap f xs = f (c2a xs)
+
+unwrap :: ([Int] -> [Int]) -> (R -> [Int])
+unwrap f r = f (a2c r)
+</code>
+
+<code>unwrap</code> takes a function of the type of the original
+<code>nub</code>, and generates the new version of <code>nub</code>.
+<code>wrap</code> does the converse, and converts the function
+back.
+
+Now we have all the pieces, and can use the worker/wrapper theorem!
+
+The worker/wrapper theorem states:
+
+<div class="mybox" >
+
+If <code>comp :: A</code> is defined by <code>comp = fix body</code> for some <code>body :: A -> A</code>,<br>
+and <code>wrap :: B -> A</code> and <code>unwrap :: A -> B</code> satisfy any of the worker/wrapper assumptions,<br> then
+
+<code>
+comp =  wrap work
+</code>
+
+where <code>work :: B</code> is defined by
+
+<code>
+work =  fix (unwrap . body . wrap)
+</code>
+</div>
+
+In other words, if we have a way of converting to and from a new type,
+we can use the worker/wrapper theorem to mechanically achieve recursion over 
+the new type (in general, <code>B</code> in our case, <code>R -> [Int]</code>)
+
+There are three possible worker/wrapper assumptions; the simplest of which
+is <code>wrap . unwrap = id</code>.
+
+Do our <code>wrap</code> and <code>unwrap</code> satisfy the worker/wrapper assumption?
+<code>
+wrap . unwrap :: ([Int] -> [Int]) -> ([Int] -> [Int])
+{ apply . }
+==> \ x -> wrap (unwrap x)
+{ apply wrap, unwrap }
+==> \ x -> (\ f xs -> f (c2a xs)) ((\ f r -> f (a2c r)) x)
+{ beta reduce }
+==> \ x -> (\ xs -> ((\ f r -> f (a2c r)) x) (c2a xs))
+{ beta reduce }
+==> \ x -> (\ xs -> (\ r -> x (a2c r)) (c2a xs))
+{ beta reduce }
+==> \ x -> (\ xs -> x (a2c (c2a xs)))
+{ unapply . }
+==> \ x -> (\ xs -> x ((a2c . c2a) xs))
+{ law: a2c . c2a == id }
+==> \ x -> (\ xs -> x xs)
+{ QED }
+</code>
+Yes. So we can use the following.
+<code>
+nub :: [Int] -> [Int]
+nub = wrap nub'
+nub' :: R -> [Int]
+nub' = fix ( unwrap 
+           . (\ nub w -> 
+	             case w of
+			      [] -> []
+				     (x:xs) -> nub (filter (\y -> not (x == y)) xs)
+             )
+	         . wrap )
+</code>
+Note that the <code>nub</code> inside the body of fix is a locally bound function.
+
+Now we simplify, simplify, simplify. Unfolding wrap and unwrap, and
+applying straightforward transformations gives:
+<code>
+nub' = fix (\ nub' w ->
+       case a2c w of
+	      [] -> []
+		   (x:xs) -> x : nub' (c2a (Prelude.filter (\ y -> not (x == y)) xs))
+           )
+</code>
+Now we start the magic; we have two laws:
+<code>
+case a2c w of		case caseR w of
+  [] -> ...		==>      Nothing -> ...
+  (x:xs) -> ...			  Just (x,r) -> let xs = a2c r in ...
+
+  Prelude.filter (\ y -> not (x == y)) (a2c xs)
+          ==>
+  a2c (Prelude.filterR x xs)
+</code>
+We leave proving these rewrites as optional exercises, but both
+are the way we introduce <code>caseR</code> and <code>filterR</code>.
+Using the first law gives:
+<code>
+nub' = fix (\ nub' w ->
+       case nextR w of
+	      Nothing -> []
+		        Just (x,xs) -> x : nub' (c2a (Prelude.filter (\ y -> not (x == y)) (a2c xs)))
+           )
+</code>
+Then using the second law gives:
+<code>
+nub' = fix (\ nub' w ->
+       case nextR w of
+	      Nothing -> []
+		        Just (x,xs) -> x : nub' (c2a (a2c (filterR x xs)))
+           )
+</code>
+Now we do something strange, unapply <code>wrap</code> and <code>unwrap</code>.
+<code>
+nub' = fix (\ nub' w ->
+       case nextR w of
+	      Nothing -> []
+		        Just (x,xs) -> x : (unwrap (wrap nub')) (filterR x xs)
+           )
+</code>
+This was so we can use the worker/wrapper fusion property, which is
+<code>
+ (wrap . unwrap) work = work
+</code>
+This simply means that <code>wrap . unwrap</code> is the identity
+over any value produce by the recursive call (even though 
+<code>wrap . unwrap</code> might not be the identity in general).
+Taking advantage of this gives:
+<code>
+nub' = fix (\ nub' w ->
+       case nextR w of
+	      Nothing -> []
+		        Just (x,xs) -> x : nub' (filterR x xs)
+           )
+</code>
+Now we inline <code>nextR</code>, <code>filterR</code>, and
+<code>fix</code>, giving our answer:
+<code>
+nub :: [Int] -> [Int]
+nub xs = nub' (R xs empty)
+
+nub' :: R -> [Int]
+nub' (R xs except) = 
+  case dropWhile (\ x -> x `member` except) xs of
+    [] -> []
+    (x:xs) -> x : nub' (R xs (insert x except))
+</code>
+
+With a small piece of invention (the efficient representation of <code>R</code>),
+we have systematically derived an efficient <code>nub</code>.
+
+But I asked for <code>nub'</code> of type <code>[Int] -> Set Int -> [Int]</code>!
+
+Sigh. Ho Hum. Here we go again.
+
+<b>(Re)using the worker/wrapper transformation</b>
+
+So we want to translate something of type <code>R -> [Int]</code> into
+something of type <code>[Int] -> Set Int -> [Int]</code>. Lets reuse the worker/wrapper
+transformation.
+
+<code>
+wrap :: ([Int] -> Set Int -> [Int]) -> (R -> [Int])
+wrap f (R xs except) = f xs except
+
+unwrap :: (R -> [Int]) -> ([Int] -> Set Int -> [Int]) 
+unwrap f xs except = f (R xs except)
+</code>
+Of course, this is a currying operation, and a well known
+transformation. But we can use the worker/wrapper to handle this
+type rewrite.
+
+(The worker/wrapper precondition used above does not hold in this
+case, but another one of the worker/wrapper preconditions does hold,
+capturing the strictness of <code>nub'</code> in the <code>R</code>
+argument.)
+
+After cranking the handle, again, we get our answer:
+<code>
+nub :: [Int] -> [Int]
+nub xs = nub' xs empty
+
+nub' :: [Int] -> Set Int -> [Int]
+nub' xs except = 
+  case dropWhile (\ x -> x `member` except) xs of
+    [] -> []
+    (x:xs) -> x : nub' xs (insert x except)
+</code>
+
+We have an efficient solution, based on choosing a good data-structure
+representation. We used the original function's consumption of a
+simple list as a specification of what we wanted our eventual
+implementation to do. The worker/wrapper was uses twice,
+once to incorporate our efficient data-structure, and once
+to uncurry its use.
+
+<b>Paper about the worker/wrapper transformation generalization</b>
+
+The formalization and exploration of the worker/wrapper transformation
+is joint work with <a href="http://www.cs.nott.ac.uk/~gmh/">Graham
+Hutton</a>, started during his sabbatical at <a
+href="http://www.galois.com">Galois</a>.  A draft of the
+worker/wrapper paper is available on my <a
+href="http://www.unsafeperformio.com/publications.php">publications
+and papers web page</a>. In the paper, Graham and I introduce and
+prove the general worker/wrapper theorem then use it on four examples:
+
+<ul>
+<li>deriving a more efficient reverse based upon Hughes-style lists;</li>
+<li>use unboxed values to take advantage of strictness information (as in the original worker/wrapper paper,
+"Unboxed value as first class citizens");</li>
+<li>perform memoisation by choosing a list as an alternative represent to a <code>Nat -> Nat</code> function;</li>
+<li>and perform CPS-transformation by choosing a double-barreled
+continuation type for a small expression evaluator.</li>
+</ul>
+
+Comments and feedback welcome. Let the transformations begin!
+
+AndyG
+

@@ -51,8 +51,13 @@ instance PathContext Context where
   contextPath = hermitPath
 
 -- | Create the initial HERMIT context by providing a 'ModGuts'.
+-- We add the top-level bindings to the environment **immeduately*, because
+-- they can be used in rules. In a sense, anything exported is part
+-- of a big recusive group.
 initContext :: ModGuts -> Context
-initContext = Context empty 0 rootAbsPath
+initContext modGuts = Prelude.foldl (flip addBinding) start binds
+   where start = Context empty 0 rootAbsPath modGuts
+         binds = mg_binds modGuts
 
 -- | Update the context by extending the stored 'AbsolutePath' to a child.
 (@@) :: Context -> Int -> Context

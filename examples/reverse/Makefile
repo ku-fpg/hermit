@@ -1,9 +1,14 @@
-boot::
-#	(cd ../.. ; cabal clean ; cabal install )
-	(cd ../.. ; make boot )
-	make comp
+HERMIT = perl ../../scripts/hermit.pl
+MODULE=Reverse
 
-comp::
-	ghc-7.4.1 -fplugin=Language.HERMIT.Plugin Reverse.hs \
-		  -fplugin-opt=Language.HERMIT.Plugin:main:Reverse/Reverse.hermit  \
-		  -fforce-recomp -O2 -dcore-lint
+test-example:
+	- $(HERMIT) $(MODULE).hs resume
+	./$(MODULE)
+
+	- $(HERMIT) $(MODULE).hs $(MODULE).hss resume
+	./$(MODULE)
+
+interactive-example:
+	- $(HERMIT) Reverse.hs
+
+

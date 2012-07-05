@@ -21,7 +21,6 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
 
             -- This is a bit of a hack; otherwise we lose what we've not seen
             liftIO $ hSetBuffering stdout NoBuffering
-            liftIO $ print opts
 
             let
                 myPass = CoreDoPluginPass "HERMIT" $ modFilter hp opts
@@ -32,7 +31,7 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
 
 -- | Determine whether to act on this module, choose plugin pass.
 modFilter :: HermitPass -> HermitPass
-modFilter hp opts guts | null modOpts = return guts -- don't process this module
+modFilter hp opts guts | null modOpts && not (null opts) = return guts -- don't process this module
                        | otherwise    = hp modOpts guts
     where modOpts = filterOpts opts guts
 

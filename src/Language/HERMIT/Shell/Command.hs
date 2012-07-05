@@ -49,6 +49,8 @@ data ShellCommand :: * where
    QueryFun      :: QueryFun                 -> ShellCommand
    MetaCommand   :: MetaCommand              -> ShellCommand
 
+-- | AstEffects are things that are recorded in our log and saved files.
+
 data AstEffect
    -- | This applys a rewrite (giving a whole new lower-level AST)
    = Apply      (RewriteH Core)
@@ -61,7 +63,9 @@ data AstEffect
 
    | BeginScope
    | EndScope
-   | Tag String                 -- Adding a tag
+   | Tag String                 -- ^ Adding a tag
+   -- | A precondition or other predicate that must not fail
+   | CorrectnessCritera  (TranslateH Core ())
    deriving Typeable
 
 instance Extern AstEffect where
@@ -74,8 +78,7 @@ data ShellEffect :: * where
    deriving Typeable
 
 data QueryFun :: * where
-   QueryT         :: TranslateH Core String   -> QueryFun  -- strange stuff
-
+   QueryT         :: TranslateH Core String   -> QueryFun
    -- These two be can generalized into
    --  (CommandLineState -> IO String)
    Status        ::                             QueryFun
@@ -133,6 +136,7 @@ interpShellCommand =
                 , interp $ \ (TranslateCorePathBox tt)   -> AstEffect (Pathfinder tt)
                 , interp $ \ (StringBox str)             -> QueryFun (Message str)
                 , interp $ \ (TranslateCoreStringBox tt) -> QueryFun (QueryT tt)
+                , interp $ \ (TranslateCoreCheckBox tt)  -> AstEffect (CorrectnessCritera tt)
                 , interp $ \ (effect :: AstEffect)       -> AstEffect effect
                 , interp $ \ (effect :: ShellEffect)     -> ShellEffect effect
                 , interp $ \ (query :: QueryFun)         -> QueryFun query
@@ -184,7 +188,7 @@ shell_externals = map (.+ Shell)
    , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st ->
        case M.lookup pp pp_dictionary of
          Nothing -> do
-            liftIO $ putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
+            putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
             return st
          Just _ -> return $ st { cl_pretty = pp })
        [ "set the pretty printer"
@@ -236,10 +240,13 @@ pretty st = case M.lookup (cl_pretty (cl_session st)) pp_dictionary of
 showFocus :: MonadIO m => CLM m ()
 showFocus = do
     st <- get
-    liftIO ((do
-        doc <- queryS (cl_kernel st) (cl_cursor (cl_session st)) (pretty st)
-        cl_render (cl_session st) stdout (cl_pretty_opts (cl_session st)) doc)
-          `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg)
+    -- No not show focus while loading
+    condM (gets (cl_loading . cl_session))
+          (return ())
+          ( liftIO ((do
+                  doc <- queryS (cl_kernel st) (cl_cursor (cl_session st)) (pretty st)
+                  cl_render (cl_session st) stdout (cl_pretty_opts (cl_session st)) doc)
+                  `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg))
 
 -------------------------------------------------------------------------------
 
@@ -293,7 +300,7 @@ data SessionState = SessionState
         , cl_render      :: Handle -> PrettyOptions -> DocH -> IO ()   -- ^ the way of outputing to the screen
         , cl_width       :: Int                 -- ^ how wide is the screen?
         , cl_nav         :: Bool        -- ^ keyboard input the the nav panel
-        , cl_loading     :: Bool        -- ^ if loading a file, show commands as they run. TODO: generalize
+        , cl_loading     :: Bool        -- ^ if loading a file
         }
 
 
@@ -339,9 +346,7 @@ shellComplete mvar rPrev so_far = do
 -- | The first argument is a list of files to load.
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
 commandLine filesToLoad behavior modGuts = do
-    GHC.liftIO $ print ("files",filesToLoad)
-
-    GHC.liftIO $ print (length (GHC.mg_rules modGuts))
+--    GHC.liftIO $ print ("files",filesToLoad)
     let dict = dictionary $ all_externals shell_externals modGuts
     let ws_complete = " ()"
 
@@ -352,7 +357,7 @@ commandLine filesToLoad behavior modGuts = do
                          _        -> LoadFile fileName
                       | fileName <- reverse filesToLoad
                       , not (null fileName)
-                      ] `ourCatch` \ msg -> putStrLn $ "Booting Failure: " ++ msg
+                      ] `ourCatch` \ msg -> putStrToConsole $ "Booting Failure: " ++ msg
 
     flip scopedKernel modGuts $ \ skernel sast -> do
 
@@ -388,16 +393,16 @@ loop completionMVar = loop'
                     else (case parseStmtsH line of
                                 Left  msg   -> throwError ("Parse failure: " ++ msg)
                                 Right stmts -> evalStmts stmts)
-                         `ourCatch` putStrLn
+                         `ourCatch` (liftIO . putStrLn)
                            >> loop'
 
-ourCatch :: (m ~ IO, MonadIO n) => CLM m () -> (String -> IO ()) -> CLM n ()
+ourCatch :: (MonadIO n) => CLM IO () -> (String -> CLM n ()) -> CLM n ()
 ourCatch m failure = do
                 st <- get
                 (res,st') <- liftIO $ runStateT (runErrorT m) st
                 put st'
                 case res of
-                  Left msg -> liftIO $ failure msg
+                  Left msg -> failure msg
                   Right () -> return ()
 
 
@@ -419,9 +424,6 @@ evalExpr expr = do
                 expr of
             Left msg  -> throwError msg
             Right cmd -> do
-                condM (gets (cl_loading . cl_session))
-                      (liftIO (putStrLn $ "doing : " ++ show expr))
-                      (return ())
                 case cmd of
                   AstEffect effect   -> performAstEffect effect expr
                   ShellEffect effect -> performShellEffect effect
@@ -479,6 +481,13 @@ performAstEffect EndScope expr = do
 performAstEffect (Tag tag) expr = do
         st <- get
         put (st { cl_tags = (tag, cl_cursor (cl_session st)) : cl_tags st })
+performAstEffect (CorrectnessCritera q) expr = do
+        st <- get
+        correctness <- liftIO (try $ queryS (cl_kernel st) (cl_cursor (cl_session st)) q)
+        case correctness of
+          Right ()  -> do putStrToConsole $ unparseExprH expr ++ " [correct]"
+          Left (err :: IOException)
+                   -> fail $ unparseExprH expr ++ " [exception: " ++ show err ++ "]"
 
 
 -------------------------------------------------------------------------------
@@ -497,9 +506,15 @@ performShellEffect (SessionStateEffect f) = do
 performQuery :: (MonadIO m) => QueryFun -> CLM m ()
 performQuery (QueryT q) = do
     st <- get
-    -- something changed, to print
-    liftIO ((queryS (cl_kernel st) (cl_cursor (cl_session st)) q >>= putStrLn)
-              `catch` \ msg -> putStrLn $ "Query Failed: " ++ msg)
+    str <- liftIO (queryS (cl_kernel st) (cl_cursor (cl_session st)) q)
+    putStrToConsole str
+performQuery (Inquiry f) = do
+    st <- get
+    str <- liftIO $ f st (cl_session st)
+    putStrToConsole str
+
+-- These two need to use Inquiry
+performQuery (Message msg) = liftIO (putStrLn msg)
 performQuery Status = do
     st <- get
     liftIO $ do
@@ -507,10 +522,6 @@ performQuery Status = do
         putStrLn $ "Paths: " ++ show ps
         print ("Graph",cl_graph st)
         print ("This",cl_cursor (cl_session st))
-performQuery (Inquiry f) = do
-    st <- get
-    liftIO (f st (cl_session st) >>= putStrLn)
-performQuery (Message msg) = liftIO (putStrLn msg)
 
 -------------------------------------------------------------------------------
 
@@ -528,15 +539,20 @@ performMetaCommand (Dump fileName _pp renderer _) = do
             hClose h
         _ -> throwError "dump: bad pretty-printer or renderer option"
 performMetaCommand (LoadFile fileName) = do
-        liftIO $ putStrLn $ "[loading " ++ fileName ++ "]"
+        putStrToConsole $ "[loading " ++ fileName ++ "]"
         res <- liftIO $ try (readFile fileName)
         case res of
           Right str -> case parseStmtsH (normalize str) of
                         Left  msg  -> throwError ("Parse failure: " ++ msg)
                         Right stmts -> do
+                            load_st <- gets (cl_loading . cl_session)
                             modify $ \st -> st { cl_session = (cl_session st) { cl_loading = True } }
-                            evalStmts stmts
-                            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = False } }
+                            evalStmts stmts `catchError` (\ err -> do
+                                    modify $ \st -> st { cl_session = (cl_session st) { cl_loading = load_st } }
+                                    throwError err)
+                            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = load_st } }
+                            putStrToConsole $ "[done, loaded N commands]"
+
           Left (err :: IOException) -> throwError ("IO error: " ++ show err)
   where
    normalize = unlines
@@ -549,12 +565,18 @@ performMetaCommand (LoadFile fileName) = do
 
 performMetaCommand (SaveFile fileName) = do
         st <- get
-        liftIO $ putStrLn $ "[saving " ++ fileName ++ "]"
+        putStrToConsole $ "[saving " ++ fileName ++ "]"
         -- no checks to see if you are clobering; be careful
         liftIO $ writeFile fileName $ showGraph (cl_graph st) (cl_tags st) (SAST 0)
 
 
+-------------------------------------------------------------------------------
 
+putStrToConsole :: MonadIO m => String -> CLM m ()
+putStrToConsole str =
+  condM (gets (cl_loading . cl_session))
+        (return ())
+        (liftIO (putStrLn str))
 
 -------------------------------------------------------------------------------
 
@@ -613,14 +635,16 @@ navigation whereTo st sess_st =
            let ns = [ edge | edge@(s,_,_) <- cl_graph st, s == cl_cursor (cl_session st) ]
            case ns of
              [] -> fail "Cannot step forward (no more steps)"
-             [(_,_,d) ] -> -- TODO: give message
+             [(_,cmd,d) ] -> do
+                           putStrLn $ "step : " ++ unparseExprH cmd
                            return $ sess_st { cl_cursor = d }
              _ -> fail "Cannot step forward (multiple choices)"
       Back -> do
            let ns = [ edge | edge@(_,_,d) <- cl_graph st, d == cl_cursor (cl_session st) ]
            case ns of
              []         -> fail "Cannot step backwards (no more steps)"
-             [(s,_,_) ] -> -- TODO: give message about undoing
+             [(s,cmd,_) ] -> do
+                           putStrLn $ "back, unstepping : " ++ unparseExprH cmd
                            return $ sess_st { cl_cursor = s }
              _          -> fail "Cannot step backwards (multiple choices, impossible!)"
 

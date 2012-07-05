@@ -6,3 +6,4 @@ dist/
 *.swo
 BEFORE.HERMIT.*
 AFTER.HERMIT.*
+examples/Haskell2012/paper/

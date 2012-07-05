@@ -2,7 +2,7 @@
 module Language.HERMIT.Primitive.GHC where
 
 import GhcPlugins hiding (freeVars,empty)
---import qualified GhcPlugins as GHC
+import qualified Language.HERMIT.GHC as GHC
 import qualified OccurAnal
 import Control.Arrow
 import Control.Applicative
@@ -13,6 +13,7 @@ import Language.HERMIT.Primitive.Consider
 
 import Language.HERMIT.Kure
 import Language.HERMIT.External
+import Language.HERMIT.Context
 -- import Language.HERMIT.GHC
 
 import qualified Language.Haskell.TH as TH
@@ -32,7 +33,7 @@ externals modGuts = map (.+ TODO)
                 [ "Safe let substitution [via GHC]"
                 , "let x = E1 in E2, safe to inline without duplicating work ==> E2[E1/x],"
                 , "fails otherwise"
-                , "only matches non-recursive lets" ]                           .+ Deep .+ Eval
+                , "only matches non-recursive lets" ]                           .+ Deep .+ Eval .+ Bash
          , external "safe-let-subst-plus" (promoteR safeLetSubstPlusR :: RewriteH Core)
                 [ "Safe let substitution [via GHC]"
                 , "let { x = E1, ... } in E2, "
@@ -79,7 +80,25 @@ letSubstR = contextfreeT $ \ exp -> case exp of
 
 -- This is quite expensive (O(n) for the size of the sub-tree)
 safeLetSubstR :: RewriteH CoreExpr
-safeLetSubstR = contextfreeT $ \ exp -> case occurAnalyseExpr exp of
+safeLetSubstR = translate $ \ env exp ->
+    let   -- Lit?
+          safeBind (Var {})   = True
+          safeBind (Lam {})   = True
+          safeBind e@(App {}) =
+                 case collectArgs e of
+                   (Var f,args) -> arityOf env f > length (filter (not . isTypeArg) args)
+                   (other,args) -> case collectBinders other of
+                                     (bds,_) -> length bds > length args
+          safeBind _          = False
+
+          safeSubst NoOccInfo = False   -- unknown!
+          safeSubst IAmDead   = True    -- DCE
+          safeSubst (OneOcc inLam oneBr _)
+                              | inLam == True || oneBr == False = False   -- do not inline inside a lambda
+                                                                          -- or if in multiple case branches
+                              | otherwise = True
+          safeSubst _ = False   -- strange case, like a loop breaker
+   in case occurAnalyseExpr exp of
       Let (NonRec b (Type bty)) e
          | isTyVar b -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
                             sub      = extendTvSubst emptySub b bty
@@ -92,24 +111,6 @@ safeLetSubstR = contextfreeT $ \ exp -> case occurAnalyseExpr exp of
          | otherwise -> fail "safeLetSubstR failed (safety critera not met)"
       -- By (our) definition, types are a trivial bind
       _ -> fail "LetSubst failed. Expr is not a (non-recursive) Let."
-  where
-          -- Lit?
-          safeBind (Var {})   = True
-          safeBind (Lam {})   = True
-          safeBind e@(App {}) =
-                 case collectArgs e of
-                   (Var f,args) -> idArity f > length (filter (not . isTypeArg) args)
-                   (other,args) -> case collectBinders other of
-                                     (bds,_) -> length bds > length args
-          safeBind _          = False
-
-          safeSubst NoOccInfo = False   -- unknown!
-          safeSubst IAmDead   = True    -- DCE
-          safeSubst (OneOcc inLam oneBr _)
-                              | inLam == True || oneBr == False = False   -- do not inline inside a lambda
-                                                                          -- or if in multiple case branches
-                              | otherwise = True
-          safeSubst _ = False   -- strange case, like a loop breaker
 
 -- | 'safeLetSubstPlusR' tries to inline a stack of bindings, stopping when reaches
 -- the end of the stack of lets.
@@ -244,14 +245,28 @@ coreEqual _             _             = Nothing
 
 -- TODO: make this handle cmp of recusive functions, by using subst.
 
-compareValues :: TH.Name -> TH.Name -> TranslateH Core String
+compareValues :: TH.Name -> TH.Name -> TranslateH Core ()
 compareValues n1 n2 = do
         p1 <- rhsOf n1
         p2 <- rhsOf n2
         e1 :: Core <- pathT p1 idR
         e2 :: Core <- pathT p2 idR
         case e1 `coreEqual` e2 of
-          Nothing -> return $ show n1 ++ " and " ++ show n2 ++ " are incomparable"
-          Just b  -> return $ show n1
-                           ++ (if b then " == " else " /= ")
-                           ++ show n2
+          Nothing    -> fail $ show n1 ++ " and " ++ show n2 ++ " are incomparable"
+          Just False -> fail $ show n1 ++ " and " ++ show n2 ++ " are not equal"
+          Just True  -> return ()
+
+--------------------------------------------------------
+
+-- try figure out the arity of an Id
+arityOf:: Context -> Id -> Int
+arityOf env nm =
+     case lookupHermitBinding nm env of
+        Nothing       -> idArity nm
+        Just (LAM {}) -> 0
+        -- Note: the exprArity will call idArity if
+        -- it hits an id; perhaps we should do the counting
+        -- The advantage of idArity is it will terminate, though.
+        Just (BIND _ _ e) -> GHC.exprArity e
+
+
