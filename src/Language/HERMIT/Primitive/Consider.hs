@@ -26,7 +26,7 @@ externals = map (.+ Navigation)
 
 -- focus on a binding group
 considerName :: TH.Name -> TranslateH Core Path
-considerName = uniquePrunePathToT . bindGroup
+considerName = onePathToT . bindGroup
 
 -- find a binding group that contains a name.
 -- this is slightly different than namedBinding below,
@@ -40,7 +40,7 @@ bindGroup _  _                        =  False
 
 -- find a specific binding's rhs.
 rhsOf :: TH.Name -> TranslateH Core Path
-rhsOf nm = uniquePrunePathToT (namedBinding nm) >>> arr (++ [0])
+rhsOf nm = onePathToT (namedBinding nm) >>> arr (++ [0])
 
 -- find a named binding.
 namedBinding :: TH.Name -> Core -> Bool
@@ -89,7 +89,7 @@ considerables =   [ ("bind",Binding)
 considerConstruct :: String -> TranslateH Core Path
 considerConstruct str = case string2considerable str of
                           Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". " ++ recognizedConsiderables ++ ".  Or did you mean \"consider '" ++ str ++ "\"?"
-                          Just c  -> firstPathToT (underConsideration c)
+                          Just c  -> onePathToT (underConsideration c)
 
 string2considerable :: String -> Maybe Considerable
 string2considerable = flip lookup considerables

@@ -532,7 +532,7 @@ performMetaCommand (LoadFile fileName) = do
         res <- liftIO $ try (readFile fileName)
         case res of
           Right str -> case parseStmtsH (normalize str) of
-                        Left  msg  -> throwError ("parse failure: " ++ msg)
+                        Left  msg  -> throwError ("Parse failure: " ++ msg)
                         Right stmts -> do
                             modify $ \st -> st { cl_session = (cl_session st) { cl_loading = True } }
                             evalStmts stmts
