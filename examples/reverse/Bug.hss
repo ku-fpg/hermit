@@ -1,0 +1,10 @@
+-- perl ../../scripts/hermit.pl Reverse.hs Bug.hss
+ consider 'rev
+ consider app
+ up
+ up
+ 2
+ down
+ case-split 'xs
+ any-bu (inline 'xs)
+
