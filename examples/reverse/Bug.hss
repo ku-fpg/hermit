@@ -5,5 +5,5 @@
  up
  2
  down
- case-split-plus 'xs
+ case-split-inline 'xs
 
