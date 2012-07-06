@@ -34,7 +34,7 @@ externals =
          , external "case-float-app" (promoteR caseFloatApp :: RewriteH Core)
                      [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow .+ Bash
          , external "case-float-arg" (promoteR caseFloatArg :: RewriteH Core)
-                     [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition .+ Bash
+                     [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
          , external "case-float-case" (promoteR caseFloatCase :: RewriteH Core)
                      [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval .+ Bash
          , external "case-reduce" (promoteR caseReduce :: RewriteH Core)
