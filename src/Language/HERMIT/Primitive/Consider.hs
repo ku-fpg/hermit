@@ -61,10 +61,6 @@ unqualified = checkCompose . reverse . showPpr . idName
           checkCompose other   = reverse (takeWhile (/='.') other)
 -- TODO: Does GHC provide this?
 
--- Hacks till we can find the correct way of doing these.
-cmpName :: TH.Name -> Name -> Bool
-cmpName = cmpTHName2Name
-
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetIn | CaseOf | Casty | Ticky | TypeVar | Coerce
 
 recognizedConsiderables :: String
@@ -112,11 +108,11 @@ underConsideration Coerce      (ExprCore (Coercion _))    = True
 underConsideration _           _                          = False
 
 
+-- I feel like these two should go somewhere else, but seem to get stuck with dependency cycles when I move them.
+
+-- Hacks till we can find the correct way of doing these.
+cmpName :: TH.Name -> Name -> Bool
+cmpName = cmpTHName2Name
+
 var :: TH.Name -> RewriteH CoreExpr
 var nm = whenM (varT $ \ v -> nm `cmpName` idName v) idR
-
--- var nm = contextfreeT $ \ e -> do
---   liftIO $ print ("VAR",GHC.showSDoc . GHC.ppr $ thRdrNameGuesses $ nm)
---   case e of
---     Var n0 | nm `cmpName` idName n0 -> return e
---     _                               -> fail $ "Name \"" ++ show nm ++ "\" not found."

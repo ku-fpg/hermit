@@ -39,26 +39,26 @@ externals er = map ((.+ Experiment) . (.+ TODO))
                 [ "List the type (Constructor) for this expression."]
          , external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
                 [ "determines if a rewrite could be successfully applied" ]
-         , external "fix-intro" (promoteR fixIntro :: RewriteH Core)
+         , external "fix-intro" (promoteBindR fixIntro :: RewriteH Core)
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
          , external "number-binder" (exprNumberBinder :: Int -> RewriteH Core)
                 [ "add a number suffix onto a (lambda) binding" ]
          , external "auto-number-binder" (autoRenameBinder :: RewriteH Core)
                 [ "automatically add a number suffix onto a (lambda) binding" ]
-         , external "cleanup-unfold" (promoteR cleanupUnfold :: RewriteH Core)
+         , external "cleanup-unfold" (promoteExprR cleanupUnfold :: RewriteH Core)
                 [ "clean up immeduate nested fully-applied lambdas, from the bottom up"]
-         , external "unfold" (promoteR . unfold :: TH.Name -> RewriteH Core)
+         , external "unfold" (promoteExprR . unfold :: TH.Name -> RewriteH Core)
                 [ "inline a definition, and apply the arguments; tranditional unfold"]
          , external "unshadow" (unshadow :: RewriteH Core)
                 [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
-         , external "push" (promoteR . push :: TH.Name -> RewriteH Core)
+         , external "push" (promoteExprR . push :: TH.Name -> RewriteH Core)
                 [ "push a function <v> into argument" ]
                         -- TODO: does not work with rules with no arguments
          , external "unfold-rule" ((\ nm -> promoteR (rules (er_rules er) nm >>> cleanupUnfold)) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ]
          , external "var" (promoteR . var :: TH.Name -> RewriteH Core)
                 [ "var '<v> succeeded for variable v, and fails otherwise"] .+ Predicate
-         , external "case-split" (promoteR . caseSplit :: TH.Name -> RewriteH Core)
+         , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
                 [ "case split" ]
          ] ++
          [ external "any-call" (withUnfold :: RewriteH Core -> RewriteH Core)
@@ -239,7 +239,7 @@ altAutoRenameBinder = do
 -- remove N lets, please
 letSubstNR :: Int -> RewriteH Core
 letSubstNR 0 = idR
-letSubstNR n = (childR 1 $ letSubstNR (n - 1)) >>> promoteR letSubstR
+letSubstNR n = (childR 1 $ letSubstNR (n - 1)) >>> promoteExprR letSubstR
 
 inventNames :: [Id] -> String -> String
 inventNames curr old | trace (show ("inventNames",names,old)) False = undefined

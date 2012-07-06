@@ -25,16 +25,16 @@ import Prelude hiding (exp)
 
 externals :: ExternalReader -> [External]
 externals er = map (.+ TODO)
-         [ external "let-subst" (promoteR letSubstR :: RewriteH Core)
+         [ external "let-subst" (promoteExprR letSubstR :: RewriteH Core)
                 [ "Let substitution [via GHC]"
                 , "let x = E1 in E2 ==> E2[E1/x], fails otherwise"
                 , "only matches non-recursive lets" ]                           .+ Deep
-         , external "safe-let-subst" (promoteR safeLetSubstR :: RewriteH Core)
+         , external "safe-let-subst" (promoteExprR safeLetSubstR :: RewriteH Core)
                 [ "Safe let substitution [via GHC]"
                 , "let x = E1 in E2, safe to inline without duplicating work ==> E2[E1/x],"
                 , "fails otherwise"
                 , "only matches non-recursive lets" ]                           .+ Deep .+ Eval .+ Bash
-         , external "safe-let-subst-plus" (promoteR safeLetSubstPlusR :: RewriteH Core)
+         , external "safe-let-subst-plus" (promoteExprR safeLetSubstPlusR :: RewriteH Core)
                 [ "Safe let substitution [via GHC]"
                 , "let { x = E1, ... } in E2, "
                 , "  where safe to inline without duplicating work ==> E2[E1/x,...],"
@@ -42,9 +42,9 @@ externals er = map (.+ TODO)
                 , "only matches non-recursive lets" ]  .+ Deep .+ Eval
          , external "freevars" (promoteT freeIdsQuery :: TranslateH Core String)
                 [ "List the free variables in this expression [via GHC]" ] .+ Query .+ Deep
-         , external "deshadow-binds" (promoteR deShadowBindsR :: RewriteH Core)
+         , external "deshadow-binds" (promoteProgramR deShadowBindsR :: RewriteH Core)
                 [ "Deshadow a program " ] .+ Deep
-         , external "apply-rule" (promoteR . rules (er_rules er) :: String -> RewriteH Core)
+         , external "apply-rule" (promoteExprR . rules (er_rules er) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ] .+ Shallow
          , external "apply-rule" (rules_help (er_rules er))
                 [ "list rules that can be used" ] .+ Query

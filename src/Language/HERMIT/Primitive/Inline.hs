@@ -13,13 +13,13 @@ import qualified Language.Haskell.TH as TH
 
 externals :: [External]
 externals =
-            [ external "inline" (promoteR (inline False) :: RewriteH Core)
+            [ external "inline" (promoteExprR (inline False) :: RewriteH Core)
                 [ "(Var n) ==> <defn of n>, fails otherwise" ].+ Eval .+ Deep .+ TODO
-            , external "inline-scrutinee" (promoteR (inline True) :: RewriteH Core)
+            , external "inline-scrutinee" (promoteExprR (inline True) :: RewriteH Core)
                 [ "(Var n) ==> <defn of n>, fails otherwise"
                 , "In the case of case wildcard binders, replaces with scrutinee expression, "
                 , "rather than constructor or literal." ].+ Eval .+ Deep .+ TODO
-            , external "inline" (promoteR . inlineName :: TH.Name -> RewriteH Core)
+            , external "inline" (promoteExprR . inlineName :: TH.Name -> RewriteH Core)
                 [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
             ]
 
@@ -42,8 +42,8 @@ inline scrutinee = rewrite $ \ c e -> case e of
                     _ -> fail $ "inline failed, cannot find " ++ show n0 ++ "  in Env or IdInfo"
                 Just (LAM {}) -> fail $ "inline failed, found lambda-bound value or type"
                 Just (BIND _depth _ e')
-                  -- need to check for clashes, based on the depth
-                  -- for now, just accept, and proceeded
+                  -- TO DO: need to check for clashes, based on the depth
+                  --        for now, just accept, and proceeded
                   -> return e'
                 Just (CASE _d s conApp) -> return $ if scrutinee then s else conApp
     _      -> fail "inline failed (No variable)"

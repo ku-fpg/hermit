@@ -29,15 +29,15 @@ externals =
          --   -- Again, don't think the lhs of this rule is possible to construct in core.
          -- , external "case-merging" (promoteR $ not_defined "case-merging" :: RewriteH Core)
          --             [ "case v of ...; d -> case v of alt -> e ==> case v of ...; alt -> e[v/d]" ] .+ Unimplemented .+ Eval
-           external "let-float-case" (promoteR letFloatCase :: RewriteH Core)
+           external "let-float-case" (promoteExprR letFloatCase :: RewriteH Core)
                      [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]  .+ Commute .+ Shallow .+ Eval .+ Bash
-         , external "case-float-app" (promoteR caseFloatApp :: RewriteH Core)
+         , external "case-float-app" (promoteExprR caseFloatApp :: RewriteH Core)
                      [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow .+ Bash
-         , external "case-float-arg" (promoteR caseFloatArg :: RewriteH Core)
+         , external "case-float-arg" (promoteExprR caseFloatArg :: RewriteH Core)
                      [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
-         , external "case-float-case" (promoteR caseFloatCase :: RewriteH Core)
+         , external "case-float-case" (promoteExprR caseFloatCase :: RewriteH Core)
                      [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval .+ Bash
-         , external "case-reduce" (promoteR caseReduce :: RewriteH Core)
+         , external "case-reduce" (promoteExprR caseReduce :: RewriteH Core)
                      [ "case-of-known-constructor"
                      , "case C v1..vn of C w1..wn -> e ==> e[v1/w1..vn/wn]" ] .+ Shallow .+ Eval .+ Bash
          ]

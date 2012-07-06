@@ -21,21 +21,21 @@ import Control.Arrow
 
 externals :: [External]
 externals =
-         [ external "beta-reduce" (promoteR beta_reduce :: RewriteH Core)
+         [ external "beta-reduce" (promoteExprR beta_reduce :: RewriteH Core)
                      [ "((\\ v -> E1) E2) ==> let v = E2 in E1, fails otherwise"
                      , "this form of beta reduction is safe if E2 is an arbitrary"
                      , "expression (won't duplicate work)" ]                                 .+ Eval .+ Shallow
-         , external "beta-reduce-plus" (promoteR betaReducePlus :: RewriteH Core)
+         , external "beta-reduce-plus" (promoteExprR betaReducePlus :: RewriteH Core)
                      [ "perform one or more beta-reductions"]                                .+ Eval .+ Shallow .+ Bash
-         , external "beta-expand" (promoteR beta_expand :: RewriteH Core)
+         , external "beta-expand" (promoteExprR beta_expand :: RewriteH Core)
                      [ "(let v = E1 in E2) ==> (\\ v -> E2) E1, fails otherwise" ]           .+ Shallow
-         , external "dead-code-elimination" (promoteR dce :: RewriteH Core)
+         , external "dead-code-elimination" (promoteExprR dce :: RewriteH Core)
                      [ "dead code elimination removes a let."
                      , "(let v = E1 in E2) ==> E2, if v is not free in E2, fails otherwise"
                      , "condition: let is not-recursive" ]                                   .+ Eval .+ Shallow .+ Bash
-         , external "eta-reduce" (promoteR eta_reduce :: RewriteH Core)
+         , external "eta-reduce" (promoteExprR eta_reduce :: RewriteH Core)
                      [ "(\\ v -> E1 v) ==> E1, fails otherwise" ]                            .+ Eval .+ Shallow .+ Bash
-         , external "eta-expand" (promoteR . eta_expand :: TH.Name -> RewriteH Core)
+         , external "eta-expand" (promoteExprR . eta_expand :: TH.Name -> RewriteH Core)
                      [ "'eta-expand v' performs E1 ==> (\\ v -> E1 v), fails otherwise" ]    .+ Shallow .+ Introduce
          ]
          ++ Let.externals

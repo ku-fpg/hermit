@@ -46,6 +46,12 @@ module Language.HERMIT.Kure
        , letRecT, letRecAllR, letRecAnyR, letRecOneR
        , recDefT, recDefAllR, recDefAnyR, recDefOneR
        , letRecDefT, letRecDefAllR, letRecDefAnyR, letRecDefOneR
+       -- * Promotion Combinators
+       , promoteProgramR
+       , promoteBindR
+       , promoteDefR
+       , promoteExprR
+       , promoteAltR
        )
 where
 
@@ -594,5 +600,27 @@ letRecDefAnyR rs r = letRecAnyR (\ n -> defR (rs n)) r
 
 letRecDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr -> RewriteH CoreExpr
 letRecDefOneR rs r = letRecOneR (\ n -> defR (rs n)) r
+
+---------------------------------------------------------------------
+
+-- | Promote a rewrite on 'CoreProgram' to a rewrite on 'Core'.
+promoteProgramR :: RewriteH CoreProgram -> RewriteH Core
+promoteProgramR r = setFailMsg "This rewrite can only succeed at program nodes (the top-level)." retractT >>> r >>> injectT
+
+-- | Promote a rewrite on 'CoreBind' to a rewrite on 'Core'.
+promoteBindR :: RewriteH CoreBind -> RewriteH Core
+promoteBindR r = setFailMsg "This rewrite can only succeed at binding group nodes." retractT >>> r >>> injectT
+
+-- | Promote a rewrite on 'CoreDef' to a rewrite on 'Core'.
+promoteDefR :: RewriteH CoreDef -> RewriteH Core
+promoteDefR r = setFailMsg "This rewrite can only succeed at recursive definition nodes." retractT >>> r >>> injectT
+
+-- | Promote a rewrite on 'CoreExpr' to a rewrite on 'Core'.
+promoteAltR :: RewriteH CoreAlt -> RewriteH Core
+promoteAltR r = setFailMsg "This rewrite can only succeed at case alternative nodes." retractT >>> r >>> injectT
+
+-- | Promote a rewrite on 'CoreExpr' to a rewrite on 'Core'.
+promoteExprR :: RewriteH CoreExpr -> RewriteH Core
+promoteExprR r = setFailMsg "This rewrite can only succeed at expression nodes." retractT >>> r >>> injectT
 
 ---------------------------------------------------------------------
