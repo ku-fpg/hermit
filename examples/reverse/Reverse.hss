@@ -7,48 +7,22 @@ consider 'rev
  { down
    consider 'rev
    fix-intro
--- We've now got a fix version of rev
-
-   { down
-      apply-rule ww ;
-      cleanup-unfold 
-      { 1 ; let-intro 'work }
-      let-float-arg 
-   }
-
-
-   prune-td (unfold '.)
-   prune-td (unfold '.)
-
- }
- 
--- Normalize to two definitions; first is recursive.
--- { 0 ; 0 ; let-float-let }
-
--- Unfold wrap and unwrap
-{ consider 'work
-  prune-td (unfold 'wrap)
-  prune-td (unfold 'unwrap)
-  unshadow
-}
-
-bash    -- TADA
-
-
--- And force the worker/wrapper through
-   prune-td (unfold '.)
-   bash
-   any-bu (eta-expand 'ys >>> any-bu (apply-rule "[] ++")) ; bash
+   any-call (unfold-rule "ww")
+   any-call (unfold '.)
+   any-call (unfold 'wrap)
+   any-call (unfold 'unwrap)
+   any-call (unfold '.)
+   unshadow ; bash
+   any-bu (case-float-arg)
    any-bu (apply-rule "repH ++") ; bash
-   prune-td (unfold '.)
-   prune-td (unfold '.)
-   any-bu (apply-rule "repH (:)") ; bash
-   any-bu (apply-rule "repH []") ; bash
-   prune-td (unfold '.)
-   any-bu (apply-rule "[] ++") ; bash
-   { consider case ; eta-expand 'ys ; { consider app ; case-float-app } }
    any-bu (unfold-rule "rep-abs-fusion") 
-   prune-td (unfold 'fix)
-   bash
 
+   { consider case ; eta-expand 'ys ; any-bu case-float-app }
+   any-call (unfold 'repH)
+   any-call (unfold '.)
+   any-call (unfold-rule "(:) ++")
+   any-call (unfold-rule "[] ++")
+   any-call (unfold 'fix) ; bash
+   unshadow
+}
    
