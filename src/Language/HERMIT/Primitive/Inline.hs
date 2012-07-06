@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 module Language.HERMIT.Primitive.Inline where
 
 import GhcPlugins
@@ -51,8 +52,7 @@ inline scrutinee = rewrite $ \ c e -> case e of
                     if scrutinee then return s
                     else let tys = tyConAppArgs (idType n0)
                              e'  = alt2Exp s tys coreAlt
-                             d'  = either (const depth) (const (depth+1)) e'
-                             e'' = either id id e'
+                             (e'',d') = either (,depth) (,depth+1) e'
                          in condM (apply (extractT (ensureDepth d')) c e'')
                                   (return e'')
                                   (fail "values in inlined expression have been rebound")
