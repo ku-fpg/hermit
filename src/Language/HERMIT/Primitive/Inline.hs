@@ -51,10 +51,9 @@ inline scrutinee = rewrite $ \ c e -> case e of
                 Just (CASE depth s coreAlt) ->
                     if scrutinee then return s
                     else let tys = tyConAppArgs (idType n0)
-                             e'  = alt2Exp s tys coreAlt
-                             (e'',d') = either (,depth) (,depth+1) e'
-                         in condM (apply (extractT (ensureDepth d')) c e'')
-                                  (return e'')
+                             (e',d') = either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
+                         in condM (apply (extractT (ensureDepth d')) c e')
+                                  (return e')
                                   (fail "values in inlined expression have been rebound")
 
     _      -> fail "inline failed (No variable)"
