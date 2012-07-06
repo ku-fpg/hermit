@@ -59,7 +59,11 @@ externals er = map ((.+ Experiment) . (.+ TODO))
          , external "var" (promoteR . var :: TH.Name -> RewriteH Core)
                 [ "var '<v> succeeded for variable v, and fails otherwise"] .+ Predicate
          , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
-                [ "case split" ]
+                [ "case-split 'x"
+                , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ]
+         , external "case-split-plus" (caseSplitPlus :: TH.Name -> RewriteH Core)
+                [ "Like case-split, but additionally inlines the matched constructor "
+                , "applications for all occurances of the named variable." ]
          ] ++
          [ external "any-call" (withUnfold :: RewriteH Core -> RewriteH Core)
                 [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
@@ -138,7 +142,7 @@ fixIntro = translate $ \ c e -> case e of
         NonRec {}    -> fail "Cannot take fix of a non-recusive group"
 
 
--- ^ Case split a free variable in an expression:
+-- | Case split a free variable in an expression:
 --
 -- Assume expression e which mentions x :: [a]
 --
@@ -159,6 +163,13 @@ caseSplit nm = do
                                         as <- sequence [ newVarH (TH.mkName a) ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
                                         return (dc,as)) dcs
                 return $ Case (Var i) i (exprType e) [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
+
+-- | Like caseSplit, but additionally inlines the constructor applications
+-- for each occurance of the named variable.
+--
+-- > caseSplitPlus nm = caseSplit nm >>> anybuR (inlineName nm)
+caseSplitPlus :: TH.Name -> RewriteH Core
+caseSplitPlus nm = promoteR (caseSplit nm) >>> anybuR (promoteR (inlineName nm))
 
 {-
 exprBinder :: TranslateH CoreExpr [(Id,ContextPath)]

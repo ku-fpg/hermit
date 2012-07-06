@@ -5,6 +5,5 @@
  up
  2
  down
- case-split 'xs
- any-bu (inline 'xs)
+ case-split-plus 'xs
 
