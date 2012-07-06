@@ -9,10 +9,11 @@ module Language.HERMIT.Kure
        , module Language.KURE.Injection
        -- * Synonyms
 
-       -- | In HERMIT, 'Translate', 'Rewrite' and 'Lens' always operate the same context and monad.
+       -- | In HERMIT, 'Translate', 'Rewrite' and 'Lens' always operate on the same context and monad.
        , TranslateH
        , RewriteH
        , LensH
+       , CoreTickish
        , idR
        -- * Generic Data Type
        -- $typenote
@@ -23,12 +24,12 @@ module Language.HERMIT.Kure
        -- ** Program
        , nilT
        , consBindT, consBindAllR, consBindAnyR, consBindOneR
-       -- ** Bindings
+       -- ** Binding Groups
        , nonRecT, nonRecR
        , recT, recAllR, recAnyR, recOneR
        -- ** Recursive Definitions
        , defT, defR
-       -- ** Alternatives
+       -- ** Case Alternatives
        , altT, altR
        -- ** Expressions
        , varT
@@ -80,6 +81,9 @@ type LensH a b = Lens Context HermitM a b
 idR :: RewriteH a
 idR = Control.Category.id
 
+-- | Unlike everything else, there is no synonym for 'Tickish' 'Id' provided by GHC, so we provide one.
+type CoreTickish = Tickish Id
+
 ---------------------------------------------------------------------
 
 -- $typenote
@@ -97,13 +101,13 @@ defToRecBind :: [CoreDef] -> CoreBind
 defToRecBind = Rec . map (\ (Def v e) -> (v,e))
 
 -- | Core is the sum type of all nodes in the AST that we wish to be able to traverse.
---   All 'Node' instances define 'Core' to be the 'Generic' type.
-data Core = ModGutsCore  ModGuts
-          | ProgramCore  CoreProgram
-          | BindCore     CoreBind
-          | DefCore      CoreDef
-          | ExprCore     CoreExpr
-          | AltCore      CoreAlt
+--   All 'Node' instances in HERMIT define their 'Generic' type to be 'Core'.
+data Core = ModGutsCore  ModGuts            -- ^ The module.
+          | ProgramCore  CoreProgram        -- ^ A program (list of top-level bindings).
+          | BindCore     CoreBind           -- ^ A binding group.
+          | DefCore      CoreDef            -- ^ A recursive definition.
+          | ExprCore     CoreExpr           -- ^ An expression.
+          | AltCore      CoreAlt            -- ^ A case alternative.
 
 ---------------------------------------------------------------------
 
@@ -185,10 +189,12 @@ instance Walker Context HermitM ModGuts where
   childL 0 = lens $ modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
   childL n = failT (missingChild n)
 
--- | Slightly different to the others; passes in *all* of the original to the reconstruction function.
+-- | Translate a module.
+--   Slightly different to the other congruence combinators: it passes in *all* of the original to the reconstruction function.
 modGutsT :: TranslateH CoreProgram a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
 modGutsT t f = translate $ \ c modGuts -> f modGuts <$> apply t (c @@ 0) (mg_binds modGuts)
 
+-- | Rewrite the 'CoreProgram' child of a module.
 modGutsR :: RewriteH CoreProgram -> RewriteH ModGuts
 modGutsR r = modGutsT r (\ modguts bds -> modguts {mg_binds = bds})
 
@@ -210,26 +216,31 @@ instance Walker Context HermitM CoreProgram where
   childL 1 = lens $ consBindT idR exposeT (childL1of2 (:))
   childL n = failT (missingChild n)
 
+-- | Translate an empty list.
 nilT :: b -> TranslateH [a] b
 nilT b = contextfreeT $ \ e -> case e of
                            [] -> pure b
                            _  -> fail "no match for []"
 
-consBindT' :: TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH [CoreBind] b
+consBindT' :: TranslateH CoreBind a1 -> TranslateH CoreProgram a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH CoreProgram b
 consBindT' t1 t2 f = translate $ \ c e -> case e of
         bd:bds -> f (apply t1 (c @@ 0) bd) (apply t2 (addBinding bd c @@ 1) bds)
         _      -> fail "no match for consBind"
 
-consBindT :: TranslateH CoreBind a1 -> TranslateH [CoreBind] a2 -> (a1 -> a2 -> b) -> TranslateH [CoreBind] b
+-- | Translate a program of the form: ('CoreBind' @:@ 'CoreProgram')
+consBindT :: TranslateH CoreBind a1 -> TranslateH CoreProgram a2 -> (a1 -> a2 -> b) -> TranslateH CoreProgram b
 consBindT t1 t2 f = consBindT' t1 t2 (liftA2 f)
 
-consBindAllR :: RewriteH CoreBind -> RewriteH [CoreBind] -> RewriteH [CoreBind]
+-- | Rewrite all children of a program of the form: ('CoreBind' @:@ 'CoreProgram')
+consBindAllR :: RewriteH CoreBind -> RewriteH CoreProgram -> RewriteH CoreProgram
 consBindAllR r1 r2 = consBindT r1 r2 (:)
 
-consBindAnyR :: RewriteH CoreBind -> RewriteH [CoreBind] -> RewriteH [CoreBind]
+-- | Rewrite any children of a program of the form: ('CoreBind' @:@ 'CoreProgram')
+consBindAnyR :: RewriteH CoreBind -> RewriteH CoreProgram -> RewriteH CoreProgram
 consBindAnyR r1 r2 = consBindT' (attemptR r1) (attemptR r2) (attemptAny2 (:))
 
-consBindOneR :: RewriteH CoreBind -> RewriteH [CoreBind] -> RewriteH [CoreBind]
+-- | Rewrite one child of a program of the form: ('CoreBind' @:@ 'CoreProgram')
+consBindOneR :: RewriteH CoreBind -> RewriteH CoreProgram -> RewriteH CoreProgram
 consBindOneR r1 r2 = consBindT' (withArgumentT r1) (withArgumentT r2) (attemptOne2 (:))
 
 ---------------------------------------------------------------------
@@ -271,11 +282,13 @@ instance Walker Context HermitM CoreBind where
   oneR r = nonRecR (extractR r)
         <+ recOneR (\ _ -> extractR r)
 
+-- | Translate a binding group of the form: @NonRec@ 'Id' 'CoreExpr'
 nonRecT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreBind b
 nonRecT t f = translate $ \ c e -> case e of
                                      NonRec v e' -> f v <$> apply t (c @@ 0) e'
                                      _           -> fail "not NonRec constructor"
 
+-- | Rewrite the 'CoreExpr' child of a binding group of the form: @NonRec@ 'Id' 'CoreExpr'
 nonRecR :: RewriteH CoreExpr -> RewriteH CoreBind
 nonRecR r = nonRecT r NonRec
 
@@ -288,15 +301,19 @@ recT' t f = translate $ \ c e -> case e of
                           ]
          _       -> fail "not Rec constructor"
 
+-- | Translate a binding group of the form: @Rec@ ['CoreDef']
 recT :: (Int -> TranslateH CoreDef a) -> ([a] -> b) -> TranslateH CoreBind b
 recT ts f = recT' ts (fmap f . sequence)
 
+-- | Rewrite all children of a binding group of the form: @Rec@ ['CoreDef']
 recAllR :: (Int -> RewriteH CoreDef) -> RewriteH CoreBind
 recAllR rs = recT rs defToRecBind
 
+-- | Rewrite any children of a binding group of the form: @Rec@ ['CoreDef']
 recAnyR :: (Int -> RewriteH CoreDef) -> RewriteH CoreBind
 recAnyR rs = recT' (attemptR . rs) (attemptAnyN defToRecBind)
 
+-- | Rewrite one child of a binding group of the form: @Rec@ ['CoreDef']
 recOneR :: (Int -> RewriteH CoreDef) -> RewriteH CoreBind
 recOneR rs = recT' (withArgumentT . rs) (attemptOneN defToRecBind)
 
@@ -316,9 +333,11 @@ instance Walker Context HermitM CoreDef where
   childL 0 = lens $ defT exposeT (childL1of2 Def)
   childL n = failT (missingChild n)
 
+-- | Translate a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
 defT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreDef b
 defT t f = translate $ \ c (Def v e) -> f v <$> apply t (c @@ 0) e
 
+-- | Rewrite the 'CoreExpr' child of a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
 defR :: RewriteH CoreExpr -> RewriteH CoreDef
 defR r = defT r Def
 
@@ -338,9 +357,11 @@ instance Walker Context HermitM CoreAlt where
   childL 0 = lens $ altT exposeT (childL2of3 (,,))
   childL n = failT (missingChild n)
 
+-- | Translate a case alternative of the form: ('AltCon', 'Id', 'CoreExpr')
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
 altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (foldr addLambdaBinding c bs @@ 0) e
 
+-- | Rewrite the 'CoreExpr' child of a case alternative of the form: ('AltCon', 'Id', 'CoreExpr')
 altR :: RewriteH CoreExpr -> RewriteH CoreAlt
 altR r = altT r (,,)
 
@@ -433,15 +454,16 @@ instance Walker Context HermitM CoreExpr where
 
 ---------------------------------------------------------------------
 
--- Expr
+-- | Translate an expression of the form: @Var@ 'Id'
 varT :: (Id -> b) -> TranslateH CoreExpr b
 varT f = contextfreeT $ \ e -> case e of
-        Var n -> pure (f n)
+        Var v -> pure (f v)
         _     -> fail "no match for Var"
 
+-- | Translate an expression of the form: @Lit@ 'Literal'
 litT :: (Literal -> b) -> TranslateH CoreExpr b
 litT f = contextfreeT $ \ e -> case e of
-        Lit i -> pure (f i)
+        Lit x -> pure (f x)
         _     -> fail "no match for Lit"
 
 
@@ -450,24 +472,29 @@ appT' t1 t2 f = translate $ \ c e -> case e of
          App e1 e2 -> f (apply t1 (c @@ 0) e1) (apply t2 (c @@ 1) e2)
          _         -> fail "no match for App"
 
+-- | Translate an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
 appT :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (a1 -> a2 -> b) -> TranslateH CoreExpr b
 appT t1 t2 = appT' t1 t2 . liftA2
 
+-- | Rewrite all children of an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
 appAllR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
 appAllR r1 r2 = appT r1 r2 App
 
+-- | Rewrite any children of an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
 appAnyR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
 appAnyR r1 r2 = appT' (attemptR r1) (attemptR r2) (attemptAny2 App)
 
+-- | Rewrite one child of an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
 appOneR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
 appOneR r1 r2 = appT' (withArgumentT r1) (withArgumentT r2) (attemptOne2 App)
 
-
+-- | Translate an expression of the form: @Lam@ 'Id' 'CoreExpr'
 lamT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreExpr b
 lamT t f = translate $ \ c e -> case e of
         Lam b e1 -> f b <$> apply t (addLambdaBinding b c @@ 0) e1
         _        -> fail "no match for Lam"
 
+-- | Rewrite the 'CoreExpr' child of an expression of the form: @Lam@ 'Id' 'CoreExpr'
 lamR :: RewriteH CoreExpr -> RewriteH CoreExpr
 lamR r = lamT r Lam
 
@@ -479,15 +506,19 @@ letT' t1 t2 f = translate $ \ c e -> case e of
                 -- if they are recursive. See allR (Rec ...) for details.
         _         -> fail "no match for Let"
 
+-- | Translate an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
 letT :: TranslateH CoreBind a1 -> TranslateH CoreExpr a2 -> (a1 -> a2 -> b) -> TranslateH CoreExpr b
 letT t1 t2 = letT' t1 t2 . liftA2
 
+-- | Rewrite all children of an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
 letAllR :: RewriteH CoreBind -> RewriteH CoreExpr -> RewriteH CoreExpr
 letAllR r1 r2 = letT r1 r2 Let
 
+-- | Rewrite any children of an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
 letAnyR :: RewriteH CoreBind -> RewriteH CoreExpr -> RewriteH CoreExpr
 letAnyR r1 r2 = letT' (attemptR r1) (attemptR r2) (attemptAny2 Let)
 
+-- | Rewrite one child of an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
 letOneR :: RewriteH CoreBind -> RewriteH CoreExpr -> RewriteH CoreExpr
 letOneR r1 r2 = letT' (withArgumentT r1) (withArgumentT r2) (attemptOne2 Let)
 
@@ -503,101 +534,124 @@ caseT' t ts f = translate $ \ c e -> case e of
                                                              ]
          _ -> fail "no match for Case"
 
+-- | Translate an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
 caseT :: TranslateH CoreExpr a1
       -> (Int -> TranslateH CoreAlt a2)
       -> (a1 -> Id -> Type -> [a2] -> b)
       -> TranslateH CoreExpr b
 caseT t ts f = caseT' t ts (\ b ty me malts -> f <$> me <*> pure b <*> pure ty <*> sequence malts)
 
+-- | Rewrite all children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
 caseAllR :: RewriteH CoreExpr -> (Int -> RewriteH CoreAlt) -> RewriteH CoreExpr
 caseAllR r rs = caseT r rs Case
 
+-- | Rewrite any children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
 caseAnyR :: RewriteH CoreExpr -> (Int -> RewriteH CoreAlt) -> RewriteH CoreExpr
 caseAnyR r rs = caseT' (attemptR r) (attemptR . rs) (\ b ty -> attemptAny1N (\ e -> Case e b ty))
 
+-- | Rewrite one child of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
 caseOneR :: RewriteH CoreExpr -> (Int -> RewriteH CoreAlt) -> RewriteH CoreExpr
 caseOneR r rs = caseT' (withArgumentT r) (withArgumentT . rs) (\ b ty -> attemptOne1N (\ e -> Case e b ty))
 
-
+-- | Translate an expression of the form: @Cast@ 'CoreExpr' 'Coercion'
 castT :: TranslateH CoreExpr a -> (a -> Coercion -> b) -> TranslateH CoreExpr b
 castT t f = translate $ \ c e -> case e of
                                    Cast e1 cast -> f <$> apply t (c @@ 0) e1 <*> pure cast
                                    _            -> fail "no match for Cast"
 
+-- | Rewrite the 'CoreExpr' child of an expression of the form: @Cast@ 'CoreExpr' 'Coercion'
 castR :: RewriteH CoreExpr -> RewriteH CoreExpr
 castR r = castT r Cast
 
-
-tickT :: TranslateH CoreExpr a -> (Tickish Id -> a -> b) -> TranslateH CoreExpr b
+-- | Translate an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
+tickT :: TranslateH CoreExpr a -> (CoreTickish -> a -> b) -> TranslateH CoreExpr b
 tickT t f = translate $ \ c e -> case e of
         Tick tk e1 -> f tk <$> apply t (c @@ 0) e1
         _          -> fail "no match for Tick"
 
+-- | Rewrite the 'CoreExpr' child of an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
 tickR :: RewriteH CoreExpr -> RewriteH CoreExpr
 tickR r = tickT r Tick
 
+-- | Translate an expression of the form: @Type@ 'Type'
 typeT :: (Type -> b) -> TranslateH CoreExpr b
 typeT f = contextfreeT $ \ e -> case e of
-                                  Type i -> pure (f i)
+                                  Type t -> pure (f t)
                                   _      -> fail "no match for Type"
 
+-- | Translate an expression of the form: @Coercion@ 'Coercion'
 coercionT :: (Coercion -> b) -> TranslateH CoreExpr b
 coercionT f = contextfreeT $ \ e -> case e of
-                                      Coercion i -> pure (f i)
-                                      _          -> fail "no match for Coercion"
+                                      Coercion co -> pure (f co)
+                                      _           -> fail "no match for Coercion"
 
 ---------------------------------------------------------------------
 
--- Some additional congruence combinators to export.
+-- Some composite congruence combinators to export.
 
+-- | Translate an expression of the form: @Let@ (@NonRec@ 'Id' 'CoreExpr') 'CoreExpr'
 letNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (Id -> a1 -> a2 -> b) -> TranslateH CoreExpr b
 letNonRecT t1 t2 f = letT (nonRecT t1 (,)) t2 (uncurry f)
 
+-- | Rewrite all children of an expression of the form: @Let@ (@NonRec@ 'Id' 'CoreExpr') 'CoreExpr'
 letNonRecAllR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
 letNonRecAllR r1 r2 = letAllR (nonRecR r1) r2
 
+-- | Rewrite any children of an expression of the form: @Let@ (@NonRec@ 'Id' 'CoreExpr') 'CoreExpr'
 letNonRecAnyR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
 letNonRecAnyR r1 r2 = letAnyR (nonRecR r1) r2
 
+-- | Rewrite one child of an expression of the form: @Let@ (@NonRec@ 'Id' 'CoreExpr') 'CoreExpr'
 letNonRecOneR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
 letNonRecOneR r1 r2 = letOneR (nonRecR r1) r2
 
 
+-- | Translate an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
 letRecT :: (Int -> TranslateH CoreDef a1) -> TranslateH CoreExpr a2 -> ([a1] -> a2 -> b) -> TranslateH CoreExpr b
 letRecT ts t f = letT (recT ts id) t f
 
+-- | Rewrite all children of an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
 letRecAllR :: (Int -> RewriteH CoreDef) -> RewriteH CoreExpr -> RewriteH CoreExpr
 letRecAllR rs r = letAllR (recAllR rs) r
 
+-- | Rewrite any children of an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
 letRecAnyR :: (Int -> RewriteH CoreDef) -> RewriteH CoreExpr -> RewriteH CoreExpr
 letRecAnyR rs r = letAnyR (recAnyR rs) r
 
+-- | Rewrite one child of an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
 letRecOneR :: (Int -> RewriteH CoreDef) -> RewriteH CoreExpr -> RewriteH CoreExpr
 letRecOneR rs r = letOneR (recOneR rs) r
 
-
+-- | Translate a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
 recDefT :: (Int -> TranslateH CoreExpr a1) -> ([(Id,a1)] -> b) -> TranslateH CoreBind b
 recDefT ts f = recT (\ n -> defT (ts n) (,)) f
 
+-- | Rewrite all children of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
 recDefAllR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
 recDefAllR rs = recAllR (\ n -> defR (rs n))
 
+-- | Rewrite any children of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
 recDefAnyR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
 recDefAnyR rs = recAnyR (\ n -> defR (rs n))
 
+-- | Rewrite one child of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
 recDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
 recDefOneR rs = recOneR (\ n -> defR (rs n))
 
 
+-- | Translate an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
 letRecDefT :: (Int -> TranslateH CoreExpr a1) -> TranslateH CoreExpr a2 -> ([(Id,a1)] -> a2 -> b) -> TranslateH CoreExpr b
 letRecDefT ts t f = letRecT (\ n -> defT (ts n) (,)) t f
 
+-- | Rewrite all children of an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
 letRecDefAllR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr -> RewriteH CoreExpr
 letRecDefAllR rs r = letRecAllR (\ n -> defR (rs n)) r
 
+-- | Rewrite any children of an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
 letRecDefAnyR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr -> RewriteH CoreExpr
 letRecDefAnyR rs r = letRecAnyR (\ n -> defR (rs n)) r
 
+-- | Rewrite one child of an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
 letRecDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr -> RewriteH CoreExpr
 letRecDefOneR rs r = letRecOneR (\ n -> defR (rs n)) r
 
@@ -615,7 +669,7 @@ promoteBindR r = setFailMsg "This rewrite can only succeed at binding group node
 promoteDefR :: RewriteH CoreDef -> RewriteH Core
 promoteDefR r = setFailMsg "This rewrite can only succeed at recursive definition nodes." retractT >>> r >>> injectT
 
--- | Promote a rewrite on 'CoreExpr' to a rewrite on 'Core'.
+-- | Promote a rewrite on 'CoreAlt' to a rewrite on 'Core'.
 promoteAltR :: RewriteH CoreAlt -> RewriteH Core
 promoteAltR r = setFailMsg "This rewrite can only succeed at case alternative nodes." retractT >>> r >>> injectT
 
