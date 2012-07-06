@@ -15,16 +15,25 @@ eta-expand 'n
 
 -- work n = (f (wrap work) n, f (wrap work) (n+1))
 --   case 'n
+case-split 'n
+any-bu (inline 'n)
+
 -- work 0     = (f (wrap work) 0, f (wrap work) 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
-case-split 'n
-{ 1 ; 0; any-bu (inline 'n) }
-{ 2 ; 0; 1; any-bu (inline 'n) }
-
 --   unfold 'f
+{ 1 ; any-bu (unfold 'f >>> repeat case-reduce) }
+{ 2 ; 0 ; 1 ; any-bu (unfold 'f >>> repeat case-reduce) }
+
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
 --   unfold 'work
+-- problem: we need the original definition of work,
+--
+--   work = unwrap (f (wrap work))
+--
+-- not the current one
+-- { 2 ; 0 ; 1 ; any-bu (unfold 'work) }
+
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
 --   wrap . unwrap = id (precondition)
