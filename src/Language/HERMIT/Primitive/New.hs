@@ -282,6 +282,7 @@ unfold nm = translate $ \ env e0 -> do
 withUnfold :: RewriteH Core -> RewriteH Core
 withUnfold rr = readerT $ \ e -> case e of
         ExprCore (App {}) -> childR 1 rec >+> (rr <+ childR 0 rec)
+        ExprCore (Var {}) -> rr
         _                 -> anyR rec
    where
 
