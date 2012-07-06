@@ -274,8 +274,9 @@ unfold nm = translate $ \ env e0 -> do
 
         e1 <- apply sub2 env e0
 
-        apply cleanupUnfold env e1
-
+        -- only cleanup if 1 or more arguments
+        if n > 0 then apply cleanupUnfold env e1
+                 else return e1
 
 -- match in a top-down manner,
 withUnfold :: RewriteH Core -> RewriteH Core
