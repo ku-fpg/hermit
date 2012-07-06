@@ -152,10 +152,11 @@ caseSplit nm = do
         case [ i | i <- frees, cmpTHName2Name nm (idName i) ] of
             []    -> fail "caseSplit: provided name is not free"
             (i:_) -> do
-                let dcs = tyConDataCons (tyConAppTyCon (idType i))
+                let (tycon, tys) = splitTyConApp (idType i)
+                    dcs = tyConDataCons tycon
                     aNms = map (:[]) $ cycle ['a'..'z']
                 dcsAndVars <- mapM (\dc -> do
-                                        as <- sequence [ newVarH (TH.mkName a) ty | (a,ty) <- zip aNms $ dataConRepArgTys dc ]
+                                        as <- sequence [ newVarH (TH.mkName a) ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
                                         return (dc,as)) dcs
                 return $ Case (Var i) i (exprType e) [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
 
