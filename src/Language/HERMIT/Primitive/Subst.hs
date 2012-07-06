@@ -107,7 +107,7 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
                       then alphaLambda >>> rule345
                       else lamR (substR v expReplacement)
 
-        rule6 = anyR (promoteR $ substR v expReplacement)
+        rule6 = anyR (promoteExprR $ substR v expReplacement)
         -- like Rule 3 and 4/5 above, but for lets
         rule78 :: RewriteH CoreExpr
         rule78 = do Let bds _e <- idR

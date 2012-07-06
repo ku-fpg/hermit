@@ -33,9 +33,9 @@ import MonadUtils (MonadIO) -- GHC's MonadIO
 
 externals ::  ExternalReader -> [External]
 externals er = map ((.+ Experiment) . (.+ TODO))
-         [ external "info" (promoteT info :: TranslateH Core String)
+         [ external "info" (promoteExprT info :: TranslateH Core String)
                 [ "tell me what you know about this expression or binding" ] .+ Unimplemented
-         , external "expr-type" (promoteT exprTypeQueryT :: TranslateH Core String)
+         , external "expr-type" (promoteExprT exprTypeQueryT :: TranslateH Core String)
                 [ "List the type (Constructor) for this expression."]
          , external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
                 [ "determines if a rewrite could be successfully applied" ]
@@ -54,9 +54,9 @@ externals er = map ((.+ Experiment) . (.+ TODO))
          , external "push" (promoteExprR . push :: TH.Name -> RewriteH Core)
                 [ "push a function <v> into argument" ]
                         -- TODO: does not work with rules with no arguments
-         , external "unfold-rule" ((\ nm -> promoteR (rules (er_rules er) nm >>> cleanupUnfold)) :: String -> RewriteH Core)
+         , external "unfold-rule" ((\ nm -> promoteExprR (rules (er_rules er) nm >>> cleanupUnfold)) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ]
-         , external "var" (promoteR . var :: TH.Name -> RewriteH Core)
+         , external "var" (promoteExprR . var :: TH.Name -> RewriteH Core)
                 [ "var '<v> succeeded for variable v, and fails otherwise"] .+ Predicate
          , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
                 [ "case-split 'x"

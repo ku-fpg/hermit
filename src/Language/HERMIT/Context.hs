@@ -25,7 +25,8 @@ import Language.KURE
 
 -- | HERMIT\'s representation of variable bindings.
 data HermitBinding
-        = BIND Int Bool CoreExpr  -- ^ Binding depth, whether it is recursive, and the bound value (which cannot be inlined without checking for scoping issues).
+        = BIND Int Bool CoreExpr  -- ^ Binding depth, whether it is recursive, and the bound value
+                                  --   (which cannot be inlined without checking for scoping issues).
         | LAM Int                 -- ^ For a lambda binding you only know the depth.
         | CASE Int CoreExpr (AltCon,[Id]) -- ^ For case wildcard binders. First expr points to scrutinee,
                                           --   second to AltCon (which can be converted to Constructor or Literal).

@@ -40,7 +40,7 @@ externals er = map (.+ TODO)
                 , "  where safe to inline without duplicating work ==> E2[E1/x,...],"
                 , "fails otherwise"
                 , "only matches non-recursive lets" ]  .+ Deep .+ Eval
-         , external "freevars" (promoteT freeIdsQuery :: TranslateH Core String)
+         , external "freevars" (promoteExprT freeIdsQuery :: TranslateH Core String)
                 [ "List the free variables in this expression [via GHC]" ] .+ Query .+ Deep
          , external "deshadow-binds" (promoteProgramR deShadowBindsR :: RewriteH Core)
                 [ "Deshadow a program " ] .+ Deep
