@@ -256,5 +256,6 @@ arityOf env nm =
         -- it hits an id; perhaps we should do the counting
         -- The advantage of idArity is it will terminate, though.
         Just (BIND _ _ e) -> GHC.exprArity e
+        Just (CASE _ e _) -> GHC.exprArity e
 
 
