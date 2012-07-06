@@ -27,7 +27,8 @@ import Language.KURE
 data HermitBinding
         = BIND Int Bool CoreExpr  -- ^ Binding depth, whether it is recursive, and the bound value (which cannot be inlined without checking for scoping issues).
         | LAM Int                 -- ^ For a lambda binding you only know the depth.
-        | CASE Int CoreExpr CoreExpr -- ^ For case wildcard binders. First expr points to scrutinee, second to AltCon (converted to Constructor or Literal).
+        | CASE Int CoreExpr (AltCon,[Id]) -- ^ For case wildcard binders. First expr points to scrutinee,
+                                          --   second to AltCon (which can be converted to Constructor or Literal).
 
 -- | Get the depth of a binding.
 hermitBindingDepth :: HermitBinding -> Int
@@ -87,17 +88,12 @@ addBinding (Rec bds) env
                    ]
 
 addCaseBinding :: (Id,CoreExpr,CoreAlt) -> Context -> Context
-addCaseBinding (n,e,a) env
-        = env { hermitBindings = insert n (CASE next_depth e (alt2Exp a)) (hermitBindings env)
+addCaseBinding (n,e,(ac,is,_)) env
+        = env { hermitBindings = insert n (CASE next_depth e (ac,is)) (hermitBindings env)
               , hermitDepth    = next_depth
               }
   where
         next_depth = succ (hermitDepth env)
-
-        alt2Exp :: CoreAlt -> CoreExpr
-        alt2Exp (DEFAULT   , _ , _) = e     -- the scrutinee
-        alt2Exp (LitAlt l  , _ , _) = Lit l
-        alt2Exp (DataAlt dc, as, _) = mkCoreConApps dc (map Var as)
 
 -- | Add a binding that you know nothing about, except that it may shadow something.
 -- If so, do not worry about it here, just remember the binding and the depth.

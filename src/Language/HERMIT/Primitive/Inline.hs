@@ -45,8 +45,17 @@ inline scrutinee = rewrite $ \ c e -> case e of
                   -- TO DO: need to check for clashes, based on the depth
                   --        for now, just accept, and proceeded
                   -> return e'
-                Just (CASE _d s conApp) -> return $ if scrutinee then s else conApp
+                Just (CASE _d s coreAlt) ->
+                    if scrutinee then return s
+                    else let tys = tyConAppArgs (idType n0)
+                         in return (alt2Exp s tys coreAlt)
+
     _      -> fail "inline failed (No variable)"
+
+alt2Exp :: CoreExpr -> [Type] -> (AltCon,[Id]) -> CoreExpr
+alt2Exp d _   (DEFAULT   , _ ) = d
+alt2Exp _ _   (LitAlt l  , _ ) = Lit l
+alt2Exp _ tys (DataAlt dc, as) = mkCoreConApps dc (map Type tys ++ map Var as)
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: TranslateH Core [String]
