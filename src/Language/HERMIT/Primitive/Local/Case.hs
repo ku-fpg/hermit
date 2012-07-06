@@ -90,27 +90,24 @@ caseFloatCase = do
 
 -- | Case-of-known-constructor rewrite
 caseReduce :: RewriteH CoreExpr
-caseReduce = letTransform >>> repeatR letSubstR
+caseReduce = letTransform >>> tryR (repeatR letSubstR)
     where letTransform = contextfreeT $ \ e -> case e of
             Case s _ _ alts -> case isDataCon s of
                                  Nothing -> fail "caseReduce failed, not a DataCon"
-                                 Just (sc, fs) -> case [ (bs, rhs) | (DataAlt dc, bs, rhs) <- alts, sc == dc ] of
-                                                    [(bs,e')] -> return $ nestedLets e' $ zip bs fs
-                                                    []   -> fail "caseReduce failed, no matching alternative (impossible?!)"
-                                                    _    -> fail "caseReduce failed, more than one matching alt (impossible?!)"
+                                 Just (dc, args) -> case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
+                                    [(bs,e')] -> return $ nestedLets e' $ zip bs args
+                                    []   -> fail "caseReduce failed, no matching alternative"
+                                    _    -> fail "caseReduce failed, more than one matching alt"
             _ -> fail "caseReduce failed, not a Case"
 
--- TODO: finish writing isDataCon to handle all Expr constructors properly
--- | Walk down the left spine of an App tree, looking for a DataCon
---   and keeping track of the fields as we go.
+-- | If expression is a constructor application, return the relevant bits.
 isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])
-isDataCon expr = go expr []
-    where go (App e a) fs = go e (a:fs)
-          go (Var i)   fs | isId i = case idDetails i of
-                                        DataConWorkId dc -> return (dc,fs)
-                                        DataConWrapId dc -> return (dc,fs)
-                                        _ -> Nothing
-          go _ _ = Nothing -- probably not true, due to ticks and whathaveyou
+isDataCon expr = case fn of
+                    (Var i) -> do
+                        dc <- isDataConId_maybe i
+                        return (dc, args)
+                    _ -> fail "not a var"
+    where (fn, args) = collectArgs expr
 
 -- | We don't want to use the recursive let here, so nest a bunch of non-recursive lets
 nestedLets :: Expr b -> [(b, Expr b)] -> Expr b
