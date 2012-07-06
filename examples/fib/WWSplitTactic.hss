@@ -31,6 +31,7 @@
 -- We either need to provide these somehow, or implement them as rewrites.
 --
 -- BEGIN: ww tactic
+{
 fix-intro
 consider lam
 let-intro 'f
@@ -39,16 +40,13 @@ let-float-arg
 1
 apply-rule ww
 innermost ((inline '.) <+ beta-reduce-plus <+ safe-let-subst)
-1
-let-intro 'w
-up
+{ 1; let-intro 'w }
 let-float-arg
-rhs-of 'w
-apply-rule inline-fix
-innermost ((inline '.) <+ beta-reduce-plus <+ safe-let-subst)
-up
-up
+{ rhs-of 'w
+  apply-rule inline-fix
+  innermost ((inline '.) <+ beta-reduce-plus <+ safe-let-subst)
+}
 let-subst
 let-float-arg
-up
+}
 -- END: ww tactic
