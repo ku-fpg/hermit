@@ -53,6 +53,7 @@ externals er = map ((.+ Experiment) . (.+ TODO))
                 [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
          , external "push" (promoteR . push :: TH.Name -> RewriteH Core)
                 [ "push a function <v> into argument" ]
+                        -- TODO: does not work with rules with no arguments
          , external "unfold-rule" ((\ nm -> promoteR (rules (er_rules er) nm >>> cleanupUnfold)) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ]
          , external "var" (promoteR . var :: TH.Name -> RewriteH Core)
@@ -60,8 +61,8 @@ externals er = map ((.+ Experiment) . (.+ TODO))
          , external "case-split" (promoteR . caseSplit :: TH.Name -> RewriteH Core)
                 [ "case split" ]
          ] ++
-         [ external "any-app" (withUnfold :: RewriteH Core -> RewriteH Core)
-                [ "any-app (.. unfold command ..) applies an unfold commands to all applications"
+         [ external "any-call" (withUnfold :: RewriteH Core -> RewriteH Core)
+                [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
                 , "preference is given to applications with applications with more arguments"
                 ] .+ Deep
          ]
