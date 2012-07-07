@@ -20,7 +20,8 @@ import qualified Language.Haskell.TH as TH
 ----------------------------------------------------------------------------
 
 -- | The HERMIT monad is kept abstract.
-newtype HermitM a = HermitM {runHermitM :: CoreM (KureMonad a)}
+newtype HermitM a = HermitM { -- | Expose the internal 'CoreM' monad.
+                              runHermitM :: CoreM (KureMonad a)}
 
 -- | Eliminator for 'HermitM'.
 runHM :: (a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b

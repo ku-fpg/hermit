@@ -246,10 +246,10 @@ showFocus = do
     -- No not show focus while loading
     condM (gets (cl_loading . cl_session))
           (return ())
-          ( liftIO ((do
-                  doc <- queryS (cl_kernel st) (cl_cursor (cl_session st)) (pretty st)
-                  cl_render (cl_session st) stdout (cl_pretty_opts (cl_session st)) doc)
-                  `catch` \ msg -> putStrLn $ "Error thrown: " ++ msg))
+          (iokm2clm' "Rendering error: "
+                     (liftIO . cl_render (cl_session st) stdout (cl_pretty_opts (cl_session st)))
+                     (queryS (cl_kernel st) (cl_cursor (cl_session st)) (pretty st))
+          )
 
 -------------------------------------------------------------------------------
 
@@ -279,6 +279,13 @@ moveLocally _ p                          = p
 -------------------------------------------------------------------------------
 
 type CLM m a = ErrorT String (StateT CommandLineState m) a
+
+-- TODO: Come up with names for these, and/or better characterise these abstractions.
+iokm2clm' :: MonadIO m => String -> (a -> CLM m b) -> IO (KureMonad a) -> CLM m b
+iokm2clm' msg ret m = liftIO m >>= runKureMonad ret (throwError . (msg ++))
+
+iokm2clm :: MonadIO m => String -> IO (KureMonad a) -> CLM m a
+iokm2clm msg = iokm2clm' msg return
 
 data CommandLineState = CommandLineState
         { cl_graph       :: [(SAST,ExprH,SAST)]
@@ -343,8 +350,11 @@ shellComplete :: MVar CommandLineState -> String -> String -> IO [Completion]
 shellComplete mvar rPrev so_far = do
     st <- readMVar mvar
     targetQuery <- completionQuery st (completionType rPrev)
-    liftM (map simpleCompletion . nub . filter (so_far `isPrefixOf`))
-        $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
+    -- (liftM.liftM) (map simpleCompletion . nub . filter (so_far `isPrefixOf`))
+    --     $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
+    mcls <- queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
+    cl <- runKureMonad return fail mcls -- TO DO: probably shouldn't use fail here.
+    return $ (map simpleCompletion . nub . filter (so_far `isPrefixOf`)) cl
 
 -- | The first argument is a list of files to load.
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
@@ -434,17 +444,14 @@ evalStmts = mapM_ evalExpr . scopes
 evalExpr :: (MonadIO m) => ExprH -> CLM m ()
 evalExpr expr = do
     dict <- gets cl_dict
-    case interpExprH
-                dict
-                interpShellCommand
-                expr of
-            Left msg  -> throwError msg
-            Right cmd -> do
-                case cmd of
-                  AstEffect effect   -> performAstEffect effect expr
-                  ShellEffect effect -> performShellEffect effect
-                  QueryFun query     -> performQuery query
-                  MetaCommand meta   -> performMetaCommand meta
+    case interpExprH dict interpShellCommand expr of
+      Left msg  -> throwError msg
+      Right cmd -> do
+        case cmd of
+          AstEffect effect   -> performAstEffect effect expr
+          ShellEffect effect -> performShellEffect effect
+          QueryFun query     -> performQuery query
+          MetaCommand meta   -> performMetaCommand meta
 
 -------------------------------------------------------------------------------
 
@@ -454,60 +461,60 @@ evalExpr expr = do
 performAstEffect :: MonadIO m => AstEffect -> ExprH -> CLM m ()
 performAstEffect (Apply rr) expr = do
     st <- get
-    -- something changed (you've applied)
-    eiast <- liftIO $ (do ast' <- applyS (cl_kernel st) (cl_cursor (cl_session st)) rr
-                          return $ Right ast')
-                            `catch` \ msg -> return $ Left $ "Rewrite Failed: " ++ msg
-    either throwError (\ast' -> do put $ newSAST expr ast' st
-                                   showFocus
-                                   return ()) eiast
+    iokm2clm' "Rewrite failed: "
+              (\ ast' -> put (newSAST expr ast' st) >> showFocus)
+              (applyS (cl_kernel st) (cl_cursor $ cl_session st) rr)
+
 performAstEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
-    -- TODO: thread this putStr into the throwError
-    opt <- liftIO $ liftM Right (queryS (cl_kernel st) (cl_cursor (cl_session st)) t)
-                       `catch` (\ msg -> return (Left msg))
-    case opt of
-          Right p -> do ast <- liftIO $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ p)
-                        put $ newSAST expr ast st
-                        showFocus
-          Left msg -> fail $ "Can not find path: " ++ msg
+    iokm2clm' "Cannot find path: "
+              (\ p -> do ast <- iokm2clm "Path is invalid: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ p)
+                         put $ newSAST expr ast st
+                         showFocus)
+              (queryS (cl_kernel st) (cl_cursor $ cl_session st) t)
 
 performAstEffect (Direction dir) expr = do
     st <- get
-    ast <- liftIO $ do
-        child_count <- queryS (cl_kernel st) (cl_cursor (cl_session st)) numChildrenT
-        print (child_count, dir)
-        modPathS (cl_kernel st) (cl_cursor (cl_session st)) (scopePath2Path . moveLocally dir . path2ScopePath)
+    child_count <- iokm2clm "Could not compute number of children:" $ queryS (cl_kernel st) (cl_cursor (cl_session st)) numChildrenT
+    liftIO $ print (child_count, dir)
+    ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (scopePath2Path . moveLocally dir . path2ScopePath)
     put $ newSAST expr ast st
     -- something changed, to print
     showFocus
---performAstEffect (ShellState' f) = get >>= liftIO . f >>= put >> showFocus
+
 performAstEffect (PushFocus ls) expr = do
     st <- get
-    ast <- liftIO $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ ls)
+    ast <- iokm2clm "Invalid push: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ ls)
     put $ newSAST expr ast st
     showFocus
+
 performAstEffect BeginScope expr = do
         st <- get
         ast <- liftIO $ beginScopeS (cl_kernel st) (cl_cursor (cl_session st))
         put $ newSAST expr ast st
         showFocus
+
 performAstEffect EndScope expr = do
         st <- get
         ast <- liftIO $ endScopeS (cl_kernel st) (cl_cursor (cl_session st))
         put $ newSAST expr ast st
         showFocus
+
 performAstEffect (Tag tag) expr = do
         st <- get
         put (st { cl_tags = (tag, cl_cursor (cl_session st)) : cl_tags st })
+
 performAstEffect (CorrectnessCritera q) expr = do
         st <- get
-        correctness <- liftIO (try $ queryS (cl_kernel st) (cl_cursor (cl_session st)) q)
-        case correctness of
-          Right ()  -> do putStrToConsole $ unparseExprH expr ++ " [correct]"
-          Left (err :: IOException)
-                   -> fail $ unparseExprH expr ++ " [exception: " ++ show err ++ "]"
+        liftIO (queryS (cl_kernel st) (cl_cursor $ cl_session st) q)
+          >>= runKureMonad (\ () -> putStrToConsole $ unparseExprH expr ++ " [correct]")
+                           (\ err -> fail $ unparseExprH expr ++ " [exception: " ++ err ++ "]")
+        -- correctness <- liftIO (try $ queryS (cl_kernel st) (cl_cursor (cl_session st)) q)
+        -- case correctness of
+        --   Right ()  -> do putStrToConsole $ unparseExprH expr ++ " [correct]"
+        --   Left (err :: IOException)
+        --            -> fail $ unparseExprH expr ++ " [exception: " ++ show err ++ "]"
 
 
 -------------------------------------------------------------------------------
@@ -526,8 +533,10 @@ performShellEffect (SessionStateEffect f) = do
 performQuery :: (MonadIO m) => QueryFun -> CLM m ()
 performQuery (QueryT q) = do
     st <- get
-    str <- liftIO (queryS (cl_kernel st) (cl_cursor (cl_session st)) q)
-    putStrToConsole str
+    iokm2clm' "Query failed: "
+              putStrToConsole
+              (queryS (cl_kernel st) (cl_cursor $ cl_session st) q)
+
 performQuery (Inquiry f) = do
     st <- get
     str <- liftIO $ f st (cl_session st)
@@ -552,11 +561,11 @@ performMetaCommand Resume = do st <- get
 performMetaCommand (Dump fileName _pp renderer _) = do
     st <- get
     case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
-        (Just pp, Just r) -> liftIO $ do
-            doc <- queryS (cl_kernel st) (cl_cursor (cl_session st)) (pp (cl_pretty_opts (cl_session st)))
-            h <- openFile fileName WriteMode
-            r h (cl_pretty_opts (cl_session st)) doc
-            hClose h
+        (Just pp, Just r) -> do doc <- iokm2clm "Bad pretty-printer or renderer option: " $
+                                           queryS (cl_kernel st) (cl_cursor $ cl_session st) (pp (cl_pretty_opts $ cl_session st))
+                                liftIO $ do h <- openFile fileName WriteMode
+                                            r h (cl_pretty_opts $ cl_session st) doc
+                                            hClose h
         _ -> throwError "dump: bad pretty-printer or renderer option"
 performMetaCommand (LoadFile fileName) = do
         putStrToConsole $ "[loading " ++ fileName ++ "]"

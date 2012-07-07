@@ -29,19 +29,19 @@ import Control.Concurrent
 --   For now, operations on a 'Kernel' are sequential, but later
 --   it will be possible to have two 'applyK's running in parallel.
 data Kernel = Kernel
-        { resumeK ::            AST                      -> IO ()    -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
-        , abortK  ::                                        IO ()    -- ^ Halt the 'Kernel' and abort GHC without compiling.
-        , applyK  ::            AST -> RewriteH Core     -> IO AST   -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
-        , queryK  :: forall a . AST -> TranslateH Core a -> IO a     -- ^ Apply a 'TranslateH' to the 'AST' and return the resulting value.
-        , deleteK ::            AST                      -> IO ()    -- ^ Delete the internal record of the specified 'AST'.
-        , listK   ::                                        IO [AST] -- ^ List all the 'AST's tracked by the 'Kernel'.
+        { resumeK ::            AST                      -> IO ()                -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
+        , abortK  ::                                        IO ()                -- ^ Halt the 'Kernel' and abort GHC without compiling.
+        , applyK  ::            AST -> RewriteH Core     -> IO (KureMonad AST)   -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
+        , queryK  :: forall a . AST -> TranslateH Core a -> IO (KureMonad a)     -- ^ Apply a 'TranslateH' to the 'AST' and return the resulting value.
+        , deleteK ::            AST                      -> IO ()                -- ^ Delete the internal record of the specified 'AST'.
+        , listK   ::                                        IO [AST]             -- ^ List all the 'AST's tracked by the 'Kernel'.
         }
 
 -- | A /handle/ for a specific version of the 'ModGuts'.
 newtype AST = AST Int -- ^ Currently 'AST's are identified by an 'Int' label.
               deriving (Eq, Ord, Show)
 
-data Msg s r = forall a . Req (s -> CoreM (Either String (a,s))) (MVar (Either String a))
+data Msg s r = forall a . Req (s -> HermitM (a,s)) (MVar (KureMonad a))
              | Done (s -> CoreM r)
 
 -- | Start a HERMIT client by providing an IO function that takes the initial 'Kernel' and inital 'AST' handle.
@@ -61,43 +61,43 @@ hermitKernel callback modGuts = do
         let sendDone :: (Map AST ModGuts -> CoreM ModGuts) -> IO ()
             sendDone = putMVar msg . Done
 
-        let sendReq :: (Map AST ModGuts -> CoreM (Either String (a,Map AST ModGuts))) -> IO a
-            sendReq fn = do rep <- newEmptyMVar
+        let sendReq :: (Map AST ModGuts -> HermitM (a, Map AST ModGuts)) -> IO (KureMonad a)
+            sendReq fn = do rep  <- newEmptyMVar
                             putMVar msg (Req fn rep)
-                            takeMVar rep >>= either fail return
+                            takeMVar rep
 
-        let kernel = Kernel
-                { resumeK = \ name -> sendDone $ \ env -> find name env fail return
+
+        let kernel :: Kernel
+            kernel = Kernel
+                { resumeK = \ name -> sendDone $ \ env -> findWithErrMsg name env (\ msg -> throwGhcException $ ProgramError $ msg ++ ", exiting HERMIT and aborting GHC compilation.") return
+
                 , abortK  = sendDone $ \ _ -> throwGhcException (ProgramError "Exiting HERMIT and aborting GHC compilation.")
-                , applyK = \ name rr -> sendReq $ \ env -> find name env fail' $ \ core ->
-                             runHM
-                                  (\ core' -> do
-                                      syn' <- liftIO $ takeMVar syntax_names
-                                      return' (syn',insert syn' core' env))
-                                  fail'
-                                  (apply (extractR rr) (initContext core) core)
-                , queryK = \ name q -> sendReq $ \ env -> find name env fail' $ \ core ->
-                             runHM
-                                  (\ reply -> return' (reply,env))
-                                  fail'
-                                  (apply (extractT q) (initContext core) core)
-                , deleteK = \ name -> sendReq $ \ env -> find name env fail' $ \ _ ->
-                             return' ((), delete name env)
-                , listK = sendReq $ \ env -> return' (keys env,env)
+
+                , applyK = \ name r -> sendReq $ \ env -> findWithErrMsg name env fail $ \ core -> do core' <- apply (extractR r) (initContext core) core
+                                                                                                      syn' <- liftIO $ takeMVar syntax_names
+                                                                                                      return (syn', insert syn' core' env)
+
+                , queryK = \ name q -> sendReq $ \ env -> findWithErrMsg name env fail $ \ core -> do reply <- apply (extractT q) (initContext core) core
+                                                                                                      return (reply,env)
+
+                , deleteK = \ name -> sendReq (\ env -> find name env (return ((), env))
+                                                                      (\ _ -> return ((), delete name env)))
+                                         >>= runKureMonad return fail
+
+                , listK = sendReq (\ env -> return (keys env, env)) >>= runKureMonad return fail
                 }
 
         -- We always start with syntax blob 0
         syn <- liftIO $ takeMVar syntax_names
 
-        let loop st = do
+        let loop :: Map AST ModGuts -> CoreM ModGuts
+            loop st = do
                 m <- liftIO $ takeMVar msg
                 case m of
-                  Req fn rep -> do ans <- fn st
-                                   case ans of
-                                     Right (a,st2) -> do liftIO $ putMVar rep (Right a)
-                                                         loop st2
-                                     Left m' -> do liftIO $ putMVar rep (Left m')
-                                                   loop st
+                  Req fn rep -> runHM (\ (a,st2) -> liftIO (putMVar rep $ return a) >> loop st2)
+                                      (\ msg     -> liftIO (putMVar rep $ fail msg) >> loop st)
+                                      (fn st)
+
                   Done fn -> fn st
 
         _pid <- liftIO $ forkIO $ callback kernel syn
@@ -107,11 +107,8 @@ hermitKernel callback modGuts = do
         -- (Kill the pid'd thread? do we need to?)
 
 
-find :: Monad m => AST -> Map AST ModGuts -> (String -> m a) -> (ModGuts -> m a) -> m a
-find name env failing k = maybe (failing $ "cannot find syntax tree : " ++ show name) k (lookup name env)
+findWithErrMsg :: AST -> Map AST v -> (String -> b) -> (v -> b) -> b
+findWithErrMsg ast m f = find ast m (f $ "Cannot find syntax tree: " ++ show ast)
 
-fail' :: Monad m => a -> m (Either a b)
-fail' = return . Left
-
-return' :: Monad m => b -> m (Either a b)
-return' = return . Right
+find :: Ord k => k -> Map k v -> b -> (v -> b) -> b
+find k m f s = maybe f s (lookup k m)

@@ -13,13 +13,13 @@ import Language.HERMIT.Kernel
 
 data ScopedKernel = ScopedKernel
         { resumeS     ::            SAST                      -> IO ()
-        , abortS      ::                                        IO ()
-        , applyS      ::            SAST -> RewriteH Core     -> IO SAST
-        , queryS      :: forall a . SAST -> TranslateH Core a -> IO a
+        , abortS      ::                                         IO ()
+        , applyS      ::            SAST -> RewriteH Core     -> IO (KureMonad SAST)
+        , queryS      :: forall a . SAST -> TranslateH Core a -> IO (KureMonad a)
         , deleteS     ::            SAST                      -> IO ()
-        , listS       ::                                        IO [SAST]
+        , listS       ::                                         IO [SAST]
         , pathS       ::            SAST                      -> IO [Path]
-        , modPathS    ::            SAST -> (Path -> Path)    -> IO SAST
+        , modPathS    ::            SAST -> (Path -> Path)    -> IO (KureMonad SAST)
         , beginScopeS ::            SAST                      -> IO SAST
         , endScopeS   ::            SAST                      -> IO SAST
         }
@@ -44,6 +44,10 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
     store <- newTMVarIO $ I.fromList [(0,(initAST, [], []))]
     key <- newTMVarIO (1::Int)
 
+    let failCleanup :: SASTStore -> String -> IO (KureMonad a)
+        failCleanup m msg = atomically $ do putTMVar store m
+                                            return $ fail msg
+
     let newKey = do
             k <- takeTMVar key
             putTMVar key (k+1)
@@ -57,11 +61,11 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
             , abortS      = abortK kernel
             , applyS      = \ (SAST sAst) rr -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
-                                ast' <- applyK kernel ast (focusR (pathStackToLens base rel) rr)
-                                atomically $ do
-                                    k <- newKey
-                                    putTMVar store $ I.insert k (ast', base, rel) m
-                                    return $ SAST k
+                                applyK kernel ast (focusR (pathStackToLens base rel) rr)
+                                  >>= runKureMonad (\ ast' -> atomically $ do k <- newKey
+                                                                              putTMVar store $ I.insert k (ast', base, rel) m
+                                                                              return $ return $ SAST k)
+                                                   (failCleanup m)
             , queryS      = \ (SAST sAst) t -> do
                                 m <- atomically $ readTMVar store
                                 (ast, base, rel) <- get sAst m
@@ -78,12 +82,15 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
             , modPathS    = \ (SAST sAst) f -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
                                 let rel' = f rel
-                                condM (fmap (&& (rel /= rel')) (queryK kernel ast (testLensT (pathStackToLens base rel'))))
-                                      (atomically $ do
-                                            k <- newKey
-                                            putTMVar store $ I.insert k (ast, base, rel') m
-                                            return $ SAST k)
-                                      (atomically $ putTMVar store m >> return (SAST sAst))
+                                queryK kernel ast (testLensT (pathStackToLens base rel'))
+                                  >>= runKureMonad (\ b -> if rel == rel'
+                                                            then failCleanup m "Path is unchanged, nothing to do."
+                                                            else if b
+                                                                  then atomically $ do k <- newKey
+                                                                                       putTMVar store $ I.insert k (ast, base, rel') m
+                                                                                       return (return $ SAST k)
+                                                                  else failCleanup m "Invalid path created.")
+                                                   (failCleanup m)
             , beginScopeS = \ (SAST sAst) -> atomically $ do
                                 m <- takeTMVar store
                                 (ast, base, rel) <- get sAst m
