@@ -15,8 +15,10 @@ consider 'rev
    unshadow ; bash
    any-bu (case-float-arg)
    any-bu (apply-rule "repH ++") ; bash
+   any-bu (apply-rule "repH []") ; bash
    any-bu (unfold-rule "rep-abs-fusion") 
 
+   -- This is just a setup to all completion
    { consider case ; eta-expand 'ys ; any-bu case-float-app }
    any-call (unfold 'repH)
    any-call (unfold '.)

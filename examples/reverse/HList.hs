@@ -19,8 +19,8 @@ absH f = f []
 {-# RULES "absH" forall f 	 . absH f = f []     #-}
 
 -- The "Algebra" for repH
-{-# RULES "repH ++" forall xs ys . repH (xs ++ ys) = repH xs . repH ys #-}
-{-# RULES "repH []" 	           repH [] = ([] ++) 	       	       #-}
+{-# RULES "repH ++" forall xs ys   . repH (xs ++ ys) = repH xs . repH ys #-}
+{-# RULES "repH []" 	             repH [] = id  	       	         #-}
 {-# RULES "repH (:)" forall x xs   . repH (x:xs) = ((:) x) . repH xs     #-}
 
 -- Should be in the "List" module
