@@ -1,0 +1,166 @@
+Using this file to keep track of progress/improvements coming out of this example.
+Format: steps from Neil's worker/wrapper derivation with interspersed commentary.
+Entire derivation is:
+
+-- Normal fib definition
+fib :: Nat -> Nat
+fib = body
+
+-- After WWSplit tactic
+fib = wrap work
+
+f :: (Nat -> Nat) -> Nat -> Nat
+f = \fib -> body
+
+wrap :: (Nat -> (Nat, Nat)) -> (Nat -> Nat)
+unwrap :: (Nat -> Nat) -> (Nat -> (Nat, Nat))
+work :: Nat -> (Nat, Nat)
+
+-- Derivation
+work = unwrap (f (wrap work))
+ {- extensionality -}
+work n = unwrap (f (wrap work)) n
+ {- unfold 'unwrap -}
+work n = (f (wrap work) n, f (wrap work) (n+1))
+ {- case 'n -}
+work 0     = (f (wrap work) 0, f (wrap work) 1)
+work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
+ {- unfold 'f -}
+work 0     = (0, 1)
+work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
+ {- unfold 'work -}
+work 0     = (0, 1)
+work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
+ {- wrap . unwrap = id (precondition) -}
+work 0     = (0, 1)
+work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
+ {- let-intro x2, let-float-tuple -}
+work 0     = (0, 1)
+work (n+1) = let (x,y) = (f (wrap work) n, f (wrap work) (n+1)) in (y,x+y)
+ {- fold 'unwrap -}
+work 0     = (0, 1)
+work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
+ {- fold 'work -}
+work 0     = (0, 1)
+work (n+1) = let (x,y) = work n in (y,x+y)
+ {- QED -}
+
+Discussion:
+
+###############################################################################
+
+work = unwrap (f (wrap work))
+
+To get to this point required creation of the WWSplit tactic. This
+is slightly more complicated than how we did the split in the reverse
+example in the paper, because we want to keep f abstract for most
+of this derivation (we selectively unfold it once). I was able to
+create a tactic which I believe is entirely general, allowing one
+to rewrite:
+
+  letrec g = body
+
+to:
+
+  let g = (let f = \g -> body
+           in (letrec work = unwrap (f (wrap work))
+               in wrap work))
+
+There are a couple todo's regarding this split. It relies on
+two GHC RULES pragmas (ww, and inline-fix). These should probably
+be written as rewrites. Doing so would probably allow the whole
+tactic to be expressed as a rewrite, rather than a hermit script.
+
+###############################################################################
+
+ {- extensionality -}
+work n = unwrap (f (wrap work)) n
+
+This was done with "eta-expand 'n". Allowing core lint to run revealed
+that eta-expand was not handling types correctly. This is fixed in commit
+b49fcd2be2ff0592ab51a2e9b8a291dff48bbf4b by using splitFunTy_maybe, which
+looks to be a really handy function. Must remember to exit Hermit with
+resume, instead of abort, so core-lint runs.
+
+###############################################################################
+
+ {- unfold 'unwrap -}
+work n = (f (wrap work) n, f (wrap work) (n+1))
+
+At the moment we have to be careful to call unfold at the right place. Otherwise
+we end up with extra redexes that must be dealt with.
+
+###############################################################################
+
+ {- case 'n -}
+work 0     = (f (wrap work) 0, f (wrap work) 1)
+work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
+
+This step required two new capabilites:
+
+  * A case-split rewrite that accepts the name of a free variable of an
+    expression, finds all the data constructors belonging to the type,
+    and builds a case statement, cloning the expression for each case alt.
+    Getting the correct types of the pattern binders was tricky (or simple
+    once I found the correct GHC functions to instantiate the constructor
+    argument types).
+
+  * Modify the Hermit context to store two possible values for variables
+    that are case wildcard binders. These can refer to either the scrutinee
+    (previous behavior), or the constructor application of the pattern. This
+    is what allows the 'n above to be replaced by 0 and 1 when case splitting.
+    It is important to store the AltCon and binders in the context, and only
+    convert to a CoreExpr upon inlining, so that we can apply the constructor
+    at the correct types.
+
+There is a case-split-inline rewrite that combines these steps. This step
+also required rewriting fib to work over:
+
+  data Nat = Zero | Succ Nat
+
+rather than Int, as the only Int constructor is the one which boxes Int#. We
+probably need an case-literal rewrite, which accepts a literal and adds a
+LitCon pattern. We could then go back to working on Int, and "case-literal 0"
+rather than "case-split-inline 'n".
+
+###############################################################################
+
+ {- unfold 'f -}
+work 0     = (0, 1)
+work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
+
+This step is done by calling unfold and repeatedly applying case-reduce on
+three of the four tupled expressions. Should we add case-reduce to the
+unfold cleanup step? Is there a more general cleanup rewrite we can build
+that isn't as invasive as bash, but handles this stuff for us? I can imagine
+some rewrites (like case-reduce) that we simply always want to run, as they
+are effectively dead code elimination.
+
+###############################################################################
+
+ {- unfold 'work -}
+work 0     = (0, 1)
+work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
+
+Our first run-in with equational reasoning issues. The problem is that we
+want to unfold the definition of work we started with, not the one we currently
+have. I think, in the short term, I'll add the following:
+
+  stash-defn 'work origWork -- stashes the RHS of work somewhere, with a name
+  stash-unfold origWork     -- like unfold, but looks up a stashed name
+
+###############################################################################
+
+ {- wrap . unwrap = id (precondition) -}
+work 0     = (0, 1)
+work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
+ {- let-intro x2, let-float-tuple -}
+work 0     = (0, 1)
+work (n+1) = let (x,y) = (f (wrap work) n, f (wrap work) (n+1)) in (y,x+y)
+ {- fold 'unwrap -}
+work 0     = (0, 1)
+work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
+ {- fold 'work -}
+work 0     = (0, 1)
+work (n+1) = let (x,y) = work n in (y,x+y)
+ {- QED -}

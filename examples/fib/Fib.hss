@@ -15,8 +15,7 @@ eta-expand 'n
 
 -- work n = (f (wrap work) n, f (wrap work) (n+1))
 --   case 'n
-case-split 'n
-any-bu (inline 'n)
+case-split-inline 'n
 
 -- work 0     = (f (wrap work) 0, f (wrap work) 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
