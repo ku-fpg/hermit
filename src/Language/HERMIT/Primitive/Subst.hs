@@ -10,7 +10,7 @@ import Control.Arrow
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
-import Language.HERMIT.Primitive.GHC(freeIds)
+import Language.HERMIT.Primitive.GHC(coreExprFreeIds)
 
 import qualified Language.Haskell.TH as TH
 
@@ -102,8 +102,8 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
         rule345 :: RewriteH CoreExpr
         rule345 = do Lam b e <- idR
                      guardMsg (b == v) "Subtitution var clashes with Lam"
-                     guardMsg (v `notElem` freeIds e) "Substitution var not used in body of Lam"
-                     if b `elem` freeIds expReplacement
+                     guardMsg (v `notElem` coreExprFreeIds e) "Substitution var not used in body of Lam"
+                     if b `elem` coreExprFreeIds expReplacement
                       then alphaLambda >>> rule345
                       else lamR (substR v expReplacement)
 
@@ -112,7 +112,7 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
         rule78 :: RewriteH CoreExpr
         rule78 = do Let bds _e <- idR
                     guardMsg (v `elem` bindList bds) "Substitution var clashes with Let var"
-                    if null $ List.intersect (bindList bds) (freeIds expReplacement)
+                    if null $ List.intersect (bindList bds) (coreExprFreeIds expReplacement)
                      then letAnyR (substBindR v expReplacement) (substR v expReplacement)
                      else alphaLet >>> rule78
 
@@ -126,7 +126,7 @@ substAltR :: Id -> CoreExpr -> RewriteH CoreAlt
 substAltR v expReplacement =
     do (_, bs, _) <- idR
        guardMsg (v `elem` bs) "Substitution var clashes with Alt binders"
-       if null $ List.intersect bs (freeIds expReplacement)
+       if null $ List.intersect bs (coreExprFreeIds expReplacement)
         then altR (substR v expReplacement)
         else alphaAlt >>> altR (substR v expReplacement)
 
@@ -141,7 +141,7 @@ substNonRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substNonRecBindR v expReplacement =
     do NonRec b _ <- idR
        guardMsg (b == v) "Substitution var clashes wth Let bound var"
-       guardMsg (b `elem` freeIds expReplacement) "Let bound var is free in substitution expr."
+       guardMsg (b `elem` coreExprFreeIds expReplacement) "Let bound var is free in substitution expr."
        nonRecR (substR v expReplacement)
 
 substRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
@@ -149,7 +149,7 @@ substRecBindR v expReplacement =
     do exp@(Rec _) <- idR
        let boundIds = bindList exp
        guardMsg (v `elem` boundIds) "Substitution var clashes wth Let bound var"
-       guardMsg (not . null $ List.intersect boundIds (freeIds expReplacement)) "Let bound var is free in substitution expr."
+       guardMsg (not . null $ List.intersect boundIds (coreExprFreeIds expReplacement)) "Let bound var is free in substitution expr."
        recDefAnyR (\ _ -> substR v expReplacement)
 
 letSubstR :: RewriteH CoreExpr

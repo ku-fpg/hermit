@@ -59,14 +59,16 @@ inline scrutinee = rewrite $ \ c e -> case e of
     _      -> fail "inline failed (No variable)"
 
 -- | Convert lhs of case alternative to a constructor application expression,
--- or a default expression in the case of the DEFAULT alternative.
--- Accepts a list of types to apply to the constructor before the value args.
+--   or a default expression in the case of the DEFAULT alternative.
+--   Accepts a list of types to apply to the constructor before the value args.
 --
 -- > data T a b = C a b Int
+--
 -- Pseudocode:
+--
 -- > alt2Exp (...) [a,b] (C, [x,y,z]) ==> C a b (x::a) (y::b) (z::Int)
 --
--- The Either denotes whether we picked the default (scrutinee) or built an expression.
+-- The 'Either' denotes whether we picked the default (scrutinee) or built an expression.
 -- This matters for the depth check.
 alt2Exp :: CoreExpr -> [Type] -> (AltCon,[Id]) -> Either CoreExpr CoreExpr
 alt2Exp d _   (DEFAULT   , _ ) = Left d

@@ -1,7 +1,7 @@
 -- Andre Santos' Local Transformations (Ch 3 in his dissertation)
 module Language.HERMIT.Primitive.Local where
 
-import GhcPlugins hiding (freeVars)
+import GhcPlugins
 
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
@@ -111,7 +111,7 @@ eta_reduce :: RewriteH CoreExpr
 eta_reduce = withPatFailMsg "eta_reduce failed. Not applied to Lam-App-Var" $
     do Lam v1 (App f (Var v2)) <- idR
        guardMsg (v1 == v2) "eta_reduce failed, variables are not equal."
-       guardMsg (v1 `notElem` freeIds f) $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++ "is free in the function being applied."
+       guardMsg (v1 `notElem` coreExprFreeIds f) $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++ "is free in the function being applied."
        return f
 
 eta_expand :: TH.Name -> RewriteH CoreExpr
@@ -126,8 +126,8 @@ eta_expand nm = contextfreeT $ \ e -> case splitFunTy_maybe (exprType e) of
 -- (let v = E1 in E2) => E2, if v is not free in E2
 dce :: RewriteH CoreExpr
 dce = contextfreeT $ \ e -> case e of
-        Let (NonRec n _) e2 | n `notElem` freeVars e2 -> return e2
-                            | otherwise               -> fail "DCE: no dead code"
+        Let (NonRec n _) e2 | n `notElem` coreExprFreeVars e2 -> return e2
+                            | otherwise                       -> fail "DCE: no dead code"
         _ -> fail "DCE: not applied to a NonRec Let."
 
 ------------------------------------------------------------------------------

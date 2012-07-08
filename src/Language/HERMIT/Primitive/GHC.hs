@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Language.HERMIT.Primitive.GHC where
 
-import GhcPlugins hiding (freeVars,empty)
+import GhcPlugins hiding (empty)
 import qualified Language.HERMIT.GHC as GHC
 import qualified OccurAnal
 import Control.Arrow
@@ -40,8 +40,8 @@ externals er = map (.+ TODO)
                 , "  where safe to inline without duplicating work ==> E2[E1/x,...],"
                 , "fails otherwise"
                 , "only matches non-recursive lets" ]  .+ Deep .+ Eval
-         , external "freevars" (promoteExprT freeIdsQuery :: TranslateH Core String)
-                [ "List the free variables in this expression [via GHC]" ] .+ Query .+ Deep
+         , external "free-ids" (promoteExprT freeIdsQuery :: TranslateH Core String)
+                [ "List the free identifiers in this expression [via GHC]" ] .+ Query .+ Deep
          , external "deshadow-binds" (promoteProgramR deShadowBindsR :: RewriteH Core)
                 [ "Deshadow a program " ] .+ Deep
          , external "apply-rule" (promoteExprR . rules (er_rules er) :: String -> RewriteH Core)
@@ -110,23 +110,26 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 
 -- output a list of all free variables in the Expr.
 freeIdsQuery :: TranslateH CoreExpr String
-freeIdsQuery = freeIdsT >>^ (("FreeVars are: " ++) . show . map (showSDoc.ppr))
+freeIdsQuery = freeIdsT >>^ (("Free identifiers are: " ++) . show . map (showSDoc.ppr))
+
+-- Doesn't work, because it doesn't account for any bindings we add as we navigate down.
+-- freeIdsQuery :: TranslateH Core String
+-- freeIdsQuery = prunetdT (promoteExprT freeIdsT)
+--                >>^ (("Free identifiers are: " ++) . show . map (showSDoc.ppr) . nub)
 
 freeIdsT :: TranslateH CoreExpr [Id]
-freeIdsT = arr freeIds
+freeIdsT = arr coreExprFreeIds
 
-freeVarsT :: TranslateH CoreExpr [Id]
-freeVarsT = arr freeVars
+freeVarsT :: TranslateH CoreExpr [Var]
+freeVarsT = arr coreExprFreeVars
 
 -- note: exprFreeVars get *all* free variables, including types
--- note: shadows the freeVars in GHC that operates on the AnnCore.
--- TODO: we should rename this.
-freeVars :: CoreExpr -> [Id]
-freeVars  = uniqSetToList . exprFreeVars
+coreExprFreeVars :: CoreExpr -> [Var]
+coreExprFreeVars  = uniqSetToList . exprFreeVars
 
 -- note: exprFreeIds is only value-level free variables
-freeIds :: CoreExpr -> [Id]
-freeIds  = uniqSetToList . exprFreeIds
+coreExprFreeIds :: CoreExpr -> [Id]
+coreExprFreeIds  = uniqSetToList . exprFreeIds
 
 ------------------------------------------------------------------------
 
@@ -160,7 +163,7 @@ rulesToRewriteH rs = contextfreeT $ \ e -> do
     (Var fn,args) <- return $ collectArgs e
     -- Question: does this include Id's, or Var's (which include type names)
     -- Assumption: Var's.
-    let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- freeVars e ])
+    let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- coreExprFreeVars e ])
         -- The rough_args are just an attempt to try eliminate silly things
         -- that will never match
         _rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
