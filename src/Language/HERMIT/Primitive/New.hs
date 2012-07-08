@@ -28,15 +28,14 @@ import qualified Language.Haskell.TH as TH
 import Control.Monad
 import MonadUtils (MonadIO) -- GHC's MonadIO
 
--- promoteR'  :: Term a => RewriteH a -> RewriteH (Generic a)
--- promoteR' rr = rewrite $ \ c e ->  inject <$> maybe (fail "argument is not an expr") (apply rr c)  (retract e)
+import Data.List(intercalate)
 
 externals ::  ExternalReader -> [External]
 externals er = map ((.+ Experiment) . (.+ TODO))
-         [ external "info" (promoteExprT info :: TranslateH Core String)
+         [ external "info" (info :: TranslateH Core String)
                 [ "tell me what you know about this expression or binding" ] .+ Unimplemented
-         , external "expr-type" (promoteExprT exprTypeQueryT :: TranslateH Core String)
-                [ "List the type (Constructor) for this expression."]
+         , external "expr-type" (promoteExprT exprTypeT :: TranslateH Core String)
+                [ "display the type of this expression"]
          , external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
                 [ "determines if a rewrite could be successfully applied" ]
          , external "fix-intro" (promoteBindR fixIntro :: RewriteH Core)
@@ -78,31 +77,58 @@ externals er = map ((.+ Experiment) . (.+ TODO))
 
 -- A few Queries.
 
--- info currently outputs the type of the current CoreExpr
--- TODO: we need something for bindings, etc.
-info :: TranslateH CoreExpr String
-info = translate $ \ c e ->
-          let hd = "Core Expr"
-              ty = "type ::= " ++ showSDoc (ppr (exprType e))
-              pa = "path :=  " ++ show (contextPath c)
-              extra = "extra := " ++ case e of
-                                       Var v -> showSDoc (ppIdInfo v (idInfo v))
-                                       _     -> "{}"
-           in return (unlines [hd,ty,pa,extra])
+info :: TranslateH Core String
+info = translate $ \ c core ->
+         let pa       = "Path: " ++ show (contextPath c)
+             node     = "Node: " ++ coreNode core
+             con      = "Constructor: " ++ coreConstructor core
+             expExtra = case core of
+                          ExprCore e -> ["Type: " ++ showExprType e] ++
+                                           case e of
+                                             Var v -> ["Identifier Info: " ++ showIdInfo v]
+                                             _     -> []
+                          _          -> []
+         in
+             return (intercalate "\n" $ [pa,node,con] ++ expExtra)
 
+exprTypeT :: TranslateH CoreExpr String
+exprTypeT = arr showExprType
 
-exprTypeQueryT :: TranslateH CoreExpr String
-exprTypeQueryT = arr $ \ e -> case e of
-                                Var _        -> "Var"
-                                Type _       -> "Type"
-                                Lit _        -> "Lit"
-                                App _ _      -> "App"
-                                Lam _ _      -> "Lam"
-                                Let _ _      -> "Let"
-                                Case _ _ _ _ -> "Case"
-                                Cast _ _     -> "Cast"
-                                Tick _ _     -> "Tick"
-                                Coercion _   -> "Coercion"
+showExprType :: CoreExpr -> String
+showExprType = showSDoc . ppr . exprType
+
+showIdInfo :: Id -> String
+showIdInfo v = showSDoc $ ppIdInfo v $ idInfo v
+
+coreNode :: Core -> String
+coreNode (ModGutsCore _) = "Module"
+coreNode (ProgramCore _) = "Program"
+coreNode (BindCore _)    = "Binding Group"
+coreNode (DefCore _)     = "Recursive Definition"
+coreNode (ExprCore _)    = "Expression"
+coreNode (AltCore _)     = "Case Alternative"
+
+coreConstructor :: Core -> String
+coreConstructor (ModGutsCore _)    = "ModGuts"
+coreConstructor (ProgramCore prog) = case prog of
+                                       []    -> "[]"
+                                       (_:_) -> "(:)"
+coreConstructor (BindCore bnd)     = case bnd of
+                                       Rec _      -> "Rec"
+                                       NonRec _ _ -> "NonRec"
+coreConstructor (DefCore _)        = "Def"
+coreConstructor (AltCore _)        = "(,,)"
+coreConstructor (ExprCore expr)    = case expr of
+                                       Var _        -> "Var"
+                                       Type _       -> "Type"
+                                       Lit _        -> "Lit"
+                                       App _ _      -> "App"
+                                       Lam _ _      -> "Lam"
+                                       Let _ _      -> "Let"
+                                       Case _ _ _ _ -> "Case"
+                                       Cast _ _     -> "Cast"
+                                       Tick _ _     -> "Tick"
+                                       Coercion _   -> "Coercion"
 
 testQuery :: RewriteH Core -> TranslateH Core String
 testQuery r = f <$> testM r
@@ -320,13 +346,10 @@ push nm = do
         e <- idR
         case collectArgs e of
           (Var v,args) -> do
-                  when (not (nm `cmpName` idName v)) $ do
-                          fail $ "push did not find name " ++ show nm
-                  when (length args == 0) $ do
-                          fail $ "no argument for " ++ show nm
-                  when (not (all isTypeArg (init args))) $ do
-                          fail $ " initial arguments are not type arguments for " ++ show nm
+                  when (not (nm `cmpName` idName v)) $ fail $ "push did not find name " ++ show nm
+                  when (length args == 0) $ fail $ "no argument for " ++ show nm
+                  when (not (all isTypeArg (init args))) $ fail $ " initial arguments are not type arguments for " ++ show nm
                   case last args of
                      Case {} -> caseFloatArg
-                     _       -> fail "can not push, sorry"
+                     _       -> fail "cannot push, sorry"
           _ -> fail "no function to match for push"
