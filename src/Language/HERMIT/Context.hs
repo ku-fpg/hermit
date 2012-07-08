@@ -4,12 +4,16 @@ module Language.HERMIT.Context
          HermitBinding(..)
        , hermitBindingDepth
          -- * The HERMIT Context
-       , Context(hermitBindings,hermitDepth,hermitPath,hermitModGuts)
+       , Context
        , initContext
        , (@@)
        , addBinding
        , addCaseBinding
        , addLambdaBinding
+       , hermitBindings
+       , hermitDepth
+       , hermitPath
+       , hermitModGuts
        , lookupHermitBinding
        , listBindings
        , boundIn
@@ -43,10 +47,10 @@ hermitBindingDepth (CASE d _ _) = d
 --   The bindings here are lazy by choice, so that we can avoid the cost
 --   of building the context if we never use it.
 data Context = Context
-        { hermitBindings :: Map Id HermitBinding    -- ^ all (important) bindings in scope
-        , hermitDepth    :: Int                     -- ^ depth of bindings
-        , hermitPath     :: AbsolutePath            -- ^ path to the current node from the root.
-        , hermitModGuts  :: ModGuts                 -- ^ the module
+        { hermitBindings :: Map Id HermitBinding    -- ^ All (important) bindings in scope.
+        , hermitDepth    :: Int                     -- ^ The depth of the bindings.
+        , hermitPath     :: AbsolutePath            -- ^ The 'AbsolutePath' to the current node from the root.
+        , hermitModGuts  :: ModGuts                 -- ^ The 'ModGuts' of the current module.
         }
 
 ------------------------------------------------------------------------
@@ -55,8 +59,8 @@ data Context = Context
 instance PathContext Context where
   contextPath = hermitPath
 
--- | Create the initial HERMIT context by providing a 'ModGuts'.
--- We add the top-level bindings to the environment **immeduately*, because
+-- | Create the initial HERMIT 'Context' by providing a 'ModGuts'.
+-- We add the top-level bindings to the environment /immediately/, because
 -- they can be used in rules. In a sense, anything exported is part
 -- of a big recusive group.
 initContext :: ModGuts -> Context
