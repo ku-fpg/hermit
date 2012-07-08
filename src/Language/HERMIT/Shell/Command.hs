@@ -544,13 +544,14 @@ performQuery (Inquiry f) = do
 
 -- These two need to use Inquiry
 performQuery (Message msg) = liftIO (putStrLn msg)
-performQuery Status = do
-    st <- get
-    liftIO $ do
-        ps <- pathS (cl_kernel st) (cl_cursor (cl_session st))
-        putStrLn $ "Paths: " ++ show ps
-        print ("Graph",cl_graph st)
-        print ("This",cl_cursor (cl_session st))
+performQuery Status = showFocus
+  -- do
+  --   st <- get
+  --   liftIO $ do
+  --       ps <- pathS (cl_kernel st) (cl_cursor (cl_session st))
+  --       putStrLn $ "Paths: " ++ show ps
+  --       print ("Graph",cl_graph st)
+  --       print ("This",cl_cursor (cl_session st))
 
 -------------------------------------------------------------------------------
 
