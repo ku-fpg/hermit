@@ -25,7 +25,6 @@ import Language.HERMIT.Primitive.Consider -- for cmpName
 import qualified Language.Haskell.TH as TH
 
 -- import Debug.Trace
-import Control.Monad
 import MonadUtils (MonadIO) -- GHC's MonadIO
 
 import Data.List(intercalate)
@@ -346,9 +345,9 @@ push nm = do
         e <- idR
         case collectArgs e of
           (Var v,args) -> do
-                  when (not (nm `cmpName` idName v)) $ fail $ "push did not find name " ++ show nm
-                  when (length args == 0) $ fail $ "no argument for " ++ show nm
-                  when (not (all isTypeArg (init args))) $ fail $ " initial arguments are not type arguments for " ++ show nm
+                  guardMsg (nm `cmpName` idName v) $ "push did not find name " ++ show nm
+                  guardMsg (not $ null args) $ "no argument for " ++ show nm
+                  guardMsg (all isTypeArg (init args)) $ "initial arguments are not type arguments for " ++ show nm
                   case last args of
                      Case {} -> caseFloatArg
                      _       -> fail "cannot push, sorry"
