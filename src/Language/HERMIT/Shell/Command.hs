@@ -559,13 +559,13 @@ performMetaCommand :: MonadIO m => MetaCommand -> CLM m ()
 performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
 performMetaCommand Resume = do st <- get
                                liftIO $ resumeS (cl_kernel st) (cl_cursor $ cl_session st)
-performMetaCommand (Dump fileName _pp renderer _) = do
+performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
     case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
         (Just pp, Just r) -> do doc <- iokm2clm "Bad pretty-printer or renderer option: " $
                                            queryS (cl_kernel st) (cl_cursor $ cl_session st) (pp (cl_pretty_opts $ cl_session st))
                                 liftIO $ do h <- openFile fileName WriteMode
-                                            r h (cl_pretty_opts $ cl_session st) doc
+                                            r h ((cl_pretty_opts $ cl_session st) { po_width = width }) doc
                                             hClose h
         _ -> throwError "dump: bad pretty-printer or renderer option"
 performMetaCommand (LoadFile fileName) = do
