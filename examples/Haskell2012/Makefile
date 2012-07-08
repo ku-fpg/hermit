@@ -1,5 +1,8 @@
 HERMIT = perl ../../scripts/hermit.pl
 
+haskell-paper::
+       - $(HERMIT) Reverse.hs Reverse.hss abort
+
 test-fib:
 	- $(HERMIT) Fib.hs resume
 	./Fib
