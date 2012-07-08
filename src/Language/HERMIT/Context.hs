@@ -68,7 +68,7 @@ initContext modGuts = Prelude.foldl (flip addBinding) start binds
 (@@) :: Context -> Int -> Context
 (@@) env n = env { hermitPath = extendAbsPath n (hermitPath env) }
 
--- | Add a GHC Core binding to the 'Context'.
+-- | Add all bindings in a binding group to the 'Context'.
 addBinding :: CoreBind -> Context -> Context
 addBinding (NonRec n e) env
         = env { hermitBindings = insert n (BIND next_depth False e) (hermitBindings env)
@@ -88,6 +88,7 @@ addBinding (Rec bds) env
                    | (b,e) <- bds
                    ]
 
+-- | Add the bindings for a specific case alternative.
 addCaseBinding :: (Id,CoreExpr,CoreAlt) -> Context -> Context
 addCaseBinding (n,e,(ac,is,_)) env
         = env { hermitBindings = insert n (CASE next_depth e (ac,is)) (hermitBindings env)
