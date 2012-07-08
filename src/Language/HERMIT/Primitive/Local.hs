@@ -89,21 +89,10 @@ betaReducePlus = do
 --betaReducePlus decent lift op = decent (tryR (betaReducePlus decent lift op >>> lift)) >>> op
 
 
-
-
-
-     -- contextfreeT $ \ e -> case e of
-     --    App (Lam v e1) e2 -> return $ Let (NonRec v e2) e1
-     --    _ -> fail "beta_reduce failed. Not applied to an App."
-
 beta_expand :: RewriteH CoreExpr
 beta_expand = setFailMsg "beta_expand failed. Not applied to a NonRec Let." $
     do Let (NonRec v e2) e1 <- idR
        return $ App (Lam v e1) e2
-
-  -- contextfreeT $ \ e -> case e of
-  --       Let (NonRec v e2) e1 -> return $ App (Lam v e1) e2
-  --       _ -> fail "beta_expand failed. Not applied to a NonRec Let."
 
 ------------------------------------------------------------------------------
 
@@ -125,10 +114,10 @@ eta_expand nm = contextfreeT $ \ e -> case splitFunTy_maybe (exprType e) of
 -- dead code elimination removes a let.
 -- (let v = E1 in E2) => E2, if v is not free in E2
 dce :: RewriteH CoreExpr
-dce = contextfreeT $ \ e -> case e of
-        Let (NonRec n _) e2 | n `notElem` coreExprFreeVars e2 -> return e2
-                            | otherwise                       -> fail "DCE: no dead code"
-        _ -> fail "DCE: not applied to a NonRec Let."
+dce = withPatFailMsg "dce failed.  Not applied to a NonRec-Let." $
+      do Let (NonRec v _) e <- idR
+         guardMsg (v `notElem` coreExprFreeVars e) "dce failed.  No dead code to eliminate."
+         return e
 
 ------------------------------------------------------------------------------
 
