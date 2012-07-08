@@ -29,13 +29,13 @@ import Control.Concurrent
 --   For now, operations on a 'Kernel' are sequential, but later
 --   it will be possible to have two 'applyK's running in parallel.
 data Kernel = Kernel
-        { resumeK ::            AST                      -> IO ()                -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
-        , abortK  ::                                        IO ()                -- ^ Halt the 'Kernel' and abort GHC without compiling.
-        , applyK  ::            AST -> RewriteH Core     -> IO (KureMonad AST)   -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
-        , queryK  :: forall a . AST -> TranslateH Core a -> IO (KureMonad a)     -- ^ Apply a 'TranslateH' to the 'AST' and return the resulting value.
-        , deleteK ::            AST                      -> IO ()                -- ^ Delete the internal record of the specified 'AST'.
-        , listK   ::                                        IO [AST]             -- ^ List all the 'AST's tracked by the 'Kernel'.
-        }
+  { resumeK ::            AST                      -> IO ()                -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
+  , abortK  ::                                        IO ()                -- ^ Halt the 'Kernel' and abort GHC without compiling.
+  , applyK  ::            AST -> RewriteH Core     -> IO (KureMonad AST)   -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
+  , queryK  :: forall a . AST -> TranslateH Core a -> IO (KureMonad a)     -- ^ Apply a 'TranslateH' to the 'AST' and return the resulting value.
+  , deleteK ::            AST                      -> IO ()                -- ^ Delete the internal record of the specified 'AST'.
+  , listK   ::                                        IO [AST]             -- ^ List all the 'AST's tracked by the 'Kernel'.
+  }
 
 -- | A /handle/ for a specific version of the 'ModGuts'.
 newtype AST = AST Int -- ^ Currently 'AST's are identified by an 'Int' label.
@@ -50,7 +50,7 @@ data Msg s r = forall a . Req (s -> HermitM (a,s)) (MVar (KureMonad a))
 hermitKernel :: (Kernel -> AST -> IO ()) -> ModGuts -> CoreM ModGuts
 hermitKernel callback modGuts = do
 
-        msg :: MVar (Msg (Map AST ModGuts) ModGuts) <- liftIO newEmptyMVar
+        msgMV :: MVar (Msg (Map AST ModGuts) ModGuts) <- liftIO newEmptyMVar
 
         syntax_names :: MVar AST <- liftIO newEmptyMVar
 
@@ -59,11 +59,11 @@ hermitKernel callback modGuts = do
                                 in loop 0
 
         let sendDone :: (Map AST ModGuts -> CoreM ModGuts) -> IO ()
-            sendDone = putMVar msg . Done
+            sendDone = putMVar msgMV . Done
 
         let sendReq :: (Map AST ModGuts -> HermitM (a, Map AST ModGuts)) -> IO (KureMonad a)
             sendReq fn = do rep  <- newEmptyMVar
-                            putMVar msg (Req fn rep)
+                            putMVar msgMV (Req fn rep)
                             takeMVar rep
 
 
@@ -92,7 +92,7 @@ hermitKernel callback modGuts = do
 
         let loop :: Map AST ModGuts -> CoreM ModGuts
             loop st = do
-                m <- liftIO $ takeMVar msg
+                m <- liftIO $ takeMVar msgMV
                 case m of
                   Req fn rep -> runHM (\ (a,st2) -> liftIO (putMVar rep $ return a) >> loop st2)
                                       (\ msg     -> liftIO (putMVar rep $ fail msg) >> loop st)
