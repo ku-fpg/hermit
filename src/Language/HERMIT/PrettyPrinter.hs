@@ -40,8 +40,12 @@ data SyntaxForColor             -- (suggestion)
 attr :: Attr -> DocH -> DocH
 attr a p = mark (PushAttr a) <> p <> mark PopAttr
 
+-- Hack, till we get 'PathAttr' working properly
+-- The problem is that attributes span over multiple lines,
+-- messing up the latex output
+
 attrP :: Path -> DocH -> DocH
-attrP = attr . PathAttr
+attrP _ doc = doc -- attr . PathAttr
 
 varColor :: DocH -> DocH
 varColor = attr (Color VarColor)
@@ -206,7 +210,8 @@ renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\
                   PP.Chr ch   -> special [ch] `mappend` rest cols
                   PP.Str str  -> special str `mappend` rest cols
                   PP.PStr str -> special str `mappend` rest cols
-                  PP.Mark (PopAttr)    -> rest (tail cols)
+                  PP.Mark (PopAttr)    ->
+                        let (_:cols') = cols in rDoHighlight False cols' `mappend` rest cols'
                   PP.Mark (PushAttr _) -> error "renderCode: can not have marks inside special symbols"
           marker m rest cols = case m of
                   PP.Chr ch   -> rPutStr [ch] `mappend` rest cols
