@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, TypeFamilies, FlexibleContexts #-}
 module Language.HERMIT.Primitive.GHC where
 
 import GhcPlugins hiding (empty)
@@ -12,6 +12,7 @@ import qualified Data.Map as Map
 import Language.HERMIT.Primitive.Consider
 
 import Language.HERMIT.Kure
+import Language.HERMIT.Monad
 import Language.HERMIT.External
 import Language.HERMIT.Context
 -- import Language.HERMIT.GHC
@@ -44,9 +45,9 @@ externals er = map (.+ TODO)
                 [ "List the free identifiers in this expression [via GHC]" ] .+ Query .+ Deep
          , external "deshadow-binds" (promoteProgramR deShadowBindsR :: RewriteH Core)
                 [ "Deshadow a program " ] .+ Deep
-         , external "apply-rule" (promoteExprR . rules (er_rules er) :: String -> RewriteH Core)
+         , external "apply-rule" (promoteExprR . rules :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ] .+ Shallow
-         , external "apply-rule" (rules_help (er_rules er))
+         , external "apply-rule" (rules_help :: TranslateH Core String)
                 [ "list rules that can be used" ] .+ Query
          , external "compare-values" compareValues
                 ["compare's the rhs of two values"] .+ Query .+ Predicate
@@ -173,13 +174,33 @@ rulesToRewriteH rs = contextfreeT $ \ e -> do
         Nothing         -> fail "rule not matched"
         Just (rule,e')  -> return $ mkApps e' (drop (ruleArity rule) args)
 
-rules :: Map.Map String (RewriteH CoreExpr) -> String -> RewriteH CoreExpr
-rules mp r = case Map.lookup r mp of
+rules ::  String -> RewriteH CoreExpr
+rules r = do
+        theRules <- getHermitRules
+        case lookup r theRules of
                Nothing -> fail $ "failed to find rule: " ++ show r
                Just rr -> rr
 
-rules_help :: Map.Map String (RewriteH CoreExpr) -> String
-rules_help env = show (Map.keys env)
+getHermitRules :: (Generic a ~ Core) => TranslateH a [(String, RewriteH CoreExpr)]
+getHermitRules = translate $ \ env e -> do
+    rb <- liftCoreM $ getRuleBase
+    let other_rules = [ rule
+                        | top_bnds <- mg_binds (hermitModGuts env)
+                        , bnd <- case top_bnds of
+                                     Rec bnds -> map fst bnds
+                                     NonRec b _ -> [b]
+                        , rule <- idCoreRules bnd
+                        ]
+    return [ ( unpackFS (ruleName r), rulesToRewriteH [r] )
+           | r <- mg_rules (hermitModGuts env) ++ other_rules ++ concat (nameEnvElts rb)
+           ]
+
+rules_help :: TranslateH Core String
+rules_help = do
+    rulesEnv <- getHermitRules
+    return $ show (map fst rulesEnv)
+
+----------------------------------------------------------------------
 
 occurAnalyseExpr :: CoreExpr -> CoreExpr
 occurAnalyseExpr = OccurAnal.occurAnalyseExpr

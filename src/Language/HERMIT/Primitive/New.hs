@@ -52,7 +52,7 @@ externals er = map ((.+ Experiment) . (.+ TODO))
          , external "push" (promoteExprR . push :: TH.Name -> RewriteH Core)
                 [ "push a function <v> into argument" ]
                         -- TODO: does not work with rules with no arguments
-         , external "unfold-rule" ((\ nm -> promoteExprR (rules (er_rules er) nm >>> cleanupUnfold)) :: String -> RewriteH Core)
+         , external "unfold-rule" ((\ nm -> promoteExprR (rules nm >>> cleanupUnfold)) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ]
          , external "var" (promoteExprR . var :: TH.Name -> RewriteH Core)
                 [ "var '<v> succeeded for variable v, and fails otherwise"] .+ Predicate
