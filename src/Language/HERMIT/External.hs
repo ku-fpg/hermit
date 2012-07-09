@@ -33,7 +33,6 @@ module Language.HERMIT.External
        , NameBox(..)
        , TranslateCorePathBox(..)
        , StringBox(..)
-       , ExternalReader(..)
 
 ) where
 
@@ -45,13 +44,6 @@ import GhcPlugins
 import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.Kure
-
------------------------------------------------------------------
--- The reader environment when you are building the dictionary.
-
-data ExternalReader = ExternalReader
-        { er_rules :: Map String (RewriteH CoreExpr) -- ^ all rules that we know about
-        }
 
 -----------------------------------------------------------------
 

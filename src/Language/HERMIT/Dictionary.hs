@@ -36,19 +36,19 @@ import qualified Language.HERMIT.PrettyPrinter.GHC as GHCPP
 
 --------------------------------------------------------------------------
 
-prim_externals :: ExternalReader -> [External]
-prim_externals er
+prim_externals :: [External]
+prim_externals
                =    Kure.externals
                  ++ Consider.externals
                  ++ Inline.externals
                  ++ Local.externals
                  ++ Debug.externals
-                 ++ New.externals er
+                 ++ New.externals
 
 -- The GHC.externals here is a bit of a hack. Not sure about this
 -- | Augment a list of 'External's by adding all of HERMIT's primitive 'External's, plus any GHC RULES pragmas in the module.
-all_externals :: [External] -> ExternalReader -> [External]
-all_externals my_externals er = prim_externals er ++ my_externals ++ GHC.externals er
+all_externals :: [External] -> [External]
+all_externals my_externals = prim_externals ++ my_externals ++ GHC.externals
 
 -- | Create the dictionary.
 dictionary :: [External] -> Map String [Dynamic]

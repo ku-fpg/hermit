@@ -29,8 +29,8 @@ import MonadUtils (MonadIO) -- GHC's MonadIO
 
 import Data.List(intercalate)
 
-externals ::  ExternalReader -> [External]
-externals er = map ((.+ Experiment) . (.+ TODO))
+externals ::  [External]
+externals = map ((.+ Experiment) . (.+ TODO))
          [ external "info" (info :: TranslateH Core String)
                 [ "tell me what you know about this expression or binding" ] .+ Unimplemented
          , external "expr-type" (promoteExprT exprTypeT :: TranslateH Core String)

@@ -24,8 +24,8 @@ import Prelude hiding (exp)
 
 ------------------------------------------------------------------------
 
-externals :: ExternalReader -> [External]
-externals er = map (.+ TODO)
+externals :: [External]
+externals =
          [ external "let-subst" (promoteExprR letSubstR :: RewriteH Core)
                 [ "Let substitution [via GHC]"
                 , "let x = E1 in E2 ==> E2[E1/x], fails otherwise"

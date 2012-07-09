@@ -330,21 +330,7 @@ shellComplete mvar rPrev so_far = do
 -- | The first argument is a list of files to load.
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
 commandLine filesToLoad behavior modGuts = do
-    rb :: GHC.RuleBase <- GHC.getRuleBase
-    let other_rules = [ rule
-                        | top_bnds <- GHC.mg_binds modGuts
-                        , bnd <- case top_bnds of
-                                     GHC.Rec bnds -> map fst bnds
-                                     GHC.NonRec b _ -> [b]
-                        , rule <- GHC.idCoreRules bnd
-                        ]
-    let er = ExternalReader
-                { er_rules = rulesToEnv $
-                                   GHC.mg_rules modGuts
-                                ++ other_rules
-                                ++ concat (GHC.nameEnvElts rb)
-                }
-    let dict = dictionary $ all_externals shell_externals er
+    let dict = dictionary $ all_externals shell_externals
     let ws_complete = " ()"
 
     let startup =
