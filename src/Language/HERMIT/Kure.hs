@@ -50,6 +50,7 @@ module Language.HERMIT.Kure
        , letRecDefT, letRecDefAllR, letRecDefAnyR, letRecDefOneR
        -- * Promotion Combinators
        -- ** Rewrite Promotions
+       , promoteModGutsR
        , promoteProgramR
        , promoteBindR
        , promoteDefR
@@ -663,6 +664,10 @@ letRecDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr -> RewriteH Cor
 letRecDefOneR rs r = letRecOneR (\ n -> defR (rs n)) r
 
 ---------------------------------------------------------------------
+
+-- | Promote a rewrite on 'CoreProgram' to a rewrite on 'Core'.
+promoteModGutsR :: RewriteH ModGuts -> RewriteH Core
+promoteModGutsR r = setFailMsg "This rewrite can only succeed at the module level." retractT >>> r >>> injectT
 
 -- | Promote a rewrite on 'CoreProgram' to a rewrite on 'Core'.
 promoteProgramR :: RewriteH CoreProgram -> RewriteH Core
