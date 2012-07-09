@@ -159,11 +159,13 @@ fixIntro = translate $ \ c e -> case e of
                 fixId <- findFn (hermitModGuts c) "Data.Function.fix"
 
                 let coreFix = App (App (Var fixId) (Type (idType f)))
---                let coreFix = App (Lit (mkMachString "<<FIX>>"))
 
-                -- let rec f = e => let f = fix (\ f -> e)
-                -- TODO: check f is not a top-level value
-                return $ NonRec f (coreFix (Lam f e0))
+                f' <- cloneId id f
+
+                let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars e0))
+                    sub      = extendSubst emptySub f (Var f')
+
+                return $ NonRec f (coreFix (Lam f' (substExpr (text "fixIntro") sub e0)))
         Rec {}       -> fail "recusive group not suitable"
         NonRec {}    -> fail "Cannot take fix of a non-recusive group"
 
