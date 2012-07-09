@@ -14,3 +14,10 @@ compare-values 'beta_reduce_start 'beta_reduce_end
   case-reduce
 }
 compare-values 'case_reduce_start 'case_reduce_end
+
+add-rule capture 'capture_me
+
+{ consider 'new_rule_start
+  any-call (apply-rule capture)
+}
+compare-values 'new_rule_start 'new_rule_end

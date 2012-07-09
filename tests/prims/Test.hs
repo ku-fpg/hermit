@@ -21,3 +21,15 @@ case_reduce_start = case bar of
           bar = Bar 5 2.1
 
 case_reduce_end = show (5 :: Int)
+
+------------------------ adding and using a rule ---------------------
+
+--{-# NOINLINE capture_me #-}
+capture_me :: Int
+capture_me = 99
+
+new_rule_start = capture_me
+
+new_rule_end = 99 :: Int
+
+
