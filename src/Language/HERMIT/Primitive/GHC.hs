@@ -51,6 +51,10 @@ externals =
                 [ "list rules that can be used" ] .+ Query
          , external "compare-values" compareValues
                 ["compare's the rhs of two values"] .+ Query .+ Predicate
+         , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
+                ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
+                                        .+ Introduce
+
          ]
 
 ------------------------------------------------------------------------
@@ -179,9 +183,9 @@ rules r = do
         theRules <- getHermitRules
         case lookup r theRules of
                Nothing -> fail $ "failed to find rule: " ++ show r
-               Just rr -> rr
+               Just rr -> rulesToRewriteH rr
 
-getHermitRules :: (Generic a ~ Core) => TranslateH a [(String, RewriteH CoreExpr)]
+getHermitRules :: (Generic a ~ Core) => TranslateH a [(String, [CoreRule])]
 getHermitRules = translate $ \ env e -> do
     rb <- liftCoreM $ getRuleBase
     let other_rules = [ rule
@@ -191,14 +195,45 @@ getHermitRules = translate $ \ env e -> do
                                      NonRec b _ -> [b]
                         , rule <- idCoreRules bnd
                         ]
-    return [ ( unpackFS (ruleName r), rulesToRewriteH [r] )
+    return [ ( unpackFS (ruleName r), [r] )
            | r <- mg_rules (hermitModGuts env) ++ other_rules ++ concat (nameEnvElts rb)
            ]
 
 rules_help :: TranslateH Core String
 rules_help = do
     rulesEnv <- getHermitRules
-    return $ show (map fst rulesEnv)
+    return  $ (show (map fst rulesEnv) ++ "\n") ++
+              (showSDoc $ pprRulesForUser $ concatMap snd rulesEnv)
+
+makeRule :: String -> Id -> CoreExpr -> CoreRule
+makeRule rule_name nm expr =
+                          mkRule True   -- auto-generated
+                                 False  -- local
+                                 (mkFastString rule_name)
+                                 NeverActive    -- because we need to call for these
+                                 (varName nm)
+                                 []
+                                 []
+                                 expr
+
+
+-- TODO: check if a top-level binding
+addCoreBindAsRule :: String -> TH.Name -> RewriteH ModGuts
+addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
+        case [ (v,e)
+             | top_bnds <- mg_binds modGuts
+             , (v,e) <- case top_bnds of
+                            Rec bnds -> bnds
+                            NonRec b e -> [(b,e)]
+             ,  nm `cmpName` idName v
+             ] of
+         [] -> fail $ "can not find binding " ++ show nm
+         [(v,e)] -> return $ modGuts { mg_rules = mg_rules modGuts
+                                              ++ [makeRule rule_name v e]
+                                     }
+         _ -> fail $ "found multiple bindings for " ++ show nm
+
+  where
 
 ----------------------------------------------------------------------
 
