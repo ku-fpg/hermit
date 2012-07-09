@@ -69,7 +69,7 @@ dictionary externs = toDictionary externs'
                 -- Only fails if all of them fail the first time.
                 , let bashPredicate = Bash -- Shallow .& Eval .& (notT Loop)
                   in external "bash"
-                              (metaCmd externs bashPredicate (innermostR . orR))
+                              (metaCmd externs bashPredicate (setFailMsg "Nothing to do." . innermostR . orR))
                               (metaHelp externs bashPredicate
                                 [ "Iteratively apply the following rewrites until nothing changes:" ])
                               .+ Eval .+ Deep .+ Loop
