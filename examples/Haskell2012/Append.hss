@@ -1,5 +1,5 @@
 consider 'foo
-dump "paper/foo-before-rule.tex" "clean" "latex" 56
+dump "paper/foo-before-rule.tex" "clean" "latex" 60
 
 any-bu (unfold-rule appendNil)
-dump "paper/foo-after-rule.tex" "clean" "latex" 56
+dump "paper/foo-after-rule.tex" "clean" "latex" 60
