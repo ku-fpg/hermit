@@ -107,10 +107,6 @@ instance Extern MetaCommand where
     box i = i
     unbox i = i
 
-data Direction = L | R | U | D | T
-        deriving Show
-
-
 -- TODO: Use another word, Navigation is a more general concept
 -- Perhaps VersionNavigation
 data Navigation = Back                  -- back (up) the derivation tree
@@ -250,31 +246,6 @@ showFocus = do
                      (liftIO . cl_render (cl_session st) stdout (cl_pretty_opts (cl_session st)))
                      (queryS (cl_kernel st) (cl_cursor (cl_session st)) (pretty st))
           )
-
--------------------------------------------------------------------------------
-
--- TODO: change ScopedKernel to use this interface instead of Path?
-newtype ScopePath = ScopePath [Int]
-
-emptyScopePath :: ScopePath
-emptyScopePath = ScopePath []
-
-concatScopePaths :: [ScopePath] -> ScopePath
-concatScopePaths = ScopePath . foldr (\ (ScopePath ns) ms -> ns ++ ms) []
-
-scopePath2Path :: ScopePath -> Path
-scopePath2Path (ScopePath p) = reverse p
-
-path2ScopePath :: Path -> ScopePath
-path2ScopePath p = ScopePath (reverse p)
-
-moveLocally :: Direction -> ScopePath -> ScopePath
-moveLocally D (ScopePath ns)             = ScopePath (0:ns)
-moveLocally U (ScopePath (_:ns))         = ScopePath ns
-moveLocally L (ScopePath (n:ns)) | n > 0 = ScopePath ((n-1):ns)
-moveLocally R (ScopePath (n:ns))         = ScopePath ((n+1):ns)
-moveLocally T _                          = ScopePath []
-moveLocally _ p                          = p
 
 -------------------------------------------------------------------------------
 
@@ -469,7 +440,7 @@ performAstEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
     iokm2clm' "Cannot find path: "
-              (\ p -> do ast <- iokm2clm "Path is invalid: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ p)
+              (\ p -> do ast <- iokm2clm "Path is invalid: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (extendLocalPath p)
                          put $ newSAST expr ast st
                          showFocus)
               (queryS (cl_kernel st) (cl_cursor $ cl_session st) t)
@@ -478,14 +449,14 @@ performAstEffect (Direction dir) expr = do
     st <- get
     child_count <- iokm2clm "Could not compute number of children:" $ queryS (cl_kernel st) (cl_cursor (cl_session st)) numChildrenT
     liftIO $ print (child_count, dir)
-    ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (scopePath2Path . moveLocally dir . path2ScopePath)
+    ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (moveLocally dir)
     put $ newSAST expr ast st
     -- something changed, to print
     showFocus
 
-performAstEffect (PushFocus ls) expr = do
+performAstEffect (PushFocus p) expr = do
     st <- get
-    ast <- iokm2clm "Invalid push: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (++ ls)
+    ast <- iokm2clm "Invalid push: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (extendLocalPath p)
     put $ newSAST expr ast st
     showFocus
 
