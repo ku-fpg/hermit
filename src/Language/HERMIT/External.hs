@@ -39,7 +39,6 @@ module Language.HERMIT.External
 import Data.Map hiding (map)
 import Data.Dynamic
 import Data.List
-import GhcPlugins
 
 import qualified Language.Haskell.TH as TH
 

@@ -57,6 +57,7 @@ module Language.HERMIT.Kure
        , promoteExprR
        , promoteAltR
        -- ** Translate Promotions
+       , promoteModGutsT
        , promoteProgramT
        , promoteBindT
        , promoteDefT
@@ -665,50 +666,54 @@ letRecDefOneR rs r = letRecOneR (\ n -> defR (rs n)) r
 
 ---------------------------------------------------------------------
 
--- | Promote a rewrite on 'CoreProgram' to a rewrite on 'Core'.
+-- | Promote a rewrite on 'ModGuts' to a rewrite on 'Core'.
 promoteModGutsR :: RewriteH ModGuts -> RewriteH Core
-promoteModGutsR r = setFailMsg "This rewrite can only succeed at the module level." retractT >>> r >>> injectT
+promoteModGutsR = promoteWithFailMsgR "This rewrite can only succeed at the module level."
 
 -- | Promote a rewrite on 'CoreProgram' to a rewrite on 'Core'.
 promoteProgramR :: RewriteH CoreProgram -> RewriteH Core
-promoteProgramR r = setFailMsg "This rewrite can only succeed at program nodes (the top-level)." retractT >>> r >>> injectT
+promoteProgramR = promoteWithFailMsgR "This rewrite can only succeed at program nodes (the top-level)."
 
 -- | Promote a rewrite on 'CoreBind' to a rewrite on 'Core'.
 promoteBindR :: RewriteH CoreBind -> RewriteH Core
-promoteBindR r = setFailMsg "This rewrite can only succeed at binding group nodes." retractT >>> r >>> injectT
+promoteBindR = promoteWithFailMsgR "This rewrite can only succeed at binding group nodes."
 
 -- | Promote a rewrite on 'CoreDef' to a rewrite on 'Core'.
 promoteDefR :: RewriteH CoreDef -> RewriteH Core
-promoteDefR r = setFailMsg "This rewrite can only succeed at recursive definition nodes." retractT >>> r >>> injectT
+promoteDefR = promoteWithFailMsgR "This rewrite can only succeed at recursive definition nodes."
 
 -- | Promote a rewrite on 'CoreAlt' to a rewrite on 'Core'.
 promoteAltR :: RewriteH CoreAlt -> RewriteH Core
-promoteAltR r = setFailMsg "This rewrite can only succeed at case alternative nodes." retractT >>> r >>> injectT
+promoteAltR = promoteWithFailMsgR "This rewrite can only succeed at case alternative nodes."
 
 -- | Promote a rewrite on 'CoreExpr' to a rewrite on 'Core'.
 promoteExprR :: RewriteH CoreExpr -> RewriteH Core
-promoteExprR r = setFailMsg "This rewrite can only succeed at expression nodes." retractT >>> r >>> injectT
+promoteExprR = promoteWithFailMsgR "This rewrite can only succeed at expression nodes."
 
 ---------------------------------------------------------------------
 
+-- | Promote a translate on 'ModGuts' to a translate on 'Core'.
+promoteModGutsT :: TranslateH ModGuts b -> TranslateH Core b
+promoteModGutsT = promoteWithFailMsgT "This translate can only succeed at the module level."
+
 -- | Promote a translate on 'CoreProgram' to a translate on 'Core'.
 promoteProgramT :: TranslateH CoreProgram b -> TranslateH Core b
-promoteProgramT t = setFailMsg "This translate can only succeed at program nodes (the top-level)." retractT >>> t
+promoteProgramT = promoteWithFailMsgT "This translate can only succeed at program nodes (the top-level)."
 
 -- | Promote a translate on 'CoreBind' to a translate on 'Core'.
 promoteBindT :: TranslateH CoreBind b -> TranslateH Core b
-promoteBindT t = setFailMsg "This translate can only succeed at binding group nodes." retractT >>> t
+promoteBindT = promoteWithFailMsgT "This translate can only succeed at binding group nodes."
 
 -- | Promote a translate on 'CoreDef' to a translate on 'Core'.
 promoteDefT :: TranslateH CoreDef b -> TranslateH Core b
-promoteDefT t = setFailMsg "This translate can only succeed at recursive definition nodes." retractT >>> t
+promoteDefT = promoteWithFailMsgT "This translate can only succeed at recursive definition nodes."
 
 -- | Promote a translate on 'CoreAlt' to a translate on 'Core'.
 promoteAltT :: TranslateH CoreAlt b -> TranslateH Core b
-promoteAltT t = setFailMsg "This translate can only succeed at case alternative nodes." retractT >>> t
+promoteAltT = promoteWithFailMsgT "This translate can only succeed at case alternative nodes."
 
 -- | Promote a translate on 'CoreExpr' to a translate on 'Core'.
 promoteExprT :: TranslateH CoreExpr b -> TranslateH Core b
-promoteExprT t = setFailMsg "This translate can only succeed at expression nodes." retractT >>> t
+promoteExprT = promoteWithFailMsgT "This translate can only succeed at expression nodes."
 
 ---------------------------------------------------------------------
