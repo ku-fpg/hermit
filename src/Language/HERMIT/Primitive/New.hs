@@ -271,7 +271,8 @@ altAutoRenameBinder = do
         (_,bs,_) <- idR
         frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreAlt [Var]
         bound <- translate $ \ c _ -> return (listBindings c)
-        altRenameBinder (inventNames (filter (\ i -> not (i `elem` bs)) (frees ++ bound))) >>> (childR 1 $ letSubstNR (length bs))
+        altRenameBinder (inventNames (filter (\ i -> not (i `elem` bs)) (frees ++ bound)))
+                    >>> (childR 0 $ letSubstNR (length bs))
 
 -- remove N lets, please
 letSubstNR :: Int -> RewriteH Core
