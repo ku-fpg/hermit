@@ -16,27 +16,44 @@ consider 'rev
 
    any-call (unfold-rule "ww")
    dump "paper/2-after-ww.tex" "clean" "latex" 56
- 
-   any-call (unfold '.)
-   any-call (unfold 'wrap)
-   any-call (unfold 'unwrap)
-   any-call (unfold '.)
-   unshadow ; bash
-   any-bu (case-float-arg)
-   any-bu (apply-rule "repH ++") ; bash
-   any-bu (apply-rule "repH []") ; bash
-   any-bu (unfold-rule "rep-abs-fusion") 
 
-   -- This is just a setup to all completion
-   { consider case ; eta-expand 'ys ; any-bu case-float-app }
-   any-call (unfold 'repH)
    any-call (unfold '.)
+   dump "paper/4-after-unfold-dot.tex" "clean" "latex" 56
+
+   any-call (unfold 'wrap >+> unfold 'unwrap)
+   any-call (unfold '.)
+   dump "paper/7-wrap-unwrap-inlined.tex" "clean" "latex" 56
+
+   unshadow
+   dump "paper/7b-wrap-unwrap-unshadow.tex" "clean" "latex" 56
+
+   bash
+   dump "paper/8-wrap-unwrap-bashed.tex" "clean" "latex" 56
+
+   any-bu (case-float-arg)
+   dump "paper/8b-case-float-arg.tex" "clean" "latex" 56
+
+   any-call (unfold-rule "repH ++")
+
+   dump "paper/9-rule-rep-append.tex" "clean" "latex" 56
+
+   any-call (unfold-rule "rep-abs-fusion") 
+   dump "paper/11-rep-app-fusion.tex" "clean" "latex" 56
+
+   any-call (unfold 'repH)
+   any-call (unfold '.) ; bash
+   focus (consider case) (eta-expand 'ys)
+   any-bu case-float-app
    any-call (unfold-rule "(:) ++")
    any-call (unfold-rule "[] ++")
-   any-call (unfold 'fix) ; bash
-   unshadow
+   any-call (unfold 'fix) ; bash ; unshadow
 
-abort
+   dump "paper/12-cleanup.tex" "clean" "latex" 56
+
+   -- This is just a setup to all completion
+--   unshadow
+
+resume
 
 
    
