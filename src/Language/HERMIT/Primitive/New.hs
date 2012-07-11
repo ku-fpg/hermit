@@ -83,6 +83,7 @@ info = translate $ \ c core ->
              con      = "Constructor: " ++ coreConstructor core
              expExtra = case core of
                           ExprCore e -> ["Type: " ++ showExprType e] ++
+                                        ["Free Variables: " ++ showVars (coreExprFreeVars e)] ++
                                            case e of
                                              Var v -> ["Identifier Info: " ++ showIdInfo v]
                                              _     -> []

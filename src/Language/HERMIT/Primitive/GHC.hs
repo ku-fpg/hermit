@@ -112,9 +112,17 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 
 ------------------------------------------------------------------------
 
--- output a list of all free variables in the Expr.
+-- | Output a list of all free variables in an expression.
 freeIdsQuery :: TranslateH CoreExpr String
-freeIdsQuery = freeIdsT >>^ (("Free identifiers are: " ++) . show . map (showSDoc.ppr))
+freeIdsQuery = freeIdsT >>^ (("Free identifiers are: " ++) . showVars)
+
+-- | Show a human-readable version of a list of 'Var's.
+showVar :: Var -> String
+showVar = show . showSDoc . ppr
+
+-- | Show a human-readable version of a 'Var'.
+showVars :: [Var] -> String
+showVars = show . map (showSDoc . ppr)
 
 -- Doesn't work, because it doesn't account for any bindings we add as we navigate down.
 -- freeIdsQuery :: TranslateH Core String
