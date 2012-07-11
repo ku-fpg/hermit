@@ -108,6 +108,7 @@ type CoreTickish = Tickish Id
 --   Here we use an isomorphic data type.
 data CoreDef = Def Id CoreExpr
 
+-- | Convert a list of recursive definitions into a recursive binding group.
 defToRecBind :: [CoreDef] -> CoreBind
 defToRecBind = Rec . map (\ (Def v e) -> (v,e))
 
