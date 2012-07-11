@@ -5,7 +5,6 @@ import GhcPlugins hiding (empty)
 import qualified Language.HERMIT.GHC as GHC
 import qualified OccurAnal
 import Control.Arrow
-import Control.Applicative
 import qualified Data.Map as Map
 
 -- import Language.HERMIT.Primitive.Debug
@@ -258,44 +257,36 @@ joinT f e0 = translate $ \ c e1 -> do
 -}
 
 exprEqual :: CoreExpr -> CoreExpr -> Maybe Bool
-exprEqual (Var v1)       (Var v2)        = Just (v1 == v2)
-exprEqual (Lit i1)       (Lit i2)        = Just (i1 == i2)
-exprEqual (Type t1)      (Type t2)       = Just (t1 `eqType` t2)
-exprEqual (App f1 e1)    (App f2 e2)     = liftA2 (&&) (f1 `exprEqual` f2) (e1 `exprEqual` e2)
-exprEqual (Lam _ _)      (Lam _ _)       = Nothing
-exprEqual (Case _ _ _ _) (Case _ _ _ _)  = Nothing
-exprEqual (Let _ _)      (Let _ _)       = Nothing
-exprEqual (Cast _ _)     (Cast _ _)      = Nothing
-exprEqual (Tick _ _)     (Tick _ _)      = Nothing
-exprEqual (Coercion _)   (Coercion _)    = Nothing
-exprEqual _              _               = Just False
+exprEqual e1 e2 = Just $ eqExpr (mkInScopeSet $ exprsFreeVars [e1, e2]) e1 e2
+
+
+-- The ideas for this function are directly extracted from
+-- the GHC function, CoreUtils.eqExprX
+bindEqual :: CoreBind -> CoreBind -> Maybe Bool
+bindEqual  (Rec ps1) (Rec ps2) = Just $ all2 (eqExprX id_unf env') rs1 rs2
+      where
+        id_unf _ = noUnfolding      -- Don't expand
+        (bs1,rs1) = unzip ps1
+        (bs2,rs2) = unzip ps2
+        env = mkInScopeSet $ exprsFreeVars (rs1 ++ rs2) -- emptyInScopeSet
+        env' = rnBndrs2 (mkRnEnv2 env) bs1 bs2
+
+bindEqual  (NonRec _ e1) (NonRec _ e2) = exprEqual e1 e2
+
+bindEqual _ _ = Nothing
+
+--------------------------------------------------------
 
 coreEqual :: Core -> Core -> Maybe Bool
 coreEqual (ExprCore e1) (ExprCore e2) = e1 `exprEqual` e2
+coreEqual (BindCore b1) (BindCore b2) = b1 `bindEqual` b2
+coreEqual (DefCore dc1) (DefCore dc2) = (defToRecBind [dc1]) `bindEqual` (defToRecBind [dc2])
 coreEqual _             _             = Nothing
-
--- exprEqual :: CoreExpr -> TranslateH CoreExpr ()
--- exprEqual (Var v1) = do { Var v2 <- idR ; if v1 == v2 then return () else fail "var mismatch" }
--- exprEqual (Lit i1) = do { Lit i2 <- idR ; if i1 == i2 then return () else fail "lit mismatch" }
--- exprEqual (Type t1) = do { Type t2 <- idR ; if t1 `eqType` t2 then return () else fail "type mismatch" }
--- exprEqual (App e1 e2) = appT (exprEqual e1) (exprEqual e2) $ \ () () -> ()
--- exprEqual _        = fail "exprEqual fail"
-
--- coreEqualT :: Core -> TranslateH Core ()
--- coreEqualT (ModGutsCore  _) = fail "cannot compare ModGuts"
--- coreEqualT (ProgramCore  _) = fail "cannot compare Program"
--- coreEqualT (BindCore  _)    = fail "cannot compare Bind"
--- coreEqualT (DefCore  _)     = fail "cannot compare Def"
--- coreEqualT (ExprCore  e)    = promoteT $ exprEqual e
--- coreEqualT (AltCore  _)     = fail "cannot compare Alt"
-
-
--- TODO: make this handle cmp of recusive functions, by using subst.
 
 compareValues :: TH.Name -> TH.Name -> TranslateH Core ()
 compareValues n1 n2 = do
-        p1 <- rhsOf n1
-        p2 <- rhsOf n2
+        p1 <- onePathToT (namedBinding n1)
+        p2 <- onePathToT (namedBinding n2)
         e1 :: Core <- pathT p1 idR
         e2 :: Core <- pathT p2 idR
         case e1 `coreEqual` e2 of
@@ -304,6 +295,7 @@ compareValues n1 n2 = do
           Just True  -> return ()
 
 --------------------------------------------------------
+
 
 -- try figure out the arity of an Id
 arityOf:: Context -> Id -> Int

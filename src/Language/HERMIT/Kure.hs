@@ -19,6 +19,7 @@ module Language.HERMIT.Kure
        -- * Generic Data Type
        -- $typenote
        , Core(..), CoreDef(..)
+       , defToRecBind
        -- * Congruence combinators
        -- ** Modguts
        , modGutsT, modGutsR
