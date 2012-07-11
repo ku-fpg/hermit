@@ -25,7 +25,7 @@ Library
                  data-default >= 0.4,
                  ghc >= 7.4,
                  haskeline >= 0.6.4.7 && < 0.7,
-                 kure >= 2.1.23,
+                 kure >= 2.1.25,
                  marked-pretty >= 0.1,
                  mtl,
                  stm,

@@ -26,7 +26,7 @@ externals = map (.+ Navigation)
 
 -- focus on a binding group
 considerName :: TH.Name -> TranslateH Core Path
-considerName = onePathToT . bindGroup
+considerName = oneNonEmptyPathToT . bindGroup
 
 -- find a binding group that contains a name.
 -- this is slightly different than namedBinding below,
@@ -50,7 +50,7 @@ namedBinding _  _                        =  False
 
 -- find all the possible targets of consider
 considerTargets :: TranslateH Core [String]
-considerTargets = collectT (promoteT $ nonRec <+ rec) >>> arr concat
+considerTargets = allT (collectT (promoteT $ nonRec <+ rec)) >>> arr concat
     where nonRec = nonRecT (pure ()) (const . (:[]) . unqualified)
           rec    = recT (const (arr (\(Def v _) -> unqualified v))) id
 
@@ -85,7 +85,7 @@ considerables =   [ ("bind",Binding)
 considerConstruct :: String -> TranslateH Core Path
 considerConstruct str = case string2considerable str of
                           Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". " ++ recognizedConsiderables ++ ".  Or did you mean \"consider '" ++ str ++ "\"?"
-                          Just c  -> onePathToT (underConsideration c)
+                          Just c  -> oneNonEmptyPathToT (underConsideration c)
 
 string2considerable :: String -> Maybe Considerable
 string2considerable = flip lookup considerables
