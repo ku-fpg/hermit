@@ -14,39 +14,41 @@ consider 'rev
    fix-intro
    dump "paper/1-fix-intro.tex" "clean" "latex" 56
 
-   any-call (unfold-rule "ww")
+   prune-td (unfold-rule "ww")
    dump "paper/2-after-ww.tex" "clean" "latex" 56
 
-   any-call (unfold '.)
+   prune-td (unfold '.)
+   prune-td (unfold '.)
    dump "paper/4-after-unfold-dot.tex" "clean" "latex" 56
 
-   any-call (unfold 'wrap >+> unfold 'unwrap)
-   any-call (unfold '.)
+   prune-td (unfold 'wrap) ;    prune-td (unfold 'wrap) 
+   prune-td (unfold 'unwrap)
+   prune-td (unfold '.)
    dump "paper/7-wrap-unwrap-inlined.tex" "clean" "latex" 56
+
+   bash
+   dump "paper/7a-wrap-unwrap-bashed.tex" "clean" "latex" 56
 
    unshadow
    dump "paper/7b-wrap-unwrap-unshadow.tex" "clean" "latex" 56
 
-   bash
-   dump "paper/8-wrap-unwrap-bashed.tex" "clean" "latex" 56
-
    any-bu (case-float-arg)
    dump "paper/8b-case-float-arg.tex" "clean" "latex" 56
 
-   any-call (unfold-rule "repH ++")
+   prune-td (unfold-rule "repH ++")
 
    dump "paper/9-rule-rep-append.tex" "clean" "latex" 56
 
-   any-call (unfold-rule "rep-abs-fusion") 
+   prune-td (unfold-rule "rep-abs-fusion") 
    dump "paper/11-rep-app-fusion.tex" "clean" "latex" 56
 
-   any-call (unfold 'repH)
-   any-call (unfold '.) ; bash
+   prune-td (unfold 'repH)
+   prune-td (unfold '.) ; bash
    focus (consider case) (eta-expand 'ys)
    any-bu case-float-app
-   any-call (unfold-rule "(:) ++")
-   any-call (unfold-rule "[] ++")
-   any-call (unfold 'fix) ; bash ; unshadow
+   prune-td (unfold-rule "(:) ++")
+   prune-td (unfold-rule "[] ++")
+   prune-td (unfold 'fix) ; bash ; unshadow
 
    dump "paper/12-cleanup.tex" "clean" "latex" 56
 
