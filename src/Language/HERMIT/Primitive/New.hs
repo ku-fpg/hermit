@@ -59,7 +59,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
          , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
                 [ "case-split 'x"
                 , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ]
-         , external "case-split-inline" (caseSplitPlus :: TH.Name -> RewriteH Core)
+         , external "case-split-inline" (caseSplitInline :: TH.Name -> RewriteH Core)
                 [ "Like case-split, but additionally inlines the matched constructor "
                 , "applications for all occurances of the named variable." ]
          ] ++
@@ -195,9 +195,9 @@ caseSplit nm = do
 -- | Like caseSplit, but additionally inlines the constructor applications
 -- for each occurance of the named variable.
 --
--- > caseSplitPlus nm = caseSplit nm >>> anybuR (inlineName nm)
-caseSplitPlus :: TH.Name -> RewriteH Core
-caseSplitPlus nm = promoteR (caseSplit nm) >>> anybuR (promoteR (inlineName nm))
+-- > caseSplitInline nm = caseSplit nm >>> anybuR (inlineName nm)
+caseSplitInline :: TH.Name -> RewriteH Core
+caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteR (inlineName nm))
 
 {-
 exprBinder :: TranslateH CoreExpr [(Id,ContextPath)]
