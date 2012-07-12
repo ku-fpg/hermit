@@ -104,9 +104,9 @@ type CoreTickish = Tickish Id
 --     (a) we do not need that functionality, and
 --     (b) the types are complicated and we're not sure that we understand them.
 
--- | In GHC Core, recursive definitions are encoded as (Id, CoreExpr) pairs.
+--  In GHC Core, recursive definitions are encoded as (Id, CoreExpr) pairs.
 --   Here we use an isomorphic data type.
-data CoreDef = Def Id CoreExpr
+-- data CoreDef = Def Id CoreExpr
 
 -- | Convert a list of recursive definitions into a recursive binding group.
 defToRecBind :: [CoreDef] -> CoreBind

@@ -15,7 +15,7 @@ module Language.HERMIT.Kernel
 
 import Prelude hiding (lookup)
 
-import GhcPlugins hiding (singleton)
+import GhcPlugins hiding (singleton, empty)
 
 import Language.HERMIT.Context
 import Language.HERMIT.Monad
@@ -90,22 +90,24 @@ hermitKernel callback modGuts = do
         -- We always start with syntax blob 0
         syn <- liftIO $ takeMVar syntax_names
 
-        let loop :: Map AST ModGuts -> CoreM ModGuts
-            loop st = do
+        let loop :: LoopState -> CoreM ModGuts
+            loop (asts, defs) = do
                 m <- liftIO $ takeMVar msgMV
                 case m of
-                  Req fn rep -> runHM (\ (a,st2) -> liftIO (putMVar rep $ return a) >> loop st2)
-                                      (\ msg     -> liftIO (putMVar rep $ fail msg) >> loop st)
-                                      (fn st)
+                  Req fn rep -> runHM defs
+                                      (\ defs' (a,asts') -> liftIO (putMVar rep $ return a) >> loop (asts', defs'))
+                                      (\ msg             -> liftIO (putMVar rep $ fail msg) >> loop (asts , defs ))
+                                      (fn asts)
 
-                  Done fn -> fn st
+                  Done fn -> fn asts
 
         _pid <- liftIO $ forkIO $ callback kernel syn
 
-        loop (singleton syn modGuts)
+        loop (singleton syn modGuts, empty)
 
         -- (Kill the pid'd thread? do we need to?)
 
+type LoopState = (Map AST ModGuts, DefStash)
 
 findWithErrMsg :: AST -> Map AST v -> (String -> b) -> (v -> b) -> b
 findWithErrMsg ast m f = find ast m (f $ "Cannot find syntax tree: " ++ show ast)
