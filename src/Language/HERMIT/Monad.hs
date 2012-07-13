@@ -9,7 +9,6 @@ module Language.HERMIT.Monad
           , newVarH
             -- * Saving Definitions
           , Label
-          , CoreDef(..)
           , DefStash
           , saveDef
           , lookupDef
@@ -22,11 +21,12 @@ import Data.Map
 import GhcPlugins hiding (empty)
 import MonadUtils       -- from GHC
 
-import Control.Applicative
 import Control.Monad
 
 import Language.KURE.Combinators
 import Language.KURE.Utilities
+
+import Language.HERMIT.CoreExtra
 
 import qualified Language.Haskell.TH as TH
 
@@ -34,9 +34,6 @@ import qualified Language.Haskell.TH as TH
 
 -- | A label for individual defintions.
 type Label = String
-
--- | A (potentially recursive) definition is an identifier and an expression.
-data CoreDef = Def Id CoreExpr
 
 -- | A store of saved definitions.
 type DefStash = Map Label CoreDef
@@ -51,7 +48,7 @@ getStash :: HermitM DefStash
 getStash = HermitM (\ s -> return $ return (s, s))
 
 putStash :: DefStash -> HermitM ()
-putStash s = HermitM (\ s -> return $ return (s, ()))
+putStash s = HermitM (\ _ -> return $ return (s, ()))
 
 -- | Save a definition for future use.
 saveDef :: Label -> CoreDef -> HermitM ()
@@ -62,13 +59,6 @@ saveDef l d = do s <- getStash
 lookupDef :: Label -> HermitM CoreDef
 lookupDef l = do s <- getStash
                  maybe (fail "Definition not found.") return (lookup l s)
-
--- -- | The HERMIT monad is kept abstract.
--- newtype HermitM a = HermitM { -- | Expose the internal 'CoreM' monad.
---                               runHermitM :: CoreM (KureMonad a)
---                               -- | Get the
---                             , getDefs       :: [(Label,CoreDef)]
---                             }
 
 -- | Eliminator for 'HermitM'.
 runHM :: DefStash -> (DefStash -> a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b
@@ -100,11 +90,6 @@ instance Monad HermitM where
 instance MonadCatch HermitM where
 -- catchM :: HermitM a -> (String -> HermitM a) -> HermitM a
    (HermitM gcm) `catchM` f = HermitM $ \ s -> gcm s >>= runKureMonad (return.return) (\ msg -> runHermitM (f msg) s)
-
-     -- HermitM $ \ s -> do (s', km) <- gcm s
-     --                                              runKureMonad (\ a -> return (s', return a))
-     --                                                           (runHermitM s . f) -- we discard any saved definitions in the case of failure (can be changed if neccassary)
-     --                                                           km
 
 ----------------------------------------------------------------------------
 

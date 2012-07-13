@@ -39,6 +39,7 @@ Library
 
        Language.HERMIT
        Language.HERMIT.Context
+       Language.HERMIT.CoreExtra
        Language.HERMIT.Dictionary
        Language.HERMIT.Expr
        Language.HERMIT.External

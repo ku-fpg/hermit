@@ -14,12 +14,10 @@ module Language.HERMIT.Kure
        , TranslateH
        , RewriteH
        , LensH
-       , CoreTickish
        , idR
        -- * Generic Data Type
        -- $typenote
-       , Core(..), CoreDef(..)
-       , defToRecBind
+       , Core(..)
        -- * Congruence combinators
        -- ** Modguts
        , modGutsT, modGutsR
@@ -73,6 +71,7 @@ import Language.KURE
 import Language.KURE.Injection
 import Language.KURE.Utilities
 
+import Language.HERMIT.CoreExtra
 import Language.HERMIT.Context
 import Language.HERMIT.Monad
 
@@ -92,9 +91,6 @@ type LensH a b = Lens Context HermitM a b
 idR :: RewriteH a
 idR = Control.Category.id
 
--- | Unlike everything else, there is no synonym for 'Tickish' 'Id' provided by GHC, so we provide one.
-type CoreTickish = Tickish Id
-
 ---------------------------------------------------------------------
 
 -- $typenote
@@ -103,14 +99,6 @@ type CoreTickish = Tickish Id
 --   We have not done so because
 --     (a) we do not need that functionality, and
 --     (b) the types are complicated and we're not sure that we understand them.
-
---  In GHC Core, recursive definitions are encoded as (Id, CoreExpr) pairs.
---   Here we use an isomorphic data type.
--- data CoreDef = Def Id CoreExpr
-
--- | Convert a list of recursive definitions into a recursive binding group.
-defToRecBind :: [CoreDef] -> CoreBind
-defToRecBind = Rec . map (\ (Def v e) -> (v,e))
 
 -- | Core is the sum type of all nodes in the AST that we wish to be able to traverse.
 --   All 'Node' instances in HERMIT define their 'Generic' type to be 'Core'.
