@@ -48,7 +48,7 @@ case-split-inline 'n
 
   { 0 ; 1 ; let-intro 'x }
   innermost (let-float-arg <+ let-float-app)
-  -- any-bu (fold 'x)
+  { 1 ; 1 ; any-bu (fold 'x) }
   quit
 
 -- work 0     = (0, 1)
