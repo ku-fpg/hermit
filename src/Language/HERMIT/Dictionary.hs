@@ -26,6 +26,8 @@ import qualified Language.HERMIT.Primitive.Local as Local
 import qualified Language.HERMIT.Primitive.New as New
 import qualified Language.HERMIT.Primitive.Debug as Debug
 import qualified Language.HERMIT.Primitive.GHC as GHC
+import qualified Language.HERMIT.Primitive.Fold as Fold
+import qualified Language.HERMIT.Primitive.Unfold as Unfold
 
 
 import Language.HERMIT.PrettyPrinter
@@ -44,6 +46,8 @@ prim_externals
                  ++ Local.externals
                  ++ Debug.externals
                  ++ New.externals
+                 ++ Fold.externals
+                 ++ Unfold.externals
 
 -- The GHC.externals here is a bit of a hack. Not sure about this
 -- | Augment a list of 'External's by adding all of HERMIT's primitive 'External's, plus any GHC RULES pragmas in the module.

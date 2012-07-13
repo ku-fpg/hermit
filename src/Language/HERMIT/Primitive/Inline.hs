@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 module Language.HERMIT.Primitive.Inline where
 
 import GhcPlugins
@@ -8,6 +7,7 @@ import Control.Arrow
 import Language.HERMIT.Primitive.Navigation
 -- import Language.HERMIT.Primitive.Debug (traceR)
 import Language.HERMIT.Primitive.GHC
+import Language.HERMIT.Primitive.Unfold
 import Language.HERMIT.Kure
 import Language.HERMIT.Context
 import Language.HERMIT.External
@@ -36,44 +36,11 @@ inlineName nm = var nm >>> inline False
 inline :: Bool -> RewriteH CoreExpr
 inline scrutinee = rewrite $ \ c e -> case e of
     Var n0 -> -- A candiate for inlining
-              case lookupHermitBinding n0 c of
-                Nothing       -> do
-                  let info = idInfo n0
-                  case unfoldingInfo info of
-                    -- This was simple, once we knew where to look
-                    CoreUnfolding { uf_tmpl = uft } -> return uft
-                    _ -> fail $ "inline failed, cannot find " ++ show n0 ++ "  in Env or IdInfo"
-                Just (LAM {}) -> fail $ "inline failed, found lambda-bound value or type"
-                Just (BIND depth _ e') ->
-                    condM (apply (extractT (ensureDepth depth)) c e')
-                          (return e')
-                          (fail "values in inlined expression have been rebound")
-                Just (CASE depth s coreAlt) ->
-                    if scrutinee then return s
-                    else let tys = tyConAppArgs (idType n0)
-                             (e',d') = either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
-                         in condM (apply (extractT (ensureDepth d')) c e')
-                                  (return e')
-                                  (fail "values in inlined expression have been rebound")
-
+              either fail (\(e',d) -> condM (apply (extractT (ensureDepth d)) c e')
+                                            (return e')
+                                            (fail "values in inlined expression have been rebound"))
+                     (getUnfolding scrutinee n0 c)
     _      -> fail "inline failed (No variable)"
-
--- | Convert lhs of case alternative to a constructor application expression,
---   or a default expression in the case of the DEFAULT alternative.
---   Accepts a list of types to apply to the constructor before the value args.
---
--- > data T a b = C a b Int
---
--- Pseudocode:
---
--- > alt2Exp (...) [a,b] (C, [x,y,z]) ==> C a b (x::a) (y::b) (z::Int)
---
--- The 'Either' denotes whether we picked the default (scrutinee) or built an expression.
--- This matters for the depth check.
-alt2Exp :: CoreExpr -> [Type] -> (AltCon,[Id]) -> Either CoreExpr CoreExpr
-alt2Exp d _   (DEFAULT   , _ ) = Left d
-alt2Exp _ _   (LitAlt l  , _ ) = Right $ Lit l
-alt2Exp _ tys (DataAlt dc, as) = Right $ mkCoreConApps dc (map Type tys ++ map Var as)
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
 -- Assumes minimum depth is 0.
