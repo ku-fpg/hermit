@@ -41,8 +41,10 @@ data Kernel = Kernel
 newtype AST = AST Int -- ^ Currently 'AST's are identified by an 'Int' label.
               deriving (Eq, Ord, Show)
 
-data Msg s r = forall a . Req (s -> HermitM (a,s)) (MVar (KureMonad a))
+data Msg s r = forall a . Req (s -> CoreM (KureMonad (a,s))) (MVar (KureMonad a))
              | Done (s -> CoreM r)
+
+type KernelState = Map AST (DefStash, ModGuts)
 
 -- | Start a HERMIT client by providing an IO function that takes the initial 'Kernel' and inital 'AST' handle.
 --   The 'Modguts' to 'CoreM' Modguts' function required by GHC Plugins is returned.
@@ -50,7 +52,7 @@ data Msg s r = forall a . Req (s -> HermitM (a,s)) (MVar (KureMonad a))
 hermitKernel :: (Kernel -> AST -> IO ()) -> ModGuts -> CoreM ModGuts
 hermitKernel callback modGuts = do
 
-        msgMV :: MVar (Msg (Map AST ModGuts) ModGuts) <- liftIO newEmptyMVar
+        msgMV :: MVar (Msg KernelState ModGuts) <- liftIO newEmptyMVar
 
         syntax_names :: MVar AST <- liftIO newEmptyMVar
 
@@ -58,10 +60,10 @@ hermitKernel callback modGuts = do
                                                loop (succ n)
                                 in loop 0
 
-        let sendDone :: (Map AST ModGuts -> CoreM ModGuts) -> IO ()
+        let sendDone :: (KernelState -> CoreM ModGuts) -> IO ()
             sendDone = putMVar msgMV . Done
 
-        let sendReq :: (Map AST ModGuts -> HermitM (a, Map AST ModGuts)) -> IO (KureMonad a)
+        let sendReq :: (KernelState -> CoreM (KureMonad (a, KernelState))) -> IO (KureMonad a)
             sendReq fn = do rep  <- newEmptyMVar
                             putMVar msgMV (Req fn rep)
                             takeMVar rep
@@ -69,45 +71,42 @@ hermitKernel callback modGuts = do
 
         let kernel :: Kernel
             kernel = Kernel
-                { resumeK = \ name -> sendDone $ \ env -> findWithErrMsg name env (\ msg -> throwGhcException $ ProgramError $ msg ++ ", exiting HERMIT and aborting GHC compilation.") return
+                { resumeK = \ name -> sendDone $ \ st -> findWithErrMsg name st (\ msg -> throwGhcException $ ProgramError $ msg ++ ", exiting HERMIT and aborting GHC compilation.") (return.snd)
 
                 , abortK  = sendDone $ \ _ -> throwGhcException (ProgramError "Exiting HERMIT and aborting GHC compilation.")
 
-                , applyK = \ name r -> sendReq $ \ env -> findWithErrMsg name env fail $ \ core -> do core' <- apply (extractR r) (initContext core) core
-                                                                                                      syn' <- liftIO $ takeMVar syntax_names
-                                                                                                      return (syn', insert syn' core' env)
+                , applyK = \ name r -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM defs
+                                                                                                               (\ defs' core' -> do syn' <- liftIO $ takeMVar syntax_names
+                                                                                                                                    return2 (syn', insert syn' (defs',core') st))
+                                                                                                               (return . fail)
+                                                                                                               (apply (extractR r) (initContext core) core)
 
-                , queryK = \ name q -> sendReq $ \ env -> findWithErrMsg name env fail $ \ core -> do reply <- apply (extractT q) (initContext core) core
-                                                                                                      return (reply,env)
+                , queryK = \ name q -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM defs
+                                                                                                               (\ _ r -> return2 (r, st))
+                                                                                                               (return . fail)
+                                                                                                               (apply (extractT q) (initContext core) core)
 
-                , deleteK = \ name -> sendReq (\ env -> find name env (return ((), env))
-                                                                      (\ _ -> return ((), delete name env)))
-                                         >>= runKureMonad return fail
+                , deleteK = \ name -> sendReq (\ st -> return2 ((), delete name st)) >>= runKureMonad return fail
 
-                , listK = sendReq (\ env -> return (keys env, env)) >>= runKureMonad return fail
+                , listK = sendReq (\ st -> return2 (keys st, st)) >>= runKureMonad return fail
                 }
 
         -- We always start with syntax blob 0
         syn <- liftIO $ takeMVar syntax_names
 
-        let loop :: LoopState -> CoreM ModGuts
-            loop (asts, defs) = do
+        let loop :: KernelState -> CoreM ModGuts
+            loop st = do
                 m <- liftIO $ takeMVar msgMV
                 case m of
-                  Req fn rep -> runHM defs
-                                      (\ defs' (a,asts') -> liftIO (putMVar rep $ return a) >> loop (asts', defs'))
-                                      (\ msg             -> liftIO (putMVar rep $ fail msg) >> loop (asts , defs ))
-                                      (fn asts)
-
-                  Done fn -> fn asts
+                  Req fn rep -> fn st >>= runKureMonad (\ (a,st') -> liftIO (putMVar rep $ return a) >> loop st')
+                                                       (\ msg -> liftIO (putMVar rep $ fail msg) >> loop st)
+                  Done fn -> fn st
 
         _pid <- liftIO $ forkIO $ callback kernel syn
 
-        loop (singleton syn modGuts, empty)
+        loop (singleton syn (empty, modGuts))
 
         -- (Kill the pid'd thread? do we need to?)
-
-type LoopState = (Map AST ModGuts, DefStash)
 
 findWithErrMsg :: AST -> Map AST v -> (String -> b) -> (v -> b) -> b
 findWithErrMsg ast m f = find ast m (f $ "Cannot find syntax tree: " ++ show ast)

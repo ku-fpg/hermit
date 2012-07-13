@@ -39,7 +39,7 @@ bindGroup _  _                        =  False
 
 -- find a specific binding's rhs.
 rhsOf :: TH.Name -> TranslateH Core Path
-rhsOf nm = onePathToT (namedBinding nm) >>> arr (++ [0])
+rhsOf nm = onePathToT (namedBinding nm) >>^ (++ [0])
 
 -- find a named binding.
 namedBinding :: TH.Name -> Core -> Bool

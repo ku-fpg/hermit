@@ -6,12 +6,14 @@ module Language.HERMIT.Monad
             HermitM
           , runHM
           , liftCoreM
+          , return2
           , newVarH
             -- * Saving Definitions
           , Label
           , DefStash
           , saveDef
           , lookupDef
+          , getStash
 ) where
 
 import Prelude hiding (lookup)
@@ -43,6 +45,9 @@ newtype HermitM a = HermitM (DefStash -> CoreM (KureMonad (DefStash, a)))
 
 runHermitM :: HermitM a -> DefStash -> CoreM (KureMonad (DefStash, a))
 runHermitM (HermitM f) = f
+
+return2 :: (Monad m, Monad n) => a -> m (n a)
+return2 = return . return
 
 getStash :: HermitM DefStash
 getStash = HermitM (\ s -> return $ return (s, s))
