@@ -29,10 +29,10 @@ import Language.HERMIT.Interp
 import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.Kure
 import Language.HERMIT.PrettyPrinter
-import Language.HERMIT.Primitive.Consider
+import Language.HERMIT.Primitive.Navigation
 import Language.HERMIT.Primitive.Inline
 
-import Language.HERMIT.Primitive.GHC
+-- import Language.HERMIT.Primitive.GHC
 
 
 import Prelude hiding (catch)

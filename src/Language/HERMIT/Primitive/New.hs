@@ -20,7 +20,7 @@ import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Local.Case
 import Language.HERMIT.Primitive.Inline
 -- import Language.HERMIT.Primitive.Debug
-import Language.HERMIT.Primitive.Consider -- for cmpName
+import Language.HERMIT.Primitive.Navigation -- for cmpName
 
 import qualified Language.Haskell.TH as TH
 

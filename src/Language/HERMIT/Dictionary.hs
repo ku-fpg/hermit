@@ -20,7 +20,7 @@ import Language.HERMIT.External
 
 --import qualified Language.HERMIT.Primitive.Command as Command
 import qualified Language.HERMIT.Primitive.Kure as Kure
-import qualified Language.HERMIT.Primitive.Consider as Consider
+import qualified Language.HERMIT.Primitive.Navigation as Navigation
 import qualified Language.HERMIT.Primitive.Inline as Inline
 import qualified Language.HERMIT.Primitive.Local as Local
 import qualified Language.HERMIT.Primitive.New as New
@@ -39,7 +39,7 @@ import qualified Language.HERMIT.PrettyPrinter.GHC as GHCPP
 prim_externals :: [External]
 prim_externals
                =    Kure.externals
-                 ++ Consider.externals
+                 ++ Navigation.externals
                  ++ Inline.externals
                  ++ Local.externals
                  ++ Debug.externals

@@ -1,5 +1,4 @@
--- TODO: rename as Language.HERMIT.Primitive.Navigation
-module Language.HERMIT.Primitive.Consider where
+module Language.HERMIT.Primitive.Navigation where
 
 import GhcPlugins as GHC
 

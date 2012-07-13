@@ -5,7 +5,7 @@ import GhcPlugins
 
 import Control.Arrow
 
-import Language.HERMIT.Primitive.Consider
+import Language.HERMIT.Primitive.Navigation
 -- import Language.HERMIT.Primitive.Debug (traceR)
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Kure

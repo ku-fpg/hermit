@@ -8,7 +8,7 @@ import Control.Arrow
 import qualified Data.Map as Map
 
 -- import Language.HERMIT.Primitive.Debug
-import Language.HERMIT.Primitive.Consider
+import Language.HERMIT.Primitive.Navigation
 
 import Language.HERMIT.CoreExtra
 import Language.HERMIT.Kure
