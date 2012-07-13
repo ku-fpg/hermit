@@ -5,6 +5,11 @@ load "WWSplitTactic.hss"
 -- now ready to start neil's derivation
 rhs-of 'work
 
+-- save this for later
+up
+stash-defn origwork
+down
+
 -- work = unwrap (f (wrap work))
 --   extensionality (eta-expand)
 eta-expand 'n
@@ -26,16 +31,13 @@ case-split-inline 'n
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
 --   unfold 'work
--- problem: we need the original definition of work,
---
---   work = unwrap (f (wrap work))
---
--- not the current one
--- { 2 ; 0 ; 1 ; any-bu (unfold 'work) }
+{ 2 ; 0 ; 1 ; any-bu (stash-apply origwork) }
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
 --   wrap . unwrap = id (precondition)
+{ 2 ; 0 ; 1 ; any-bu (unfold-rule precondition) }
+
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
 --   let-intro x2, let-float-tuple

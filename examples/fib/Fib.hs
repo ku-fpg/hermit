@@ -9,6 +9,7 @@ main = defaultMain
 
 {-# RULES "ww" forall work . fix work = wrap (fix (unwrap . work . wrap)) #-}
 {-# RULES "inline-fix" forall f . fix f = let work = f work in work #-}
+{-# RULES "precondition" forall w . wrap (unwrap w) = w #-}
 
 -- beginning of neil's derivation
 fib :: Nat -> Nat
