@@ -144,17 +144,46 @@ work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (u
 
 Our first run-in with equational reasoning issues. The problem is that we
 want to unfold the definition of work we started with, not the one we currently
-have. I think, in the short term, I'll add the following:
+have. We are experimenting with two approaches to this:
 
-  stash-defn 'work origWork -- stashes the RHS of work somewhere, with a name
-  stash-unfold origWork     -- like unfold, but looks up a stashed name
+    1. Create a GHC rule on the fly, stash it in the ModGuts, and then
+       use unfold-rule. There are (currently) a few problems with this:
+
+        * Only top-level bindings consistently work as rules. This can probably
+          be solved by tracking down the occasional kernel panic. See my email
+          on July 12th about the issue.
+
+        * The add-rule rewrite works on ModGuts (by necessity), so you must be
+          at the top level to use it. This is problematic when inside scoping
+          braces, which prevent you from going up by design.
+
+    2. Stash the definition in the HermitMonad (currently) or alongside the
+       AST in the kernel. This is the method I'm currently using in the
+       derivation. It appears to work quite well, and gives us control
+       over how its unfolded. We can reject unfoldings that would result
+       in variables that are not defined (because a binding is no longer
+       present), for instance. TODO: prevent unintended capture!
+
+The two rewrites added for #2 are:
+
+  stashDef :: String -> TranslateH CoreDef () -- stashes the RHS of binding, with a name
+  -- stash-defn
+  stashApply :: String -> RewriteH CoreExpr   -- like inline, but looks up a stashed name
+  -- stash-apply
 
 ###############################################################################
 
  {- wrap . unwrap = id (precondition) -}
 work 0     = (0, 1)
 work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
- {- let-intro x2, let-float-tuple -}
+
+I'm currently using a GHC rule for this:
+
+    {-# RULES precondition forall w . wrap (unwrap w) = w #-}
+
+###############################################################################
+
+ {- let-intro x2, let-float -}
 work 0     = (0, 1)
 work (n+1) = let (x,y) = (f (wrap work) n, f (wrap work) (n+1)) in (y,x+y)
  {- fold 'unwrap -}
