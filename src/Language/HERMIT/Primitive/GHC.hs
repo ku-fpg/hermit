@@ -10,6 +10,7 @@ import qualified Data.Map as Map
 -- import Language.HERMIT.Primitive.Debug
 import Language.HERMIT.Primitive.Consider
 
+import Language.HERMIT.CoreExtra
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.External
