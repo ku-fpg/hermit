@@ -26,14 +26,26 @@ externals =
 
 ------------------------------------------------------------------------
 
+-- NOTE: Using a Rewrite because of the way the Kernel is set up.
+--       This is a temperary hack until we work out the best way to structure the Kernel.
+
 -- | Stash a binding with a name for later use.
 -- Allows us to look at past definitions.
-stashDef :: String -> TranslateH Core ()
-stashDef label = contextfreeT $ \ core -> do
-    case core of
-        DefCore def -> saveDef label def
-        BindCore (NonRec i e) -> saveDef label (Def i e)
-        _           -> fail "stashDef: not a binding"
+stashDef :: String -> RewriteH Core
+stashDef label = sideEffectR $ \ _ core ->
+  case core of
+    DefCore def           -> saveDef label def
+    BindCore (NonRec i e) -> saveDef label (Def i e)
+    _                     -> fail "stashDef: not a binding"
+
+-- | Stash a binding with a name for later use.
+-- Allows us to look at past definitions.
+-- stashDef :: String -> TranslateH Core ()
+-- stashDef label = contextfreeT $ \ core ->
+--     case core of
+--         DefCore def -> saveDef label def
+--         BindCore (NonRec i e) -> saveDef label (Def i e)
+--         _           -> fail "stashDef: not a binding"
 
 -- | Apply a stashed definition (like inline, but looks in stash instead of context)
 stashApply :: String -> RewriteH CoreExpr
