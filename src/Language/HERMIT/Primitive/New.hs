@@ -143,7 +143,7 @@ findFn modguts nm = do
         [] -> fail $ "cannot find " ++ nm
         _  -> fail $ "too many " ++ nm ++ " found"
 
-    liftIO $ print ("VAR", GHC.showSDoc . GHC.ppr $ namedFn)
+ --   liftIO $ print ("VAR", GHC.showSDoc . GHC.ppr $ namedFn)
 
     uq <- getUniqueM
     let n_tyvar = GHC.setTyVarUnique (head alphaTyVars) uq

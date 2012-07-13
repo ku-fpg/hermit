@@ -5,3 +5,7 @@ fib:
 
 interactive:
 	- $(HERMIT) Fib.hs Fib.hss
+
+start:
+	- $(HERMIT) Fib.hs
+
