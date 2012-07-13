@@ -74,6 +74,8 @@ data CmdTag = Shell          -- ^ Shell command.
             | Debug          -- ^ Commands to help debugging.
             | VersionControl -- ^ Version control.
             | Bash           -- ^ Commands that are run by 'Language.HERMIT.Dicitonary.bash'.
+            | Context        -- ^ a command that uses its context, like inline
+
 
             | TODO           -- ^ TODO: check before the release.
             | Unimplemented  -- ^ Something is not finished yet, do not use.
@@ -120,6 +122,7 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
           , (Debug,        "Commands specifically to help debugging")
           , (VersionControl,"Version Control for Core Syntax")
           , (Bash,         "Commands that run as part of the bash command.")
+          , (Context,      "Commands that use their context, like inlining")
 
           , (TODO,         "TO BE assessed before a release")
           , (Unimplemented,"Something is not finished yet; do not used")
