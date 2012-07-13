@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, RankNTypes, ScopedTypeVariables, TypeFamilies, DeriveDataTypeable #-}
+{-# LANGUAGE GADTs, RankNTypes, ScopedTypeVariables, TypeFamilies, DeriveDataTypeable, TupleSections #-}
 
 module Language.HERMIT.Kernel
         ( -- * The HERMIT Kernel
@@ -68,6 +68,11 @@ hermitKernel callback modGuts = do
                             putMVar msgMV (Req fn rep)
                             takeMVar rep
 
+        let sendReqRead :: (KernelState -> CoreM (KureMonad a)) -> IO (KureMonad a)
+            sendReqRead fn = sendReq (\ st -> (fmap.fmap) (,st) $ fn st)
+
+        let sendReqWrite :: (KernelState -> CoreM KernelState) -> IO ()
+            sendReqWrite fn = sendReq (fmap ( return . ((),) ) . fn) >>= runKureMonad return fail
 
         let kernel :: Kernel
             kernel = Kernel
@@ -77,18 +82,18 @@ hermitKernel callback modGuts = do
 
                 , applyK = \ name r -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM defs
                                                                                                                (\ defs' core' -> do syn' <- liftIO $ takeMVar syntax_names
-                                                                                                                                    return2 (syn', insert syn' (defs',core') st))
+                                                                                                                                    return $ return (syn', insert syn' (defs',core') st))
                                                                                                                (return . fail)
                                                                                                                (apply (extractR r) (initContext core) core)
 
-                , queryK = \ name q -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM defs
-                                                                                                               (\ _ r -> return2 (r, st))
-                                                                                                               (return . fail)
-                                                                                                               (apply (extractT q) (initContext core) core)
+                , queryK = \ name q -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM defs
+                                                                                                                   (\ _ -> return.return)
+                                                                                                                   (return . fail)
+                                                                                                                   (apply (extractT q) (initContext core) core)
 
-                , deleteK = \ name -> sendReq (\ st -> return2 ((), delete name st)) >>= runKureMonad return fail
+                , deleteK = \ name -> sendReqWrite (return . delete name)
 
-                , listK = sendReq (\ st -> return2 (keys st, st)) >>= runKureMonad return fail
+                , listK = sendReqRead (return . return . keys) >>= runKureMonad return fail
                 }
 
         -- We always start with syntax blob 0
@@ -99,7 +104,7 @@ hermitKernel callback modGuts = do
                 m <- liftIO $ takeMVar msgMV
                 case m of
                   Req fn rep -> fn st >>= runKureMonad (\ (a,st') -> liftIO (putMVar rep $ return a) >> loop st')
-                                                       (\ msg -> liftIO (putMVar rep $ fail msg) >> loop st)
+                                                       (\ msg     -> liftIO (putMVar rep $ fail msg) >> loop st)
                   Done fn -> fn st
 
         _pid <- liftIO $ forkIO $ callback kernel syn

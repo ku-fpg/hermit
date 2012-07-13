@@ -6,7 +6,6 @@ module Language.HERMIT.Monad
             HermitM
           , runHM
           , liftCoreM
-          , return2
           , newVarH
             -- * Saving Definitions
           , Label
@@ -24,6 +23,7 @@ import GhcPlugins hiding (empty)
 import MonadUtils       -- from GHC
 
 import Control.Monad
+import Control.Arrow
 
 import Language.KURE.Combinators
 import Language.KURE.Utilities
@@ -46,9 +46,6 @@ newtype HermitM a = HermitM (DefStash -> CoreM (KureMonad (DefStash, a)))
 runHermitM :: HermitM a -> DefStash -> CoreM (KureMonad (DefStash, a))
 runHermitM (HermitM f) = f
 
-return2 :: (Monad m, Monad n) => a -> m (n a)
-return2 = return . return
-
 getStash :: HermitM DefStash
 getStash = HermitM (\ s -> return $ return (s, s))
 
@@ -57,13 +54,11 @@ putStash s = HermitM (\ _ -> return $ return (s, ()))
 
 -- | Save a definition for future use.
 saveDef :: Label -> CoreDef -> HermitM ()
-saveDef l d = do s <- getStash
-                 putStash (insert l d s)
+saveDef l d = getStash >>= (insert l d >>> putStash)
 
 -- | Lookup a previously saved definition.
 lookupDef :: Label -> HermitM CoreDef
-lookupDef l = do s <- getStash
-                 maybe (fail "Definition not found.") return (lookup l s)
+lookupDef l = getStash >>= (lookup l >>> maybe (fail "Definition not found.") return)
 
 -- | Eliminator for 'HermitM'.
 runHM :: DefStash -> (DefStash -> a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b
@@ -114,8 +109,7 @@ instance MonadUnique HermitM where
 -- | Make a unique 'Id' for a specified type based on a provided 'TH.Name'.
 newVarH :: TH.Name -> Type -> HermitM Id
 newVarH nm ty = do uq <- getUniqueM
-                   let fast_str = mkFastString (show nm)
-                       name     = mkSystemVarName uq fast_str
+                   let name = mkSystemVarName uq (mkFastString $ show nm)
                    return (mkLocalId name ty)
 
 -- newTypeVarH :: TH.Name -> Kind -> HermitM TyVar
