@@ -4,7 +4,6 @@
 
 -- This is the outer rev, with the big lambda
 consider 'rev
-   down
    consider 'rev
    fix-intro
    any-call (unfold-rule "ww")
@@ -13,10 +12,10 @@ consider 'rev
    any-call (unfold 'unwrap)
    any-call (unfold '.)
    unshadow ; bash
-   any-bu (case-float-arg)
+   any-bu case-float-arg
    any-bu (apply-rule "repH ++") ; bash
    any-bu (apply-rule "repH []") ; bash
-   any-bu (unfold-rule "rep-abs-fusion") 
+   any-bu (unfold-rule "rep-abs-fusion")
 
    -- This is just a setup to all completion
    { consider case ; eta-expand 'ys ; any-bu case-float-app }
@@ -27,4 +26,3 @@ consider 'rev
    any-call (unfold 'fix) ; bash
    unshadow
 
-   
