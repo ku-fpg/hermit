@@ -52,6 +52,7 @@ Library
        Language.HERMIT.Plugin
 
        Language.HERMIT.Primitive.Debug
+       Language.HERMIT.Primitive.Fold
        Language.HERMIT.Primitive.GHC
        Language.HERMIT.Primitive.Inline
        Language.HERMIT.Primitive.Kure
@@ -61,6 +62,7 @@ Library
        Language.HERMIT.Primitive.Navigation
        Language.HERMIT.Primitive.New
        Language.HERMIT.Primitive.Subst
+       Language.HERMIT.Primitive.Unfold
 
        Language.HERMIT.PrettyPrinter
        Language.HERMIT.PrettyPrinter.AST

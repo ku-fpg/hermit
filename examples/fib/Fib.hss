@@ -26,21 +26,31 @@ case-split-inline 'n
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
 --   unfold 'f
 { 1 ; any-bu (unfold 'f >>> repeat case-reduce) }
-{ 2 ; 0 ; 1 ; any-bu (unfold 'f >>> repeat case-reduce) }
+{ 2 ; 0  -- we're working in the n+1 rhs for a while
+  { 1
+    any-bu (unfold 'f >>> repeat case-reduce)
 
--- work 0     = (0, 1)
--- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
---   unfold 'work
-{ 2 ; 0 ; 1 ; any-bu (stash-apply origwork) }
+    -- work 0     = (0, 1)
+    -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
+    --   unfold 'work
+    any-bu (stash-apply origwork)
 
--- work 0     = (0, 1)
--- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
---   wrap . unwrap = id (precondition)
-{ 2 ; 0 ; 1 ; any-bu (unfold-rule precondition) }
+    -- work 0     = (0, 1)
+    -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
+    --   wrap . unwrap = id (precondition)
+    any-bu (unfold-rule precondition)
 
--- work 0     = (0, 1)
--- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
---   let-intro x2, let-float-tuple
+    -- work 0     = (0, 1)
+    -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
+    --   let-intro x2, let-float-tuple
+    { 1 ; let-intro 'y }
+  }
+
+  { 0 ; 1 ; let-intro 'x }
+  innermost (let-float-arg <+ let-float-app)
+  { 1 ; 1 ; any-bu (fold 'x) }
+  quit
+
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = (f (wrap work) n, f (wrap work) (n+1)) in (y,x+y)
 --   fold 'unwrap
@@ -49,3 +59,4 @@ case-split-inline 'n
 --   fold 'work
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = work n in (y,x+y)
+}

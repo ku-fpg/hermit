@@ -1,10 +1,11 @@
-{-# LANGUAGE ScopedTypeVariables, TypeFamilies, FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables, TypeFamilies, FlexibleContexts, TupleSections #-}
 module Language.HERMIT.Primitive.GHC where
 
 import GhcPlugins hiding (empty)
 import qualified Language.HERMIT.GHC as GHC
 import qualified OccurAnal
 import Control.Arrow
+import Control.Monad
 import qualified Data.Map as Map
 
 -- import Language.HERMIT.Primitive.Debug
@@ -54,10 +55,6 @@ externals =
          , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
                 ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
                                         .+ Introduce
-         , external "stash-defn" stashDef
-                ["stash-defn"]
-         , external "stash-apply" (promoteExprR . stashApply)
-                ["stash-apply"]
          ]
 
 ------------------------------------------------------------------------
@@ -226,33 +223,6 @@ makeRule rule_name nm expr =
                                  []
                                  []
                                  expr
-
-
-stashDef :: String -> TranslateH Core ()
-stashDef label = contextfreeT $ \ core -> do
-    case core of
-        DefCore def -> saveDef label def
-        BindCore (NonRec i e) -> saveDef label (Def i e)
-        _           -> fail "stashDef: not a binding"
-
-stashApply :: String -> RewriteH CoreExpr
-stashApply label = translate $ \ c e -> do
-    (Def i rhs) <- lookupDef label
-    case e of
-        (Var i') -> if idName i == idName i'
-                    then do rhsFrees <- apply freeVarsT c rhs
-                            if and (map (inScope c) rhsFrees)
-                            then return rhs
-                            else fail "stashApply: some frees in stashed definition are no longer in scope"
-                    else fail $ "stashApply: stashed definition applies to: " ++ showPpr i ++ " not: " ++ showPpr i'
-        _ -> fail "stashApply: not a Var"
-
-inScope :: Context -> Id -> Bool
-inScope c i = maybe (case unfoldingInfo (idInfo i) of
-                        CoreUnfolding {} -> True -- defined elsewhere
-                        _ -> False)
-                    (const True) -- defined in this module
-                    (lookupHermitBinding i c)
 
 -- TODO: check if a top-level binding
 addCoreBindAsRule :: String -> TH.Name -> RewriteH ModGuts
