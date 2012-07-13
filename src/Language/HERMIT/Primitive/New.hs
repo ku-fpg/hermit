@@ -339,6 +339,7 @@ unshadow = anytdR (promoteR autoRenameBinder)
 --cleanUnfold :: (LensH Core Core -> RewriteH Core) -> RewriteH Core
 --cleanUnfold f =
 
+-- TODO: use appCount
 countArguments :: CoreExpr -> Int
 countArguments (App e1 _) = countArguments e1 + 1
 countArguments _          = 0
