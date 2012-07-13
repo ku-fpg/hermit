@@ -49,22 +49,25 @@ beta_reduce = setFailMsg "beta_reduce failed. Not applied to an App." $
        return $ Let (NonRec v e2) e1
 
 
-betaReducePlus :: RewriteH CoreExpr
-betaReducePlus = do
+multiBetaReduce :: (Int -> Bool) -> RewriteH CoreExpr
+multiBetaReduce p = do
         e <- idR
         let (f,xs) = collectArgs e
-        guardMsg (length xs /= 0) "betaReducePlus, no applications"
+        guardMsg (p (length xs)) "multiBetaReduce, incorrect number of arguments"
 
         let (vs,e0) = collectBinders f
 
-        guardMsg (length vs >= length xs) "betaReducePlus, no lambdas"
+        guardMsg (length vs >= length xs) "multiBetaReduce, insufficent lambdas"
 
         let (vs1,vs2) = splitAt (length xs) vs
 
-        (return
+        return
            $ mkLets (zipWith NonRec vs1 xs)
-           $ mkLams vs2 e0) >>> observeR "beta-reduce-plus(final)"
+           $ mkLams vs2 e0
 
+-- TODO: inline this everywhere
+betaReducePlus :: RewriteH CoreExpr
+betaReducePlus = multiBetaReduce (> 0)
 
 {-
 
