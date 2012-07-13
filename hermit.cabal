@@ -63,7 +63,8 @@ Library
        Language.HERMIT.Primitive.New
        Language.HERMIT.Primitive.Subst
        Language.HERMIT.Primitive.Unfold
-
+       Language.HERMIT.Primitive.Utils
+       
        Language.HERMIT.PrettyPrinter
        Language.HERMIT.PrettyPrinter.AST
        Language.HERMIT.PrettyPrinter.Clean
