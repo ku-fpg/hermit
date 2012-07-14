@@ -7,7 +7,7 @@ main = defaultMain
         [ bench "35" $ whnf fib 35
         ]
 
-{-# RULES "ww" forall work . fix work = wrap (fix (unwrap . work . wrap)) #-}
+{-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
 {-# RULES "inline-fix" forall f . fix f = let work = f work in work #-}
 {-# RULES "precondition" forall w . wrap (unwrap w) = w #-}
 
