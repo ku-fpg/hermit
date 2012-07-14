@@ -8,14 +8,12 @@ import Language.HERMIT.Monad
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.GHC
-import Language.HERMIT.Primitive.Debug
+-- import Language.HERMIT.Primitive.Debug
 
 import qualified Language.HERMIT.Primitive.Local.Case as Case
 import qualified Language.HERMIT.Primitive.Local.Let as Let
 
 import qualified Language.Haskell.TH as TH
-
-import Control.Arrow
 
 ------------------------------------------------------------------------------
 
