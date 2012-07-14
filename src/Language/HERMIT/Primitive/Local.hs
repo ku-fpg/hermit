@@ -119,6 +119,10 @@ eta_expand nm = contextfreeT $ \ e ->
                                    return $ Lam v1 (App e (Type (mkTyVarTy v1)))
                   Nothing -> fail "eta-expand failed"
 
+multiEtaExpand :: [TH.Name] -> RewriteH CoreExpr
+multiEtaExpand []       = idR
+multiEtaExpand (nm:nms) = eta_expand nm >>> lamR (multiEtaExpand nms)
+
 ------------------------------------------------------------------------------
 
 -- dead code elimination removes a let.
