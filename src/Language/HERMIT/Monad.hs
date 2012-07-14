@@ -7,6 +7,7 @@ module Language.HERMIT.Monad
           , runHM
           , liftCoreM
           , newVarH
+          , newTypeVarH
             -- * Saving Definitions
           , Label
           , DefStash
@@ -112,7 +113,9 @@ newVarH nm ty = do uq <- getUniqueM
                    let name = mkSystemVarName uq (mkFastString $ show nm)
                    return (mkLocalId name ty)
 
--- newTypeVarH :: TH.Name -> Kind -> HermitM TyVar
--- newTypeVarH = undefined -- TO DO!
+newTypeVarH :: TH.Name -> Kind -> HermitM TyVar
+newTypeVarH nm kind = do uq <- getUniqueM
+                         let name = mkSystemVarName uq (mkFastString $ show nm)
+                         return (mkTyVar name kind)
 
 ----------------------------------------------------------------------------
