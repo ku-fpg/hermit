@@ -107,15 +107,15 @@ instance MonadUnique HermitM where
 
 ----------------------------------------------------------------------------
 
--- | Make a unique 'Id' for a specified type based on a provided 'TH.Name'.
-newVarH :: TH.Name -> Type -> HermitM Id
-newVarH nm ty = do uq <- getUniqueM
-                   let name = mkSystemVarName uq (mkFastString $ show nm)
-                   return (mkLocalId name ty)
+newName :: TH.Name -> HermitM Name
+newName nm = flip mkSystemVarName (mkFastString $ show nm) <$> getUniqueM
 
+-- | Make a unique identifier for a specified type based on a provided name.
+newVarH :: TH.Name -> Type -> HermitM Id
+newVarH nm ty = flip mkLocalId ty <$> newName nm
+
+-- | Make a unique type variable for a specified kind based on a provided name.
 newTypeVarH :: TH.Name -> Kind -> HermitM TyVar
-newTypeVarH nm kind = do uq <- getUniqueM
-                         let name = mkSystemVarName uq (mkFastString $ show nm)
-                         return (mkTyVar name kind)
+newTypeVarH nm kind = flip mkTyVar kind <$> newName nm
 
 ----------------------------------------------------------------------------
