@@ -101,16 +101,25 @@ beta_expand = setFailMsg "beta_expand failed. Not applied to a NonRec Let." $
 
 eta_reduce :: RewriteH CoreExpr
 eta_reduce = withPatFailMsg "eta_reduce failed. Not applied to Lam-App-Var" $
-    do Lam v1 (App f (Var v2)) <- idR
+   (do Lam v1 (App f (Var v2)) <- idR
        guardMsg (v1 == v2) "eta_reduce failed, variables are not equal."
        guardMsg (v1 `notElem` coreExprFreeIds f) $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++ "is free in the function being applied."
-       return f
+       return f) <+
+   (do Lam v1 (App f (Type ty)) <- idR
+       Just v2 <- return (getTyVar_maybe ty)
+       guardMsg (v1 == v2) "eta_reduce failed, type variables are not equal."
+       guardMsg (v1 `notElem` coreExprFreeVars f) $ "eta_reduce failed. " ++ showSDoc (ppr v1) ++ "is free in the function being applied."
+       return f)
 
 eta_expand :: TH.Name -> RewriteH CoreExpr
-eta_expand nm = contextfreeT $ \ e -> case splitFunTy_maybe (exprType e) of
-                                  Nothing          -> fail "eta-expand failed (expression is not an App)"
-                                  Just (arg_ty, _) -> do v1 <- newVarH nm arg_ty
-                                                         return $ Lam v1 (App e (Var v1))
+eta_expand nm = contextfreeT $ \ e ->
+        case splitFunTy_maybe (exprType e) of
+          Just (arg_ty, _) -> do v1 <- newVarH nm arg_ty
+                                 return $ Lam v1 (App e (Var v1))
+          _ -> case splitForAllTy_maybe (exprType e) of
+                  Just (v,_) -> do v1 <- newTypeVarH nm (tyVarKind v)
+                                   return $ Lam v1 (App e (Type (mkTyVarTy v1)))
+                  Nothing -> fail "eta-expand failed"
 
 ------------------------------------------------------------------------------
 
