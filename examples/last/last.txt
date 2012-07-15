@@ -75,8 +75,8 @@ of f automatically follows from our assumption that f maps [] to
 bottom (the result of error) and monotonicity of f.
 
 Hence for this example, the simple worker/wrapper assumption wrap .
-unwrap = id is not always valid.  However, because body l maps 
-[] to error "last: []" by definition, we do have the weaker 
+unwrap = id is not always valid.  However, because body l maps
+[] to error "last: []" by definition, we do have the weaker
 worker/wrapper assumption wrap . unwrap . body = body.
 
 Step 5: apply the worker/wrapper transformation
@@ -89,7 +89,7 @@ Step 5: apply the worker/wrapper transformation
 
 Step 6: simplify the new definition
 
-     last xs 
+     last xs
    =    applying last
      wrap work xs
    =    applying wrap
@@ -115,7 +115,7 @@ which transformation can be verified as follows:
 
       work x xs
    =     applying work
-      fix (unwrap . body . wrap)
+      fix (unwrap . body . wrap) x xs
    =     computation
       (unwrap . body . wrap) (fix (unwrap . body . wrap)) x xs
    =     unwappling work

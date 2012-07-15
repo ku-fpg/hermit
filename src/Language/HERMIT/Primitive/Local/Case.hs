@@ -91,14 +91,14 @@ caseFloatCase = do
 -- | Case-of-known-constructor rewrite
 caseReduce :: RewriteH CoreExpr
 caseReduce = letTransform >>> tryR (repeatR letSubstR)
-    where letTransform = contextfreeT $ \ e -> case e of
-            Case s _ _ alts -> case isDataCon s of
-                                 Nothing -> fail "caseReduce failed, not a DataCon"
-                                 Just (dc, args) -> case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
+    where letTransform = withPatFailMsg "caseReduce failed, not a Case" $
+                         do Case s _ _ alts <- idR
+                            case isDataCon s of
+                              Nothing -> fail "caseReduce failed, not a DataCon"
+                              Just (dc, args) -> case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
                                     [(bs,e')] -> return $ nestedLets e' $ zip bs args
                                     []   -> fail "caseReduce failed, no matching alternative"
                                     _    -> fail "caseReduce failed, more than one matching alt"
-            _ -> fail "caseReduce failed, not a Case"
 
 -- | If expression is a constructor application, return the relevant bits.
 isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])
