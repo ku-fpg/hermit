@@ -88,9 +88,6 @@ caseFloatCase = do
           (const idR)
           (\ (Case s1 b1 ty1 alts1) b2 ty2 alts2 -> Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ])
 
-
--- WARNING: BROKEN!!!!
--- Does not account for type arguments in the scrutinee.
 -- | Case-of-known-constructor rewrite
 caseReduce :: RewriteH CoreExpr
 caseReduce = letTransform >>> tryR (repeatR letSubstR)
@@ -99,9 +96,25 @@ caseReduce = letTransform >>> tryR (repeatR letSubstR)
                             case isDataCon s of
                               Nothing -> fail "caseReduce failed, not a DataCon"
                               Just (dc, args) -> case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
-                                    [(bs,e')] -> return $ nestedLets e' $ zip bs args
+                                    [(bs,e')] -> let valArgs = drop (length args - length bs) args -- discard any type arguments
+                                                  in return $ nestedLets e' $ zip bs valArgs
                                     []   -> fail "caseReduce failed, no matching alternative"
                                     _    -> fail "caseReduce failed, more than one matching alt"
+
+
+-- WARNING: BROKEN!!!!
+-- Does not account for type arguments in the scrutinee.
+-- Case-of-known-constructor rewrite
+-- caseReduce :: RewriteH CoreExpr
+-- caseReduce = letTransform >>> tryR (repeatR letSubstR)
+--     where letTransform = withPatFailMsg "caseReduce failed, not a Case" $
+--                          do Case s _ _ alts <- idR
+--                             case isDataCon s of
+--                               Nothing -> fail "caseReduce failed, not a DataCon"
+--                               Just (dc, args) -> case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
+--                                     [(bs,e')] -> return $ nestedLets e' $ zip bs args
+--                                     []   -> fail "caseReduce failed, no matching alternative"
+--                                     _    -> fail "caseReduce failed, more than one matching alt"
 
 -- | If expression is a constructor application, return the relevant bits.
 isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])

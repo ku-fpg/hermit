@@ -2,7 +2,6 @@ module Main where
 
 import Data.Function(fix)
 import Prelude hiding (last)
-import LastPrelude
 
 unwrap         :: ([a] -> a) -> a -> [a] -> a
 unwrap f a as  = f (a:as)

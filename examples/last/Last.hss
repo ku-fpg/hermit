@@ -24,12 +24,14 @@ fix-intro
   --      case-split-inline 'as
         any-td (unfold 'f)
         case-reduce
+        one-td (unfold 'wrap >>> case-reduce)
   --      bash
   --      any-td (unfold 'wrap)
   --      bash
       }
     }
   }
+  dead-code-elimination
 }
 -- up
 -- let-float-let
