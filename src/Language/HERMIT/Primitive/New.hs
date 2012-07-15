@@ -39,6 +39,8 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "determines if a rewrite could be successfully applied" ]
          , external "fix-intro" (promoteBindR fixIntro :: RewriteH Core)
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
+         , external "fix-spec" (promoteExprR fixSpecialization :: RewriteH Core)
+                [ "specialize a fix with a given argument"] .+ Shallow .+ TODO
          , external "number-binder" (exprNumberBinder :: Int -> RewriteH Core)
                 [ "add a number suffix onto a (lambda) binding" ]
          , external "auto-number-binder" (autoRenameBinder :: RewriteH Core)
@@ -168,6 +170,56 @@ fixIntro = translate $ \ c e -> case e of
                 return $ NonRec f (coreFix (Lam f' (substExpr (text "fixIntro") sub e0)))
         Rec {}       -> fail "recusive group not suitable"
         NonRec {}    -> fail "Cannot take fix of a non-recusive group"
+
+-- ironically, this is an instance of worker/wrapper itself.
+
+fixSpecialization :: RewriteH CoreExpr
+fixSpecialization = do
+        fixId <- translate $ \ c e -> findFn (hermitModGuts c) "Data.Function.fix"
+
+        -- fix (t::*) (f :: t -> t) (a :: t) :: t
+        App (App (App (Var fx) (Type t)) f) a <- idR
+
+        guardMsg (fx == fixId) "fixSpecialization only works on fix"
+
+        let rr :: RewriteH CoreExpr
+            rr = multiEtaExpand [TH.mkName "f",TH.mkName "a"]
+
+            sub :: RewriteH Core
+            sub = pathR [0,1] (promoteR rr)
+        -- be careful this does not loop (it should not)
+        extractR sub >>> fixSpecialization'
+
+
+fixSpecialization' :: RewriteH CoreExpr
+fixSpecialization' = do
+        -- In normal form now
+        App (App (App (Var fx) (Type t))
+                 (Lam v1 (Lam v2 (App (App e a1) a2)))
+            )
+            a <- idR
+
+        let t' = case a of
+                   Type t2  -> applyTy t t2
+--                   Var  a2  -> mkAppTy t (exprType t2)
+--                   mkAppTy t t'
+
+
+        let t2' = case a2 of
+                   Type t2  -> applyTy t t2
+--                   Var  a2  -> mkAppTy t (exprType t2)
+--                   mkAppTy t t'
+
+
+        v3 <- translate $ \ _ _ -> newVarH (TH.mkName "f") t' -- (funArgTy t')
+        v4 <- translate $ \ _ _ -> newTypeVarH (TH.mkName "a") (tyVarKind v2)
+
+         -- f' :: \/ a -> T [a] -> (\/ b . T [b])
+        let f' = Lam v4  (Cast (Var v3)
+                               (mkUnsafeCo t' (applyTy t ((mkTyVarTy v4)))))
+        let e' = Lam v3 (App (App e f') a)
+
+        return $ App (App (Var fx) (Type t')) e'
 
 
 -- | Case split a free variable in an expression:

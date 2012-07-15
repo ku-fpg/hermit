@@ -55,6 +55,9 @@ externals =
          , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
                 ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
                                         .+ Introduce
+         , external "cast-elim" (promoteExprR castElimination)
+                ["cast-elim removes casts"]
+                                        .+ Shallow .+ TODO
          ]
 
 ------------------------------------------------------------------------
@@ -327,4 +330,20 @@ cloneId nameMod b = do
         let name = mkSystemVarName uq $ mkFastString $ nameMod $ getOccString b
             ty   = idType b
         return $ mkLocalId name ty
+
+-------------------------------------------
+
+-- remove a cast;
+-- TODO: check for validity of removing this cast
+castElimination :: RewriteH CoreExpr
+castElimination = do
+        Cast e _ <- idR
+        return $ e
+
+{-
+    go (Cast e co)      | isReflCo co' = go e
+       	                | otherwise    = Cast (go e) co'
+                        where
+                          co' = optCoercion (getCvSubst subst) co
+-}
 
