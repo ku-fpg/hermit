@@ -15,6 +15,8 @@ import qualified Language.HERMIT.Primitive.Local.Let as Let
 
 import qualified Language.Haskell.TH as TH
 
+import Control.Arrow
+
 ------------------------------------------------------------------------------
 
 externals :: [External]
