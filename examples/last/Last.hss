@@ -1,5 +1,3 @@
--- Need to be able to fold a defintion in the Stash to proceed with this.
-
 consider 'last
 consider 'last
 fix-intro
@@ -16,63 +14,16 @@ fix-intro
         0
         0
         repeat (any-call (unfold '.))
-        eta-expand 'a
+        eta-expand 'b
         0
-        eta-expand 'as
+        eta-expand 'bs
         0
         unfold 'unwrap
-  --      case-split-inline 'as
         any-td (unfold 'f)
         case-reduce
         one-td (unfold 'wrap >>> case-reduce)
-  --      bash
-  --      any-td (unfold 'wrap)
-  --      bash
       }
     }
   }
   dead-code-elimination
 }
--- up
--- let-float-let
--- consider 'last
---   { 0
---     unfold-rule "ww"
---     { 1
---       let-intro 'work
---       { 0
--- --        stash-defn "orig-work"
---   --      {
---   --        0
---     --      eta-expand 'x
---       --    eta-expand 'xs
---     --    }
---   --      one-td (unfold-rule "fix-computation")
---       }
---     }
---     let-float-arg
---   }
--- up
--- let-float-let
--- 1
--- 0
--- 0
--- eta-expand 'as
--- { 0
---   unfold 'wrap
--- }
--- -- { 0
--- --   2
--- --   0
--- --   one-td (inline 'work >>> unfold-rule "fix-computation")
--- --   one-td (fold 'work)
--- --   repeat (any-call (unfold '.))
--- --   unfold 'unwrap
--- --   unfold 'f
--- --   {
--- --     consider case
--- --     2
--- --     0
--- --
--- --   }
--- -- }
