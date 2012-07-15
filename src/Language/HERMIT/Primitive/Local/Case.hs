@@ -88,6 +88,9 @@ caseFloatCase = do
           (const idR)
           (\ (Case s1 b1 ty1 alts1) b2 ty2 alts2 -> Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ])
 
+
+-- WARNING: BROKEN!!!!
+-- Does not account for type arguments in the scrutinee.
 -- | Case-of-known-constructor rewrite
 caseReduce :: RewriteH CoreExpr
 caseReduce = letTransform >>> tryR (repeatR letSubstR)
@@ -103,13 +106,12 @@ caseReduce = letTransform >>> tryR (repeatR letSubstR)
 -- | If expression is a constructor application, return the relevant bits.
 isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])
 isDataCon expr = case fn of
-                    (Var i) -> do
-                        dc <- isDataConId_maybe i
-                        return (dc, args)
+                    Var i -> do dc <- isDataConId_maybe i
+                                return (dc, args)
                     _ -> fail "not a var"
     where (fn, args) = collectArgs expr
 
 -- | We don't want to use the recursive let here, so nest a bunch of non-recursive lets
-nestedLets :: Expr b -> [(b, Expr b)] -> Expr b
-nestedLets e = foldr (\(b,rhs) -> Let $ NonRec b rhs) e
+nestedLets :: CoreExpr -> [(Id, CoreExpr)] -> CoreExpr
+nestedLets = foldr (\(b,rhs) -> Let $ NonRec b rhs)
 
