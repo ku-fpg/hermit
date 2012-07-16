@@ -21,3 +21,8 @@ add-rule capture 'capture_me
   any-call (apply-rule capture)
 }
 compare-values 'new_rule_start 'new_rule_end
+
+{ rhs-of 'fold_start
+  any-bu (fold 'double)
+}
+compare-values 'fold_start 'fold_end

@@ -31,3 +31,13 @@ capture_me = 99
 new_rule_start = capture_me
 
 new_rule_end = 99 :: Int
+
+------------------------ fold -----------------------------
+
+double :: Int -> Int
+double x = x + x
+
+fold_start :: Int
+fold_start = 5 + 5 + 6
+
+fold_end = double 5 + 6
