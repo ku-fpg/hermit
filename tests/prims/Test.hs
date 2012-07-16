@@ -12,13 +12,13 @@ beta_reduce_end :: Int
 beta_reduce_end = 1 + 2
 
 ------------------------ case reduction ---------------------
-data Foo = Bar Int Float | Baz String
+data Foo a = Bar Int Float a | Baz String
 
 case_reduce_start = case bar of
-                        Bar x f -> show x
+                        Bar x f a -> show x
                         Baz s -> s
     where {-# NOINLINE bar #-}
-          bar = Bar 5 2.1
+          bar = Bar 5 2.1 'a'
 
 case_reduce_end = show (5 :: Int)
 
@@ -31,5 +31,3 @@ capture_me = 99
 new_rule_start = capture_me
 
 new_rule_end = 99 :: Int
-
-
