@@ -10,9 +10,7 @@ wrap           :: (a -> [a] -> a) -> [a] -> a
 wrap f []      = error "wrap _ []"
 wrap f (a:as)  = f a as
 
-
 {-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
-{-# RULES "fix-computation" forall f . fix f = f (fix f) #-}
 
 -- last :: [a] -> a
 last []       = error "last []"
