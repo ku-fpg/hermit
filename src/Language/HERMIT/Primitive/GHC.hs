@@ -267,8 +267,8 @@ joinT f e0 = translate $ \ c e1 -> do
                 apply t c e1
 -}
 
-exprEqual :: CoreExpr -> CoreExpr -> Maybe Bool
-exprEqual e1 e2 = Just $ eqExpr (mkInScopeSet $ exprsFreeVars [e1, e2]) e1 e2
+exprEqual :: CoreExpr -> CoreExpr -> Bool
+exprEqual e1 e2 = eqExpr (mkInScopeSet $ exprsFreeVars [e1, e2]) e1 e2
 
 
 -- The ideas for this function are directly extracted from
@@ -282,14 +282,14 @@ bindEqual  (Rec ps1) (Rec ps2) = Just $ all2 (eqExprX id_unf env') rs1 rs2
         env = mkInScopeSet $ exprsFreeVars (rs1 ++ rs2) -- emptyInScopeSet
         env' = rnBndrs2 (mkRnEnv2 env) bs1 bs2
 
-bindEqual  (NonRec _ e1) (NonRec _ e2) = exprEqual e1 e2
+bindEqual  (NonRec _ e1) (NonRec _ e2) = Just $ exprEqual e1 e2
 
 bindEqual _ _ = Nothing
 
 --------------------------------------------------------
 
 coreEqual :: Core -> Core -> Maybe Bool
-coreEqual (ExprCore e1) (ExprCore e2) = e1 `exprEqual` e2
+coreEqual (ExprCore e1) (ExprCore e2) = Just $ e1 `exprEqual` e2
 coreEqual (BindCore b1) (BindCore b2) = b1 `bindEqual` b2
 coreEqual (DefCore dc1) (DefCore dc2) = (defToRecBind [dc1]) `bindEqual` (defToRecBind [dc2])
 coreEqual _             _             = Nothing

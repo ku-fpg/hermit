@@ -2,15 +2,19 @@
 module Language.HERMIT.Primitive.Fold where
 
 import GhcPlugins hiding (empty)
+
+import Control.Applicative
 import Control.Monad
+
 import qualified Data.Map as Map
 
+import Language.HERMIT.Context
+import Language.HERMIT.External
+import Language.HERMIT.Kure
+
+import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Navigation
 import Language.HERMIT.Primitive.Unfold
-
-import Language.HERMIT.Kure
-import Language.HERMIT.External
-import Language.HERMIT.Context
 
 import qualified Language.Haskell.TH as TH
 
@@ -34,16 +38,22 @@ foldR nm =
                 _ -> fail "fold: cannot find name"
         either fail
                (\(rhs,_d) -> maybe (fail "fold: no match")
-                                   (\exp -> return exp)
+                                   return
                                    (fold i rhs e))
                (getUnfolding False i c)
 
 fold :: Id -> CoreExpr -> CoreExpr -> Maybe CoreExpr
 fold i lam exp = do
     let (vs,body) = foldArgs lam
-    m <- foldMatch vs body exp
-    -- TODO: make sure duplicate keys have same exp!
-    es <- sequence [ lookup v m | v <- vs ]
+        -- return Nothing if not equal, so sequence will fail below
+        checkEqual :: Maybe CoreExpr -> Maybe CoreExpr -> Maybe CoreExpr
+        checkEqual m1 m2 = condM (exprEqual <$> m1 <*> m2) m1 Nothing
+
+    al <- foldMatch vs body exp
+
+    let m = Map.fromListWith checkEqual [(k,Just v) | (k,v) <- al ]
+
+    es <- sequence [ join (Map.lookup v m) | v <- vs ]
     return (foldl App (Var i) es)
 
 -- | Collect arguments to function we are folding, so we can unify with them.
