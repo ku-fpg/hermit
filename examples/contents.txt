@@ -1,0 +1,86 @@
+Fibonacci (Tupling)
+===================
+
+* Example of Tupling transformation.
+
+* In progress (Drew).
+
+
+Flatten
+=======
+
+* Another append-vanishes example, based on the Reverse example.
+
+* Completed.
+
+* Main rewrites: any-call
+
+
+Hanoi
+=====
+
+
+
+Haskell 2012 Paper
+==================
+
+Fibonacci (Unrolling)
+---------------------
+
+* We unfold fib once to show how things operate overall.
+
+* Completed and published.
+
+* Main rewrites: any-bu, inline
+
+
+Reverse
+-------
+
+* Our larger, low-level reverse example.
+
+* Completed and published.
+
+* Main rewrites: any-bu, unfold
+
+
+Append
+------
+
+* A demonstration of GHC RULES (no use of HERMIT).
+
+* Completed and published.
+
+
+Last
+====
+
+* A classic simple example.
+
+* Completed.
+
+
+Quicksort
+=========
+
+* Another append-vanishes example.
+
+* In progress (Neil).
+
+
+Reverse
+=======
+
+* Higher-level script than in the Haskell 2012 paper.
+
+* Completed.  Lower-level version has been published.
+
+* Main rewrites: any-call
+
+
+To Do
+=====
+
+* Life - Can we translate to a stronger type?
+
+* Append Vanishes - Should generalise the Reverse, Flatten, and Quicksort examples.
