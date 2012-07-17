@@ -15,18 +15,21 @@ import Language.HERMIT.Primitive.GHC(coreExprFreeIds)
 import qualified Language.Haskell.TH as TH
 
 import Prelude hiding (exp)
+import Data.Maybe
 
 externals :: [External]
-externals = []
-{-
-map (.+ Experiment)
+externals =
          [
-           external "alpha" (promoteR alphaLambda :: RewriteH Core)
-                [ "Alpha rename (for Lambda's)."]
+           external "alpha" (\nm -> promoteR (alphaLambda (Just nm)) :: RewriteH Core)
+                [ "alpha 'v renames the bound variable in a Lambda expression to v."]
+         , external "alpha" (promoteR (alphaLambda Nothing) :: RewriteH Core)
+                [ "renames the bound variable in a lambda expression."]
          , external "alpha-let" (promoteR alphaLet :: RewriteH Core)
-                [ "Alpha rename (for Let)."]
-         , external "let-sub" (promoteR letSubstR :: RewriteH Core)
-                [ "Let substitution."]
+                [ "Alpha rename for any Let expr."]
+         , external "alpha-let-nonrec" (\nm -> promoteR (alphaNonRecLet (Just nm)) :: RewriteH Core)
+                [ "alpha-let-nonrec 'v renames the bound variable in a NonRecursive Let expression to v."]
+         , external "alpha-let-rec1" (\nm -> promoteR (alphaRecLetOne (Just nm)) :: RewriteH Core)
+                [ "alpha-let-rec1 'v renames the bound variable in a Recursive Let expression (with a single binding) to v."]
 
            -- the remaining are really just for testing.
          , external "alpha-alt" (promoteR alphaAlt :: RewriteH Core)
@@ -34,36 +37,42 @@ map (.+ Experiment)
          , external "alpha-case" (promoteR alphaCase :: RewriteH Core)
                 [ "Alpha renaming for each alternative of a Case."]
          ]
--}
+
 bindList :: Bind Id -> [Id]
 bindList (NonRec b _) = [b]
 
 bindList (Rec binds) = map fst binds
 
 
-varNameH :: Id -> TH.Name
-varNameH = TH.mkName . showSDoc . ppr
+newVarName :: Id -> TH.Name
+newVarName x = TH.mkName $ (showSDoc (ppr x) ++ "New")
 
 freshVarT :: Id -> TranslateH a Id
-freshVarT v = constT $ newVarH (varNameH v) (idType v)
+freshVarT v = constT $ newVarH (newVarName v) (idType v)
+
+freshVarT' :: TH.Name -> Type -> TranslateH a Id
+freshVarT' nm ty  = constT $ newVarH nm ty
+
 
 -- The alpha renaming functions defined here,
 -- rely on a function to return a globally fresh Id,
 -- therefore, they do not require a list of Id's which must not clash.
 
-alphaLambda :: RewriteH CoreExpr
-alphaLambda = do Lam b _ <- idR
-                 b' <- freshVarT b
-                 lamT (trySubstR b $ Var b') (\ _ -> Lam b')
+alphaLambda :: Maybe TH.Name -> RewriteH CoreExpr
+alphaLambda nm = do Lam b _ <- idR
+                    let newname = fromMaybe (newVarName b) nm
+                    b' <- freshVarT' newname (idType b)
+                    lamT (trySubstR b $ Var b') (\ _ -> Lam b')
 
 -- Replace each var bound in a let expr with a globally fresh Id.
 alphaLet :: RewriteH CoreExpr
-alphaLet = alphaNonRecLet <+ alphaRecLet
+alphaLet = alphaNonRecLet Nothing <+ alphaRecLet
 
-alphaNonRecLet :: RewriteH CoreExpr
-alphaNonRecLet = do Let (NonRec v _) _ <- idR
-                    v' <- freshVarT v
-                    letNonRecT idR (trySubstR v $ Var v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
+alphaNonRecLet :: Maybe TH.Name -> RewriteH CoreExpr
+alphaNonRecLet nm = do Let (NonRec v _) _ <- idR
+                       let newname = fromMaybe (newVarName v) nm
+                       v' <- freshVarT' newname (idType v)
+                       letNonRecT idR (trySubstR v $ Var v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
 
 alphaRecLet :: RewriteH CoreExpr
 alphaRecLet = do Let bds@(Rec _) _ <- idR
@@ -73,6 +82,15 @@ alphaRecLet = do Let bds@(Rec _) _ <- idR
                             (foldr seqSubst idR (zip boundIds freshBoundIds))
                             (\ bds' e' -> let freshBds = zip freshBoundIds (map snd bds') in Let (Rec freshBds) e')
     where seqSubst (v,v') t = t >>> (trySubstR v $ Var v')
+
+
+alphaRecLetOne :: Maybe TH.Name -> RewriteH CoreExpr
+alphaRecLetOne nm = do Let (Rec [(v, _)]) _ <- idR
+                       let newname = fromMaybe (newVarName v) nm
+                       v' <- freshVarT' newname (idType v)
+                       letRecDefT (\ _ -> (trySubstR v $ Var v'))
+                                  (trySubstR v $ Var v')
+                                  (\ [(_,be)] e' -> Let (Rec [(v', be)]) e')
 
 -- there is no alphaCase.
 -- instead alphaAlt performs renaming over an individual Case alternative
@@ -104,7 +122,7 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
                      guardMsg (b == v) "Subtitution var clashes with Lam"
                      guardMsg (v `notElem` coreExprFreeIds e) "Substitution var not used in body of Lam"
                      if b `elem` coreExprFreeIds expReplacement
-                      then alphaLambda >>> rule345
+                      then alphaLambda Nothing >>> rule345
                       else lamR (substR v expReplacement)
 
         rule6 = anyR (promoteExprR $ substR v expReplacement)
