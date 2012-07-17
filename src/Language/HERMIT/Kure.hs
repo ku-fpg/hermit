@@ -48,6 +48,7 @@ module Language.HERMIT.Kure
        , letRecT, letRecAllR, letRecAnyR, letRecOneR
        , recDefT, recDefAllR, recDefAnyR, recDefOneR
        , letRecDefT, letRecDefAllR, letRecDefAnyR, letRecDefOneR
+       , caseAltT, caseAltAllR, caseAltAnyR, caseAltOneR
        -- * Promotion Combinators
        -- ** Rewrite Promotions
        , promoteModGutsR
@@ -358,7 +359,7 @@ instance Walker Context HermitM CoreAlt where
   childL 0 = lens $ altT exposeT (childL2of3 (,,))
   childL n = failT (missingChild n)
 
--- | Translate a case alternative of the form: ('AltCon', 'Id', 'CoreExpr')
+-- | Translate a case alternative of the form: ('AltCon', ['Id'], 'CoreExpr')
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
 altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (foldr addLambdaBinding c bs @@ 0) e
 
@@ -608,7 +609,7 @@ letNonRecOneR r1 r2 = letOneR (nonRecR r1) r2
 
 -- | Translate an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
 letRecT :: (Int -> TranslateH CoreDef a1) -> TranslateH CoreExpr a2 -> ([a1] -> a2 -> b) -> TranslateH CoreExpr b
-letRecT ts t f = letT (recT ts id) t f
+letRecT ts t = letT (recT ts id) t
 
 -- | Rewrite all children of an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
 letRecAllR :: (Int -> RewriteH CoreDef) -> RewriteH CoreExpr -> RewriteH CoreExpr
@@ -624,7 +625,7 @@ letRecOneR rs r = letOneR (recOneR rs) r
 
 -- | Translate a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
 recDefT :: (Int -> TranslateH CoreExpr a1) -> ([(Id,a1)] -> b) -> TranslateH CoreBind b
-recDefT ts f = recT (\ n -> defT (ts n) (,)) f
+recDefT ts = recT (\ n -> defT (ts n) (,))
 
 -- | Rewrite all children of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
 recDefAllR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
@@ -641,7 +642,7 @@ recDefOneR rs = recOneR (\ n -> defR (rs n))
 
 -- | Translate an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
 letRecDefT :: (Int -> TranslateH CoreExpr a1) -> TranslateH CoreExpr a2 -> ([(Id,a1)] -> a2 -> b) -> TranslateH CoreExpr b
-letRecDefT ts t f = letRecT (\ n -> defT (ts n) (,)) t f
+letRecDefT ts t = letRecT (\ n -> defT (ts n) (,)) t
 
 -- | Rewrite all children of an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
 letRecDefAllR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr -> RewriteH CoreExpr
@@ -654,6 +655,23 @@ letRecDefAnyR rs r = letRecAnyR (\ n -> defR (rs n)) r
 -- | Rewrite one child of an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
 letRecDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr -> RewriteH CoreExpr
 letRecDefOneR rs r = letRecOneR (\ n -> defR (rs n)) r
+
+
+-- | Translate an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Id'], 'CoreExpr')]
+caseAltT :: TranslateH CoreExpr a1 -> (Int -> TranslateH CoreExpr a2) -> (a1 -> Id -> Type -> [(AltCon,[Id],a2)] -> b) -> TranslateH CoreExpr b
+caseAltT t ts = caseT t (\ n -> altT (ts n) (,,))
+
+-- | Rewrite all children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Id'], 'CoreExpr')]
+caseAltAllR :: RewriteH CoreExpr -> (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr
+caseAltAllR t ts = caseAllR t (\ n -> altR (ts n))
+
+-- | Rewrite any children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Id'], 'CoreExpr')]
+caseAltAnyR :: RewriteH CoreExpr -> (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr
+caseAltAnyR t ts = caseAnyR t (\ n -> altR (ts n))
+
+-- | Rewrite one child of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Id'], 'CoreExpr')]
+caseAltOneR :: RewriteH CoreExpr -> (Int -> RewriteH CoreExpr) -> RewriteH CoreExpr
+caseAltOneR t ts = caseOneR t (\ n -> altR (ts n))
 
 ---------------------------------------------------------------------
 
