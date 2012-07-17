@@ -5,7 +5,7 @@ Fibonacci (Tupling)
 
 * In progress (Drew).
 
-* Interesting rewrites: case-split(-inline), fold
+* Interesting rewrites: ww-split tactic, case-split(-inline), fold
 
 
 Flatten
