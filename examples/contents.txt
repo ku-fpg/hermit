@@ -5,6 +5,8 @@ Fibonacci (Tupling)
 
 * In progress (Drew).
 
+* Interesting rewrites: case-split(-inline), fold
+
 
 Flatten
 =======
@@ -19,6 +21,9 @@ Flatten
 Hanoi
 =====
 
+* Another tupling transformation
+
+* Initial and target Haskell implementation given. Derivation not started.
 
 
 Haskell 2012 Paper
