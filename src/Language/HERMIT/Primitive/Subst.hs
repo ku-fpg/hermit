@@ -20,29 +20,27 @@ import Data.Maybe
 externals :: [External]
 externals =
          [
-           external "alpha" (\nm -> promoteR (alphaLambda (Just nm)) :: RewriteH Core)
+           external "alpha" (\nm -> promoteExprR (alphaLambda (Just nm)) :: RewriteH Core)
                 [ "alpha 'v renames the bound variable in a Lambda expression to v."]
-         , external "alpha" (promoteR (alphaLambda Nothing) :: RewriteH Core)
+         , external "alpha" (promoteExprR (alphaLambda Nothing) :: RewriteH Core)
                 [ "renames the bound variable in a lambda expression."]
-         , external "alpha-let" (promoteR alphaLet :: RewriteH Core)
+         , external "alpha-let" (promoteExprR alphaLet :: RewriteH Core)
                 [ "Alpha rename for any Let expr."]
-         , external "alpha-let-nonrec" (\nm -> promoteR (alphaNonRecLet (Just nm)) :: RewriteH Core)
+         , external "alpha-let-nonrec" (\nm -> promoteExprR (alphaNonRecLet (Just nm)) :: RewriteH Core)
                 [ "alpha-let-nonrec 'v renames the bound variable in a NonRecursive Let expression to v."]
-         , external "alpha-let-rec1" (\nm -> promoteR (alphaRecLetOne (Just nm)) :: RewriteH Core)
+         , external "alpha-let-rec1" (\nm -> promoteExprR (alphaRecLetOne (Just nm)) :: RewriteH Core)
                 [ "alpha-let-rec1 'v renames the bound variable in a Recursive Let expression (with a single binding) to v."]
 
            -- the remaining are really just for testing.
-         , external "alpha-alt" (promoteR alphaAlt :: RewriteH Core)
+         , external "alpha-alt" (promoteAltR alphaAlt :: RewriteH Core)
                 [ "Alpha rename (for a single Case Alternative)."]
-         , external "alpha-case" (promoteR alphaCase :: RewriteH Core)
+         , external "alpha-case" (promoteExprR alphaCase :: RewriteH Core)
                 [ "Alpha renaming for each alternative of a Case."]
          ]
 
-bindList :: Bind Id -> [Id]
+bindList :: CoreBind -> [Id]
 bindList (NonRec b _) = [b]
-
-bindList (Rec binds) = map fst binds
-
+bindList (Rec binds)  = map fst binds
 
 newVarName :: Id -> TH.Name
 newVarName x = TH.mkName $ (showSDoc (ppr x) ++ "New")
@@ -112,7 +110,7 @@ trySubstR :: Id -> CoreExpr -> RewriteH CoreExpr
 trySubstR v e = tryR (substR v e)
 
 substR :: Id -> CoreExpr -> RewriteH CoreExpr
-substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
+substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ anyR rule6
     where -- The 6 rules from the textbook for the simple lambda calculus.
         rule12 :: RewriteH CoreExpr
         rule12 = whenM (varT (==v)) (return expReplacement)
@@ -125,7 +123,12 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
                       then alphaLambda Nothing >>> rule345
                       else lamR (substR v expReplacement)
 
-        rule6 = anyR (promoteExprR $ substR v expReplacement)
+        rule6 :: RewriteH Core
+        rule6 =  do core <- idR
+                    case core of
+                      ExprCore _ -> promoteExprR (substR v expReplacement)
+                      _          -> anyR rule6
+
         -- like Rule 3 and 4/5 above, but for lets
         rule78 :: RewriteH CoreExpr
         rule78 = do Let bds _e <- idR
@@ -136,6 +139,7 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
 
         -- edk?  Do we need to worry about clashes with the VBind component of a Case?
         --  For now, it is ignored here.
+        rule9 :: RewriteH CoreExpr
         rule9 = caseAnyR (substR v expReplacement) (\_ -> substAltR v expReplacement)
 
 -- edk !! Note, this subst handles name clashes with variables bound in the Alt form,
