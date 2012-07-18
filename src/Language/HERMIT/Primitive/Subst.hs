@@ -32,10 +32,14 @@ externals =
                 [ "alpha-let-rec1 'v renames the bound variable in a Recursive Let expression (with a single binding) to v."]
 
            -- the remaining are really just for testing.
+         , external "alpha-case" (promoteExprR alphaCase :: RewriteH Core)
+                [ "renames the bound variables in a case expression."]
          , external "alpha-alt" (promoteAltR alphaAlt :: RewriteH Core)
                 [ "Alpha rename (for a single Case Alternative)."]
-         , external "alpha-case" (promoteExprR alphaCase :: RewriteH Core)
-                [ "Alpha renaming for each alternative of a Case."]
+         , external "alpha-case-wild" (\ nm -> promoteExprR (alphaCaseWild (Just nm)) :: RewriteH Core)
+                [ "Alpha renaming for the wildcard pattern in a Case."]
+         , external "alpha-case-wild" (promoteExprR (alphaCaseWild Nothing) :: RewriteH Core)
+                [ "Alpha renaming for the wildcard pattern in a Case."]
          ]
 
 bindList :: CoreBind -> [Id]
@@ -90,8 +94,16 @@ alphaRecLetOne nm = do Let (Rec [(v, _)]) _ <- idR
                                   (trySubstR v $ Var v')
                                   (\ [(_,be)] e' -> Let (Rec [(v', be)]) e')
 
--- there is no alphaCase.
--- instead alphaAlt performs renaming over an individual Case alternative
+alphaCase :: RewriteH CoreExpr
+alphaCase = alphaCaseWild Nothing >+> anyR (promoteAltR alphaAlt)
+
+-- Only renames the wildcard identifier
+alphaCaseWild :: Maybe TH.Name -> RewriteH CoreExpr
+alphaCaseWild nm = do Case _ v _ _ <- idR
+                      let newname = fromMaybe (newVarName v) nm
+                      v' <- freshVarT' newname (idType v)
+                      caseT idR (\ _ -> tryR $ substAltR v $ Var v') (\ e _ -> Case e v)
+
 alphaAlt :: RewriteH CoreAlt
 alphaAlt = do (con, vs, _) <- idR
               freshBoundIds <- sequence $ fmap freshVarT vs
@@ -110,7 +122,7 @@ trySubstR :: Id -> CoreExpr -> RewriteH CoreExpr
 trySubstR v e = tryR (substR v e)
 
 substR :: Id -> CoreExpr -> RewriteH CoreExpr
-substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ anyR rule6
+substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
     where -- The 6 rules from the textbook for the simple lambda calculus.
         rule12 :: RewriteH CoreExpr
         rule12 = whenM (varT (==v)) (return expReplacement)
@@ -123,16 +135,13 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ anyR rule6
                       then alphaLambda Nothing >>> rule345
                       else lamR (substR v expReplacement)
 
-        rule6 :: RewriteH Core
-        rule6 =  do core <- idR
-                    case core of
-                      ExprCore _ -> promoteExprR (substR v expReplacement)
-                      _          -> anyR rule6
+        rule6 :: RewriteH CoreExpr
+        rule6 =  anyR (promoteExprR $ substR v expReplacement)
 
         -- like Rule 3 and 4/5 above, but for lets
         rule78 :: RewriteH CoreExpr
         rule78 = do Let bds _e <- idR
-                    guardMsg (v `elem` bindList bds) "Substitution var clashes with Let var"
+                    guardMsg (v `elem` bindList bds) "Substitution variable clashes with Let var."
                     if null $ List.intersect (bindList bds) (coreExprFreeIds expReplacement)
                      then letAnyR (substBindR v expReplacement) (substR v expReplacement)
                      else alphaLet >>> rule78
@@ -140,17 +149,21 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ anyR rule6
         -- edk?  Do we need to worry about clashes with the VBind component of a Case?
         --  For now, it is ignored here.
         rule9 :: RewriteH CoreExpr
-        rule9 = caseAnyR (substR v expReplacement) (\_ -> substAltR v expReplacement)
+        rule9 = do Case _ x _ _ <- idR
+                   guardMsg (x /= v) "Substitution variable clashes with Case wildcard."
+                   (if x `elem` coreExprFreeIds expReplacement
+                      then alphaCaseWild Nothing
+                      else idR) >>> caseAnyR (substR v expReplacement) (\_ -> substAltR v expReplacement)
 
 -- edk !! Note, this subst handles name clashes with variables bound in the Alt form,
 -- since the scope of these bound variables is within the Alt.
 substAltR :: Id -> CoreExpr -> RewriteH CoreAlt
 substAltR v expReplacement =
     do (_, bs, _) <- idR
-       guardMsg (v `elem` bs) "Substitution var clashes with Alt binders"
-       if null $ List.intersect bs (coreExprFreeIds expReplacement)
-        then altR (substR v expReplacement)
-        else alphaAlt >>> altR (substR v expReplacement)
+       guardMsg (v `elem` bs) "Substitution variable clashes with Alt binders"
+       (if null $ List.intersect bs (coreExprFreeIds expReplacement)
+         then idR
+         else alphaAlt) >>> altR (substR v expReplacement)
 
 
 -- edk !! Note, this subst DOES NOT handle name clashes with variables bound in the Bind form,
@@ -185,6 +198,6 @@ letSubstR = rewrite $ \ c exp ->
 --         | otherwise -> fail "LetSubst failed. (is a type variable)"
       _ -> fail "LetSubst failed. Expr is not a Non-recursive Let."
 
--- tests ...
-alphaCase :: RewriteH CoreExpr
-alphaCase = caseAnyR (fail "alphaCase") (\ _ -> alphaAlt)
+-- -- tests ...
+-- alphaCase :: RewriteH CoreExpr
+-- alphaCase = caseAnyR (fail "alphaCase") (\ _ -> alphaAlt)
