@@ -102,7 +102,7 @@ alphaCaseWild :: Maybe TH.Name -> RewriteH CoreExpr
 alphaCaseWild nm = do Case _ v _ _ <- idR
                       let newname = fromMaybe (newVarName v) nm
                       v' <- freshVarT' newname (idType v)
-                      caseT idR (\ _ -> tryR $ substAltR v $ Var v') (\ e _ -> Case e v)
+                      caseT idR (\ _ -> tryR $ substAltR v $ Var v') (\ e _ -> Case e v')
 
 alphaAlt :: RewriteH CoreAlt
 alphaAlt = do (con, vs, _) <- idR
