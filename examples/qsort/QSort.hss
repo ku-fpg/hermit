@@ -1,0 +1,37 @@
+-- WARNING: this is the code from flatten.  I've just copied it here as a starting point.
+
+consider 'flatten
+{
+  consider 'flatten
+  fix-intro
+  0
+  unfold-rule "ww"
+  any-call (unfold '.)
+  any-call (unfold 'wrap)
+  any-call (unfold 'unwrap)
+  any-call (unfold '.)
+  bash
+  unshadow
+  any-bu case-float-arg
+  {
+    consider case
+    any-bu (apply-rule "repH ++")
+    bash
+    any-bu (unfold-rule "rep-abs-fusion")
+    {
+      2
+      0
+      unfold-rule "repH (:)"
+      one-td (unfold-rule "repH []")
+      unfold-rule "(.) id"
+    }
+  }
+  {
+    consider app
+    unfold 'fix
+  }
+}
+bash
+unshadow
+one-td (unfold 'absH)
+
