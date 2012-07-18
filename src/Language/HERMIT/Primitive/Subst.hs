@@ -146,8 +146,6 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
                      then letAnyR (substBindR v expReplacement) (substR v expReplacement)
                      else alphaLet >>> rule78
 
-        -- edk?  Do we need to worry about clashes with the VBind component of a Case?
-        --  For now, it is ignored here.
         rule9 :: RewriteH CoreExpr
         rule9 = do Case _ x _ _ <- idR
                    guardMsg (x /= v) "Substitution variable clashes with Case wildcard."
@@ -160,7 +158,7 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
 substAltR :: Id -> CoreExpr -> RewriteH CoreAlt
 substAltR v expReplacement =
     do (_, bs, _) <- idR
-       guardMsg (v `elem` bs) "Substitution variable clashes with Alt binders"
+       guardMsg (v `notElem` bs) "Substitution variable clashes with Alt binders"
        (if null $ List.intersect bs (coreExprFreeIds expReplacement)
          then idR
          else alphaAlt) >>> altR (substR v expReplacement)
