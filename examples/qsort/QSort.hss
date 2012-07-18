@@ -1,8 +1,6 @@
--- WARNING: this is the code from flatten.  I've just copied it here as a starting point.
-
-consider 'flatten
+consider 'qsort
 {
-  consider 'flatten
+  consider 'qsort
   fix-intro
   0
   unfold-rule "ww"
@@ -11,27 +9,32 @@ consider 'flatten
   any-call (unfold 'unwrap)
   any-call (unfold '.)
   bash
-  unshadow
-  any-bu case-float-arg
+  any-td case-float-arg
+  bash
   {
     consider case
-    any-bu (apply-rule "repH ++")
+    any-td (apply-rule "repH ++")
     bash
     any-bu (unfold-rule "rep-abs-fusion")
-    {
-      2
-      0
-      unfold-rule "repH (:)"
-      one-td (unfold-rule "repH []")
-      unfold-rule "(.) id"
-    }
-  }
-  {
-    consider app
-    unfold 'fix
+    any-td (apply-rule "repH ++")
+    bash
+    any-bu (unfold-rule "rep-abs-fusion")
+    any-td (unfold-rule "repH (:)")
+    any-td (unfold-rule "repH []")
+    any-td (unfold-rule "(.) id")
   }
 }
+{
+  consider app
+  unfold 'fix
+}
+any-td (unfold '.)
 bash
-unshadow
 one-td (unfold 'absH)
+unshadow
+{
+  consider let
+  alpha-let-rec1 'work
+}
 
+-- More to do.  Can eliminate nested cases.
