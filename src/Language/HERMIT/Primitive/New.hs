@@ -249,7 +249,7 @@ caseSplit nm = do
 --
 -- > caseSplitInline nm = caseSplit nm >>> anybuR (inlineName nm)
 caseSplitInline :: TH.Name -> RewriteH Core
-caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteR (inlineName nm))
+caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineName nm)
 
 {-
 exprBinder :: TranslateH CoreExpr [(Id,ContextPath)]

@@ -4,6 +4,7 @@ import GhcPlugins
 
 import Control.Arrow
 
+import Language.HERMIT.GHC
 import Language.HERMIT.Primitive.Navigation
 -- import Language.HERMIT.Primitive.Debug (traceR)
 import Language.HERMIT.Primitive.GHC
@@ -24,6 +25,8 @@ externals =
                 , "rather than constructor or literal." ].+ Eval .+ Deep .+ TODO
             , external "inline" (promoteExprR . inlineName :: TH.Name -> RewriteH Core)
                 [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
+            -- , external "inline-case-constructor" (promoteExprR inlineCaseConstructor :: RewriteH Core)
+            --     [ "Inline the wildcard binder of the current case expression." ].+ Eval .+ Deep .+ TODO
             ]
 
 inlineName :: TH.Name -> RewriteH CoreExpr
@@ -35,12 +38,16 @@ inlineName nm = var nm >>> inline False
 -- TODO: check the scoping for the inline operation; we can mess things up here.
 inline :: Bool -> RewriteH CoreExpr
 inline scrutinee = rewrite $ \ c e -> case e of
-    Var n0 -> -- A candiate for inlining
+    Var v  -> -- A candiate for inlining
               either fail (\(e',d) -> condM (apply (extractT (ensureDepth d)) c e')
                                             (return e')
                                             (fail "values in inlined expression have been rebound"))
-                     (getUnfolding scrutinee n0 c)
-    _      -> fail "inline failed (No variable)"
+                     (getUnfolding scrutinee v c)
+    _      -> fail "inline failed (not a variable)"
+
+inlineCaseConstructor :: RewriteH CoreExpr
+inlineCaseConstructor = do Case _ v _ _ <- idR
+                           extractR $ anybuR $ promoteExprR $ inlineName $ id2THName v
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
 -- Assumes minimum depth is 0.

@@ -3,6 +3,8 @@ module Language.HERMIT.GHC
         -- | Things that have been copied from GHC, or imported directly, for various reasons.
           ppIdInfo
         , thRdrNameGuesses
+        , name2THName
+        , id2THName
         , cmpTHName2Name
         , findNameFromTH
         , alphaTyVars
@@ -26,9 +28,27 @@ import qualified Language.Haskell.TH as TH
 
 --------------------------------------------------------------------------
 
--- | Hacks untill we can find the correct way of doing these.
+-- idName :: Id -> Name
+-- nameOccName :: Name -> OccName
+-- occNameString :: OccName -> String
+-- getOccName :: NamedThing a => a -> OccName
+-- getName :: NamedThing a => a -> Name
+-- getOccString :: NamedThing a => a -> String
+
+-- TH.nameBase :: TH.Name -> String
+-- TH.mkName :: String -> TH.Name
+
+-- | Converts a GHC 'Name' to a Template Haskell 'TH.Name', going via a 'String'.
+name2THName :: Name -> TH.Name
+name2THName = TH.mkName . getOccString
+
+-- | Converts an 'Id' to a Template Haskell 'TH.Name', going via a 'String'.
+id2THName :: Id -> TH.Name
+id2THName = name2THName . idName
+
+-- | Hacks until we can find the correct way of doing these.
 cmpTHName2Name :: TH.Name -> Name -> Bool
-cmpTHName2Name th_nm ghc_nm = TH.nameBase th_nm == occNameString (nameOccName ghc_nm)
+cmpTHName2Name th_nm ghc_nm = TH.nameBase th_nm == getOccString ghc_nm -- occNameString (nameOccName ghc_nm)
 
 -- | This is hopeless O(n), because the we could not generate the 'OccName's that match,
 -- for use of the GHC 'OccEnv'.

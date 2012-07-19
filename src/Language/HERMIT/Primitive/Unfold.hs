@@ -50,13 +50,13 @@ stashDef label = sideEffectR $ \ _ core ->
 -- | Apply a stashed definition (like inline, but looks in stash instead of context)
 stashApply :: String -> RewriteH CoreExpr
 stashApply label = translate $ \ c e -> do
-    (Def i rhs) <- lookupDef label
+    Def i rhs <- lookupDef label
     case e of
-        (Var i') -> if idName i == idName i'
+        Var i' -> if idName i == idName i'
                     then do rhsFrees <- apply freeVarsT c rhs
-                            if and (map (inScope c) rhsFrees)
-                            then return rhs
-                            else fail "stashApply: some frees in stashed definition are no longer in scope"
+                            if all (inScope c) rhsFrees
+                              then return rhs
+                              else fail "stashApply: some frees in stashed definition are no longer in scope"
                     else fail $ "stashApply: stashed definition applies to: " ++ showPpr i ++ " not: " ++ showPpr i'
         _ -> fail "stashApply: not a Var"
 
