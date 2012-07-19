@@ -1,0 +1,30 @@
+consider 'mapPlus1Int
+load "../fib/WWSplitTactic.hss"
+rhs-of 'work
+one-td (unfold 'unwrap)
+any-call (unfold '.)
+innermost (beta-reduce <+ safe-let-subst)
+0
+case-split-inline 'x
+{ 3 -- Nil case
+  any-call (unfold 'abs)
+  any-call (unfold 'f)
+  any-call (unfold 'rep)
+  any-bu case-reduce
+}
+{ 2 -- Singleton case
+  any-call (unfold 'abs)
+  any-call (unfold 'f)
+  any-call (unfold 'rep)
+  any-bu case-reduce
+  -- here we make use of the already solved Nil case
+  any-call (unfold 'wrap)
+  any-call (unfold 'work)
+  any-call (unfold '.)
+  any-call (unfold '.)
+  one-td (unfold 'abs)
+  bash
+  one-td (unfold 'rep)
+  bash
+}
+-- todo: finish the Cons2 case

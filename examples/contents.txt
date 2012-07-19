@@ -25,6 +25,14 @@ Hanoi
 
 * Initial and target Haskell implementation given. Derivation not started.
 
+Map
+===
+
+* List unrolling.
+
+* In progress (Drew).
+
+* Main rewrites: any-call, one-td, unfold, case-split(-inline)
 
 Haskell 2012 Paper
 ==================
