@@ -7,6 +7,7 @@ module Language.HERMIT.Context
        , Context
        , initContext
        , (@@)
+       , addAltBindings
        , addBinding
        , addCaseBinding
        , addLambdaBinding
@@ -21,7 +22,7 @@ module Language.HERMIT.Context
 
 import Prelude hiding (lookup)
 import GhcPlugins hiding (empty)
-import Data.Map hiding (map)
+import Data.Map hiding (map, foldr)
 
 import Language.KURE
 
@@ -114,6 +115,15 @@ addLambdaBinding n env
   where
         next_depth = succ (hermitDepth env)
 
+-- | Add the Ids bound by a DataCon in a case. Like lambda bindings,
+-- in that we know nothing about them, but all bound at the same depth,
+-- so we cannot just fold addLambdaBinding over the list.
+addAltBindings :: [Id] -> Context -> Context
+addAltBindings ns env
+        = env { hermitBindings = foldr (\n bds -> insert n (LAM next_depth) bds) (hermitBindings env) ns
+              , hermitDepth    = next_depth
+              }
+  where next_depth = succ (hermitDepth env)
 
 -- | Lookup the binding for an identifier in a 'Context'.
 lookupHermitBinding :: Id -> Context -> Maybe HermitBinding

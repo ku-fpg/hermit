@@ -361,7 +361,7 @@ instance Walker Context HermitM CoreAlt where
 
 -- | Translate a case alternative of the form: ('AltCon', ['Id'], 'CoreExpr')
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
-altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (foldr addLambdaBinding c bs @@ 0) e
+altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (addAltBindings bs c @@ 0) e
 
 -- | Rewrite the 'CoreExpr' child of a case alternative of the form: ('AltCon', 'Id', 'CoreExpr')
 altR :: RewriteH CoreExpr -> RewriteH CoreAlt
