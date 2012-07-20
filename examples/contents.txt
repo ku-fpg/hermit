@@ -30,9 +30,9 @@ Map
 
 * List unrolling.
 
-* In progress (Drew).
+* Completed.
 
-* Main rewrites: any-call, one-td, unfold, case-split(-inline)
+* Main rewrites: simplify, any-call, unfold, case-split(-inline), stash-defn/stash-apply.
 
 Haskell 2012 Paper
 ==================
