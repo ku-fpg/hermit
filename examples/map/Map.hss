@@ -1,30 +1,46 @@
 consider 'mapPlus1Int
-load "../fib/WWSplitTactic.hss"
-rhs-of 'work
-one-td (unfold 'unwrap)
-any-call (unfold '.)
-innermost (beta-reduce <+ safe-let-subst)
-0
-case-split-inline 'x
-{ 3 -- Nil case
-  any-call (unfold 'abs)
-  any-call (unfold 'f)
-  any-call (unfold 'rep)
-  any-bu case-reduce
-}
-{ 2 -- Singleton case
-  any-call (unfold 'abs)
-  any-call (unfold 'f)
-  any-call (unfold 'rep)
-  any-bu case-reduce
-  -- here we make use of the already solved Nil case
-  any-call (unfold 'wrap)
-  any-call (unfold 'work)
+{ load "../fib/WWSplitTactic.hss"
+  consider 'work
+  0
+  stash-defn origwork
+  0
+  one-td (unfold 'unwrap)
   any-call (unfold '.)
-  any-call (unfold '.)
-  one-td (unfold 'abs)
-  bash
-  one-td (unfold 'rep)
-  bash
+  innermost (beta-reduce <+ safe-let-subst)
+  0
+  case-split-inline 'x
+  { 3 -- Nil case
+    any-call (unfold 'abs)
+    any-call (unfold 'f)
+    any-call (unfold 'rep)
+    simplify
+  }
+  { 2 -- Singleton case
+    any-call (unfold 'abs)
+    any-call (unfold 'f)
+    any-call (unfold 'wrap)
+    any-call (unfold 'rep)
+    -- here we make use of the already solved Nil case
+    any-call (unfold 'work)
+    simplify
+    any-call (unfold 'abs)
+    simplify
+  }
+  { 1 -- Cons2 case
+    any-call (unfold 'abs)
+    any-call (unfold 'f)
+    any-call (unfold 'wrap)
+    simplify
+    any-bu (stash-apply origwork)
+    any-call (unfold 'unwrap)
+    simplify
+    innermost (unfold-rule precondition1)
+    any-call (unfold 'f)
+    innermost case-reduce
+    any-call (unfold 'rep)
+    innermost case-reduce
+    any-call (unfold 'wrap)
+    simplify
+    innermost (unfold-rule precondition2)
+  }
 }
--- todo: finish the Cons2 case

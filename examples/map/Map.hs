@@ -26,6 +26,8 @@ wrap f = abs . f . rep
 -- needed for WWSplitTactic.hss
 {-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
 {-# RULES "inline-fix" forall f . fix f = let work = f work in work #-}
+{-# RULES "precondition1" forall xs . abs (rep xs) = xs #-}
+{-# RULES "precondition2" forall xs . rep (abs xs) = xs #-}
 
 -- can apply "ww" rule to this
 mapPlus1Int :: [Int] -> [Int]
