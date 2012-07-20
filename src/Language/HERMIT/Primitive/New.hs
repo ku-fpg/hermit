@@ -64,6 +64,8 @@ externals = map ((.+ Experiment) . (.+ TODO))
          , external "case-split-inline" (caseSplitInline :: TH.Name -> RewriteH Core)
                 [ "Like case-split, but additionally inlines the matched constructor "
                 , "applications for all occurances of the named variable." ]
+         , external "simplify" (simplifyR :: RewriteH Core)
+                [ "innermost (unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ dead-code-elimination)" ]
          ] ++
          [ external "any-call" (withUnfold :: RewriteH Core -> RewriteH Core)
                 [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
@@ -71,6 +73,8 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 ] .+ Deep
          ]
 
+simplifyR :: RewriteH Core
+simplifyR = innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ dce))
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
