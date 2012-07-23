@@ -8,6 +8,7 @@ import Control.Monad
 
 import qualified Data.Map as Map
 
+import Language.HERMIT.Monad
 import Language.HERMIT.Context
 import Language.HERMIT.External
 import Language.HERMIT.Kure
@@ -37,9 +38,18 @@ externals =
                 ,"Note: due to associativity, if you wanted to fold 5 + 6 + 6, "
                 ,"you first need to apply an associativity rewrite."
                 ] .+ Context .+ Deep
+         , external "stash-fold" (promoteExprR . stashFoldR)
+                ["Fold a stashed definition."] .+ Context .+ Deep
          ]
 
 ------------------------------------------------------------------------
+
+stashFoldR :: String -> RewriteH CoreExpr
+stashFoldR label = translate $ \ c e -> do
+    Def i rhs <- lookupDef label
+    maybe (fail "fold: no match")
+          return
+          (fold i rhs e)
 
 foldR :: TH.Name -> RewriteH CoreExpr
 foldR nm =
