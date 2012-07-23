@@ -5,6 +5,7 @@ top
 
 -- do the w/w split
 consider 'fib
+{
 load "WWSplitTactic.hss"
 
 -- now ready to start neil's derivation
@@ -31,7 +32,7 @@ case-split-inline 'n
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
 --   unfold 'f
 { 1 ; any-call (unfold 'f); simplify }
-2 ; 0  -- we're working in the n+1 rhs for a while
+{ 2 ; 0  -- we're working in the n+1 rhs for a while
   { 1
     any-bu (unfold 'f)
     simplify
@@ -65,6 +66,10 @@ case-split-inline 'n
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
 --   fold 'work
+  { rhs-of 't ; 0 ; stash-fold origwork }
+
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = work n in (y,x+y)
-
+}
+}
+innermost dead-code-elimination

@@ -3,9 +3,9 @@ Fibonacci (Tupling)
 
 * Example of Tupling transformation.
 
-* In progress (Drew).
+* Completed
 
-* Interesting rewrites: ww-split tactic, case-split(-inline), fold
+* Interesting rewrites: ww-split tactic, case-split(-inline), fold, stash-(fold/defn/apply), let-tuple
 
 
 Flatten
