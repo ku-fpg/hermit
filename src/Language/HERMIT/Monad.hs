@@ -105,6 +105,9 @@ instance MonadIO HermitM where
 instance MonadUnique HermitM where
    getUniqueSupplyM = liftCoreM getUniqueSupplyM
 
+instance MonadThings HermitM where
+   lookupThing = liftCoreM . lookupThing
+
 ----------------------------------------------------------------------------
 
 newName :: TH.Name -> HermitM Name

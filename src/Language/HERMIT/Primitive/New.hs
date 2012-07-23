@@ -142,27 +142,23 @@ testQuery r = f <$> testM r
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."
 
-findFn :: (MonadUnique m, MonadIO m) => ModGuts -> String -> m Id
-findFn modguts nm = do
-    namedFn <- case findNameFromTH (mg_rdr_env modguts) $ TH.mkName nm of
-        [f] -> return f
-        [] -> fail $ "cannot find " ++ nm
-        _  -> fail $ "too many " ++ nm ++ " found"
+findId :: (MonadUnique m, MonadIO m, MonadThings m) => ModGuts -> String -> m Id
+findId modguts nm =
+    case findNameFromTH (mg_rdr_env modguts) $ TH.mkName nm of
+        []  -> fail $ "cannot find " ++ nm
+        [n] -> lookupId n
+        -- TODO: HACK HACK HACK for getting the (,) constructor
+        -- we get back two results, the tycon (,) and the datacon (,)
+        -- in that order, so we choose the value-level match
+        [_,n] -> lookupId n
+        ns  -> fail $ "too many " ++ nm ++ " found:\n" ++ intercalate ", " (map (showPpr . getSrcLoc) ns)
 
  --   liftIO $ print ("VAR", GHC.showSDoc . GHC.ppr $ namedFn)
-
-    uq <- getUniqueM
-    let n_tyvar = GHC.setTyVarUnique (head alphaTyVars) uq
-        n_ty = GHC.mkTyVarTy n_tyvar
-        ty = mkForAllTy n_tyvar $ mkFunTy (mkFunTy n_ty n_ty) n_ty
-        namedId = GHC.mkVanillaGlobal namedFn ty
-        --                mkGlobalVar :: IdDetails -> Name -> Type -> IdInfo -> Id
-    return namedId
 
 fixIntro :: RewriteH CoreBind
 fixIntro = translate $ \ c e -> case e of
         Rec [(f,e0)] -> do
-                fixId <- findFn (hermitModGuts c) "Data.Function.fix"
+                fixId <- findId (hermitModGuts c) "Data.Function.fix"
 
                 let coreFix = App (App (Var fixId) (Type (idType f)))
 
@@ -179,7 +175,7 @@ fixIntro = translate $ \ c e -> case e of
 
 fixSpecialization :: RewriteH CoreExpr
 fixSpecialization = do
-        fixId <- translate $ \ c e -> findFn (hermitModGuts c) "Data.Function.fix"
+        fixId <- translate $ \ c e -> findId (hermitModGuts c) "Data.Function.fix"
 
         -- fix (t::*) (f :: t -> t) (a :: t) :: t
         App (App (App (Var fx) (Type t)) f) a <- idR
