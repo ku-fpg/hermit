@@ -12,6 +12,8 @@ start:
 test:
 	- rm *.o *.hi Fib
 	- ghc --make -O2 -o Fib -fforce-recomp Fib.hs
-	- ./Fib
+	- ./Fib > timing.txt
+	- echo "===========================================" >> timing.txt
 	- $(HERMIT) Fib.hs Fib.hss resume
-	- ./Fib
+	- ./Fib >> timing.txt
+	- cat timing.txt
