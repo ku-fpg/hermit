@@ -66,6 +66,8 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 , "applications for all occurances of the named variable." ]
          , external "simplify" (simplifyR :: RewriteH Core)
                 [ "innermost (unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ dead-code-elimination)" ]
+         , external "let-tuple" (promoteExprR . letTupleR :: TH.Name -> RewriteH Core)
+                [ "let x = e1 in (let y = e2 in e) ==> let (x,y) = (e1,e2) in e" ]
          ] ++
          [ external "any-call" (withUnfold :: RewriteH Core -> RewriteH Core)
                 [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
@@ -75,6 +77,23 @@ externals = map ((.+ Experiment) . (.+ TODO))
 
 simplifyR :: RewriteH Core
 simplifyR = innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ dce))
+
+letTupleR :: TH.Name -> RewriteH CoreExpr
+letTupleR nm = do
+    Let (NonRec b1 e1) (Let (NonRec b2 e2) e) <- idR
+    translate $ \ c _ -> do
+        tupleConId <- findId (hermitModGuts c) "(,)"
+        fstId <- findId (hermitModGuts c) "Data.Tuple.fst"
+        sndId <- findId (hermitModGuts c) "Data.Tuple.snd"
+        let e1TyE = Type (exprType e1)
+            e2TyE = Type (exprType e1)
+            rhs = mkCoreApps (Var tupleConId) [e1TyE, e2TyE, e1, e2]
+        letId <- newVarH nm (exprType rhs)
+        let fstE = mkCoreApps (Var fstId) [e1TyE, e2TyE, Var letId]
+            sndE = mkCoreApps (Var sndId) [e1TyE, e2TyE, Var letId]
+        return $ Let (NonRec letId rhs)
+                 $ Let (NonRec b1 fstE)
+                   $ Let (NonRec b2 sndE) e
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
