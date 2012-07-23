@@ -65,13 +65,13 @@ fold i lam exp = do
     let m = Map.fromListWith checkEqual [(k,Just v) | (k,v) <- al ]
 
     es <- sequence [ join (Map.lookup v m) | v <- vs ]
-    return (foldl App (Var i) es)
+    return $ mkCoreApps (Var i) es
 
 -- | Collect arguments to function we are folding, so we can unify with them.
 foldArgs :: CoreExpr -> ([Var], CoreExpr)
 foldArgs = go []
     where go vs (Lam v e) = go (v:vs) e
-          go vs e         = (vs, e)
+          go vs e         = (reverse vs, e)
 
 -- Note: return list can have duplicate keys, caller is responsible
 -- for checking that dupes refer to same expression
