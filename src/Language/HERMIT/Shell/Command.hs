@@ -28,6 +28,7 @@ import Language.HERMIT.External
 import Language.HERMIT.Interp
 import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.Kure
+import Language.HERMIT.Monad
 import Language.HERMIT.PrettyPrinter
 import Language.HERMIT.Primitive.Navigation
 import Language.HERMIT.Primitive.Inline
@@ -264,6 +265,7 @@ data CommandLineState = CommandLineState
         -- these two should be in a reader
         , cl_dict        :: M.Map String [Dynamic]
         , cl_kernel       :: ScopedKernel
+        , cl_logger      :: Logger
         -- and the session state (perhaps in a seperate state?)
         , cl_session      :: SessionState
         }
@@ -342,10 +344,13 @@ commandLine filesToLoad behavior modGuts = do
                       , not (null fileName)
                       ] `ourCatch` \ msg -> putStrToConsole $ "Booting Failure: " ++ msg
 
-    flip scopedKernel modGuts $ \ skernel sast -> do
+
+    logger <- GHC.liftIO mkLogger
+
+    flip (scopedKernel (logger_debugMessage logger)) modGuts $ \ skernel sast -> do
 
         let sessionState = SessionState sast "clean" def unicodeConsole 80 False False
-            shellState = CommandLineState [] [] dict skernel sessionState
+            shellState = CommandLineState [] [] dict skernel logger sessionState
 
         completionMVar <- newMVar shellState
 
@@ -719,3 +724,28 @@ showGraph graph tags this@(SAST n) =
                 ])
   where
           paths = [ (b,c) | (a,b,c) <- graph, a == this ]
+
+----------------------------------------------------------------------------------------------
+
+-- Our "Logger"; should be in its own module at some point
+
+data Logger = Logger
+        { logger_debugMessage :: DebugMessage -> IO ()
+        , logger_resetTicks   :: IO ()
+        , logger_showTicks    :: IO ()
+        }
+
+
+mkLogger :: IO Logger
+mkLogger =
+   return $ Logger
+        { logger_debugMessage = \ msg -> case msg of
+                DebugTick    msg      -> putStrLn $ "(X) " ++ msg
+                DebugMessage msg core -> putStrLn $ "[" ++ msg ++ "]\n"
+                                                 ++ showCore core
+        , logger_resetTicks = return ()
+        , logger_showTicks = return ()
+        }
+  where
+          showCore :: Core -> String
+          showCore = show2

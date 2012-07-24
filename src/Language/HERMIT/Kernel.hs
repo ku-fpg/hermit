@@ -49,8 +49,8 @@ type KernelState = Map AST (DefStash, ModGuts)
 -- | Start a HERMIT client by providing an IO function that takes the initial 'Kernel' and inital 'AST' handle.
 --   The 'Modguts' to 'CoreM' Modguts' function required by GHC Plugins is returned.
 --   The callback is only ever called once.
-hermitKernel :: (Kernel -> AST -> IO ()) -> ModGuts -> CoreM ModGuts
-hermitKernel callback modGuts = do
+hermitKernel :: (DebugMessage -> IO ()) -> (Kernel -> AST -> IO ()) -> ModGuts -> CoreM ModGuts
+hermitKernel debugging callback modGuts = do
 
         msgMV :: MVar (Msg KernelState ModGuts) <- liftIO newEmptyMVar
 
@@ -75,8 +75,7 @@ hermitKernel callback modGuts = do
             sendReqWrite fn = sendReq (fmap ( return . ((),) ) . fn) >>= runKureMonad return fail
 
         let hm_env :: HermitMEnv
-            hm_env = mkHermitMEnv $ \ _ -> return ()
-
+            hm_env = mkHermitMEnv $ debugging
 
         let kernel :: Kernel
             kernel = Kernel
