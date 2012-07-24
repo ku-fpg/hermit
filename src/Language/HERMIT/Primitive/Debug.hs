@@ -6,6 +6,7 @@ import GhcPlugins as GHC
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.PrettyPrinter
+import Language.HERMIT.Monad
 
 externals :: [External]
 externals = map (.+ Debug)
@@ -22,11 +23,9 @@ observeFailureR str m = m <+ observeR str
 
 -- Print out the Core, with a message
 observeR :: (Injection a Core, Generic a ~ Core) => String -> RewriteH a
-observeR msg = extractR $ sideEffectR $ \ _ core -> do
-        liftIO (putStrLn $ "[traceR: " ++ msg ++ "]")
-        liftIO (putStrLn $ show2 (core :: Core))
-        liftIO (putStrLn $ "[end traceR]")
+observeR msg = extractR $ sideEffectR $ \ _ core ->
+        sendDebugMessage $ DebugMessage msg core
 
 -- Just say something, every time the rewrite is done
 traceR :: String -> RewriteH a
-traceR msg = sideEffectR $ \ _ _ -> liftIO (putStrLn $ "traceR: " ++ msg)
+traceR msg = sideEffectR $ \ _ _ -> sendDebugMessage $ DebugTick msg
