@@ -138,7 +138,7 @@ newTypeVarH nm kind = flip mkTyVar kind <$> newName nm
 -- | A message packet.
 data DebugMessage :: * where
         DebugTick    :: String -> DebugMessage
-        DebugMessage :: String -> () -> DebugMessage
+        DebugMessage :: String -> Core -> DebugMessage
 
 mkHermitMEnv :: (DebugMessage -> IO ()) -> HermitMEnv
 mkHermitMEnv debugger = HermitMEnv
