@@ -8,20 +8,21 @@ set-renderer ascii
 }
 compare-values 'beta_reduce_start 'beta_reduce_end
 
--- Tests: case-reduce
+-- Tests: case-reduce 
 { rhs-of 'case_reduce_start
   let-subst
   case-reduce
 }
 compare-values 'case_reduce_start 'case_reduce_end
 
+-- Tests: add-rule
 add-rule capture 'capture_me
-
 { consider 'new_rule_start
   any-call (apply-rule capture)
 }
 compare-values 'new_rule_start 'new_rule_end
 
+-- Tests: fold
 { rhs-of 'fold_start
   any-bu (fold 'double)
 }
