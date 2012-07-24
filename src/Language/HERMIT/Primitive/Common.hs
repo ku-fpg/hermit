@@ -37,3 +37,10 @@ caseAltVarsT = caseT mempty (const altVarsT) $ \ () v _ vs -> map (v:) vs
 --   caseT id (const altFreeVarsT) $ \ _ bndr _ fs -> [ f bndr | f <- fs ]
 altFreeVarsT :: TranslateH CoreAlt (Id -> [Var])
 altFreeVarsT = altT freeVarsT $ \ _con ids frees coreBndr -> nub frees \\ nub (coreBndr : ids)
+
+------------------------------------------------------------------------------
+
+wrongExprForm :: String -> String
+wrongExprForm form = "Expression does not have the form: " ++ form
+
+------------------------------------------------------------------------------

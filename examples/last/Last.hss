@@ -27,4 +27,7 @@ fix-intro
     case-reduce
   }
   dead-code-elimination
+  let-float-arg
+  1
+  unfold 'wrap
 }

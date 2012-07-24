@@ -37,13 +37,14 @@ inlineName nm = var nm >>> inline False
 -- be prompted to more general cases.
 -- TODO: check the scoping for the inline operation; we can mess things up here.
 inline :: Bool -> RewriteH CoreExpr
-inline scrutinee = rewrite $ \ c e -> case e of
+inline scrutinee = prefixFailMsg "Inline failed: " $
+  rewrite $ \ c e -> case e of
     Var v  -> -- A candiate for inlining
               either fail (\(e',d) -> condM (apply (extractT (ensureDepth d)) c e')
                                             (return e')
-                                            (fail "values in inlined expression have been rebound"))
+                                            (fail "values in inlined expression have been rebound."))
                      (getUnfolding scrutinee v c)
-    _      -> fail "inline failed (not a variable)"
+    _      -> fail "not a variable."
 
 inlineCaseConstructor :: RewriteH CoreExpr
 inlineCaseConstructor = do Case _ v _ _ <- idR

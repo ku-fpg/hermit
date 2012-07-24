@@ -47,34 +47,37 @@ externals =
 
 -- | case (let v = e1 in e2) of alts ==> let v = e1 in case e2 of alts
 letFloatCase :: RewriteH CoreExpr
-letFloatCase = do
-    captures <- caseT letVarsT (const (pure ())) $ \ vs _ _ _ -> vs
-    cFrees   <- freeVarsT -- so we get type variables too
-    caseT (if null (intersect cFrees captures) then idR else alphaLet)
-          (const idR)
-          (\ (Let bnds e) b ty alts -> Let bnds (Case e b ty alts))
+letFloatCase = prefixFailMsg "Let floating from Case failed: " $
+  do
+     captures <- caseT letVarsT (const (pure ())) $ \ vs _ _ _ -> vs
+     cFrees   <- freeVarsT -- so we get type variables too
+     caseT (if null (intersect cFrees captures) then idR else alphaLet)
+           (const idR)
+           (\ (Let bnds e) b ty alts -> Let bnds (Case e b ty alts))
 
 -- | (case s of alt1 -> e1; alt2 -> e2) v ==> case s of alt1 -> e1 v; alt2 -> e2 v
 caseFloatApp :: RewriteH CoreExpr
-caseFloatApp = do
-    captures <- appT caseAltVarsT freeVarsT (flip (map . intersect))
-    appT (caseAllR idR
-                   (\i -> if null (captures !! i) then idR else alphaAlt))
-         idR
-         (\(Case s b _ty alts) v -> let newTy = exprType (App (case head alts of (_,_,f) -> f) v)
-                                    in Case s b newTy [ (c, ids, App f v)
-                                                      | (c,ids,f) <- alts ])
+caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
+  do
+     captures <- appT caseAltVarsT freeVarsT (flip (map . intersect))
+     appT (caseAllR idR
+                    (\i -> if null (captures !! i) then idR else alphaAlt))
+          idR
+          (\(Case s b _ty alts) v -> let newTy = exprType (App (case head alts of (_,_,f) -> f) v)
+                                     in Case s b newTy [ (c, ids, App f v)
+                                                       | (c,ids,f) <- alts ])
 
 -- | f (case s of alt1 -> e1; alt2 -> e2) ==> case s of alt1 -> f e1; alt2 -> f e2
 caseFloatArg :: RewriteH CoreExpr
-caseFloatArg = do
-    captures <- appT freeVarsT caseAltVarsT (map . intersect)
-    appT idR
-         (caseAllR idR
-                   (\i -> if null (captures !! i) then idR else alphaAlt))
-         (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
-                                    in Case s b newTy [ (c, ids, App f e)
-                                                      | (c,ids,e) <- alts ])
+caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
+  do
+     captures <- appT freeVarsT caseAltVarsT (map . intersect)
+     appT idR
+          (caseAllR idR
+                    (\i -> if null (captures !! i) then idR else alphaAlt))
+          (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
+                                     in Case s b newTy [ (c, ids, App f e)
+                                                       | (c,ids,e) <- alts ])
 
 -- | case (case s1 of alt11 -> e11; alt12 -> e12) of alt21 -> e21; alt22 -> e22
 --   ==>
@@ -82,24 +85,26 @@ caseFloatArg = do
 --     alt11 -> case e11 of alt21 -> e21; alt22 -> e22
 --     alt12 -> case e12 of alt21 -> e21; alt22 -> e22
 caseFloatCase :: RewriteH CoreExpr
-caseFloatCase = do
-    captures <- caseT caseAltVarsT (const altFreeVarsT) $ \ vss bndr _ fs -> map (intersect (concatMap ($ bndr) fs)) vss
-    caseT (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
-          (const idR)
-          (\ (Case s1 b1 ty1 alts1) b2 ty2 alts2 -> Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ])
+caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
+  do
+     captures <- caseT caseAltVarsT (const altFreeVarsT) $ \ vss bndr _ fs -> map (intersect (concatMap ($ bndr) fs)) vss
+     caseT (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
+           (const idR)
+           (\ (Case s1 b1 ty1 alts1) b2 ty2 alts2 -> Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ])
 
 -- | Case-of-known-constructor rewrite
 caseReduce :: RewriteH CoreExpr
 caseReduce = letTransform >>> tryR (repeatR letSubstR)
-    where letTransform = withPatFailMsg "caseReduce failed, not a Case" $
+    where letTransform = prefixFailMsg "Case reduction failed: " $
+                         withPatFailMsg (wrongExprForm "Case e v t alts") $
                          do Case s _ _ alts <- idR
                             case isDataCon s of
-                              Nothing -> fail "caseReduce failed, not a DataCon"
+                              Nothing -> fail "head of scrutinee is not a data constructor."
                               Just (dc, args) -> case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
                                     [(bs,e')] -> let valArgs = drop (length args - length bs) args -- discard any type arguments
                                                   in return $ nestedLets e' $ zip bs valArgs
-                                    []   -> fail "caseReduce failed, no matching alternative"
-                                    _    -> fail "caseReduce failed, more than one matching alt"
+                                    []   -> fail "no matching alternative."
+                                    _    -> fail "more than one matching alternative."
 
 
 -- WARNING: BROKEN!!!!

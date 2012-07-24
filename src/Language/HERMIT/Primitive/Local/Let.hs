@@ -27,7 +27,7 @@ externals =
                      [ "(let v = ev in e) x ==> let v = ev in e x" ]                    .+ Commute .+ Shallow .+ Bash
          , external "let-float-arg" (promoteExprR letFloatArg :: RewriteH Core)
                      [ "f (let v = ev in e) ==> let v = ev in f e" ]                    .+ Commute .+ Shallow .+ Bash
-         , external "let-float-let" (promoteExprR (letFloatLet) <+ promoteProgramR letFloatLetTop :: RewriteH Core)
+         , external "let-float-let" (promoteProgramR letFloatLetTop <+ promoteExprR (letFloatLet) :: RewriteH Core)
                      [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow .+ Bash
          , external "case-float-let" (promoteExprR caseFloatLet :: RewriteH Core)
                      [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow .+ Bash
@@ -41,41 +41,41 @@ externals =
 -- not_defined nm = fail $ nm ++ " not implemented!"
 
 letIntro ::  TH.Name -> RewriteH CoreExpr
-letIntro nm = setFailMsg "letIntro failed" $
+letIntro nm = prefixFailMsg "Let introduction failed: " $
               contextfreeT $ \ e -> do letvar <- newVarH nm (exprType e)
                                        return $ Let (NonRec letvar e) (Var letvar)
 
 letFloatApp :: RewriteH CoreExpr
-letFloatApp = setFailMsg "letFloatApp failed" $
+letFloatApp = prefixFailMsg "Let floating from App function failed: " $
   do vs <- appT letVarsT freeVarsT intersect
      let letAction = if null vs then idR else alphaLet
      appT letAction idR $ \ (Let bnds e) x -> Let bnds $ App e x
 
 letFloatArg :: RewriteH CoreExpr
-letFloatArg = setFailMsg "letFloatArg failed" $
+letFloatArg = prefixFailMsg "Let floating from App argument failed: " $
   do vs <- appT freeVarsT letVarsT intersect
      let letAction = if null vs then idR else alphaLet
      appT idR letAction $ \ f (Let bnds e) -> Let bnds $ App f e
 
 letFloatLet :: RewriteH CoreExpr
-letFloatLet = setFailMsg "letFloatLet failed" $
+letFloatLet = prefixFailMsg "Let floating from Let failed: " $
   do vs <- letNonRecT letVarsT freeVarsT (\ _ -> intersect)
      let bdsAction = if null vs then idR else nonRecR alphaLet
      letT bdsAction idR $ \ (NonRec v (Let bds ev)) e -> Let bds $ Let (NonRec v ev) e
 
 letFloatLetTop :: RewriteH CoreProgram
-letFloatLetTop = setFailMsg "letFloatLetTop failed" $
+letFloatLetTop = setFailMsg "Let floating to top level failed: program does not have the form: NonRec v (Let (NonRec w ew) ev) : bds" $
   do NonRec v (Let (NonRec w ew) ev) : bds <- idR
      return (NonRec w ew : NonRec v ev : bds)
 
 caseFloatLet :: RewriteH CoreExpr
-caseFloatLet = setFailMsg "caseFloatLet failed" $
+caseFloatLet = prefixFailMsg "Case floating from Let failed: " $
   do vs <- letNonRecT caseAltVarsT idR (\ letVar caseVars _ -> elem letVar $ concat caseVars)
      let bdsAction = if not vs then idR else (nonRecR alphaCase)
      letT bdsAction idR $ \ (NonRec v (Case s b ty alts)) e -> Case s b ty [ (con, ids, Let (NonRec v ec) e) | (con, ids, ec) <- alts]
 
 letToCase :: RewriteH CoreExpr
-letToCase = setFailMsg "letToCase failed" $
+letToCase = prefixFailMsg "Converting Let to Case failed: " $
   do Let (NonRec v ev) _ <- idR
      caseBndr <- freshVarT v
      letT (return ()) (substR v (Var caseBndr)) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]

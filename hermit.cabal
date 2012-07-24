@@ -25,7 +25,7 @@ Library
                  data-default >= 0.4,
                  ghc >= 7.4,
                  haskeline >= 0.6.4.7 && < 0.7,
-                 kure >= 2.1.25,
+                 kure >= 2.2.1,
                  marked-pretty >= 0.1,
                  mtl,
                  stm,
@@ -64,7 +64,7 @@ Library
        Language.HERMIT.Primitive.Subst
        Language.HERMIT.Primitive.Unfold
        Language.HERMIT.Primitive.Utils
-       
+
        Language.HERMIT.PrettyPrinter
        Language.HERMIT.PrettyPrinter.AST
        Language.HERMIT.PrettyPrinter.Clean
@@ -89,4 +89,4 @@ Executable hermit
     default-language: Haskell2010
     Main-Is: Main.hs
     Hs-Source-Dirs: driver
-    Ghc-Options: 
+    Ghc-Options:
