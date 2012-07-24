@@ -15,7 +15,6 @@ module Language.HERMIT.Kure
        , LensH
        , idR
        -- * Generic Data Type
-       -- $typenote
        , Core(..)
        , CoreDef(..)
        -- * Congruence combinators

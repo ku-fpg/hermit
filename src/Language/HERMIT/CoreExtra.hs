@@ -32,7 +32,7 @@ data Core = ModGutsCore  ModGuts            -- ^ The module.
 ---------------------------------------------------------------------
 
 -- | A (potentially recursive) definition is an identifier and an expression.
---   In GHC Core, recursive definitions are encoded as (Id, CoreExpr) pairs.
+--   In GHC Core, recursive definitions are encoded as ('Id', 'CoreExpr') pairs.
 --   This data type is isomorphic.
 data CoreDef = Def Id CoreExpr
 
