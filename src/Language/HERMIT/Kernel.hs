@@ -74,6 +74,11 @@ hermitKernel callback modGuts = do
         let sendReqWrite :: (KernelState -> CoreM KernelState) -> IO ()
             sendReqWrite fn = sendReq (fmap ( return . ((),) ) . fn) >>= runKureMonad return fail
 
+        let applyH :: TranslateH ModGuts a -> ModGuts -> HermitM a
+            applyH r core = do
+                cxt <- liftIO $ initContext core
+                apply r cxt core
+
         let kernel :: Kernel
             kernel = Kernel
                 { resumeK = \ name -> sendDone $ \ st -> findWithErrMsg name st (\ msg -> throwGhcException $ ProgramError $ msg ++ ", exiting HERMIT and aborting GHC compilation.") (return.snd)
@@ -84,12 +89,12 @@ hermitKernel callback modGuts = do
                                                                                                                (\ defs' core' -> do syn' <- liftIO $ takeMVar syntax_names
                                                                                                                                     return $ return (syn', insert syn' (defs',core') st))
                                                                                                                (return . fail)
-                                                                                                               (apply (extractR r) (initContext core) core)
+                                                                                                               (applyH (extractR r) core)
 
                 , queryK = \ name q -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM defs
                                                                                                                    (\ _ -> return.return)
                                                                                                                    (return . fail)
-                                                                                                                   (apply (extractT q) (initContext core) core)
+                                                                                                                   (applyH (extractT q) core)
 
                 , deleteK = \ name -> sendReqWrite (return . delete name)
 
