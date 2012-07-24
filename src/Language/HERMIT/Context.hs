@@ -25,7 +25,6 @@ import GhcPlugins hiding (empty)
 import Data.Map hiding (map, foldr)
 
 import Language.KURE
-import Control.Concurrent.STM
 
 ------------------------------------------------------------------------
 
@@ -53,7 +52,6 @@ data Context = Context
         , hermitDepth    :: Int                     -- ^ The depth of the bindings.
         , hermitPath     :: AbsolutePath            -- ^ The 'AbsolutePath' to the current node from the root.
         , hermitModGuts  :: ModGuts                 -- ^ The 'ModGuts' of the current module.
-        , hermitTickBoxes :: TMVar (Map String Integer)     -- ^ a mapping from label to number of ticks
         }
 
 ------------------------------------------------------------------------
@@ -66,13 +64,10 @@ instance PathContext Context where
 -- We add the top-level bindings to the environment /immediately/, because
 -- they can be used in rules. In a sense, anything exported is part
 -- of a big recusive group.
-initContext :: ModGuts -> IO Context
-initContext modGuts = do
-        tickMap <- atomically $ newTMVar empty
-        let start = Context empty 0 rootAbsPath modGuts tickMap
-            binds = mg_binds modGuts
-        return $ Prelude.foldl (flip addBinding) start binds
-
+initContext :: ModGuts -> Context
+initContext modGuts = Prelude.foldl (flip addBinding) start binds
+   where start = Context empty 0 rootAbsPath modGuts
+         binds = mg_binds modGuts
 
 -- | Update the context by extending the stored 'AbsolutePath' to a child.
 (@@) :: Context -> Int -> Context
