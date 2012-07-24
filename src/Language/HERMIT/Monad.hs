@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections, GADTs, KindSignatures #-}
 
 module Language.HERMIT.Monad
           (
@@ -14,6 +14,10 @@ module Language.HERMIT.Monad
           , saveDef
           , lookupDef
           , getStash
+          , HermitMEnv(..)
+          , DebugMessage(..)
+          , mkHermitMEnv
+          , sendDebugMessage
 ) where
 
 import Prelude hiding (lookup)
@@ -41,17 +45,25 @@ type Label = String
 -- | A store of saved definitions.
 type DefStash = Map Label CoreDef
 
--- | The HERMIT monad is kept abstract.
-newtype HermitM a = HermitM (DefStash -> CoreM (KureMonad (DefStash, a)))
+-- | A way of sending messages to top level
+newtype HermitMEnv = HermitMEnv { hs_debugChan :: DebugMessage -> IO () }
 
-runHermitM :: HermitM a -> DefStash -> CoreM (KureMonad (DefStash, a))
+-- | The HERMIT monad is kept abstract.
+newtype HermitM a = HermitM (HermitMEnv -> DefStash -> CoreM (KureMonad (DefStash, a)))
+
+runHermitM :: HermitM a -> HermitMEnv -> DefStash -> CoreM (KureMonad (DefStash, a))
 runHermitM (HermitM f) = f
 
 getStash :: HermitM DefStash
-getStash = HermitM (\ s -> return $ return (s, s))
+getStash = HermitM (\ _ s -> return $ return (s, s))
 
 putStash :: DefStash -> HermitM ()
-putStash s = HermitM (\ _ -> return $ return (s, ()))
+putStash s = HermitM (\ _ _ -> return $ return (s, ()))
+
+sendDebugMessage :: DebugMessage -> HermitM ()
+sendDebugMessage msg = HermitM $ \ ch s -> do
+                        liftIO $ hs_debugChan ch msg
+                        return $ return (s, ())
 
 -- | Save a definition for future use.
 saveDef :: Label -> CoreDef -> HermitM ()
@@ -62,8 +74,8 @@ lookupDef :: Label -> HermitM CoreDef
 lookupDef l = getStash >>= (lookup l >>> maybe (fail "Definition not found.") return)
 
 -- | Eliminator for 'HermitM'.
-runHM :: DefStash -> (DefStash -> a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b
-runHM s success failure ma = runHermitM ma s >>= runKureMonad (uncurry success) failure
+runHM :: HermitMEnv -> DefStash -> (DefStash -> a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b
+runHM env s success failure ma = runHermitM ma env s >>= runKureMonad (\ (a,b) -> success a b) failure
 
 ----------------------------------------------------------------------------
 
@@ -80,24 +92,24 @@ instance Applicative HermitM where
 
 instance Monad HermitM where
 -- return :: a -> HermitM a
-   return a = HermitM $ \ s -> return (return (s,a))
+   return a = HermitM $ \ _ s -> return (return (s,a))
 
 -- (>>=) :: HermitM a -> (a -> HermitM b) -> HermitM b
-   (HermitM gcm) >>= f = HermitM $ gcm >=> runKureMonad (\ (s', a) -> runHermitM (f a) s') (return . fail)
+   (HermitM gcm) >>= f = HermitM $ \ env -> gcm env >=> runKureMonad (\ (s', a) -> runHermitM (f a) env s') (return . fail)
 
 -- fail :: String -> HermitM a
-   fail msg = HermitM $ \ _ -> return (fail msg)
+   fail msg = HermitM $ \ _ _ -> return (fail msg)
 
 instance MonadCatch HermitM where
 -- catchM :: HermitM a -> (String -> HermitM a) -> HermitM a
-   (HermitM gcm) `catchM` f = HermitM $ \ s -> gcm s >>= runKureMonad (return.return) (\ msg -> runHermitM (f msg) s)
+   (HermitM gcm) `catchM` f = HermitM $ \ env s -> gcm env s >>= runKureMonad (return.return) (\ msg -> runHermitM (f msg) env s)
 
 ----------------------------------------------------------------------------
 
 -- | 'CoreM' can be lifted to 'HermitM'.
 liftCoreM :: CoreM a -> HermitM a
-liftCoreM ma = HermitM $ \ s -> do a <- ma
-                                   return (return (s,a))
+liftCoreM ma = HermitM $ \ _ s -> do a <- ma
+                                     return (return (s,a))
 
 instance MonadIO HermitM where
    liftIO = liftCoreM . liftIO
@@ -122,3 +134,13 @@ newTypeVarH :: TH.Name -> Kind -> HermitM TyVar
 newTypeVarH nm kind = flip mkTyVar kind <$> newName nm
 
 ----------------------------------------------------------------------------
+
+-- | A message packet.
+data DebugMessage :: * where
+        DebugTick    :: String -> DebugMessage
+        DebugMessage :: String -> () -> DebugMessage
+
+mkHermitMEnv :: (DebugMessage -> IO ()) -> HermitMEnv
+mkHermitMEnv debugger = HermitMEnv
+                { hs_debugChan = debugger
+                }

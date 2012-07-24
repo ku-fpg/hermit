@@ -74,19 +74,25 @@ hermitKernel callback modGuts = do
         let sendReqWrite :: (KernelState -> CoreM KernelState) -> IO ()
             sendReqWrite fn = sendReq (fmap ( return . ((),) ) . fn) >>= runKureMonad return fail
 
+        let hm_env :: HermitMEnv
+            hm_env = mkHermitMEnv $ \ _ -> return ()
+
+
         let kernel :: Kernel
             kernel = Kernel
                 { resumeK = \ name -> sendDone $ \ st -> findWithErrMsg name st (\ msg -> throwGhcException $ ProgramError $ msg ++ ", exiting HERMIT and aborting GHC compilation.") (return.snd)
 
                 , abortK  = sendDone $ \ _ -> throwGhcException (ProgramError "Exiting HERMIT and aborting GHC compilation.")
 
-                , applyK = \ name r -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM defs
+                , applyK = \ name r -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM hm_env
+                                                                                                               defs
                                                                                                                (\ defs' core' -> do syn' <- liftIO $ takeMVar syntax_names
                                                                                                                                     return $ return (syn', insert syn' (defs',core') st))
                                                                                                                (return . fail)
                                                                                                                (apply (extractR r) (initContext core) core)
 
-                , queryK = \ name q -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM defs
+                , queryK = \ name q -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM hm_env
+                                                                                                                   defs
                                                                                                                    (\ _ -> return.return)
                                                                                                                    (return . fail)
                                                                                                                    (apply (extractT q) (initContext core) core)
