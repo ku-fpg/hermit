@@ -8,22 +8,23 @@ fix-intro
   let-float-arg
   { 1
     unfold-rule "ww"
-    { 1
-      unfold 'fix
-      { 0
-        0
-        0
-        repeat (any-call (unfold '.))
-        eta-expand 'b
-        0
-        eta-expand 'bs
-        0
-        unfold 'unwrap
-        any-td (unfold 'f)
-        case-reduce
-        one-td (unfold 'wrap >>> case-reduce)
-      }
-    }
+    1
+    unfold 'fix
+    alpha-let-rec1 'work
+    0
+    0
+    0
+    any-td (unfold '.)
+    eta-expand 'b
+    0
+    eta-expand 'bs
+    0
+    unfold 'unwrap
+    unfold 'f
+    case-reduce
+    consider app
+    unfold 'wrap
+    case-reduce
   }
   dead-code-elimination
 }
