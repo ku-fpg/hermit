@@ -9,7 +9,6 @@ module Language.HERMIT.Kure
        , module Language.KURE.Injection
        , KureMonad, runKureMonad, fromKureMonad
        -- * Synonyms
-
        -- | In HERMIT, 'Translate', 'Rewrite' and 'Lens' always operate on the same context and monad.
        , TranslateH
        , RewriteH
@@ -92,24 +91,6 @@ type LensH a b = Lens Context HermitM a b
 -- | A synonym for the identity rewrite.  Convienient to avoid importing Control.Category.
 idR :: RewriteH a
 idR = Control.Category.id
-
----------------------------------------------------------------------
-
--- $typenote
---   NOTE: 'Type' is not included in the generic datatype.
---   However, we could have included it and provided the facility for descending into types.
---   We have not done so because
---     (a) we do not need that functionality, and
---     (b) the types are complicated and we're not sure that we understand them.
-
--- | Core is the sum type of all nodes in the AST that we wish to be able to traverse.
---   All 'Node' instances in HERMIT define their 'Generic' type to be 'Core'.
-data Core = ModGutsCore  ModGuts            -- ^ The module.
-          | ProgramCore  CoreProgram        -- ^ A program (list of top-level bindings).
-          | BindCore     CoreBind           -- ^ A binding group.
-          | DefCore      CoreDef            -- ^ A recursive definition.
-          | ExprCore     CoreExpr           -- ^ An expression.
-          | AltCore      CoreAlt            -- ^ A case alternative.
 
 ---------------------------------------------------------------------
 
