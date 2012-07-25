@@ -35,7 +35,7 @@ considerName = oneNonEmptyPathToT . bindGroup
 -- so we only need one of these?
 bindGroup :: TH.Name -> Core -> Bool
 bindGroup nm (BindCore (NonRec v _))  =  nm `cmpName` v
-bindGroup nm (BindCore (Rec bds))     =  any (cmpName nm) $ map fst bds
+bindGroup nm (BindCore (Rec bds))     =  any (cmpName nm . fst) bds
 bindGroup _  _                        =  False
 
 -- find a specific binding's rhs.
@@ -115,4 +115,4 @@ cmpName :: TH.Name -> Id -> Bool
 cmpName = cmpTHName2Id
 
 var :: TH.Name -> RewriteH CoreExpr
-var nm = whenM (varT $ \ v -> nm `cmpName` v) idR
+var nm = whenM (varT $ cmpName nm) idR
