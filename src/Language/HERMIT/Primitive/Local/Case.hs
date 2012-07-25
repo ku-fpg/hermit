@@ -101,7 +101,7 @@ caseReduce = letTransform >>> tryR (repeatR letSubstR)
                             case isDataCon s of
                               Nothing -> fail "head of scrutinee is not a data constructor."
                               Just (dc, args) -> case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
-                                    [(bs,e')] -> let valArgs = drop (length args - length bs) args -- discard any type arguments
+                                    [(bs,e')] -> let valArgs = filter isValArg args -- discard any type arguments
                                                   in return $ nestedLets e' $ zip bs valArgs
                                     []   -> fail "no matching alternative."
                                     _    -> fail "more than one matching alternative."
