@@ -70,7 +70,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
          , external "simplify" (simplifyR :: RewriteH Core)
                 [ "innermost (unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ dead-code-elimination)" ]
          , external "let-tuple" (promoteExprR . letTupleR :: TH.Name -> RewriteH Core)
-                [ "let x = e1 in (let y = e2 in e) ==> let (x,y) = (e1,e2) in e" ]
+                [ "let x = e1 in (let y = e2 in e) ==> let t = (e1,e2) in (let x = fst t in (let y = snd t in e))" ]
          ] ++
          [ external "any-call" (withUnfold :: RewriteH Core -> RewriteH Core)
                 [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
@@ -83,20 +83,24 @@ simplifyR = innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <
 
 letTupleR :: TH.Name -> RewriteH CoreExpr
 letTupleR nm = do
-    Let (NonRec b1 e1) (Let (NonRec b2 e2) e) <- idR
-    translate $ \ c _ -> do
-        tupleConId <- findId (hermitModGuts c) "(,)"
-        fstId <- findId (hermitModGuts c) "Data.Tuple.fst"
-        sndId <- findId (hermitModGuts c) "Data.Tuple.snd"
-        let e1TyE = Type (exprType e1)
-            e2TyE = Type (exprType e1)
-            rhs = mkCoreApps (Var tupleConId) [e1TyE, e2TyE, e1, e2]
-        letId <- newVarH nm (exprType rhs)
-        let fstE = mkCoreApps (Var fstId) [e1TyE, e2TyE, Var letId]
-            sndE = mkCoreApps (Var sndId) [e1TyE, e2TyE, Var letId]
-        return $ Let (NonRec letId rhs)
-                 $ Let (NonRec b1 fstE)
-                   $ Let (NonRec b2 sndE) e
+    Let (NonRec x e1) (Let (NonRec y e2) e) <- idR
+    condM (letT (nonRecT (pure ()) const)
+                (letT (nonRecT freeVarsT (flip const)) (pure ()) const)
+                elem)
+          (fail "'x' is used in 'e2'")
+          (translate $ \ c _ -> do
+                tupleConId <- findId (hermitModGuts c) "(,)"
+                fstId <- findId (hermitModGuts c) "Data.Tuple.fst"
+                sndId <- findId (hermitModGuts c) "Data.Tuple.snd"
+                let e1TyE = Type (exprType e1)
+                    e2TyE = Type (exprType e1)
+                    rhs = mkCoreApps (Var tupleConId) [e1TyE, e2TyE, e1, e2]
+                letId <- newVarH nm (exprType rhs)
+                let fstE = mkCoreApps (Var fstId) [e1TyE, e2TyE, Var letId]
+                    sndE = mkCoreApps (Var sndId) [e1TyE, e2TyE, Var letId]
+                return $ Let (NonRec letId rhs)
+                        $ Let (NonRec x fstE)
+                         $ Let (NonRec y sndE) e)
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
@@ -173,7 +177,7 @@ findId modguts nm =
         -- we get back two results, the tycon (,) and the datacon (,)
         -- in that order, so we choose the value-level match
         [_,n] -> lookupId n
-        ns  -> fail $ "too many " ++ nm ++ " found:\n" ++ intercalate ", " (map (showPpr . getSrcLoc) ns)
+        ns  -> fail $ "too many " ++ nm ++ " found:\n" ++ intercalate ", " (map showPpr ns)
 
  --   liftIO $ print ("VAR", GHC.showSDoc . GHC.ppr $ namedFn)
 

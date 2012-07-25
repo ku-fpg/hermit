@@ -1,32 +1,31 @@
 {-# LANGUAGE TemplateHaskell #-}
+-- for criterion
 import Criterion.Main
-
 import Control.DeepSeq.TH
+
 -- so we can fix-intro
 import Data.Function (fix)
 
-import Prelude hiding (,)
+-- so we can let-tuple
 import GHC.Tuple
 
--- we need a better way for when we need to case on Nat
 data Nat = Zero | Succ Nat
-
-deriveNFData ''Nat
-
-main :: IO ()
-main = defaultMain
-        [ bench "20" $ nf fib 20
-        ]
 
 {-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
 {-# RULES "inline-fix" forall f . fix f = let work = f work in work #-}
 {-# RULES "precondition" forall w . wrap (unwrap w) = w #-}
 
--- beginning of neil's derivation
+-- original fib definition
 fib :: Nat -> Nat
 fib Zero = Zero
 fib (Succ Zero) = Succ Zero
 fib (Succ (Succ n)) = fib (Succ n) + fib n
+
+-- goal:
+-- fib' = fst work
+--   where work Zero = (Zero, Succ Zero)
+--         work (Succ n) = let (x,y) = work n
+--                         in (y,x+y)
 
 instance Num Nat where
     n1 + Zero = n1
@@ -42,9 +41,11 @@ wrap h = fst . h
 unwrap :: (Nat -> Nat) -> Nat -> (Nat, Nat)
 unwrap h n = (h n, h (Succ n))
 
-{- todo?:
-    convert this to definiton above
-fib :: Nat -> Nat
-fib n = if n < 2 then 1 else fib(n-1) + fib(n-2)
--}
+-- for criterion
+deriveNFData ''Nat
 
+main :: IO ()
+main = defaultMain
+        [ bench "15" $ nf fib 15
+        , bench "30" $ nf fib 30
+        ]
