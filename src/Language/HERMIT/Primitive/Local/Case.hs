@@ -59,9 +59,11 @@ letFloatCase = prefixFailMsg "Let floating from Case failed: " $
 caseFloatApp :: RewriteH CoreExpr
 caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
   do
-     captures <- appT caseAltVarsT freeVarsT (flip (map . intersect))
-     appT (caseAllR idR
-                    (\i -> if null (captures !! i) then idR else alphaAlt))
+    captures      <- appT caseAltVarsT freeVarsT (flip (map . intersect))
+    binderCapture <- appT caseBinderVarT freeVarsT intersect
+    appT ((if (null binderCapture) then idR else alphaCaseWild Nothing)
+          >>> (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
+         )
           idR
           (\(Case s b _ty alts) v -> let newTy = exprType (App (case head alts of (_,_,f) -> f) v)
                                      in Case s b newTy [ (c, ids, App f v)
@@ -71,13 +73,15 @@ caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
 caseFloatArg :: RewriteH CoreExpr
 caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
   do
-     captures <- appT freeVarsT caseAltVarsT (map . intersect)
-     appT idR
-          (caseAllR idR
-                    (\i -> if null (captures !! i) then idR else alphaAlt))
-          (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
-                                     in Case s b newTy [ (c, ids, App f e)
-                                                       | (c,ids,e) <- alts ])
+    captures      <- appT freeVarsT caseAltVarsT (map . intersect)
+    binderCapture <- appT freeVarsT caseBinderVarT intersect
+    appT idR
+         ((if (null binderCapture) then idR else alphaCaseWild Nothing)
+          >>> (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
+         )
+         (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
+                                    in Case s b newTy [ (c, ids, App f e)
+                                                      | (c,ids,e) <- alts ])
 
 -- | case (case s1 of alt11 -> e11; alt12 -> e12) of alt21 -> e21; alt22 -> e22
 --   ==>
@@ -87,22 +91,27 @@ caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
 caseFloatCase :: RewriteH CoreExpr
 caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
   do
-     captures <- caseT caseAltVarsT (const altFreeVarsT) $ \ vss bndr _ fs -> map (intersect (concatMap ($ bndr) fs)) vss
-     caseT (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
-           (const idR)
-           (\ (Case s1 b1 ty1 alts1) b2 ty2 alts2 -> Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ])
+    captures <- caseT caseAltVarsT (const altFreeVarsT) $ \ vss bndr _ fs -> map (intersect (concatMap ($ bndr) fs)) vss
+    -- does the binder of the inner case, shadow a free variable in any of the outer case alts?
+    -- notice, caseBinderVarT returns a singleton list
+    binderCapture <- caseT caseBinderVarT (const altFreeVarsT) $ \ innerBindr bndr _ fs -> intersect (concatMap ($ bndr) fs) innerBindr
+    caseT ((if (null binderCapture) then idR else alphaCaseWild Nothing)
+           >>>  (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
+          )
+          (const idR)
+          (\ (Case s1 b1 ty1 alts1) b2 ty2 alts2 -> Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ])
 
 -- | Case-of-known-constructor rewrite
 caseReduce :: RewriteH CoreExpr
 caseReduce = letTransform >>> tryR (repeatR letSubstR)
     where letTransform = prefixFailMsg "Case reduction failed: " $
                          withPatFailMsg (wrongExprForm "Case e v t alts") $
-                         do Case s _ _ alts <- idR
+                         do Case s binder _ alts <- idR
                             case isDataCon s of
                               Nothing -> fail "head of scrutinee is not a data constructor."
                               Just (dc, args) -> case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
                                     [(bs,e')] -> let valArgs = filter isValArg args -- discard any type arguments
-                                                  in return $ nestedLets e' $ zip bs valArgs
+                                                  in return $ nestedLets e' $ (binder, s) : (zip bs valArgs)
                                     []   -> fail "no matching alternative."
                                     _    -> fail "more than one matching alternative."
 
