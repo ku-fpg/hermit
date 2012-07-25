@@ -47,7 +47,7 @@ bindList (NonRec b _) = [b]
 bindList (Rec binds)  = map fst binds
 
 newVarName :: Id -> TH.Name
-newVarName x = TH.mkName $ (showSDoc (ppr x) ++ "New")
+newVarName x = TH.mkName $ showSDoc (ppr x) ++ "New"
 
 freshVarT :: Id -> TranslateH a Id
 freshVarT v = constT $ newVarH (newVarName v) (idType v)
@@ -80,17 +80,17 @@ alphaRecLet :: RewriteH CoreExpr
 alphaRecLet = do Let bds@(Rec _) _ <- idR
                  let boundIds = bindList bds
                  freshBoundIds <- sequence $ fmap freshVarT boundIds
-                 letRecDefT (\ _ -> (foldr seqSubst idR (zip boundIds freshBoundIds)))
+                 letRecDefT (\ _ -> foldr seqSubst idR (zip boundIds freshBoundIds))
                             (foldr seqSubst idR (zip boundIds freshBoundIds))
                             (\ bds' e' -> let freshBds = zip freshBoundIds (map snd bds') in Let (Rec freshBds) e')
-    where seqSubst (v,v') t = t >>> (trySubstR v $ Var v')
+    where seqSubst (v,v') t = t >>> trySubstR v (Var v')
 
 
 alphaRecLetOne :: Maybe TH.Name -> RewriteH CoreExpr
 alphaRecLetOne nm = do Let (Rec [(v, _)]) _ <- idR
                        let newname = fromMaybe (newVarName v) nm
                        v' <- freshVarT' newname (idType v)
-                       letRecDefT (\ _ -> (trySubstR v $ Var v'))
+                       letRecDefT (\ _ -> trySubstR v $ Var v')
                                   (trySubstR v $ Var v')
                                   (\ [(_,be)] e' -> Let (Rec [(v', be)]) e')
 
@@ -108,7 +108,7 @@ alphaAlt :: RewriteH CoreAlt
 alphaAlt = do (con, vs, _) <- idR
               freshBoundIds <- sequence $ fmap freshVarT vs
               altT (foldr seqSubst idR (zip vs freshBoundIds)) (\ _ _ e' -> (con, freshBoundIds, e'))
-    where seqSubst (v,v') t = t >>> (trySubstR v $ Var v')
+    where seqSubst (v,v') t = t >>> trySubstR v (Var v')
 
 -- Andy's substitution rewrite
 --  E [ v::r ] ===   let (NonRec v = r) in E
@@ -129,8 +129,8 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
 
         rule345 :: RewriteH CoreExpr
         rule345 = do Lam b e <- idR
-                     guardMsg (b == v) "Subtitution var clashes with Lam"
-                     guardMsg (v `notElem` coreExprFreeIds e) "Substitution var not used in body of Lam"
+                     guardMsg (b /= v) "Subtitution var clashes with Lam"
+                     guardMsg (v `elem` coreExprFreeIds e) "Substitution var not used in body of Lam"
                      if b `elem` coreExprFreeIds expReplacement
                       then alphaLambda Nothing >>> rule345
                       else lamR (substR v expReplacement)
@@ -141,7 +141,7 @@ substR v expReplacement = (rule12 <+ rule345 <+ rule78 <+ rule9)  <+ rule6
         -- like Rule 3 and 4/5 above, but for lets
         rule78 :: RewriteH CoreExpr
         rule78 = do Let bds _e <- idR
-                    guardMsg (v `elem` bindList bds) "Substitution variable clashes with Let var."
+                    guardMsg (v `notElem` bindList bds) "Substitution variable clashes with Let var."
                     if null $ List.intersect (bindList bds) (coreExprFreeIds expReplacement)
                      then letAnyR (substBindR v expReplacement) (substR v expReplacement)
                      else alphaLet >>> rule78
@@ -173,18 +173,19 @@ substBindR v expReplacement = substNonRecBindR v expReplacement <+ substRecBindR
 substNonRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substNonRecBindR v expReplacement =
     do NonRec b _ <- idR
-       guardMsg (b == v) "Substitution var clashes wth Let bound var"
-       guardMsg (b `elem` coreExprFreeIds expReplacement) "Let bound var is free in substitution expr."
+       guardMsg (b /= v) "Substitution var clashes wth Let bound var"
+       guardMsg (b `elem` coreExprFreeIds expReplacement) "Let bound var is free in substitution expr." -- TODO: alpha rename and continue?
        nonRecR (substR v expReplacement)
 
 substRecBindR :: Id -> CoreExpr  -> RewriteH CoreBind
 substRecBindR v expReplacement =
     do exp@(Rec _) <- idR
        let boundIds = bindList exp
-       guardMsg (v `elem` boundIds) "Substitution var clashes wth Let bound var"
-       guardMsg (not . null $ List.intersect boundIds (coreExprFreeIds expReplacement)) "Let bound var is free in substitution expr."
+       guardMsg (v `notElem` boundIds) "Substitution var clashes wth Let bound var"
+       guardMsg (not . null $ List.intersect boundIds (coreExprFreeIds expReplacement)) "Let bound var is free in substitution expr." -- TODO: alpha rename and continue?
        recDefAnyR (\ _ -> substR v expReplacement)
 
+-- TO DO: Rewrite this
 letSubstR :: RewriteH CoreExpr
 letSubstR = rewrite $ \ c exp ->
     case exp of
