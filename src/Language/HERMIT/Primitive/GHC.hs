@@ -90,8 +90,8 @@ safeLetSubstR = translate $ \ env exp ->
           safeSubst NoOccInfo = False   -- unknown!
           safeSubst IAmDead   = True    -- DCE
           safeSubst (OneOcc inLam oneBr _)
-                              | inLam == True || oneBr == False = False   -- do not inline inside a lambda
-                                                                          -- or if in multiple case branches
+                              | inLam || not oneBr = False   -- do not inline inside a lambda
+                                                             -- or if in multiple case branches
                               | otherwise = True
           safeSubst _ = False   -- strange case, like a loop breaker
    in case occurAnalyseExpr exp of
@@ -198,7 +198,7 @@ rules r = do
 
 getHermitRules :: (Generic a ~ Core) => TranslateH a [(String, [CoreRule])]
 getHermitRules = translate $ \ env _e -> do
-    rb <- liftCoreM $ getRuleBase
+    rb <- liftCoreM getRuleBase
     let other_rules = [ rule
                         | top_bnds <- mg_binds (hermitModGuts env)
                         , bnd <- case top_bnds of
@@ -214,18 +214,16 @@ rules_help :: TranslateH Core String
 rules_help = do
     rulesEnv <- getHermitRules
     return  $ (show (map fst rulesEnv) ++ "\n") ++
-              (showSDoc $ pprRulesForUser $ concatMap snd rulesEnv)
+              showSDoc (pprRulesForUser $ concatMap snd rulesEnv)
 
 makeRule :: String -> Id -> CoreExpr -> CoreRule
-makeRule rule_name nm expr =
-                          mkRule True   -- auto-generated
+makeRule rule_name nm =   mkRule True   -- auto-generated
                                  False  -- local
                                  (mkFastString rule_name)
                                  NeverActive    -- because we need to call for these
                                  (varName nm)
                                  []
                                  []
-                                 expr
 
 -- TODO: check if a top-level binding
 addCoreBindAsRule :: String -> TH.Name -> RewriteH ModGuts
@@ -291,7 +289,7 @@ bindEqual _ _ = Nothing
 coreEqual :: Core -> Core -> Maybe Bool
 coreEqual (ExprCore e1) (ExprCore e2) = Just $ e1 `exprEqual` e2
 coreEqual (BindCore b1) (BindCore b2) = b1 `bindEqual` b2
-coreEqual (DefCore dc1) (DefCore dc2) = (defToRecBind [dc1]) `bindEqual` (defToRecBind [dc2])
+coreEqual (DefCore dc1) (DefCore dc2) = defToRecBind [dc1] `bindEqual` defToRecBind [dc2]
 coreEqual _             _             = Nothing
 
 compareValues :: TH.Name -> TH.Name -> TranslateH Core ()
@@ -338,7 +336,7 @@ cloneId nameMod b = do
 castElimination :: RewriteH CoreExpr
 castElimination = do
         Cast e _ <- idR
-        return $ e
+        return e
 
 {-
     go (Cast e co)      | isReflCo co' = go e

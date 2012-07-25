@@ -45,20 +45,21 @@ externals =
 ------------------------------------------------------------------------
 
 stashFoldR :: String -> RewriteH CoreExpr
-stashFoldR label = translate $ \ c e -> do
+stashFoldR label = prefixFailMsg "Fold failed: " $
+                   contextfreeT $ \ e -> do
     Def i rhs <- lookupDef label
-    maybe (fail "fold: no match")
+    maybe (fail "no match.")
           return
           (fold i rhs e)
 
 foldR :: TH.Name -> RewriteH CoreExpr
-foldR nm =
+foldR nm =  prefixFailMsg "Fold failed: " $
     translate $ \ c e -> do
-        i <- case filter (\i -> nm `cmpName` (idName i)) $ Map.keys (hermitBindings c) of
+        i <- case filter (\i -> nm `cmpName` idName i) $ Map.keys (hermitBindings c) of
                 [i] -> return i
-                _ -> fail "fold: cannot find name"
+                _ -> fail "cannot find name."
         either fail
-               (\(rhs,_d) -> maybe (fail "fold: no match")
+               (\(rhs,_d) -> maybe (fail "no match.")
                                    return
                                    (fold i rhs e))
                (getUnfolding False i c)
@@ -91,8 +92,8 @@ foldMatch :: [Var]          -- ^ vars that can unify with anything
           -> Maybe [(Var,CoreExpr)] -- ^ mapping of vars to expressions, or failure
 foldMatch vs (Var i) e | i `elem` vs = return [(i,e)]
                        | otherwise   = case e of
-                                        Var i' | i == i' -> return []
-                                        _                -> Nothing
+                                         Var i' | i == i' -> return []
+                                         _                -> Nothing
 foldMatch _  (Lit l) (Lit l') | l == l' = return []
 foldMatch vs (App e a) (App e' a') = do
     x <- foldMatch vs e e'
