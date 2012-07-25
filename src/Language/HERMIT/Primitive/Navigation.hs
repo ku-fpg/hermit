@@ -114,5 +114,6 @@ underConsideration _           _                          = False
 cmpName :: TH.Name -> Id -> Bool
 cmpName = cmpTHName2Id
 
-var :: TH.Name -> RewriteH CoreExpr
-var nm = whenM (varT $ cmpName nm) idR
+var :: TH.Name -> TranslateH CoreExpr ()
+var nm = whenM (varT $ cmpName nm) (return ())
+

@@ -56,8 +56,11 @@ externals = map ((.+ Experiment) . (.+ TODO))
                         -- TODO: does not work with rules with no arguments
          , external "unfold-rule" ((\ nm -> promoteExprR (rules nm >>> cleanupUnfold)) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ]
-         , external "var" (promoteExprR . var :: TH.Name -> RewriteH Core)
-                [ "var '<v> succeeded for variable v, and fails otherwise"] .+ Predicate
+         , external "var" (promoteExprT . var :: TH.Name -> TranslateH Core ())
+                 [ "var '<v> returns True for variable v, and False otherwise.",
+                   "Useful in combination with \"when\"." ] .+ Predicate
+         -- I've modified "var" to return () rather than being an "idR".
+         -- Instead of the old "var v >>> r" you should instead say "when (var v) r".
          , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
                 [ "case-split 'x"
                 , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ]

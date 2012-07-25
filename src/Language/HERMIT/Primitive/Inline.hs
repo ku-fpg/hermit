@@ -30,7 +30,7 @@ externals =
             ]
 
 inlineName :: TH.Name -> RewriteH CoreExpr
-inlineName nm = var nm >>> inline False
+inlineName nm = var nm >> inline False
 
 -- | The implementation of inline, an important transformation.
 -- This *only* works on a Var of the given name. It can trivially
