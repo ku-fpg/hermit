@@ -55,7 +55,7 @@ stashFoldR label = prefixFailMsg "Fold failed: " $
 foldR :: TH.Name -> RewriteH CoreExpr
 foldR nm =  prefixFailMsg "Fold failed: " $
     translate $ \ c e -> do
-        i <- case filter (\i -> nm `cmpName` idName i) $ Map.keys (hermitBindings c) of
+        i <- case filter (\i -> nm `cmpName` i) $ Map.keys (hermitBindings c) of
                 [i] -> return i
                 _ -> fail "cannot find name."
         either fail

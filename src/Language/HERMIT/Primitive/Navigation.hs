@@ -6,8 +6,9 @@ import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 
-import Control.Applicative
 import Control.Arrow
+
+import Data.Monoid
 
 import qualified Language.Haskell.TH as TH
 
@@ -33,8 +34,8 @@ considerName = oneNonEmptyPathToT . bindGroup
 -- the actual binding. TODO: modify considerName or rhsOf
 -- so we only need one of these?
 bindGroup :: TH.Name -> Core -> Bool
-bindGroup nm (BindCore (NonRec v _))  =  nm `cmpName` idName v
-bindGroup nm (BindCore (Rec bds))     =  any (cmpName nm . idName) $ map fst bds
+bindGroup nm (BindCore (NonRec v _))  =  nm `cmpName` v
+bindGroup nm (BindCore (Rec bds))     =  any (cmpName nm) $ map fst bds
 bindGroup _  _                        =  False
 
 -- find a specific binding's rhs.
@@ -43,22 +44,22 @@ rhsOf nm = onePathToT (namedBinding nm) >>^ (++ [0])
 
 -- find a named binding.
 namedBinding :: TH.Name -> Core -> Bool
-namedBinding nm (BindCore (NonRec v _))  =  nm `cmpName` idName v
-namedBinding nm (DefCore (Def v _))      =  nm `cmpName` idName v
+namedBinding nm (BindCore (NonRec v _))  =  nm `cmpName` v
+namedBinding nm (DefCore (Def v _))      =  nm `cmpName` v
 namedBinding _  _                        =  False
 
 -- find all the possible targets of consider
 considerTargets :: TranslateH Core [String]
 considerTargets = allT (collectT (promoteT $ nonRec <+ rec)) >>> arr concat
-    where nonRec = nonRecT (pure ()) (const . (:[]) . unqualified)
-          rec    = recT (const (arr (\(Def v _) -> unqualified v))) id
+    where nonRec = nonRecT mempty (\ v () -> [unqualifiedIdName v])
+          rec    = recT (const (arr (\ (Def v _) -> unqualifiedIdName v))) id
 
--- | Get the unqualified name from an Id/Var.
-unqualified :: Id -> String
-unqualified = checkCompose . reverse . showPpr . idName
-    where checkCompose ('.':_) = "."
-          checkCompose other   = reverse (takeWhile (/='.') other)
--- TODO: Does GHC provide this?
+-- -- | Get the unqualified name from an Id/Var.
+-- unqualified :: Id -> String
+-- unqualified = checkCompose . reverse . showPpr . idName
+--     where checkCompose ('.':_) = "."
+--           checkCompose other   = reverse (takeWhile (/='.') other)
+-- -- TODO: Does GHC provide this?
 
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetIn | CaseOf | Casty | Ticky | TypeVar | Coerce
 
@@ -110,8 +111,8 @@ underConsideration _           _                          = False
 -- I feel like these two should go somewhere else, but seem to get stuck with dependency cycles when I move them.
 
 -- Hacks till we can find the correct way of doing these.
-cmpName :: TH.Name -> Name -> Bool
-cmpName = cmpTHName2Name
+cmpName :: TH.Name -> Id -> Bool
+cmpName = cmpTHName2Id
 
 var :: TH.Name -> RewriteH CoreExpr
-var nm = whenM (varT $ \ v -> nm `cmpName` idName v) idR
+var nm = whenM (varT $ \ v -> nm `cmpName` v) idR

@@ -233,7 +233,7 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
              , (v,e) <- case top_bnds of
                             Rec bnds -> bnds
                             NonRec b e -> [(b,e)]
-             ,  nm `cmpName` idName v
+             ,  nm `cmpName` v
              ] of
          [] -> fail $ "can not find binding " ++ show nm
          [(v,e)] -> return $ modGuts { mg_rules = mg_rules modGuts

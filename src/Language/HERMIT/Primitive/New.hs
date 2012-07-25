@@ -252,7 +252,7 @@ caseSplit :: TH.Name -> RewriteH CoreExpr
 caseSplit nm = do
     frees <- freeIdsT
     contextfreeT $ \ e -> do
-        case [ i | i <- frees, cmpTHName2Name nm (idName i) ] of
+        case [ i | i <- frees, cmpName nm i ] of
             []    -> fail "caseSplit: provided name is not free"
             (i:_) -> do
                 let (tycon, tys) = splitTyConApp (idType i)
@@ -421,7 +421,7 @@ push nm = do
         e <- idR
         case collectArgs e of
           (Var v,args) -> do
-                  guardMsg (nm `cmpName` idName v) $ "push did not find name " ++ show nm
+                  guardMsg (nm `cmpName` v) $ "push did not find name " ++ show nm
                   guardMsg (not $ null args) $ "no argument for " ++ show nm
                   guardMsg (all isTypeArg (init args)) $ "initial arguments are not type arguments for " ++ show nm
                   case last args of
