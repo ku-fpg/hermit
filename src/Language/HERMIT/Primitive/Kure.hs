@@ -1,4 +1,9 @@
-module Language.HERMIT.Primitive.Kure where
+module Language.HERMIT.Primitive.Kure
+       ( -- * KURE Strategies
+         -- This list contains reflections of the KURE strategies as 'External's.
+         externals
+       )
+where
 
 import Control.Arrow
 
@@ -57,6 +62,8 @@ externals = map (.+ KURE)
        [ "apply a query at a focal point"] .+ Navigation .+ Deep
    , external "when"       ((>>) :: TranslateH Core () -> RewriteH Core -> RewriteH Core)
        [ "apply a rewrite only if the check succeeds" ] .+ Predicate
+   , external "not"        (notM :: TranslateH Core () -> TranslateH Core ())
+       [ "cause a failing check to succeed, a succeeding check to fail" ] .+ Predicate
    ]
 
 hfocusR :: TranslateH Core Path -> RewriteH Core -> RewriteH Core

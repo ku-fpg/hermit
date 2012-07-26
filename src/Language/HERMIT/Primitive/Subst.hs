@@ -53,7 +53,7 @@ substR v e = promoteExprR (substVarR v e) <+ substNonVarR v e
 substVarR :: Id -> CoreExpr -> RewriteH CoreExpr
 substVarR v e = whenM (varT (==v)) (return e)
 
--- This defintition contains themain logic of the substitution algorithm
+-- This definition contains themain logic of the substitution algorithm
 substNonVarR :: Id -> CoreExpr -> RewriteH Core
 substNonVarR v e = let fvs = coreExprFreeIds e in
                    do bs <- arr idsBound
