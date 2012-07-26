@@ -98,8 +98,8 @@ safeTakeTMVar mvar = bracketOnError (atomically $ takeTMVar mvar) (atomically . 
 
 -- | Start a HERMIT client by providing an IO function that takes the initial 'ScopedKernel' and inital 'SAST' handle.
 --   The 'Modguts' to 'CoreM' Modguts' function required by GHC Plugins is returned.
-scopedKernel :: (DebugMessage -> IO ()) -> (ScopedKernel -> SAST -> IO ()) -> ModGuts -> CoreM ModGuts
-scopedKernel debugging callback = hermitKernel debugging $ \ kernel initAST -> do
+scopedKernel :: (ScopedKernel -> SAST -> IO ()) -> ModGuts -> CoreM ModGuts
+scopedKernel callback = hermitKernel $ \ kernel initAST -> do
     store <- newTMVarIO $ I.fromList [(0,(initAST, [], emptyLocalPath))]
     key <- newTMVarIO (1::Int)
 

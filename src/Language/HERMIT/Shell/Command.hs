@@ -349,7 +349,7 @@ commandLine filesToLoad behavior modGuts = do
 
     logger <- GHC.liftIO mkLogger
 
-    flip (scopedKernel (logger_debugMessage logger)) modGuts $ \ skernel sast -> do
+    flip (scopedKernel) modGuts $ \ skernel sast -> do
 
         let sessionState = SessionState sast "clean" def unicodeConsole 80 False False (mkHermitMEnv (logger_debugMessage logger))
             shellState = CommandLineState [] [] dict skernel logger sessionState
