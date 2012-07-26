@@ -72,16 +72,16 @@ pathStackToLens ps p = pathL $ concat $ localPaths2Paths (p:ps)
 
 -- | An alternative HERMIT kernel, that provides scoping.
 data ScopedKernel = ScopedKernel
-        { resumeS     ::            SAST                              -> IO ()
-        , abortS      ::                                                 IO ()
-        , applyS      ::            SAST -> RewriteH Core             -> IO (KureMonad SAST)
-        , queryS      :: forall a . SAST -> TranslateH Core a         -> IO (KureMonad a)
-        , deleteS     ::            SAST                              -> IO ()
-        , listS       ::                                                 IO [SAST]
-        , pathS       ::            SAST                              -> IO [Path]
-        , modPathS    ::            SAST -> (LocalPath -> LocalPath)  -> IO (KureMonad SAST)
-        , beginScopeS ::            SAST                              -> IO SAST
-        , endScopeS   ::            SAST                              -> IO SAST
+        { resumeS     ::            SAST                                              -> IO ()
+        , abortS      ::                                                                 IO ()
+        , applyS      ::            SAST -> RewriteH Core             -> HermitMEnv   -> IO (KureMonad SAST)
+        , queryS      :: forall a . SAST -> TranslateH Core a         -> HermitMEnv   -> IO (KureMonad a)
+        , deleteS     ::            SAST                                              -> IO ()
+        , listS       ::                                                                 IO [SAST]
+        , pathS       ::            SAST                                              -> IO [Path]
+        , modPathS    ::            SAST -> (LocalPath -> LocalPath)  -> HermitMEnv   -> IO (KureMonad SAST)
+        , beginScopeS ::            SAST                                              -> IO SAST
+        , endScopeS   ::            SAST                                              -> IO SAST
         }
 
 -- | A /handle/ for an 'AST' combined with scoping information.
@@ -118,17 +118,17 @@ scopedKernel debugging callback = hermitKernel debugging $ \ kernel initAST -> d
                                 (ast,_,_) <- get sAst m
                                 resumeK kernel ast
             , abortS      = abortK kernel
-            , applyS      = \ (SAST sAst) rr -> safeTakeTMVar store $ \ m -> do
+            , applyS      = \ (SAST sAst) rr env -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
-                                applyK kernel ast (focusR (pathStackToLens base rel) rr)
+                                applyK kernel ast (focusR (pathStackToLens base rel) rr) env
                                   >>= runKureMonad (\ ast' -> atomically $ do k <- newKey
                                                                               putTMVar store $ I.insert k (ast', base, rel) m
                                                                               return $ return $ SAST k)
                                                    (failCleanup m)
-            , queryS      = \ (SAST sAst) t -> do
+            , queryS      = \ (SAST sAst) t env -> do
                                 m <- atomically $ readTMVar store
                                 (ast, base, rel) <- get sAst m
-                                queryK kernel ast (focusT (pathStackToLens base rel) t)
+                                queryK kernel ast (focusT (pathStackToLens base rel) t) env
             , deleteS     = \ (SAST sAst) -> atomically $ do
                                 m <- takeTMVar store
                                 putTMVar store $ I.delete sAst m
@@ -138,10 +138,10 @@ scopedKernel debugging callback = hermitKernel debugging $ \ kernel initAST -> d
                                 m <- readTMVar store
                                 (_, base, rel) <- get sAst m
                                 return $ localPaths2Paths (rel : base)
-            , modPathS    = \ (SAST sAst) f -> safeTakeTMVar store $ \ m -> do
+            , modPathS    = \ (SAST sAst) f env -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
                                 let rel' = f rel
-                                queryK kernel ast (testLensT (pathStackToLens base rel'))
+                                queryK kernel ast (testLensT (pathStackToLens base rel')) env
                                   >>= runKureMonad (\ b -> if rel == rel'
                                                             then failCleanup m "Path is unchanged, nothing to do."
                                                             else if b
