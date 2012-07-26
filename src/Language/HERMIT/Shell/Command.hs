@@ -28,6 +28,7 @@ import Language.HERMIT.External
 import Language.HERMIT.Interp
 import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.Kure
+import Language.HERMIT.Monad
 import Language.HERMIT.PrettyPrinter
 import Language.HERMIT.Primitive.Navigation
 import Language.HERMIT.Primitive.Inline
@@ -244,7 +245,7 @@ showFocus = do
           (return ())
           (iokm2clm' "Rendering error: "
                      (liftIO . cl_render (cl_session st) stdout (cl_pretty_opts (cl_session st)))
-                     (queryS (cl_kernel st) (cl_cursor (cl_session st)) (pretty st))
+                     (queryS (cl_kernel st) (cl_cursor (cl_session st)) (pretty st) (cl_kernel_env (cl_session st)))
           )
 
 -------------------------------------------------------------------------------
@@ -264,6 +265,7 @@ data CommandLineState = CommandLineState
         -- these two should be in a reader
         , cl_dict        :: M.Map String [Dynamic]
         , cl_kernel       :: ScopedKernel
+        , cl_logger      :: Logger
         -- and the session state (perhaps in a seperate state?)
         , cl_session      :: SessionState
         }
@@ -282,6 +284,7 @@ data SessionState = SessionState
         , cl_width       :: Int                 -- ^ how wide is the screen?
         , cl_nav         :: Bool        -- ^ keyboard input the the nav panel
         , cl_loading     :: Bool        -- ^ if loading a file
+        , cl_kernel_env  :: HermitMEnv   -- ^ The environment to use with the kernel calls
         }
 
 
@@ -323,7 +326,8 @@ shellComplete mvar rPrev so_far = do
     targetQuery <- completionQuery st (completionType rPrev)
     -- (liftM.liftM) (map simpleCompletion . nub . filter (so_far `isPrefixOf`))
     --     $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
-    mcls <- queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
+    -- TODO: I expect you want to build a silent version of the kernal_env for this query
+    mcls <- queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery (cl_kernel_env (cl_session st))
     cl <- runKureMonad return fail mcls -- TO DO: probably shouldn't use fail here.
     return $ (map simpleCompletion . nub . filter (so_far `isPrefixOf`)) cl
 
@@ -342,10 +346,13 @@ commandLine filesToLoad behavior modGuts = do
                       , not (null fileName)
                       ] `ourCatch` \ msg -> putStrToConsole $ "Booting Failure: " ++ msg
 
-    flip scopedKernel modGuts $ \ skernel sast -> do
 
-        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False
-            shellState = CommandLineState [] [] dict skernel sessionState
+    logger <- GHC.liftIO mkLogger
+
+    flip (scopedKernel) modGuts $ \ skernel sast -> do
+
+        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False (mkHermitMEnv (logger_debugMessage logger))
+            shellState = CommandLineState [] [] dict skernel logger sessionState
 
         completionMVar <- newMVar shellState
 
@@ -420,29 +427,29 @@ performAstEffect (Apply rr) expr = do
     st <- get
     iokm2clm' "Rewrite failed: "
               (\ ast' -> put (newSAST expr ast' st) >> showFocus)
-              (applyS (cl_kernel st) (cl_cursor $ cl_session st) rr)
+              (applyS (cl_kernel st) (cl_cursor $ cl_session st) rr (cl_kernel_env $ cl_session st))
 
 performAstEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
     iokm2clm' "Cannot find path: "
-              (\ p -> do ast <- iokm2clm "Path is invalid: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (extendLocalPath p)
+              (\ p -> do ast <- iokm2clm "Path is invalid: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (extendLocalPath p) (cl_kernel_env $ cl_session st)
                          put $ newSAST expr ast st
                          showFocus)
-              (queryS (cl_kernel st) (cl_cursor $ cl_session st) t)
+              (queryS (cl_kernel st) (cl_cursor $ cl_session st) t (cl_kernel_env $ cl_session st))
 
 performAstEffect (Direction dir) expr = do
     st <- get
-    child_count <- iokm2clm "Could not compute number of children:" $ queryS (cl_kernel st) (cl_cursor (cl_session st)) numChildrenT
+    child_count <- iokm2clm "Could not compute number of children:" $ queryS (cl_kernel st) (cl_cursor (cl_session st)) numChildrenT (cl_kernel_env (cl_session st))
     liftIO $ print (child_count, dir)
-    ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (moveLocally dir)
+    ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (moveLocally dir) (cl_kernel_env $ cl_session st)
     put $ newSAST expr ast st
     -- something changed, to print
     showFocus
 
 performAstEffect (PushFocus p) expr = do
     st <- get
-    ast <- iokm2clm "Invalid push: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (extendLocalPath p)
+    ast <- iokm2clm "Invalid push: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (extendLocalPath p) (cl_kernel_env $ cl_session st)
     put $ newSAST expr ast st
     showFocus
 
@@ -464,7 +471,8 @@ performAstEffect (Tag tag) expr = do
 
 performAstEffect (CorrectnessCritera q) expr = do
         st <- get
-        liftIO (queryS (cl_kernel st) (cl_cursor $ cl_session st) q)
+        -- TODO: Again, we may want a quiet version of the kernel_env
+        liftIO (queryS (cl_kernel st) (cl_cursor $ cl_session st) q (cl_kernel_env (cl_session st)))
           >>= runKureMonad (\ () -> putStrToConsole $ unparseExprH expr ++ " [correct]")
                            (\ err -> fail $ unparseExprH expr ++ " [exception: " ++ err ++ "]")
         -- correctness <- liftIO (try $ queryS (cl_kernel st) (cl_cursor (cl_session st)) q)
@@ -492,7 +500,7 @@ performQuery (QueryT q) = do
     st <- get
     iokm2clm' "Query failed: "
               putStrToConsole
-              (queryS (cl_kernel st) (cl_cursor $ cl_session st) q)
+              (queryS (cl_kernel st) (cl_cursor $ cl_session st) q (cl_kernel_env (cl_session st)))
 
 performQuery (Inquiry f) = do
     st <- get
@@ -520,7 +528,7 @@ performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
     case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
         (Just pp, Just r) -> do doc <- iokm2clm "Bad pretty-printer or renderer option: " $
-                                           queryS (cl_kernel st) (cl_cursor $ cl_session st) (pp (cl_pretty_opts $ cl_session st))
+                                           queryS (cl_kernel st) (cl_cursor $ cl_session st) (pp (cl_pretty_opts $ cl_session st)) (cl_kernel_env $ cl_session st)
                                 liftIO $ do h <- openFile fileName WriteMode
                                             r h ((cl_pretty_opts $ cl_session st) { po_width = width }) doc
                                             hClose h
@@ -719,3 +727,28 @@ showGraph graph tags this@(SAST n) =
                 ])
   where
           paths = [ (b,c) | (a,b,c) <- graph, a == this ]
+
+----------------------------------------------------------------------------------------------
+
+-- Our "Logger"; should be in its own module at some point
+
+data Logger = Logger
+        { logger_debugMessage :: DebugMessage -> IO ()
+        , logger_resetTicks   :: IO ()
+        , logger_showTicks    :: IO ()
+        }
+
+
+mkLogger :: IO Logger
+mkLogger =
+   return $ Logger
+        { logger_debugMessage = \ msg -> case msg of
+                DebugTick    msg      -> putStrLn $ "(X) " ++ msg
+                DebugMessage msg core -> putStrLn $ "[" ++ msg ++ "]\n"
+                                                 ++ showCore core
+        , logger_resetTicks = return ()
+        , logger_showTicks = return ()
+        }
+  where
+          showCore :: Core -> String
+          showCore = show2

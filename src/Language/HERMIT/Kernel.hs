@@ -29,12 +29,12 @@ import Control.Concurrent
 --   For now, operations on a 'Kernel' are sequential, but later
 --   it will be possible to have two 'applyK's running in parallel.
 data Kernel = Kernel
-  { resumeK ::            AST                      -> IO ()                -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
-  , abortK  ::                                        IO ()                -- ^ Halt the 'Kernel' and abort GHC without compiling.
-  , applyK  ::            AST -> RewriteH Core     -> IO (KureMonad AST)   -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
-  , queryK  :: forall a . AST -> TranslateH Core a -> IO (KureMonad a)     -- ^ Apply a 'TranslateH' to the 'AST' and return the resulting value.
-  , deleteK ::            AST                      -> IO ()                -- ^ Delete the internal record of the specified 'AST'.
-  , listK   ::                                        IO [AST]             -- ^ List all the 'AST's tracked by the 'Kernel'.
+  { resumeK ::            AST                                      -> IO ()                -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
+  , abortK  ::                                                        IO ()                -- ^ Halt the 'Kernel' and abort GHC without compiling.
+  , applyK  ::            AST -> RewriteH Core     -> HermitMEnv   -> IO (KureMonad AST)   -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
+  , queryK  :: forall a . AST -> TranslateH Core a -> HermitMEnv   -> IO (KureMonad a)     -- ^ Apply a 'TranslateH' to the 'AST' and return the resulting value.
+  , deleteK ::            AST                                      -> IO ()                -- ^ Delete the internal record of the specified 'AST'.
+  , listK   ::                                                        IO [AST]             -- ^ List all the 'AST's tracked by the 'Kernel'.
   }
 
 -- | A /handle/ for a specific version of the 'ModGuts'.
@@ -74,24 +74,20 @@ hermitKernel callback modGuts = do
         let sendReqWrite :: (KernelState -> CoreM KernelState) -> IO ()
             sendReqWrite fn = sendReq (fmap ( return . ((),) ) . fn) >>= runKureMonad return fail
 
-        let hm_env :: HermitMEnv
-            hm_env = mkHermitMEnv $ \ _ -> return ()
-
-
         let kernel :: Kernel
             kernel = Kernel
                 { resumeK = \ name -> sendDone $ \ st -> findWithErrMsg name st (\ msg -> throwGhcException $ ProgramError $ msg ++ ", exiting HERMIT and aborting GHC compilation.") (return.snd)
 
                 , abortK  = sendDone $ \ _ -> throwGhcException (ProgramError "Exiting HERMIT and aborting GHC compilation.")
 
-                , applyK = \ name r -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM hm_env
+                , applyK = \ name r hm_env -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM hm_env
                                                                                                                defs
                                                                                                                (\ defs' core' -> do syn' <- liftIO $ takeMVar syntax_names
                                                                                                                                     return $ return (syn', insert syn' (defs',core') st))
                                                                                                                (return . fail)
                                                                                                                (apply (extractR r) (initContext core) core)
 
-                , queryK = \ name q -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM hm_env
+                , queryK = \ name q hm_env -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM hm_env
                                                                                                                    defs
                                                                                                                    (\ _ -> return.return)
                                                                                                                    (return . fail)
