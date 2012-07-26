@@ -12,7 +12,7 @@ import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC
-import Language.HERMIT.Primitive.Subst hiding (letSubstR)
+import Language.HERMIT.Primitive.Subst
 
 -- NOTE: these are hard to test in small examples, as GHC does them for us, so use with caution
 ------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
   do
     captures      <- appT caseAltVarsT freeVarsT (flip (map . intersect))
     binderCapture <- appT caseBinderVarT freeVarsT intersect
-    appT ((if (null binderCapture) then idR else alphaCaseWild Nothing)
+    appT ((if (null binderCapture) then idR else alphaCaseBinder Nothing)
           >>> (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
          )
           idR
@@ -76,7 +76,7 @@ caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
     captures      <- appT freeVarsT caseAltVarsT (map . intersect)
     binderCapture <- appT freeVarsT caseBinderVarT intersect
     appT idR
-         ((if (null binderCapture) then idR else alphaCaseWild Nothing)
+         ((if (null binderCapture) then idR else alphaCaseBinder Nothing)
           >>> (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
          )
          (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
@@ -95,7 +95,7 @@ caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
     -- does the binder of the inner case, shadow a free variable in any of the outer case alts?
     -- notice, caseBinderVarT returns a singleton list
     binderCapture <- caseT caseBinderVarT (const altFreeVarsT) $ \ innerBindr bndr _ fs -> intersect (concatMap ($ bndr) fs) innerBindr
-    caseT ((if (null binderCapture) then idR else alphaCaseWild Nothing)
+    caseT ((if (null binderCapture) then idR else alphaCaseBinder Nothing)
            >>>  (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
           )
           (const idR)

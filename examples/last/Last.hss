@@ -10,7 +10,7 @@ fix-intro
     unfold-rule "ww"
     1
     unfold 'fix
-    alpha-let-rec1 'work
+    alpha-let 'work
     0
     0
     0

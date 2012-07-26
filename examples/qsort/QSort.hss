@@ -34,7 +34,7 @@ one-td (unfold 'absH)
 unshadow
 {
   consider let
-  alpha-let-rec1 'work
+  alpha-let 'work
 }
 
 -- More to do.  Can eliminate nested cases.

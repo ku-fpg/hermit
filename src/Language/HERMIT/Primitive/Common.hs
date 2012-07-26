@@ -28,7 +28,7 @@ altVarsT = altT mempty (\ _ vs () -> vs)
 
 -- | List of the list of Ids bound by each case alternative
 caseAltVarsT :: TranslateH CoreExpr [[Id]]
-caseAltVarsT = caseT mempty (const altVarsT) $ \ () v _ vs -> vs
+caseAltVarsT = caseT mempty (const altVarsT) $ \ () _ _ vs -> vs
 
 -- | List of the list of Ids bound by each case alternative, including the Case binder in each list
 caseAltVarsWithBinderT :: TranslateH CoreExpr [[Id]]
@@ -36,9 +36,9 @@ caseAltVarsWithBinderT = caseT mempty (const altVarsT) $ \ () v _ vs -> map (v:)
 
 -- | list containing the single Id of the case binder
 caseBinderVarT :: TranslateH CoreExpr [Id]
-caseBinderVarT = translate $ \ c e -> case e of
-                                       Case e1 b ty alts -> do return [b]
-                                       _ -> fail "no match for Case"
+caseBinderVarT = contextfreeT $ \ e -> case e of
+                                         Case e1 b ty alts -> do return [b]
+                                         _ -> fail "no match for Case"
 
 -- | Free variables for a CoreAlt, returns a function, which accepts
 --   the coreBndr name, before giving a result.

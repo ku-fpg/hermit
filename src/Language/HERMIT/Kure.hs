@@ -42,10 +42,13 @@ module Language.HERMIT.Kure
        , typeT
        , coercionT
        -- ** Composite Congruence Combinators
+       , recDefT, recDefAllR, recDefAnyR, recDefOneR
        , letNonRecT, letNonRecAllR, letNonRecAnyR, letNonRecOneR
        , letRecT, letRecAllR, letRecAnyR, letRecOneR
-       , recDefT, recDefAllR, recDefAnyR, recDefOneR
        , letRecDefT, letRecDefAllR, letRecDefAnyR, letRecDefOneR
+       , consNonRecT, consNonRecAllR, consNonRecAnyR, consNonRecOneR
+       , consRecT, consRecAllR, consRecAnyR, consRecOneR
+       , consRecDefT, consRecDefAllR, consRecDefAnyR, consRecDefOneR
        , caseAltT, caseAltAllR, caseAltAnyR, caseAltOneR
        -- * Promotion Combinators
        -- ** Rewrite Promotions
@@ -570,6 +573,74 @@ coercionT f = contextfreeT $ \ e -> case e of
 
 -- Some composite congruence combinators to export.
 
+-- | Translate a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
+recDefT :: (Int -> TranslateH CoreExpr a1) -> ([(Id,a1)] -> b) -> TranslateH CoreBind b
+recDefT ts = recT (\ n -> defT (ts n) (,))
+
+-- | Rewrite all children of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
+recDefAllR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
+recDefAllR rs = recAllR (\ n -> defR (rs n))
+
+-- | Rewrite any children of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
+recDefAnyR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
+recDefAnyR rs = recAnyR (\ n -> defR (rs n))
+
+-- | Rewrite one child of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
+recDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
+recDefOneR rs = recOneR (\ n -> defR (rs n))
+
+
+-- | Translate a program of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProgram'
+consNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreProgram a2 -> (Id -> a1 -> a2 -> b) -> TranslateH CoreProgram b
+consNonRecT t1 t2 f = consBindT (nonRecT t1 (,)) t2 (uncurry f)
+
+-- | Rewrite all children of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProgram'
+consNonRecAllR :: RewriteH CoreExpr -> RewriteH CoreProgram -> RewriteH CoreProgram
+consNonRecAllR r1 r2 = consBindAllR (nonRecR r1) r2
+
+-- | Rewrite any children of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProgram'
+consNonRecAnyR :: RewriteH CoreExpr -> RewriteH CoreProgram -> RewriteH CoreProgram
+consNonRecAnyR r1 r2 = consBindAnyR (nonRecR r1) r2
+
+-- | Rewrite one child of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProgram'
+consNonRecOneR :: RewriteH CoreExpr -> RewriteH CoreProgram -> RewriteH CoreProgram
+consNonRecOneR r1 r2 = consBindOneR (nonRecR r1) r2
+
+
+-- | Translate an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProgram'
+consRecT :: (Int -> TranslateH CoreDef a1) -> TranslateH CoreProgram a2 -> ([a1] -> a2 -> b) -> TranslateH CoreProgram b
+consRecT ts t = consBindT (recT ts id) t
+
+-- | Rewrite all children of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProgram'
+consRecAllR :: (Int -> RewriteH CoreDef) -> RewriteH CoreProgram -> RewriteH CoreProgram
+consRecAllR rs r = consBindAllR (recAllR rs) r
+
+-- | Rewrite any children of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProgram'
+consRecAnyR :: (Int -> RewriteH CoreDef) -> RewriteH CoreProgram -> RewriteH CoreProgram
+consRecAnyR rs r = consBindAnyR (recAnyR rs) r
+
+-- | Rewrite one child of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProgram'
+consRecOneR :: (Int -> RewriteH CoreDef) -> RewriteH CoreProgram -> RewriteH CoreProgram
+consRecOneR rs r = consBindOneR (recOneR rs) r
+
+
+-- | Translate an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProgram'
+consRecDefT :: (Int -> TranslateH CoreExpr a1) -> TranslateH CoreProgram a2 -> ([(Id,a1)] -> a2 -> b) -> TranslateH CoreProgram b
+consRecDefT ts t = consRecT (\ n -> defT (ts n) (,)) t
+
+-- | Rewrite all children of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProgram'
+consRecDefAllR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreProgram -> RewriteH CoreProgram
+consRecDefAllR rs r = consRecAllR (\ n -> defR (rs n)) r
+
+-- | Rewrite any children of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProgram'
+consRecDefAnyR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreProgram -> RewriteH CoreProgram
+consRecDefAnyR rs r = consRecAnyR (\ n -> defR (rs n)) r
+
+-- | Rewrite one child of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProgram'
+consRecDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreProgram -> RewriteH CoreProgram
+consRecDefOneR rs r = consRecOneR (\ n -> defR (rs n)) r
+
+
 -- | Translate an expression of the form: @Let@ (@NonRec@ 'Id' 'CoreExpr') 'CoreExpr'
 letNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (Id -> a1 -> a2 -> b) -> TranslateH CoreExpr b
 letNonRecT t1 t2 f = letT (nonRecT t1 (,)) t2 (uncurry f)
@@ -602,22 +673,6 @@ letRecAnyR rs r = letAnyR (recAnyR rs) r
 -- | Rewrite one child of an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
 letRecOneR :: (Int -> RewriteH CoreDef) -> RewriteH CoreExpr -> RewriteH CoreExpr
 letRecOneR rs r = letOneR (recOneR rs) r
-
--- | Translate a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
-recDefT :: (Int -> TranslateH CoreExpr a1) -> ([(Id,a1)] -> b) -> TranslateH CoreBind b
-recDefT ts = recT (\ n -> defT (ts n) (,))
-
--- | Rewrite all children of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
-recDefAllR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
-recDefAllR rs = recAllR (\ n -> defR (rs n))
-
--- | Rewrite any children of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
-recDefAnyR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
-recDefAnyR rs = recAnyR (\ n -> defR (rs n))
-
--- | Rewrite one child of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
-recDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
-recDefOneR rs = recOneR (\ n -> defR (rs n))
 
 
 -- | Translate an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'

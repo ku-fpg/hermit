@@ -77,5 +77,5 @@ caseFloatLet = prefixFailMsg "Case floating from Let failed: " $
 letToCase :: RewriteH CoreExpr
 letToCase = prefixFailMsg "Converting Let to Case failed: " $
   do Let (NonRec v ev) _ <- idR
-     caseBndr <- freshVarT v
-     letT (return ()) (substR v (Var caseBndr)) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
+     caseBndr <- freshIdT Nothing v
+     letT (return ()) (renameIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
