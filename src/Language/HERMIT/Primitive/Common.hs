@@ -13,18 +13,24 @@ import Language.HERMIT.Kure
 
 import Language.HERMIT.Primitive.GHC
 
--- | List of variables bound in binding (including type variables)
-bindings :: TranslateH CoreBind [Var]
-bindings = recT (\_ -> arr (\(Def v _) -> v)) id
-        <+ nonRecT idR (\v _ -> [v])
+-- | All the identifiers bound in this binding group.
+bindings :: CoreBind -> [Id]
+bindings (NonRec b _) = [b]
+bindings (Rec bs)     = map fst bs
+
+-- | Lifted version of 'bindings'.
+bindingsT :: TranslateH CoreBind [Var]
+bindingsT = arr bindings
 
 -- | List of variables bound by Let (including type variables)
 letVarsT :: TranslateH CoreExpr [Var]
-letVarsT = letT bindings idR const
+letVarsT = do Let bs _ <- idR
+              return (bindings bs)
 
 -- | List of Ids bound by the case alternative
 altVarsT :: TranslateH CoreAlt [Id]
-altVarsT = altT mempty (\ _ vs () -> vs)
+altVarsT = do (_,vs,_) <- idR
+              return vs
 
 -- | List of the list of Ids bound by each case alternative
 caseAltVarsT :: TranslateH CoreExpr [[Id]]
@@ -36,9 +42,9 @@ caseAltVarsWithBinderT = caseT mempty (const altVarsT) $ \ () v _ vs -> map (v:)
 
 -- | list containing the single Id of the case binder
 caseBinderVarT :: TranslateH CoreExpr [Id]
-caseBinderVarT = contextfreeT $ \ e -> case e of
-                                         Case e1 b ty alts -> do return [b]
-                                         _ -> fail "no match for Case"
+caseBinderVarT = setFailMsg "Not a Case expression." $
+                 do Case _ b _ _ <- idR
+                    return [b]
 
 -- | Free variables for a CoreAlt, returns a function, which accepts
 --   the coreBndr name, before giving a result.
