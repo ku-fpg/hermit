@@ -62,10 +62,10 @@ dictionary externs = toDictionary externs'
   where
         msg = layoutTxt 60 (map (show . fst) dictionaryOfTags)
         externs' = externs ++
-                [ external ":help" (help_command externs' "help")
+                [ external "help" (help_command externs' "help")
                     [ "(this message)" ] .+ Query .+ Shell
-                , external ":help" (help_command externs')
-                    ([ ":help <command>|<category>|categories|all|<search-string>"
+                , external "help" (help_command externs')
+                    ([ "help <command>|<category>|categories|all|<search-string>"
                      , "displays help about a command or category."
                      , "Multiple items may match."
                      , ""

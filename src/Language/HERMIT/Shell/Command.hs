@@ -169,21 +169,21 @@ shell_externals = map (.+ Shell)
        [ "move to the first child"]
    , external "tag"             Tag
        [ "tag <label> names the current AST with a label" ]
-   , external ":navigate"        (SessionStateEffect $ \ _ st -> return $ st { cl_nav = True })
+   , external "navigate"        (SessionStateEffect $ \ _ st -> return $ st { cl_nav = True })
        [ "switch to navigate mode" ]
-   , external ":command-line"    (SessionStateEffect $ \ _ st -> return $ st { cl_nav = False })
+   , external "command-line"    (SessionStateEffect $ \ _ st -> return $ st { cl_nav = False })
        [ "switch to command line mode" ]
    , external "top"            (Direction T)
        [ "move to root of tree" ]
-   , external ":back"            (SessionStateEffect $ navigation Back)
+   , external "back"            (SessionStateEffect $ navigation Back)
        [ "go back in the derivation" ]                                          .+ VersionControl
    , external "log"             (Inquiry showDerivationTree)
        [ "go back in the derivation" ]                                          .+ VersionControl
-   , external ":step"            (SessionStateEffect $ navigation Step)
+   , external "step"            (SessionStateEffect $ navigation Step)
        [ "step forward in the derivation" ]                                     .+ VersionControl
-   , external ":goto"            (SessionStateEffect . navigation . Goto)
+   , external "goto"            (SessionStateEffect . navigation . Goto)
        [ "goto a specific step in the derivation" ]                             .+ VersionControl
-   , external ":goto"            (SessionStateEffect . navigation . GotoTag)
+   , external "goto"            (SessionStateEffect . navigation . GotoTag)
        [ "goto a named step in the derivation" ]
    , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st ->
        case M.lookup pp pp_dictionary of
@@ -674,14 +674,14 @@ getNavCmd = do
 
    cmds = [ ("\ESC" , \ str -> condM (hReady stdin)
                                      (readCh str)
-                                     (return (Just ":command-line")))
+                                     (return (Just "command-line")))
           , ("\ESC[" , readCh)
           , ("\ESC[A", res "up")
           , ("\ESC[B", res "down")
           , ("\ESC[C", res "right")
           , ("\ESC[D", res "left")
-          , ("?",      res ":nav-commands")
-          , ("f",      res ":step")
+          , ("?",      res "nav-commands")
+          , ("f",      res "step")
           ] ++
           [ (show n, res (show n)) | n <- [0..9] :: [Int] ]
 
@@ -721,7 +721,7 @@ showGraph :: [(SAST,ExprH,SAST)] -> [(String,SAST)] -> SAST -> String
 showGraph graph tags this@(SAST n) =
         (if length paths > 1 then "tag " ++ show n ++ "\n" else "") ++
         concat (intercalate
-                [":goto " ++ show n ++ "\n"]
+                ["goto " ++ show n ++ "\n"]
                 [ [ unparseExprH b ++ "\n" ++ showGraph graph tags c ]
                 | (b,c) <- paths
                 ])
