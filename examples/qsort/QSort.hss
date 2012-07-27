@@ -36,6 +36,3 @@ unshadow
   consider let
   alpha-let 'work
 }
-one-td (inline-case-constructor)
-bash
--- I want to include "inline-case-constructor" as part of bash, but that causes this script to break.

@@ -23,8 +23,8 @@ externals =
                 , "rather than constructor or literal." ].+ Eval .+ Deep .+ TODO
             , external "inline" (promoteExprR . inlineName :: TH.Name -> RewriteH Core)
                 [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
-            , external "inline-case-constructor" (promoteExprR inlineCaseConstructor :: RewriteH Core)
-                [ "Inline the wildcard binder of the current case expression." ].+ Eval .+ Deep .+ TODO -- .+ Bash
+            -- , external "inline-case-constructor" (promoteExprR inlineCaseConstructor :: RewriteH Core)
+            --     [ "Inline the wildcard binder of the current case expression." ].+ Eval .+ Deep .+ TODO -- .+ Bash
             ]
 
 inlineName :: TH.Name -> RewriteH CoreExpr
@@ -44,9 +44,10 @@ inline scrutinee = prefixFailMsg "Inline failed: " $
                      (getUnfolding scrutinee v c)
     _      -> fail "not a variable."
 
-inlineCaseConstructor :: RewriteH CoreExpr
-inlineCaseConstructor = do Case _ v _ _ <- idR
-                           extractR $ anybuR $ promoteExprR $ inlineName $ id2THName v
+-- Doesn't work.  We don't want to inline things that share the same TH.Name.
+-- inlineCaseConstructor :: RewriteH CoreExpr
+-- inlineCaseConstructor = do Case _ v _ _ <- idR
+--                            extractR $ anybuR $ promoteExprR $ inlineName $ id2THName v
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
 -- Assumes minimum depth is 0.
