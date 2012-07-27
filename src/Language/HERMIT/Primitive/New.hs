@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, FlexibleInstances, TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies, FlexibleInstances #-}
 
 -- Placeholder for new prims
 module Language.HERMIT.Primitive.New where
@@ -89,9 +89,9 @@ letTupleR nm = do
                 elem)
           (fail "'x' is used in 'e2'")
           (translate $ \ c _ -> do
-                tupleConId <- findId (hermitModGuts c) "(,)"
-                fstId <- findId (hermitModGuts c) "Data.Tuple.fst"
-                sndId <- findId (hermitModGuts c) "Data.Tuple.snd"
+                tupleConId <- findId c "(,)"
+                fstId <- findId c "Data.Tuple.fst"
+                sndId <- findId c "Data.Tuple.snd"
                 let e1TyE = Type (exprType e1)
                     e2TyE = Type (exprType e1)
                     rhs = mkCoreApps (Var tupleConId) [e1TyE, e2TyE, e1, e2]
@@ -168,8 +168,11 @@ testQuery r = f <$> testM r
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."
 
-findId :: (MonadUnique m, MonadIO m, MonadThings m) => ModGuts -> String -> m Id
-findId modguts nm =
+findId :: (MonadUnique m, MonadIO m, MonadThings m) => Context -> String -> m Id
+findId c = findIdMG (hermitModGuts c)
+
+findIdMG :: (MonadUnique m, MonadIO m, MonadThings m) => ModGuts -> String -> m Id
+findIdMG modguts nm =
     case findNameFromTH (mg_rdr_env modguts) $ TH.mkName nm of
         []  -> fail $ "cannot find " ++ nm
         [n] -> lookupId n
@@ -184,7 +187,7 @@ findId modguts nm =
 fixIntro :: RewriteH CoreBind
 fixIntro = translate $ \ c e -> case e of
         Rec [(f,e0)] -> do
-                fixId <- findId (hermitModGuts c) "Data.Function.fix"
+                fixId <- findId c "Data.Function.fix"
 
                 let coreFix = App (App (Var fixId) (Type (idType f)))
 
@@ -201,10 +204,10 @@ fixIntro = translate $ \ c e -> case e of
 
 fixSpecialization :: RewriteH CoreExpr
 fixSpecialization = do
-        fixId <- translate $ \ c e -> findId (hermitModGuts c) "Data.Function.fix"
+        fixId <- translate $ \ c _ -> findId c "Data.Function.fix"
 
         -- fix (t::*) (f :: t -> t) (a :: t) :: t
-        App (App (App (Var fx) (Type t)) f) a <- idR
+        App (App (App (Var fx) (Type _)) _) _ <- idR
 
         guardMsg (fx == fixId) "fixSpecialization only works on fix"
 
@@ -221,7 +224,7 @@ fixSpecialization' :: RewriteH CoreExpr
 fixSpecialization' = do
         -- In normal form now
         App (App (App (Var fx) (Type t))
-                 (Lam v1 (Lam v2 (App (App e a1) a2)))
+                 (Lam _ (Lam v2 (App (App e _) a2)))
             )
             a <- idR
 
@@ -231,18 +234,19 @@ fixSpecialization' = do
 --                   mkAppTy t t'
 
 
+        -- TODO: t2' isn't used anywhere???
         let t2' = case a2 of
                    Type t2  -> applyTy t t2
 --                   Var  a2  -> mkAppTy t (exprType t2)
 --                   mkAppTy t t'
 
 
-        v3 <- translate $ \ _ _ -> newVarH (TH.mkName "f") t' -- (funArgTy t')
-        v4 <- translate $ \ _ _ -> newTypeVarH (TH.mkName "a") (tyVarKind v2)
+        v3 <- constT $ newVarH (TH.mkName "f") t' -- (funArgTy t')
+        v4 <- constT $ newTypeVarH (TH.mkName "a") (tyVarKind v2)
 
          -- f' :: \/ a -> T [a] -> (\/ b . T [b])
         let f' = Lam v4  (Cast (Var v3)
-                               (mkUnsafeCo t' (applyTy t ((mkTyVarTy v4)))))
+                               (mkUnsafeCo t' (applyTy t (mkTyVarTy v4))))
         let e' = Lam v3 (App (App e f') a)
 
         return $ App (App (Var fx) (Type t')) e'
@@ -258,7 +262,7 @@ fixSpecialization' = do
 caseSplit :: TH.Name -> RewriteH CoreExpr
 caseSplit nm = do
     frees <- freeIdsT
-    contextfreeT $ \ e -> do
+    contextfreeT $ \ e ->
         case [ i | i <- frees, cmpName nm i ] of
             []    -> fail "caseSplit: provided name is not free"
             (i:_) -> do
@@ -288,7 +292,7 @@ exprBinder = translate $ \ c e -> case e of
 
 exprNumberBinder :: Int -> RewriteH Core
 exprNumberBinder n = promoteR (exprRenameBinder (++ show n))
-                 >>> (childR 0 $ promoteR letSubstR)
+                 >>> childR 0 (promoteR letSubstR)
 
 exprRenameBinder :: (String -> String) -> RewriteH CoreExpr
 exprRenameBinder nameMod =
@@ -305,7 +309,7 @@ altRenameBinder :: (String -> String) -> RewriteH CoreAlt
 altRenameBinder nameMod =
              do (con,bs,e) <- idR
                 (bs',f) <- constT (cloneIdsH nameMod bs)
-                return $ (con,bs',f e)
+                return (con,bs',f e)
 
 -- This gives an new version of an Id, with the same info, and a new textual name.
 cloneIdH :: (String -> String) -> Id -> HermitM (Id,CoreExpr -> CoreExpr)
@@ -339,12 +343,12 @@ exprAutoRenameBinder =
         Lam b _ <- idR
         frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreExpr [Var]
         bound <- translate $ \ c _ -> return (listBindings c)
-        exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> (childR 0 $ promoteR letSubstR))
+        exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> childR 0 (promoteR letSubstR))
  <+ (do -- check in Let
         Let (NonRec b _) _ <- idR
         frees <- freeVarsT :: TranslateH CoreExpr [Var]
         bound <- translate $ \ c _ -> return (listBindings c)
-        exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> (childR 0 $ promoteR letSubstR))
+        exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> childR 0 (promoteR letSubstR))
 
 altAutoRenameBinder :: RewriteH CoreAlt
 altAutoRenameBinder = do
@@ -352,18 +356,18 @@ altAutoRenameBinder = do
         (_,bs,_) <- idR
         frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreAlt [Var]
         bound <- translate $ \ c _ -> return (listBindings c)
-        altRenameBinder (inventNames (filter (\ i -> not (i `elem` bs)) (frees ++ bound)))
-                    >>> (childR 0 $ letSubstNR (length bs))
+        altRenameBinder (inventNames (filter (`notElem` bs) (frees ++ bound)))
+                    >>> childR 0 (letSubstNR (length bs))
 
 -- remove N lets, please
 letSubstNR :: Int -> RewriteH Core
 letSubstNR 0 = idR
-letSubstNR n = (childR 1 $ letSubstNR (n - 1)) >>> promoteExprR letSubstR
+letSubstNR n = childR 1 (letSubstNR (n - 1)) >>> promoteExprR letSubstR
 
 inventNames :: [Id] -> String -> String
-inventNames curr old | trace (show ("inventNames",names,old)) False = undefined
-   where
-           names = map getOccString curr
+-- inventNames curr old | trace (show ("inventNames",names,old)) False = undefined
+--    where
+--            names = map getOccString curr
 inventNames curr old = head
                      [ nm
                      | nm <- old : [ old ++ show uq | uq <- [0..] :: [Int] ]
@@ -385,8 +389,7 @@ unfold :: TH.Name -> RewriteH CoreExpr
 unfold nm = translate $ \ env e0 -> do
         let n = countArguments e0
         let sub :: RewriteH Core
-            sub = pathR (take n (repeat 0))
-                        (promoteR (inlineName nm))
+            sub = pathR (replicate n 0) (promoteR $ inlineName nm)
 
             sub2 :: RewriteH CoreExpr
             sub2 = extractR sub
