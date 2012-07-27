@@ -36,7 +36,6 @@ import qualified Language.HERMIT.PrettyPrinter.AST as AST
 import qualified Language.HERMIT.PrettyPrinter.Clean as Clean
 import qualified Language.HERMIT.PrettyPrinter.GHC as GHCPP
 
-
 --------------------------------------------------------------------------
 
 prim_externals :: [External]

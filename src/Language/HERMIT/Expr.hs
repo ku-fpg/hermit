@@ -63,7 +63,7 @@ unparseStmtsH stmts = intercalate " ; " (map unparseStmtH stmts)
 parse :: ReadS a -> String -> Either String a
 parse p str = case p str of
                 (a,rest) : _  | all isSpace rest -> Right a
-                _                                -> Left $ "Bad parse for: " ++ str
+                _                                -> Left $ "User error, cannot parse: " ++ str
 
 many :: ReadS a -> ReadS [a]
 many p inp =

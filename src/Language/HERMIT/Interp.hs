@@ -21,7 +21,7 @@ import Language.HERMIT.Expr
 -- | Interpret an 'ExprH' by looking up the appropriate 'Dynamic'(s) in the provided 'Data.Map', then interpreting the 'Dynamic'(s) with the provided 'Interp's, returning the first interpretation to succeed (or an error string if none succeed).
 interpExprH :: M.Map String [Dynamic] -> [Interp a] -> ExprH -> Either String a
 interpExprH env interps =
-          either Left (\ dyns -> runInterp dyns (map (fmap Right) interps) (Left "no type match"))
+          either Left (\ dyns -> runInterp dyns (map (fmap Right) interps) (Left "User error, HERMIT command does not type-check."))
           . interpExpr env
 
 runInterp :: [Dynamic] -> [Interp b] -> b -> b
@@ -56,7 +56,7 @@ interpExpr' rhs env (CmdName str)
   -- not a command, try as a string arg... worst case: dynApply fails with "bad type of expression"
   -- best case: 'help ls' works instead of 'help "ls"'. this is likewise done in then clause above
   | rhs                                 = return [toDyn $ StringBox str]
-  | otherwise                           = Left $ "Unrecognised command: " ++ show str
+  | otherwise                           = Left $ "User error, unrecognised HERMIT command: " ++ show str
 interpExpr' _ env (AppH e1 e2)              = dynAppMsg (interpExpr' False env e1) (interpExpr' True env e2)
 
 dynAppMsg :: Either String [Dynamic] -> Either String [Dynamic] -> Either String [Dynamic]
