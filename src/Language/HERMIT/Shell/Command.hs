@@ -311,8 +311,8 @@ completionType = go . dropWhile isSpace
                  ]
 
 completionQuery :: CommandLineState -> CompletionType -> IO (TranslateH Core [String])
-completionQuery _ ConsiderC = return $ considerTargets >>> arr ((++ map fst considerables) . map ('\'':))
-completionQuery _ InlineC   = return $ inlineTargets   >>> arr (map ('\'':))
+completionQuery _ ConsiderC = return $ considerTargets >>^ ((++ map fst considerables) . map ('\'':))
+completionQuery _ InlineC   = return $ inlineTargets   >>^ map ('\'':)
 completionQuery s CommandC  = return $ pure (M.keys (cl_dict s))
 -- Need to modify opts in completionType function. No key can be a suffix of another key.
 completionQuery _ (AmbiguousC ts) = do
