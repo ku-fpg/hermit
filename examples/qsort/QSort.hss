@@ -13,14 +13,17 @@ consider 'qsort
   bash
   {
     consider case
-    any-td (apply-rule "repH ++")
-    bash
-    any-bu (unfold-rule "rep-abs-fusion")
-    any-td (apply-rule "repH ++")
-    bash
-    any-bu (unfold-rule "rep-abs-fusion")
+    any-td (unfold-rule "repH ++")
+    any-td (unfold-rule "rep-abs-fusion")
     any-td (unfold-rule "repH (:)")
     any-td (unfold-rule "repH []")
+    any-call (unfold '.)
+    bash
+    { consider let
+      alpha-let 'smaller
+      1
+      alpha-let 'larger
+    }
     any-td (unfold-rule "(.) id")
   }
 }
@@ -29,8 +32,6 @@ consider 'qsort
   unfold 'fix
   alpha-let 'work
 }
-any-td (unfold '.)
 bash
 one-td (unfold 'absH)
-unshadow
 

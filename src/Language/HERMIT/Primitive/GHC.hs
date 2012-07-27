@@ -63,7 +63,8 @@ externals =
 ------------------------------------------------------------------------
 
 letSubstR :: RewriteH CoreExpr
-letSubstR = contextfreeT $ \ exp -> case exp of
+letSubstR =  prefixFailMsg "Let substition failed: " $
+             contextfreeT $ \ exp -> case exp of
       Let (NonRec b be) e
          | isId b    -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
                             sub      = extendSubst emptySub b be
@@ -72,11 +73,12 @@ letSubstR = contextfreeT $ \ exp -> case exp of
          | isTyVar b -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
                             sub      = extendTvSubst emptySub b bty
                          in return $ substExpr (text "letSubstR") sub e
-      _ -> fail "LetSubst failed. Expr is not a (non-recursive) Let."
+      _ -> fail "expression is not a non-recursive Let."
 
 -- This is quite expensive (O(n) for the size of the sub-tree)
 safeLetSubstR :: RewriteH CoreExpr
-safeLetSubstR = translate $ \ env exp ->
+safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
+                 translate $ \ env exp ->
     let   -- Lit?
           safeBind (Var {})   = True
           safeBind (Lam {})   = True
@@ -89,10 +91,7 @@ safeLetSubstR = translate $ \ env exp ->
 
           safeSubst NoOccInfo = False   -- unknown!
           safeSubst IAmDead   = True    -- DCE
-          safeSubst (OneOcc inLam oneBr _)
-                              | inLam || not oneBr = False   -- do not inline inside a lambda
-                                                             -- or if in multiple case branches
-                              | otherwise = True
+          safeSubst (OneOcc inLam oneBr _) = not inLam && oneBr -- do not inline inside a lambda or if in multiple case branches
           safeSubst _ = False   -- strange case, like a loop breaker
    in case occurAnalyseExpr exp of
       Let (NonRec b (Type bty)) e
@@ -104,9 +103,9 @@ safeLetSubstR = translate $ \ env exp ->
                      -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
                             sub      = extendSubst emptySub b be
                          in return $ substExpr (text "letSubstR") sub e
-         | otherwise -> fail "safeLetSubstR failed (safety critera not met)"
+         | otherwise -> fail "safety critera not met."
       -- By (our) definition, types are a trivial bind
-      _ -> fail "LetSubst failed. Expr is not a (non-recursive) Let."
+      _ -> fail "expression is not a non-recursive Let."
 
 -- | 'safeLetSubstPlusR' tries to inline a stack of bindings, stopping when reaches
 -- the end of the stack of lets.
