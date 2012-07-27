@@ -2,8 +2,6 @@ module Language.HERMIT.Primitive.Inline where
 
 import GhcPlugins
 
-import Control.Arrow
-
 import Language.HERMIT.GHC
 import Language.HERMIT.Primitive.Navigation
 -- import Language.HERMIT.Primitive.Debug (traceR)
@@ -25,8 +23,8 @@ externals =
                 , "rather than constructor or literal." ].+ Eval .+ Deep .+ TODO
             , external "inline" (promoteExprR . inlineName :: TH.Name -> RewriteH Core)
                 [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
-            -- , external "inline-case-constructor" (promoteExprR inlineCaseConstructor :: RewriteH Core)
-            --     [ "Inline the wildcard binder of the current case expression." ].+ Eval .+ Deep .+ TODO
+            , external "inline-case-constructor" (promoteExprR inlineCaseConstructor :: RewriteH Core)
+                [ "Inline the wildcard binder of the current case expression." ].+ Eval .+ Deep .+ TODO -- .+ Bash
             ]
 
 inlineName :: TH.Name -> RewriteH CoreExpr
