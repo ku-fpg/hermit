@@ -20,9 +20,7 @@ consider 'qsort
     any-call (unfold '.)
     bash
     { consider let
-      alpha-let 'smaller
-      1
-      alpha-let 'larger
+      repeat let-subst -- maybe if we folded the (.) then safe-let-subst would fire and this would be unneccassary
     }
     any-td (unfold-rule "(.) id")
   }
