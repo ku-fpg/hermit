@@ -62,7 +62,7 @@ foldR nm =  prefixFailMsg "Fold failed: " $
                (\(rhs,_d) -> maybe (fail "no match.")
                                    return
                                    (fold i rhs e))
-               (getUnfolding False i c)
+               (getUnfolding False False i c)
 
 fold :: Id -> CoreExpr -> CoreExpr -> Maybe CoreExpr
 fold i lam exp = do

@@ -27,12 +27,10 @@ consider 'qsort
 {
   consider app
   unfold 'fix
+  alpha-let 'work
 }
 any-td (unfold '.)
 bash
 one-td (unfold 'absH)
 unshadow
-{
-  consider let
-  alpha-let 'work
-}
+

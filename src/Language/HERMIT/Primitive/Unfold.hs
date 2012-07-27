@@ -69,19 +69,28 @@ inScope c i = maybe (case unfoldingInfo (idInfo i) of
                     (lookupHermitBinding i c)
 
 getUnfolding :: Monad m
-             => Bool -- ^ If True, then for case binders inline the scrutinee.
+             => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
+             -> Bool -- ^ Only succeed if this variable is a case binder.
              -> Id -> Context -> m (CoreExpr, Int)
-getUnfolding scrutinee i c =
+getUnfolding scrutinee caseBinderOnly i c =
     case lookupHermitBinding i c of
         Nothing -> case unfoldingInfo (idInfo i) of
-                     CoreUnfolding { uf_tmpl = uft } -> return (uft, 0)
-                     _ -> fail $ "cannot find " ++ show i ++ " in Env or IdInfo"
+                     CoreUnfolding { uf_tmpl = uft } -> if caseBinderOnly then fail "not a case binder" else return (uft, 0)
+                     _                               -> fail $ "cannot find " ++ show i ++ " in Env or IdInfo."
         Just (LAM {}) -> fail $ show i ++ " is lambda-bound"
-        Just (BIND depth _ e') -> return (e', depth)
-        Just (CASE depth s coreAlt) ->
-            if scrutinee then return (s, depth)
-            else let tys = tyConAppArgs (idType i)
-                 in return $ either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
+        Just (BIND depth _ e') -> if caseBinderOnly then fail "not a case binder" else return (e', depth)
+        Just (CASE depth s coreAlt) -> return $ if scrutinee
+                                                 then (s, depth)
+                                                 else let tys = tyConAppArgs (idType i)
+                                                       in either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
+
+-- getCaseBinderUnfolding :: Monad m => Id -> Context -> m (CoreExpr, Int)
+-- getCaseBinderUnfolding i c =
+--     case lookupHermitBinding i c of
+--         Just (CASE depth s coreAlt) -> let tys = tyConAppArgs (idType i)
+--                                         in return $ either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
+--         _ -> fail "not a case binder."
+
 
 -- | Convert lhs of case alternative to a constructor application expression,
 --   or a default expression in the case of the DEFAULT alternative.

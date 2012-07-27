@@ -27,6 +27,7 @@ consider 'flatten
   {
     consider app
     unfold 'fix
+    alpha-let 'work
   }
 }
 bash

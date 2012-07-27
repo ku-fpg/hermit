@@ -18,36 +18,59 @@ import qualified Language.Haskell.TH as TH
 
 externals :: [External]
 externals =
-            [ external "inline" (promoteExprR (inline False) :: RewriteH Core)
+            [ external "inline" (promoteExprR inline :: RewriteH Core)
                 [ "(Var n) ==> <defn of n>, fails otherwise" ].+ Eval .+ Deep .+ TODO
-            , external "inline-scrutinee" (promoteExprR (inline True) :: RewriteH Core)
+            , external "inline-scrutinee" (promoteExprR inlineScrutinee :: RewriteH Core)
                 [ "(Var n) ==> <defn of n>, fails otherwise"
-                , "In the case of case wildcard binders, replaces with scrutinee expression, "
+                , "In the case of case binders, replaces with scrutinee expression, "
                 , "rather than constructor or literal." ].+ Eval .+ Deep .+ TODO
             , external "inline" (promoteExprR . inlineName :: TH.Name -> RewriteH Core)
                 [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
-            -- , external "inline-case-constructor" (promoteExprR inlineCaseConstructor :: RewriteH Core)
-            --     [ "Inline the wildcard binder of the current case expression." ].+ Eval .+ Deep .+ TODO -- .+ Bash
+            , external "inline-case-binder" (promoteExprR inlineCaseBinder :: RewriteH Core)
+                [ "Inline if this variable is a case binder." ] .+ TODO -- .+ Bash
             ]
 
 inlineName :: TH.Name -> RewriteH CoreExpr
-inlineName nm = var nm >> inline False
+inlineName nm = var nm >> inline
+
+inline :: RewriteH CoreExpr
+inline = configurableInline False False
+
+inlineScrutinee :: RewriteH CoreExpr
+inlineScrutinee = configurableInline True False
+
+inlineCaseBinder :: RewriteH CoreExpr
+inlineCaseBinder = configurableInline False True
+
+
+-- inline :: Bool -> RewriteH CoreExpr
+-- inline scrutinee = prefixFailMsg "Inline failed: " $
+--                    withPatFailMsg (wrongExprForm "Var v") $
+--                    do (c, Var v) <- exposeT
+--                       (e,d) <- getUnfolding scrutinee v c
+--                       return e >>> accepterR (extractT $ ensureDepth d) "values in inlined expression have been rebound."
+
+-- inlineCaseBinder :: RewriteH CoreExpr
+-- inlineCaseBinder = prefixFailMsg "Inline failed: " $
+--                    withPatFailMsg (wrongExprForm "Var v") $
+--                    do (c, Var v) <- exposeT
+--                       (e,d) <- getCaseBindingUnfolding v c
+--                       return e >>> accepterR (extractT $ ensureDepth d) "values in inlined expression have been rebound."
 
 -- | The implementation of inline, an important transformation.
 -- This *only* works on a Var of the given name. It can trivially
 -- be prompted to more general cases.
 -- TODO: check the scoping for the inline operation; we can mess things up here.
-inline :: Bool -> RewriteH CoreExpr
-inline scrutinee = prefixFailMsg "Inline failed: " $
-                   withPatFailMsg (wrongExprForm "Var v") $
-                   do (c, Var v) <- exposeT
-                      (e,d) <- getUnfolding scrutinee v c
-                      return e >>> accepterR (extractT $ ensureDepth d) "values in inlined expression have been rebound."
+configurableInline :: Bool -- ^ Inline the scrutinee instead of the patten match (for case binders).
+                   -> Bool -- ^ Only inline if this variable is a case binder.
+                   -> RewriteH CoreExpr
+configurableInline scrutinee caseBinderOnly =
+   prefixFailMsg "Inline failed: " $
+   withPatFailMsg (wrongExprForm "Var v") $
+   do (c, Var v) <- exposeT
+      (e,d) <- getUnfolding scrutinee caseBinderOnly v c
+      return e >>> accepterR (extractT $ ensureDepth d) "values in inlined expression have been rebound."
 
--- Doesn't work.  We don't want to inline things that share the same TH.Name.
--- inlineCaseConstructor :: RewriteH CoreExpr
--- inlineCaseConstructor = do Case _ v _ _ <- idR
---                            extractR $ anybuR $ promoteExprR $ inlineName $ id2THName v
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
 -- Assumes minimum depth is 0.
@@ -63,6 +86,6 @@ ensureDepth d = do
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: TranslateH Core [String]
-inlineTargets = collectT $ promoteT $ condM (testM (inline False))
+inlineTargets = collectT $ promoteT $ condM (testM inline)
                                             (varT unqualifiedIdName)
                                             (fail "cannot be inlined")
