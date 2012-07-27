@@ -68,20 +68,20 @@ inScope c i = maybe (case unfoldingInfo (idInfo i) of
                     (const True) -- defined in this module
                     (lookupHermitBinding i c)
 
-getUnfolding :: Bool -> Id -> Context -> Either String (CoreExpr, Int)
+getUnfolding :: Monad m
+             => Bool -- ^ If True, then for case binders inline the scrutinee.
+             -> Id -> Context -> m (CoreExpr, Int)
 getUnfolding scrutinee i c =
     case lookupHermitBinding i c of
-        Nothing ->
-            case unfoldingInfo (idInfo i) of
-                CoreUnfolding { uf_tmpl = uft } -> Right (uft, 0)
-                _ -> Left $ "inline failed, cannot find " ++ show i ++ " in Env or IdInfo"
-        Just (LAM {}) ->
-            Left $ show i ++ " is lambda-bound"
-        Just (BIND depth _ e') -> Right (e', depth)
+        Nothing -> case unfoldingInfo (idInfo i) of
+                     CoreUnfolding { uf_tmpl = uft } -> return (uft, 0)
+                     _ -> fail $ "cannot find " ++ show i ++ " in Env or IdInfo"
+        Just (LAM {}) -> fail $ show i ++ " is lambda-bound"
+        Just (BIND depth _ e') -> return (e', depth)
         Just (CASE depth s coreAlt) ->
-            if scrutinee then Right (s, depth)
+            if scrutinee then return (s, depth)
             else let tys = tyConAppArgs (idType i)
-                 in Right $ either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
+                 in return $ either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
 
 -- | Convert lhs of case alternative to a constructor application expression,
 --   or a default expression in the case of the DEFAULT alternative.

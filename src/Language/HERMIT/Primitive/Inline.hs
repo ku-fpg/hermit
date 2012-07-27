@@ -2,7 +2,10 @@ module Language.HERMIT.Primitive.Inline where
 
 import GhcPlugins
 
+import Control.Arrow
+
 import Language.HERMIT.GHC
+import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.Navigation
 -- import Language.HERMIT.Primitive.Debug (traceR)
 import Language.HERMIT.Primitive.GHC
@@ -36,13 +39,10 @@ inlineName nm = var nm >> inline False
 -- TODO: check the scoping for the inline operation; we can mess things up here.
 inline :: Bool -> RewriteH CoreExpr
 inline scrutinee = prefixFailMsg "Inline failed: " $
-  rewrite $ \ c e -> case e of
-    Var v  -> -- A candiate for inlining
-              either fail (\(e',d) -> condM (apply (extractT (ensureDepth d)) c e')
-                                            (return e')
-                                            (fail "values in inlined expression have been rebound."))
-                     (getUnfolding scrutinee v c)
-    _      -> fail "not a variable."
+                   withPatFailMsg (wrongExprForm "Var v") $
+                   do (c, Var v) <- exposeT
+                      (e,d) <- getUnfolding scrutinee v c
+                      return e >>> accepterR (extractT $ ensureDepth d) "values in inlined expression have been rebound."
 
 -- Doesn't work.  We don't want to inline things that share the same TH.Name.
 -- inlineCaseConstructor :: RewriteH CoreExpr
