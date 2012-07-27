@@ -34,6 +34,7 @@ import Language.KURE.Combinators
 import Language.KURE.Utilities
 
 import Language.HERMIT.CoreExtra
+import Language.HERMIT.Context
 
 import qualified Language.Haskell.TH as TH
 
@@ -137,8 +138,8 @@ newTypeVarH nm kind = flip mkTyVar kind <$> newName nm
 
 -- | A message packet.
 data DebugMessage :: * where
-        DebugTick    :: String -> DebugMessage
-        DebugMessage :: String -> Core -> DebugMessage
+        DebugTick    :: String                    -> DebugMessage
+        DebugCore    :: String -> Context -> Core -> DebugMessage       -- A postcard
 
 mkHermitMEnv :: (DebugMessage -> IO ()) -> HermitMEnv
 mkHermitMEnv debugger = HermitMEnv

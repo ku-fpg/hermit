@@ -744,7 +744,7 @@ mkLogger =
    return $ Logger
         { logger_debugMessage = \ msg -> case msg of
                 DebugTick    msg      -> putStrLn $ "(X) " ++ msg
-                DebugMessage msg core -> putStrLn $ "[" ++ msg ++ "]\n"
+                DebugCore  msg _ core -> putStrLn $ "[" ++ msg ++ "]\n"
                                                  ++ showCore core
         , logger_resetTicks = return ()
         , logger_showTicks = return ()

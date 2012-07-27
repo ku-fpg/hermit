@@ -23,8 +23,8 @@ observeFailureR str m = m <+ observeR str
 
 -- Print out the Core, with a message
 observeR :: (Injection a Core, Generic a ~ Core) => String -> RewriteH a
-observeR msg = extractR $ sideEffectR $ \ _ core ->
-        sendDebugMessage $ DebugMessage msg core
+observeR msg = extractR $ sideEffectR $ \ cxt core ->
+        sendDebugMessage $ DebugCore msg cxt core
 
 -- Just say something, every time the rewrite is done
 traceR :: String -> RewriteH a
