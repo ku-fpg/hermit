@@ -84,14 +84,6 @@ getUnfolding scrutinee caseBinderOnly i c =
                                                  else let tys = tyConAppArgs (idType i)
                                                        in either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
 
--- getCaseBinderUnfolding :: Monad m => Id -> Context -> m (CoreExpr, Int)
--- getCaseBinderUnfolding i c =
---     case lookupHermitBinding i c of
---         Just (CASE depth s coreAlt) -> let tys = tyConAppArgs (idType i)
---                                         in return $ either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
---         _ -> fail "not a case binder."
-
-
 -- | Convert lhs of case alternative to a constructor application expression,
 --   or a default expression in the case of the DEFAULT alternative.
 --   Accepts a list of types to apply to the constructor before the value args.

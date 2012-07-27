@@ -27,7 +27,7 @@ externals =
             , external "inline" (promoteExprR . inlineName :: TH.Name -> RewriteH Core)
                 [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
             , external "inline-case-binder" (promoteExprR inlineCaseBinder :: RewriteH Core)
-                [ "Inline if this variable is a case binder." ] .+ TODO -- .+ Bash
+                [ "Inline if this variable is a case binder." ].+ Eval .+ Deep .+ Bash .+ TODO
             ]
 
 inlineName :: TH.Name -> RewriteH CoreExpr
@@ -41,21 +41,6 @@ inlineScrutinee = configurableInline True False
 
 inlineCaseBinder :: RewriteH CoreExpr
 inlineCaseBinder = configurableInline False True
-
-
--- inline :: Bool -> RewriteH CoreExpr
--- inline scrutinee = prefixFailMsg "Inline failed: " $
---                    withPatFailMsg (wrongExprForm "Var v") $
---                    do (c, Var v) <- exposeT
---                       (e,d) <- getUnfolding scrutinee v c
---                       return e >>> accepterR (extractT $ ensureDepth d) "values in inlined expression have been rebound."
-
--- inlineCaseBinder :: RewriteH CoreExpr
--- inlineCaseBinder = prefixFailMsg "Inline failed: " $
---                    withPatFailMsg (wrongExprForm "Var v") $
---                    do (c, Var v) <- exposeT
---                       (e,d) <- getCaseBindingUnfolding v c
---                       return e >>> accepterR (extractT $ ensureDepth d) "values in inlined expression have been rebound."
 
 -- | The implementation of inline, an important transformation.
 -- This *only* works on a Var of the given name. It can trivially
