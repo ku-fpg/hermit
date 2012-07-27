@@ -80,7 +80,6 @@ import Language.HERMIT.Monad
 
 import Control.Applicative
 import qualified Control.Category
-import Control.Arrow
 
 import Data.Monoid
 
@@ -249,7 +248,7 @@ instance Walker Context HermitM CoreBind where
 
     where
       nonrec = nonRecT exposeT (childL1of2 NonRec)
-      rec    = whenM (arr $ hasChild n) $
+      rec    = whenM (hasChildT n) $
                   recT (const exposeT) (childLMofN n defToRecBind)
 
   allT t = nonRecT (extractT t) (\ _ -> id)
@@ -389,7 +388,7 @@ instance Walker Context HermitM CoreExpr where
                  _  ->    caseChooseL
      where
        -- Note we use index (n-1) because 0 refers to the expression being scrutinised.
-       caseChooseL = whenM (arr $ hasChild n) $
+       caseChooseL = whenM (hasChildT n) $
                            caseT idR (const exposeT) (\ e v t -> childLMofN (n-1) (Case e v t))
 
   allT t = varT (\ _ -> mempty)

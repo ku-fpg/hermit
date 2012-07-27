@@ -115,5 +115,5 @@ cmpName :: TH.Name -> Id -> Bool
 cmpName = cmpTHName2Id
 
 var :: TH.Name -> TranslateH CoreExpr ()
-var nm = whenM (varT $ cmpName nm) (return ())
+var nm = varT (cmpName nm) >>= guardM
 
