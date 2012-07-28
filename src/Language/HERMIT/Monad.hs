@@ -47,7 +47,7 @@ type Label = String
 type DefStash = Map Label CoreDef
 
 -- | A way of sending messages to top level
-newtype HermitMEnv = HermitMEnv { hs_debugChan :: DebugMessage -> IO () }
+newtype HermitMEnv = HermitMEnv { hs_debugChan :: DebugMessage -> HermitM () }
 
 -- | The HERMIT monad is kept abstract.
 newtype HermitM a = HermitM (HermitMEnv -> DefStash -> CoreM (KureMonad (DefStash, a)))
@@ -62,9 +62,9 @@ putStash :: DefStash -> HermitM ()
 putStash s = HermitM (\ _ _ -> return $ return (s, ()))
 
 sendDebugMessage :: DebugMessage -> HermitM ()
-sendDebugMessage msg = HermitM $ \ ch s -> do
-                        liftIO $ hs_debugChan ch msg
-                        return $ return (s, ())
+sendDebugMessage msg =
+        do env <- HermitM $ \ ch s -> return $ return (s, ch)
+           hs_debugChan env msg
 
 -- | Save a definition for future use.
 saveDef :: Label -> CoreDef -> HermitM ()
@@ -141,7 +141,7 @@ data DebugMessage :: * where
         DebugTick    :: String                    -> DebugMessage
         DebugCore    :: String -> Context -> Core -> DebugMessage       -- A postcard
 
-mkHermitMEnv :: (DebugMessage -> IO ()) -> HermitMEnv
+mkHermitMEnv :: (DebugMessage -> HermitM ()) -> HermitMEnv
 mkHermitMEnv debugger = HermitMEnv
                 { hs_debugChan = debugger
                 }

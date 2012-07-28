@@ -733,7 +733,7 @@ showGraph graph tags this@(SAST n) =
 -- Our "Logger"; should be in its own module at some point
 
 data Logger = Logger
-        { logger_debugMessage :: DebugMessage -> IO ()
+        { logger_debugMessage :: DebugMessage -> HermitM ()
         , logger_resetTicks   :: IO ()
         , logger_showTicks    :: IO ()
         }
@@ -743,9 +743,9 @@ mkLogger :: IO Logger
 mkLogger =
    return $ Logger
         { logger_debugMessage = \ msg -> case msg of
-                DebugTick    msg      -> putStrLn $ "(X) " ++ msg
-                DebugCore  msg _ core -> putStrLn $ "[" ++ msg ++ "]\n"
-                                                 ++ showCore core
+                DebugTick    msg      -> GHC.liftIO $ putStrLn $ "(X) " ++ msg
+                DebugCore  msg _ core -> GHC.liftIO $ putStrLn $ "[" ++ msg ++ "]\n"
+                                                             ++ showCore core
         , logger_resetTicks = return ()
         , logger_showTicks = return ()
         }
