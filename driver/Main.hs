@@ -6,8 +6,11 @@ import System.Environment
 import System.Process
 import System.Exit
 
+import Paths_hermit as P
+import Data.Version
+
 hermit_version :: String
-hermit_version = "HERMIT v0.1"
+hermit_version = "HERMIT v" ++ showVersion P.version
 
 main :: IO ()
 main = do
