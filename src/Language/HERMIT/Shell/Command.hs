@@ -10,6 +10,7 @@ import qualified GhcPlugins as GHC
 import Control.Applicative
 import Control.Arrow hiding (loop)
 import Control.Concurrent
+import Control.Concurrent.STM
 import Control.Exception.Base hiding (catch)
 import Control.Monad.State
 import Control.Monad.Error
@@ -284,8 +285,8 @@ data SessionState = SessionState
         , cl_width       :: Int                 -- ^ how wide is the screen?
         , cl_nav         :: Bool        -- ^ keyboard input the the nav panel
         , cl_loading     :: Bool        -- ^ if loading a file
+        , cl_tick        :: TVar (M.Map String Int)     -- ^ The list of ticked messages
         }
-
 
 -------------------------------------------------------------------------------
 
@@ -348,9 +349,11 @@ commandLine filesToLoad behavior modGuts = do
 
     logger <- GHC.liftIO mkLogger
 
+    var <- GHC.liftIO $ atomically $ newTVar M.empty
+
     flip (scopedKernel) modGuts $ \ skernel sast -> do
 
-        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False
+        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False var
             shellState = CommandLineState [] [] dict skernel logger sessionState
 
         completionMVar <- newMVar shellState
@@ -731,11 +734,23 @@ showGraph graph tags this@(SAST n) =
 
 cl_kernel_env  :: SessionState -> HermitMEnv
 cl_kernel_env ss = mkHermitMEnv $ \ msg -> case msg of
-                DebugTick    msg      -> GHC.liftIO $ putStrLn $ "(X) " ++ msg
+                DebugTick    msg      -> do
+                        c <- GHC.liftIO $ tick (cl_tick ss) msg
+                        GHC.liftIO $ putStrLn $ "<" ++ show c ++ "> " ++ msg
                 DebugCore  msg cxt core -> do
                         GHC.liftIO $ putStrLn $ "[" ++ msg ++ "]"
                         doc :: DocH <- apply (pretty ss) cxt core
                         GHC.liftIO $ cl_render ss stdout (cl_pretty_opts ss) doc
+
+-- tick counter
+tick :: TVar (M.Map String Int) -> String -> IO Int
+tick var msg = atomically $ do
+        m <- readTVar var
+        let c = case M.lookup msg m of
+                Nothing -> 1
+                Just x  -> x + 1
+        writeTVar var (M.insert msg c m)
+        return c
 
 -- Our "Logger"; should be in its own module at some point
 
