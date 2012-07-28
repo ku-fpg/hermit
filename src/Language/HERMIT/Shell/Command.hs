@@ -232,10 +232,10 @@ changeRenderer renderer = SessionStateEffect $ \ _ st ->
 catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
 
-pretty :: CommandLineState -> PrettyH Core
-pretty st = case M.lookup (cl_pretty (cl_session st)) pp_dictionary of
-                Just pp -> pp (cl_pretty_opts (cl_session st))
-                Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty (cl_session st) ++ ">>")
+pretty :: SessionState -> PrettyH Core
+pretty ss = case M.lookup (cl_pretty ss) pp_dictionary of
+                Just pp -> pp (cl_pretty_opts ss)
+                Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty ss ++ ">>")
 
 showFocus :: MonadIO m => CLM m ()
 showFocus = do
@@ -245,7 +245,7 @@ showFocus = do
           (return ())
           (iokm2clm' "Rendering error: "
                      (liftIO . cl_render (cl_session st) stdout (cl_pretty_opts (cl_session st)))
-                     (queryS (cl_kernel st) (cl_cursor (cl_session st)) (pretty st) (cl_kernel_env (cl_session st)))
+                     (queryS (cl_kernel st) (cl_cursor (cl_session st)) (pretty (cl_session st)) (cl_kernel_env (cl_session st)))
           )
 
 -------------------------------------------------------------------------------
@@ -284,7 +284,6 @@ data SessionState = SessionState
         , cl_width       :: Int                 -- ^ how wide is the screen?
         , cl_nav         :: Bool        -- ^ keyboard input the the nav panel
         , cl_loading     :: Bool        -- ^ if loading a file
-        , cl_kernel_env  :: HermitMEnv   -- ^ The environment to use with the kernel calls
         }
 
 
@@ -351,7 +350,7 @@ commandLine filesToLoad behavior modGuts = do
 
     flip (scopedKernel) modGuts $ \ skernel sast -> do
 
-        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False (mkHermitMEnv (logger_debugMessage logger))
+        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False
             shellState = CommandLineState [] [] dict skernel logger sessionState
 
         completionMVar <- newMVar shellState
@@ -729,6 +728,14 @@ showGraph graph tags this@(SAST n) =
           paths = [ (b,c) | (a,b,c) <- graph, a == this ]
 
 ----------------------------------------------------------------------------------------------
+
+cl_kernel_env  :: SessionState -> HermitMEnv
+cl_kernel_env ss = mkHermitMEnv $ \ msg -> case msg of
+                DebugTick    msg      -> GHC.liftIO $ putStrLn $ "(X) " ++ msg
+                DebugCore  msg cxt core -> do
+                        GHC.liftIO $ putStrLn $ "[" ++ msg ++ "]"
+                        doc :: DocH <- apply (pretty ss) cxt core
+                        GHC.liftIO $ cl_render ss stdout (cl_pretty_opts ss) doc
 
 -- Our "Logger"; should be in its own module at some point
 
