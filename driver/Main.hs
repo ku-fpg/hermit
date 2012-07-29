@@ -39,7 +39,7 @@ main3 mod_nm hermit_args ghc_args = do
 --                  , "-v0"
 	          , "-fplugin=HERMIT"
                   ] ++ [ "-fplugin-opt=HERMIT:main:Main:" ++ opt
-                       | opt <- hermit_args
+                       | opt <- "" : hermit_args
                        ] ++ ghc_args
         putStrLn $ "% ghc " ++ unwords cmds
         (_,_,_,r) <- createProcess $ proc "ghc" cmds
