@@ -266,7 +266,6 @@ data CommandLineState = CommandLineState
         -- these two should be in a reader
         , cl_dict        :: M.Map String [Dynamic]
         , cl_kernel       :: ScopedKernel
-        , cl_logger      :: Logger
         -- and the session state (perhaps in a seperate state?)
         , cl_session      :: SessionState
         }
@@ -347,14 +346,12 @@ commandLine filesToLoad behavior modGuts = do
                       ] `ourCatch` \ msg -> putStrToConsole $ "Booting Failure: " ++ msg
 
 
-    logger <- GHC.liftIO mkLogger
-
     var <- GHC.liftIO $ atomically $ newTVar M.empty
 
     flip (scopedKernel) modGuts $ \ skernel sast -> do
 
         let sessionState = SessionState sast "clean" def unicodeConsole 80 False False var
-            shellState = CommandLineState [] [] dict skernel logger sessionState
+            shellState = CommandLineState [] [] dict skernel sessionState
 
         completionMVar <- newMVar shellState
 
@@ -752,25 +749,3 @@ tick var msg = atomically $ do
         writeTVar var (M.insert msg c m)
         return c
 
--- Our "Logger"; should be in its own module at some point
-
-data Logger = Logger
-        { logger_debugMessage :: DebugMessage -> HermitM ()
-        , logger_resetTicks   :: IO ()
-        , logger_showTicks    :: IO ()
-        }
-
-
-mkLogger :: IO Logger
-mkLogger =
-   return $ Logger
-        { logger_debugMessage = \ msg -> case msg of
-                DebugTick    msg      -> GHC.liftIO $ putStrLn $ "(X) " ++ msg
-                DebugCore  msg _ core -> GHC.liftIO $ putStrLn $ "[" ++ msg ++ "]\n"
-                                                             ++ showCore core
-        , logger_resetTicks = return ()
-        , logger_showTicks = return ()
-        }
-  where
-          showCore :: Core -> String
-          showCore = show2
