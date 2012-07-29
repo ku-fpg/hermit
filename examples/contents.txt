@@ -97,3 +97,7 @@ To Do
 * Life - Can we translate to a stronger type?
 
 * Append Vanishes - Should generalise the Reverse, Flatten, and Quicksort examples.
+
+* Kansas Lava example?
+
+
