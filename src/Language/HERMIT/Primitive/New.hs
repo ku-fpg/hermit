@@ -16,6 +16,7 @@ import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 import Language.HERMIT.Primitive.GHC
+import Language.HERMIT.Primitive.Utils
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Local.Case
 import Language.HERMIT.Primitive.Inline
@@ -234,7 +235,7 @@ fixSpecialization' = do
 --                   mkAppTy t t'
 
 
-        -- TODO: t2' isn't used anywhere???
+        -- TODO: t2' isn't used anywhere -- which means that a2 is never used ???
         let t2' = case a2 of
                    Type t2  -> applyTy t t2
 --                   Var  a2  -> mkAppTy t (exprType t2)
@@ -314,10 +315,7 @@ altRenameBinder nameMod =
 -- This gives an new version of an Id, with the same info, and a new textual name.
 cloneIdH :: (String -> String) -> Id -> HermitM (Id,CoreExpr -> CoreExpr)
 cloneIdH nameMod b = do
-        uq <- getUniqueM
-        let name = mkSystemVarName uq $ mkFastString $ nameMod $ getOccString b
-            ty   = idType b
-            b'   = mkLocalId name ty
+        b' <- cloneId nameMod b
         return (b', Let (NonRec b (Var b')))
 
 cloneIdsH :: (String -> String) -> [Id] -> HermitM ([Id],CoreExpr -> CoreExpr)
@@ -387,7 +385,7 @@ cleanupUnfold = betaReducePlus >>> safeLetSubstPlusR
 
 unfold :: TH.Name -> RewriteH CoreExpr
 unfold nm = translate $ \ env e0 -> do
-        let n = countArguments e0
+        let n = appCount e0
         let sub :: RewriteH Core
             sub = pathR (replicate n 0) (promoteR $ inlineName nm)
 
@@ -411,7 +409,7 @@ withUnfold rr = readerT $ \ e -> case e of
         rec :: RewriteH Core
         rec = withUnfold rr
 
--- Makes every 'virtual' shadow dispear.
+-- Makes every 'virtual' shadow disappear.
 -- O(n^2) right now
 -- Also, only does lambda bound things.
 unshadow :: RewriteH Core
@@ -419,11 +417,6 @@ unshadow = anytdR (promoteR autoRenameBinder)
 
 --cleanUnfold :: (LensH Core Core -> RewriteH Core) -> RewriteH Core
 --cleanUnfold f =
-
--- TODO: use appCount
-countArguments :: CoreExpr -> Int
-countArguments (App e1 _) = countArguments e1 + 1
-countArguments _          = 0
 
 -- push a variable into the expression
 push :: TH.Name -> RewriteH CoreExpr

@@ -54,12 +54,6 @@ considerTargets = allT (collectT (promoteT $ nonRec <+ rec)) >>> arr concat
     where nonRec = nonRecT mempty (\ v () -> [unqualifiedIdName v])
           rec    = recT (const (arr (\ (Def v _) -> unqualifiedIdName v))) id
 
--- -- | Get the unqualified name from an Id/Var.
--- unqualified :: Id -> String
--- unqualified = checkCompose . reverse . showPpr . idName
---     where checkCompose ('.':_) = "."
---           checkCompose other   = reverse (takeWhile (/='.') other)
--- -- TODO: Does GHC provide this?
 
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetIn | CaseOf | Casty | Ticky | TypeVar | Coerce
 

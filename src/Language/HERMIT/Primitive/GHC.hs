@@ -319,8 +319,6 @@ arityOf env nm =
 
 ---------------------------------------------------------
 
-
--- TODO: cloneIdH should use this
 cloneId :: (String -> String) -> Id -> HermitM Id
 cloneId nameMod b = do
         uq <- getUniqueM
