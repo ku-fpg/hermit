@@ -1,3 +1,5 @@
+-- WARNING: This is incorrect.  Counter example: nub [undefined]
+
 A few days ago, I set a quick challenge to <em>derive</em> an efficient
 version of <code>nub</code> over <code>Int</code> from a textbook
 definition of <code>nub</code>. So, starting from
@@ -51,7 +53,7 @@ The first thing we can do is enumerate what happens to the the consumed list.
 There are only two things going on
 
 <ul>
-<li>The list is deconstructed, using pattern matching. 
+<li>The list is deconstructed, using pattern matching.
 </li>
 <li>The list is selectively reconstructed, using filter,
 based on a single lack-of-membership test.
@@ -103,8 +105,8 @@ How about
 <code>
 data R = R [Int] (Set Int)
 
-nextR :: R -> Maybe (Int,R) 
-nextR (R xs except) = 
+nextR :: R -> Maybe (Int,R)
+nextR (R xs except) =
   case dropWhile (\ x -> x `member` except) xs of
     [] -> Nothing
     (x:xs) -> Just (x,R xs except)
@@ -117,7 +119,7 @@ This data-structure is optimized for the API of <code>R</code>.  Yes, a bit of
 invention, but nothing deep, and nothing recursive.  We need to
 maintain the ordering of the original list, so we use a list. We need
 to sometimes exclude specific elements, so we have a set of things
-to exclude. 
+to exclude.
 
 <em>I argue that inventing a better <code>R</code> in the only imagination needed
 to solve the problem.</em>
@@ -200,7 +202,7 @@ work =  fix (unwrap . body . wrap)
 </div>
 
 In other words, if we have a way of converting to and from a new type,
-we can use the worker/wrapper theorem to mechanically achieve recursion over 
+we can use the worker/wrapper theorem to mechanically achieve recursion over
 the new type (in general, <code>B</code> in our case, <code>R -> [Int]</code>)
 
 There are three possible worker/wrapper assumptions; the simplest of which
@@ -230,8 +232,8 @@ Yes. So we can use the following.
 nub :: [Int] -> [Int]
 nub = wrap nub'
 nub' :: R -> [Int]
-nub' = fix ( unwrap 
-           . (\ nub w -> 
+nub' = fix ( unwrap
+           . (\ nub w ->
 	             case w of
 			      [] -> []
 				     (x:xs) -> nub (filter (\y -> not (x == y)) xs)
@@ -290,7 +292,7 @@ This was so we can use the worker/wrapper fusion property, which is
  (wrap . unwrap) work = work
 </code>
 This simply means that <code>wrap . unwrap</code> is the identity
-over any value produce by the recursive call (even though 
+over any value produce by the recursive call (even though
 <code>wrap . unwrap</code> might not be the identity in general).
 Taking advantage of this gives:
 <code>
@@ -307,7 +309,7 @@ nub :: [Int] -> [Int]
 nub xs = nub' (R xs empty)
 
 nub' :: R -> [Int]
-nub' (R xs except) = 
+nub' (R xs except) =
   case dropWhile (\ x -> x `member` except) xs of
     [] -> []
     (x:xs) -> x : nub' (R xs (insert x except))
@@ -330,7 +332,7 @@ transformation.
 wrap :: ([Int] -> Set Int -> [Int]) -> (R -> [Int])
 wrap f (R xs except) = f xs except
 
-unwrap :: (R -> [Int]) -> ([Int] -> Set Int -> [Int]) 
+unwrap :: (R -> [Int]) -> ([Int] -> Set Int -> [Int])
 unwrap f xs except = f (R xs except)
 </code>
 Of course, this is a currying operation, and a well known
@@ -348,7 +350,7 @@ nub :: [Int] -> [Int]
 nub xs = nub' xs empty
 
 nub' :: [Int] -> Set Int -> [Int]
-nub' xs except = 
+nub' xs except =
   case dropWhile (\ x -> x `member` except) xs of
     [] -> []
     (x:xs) -> x : nub' xs (insert x except)

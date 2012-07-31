@@ -13,9 +13,9 @@ wrap f (a:as)  = f a as
 {-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
 
 -- last :: [a] -> a
-last []       = error "last []"
-last [a]      = a
-last (_:a:as) = last (a:as)
+last []        = error "last []"
+last [a]       = a
+last (_:a:as)  = last (a:as)
 
 main :: IO ()
 main = print (last "hello")
