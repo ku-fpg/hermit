@@ -1,0 +1,87 @@
+nub : List ℤ → List ℤ
+nub [] = []
+nub (x ∷ xs) = x ∷ nub (filter (‌≠ x) xs)
+
+f : (List ℤ → List ℤ) → List ℤ → List ℤ
+f h [] = []
+f h (x ∷ xs) = x ∷ h (filter (≠ x) xs)
+
+work : List ℤ → Set ℤ → List ℤ
+work []       s = []
+work (x ∷ xs) s = let ys = work xs (insert x s)
+                   in if x ∈ s then ys else x ∷ ys
+
+g : (List ℤ → Set ℤ → List ℤ) → List ℤ → Set ℤ → List ℤ
+g h []       s = []
+g h (x ∷ xs) s = let ys = h xs (insert x s)
+                  in if x ∈ s then ys else x ∷ ys
+
+abs : (List ℤ → Set ℤ → List ℤ) → List ℤ → List ℤ
+abs h []       = []
+abs h (x ∷ xs) = x ∷ h xs {x}
+
+rep : (List ℤ → List ℤ) → List ℤ → Set ℤ → List ℤ
+rep h xs s = h (filter (∉ s) xs)
+
+
+(A) False
+  abs ∘ rep ≡ id
+⇔   {- extensionality -}
+  abs (rep h) xs ≡ h xs
+⇒   {- let xs = [] -}
+  abs (rep h) []       ≡ h []
+⇔   {- unfold abs -}
+  []       ≡ h []
+⇒   {- let h = (7:) -}
+  [] ≡ [7]
+⇔
+  False
+
+(B) False
+   abs ∘ rep ∘ f ≡ f
+⇔    {- extensionality -}
+   abs (rep (f h)) xs ≡ f h xs
+⇒    {- let xs = [1] -}
+   abs (rep (f h)) (1 ∷ []) ≡ f h (1 ∷ [])
+⇔    {- unfold abs -}
+   1 ∷ rep (f h) [] {1} ≡ f h (1 ∷ [])
+⇔    {- unfold f -}
+   1 ∷ rep (f h) [] {1} ≡ 1 ∷ h (filter (≠ 1) [])
+⇔    {- cancellation -}
+   rep (f h) [] {1} ≡ h (filter (≠ 1) [])
+⇔    {- unfold rep -}
+   f h (filter (∉ {1}) []) ≡ h (filter (≠ 1) [])
+⇔    {- unfold filter  -}
+   f h [] ≡ h []
+⇔    {- unfold f -}
+   [] ≡ h []
+⇒    {- let h = (7:) -}
+   False
+
+(C)
+   fix (abs ∘ rep ∘ f) ≡ fix f
+⇔    {- fix f ≡ fix (f ∘ f) -}
+   fix (abs ∘ rep ∘ f) ≡ fix (f ∘ f)
+⇐    {- congruence -}
+   abs ∘ rep ∘ f ≡ f ∘ f
+⇔    {- extensionality -}
+   abs (rep (f h)) xs ≡ f (f h) xs
+⇔    {- case split xs -}
+   abs (rep (f h)) ⊥        ≡ f (f h) ⊥
+   abs (rep (f h)) []       ≡ f (f h) []
+   abs (rep (f h)) (x ∷ xs) ≡ f (f h) (x ∷ xs)
+⇔    {- unfold abs -}
+   ⊥                    ≡ f (f h) ⊥
+   []                   ≡ f (f h) []
+   x ∷ rep (f h) xs {x} ≡ f (f h) (x ∷ xs)
+⇔    {- unfold f -}
+   ⊥                    ≡ ⊥
+   []                   ≡ []
+   x ∷ rep (f h) xs {x} ≡ x ∷ f h (filter (≠ x) xs)
+⇔    {- refl, cancellation -}
+   rep (f h) xs {x} ≡ f h (filter (≠ x) xs)
+⇔    {- unfold rep -}
+   f h (filter (∉ {x}) xs) ≡ f h (filter (≠ x) xs)
+⇐    {- congruence -}
+   (∉ {x}) ≡ (≠ x)
+     {- I believe this is true -}
