@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, TypeFamilies #-}
 module Language.HERMIT.Primitive.Debug
-       (
+       ( -- * Debugging Primitives
          externals
        , traceR
        , observeR
