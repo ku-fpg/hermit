@@ -12,9 +12,9 @@ import Language.HERMIT.Monad
 import Language.HERMIT.Context
 import Language.HERMIT.External
 import Language.HERMIT.Kure
+import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.GHC
-import Language.HERMIT.Primitive.Navigation
 import Language.HERMIT.Primitive.Unfold
 
 import qualified Language.Haskell.TH as TH
@@ -55,7 +55,7 @@ stashFoldR label = prefixFailMsg "Fold failed: " $
 foldR :: TH.Name -> RewriteH CoreExpr
 foldR nm =  prefixFailMsg "Fold failed: " $
     translate $ \ c e -> do
-        i <- case filter (\i -> nm `cmpName` i) $ Map.keys (hermitBindings c) of
+        i <- case filter (\i -> nm `cmpTHName2Id` i) $ Map.keys (hermitBindings c) of
                 [i] -> return i
                 _ -> fail "cannot find name."
         either fail

@@ -1,11 +1,8 @@
 {-# LANGUAGE FlexibleContexts, TypeFamilies #-}
 module Language.HERMIT.Primitive.Debug where
 
-import GhcPlugins as GHC
-
 import Language.HERMIT.Kure
 import Language.HERMIT.External
-import Language.HERMIT.PrettyPrinter
 import Language.HERMIT.Monad
 
 externals :: [External]

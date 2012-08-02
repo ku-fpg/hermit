@@ -34,8 +34,8 @@ considerName = oneNonEmptyPathToT . bindGroup
 -- the actual binding. TODO: modify considerName or rhsOf
 -- so we only need one of these?
 bindGroup :: TH.Name -> Core -> Bool
-bindGroup nm (BindCore (NonRec v _))  =  nm `cmpName` v
-bindGroup nm (BindCore (Rec bds))     =  any (cmpName nm . fst) bds
+bindGroup nm (BindCore (NonRec v _))  =  nm `cmpTHName2Id` v
+bindGroup nm (BindCore (Rec bds))     =  any (cmpTHName2Id nm . fst) bds
 bindGroup _  _                        =  False
 
 -- find a specific binding's rhs.
@@ -44,8 +44,8 @@ rhsOf nm = onePathToT (namedBinding nm) >>^ (++ [0])
 
 -- find a named binding.
 namedBinding :: TH.Name -> Core -> Bool
-namedBinding nm (BindCore (NonRec v _))  =  nm `cmpName` v
-namedBinding nm (DefCore (Def v _))      =  nm `cmpName` v
+namedBinding nm (BindCore (NonRec v _))  =  nm `cmpTHName2Id` v
+namedBinding nm (DefCore (Def v _))      =  nm `cmpTHName2Id` v
 namedBinding _  _                        =  False
 
 -- find all the possible targets of consider
@@ -100,14 +100,3 @@ underConsideration Ticky       (ExprCore (Tick _ _))      = True
 underConsideration TypeVar     (ExprCore (Type _))        = True
 underConsideration Coerce      (ExprCore (Coercion _))    = True
 underConsideration _           _                          = False
-
-
--- I feel like these two should go somewhere else, but seem to get stuck with dependency cycles when I move them.
-
--- Hacks till we can find the correct way of doing these.
-cmpName :: TH.Name -> Id -> Bool
-cmpName = cmpTHName2Id
-
-var :: TH.Name -> TranslateH CoreExpr ()
-var nm = varT (cmpName nm) >>= guardM
-

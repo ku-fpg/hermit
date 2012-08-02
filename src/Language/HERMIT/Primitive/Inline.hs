@@ -6,7 +6,6 @@ import Control.Arrow
 
 import Language.HERMIT.GHC
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.Navigation
 -- import Language.HERMIT.Primitive.Debug (traceR)
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Unfold
@@ -31,7 +30,7 @@ externals =
             ]
 
 inlineName :: TH.Name -> RewriteH CoreExpr
-inlineName nm = var nm >> inline
+inlineName nm = (varT (cmpTHName2Id nm) >>= guardM) >> inline
 
 inline :: RewriteH CoreExpr
 inline = configurableInline False False
