@@ -119,18 +119,13 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 freeIdsQuery :: TranslateH CoreExpr String
 freeIdsQuery = freeIdsT >>^ (("Free identifiers are: " ++) . showVars)
 
--- | Show a human-readable version of a list of 'Var's.
+-- | Show a human-readable version of a 'Var'.
 showVar :: Var -> String
 showVar = show . showSDoc . ppr
 
--- | Show a human-readable version of a 'Var'.
+-- | Show a human-readable version of a list of 'Var's.
 showVars :: [Var] -> String
 showVars = show . map (showSDoc . ppr)
-
--- Doesn't work, because it doesn't account for any bindings we add as we navigate down.
--- freeIdsQuery :: TranslateH Core String
--- freeIdsQuery = prunetdT (promoteExprT freeIdsT)
---                >>^ (("Free identifiers are: " ++) . show . map (showSDoc.ppr) . nub)
 
 freeIdsT :: TranslateH CoreExpr [Id]
 freeIdsT = arr coreExprFreeIds
@@ -239,8 +234,6 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
                                               ++ [makeRule rule_name v e]
                                      }
          _ -> fail $ "found multiple bindings for " ++ show nm
-
-  where
 
 ----------------------------------------------------------------------
 
