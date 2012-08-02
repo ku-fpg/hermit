@@ -21,7 +21,6 @@ import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Local.Case
 import Language.HERMIT.Primitive.Inline
 -- import Language.HERMIT.Primitive.Debug
-import Language.HERMIT.Primitive.Navigation -- for cmpName
 
 import qualified Language.Haskell.TH as TH
 
@@ -57,7 +56,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
                         -- TODO: does not work with rules with no arguments
          , external "unfold-rule" ((\ nm -> promoteExprR (rules nm >>> cleanupUnfold)) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ]
-         , external "var" (promoteExprT . var :: TH.Name -> TranslateH Core ())
+         , external "var" (promoteExprT . isVar :: TH.Name -> TranslateH Core ())
                  [ "var '<v> returns True for variable v, and False otherwise.",
                    "Useful in combination with \"when\"." ] .+ Predicate
          -- I've modified "var" to return () rather than being an "idR".
@@ -78,6 +77,10 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 , "preference is given to applications with applications with more arguments"
                 ] .+ Deep
          ]
+
+
+isVar :: TH.Name -> TranslateH CoreExpr ()
+isVar nm = varT (cmpTHName2Id nm) >>= guardM
 
 simplifyR :: RewriteH Core
 simplifyR = innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ dce))
@@ -264,7 +267,7 @@ caseSplit :: TH.Name -> RewriteH CoreExpr
 caseSplit nm = do
     frees <- freeIdsT
     contextfreeT $ \ e ->
-        case [ i | i <- frees, cmpName nm i ] of
+        case [ i | i <- frees, cmpTHName2Id nm i ] of
             []    -> fail "caseSplit: provided name is not free"
             (i:_) -> do
                 let (tycon, tys) = splitTyConApp (idType i)
@@ -424,7 +427,7 @@ push nm = do
         e <- idR
         case collectArgs e of
           (Var v,args) -> do
-                  guardMsg (nm `cmpName` v) $ "push did not find name " ++ show nm
+                  guardMsg (nm `cmpTHName2Id` v) $ "push did not find name " ++ show nm
                   guardMsg (not $ null args) $ "no argument for " ++ show nm
                   guardMsg (all isTypeArg (init args)) $ "initial arguments are not type arguments for " ++ show nm
                   case last args of

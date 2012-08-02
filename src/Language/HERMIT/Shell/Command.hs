@@ -464,7 +464,7 @@ performAstEffect EndScope expr = do
         put $ newSAST expr ast st
         showFocus
 
-performAstEffect (Tag tag) expr = do
+performAstEffect (Tag tag) _ = do
         st <- get
         put (st { cl_tags = (tag, cl_cursor (cl_session st)) : cl_tags st })
 
@@ -709,7 +709,7 @@ showRefactorTrail db tags a me =
 
   where
           dot = if a == me then "*" else "o"
-          show' n a = replicate (n - length (show a)) ' ' ++ show a
+          show' n x = replicate (n - length (show a)) ' ' ++ show x
           tags_txt = concat [ ' ' : txt
                             | (n,txt) <- tags
                             , n == a
@@ -731,11 +731,11 @@ showGraph graph tags this@(SAST n) =
 
 cl_kernel_env  :: SessionState -> HermitMEnv
 cl_kernel_env ss = mkHermitMEnv $ \ msg -> case msg of
-                DebugTick    msg      -> do
-                        c <- GHC.liftIO $ tick (cl_tick ss) msg
-                        GHC.liftIO $ putStrLn $ "<" ++ show c ++ "> " ++ msg
-                DebugCore  msg cxt core -> do
-                        GHC.liftIO $ putStrLn $ "[" ++ msg ++ "]"
+                DebugTick    msg'      -> do
+                        c <- GHC.liftIO $ tick (cl_tick ss) msg'
+                        GHC.liftIO $ putStrLn $ "<" ++ show c ++ "> " ++ msg'
+                DebugCore  msg' cxt core -> do
+                        GHC.liftIO $ putStrLn $ "[" ++ msg' ++ "]"
                         doc :: DocH <- apply (pretty ss) cxt core
                         GHC.liftIO $ cl_render ss stdout (cl_pretty_opts ss) doc
 
