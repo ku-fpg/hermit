@@ -46,6 +46,7 @@ inlineCaseBinder = configurableInline False True
 -- This *only* works on a Var of the given name. It can trivially
 -- be prompted to more general cases.
 -- TODO: check the scoping for the inline operation; we can mess things up here.
+-- Has this TODO been dealt with already?
 configurableInline :: Bool -- ^ Inline the scrutinee instead of the patten match (for case binders).
                    -> Bool -- ^ Only inline if this variable is a case binder.
                    -> RewriteH CoreExpr
@@ -62,15 +63,15 @@ configurableInline scrutinee caseBinderOnly =
 ensureDepth :: Int -> TranslateH Core Bool
 ensureDepth d = do
     frees <- promoteT freeVarsT
-    ds <- collectT (do c <- contextT
-                       promoteT $ varT $ \ i -> if i `elem` frees
-                                                then maybe (i,0) (\b -> (i,hermitBindingDepth b)) (lookupHermitBinding i c)
-                                                else (i,0))
+    ds <- collectT $ do c <- contextT
+                        promoteExprT $ varT $ \ i -> if i `elem` frees
+                                                       then maybe (i,0) (\b -> (i,hermitBindingDepth b)) (lookupHermitBinding i c)
+                                                       else (i,0)
     -- traceR $ "greater values (" ++ show d ++ "): " ++ show (filter ((> d) . snd) ds)
-    return $ all (<= d) $ map snd ds
+    return $ all (toSnd (<= d)) ds
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: TranslateH Core [String]
 inlineTargets = collectT $ promoteT $ condM (testM inline)
                                             (varT unqualifiedIdName)
-                                            (fail "cannot be inlined")
+                                            (fail "cannot be inlined.")
