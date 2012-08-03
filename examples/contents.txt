@@ -78,7 +78,9 @@ Quicksort
 
 * Another append-vanishes example.
 
-* In progress (Neil).
+* Completed.
+
+* Main rewrites: any-call
 
 
 Reverse
@@ -96,7 +98,7 @@ To Do
 
 * Life - Can we translate to a stronger type?
 
-* Append Vanishes - Should generalise the Reverse, Flatten, and Quicksort examples.
+* Append Vanishes - Should generalise the Reverse, Flatten, and Quicksort examples into a single common script.
 
 * Kansas Lava example?
 
