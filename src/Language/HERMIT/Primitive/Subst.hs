@@ -20,7 +20,7 @@ import Prelude hiding (exp)
 import Data.Maybe
 
 externals :: [External]
-externals =
+externals = map (.+ Deep)
          [  external "alpha" alpha
                [ "renames the bound variables at the current node."]
          ,  external "alpha-lam" (promoteExprR . alphaLam . Just)
@@ -37,11 +37,11 @@ externals =
                [ "renames all binders in a Case alternative."]
          ,  external "alpha-let" (promoteExprR . alphaLetOne . Just)
                [ "renames the bound variable in a Let expression with one binder to the given name."]
-         ,  external "alpha-let" (promoteExprR $ alphaLet)
+         ,  external "alpha-let" (promoteExprR alphaLet)
                [ "renames the bound variables in a Let expression."]
          ,  external "alpha-top" (promoteProgramR . alphaConsOne . Just)
                [ "renames the bound variable in a top-level binding with one binder to the given name."]
-         ,  external "alpha-top" (promoteProgramR $ alphaCons)
+         ,  external "alpha-top" (promoteProgramR alphaCons)
                [ "renames the bound variables in a top-level binding."]
          ]
 
