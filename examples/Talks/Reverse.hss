@@ -1,0 +1,24 @@
+consider 'rev
+   down
+   consider 'rev
+   fix-intro
+   prune-td (unfold-rule "ww")
+   prune-td (unfold '.)
+   prune-td (unfold '.)
+   prune-td (unfold 'wrap) ; prune-td (unfold 'wrap)
+   prune-td (unfold 'unwrap)
+   prune-td (unfold '.)
+   bash
+   unshadow
+   any-bu (case-float-arg)
+   prune-td (unfold-rule "repH ++")
+   prune-td (unfold-rule "rep-abs-fusion")
+   prune-td (unfold 'repH)
+   prune-td (unfold '.) ; bash
+   focus (consider case) (eta-expand 'ys)
+   any-bu case-float-app
+   prune-td (unfold-rule "(:) ++")
+   prune-td (unfold-rule "[] ++")
+   prune-td (unfold 'fix) ; bash
+   one-td (alpha-let 'work)
+   prune-td (unfold 'absH)
