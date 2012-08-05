@@ -348,7 +348,7 @@ commandLine filesToLoad behavior modGuts = do
 
     var <- GHC.liftIO $ atomically $ newTVar M.empty
 
-    flip (scopedKernel) modGuts $ \ skernel sast -> do
+    flip scopedKernel modGuts $ \ skernel sast -> do
 
         let sessionState = SessionState sast "clean" def unicodeConsole 80 False False var
             shellState = CommandLineState [] [] dict skernel sessionState
@@ -409,12 +409,11 @@ evalExpr expr = do
     dict <- gets cl_dict
     case interpExprH dict interpShellCommand expr of
       Left msg  -> throwError msg
-      Right cmd -> do
-        case cmd of
-          AstEffect effect   -> performAstEffect effect expr
-          ShellEffect effect -> performShellEffect effect
-          QueryFun query     -> performQuery query
-          MetaCommand meta   -> performMetaCommand meta
+      Right cmd -> case cmd of
+                     AstEffect effect   -> performAstEffect effect expr
+                     ShellEffect effect -> performShellEffect effect
+                     QueryFun query     -> performQuery query
+                     MetaCommand meta   -> performMetaCommand meta
 
 -------------------------------------------------------------------------------
 
@@ -439,16 +438,17 @@ performAstEffect (Pathfinder t) expr = do
 
 performAstEffect (Direction dir) expr = do
     st <- get
-    child_count <- iokm2clm "Could not compute number of children:" $ queryS (cl_kernel st) (cl_cursor (cl_session st)) numChildrenT (cl_kernel_env (cl_session st))
-    liftIO $ print (child_count, dir)
-    ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (moveLocally dir) (cl_kernel_env $ cl_session st)
+    -- This seems unnecassary.  But if you restore it, note that it needs editing so that it doesn't print if we're loading a file.
+    -- child_count <- iokm2clm "Could not compute number of children:" $ queryS (cl_kernel st) (cl_cursor (cl_session st)) numChildrenT (cl_kernel_env (cl_session st))
+    -- liftIO $ print (child_count, dir)
+    ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor $ cl_session st) (moveLocally dir) (cl_kernel_env $ cl_session st)
     put $ newSAST expr ast st
     -- something changed, to print
     showFocus
 
 performAstEffect (PushFocus p) expr = do
     st <- get
-    ast <- iokm2clm "Invalid push: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (extendLocalPath p) (cl_kernel_env $ cl_session st)
+    ast <- iokm2clm "Invalid push: " $ modPathS (cl_kernel st) (cl_cursor $ cl_session st) (extendLocalPath p) (cl_kernel_env $ cl_session st)
     put $ newSAST expr ast st
     showFocus
 
@@ -466,12 +466,12 @@ performAstEffect EndScope expr = do
 
 performAstEffect (Tag tag) _ = do
         st <- get
-        put (st { cl_tags = (tag, cl_cursor (cl_session st)) : cl_tags st })
+        put (st { cl_tags = (tag, cl_cursor $ cl_session st) : cl_tags st })
 
 performAstEffect (CorrectnessCritera q) expr = do
         st <- get
         -- TODO: Again, we may want a quiet version of the kernel_env
-        liftIO (queryS (cl_kernel st) (cl_cursor $ cl_session st) q (cl_kernel_env (cl_session st)))
+        liftIO (queryS (cl_kernel st) (cl_cursor $ cl_session st) q (cl_kernel_env $ cl_session st))
           >>= runKureMonad (\ () -> putStrToConsole $ unparseExprH expr ++ " [correct]")
                            (\ err -> fail $ unparseExprH expr ++ " [exception: " ++ err ++ "]")
         -- correctness <- liftIO (try $ queryS (cl_kernel st) (cl_cursor (cl_session st)) q)
@@ -483,10 +483,10 @@ performAstEffect (CorrectnessCritera q) expr = do
 
 -------------------------------------------------------------------------------
 
-performShellEffect :: (MonadIO m) => ShellEffect -> CLM m ()
+performShellEffect :: MonadIO m => ShellEffect -> CLM m ()
 performShellEffect (SessionStateEffect f) = do
         st <- get
-        opt <- liftIO (fmap Right (f st (cl_session st)) `catch` \ str -> return (Left str))
+        opt <- liftIO (fmap Right (f st $ cl_session st) `catch` \ str -> return (Left str))
         case opt of
           Right s_st' -> do put (st { cl_session = s_st' })
                             showFocus
@@ -494,12 +494,12 @@ performShellEffect (SessionStateEffect f) = do
 
 -------------------------------------------------------------------------------
 
-performQuery :: (MonadIO m) => QueryFun -> CLM m ()
+performQuery :: MonadIO m => QueryFun -> CLM m ()
 performQuery (QueryT q) = do
     st <- get
     iokm2clm' "Query failed: "
               putStrToConsole
-              (queryS (cl_kernel st) (cl_cursor $ cl_session st) q (cl_kernel_env (cl_session st)))
+              (queryS (cl_kernel st) (cl_cursor $ cl_session st) q (cl_kernel_env $ cl_session st))
 
 performQuery (Inquiry f) = do
     st <- get
@@ -542,10 +542,10 @@ performMetaCommand (LoadFile fileName) = do
                             load_st <- gets (cl_loading . cl_session)
                             modify $ \st -> st { cl_session = (cl_session st) { cl_loading = True } }
                             evalStmts stmts `catchError` (\ err -> do
-                                    modify $ \st -> st { cl_session = (cl_session st) { cl_loading = load_st } }
+                                    modify $ \ st -> st { cl_session = (cl_session st) { cl_loading = load_st } }
                                     throwError err)
                             modify $ \st -> st { cl_session = (cl_session st) { cl_loading = load_st } }
-                            putStrToConsole $ "[done, loaded N commands]"
+                            putStrToConsole "[done, loaded N commands]" -- TODO: should this "N" actually be the number of commands loaded?
 
           Left (err :: IOException) -> throwError ("IO error: " ++ show err)
   where
