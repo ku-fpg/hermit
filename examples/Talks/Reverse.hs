@@ -4,11 +4,11 @@ import HList
 import Data.Function (fix)
 
 {-# INLINE unwrap #-}
-unwrap :: ([a] -> [a]) -> ([a] -> H a)
+unwrap :: ([a] -> [a]) -> ([a] -> [a] -> [a])
 unwrap f = repH . f
 
 {-# INLINE wrap #-}
-wrap :: ([a] -> H a) -> ([a] -> [a])
+wrap :: ([a] -> [a] -> [a]) -> ([a] -> [a])
 wrap g = absH . g
 
 {-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}

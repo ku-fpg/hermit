@@ -1,17 +1,14 @@
 module HList
-       ( H
-       , repH
+       ( repH
        , absH
        ) where
 
-type H a = [a] -> [a]
-
 {-# INLINE repH #-}
-repH :: [a] -> H a
+repH :: [a] -> [a] -> [a]
 repH xs = (xs ++)
 
 {-# INLINE absH #-}
-absH :: H a -> [a]
+absH :: ([a] -> [a]) -> [a]
 absH f = f []
 
 {-# RULES "repH ++" forall xs ys   . repH (xs ++ ys) = repH xs . repH ys #-}

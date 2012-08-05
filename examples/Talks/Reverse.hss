@@ -24,3 +24,4 @@ bash
 alpha-let 'work
 one-td (unfold 'absH)
 up ; up ; up ; up
+bash
