@@ -18,4 +18,4 @@ rev []     = []
 rev (x:xs) = rev xs ++ [x]
 
 main :: IO ()
-main = print $ length $ rev [1..15000]
+main = putStrLn $ "Successfully reversed a list of " ++ show (length $ rev [1..15000]) ++ " elements."
