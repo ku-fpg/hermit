@@ -487,7 +487,7 @@ letT' :: TranslateH CoreBind a1 -> TranslateH CoreExpr a2 -> (HermitM a1 -> Herm
 letT' t1 t2 f = translate $ \ c e -> case e of
         Let bds e1 -> f (apply t1 (c @@ 0) bds) (apply t2 (addBinding bds c @@ 1) e1)
                 -- use *original* env, because the bindings are self-binding,
-                -- if they are recursive. See allR (Rec ...) for details.
+                -- if they are recursive. See recT'.
         _         -> fail "no match for Let"
 
 -- | Translate an expression of the form: @Let@ 'CoreBind' 'CoreExpr'

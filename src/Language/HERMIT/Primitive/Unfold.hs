@@ -5,6 +5,7 @@ import GhcPlugins hiding (empty)
 import Control.Monad
 
 import Language.HERMIT.Primitive.GHC
+import Language.HERMIT.Primitive.Common
 
 import Language.HERMIT.CoreExtra
 import Language.HERMIT.Kure
@@ -47,20 +48,19 @@ stashDef label = sideEffectR $ \ _ core ->
 --         BindCore (NonRec i e) -> saveDef label (Def i e)
 --         _           -> fail "stashDef: not a binding"
 
--- | Apply a stashed definition (like inline, but looks in stash instead of context)
+-- | Apply a stashed definition (like inline, but looks in stash instead of context).
 stashApply :: String -> RewriteH CoreExpr
-stashApply label = translate $ \ c e -> do
-    Def i rhs <- lookupDef label
-    case e of
-        Var i' -> if idName i == idName i'
-                    then do rhsFrees <- apply freeVarsT c rhs
-                            if all (inScope c) rhsFrees
-                              then return rhs
-                              else fail "stashApply: some frees in stashed definition are no longer in scope"
-                    else fail $ "stashApply: stashed definition applies to: " ++ showPpr i ++ " not: " ++ showPpr i'
-        _ -> fail "stashApply: not a Var"
+stashApply label = setFailMsg "Inlining stashed definition failed: " $
+                   withPatFailMsg (wrongExprForm "Var v") $
+                   do (c, Var v) <- exposeT
+                      constT $ do Def i rhs <- lookupDef label
+                                  if idName i == idName v -- Is there a reason we're not just using equality on Id?
+                                    then condM (all (inScope c) `liftM` apply freeVarsT c rhs)
+                                               (return rhs)
+                                               (fail "some free variables in stashed definition are no longer in scope.")
+                                    else fail $ "stashed definition applies to " ++ showPpr i ++ " not " ++ showPpr v
 
--- | See whether an Id is in scope.
+-- | See whether an identifier is in scope.
 inScope :: Context -> Id -> Bool
 inScope c i = maybe (case unfoldingInfo (idInfo i) of
                         CoreUnfolding {} -> True -- defined elsewhere
