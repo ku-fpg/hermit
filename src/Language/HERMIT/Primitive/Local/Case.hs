@@ -1,11 +1,12 @@
 -- Andre Santos' Local Transformations (Ch 3 in his dissertation)
 module Language.HERMIT.Primitive.Local.Case
-       (
+       ( -- * Rewrites on Case Expressions
          externals
        , letFloatCase
        , caseFloatApp
        , caseFloatArg
        , caseFloatCase
+       , caseFloatLet
        , caseFloat
        , caseReduce
        )
@@ -49,8 +50,10 @@ externals =
                      [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
          , external "case-float-case" (promoteExprR caseFloatCase :: RewriteH Core)
                      [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval .+ Bash
+         , external "case-float-let" (promoteExprR caseFloatLet :: RewriteH Core)
+                     [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow .+ Bash
          , external "case-float" (promoteExprR caseFloat :: RewriteH Core)
-                     [ "Try to float a case whatever the context." ] .+ Commute .+ Shallow .+ PreCondition
+                     [ "Float a Case whatever the context." ] .+ Commute .+ Shallow .+ PreCondition
          , external "case-reduce" (promoteExprR caseReduce :: RewriteH Core)
                      [ "case-of-known-constructor"
                      , "case C v1..vn of C w1..wn -> e ==> e[v1/w1..vn/wn]" ] .+ Shallow .+ Eval .+ Bash
@@ -65,7 +68,7 @@ letFloatCase = prefixFailMsg "Let floating from Case failed: " $
   do
      captures <- caseT letVarsT (const (pure ())) $ \ vs _ _ _ -> vs
      cFrees   <- freeVarsT -- so we get type variables too
-     caseT (if null (intersect cFrees captures) then idR else alphaLet)
+     caseT (if null (cFrees `intersect` captures) then idR else alphaLet)
            (const idR)
            (\ (Let bnds e) b ty alts -> Let bnds (Case e b ty alts))
 
@@ -75,8 +78,8 @@ caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
   do
     captures      <- appT caseAltVarsT freeVarsT (flip (map . intersect))
     binderCapture <- appT caseBinderVarT freeVarsT intersect
-    appT ((if (null binderCapture) then idR else alphaCaseBinder Nothing)
-          >>> (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
+    appT ((if null binderCapture then idR else alphaCaseBinder Nothing)
+          >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
          )
           idR
           (\(Case s b _ty alts) v -> let newTy = exprType (App (case head alts of (_,_,f) -> f) v)
@@ -91,8 +94,8 @@ caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
     captures      <- appT freeVarsT caseAltVarsT (map . intersect)
     binderCapture <- appT freeVarsT caseBinderVarT intersect
     appT idR
-         ((if (null binderCapture) then idR else alphaCaseBinder Nothing)
-          >>> (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
+         ((if null binderCapture then idR else alphaCaseBinder Nothing)
+          >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
          )
          (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
                                     in Case s b newTy [ (c, ids, App f e)
@@ -110,16 +113,24 @@ caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
     -- does the binder of the inner case, shadow a free variable in any of the outer case alts?
     -- notice, caseBinderVarT returns a singleton list
     binderCapture <- caseT caseBinderVarT (const altFreeVarsT) $ \ innerBindr bndr _ fs -> intersect (concatMap ($ bndr) fs) innerBindr
-    caseT ((if (null binderCapture) then idR else alphaCaseBinder Nothing)
-           >>>  (caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt))
+    caseT ((if null binderCapture then idR else alphaCaseBinder Nothing)
+           >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
           )
           (const idR)
           (\ (Case s1 b1 ty1 alts1) b2 ty2 alts2 -> Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ])
 
--- | Try to float a case whatever the context.
+-- | let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e
+caseFloatLet :: RewriteH CoreExpr
+caseFloatLet = prefixFailMsg "Case floating from Let failed: " $
+  do vs <- letNonRecT caseAltVarsT idR (\ letVar caseVars _ -> elem letVar $ concat caseVars)
+     let bdsAction = if not vs then idR else nonRecR alphaCase
+     letT bdsAction idR $ \ (NonRec v (Case s b ty alts)) e -> Case s b ty [ (con, ids, Let (NonRec v ec) e) | (con, ids, ec) <- alts]
+
+
+-- | Float a Case whatever the context.
 caseFloat :: RewriteH CoreExpr
-caseFloat = setFailMsg "Unsuitable expression for case floating." $
-            caseFloatApp <+ caseFloatArg <+ caseFloatCase
+caseFloat = setFailMsg "Unsuitable expression for Case floating." $
+            caseFloatApp <+ caseFloatArg <+ caseFloatCase <+ caseFloatLet
 
 -- | Case-of-known-constructor rewrite.
 caseReduce :: RewriteH CoreExpr
@@ -131,7 +142,7 @@ caseReduce = letTransform >>> tryR (repeatR letSubstR)
                               Nothing -> fail "head of scrutinee is not a data constructor."
                               Just (dc, args) -> case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
                                     [(bs,e')] -> let valArgs = filter isValArg args -- discard any type arguments
-                                                  in return $ nestedLets e' $ (binder, s) : (zip bs valArgs)
+                                                  in return $ nestedLets e' $ (binder, s) : zip bs valArgs
                                     []   -> fail "no matching alternative."
                                     _    -> fail "more than one matching alternative."
 
