@@ -71,6 +71,6 @@ ensureDepth d = do
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: TranslateH Core [String]
-inlineTargets = collectT $ promoteT $ condM (testM inline)
-                                            (varT unqualifiedIdName)
-                                            (fail "cannot be inlined.")
+inlineTargets = collectT $ promoteT $ ifM (testM inline)
+                                          (varT unqualifiedIdName)
+                                          (fail "cannot be inlined.")

@@ -3,6 +3,7 @@ module Language.HERMIT.Primitive.Unfold where
 
 import GhcPlugins hiding (empty)
 import Control.Monad
+import Control.Applicative
 
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Common
@@ -55,9 +56,9 @@ stashApply label = setFailMsg "Inlining stashed definition failed: " $
                    do (c, Var v) <- exposeT
                       constT $ do Def i rhs <- lookupDef label
                                   if idName i == idName v -- Is there a reason we're not just using equality on Id?
-                                    then condM (all (inScope c) `liftM` apply freeVarsT c rhs)
-                                               (return rhs)
-                                               (fail "some free variables in stashed definition are no longer in scope.")
+                                    then ifM (all (inScope c) <$> apply freeVarsT c rhs)
+                                             (return rhs)
+                                             (fail "some free variables in stashed definition are no longer in scope.")
                                     else fail $ "stashed definition applies to " ++ showPpr i ++ " not " ++ showPpr v
 
 -- | See whether an identifier is in scope.

@@ -242,12 +242,12 @@ showFocus :: MonadIO m => CLM m ()
 showFocus = do
     st <- get
     -- No not show focus while loading
-    condM (gets (cl_loading . cl_session))
-          (return ())
-          (iokm2clm' "Rendering error: "
-                     (liftIO . cl_render (cl_session st) stdout (cl_pretty_opts (cl_session st)))
-                     (queryS (cl_kernel st) (cl_cursor (cl_session st)) (pretty (cl_session st)) (cl_kernel_env (cl_session st)))
-          )
+    ifM (gets (cl_loading . cl_session))
+        (return ())
+        (iokm2clm' "Rendering error: "
+                   (liftIO . cl_render (cl_session st) stdout (cl_pretty_opts $ cl_session st))
+                   (queryS (cl_kernel st) (cl_cursor $ cl_session st) (pretty $ cl_session st) (cl_kernel_env $ cl_session st))
+        )
 
 -------------------------------------------------------------------------------
 
@@ -567,10 +567,9 @@ performMetaCommand (SaveFile fileName) = do
 -------------------------------------------------------------------------------
 
 putStrToConsole :: MonadIO m => String -> CLM m ()
-putStrToConsole str =
-  condM (gets (cl_loading . cl_session))
-        (return ())
-        (liftIO (putStrLn str))
+putStrToConsole str = ifM (gets (cl_loading . cl_session))
+                          (return ())
+                          (liftIO $ putStrLn str)
 
 -------------------------------------------------------------------------------
 
@@ -671,9 +670,9 @@ getNavCmd = do
 
    res str _ = return (Just str)
 
-   cmds = [ ("\ESC" , \ str -> condM (hReady stdin)
-                                     (readCh str)
-                                     (return (Just "command-line")))
+   cmds = [ ("\ESC" , \ str -> ifM (hReady stdin)
+                                   (readCh str)
+                                   (return $ Just "command-line"))
           , ("\ESC[" , readCh)
           , ("\ESC[A", res "up")
           , ("\ESC[B", res "down")

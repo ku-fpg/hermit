@@ -69,7 +69,7 @@ fold i lam exp = do
     let (vs,body) = foldArgs lam
         -- return Nothing if not equal, so sequence will fail below
         checkEqual :: Maybe CoreExpr -> Maybe CoreExpr -> Maybe CoreExpr
-        checkEqual m1 m2 = condM (exprEqual <$> m1 <*> m2) m1 Nothing
+        checkEqual m1 m2 = ifM (exprEqual <$> m1 <*> m2) m1 Nothing
 
     al <- foldMatch vs body exp
 

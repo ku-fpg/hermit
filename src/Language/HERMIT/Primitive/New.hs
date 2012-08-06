@@ -86,23 +86,23 @@ simplifyR = innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <
 letTupleR :: TH.Name -> RewriteH CoreExpr
 letTupleR nm = do
     Let (NonRec x e1) (Let (NonRec y e2) e) <- idR
-    condM (letT (nonRecT (pure ()) const)
-                (letT (nonRecT freeVarsT (flip const)) (pure ()) const)
-                elem)
-          (fail "'x' is used in 'e2'")
-          (translate $ \ c _ -> do
-                tupleConId <- findId c "(,)"
-                fstId <- findId c "Data.Tuple.fst"
-                sndId <- findId c "Data.Tuple.snd"
-                let e1TyE = Type (exprType e1)
-                    e2TyE = Type (exprType e1)
-                    rhs = mkCoreApps (Var tupleConId) [e1TyE, e2TyE, e1, e2]
-                letId <- newVarH nm (exprType rhs)
-                let fstE = mkCoreApps (Var fstId) [e1TyE, e2TyE, Var letId]
-                    sndE = mkCoreApps (Var sndId) [e1TyE, e2TyE, Var letId]
-                return $ Let (NonRec letId rhs)
-                        $ Let (NonRec x fstE)
-                         $ Let (NonRec y sndE) e)
+    ifM (letT (nonRecT (pure ()) const)
+              (letT (nonRecT freeVarsT (flip const)) (pure ()) const)
+              elem)
+        (fail "'x' is used in 'e2'")
+        (translate $ \ c _ -> do
+              tupleConId <- findId c "(,)"
+              fstId <- findId c "Data.Tuple.fst"
+              sndId <- findId c "Data.Tuple.snd"
+              let e1TyE = Type (exprType e1)
+                  e2TyE = Type (exprType e1)
+                  rhs = mkCoreApps (Var tupleConId) [e1TyE, e2TyE, e1, e2]
+              letId <- newVarH nm (exprType rhs)
+              let fstE = mkCoreApps (Var fstId) [e1TyE, e2TyE, Var letId]
+                  sndE = mkCoreApps (Var sndId) [e1TyE, e2TyE, Var letId]
+              return $ Let (NonRec letId rhs)
+                      $ Let (NonRec x fstE)
+                       $ Let (NonRec y sndE) e)
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
