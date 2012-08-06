@@ -1,5 +1,16 @@
 -- Andre Santos' Local Transformations (Ch 3 in his dissertation)
-module Language.HERMIT.Primitive.Local.Case where
+module Language.HERMIT.Primitive.Local.Case
+       (
+         externals
+       , letFloatCase
+       , caseFloatApp
+       , caseFloatArg
+       , caseFloatCase
+       , caseFloat
+       , caseReduce
+       )
+where
+
 
 import GhcPlugins
 
@@ -11,12 +22,13 @@ import Language.HERMIT.Kure
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.GHC
-import Language.HERMIT.Primitive.Subst
+import Language.HERMIT.Primitive.GHC hiding (externals)
+import Language.HERMIT.Primitive.Subst hiding (externals)
 
 -- NOTE: these are hard to test in small examples, as GHC does them for us, so use with caution
 ------------------------------------------------------------------------------
 
+-- | Externals relating to Case expressions.
 externals :: [External]
 externals =
          [ -- I'm not sure this is possible. In core, v2 can only be a Constructor, Lit, or DEFAULT
@@ -37,6 +49,8 @@ externals =
                      [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
          , external "case-float-case" (promoteExprR caseFloatCase :: RewriteH Core)
                      [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval .+ Bash
+         , external "case-float" (promoteExprR caseFloat :: RewriteH Core)
+                     [ "Try to float a case whatever the context." ] .+ Commute .+ Shallow .+ PreCondition
          , external "case-reduce" (promoteExprR caseReduce :: RewriteH Core)
                      [ "case-of-known-constructor"
                      , "case C v1..vn of C w1..wn -> e ==> e[v1/w1..vn/wn]" ] .+ Shallow .+ Eval .+ Bash
@@ -69,7 +83,8 @@ caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
                                      in Case s b newTy [ (c, ids, App f v)
                                                        | (c,ids,f) <- alts ])
 
--- | f (case s of alt1 -> e1; alt2 -> e2) ==> case s of alt1 -> f e1; alt2 -> f e2
+-- | @f (case s of alt1 -> e1; alt2 -> e2)@ ==> @case s of alt1 -> f e1; alt2 -> f e2@
+--   Only safe if @f@ is strict.
 caseFloatArg :: RewriteH CoreExpr
 caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
   do
@@ -101,7 +116,12 @@ caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
           (const idR)
           (\ (Case s1 b1 ty1 alts1) b2 ty2 alts2 -> Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ])
 
--- | Case-of-known-constructor rewrite
+-- | Try to float a case whatever the context.
+caseFloat :: RewriteH CoreExpr
+caseFloat = setFailMsg "Unsuitable expression for case floating." $
+            caseFloatApp <+ caseFloatArg <+ caseFloatCase
+
+-- | Case-of-known-constructor rewrite.
 caseReduce :: RewriteH CoreExpr
 caseReduce = letTransform >>> tryR (repeatR letSubstR)
     where letTransform = prefixFailMsg "Case reduction failed: " $
