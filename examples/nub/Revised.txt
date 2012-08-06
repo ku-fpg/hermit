@@ -87,42 +87,40 @@ rep h xs s = h (filter (∉ s) xs)
 
 Derivation using 2β
   work = rep nub
-⇔
+⇔   {- η-expand -}
   work xs s = rep nub xs s
-⇔
+⇔   {- unfold rep -}
   work xs s = nub (filter (∉ s) xs)
-⇔
-  work xs s = case xs of
-                []     → nub (filter (∉ s) [])
-                y ∷ ys → nub (filter (∉ s) (y ∷ ys))
-⇔
+⇔   {- unfold filter -}
+  work xs s = nub (case xs of
+                     []     → []
+                     y ∷ ys → if y ∉ s then y ∷ filter (∉ s) ys else filter (∉ s) ys
+                  )
+⇔   {- case-float-arg, nub is strict -}
   work xs s = case xs of
                 []     → nub []
                 y ∷ ys → nub (if y ∉ s then y ∷ filter (∉ s) ys else filter (∉ s) ys)
-⇔
+⇔   {- unfold nub -}
   work xs s = case xs of
                 []     → []
                 y ∷ ys → nub (if y ∉ s then y ∷ filter (∉ s) ys else filter (∉ s) ys)
-⇔
+⇔   {- case-float-arg, nub is strict -}
   work xs s = case xs of
                 []     → []
-                y ∷ ys → if y ∉ s then nub (y ∷ filter (∉ s) ys) else nub (filter (∉ s) ys)
-⇔
+                y ∷ ys → if y ∉ s then nub (y ∷ filter (∉ s)) ys else nub (filter (∉ s) ys)
+⇔   {- unfold nub -}
   work xs s = case xs of
                 []     → []
                 y ∷ ys → if y ∉ s then y ∷ nub (filter (≠ y) (filter (∉ s) ys)) else nub (filter (∉ s) ys)
-⇔
+⇔   {- filter p ∘ filter q ≡ filter (λ a → q a ∧ p a) -}
   work xs s = case xs of
                 []     → []
-                y ∷ ys → if y ∉ s then y ∷ nub (filter ((≠ y) ∧ (∉ s)) ys) else nub (filter (∉ s) ys)
-⇔
+                y ∷ ys → if y ∉ s then y ∷ nub (filter (λ a → (a ∉ s) ∧ (a ≠ y)) ys) else nub (filter (∉ s) ys)
+⇔   {- (a ∉ s) ∧ (a ≠ x) ≡ a ∉ insert x s, only true in the context of the "if" where evaluation of y has already been forced -}
   work xs s = case xs of
                 []     → []
-                y ∷ ys → if y ∉ s then y ∷ nub (filter (∉ (insert y s)) ys) else nub (filter (∉ s) ys)
-⇔
+                y ∷ ys → if y ∉ s then y ∷ nub (filter ((∉ insert y s) ys) else nub (filter (∉ s) ys)
+⇔   {- fold work -}
   work xs s = case xs of
                 []     → []
                 y ∷ ys → if y ∉ s then y ∷ work ys (insert y s) else work ys s
-⇔
-  work []       s = []
-  work (y ∷ ys) s = if y ∉ s then y ∷ work ys (insert y s) else work ys s
