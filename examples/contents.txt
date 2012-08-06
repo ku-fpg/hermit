@@ -11,7 +11,7 @@ Fibonacci (Tupling)
 Flatten
 =======
 
-* Another append-vanishes example, based on the Reverse example.
+* Another concatenate-vanishes example, based on the Reverse example.
 
 * Completed.
 
@@ -73,10 +73,23 @@ Last
 * Completed.
 
 
+Nub
+===
+
+* A new (that is, unpublished) worker/wrapper example.
+
+* There was a bug in Andy's original pen-and-paper derivation.
+
+* A corrected version is in the files named "Revised".
+
+* There has been no attempt to mechanise this revised derivation as yet.
+
+
+
 Quicksort
 =========
 
-* Another append-vanishes example.
+* Another concatenate-vanishes example.
 
 * Completed.
 
@@ -106,7 +119,7 @@ To Do
 
 * Life - Can we translate to a stronger type?
 
-* Append Vanishes - Should generalise the Reverse, Flatten, and Quicksort examples into a single common script.
+* Concatenate Vanishes - Should generalise the Reverse, Flatten, and Quicksort examples into a single common script.
 
 * Kansas Lava example?
 
