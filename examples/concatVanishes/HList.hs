@@ -22,9 +22,12 @@ absH f = f []
 -- Should be in the "List" module
 {-# RULES "(:) ++" forall x xs ys .    (x:xs) ++ ys = x : (xs ++ ys)       #-}
 {-# RULES "[] ++"  forall xs .         [] ++ xs     = xs                   #-}
+{-# RULES "++ []"  forall xs .         xs ++ []     = xs                   #-}
 
 -- Should be somewhere else
-{-# RULES "(.) id" forall f .          f . id = f                          #-}
+{-# RULES ". id" forall f .          f . id = f                          #-}
+{-# RULES "id ." forall f .          id . f = f                          #-}
+
 
 -- has preconditon
 {-# RULES "rep-abs-fusion" forall h .  repH (absH h) = h                   #-}
