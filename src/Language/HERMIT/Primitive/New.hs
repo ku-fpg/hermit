@@ -188,21 +188,17 @@ findIdMG modguts nm =
 
  --   liftIO $ print ("VAR", GHC.showSDoc . GHC.ppr $ namedFn)
 
+-- |  f = e   ==>   f = fix (\ f -> e)
 fixIntro :: RewriteH CoreBind
-fixIntro = translate $ \ c e -> case e of
-        Rec [(f,e0)] -> do
-                fixId <- findId c "Data.Function.fix"
-
-                let coreFix = App (App (Var fixId) (Type (idType f)))
-
-                f' <- cloneId id f
-
-                let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars e0))
-                    sub      = extendSubst emptySub f (Var f')
-
-                return $ NonRec f (coreFix (Lam f' (substExpr (text "fixIntro") sub e0)))
-        Rec {}       -> fail "recusive group not suitable"
-        NonRec {}    -> fail "Cannot take fix of a non-recusive group"
+fixIntro = prefixFailMsg "Fix introduction failed: " $
+           withPatFailMsg "not a single recursive binding." $
+           do (c, Rec [(f,e)]) <- exposeT
+              constT $ do fixId <- findId c "Data.Function.fix"
+                          f'    <- cloneId id f
+                          let coreFix  = App (App (Var fixId) (Type (idType f)))
+                              emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars e))
+                              sub      = extendSubst emptySub f (Var f')
+                          return $ NonRec f (coreFix (Lam f' (substExpr (text "fixIntro") sub e)))
 
 -- ironically, this is an instance of worker/wrapper itself.
 
