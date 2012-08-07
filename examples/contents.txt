@@ -5,7 +5,11 @@ Concatenate Vanishes
 
 * Completed.
 
+* Interesting rewrites: push, innermost, unfold-rule
+
 * It works for all three examples, but I doubt it would work for *any* concat vanishes example.
+
+* Notes: unsafe uses of RULES with pre-conditions.
 
 
 
