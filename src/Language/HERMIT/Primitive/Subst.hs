@@ -102,7 +102,7 @@ newIdName x = TH.mkName $ showSDoc (ppr x) ++ "'"
 -- | Takes a proposed new name, and the identifier that is being renamed.
 freshId :: Maybe TH.Name -> Id -> HermitM Id
 freshId mn v = let n = fromMaybe (newIdName v) mn
-                in newVarH n (idType v)
+                in newVarH (show n) (idType v)
 
 -- | Lifted version of 'freshId'.
 freshIdT :: Maybe TH.Name -> Id -> TranslateH a Id

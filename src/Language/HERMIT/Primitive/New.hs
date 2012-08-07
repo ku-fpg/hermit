@@ -99,7 +99,7 @@ letTupleR nm = do
               let e1TyE = Type (exprType e1)
                   e2TyE = Type (exprType e1)
                   rhs = mkCoreApps (Var tupleConId) [e1TyE, e2TyE, e1, e2]
-              letId <- newVarH nm (exprType rhs)
+              letId <- newVarH (show nm) (exprType rhs)
               let fstE = mkCoreApps (Var fstId) [e1TyE, e2TyE, Var letId]
                   sndE = mkCoreApps (Var sndId) [e1TyE, e2TyE, Var letId]
               return $ Let (NonRec letId rhs)
@@ -245,8 +245,8 @@ fixSpecialization' = do
 --                   mkAppTy t t'
 
 
-        v3 <- constT $ newVarH (TH.mkName "f") t' -- (funArgTy t')
-        v4 <- constT $ newTypeVarH (TH.mkName "a") (tyVarKind v2)
+        v3 <- constT $ newVarH "f" t' -- (funArgTy t')
+        v4 <- constT $ newTypeVarH "a" (tyVarKind v2)
 
          -- f' :: \/ a -> T [a] -> (\/ b . T [b])
         let f' = Lam v4  (Cast (Var v3)
@@ -274,7 +274,7 @@ caseSplit nm = do
                     dcs = tyConDataCons tycon
                     aNms = map (:[]) $ cycle ['a'..'z']
                 dcsAndVars <- mapM (\dc -> do
-                                        as <- sequence [ newVarH (TH.mkName a) ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
+                                        as <- sequence [ newVarH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
                                         return (dc,as)) dcs
                 return $ Case (Var i) i (exprType e) [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
 

@@ -56,7 +56,7 @@ externals =
 -- | e => (let v = e in v), name of v is provided
 letIntro ::  TH.Name -> RewriteH CoreExpr
 letIntro nm = prefixFailMsg "Let introduction failed: " $
-              contextfreeT $ \ e -> do letvar <- newVarH nm (exprType e)
+              contextfreeT $ \ e -> do letvar <- newVarH (show nm) (exprType e)
                                        return $ Let (NonRec letvar e) (Var letvar)
 
 -- | (let v = ev in e) x ==> let v = ev in e x

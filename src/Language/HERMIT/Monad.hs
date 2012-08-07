@@ -36,8 +36,6 @@ import Language.KURE.Utilities
 import Language.HERMIT.CoreExtra
 import Language.HERMIT.Context
 
-import qualified Language.Haskell.TH as TH
-
 ----------------------------------------------------------------------------
 
 -- | A label for individual defintions.
@@ -123,15 +121,15 @@ instance MonadThings HermitM where
 
 ----------------------------------------------------------------------------
 
-newName :: TH.Name -> HermitM Name
-newName nm = flip mkSystemVarName (mkFastString $ show nm) <$> getUniqueM
+newName :: String -> HermitM Name
+newName nm = flip mkSystemVarName (mkFastString nm) <$> getUniqueM
 
 -- | Make a unique identifier for a specified type based on a provided name.
-newVarH :: TH.Name -> Type -> HermitM Id
+newVarH :: String -> Type -> HermitM Id
 newVarH nm ty = flip mkLocalId ty <$> newName nm
 
 -- | Make a unique type variable for a specified kind based on a provided name.
-newTypeVarH :: TH.Name -> Kind -> HermitM TyVar
+newTypeVarH :: String -> Kind -> HermitM TyVar
 newTypeVarH nm kind = flip mkTyVar kind <$> newName nm
 
 ----------------------------------------------------------------------------
