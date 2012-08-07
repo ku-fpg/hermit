@@ -366,7 +366,7 @@ loop completionMVar = loop'
   where loop' = do
             st <- get
             -- so the completion can get the current state
-            liftIO $ modifyMVar_ completionMVar (const (return st))
+            liftIO $ modifyMVar_ completionMVar (const $ return st)
             -- liftIO $ print (cl_pretty st, cl_cursor (cl_session st))
             let SAST n = cl_cursor (cl_session st)
             maybeLine <- if cl_nav (cl_session st)

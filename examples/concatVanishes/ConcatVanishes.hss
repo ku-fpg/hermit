@@ -7,5 +7,8 @@ one-td (unfold 'unwrap)
 any-call (unfold '.)
 bash
 alpha-let 'work
-any-td case-float -- has precondition
-
+innermost (bash >+> push 'repH >+> unfold-rule "repH ++" >+> unfold-rule "repH (:)" >+> unfold-rule "rep-abs-fusion" >+> apply-rule "(.) id" >+> unfold-rule "repH []")
+-- innermost
+-- unfold-rule "(:) ++"
+-- unfold-rule "[] ++"
+-- unfold-rule "(.) id"

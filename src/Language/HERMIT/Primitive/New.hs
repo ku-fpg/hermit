@@ -19,6 +19,7 @@ import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Utils
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Local.Case
+import Language.HERMIT.Primitive.Local.Let
 import Language.HERMIT.Primitive.Inline
 -- import Language.HERMIT.Primitive.Debug
 
@@ -52,7 +53,8 @@ externals = map ((.+ Experiment) . (.+ TODO))
          , external "unshadow" (unshadow :: RewriteH Core)
                 [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
          , external "push" (promoteExprR . push :: TH.Name -> RewriteH Core)
-                [ "push a function <v> into argument" ]
+                [ "push a function <f> into argument."
+                , "Unsafe if f is not strict." ] .+ PreCondition
                         -- TODO: does not work with rules with no arguments
          , external "unfold-rule" ((\ nm -> promoteExprR (rules nm >>> cleanupUnfold)) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ]
@@ -411,7 +413,7 @@ withUnfold rr = readerT $ \ e -> case e of
         rec = withUnfold rr
 
 -- Makes every 'virtual' shadow disappear.
--- O(n^2) right now
+-- O(n^2) right now.
 -- Also, only does lambda bound things.
 unshadow :: RewriteH Core
 unshadow = anytdR (promoteR autoRenameBinder)
@@ -419,16 +421,18 @@ unshadow = anytdR (promoteR autoRenameBinder)
 --cleanUnfold :: (LensH Core Core -> RewriteH Core) -> RewriteH Core
 --cleanUnfold f =
 
--- push a variable into the expression
+-- | Push a function through a Case or Let expression.
+--   Unsafe if the function is not strict.
 push :: TH.Name -> RewriteH CoreExpr
-push nm = do
-        e <- idR
+push nm = setFailMsg "push failed: " $
+     do e <- idR
         case collectArgs e of
           (Var v,args) -> do
-                  guardMsg (nm `cmpTHName2Id` v) $ "push did not find name " ++ show nm
+                  guardMsg (nm `cmpTHName2Id` v) $ "could not find name " ++ show nm
                   guardMsg (not $ null args) $ "no argument for " ++ show nm
                   guardMsg (all isTypeArg (init args)) $ "initial arguments are not type arguments for " ++ show nm
                   case last args of
                      Case {} -> caseFloatArg
-                     _       -> fail "cannot push, sorry"
-          _ -> fail "no function to match for push"
+                     Let {}  -> letFloatArg
+                     _       -> fail "argument is not a Case or Let."
+          _ -> fail "no function to match"
