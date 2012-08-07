@@ -310,15 +310,6 @@ arityOf env nm =
         Just (BIND _ _ e) -> GHC.exprArity e
         Just (CASE _ e _) -> GHC.exprArity e
 
----------------------------------------------------------
-
-cloneId :: (String -> String) -> Id -> HermitM Id
-cloneId nameMod b = do
-        uq <- getUniqueM
-        let name = mkSystemVarName uq $ mkFastString $ nameMod $ getOccString b
-            ty   = idType b
-        return $ mkLocalId name ty
-
 -------------------------------------------
 
 -- remove a cast;

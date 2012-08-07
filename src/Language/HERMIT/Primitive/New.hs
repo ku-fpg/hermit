@@ -195,7 +195,7 @@ fixIntro = translate $ \ c e -> case e of
 
                 let coreFix = App (App (Var fixId) (Type (idType f)))
 
-                f' <- cloneId id f
+                f' <- cloneIdH id f
 
                 let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars e0))
                     sub      = extendSubst emptySub f (Var f')
@@ -302,30 +302,30 @@ exprRenameBinder :: (String -> String) -> RewriteH CoreExpr
 exprRenameBinder nameMod =
 --            (do observeR "exprRenameBinder" >>> fail "observe") <+
             (do Lam b e <- idR
-                (b',f) <- constT (cloneIdH nameMod b)
+                (b',f) <- constT (renameWithLetH nameMod b)
                 return $ Lam b' (f e))
          <+ (do Let (NonRec b e0) e1 <- idR
-                (b',f) <- constT (cloneIdH nameMod b)
+                (b',f) <- constT (renameWithLetH nameMod b)
 --                traceR $ "new name = " ++ show (nameMod $ getOccString b')
                 return $ Let (NonRec b' e0) (f e1))
 
 altRenameBinder :: (String -> String) -> RewriteH CoreAlt
 altRenameBinder nameMod =
              do (con,bs,e) <- idR
-                (bs',f) <- constT (cloneIdsH nameMod bs)
+                (bs',f) <- constT (renameWithLetsH nameMod bs)
                 return (con,bs',f e)
 
 -- This gives an new version of an Id, with the same info, and a new textual name.
-cloneIdH :: (String -> String) -> Id -> HermitM (Id,CoreExpr -> CoreExpr)
-cloneIdH nameMod b = do
-        b' <- cloneId nameMod b
+renameWithLetH :: (String -> String) -> Id -> HermitM (Id,CoreExpr -> CoreExpr)
+renameWithLetH nameMod b = do
+        b' <- cloneIdH nameMod b
         return (b', Let (NonRec b (Var b')))
 
-cloneIdsH :: (String -> String) -> [Id] -> HermitM ([Id],CoreExpr -> CoreExpr)
-cloneIdsH _       []     = return ([],id)
-cloneIdsH nameMod (b:bs) = do
-        (b',f)   <- cloneIdH  nameMod b
-        (bs',fs) <- cloneIdsH nameMod bs
+renameWithLetsH :: (String -> String) -> [Id] -> HermitM ([Id],CoreExpr -> CoreExpr)
+renameWithLetsH _       []     = return ([],id)
+renameWithLetsH nameMod (b:bs) = do
+        (b',f)   <- renameWithLetH  nameMod b
+        (bs',fs) <- renameWithLetsH nameMod bs
         return (b':bs',f . fs)
 
 
