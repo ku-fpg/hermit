@@ -1,4 +1,3 @@
 consider 'rev
-consider 'rev
-load "ConcatVanishes.hss"
+{ load "ConcatVanishes.hss" }
 

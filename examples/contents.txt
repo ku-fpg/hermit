@@ -3,7 +3,10 @@ Concatenate Vanishes
 
 * A common script for all our Concatenate Vanishes examples.
 
-* In progress (Neil).
+* Completed.
+
+* It works for all three examples, but I doubt it would work for *any* concat vanishes example.
+
 
 
 Fibonacci (Tupling)
@@ -126,8 +129,6 @@ To Do
 =====
 
 * Life - Can we translate to a stronger type?
-
-* Concatenate Vanishes - Should generalise the Reverse, Flatten, and Quicksort examples into a single common script.
 
 * Kansas Lava example?
 

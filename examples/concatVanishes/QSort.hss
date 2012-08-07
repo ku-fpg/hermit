@@ -1,3 +1,6 @@
 consider 'qsort
-consider 'qsort
-load "ConcatVanishes.hss"
+{ load "ConcatVanishes.hss" }
+one-td let-subst
+bash
+
+
