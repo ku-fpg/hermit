@@ -68,7 +68,7 @@ freshNameGen newName =
         case newName of
           Just name -> return $ const (show name)
           Nothing -> do bound <- translate $ \ c _ -> return (listBindings c)
-                        frees <- promoteExprT freeVarsT
+                        frees <- freeVarsT
                         return $ inventNames (frees ++ bound)
 
 
@@ -85,7 +85,7 @@ freshNameGenCoreAlt newName = translate $ \ c exp ->
         case newName of
           Just name -> return $ const (show name)
           Nothing -> case exp of
-                      (_, ids, e) -> do frees <- apply ((promoteT freeVarsT) :: TranslateH CoreExpr [Var]) c e
+                      (_, ids, e) -> do frees <- apply freeVarsT c e
                                         return $ inventNames (frees ++ (listBindings c) ++ ids)
 
 -- inventNames curr old | trace (show ("inventNames",names,old)) False = undefined
