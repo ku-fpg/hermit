@@ -3,21 +3,20 @@
 module Language.HERMIT.Primitive.Subst where
 
 import GhcPlugins hiding (empty)
-import Data.List (intersect)
 
 import Control.Arrow
 
+import Language.HERMIT.Context
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
-import Language.HERMIT.Primitive.GHC(coreExprFreeIds)
+import Language.HERMIT.Primitive.GHC(freeVarsT)
 
 import Language.HERMIT.Primitive.Common
 
 import qualified Language.Haskell.TH as TH
 
 import Prelude hiding (exp)
-import Data.Maybe
 
 externals :: [External]
 externals = map (.+ Deep)
@@ -46,67 +45,60 @@ externals = map (.+ Deep)
          ]
 
 -----------------------------------------------------------------------
-
 substR :: Id -> CoreExpr -> RewriteH Core
-substR v e = promoteExprR (substVarR v e) <+ substNonVarR v e
+substR b e =  promoteExprR $ contextfreeT $ \ exp ->
+          let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+              sub = if (isTyVar b)
+                    then case e of
+                           (Type bty) -> Just $ extendTvSubst emptySub b bty
+                           _ ->  Nothing
+                    else Just $ extendSubst emptySub b e
+          in
+            case sub of
+              Just sub' -> return $ substExpr (text "substR") sub' exp
+              Nothing -> fail "???"
 
 substVarR :: Id -> CoreExpr -> RewriteH CoreExpr
 substVarR v e = whenM (varT (==v)) (return e)
 
--- This definition contains themain logic of the substitution algorithm
-substNonVarR :: Id -> CoreExpr -> RewriteH Core
-substNonVarR v e = let fvs = coreExprFreeIds e in
-                   do bs <- arr idsBound
-                      if v `elem` bs
-                        then substWhereBinderOutOfScopeR v e
-                        else let xs = fvs `intersect` bs
-                              in andR (map alphaRenameId xs) >>> anyR (substR v e)
-                                 -- rename any binders that would capture free variables in the expression to
-                                 -- be substituted in, then descend and continue substituting
-  where
-    alphaRenameId :: Id -> RewriteH Core
-    alphaRenameId i =  promoteR (alphaConsNonRec Nothing <+ alphaConsRecId Nothing i)
-                    <+ promoteR (alphaAltId Nothing i)
-                    <+ promoteR (alphaLam Nothing <+ (alphaLetNonRec Nothing <+ alphaLetRecId Nothing i) <+ alphaCaseBinder Nothing)
+-- ---------------------------------------------------------------
 
--- TODO: There is overlap between this and the functions in Common.hs.  Maybe merge?  Maybe not.
--- | All the identifiers bound /at this level/.
-idsBound :: Core -> [Id]
-idsBound (ModGutsCore _)      = []
-idsBound (BindCore _)         = [] -- too low level, should have been dealt with higher up
-idsBound (DefCore _)          = [] -- too low level, should have been dealt with higher up
-idsBound (AltCore (_,vs,_))   = vs
-idsBound (ProgramCore p)      = case p of
-                                  []    -> []
-                                  (b:_) -> bindings b
-idsBound (ExprCore e)         = case e of
-                                  Lam v _      -> [v]
-                                  Let b _      -> bindings b
-                                  Case _ v _ _ -> [v]  -- alternatives are dealt with lower down
-                                  _            -> []
+freshNameGen :: (Maybe TH.Name) -> TranslateH CoreExpr (String -> String)
+freshNameGen newName =
+        case newName of
+          Just name -> return $ const (show name)
+          Nothing -> do bound <- translate $ \ c _ -> return (listBindings c)
+                        frees <- (promoteT freeVarsT) :: TranslateH CoreExpr [Var]
+                        return $ inventNames (frees ++ bound)
 
--- | For situations where we have a node containing a binder /and/ a child that is not in scope of that binder,
---   this substitutes into that out-of-scope child.
-substWhereBinderOutOfScopeR :: Id -> CoreExpr -> RewriteH Core
-substWhereBinderOutOfScopeR v e =  promoteR (consBindAllR substNonRecR idR)
-                                <+ promoteR (letAllR substNonRecR idR <+ caseAllR (substVarR v e) (const idR))
-  where
-    substNonRecR :: RewriteH CoreBind
-    substNonRecR = nonRecR (substVarR v e)
 
------------------------------------------------------------------------
+freshNameGenTL :: (Maybe TH.Name) -> TranslateH CoreProgram (String -> String)
+freshNameGenTL newName =
+        case newName of
+          Just name -> return $ const (show name)
+          Nothing -> do bound <- translate $ \ c _ -> return (listBindings c)
+                        return $ inventNames bound
 
-newIdName :: Id -> TH.Name
-newIdName x = TH.mkName $ showSDoc (ppr x) ++ "'"
+-- TODO edk.  This seems like a hack.  Is there a better way to do this?
+freshNameGenCoreAlt :: (Maybe TH.Name) -> TranslateH CoreAlt (String -> String)
+freshNameGenCoreAlt newName = translate $ \ c exp ->
+        case newName of
+          Just name -> return $ const (show name)
+          Nothing -> case exp of
+                      (_, ids, e) -> do frees <- apply ((promoteT freeVarsT) :: TranslateH CoreExpr [Var]) c e
+                                        return $ inventNames (frees ++ (listBindings c) ++ ids)
 
--- | Takes a proposed new name, and the identifier that is being renamed.
-freshId :: Maybe TH.Name -> Id -> HermitM Id
-freshId mn v = let n = fromMaybe (newIdName v) mn
-                in newVarH (show n) (idType v)
-
--- | Lifted version of 'freshId'.
-freshIdT :: Maybe TH.Name -> Id -> TranslateH a Id
-freshIdT mn v = constT (freshId mn v)
+-- inventNames curr old | trace (show ("inventNames",names,old)) False = undefined
+--    where
+--            names = map getOccString curr
+inventNames :: [Id] -> String -> String
+inventNames curr old = head
+                     [ nm
+                     | nm <- [ old ++ show uq | uq <- [0..] :: [Int] ]
+                     , nm `notElem` names
+                     ]
+   where
+           names = map getOccString curr
 
 -- | Arguments are the original identifier and the replacement identifier, respectively.
 renameIdR :: (Injection a Core, Generic a ~ Core) => Id -> Id -> RewriteH a
@@ -124,7 +116,8 @@ replaceId v v' i = if v == i then v' else i
 alphaLam :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLam mn = setFailMsg (wrongFormForAlpha "Lam v e") $
               do Lam v _ <- idR
-                 v' <- freshIdT mn v
+                 nameModifier <- freshNameGen mn
+                 v' <- constT (cloneIdH nameModifier v)
                  lamT (renameIdR v v') (\ _ -> Lam v')
 
 -----------------------------------------------------------------------
@@ -133,14 +126,16 @@ alphaLam mn = setFailMsg (wrongFormForAlpha "Lam v e") $
 alphaCaseBinder :: Maybe TH.Name -> RewriteH CoreExpr
 alphaCaseBinder mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
                      do Case _ v _ _ <- idR
-                        v' <- freshIdT mn v
+                        nameModifier <- freshNameGen mn
+                        v' <- constT (cloneIdH nameModifier v)
                         caseT idR (\ _ -> renameIdR v v') (\ e _ t alts -> Case e v' t alts)
 
 -----------------------------------------------------------------------
 
 -- | Rename the specified identifier in a case alternative.  Optionally takes a suggested new name.
 alphaAltId :: Maybe TH.Name -> Id -> RewriteH CoreAlt
-alphaAltId mn v = do v' <- freshIdT mn v
+alphaAltId mn v = do nameModifier <- freshNameGenCoreAlt mn
+                     v' <- constT (cloneIdH nameModifier v)
                      altT (renameIdR v v') (\ con vs e -> (con, map (replaceId v v') vs, e))
 
 -- | Rename all identifiers bound in a case alternative.
@@ -161,14 +156,16 @@ alphaCase = alphaCaseBinder Nothing >+> caseAnyR (fail "") (const alphaAlt)
 alphaLetNonRec :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLetNonRec mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
                     do Let (NonRec v _) _ <- idR
-                       v' <- freshIdT mn v
+                       nameModifier <- freshNameGen mn
+                       v' <- constT (cloneIdH nameModifier v)
                        letNonRecT idR (renameIdR v v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
 
 -- | Rename the specified identifier bound in a recursive let.  Optionally takes a suggested new name.
 alphaLetRecId :: Maybe TH.Name -> Id -> RewriteH CoreExpr
 alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
                      do Let (Rec {}) _ <- idR
-                        v' <- freshIdT mn v
+                        nameModifier <- freshNameGen mn
+                        v' <- constT (cloneIdH nameModifier v)
                         letRecDefT (\ _ -> renameIdR v v') (renameIdR v v') (\ bs e -> Let (Rec $ (map.first) (replaceId v v') bs) e)
 
 -- | Rename all identifiers bound in a recursive let.
@@ -197,14 +194,18 @@ alphaLet = alphaLetRec <+ alphaLetNonRec Nothing
 alphaConsNonRec :: Maybe TH.Name -> RewriteH CoreProgram
 alphaConsNonRec mn = setFailMsg (wrongFormForAlpha "NonRec v e : prog") $
                      do NonRec v _ : _ <- idR
-                        v' <- freshIdT mn v
+                        -- TODO edk.  This is not what I really want here.
+                        nameModifier <- freshNameGenTL mn
+                        v' <- constT (cloneIdH nameModifier v)
                         consNonRecT idR (renameIdR v v') (\ _ e1 e2 -> NonRec v' e1 : e2)
 
 -- | Rename the specified identifier bound in a recursive top-level binder.  Optionally takes a suggested new name.
 alphaConsRecId :: Maybe TH.Name -> Id -> RewriteH CoreProgram
 alphaConsRecId mn v = setFailMsg (wrongFormForAlpha "Rec bs : prog") $
                       do Rec {} : _ <- idR
-                         v' <- freshIdT mn v
+                         -- TODO edk.  This is not what I really want here.
+                         nameModifier <-freshNameGenTL mn
+                         v' <- constT (cloneIdH nameModifier v)
                          consRecDefT (\ _ -> renameIdR v v') (renameIdR v v') (\ bs e -> Rec ((map.first) (replaceId v v') bs) : e)
 
 -- | Rename all identifiers bound in a recursive top-level binder.
