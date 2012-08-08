@@ -8,6 +8,7 @@ module Language.HERMIT.Monad
           , liftCoreM
           , newVarH
           , newTypeVarH
+          , cloneIdH
             -- * Saving Definitions
           , Label
           , DefStash
@@ -122,15 +123,32 @@ instance MonadThings HermitM where
 ----------------------------------------------------------------------------
 
 newName :: String -> HermitM Name
-newName nm = flip mkSystemVarName (mkFastString nm) <$> getUniqueM
+newName name = do
+        uq <- getUniqueM
+        return $  mkSystemVarName uq $ mkFastString $ name
 
 -- | Make a unique identifier for a specified type based on a provided name.
 newVarH :: String -> Type -> HermitM Id
-newVarH nm ty = flip mkLocalId ty <$> newName nm
+newVarH name ty = do
+        name' <- newName name
+        return $ mkLocalId name' ty
 
 -- | Make a unique type variable for a specified kind based on a provided name.
 newTypeVarH :: String -> Kind -> HermitM TyVar
-newTypeVarH nm kind = flip mkTyVar kind <$> newName nm
+newTypeVarH name kind = do
+        name' <- newName name
+        return $ mkTyVar name' kind
+
+
+-- This gives an new version of an Id, with the same info, and a new textual name.
+cloneIdH :: (String -> String) -> Id -> HermitM Id
+cloneIdH nameMod b =
+        let name = nameMod $ getOccString b
+            ty   = idType b
+        in
+          case (isTyVar b) of
+            True -> newTypeVarH name ty
+            _    -> newVarH name ty
 
 ----------------------------------------------------------------------------
 
