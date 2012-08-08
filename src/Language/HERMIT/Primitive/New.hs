@@ -117,6 +117,7 @@ info = translate $ \ c core ->
          let pa       = "Path: " ++ show (contextPath c)
              node     = "Node: " ++ coreNode core
              con      = "Constructor: " ++ coreConstructor core
+             bds      = "Bindings in Scope: " ++ (show $ map unqualifiedIdName $ listBindings c)
              expExtra = case core of
                           ExprCore e -> ["Type: " ++ showExprType e] ++
                                         ["Free Variables: " ++ showVars (coreExprFreeVars e)] ++
@@ -125,7 +126,7 @@ info = translate $ \ c core ->
                                              _     -> []
                           _          -> []
          in
-             return (intercalate "\n" $ [pa,node,con] ++ expExtra)
+             return (intercalate "\n" $ [pa,node,con,bds] ++ expExtra)
 
 exprTypeT :: TranslateH CoreExpr String
 exprTypeT = arr showExprType
