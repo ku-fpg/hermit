@@ -57,7 +57,7 @@ dump "ifl-paper/7-precondition.tex" "clean" "latex" 80
 { 1 ; 1 ; let-intro 'x }
 { 0 ; 1 ; let-intro 'y }
 innermost (let-float-arg <+ let-float-app)
-{ 1 ; 1 ; any-bu (fold 'y) }
+one-td (fold 'y)
 dump "ifl-paper/8-xandy.tex" "clean" "latex" 80
 
 let-tuple 't
@@ -66,13 +66,13 @@ dump "ifl-paper/9-lettuple.tex" "clean" "latex" 80
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = (f (wrap work) n, f (wrap work) (n+1)) in (y,x+y)
 --   fold 'unwrap
-{ rhs-of 't ; fold 'unwrap }
+one-td (fold 'unwrap)
 dump "ifl-paper/10-foldunwrap.tex" "clean" "latex" 80
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
 --   fold 'work
-{ rhs-of 't ; 0 ; stash-fold origwork }
+one-td (stash-fold origwork)
 dump "ifl-paper/11-stashfold.tex" "clean" "latex" 80
 
 -- work 0     = (0, 1)
