@@ -15,23 +15,26 @@ data Nat = Zero | Succ Nat
 {-# RULES "inline-fix" forall f . fix f = let work = f work in work #-}
 {-# RULES "precondition" forall w . wrap (unwrap w) = w #-}
 
+(.+) :: Nat -> Nat -> Nat
+Zero      .+ n = n
+(Succ n') .+ n = Succ (n' .+ n)
+
+fromInt :: Int -> Nat
+fromInt 0 = Zero
+fromInt i | i < 0 = error "fromInt negative"
+          | otherwise = Succ (fromInt (i-1))
+
 -- original fib definition
 fib :: Nat -> Nat
 fib Zero = Zero
 fib (Succ Zero) = Succ Zero
-fib (Succ (Succ n)) = fib (Succ n) + fib n
+fib (Succ (Succ n)) = fib (Succ n) .+ fib n
 
 -- goal:
 -- fib' = fst work
 --   where work Zero = (Zero, Succ Zero)
 --         work (Succ n) = let (x,y) = work n
 --                         in (y,x+y)
-
-instance Num Nat where
-    n1 + Zero = n1
-    n1 + (Succ n2) = Succ (n1 + n2)
-    fromInteger 0 = Zero
-    fromInteger i = Succ (fromInteger (i-1))
 
 {-# INLINE wrap #-}
 wrap :: (Nat -> (Nat, Nat)) -> Nat -> Nat
@@ -46,6 +49,6 @@ deriveNFData ''Nat
 
 main :: IO ()
 main = defaultMain
-        [ bench "15" $ nf fib 15
-        , bench "30" $ nf fib 30
+        [ bench "15" $ nf fib (fromInt 15)
+        , bench "30" $ nf fib (fromInt 30)
         ]
