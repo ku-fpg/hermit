@@ -14,7 +14,6 @@ import Prelude hiding ((+))
 data Nat = Z | S Nat
 
 {-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
-{-# RULES "inline-fix" forall f . fix f = let work = f work in work #-}
 {-# RULES "precondition" forall w . wrap (unwrap w) = w #-}
 
 (+) :: Nat -> Nat -> Nat
