@@ -62,35 +62,32 @@ substVarR :: Id -> CoreExpr -> RewriteH CoreExpr
 substVarR v e = whenM (varT (==v)) (return e)
 
 -- ---------------------------------------------------------------
+--
+-- freshNameGen is a function used in conjunction with cloneIdH, which clones an existing Id.
+-- But, what name should the new Id have?
+-- cloneIdH generates a new Unique -- so we are positive that the new Id will be new,
+-- but freshNameGen tries to assign a Name that will be meaningful to the user, and
+-- not shadow other names in scope.
+-- So,  we start with the name of the original Id, and add an integer suffix
+--  x  goes to x0 or x1 or ...
+-- and we do not want this newly generated name to shadow either:
+-- 1.  Any free variable name in the active Expr; or
+-- 2.  Any bound variables in context.
 
 freshNameGen :: (Maybe TH.Name) -> TranslateH CoreExpr (String -> String)
 freshNameGen newName =
         case newName of
           Just name -> return $ const (show name)
-          Nothing -> do bound <- translate $ \ c _ -> return (listBindings c)
+          Nothing -> do ctx <- contextT
                         frees <- freeVarsT
-                        return $ inventNames (frees ++ bound)
+                        return $ inventNames (frees ++ (listBindings ctx))
 
+{-
+inventNames curr old | trace (show ("inventNames",names,old)) False = undefined
+    where
+            names = map getOccString curr
+-}
 
-freshNameGenTL :: (Maybe TH.Name) -> TranslateH CoreProgram (String -> String)
-freshNameGenTL newName =
-        case newName of
-          Just name -> return $ const (show name)
-          Nothing -> do bound <- translate $ \ c _ -> return (listBindings c)
-                        return $ inventNames bound
-
--- TODO edk.  This seems like a hack.  Is there a better way to do this?
-freshNameGenCoreAlt :: (Maybe TH.Name) -> TranslateH CoreAlt (String -> String)
-freshNameGenCoreAlt newName = translate $ \ c exp ->
-        case newName of
-          Just name -> return $ const (show name)
-          Nothing -> case exp of
-                      (_, ids, e) -> do frees <- apply freeVarsT c e
-                                        return $ inventNames (frees ++ (listBindings c) ++ ids)
-
--- inventNames curr old | trace (show ("inventNames",names,old)) False = undefined
---    where
---            names = map getOccString curr
 inventNames :: [Id] -> String -> String
 inventNames curr old = head
                      [ nm
@@ -115,8 +112,7 @@ replaceId v v' i = if v == i then v' else i
 -- | Alpha rename a lambda binder.  Optionally takes a suggested new name.
 alphaLam :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLam mn = setFailMsg (wrongFormForAlpha "Lam v e") $
-              do Lam v _ <- idR
-                 nameModifier <- freshNameGen mn
+              do (v, nameModifier) <- lamT (freshNameGen mn) (,)
                  v' <- constT (cloneIdH nameModifier v)
                  lamT (renameIdR v v') (\ _ -> Lam v')
 
@@ -134,7 +130,7 @@ alphaCaseBinder mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
 
 -- | Rename the specified identifier in a case alternative.  Optionally takes a suggested new name.
 alphaAltId :: Maybe TH.Name -> Id -> RewriteH CoreAlt
-alphaAltId mn v = do nameModifier <- freshNameGenCoreAlt mn
+alphaAltId mn v = do nameModifier <- altT (freshNameGen mn) (\ _ _ nameGen -> nameGen)
                      v' <- constT (cloneIdH nameModifier v)
                      altT (renameIdR v v') (\ con vs e -> (con, map (replaceId v v') vs, e))
 
@@ -155,8 +151,7 @@ alphaCase = alphaCaseBinder Nothing >+> caseAnyR (fail "") (const alphaAlt)
 -- | Alpha rename a non-recursive let binder.  Optionally takes a suggested new name.
 alphaLetNonRec :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLetNonRec mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
-                    do Let (NonRec v _) _ <- idR
-                       nameModifier <- freshNameGen mn
+                    do (v, nameModifier) <- letNonRecT idR (freshNameGen mn) (\ v _ nameMod -> (v, nameMod))
                        v' <- constT (cloneIdH nameModifier v)
                        letNonRecT idR (renameIdR v v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
 
@@ -164,8 +159,16 @@ alphaLetNonRec mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
 alphaLetRecId :: Maybe TH.Name -> Id -> RewriteH CoreExpr
 alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
                      do Let (Rec {}) _ <- idR
-                        nameModifier <- freshNameGen mn
-                        v' <- constT (cloneIdH nameModifier v)
+                        ctx <- contextT
+                         -- Cannot use freshNameGen directly, because we want to include
+                         -- free variables from every bound expression, in the name generation function
+                         -- as a result we must replicate the essence of freshNameGen in the next few lines
+                        frees <- letRecDefT (\ _ -> freeVarsT) freeVarsT (\ bindFrees exprFrees -> (concat (map snd bindFrees)) ++ exprFrees)
+                        let nameGen = case mn of
+                                        Just name -> const (show name)
+                                        Nothing -> inventNames (frees ++ (listBindings ctx))
+                        v' <- constT (cloneIdH nameGen v)
+
                         letRecDefT (\ _ -> renameIdR v v') (renameIdR v v') (\ bs e -> Let (Rec $ (map.first) (replaceId v v') bs) e)
 
 -- | Rename all identifiers bound in a recursive let.
@@ -194,8 +197,7 @@ alphaLet = alphaLetRec <+ alphaLetNonRec Nothing
 alphaConsNonRec :: Maybe TH.Name -> RewriteH CoreProgram
 alphaConsNonRec mn = setFailMsg (wrongFormForAlpha "NonRec v e : prog") $
                      do NonRec v _ : _ <- idR
-                        -- TODO edk.  This is not what I really want here.
-                        nameModifier <- freshNameGenTL mn
+                        nameModifier <- consNonRecT (freshNameGen mn) idR (\ _ nameGen _ -> nameGen)
                         v' <- constT (cloneIdH nameModifier v)
                         consNonRecT idR (renameIdR v v') (\ _ e1 e2 -> NonRec v' e1 : e2)
 
@@ -203,9 +205,15 @@ alphaConsNonRec mn = setFailMsg (wrongFormForAlpha "NonRec v e : prog") $
 alphaConsRecId :: Maybe TH.Name -> Id -> RewriteH CoreProgram
 alphaConsRecId mn v = setFailMsg (wrongFormForAlpha "Rec bs : prog") $
                       do Rec {} : _ <- idR
-                         -- TODO edk.  This is not what I really want here.
-                         nameModifier <-freshNameGenTL mn
-                         v' <- constT (cloneIdH nameModifier v)
+                         -- Cannot use freshNameGen directly, because we want to include
+                         -- free variables from every bound expression, in the name generation function
+                         -- as a result we must replicate the essence of freshNameGen in the next few lines
+                         ctx <- contextT
+                         frees <- consRecDefT (\ _ -> freeVarsT) idR (\ frees _ -> concat (map snd frees))
+                         let nameGen = case mn of
+                                         Just name -> const (show name)
+                                         Nothing -> inventNames (frees ++ (listBindings ctx))
+                         v' <- constT (cloneIdH nameGen v)
                          consRecDefT (\ _ -> renameIdR v v') (renameIdR v v') (\ bs e -> Rec ((map.first) (replaceId v v') bs) : e)
 
 -- | Rename all identifiers bound in a recursive top-level binder.
