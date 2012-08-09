@@ -5,8 +5,10 @@ top
 
 -- do the w/w split
 consider 'fib
+dump "ifl-paper/0-start.tex" "clean" "latex" 80
 {
 load "WWSplitTactic.hss"
+dump "ifl-paper/1-aftersplit.tex" "clean" "latex" 80
 
 -- now ready to start neil's derivation
 rhs-of 'work
@@ -19,14 +21,17 @@ down
 -- work = unwrap (f (wrap work))
 --   extensionality (eta-expand)
 eta-expand 'n
+dump "ifl-paper/2-eta.tex" "clean" "latex" 80
 
 -- work n = unwrap (f (wrap work)) n
 --   unfold 'unwrap
-0; unfold 'unwrap
+any-call (unfold 'unwrap)
+dump "ifl-paper/3-unfoldunwrap.tex" "clean" "latex" 80
 
 -- work n = (f (wrap work) n, f (wrap work) (n+1))
 --   case 'n
-case-split-inline 'n
+0; case-split-inline 'n
+dump "ifl-paper/4-casesplit.tex" "clean" "latex" 80
 
 -- work 0     = (f (wrap work) 0, f (wrap work) 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
@@ -36,16 +41,19 @@ case-split-inline 'n
   { 1
     any-bu (unfold 'f)
     simplify
+    dump "ifl-paper/5-unfoldf.tex" "clean" "latex" 80
 
     -- work 0     = (0, 1)
     -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
     --   unfold 'work
     any-bu (stash-apply origwork)
+    dump "ifl-paper/6-stashapply.tex" "clean" "latex" 80
 
     -- work 0     = (0, 1)
     -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
     --   wrap . unwrap = id (precondition)
     any-bu (unfold-rule precondition)
+    dump "ifl-paper/7-precondition.tex" "clean" "latex" 80
 
     -- work 0     = (0, 1)
     -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
@@ -56,17 +64,21 @@ case-split-inline 'n
   { 0 ; 1 ; let-intro 'y }
   innermost (let-float-arg <+ let-float-app)
   { 1 ; 1 ; any-bu (fold 'y) }
+  dump "ifl-paper/8-xandy.tex" "clean" "latex" 80
   let-tuple 't
+  dump "ifl-paper/9-lettuple.tex" "clean" "latex" 80
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = (f (wrap work) n, f (wrap work) (n+1)) in (y,x+y)
 --   fold 'unwrap
   { rhs-of 't ; fold 'unwrap }
+  dump "ifl-paper/10-foldunwrap.tex" "clean" "latex" 80
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
 --   fold 'work
   { rhs-of 't ; 0 ; stash-fold origwork }
+  dump "ifl-paper/11-stashfold.tex" "clean" "latex" 80
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = work n in (y,x+y)
@@ -74,3 +86,4 @@ case-split-inline 'n
 }
 innermost dead-code-elimination
 { 0 ; 1 ; any-call (unfold 'wrap) ; simplify }
+dump "ifl-paper/12-final.tex" "clean" "latex" 80
