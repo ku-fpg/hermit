@@ -11,15 +11,12 @@ load "WWSplitTactic.hss"
 dump "ifl-paper/1-aftersplit.tex" "clean" "latex" 80
 
 -- now ready to start neil's derivation
-consider 'work
-down
-stash-defn origwork
-down
+consider 'work ; down ; stash-defn origwork
+dump "ifl-paper/2-afterstash.tex" "clean" "latex" 80
 
 -- work = unwrap (f (wrap work))
 --   extensionality (eta-expand)
-eta-expand 'n
-dump "ifl-paper/2-eta.tex" "clean" "latex" 80
+down ; eta-expand 'n
 
 -- work n = unwrap (f (wrap work)) n
 --   unfold 'unwrap
@@ -28,7 +25,7 @@ dump "ifl-paper/3-unfoldunwrap.tex" "clean" "latex" 80
 
 -- work n = (f (wrap work) n, f (wrap work) (n+1))
 --   case 'n
-0; case-split-inline 'n
+down ; case-split-inline 'n
 dump "ifl-paper/4-casesplit.tex" "clean" "latex" 80
 
 -- work 0     = (f (wrap work) 0, f (wrap work) 1)
