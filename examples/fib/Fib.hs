@@ -9,31 +9,33 @@ import Data.Function (fix)
 -- so we can let-tuple
 import GHC.Tuple
 
-data Nat = Zero | Succ Nat
+import Prelude hiding ((+))
+
+data Nat = Z | S Nat
 
 {-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
 {-# RULES "inline-fix" forall f . fix f = let work = f work in work #-}
 {-# RULES "precondition" forall w . wrap (unwrap w) = w #-}
 
-(.+) :: Nat -> Nat -> Nat
-Zero      .+ n = n
-(Succ n') .+ n = Succ (n' .+ n)
+(+) :: Nat -> Nat -> Nat
+Z      + n = n
+(S n') + n = S (n' + n)
 
 fromInt :: Int -> Nat
-fromInt 0 = Zero
+fromInt 0 = Z
 fromInt i | i < 0 = error "fromInt negative"
-          | otherwise = Succ (fromInt (i-1))
+          | otherwise = S (fromInt (i-1))
 
 -- original fib definition
 fib :: Nat -> Nat
-fib Zero = Zero
-fib (Succ Zero) = Succ Zero
-fib (Succ (Succ n)) = fib (Succ n) .+ fib n
+fib Z = Z
+fib (S Z) = S Z
+fib (S (S n)) = fib (S n) + fib n
 
 -- goal:
 -- fib' = fst work
---   where work Zero = (Zero, Succ Zero)
---         work (Succ n) = let (x,y) = work n
+--   where work Z = (Z, S Z)
+--         work (S n) = let (x,y) = work n
 --                         in (y,x+y)
 
 {-# INLINE wrap #-}
@@ -42,7 +44,7 @@ wrap h = fst . h
 
 {-# INLINE unwrap #-}
 unwrap :: (Nat -> Nat) -> Nat -> (Nat, Nat)
-unwrap h n = (h n, h (Succ n))
+unwrap h n = (h n, h (S n))
 
 -- for criterion
 deriveNFData ''Nat
