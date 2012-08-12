@@ -37,11 +37,9 @@ fib (S (S n)) = fib (S n) + fib n
 --         work (S n) = let (x,y) = work n
 --                         in (y,x+y)
 
-{-# INLINE wrap #-}
 wrap :: (Nat -> (Nat, Nat)) -> Nat -> Nat
 wrap h = fst . h
 
-{-# INLINE unwrap #-}
 unwrap :: (Nat -> Nat) -> Nat -> (Nat, Nat)
 unwrap h n = (h n, h (S n))
 

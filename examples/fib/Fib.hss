@@ -1,8 +1,3 @@
--- not sure why unwrap is getting eta-expanded
-consider 'unwrap
-simplify
-top
-
 -- do the w/w split
 consider 'fib
 dump "ifl-paper/0-start.tex" "clean" "latex" 80
