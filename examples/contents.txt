@@ -12,13 +12,12 @@ Concatenate Vanishes
 * Notes: unsafe uses of RULES with pre-conditions.
 
 
-
 Fibonacci (Tupling)
 ===================
 
 * Example of Tupling transformation.
 
-* Completed
+* Completed and published
 
 * Interesting rewrites: ww-split tactic, case-split(-inline), fold, stash-(fold/defn/apply), let-tuple
 
@@ -40,6 +39,7 @@ Hanoi
 
 * Initial and target Haskell implementation given. Derivation not started.
 
+
 Map
 ===
 
@@ -49,6 +49,7 @@ Map
 
 * Main rewrites: simplify, any-call, unfold, case-split(-inline), stash-defn/stash-apply.
 
+
 Haskell 2012 Paper
 ==================
 
@@ -56,8 +57,6 @@ Fibonacci (Unrolling)
 ---------------------
 
 * We unfold fib once to show how things operate overall.
-
-* Completed and published.
 
 * Main rewrites: any-bu, inline
 
@@ -67,8 +66,6 @@ Reverse
 
 * Our larger, low-level reverse example.
 
-* Completed and published.
-
 * Main rewrites: any-bu, unfold
 
 
@@ -77,7 +74,16 @@ Append
 
 * A demonstration of GHC RULES (no use of HERMIT).
 
-* Completed and published.
+
+IFL 2012 Paper
+==================
+
+Fibonacci (Tupling)
+-------------------
+
+* Example of Tupling transformation.
+
+* Interesting rewrites: ww-split tactic, case-split(-inline), fold, stash-(fold/defn/apply), let-tuple
 
 
 Last
