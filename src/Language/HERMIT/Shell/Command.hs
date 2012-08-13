@@ -418,6 +418,7 @@ evalExpr expr = do
 -------------------------------------------------------------------------------
 
 -- TODO: This can be refactored. We always showFocus. Also, Perhaps return a modifier, not ()
+--   UPDATE: Not true.  We don't always showFocus.
 -- TODO: All of these should through an exception if they fail to execute the command as given.
 
 performAstEffect :: MonadIO m => AstEffect -> ExprH -> CLM m ()
@@ -546,7 +547,7 @@ performMetaCommand (LoadFile fileName) = do
                                     throwError err)
                             modify $ \st -> st { cl_session = (cl_session st) { cl_loading = load_st } }
                             putStrToConsole "[done, loaded N commands]" -- TODO: should this "N" actually be the number of commands loaded?
-
+                            showFocus
           Left (err :: IOException) -> throwError ("IO error: " ++ show err)
   where
    normalize = unlines
