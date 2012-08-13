@@ -1,5 +1,4 @@
 consider 'rev
-consider 'rev
 fix-intro
 down
 unfold-rule "ww"
@@ -23,5 +22,11 @@ one-td (unfold 'fix)
 bash
 alpha-let 'work
 one-td (unfold 'absH)
-up ; up ; up ; up
+down ; down ; down
+alpha-lam 'xs
+down
+alpha-lam 'acc
+top
+consider 'rev
 bash
+unshadow

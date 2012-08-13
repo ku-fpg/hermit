@@ -1,3 +1,5 @@
+module Main where
+
 fib :: Int -> Int
 fib n = if n < 2
          then 1

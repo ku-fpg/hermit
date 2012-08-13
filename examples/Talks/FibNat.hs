@@ -1,3 +1,5 @@
+module Main where
+
 import Prelude hiding ((+))
 import Nat
 
