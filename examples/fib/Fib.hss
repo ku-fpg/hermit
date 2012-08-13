@@ -1,57 +1,62 @@
--- do the w/w split
 consider 'fib
+
+{
+
 load "WWSplitTactic.hss"
--- now ready to start neil's derivation
 consider 'work ; down ; stash-defn origwork
+
 -- work = unwrap (f (wrap work))
---   extensionality (eta-expand)
+
 down ; eta-expand 'n
 
 -- work n = unwrap (f (wrap work)) n
---   unfold 'unwrap
+
 any-call (unfold 'unwrap)
+
 -- work n = (f (wrap work) n, f (wrap work) (n+1))
---   case 'n
+
 down ; case-split-inline 'n
+
 -- work 0     = (f (wrap work) 0, f (wrap work) 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
---   unfold 'f
+
 { 1 ; any-call (unfold 'f) }
 { 2 ; 0 ; 1 ; any-bu (unfold 'f) }
 simplify
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
---   unfold 'work
+
 2 ; 0 ; { 1 ; any-bu (stash-apply origwork) }
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
---   wrap . unwrap = id (precondition)
+
 any-bu (unfold-rule precondition)
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
---   let-intro x2, let-float-tuple
+
 { 1 ; 1 ; let-intro 'x }
 { 0 ; 1 ; let-intro 'y }
 innermost (let-float-arg <+ let-float-app)
 one-td (fold 'y)
-
-let-tuple 't
+let-tuple 'xy
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = (f (wrap work) n, f (wrap work) (n+1)) in (y,x+y)
---   fold 'unwrap
+
 one-td (fold 'unwrap)
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
---   fold 'work
+
 one-td (stash-fold origwork)
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = work n in (y,x+y)
-top ; consider 'fib
+
+}
+
 innermost dead-code-elimination
 { 0 ; 1 ; any-call (unfold 'wrap) ; simplify }

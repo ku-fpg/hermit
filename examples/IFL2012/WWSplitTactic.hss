@@ -23,12 +23,11 @@
 -- next step is to formulate it as an actual rewrite, or otherwise
 -- bundle it up as a one-liner.
 --
--- TODO: this relies on two RULES pragmas:
+-- TODO: this relies on a RULES pragmas:
 --
 --  {-# RULES "ww" forall work . fix work = wrap (fix (unwrap . work . wrap)) #-}
---  {-# RULES "inline-fix" forall f . fix f = let work = f work in work #-}
 --
--- We either need to provide these somehow, or implement them as rewrites.
+-- We either need to provide this somehow, or implement it as a rewrite.
 --
 -- BEGIN: ww tactic
 {

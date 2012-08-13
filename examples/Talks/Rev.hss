@@ -1,3 +1,4 @@
+{
 consider 'rev
 fix-intro
 down
@@ -26,7 +27,6 @@ down ; down ; down
 alpha-lam 'xs
 down
 alpha-lam 'acc
-top
-consider 'rev
+}
 bash
 unshadow
