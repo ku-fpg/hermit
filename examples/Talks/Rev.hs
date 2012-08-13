@@ -3,11 +3,9 @@ module Main where
 import HList
 import Data.Function (fix)
 
-{-# INLINE unwrap #-}
 unwrap :: ([a] -> [a]) -> ([a] -> [a] -> [a])
 unwrap f = repH . f
 
-{-# INLINE wrap #-}
 wrap :: ([a] -> [a] -> [a]) -> ([a] -> [a])
 wrap g = absH . g
 
@@ -19,3 +17,4 @@ rev (x:xs) = rev xs ++ [x]
 
 main :: IO ()
 main = putStrLn $ "Successfully reversed a list of " ++ show (length $ rev [1..15000]) ++ " elements."
+
