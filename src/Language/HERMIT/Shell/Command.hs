@@ -83,12 +83,12 @@ data ShellEffect :: * where
    deriving Typeable
 
 data QueryFun :: * where
-   QueryT         :: TranslateH Core String   -> QueryFun
+   QueryT        :: TranslateH Core String   -> QueryFun
    -- These two be can generalized into
    --  (CommandLineState -> IO String)
-   Status        ::                             QueryFun
+   Display       ::                             QueryFun
    Message       :: String                   -> QueryFun
-   Inquiry        ::(CommandLineState -> SessionState -> IO String) -> QueryFun
+   Inquiry       ::(CommandLineState -> SessionState -> IO String) -> QueryFun
    deriving Typeable
 
 instance Extern QueryFun where
@@ -158,7 +158,7 @@ shell_externals = map (.+ Shell)
        [ "stops HERMIT; resumes compile" ]
    , external "abort"           Abort     -- UNIX Exit
        [ "hard UNIX-style exit; does not return to GHC; does not save" ]
-   , external "status"          Status
+   , external "display"         Display
        [ "redisplays current state" ]
    , external "left"            (Direction L)
        [ "move to the next child"]
@@ -509,7 +509,7 @@ performQuery (Inquiry f) = do
 
 -- These two need to use Inquiry
 performQuery (Message msg) = liftIO (putStrLn msg)
-performQuery Status = showFocus
+performQuery Display = showFocus
   -- do
   --   st <- get
   --   liftIO $ do
