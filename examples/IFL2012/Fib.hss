@@ -1,15 +1,15 @@
-set-pp-expr-type Omit
+set-pp-expr-type Show
 
 -- do the w/w split
 consider 'fib
-dump "ifl-paper/0-start.tex" "clean" "latex" 85
+dump "ifl-paper/0-start.tex" "clean" "latex" 82
 
 load "WWSplitTactic.hss"
-dump "ifl-paper/1-aftersplit.tex" "clean" "latex" 85
+dump "ifl-paper/1-aftersplit.tex" "clean" "latex" 82
 
 -- now ready to start neil's derivation
 consider 'work ; down ; stash-defn origwork
-dump "ifl-paper/2-afterstash.tex" "clean" "latex" 85
+dump "ifl-paper/2-afterstash.tex" "clean" "latex" 82
 
 -- work = unwrap (f (wrap work))
 --   extensionality (eta-expand)
@@ -18,12 +18,12 @@ down ; eta-expand 'n
 -- work n = unwrap (f (wrap work)) n
 --   unfold 'unwrap
 any-call (unfold 'unwrap)
-dump "ifl-paper/3-unfoldunwrap.tex" "clean" "latex" 85
+dump "ifl-paper/3-unfoldunwrap.tex" "clean" "latex" 82
 
 -- work n = (f (wrap work) n, f (wrap work) (n+1))
 --   case 'n
 down ; case-split-inline 'n
-dump "ifl-paper/4-casesplit.tex" "clean" "latex" 85
+dump "ifl-paper/4-casesplit.tex" "clean" "latex" 82
 
 -- work 0     = (f (wrap work) 0, f (wrap work) 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
@@ -31,19 +31,19 @@ dump "ifl-paper/4-casesplit.tex" "clean" "latex" 85
 { 1 ; any-call (unfold 'f) }
 { 2 ; 0 ; 1 ; any-bu (unfold 'f) }
 simplify
-dump "ifl-paper/5-unfoldf.tex" "clean" "latex" 85
+dump "ifl-paper/5-unfoldf.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
 --   unfold 'work
 2 ; 0 ; { 1 ; any-bu (stash-apply origwork) }
-dump "ifl-paper/6-stashapply.tex" "clean" "latex" 85
+dump "ifl-paper/6-stashapply.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
 --   wrap . unwrap = id (precondition)
 any-bu (unfold-rule precondition)
-dump "ifl-paper/7-precondition.tex" "clean" "latex" 85
+dump "ifl-paper/7-precondition.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
@@ -52,26 +52,26 @@ dump "ifl-paper/7-precondition.tex" "clean" "latex" 85
 { 0 ; 1 ; let-intro 'y }
 innermost (let-float-arg <+ let-float-app)
 one-td (fold 'y)
-dump "ifl-paper/8-xandy.tex" "clean" "latex" 85
+dump "ifl-paper/8-xandy.tex" "clean" "latex" 82
 
 let-tuple 'xy
-dump "ifl-paper/9-lettuple.tex" "clean" "latex" 85
+dump "ifl-paper/9-lettuple.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = (f (wrap work) n, f (wrap work) (n+1)) in (y,x+y)
 --   fold 'unwrap
 one-td (fold 'unwrap)
-dump "ifl-paper/10-foldunwrap.tex" "clean" "latex" 85
+dump "ifl-paper/10-foldunwrap.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
 --   fold 'work
 one-td (stash-fold origwork)
-dump "ifl-paper/11-stashfold.tex" "clean" "latex" 85
+dump "ifl-paper/11-stashfold.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = work n in (y,x+y)
 top ; consider 'fib
 innermost dead-code-elimination
 { 0 ; 1 ; any-call (unfold 'wrap) ; simplify }
-dump "ifl-paper/12-final.tex" "clean" "latex" 85
+dump "ifl-paper/12-final.tex" "clean" "latex" 82
