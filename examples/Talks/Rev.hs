@@ -9,7 +9,7 @@ unwrap f = repH . f
 wrap :: ([a] -> [a] -> [a]) -> ([a] -> [a])
 wrap g = absH . g
 
-{-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
+{-# RULES "ww" forall f. fix f = wrap (fix (unwrap . f . wrap)) #-}
 
 -- rev :: [a] -> [a]
 rev []     = []

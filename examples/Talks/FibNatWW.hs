@@ -16,8 +16,8 @@ wrap h = fst . h
 unwrap :: (Nat -> Nat) -> Nat -> (Nat, Nat)
 unwrap h n = (h n, h (Succ n))
 
-{-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
-{-# RULES "precondition" forall w . wrap (unwrap w) = w          #-}
+{-# RULES "ww" forall f.  fix f = wrap (fix (unwrap . f . wrap)) #-}
+{-# RULES "precondition" forall w.  wrap (unwrap w) = w          #-}
 
 main :: IO ()
 main = print (fromNat $ fib $ toNat 30)

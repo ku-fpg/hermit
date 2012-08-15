@@ -11,13 +11,13 @@ repH xs = (xs ++)
 absH :: ([a] -> [a]) -> [a]
 absH f = f []
 
-{-# RULES "repH ++" forall xs ys   . repH (xs ++ ys) = repH xs . repH ys #-}
+{-# RULES "repH ++" forall xs ys.   repH (xs ++ ys) = repH xs . repH ys #-}
 
-{-# RULES "(:) ++" forall x xs ys . (x:xs) ++ ys = x : (xs ++ ys) #-}
-{-# RULES "[] ++"  forall xs      . [] ++ xs     = xs #-}
+{-# RULES "(:) ++" forall x xs ys.  (x:xs) ++ ys    = x : (xs ++ ys)    #-}
+{-# RULES "[] ++"  forall xs.       [] ++ xs        = xs                #-}
 
 -- has preconditon
-{-# RULES "rep-abs-fusion" forall h . repH (absH h) = h #-}
+{-# RULES "rep-abs-fusion" forall w . repH (absH w) = w #-}
 
 
 
