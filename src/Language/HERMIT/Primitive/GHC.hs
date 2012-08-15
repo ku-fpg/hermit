@@ -7,7 +7,7 @@ import qualified OccurAnal
 import Control.Arrow
 import Control.Monad
 import qualified Data.Map as Map
-import Data.List (nub)
+import Data.List (nub, mapAccumL)
 
 -- import Language.HERMIT.Primitive.Debug
 import Language.HERMIT.Primitive.Navigation
@@ -67,19 +67,51 @@ externals =
          ]
 
 ------------------------------------------------------------------------
+substR :: Id -> CoreExpr -> RewriteH Core
+substR b e = setFailMsg "Can only perform substitution on Expr or CoreProgram forms." $
+             promoteExprR (substExprR b e) <+  promoteProgramR (substTopBindR b e)
+
+substExprR :: Id -> CoreExpr -> RewriteH CoreExpr
+substExprR b e =  contextfreeT $ \ exp ->
+          -- The InScopeSet needs to include any free variables appearing in the
+          -- expression to be substituted.  Constructing a NonRec Let expression
+          -- to pass on to exprFeeVars takes care of this, but ...
+          -- TODO Is there a better way to do this ???
+          let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars (Let (NonRec b e) exp)))
+              sub = if (isTyVar b)
+                    then case e of
+                           (Type bty) -> Just $ extendTvSubst emptySub b bty
+                           _ ->  Nothing
+                    else Just $ extendSubst emptySub b e
+          in
+            case sub of
+              Just sub' -> return $ substExpr (text "substR") sub' exp
+              Nothing -> fail "substExprR:  Id argument is a TyVar, but the expression is not a Type."
+
+substVarR :: Id -> CoreExpr -> RewriteH CoreExpr
+substVarR v e = whenM (varT (==v)) (return e)
+
+
+
+substTopBindR :: Id -> CoreExpr -> RewriteH CoreProgram
+substTopBindR b e =  contextfreeT $ \  binds  ->
+          -- TODO.  Do we ned to initialize the emptySubst with bindFreeVars ?
+          let emptySub =  emptySubst -- mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+              sub = if (isTyVar b)
+                    then case e of
+                           (Type bty) -> Just $ extendTvSubst emptySub b bty
+                           _ ->  Nothing
+                    else Just $ extendSubst emptySub b e
+          in
+            case sub of
+              Just sub' -> return $ snd (mapAccumL substBind sub' binds)
+              Nothing -> fail "substTopBindR:  Id argument is a TyVar, but the expression is not a Type."
 
 letSubstR :: RewriteH CoreExpr
 letSubstR =  prefixFailMsg "Let substition failed: " $
-             contextfreeT $ \ exp -> case occurAnalyseExpr exp of
-      Let (NonRec b be) e
-         | isId b    -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-                            sub      = extendSubst emptySub b be
-                         in return $ substExpr (text "letSubstR") sub e
-      Let (NonRec b (Type bty)) e
-         | isTyVar b -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-                            sub      = extendTvSubst emptySub b bty
-                         in return $ substExpr (text "letSubstR") sub e
-      _ -> fail "expression is not a non-recursive Let."
+             rewrite $ \ ctx exp -> case occurAnalyseExpr exp of
+                                     Let (NonRec b be) e -> apply (substExprR b be) ctx e
+                                     _ -> fail "expression is not a non-recursive Let."
 
 -- This is quite expensive (O(n) for the size of the sub-tree)
 safeLetSubstR :: RewriteH CoreExpr
@@ -100,17 +132,23 @@ safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
           safeSubst (OneOcc inLam oneBr _) = not inLam && oneBr -- do not inline inside a lambda or if in multiple case branches
           safeSubst _ = False   -- strange case, like a loop breaker
    in case occurAnalyseExpr exp of
-      Let (NonRec b (Type bty)) e
+      -- By (our) definition, types are a trivial bind
+      Let (NonRec b (Type _)) _
+         | isTyVar b -> apply letSubstR env exp
+{-
          | isTyVar b -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
                             sub      = extendTvSubst emptySub b bty
                          in return $ substExpr (text "letSubstR") sub e
-      Let (NonRec b be) e
+-}
+      Let (NonRec b be) _
          | isId b && (safeBind be || safeSubst (occInfo (idInfo b)))
+                     -> apply letSubstR env exp
+{-
                      -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
                             sub      = extendSubst emptySub b be
                          in return $ substExpr (text "letSubstR") sub e
+-}
          | otherwise -> fail "safety critera not met."
-      -- By (our) definition, types are a trivial bind
       _ -> fail "expression is not a non-recursive Let."
 
 -- | 'safeLetSubstPlusR' tries to inline a stack of bindings, stopping when reaches

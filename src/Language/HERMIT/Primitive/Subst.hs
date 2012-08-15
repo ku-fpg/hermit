@@ -10,7 +10,7 @@ import Language.HERMIT.Context
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
-import Language.HERMIT.Primitive.GHC(freeVarsT)
+import Language.HERMIT.Primitive.GHC(freeVarsT, substR)
 
 import Language.HERMIT.Primitive.Common
 
@@ -42,26 +42,15 @@ externals = map (.+ Deep)
                [ "renames the bound variable in a top-level binding with one binder to the given name."]
          ,  external "alpha-top" (promoteProgramR alphaCons)
                [ "renames the bound variables in a top-level binding."]
+
+         , external "unshadow" (unshadow :: RewriteH Core)
+                [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
+
+         ,  external "merge-binds" (promoteProgramR mergeBinds)
+               [ "renames the bound variables in a top-level binding."]
          ]
 
 -----------------------------------------------------------------------
-substR :: Id -> CoreExpr -> RewriteH Core
-substR b e =  promoteExprR $ contextfreeT $ \ exp ->
-          let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-              sub = if (isTyVar b)
-                    then case e of
-                           (Type bty) -> Just $ extendTvSubst emptySub b bty
-                           _ ->  Nothing
-                    else Just $ extendSubst emptySub b e
-          in
-            case sub of
-              Just sub' -> return $ substExpr (text "substR") sub' exp
-              Nothing -> fail "???"
-
-substVarR :: Id -> CoreExpr -> RewriteH CoreExpr
-substVarR v e = whenM (varT (==v)) (return e)
-
--- ---------------------------------------------------------------
 --
 -- freshNameGen is a function used in conjunction with cloneIdH, which clones an existing Id.
 -- But, what name should the new Id have?
@@ -74,13 +63,23 @@ substVarR v e = whenM (varT (==v)) (return e)
 -- 1.  Any free variable name in the active Expr; or
 -- 2.  Any bound variables in context.
 
-freshNameGen :: (Maybe TH.Name) -> TranslateH CoreExpr (String -> String)
-freshNameGen newName =
+visibleIds :: TranslateH CoreExpr [Id]
+visibleIds = do ctx <- contextT
+                frees <- freeVarsT
+                return $ frees ++ (listBindings ctx)
+
+freshNameGen :: (Maybe TH.Name) -> [Id] -> (String -> String)
+freshNameGen newName idsToAvoid =
+        case newName of
+          Just name -> const (show name)
+          Nothing   -> inventNames idsToAvoid
+
+freshNameGenT :: (Maybe TH.Name) -> TranslateH CoreExpr (String -> String)
+freshNameGenT newName =
         case newName of
           Just name -> return $ const (show name)
-          Nothing -> do ctx <- contextT
-                        frees <- freeVarsT
-                        return $ inventNames (frees ++ (listBindings ctx))
+          Nothing -> do idsToAvoid <- visibleIds
+                        return $ freshNameGen Nothing idsToAvoid
 
 {-
 inventNames curr old | trace (show ("inventNames",names,old)) False = undefined
@@ -112,7 +111,7 @@ replaceId v v' i = if v == i then v' else i
 -- | Alpha rename a lambda binder.  Optionally takes a suggested new name.
 alphaLam :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLam mn = setFailMsg (wrongFormForAlpha "Lam v e") $
-              do (v, nameModifier) <- lamT (freshNameGen mn) (,)
+              do (v, nameModifier) <- lamT (freshNameGenT mn) (,)
                  v' <- constT (cloneIdH nameModifier v)
                  lamT (renameIdR v v') (\ _ -> Lam v')
 
@@ -122,7 +121,7 @@ alphaLam mn = setFailMsg (wrongFormForAlpha "Lam v e") $
 alphaCaseBinder :: Maybe TH.Name -> RewriteH CoreExpr
 alphaCaseBinder mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
                      do Case _ v _ _ <- idR
-                        nameModifier <- freshNameGen mn
+                        nameModifier <- freshNameGenT mn
                         v' <- constT (cloneIdH nameModifier v)
                         caseT idR (\ _ -> renameIdR v v') (\ e _ t alts -> Case e v' t alts)
 
@@ -130,7 +129,7 @@ alphaCaseBinder mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
 
 -- | Rename the specified identifier in a case alternative.  Optionally takes a suggested new name.
 alphaAltId :: Maybe TH.Name -> Id -> RewriteH CoreAlt
-alphaAltId mn v = do nameModifier <- altT (freshNameGen mn) (\ _ _ nameGen -> nameGen)
+alphaAltId mn v = do nameModifier <- altT (freshNameGenT mn) (\ _ _ nameGen -> nameGen)
                      v' <- constT (cloneIdH nameModifier v)
                      altT (renameIdR v v') (\ con vs e -> (con, map (replaceId v v') vs, e))
 
@@ -151,7 +150,7 @@ alphaCase = alphaCaseBinder Nothing >+> caseAnyR (fail "") (const alphaAlt)
 -- | Alpha rename a non-recursive let binder.  Optionally takes a suggested new name.
 alphaLetNonRec :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLetNonRec mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
-                    do (v, nameModifier) <- letNonRecT idR (freshNameGen mn) (\ v _ nameMod -> (v, nameMod))
+                    do (v, nameModifier) <- letNonRecT idR (freshNameGenT mn) (\ v _ nameMod -> (v, nameMod))
                        v' <- constT (cloneIdH nameModifier v)
                        letNonRecT idR (renameIdR v v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
 
@@ -197,7 +196,7 @@ alphaLet = alphaLetRec <+ alphaLetNonRec Nothing
 alphaConsNonRec :: Maybe TH.Name -> RewriteH CoreProgram
 alphaConsNonRec mn = setFailMsg (wrongFormForAlpha "NonRec v e : prog") $
                      do NonRec v _ : _ <- idR
-                        nameModifier <- consNonRecT (freshNameGen mn) idR (\ _ nameGen _ -> nameGen)
+                        nameModifier <- consNonRecT (freshNameGenT mn) idR (\ _ nameGen _ -> nameGen)
                         v' <- constT (cloneIdH nameModifier v)
                         consNonRecT idR (renameIdR v v') (\ _ e1 e2 -> NonRec v' e1 : e2)
 
@@ -244,9 +243,18 @@ alpha = setFailMsg "Cannot alpha-rename here." $
            promoteExprR (alphaLam Nothing <+ alphaCaseBinder Nothing <+ alphaLet)
         <+ promoteProgramR alphaCons
 
+unshadow :: RewriteH Core
+unshadow = anytdR (promoteExprR (alphaLam Nothing <+ alphaCaseBinder Nothing <+ alphaLet))
+
 -----------------------------------------------------------------------
 
 wrongFormForAlpha :: String -> String
 wrongFormForAlpha s = "Cannot alpha-rename: " ++ wrongExprForm s
 
 -----------------------------------------------------------------------
+
+mergeBinds :: RewriteH CoreProgram
+mergeBinds = contextfreeT $ \  binds -> return $ [Rec (foldr listOfBinds [] binds)]
+ where listOfBinds cb others = case cb of
+                                 (NonRec b e) -> (b, e) : others
+                                 (Rec bds) -> bds ++ others

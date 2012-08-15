@@ -42,16 +42,17 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
          , external "fix-spec" (promoteExprR fixSpecialization :: RewriteH Core)
                 [ "specialize a fix with a given argument"] .+ Shallow .+ TODO
-         , external "number-binder" (exprNumberBinder :: Int -> RewriteH Core)
-                [ "add a number suffix onto a (lambda) binding" ]
-         , external "auto-number-binder" (autoRenameBinder :: RewriteH Core)
-                [ "automatically add a number suffix onto a (lambda) binding" ]
+-- edk
+--         , external "number-binder" (exprNumberBinder :: Int -> RewriteH Core)
+--                [ "add a number suffix onto a (lambda) binding" ]
+--         , external "auto-number-binder" (autoRenameBinder :: RewriteH Core)
+--                [ "automatically add a number suffix onto a (lambda) binding" ]
          , external "cleanup-unfold" (promoteExprR cleanupUnfold :: RewriteH Core)
                 [ "clean up immeduate nested fully-applied lambdas, from the bottom up"]
          , external "unfold" (promoteExprR . unfold :: TH.Name -> RewriteH Core)
                 [ "inline a definition, and apply the arguments; tranditional unfold"]
-         , external "unshadow" (unshadow :: RewriteH Core)
-                [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
+--         , external "unshadow" (unshadow :: RewriteH Core)
+--                [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
          , external "push" (promoteExprR . push :: TH.Name -> RewriteH Core)
                 [ "push a function <f> into argument."
                 , "Unsafe if f is not strict." ] .+ PreCondition
@@ -334,8 +335,6 @@ inventNames curr old = head
            names = map getOccString curr
 
 
-
-
 -- | cleanupUnfold cleans a unfold operation
 --  (for example, an inline or rule application)
 -- It is used at the level of the top-redex.
@@ -368,12 +367,14 @@ withUnfold rr = prefixFailMsg "any-call failed: " $
 
         rec :: RewriteH Core
         rec = withUnfold rr
-
+{-
+  edk
 -- Makes every 'virtual' shadow disappear.
 -- O(n^2) right now.
 -- Also, only does lambda bound things.
 unshadow :: RewriteH Core
 unshadow = anytdR (promoteR autoRenameBinder)
+-}
 
 --cleanUnfold :: (LensH Core Core -> RewriteH Core) -> RewriteH Core
 --cleanUnfold f =

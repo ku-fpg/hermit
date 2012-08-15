@@ -95,6 +95,6 @@ letFloatLetTop = setFailMsg ("Let floating to top level failed: " ++ wrongExprFo
 letToCase :: RewriteH CoreExpr
 letToCase = prefixFailMsg "Converting Let to Case failed: " $
   do Let (NonRec v ev) _ <- idR
-     nameModifier <- freshNameGen Nothing
+     nameModifier <- freshNameGenT Nothing
      caseBndr <- constT (cloneIdH nameModifier v)
      letT mempty (renameIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
