@@ -168,7 +168,7 @@ rulesToEnv rs = Map.fromList
         ]
 
 rulesToRewriteH :: [CoreRule] -> RewriteH CoreExpr
-rulesToRewriteH rs = contextfreeT $ \ e -> do
+rulesToRewriteH rs = translate $ \ c e -> do
     -- First, we normalize the lhs, so we can match it
     (Var fn,args) <- return $ collectArgs e
     -- Question: does this include Id's, or Var's (which include type names)
@@ -181,7 +181,19 @@ rulesToRewriteH rs = contextfreeT $ \ e -> do
     -- trace (showSDoc (ppr fn GhcPlugins.<+> ppr args $$ ppr rs)) $
     case lookupRule (const True) (const NoUnfolding) in_scope fn args rs of
         Nothing         -> fail "rule not matched"
-        Just (rule,e')  -> return $ mkApps e' (drop (ruleArity rule) args)
+        Just (rule, exp)  -> do
+            let e' = mkApps exp (drop (ruleArity rule) args)
+            ifM (liftM (and . map (inScope c)) $ apply freeVarsT c e')
+                (return e')
+                (fail "Resulting expression after rule application contains variables that are not in scope.")
+
+-- | See whether an identifier is in scope.
+inScope :: Context -> Id -> Bool
+inScope c i = maybe (case unfoldingInfo (idInfo i) of
+                        CoreUnfolding {} -> True -- defined elsewhere
+                        _ -> False)
+                    (const True) -- defined in this module
+                    (lookupHermitBinding i c)
 
 rules ::  String -> RewriteH CoreExpr
 rules r = do

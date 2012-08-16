@@ -66,14 +66,6 @@ stashApply label = setFailMsg "Inlining stashed definition failed: " $
                                              (fail "some free variables in stashed definition are no longer in scope.")
                                     else fail $ "stashed definition applies to " ++ showPpr i ++ " not " ++ showPpr v
 
--- | See whether an identifier is in scope.
-inScope :: Context -> Id -> Bool
-inScope c i = maybe (case unfoldingInfo (idInfo i) of
-                        CoreUnfolding {} -> True -- defined elsewhere
-                        _ -> False)
-                    (const True) -- defined in this module
-                    (lookupHermitBinding i c)
-
 getUnfolding :: Monad m
              => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
              -> Bool -- ^ Only succeed if this variable is a case binder.
