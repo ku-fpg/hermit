@@ -1,14 +1,14 @@
 set-pp-expr-type Omit
 {
 load "WWSplitTactic.hss"
-consider 'work ; down ; stash-defn origwork
+consider 'work ; down ; remember origwork
 down ; eta-expand 'n
 any-call (unfold 'unwrap)
 down ; case-split-inline 'n
 { 1 ; any-call (unfold 'f) }
 { 2 ; 0 ; 1 ; any-bu (unfold 'f) }
 simplify
-2 ; 0 ; { 1 ; any-bu (stash-apply origwork) }
+2 ; 0 ; { 1 ; any-bu (unfold origwork) }
 any-bu (unfold-rule precondition)
 { 1 ; 1 ; let-intro 'x }
 { 0 ; 1 ; let-intro 'y }
@@ -16,7 +16,7 @@ innermost (let-float-arg <+ let-float-app)
 one-td (fold 'y)
 let-tuple 'xy
 one-td (fold 'unwrap)
-one-td (stash-fold origwork)
+one-td (fold origwork)
 }
 innermost dead-code-elimination
 { 0 ; 1 ; any-call (unfold 'wrap) ; simplify }

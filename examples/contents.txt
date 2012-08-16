@@ -19,7 +19,7 @@ Fibonacci (Tupling)
 
 * Completed and published
 
-* Interesting rewrites: ww-split tactic, case-split(-inline), fold, stash-(fold/defn/apply), let-tuple
+* Interesting rewrites: ww-split tactic, case-split(-inline), fold, remember (and fold/unfold rememebered defns), let-tuple
 
 
 Fibonacci (Stream Memoisation)
@@ -57,7 +57,7 @@ Map
 
 * Completed.
 
-* Main rewrites: simplify, any-call, unfold, case-split(-inline), stash-defn/stash-apply.
+* Main rewrites: simplify, any-call, unfold, case-split(-inline), remember.
 
 
 Haskell 2012 Paper
@@ -93,7 +93,7 @@ Fibonacci (Tupling)
 
 * Example of Tupling transformation.
 
-* Interesting rewrites: ww-split tactic, case-split(-inline), fold, stash-(fold/defn/apply), let-tuple
+* Interesting rewrites: ww-split tactic, case-split(-inline), fold, remember (fold/unfold remembered defns), let-tuple
 
 
 Last
