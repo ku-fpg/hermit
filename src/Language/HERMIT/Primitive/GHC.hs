@@ -185,7 +185,8 @@ rulesToRewriteH rs = translate $ \ c e -> do
             let e' = mkApps exp (drop (ruleArity rule) args)
             ifM (liftM (and . map (inScope c)) $ apply freeVarsT c e')
                 (return e')
-                (fail "Resulting expression after rule application contains variables that are not in scope.")
+                (fail $ unlines ["Resulting expression after rule application contains variables that are not in scope."
+                                ,"Did you remember to run the flatten-module command at the top level?"])
 
 -- | See whether an identifier is in scope.
 inScope :: Context -> Id -> Bool
