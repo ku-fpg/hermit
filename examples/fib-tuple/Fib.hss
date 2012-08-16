@@ -51,7 +51,7 @@ one-td (fold 'unwrap)
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
 
-one-td (stash-fold origwork)
+one-td (fold origwork)
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = work n in (y,x+y)

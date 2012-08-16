@@ -1,5 +1,9 @@
 {-# LANGUAGE ScopedTypeVariables, TypeFamilies, FlexibleContexts, TupleSections #-}
-module Language.HERMIT.Primitive.Fold where
+module Language.HERMIT.Primitive.Fold
+    ( externals
+    , foldR
+    , stashFoldR
+    ) where
 
 import GhcPlugins hiding (empty)
 
@@ -14,8 +18,8 @@ import Language.HERMIT.External
 import Language.HERMIT.Kure
 import Language.HERMIT.GHC
 
-import Language.HERMIT.Primitive.GHC
-import Language.HERMIT.Primitive.Unfold
+import Language.HERMIT.Primitive.GHC hiding (externals)
+import Language.HERMIT.Primitive.Unfold hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 
@@ -38,8 +42,8 @@ externals =
                 ,"Note: due to associativity, if you wanted to fold 5 + 6 + 6, "
                 ,"you first need to apply an associativity rewrite."
                 ] .+ Context .+ Deep
-         , external "stash-fold" (promoteExprR . stashFoldR)
-                ["Fold a stashed definition."] .+ Context .+ Deep
+         , external "fold" (promoteExprR . stashFoldR)
+                ["Fold a remembered definition."] .+ Context .+ Deep
          ]
 
 ------------------------------------------------------------------------

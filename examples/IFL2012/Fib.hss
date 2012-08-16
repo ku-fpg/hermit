@@ -66,7 +66,7 @@ dump "ifl-paper/10-foldunwrap.tex" "clean" "latex" 82
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
 --   fold 'work
-one-td (stash-fold origwork)
+one-td (fold origwork)
 dump "ifl-paper/11-stashfold.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)
