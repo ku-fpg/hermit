@@ -1,8 +1,8 @@
 consider 'mapPlus1Int
-{ load "../fib/WWSplitTactic.hss"
+{ load "../fib-tuple/WWSplitTactic.hss"
   consider 'work
   0
-  stash-defn origwork
+  remember origwork
   0
   one-td (unfold 'unwrap)
   any-call (unfold '.)
@@ -31,7 +31,7 @@ consider 'mapPlus1Int
     any-call (unfold 'f)
     any-call (unfold 'wrap)
     simplify
-    any-bu (stash-apply origwork)
+    any-bu (unfold origwork)
     any-call (unfold 'unwrap)
     simplify
     innermost (unfold-rule precondition1)

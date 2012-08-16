@@ -8,7 +8,7 @@ load "WWSplitTactic.hss"
 dump "ifl-paper/1-aftersplit.tex" "clean" "latex" 82
 
 -- now ready to start neil's derivation
-consider 'work ; down ; stash-defn origwork
+consider 'work ; down ; remember origwork
 dump "ifl-paper/2-afterstash.tex" "clean" "latex" 82
 
 -- work = unwrap (f (wrap work))
@@ -36,7 +36,7 @@ dump "ifl-paper/5-unfoldf.tex" "clean" "latex" 82
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
 --   unfold 'work
-2 ; 0 ; { 1 ; any-bu (stash-apply origwork) }
+2 ; 0 ; { 1 ; any-bu (unfold origwork) }
 dump "ifl-paper/6-stashapply.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)

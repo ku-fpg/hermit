@@ -3,7 +3,7 @@ consider 'fib
 {
 
 load "WWSplitTactic.hss"
-consider 'work ; down ; stash-defn origwork
+consider 'work ; down ; remember origwork
 
 -- work = unwrap (f (wrap work))
 
@@ -27,7 +27,7 @@ simplify
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
 
-2 ; 0 ; { 1 ; any-bu (stash-apply origwork) }
+2 ; 0 ; { 1 ; any-bu (unfold origwork) }
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)

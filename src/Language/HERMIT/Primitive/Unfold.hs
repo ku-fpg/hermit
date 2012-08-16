@@ -1,11 +1,16 @@
 {-# LANGUAGE ScopedTypeVariables, TypeFamilies, FlexibleContexts, TupleSections #-}
-module Language.HERMIT.Primitive.Unfold where
+module Language.HERMIT.Primitive.Unfold
+    ( externals
+    , stashDef
+    , stashApply
+    , getUnfolding
+    ) where
 
 import GhcPlugins hiding (empty)
 import Control.Monad
 import Control.Applicative
 
-import Language.HERMIT.Primitive.GHC
+import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Common
 
 import Language.HERMIT.CoreExtra
@@ -20,10 +25,10 @@ import Prelude hiding (exp)
 
 externals :: [External]
 externals =
-         [ external "stash-defn" stashDef
-                ["stash-defn"]
-         , external "stash-apply" (promoteExprR . stashApply)
-                ["stash-apply"]
+         [ external "remember" stashDef
+                ["Remember the current binding, allowing it to be folded/unfolded in the future."]
+         , external "unfold" (promoteExprR . stashApply)
+                ["Unfold a remembered definition."]
          ]
 
 ------------------------------------------------------------------------
