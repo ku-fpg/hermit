@@ -7,11 +7,11 @@ import Data.Function (fix)
 rev []     = []
 rev (x:xs) = rev xs ++ [x]
 
-unwrap :: ([a] -> [a]) -> ([a] -> [a] -> [a])
-unwrap f = repH . f
-
 wrap :: ([a] -> [a] -> [a]) -> ([a] -> [a])
 wrap g = absH . g
+
+unwrap :: ([a] -> [a]) -> ([a] -> [a] -> [a])
+unwrap f = repH . f
 
 {-# RULES "ww" forall f. fix f = wrap (fix (unwrap . f . wrap)) #-}
 

@@ -61,6 +61,9 @@ externals =
                                         .+ Shallow .+ TODO
          , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
                 ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
+         , external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
+                ["Flatten all the top-level binding groups into a single recursive binding group.",
+                 "This can be useful if you intend to appply GHC RULES."]
          ]
 
 ------------------------------------------------------------------------
