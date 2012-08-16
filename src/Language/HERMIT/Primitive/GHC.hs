@@ -7,6 +7,7 @@ import qualified OccurAnal
 import Control.Arrow
 import Control.Monad
 import qualified Data.Map as Map
+import Data.List (nub)
 
 -- import Language.HERMIT.Primitive.Debug
 import Language.HERMIT.Primitive.Navigation
@@ -58,6 +59,8 @@ externals =
          , external "cast-elim" (promoteExprR castElimination)
                 ["cast-elim removes casts"]
                                         .+ Shallow .+ TODO
+         , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
+                ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
          ]
 
 ------------------------------------------------------------------------
@@ -247,6 +250,23 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
                                               ++ [makeRule rule_name v e]
                                      }
          _ -> fail $ "found multiple bindings for " ++ show nm
+
+----------------------------------------------------------------------
+
+flattenModule :: RewriteH ModGuts
+flattenModule = modGutsR mergeBinds
+
+mergeBinds :: RewriteH CoreProgram
+mergeBinds = contextfreeT $ \  binds ->
+             let allbinds = foldr listOfBinds [] binds
+                 nodups = nub $ map fst allbinds
+             in
+               if (length allbinds == length nodups)
+               then return $ [Rec allbinds]
+               else fail "Module top level bindings contain multiple occurances of a name"
+ where listOfBinds cb others = case cb of
+                                 (NonRec b e) -> (b, e) : others
+                                 (Rec bds) -> bds ++ others
 
 ----------------------------------------------------------------------
 
