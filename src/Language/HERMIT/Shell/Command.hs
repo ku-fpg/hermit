@@ -546,7 +546,7 @@ performMetaCommand (LoadFile fileName) = do
                                     modify $ \ st -> st { cl_session = (cl_session st) { cl_loading = load_st } }
                                     throwError err)
                             modify $ \st -> st { cl_session = (cl_session st) { cl_loading = load_st } }
-                            putStrToConsole "[done, loaded N commands]" -- TODO: should this "N" actually be the number of commands loaded?
+                            putStrToConsole $ "[done, loaded " ++ show (numStmtsH stmts) ++  " commands]" -- TODO: This is better than saying "N", but not very robust.
                             showFocus
           Left (err :: IOException) -> throwError ("IO error: " ++ show err)
   where

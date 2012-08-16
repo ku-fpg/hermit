@@ -9,6 +9,7 @@ module Language.HERMIT.Expr
         , unparseExprH
         , unparseStmtH
         , unparseStmtsH
+        , numStmtsH
         ) where
 
 import Control.Applicative ((<$>))
@@ -31,6 +32,19 @@ data StmtH expr
         deriving Show
 
 data Box e = InfixableExpr e | Box e deriving Show
+
+---------------------------------------------
+
+-- TODO: This is a quick hack that's better than just saying "N"; I have no idea how accurate this is.
+
+-- | Count the total number of statements.
+numStmtH :: StmtH expr -> Int
+numStmtH (ExprH _)   = 1
+numStmtH (ScopeH ss) = numStmtsH ss
+
+-- | Count the total number of statements.
+numStmtsH :: [StmtH expr] -> Int
+numStmtsH = sum . map numStmtH
 
 ---------------------------------------------
 
