@@ -81,16 +81,13 @@ substExprR b e =  contextfreeT $ \ exp ->
               sub = if (isTyVar b)
                     then case e of
                            (Type bty) -> Just $ extendTvSubst emptySub b bty
+                           (Var x)    -> Just $ extendTvSubst emptySub b (mkTyVarTy x)
                            _ ->  Nothing
                     else Just $ extendSubst emptySub b e
           in
             case sub of
               Just sub' -> return $ substExpr (text "substR") sub' exp
               Nothing -> fail "substExprR:  Id argument is a TyVar, but the expression is not a Type."
-
-substVarR :: Id -> CoreExpr -> RewriteH CoreExpr
-substVarR v e = whenM (varT (==v)) (return e)
-
 
 
 substTopBindR :: Id -> CoreExpr -> RewriteH CoreProgram
@@ -291,6 +288,22 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
                                               ++ [makeRule rule_name v e]
                                      }
          _ -> fail $ "found multiple bindings for " ++ show nm
+
+----------------------------------------------------------------------
+mergeBinds :: RewriteH CoreProgram
+mergeBinds = contextfreeT $ \  binds ->
+             let allbinds = foldr listOfBinds [] binds
+                 nodups = nub $ map fst allbinds
+             in
+               if (length allbinds == length nodups)
+               then return $ [Rec allbinds]
+               else fail "Module top level bindings contain multiple occurances of a name"
+ where listOfBinds cb others = case cb of
+                                 (NonRec b e) -> (b, e) : others
+                                 (Rec bds) -> bds ++ others
+
+flattenModule :: RewriteH ModGuts
+flattenModule = modGutsR mergeBinds
 
 ----------------------------------------------------------------------
 
