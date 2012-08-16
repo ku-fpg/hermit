@@ -336,7 +336,8 @@ commandLine filesToLoad behavior modGuts = do
     let dict = dictionary $ all_externals shell_externals
     let ws_complete = " ()"
 
-    let startup =
+    let startup = do
+            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = True } }
             sequence_ [ performMetaCommand $ case fileName of
                          "abort"  -> Abort
                          "resume" -> Resume
@@ -344,7 +345,7 @@ commandLine filesToLoad behavior modGuts = do
                       | fileName <- reverse filesToLoad
                       , not (null fileName)
                       ] `ourCatch` \ msg -> putStrToConsole $ "Booting Failure: " ++ msg
-
+            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = False } }
 
     var <- GHC.liftIO $ atomically $ newTVar M.empty
 
