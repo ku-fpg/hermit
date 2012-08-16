@@ -1,0 +1,15 @@
+consider 'fib
+{
+load "WWSplitTactic.hss"
+{ 0 ; 1
+  { 0
+    any-call (unfold 'unwrap)
+    any-call (unfold 'f)
+    bash
+    { consider let ; let-subst }
+    { consider lam ; alpha-lam 'm }
+  }
+}
+innermost dead-code-elimination
+-- any-call (unfold 'wrap)
+}

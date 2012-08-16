@@ -22,6 +22,16 @@ Fibonacci (Tupling)
 * Interesting rewrites: ww-split tactic, case-split(-inline), fold, stash-(fold/defn/apply), let-tuple
 
 
+Fibonacci (Stream Memoisation)
+===================
+
+* Example of Memoisation.
+
+* Completed, though final cleanup hindered by HERMIT bug.
+
+* Interesting rewrites: ww-split tactic
+
+
 Flatten
 =======
 

@@ -1,0 +1,18 @@
+{
+fix-intro
+consider lam
+let-intro 'f
+up
+let-float-arg
+1
+apply-rule ww
+simplify
+{ 1; let-intro 'w }
+let-float-arg
+{ rhs-of 'w
+  unfold 'fix ; alpha-let 'work
+  simplify
+}
+let-subst
+let-float-arg
+}
