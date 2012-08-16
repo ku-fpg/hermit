@@ -9,6 +9,8 @@ module Language.HERMIT.Primitive.Local.Case
        , caseFloatLet
        , caseFloat
        , caseReduce
+       , caseSplit
+       , caseSplitInline
        )
 where
 
@@ -19,12 +21,17 @@ import Data.List
 import Control.Arrow
 import Control.Applicative
 
+import Language.HERMIT.GHC
 import Language.HERMIT.Kure
 import Language.HERMIT.External
+import Language.HERMIT.Monad
 
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
+import Language.HERMIT.Primitive.Inline hiding (externals)
 import Language.HERMIT.Primitive.Subst hiding (externals)
+
+import qualified Language.Haskell.TH as TH
 
 -- NOTE: these are hard to test in small examples, as GHC does them for us, so use with caution
 ------------------------------------------------------------------------------
@@ -57,6 +64,12 @@ externals =
          , external "case-reduce" (promoteExprR caseReduce :: RewriteH Core)
                      [ "case-of-known-constructor"
                      , "case C v1..vn of C w1..wn -> e ==> e[v1/w1..vn/wn]" ] .+ Shallow .+ Eval .+ Bash
+         , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
+                [ "case-split 'x"
+                , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ]
+         , external "case-split-inline" (caseSplitInline :: TH.Name -> RewriteH Core)
+                [ "Like case-split, but additionally inlines the matched constructor "
+                , "applications for all occurances of the named variable." ]
          ]
 
 -- not_defined :: String -> RewriteH CoreExpr
@@ -146,21 +159,6 @@ caseReduce = letTransform >>> tryR (repeatR letSubstR)
                                     []   -> fail "no matching alternative."
                                     _    -> fail "more than one matching alternative."
 
-
--- WARNING: BROKEN!!!!
--- Does not account for type arguments in the scrutinee.
--- Case-of-known-constructor rewrite
--- caseReduce :: RewriteH CoreExpr
--- caseReduce = letTransform >>> tryR (repeatR letSubstR)
---     where letTransform = withPatFailMsg "caseReduce failed, not a Case" $
---                          do Case s _ _ alts <- idR
---                             case isDataCon s of
---                               Nothing -> fail "caseReduce failed, not a DataCon"
---                               Just (dc, args) -> case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
---                                     [(bs,e')] -> return $ nestedLets e' $ zip bs args
---                                     []   -> fail "caseReduce failed, no matching alternative"
---                                     _    -> fail "caseReduce failed, more than one matching alt"
-
 -- | If expression is a constructor application, return the relevant bits.
 isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])
 isDataCon expr = case fn of
@@ -172,4 +170,33 @@ isDataCon expr = case fn of
 -- | We don't want to use the recursive let here, so nest a bunch of non-recursive lets
 nestedLets :: CoreExpr -> [(Id, CoreExpr)] -> CoreExpr
 nestedLets = foldr (\(b,rhs) -> Let $ NonRec b rhs)
+
+-- | Case split a free variable in an expression:
+--
+-- Assume expression e which mentions x :: [a]
+--
+-- e ==> case x of x
+--         [] -> e
+--         (a:b) -> e
+caseSplit :: TH.Name -> RewriteH CoreExpr
+caseSplit nm = do
+    frees <- freeIdsT
+    contextfreeT $ \ e ->
+        case [ i | i <- frees, cmpTHName2Id nm i ] of
+            []    -> fail "caseSplit: provided name is not free"
+            (i:_) -> do
+                let (tycon, tys) = splitTyConApp (idType i)
+                    dcs = tyConDataCons tycon
+                    aNms = map (:[]) $ cycle ['a'..'z']
+                dcsAndVars <- mapM (\dc -> do
+                                        as <- sequence [ newVarH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
+                                        return (dc,as)) dcs
+                return $ Case (Var i) i (exprType e) [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
+
+-- | Like caseSplit, but additionally inlines the constructor applications
+-- for each occurance of the named variable.
+--
+-- > caseSplitInline nm = caseSplit nm >>> anybuR (inlineName nm)
+caseSplitInline :: TH.Name -> RewriteH Core
+caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineName nm)
 

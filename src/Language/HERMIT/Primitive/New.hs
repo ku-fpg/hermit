@@ -61,12 +61,6 @@ externals = map ((.+ Experiment) . (.+ TODO))
          , external "var" (promoteExprT . isVar :: TH.Name -> TranslateH Core ())
                  [ "var '<v> returns successfully for variable v, and fails otherwise.",
                    "Useful in combination with \"when\", as in: when (var v) r" ] .+ Predicate
-         , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
-                [ "case-split 'x"
-                , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ]
-         , external "case-split-inline" (caseSplitInline :: TH.Name -> RewriteH Core)
-                [ "Like case-split, but additionally inlines the matched constructor "
-                , "applications for all occurances of the named variable." ]
          , external "simplify" (simplifyR :: RewriteH Core)
                 [ "innermost (unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ dead-code-elimination)" ]
          , external "let-tuple" (promoteExprR . letTupleR :: TH.Name -> RewriteH Core)
@@ -74,7 +68,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
          ] ++
          [ external "any-call" (withUnfold :: RewriteH Core -> RewriteH Core)
                 [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
-                , "preference is given to applications with applications with more arguments"
+                , "preference is given to applications with more arguments"
                 ] .+ Deep
          ]
 
@@ -251,36 +245,6 @@ fixSpecialization' = do
         let e' = Lam v3 (App (App e f') a)
 
         return $ App (App (Var fx) (Type t')) e'
-
-
--- | Case split a free variable in an expression:
---
--- Assume expression e which mentions x :: [a]
---
--- e ==> case x of x
---         [] -> e
---         (a:b) -> e
-caseSplit :: TH.Name -> RewriteH CoreExpr
-caseSplit nm = do
-    frees <- freeIdsT
-    contextfreeT $ \ e ->
-        case [ i | i <- frees, cmpTHName2Id nm i ] of
-            []    -> fail "caseSplit: provided name is not free"
-            (i:_) -> do
-                let (tycon, tys) = splitTyConApp (idType i)
-                    dcs = tyConDataCons tycon
-                    aNms = map (:[]) $ cycle ['a'..'z']
-                dcsAndVars <- mapM (\dc -> do
-                                        as <- sequence [ newVarH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
-                                        return (dc,as)) dcs
-                return $ Case (Var i) i (exprType e) [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
-
--- | Like caseSplit, but additionally inlines the constructor applications
--- for each occurance of the named variable.
---
--- > caseSplitInline nm = caseSplit nm >>> anybuR (inlineName nm)
-caseSplitInline :: TH.Name -> RewriteH Core
-caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineName nm)
 
 {-
 exprBinder :: TranslateH CoreExpr [(Id,ContextPath)]
