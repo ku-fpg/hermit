@@ -364,7 +364,8 @@ unfold nm = translate $ \ env e0 -> do
 
 -- match in a top-down manner,
 withUnfold :: RewriteH Core -> RewriteH Core
-withUnfold rr = readerT $ \ e -> case e of
+withUnfold rr = prefixFailMsg "any-call failed: " $
+                readerT $ \ e -> case e of
         ExprCore (App {}) -> childR 1 rec >+> (rr <+ childR 0 rec)
         ExprCore (Var {}) -> rr
         _                 -> anyR rec
@@ -385,7 +386,7 @@ unshadow = anytdR (promoteR autoRenameBinder)
 -- | Push a function through a Case or Let expression.
 --   Unsafe if the function is not strict.
 push :: TH.Name -> RewriteH CoreExpr
-push nm = setFailMsg "push failed: " $
+push nm = prefixFailMsg "push failed: " $
      do e <- idR
         case collectArgs e of
           (Var v,args) -> do
@@ -396,4 +397,4 @@ push nm = setFailMsg "push failed: " $
                      Case {} -> caseFloatArg
                      Let {}  -> letFloatArg
                      _       -> fail "argument is not a Case or Let."
-          _ -> fail "no function to match"
+          _ -> fail "no function to match."
