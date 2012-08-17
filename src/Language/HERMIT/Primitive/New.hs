@@ -38,7 +38,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "display the type of this expression"]
          , external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
                 [ "determines if a rewrite could be successfully applied" ]
-         , external "fix-intro" (promoteBindR fixIntro :: RewriteH Core)
+         , external "fix-intro" (promoteDefR fixIntro :: RewriteH Core)
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
          , external "fix-spec" (promoteExprR fixSpecialization :: RewriteH Core)
                 [ "specialize a fix with a given argument"] .+ Shallow .+ TODO
@@ -184,16 +184,16 @@ findIdMG modguts nm =
  --   liftIO $ print ("VAR", GHC.showSDoc . GHC.ppr $ namedFn)
 
 -- |  f = e   ==>   f = fix (\ f -> e)
-fixIntro :: RewriteH CoreBind
+fixIntro :: RewriteH CoreDef
 fixIntro = prefixFailMsg "Fix introduction failed: " $
            withPatFailMsg "not a single recursive binding." $
-           do (c, Rec [(f,e)]) <- exposeT
+           do (c, Def f e) <- exposeT
               constT $ do fixId <- findId c "Data.Function.fix"
                           f' <- cloneIdH id f
                           let coreFix = App (App (Var fixId) (Type (idType f)))
                               emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars e))
                               sub      = extendSubst emptySub f (Var f')
-                          return $ NonRec f (coreFix (Lam f' (substExpr (text "fixIntro") sub e)))
+                          return $ Def f (coreFix (Lam f' (substExpr (text "fixIntro") sub e)))
 
 -- ironically, this is an instance of worker/wrapper itself.
 
