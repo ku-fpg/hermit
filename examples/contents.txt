@@ -27,7 +27,7 @@ Fibonacci (Stream Memoisation)
 
 * Example of Memoisation.
 
-* Completed, though final cleanup hindered by HERMIT bug.
+* Completed.
 
 * Interesting rewrites: ww-split tactic
 

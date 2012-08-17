@@ -3,10 +3,13 @@ flatten-module
 consider 'fib
 {
 load "WWSplitTactic.hss"
-consider 'work ; down ; remember origwork
-down ; eta-expand 'n
+consider 'work
+remember origwork
+down
+eta-expand 'n
 any-call (unfold 'unwrap)
-down ; case-split-inline 'n
+down
+case-split-inline 'n
 { 1 ; any-call (unfold 'f) }
 { 2 ; 0 ; 1 ; any-bu (unfold 'f) }
 simplify

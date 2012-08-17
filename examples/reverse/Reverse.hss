@@ -2,6 +2,8 @@
 -- set-renderer unicode-console
 -- unicode-terminal
 
+flatten-module
+
 -- This is the outer rev, with the big lambda
 consider 'rev
    consider 'rev

@@ -1,4 +1,5 @@
 set-pp-expr-type Show
+flatten-module
 
 -- do the w/w split
 consider 'fib
@@ -8,7 +9,7 @@ load "WWSplitTactic.hss"
 dump "ifl-paper/1-aftersplit.tex" "clean" "latex" 82
 
 -- now ready to start neil's derivation
-consider 'work ; down ; remember origwork
+consider 'work ; remember origwork
 dump "ifl-paper/2-afterstash.tex" "clean" "latex" 82
 
 -- work = unwrap (f (wrap work))

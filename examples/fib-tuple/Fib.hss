@@ -1,9 +1,10 @@
+flatten-module
 consider 'fib
 
 {
 
 load "WWSplitTactic.hss"
-consider 'work ; down ; remember origwork
+consider 'work ; remember origwork
 
 -- work = unwrap (f (wrap work))
 
