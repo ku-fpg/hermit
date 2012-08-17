@@ -1,3 +1,4 @@
+flatten-module
 consider 'fib
 {
 load "WWSplitTactic.hss"

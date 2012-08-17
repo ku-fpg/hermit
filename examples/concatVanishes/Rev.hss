@@ -1,3 +1,4 @@
+flatten-module
 consider 'rev
 { load "ConcatVanishes.hss" }
 

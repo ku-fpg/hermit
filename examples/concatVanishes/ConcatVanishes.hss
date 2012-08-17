@@ -1,5 +1,5 @@
 consider let
-{ down ; fix-intro }
+{ consider def ; fix-intro }
 safe-let-subst
 unfold-rule "ww"
 any-call (unfold '.)
