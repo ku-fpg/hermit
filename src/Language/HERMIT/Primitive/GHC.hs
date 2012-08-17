@@ -115,6 +115,11 @@ letSubstR =  prefixFailMsg "Let substition failed: " $
                                      Let (NonRec b be) e -> apply (substExprR b be) ctx e
                                      _ -> fail "expression is not a non-recursive Let."
 
+-- remove N lets, please
+letSubstNR :: Int -> RewriteH Core
+letSubstNR 0 = idR
+letSubstNR n = childR 1 (letSubstNR (n - 1)) >>> promoteExprR letSubstR
+
 -- This is quite expensive (O(n) for the size of the sub-tree)
 safeLetSubstR :: RewriteH CoreExpr
 safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $

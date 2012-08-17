@@ -42,17 +42,10 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
          , external "fix-spec" (promoteExprR fixSpecialization :: RewriteH Core)
                 [ "specialize a fix with a given argument"] .+ Shallow .+ TODO
--- edk
---         , external "number-binder" (exprNumberBinder :: Int -> RewriteH Core)
---                [ "add a number suffix onto a (lambda) binding" ]
---         , external "auto-number-binder" (autoRenameBinder :: RewriteH Core)
---                [ "automatically add a number suffix onto a (lambda) binding" ]
          , external "cleanup-unfold" (promoteExprR cleanupUnfold :: RewriteH Core)
                 [ "clean up immeduate nested fully-applied lambdas, from the bottom up"]
          , external "unfold" (promoteExprR . unfold :: TH.Name -> RewriteH Core)
                 [ "inline a definition, and apply the arguments; tranditional unfold"]
---         , external "unshadow" (unshadow :: RewriteH Core)
---                [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
          , external "push" (promoteExprR . push :: TH.Name -> RewriteH Core)
                 [ "push a function <f> into argument."
                 , "Unsafe if f is not strict." ] .+ PreCondition
@@ -243,98 +236,6 @@ fixSpecialization' = do
 
         return $ App (App (Var fx) (Type t')) e'
 
-{-
-exprBinder :: TranslateH CoreExpr [(Id,ContextPath)]
-exprBinder = translate $ \ c e -> case e of
-        Lam b _            -> return [(b,hermitBindingPath c)]
-        Let (NonRec b _) _ -> return [(b,hermitBindingPath c)]
-        Let (Rec bds) _    -> return [(b,hermitBindingPath c) | b <- map fst bds ]
-        _                  -> return []
--}
-
-exprNumberBinder :: Int -> RewriteH Core
-exprNumberBinder n = promoteR (exprRenameBinder (++ show n))
-                 >>> childR 0 (promoteR letSubstR)
-
-exprRenameBinder :: (String -> String) -> RewriteH CoreExpr
-exprRenameBinder nameMod =
---            (do observeR "exprRenameBinder" >>> fail "observe") <+
-            (do Lam b e <- idR
-                (b',f) <- constT (renameWithLetH nameMod b)
-                return $ Lam b' (f e))
-         <+ (do Let (NonRec b e0) e1 <- idR
-                (b',f) <- constT (renameWithLetH nameMod b)
---                traceR $ "new name = " ++ show (nameMod $ getOccString b')
-                return $ Let (NonRec b' e0) (f e1))
-
-altRenameBinder :: (String -> String) -> RewriteH CoreAlt
-altRenameBinder nameMod =
-             do (con,bs,e) <- idR
-                (bs',f) <- constT (renameWithLetsH nameMod bs)
-                return (con,bs',f e)
-
--- This gives an new version of an Id, with the same info, and a new textual name.
-renameWithLetH :: (String -> String) -> Id -> HermitM (Id,CoreExpr -> CoreExpr)
-renameWithLetH nameMod b = do
-        b' <- cloneIdH nameMod b
-        return (b', Let (NonRec b (Var b')))
-
-renameWithLetsH :: (String -> String) -> [Id] -> HermitM ([Id],CoreExpr -> CoreExpr)
-renameWithLetsH _       []     = return ([],id)
-renameWithLetsH nameMod (b:bs) = do
-        (b',f)   <- renameWithLetH  nameMod b
-        (bs',fs) <- renameWithLetsH nameMod bs
-        return (b':bs',f . fs)
-
-
--- Here, success is the successful renaming, but if 'id' works, thats okay.
--- AJG: Gut feel, something not quite right here
--- Fails for non-lambdas.
-
-autoRenameBinder :: RewriteH Core
-autoRenameBinder =
-        promoteR exprAutoRenameBinder
-     <+ promoteR altAutoRenameBinder
-
-exprAutoRenameBinder :: RewriteH CoreExpr
-exprAutoRenameBinder =
-    (do -- check if lambda
-        Lam b _ <- idR
-        frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreExpr [Var]
-        bound <- translate $ \ c _ -> return (listBindings c)
-        exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> childR 0 (promoteR letSubstR))
- <+ (do -- check in Let
-        Let (NonRec b _) _ <- idR
-        frees <- freeVarsT :: TranslateH CoreExpr [Var]
-        bound <- translate $ \ c _ -> return (listBindings c)
-        exprRenameBinder (inventNames (filter (/= b) (frees ++ bound))) >>> childR 0 (promoteR letSubstR))
-
-altAutoRenameBinder :: RewriteH CoreAlt
-altAutoRenameBinder = do
-        -- check if alt
-        (_,bs,_) <- idR
-        frees <- childT 0 (promoteT freeVarsT) :: TranslateH CoreAlt [Var]
-        bound <- translate $ \ c _ -> return (listBindings c)
-        altRenameBinder (inventNames (filter (`notElem` bs) (frees ++ bound)))
-                    >>> childR 0 (letSubstNR (length bs))
-
--- remove N lets, please
-letSubstNR :: Int -> RewriteH Core
-letSubstNR 0 = idR
-letSubstNR n = childR 1 (letSubstNR (n - 1)) >>> promoteExprR letSubstR
-
-inventNames :: [Id] -> String -> String
--- inventNames curr old | trace (show ("inventNames",names,old)) False = undefined
---    where
---            names = map getOccString curr
-inventNames curr old = head
-                     [ nm
-                     | nm <- old : [ old ++ show uq | uq <- [0..] :: [Int] ]
-                     , nm `notElem` names
-                     ]
-   where
-           names = map getOccString curr
-
 
 -- | cleanupUnfold cleans a unfold operation
 --  (for example, an inline or rule application)
@@ -368,17 +269,7 @@ withUnfold rr = prefixFailMsg "any-call failed: " $
 
         rec :: RewriteH Core
         rec = withUnfold rr
-{-
-  edk
--- Makes every 'virtual' shadow disappear.
--- O(n^2) right now.
--- Also, only does lambda bound things.
-unshadow :: RewriteH Core
-unshadow = anytdR (promoteR autoRenameBinder)
--}
 
---cleanUnfold :: (LensH Core Core -> RewriteH Core) -> RewriteH Core
---cleanUnfold f =
 
 -- | Push a function through a Case or Let expression.
 --   Unsafe if the function is not strict.
