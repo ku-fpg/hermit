@@ -186,7 +186,6 @@ findIdMG modguts nm =
 -- |  f = e   ==>   f = fix (\ f -> e)
 fixIntro :: RewriteH CoreDef
 fixIntro = prefixFailMsg "Fix introduction failed: " $
-           withPatFailMsg "not a single recursive binding." $
            do (c, Def f e) <- exposeT
               constT $ do fixId <- findId c "Data.Function.fix"
                           f' <- cloneIdH id f
