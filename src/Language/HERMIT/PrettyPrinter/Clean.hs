@@ -185,7 +185,7 @@ corePrettyH opts =
                 | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = go (FunTy ty1 ty2)
                 | GHC.isTupleTyCon tyCon = case map ppCoreType tys of
                                             [] -> RetAtom $ text "()"
-                                            ds -> RetExpr $ ppParens $ foldr1 (\d r -> d <> text "," <+> r) ds
+                                            ds -> RetExpr $ text "(" <> (foldr1 (\d r -> d <> text "," <+> r) ds) <> text ")"
                 | otherwise = RetAtom $ ppName (GHC.getName tyCon) <+> sep (map ppCoreType tys) -- has spaces, but we never want parens
               go (FunTy ty1 ty2) = RetExpr $ atomExpr (go ty1) <+> text "->" <+> ppCoreType ty2
               go (ForAllTy v ty) = RetExpr $ specialSymbol ForallSymbol <+> ppVar v <+> symbol '.' <+> ppCoreType ty
