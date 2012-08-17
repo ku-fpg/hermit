@@ -64,6 +64,10 @@ externals =
          , external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
                 ["Flatten all the top-level binding groups into a single recursive binding group.",
                  "This can be useful if you intend to appply GHC RULES."]
+
+         , external "occur-analysis" (promoteExprR occurAnalyseExprR :: RewriteH Core)
+                ["Performs dependency anlaysis on a CoreExpr.",
+                 "This can be useful to simplify a recursive let to a non-recursive let."] .+ Deep
          ]
 
 ------------------------------------------------------------------------
@@ -97,6 +101,7 @@ substTopBindR b e =  contextfreeT $ \  binds  ->
               sub = if (isTyVar b)
                     then case e of
                            (Type bty) -> Just $ extendTvSubst emptySub b bty
+                           (Var x)    -> Just $ extendTvSubst emptySub b (mkTyVarTy x)
                            _ ->  Nothing
                     else Just $ extendSubst emptySub b e
           in
@@ -130,21 +135,11 @@ safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
           safeSubst _ = False   -- strange case, like a loop breaker
    in case occurAnalyseExpr exp of
       -- By (our) definition, types are a trivial bind
-      Let (NonRec b (Type _)) _
+      Let (NonRec b _) _
          | isTyVar b -> apply letSubstR env exp
-{-
-         | isTyVar b -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-                            sub      = extendTvSubst emptySub b bty
-                         in return $ substExpr (text "letSubstR") sub e
--}
       Let (NonRec b be) _
          | isId b && (safeBind be || safeSubst (occInfo (idInfo b)))
                      -> apply letSubstR env exp
-{-
-                     -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-                            sub      = extendSubst emptySub b be
-                         in return $ substExpr (text "letSubstR") sub e
--}
          | otherwise -> fail "safety critera not met."
       _ -> fail "expression is not a non-recursive Let."
 
@@ -152,7 +147,6 @@ safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
 -- the end of the stack of lets.
 safeLetSubstPlusR :: RewriteH CoreExpr
 safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
-
 
 ------------------------------------------------------------------------
 
@@ -310,6 +304,13 @@ mergeBinds = contextfreeT $ \  binds ->
 
 occurAnalyseExpr :: CoreExpr -> CoreExpr
 occurAnalyseExpr = OccurAnal.occurAnalyseExpr
+
+
+occurAnalyseExprR :: RewriteH CoreExpr
+occurAnalyseExprR = contextfreeT $ \ exp -> return (occurAnalyseExpr exp)
+
+
+
 
 {- Does not work (no export)
 -- Here is a hook into the occur analysis, and a way of looking at the result

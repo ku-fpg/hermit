@@ -10,7 +10,7 @@ import Language.HERMIT.Context
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
-import Language.HERMIT.Primitive.GHC(freeVarsT, substR)
+import Language.HERMIT.Primitive.GHC(freeVarsT, substR)  -- coreExprFreeIds
 
 import Language.HERMIT.Primitive.Common
 
@@ -46,9 +46,59 @@ externals = map (.+ Deep)
          , external "unshadow" (unshadow :: RewriteH Core)
                 [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
 
-         ,  external "merge-binds" (promoteProgramR mergeBinds)
-               [ "renames the bound variables in a top-level binding."]
          ]
+
+
+{-
+substR :: Id -> CoreExpr -> RewriteH Core
+substR v e = promoteExprR (substVarR v e) <+ substNonVarR v e
+
+substVarR :: Id -> CoreExpr -> RewriteH CoreExpr
+substVarR v e = whenM (varT (==v)) (return e)
+
+-- This definition contains themain logic of the substitution algorithm
+substNonVarR :: Id -> CoreExpr -> RewriteH Core
+substNonVarR v e = let fvs = coreExprFreeIds e in
+                   do bs <- arr idsBound
+                      if v `elem` bs
+                        then substWhereBinderOutOfScopeR v e
+                        else let xs = fvs `intersect` bs
+                              in andR (map alphaRenameId xs) >>> anyR (substR v e)
+                                 -- rename any binders that would capture free variables in the expression to
+                                 -- be substituted in, then descend and continue substituting
+  where
+    alphaRenameId :: Id -> RewriteH Core
+    alphaRenameId i =  promoteR (alphaConsNonRec Nothing <+ alphaConsRecId Nothing i)
+                    <+ promoteR (alphaAltId Nothing i)
+                    <+ promoteR (alphaLam Nothing <+ (alphaLetNonRec Nothing <+ alphaLetRecId Nothing i) <+ alphaCaseBinder Nothing)
+
+-- TODO: There is overlap between this and the functions in Common.hs.  Maybe merge?  Maybe not.
+-- | All the identifiers bound /at this level/.
+idsBound :: Core -> [Id]
+idsBound (ModGutsCore _)      = []
+idsBound (BindCore _)         = [] -- too low level, should have been dealt with higher up
+idsBound (DefCore _)          = [] -- too low level, should have been dealt with higher up
+idsBound (AltCore (_,vs,_))   = vs
+idsBound (ProgramCore p)      = case p of
+                                  []    -> []
+                                  (b:_) -> bindings b
+idsBound (ExprCore e)         = case e of
+                                  Lam v _      -> [v]
+                                  Let b _      -> bindings b
+                                  Case _ v _ _ -> [v]  -- alternatives are dealt with lower down
+                                  _            -> []
+
+-- | For situations where we have a node containing a binder /and/ a child that is not in scope of that binder,
+--   this substitutes into that out-of-scope child.
+substWhereBinderOutOfScopeR :: Id -> CoreExpr -> RewriteH Core
+substWhereBinderOutOfScopeR v e =  promoteR (consBindAllR substNonRecR idR)
+                                <+ promoteR (letAllR substNonRecR idR <+ caseAllR (extractR (substR v e)) (const idR))
+  where
+    substNonRecR :: RewriteH CoreBind
+    substNonRecR = nonRecR (extractR (substR v e))
+
+-}
+-----------------------------------------------------------------------
 
 -----------------------------------------------------------------------
 --
@@ -250,11 +300,3 @@ unshadow = anytdR (promoteExprR (alphaLam Nothing <+ alphaCaseBinder Nothing <+ 
 
 wrongFormForAlpha :: String -> String
 wrongFormForAlpha s = "Cannot alpha-rename: " ++ wrongExprForm s
-
------------------------------------------------------------------------
-
-mergeBinds :: RewriteH CoreProgram
-mergeBinds = contextfreeT $ \  binds -> return $ [Rec (foldr listOfBinds [] binds)]
- where listOfBinds cb others = case cb of
-                                 (NonRec b e) -> (b, e) : others
-                                 (Rec bds) -> bds ++ others

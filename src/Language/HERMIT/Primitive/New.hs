@@ -221,13 +221,14 @@ fixSpecialization' = do
 
         let t' = case a of
                    Type t2  -> applyTy t t2
+                   (Var x) | isTyVar x -> applyTy t (mkTyVarTy x)
 --                   Var  a2  -> mkAppTy t (exprType t2)
 --                   mkAppTy t t'
 
 
         -- TODO: t2' isn't used anywhere -- which means that a2 is never used ???
-        let t2' = case a2 of
-                   Type t2  -> applyTy t t2
+--        let t2' = case a2 of
+--                   Type t2  -> applyTy t t2
 --                   Var  a2  -> mkAppTy t (exprType t2)
 --                   mkAppTy t t'
 
