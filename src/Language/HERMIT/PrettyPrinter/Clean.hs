@@ -178,13 +178,17 @@ corePrettyH opts =
                <+ (ppCoreExpr0 >>^ \ e p -> RetExpr (attrP p e))
 
     ppCoreType :: GHC.Type -> DocH
-    ppCoreType (TyVarTy v)   = ppVar v
-    ppCoreType (AppTy t1 t2) = ppParens (ppCoreType t1 <+> ppCoreType t2)
-    ppCoreType (TyConApp tyCon tys)
-        | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = ppCoreType (FunTy ty1 ty2)
-        | otherwise = ppName (GHC.getName tyCon) <+> sep (map ppCoreType tys)
-    ppCoreType (FunTy ty1 ty2) = ppCoreType ty1 <+> text "->" <+> ppCoreType ty2
-    ppCoreType (ForAllTy v ty) = specialSymbol ForallSymbol <+> ppVar v <+> symbol '.' <+> ppCoreType ty
+    ppCoreType = normalExpr . go
+        where go (TyVarTy v)   = RetAtom $ ppVar v
+              go (AppTy t1 t2) = RetExpr $ ppCoreType t1 <+> ppCoreType t2
+              go (TyConApp tyCon tys)
+                | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = go (FunTy ty1 ty2)
+                | GHC.isTupleTyCon tyCon = case map ppCoreType tys of
+                                            [] -> RetAtom $ text "()"
+                                            ds -> RetExpr $ ppParens $ foldr1 (\d r -> d <> text "," <+> r) ds
+                | otherwise = RetAtom $ ppName (GHC.getName tyCon) <+> sep (map ppCoreType tys) -- has spaces, but we never want parens
+              go (FunTy ty1 ty2) = RetExpr $ atomExpr (go ty1) <+> text "->" <+> ppCoreType ty2
+              go (ForAllTy v ty) = RetExpr $ specialSymbol ForallSymbol <+> ppVar v <+> symbol '.' <+> ppCoreType ty
 
     ppCoreExpr0 :: PrettyH GHC.CoreExpr
     ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b _ty alts ->
