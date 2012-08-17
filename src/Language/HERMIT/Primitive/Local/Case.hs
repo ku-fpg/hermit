@@ -29,7 +29,7 @@ import Language.HERMIT.Monad
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Inline hiding (externals)
-import Language.HERMIT.Primitive.Subst hiding (externals)
+import Language.HERMIT.Primitive.AlphaConversion hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 

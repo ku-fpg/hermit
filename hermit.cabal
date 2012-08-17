@@ -61,7 +61,7 @@ Library
        Language.HERMIT.Primitive.Local.Case
        Language.HERMIT.Primitive.Navigation
        Language.HERMIT.Primitive.New
-       Language.HERMIT.Primitive.Subst
+       Language.HERMIT.Primitive.AlphaConversion
        Language.HERMIT.Primitive.Unfold
        Language.HERMIT.Primitive.Utils
 
