@@ -7,4 +7,4 @@ dist/
 BEFORE.HERMIT.*
 AFTER.HERMIT.*
 examples/Haskell2012/paper/
-examples/fib/ifl-paper/
+examples/IFL2012/ifl-paper/
