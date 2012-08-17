@@ -70,7 +70,7 @@ externals =
 
 letSubstR :: RewriteH CoreExpr
 letSubstR =  prefixFailMsg "Let substition failed: " $
-             contextfreeT $ \ exp -> case exp of
+             contextfreeT $ \ exp -> case occurAnalyseExpr exp of
       Let (NonRec b be) e
          | isId b    -> let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars exp))
                             sub      = extendSubst emptySub b be
