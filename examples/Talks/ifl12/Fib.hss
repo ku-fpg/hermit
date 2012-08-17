@@ -1,4 +1,6 @@
 set-pp-expr-type Omit
+flatten-module
+consider 'fib
 {
 load "WWSplitTactic.hss"
 consider 'work ; down ; remember origwork
