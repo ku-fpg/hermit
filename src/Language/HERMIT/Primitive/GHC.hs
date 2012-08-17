@@ -290,22 +290,6 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
          _ -> fail $ "found multiple bindings for " ++ show nm
 
 ----------------------------------------------------------------------
-mergeBinds :: RewriteH CoreProgram
-mergeBinds = contextfreeT $ \  binds ->
-             let allbinds = foldr listOfBinds [] binds
-                 nodups = nub $ map fst allbinds
-             in
-               if (length allbinds == length nodups)
-               then return $ [Rec allbinds]
-               else fail "Module top level bindings contain multiple occurances of a name"
- where listOfBinds cb others = case cb of
-                                 (NonRec b e) -> (b, e) : others
-                                 (Rec bds) -> bds ++ others
-
-flattenModule :: RewriteH ModGuts
-flattenModule = modGutsR mergeBinds
-
-----------------------------------------------------------------------
 
 flattenModule :: RewriteH ModGuts
 flattenModule = modGutsR mergeBinds
