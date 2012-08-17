@@ -344,7 +344,7 @@ commandLine filesToLoad behavior modGuts = do
                          _        -> LoadFile fileName
                       | fileName <- reverse filesToLoad
                       , not (null fileName)
-                      ] `ourCatch` \ msg -> putStrToConsole $ "Booting Failure: " ++ msg
+                      ] `ourCatch` \ msg -> liftIO . putStrLn $ "Booting Failure: " ++ msg
             modify $ \st -> st { cl_session = (cl_session st) { cl_loading = False } }
 
     var <- GHC.liftIO $ atomically $ newTVar M.empty
