@@ -172,13 +172,9 @@ findId c = findIdMG (hermitModGuts c)
 
 findIdMG :: (MonadUnique m, MonadIO m, MonadThings m) => ModGuts -> String -> m Id
 findIdMG modguts nm =
-    case findNameFromTH (mg_rdr_env modguts) $ TH.mkName nm of
+    case filter isValName $ findNameFromTH (mg_rdr_env modguts) $ TH.mkName nm of
         []  -> fail $ "cannot find " ++ nm
         [n] -> lookupId n
-        -- TODO: HACK HACK HACK for getting the (,) constructor
-        -- we get back two results, the tycon (,) and the datacon (,)
-        -- in that order, so we choose the value-level match
-        [_,n] -> lookupId n
         ns  -> fail $ "too many " ++ nm ++ " found:\n" ++ intercalate ", " (map showPpr ns)
 
  --   liftIO $ print ("VAR", GHC.showSDoc . GHC.ppr $ namedFn)
