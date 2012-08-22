@@ -32,6 +32,6 @@ consider 'flatten
   }
 }
 bash
-unshadow
+try unshadow
 one-td (unfold 'absH)
 

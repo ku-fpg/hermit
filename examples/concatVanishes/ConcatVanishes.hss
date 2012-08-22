@@ -11,5 +11,5 @@ any-td (unfold-rule "rep-abs-fusion")
 { consider app ; unfold 'fix ; alpha-let 'work }
 bash
 any-call (unfold 'absH)
-unshadow
+try unshadow
 

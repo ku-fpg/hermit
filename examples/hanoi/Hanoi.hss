@@ -1,3 +1,5 @@
+flatten-module
 -- do the w/w split
 consider 'hanoi
-load "../fib/WWSplitTactic.hss"
+load "../fib-tuple/WWSplitTactic.hss"
+try unshadow

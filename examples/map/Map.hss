@@ -1,7 +1,8 @@
+flatten-module
 consider 'mapPlus1Int
-{ load "../fib-tuple/WWSplitTactic.hss"
+{load "../fib-tuple/WWSplitTactic.hss"
   consider 'work
-  0
+
   remember origwork
   0
   one-td (unfold 'unwrap)
