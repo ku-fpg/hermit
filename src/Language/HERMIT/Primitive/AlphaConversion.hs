@@ -46,6 +46,9 @@ externals = map (.+ Deep)
 
          , external "shadow-query" (promoteExprT shadowedNamesQuery)
                 [ "List variable names shadowed by bindings in this expression." ] .+ Query
+         , external "if-shadow" (promoteExprR ifShadowingR)
+                [ "succeeds ONLY-IF bindings in this expression shadow free variable name(s)." ]
+
          , external "unshadow" unshadow
                 [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
 
@@ -264,7 +267,7 @@ alpha = setFailMsg "Cannot alpha-rename here." $
         <+ promoteProgramR alphaCons
 
 unshadow :: RewriteH Core
-unshadow = anytdR (promoteExprR (tryR (ifShadowingR >>> (alphaLam Nothing <+ alphaCaseBinder Nothing <+ alphaLet))))
+unshadow = anytdR (promoteExprR (ifShadowingR >>> (alphaLam Nothing <+ alphaCase <+ alphaLet)))
 
 -----------------------------------------------------------------------
 
