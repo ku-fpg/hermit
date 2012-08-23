@@ -100,8 +100,8 @@ letPairR nm = do
 letTupleR :: TH.Name -> RewriteH CoreExpr
 letTupleR nm = translate $ \ c e -> do
     let collectLets :: CoreExpr -> ([(Id, CoreExpr)],CoreExpr)
-        collectLets (Let (NonRec x e1) e2) = let (bnds,expr) = collectLets e2
-                                             in ((x,e1):bnds, expr)
+        collectLets (Let (NonRec x e1) e2) = let (bs,expr) = collectLets e2
+                                             in ((x,e1):bs, expr)
         collectLets expr = ([],expr)
 
         (bnds, body) = collectLets e
@@ -128,7 +128,7 @@ letTupleR nm = translate $ \ c e -> do
 
             letId <- newVarH (show nm) (exprType rhs)
             return $ Let (NonRec letId rhs)
-                     $ foldr (\ (i,(v,e)) b -> Let (NonRec v (Case (Var letId) letId (exprType e) [(DataAlt dc, vs, Var $ vs !! i)])) b)
+                     $ foldr (\ (i,(v,oe)) b -> Let (NonRec v (Case (Var letId) letId (exprType oe) [(DataAlt dc, vs, Var $ vs !! i)])) b)
                              body $ zip [0..] bnds
           else fail "cannot tuple: some bindings are used in the rhs of others"
 
@@ -246,7 +246,7 @@ fixSpecialization' :: RewriteH CoreExpr
 fixSpecialization' = do
         -- In normal form now
         App (App (App (Var fx) (Type t))
-                 (Lam _ (Lam v2 (App (App e _) a2)))
+                 (Lam _ (Lam v2 (App (App e _) _a2)))
             )
             a <- idR
 
