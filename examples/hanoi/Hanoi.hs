@@ -5,15 +5,27 @@ import Criterion.Main
 import Control.Monad (forM_)
 
 import Data.Function (fix)
+import GHC.Tuple
 
-type Nat = Int
+data Nat = Z | S Nat
+
+toInt :: Nat -> Int
+toInt Z = 0
+toInt (S m) = 1 + toInt m
+
+fromInt :: Int -> Nat
+fromInt 0 = Z
+fromInt i = S (fromInt (i-1))
+
+instance Show Nat where
+    show = show . toInt
 
 main :: IO ()
 main = do
     forM_ [0..20] $ \i -> do
-        let h = hanoi i A B C
-            h' = hanoi' i A B C
-            h'' = wrap (unwrap hanoi) i A B C
+        let h = hanoi (fromInt i) A B C
+            h' = hanoi' (fromInt i) A B C
+            h'' = wrap (unwrap hanoi) (fromInt i) A B C
         if h == h'
         then do putStrLn $ show i ++ " good."
                 if h == h''
@@ -27,39 +39,41 @@ main = do
 --        [ bench "4" $ whnf hanoi 4
 --        ]
 
-{-# RULES "ww" forall work . fix work = wrap (fix (unwrap . work . wrap)) #-}
-{-# RULES "inline-fix" forall f . fix f = let work = f work in work #-}
+{-# RULES "ww" forall work. fix work = wrap (fix (unwrap . work . wrap)) #-}
+{-# RULES "pc" forall w. wrap (unwrap w) = w #-}
+{-# RULES "++ []" forall l. l ++ [] = l #-}
+{-# RULES "[] ++" forall l. [] ++ l = l #-}
 
 data Peg = A | B | C deriving (Show, Eq)
 type Moves = [(Peg,Peg)]
 
 -- this is a candidate for tupling
 hanoi :: Nat -> Peg -> Peg -> Peg -> Moves
-hanoi 0 _ _ _ = []
-hanoi n a b c = hanoi (n-1) a c b ++ [(a,b)] ++ hanoi (n-1) c b a
+hanoi Z     _ _ _ = []
+hanoi (S n) d b c = hanoi n d c b ++ [(d,b)] ++ hanoi n c b d
 
 -- this is the goal
-hanoi' 0 _ _ _ = []
-hanoi' 1 a b _ = [(a,b)]
-hanoi' n a b c = u ++ [(a,c)] ++ v ++ [(a,b)] ++ w ++ [(c,b)] ++ u
-    where (u,v,w) = worker (n-2) a b c
+hanoi' Z         _ _ _ = []
+hanoi' (S Z)     d b _ = [(d,b)]
+hanoi' (S (S n)) d b c = u ++ [(d,c)] ++ v ++ [(d,b)] ++ w ++ [(c,b)] ++ u
+    where (u,v,w) = worker n d b c
 
           worker :: Nat -> Peg -> Peg -> Peg -> (Moves, Moves, Moves)
-          worker 0 _ _ _ = ([],[],[])
-          worker 1 a b c = ([(a,b)], [(b,c)], [(c,a)])
-          worker n a b c =
-                let (u,v,w) = worker (n-2) a b c
-                in (u ++ [(a,c)] ++ v ++ [(a,b)] ++ w ++ [(c,b)] ++ u
-                   ,v ++ [(b,a)] ++ w ++ [(b,c)] ++ u ++ [(a,c)] ++ v
-                   ,w ++ [(c,b)] ++ u ++ [(c,a)] ++ v ++ [(b,a)] ++ w)
+          worker Z         _ _ _ = ([],[],[])
+          worker (S Z)     d b c = ([(d,b)], [(b,c)], [(c,d)])
+          worker (S (S n)) d b c =
+                let (u,v,w) = worker n d b c
+                in (u ++ [(d,c)] ++ v ++ [(d,b)] ++ w ++ [(c,b)] ++ u
+                   ,v ++ [(b,d)] ++ w ++ [(b,c)] ++ u ++ [(d,c)] ++ v
+                   ,w ++ [(c,b)] ++ u ++ [(c,d)] ++ v ++ [(b,d)] ++ w)
 
 unwrap :: (Nat -> Peg -> Peg -> Peg -> Moves)
        -> (Nat -> Peg -> Peg -> Peg -> (Moves, Moves, Moves))
-unwrap f n a b c = (f n a b c, f n b c a, f n c a b)
+unwrap f n d b c = (f n d b c, f n b c d, f n c d b)
 
 wrap :: (Nat -> Peg -> Peg -> Peg -> (Moves, Moves, Moves))
      -> (Nat -> Peg -> Peg -> Peg -> Moves)
-wrap _ 0 _ _ _ = []
-wrap _ 1 a b _ = [(a,b)]
-wrap f n a b c = let (u,v,w) = f (n-2) a b c
-                 in u ++ [(a,c)] ++ v ++ [(a,b)] ++ w ++ [(c,b)] ++ u
+wrap _ Z         _ _ _ = []
+wrap _ (S Z)     d b _ = [(d,b)]
+wrap f (S (S n)) d b c = let (u,v,w) = f n d b c
+                         in u ++ [(d,c)] ++ v ++ [(d,b)] ++ w ++ [(c,b)] ++ u

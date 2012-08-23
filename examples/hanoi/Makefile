@@ -1,7 +1,13 @@
-HERMIT = perl ../../scripts/hermit.pl
-
 hanoi:
-	- $(HERMIT) Hanoi.hs Hanoi.hss resume
+	- hermit Hanoi.hs Hanoi.hss resume
 
 interactive:
-	- $(HERMIT) Hanoi.hs Hanoi.hss
+	- hermit Hanoi.hs Hanoi.hss
+
+test:
+	- rm Hanoi *.o *.hi
+	- ghc --make Hanoi.hs -O2 -o Hanoi
+	- ./Hanoi
+	- rm Hanoi *.o *.hi
+	- hermit Hanoi.hs Hanoi.hss resume
+	- ./Hanoi

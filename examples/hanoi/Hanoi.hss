@@ -1,5 +1,59 @@
 flatten-module
+
 -- do the w/w split
 consider 'hanoi
-load "../fib-tuple/WWSplitTactic.hss"
-try unshadow
+{ load "../fib-tuple/WWSplitTactic.hss" }
+
+{ consider 'work
+  remember origwork
+
+  any-call (unfold 'unwrap)
+
+  -- establish the zero base case
+  down ; down ; down ; down ; down
+  case-split-inline 'n
+  { 1 ; any-call (unfold 'f) ; simplify }
+
+  -- establish the one base case
+  { 2 ; down ; case-split-inline 'a
+    { 1 ; any-call (unfold 'f) ; simplify
+      any-call (unfold origwork)
+      any-call (unfold-rule pc)
+      any-call (unfold 'f)
+      simplify
+      any-call (unfold-rule "[] ++")
+      any-call (unfold-rule "++ []")
+    }
+    { 2 ; any-call (unfold 'f) ; simplify
+
+      any-call (unfold origwork)
+      any-call (unfold-rule pc)
+      any-call (unfold 'f)
+      simplify
+
+      -- recursion decrements by two, so must do this again
+      any-call (unfold origwork)
+      any-call (unfold-rule pc)
+
+      -- time to let intro
+      -- need a "occurance 'work" like consider
+      { down
+        { 1
+          { 0 ; 1
+            { 0 ; 1 ; let-intro 'u }
+            { 1 ; 1 ; let-intro 'v }
+          }
+          { 1 ; 1 ; 0 ; 1 ; let-intro 'w }
+        }
+        innermost let-float
+        any-call (fold 'u)
+        any-call (fold 'v)
+        any-call (fold 'w)
+        let-tuple 'uvw
+        any-call (fold 'unwrap)
+        any-call (fold origwork)
+      }
+    }
+  }
+}
+innermost dead-code-elimination
