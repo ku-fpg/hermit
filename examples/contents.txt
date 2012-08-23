@@ -19,7 +19,7 @@ Fibonacci (Tupling)
 
 * Completed and published
 
-* Interesting rewrites: ww-split tactic, case-split(-inline), fold, remember (and fold/unfold rememebered defns), let-tuple
+* Interesting rewrites: ww-split tactic, case-split(-inline), fold, remember (and fold/unfold remembered defns), let-tuple
 
 
 Fibonacci (Stream Memoisation)
@@ -47,8 +47,9 @@ Hanoi
 
 * Another tupling transformation
 
-* Initial and target Haskell implementation given. Derivation not started.
+* Completed.
 
+* Interesting rewrites: ww-split tactic, case-split(-inline), fold, remember (and fold/unfold remembered defns), let-tuple
 
 Map
 ===
