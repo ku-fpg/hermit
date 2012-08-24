@@ -16,21 +16,50 @@ Stability:           pre-alpha
 build-type:          Simple
 Cabal-Version:       >= 1.10
 
+extra-source-files:
+    examples/concatVanishes/ConcatVanishes.hss
+    examples/concatVanishes/Flatten.hs
+    examples/concatVanishes/Flatten.hss
+    examples/concatVanishes/HList.hs
+    examples/concatVanishes/Makefile
+    examples/concatVanishes/QSort.hs
+    examples/concatVanishes/QSort.hss
+    examples/concatVanishes/Rev.hs
+    examples/concatVanishes/Rev.hss
+    examples/contents.txt
+    examples/fib-stream/Fib.hs
+    examples/fib-stream/Fib.hss
+    examples/fib-stream/Makefile
+    examples/fib-stream/Nat.hs
+    examples/fib-stream/Stream.hs
+    examples/fib-stream/WWSplitTactic.hss
+    examples/fib-tuple/Fib.hs
+    examples/fib-tuple/Fib.hss
+    examples/fib-tuple/Makefile
+    examples/fib-tuple/WWSplitTactic.hss
+    examples/fib-tuple/blog.txt
+    examples/hanoi/Hanoi.hs
+    examples/hanoi/Hanoi.hss
+    examples/hanoi/Makefile
+    examples/map/Map.hs
+    examples/map/Map.hss
+    examples/map/Makefile
+
 Library
   ghc-options: -Wall -fno-warn-orphans
   Build-Depends: base >= 4 && < 5,
-                 aeson,
+                 aeson >= 0.6.0.0,
                  ansi-terminal >= 0.5.5,
-                 containers,
+                 containers >= 0.4.2.1,
                  data-default >= 0.4,
                  ghc >= 7.4,
                  haskeline >= 0.6.4.7 && < 0.7,
                  kure >= 2.2.5,
                  marked-pretty >= 0.1,
-                 mtl,
-                 stm,
-                 template-haskell,
-                 text
+                 mtl >= 2.0.1.0,
+                 stm >= 2.2.0.1,
+                 template-haskell >= 2.7.0.0,
+                 text >= 0.11.1.13
 
   default-language: Haskell2010
 
