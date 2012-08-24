@@ -267,7 +267,8 @@ alpha = setFailMsg "Cannot alpha-rename here." $
         <+ promoteProgramR alphaCons
 
 unshadow :: RewriteH Core
-unshadow = anytdR (promoteExprR (ifShadowingR >>> (alphaLam Nothing <+ alphaCase <+ alphaLet)))
+unshadow = setFailMsg "No shadows to eliminate." $
+           anytdR (promoteExprR (ifShadowingR >>> (alphaLam Nothing <+ alphaCase <+ alphaLet)))
 
 -----------------------------------------------------------------------
 
