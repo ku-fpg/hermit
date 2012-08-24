@@ -44,8 +44,6 @@ inlineCaseBinder = configurableInline False True
 -- | The implementation of inline, an important transformation.
 -- This *only* works on a Var of the given name. It can trivially
 -- be prompted to more general cases.
--- TODO: check the scoping for the inline operation; we can mess things up here.
--- Has this TODO been dealt with already?
 configurableInline :: Bool -- ^ Inline the scrutinee instead of the patten match (for case binders).
                    -> Bool -- ^ Only inline if this variable is a case binder.
                    -> RewriteH CoreExpr

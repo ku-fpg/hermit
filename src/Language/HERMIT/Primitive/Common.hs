@@ -2,7 +2,15 @@
 
 -- | Note: this module should NOT export externals. It is for common
 --   transformations needed by the other primitive modules.
-module Language.HERMIT.Primitive.Common where
+module Language.HERMIT.Primitive.Common
+    ( altFreeVarsT
+    , bindings
+    , bindingVarsT
+    , caseAltVarsT
+    , caseBinderVarT
+    , letVarsT
+    , wrongExprForm
+    ) where
 
 import GhcPlugins
 
