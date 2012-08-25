@@ -13,8 +13,6 @@ import Data.Dynamic
 import Data.List
 import Data.Map (Map, fromList, toList)
 
-import GhcPlugins
-
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 
@@ -126,28 +124,6 @@ layoutTxt :: Int -> [String] -> [String]
 layoutTxt n (w1:w2:ws) | length w1 + length w2 >= n = w1 : layoutTxt n (w2:ws)
                        | otherwise = layoutTxt n ((w1 ++ " " ++ w2) : ws)
 layoutTxt _ other = other
-
--- (This isn't used anywhere currently.)
-help :: [External] -> Maybe String -> Maybe String -> String
--- 'help ls' case
-help externals Nothing (Just "ls") = help externals (Just "ls") Nothing
--- 'help' or 'help <search string>' case
-help externals Nothing m = unlines $ make_help $ maybe externals pathPrefix m
-    where pathPrefix p = filter (isInfixOf p . externName) externals
--- 'help ls <path>' case
-help externals (Just "ls") m = unlines $ map toLine groups
-    where fixHyphen p | last p == '-' = p
-                      | otherwise     = p ++ "-"
-          optParens s | null s = ""
-                      | otherwise = "  (" ++ s ++ ")"
-          prefix = maybe "" fixHyphen m
-          groups = groupBy ((==) `on` fst)
-                 $ sortBy (compare `on` fst)
-                   [ (fst $ span (/='-') $ drop (length prefix) n, n)
-                   | n <- map externName externals, prefix `isPrefixOf` n ]
-          toLine [] = ""
-          toLine ((d,cmd):r) = d ++ optParens (intercalate ", " [ cmd' | cmd' <- cmd : map snd r, cmd' /= d ])
-help _ _ _ = error "bad help arguments"
 
 --------------------------------------------------------------------------
 
