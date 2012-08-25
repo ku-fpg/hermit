@@ -1,5 +1,5 @@
 Name:                hermit
-Version:             0.1.1.0
+Version:             0.1.2.0
 Synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
 Description:
   HERMIT uses Haskell to express semi-formal models,
