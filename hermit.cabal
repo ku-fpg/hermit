@@ -1,7 +1,7 @@
 Name:                hermit
 Version:             0.1.1.0
 Synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
-Description:         
+Description:
   HERMIT uses Haskell to express semi-formal models,
   efficient implementations, and provide a bridging DSL
   to describe via stepwise refinement the connection between
@@ -46,7 +46,7 @@ Description:
    Loading package hermit-0.1.1.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    Linking Reverse ...
-   $ ./Reverse 
+   $ ./Reverse
    ....
   @
   .
@@ -67,7 +67,7 @@ Description:
    \ \ wrap ∷ ∀ a . ([] a -> H a) -> [] a -> [] a
    \ \ main ∷ IO ()
    \ \ main ∷ IO ()
-   hermit\<0\> 
+   hermit\<0\>
    ...
   @
   .
@@ -117,6 +117,10 @@ extra-source-files:
     examples/map/Map.hs
     examples/map/Map.hss
     examples/map/Makefile
+    examples/reverse/HList.hs
+    examples/reverse/Makefile
+    examples/reverse/Reverse.hs
+    examples/reverse/Reverse.hss
 
 Library
   ghc-options: -Wall -fno-warn-orphans
