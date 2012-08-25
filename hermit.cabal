@@ -83,7 +83,7 @@ Description:
 Category:            Language, Formal Methods, Optimization, Transformation, Refactoring, Reflection
 License:             BSD3
 License-file:        LICENSE
-Author:              Andy Gill
+Author:              Andrew Farmer, Andy Gill, Ed Komp, Neil Sculthorpe
 Maintainer:          Andy Gill <andygill@ku.edu>
 Stability:           pre-alpha
 build-type:          Simple
