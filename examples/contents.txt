@@ -12,6 +12,14 @@ Concatenate Vanishes
 * Notes: unsafe uses of RULES with pre-conditions.
 
 
+Evaluation
+==========
+
+* Evaluation of Hutton's Razor with exceptions.
+
+* In progress (Neil).
+
+
 Fibonacci (Tupling)
 ===================
 
