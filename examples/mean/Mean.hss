@@ -1,0 +1,7 @@
+consider 'mean
+{ 0 ; 0
+  { 1 ; let-intro 'l }
+  { 0 ; 1 ; let-intro 's }
+  innermost let-float
+  -- let-tuple 'sl
+}

@@ -115,6 +115,14 @@ Last
 * Completed.
 
 
+Mean
+====
+
+* A non-WW tupling example (maybe it can be cast as WW, I'm not sure).
+
+* In progress (stuck because HERMIT crashes).
+
+
 Nub
 ===
 
