@@ -17,7 +17,9 @@ Evaluation
 
 * Evaluation of Hutton's Razor with exceptions.
 
-* In progress (Neil).
+* Convert to CPS to avoid repeated pattern matching.
+
+* In progress - stuck because "fold" won't fire.
 
 
 Fibonacci (Tupling)

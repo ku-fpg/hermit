@@ -18,7 +18,15 @@ eval (Add x y)   = case eval x of
                                     Nothing -> Nothing
                                     Just n  -> Just (m + n)
 
-{-# NOTRULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
+unwrap :: (Expr -> Mint) -> Expr -> (Int -> Mint) -> Mint -> Mint
+unwrap g e s f = case g e of
+                   Nothing -> f
+                   Just n  -> s n
+
+wrap :: (Expr -> (Int -> Mint) -> Mint -> Mint) -> Expr -> Mint
+wrap h e = h e Just Nothing
+
+{-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
 
 main :: IO ()
 main = print (eval $ Val 5)
