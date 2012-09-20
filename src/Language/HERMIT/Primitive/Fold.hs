@@ -75,7 +75,7 @@ fold i lam exp = do
         checkEqual :: Maybe CoreExpr -> Maybe CoreExpr -> Maybe CoreExpr
         checkEqual m1 m2 = ifM (exprEqual <$> m1 <*> m2) m1 Nothing
 
-    al <- foldMatch vs body exp
+    al <- foldMatch vs [] body exp
 
     let m = Map.fromListWith checkEqual [(k,Just v) | (k,v) <- al ]
 
@@ -88,46 +88,59 @@ foldArgs = go []
     where go vs (Lam v e) = go (v:vs) e
           go vs e         = (reverse vs, e)
 
+-- Note: Id in the concrete instance is first
+-- (not the Id found in the definition we are trying to fold).
+addAlpha :: Id -> Id -> [(Id,Id)] -> [(Id,Id)]
+addAlpha rId lId alphas | rId == lId = alphas
+                        | otherwise  = (rId,lId) : alphas
+
 -- Note: return list can have duplicate keys, caller is responsible
 -- for checking that dupes refer to same expression
 foldMatch :: [Var]          -- ^ vars that can unify with anything
+          -> [(Id,Id)]      -- ^ alpha equivalences, wherever there is binding
+                            --   note: we depend on behavior of lookup here, so new entries
+                            --         should always be added to the front of the list so
+                            --         we don't have to explicity remove them when shadowing occurs
           -> CoreExpr       -- ^ pattern we are matching on
           -> CoreExpr       -- ^ expression we are checking
           -> Maybe [(Var,CoreExpr)] -- ^ mapping of vars to expressions, or failure
-foldMatch vs (Var i) e | i `elem` vs = return [(i,e)]
-                       | otherwise   = case e of
-                                         Var i' | i == i' -> return []
-                                         _                -> Nothing
-foldMatch _  (Lit l) (Lit l') | l == l' = return []
-foldMatch vs (App e a) (App e' a') = do
-    x <- foldMatch vs e e'
-    y <- foldMatch vs a a'
+-- foldMatch vs as e e' | trace ("foldMatch: " ++ showPpr vs ++ " Alphas: " ++ showPpr as ++ "e:\n" ++ showPpr e ++ "\ne':\n" ++ showPpr e') False = undefined
+foldMatch vs as (Var i) e | i `elem` vs = return [(i,e)]
+                          | otherwise   = case e of
+                                            Var i' | maybe False (const True) (lookup i' as) -> return [(i,e)]
+                                                   | i == i' -> return []
+                                            _                -> Nothing
+foldMatch _  _ (Lit l) (Lit l') | l == l' = return []
+foldMatch vs as (App e a) (App e' a') = do
+    x <- foldMatch vs as e e'
+    y <- foldMatch vs as a a'
     return (x ++ y)
-foldMatch vs (Lam v e) (Lam v' e') | v == v' = foldMatch (filter (==v) vs) e e'
-foldMatch vs (Let (NonRec v rhs) e) (Let (NonRec v' rhs') e') | v == v' = do
-    x <- foldMatch vs rhs rhs'
-    y <- foldMatch (filter (==v) vs) e e'
+foldMatch vs as (Lam v e) (Lam v' e') = foldMatch (filter (==v) vs) (addAlpha v' v as) e e'
+foldMatch vs as (Let (NonRec v rhs) e) (Let (NonRec v' rhs') e') = do
+    x <- foldMatch vs as rhs rhs'
+    y <- foldMatch (filter (==v) vs) (addAlpha v' v as) e e'
     return (x ++ y)
-foldMatch vs (Let (Rec bnds) e) (Let (Rec bnds') e') | length bnds == length bnds' = do
+-- TODO: this depends on bindings being in the same order
+foldMatch vs as (Let (Rec bnds) e) (Let (Rec bnds') e') | length bnds == length bnds' = do
     let vs' = filter (`elem` map fst bnds) vs
-        bmatch (v,rhs) (v',rhs') | v == v' = foldMatch vs' rhs rhs'
-        bmatch _ _ = Nothing
+        as' = [ (v',v) | ((v,_),(v',_)) <- zip bnds bnds' ] ++ as
+        bmatch (_,rhs) (_,rhs') = foldMatch vs' as' rhs rhs'
     x <- zipWithM bmatch bnds bnds'
-    y <- foldMatch vs' e e'
+    y <- foldMatch vs' as' e e'
     return (concat x ++ y)
-foldMatch vs (Tick t e) (Tick t' e') | t == t' = foldMatch vs e e'
+foldMatch vs as (Tick t e) (Tick t' e') | t == t' = foldMatch vs as e e'
 -- TODO: showPpr hack in the rest of these!
--- TODO: we don't care if b == b' if they are not used anywhere
-foldMatch vs (Case s b ty alts) (Case s' b' ty' alts')
-  | (b == b') && (showPpr ty == showPpr ty') && (length alts == length alts') = do
-    x <- foldMatch vs s s'
-    let vs' = filter (==b) vs
-        altMatch (ac, is, e) (ac', is', e') | (ac == ac') && (is == is') =
-            foldMatch (filter (`elem` is) vs') e e'
+foldMatch vs as (Case s b ty alts) (Case s' b' ty' alts')
+  | (showPpr ty == showPpr ty') && (length alts == length alts') = do
+    let as' = addAlpha b' b as
+    x <- foldMatch vs as' s s'
+    let vs' = filter (/=b) vs
+        altMatch (ac, is, e) (ac', is', e') | ac == ac' =
+            foldMatch (filter (`notElem` is) vs') (zip is' is ++ as') e e'
         altMatch _ _ = Nothing
     y <- zipWithM altMatch alts alts'
     return (x ++ concat y)
-foldMatch vs (Cast e c) (Cast e' c') | showPpr c == showPpr c' = foldMatch vs e e'
-foldMatch _ (Type t) (Type t') | showPpr t == showPpr t' = return []
-foldMatch _ (Coercion c) (Coercion c') | showPpr c == showPpr c' = return []
-foldMatch _ _ _ = Nothing
+foldMatch vs as (Cast e c)   (Cast e' c')  | showPpr c == showPpr c' = foldMatch vs as e e'
+foldMatch _ _   (Type t)     (Type t')     | showPpr t == showPpr t' = return []
+foldMatch _ _   (Coercion c) (Coercion c') | showPpr c == showPpr c' = return []
+foldMatch _ _ _ _ = Nothing
