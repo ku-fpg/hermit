@@ -107,7 +107,7 @@ foldMatch :: [Var]          -- ^ vars that can unify with anything
 -- foldMatch vs as e e' | trace ("foldMatch: " ++ showPpr vs ++ " Alphas: " ++ showPpr as ++ "e:\n" ++ showPpr e ++ "\ne':\n" ++ showPpr e') False = undefined
 foldMatch vs as (Var i) e | i `elem` vs = return [(i,e)]
                           | otherwise   = case e of
-                                            Var i' | maybe False (const True) (lookup i' as) -> return [(i,e)]
+                                            Var i' | maybe False (==i) (lookup i' as) -> return [(i,e)]
                                                    | i == i' -> return []
                                             _                -> Nothing
 foldMatch _  _ (Lit l) (Lit l') | l == l' = return []
