@@ -4,6 +4,9 @@
 module Language.HERMIT.Primitive.New where
 
 import GhcPlugins as GHC hiding (varName)
+import TcSplice (lookupThName_maybe)
+-- GHC 7.6 only! import TcRnMonad (initTcForLookup)
+
 --import Convert (thRdrNameGuesses)
 -- import OccName(varName)
 
@@ -198,6 +201,16 @@ testQuery r = f <$> testM r
   where
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."
+
+{- this will work in 7.6!
+findId' :: String -> m Id
+findId' = thNameToGhcId . mkName
+
+thNameToGhcId nm = do
+    hsc_env <- getHscEnv
+    mnm <- liftIO $ initTcForLookup hsc_env $ lookupThName_maybe nm
+    maybe (fail "cannot find " ++ show nm) lookupId mnm
+-}
 
 findId :: (MonadUnique m, MonadIO m, MonadThings m) => Context -> String -> m Id
 findId c = findIdMG (hermitModGuts c)

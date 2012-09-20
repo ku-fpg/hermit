@@ -1,6 +1,7 @@
 import Prelude hiding (sum, length, foldr)
 
 -- so we can let-tuple
+import Data.Tuple
 import GHC.Tuple
 
 {-# NOINLINE mean #-}
