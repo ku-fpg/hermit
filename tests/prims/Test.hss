@@ -1,3 +1,4 @@
+flatten-module
 -- Use an ASCII render (so we can diff)
 set-renderer ascii
 -- set-pretty-depth 0
@@ -8,7 +9,7 @@ set-renderer ascii
 }
 compare-values 'beta_reduce_start 'beta_reduce_end
 
--- Tests: case-reduce 
+-- Tests: case-reduce
 { rhs-of 'case_reduce_start
   let-subst
   case-reduce
@@ -27,3 +28,9 @@ compare-values 'new_rule_start 'new_rule_end
   any-bu (fold 'double)
 }
 compare-values 'fold_start 'fold_end
+
+-- Tests: ticks in names
+{ rhs-of 'ones'_start
+  any-bu (inline 'ones')
+}
+compare-values 'ones'_start 'ones'_end
