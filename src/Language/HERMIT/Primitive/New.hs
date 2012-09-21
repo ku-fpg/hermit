@@ -46,7 +46,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
          , external "fix-intro" (promoteDefR fixIntro :: RewriteH Core)
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
          , external "fix-spec" (promoteExprR fixSpecialization :: RewriteH Core)
-                [ "specialize a fix with a given argument"] .+ Shallow .+ TODO
+                [ "specialize a fix with a given argument"] .+ Shallow
          , external "cleanup-unfold" (promoteExprR cleanupUnfold :: RewriteH Core)
                 [ "clean up immeduate nested fully-applied lambdas, from the bottom up"]
          , external "unfold" (promoteExprR . unfold :: TH.Name -> RewriteH Core)
@@ -64,11 +64,14 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "innermost (unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ dead-code-elimination)" ]
          , external "let-tuple" (promoteExprR . letTupleR :: TH.Name -> RewriteH Core)
                 [ "let x = e1 in (let y = e2 in e) ==> let t = (e1,e2) in (let x = fst t in (let y = snd t in e))" ]
-         ] ++
-         [ external "any-call" (withUnfold :: RewriteH Core -> RewriteH Core)
+         , external "any-call" (withUnfold :: RewriteH Core -> RewriteH Core)
                 [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
                 , "preference is given to applications with more arguments"
                 ] .+ Deep
+         , external "abstract" (promoteExprR . abstract :: TH.Name -> RewriteH Core)
+                [ "Abstract over a variable using a lambda.",
+                  "e  ==>  (\\ x -> e) x"
+                ] .+ Shallow .+ Introduce .+ Context
          ]
 
 
@@ -331,9 +334,20 @@ push nm = prefixFailMsg "push failed: " $
           (Var v,args) -> do
                   guardMsg (nm `cmpTHName2Id` v) $ "could not find name " ++ show nm
                   guardMsg (not $ null args) $ "no argument for " ++ show nm
-                  guardMsg (all isTypeArg (init args)) $ "initial arguments are not type arguments for " ++ show nm
+                  guardMsg (all isTypeArg $ init args) $ "initial arguments are not type arguments for " ++ show nm
                   case last args of
                      Case {} -> caseFloatArg
                      Let {}  -> letFloatArg
                      _       -> fail "argument is not a Case or Let."
           _ -> fail "no function to match."
+
+-- | Abstract over a variable using a lambda.
+--   e  ==>  (\ x. e) x
+abstract :: TH.Name -> RewriteH CoreExpr
+abstract nm = prefixFailMsg "abstraction failed: " $
+    do (c,e) <- exposeT
+       let name = TH.nameBase nm
+       case filter (cmpTHName2Id nm) (listBindings c) of
+         []         -> fail $ name ++ " is not in scope."
+         [v]        -> return (App (Lam v e) (Var v)) -- There might be issues if "v" is a type variable, I'm not sure.
+         _ : _ : _  -> fail $ "multiple variables named " ++ name ++ " in scope."

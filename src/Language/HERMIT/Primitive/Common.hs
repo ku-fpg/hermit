@@ -61,7 +61,8 @@ bindingVarsT = translate $ \ c core -> case core of
 -- This implementation fails for any expression that is not a Let.
 -- This specific argument matching is required where it is used in Local/Let.hs and Local/Case.hs
 letVarsT :: TranslateH CoreExpr [Var]
-letVarsT = do Let bs _ <- idR
+letVarsT = setFailMsg "Not a Let expression." $
+           do Let bs _ <- idR
               return (bindings bs)
 
 -- | List of the list of Ids bound by each case alternative
