@@ -104,7 +104,6 @@ foldMatch :: [Var]          -- ^ vars that can unify with anything
           -> CoreExpr       -- ^ pattern we are matching on
           -> CoreExpr       -- ^ expression we are checking
           -> Maybe [(Var,CoreExpr)] -- ^ mapping of vars to expressions, or failure
--- foldMatch vs as e e' | trace ("foldMatch: " ++ showPpr vs ++ " Alphas: " ++ showPpr as ++ "e:\n" ++ showPpr e ++ "\ne':\n" ++ showPpr e') False = undefined
 foldMatch vs as (Var i) e | i `elem` vs = return [(i,e)]
                           | otherwise   = case e of
                                             Var i' | maybe False (==i) (lookup i' as) -> return [(i,e)]
@@ -129,9 +128,8 @@ foldMatch vs as (Let (Rec bnds) e) (Let (Rec bnds') e') | length bnds == length 
     y <- foldMatch vs' as' e e'
     return (concat x ++ y)
 foldMatch vs as (Tick t e) (Tick t' e') | t == t' = foldMatch vs as e e'
--- TODO: showPpr hack in the rest of these!
 foldMatch vs as (Case s b ty alts) (Case s' b' ty' alts')
-  | (showPpr ty == showPpr ty') && (length alts == length alts') = do
+  | (eqType ty ty') && (length alts == length alts') = do
     let as' = addAlpha b' b as
     x <- foldMatch vs as' s s'
     let vs' = filter (/=b) vs
@@ -140,7 +138,7 @@ foldMatch vs as (Case s b ty alts) (Case s' b' ty' alts')
         altMatch _ _ = Nothing
     y <- zipWithM altMatch alts alts'
     return (x ++ concat y)
-foldMatch vs as (Cast e c)   (Cast e' c')  | showPpr c == showPpr c' = foldMatch vs as e e'
-foldMatch _ _   (Type t)     (Type t')     | showPpr t == showPpr t' = return []
-foldMatch _ _   (Coercion c) (Coercion c') | showPpr c == showPpr c' = return []
+foldMatch vs as (Cast e c)   (Cast e' c')  | coreEqCoercion c c' = foldMatch vs as e e'
+foldMatch _ _   (Type t)     (Type t')     | eqType t t' = return []
+foldMatch _ _   (Coercion c) (Coercion c') | coreEqCoercion c c' = return []
 foldMatch _ _ _ _ = Nothing
