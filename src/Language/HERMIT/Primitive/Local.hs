@@ -98,17 +98,19 @@ betaExpand = setFailMsg ("Beta expansion failed: " ++ wrongExprForm "Let (NonRec
 ------------------------------------------------------------------------------
 
 etaReduce :: RewriteH CoreExpr
-etaReduce = prefixFailMsg "Eta reduction failed: " $
-            withPatFailMsg (wrongExprForm "Lam v1 (App f (Var v2))") $
-   (do Lam v1 (App f (Var v2)) <- idR
-       guardMsg (v1 == v2) "the expression has the right form, but the variables are not equal."
-       guardMsg (v1 `notElem` coreExprFreeIds f) $ showSDoc (ppr v1) ++ " is free in the function being applied."
-       return f) <+
-   (do Lam v1 (App f (Type ty)) <- idR
-       Just v2 <- return (getTyVar_maybe ty)
-       guardMsg (v1 == v2) "type variables are not equal."
-       guardMsg (v1 `notElem` coreExprFreeVars f) $ showSDoc (ppr v1) ++ " is free in the function being applied."
-       return f)
+etaReduce = do
+    dynFlags <- constT getDynFlags
+    prefixFailMsg "Eta reduction failed: " $
+      withPatFailMsg (wrongExprForm "Lam v1 (App f (Var v2))") $
+       (do Lam v1 (App f (Var v2)) <- idR
+           guardMsg (v1 == v2) "the expression has the right form, but the variables are not equal."
+           guardMsg (v1 `notElem` coreExprFreeIds f) $ showPpr dynFlags v1 ++ " is free in the function being applied."
+           return f) <+
+       (do Lam v1 (App f (Type ty)) <- idR
+           Just v2 <- return (getTyVar_maybe ty)
+           guardMsg (v1 == v2) "type variables are not equal."
+           guardMsg (v1 `notElem` coreExprFreeVars f) $ showPpr dynFlags v1 ++ " is free in the function being applied."
+           return f)
 
 etaExpand :: TH.Name -> RewriteH CoreExpr
 etaExpand nm = prefixFailMsg "Eta expansion failed: " $

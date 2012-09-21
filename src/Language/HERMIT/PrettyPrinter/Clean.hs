@@ -66,161 +66,163 @@ typeBindSymbol :: DocH
 typeBindSymbol = markColor TypeColor (specialFont $ char $ renderSpecial TypeBindSymbol)
 
 corePrettyH :: PrettyOptions -> PrettyH Core
-corePrettyH opts =
-       promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
-    <+ promoteT (ppProgram  :: PrettyH GHC.CoreProgram)
-    <+ promoteT (ppCoreBind :: PrettyH GHC.CoreBind)
-    <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
-    <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
-    <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
-  where
-    hideNotes = True
+corePrettyH opts = do
+    dynFlags <- constT GHC.getDynFlags
 
-    ppVar :: GHC.Var -> DocH
-    ppVar = ppName . GHC.varName
+    let hideNotes = True
 
-    ppName :: GHC.Name -> DocH
-    ppName nm
-            | isInfix name = ppParens $ varColor $ text name
-            | otherwise    = varColor $ text name
-      where name = GHC.occNameString $ GHC.nameOccName $ nm
-            isInfix = all (\ n -> n `elem` "!@#$%^&*-._+=:?/\\<>'")
+        ppVar :: GHC.Var -> DocH
+        ppVar = ppName . GHC.varName
+
+        ppName :: GHC.Name -> DocH
+        ppName nm
+                | isInfix name = ppParens $ varColor $ text name
+                | otherwise    = varColor $ text name
+          where name = GHC.occNameString $ GHC.nameOccName $ nm
+                isInfix = all (\ n -> n `elem` "!@#$%^&*-._+=:?/\\<>'")
 
 
-    -- binders are vars that is bound by lambda or case, etc.
-    ppBinder :: GHC.Var -> Maybe DocH
-    ppBinder var = case po_exprTypes opts of
-                    Abstract | GHC.isTyVar var -> Just $ typeBindSymbol
-                    Omit     | GHC.isTyVar var -> Nothing
-                    _                          -> Just $ ppVar var
+        -- binders are vars that is bound by lambda or case, etc.
+        ppBinder :: GHC.Var -> Maybe DocH
+        ppBinder var = case po_exprTypes opts of
+                        Abstract | GHC.isTyVar var -> Just $ typeBindSymbol
+                        Omit     | GHC.isTyVar var -> Nothing
+                        _                          -> Just $ ppVar var
 
-    ppIdBinder :: GHC.Id -> DocH
-    ppIdBinder var = ppVar var
+        ppIdBinder :: GHC.Id -> DocH
+        ppIdBinder var = ppVar var
 
-    -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
-    -- that we are eliding infomation here.
-    ppSDoc :: (GHC.Outputable a) => a -> MDoc b
-    ppSDoc = toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showSDoc . GHC.ppr
-        where toDoc s | any isSpace s = parens (text s)
-                      | otherwise     = text s
+        -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
+        -- that we are eliding infomation here.
+        ppSDoc :: (GHC.Outputable a) => a -> MDoc b
+        ppSDoc = toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showSDoc dynFlags . GHC.ppr
+            where toDoc s | any isSpace s = parens (text s)
+                          | otherwise     = text s
 
-    ppModGuts :: PrettyH GHC.ModGuts
-    ppModGuts =   arr $ \ m -> hang (keyword "module" <+> ppSDoc (GHC.mg_module m) <+> keyword "where") 2
-                               (vcat [ (ppIdBinder v <+> specialSymbol TypeOfSymbol <+> ppCoreType (GHC.idType v))
-                                     | bnd <- GHC.mg_binds m
-                                     , v <- case bnd of
-                                              GHC.NonRec f _ -> [f]
-                                              GHC.Rec bnds -> map fst bnds
-                                   ])
+        ppModGuts :: PrettyH GHC.ModGuts
+        ppModGuts =   arr $ \ m -> hang (keyword "module" <+> ppSDoc (GHC.mg_module m) <+> keyword "where") 2
+                                   (vcat [ (ppIdBinder v <+> specialSymbol TypeOfSymbol <+> ppCoreType (GHC.idType v))
+                                         | bnd <- GHC.mg_binds m
+                                         , v <- case bnd of
+                                                  GHC.NonRec f _ -> [f]
+                                                  GHC.Rec bnds -> map fst bnds
+                                       ])
 
-    -- DocH is not a monoid, so we can't use listT here
-    ppProgram :: PrettyH GHC.CoreProgram -- CoreProgram = [CoreBind]
-    ppProgram = translate $ \ c -> fmap vcat . sequenceA . map (apply ppCoreBind c)
+        -- DocH is not a monoid, so we can't use listT here
+        ppProgram :: PrettyH GHC.CoreProgram -- CoreProgram = [CoreBind]
+        ppProgram = translate $ \ c -> fmap vcat . sequenceA . map (apply ppCoreBind c)
 
-    ppCoreExpr :: PrettyH GHC.CoreExpr
-    ppCoreExpr = ppCoreExprR >>^ normalExpr
+        ppCoreExpr :: PrettyH GHC.CoreExpr
+        ppCoreExpr = ppCoreExprR >>^ normalExpr
 
-    appendArg xs (RetEmpty) = xs
-    appendArg xs e          = xs ++ [e]
+        appendArg xs (RetEmpty) = xs
+        appendArg xs e          = xs ++ [e]
 
-    appendBind Nothing  xs = xs
-    appendBind (Just v) xs = v : xs
+        appendBind Nothing  xs = xs
+        appendBind (Just v) xs = v : xs
 
-    ppCoreExprR :: TranslateH GHC.CoreExpr RetExpr
-    ppCoreExprR = do
-           ret <- ppCoreExprPR
-           absPath <- absPathT
-           return $ ret (rootPath absPath)
+        ppCoreExprR :: TranslateH GHC.CoreExpr RetExpr
+        ppCoreExprR = do
+               ret <- ppCoreExprPR
+               absPath <- absPathT
+               return $ ret (rootPath absPath)
 
-    ppCoreExprPR :: TranslateH GHC.CoreExpr (Path -> RetExpr)
-    ppCoreExprPR = lamT ppCoreExprR (\ v e _ -> case e of
-                                              RetLam vs e0  -> RetLam (appendBind (ppBinder v) vs) e0
-                                              _             -> RetLam (appendBind (ppBinder v) []) (normalExpr e))
+        ppCoreExprPR :: TranslateH GHC.CoreExpr (Path -> RetExpr)
+        ppCoreExprPR = lamT ppCoreExprR (\ v e _ -> case e of
+                                                  RetLam vs e0  -> RetLam (appendBind (ppBinder v) vs) e0
+                                                  _             -> RetLam (appendBind (ppBinder v) []) (normalExpr e))
 
-               <+ letT ppCoreBind ppCoreExprR
-                                   (\ bd e _ -> case e of
-                                              RetLet vs e0  -> RetLet (bd : vs) e0
-                                              _             -> RetLet [bd] (normalExpr e))
-               -- HACKs
-{-
-               <+ (acceptR (\ e -> case e of
-                                     GHC.App (GHC.Var v) (GHC.Type t) | po_exprTypes opts == Abstract -> True
-                                     _ -> False) >>>
-                           (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetAtom e2) ->
-                                    RetAtom (e1 <+> e2))))
--}
-               <+ (acceptR (\ e -> case e of
-                                     GHC.App (GHC.Type _) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
-                                     GHC.App (GHC.App (GHC.Var _) (GHC.Type _)) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
-                                     _ -> False) "TODO: add decent error message here" >>>
-                           (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetLam vs e0) _ ->
-                                    RetExpr $ hang (e1 <+>
-                                                        symbol '(' <>
-                                                        specialSymbol LambdaSymbol <+>
-                                                        hsep vs <+>
-                                                        specialSymbol RightArrowSymbol) 2 (e0 <> symbol ')')))
+                   <+ letT ppCoreBind ppCoreExprR
+                                       (\ bd e _ -> case e of
+                                                  RetLet vs e0  -> RetLet (bd : vs) e0
+                                                  _             -> RetLet [bd] (normalExpr e))
+                   -- HACKs
+    {-
+                   <+ (acceptR (\ e -> case e of
+                                         GHC.App (GHC.Var v) (GHC.Type t) | po_exprTypes opts == Abstract -> True
+                                         _ -> False) >>>
+                               (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetAtom e2) ->
+                                        RetAtom (e1 <+> e2))))
+    -}
+                   <+ (acceptR (\ e -> case e of
+                                         GHC.App (GHC.Type _) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
+                                         GHC.App (GHC.App (GHC.Var _) (GHC.Type _)) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
+                                         _ -> False) "TODO: add decent error message here" >>>
+                               (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetLam vs e0) _ ->
+                                        RetExpr $ hang (e1 <+>
+                                                            symbol '(' <>
+                                                            specialSymbol LambdaSymbol <+>
+                                                            hsep vs <+>
+                                                            specialSymbol RightArrowSymbol) 2 (e0 <> symbol ')')))
 
 
-                  )
+                      )
 
-               <+ appT ppCoreExprR ppCoreExprR
-                                   (\ e1 e2 _ -> case e1 of
-                                              RetApp f xs   -> RetApp f (appendArg xs e2)
-                                              _             -> case e2 of -- if our only args are types, and they are omitted, don't paren
-                                                                RetEmpty -> e1
-                                                                args -> RetApp (atomExpr e1) (appendArg [] args))
-               <+ varT (\ i p -> RetAtom (attrP p $ ppVar i))
-               <+ litT (\ i p -> RetAtom (attrP p $ ppSDoc i))
-               <+ typeT (\ t p -> case po_exprTypes opts of
-                                  Show     -> RetAtom (attrP p $ ppCoreType t)
-                                  Abstract -> RetAtom (attrP p $ typeSymbol)
-                                  Omit     -> RetEmpty)
-               <+ (ppCoreExpr0 >>^ \ e p -> RetExpr (attrP p e))
+                   <+ appT ppCoreExprR ppCoreExprR
+                                       (\ e1 e2 _ -> case e1 of
+                                                  RetApp f xs   -> RetApp f (appendArg xs e2)
+                                                  _             -> case e2 of -- if our only args are types, and they are omitted, don't paren
+                                                                    RetEmpty -> e1
+                                                                    args -> RetApp (atomExpr e1) (appendArg [] args))
+                   <+ varT (\ i p -> RetAtom (attrP p $ ppVar i))
+                   <+ litT (\ i p -> RetAtom (attrP p $ ppSDoc i))
+                   <+ typeT (\ t p -> case po_exprTypes opts of
+                                      Show     -> RetAtom (attrP p $ ppCoreType t)
+                                      Abstract -> RetAtom (attrP p $ typeSymbol)
+                                      Omit     -> RetEmpty)
+                   <+ (ppCoreExpr0 >>^ \ e p -> RetExpr (attrP p e))
 
-    ppCoreType :: GHC.Type -> DocH
-    ppCoreType = normalExpr . go
-        where go (TyVarTy v)   = RetAtom $ ppVar v
-              go (AppTy t1 t2) = RetExpr $ ppCoreType t1 <+> ppCoreType t2
-              go (TyConApp tyCon tys)
-                | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = go (FunTy ty1 ty2)
-                | GHC.isTupleTyCon tyCon = case map ppCoreType tys of
-                                            [] -> RetAtom $ text "()"
-                                            ds -> RetExpr $ text "(" <> (foldr1 (\d r -> d <> text "," <+> r) ds) <> text ")"
-                | otherwise = RetAtom $ ppName (GHC.getName tyCon) <+> sep (map ppCoreType tys) -- has spaces, but we never want parens
-              go (FunTy ty1 ty2) = RetExpr $ atomExpr (go ty1) <+> text "->" <+> ppCoreType ty2
-              go (ForAllTy v ty) = RetExpr $ specialSymbol ForallSymbol <+> ppVar v <+> symbol '.' <+> ppCoreType ty
+        ppCoreType :: GHC.Type -> DocH
+        ppCoreType = normalExpr . go
+            where go (TyVarTy v)   = RetAtom $ ppVar v
+                  go (AppTy t1 t2) = RetExpr $ ppCoreType t1 <+> ppCoreType t2
+                  go (TyConApp tyCon tys)
+                    | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = go (FunTy ty1 ty2)
+                    | GHC.isTupleTyCon tyCon = case map ppCoreType tys of
+                                                [] -> RetAtom $ text "()"
+                                                ds -> RetExpr $ text "(" <> (foldr1 (\d r -> d <> text "," <+> r) ds) <> text ")"
+                    | otherwise = RetAtom $ ppName (GHC.getName tyCon) <+> sep (map ppCoreType tys) -- has spaces, but we never want parens
+                  go (FunTy ty1 ty2) = RetExpr $ atomExpr (go ty1) <+> text "->" <+> ppCoreType ty2
+                  go (ForAllTy v ty) = RetExpr $ specialSymbol ForallSymbol <+> ppVar v <+> symbol '.' <+> ppCoreType ty
 
-    ppCoreExpr0 :: PrettyH GHC.CoreExpr
-    ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b _ty alts ->
-                        (keywordColor (text "case") <+> s <+> keywordColor (text "of") <+> ppIdBinder b) $$
-                          nest 2 (vcat alts))
-              <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
-              <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
---              <+ typeT (\ty -> text "Type" <+> nest 2 (ppSDoc ty))
-              <+ coercionT (\co -> text "Coercion" $$ nest 2 (ppSDoc co))
+        ppCoreExpr0 :: PrettyH GHC.CoreExpr
+        ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b _ty alts ->
+                            (keywordColor (text "case") <+> s <+> keywordColor (text "of") <+> ppIdBinder b) $$
+                              nest 2 (vcat alts))
+                  <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
+                  <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
+    --              <+ typeT (\ty -> text "Type" <+> nest 2 (ppSDoc ty))
+                  <+ coercionT (\co -> text "Coercion" $$ nest 2 (ppSDoc co))
 
-    ppCoreBind :: PrettyH GHC.CoreBind
-    ppCoreBind = nonRecT ppCoreExprR ppDefFun
-              <+ recT (const ppCoreDef) (\ bnds -> keywordColor (text "rec") <+> vcat bnds)
+        ppCoreBind :: PrettyH GHC.CoreBind
+        ppCoreBind = nonRecT ppCoreExprR ppDefFun
+                  <+ recT (const ppCoreDef) (\ bnds -> keywordColor (text "rec") <+> vcat bnds)
 
-    ppCoreAlt :: PrettyH GHC.CoreAlt
-    ppCoreAlt = altT ppCoreExpr $ \ con ids e -> case con of
-                  GHC.DataAlt dcon -> hang (ppName (GHC.dataConName dcon) <+> ppIds ids) 2 e
-                  GHC.LitAlt lit   -> hang (ppSDoc lit <+> ppIds ids) 2 e
-                  GHC.DEFAULT      -> symbol '_' <+> ppIds ids <+> e
-          where
-                 ppIds ids | null ids  = specialSymbol RightArrowSymbol
-                           | otherwise = hsep (map ppIdBinder ids) <+> specialSymbol RightArrowSymbol
+        ppCoreAlt :: PrettyH GHC.CoreAlt
+        ppCoreAlt = altT ppCoreExpr $ \ con ids e -> case con of
+                      GHC.DataAlt dcon -> hang (ppName (GHC.dataConName dcon) <+> ppIds ids) 2 e
+                      GHC.LitAlt lit   -> hang (ppSDoc lit <+> ppIds ids) 2 e
+                      GHC.DEFAULT      -> symbol '_' <+> ppIds ids <+> e
+              where
+                     ppIds ids | null ids  = specialSymbol RightArrowSymbol
+                               | otherwise = hsep (map ppIdBinder ids) <+> specialSymbol RightArrowSymbol
 
-    -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
-    ppCoreDef :: PrettyH CoreDef
-    ppCoreDef = defT ppCoreExprR ppDefFun
+        -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
+        ppCoreDef :: PrettyH CoreDef
+        ppCoreDef = defT ppCoreExprR ppDefFun
 
-    ppDefFun :: GHC.Id -> RetExpr -> DocH
-    ppDefFun i e = case e of
-                    RetLam vs e0 -> hang (pre <+> specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
-                    _ -> hang pre 2 (normalExpr e)
-        where
-            pre = case ppBinder i of
-                    Nothing -> empty
-                    Just p  -> p <+> symbol '='
+        ppDefFun :: GHC.Id -> RetExpr -> DocH
+        ppDefFun i e = case e of
+                        RetLam vs e0 -> hang (pre <+> specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
+                        _ -> hang pre 2 (normalExpr e)
+            where
+                pre = case ppBinder i of
+                        Nothing -> empty
+                        Just p  -> p <+> symbol '='
+
+    promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
+     <+ promoteT (ppProgram  :: PrettyH GHC.CoreProgram)
+     <+ promoteT (ppCoreBind :: PrettyH GHC.CoreBind)
+     <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
+     <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
+     <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)

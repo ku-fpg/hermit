@@ -131,7 +131,7 @@ Library
                  ansi-terminal >= 0.5.5,
                  containers >= 0.4.2.1,
                  data-default >= 0.4,
-                 ghc >= 7.4,
+                 ghc == 7.6.*,
                  haskeline >= 0.6.4.7,
                  kure >= 2.4.1,
                  marked-pretty >= 0.1,

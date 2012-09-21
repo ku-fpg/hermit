@@ -157,15 +157,18 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 
 -- | Output a list of all free variables in an expression.
 freeIdsQuery :: TranslateH CoreExpr String
-freeIdsQuery = freeIdsT >>^ (("Free identifiers are: " ++) . showVars)
+freeIdsQuery = do
+    dynFlags <- constT getDynFlags
+    frees <- freeIdsT
+    return $ "Free identifiers are: " ++ showVars dynFlags frees
 
 -- | Show a human-readable version of a 'Var'.
-showVar :: Var -> String
-showVar = show . showSDoc . ppr
+showVar :: DynFlags -> Var -> String
+showVar dynFlags = show . showPpr dynFlags
 
 -- | Show a human-readable version of a list of 'Var's.
-showVars :: [Var] -> String
-showVars = show . map (showSDoc . ppr)
+showVars :: DynFlags -> [Var] -> String
+showVars dynFlags = show . map (showPpr dynFlags)
 
 freeIdsT :: TranslateH CoreExpr [Id]
 freeIdsT = arr coreExprFreeIds
@@ -260,8 +263,9 @@ getHermitRules = translate $ \ env _e -> do
 rules_help :: TranslateH Core String
 rules_help = do
     rulesEnv <- getHermitRules
+    dynFlags <- constT getDynFlags
     return  $ (show (map fst rulesEnv) ++ "\n") ++
-              showSDoc (pprRulesForUser $ concatMap snd rulesEnv)
+              showSDoc dynFlags (pprRulesForUser $ concatMap snd rulesEnv)
 
 makeRule :: String -> Id -> CoreExpr -> CoreRule
 makeRule rule_name nm =   mkRule True   -- auto-generated
