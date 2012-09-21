@@ -27,4 +27,4 @@ consider 'rev
    any-call (unfold-rule "[] ++")
    any-call (unfold 'fix) ; bash
    unshadow
-
+   any-call (unfold 'absH)

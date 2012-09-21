@@ -1,7 +1,9 @@
 Name:                hermit
-Version:             0.1.2.0
+Version:             0.1.1.1
 Synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
 Description:
+  Note: HERMIT is currently compatible with GHC 7.4.* only.
+  .
   HERMIT uses Haskell to express semi-formal models,
   efficient implementations, and provide a bridging DSL
   to describe via stepwise refinement the connection between
@@ -38,12 +40,12 @@ Description:
   .
   @
    $ hermit Reverse.hs Reverse.hss resume
-   [starting HERMIT v0.1.1.0 on Reverse.hs]
+   [starting HERMIT v0.1.1.1 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:main:Main: -fplugin-opt=HERMIT:main:Main:resume
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.1.1.0 ... linking ... done.
+   Loading package hermit-0.1.1.1 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    Linking Reverse ...
    $ ./Reverse
@@ -54,12 +56,12 @@ Description:
   .
   @
    $ hermit Reverse.hs
-   [starting HERMIT v0.1.1.0 on Reverse.hs]
+   [starting HERMIT v0.1.1.1 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:main:Main:
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.1.1.0 ... linking ... done.
+   Loading package hermit-0.1.1.1 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    module main:Main where
    \ \ rev ∷ ∀ a . [] a -> [] a
@@ -129,7 +131,7 @@ Library
                  ansi-terminal >= 0.5.5,
                  containers >= 0.4.2.1,
                  data-default >= 0.4,
-                 ghc >= 7.4,
+                 ghc == 7.4.*,
                  haskeline >= 0.6.4.7,
                  kure >= 2.4.1,
                  marked-pretty >= 0.1,
