@@ -145,29 +145,32 @@ letTupleR nm = translate $ \ c e -> do
 -- A few Queries.
 
 info :: TranslateH Core String
-info = translate $ \ c core ->
+info = translate $ \ c core -> do
+         dynFlags <- getDynFlags
          let pa       = "Path: " ++ show (contextPath c)
              node     = "Node: " ++ coreNode core
              con      = "Constructor: " ++ coreConstructor core
              bds      = "Bindings in Scope: " ++ (show $ map unqualifiedIdName $ listBindings c)
              expExtra = case core of
-                          ExprCore e -> ["Type: " ++ showExprType e] ++
-                                        ["Free Variables: " ++ showVars (coreExprFreeVars e)] ++
+                          ExprCore e -> ["Type: " ++ showExprType dynFlags e] ++
+                                        ["Free Variables: " ++ showVars dynFlags (coreExprFreeVars e)] ++
                                            case e of
-                                             Var v -> ["Identifier Info: " ++ showIdInfo v]
+                                             Var v -> ["Identifier Info: " ++ showIdInfo dynFlags v]
                                              _     -> []
                           _          -> []
-         in
-             return (intercalate "\n" $ [pa,node,con,bds] ++ expExtra)
+
+         return (intercalate "\n" $ [pa,node,con,bds] ++ expExtra)
 
 exprTypeT :: TranslateH CoreExpr String
-exprTypeT = arr showExprType
+exprTypeT = contextfreeT $ \ e -> do
+    dynFlags <- getDynFlags
+    return $ showExprType dynFlags e
 
-showExprType :: CoreExpr -> String
-showExprType = showSDoc . ppr . exprType
+showExprType :: DynFlags -> CoreExpr -> String
+showExprType dynFlags = showPpr dynFlags . exprType
 
-showIdInfo :: Id -> String
-showIdInfo v = showSDoc $ ppIdInfo v $ idInfo v
+showIdInfo :: DynFlags -> Id -> String
+showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
 
 coreNode :: Core -> String
 coreNode (ModGutsCore _) = "Module"
@@ -215,15 +218,16 @@ thNameToGhcId nm = do
     maybe (fail "cannot find " ++ show nm) lookupId mnm
 -}
 
-findId :: (MonadUnique m, MonadIO m, MonadThings m) => Context -> String -> m Id
+findId :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => Context -> String -> m Id
 findId c = findIdMG (hermitModGuts c)
 
-findIdMG :: (MonadUnique m, MonadIO m, MonadThings m) => ModGuts -> String -> m Id
+findIdMG :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => ModGuts -> String -> m Id
 findIdMG modguts nm =
     case filter isValName $ findNameFromTH (mg_rdr_env modguts) $ TH.mkName nm of
         []  -> fail $ "cannot find " ++ nm
         [n] -> lookupId n
-        ns  -> fail $ "too many " ++ nm ++ " found:\n" ++ intercalate ", " (map showPpr ns)
+        ns  -> do dynFlags <- getDynFlags
+                  fail $ "too many " ++ nm ++ " found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
 
  --   liftIO $ print ("VAR", GHC.showSDoc . GHC.ppr $ namedFn)
 

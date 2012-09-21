@@ -21,39 +21,39 @@ vlist = listify ($$)
 hlist = listify (<+>)
 
 corePrettyH :: PrettyOptions -> PrettyH Core
-corePrettyH opts =
-       promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
-    <+ promoteT (ppProgram  :: PrettyH GHC.CoreProgram)
-    <+ promoteT (ppCoreBind :: PrettyH GHC.CoreBind)
-    <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
-    <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
-    <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
-  where
-    hideNotes = po_notes opts
+corePrettyH opts = do
+    dynFlags <- constT GHC.getDynFlags
 
-    -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
-    -- that we are eliding infomation here.
-    ppSDoc :: (GHC.Outputable a) => a -> MDoc b
-    ppSDoc = toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showSDoc . GHC.ppr
-        where toDoc s | any isSpace s = parens (text s)
-                      | otherwise     = text s
+    let hideNotes = po_notes opts
 
-    ppModGuts :: PrettyH GHC.ModGuts
-    ppModGuts = arr (ppSDoc . GHC.mg_binds)
+        -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
+        -- that we are eliding infomation here.
+        ppSDoc :: (GHC.Outputable a) => a -> MDoc b
+        ppSDoc = toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showSDoc dynFlags . GHC.ppr
+            where toDoc s | any isSpace s = parens (text s)
+                          | otherwise     = text s
 
-    -- DocH is not a monoid, so we can't use listT here
-    ppProgram :: PrettyH GHC.CoreProgram
-    ppProgram = arr ppSDoc
+        ppModGuts :: PrettyH GHC.ModGuts
+        ppModGuts = arr (ppSDoc . GHC.mg_binds)
 
-    ppCoreExpr :: PrettyH GHC.CoreExpr
-    ppCoreExpr = arr ppSDoc
+        ppProgram :: PrettyH GHC.CoreProgram
+        ppProgram = arr ppSDoc
 
-    ppCoreBind :: PrettyH GHC.CoreBind
-    ppCoreBind = arr ppSDoc
+        ppCoreExpr :: PrettyH GHC.CoreExpr
+        ppCoreExpr = arr ppSDoc
 
-    ppCoreAlt :: PrettyH GHC.CoreAlt
-    ppCoreAlt = arr ppSDoc
+        ppCoreBind :: PrettyH GHC.CoreBind
+        ppCoreBind = arr ppSDoc
 
-    -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
-    ppCoreDef :: PrettyH CoreDef
-    ppCoreDef = defT ppCoreExpr $ \ i e -> ppSDoc i <> text "=" <> e
+        ppCoreAlt :: PrettyH GHC.CoreAlt
+        ppCoreAlt = arr ppSDoc
+
+        ppCoreDef :: PrettyH CoreDef
+        ppCoreDef = defT ppCoreExpr $ \ i e -> ppSDoc i <> text "=" <> e
+
+    promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
+     <+ promoteT (ppProgram  :: PrettyH GHC.CoreProgram)
+     <+ promoteT (ppCoreBind :: PrettyH GHC.CoreBind)
+     <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
+     <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
+     <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)

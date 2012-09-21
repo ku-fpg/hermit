@@ -22,55 +22,57 @@ vlist = listify ($$)
 hlist = listify (<+>)
 
 corePrettyH :: PrettyOptions -> PrettyH Core
-corePrettyH opts =
-       promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
-    <+ promoteT (ppProgram  :: PrettyH GHC.CoreProgram)
-    <+ promoteT (ppCoreBind :: PrettyH GHC.CoreBind)
-    <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
-    <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
-    <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
-  where
-    hideNotes = po_notes opts
+corePrettyH opts = do
+    dynFlags <- constT GHC.getDynFlags
 
-    -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
-    -- that we are eliding infomation here.
-    ppSDoc :: (GHC.Outputable a) => a -> MDoc b
-    ppSDoc = toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showSDoc . GHC.ppr
-        where toDoc s | any isSpace s = parens (text s)
-                      | otherwise     = text s
+    let hideNotes = po_notes opts
 
-    ppModGuts :: PrettyH GHC.ModGuts
-    ppModGuts = arr (ppSDoc . GHC.mg_module)
+        -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
+        -- that we are eliding infomation here.
+        ppSDoc :: (GHC.Outputable a) => a -> MDoc b
+        ppSDoc = toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showSDoc dynFlags . GHC.ppr
+            where toDoc s | any isSpace s = parens (text s)
+                          | otherwise     = text s
 
-    -- DocH is not a monoid, so we can't use listT here
-    ppProgram :: PrettyH GHC.CoreProgram -- CoreProgram = [CoreBind]
-    ppProgram = translate $ \ c -> fmap vlist . sequenceA . map (apply ppCoreBind c)
+        ppModGuts :: PrettyH GHC.ModGuts
+        ppModGuts = arr (ppSDoc . GHC.mg_module)
 
-    ppCoreExpr :: PrettyH GHC.CoreExpr
-    ppCoreExpr = varT (\i -> text "Var" <+> varColor (ppSDoc i))
-              <+ litT (\i -> text "Lit" <+> ppSDoc i)
-              <+ appT ppCoreExpr ppCoreExpr (\ a b -> text "App" $$ nest 2 (cat [parens a, parens b]))
-              <+ lamT ppCoreExpr (\ v e -> text "Lam" <+> varColor (ppSDoc v) $$ nest 2 (parens e))
-              <+ letT ppCoreBind ppCoreExpr (\ b e -> text "Let" $$ nest 2 (cat [parens b, parens e]))
-              <+ caseT ppCoreExpr (const ppCoreAlt) (\s b ty alts ->
-                        text "Case" $$ nest 2 (parens s)
-                                    $$ nest 2 (ppSDoc b)
-                                    $$ nest 2 (ppSDoc ty)
-                                    $$ nest 2 (vlist alts))
-              <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
-              <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
-              <+ typeT (\ty -> text "Type" <+> nest 2 (ppSDoc ty))
-              <+ coercionT (\co -> text "Coercion" $$ nest 2 (ppSDoc co))
+        -- DocH is not a monoid, so we can't use listT here
+        ppProgram :: PrettyH GHC.CoreProgram -- CoreProgram = [CoreBind]
+        ppProgram = translate $ \ c -> fmap vlist . sequenceA . map (apply ppCoreBind c)
 
-    ppCoreBind :: PrettyH GHC.CoreBind
-    ppCoreBind = nonRecT ppCoreExpr (\i e -> text "NonRec" <+> ppSDoc i $$ nest 2 (parens e))
-              <+ recT (const ppCoreDef) (\bnds -> text "Rec" $$ nest 2 (vlist bnds))
+        ppCoreExpr :: PrettyH GHC.CoreExpr
+        ppCoreExpr = varT (\i -> text "Var" <+> varColor (ppSDoc i))
+                  <+ litT (\i -> text "Lit" <+> ppSDoc i)
+                  <+ appT ppCoreExpr ppCoreExpr (\ a b -> text "App" $$ nest 2 (cat [parens a, parens b]))
+                  <+ lamT ppCoreExpr (\ v e -> text "Lam" <+> varColor (ppSDoc v) $$ nest 2 (parens e))
+                  <+ letT ppCoreBind ppCoreExpr (\ b e -> text "Let" $$ nest 2 (cat [parens b, parens e]))
+                  <+ caseT ppCoreExpr (const ppCoreAlt) (\s b ty alts ->
+                            text "Case" $$ nest 2 (parens s)
+                                        $$ nest 2 (ppSDoc b)
+                                        $$ nest 2 (ppSDoc ty)
+                                        $$ nest 2 (vlist alts))
+                  <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
+                  <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
+                  <+ typeT (\ty -> text "Type" <+> nest 2 (ppSDoc ty))
+                  <+ coercionT (\co -> text "Coercion" $$ nest 2 (ppSDoc co))
 
-    ppCoreAlt :: PrettyH GHC.CoreAlt
-    ppCoreAlt = altT ppCoreExpr $ \ con ids e -> text "Alt" <+> ppSDoc con
-                                                            <+> (hlist $ map ppSDoc ids)
-                                                            $$ nest 2 (parens e)
+        ppCoreBind :: PrettyH GHC.CoreBind
+        ppCoreBind = nonRecT ppCoreExpr (\i e -> text "NonRec" <+> ppSDoc i $$ nest 2 (parens e))
+                  <+ recT (const ppCoreDef) (\bnds -> text "Rec" $$ nest 2 (vlist bnds))
 
-    -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
-    ppCoreDef :: PrettyH CoreDef
-    ppCoreDef = defT ppCoreExpr $ \ i e -> parens $ varColor (ppSDoc i) <> text "," <> e
+        ppCoreAlt :: PrettyH GHC.CoreAlt
+        ppCoreAlt = altT ppCoreExpr $ \ con ids e -> text "Alt" <+> ppSDoc con
+                                                                <+> (hlist $ map ppSDoc ids)
+                                                                $$ nest 2 (parens e)
+
+        -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
+        ppCoreDef :: PrettyH CoreDef
+        ppCoreDef = defT ppCoreExpr $ \ i e -> parens $ varColor (ppSDoc i) <> text "," <> e
+
+    promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
+     <+ promoteT (ppProgram  :: PrettyH GHC.CoreProgram)
+     <+ promoteT (ppCoreBind :: PrettyH GHC.CoreBind)
+     <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
+     <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
+     <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)

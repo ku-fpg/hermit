@@ -64,7 +64,8 @@ stashApply label = setFailMsg "Inlining stashed definition failed: " $
                                     then ifM (all (inScope c) <$> apply freeVarsT c rhs)
                                              (return rhs)
                                              (fail "some free variables in stashed definition are no longer in scope.")
-                                    else fail $ "stashed definition applies to " ++ showPpr i ++ " not " ++ showPpr v
+                                    else do dynFlags <- getDynFlags
+                                            fail $ "stashed definition applies to " ++ showPpr dynFlags i ++ " not " ++ showPpr dynFlags v
 
 getUnfolding :: Monad m
              => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
@@ -74,9 +75,9 @@ getUnfolding scrutinee caseBinderOnly i c =
     case lookupHermitBinding i c of
         Nothing -> case unfoldingInfo (idInfo i) of
                      CoreUnfolding { uf_tmpl = uft } -> if caseBinderOnly then fail "not a case binder" else return (uft, 0)
-                     _                               -> fail $ "cannot find " ++ show i ++ " in Env or IdInfo."
-        Just (LAM {}) -> fail $ show i ++ " is lambda-bound"
-        Just (BIND depth _ e') -> if caseBinderOnly then fail "not a case binder" else return (e', depth)
+                     _                               -> fail $ "cannot find unfolding in Env or IdInfo."
+        Just (LAM {}) -> fail $ "variable is lambda-bound."
+        Just (BIND depth _ e') -> if caseBinderOnly then fail "not a case binder." else return (e', depth)
         Just (CASE depth s coreAlt) -> return $ if scrutinee
                                                  then (s, depth)
                                                  else let tys = tyConAppArgs (idType i)

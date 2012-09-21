@@ -120,6 +120,9 @@ instance MonadUnique HermitM where
 instance MonadThings HermitM where
    lookupThing = liftCoreM . lookupThing
 
+instance HasDynFlags HermitM where
+   getDynFlags = liftCoreM getDynFlags
+
 ----------------------------------------------------------------------------
 
 newName :: String -> HermitM Name
