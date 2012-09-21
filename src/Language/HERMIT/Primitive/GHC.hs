@@ -2,7 +2,6 @@
 module Language.HERMIT.Primitive.GHC where
 
 import GhcPlugins hiding (empty)
-import qualified Language.HERMIT.GHC as GHC
 import qualified OccurAnal
 import Control.Arrow
 import Control.Monad
@@ -17,7 +16,7 @@ import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.External
 import Language.HERMIT.Context
--- import Language.HERMIT.GHC
+import qualified Language.HERMIT.GHC as GHC
 
 import qualified Language.Haskell.TH as TH
 -- import Debug.Trace
@@ -159,13 +158,9 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 freeIdsQuery :: TranslateH CoreExpr String
 freeIdsQuery = freeIdsT >>^ (("Free identifiers are: " ++) . showVars)
 
--- | Show a human-readable version of a 'Var'.
-showVar :: Var -> String
-showVar = show . showSDoc . ppr
-
 -- | Show a human-readable version of a list of 'Var's.
 showVars :: [Var] -> String
-showVars = show . map (showSDoc . ppr)
+showVars = show . map GHC.var2String
 
 freeIdsT :: TranslateH CoreExpr [Id]
 freeIdsT = arr coreExprFreeIds
@@ -173,11 +168,11 @@ freeIdsT = arr coreExprFreeIds
 freeVarsT :: TranslateH CoreExpr [Var]
 freeVarsT = arr coreExprFreeVars
 
--- note: exprFreeVars get *all* free variables, including types
+-- note: coreExprFreeVars get *all* free variables, including types
 coreExprFreeVars :: CoreExpr -> [Var]
 coreExprFreeVars  = uniqSetToList . exprFreeVars
 
--- note: exprFreeIds is only value-level free variables
+-- note: coreExprFreeIds is only value-level free variables
 coreExprFreeIds :: CoreExpr -> [Id]
 coreExprFreeIds  = uniqSetToList . exprFreeIds
 

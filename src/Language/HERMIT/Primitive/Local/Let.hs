@@ -14,12 +14,15 @@ where
 
 import GhcPlugins
 
+import Control.Category((>>>))
+
 import Data.List
 import Data.Monoid
 
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.External
+import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
@@ -40,8 +43,15 @@ externals =
                      [ "(let v = ev in e) x ==> let v = ev in e x" ]                    .+ Commute .+ Shallow .+ Bash
          , external "let-float-arg" (promoteExprR letFloatArg :: RewriteH Core)
                      [ "f (let v = ev in e) ==> let v = ev in f e" ]                    .+ Commute .+ Shallow .+ Bash
-         , external "let-float-let" (promoteProgramR letFloatLetTop <+ promoteExprR letFloatLet :: RewriteH Core)
+         , external "let-float-lam" (promoteExprR letFloatLam :: RewriteH Core)
+                     [ "(\\ v1 -> let v2 = e1 in e2)  ==>  let v2 = e1 in (\\ v1 -> e2)",
+                       "Fails if v1 occurs in e1.",
+                       "If v1 = v2 then v1 will be alpha-renamed."
+                     ]                                                                  .+ Commute .+ Shallow .+ Bash
+         , external "let-float-let" (promoteExprR letFloatLet :: RewriteH Core)
                      [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow .+ Bash
+         , external "let-float-top" (promoteProgramR letFloatLetTop :: RewriteH Core)
+                     [ "v = (let w = ew in ev) : bds ==> w = ew : v = ev : bds" ] .+ Commute .+ Shallow .+ Bash
          , external "let-float" (promoteProgramR letFloatLetTop <+ promoteExprR letFloatExpr :: RewriteH Core)
                      [ "Float a Let whatever the context." ] .+ Commute .+ Shallow .+ Bash
          , external "let-to-case" (promoteExprR letToCase :: RewriteH Core)
@@ -49,9 +59,6 @@ externals =
          -- , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
          --             [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ] .+ Unimplemented
          ]
-
--- not_defined :: String -> RewriteH CoreExpr
--- not_defined nm = fail $ nm ++ " not implemented!"
 
 -- | e => (let v = e in v), name of v is provided
 letIntro ::  TH.Name -> RewriteH CoreExpr
@@ -73,17 +80,29 @@ letFloatArg = prefixFailMsg "Let floating from App argument failed: " $
      let letAction = if null vs then idR else alphaLet
      appT idR letAction $ \ f (Let bnds e) -> Let bnds $ App f e
 
--- let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e
+-- | let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e
 letFloatLet :: RewriteH CoreExpr
 letFloatLet = prefixFailMsg "Let floating from Let failed: " $
   do vs <- letNonRecT letVarsT freeVarsT (\ _ -> intersect)
      let bdsAction = if null vs then idR else nonRecR alphaLet
      letT bdsAction idR $ \ (NonRec v (Let bds ev)) e -> Let bds $ Let (NonRec v ev) e
 
+-- | (\ v1 -> let v2 = e1 in e2)  ==>  let v2 = e1 in (\ v1 -> e2)
+--   Fails if v1 occurs in e1.
+--   If v1 = v2 then v1 will be alpha-renamed.
+letFloatLam :: RewriteH CoreExpr
+letFloatLam = prefixFailMsg "Let floating from Lam failed: " $
+              withPatFailMsg (wrongExprForm "Lam v1 (Let (NonRec v2 e1) e2)") $
+  do Lam v1 (Let (NonRec v2 e1) e2) <- idR
+     guardMsg (v1 `notElem` coreExprFreeVars e1) $ var2String v1 ++ " occurs in the definition of " ++ var2String v2 ++ "."
+     if v1 == v2
+      then alphaLam Nothing >>> letFloatLam
+      else return (Let (NonRec v2 e1) (Lam v1 e2))
+
 -- | Float a Let through an expression, whatever the context.
 letFloatExpr :: RewriteH CoreExpr
 letFloatExpr = setFailMsg "Unsuitable expression for Let floating." $
-               letFloatApp <+ letFloatArg <+ letFloatLet
+               letFloatApp <+ letFloatArg <+ letFloatLet <+ letFloatLam
 
 -- | NonRec v (Let (NonRec w ew) ev) : bds ==> NonRec w ew : NonRec v ev : bds
 letFloatLetTop :: RewriteH CoreProgram
@@ -94,6 +113,7 @@ letFloatLetTop = setFailMsg ("Let floating to top level failed: " ++ wrongExprFo
 -- | let v = ev in e ==> case ev of v -> e
 letToCase :: RewriteH CoreExpr
 letToCase = prefixFailMsg "Converting Let to Case failed: " $
+            withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
   do Let (NonRec v ev) _ <- idR
      nameModifier <- freshNameGenT Nothing
      caseBndr <- constT (cloneIdH nameModifier v)

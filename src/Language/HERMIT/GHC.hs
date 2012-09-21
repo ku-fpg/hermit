@@ -2,6 +2,7 @@ module Language.HERMIT.GHC
         (
         -- | Things that have been copied from GHC, or imported directly, for various reasons.
           ppIdInfo
+        , var2String
         , thRdrNameGuesses
         , name2THName
         , id2THName
@@ -31,6 +32,7 @@ import qualified Language.Haskell.TH as TH
 --------------------------------------------------------------------------
 
 -- idName :: Id -> Name
+-- varName :: Var -> Name
 -- nameOccName :: Name -> OccName
 -- occNameString :: OccName -> String
 -- getOccName :: NamedThing a => a -> OccName
@@ -39,6 +41,10 @@ import qualified Language.Haskell.TH as TH
 
 -- TH.nameBase :: TH.Name -> String
 -- TH.mkName :: String -> TH.Name
+
+-- | Convert a variable to a neat string for printing.
+var2String :: Var -> String
+var2String = occNameString . nameOccName . varName
 
 -- | Converts a GHC 'Name' to a Template Haskell 'TH.Name', going via a 'String'.
 name2THName :: Name -> TH.Name
