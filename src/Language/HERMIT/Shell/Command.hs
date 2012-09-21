@@ -36,9 +36,6 @@ import Language.HERMIT.Primitive.Inline
 
 -- import Language.HERMIT.Primitive.GHC
 
-
-import Prelude hiding (catch)
-
 import System.Console.ANSI
 import System.IO
 

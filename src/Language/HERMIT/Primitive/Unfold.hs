@@ -18,6 +18,7 @@ import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.External
 import Language.HERMIT.Context
+import Language.HERMIT.GHC
 
 import Prelude hiding (exp)
 
@@ -64,8 +65,7 @@ stashApply label = setFailMsg "Inlining stashed definition failed: " $
                                     then ifM (all (inScope c) <$> apply freeVarsT c rhs)
                                              (return rhs)
                                              (fail "some free variables in stashed definition are no longer in scope.")
-                                    else do dynFlags <- getDynFlags
-                                            fail $ "stashed definition applies to " ++ showPpr dynFlags i ++ " not " ++ showPpr dynFlags v
+                                    else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v
 
 getUnfolding :: Monad m
              => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
