@@ -118,9 +118,11 @@ Last
 Mean
 ====
 
+* Problem (and pen-and-paper calculation) provided by Jason Reich.
+
 * A non-WW tupling example (maybe it can be cast as WW, I'm not sure).
 
-* In progress (stuck because HERMIT crashes).
+* Completed.
 
 
 Nub

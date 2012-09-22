@@ -1,4 +1,4 @@
-import Prelude hiding (sum, length, foldr)
+import Prelude hiding (sum, length)
 
 -- so we can let-tuple
 import Data.Tuple
@@ -9,13 +9,12 @@ mean :: [Int] -> Int
 mean xs = sum xs `div` length xs
 
 sum :: [Int] -> Int
-sum xs = foldr (+) 0 xs
+sum []     = 0
+sum (x:xs) = x + sum xs
 
 length :: [Int] -> Int
-length xs = foldr (const $ (+) 1) 0 xs
-
-foldr f z [] = z
-foldr f z (x:xs) = x `f` foldr f z xs
+length []     = 0
+length (x:xs) = 1 + length xs
 
 main :: IO ()
 main = print $ mean [1..10]
