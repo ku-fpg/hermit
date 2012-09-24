@@ -1,3 +1,5 @@
+{-# LANGUAGE InstanceSigs #-}
+
 module Language.HERMIT.Context
        (
          -- * HERMIT Bindings
@@ -58,6 +60,7 @@ data Context = Context
 
 -- | The HERMIT context stores an 'AbsolutePath' to the current node in the tree.
 instance PathContext Context where
+  contextPath :: Context -> AbsolutePath
   contextPath = hermitPath
 
 -- | Create the initial HERMIT 'Context' by providing a 'ModGuts'.

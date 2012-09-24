@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, GADTs, KindSignatures #-}
+{-# LANGUAGE TupleSections, GADTs, KindSignatures, InstanceSigs #-}
 
 module Language.HERMIT.Monad
           (
@@ -80,29 +80,29 @@ runHM env s success failure ma = runHermitM ma env s >>= runKureMonad (\ (a,b) -
 ----------------------------------------------------------------------------
 
 instance Functor HermitM where
--- fmap :: (a -> b) -> HermitM a -> HermitM b
-   fmap = liftM
+  fmap :: (a -> b) -> HermitM a -> HermitM b
+  fmap = liftM
 
 instance Applicative HermitM where
--- pure :: a -> HermitM a
-   pure  = return
+  pure :: a -> HermitM a
+  pure  = return
 
--- (<*>) :: HermitM (a -> b) -> HermitM a -> HermitM b
-   (<*>) = ap
+  (<*>) :: HermitM (a -> b) -> HermitM a -> HermitM b
+  (<*>) = ap
 
 instance Monad HermitM where
--- return :: a -> HermitM a
-   return a = HermitM $ \ _ s -> return (return (s,a))
+  return :: a -> HermitM a
+  return a = HermitM $ \ _ s -> return (return (s,a))
 
--- (>>=) :: HermitM a -> (a -> HermitM b) -> HermitM b
-   (HermitM gcm) >>= f = HermitM $ \ env -> gcm env >=> runKureMonad (\ (s', a) -> runHermitM (f a) env s') (return . fail)
+  (>>=) :: HermitM a -> (a -> HermitM b) -> HermitM b
+  (HermitM gcm) >>= f = HermitM $ \ env -> gcm env >=> runKureMonad (\ (s', a) -> runHermitM (f a) env s') (return . fail)
 
--- fail :: String -> HermitM a
-   fail msg = HermitM $ \ _ _ -> return (fail msg)
+  fail :: String -> HermitM a
+  fail msg = HermitM $ \ _ _ -> return (fail msg)
 
 instance MonadCatch HermitM where
--- catchM :: HermitM a -> (String -> HermitM a) -> HermitM a
-   (HermitM gcm) `catchM` f = HermitM $ \ env s -> gcm env s >>= runKureMonad (return.return) (\ msg -> runHermitM (f msg) env s)
+  catchM :: HermitM a -> (String -> HermitM a) -> HermitM a
+  (HermitM gcm) `catchM` f = HermitM $ \ env s -> gcm env s >>= runKureMonad (return.return) (\ msg -> runHermitM (f msg) env s)
 
 ----------------------------------------------------------------------------
 
@@ -112,23 +112,27 @@ liftCoreM ma = HermitM $ \ _ s -> do a <- ma
                                      return (return (s,a))
 
 instance MonadIO HermitM where
-   liftIO = liftCoreM . liftIO
+  liftIO :: IO a -> HermitM a
+  liftIO = liftCoreM . liftIO
 
 instance MonadUnique HermitM where
-   getUniqueSupplyM = liftCoreM getUniqueSupplyM
+  getUniqueSupplyM :: HermitM UniqSupply
+  getUniqueSupplyM = liftCoreM getUniqueSupplyM
 
 instance MonadThings HermitM where
-   lookupThing = liftCoreM . lookupThing
+  lookupThing :: Name -> HermitM TyThing
+  lookupThing = liftCoreM . lookupThing
 
 instance HasDynFlags HermitM where
-   getDynFlags = liftCoreM getDynFlags
+  getDynFlags :: HermitM DynFlags
+  getDynFlags = liftCoreM getDynFlags
 
 ----------------------------------------------------------------------------
 
 newName :: String -> HermitM Name
 newName name = do
         uq <- getUniqueM
-        return $  mkSystemVarName uq $ mkFastString $ name
+        return $ mkSystemVarName uq $ mkFastString $ name
 
 -- | Make a unique identifier for a specified type based on a provided name.
 newVarH :: String -> Type -> HermitM Id
@@ -149,9 +153,9 @@ cloneIdH nameMod b =
         let name = nameMod $ getOccString b
             ty   = idType b
         in
-          case (isTyVar b) of
-            True -> newTypeVarH name ty
-            _    -> newVarH name ty
+          if isTyVar b
+           then newTypeVarH name ty
+           else newVarH name ty
 
 ----------------------------------------------------------------------------
 
@@ -164,3 +168,5 @@ mkHermitMEnv :: (DebugMessage -> HermitM ()) -> HermitMEnv
 mkHermitMEnv debugger = HermitMEnv
                 { hs_debugChan = debugger
                 }
+
+----------------------------------------------------------------------------
