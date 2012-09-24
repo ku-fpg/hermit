@@ -61,18 +61,21 @@ externals =
          , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
                 ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
          , external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
-                ["Flatten all the top-level binding groups into a single recursive binding group.",
+                ["Flatten all the top-level binding groups in the module to a single recursive binding group.",
                  "This can be useful if you intend to appply GHC RULES."]
-
+         , external "flatten-program" (promoteProgramR flattenProgram :: RewriteH Core)
+                ["Flatten all the top-level binding groups in a program (list of binding groups) to a single recursive binding group.",
+                 "This can be useful if you intend to appply GHC RULES."]
          , external "occur-analysis" (promoteExprR occurAnalyseExprR :: RewriteH Core)
                 ["Performs dependency anlaysis on a CoreExpr.",
                  "This can be useful to simplify a recursive let to a non-recursive let."] .+ Deep
          ]
 
 ------------------------------------------------------------------------
+
 substR :: Id -> CoreExpr -> RewriteH Core
 substR b e = setFailMsg "Can only perform substitution on Expr or CoreProgram forms." $
-             promoteExprR (substExprR b e) <+  promoteProgramR (substTopBindR b e)
+             promoteExprR (substExprR b e) <+ promoteProgramR (substTopBindR b e)
 
 substExprR :: Id -> CoreExpr -> RewriteH CoreExpr
 substExprR b e =  contextfreeT $ \ exp ->
@@ -81,12 +84,12 @@ substExprR b e =  contextfreeT $ \ exp ->
           -- to pass on to exprFeeVars takes care of this, but ...
           -- TODO Is there a better way to do this ???
           let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars (Let (NonRec b e) exp)))
-              sub = if (isTyVar b)
-                    then case e of
-                           (Type bty) -> Just $ extendTvSubst emptySub b bty
-                           (Var x)    -> Just $ extendTvSubst emptySub b (mkTyVarTy x)
-                           _ ->  Nothing
-                    else Just $ extendSubst emptySub b e
+              sub = if isTyVar b
+                     then case e of
+                            Type bty -> Just $ extendTvSubst emptySub b bty
+                            Var x    -> Just $ extendTvSubst emptySub b (mkTyVarTy x)
+                            _        ->  Nothing
+                     else Just $ extendSubst emptySub b e
           in
             case sub of
               Just sub' -> return $ substExpr (text "substR") sub' exp
@@ -95,7 +98,7 @@ substExprR b e =  contextfreeT $ \ exp ->
 
 substTopBindR :: Id -> CoreExpr -> RewriteH CoreProgram
 substTopBindR b e =  contextfreeT $ \  binds  ->
-          -- TODO.  Do we ned to initialize the emptySubst with bindFreeVars ?
+          -- TODO.  Do we need to initialize the emptySubst with bindFreeVars?
           let emptySub =  emptySubst -- mkEmptySubst (mkInScopeSet (exprFreeVars exp))
               sub = if (isTyVar b)
                     then case e of
@@ -293,20 +296,23 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
 
 ----------------------------------------------------------------------
 
-flattenModule :: RewriteH ModGuts
-flattenModule = modGutsR mergeBinds
+-- These flatten Rewrites don't belong here.  But where?
 
-mergeBinds :: RewriteH CoreProgram
-mergeBinds = contextfreeT $ \  binds ->
-             let allbinds = foldr listOfBinds [] binds
-                 nodups = nub $ map fst allbinds
-             in
-               if (length allbinds == length nodups)
-               then return $ [Rec allbinds]
-               else fail "Module top level bindings contain multiple occurances of a name"
- where listOfBinds cb others = case cb of
-                                 (NonRec b e) -> (b, e) : others
-                                 (Rec bds) -> bds ++ others
+flattenModule :: RewriteH ModGuts
+flattenModule = modGutsR flattenProgram
+
+flattenProgram :: RewriteH CoreProgram
+flattenProgram = contextfreeT $ \ binds ->
+                 let allbinds = foldr listOfBinds [] binds
+                     nodups   = nub $ map fst allbinds
+                 in
+                    if length allbinds == length nodups
+                     then return [Rec allbinds]
+                     else fail "Top-level bindings contain multiple occurances of a name."
+  where
+        listOfBinds :: CoreBind -> [(Id,CoreExpr)] -> [(Id,CoreExpr)]
+        listOfBinds (NonRec b e) others = (b, e) : others
+        listOfBinds (Rec bds)    others = bds ++ others
 
 ----------------------------------------------------------------------
 
@@ -377,9 +383,8 @@ compareValues n1 n2 = do
 
 --------------------------------------------------------
 
-
 -- try figure out the arity of an Id
-arityOf:: Context -> Id -> Int
+arityOf :: Context -> Id -> Int
 arityOf env nm =
      case lookupHermitBinding nm env of
         Nothing       -> idArity nm

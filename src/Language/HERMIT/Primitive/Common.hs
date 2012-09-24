@@ -8,6 +8,7 @@ module Language.HERMIT.Primitive.Common
     , bindingVarsT
     , caseAltVarsT
     , caseBinderVarT
+    , caseAltVarsWithBinderT
     , letVarsT
     , wrongExprForm
     ) where

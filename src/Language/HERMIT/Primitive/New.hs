@@ -255,9 +255,10 @@ fixSpecialization' = do
             )
             a <- idR
 
-        let t' = case a of
-                   Type t2  -> applyTy t t2
-                   (Var x) | isTyVar x -> applyTy t (mkTyVarTy x)
+        t' <- case a of
+                Type t2           -> return (applyTy t t2)
+                Var x | isTyVar x -> return (applyTy t (mkTyVarTy x))
+                _                 -> fail "Not a type variable." -- TODO: I've added this error message to avoid compiler-time warnings about missing cases, but this may have changed the semantics.  Generally I think this entire functions needs revisiting and cleaning up.  What's going on with all the dead-code (which I've commented out now).
 --                   Var  a2  -> mkAppTy t (exprType t2)
 --                   mkAppTy t t'
 

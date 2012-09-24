@@ -8,7 +8,7 @@ module Language.HERMIT.Dictionary
        , pp_dictionary
 )  where
 
-import Data.Default (def)
+-- import Data.Default (def)
 import Data.Dynamic
 import Data.List
 import Data.Map (Map, fromList, toList)
@@ -88,6 +88,7 @@ pp_dictionary = fromList
         , ("ghc",    GHCPP.corePrettyH)
         ]
 
+{-
 -- (This isn't used anywhere currently.)
 -- | Each pretty printer can suggest some options
 pp_opt_dictionary :: Map String PrettyOptions
@@ -96,7 +97,7 @@ pp_opt_dictionary = fromList
         , ("ast",  def)
         , ("ghc",  def)
         ]
-
+-}
 
 --------------------------------------------------------------------------
 
