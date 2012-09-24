@@ -1,4 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables, TypeFamilies, FlexibleContexts, TupleSections #-}
 module Language.HERMIT.Primitive.Fold
     ( externals
     , foldR
@@ -53,7 +52,7 @@ stashFoldR :: String -> RewriteH CoreExpr
 stashFoldR label = prefixFailMsg "Fold failed: " $
     translate $ \ c e -> do
         Def i rhs <- lookupDef label
-        guardMsg (inScope c i) $ var2String i ++ " is not in scope."
+        guardMsg (inScope c i) $ var2String i ++ " is not in scope.\n(A common cause of this error is trying to fold a recursive call while being in the body of a non-recursive definition.  This can be resolved by calling \"nonrec-to-rec\" on the non-recursive binding group.)"
         maybe (fail "no match.")
               return
               (fold i rhs e)
