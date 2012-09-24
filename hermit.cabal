@@ -2,8 +2,6 @@ Name:                hermit
 Version:             0.1.2.0
 Synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
 Description:
-  Note: HERMIT is currently compatible with GHC 7.4.* only.
-  .
   HERMIT uses Haskell to express semi-formal models,
   efficient implementations, and provide a bridging DSL
   to describe via stepwise refinement the connection between
@@ -127,18 +125,18 @@ extra-source-files:
 Library
   ghc-options: -Wall -fno-warn-orphans
   Build-Depends: base >= 4 && < 5,
-                 aeson >= 0.6.0.0,
+                 aeson >= 0.6.0.2,
                  ansi-terminal >= 0.5.5,
-                 containers >= 0.4.2.1,
-                 data-default >= 0.4,
+                 containers >= 0.5.0.0,
+                 data-default >= 0.5.0,
                  ghc == 7.6.*,
-                 haskeline >= 0.6.4.7,
+                 haskeline >= 0.7.0.3,
                  kure >= 2.4.2,
                  marked-pretty >= 0.1,
-                 mtl >= 2.0.1.0,
-                 stm >= 2.2.0.1,
-                 template-haskell >= 2.7.0.0,
-                 text >= 0.11.1.13
+                 mtl >= 2.1.2,
+                 stm >= 2.4,
+                 template-haskell >= 2.8.0.0,
+                 text >= 0.11.2.3
 
   default-language: Haskell2010
 
