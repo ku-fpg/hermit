@@ -112,6 +112,8 @@ letTupleR nm = translate $ \ c e -> do
 
         (bnds, body) = collectLets e
 
+    guardMsg (length bnds > 1) "cannot tuple: need at least two nonrec lets"
+
     -- until we no longer need letPairR
     if length bnds == 2
       then apply (letPairR nm) c e
