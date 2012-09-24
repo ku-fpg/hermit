@@ -58,6 +58,9 @@ externals =
                      [ "let v = ev in e ==> case ev of v -> e" ] .+ Commute .+ Shallow .+ PreCondition
          -- , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
          --             [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ] .+ Unimplemented
+         , external "nonrec-to-rec" (promoteBindR nonrecToRec :: RewriteH Core)
+                     [ "convert a nonrec binding into a recursive binding group with a single binding"
+                     , "NonRec v ev ==> Rec [(v,ev)]" ]
          ]
 
 -- | e => (let v = e in v), name of v is provided
@@ -118,3 +121,8 @@ letToCase = prefixFailMsg "Converting Let to Case failed: " $
      nameModifier <- freshNameGenT Nothing
      caseBndr <- constT (cloneIdH nameModifier v)
      letT mempty (renameIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
+
+nonrecToRec :: RewriteH CoreBind
+nonrecToRec = do
+    NonRec v ev <- idR
+    return $ Rec [(v,ev)]
