@@ -61,7 +61,7 @@ stashApply label = setFailMsg "Inlining stashed definition failed: " $
                    withPatFailMsg (wrongExprForm "Var v") $
                    do (c, Var v) <- exposeT
                       constT $ do Def i rhs <- lookupDef label
-                                  if idName i == idName v -- Is there a reason we're not just using equality on Id?
+                                  if idName i == idName v -- TODO: Is there a reason we're not just using equality on Id?
                                     then ifM (all (inScope c) <$> apply freeVarsT c rhs)
                                              (return rhs)
                                              (fail "some free variables in stashed definition are no longer in scope.")

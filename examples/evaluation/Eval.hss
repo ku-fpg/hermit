@@ -14,7 +14,13 @@ load "WWSplitTactic.hss"
     one-td (unfold 'body)
     bash
     any-bu (fold 'unwrap)
-    any-bu (fold 'fusion)
+    any-bu (unfold-rule fusion)
+    consider case
+    consider case
+    2 ; 0
   }
 }
 }
+back
+back
+back

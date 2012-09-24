@@ -30,7 +30,12 @@ externals =
             ]
 
 inlineName :: TH.Name -> RewriteH CoreExpr
-inlineName nm = (varT (cmpTHName2Id nm) >>= guardM) >> inline
+inlineName nm = let name = TH.nameBase nm in
+                prefixFailMsg ("inline '" ++ name ++ " failed: ") $
+                withPatFailMsg (wrongExprForm "Var v") $
+   do Var v <- idR
+      guardMsg (cmpTHName2Id nm v) $ name ++ " does not match " ++ var2String v ++ "."
+      inline
 
 inline :: RewriteH CoreExpr
 inline = configurableInline False False
