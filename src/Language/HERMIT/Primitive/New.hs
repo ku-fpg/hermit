@@ -4,11 +4,6 @@
 module Language.HERMIT.Primitive.New where
 
 import GhcPlugins as GHC hiding (varName)
-import TcSplice (lookupThName_maybe)
--- GHC 7.6 only! import TcRnMonad (initTcForLookup)
-
---import Convert (thRdrNameGuesses)
--- import OccName(varName)
 
 import Control.Applicative
 import Control.Arrow
@@ -210,16 +205,6 @@ testQuery r = f <$> testM r
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."
 
-{- this will work in 7.6!
-findId' :: String -> m Id
-findId' = thNameToGhcId . mkName
-
-thNameToGhcId nm = do
-    hsc_env <- getHscEnv
-    mnm <- liftIO $ initTcForLookup hsc_env $ lookupThName_maybe nm
-    maybe (fail "cannot find " ++ show nm) lookupId mnm
--}
-
 findId :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => Context -> String -> m Id
 findId c = findIdMG (hermitModGuts c)
 
@@ -230,8 +215,6 @@ findIdMG modguts nm =
         [n] -> lookupId n
         ns  -> do dynFlags <- getDynFlags
                   fail $ "too many " ++ nm ++ " found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
-
- --   liftIO $ print ("VAR", GHC.showSDoc . GHC.ppr $ namedFn)
 
 -- |  f = e   ==>   f = fix (\ f -> e)
 fixIntro :: RewriteH CoreDef
