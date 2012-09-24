@@ -10,6 +10,7 @@ import GhcPlugins hiding (empty)
 import Control.Applicative
 import Control.Monad
 
+import Data.List (intercalate)
 import qualified Data.Map as Map
 
 import Language.HERMIT.Monad
@@ -50,18 +51,20 @@ externals =
 
 stashFoldR :: String -> RewriteH CoreExpr
 stashFoldR label = prefixFailMsg "Fold failed: " $
-                   contextfreeT $ \ e -> do
-    Def i rhs <- lookupDef label
-    maybe (fail "no match.")
-          return
-          (fold i rhs e)
+    translate $ \ c e -> do
+        Def i rhs <- lookupDef label
+        guardMsg (inScope c i) $ var2String i ++ " is not in scope."
+        maybe (fail "no match.")
+              return
+              (fold i rhs e)
 
 foldR :: TH.Name -> RewriteH CoreExpr
 foldR nm =  prefixFailMsg "Fold failed: " $
     translate $ \ c e -> do
-        i <- case filter (\i -> nm `cmpTHName2Id` i) $ Map.keys (hermitBindings c) of
+        i <- case filter (cmpTHName2Id nm) $ Map.keys (hermitBindings c) of
+                []  -> fail "cannot find name."
                 [i] -> return i
-                _ -> fail "cannot find name."
+                is  -> fail $ "multiple names match: " ++ intercalate ", " (map var2String is)
         either fail
                (\(rhs,_d) -> maybe (fail "no match.")
                                    return
