@@ -9,7 +9,8 @@
 }
 innermost let-float
 consider 'sumlength
-remember sumlen
+nonrec-to-rec           -- since we know sumlength will eventually be recursive
+0 ; remember sumlen
 { 0 ; 0
   case-split-inline 'xs
   any-call (unfold 'sum)
