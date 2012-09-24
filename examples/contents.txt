@@ -19,7 +19,9 @@ Evaluation
 
 * Convert to CPS to avoid repeated pattern matching.
 
-* In progress - stuck because "fold" won't fire.
+* Completed.
+
+* Interesting rewrites: abstract, fold
 
 
 Fibonacci (Tupling)
@@ -123,6 +125,9 @@ Mean
 * A non-WW tupling example (maybe it can be cast as WW, I'm not sure).
 
 * Completed.
+
+* Interesting rewrites: abstract, remember, fold, let-intro, let-float, let-tuple
+
 
 
 Nub

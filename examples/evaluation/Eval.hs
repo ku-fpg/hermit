@@ -29,9 +29,5 @@ wrap h e = h e Just Nothing
 {-# RULES "ww"     forall f. fix f = wrap (fix (unwrap . f . wrap)) #-}
 {-# RULES "fusion" forall w. unwrap (wrap w) = w                    #-} -- has precondition
 
--- Temperary hack
-compose :: (Int -> a) -> Int -> Int -> a
-compose f m n = f ((+) m n)
-
 main :: IO ()
 main = print (eval $ Val 5)
