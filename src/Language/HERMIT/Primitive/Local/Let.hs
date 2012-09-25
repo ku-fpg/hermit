@@ -1,14 +1,15 @@
--- Andre Santos' Local Transformations (Ch 3 in his dissertation)
 module Language.HERMIT.Primitive.Local.Let
        ( -- * Rewrites on Let Expressions
-         externals
+         letExternals
        , letIntro
        , letFloatApp
        , letFloatArg
        , letFloatLet
+       , letFloatLam
        , letFloatExpr
        , letFloatLetTop
        , letToCase
+       , nonrecToRec
        )
 where
 
@@ -25,16 +26,16 @@ import Language.HERMIT.External
 import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.GHC hiding (externals)
-import Language.HERMIT.Primitive.AlphaConversion hiding (externals)
+import Language.HERMIT.Primitive.GHC
+import Language.HERMIT.Primitive.AlphaConversion
 
 import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------
 
 -- | Externals relating to Let expressions.
-externals :: [External]
-externals =
+letExternals :: [External]
+letExternals =
          [ external "let-intro" (promoteExprR . letIntro :: TH.Name -> RewriteH Core)
                 [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
          -- , external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
@@ -44,8 +45,7 @@ externals =
          , external "let-float-arg" (promoteExprR letFloatArg :: RewriteH Core)
                      [ "f (let v = ev in e) ==> let v = ev in f e" ]                    .+ Commute .+ Shallow .+ Bash
          , external "let-float-lam" (promoteExprR letFloatLam :: RewriteH Core)
-                     [ "(\\ v1 -> let v2 = e1 in e2)  ==>  let v2 = e1 in (\\ v1 -> e2)",
-                       "Fails if v1 occurs in e1.",
+                     [ "(\\ v1 -> let v2 = e1 in e2)  ==>  let v2 = e1 in (\\ v1 -> e2), if v1 is not free in e2.",
                        "If v1 = v2 then v1 will be alpha-renamed."
                      ]                                                                  .+ Commute .+ Shallow .+ Bash
          , external "let-float-let" (promoteExprR letFloatLet :: RewriteH Core)
@@ -59,8 +59,8 @@ externals =
          -- , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
          --             [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ] .+ Unimplemented
          , external "nonrec-to-rec" (promoteBindR nonrecToRec :: RewriteH Core)
-                     [ "convert a nonrec binding into a recursive binding group with a single binding"
-                     , "NonRec v ev ==> Rec [(v,ev)]" ]
+                     [ "convert a non-recursive binding into a recursive binding group with a single definition."
+                     , "NonRec v e ==> Rec [Def v e]" ]
          ]
 
 -- | e => (let v = e in v), name of v is provided
@@ -122,7 +122,8 @@ letToCase = prefixFailMsg "Converting Let to Case failed: " $
      caseBndr <- constT (cloneIdH nameModifier v)
      letT mempty (renameIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
 
+-- | NonRec v e ==> Rec [Def v e]
 nonrecToRec :: RewriteH CoreBind
-nonrecToRec = do
-    NonRec v ev <- idR
-    return $ Rec [(v,ev)]
+nonrecToRec = setFailMsg (wrongExprForm "NonRec v e") $
+  do NonRec v e <- idR
+     return $ Rec [(v,e)]

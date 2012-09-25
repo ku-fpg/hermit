@@ -1,7 +1,6 @@
--- Andre Santos' Local Transformations (Ch 3 in his dissertation)
 module Language.HERMIT.Primitive.Local.Case
        ( -- * Rewrites on Case Expressions
-         externals
+         caseExternals
        , letFloatCase
        , caseFloatApp
        , caseFloatArg
@@ -27,9 +26,9 @@ import Language.HERMIT.External
 import Language.HERMIT.Monad
 
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.GHC hiding (externals)
-import Language.HERMIT.Primitive.Inline hiding (externals)
-import Language.HERMIT.Primitive.AlphaConversion hiding (externals)
+import Language.HERMIT.Primitive.GHC
+import Language.HERMIT.Primitive.Inline
+import Language.HERMIT.Primitive.AlphaConversion
 
 import qualified Language.Haskell.TH as TH
 
@@ -37,8 +36,8 @@ import qualified Language.Haskell.TH as TH
 ------------------------------------------------------------------------------
 
 -- | Externals relating to Case expressions.
-externals :: [External]
-externals =
+caseExternals :: [External]
+caseExternals =
          [ -- I'm not sure this is possible. In core, v2 can only be a Constructor, Lit, or DEFAULT
            -- In the last case, v1 is already inlined in e. So we can't construct v2 as a Var.
          --   external "case-elimination" (promoteR $ not_defined "case-elimination" :: RewriteH Core)
@@ -71,9 +70,6 @@ externals =
                 [ "Like case-split, but additionally inlines the matched constructor "
                 , "applications for all occurances of the named variable." ]
          ]
-
--- not_defined :: String -> RewriteH CoreExpr
--- not_defined nm = fail $ nm ++ " not implemented!"
 
 -- | case (let v = e1 in e2) of alts ==> let v = e1 in case e2 of alts
 letFloatCase :: RewriteH CoreExpr

@@ -19,8 +19,6 @@ import Language.HERMIT.GHC
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Utils
 import Language.HERMIT.Primitive.Local
-import Language.HERMIT.Primitive.Local.Case
-import Language.HERMIT.Primitive.Local.Let
 import Language.HERMIT.Primitive.Inline
 -- import Language.HERMIT.Primitive.Debug
 
@@ -74,7 +72,7 @@ isVar :: TH.Name -> TranslateH CoreExpr ()
 isVar nm = varT (cmpTHName2Id nm) >>= guardM
 
 simplifyR :: RewriteH Core
-simplifyR = innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ dce))
+simplifyR = innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ deadCodeElimination))
 
 -- This left for Neil's IFL presentation. letTupleR is the more general version.
 letPairR :: TH.Name -> RewriteH CoreExpr

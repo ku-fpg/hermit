@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, TypeFamilies, FlexibleContexts, TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
 module Language.HERMIT.Primitive.GHC where
 
 import GhcPlugins hiding (empty)
@@ -6,7 +6,7 @@ import qualified OccurAnal
 import Control.Arrow
 import Control.Monad
 import qualified Data.Map as Map
-import Data.List (nub, mapAccumL)
+import Data.List (mapAccumL)
 
 -- import Language.HERMIT.Primitive.Debug
 import Language.HERMIT.Primitive.Navigation
@@ -60,12 +60,6 @@ externals =
                                         .+ Shallow .+ TODO
          , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
                 ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
-         , external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
-                ["Flatten all the top-level binding groups in the module to a single recursive binding group.",
-                 "This can be useful if you intend to appply GHC RULES."]
-         , external "flatten-program" (promoteProgramR flattenProgram :: RewriteH Core)
-                ["Flatten all the top-level binding groups in a program (list of binding groups) to a single recursive binding group.",
-                 "This can be useful if you intend to appply GHC RULES."]
          , external "occur-analysis" (promoteExprR occurAnalyseExprR :: RewriteH Core)
                 ["Performs dependency anlaysis on a CoreExpr.",
                  "This can be useful to simplify a recursive let to a non-recursive let."] .+ Deep
@@ -288,7 +282,7 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
                             NonRec b e -> [(b,e)]
              ,  nm `GHC.cmpTHName2Id` v
              ] of
-         [] -> fail $ "can not find binding " ++ show nm
+         [] -> fail $ "cannot find binding " ++ show nm
          [(v,e)] -> return $ modGuts { mg_rules = mg_rules modGuts
                                               ++ [makeRule rule_name v e]
                                      }
@@ -296,32 +290,11 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
 
 ----------------------------------------------------------------------
 
--- These flatten Rewrites don't belong here.  But where?
-
-flattenModule :: RewriteH ModGuts
-flattenModule = modGutsR flattenProgram
-
-flattenProgram :: RewriteH CoreProgram
-flattenProgram = contextfreeT $ \ binds ->
-                 let allbinds = foldr listOfBinds [] binds
-                     nodups   = nub $ map fst allbinds
-                 in
-                    if length allbinds == length nodups
-                     then return [Rec allbinds]
-                     else fail "Top-level bindings contain multiple occurances of a name."
-  where
-        listOfBinds :: CoreBind -> [(Id,CoreExpr)] -> [(Id,CoreExpr)]
-        listOfBinds (NonRec b e) others = (b, e) : others
-        listOfBinds (Rec bds)    others = bds ++ others
-
-----------------------------------------------------------------------
-
 occurAnalyseExpr :: CoreExpr -> CoreExpr
 occurAnalyseExpr = OccurAnal.occurAnalyseExpr
 
-
 occurAnalyseExprR :: RewriteH CoreExpr
-occurAnalyseExprR = contextfreeT $ \ exp -> return (occurAnalyseExpr exp)
+occurAnalyseExprR = arr occurAnalyseExpr
 
 
 
@@ -374,11 +347,11 @@ compareValues :: TH.Name -> TH.Name -> TranslateH Core ()
 compareValues n1 n2 = do
         p1 <- onePathToT (namedBinding n1)
         p2 <- onePathToT (namedBinding n2)
-        e1 :: Core <- pathT p1 idR
-        e2 :: Core <- pathT p2 idR
+        e1 <- pathT p1 idR
+        e2 <- pathT p2 idR
         case e1 `coreEqual` e2 of
-          Nothing    -> fail $ show n1 ++ " and " ++ show n2 ++ " are incomparable"
-          Just False -> fail $ show n1 ++ " and " ++ show n2 ++ " are not equal"
+          Nothing    -> fail $ show n1 ++ " and " ++ show n2 ++ " are incomparable."
+          Just False -> fail $ show n1 ++ " and " ++ show n2 ++ " are not equal."
           Just True  -> return ()
 
 --------------------------------------------------------
