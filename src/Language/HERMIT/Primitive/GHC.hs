@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeFamilies #-}
 module Language.HERMIT.Primitive.GHC where
 
 import GhcPlugins hiding (empty)
@@ -28,30 +27,28 @@ import Prelude hiding (exp)
 externals :: [External]
 externals =
          [ external "let-subst" (promoteExprR letSubstR :: RewriteH Core)
-                [ "Let substitution [via GHC]"
-                , "let x = E1 in E2 ==> E2[E1/x], fails otherwise"
-                , "only matches non-recursive lets" ]                           .+ Deep
+                [ "Let substitution"
+                , "(let x = e1 in e2) ==> (e2[e1/x])"
+                , "x must not be free in e1." ]                           .+ Deep
          , external "safe-let-subst" (promoteExprR safeLetSubstR :: RewriteH Core)
-                [ "Safe let substitution [via GHC]"
-                , "let x = E1 in E2, safe to inline without duplicating work ==> E2[E1/x],"
-                , "fails otherwise"
-                , "only matches non-recursive lets" ]                           .+ Deep .+ Eval .+ Bash
+                [ "Safe let substitution"
+                , "let x = e1 in e2, safe to inline without duplicating work ==> e2[e1/x],"
+                , "x must not be free in e1." ]                           .+ Deep .+ Eval .+ Bash
          , external "safe-let-subst-plus" (promoteExprR safeLetSubstPlusR :: RewriteH Core)
-                [ "Safe let substitution [via GHC]"
-                , "let { x = E1, ... } in E2, "
-                , "  where safe to inline without duplicating work ==> E2[E1/x,...],"
-                , "fails otherwise"
+                [ "Safe let substitution"
+                , "let { x = e1, ... } in e2, "
+                , "  where safe to inline without duplicating work ==> e2[e1/x,...],"
                 , "only matches non-recursive lets" ]  .+ Deep .+ Eval
          , external "free-ids" (promoteExprT freeIdsQuery :: TranslateH Core String)
-                [ "List the free identifiers in this expression [via GHC]" ] .+ Query .+ Deep
+                [ "List the free identifiers in this expression." ] .+ Query .+ Deep
          , external "deshadow-binds" (promoteProgramR deShadowBindsR :: RewriteH Core)
-                [ "Deshadow a program " ] .+ Deep
+                [ "Deshadow a program." ] .+ Deep
          , external "apply-rule" (promoteExprR . rules :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ] .+ Shallow
          , external "apply-rule" (rules_help :: TranslateH Core String)
                 [ "list rules that can be used" ] .+ Query
          , external "compare-values" compareValues
-                ["compare's the rhs of two values"] .+ Query .+ Predicate
+                ["compare the rhs of two values."] .+ Query .+ Predicate
          , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
                 ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
                                         .+ Introduce
@@ -68,7 +65,7 @@ externals =
 ------------------------------------------------------------------------
 
 substR :: Id -> CoreExpr -> RewriteH Core
-substR b e = setFailMsg "Can only perform substitution on Expr or CoreProgram forms." $
+substR b e = setFailMsg "Can only perform substitution on CoreExpr or CoreProgram forms." $
              promoteExprR (substExprR b e) <+ promoteProgramR (substTopBindR b e)
 
 substExprR :: Id -> CoreExpr -> RewriteH CoreExpr
@@ -82,7 +79,7 @@ substExprR b e =  contextfreeT $ \ exp ->
                      then case e of
                             Type bty -> Just $ extendTvSubst emptySub b bty
                             Var x    -> Just $ extendTvSubst emptySub b (mkTyVarTy x)
-                            _        ->  Nothing
+                            _        -> Nothing
                      else Just $ extendSubst emptySub b e
           in
             case sub of
@@ -91,7 +88,7 @@ substExprR b e =  contextfreeT $ \ exp ->
 
 
 substTopBindR :: Id -> CoreExpr -> RewriteH CoreProgram
-substTopBindR b e =  contextfreeT $ \  binds  ->
+substTopBindR b e =  contextfreeT $ \ binds ->
           -- TODO.  Do we need to initialize the emptySubst with bindFreeVars?
           let emptySub =  emptySubst -- mkEmptySubst (mkInScopeSet (exprFreeVars exp))
               sub = if (isTyVar b)
@@ -105,13 +102,15 @@ substTopBindR b e =  contextfreeT $ \  binds  ->
               Just sub' -> return $ snd (mapAccumL substBind sub' binds)
               Nothing -> fail "substTopBindR:  Id argument is a TyVar, but the expression is not a Type."
 
+-- | (let x = e1 in e2) ==> (e2[e1/x]),
+--   x must not be free in e1.
 letSubstR :: RewriteH CoreExpr
 letSubstR =  prefixFailMsg "Let substition failed: " $
              rewrite $ \ ctx exp -> case occurAnalyseExpr exp of
                                      Let (NonRec b be) e -> apply (substExprR b be) ctx e
                                      _ -> fail "expression is not a non-recursive Let."
 
--- remove N lets, please
+-- | Perform let-substitution the specified number of times.
 letSubstNR :: Int -> RewriteH Core
 letSubstNR 0 = idR
 letSubstNR n = childR 1 (letSubstNR (n - 1)) >>> promoteExprR letSubstR
@@ -154,29 +153,26 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 -- | Output a list of all free variables in an expression.
 freeIdsQuery :: TranslateH CoreExpr String
 freeIdsQuery = do
-    dynFlags <- constT getDynFlags
     frees <- freeIdsT
-    return $ "Free identifiers are: " ++ showVars dynFlags frees
-
--- | Show a human-readable version of a 'Var'.
-showVar :: DynFlags -> Var -> String
-showVar dynFlags = show . showPpr dynFlags
+    return $ "Free identifiers are: " ++ showVars frees
 
 -- | Show a human-readable version of a list of 'Var's.
-showVars :: DynFlags -> [Var] -> String
-showVars dynFlags = show . map (showPpr dynFlags) -- map GHC.var2String
+showVars :: [Var] -> String
+showVars = show . map GHC.var2String
 
+-- | Lifted version of 'coreExprFreeIds'.
 freeIdsT :: TranslateH CoreExpr [Id]
 freeIdsT = arr coreExprFreeIds
 
+-- | Lifted version of 'coreExprFreeVars'.
 freeVarsT :: TranslateH CoreExpr [Var]
 freeVarsT = arr coreExprFreeVars
 
--- note: coreExprFreeVars get *all* free variables, including types
+-- | List all free variables (including types) in the expression.
 coreExprFreeVars :: CoreExpr -> [Var]
 coreExprFreeVars  = uniqSetToList . exprFreeVars
 
--- note: coreExprFreeIds is only value-level free variables
+-- | List all free identifiers (value-level free variables) in the expression.
 coreExprFreeIds :: CoreExpr -> [Id]
 coreExprFreeIds  = uniqSetToList . exprFreeIds
 
@@ -242,8 +238,8 @@ rules r = do
                Nothing -> fail $ "failed to find rule: " ++ show r
                Just rr -> rulesToRewriteH rr
 
-getHermitRules :: (Generic a ~ Core) => TranslateH a [(String, [CoreRule])]
-getHermitRules = translate $ \ env _e -> do
+getHermitRules :: TranslateH a [(String, [CoreRule])]
+getHermitRules = translate $ \ env _ -> do
     rb <- liftCoreM getRuleBase
     let other_rules = [ rule
                         | top_bnds <- mg_binds (hermitModGuts env)
@@ -290,9 +286,12 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
 
 ----------------------------------------------------------------------
 
+-- | Performs dependency anlaysis on an expression.
+--   This can be useful to simplify a non-recursive recursive binding group to a non-recursive binding group.
 occurAnalyseExpr :: CoreExpr -> CoreExpr
 occurAnalyseExpr = OccurAnal.occurAnalyseExpr
 
+-- | Lifted version of 'occurAnalyseExpr'
 occurAnalyseExprR :: RewriteH CoreExpr
 occurAnalyseExprR = arr occurAnalyseExpr
 
@@ -356,7 +355,7 @@ compareValues n1 n2 = do
 
 --------------------------------------------------------
 
--- try figure out the arity of an Id
+-- | Try to figure out the arity of an identifier.
 arityOf :: Context -> Id -> Int
 arityOf env nm =
      case lookupHermitBinding nm env of

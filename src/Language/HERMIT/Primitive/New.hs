@@ -148,7 +148,7 @@ info = translate $ \ c core -> do
              bds      = "Bindings in Scope: " ++ (show $ map unqualifiedIdName $ listBindings c)
              expExtra = case core of
                           ExprCore e -> ["Type: " ++ showExprType dynFlags e] ++
-                                        ["Free Variables: " ++ showVars dynFlags (coreExprFreeVars e)] ++
+                                        ["Free Variables: " ++ showVars (coreExprFreeVars e)] ++
                                            case e of
                                              Var v -> ["Identifier Info: " ++ showIdInfo dynFlags v]
                                              _     -> []

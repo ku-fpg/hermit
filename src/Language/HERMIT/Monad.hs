@@ -15,6 +15,7 @@ module Language.HERMIT.Monad
           , saveDef
           , lookupDef
           , getStash
+            -- * Messages
           , HermitMEnv(..)
           , DebugMessage(..)
           , mkHermitMEnv
@@ -54,9 +55,11 @@ newtype HermitM a = HermitM (HermitMEnv -> DefStash -> CoreM (KureMonad (DefStas
 runHermitM :: HermitM a -> HermitMEnv -> DefStash -> CoreM (KureMonad (DefStash, a))
 runHermitM (HermitM f) = f
 
+-- | Get the stash of saved definitions.
 getStash :: HermitM DefStash
 getStash = HermitM (\ _ s -> return $ return (s, s))
 
+-- | Replace the stash of saved definitions.
 putStash :: DefStash -> HermitM ()
 putStash s = HermitM (\ _ _ -> return $ return (s, ()))
 
@@ -147,7 +150,7 @@ newTypeVarH name kind = do
         return $ mkTyVar name' kind
 
 
--- This gives an new version of an Id, with the same info, and a new textual name.
+-- | This gives an new version of an Id, with the same info, and a new textual name.
 cloneIdH :: (String -> String) -> Id -> HermitM Id
 cloneIdH nameMod b =
         let name = nameMod $ getOccString b

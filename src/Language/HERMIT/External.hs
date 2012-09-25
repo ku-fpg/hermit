@@ -58,7 +58,6 @@ type ExternalHelp = [String]
 --   (or the help function will not find it).
 --   These should be /user facing/, because they give the user
 --   a way of sub-dividing our confusing array of commands.
-
 data CmdTag = Shell          -- ^ Shell command.
             | Eval           -- ^ The arrow of evaluation (reduces a term).
             | KURE           -- ^ 'Language.KURE' command.
