@@ -126,7 +126,7 @@ caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
            >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
           )
           (const idR)
-          (\ (Case s1 b1 ty1 alts1) b2 ty2 alts2 -> Case s1 b1 ty1 [ (c1, ids1, Case e1 b2 ty2 alts2) | (c1, ids1, e1) <- alts1 ])
+          (\ (Case s1 b1 _ alts1) b2 ty alts2 -> Case s1 b1 ty [ (c1, ids1, Case e1 b2 ty alts2) | (c1, ids1, e1) <- alts1 ])
 
 -- | let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e
 caseFloatLet :: RewriteH CoreExpr

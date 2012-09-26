@@ -21,6 +21,7 @@ load "WWSplitTactic.hss"
     }
   one-td (unfold '-)
   one-td (unfold '*)
+  simplify
   innermost case-float-case
   }
 }

@@ -1,8 +1,8 @@
 {-# LANGUAGE MagicHash #-}
 
+import Prelude hiding ((*),(-))
 import GHC.Exts
 import Data.Function(fix)
-import Prelude hiding ((*),(-))
 
 fac :: Int -> Int
 fac 0 = 1
@@ -18,7 +18,7 @@ wrap h (I# x) = I# (h x)
 {-# RULES "ww"     forall f. fix f = wrap (fix (unwrap . f . wrap)) #-}
 
 main :: IO ()
-main = print (fac 50)
+main = print (fac 10)
 
 
 (*) :: Int -> Int -> Int
