@@ -120,7 +120,7 @@ letToCase = prefixFailMsg "Converting Let to Case failed: " $
   do Let (NonRec v ev) _ <- idR
      nameModifier <- freshNameGenT Nothing
      caseBndr <- constT (cloneIdH nameModifier v)
-     letT mempty (renameIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
+     letT mempty (replaceIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
 
 -- | NonRec v e ==> Rec [Def v e]
 nonrecToRec :: RewriteH CoreBind

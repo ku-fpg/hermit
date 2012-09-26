@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections #-}
+{-# LANGUAGE InstanceSigs, FlexibleInstances, FlexibleContexts #-}
 
 -- | Note: this module should NOT export externals. It is for common
 --   transformations needed by the other primitive modules.
@@ -11,7 +11,8 @@ module Language.HERMIT.Primitive.Common
     , caseAltVarsWithBinderT
     , letVarsT
     , wrongExprForm
-    ) where
+    )
+where
 
 import GhcPlugins
 
@@ -21,7 +22,6 @@ import Data.List
 import Data.Monoid
 
 import Language.HERMIT.Kure
-
 import Language.HERMIT.Primitive.GHC
 
 
@@ -30,22 +30,27 @@ class BindEnv a where
 
 -- | All the identifiers bound in this binding group.
 instance BindEnv  CoreBind where
+    bindings :: CoreBind -> [Id]
     bindings (NonRec b _) = [b]
     bindings (Rec bs)     = map fst bs
 
 instance BindEnv CoreAlt where
+    bindings :: CoreAlt -> [Id]
     bindings (_,vs,_) = vs
 
 instance BindEnv CoreExpr where
+    bindings :: CoreExpr -> [Id]
     bindings (Lam b _)          = [b]
     bindings (Let bs _)         = bindings bs
-    bindings (Case _ sc _ alts) = sc : (nub (concat (map bindings alts)))
+    bindings (Case _ sc _ alts) = sc : nub (concatMap bindings alts)
     bindings _                  = []
 
 instance BindEnv CoreProgram where
-    bindings prog = nub (concat (map bindings prog))
+    bindings :: CoreProgram -> [Id]
+    bindings prog = nub (concatMap bindings prog)
 
 instance BindEnv CoreDef  where
+    bindings :: CoreDef -> [Id]
     bindings (Def b _) = [b]
 
 bindingVarsT :: TranslateH Core [Var]

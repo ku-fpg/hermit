@@ -1,5 +1,25 @@
 {-# LANGUAGE TypeFamilies, FlexibleContexts #-}
-module Language.HERMIT.Primitive.AlphaConversion where
+module Language.HERMIT.Primitive.AlphaConversion
+       ( -- * Alpha-Renaming and Shadowing
+         externals
+         -- ** Alpha-Renaming
+       , alpha
+       , alphaLam
+       , alphaCaseBinder
+       , alphaAlt
+       , alphaCase
+       , alphaLetOne
+       , alphaLet
+       , alphaConsOne
+       , alphaCons
+         -- ** Shadow Detection and Unshadowing
+       , unshadow
+       , guardShadowingT
+       , shadowedNamesQuery
+       , freshNameGenT
+       , replaceIdR
+       )
+where
 
 import GhcPlugins hiding (empty)
 
@@ -19,6 +39,7 @@ import qualified Language.Haskell.TH as TH
 
 import Prelude hiding (exp)
 
+-- | Externals for alpha-renaming.
 externals :: [External]
 externals = map (.+ Deep)
          [  external "alpha" alpha
@@ -46,9 +67,8 @@ externals = map (.+ Deep)
 
          , external "shadow-query" (promoteExprT shadowedNamesQuery)
                 [ "List variable names shadowed by bindings in this expression." ] .+ Query
-         , external "if-shadow" (promoteExprR ifShadowingR)
-                [ "succeeds ONLY-IF bindings in this expression shadow free variable name(s)." ]
-
+         , external "if-shadowing" (promoteExprT guardShadowingT)
+                [ "succeeds ONLY-IF bindings in this expression shadow free variable name(s)." ] .+ Predicate
          , external "unshadow" unshadow
                 [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
 
@@ -67,24 +87,23 @@ externals = map (.+ Deep)
 -- 1.  Any free variable name in the active Expr; or
 -- 2.  Any bound variables in context.
 
+-- | List all visible identifiers (in the expression or the context).
 visibleIds :: TranslateH CoreExpr [Id]
 visibleIds = do ctx <- contextT
                 frees <- freeVarsT
-                return $ frees ++ (listBindings ctx)
+                return $ frees ++ listBindings ctx
 
-freshNameGen :: (Maybe TH.Name) -> [Id] -> (String -> String)
-freshNameGen newName idsToAvoid =
-        case newName of
-          Just name -> const (show name)
-          Nothing   -> inventNames idsToAvoid
+--  If a name is provided use that, otherwise modify the string making sure to /not/ clash with the given list of identifiers.
+-- freshNameGen :: Maybe TH.Name -> [Id] -> String -> String
+-- freshNameGen Nothing   = inventNames
+-- freshNameGen (Just nm) = \ _ _ -> show nm
 
-freshNameGenT :: (Maybe TH.Name) -> TranslateH CoreExpr (String -> String)
-freshNameGenT newName =
-        case newName of
-          Just name -> return $ const (show name)
-          Nothing -> do idsToAvoid <- visibleIds
-                        return $ freshNameGen Nothing idsToAvoid
+-- | Lifted version of 'freshNameGen' that avoids any currently visible names.
+freshNameGenT :: Maybe TH.Name -> TranslateH CoreExpr (String -> String)
+freshNameGenT (Just nm) = return $ const (show nm)
+freshNameGenT Nothing   = visibleIds >>^ inventNames
 
+-- | Invent a new String based on the old one, but avoiding clashing with the given list of identifiers.
 inventNames :: [Id] -> String -> String
 inventNames curr old = head
                      [ nm
@@ -97,30 +116,31 @@ inventNames curr old = head
            baseLeng = length $ drop (length nums) old
            base = take baseLeng old
            start = case reads nums of
-                     [(v,_)] -> (v + 1)
-                     _ -> 0
+                     [(v,_)] -> v + 1
+                     _       -> 0
 
 shadowedNamesT :: TranslateH CoreExpr [String]
 shadowedNamesT = do ctx         <- contextT
                     frees       <- freeVarsT
                     bindingIds  <- extractT bindingVarsT
-                    let shadows = intersect (map getOccString bindingIds)
-                                            (map getOccString (frees ++ (listBindings ctx)))
-                    return        shadows
+                    return $ intersect (map getOccString bindingIds)
+                                       (map getOccString (frees ++ listBindings ctx))
 
 -- | Output a list of all variables that shadowed by bindings in the is expression.
 shadowedNamesQuery :: TranslateH CoreExpr String
-shadowedNamesQuery = shadowedNamesT >>^ (("Names shadowed by bindings in the current expression: " ++) . show)
+shadowedNamesQuery = do shadows <- shadowedNamesT
+                        return $ "Names shadowed by bindings in the current expression: " ++ show shadows
 
-ifShadowingR :: RewriteH CoreExpr
-ifShadowingR = do shadows <- shadowedNamesT
-                  case shadows of
-                    [] -> fail "Bindings at this node do not shadow."
-                    _  -> idR
+-- | Succeed only if the bindings at this node shadow something in the context.
+guardShadowingT :: TranslateH CoreExpr ()
+guardShadowingT = ifM (shadowedNamesT >>^ null)
+                      (fail "Bindings at this node do not shadow.")
+                      (return ())
 
--- | Arguments are the original identifier and the replacement identifier, respectively.
-renameIdR :: (Injection a Core, Generic a ~ Core) => Id -> Id -> RewriteH a
-renameIdR v v' = extractR $ tryR $ substR v (Var v')
+-- | Replace all occurrences of an identifier.
+--   Arguments are the original identifier and the replacement identifier, respectively.
+replaceIdR :: (Injection a Core, Generic a ~ Core) => Id -> Id -> RewriteH a
+replaceIdR v v' = extractR $ tryR $ substR v (Var v')
 
 -- | Given an identifier to replace, and a replacement, produce an 'Id' @->@ 'Id' function that
 --   acts as in identity for all 'Id's except the one to replace, for which it returns the replacment.
@@ -135,7 +155,7 @@ alphaLam :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLam mn = setFailMsg (wrongFormForAlpha "Lam v e") $
               do (v, nameModifier) <- lamT (freshNameGenT mn) (,)
                  v' <- constT (cloneIdH nameModifier v)
-                 lamT (renameIdR v v') (\ _ -> Lam v')
+                 lamT (replaceIdR v v') (\ _ -> Lam v')
 
 -----------------------------------------------------------------------
 
@@ -145,7 +165,7 @@ alphaCaseBinder mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
                      do Case _ v _ _ <- idR
                         nameModifier <- freshNameGenT mn
                         v' <- constT (cloneIdH nameModifier v)
-                        caseT idR (\ _ -> renameIdR v v') (\ e _ t alts -> Case e v' t alts)
+                        caseT idR (\ _ -> replaceIdR v v') (\ e _ t alts -> Case e v' t alts)
 
 -----------------------------------------------------------------------
 
@@ -153,7 +173,7 @@ alphaCaseBinder mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
 alphaAltId :: Maybe TH.Name -> Id -> RewriteH CoreAlt
 alphaAltId mn v = do nameModifier <- altT (freshNameGenT mn) (\ _ _ nameGen -> nameGen)
                      v' <- constT (cloneIdH nameModifier v)
-                     altT (renameIdR v v') (\ con vs e -> (con, map (replaceId v v') vs, e))
+                     altT (replaceIdR v v') (\ con vs e -> (con, map (replaceId v v') vs, e))
 
 -- | Rename all identifiers bound in a case alternative.
 alphaAlt :: RewriteH CoreAlt
@@ -174,7 +194,7 @@ alphaLetNonRec :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLetNonRec mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
                     do (v, nameModifier) <- letNonRecT idR (freshNameGenT mn) (\ v _ nameMod -> (v, nameMod))
                        v' <- constT (cloneIdH nameModifier v)
-                       letNonRecT idR (renameIdR v v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
+                       letNonRecT idR (replaceIdR v v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
 
 -- | Rename the specified identifier bound in a recursive let.  Optionally takes a suggested new name.
 alphaLetRecId :: Maybe TH.Name -> Id -> RewriteH CoreExpr
@@ -184,13 +204,13 @@ alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
                          -- Cannot use freshNameGen directly, because we want to include
                          -- free variables from every bound expression, in the name generation function
                          -- as a result we must replicate the essence of freshNameGen in the next few lines
-                        frees <- letRecDefT (\ _ -> freeVarsT) freeVarsT (\ bindFrees exprFrees -> (concat (map snd bindFrees)) ++ exprFrees)
+                        frees <- letRecDefT (\ _ -> freeVarsT) freeVarsT (\ bindFrees exprFrees -> concatMap snd bindFrees ++ exprFrees)
                         let nameGen = case mn of
                                         Just name -> const (show name)
-                                        Nothing -> inventNames (frees ++ (listBindings ctx))
+                                        Nothing -> inventNames (frees ++ listBindings ctx)
                         v' <- constT (cloneIdH nameGen v)
 
-                        letRecDefT (\ _ -> renameIdR v v') (renameIdR v v') (\ bs e -> Let (Rec $ (map.first) (replaceId v v') bs) e)
+                        letRecDefT (\ _ -> replaceIdR v v') (replaceIdR v v') (\ bs e -> Let (Rec $ (map.first) (replaceId v v') bs) e)
 
 -- | Rename all identifiers bound in a recursive let.
 alphaLetRec :: RewriteH CoreExpr
@@ -220,7 +240,7 @@ alphaConsNonRec mn = setFailMsg (wrongFormForAlpha "NonRec v e : prog") $
                      do NonRec v _ : _ <- idR
                         nameModifier <- consNonRecT (freshNameGenT mn) idR (\ _ nameGen _ -> nameGen)
                         v' <- constT (cloneIdH nameModifier v)
-                        consNonRecT idR (renameIdR v v') (\ _ e1 e2 -> NonRec v' e1 : e2)
+                        consNonRecT idR (replaceIdR v v') (\ _ e1 e2 -> NonRec v' e1 : e2)
 
 -- | Rename the specified identifier bound in a recursive top-level binder.  Optionally takes a suggested new name.
 alphaConsRecId :: Maybe TH.Name -> Id -> RewriteH CoreProgram
@@ -230,13 +250,13 @@ alphaConsRecId mn v = setFailMsg (wrongFormForAlpha "Rec bs : prog") $
                          -- free variables from every bound expression, in the name generation function
                          -- as a result we must replicate the essence of freshNameGen in the next few lines
                          ctx <- contextT
-                         frees <- consRecDefT (\ _ -> freeVarsT) idR (\ frees _ -> concat (map snd frees))
-                         let idsToAvoid = ((nub frees) \\ (bindings rbs)) ++ (listBindings ctx)
+                         frees <- consRecDefT (\ _ -> freeVarsT) idR (\ frees _ -> concatMap snd frees)
+                         let idsToAvoid = (nub frees \\ bindings rbs) ++ listBindings ctx
                              nameGen = case mn of
                                          Just name -> const (show name)
                                          Nothing -> inventNames idsToAvoid
                          v' <- constT (cloneIdH nameGen v)
-                         consRecDefT (\ _ -> renameIdR v v') (renameIdR v v') (\ bs e -> Rec ((map.first) (replaceId v v') bs) : e)
+                         consRecDefT (\ _ -> replaceIdR v v') (replaceIdR v v') (\ bs e -> Rec ((map.first) (replaceId v v') bs) : e)
 
 -- | Rename all identifiers bound in a recursive top-level binder.
 alphaConsRec :: RewriteH CoreProgram
@@ -266,11 +286,14 @@ alpha = setFailMsg "Cannot alpha-rename here." $
            promoteExprR (alphaLam Nothing <+ alphaCaseBinder Nothing <+ alphaLet)
         <+ promoteProgramR alphaCons
 
+-- | Rename local variable with manifestly unique names (x, x0, x1, ...).
 unshadow :: RewriteH Core
 unshadow = setFailMsg "No shadows to eliminate." $
-           anytdR (promoteExprR (ifShadowingR >>> (alphaLam Nothing <+ alphaCase <+ alphaLet)))
+           anytdR (promoteExprR (guardShadowingT >> (alphaLam Nothing <+ alphaCase <+ alphaLet)))
 
 -----------------------------------------------------------------------
 
 wrongFormForAlpha :: String -> String
 wrongFormForAlpha s = "Cannot alpha-rename: " ++ wrongExprForm s
+
+-----------------------------------------------------------------------
