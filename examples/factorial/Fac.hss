@@ -1,0 +1,26 @@
+flatten-module
+consider 'fac
+load "WWSplitTactic.hss"
+{
+  0 ; 1
+  {
+    1
+    eta-expand 'n
+    one-td (unfold 'wrap)
+  }
+  {
+    0 ; 0 ; 0
+    eta-expand 'x
+    one-td (unfold 'unwrap)
+    one-td (unfold 'f)
+    one-td (unfold 'wrap)
+    simplify
+    {
+      consider alt ; 0 ; case-float-arg
+      consider alt ; 0 ; case-float-arg
+    }
+  }
+  one-td (unfold '-) -- is this working?
+  -- one-td (unfold '*) -- this doesn't even get past the parser
+}
+simplify

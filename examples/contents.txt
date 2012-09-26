@@ -24,6 +24,14 @@ Evaluation
 * Interesting rewrites: abstract, fold
 
 
+Factorial
+=========
+
+* The classic boxing/unboxing example.
+
+* In progress (stuck due to parser limitations).
+
+
 Fibonacci (Tupling)
 ===================
 
@@ -169,6 +177,7 @@ Talks
 * This directory is for the code that Neil intends to demo at Nottingham, IFL and Haskell.
 
 * Don't mess with it without telling him!
+
 
 
 To Do
