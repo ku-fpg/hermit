@@ -7,7 +7,9 @@ module Language.HERMIT.GHC
         , name2THName
         , id2THName
         , cmpTHName2Name
+        , cmpString2Name
         , cmpTHName2Id
+        , cmpString2Id
         , unqualifiedIdName
         , findNameFromTH
         , alphaTyVars
@@ -60,11 +62,19 @@ unqualifiedIdName = TH.nameBase . id2THName
 
 -- | Hacks until we can find the correct way of doing these.
 cmpTHName2Name :: TH.Name -> Name -> Bool
-cmpTHName2Name th_nm ghc_nm = TH.nameBase th_nm == getOccString ghc_nm -- occNameString (nameOccName ghc_nm)
+cmpTHName2Name th_nm = cmpString2Name (TH.nameBase th_nm)
+
+-- | Hacks until we can find the correct way of doing these.
+cmpString2Name :: String -> Name -> Bool
+cmpString2Name str_nm ghc_nm = str_nm == getOccString ghc_nm -- occNameString (nameOccName ghc_nm)
 
 -- | Hacks until we can find the correct way of doing these.
 cmpTHName2Id :: TH.Name -> Id -> Bool
 cmpTHName2Id nm = cmpTHName2Name nm . idName
+
+-- | Hacks until we can find the correct way of doing these.
+cmpString2Id :: String -> Id -> Bool
+cmpString2Id str_nm = cmpString2Name str_nm . idName
 
 -- | This is hopeless O(n), because the we could not generate the 'OccName's that match,
 -- for use of the GHC 'OccEnv'.
