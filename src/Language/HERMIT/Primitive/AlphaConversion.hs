@@ -93,12 +93,8 @@ visibleIds = do ctx <- contextT
                 frees <- freeVarsT
                 return $ frees ++ listBindings ctx
 
---  If a name is provided use that, otherwise modify the string making sure to /not/ clash with the given list of identifiers.
--- freshNameGen :: Maybe TH.Name -> [Id] -> String -> String
--- freshNameGen Nothing   = inventNames
--- freshNameGen (Just nm) = \ _ _ -> show nm
-
--- | Lifted version of 'freshNameGen' that avoids any currently visible names.
+-- | If a name is provided replace the string with that,
+--   otherwise modify the string making sure to /not/ clash with any visible identifiers.
 freshNameGenT :: Maybe TH.Name -> TranslateH CoreExpr (String -> String)
 freshNameGenT (Just nm) = return $ const (show nm)
 freshNameGenT Nothing   = visibleIds >>^ inventNames
