@@ -9,7 +9,7 @@ import Control.Applicative
 import Control.Arrow
 import Control.Monad
 
-import Data.List(intercalate,intersect)
+import Data.List(find,intercalate,intersect)
 
 import Language.HERMIT.Context
 import Language.HERMIT.Monad
@@ -203,8 +203,9 @@ testQuery r = f <$> testM r
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."
 
+-- | Look in HERMIT context first, then attempt to find in GHC's global reader env.
 findId :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => Context -> String -> m Id
-findId c = findIdMG (hermitModGuts c)
+findId c nm = maybe (findIdMG (hermitModGuts c) nm) return (find (cmpString2Id nm) (listBindings c))
 
 findIdMG :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => ModGuts -> String -> m Id
 findIdMG modguts nm =
