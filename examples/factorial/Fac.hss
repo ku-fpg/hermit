@@ -21,6 +21,6 @@ load "WWSplitTactic.hss"
     }
   }
   one-td (unfold '-) -- is this working?
-  -- one-td (unfold '*) -- this doesn't even get past the parser
+  one-td (unfold '*)
 }
 simplify

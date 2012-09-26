@@ -210,7 +210,7 @@ isId :: Char -> Bool
 isId c = isAlphaNum c || c `elem` "_-'"
 
 isInfixId :: Char -> Bool
-isInfixId c = c `elem` "+._-:<>"
+isInfixId c = c `elem` "+*/._-:<>"
 
 
 ---------------------------------------------

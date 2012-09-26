@@ -29,7 +29,7 @@ Factorial
 
 * The classic boxing/unboxing example.
 
-* In progress (stuck due to parser limitations).
+* In progress.
 
 
 Fibonacci (Tupling)
