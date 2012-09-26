@@ -2,6 +2,7 @@
 
 import GHC.Exts
 import Data.Function(fix)
+import Prelude hiding ((*),(-))
 
 fac :: Int -> Int
 fac 0 = 1
@@ -18,3 +19,10 @@ wrap h (I# x) = I# (h x)
 
 main :: IO ()
 main = print (fac 50)
+
+
+(*) :: Int -> Int -> Int
+(I# x) * (I# y) = I# (x *# y)
+
+(-) :: Int -> Int -> Int
+(I# x) - (I# y) = I# (x -# y)

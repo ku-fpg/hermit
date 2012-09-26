@@ -19,8 +19,9 @@ load "WWSplitTactic.hss"
       consider alt ; 0 ; case-float-arg
       consider alt ; 0 ; case-float-arg
     }
-  }
-  one-td (unfold '-) -- is this working?
+  one-td (unfold '-)
   one-td (unfold '*)
+  innermost case-float-case
+  }
 }
 simplify

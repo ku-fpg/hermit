@@ -29,7 +29,7 @@ Factorial
 
 * The classic boxing/unboxing example.
 
-* In progress.
+* Completed, but Core Lint rejects the result due to a bug in case-float-case.
 
 
 Fibonacci (Tupling)
