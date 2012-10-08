@@ -25,16 +25,16 @@ import Language.HERMIT.GHC
 import Data.Map
 import Control.Concurrent
 
--- | A 'Kernel' is a repository for Core syntax trees.
+-- | A 'Kernel' is a repository for complete Core syntax trees ('ModGuts').
 --   For now, operations on a 'Kernel' are sequential, but later
 --   it will be possible to have two 'applyK's running in parallel.
 data Kernel = Kernel
-  { resumeK ::            AST                                      -> IO ()                -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
-  , abortK  ::                                                        IO ()                -- ^ Halt the 'Kernel' and abort GHC without compiling.
-  , applyK  ::            AST -> RewriteH Core     -> HermitMEnv   -> IO (KureMonad AST)   -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
-  , queryK  :: forall a . AST -> TranslateH Core a -> HermitMEnv   -> IO (KureMonad a)     -- ^ Apply a 'TranslateH' to the 'AST' and return the resulting value.
-  , deleteK ::            AST                                      -> IO ()                -- ^ Delete the internal record of the specified 'AST'.
-  , listK   ::                                                        IO [AST]             -- ^ List all the 'AST's tracked by the 'Kernel'.
+  { resumeK ::            AST                                        -> IO ()                -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
+  , abortK  ::                                                          IO ()                -- ^ Halt the 'Kernel' and abort GHC without compiling.
+  , applyK  ::            AST -> RewriteH ModGuts     -> HermitMEnv  -> IO (KureMonad AST)   -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
+  , queryK  :: forall a . AST -> TranslateH ModGuts a -> HermitMEnv  -> IO (KureMonad a)     -- ^ Apply a 'TranslateH' to the 'AST' and return the resulting value.
+  , deleteK ::            AST                                        -> IO ()                -- ^ Delete the internal record of the specified 'AST'.
+  , listK   ::                                                          IO [AST]             -- ^ List all the 'AST's tracked by the 'Kernel'.
   }
 
 -- | A /handle/ for a specific version of the 'ModGuts'.
@@ -54,9 +54,9 @@ hermitKernel callback modGuts = do
 
         msgMV :: MVar (Msg KernelState ModGuts) <- liftIO newEmptyMVar
 
-        syntax_names :: MVar AST <- liftIO newEmptyMVar
+        nextASTname :: MVar AST <- liftIO newEmptyMVar
 
-        _ <- liftIO $ forkIO $ let loop n = do putMVar syntax_names (AST n)
+        _ <- liftIO $ forkIO $ let loop n = do putMVar nextASTname (AST n)
                                                loop (succ n)
                                 in loop 0
 
@@ -80,26 +80,26 @@ hermitKernel callback modGuts = do
 
                 , abortK  = sendDone $ \ _ -> throwGhcException (ProgramError "Exiting HERMIT and aborting GHC compilation.")
 
-                , applyK = \ name r hm_env -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM hm_env
+                , applyK = \ name r hm_env -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, guts) -> runHM hm_env
                                                                                                                defs
-                                                                                                               (\ defs' core' -> do syn' <- liftIO $ takeMVar syntax_names
-                                                                                                                                    return $ return (syn', insert syn' (defs',core') st))
+                                                                                                               (\ defs' guts' -> do ast <- liftIO $ takeMVar nextASTname
+                                                                                                                                    return $ return (ast, insert ast (defs',guts') st))
                                                                                                                (return . fail)
-                                                                                                               (apply (extractR r) (initContext core) core)
+                                                                                                               (apply r (initContext guts) guts)
 
-                , queryK = \ name q hm_env -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM hm_env
+                , queryK = \ name t hm_env -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM hm_env
                                                                                                                    defs
                                                                                                                    (\ _ -> return.return)
                                                                                                                    (return . fail)
-                                                                                                                   (apply (extractT q) (initContext core) core)
+                                                                                                                   (apply t (initContext core) core)
 
                 , deleteK = \ name -> sendReqWrite (return . delete name)
 
                 , listK = sendReqRead (return . return . keys) >>= runKureMonad return fail
                 }
 
-        -- We always start with syntax blob 0
-        syn <- liftIO $ takeMVar syntax_names
+        -- We always start with AST 0
+        ast0 <- liftIO $ takeMVar nextASTname
 
         let loop :: KernelState -> CoreM ModGuts
             loop st = do
@@ -109,9 +109,9 @@ hermitKernel callback modGuts = do
                                                        (\ msg     -> liftIO (putMVar rep $ fail msg) >> loop st)
                   Done fn -> fn st
 
-        _pid <- liftIO $ forkIO $ callback kernel syn
+        _pid <- liftIO $ forkIO $ callback kernel ast0
 
-        loop (singleton syn (empty, modGuts))
+        loop (singleton ast0 (empty, modGuts))
 
         -- (Kill the pid'd thread? do we need to?)
 

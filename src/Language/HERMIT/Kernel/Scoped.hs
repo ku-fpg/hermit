@@ -10,6 +10,7 @@ module Language.HERMIT.Kernel.Scoped
        , scopedKernel
 ) where
 
+import Control.Arrow
 import Control.Concurrent.STM
 import Control.Exception.Base (bracketOnError)
 
@@ -65,8 +66,8 @@ moveLocally _ p                          = p
 extendLocalPath :: Path -> LocalPath -> LocalPath
 extendLocalPath p (LocalPath lp) = LocalPath (reverse p ++ lp)
 
-pathStackToLens :: [LocalPath] -> LocalPath -> LensH Core Core
-pathStackToLens ps p = pathL $ concat $ localPaths2Paths (p:ps)
+pathStackToLens :: [LocalPath] -> LocalPath -> LensH ModGuts Core
+pathStackToLens ps p = injectL >>> pathL (concat $ localPaths2Paths (p:ps))
 
 ----------------------------------------------------------------------------
 
