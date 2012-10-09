@@ -35,8 +35,8 @@ data HermitBinding
         = BIND Int Bool CoreExpr  -- ^ Binding depth, whether it is recursive, and the bound value
                                   --   (which cannot be inlined without checking for scoping issues).
         | LAM Int                 -- ^ For a lambda binding you only know the depth.
-        | CASE Int CoreExpr (AltCon,[Id]) -- ^ For case wildcard binders. First expr points to scrutinee,
-                                          --   second to AltCon (which can be converted to Constructor or Literal).
+        | CASE Int CoreExpr (AltCon,[Id]) -- ^ For case wildcard binders. We store both the scrutinised expression,
+                                          --   and the case alternative 'AltCon' (which can be converted to Constructor or Literal) and identifiers.
 
 -- | Get the depth of a binding.
 hermitBindingDepth :: HermitBinding -> Int
@@ -69,36 +69,28 @@ initContext modGuts = Context empty 0 rootAbsPath modGuts
 
 -- | Update the context by extending the stored 'AbsolutePath' to a child.
 (@@) :: Context -> Int -> Context
-(@@) env n = env { hermitPath = extendAbsPath n (hermitPath env) }
+(@@) c v = c { hermitPath = extendAbsPath v (hermitPath c) }
+
+------------------------------------------------------------------------
 
 -- | Add all bindings in a binding group to the 'Context'.
 addBinding :: CoreBind -> Context -> Context
-addBinding (NonRec n e) env
-        = env { hermitBindings = insert n (BIND next_depth False e) (hermitBindings env)
-              , hermitDepth    = next_depth
-              }
-  where
-        next_depth = succ (hermitDepth env)
-addBinding (Rec bds) env
-        = env { hermitBindings = bds_env `union` hermitBindings env
-              , hermitDepth    = next_depth
-              }
-  where
-        next_depth = succ (hermitDepth env)
-        -- notice how all recursive binding in a binding group are at the same depth.
-        bds_env    = fromList
-                   [ (b,BIND next_depth True e)
-                   | (b,e) <- bds
-                   ]
+addBinding corebind c = let nextDepth = succ (hermitDepth c)
+                            hbds      = hermitBindings c
+                            newBds    = case corebind of
+                                          NonRec v e  -> insert v (BIND nextDepth False e) hbds
+                                          Rec bds     -> hbds `union` fromList [ (b, BIND nextDepth True e) | (b,e) <- bds ]
+                                                         -- Notice how all recursive binding in a binding group are at the same depth.
+                        in c { hermitBindings = newBds
+                             , hermitDepth    = nextDepth
+                             }
 
 -- | Add the bindings for a specific case alternative.
 addCaseBinding :: (Id,CoreExpr,CoreAlt) -> Context -> Context
-addCaseBinding (n,e,(ac,is,_)) env
-        = env { hermitBindings = insert n (CASE next_depth e (ac,is)) (hermitBindings env)
-              , hermitDepth    = next_depth
-              }
-  where
-        next_depth = succ (hermitDepth env)
+addCaseBinding (v,e,(con,vs,_)) c = let nextDepth = succ (hermitDepth c)
+                                     in c { hermitBindings = insert v (CASE nextDepth e (con,vs)) (hermitBindings c)
+                                          , hermitDepth    = nextDepth
+                                          }
 
 -- | Add a binding that you know nothing about, except that it may shadow something.
 -- If so, do not worry about it here, just remember the binding and the depth.
@@ -106,22 +98,21 @@ addCaseBinding (n,e,(ac,is,_)) env
 -- we then check to see what is free in the inlinee, and see
 -- if any of the frees will stop the validity of the inlining.
 addLambdaBinding :: Id -> Context -> Context
-addLambdaBinding n env
-        = env { hermitBindings = insert n (LAM next_depth) (hermitBindings env)
-              , hermitDepth    = next_depth
-              }
-  where
-        next_depth = succ (hermitDepth env)
+addLambdaBinding v c = let nextDepth = succ (hermitDepth c)
+                        in c { hermitBindings = insert v (LAM nextDepth) (hermitBindings c)
+                             , hermitDepth    = nextDepth
+                             }
 
--- | Add the Ids bound by a DataCon in a case. Like lambda bindings,
+-- | Add the identifiers bound by a 'DataCon' in a case. Like lambda bindings,
 -- in that we know nothing about them, but all bound at the same depth,
 -- so we cannot just fold addLambdaBinding over the list.
 addAltBindings :: [Id] -> Context -> Context
-addAltBindings ns env
-        = env { hermitBindings = foldr (\n bds -> insert n (LAM next_depth) bds) (hermitBindings env) ns
-              , hermitDepth    = next_depth
-              }
-  where next_depth = succ (hermitDepth env)
+addAltBindings vs c = let nextDepth = succ (hermitDepth c)
+                       in c { hermitBindings = foldr (\ v bds -> insert v (LAM nextDepth) bds) (hermitBindings c) vs
+                            , hermitDepth    = nextDepth
+                            }
+
+------------------------------------------------------------------------
 
 -- | Lookup the binding for an identifier in a 'Context'.
 lookupHermitBinding :: Id -> Context -> Maybe HermitBinding
