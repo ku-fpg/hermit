@@ -85,9 +85,9 @@ import Data.Monoid
 
 ---------------------------------------------------------------------
 
-type TranslateH a b = Translate Context HermitM a b
-type RewriteH a = Rewrite Context HermitM a
-type LensH a b = Lens Context HermitM a b
+type TranslateH a b = Translate HermitC HermitM a b
+type RewriteH a = Rewrite HermitC HermitM a
+type LensH a b = Lens HermitC HermitM a b
 
 -- | A synonym for the identity rewrite.  Convienient to avoid importing Control.Category.
 idR :: RewriteH a
@@ -108,7 +108,7 @@ instance Node Core where
 -- Defining Walker instances for the Generic type 'Core' is almost entirely automated by KURE.
 -- Unfortunately, you still need to pattern match on the 'Core' data type.
 
-instance Walker Context HermitM Core where
+instance Walker HermitC HermitM Core where
   childL n = lens $ translate $ \ c core -> case core of
           ModGutsCore x -> childLgeneric n c x
           ProgramCore x -> childLgeneric n c x
@@ -169,7 +169,7 @@ instance Node ModGuts where
 
   numChildren _ = 1
 
-instance Walker Context HermitM ModGuts where
+instance Walker HermitC HermitM ModGuts where
   childL 0 = lens $ modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
   childL n = failT (missingChild n)
 
@@ -195,7 +195,7 @@ instance Node CoreProgram where
   -- we consider only the head and tail to be interesting children
   numChildren bds = min 2 (length bds)
 
-instance Walker Context HermitM CoreProgram where
+instance Walker HermitC HermitM CoreProgram where
   childL 0 = lens $ consBindT exposeT idR (childL0of2 (:))
   childL 1 = lens $ consBindT idR exposeT (childL1of2 (:))
   childL n = failT (missingChild n)
@@ -240,7 +240,7 @@ instance Node CoreBind where
   numChildren (NonRec _ _) = 1
   numChildren (Rec defs)   = length defs
 
-instance Walker Context HermitM CoreBind where
+instance Walker HermitC HermitM CoreBind where
   childL n = lens $ setFailMsg (missingChild n) $
                case n of
                  0 -> nonrec <+ rec
@@ -313,7 +313,7 @@ instance Node CoreDef where
 
   numChildren _ = 1
 
-instance Walker Context HermitM CoreDef where
+instance Walker HermitC HermitM CoreDef where
   childL 0 = lens $ defT exposeT (childL1of2 Def)
   childL n = failT (missingChild n)
 
@@ -337,7 +337,7 @@ instance Node CoreAlt where
 
   numChildren _ = 1
 
-instance Walker Context HermitM CoreAlt where
+instance Walker HermitC HermitM CoreAlt where
   childL 0 = lens $ altT exposeT (childL2of3 (,,))
   childL n = failT (missingChild n)
 
@@ -370,7 +370,7 @@ instance Node CoreExpr where
   numChildren (Type _)        = 0
   numChildren (Coercion _)    = 0
 
-instance Walker Context HermitM CoreExpr where
+instance Walker HermitC HermitM CoreExpr where
 
   childL n = lens $ setFailMsg (missingChild n) $
                case n of

@@ -70,7 +70,7 @@ stashApply label = setFailMsg "Inlining stashed definition failed: " $
 getUnfolding :: Monad m
              => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
              -> Bool -- ^ Only succeed if this variable is a case binder.
-             -> Id -> Context -> m (CoreExpr, Int)
+             -> Id -> HermitC -> m (CoreExpr, Int)
 getUnfolding scrutinee caseBinderOnly i c =
     case lookupHermitBinding i c of
         Nothing -> case unfoldingInfo (idInfo i) of

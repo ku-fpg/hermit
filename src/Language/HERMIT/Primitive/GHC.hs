@@ -224,7 +224,7 @@ rulesToRewriteH rs = translate $ \ c e -> do
                                 ,"This can probably be solved by running the flatten-module command at the top level."])
 
 -- | See whether an identifier is in scope.
-inScope :: Context -> Id -> Bool
+inScope :: HermitC -> Id -> Bool
 inScope c i = maybe (case unfoldingInfo (idInfo i) of
                         CoreUnfolding {} -> True -- defined elsewhere
                         _ -> False)
@@ -356,7 +356,7 @@ compareValues n1 n2 = do
 --------------------------------------------------------
 
 -- | Try to figure out the arity of an identifier.
-arityOf :: Context -> Id -> Int
+arityOf :: HermitC -> Id -> Int
 arityOf env nm =
      case lookupHermitBinding nm env of
         Nothing       -> idArity nm

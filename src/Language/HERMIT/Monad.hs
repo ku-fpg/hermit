@@ -165,7 +165,7 @@ cloneIdH nameMod b =
 -- | A message packet.
 data DebugMessage :: * where
         DebugTick    :: String                    -> DebugMessage
-        DebugCore    :: String -> Context -> Core -> DebugMessage       -- A postcard
+        DebugCore    :: String -> HermitC -> Core -> DebugMessage       -- A postcard
 
 mkHermitMEnv :: (DebugMessage -> HermitM ()) -> HermitMEnv
 mkHermitMEnv debugger = HermitMEnv

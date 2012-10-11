@@ -204,7 +204,7 @@ testQuery r = f <$> testM r
     f False = "Rewrite would fail."
 
 -- | Look in HERMIT context first, then attempt to find in GHC's global reader env.
-findId :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => Context -> String -> m Id
+findId :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => HermitC -> String -> m Id
 findId c nm = maybe (findIdMG (hermitModGuts c) nm) return (find (cmpString2Id nm) (listBindings c))
 
 findIdMG :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => ModGuts -> String -> m Id
