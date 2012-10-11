@@ -7,7 +7,7 @@ module Language.HERMIT.Kure
        -- | All the required functionality of KURE is exported here, so other modules do not need to import KURE directly.
          module Language.KURE
        , module Language.KURE.Injection
-       , KureMonad, runKureMonad, fromKureMonad
+       , KureM, runKureM, fromKureM
        -- * Synonyms
        -- | In HERMIT, 'Translate', 'Rewrite' and 'Lens' always operate on the same context and monad.
        , TranslateH

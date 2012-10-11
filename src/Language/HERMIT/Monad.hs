@@ -50,9 +50,9 @@ type DefStash = Map Label CoreDef
 newtype HermitMEnv = HermitMEnv { hs_debugChan :: DebugMessage -> HermitM () }
 
 -- | The HERMIT monad is kept abstract.
-newtype HermitM a = HermitM (HermitMEnv -> DefStash -> CoreM (KureMonad (DefStash, a)))
+newtype HermitM a = HermitM (HermitMEnv -> DefStash -> CoreM (KureM (DefStash, a)))
 
-runHermitM :: HermitM a -> HermitMEnv -> DefStash -> CoreM (KureMonad (DefStash, a))
+runHermitM :: HermitM a -> HermitMEnv -> DefStash -> CoreM (KureM (DefStash, a))
 runHermitM (HermitM f) = f
 
 -- | Get the stash of saved definitions.
@@ -78,7 +78,7 @@ lookupDef l = getStash >>= (lookup l >>> maybe (fail "Definition not found.") re
 
 -- | Eliminator for 'HermitM'.
 runHM :: HermitMEnv -> DefStash -> (DefStash -> a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b
-runHM env s success failure ma = runHermitM ma env s >>= runKureMonad (\ (a,b) -> success a b) failure
+runHM env s success failure ma = runHermitM ma env s >>= runKureM (\ (a,b) -> success a b) failure
 
 ----------------------------------------------------------------------------
 
@@ -98,14 +98,14 @@ instance Monad HermitM where
   return a = HermitM $ \ _ s -> return (return (s,a))
 
   (>>=) :: HermitM a -> (a -> HermitM b) -> HermitM b
-  (HermitM gcm) >>= f = HermitM $ \ env -> gcm env >=> runKureMonad (\ (s', a) -> runHermitM (f a) env s') (return . fail)
+  (HermitM gcm) >>= f = HermitM $ \ env -> gcm env >=> runKureM (\ (s', a) -> runHermitM (f a) env s') (return . fail)
 
   fail :: String -> HermitM a
   fail msg = HermitM $ \ _ _ -> return (fail msg)
 
 instance MonadCatch HermitM where
   catchM :: HermitM a -> (String -> HermitM a) -> HermitM a
-  (HermitM gcm) `catchM` f = HermitM $ \ env s -> gcm env s >>= runKureMonad (return.return) (\ msg -> runHermitM (f msg) env s)
+  (HermitM gcm) `catchM` f = HermitM $ \ env s -> gcm env s >>= runKureM (return.return) (\ msg -> runHermitM (f msg) env s)
 
 ----------------------------------------------------------------------------
 

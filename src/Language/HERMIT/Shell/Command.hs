@@ -251,10 +251,10 @@ showFocus = do
 type CLM m a = ErrorT String (StateT CommandLineState m) a
 
 -- TODO: Come up with names for these, and/or better characterise these abstractions.
-iokm2clm' :: MonadIO m => String -> (a -> CLM m b) -> IO (KureMonad a) -> CLM m b
-iokm2clm' msg ret m = liftIO m >>= runKureMonad ret (throwError . (msg ++))
+iokm2clm' :: MonadIO m => String -> (a -> CLM m b) -> IO (KureM a) -> CLM m b
+iokm2clm' msg ret m = liftIO m >>= runKureM ret (throwError . (msg ++))
 
-iokm2clm :: MonadIO m => String -> IO (KureMonad a) -> CLM m a
+iokm2clm :: MonadIO m => String -> IO (KureM a) -> CLM m a
 iokm2clm msg = iokm2clm' msg return
 
 data CommandLineState = CommandLineState
@@ -324,7 +324,7 @@ shellComplete mvar rPrev so_far = do
     --     $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
     -- TODO: I expect you want to build a silent version of the kernal_env for this query
     mcls <- queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery (cl_kernel_env (cl_session st))
-    cl <- runKureMonad return fail mcls -- TO DO: probably shouldn't use fail here.
+    cl <- runKureM return fail mcls -- TO DO: probably shouldn't use fail here.
     return $ (map simpleCompletion . nub . filter (so_far `isPrefixOf`)) cl
 
 -- | The first argument is a list of files to load.
@@ -471,8 +471,8 @@ performAstEffect (CorrectnessCritera q) expr = do
         st <- get
         -- TODO: Again, we may want a quiet version of the kernel_env
         liftIO (queryS (cl_kernel st) (cl_cursor $ cl_session st) q (cl_kernel_env $ cl_session st))
-          >>= runKureMonad (\ () -> putStrToConsole $ unparseExprH expr ++ " [correct]")
-                           (\ err -> fail $ unparseExprH expr ++ " [exception: " ++ err ++ "]")
+          >>= runKureM (\ () -> putStrToConsole $ unparseExprH expr ++ " [correct]")
+                       (\ err -> fail $ unparseExprH expr ++ " [exception: " ++ err ++ "]")
         -- correctness <- liftIO (try $ queryS (cl_kernel st) (cl_cursor (cl_session st)) q)
         -- case correctness of
         --   Right ()  -> do putStrToConsole $ unparseExprH expr ++ " [correct]"
