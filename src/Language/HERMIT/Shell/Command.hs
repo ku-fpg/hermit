@@ -261,10 +261,10 @@ data CommandLineState = CommandLineState
         { cl_graph       :: [(SAST,ExprH,SAST)]
         , cl_tags        :: [(String,SAST)]
         -- these two should be in a reader
-        , cl_dict        :: M.Map String [Dynamic]
-        , cl_kernel       :: ScopedKernel
+        , cl_dict        :: Dictionary
+        , cl_kernel      :: ScopedKernel
         -- and the session state (perhaps in a seperate state?)
-        , cl_session      :: SessionState
+        , cl_session     :: SessionState
         }
 
 newSAST :: ExprH -> SAST -> CommandLineState -> CommandLineState

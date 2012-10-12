@@ -3,7 +3,8 @@
 module Language.HERMIT.Dictionary
        ( -- * The HERMIT Dictionary
          -- | This is the main namespace. Things tend to be untyped, because the API is accessed via (untyped) names.
-         all_externals
+         Dictionary
+       , all_externals
        , dictionary
        , pp_dictionary
 )  where
@@ -36,6 +37,10 @@ import qualified Language.HERMIT.PrettyPrinter.GHC as GHCPP
 
 --------------------------------------------------------------------------
 
+-- | A 'Dictionary' is a collection of 'Dynamic's.
+--   Looking up a 'Dynamic' (via a 'String' key) returns a list, as there can be multiple 'Dynamic's with the same name.
+type Dictionary = Map String [Dynamic]
+
 prim_externals :: [External]
 prim_externals
                =    Kure.externals
@@ -53,8 +58,8 @@ prim_externals
 all_externals :: [External] -> [External]
 all_externals my_externals = prim_externals ++ my_externals ++ GHC.externals
 
--- | Create the dictionary.
-dictionary :: [External] -> Map String [Dynamic]
+-- | Create a dictionary from a list of 'External's.
+dictionary :: [External] -> Dictionary
 dictionary externs = toDictionary externs'
   where
         msg = layoutTxt 60 (map (show . fst) dictionaryOfTags)
