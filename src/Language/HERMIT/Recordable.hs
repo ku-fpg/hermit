@@ -17,15 +17,13 @@ import Language.HERMIT.Interp
 
 data Recordable = RecRewrite (RewriteH Core)
                 | RecPath (TranslateH Core Path)
-                | RecDescent Int
                 | RecScope [Recordable]
 
 ------------------------------------
 
 interpRecordable :: [Interp Recordable]
 interpRecordable =
-                [ interp (\ (IntBox i)               -> RecDescent i)
-                , interp (\ (RewriteCoreBox r)       -> RecRewrite r)
+                [ interp (\ (RewriteCoreBox r)       -> RecRewrite r)
                 , interp (\ (TranslateCorePathBox t) -> RecPath t)
                 ]
 
@@ -37,7 +35,6 @@ recordables2rewrite (rec : recs)  = let rest = recordables2rewrite recs
                                      in case rec of
                                           RecScope recs1 -> recordables2rewrite recs1 >>> rest
                                           RecRewrite r   -> r >>> rest
-                                          RecDescent n   -> childR n rest
                                           RecPath t      -> do p <- t
                                                                pathR p rest
 
