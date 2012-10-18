@@ -1,4 +1,4 @@
-{-# LANGUAGE KindSignatures, GADTs #-}
+{-# LANGUAGE KindSignatures, GADTs, InstanceSigs #-}
 
 module Language.HERMIT.Interp
         ( -- * The HERMIT Interpreter
@@ -40,7 +40,8 @@ interp :: Typeable a => (a -> b) -> Interp b
 interp = Interp
 
 instance Functor Interp where
-   fmap f (Interp g) = Interp (f . g)
+  fmap :: (a -> b) -> Interp a -> Interp b
+  fmap f (Interp g) = Interp (f . g)
 
 
 interpExpr :: M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
@@ -49,7 +50,11 @@ interpExpr = interpExpr' False
 interpExpr' :: Bool -> M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
 interpExpr' _   _   (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
 interpExpr' rhs env (CmdName str)
-  | all isDigit str                     = return [ toDyn $ IntBox $ read str ]
+                                        -- An Int is either a Path, or will be interpreted specially later.
+  | all isDigit str                     = let i = read str in
+                                          return [ toDyn $ IntBox i
+                                                 , toDyn $ TranslateCorePathBox (return [i])
+                                                 ]
   | Just dyn <- M.lookup str env        = return $ if rhs
                                                      then toDyn (StringBox str) : dyn
                                                      else dyn
@@ -64,4 +69,3 @@ dynAppMsg = liftM2 dynApply'
    where
            dynApply' :: [Dynamic] -> [Dynamic] -> [Dynamic]
            dynApply' fs xs = [ r | f <- fs, x <- xs, Just r <- return (dynApply f x)]
-

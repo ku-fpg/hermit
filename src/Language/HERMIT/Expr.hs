@@ -135,7 +135,7 @@ parseExprH0 :: ReadS (Box ExprH)
 parseExprH0 inp =
         [ (Box (CmdName str),inp1)
         | (str,inp1) <- parseToken inp
-        , isAlphaNum (head str) || head str == ':'    -- commands can start with :
+        , isAlphaNum (head str) || head str == ':'    -- commands can start with : -- This can probably be removed now, as we no longer start commands with :
         , all isId (tail str)
         ] ++
         [ (InfixableExpr (CmdName str),inp1)

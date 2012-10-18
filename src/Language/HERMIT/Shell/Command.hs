@@ -43,13 +43,12 @@ import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 import System.Console.Haskeline hiding (catch)
 
--- There are 3 types of commands, AST effect-ful, Shell effect-ful, and Queries.
+-- There are 4 types of commands, AST effect-ful, Shell effect-ful, Queries, and Meta-commands.
 
-data ShellCommand :: * where
-   AstEffect     :: AstEffect                -> ShellCommand
-   ShellEffect   :: ShellEffect              -> ShellCommand
-   QueryFun      :: QueryFun                 -> ShellCommand
-   MetaCommand   :: MetaCommand              -> ShellCommand
+data ShellCommand =  AstEffect   AstEffect
+                  |  ShellEffect ShellEffect
+                  |  QueryFun    QueryFun
+                  |  MetaCommand MetaCommand
 
 -- | AstEffects are things that are recorded in our log and saved files.
 
@@ -60,8 +59,8 @@ data AstEffect
    | Pathfinder (TranslateH Core Path)
    -- | This changes the currect location using directions
    | Direction  Direction
-   -- | This changes the current location using a give path
-   | PushFocus Path
+   --  | This changes the current location using a give path
+--   | PushFocus Path
 
    | BeginScope
    | EndScope
@@ -71,9 +70,9 @@ data AstEffect
    deriving Typeable
 
 instance Extern AstEffect where
-    type Box AstEffect = AstEffect
-    box i = i
-    unbox i = i
+   type Box AstEffect = AstEffect
+   box i = i
+   unbox i = i
 
 data ShellEffect :: * where
    SessionStateEffect    :: (CommandLineState -> SessionState -> IO SessionState) -> ShellEffect
@@ -89,9 +88,9 @@ data QueryFun :: * where
    deriving Typeable
 
 instance Extern QueryFun where
-    type Box QueryFun = QueryFun
-    box i = i
-    unbox i = i
+   type Box QueryFun = QueryFun
+   box i = i
+   unbox i = i
 
 data MetaCommand
    = Resume
@@ -129,7 +128,6 @@ instance Extern ShellCommand where
 interpShellCommand :: [Interp ShellCommand]
 interpShellCommand =
                 [ interp $ \ (ShellCommandBox cmd)       -> cmd
-                , interp $ \ (IntBox i)                  -> AstEffect (PushFocus [i])
                 , interp $ \ (RewriteCoreBox rr)         -> AstEffect (Apply rr)
                 , interp $ \ (TranslateCorePathBox tt)   -> AstEffect (Pathfinder tt)
                 , interp $ \ (StringBox str)             -> QueryFun (Message str)
@@ -222,7 +220,7 @@ showRenderers = Message $ "set-renderer " ++ show (map fst finalRenders)
 changeRenderer :: String -> ShellEffect
 changeRenderer renderer = SessionStateEffect $ \ _ st ->
         case lookup renderer finalRenders of
-          Nothing -> return st          -- should fail with message
+          Nothing -> return st          -- TODO: should fail with message
           Just r  -> return $ st { cl_render = r }
 
 ----------------------------------------------------------------------------------
@@ -274,14 +272,14 @@ newSAST expr sast st = st { cl_session = (cl_session st) { cl_cursor = sast }
 
 -- Session-local issues; things that are never saved.
 data SessionState = SessionState
-        { cl_cursor      :: SAST              -- ^ the current AST
-        , cl_pretty      :: String           -- ^ which pretty printer to use
-        , cl_pretty_opts :: PrettyOptions -- ^ The options for the pretty printer
+        { cl_cursor      :: SAST                                       -- ^ the current AST
+        , cl_pretty      :: String                                     -- ^ which pretty printer to use
+        , cl_pretty_opts :: PrettyOptions                              -- ^ The options for the pretty printer
         , cl_render      :: Handle -> PrettyOptions -> DocH -> IO ()   -- ^ the way of outputing to the screen
-        , cl_width       :: Int                 -- ^ how wide is the screen?
-        , cl_nav         :: Bool        -- ^ keyboard input the the nav panel
-        , cl_loading     :: Bool        -- ^ if loading a file
-        , cl_tick        :: TVar (M.Map String Int)     -- ^ The list of ticked messages
+        , cl_width       :: Int                                        -- ^ how wide is the screen?
+        , cl_nav         :: Bool                                       -- ^ keyboard input the the nav panel
+        , cl_loading     :: Bool                                       -- ^ if loading a file
+        , cl_tick        :: TVar (M.Map String Int)                    -- ^ The list of ticked messages
         }
 
 -------------------------------------------------------------------------------
@@ -292,7 +290,7 @@ data CompletionType = ConsiderC -- complete with possible arguments to consider
                     | AmbiguousC [CompletionType]  -- completionType function needs to be more specific
     deriving (Show)
 
--- todo: reverse rPrev and parse it, to better figure out what possiblities are in context?
+-- TODO: reverse rPrev and parse it, to better figure out what possiblities are in context?
 --       for instance, completing "any-bu (inline " should be different than completing just "inline "
 --       this would also allow typed completion?
 completionType :: String -> CompletionType
@@ -383,7 +381,7 @@ loop completionMVar = loop'
                          `ourCatch` (liftIO . putStrLn)
                            >> loop'
 
-ourCatch :: (MonadIO n) => CLM IO () -> (String -> CLM n ()) -> CLM n ()
+ourCatch :: MonadIO m => CLM IO () -> (String -> CLM m ()) -> CLM m ()
 ourCatch m failure = do
                 st <- get
                 (res,st') <- liftIO $ runStateT (runErrorT m) st
@@ -394,7 +392,7 @@ ourCatch m failure = do
 
 
 
-evalStmts :: (MonadIO m) => [StmtH ExprH] -> CLM m ()
+evalStmts :: MonadIO m => [StmtH ExprH] -> CLM m ()
 evalStmts = mapM_ evalExpr . scopes
     where scopes :: [StmtH ExprH] -> [ExprH]
           scopes [] = []
@@ -402,7 +400,7 @@ evalStmts = mapM_ evalExpr . scopes
           scopes (ScopeH s:ss) = (CmdName "{" : scopes s) ++ [CmdName "}"] ++ scopes ss
 
 
-evalExpr :: (MonadIO m) => ExprH -> CLM m ()
+evalExpr :: MonadIO m => ExprH -> CLM m ()
 evalExpr expr = do
     dict <- gets cl_dict
     case interpExprH dict interpShellCommand expr of
@@ -437,18 +435,9 @@ performAstEffect (Pathfinder t) expr = do
 
 performAstEffect (Direction dir) expr = do
     st <- get
-    -- This seems unnecassary.  But if you restore it, note that it needs editing so that it doesn't print if we're loading a file.
-    -- child_count <- iokm2clm "Could not compute number of children:" $ queryS (cl_kernel st) (cl_cursor (cl_session st)) numChildrenT (cl_kernel_env (cl_session st))
-    -- liftIO $ print (child_count, dir)
     ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor $ cl_session st) (moveLocally dir) (cl_kernel_env $ cl_session st)
     put $ newSAST expr ast st
     -- something changed, to print
-    showFocus
-
-performAstEffect (PushFocus p) expr = do
-    st <- get
-    ast <- iokm2clm "Invalid push: " $ modPathS (cl_kernel st) (cl_cursor $ cl_session st) (extendLocalPath p) (cl_kernel_env $ cl_session st)
-    put $ newSAST expr ast st
     showFocus
 
 performAstEffect BeginScope expr = do
@@ -473,12 +462,6 @@ performAstEffect (CorrectnessCritera q) expr = do
         liftIO (queryS (cl_kernel st) (cl_cursor $ cl_session st) q (cl_kernel_env $ cl_session st))
           >>= runKureM (\ () -> putStrToConsole $ unparseExprH expr ++ " [correct]")
                        (\ err -> fail $ unparseExprH expr ++ " [exception: " ++ err ++ "]")
-        -- correctness <- liftIO (try $ queryS (cl_kernel st) (cl_cursor (cl_session st)) q)
-        -- case correctness of
-        --   Right ()  -> do putStrToConsole $ unparseExprH expr ++ " [correct]"
-        --   Left (err :: IOException)
-        --            -> fail $ unparseExprH expr ++ " [exception: " ++ show err ++ "]"
-
 
 -------------------------------------------------------------------------------
 
@@ -508,13 +491,6 @@ performQuery (Inquiry f) = do
 -- These two need to use Inquiry
 performQuery (Message msg) = liftIO (putStrLn msg)
 performQuery Display = showFocus
-  -- do
-  --   st <- get
-  --   liftIO $ do
-  --       ps <- pathS (cl_kernel st) (cl_cursor (cl_session st))
-  --       putStrLn $ "Paths: " ++ show ps
-  --       print ("Graph",cl_graph st)
-  --       print ("This",cl_cursor (cl_session st))
 
 -------------------------------------------------------------------------------
 
@@ -525,12 +501,12 @@ performMetaCommand Resume = do st <- get
 performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
     case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
-        (Just pp, Just r) -> do doc <- iokm2clm "Bad pretty-printer or renderer option: " $
-                                           queryS (cl_kernel st) (cl_cursor $ cl_session st) (pp (cl_pretty_opts $ cl_session st)) (cl_kernel_env $ cl_session st)
-                                liftIO $ do h <- openFile fileName WriteMode
-                                            r h ((cl_pretty_opts $ cl_session st) { po_width = width }) doc
-                                            hClose h
-        _ -> throwError "dump: bad pretty-printer or renderer option"
+      (Just pp, Just r) -> do doc <- iokm2clm "Bad pretty-printer or renderer option: " $
+                                         queryS (cl_kernel st) (cl_cursor $ cl_session st) (pp (cl_pretty_opts $ cl_session st)) (cl_kernel_env $ cl_session st)
+                              liftIO $ do h <- openFile fileName WriteMode
+                                          r h ((cl_pretty_opts $ cl_session st) { po_width = width }) doc
+                                          hClose h
+      _ -> throwError "dump: bad pretty-printer or renderer option"
 performMetaCommand (LoadFile fileName) = do
         putStrToConsole $ "[loading " ++ fileName ++ "]"
         res <- liftIO $ try (readFile fileName)
@@ -619,14 +595,14 @@ navigation whereTo st sess_st =
            all_nds <- listS (cl_kernel st)
            if SAST n `elem` all_nds
               then return $ sess_st { cl_cursor = SAST n }
-              else fail $ "Can not find AST #" ++ show n
+              else fail $ "Cannot find AST #" ++ show n ++ "."
       GotoTag tag -> case lookup tag (cl_tags st) of
                        Just sast -> return $ sess_st { cl_cursor = sast }
-                       Nothing   -> fail $ "Can not find tag " ++ show tag
+                       Nothing   -> fail $ "Cannot find tag " ++ show tag ++ "."
       Step -> do
            let ns = [ edge | edge@(s,_,_) <- cl_graph st, s == cl_cursor (cl_session st) ]
            case ns of
-             [] -> fail "Cannot step forward (no more steps)"
+             [] -> fail "Cannot step forward (no more steps)."
              [(_,cmd,d) ] -> do
                            putStrLn $ "step : " ++ unparseExprH cmd
                            return $ sess_st { cl_cursor = d }
@@ -634,11 +610,11 @@ navigation whereTo st sess_st =
       Back -> do
            let ns = [ edge | edge@(_,_,d) <- cl_graph st, d == cl_cursor (cl_session st) ]
            case ns of
-             []         -> fail "Cannot step backwards (no more steps)"
+             []         -> fail "Cannot step backwards (no more steps)."
              [(s,cmd,_) ] -> do
                            putStrLn $ "back, unstepping : " ++ unparseExprH cmd
                            return $ sess_st { cl_cursor = s }
-             _          -> fail "Cannot step backwards (multiple choices, impossible!)"
+             _          -> fail "Cannot step backwards (multiple choices, impossible!)."
 
 --------------------------------------------------------
 
