@@ -88,7 +88,7 @@ instance Functor HermitM where
 
 instance Applicative HermitM where
   pure :: a -> HermitM a
-  pure  = return
+  pure = return
 
   (<*>) :: HermitM (a -> b) -> HermitM a -> HermitM b
   (<*>) = ap
@@ -133,21 +133,18 @@ instance HasDynFlags HermitM where
 ----------------------------------------------------------------------------
 
 newName :: String -> HermitM Name
-newName name = do
-        uq <- getUniqueM
-        return $ mkSystemVarName uq $ mkFastString $ name
+newName name = do uq <- getUniqueM
+                  return $ mkSystemVarName uq $ mkFastString name
 
 -- | Make a unique identifier for a specified type based on a provided name.
 newVarH :: String -> Type -> HermitM Id
-newVarH name ty = do
-        name' <- newName name
-        return $ mkLocalId name' ty
+newVarH name ty = do name' <- newName name
+                     return $ mkLocalId name' ty
 
 -- | Make a unique type variable for a specified kind based on a provided name.
 newTypeVarH :: String -> Kind -> HermitM TyVar
-newTypeVarH name kind = do
-        name' <- newName name
-        return $ mkTyVar name' kind
+newTypeVarH name kind = do name' <- newName name
+                           return $ mkTyVar name' kind
 
 
 -- | This gives an new version of an Id, with the same info, and a new textual name.
