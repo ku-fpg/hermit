@@ -232,7 +232,7 @@ renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\
 ghcCorePrettyH :: PrettyH Core
 ghcCorePrettyH =
            promoteT (ppModule :: PrettyH ModGuts)
-        <+ promoteT (ppH      :: PrettyH CoreProgram)
+        <+ promoteT (ppProg   :: PrettyH CoreProg)
         <+ promoteT (ppH      :: PrettyH CoreBind)
         <+ promoteT (ppDef    :: PrettyH CoreDef)
         <+ promoteT (ppH      :: PrettyH CoreExpr)
@@ -247,8 +247,11 @@ ghcCorePrettyH =
         ppModule :: PrettyH ModGuts
         ppModule = mg_module ^>> ppH
 
+        ppProg :: PrettyH CoreProg
+        ppProg = progToBinds ^>> ppH
+
         ppDef :: PrettyH CoreDef
-        ppDef = (\ (Def v e) -> (v,e)) ^>> ppH
+        ppDef = defToPair ^>> ppH
 
 --        arr (PP.text . ppr . mg_module)
 

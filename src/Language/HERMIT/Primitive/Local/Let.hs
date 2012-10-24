@@ -50,9 +50,9 @@ letExternals =
                      ]                                                                  .+ Commute .+ Shallow .+ Bash
          , external "let-float-let" (promoteExprR letFloatLet :: RewriteH Core)
                      [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow .+ Bash
-         , external "let-float-top" (promoteProgramR letFloatLetTop :: RewriteH Core)
+         , external "let-float-top" (promoteProgR letFloatLetTop :: RewriteH Core)
                      [ "v = (let w = ew in ev) : bds ==> w = ew : v = ev : bds" ] .+ Commute .+ Shallow .+ Bash
-         , external "let-float" (promoteProgramR letFloatLetTop <+ promoteExprR letFloatExpr :: RewriteH Core)
+         , external "let-float" (promoteProgR letFloatLetTop <+ promoteExprR letFloatExpr :: RewriteH Core)
                      [ "Float a Let whatever the context." ] .+ Commute .+ Shallow .+ Bash
          , external "let-to-case" (promoteExprR letToCase :: RewriteH Core)
                      [ "let v = ev in e ==> case ev of v -> e" ] .+ Commute .+ Shallow .+ PreCondition
@@ -107,11 +107,11 @@ letFloatExpr :: RewriteH CoreExpr
 letFloatExpr = setFailMsg "Unsuitable expression for Let floating." $
                letFloatApp <+ letFloatArg <+ letFloatLet <+ letFloatLam
 
--- | NonRec v (Let (NonRec w ew) ev) : bds ==> NonRec w ew : NonRec v ev : bds
-letFloatLetTop :: RewriteH CoreProgram
-letFloatLetTop = setFailMsg ("Let floating to top level failed: " ++ wrongExprForm "NonRec v (Let (NonRec w ew) ev) : bds") $
-  do NonRec v (Let (NonRec w ew) ev) : bds <- idR
-     return (NonRec w ew : NonRec v ev : bds)
+-- | NonRec v (Let (NonRec w ew) ev) `ProgCons` p ==> NonRec w ew `ProgCons` NonRec v ev `ProgCons` p
+letFloatLetTop :: RewriteH CoreProg
+letFloatLetTop = setFailMsg ("Let floating to top level failed: " ++ wrongExprForm "NonRec v (Let (NonRec w ew) ev) `ProgCons` p") $
+  do NonRec v (Let (NonRec w ew) ev) `ProgCons` p <- idR
+     return (NonRec w ew `ProgCons` NonRec v ev `ProgCons` p)
 
 -- | let v = ev in e ==> case ev of v -> e
 letToCase :: RewriteH CoreExpr

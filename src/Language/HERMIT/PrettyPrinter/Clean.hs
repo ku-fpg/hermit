@@ -108,9 +108,10 @@ corePrettyH opts = do
                                                   GHC.Rec bnds -> map fst bnds
                                        ])
 
-        -- DocH is not a monoid, so we can't use listT here
-        ppProgram :: PrettyH GHC.CoreProgram -- CoreProgram = [CoreBind]
-        ppProgram = translate $ \ c -> fmap vcat . sequenceA . map (apply ppCoreBind c)
+        -- DocH is not a monoid.
+        -- GHC uses a list, which we print here. The CoreProg type is our doing.
+        ppCoreProg :: PrettyH CoreProg
+        ppCoreProg = translate $ \ c -> fmap vcat . sequenceA . map (apply ppCoreBind c) . progToBinds
 
         ppCoreExpr :: PrettyH GHC.CoreExpr
         ppCoreExpr = ppCoreExprR >>^ normalExpr
@@ -221,7 +222,7 @@ corePrettyH opts = do
                         Just p  -> p <+> symbol '='
 
     promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
-     <+ promoteT (ppProgram  :: PrettyH GHC.CoreProgram)
+     <+ promoteT (ppCoreProg :: PrettyH CoreProg)
      <+ promoteT (ppCoreBind :: PrettyH GHC.CoreBind)
      <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
      <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)

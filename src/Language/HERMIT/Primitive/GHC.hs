@@ -41,7 +41,7 @@ externals =
                 , "only matches non-recursive lets" ]  .+ Deep .+ Eval
          , external "free-ids" (promoteExprT freeIdsQuery :: TranslateH Core String)
                 [ "List the free identifiers in this expression." ] .+ Query .+ Deep
-         , external "deshadow-binds" (promoteProgramR deShadowBindsR :: RewriteH Core)
+         , external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH Core)
                 [ "Deshadow a program." ] .+ Deep
          , external "apply-rule" (promoteExprR . rules :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ] .+ Shallow
@@ -65,8 +65,8 @@ externals =
 ------------------------------------------------------------------------
 
 substR :: Id -> CoreExpr -> RewriteH Core
-substR b e = setFailMsg "Can only perform substitution on CoreExpr or CoreProgram forms." $
-             promoteExprR (substExprR b e) <+ promoteProgramR (substTopBindR b e)
+substR b e = setFailMsg "Can only perform substitution on expressions or programs." $
+             promoteExprR (substExprR b e) <+ promoteProgR (substTopBindR b e)
 
 substExprR :: Id -> CoreExpr -> RewriteH CoreExpr
 substExprR b e =  contextfreeT $ \ exp ->
@@ -87,20 +87,20 @@ substExprR b e =  contextfreeT $ \ exp ->
               Nothing -> fail "substExprR:  Id argument is a TyVar, but the expression is not a Type."
 
 
-substTopBindR :: Id -> CoreExpr -> RewriteH CoreProgram
-substTopBindR b e =  contextfreeT $ \ binds ->
+substTopBindR :: Id -> CoreExpr -> RewriteH CoreProg
+substTopBindR b e =  contextfreeT $ \ p ->
           -- TODO.  Do we need to initialize the emptySubst with bindFreeVars?
           let emptySub =  emptySubst -- mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-              sub = if (isTyVar b)
-                    then case e of
-                           (Type bty) -> Just $ extendTvSubst emptySub b bty
-                           (Var x)    -> Just $ extendTvSubst emptySub b (mkTyVarTy x)
-                           _ ->  Nothing
-                    else Just $ extendSubst emptySub b e
+              sub = if isTyVar b
+                      then case e of
+                             Type bty -> Just $ extendTvSubst emptySub b bty
+                             Var x    -> Just $ extendTvSubst emptySub b (mkTyVarTy x)
+                             _        ->  Nothing
+                      else Just $ extendSubst emptySub b e
           in
             case sub of
-              Just sub' -> return $ snd (mapAccumL substBind sub' binds)
-              Nothing -> fail "substTopBindR:  Id argument is a TyVar, but the expression is not a Type."
+              Just sub' -> return $ bindsToProg $ snd (mapAccumL substBind sub' (progToBinds p))
+              Nothing   -> fail "substTopBindR:  Id argument is a TyVar, but the expression is not a Type."
 
 -- | (let x = e1 in e2) ==> (e2[e1/x]),
 --   x must not be free in e1.
@@ -184,8 +184,8 @@ coreExprFreeIds  = uniqSetToList . exprFreeIds
 --
 -- (Actually, within a single /type/ there might still be shadowing, because
 -- 'substTy' is a no-op for the empty substitution, but that's probably OK.)
-deShadowBindsR :: RewriteH CoreProgram
-deShadowBindsR = arr deShadowBinds
+deShadowProgR :: RewriteH CoreProg
+deShadowProgR = arr (bindsToProg . deShadowBinds . progToBinds)
 
 ------------------------------------------------------------------------
 {-
@@ -339,7 +339,7 @@ bindEqual _ _ = Nothing
 coreEqual :: Core -> Core -> Maybe Bool
 coreEqual (ExprCore e1) (ExprCore e2) = Just $ e1 `exprEqual` e2
 coreEqual (BindCore b1) (BindCore b2) = b1 `bindEqual` b2
-coreEqual (DefCore dc1) (DefCore dc2) = defToRecBind [dc1] `bindEqual` defToRecBind [dc2]
+coreEqual (DefCore dc1) (DefCore dc2) = defsToRecBind [dc1] `bindEqual` defsToRecBind [dc2]
 coreEqual _             _             = Nothing
 
 compareValues :: TH.Name -> TH.Name -> TranslateH Core ()

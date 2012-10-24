@@ -65,7 +65,7 @@ externals =
          [ external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
                 ["Flatten all the top-level binding groups in the module to a single recursive binding group.",
                  "This can be useful if you intend to appply GHC RULES."]
-         , external "flatten-program" (promoteProgramR flattenProgram :: RewriteH Core)
+         , external "flatten-program" (promoteProgR flattenProgram :: RewriteH Core)
                 ["Flatten all the top-level binding groups in a program (list of binding groups) to a single recursive binding group.",
                  "This can be useful if you intend to appply GHC RULES."]
          ]
@@ -182,13 +182,13 @@ flattenModule :: RewriteH ModGuts
 flattenModule = modGutsR flattenProgram
 
 -- | Flatten all the top-level binding groups in a program to a single recursive binding group.
-flattenProgram :: RewriteH CoreProgram
-flattenProgram = contextfreeT $ \ binds ->
-                 let allbinds = foldr listOfBinds [] binds
+flattenProgram :: RewriteH CoreProg
+flattenProgram = contextfreeT $ \ p ->
+                 let allbinds = foldr listOfBinds [] (progToBinds p)
                      nodups   = nub $ map fst allbinds
                  in
                     if length allbinds == length nodups
-                     then return [Rec allbinds]
+                     then return $ bindsToProg [Rec allbinds]
                      else fail "Top-level bindings contain multiple occurances of a name."
   where
         listOfBinds :: CoreBind -> [(Id,CoreExpr)] -> [(Id,CoreExpr)]

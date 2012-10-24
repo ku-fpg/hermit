@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections, LambdaCase #-}
 
 module Language.HERMIT.Kure
        (
@@ -16,13 +16,18 @@ module Language.HERMIT.Kure
        , idR
        -- * Generic Data Type
        , Core(..)
+       , CoreProg(..)
        , CoreDef(..)
+       , defToPair
+       , defsToRecBind
+       , progToBinds
+       , bindsToProg
        -- * Congruence combinators
        -- ** Modguts
        , modGutsT, modGutsR
        -- ** Program
-       , nilT
-       , consBindT, consBindAllR, consBindAnyR, consBindOneR
+       , progNilT
+       , progConsT, progConsAllR, progConsAnyR, progConsOneR
        -- ** Binding Groups
        , nonRecT, nonRecR
        , recT, recAllR, recAnyR, recOneR
@@ -53,14 +58,14 @@ module Language.HERMIT.Kure
        -- * Promotion Combinators
        -- ** Rewrite Promotions
        , promoteModGutsR
-       , promoteProgramR
+       , promoteProgR
        , promoteBindR
        , promoteDefR
        , promoteExprR
        , promoteAltR
        -- ** Translate Promotions
        , promoteModGutsT
-       , promoteProgramT
+       , promoteProgT
        , promoteBindT
        , promoteDefT
        , promoteExprT
@@ -99,7 +104,7 @@ instance Node Core where
   type Generic Core = Core
 
   numChildren (ModGutsCore x) = numChildren x
-  numChildren (ProgramCore x) = numChildren x
+  numChildren (ProgCore x)    = numChildren x
   numChildren (BindCore x)    = numChildren x
   numChildren (DefCore x)     = numChildren x
   numChildren (ExprCore x)    = numChildren x
@@ -111,7 +116,7 @@ instance Node Core where
 instance Walker HermitC HermitM Core where
   childL n = lens $ translate $ \ c core -> case core of
           ModGutsCore x -> childLgeneric n c x
-          ProgramCore x -> childLgeneric n c x
+          ProgCore x    -> childLgeneric n c x
           BindCore x    -> childLgeneric n c x
           DefCore x     -> childLgeneric n c x
           ExprCore x    -> childLgeneric n c x
@@ -119,7 +124,7 @@ instance Walker HermitC HermitM Core where
 
   allT t = translate $ \ c core -> case core of
           ModGutsCore x -> allTgeneric t c x
-          ProgramCore x -> allTgeneric t c x
+          ProgCore x    -> allTgeneric t c x
           BindCore x    -> allTgeneric t c x
           DefCore x     -> allTgeneric t c x
           ExprCore x    -> allTgeneric t c x
@@ -127,7 +132,7 @@ instance Walker HermitC HermitM Core where
 
   oneT t = translate $ \ c core -> case core of
           ModGutsCore x -> oneTgeneric t c x
-          ProgramCore x -> oneTgeneric t c x
+          ProgCore x    -> oneTgeneric t c x
           BindCore x    -> oneTgeneric t c x
           DefCore x     -> oneTgeneric t c x
           ExprCore x    -> oneTgeneric t c x
@@ -135,7 +140,7 @@ instance Walker HermitC HermitM Core where
 
   allR r = rewrite $ \ c core -> case core of
           ModGutsCore x -> allRgeneric r c x
-          ProgramCore x -> allRgeneric r c x
+          ProgCore x    -> allRgeneric r c x
           BindCore x    -> allRgeneric r c x
           DefCore x     -> allRgeneric r c x
           ExprCore x    -> allRgeneric r c x
@@ -143,7 +148,7 @@ instance Walker HermitC HermitM Core where
 
   anyR r = rewrite $ \ c core -> case core of
           ModGutsCore x -> anyRgeneric r c x
-          ProgramCore x -> anyRgeneric r c x
+          ProgCore x    -> anyRgeneric r c x
           BindCore x    -> anyRgeneric r c x
           DefCore x     -> anyRgeneric r c x
           ExprCore x    -> anyRgeneric r c x
@@ -151,7 +156,7 @@ instance Walker HermitC HermitM Core where
 
   oneR r = rewrite $ \ c core -> case core of
           ModGutsCore x -> oneRgeneric r c x
-          ProgramCore x -> oneRgeneric r c x
+          ProgCore x    -> oneRgeneric r c x
           BindCore x    -> oneRgeneric r c x
           DefCore x     -> oneRgeneric r c x
           ExprCore x    -> oneRgeneric r c x
@@ -170,62 +175,63 @@ instance Node ModGuts where
   numChildren _ = 1
 
 instance Walker HermitC HermitM ModGuts where
-  childL 0 = lens $ modGutsT exposeT (childL1of2 $ \ modguts bds -> modguts {mg_binds = bds})
+  childL 0 = lens $ modGutsT exposeT (childL1of2 $ \ modguts p -> modguts {mg_binds = progToBinds p})
   childL n = failT (missingChild n)
 
 -- | Translate a module.
 --   Slightly different to the other congruence combinators: it passes in *all* of the original to the reconstruction function.
-modGutsT :: TranslateH CoreProgram a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
-modGutsT t f = translate $ \ c modGuts -> f modGuts <$> apply t (c @@ 0) (mg_binds modGuts)
+modGutsT :: TranslateH CoreProg a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
+modGutsT t f = translate $ \ c modGuts -> f modGuts <$> apply t (c @@ 0) (bindsToProg (mg_binds modGuts))
 
--- | Rewrite the 'CoreProgram' child of a module.
-modGutsR :: RewriteH CoreProgram -> RewriteH ModGuts
-modGutsR r = modGutsT r (\ modguts bds -> modguts {mg_binds = bds})
+-- | Rewrite the 'CoreProg' child of a module.
+modGutsR :: RewriteH CoreProg -> RewriteH ModGuts
+modGutsR r = modGutsT r (\ modguts p -> modguts {mg_binds = progToBinds p})
 
 ---------------------------------------------------------------------
 
-instance Injection CoreProgram Core where
-  inject                    = ProgramCore
-  retract (ProgramCore bds) = Just bds
-  retract _                 = Nothing
+instance Injection CoreProg Core where
+  inject                 = ProgCore
+  retract (ProgCore bds) = Just bds
+  retract _              = Nothing
 
-instance Node CoreProgram where
-  type Generic CoreProgram = Core
+instance Node CoreProg where
+  type Generic CoreProg = Core
 
-  -- we consider only the head and tail to be interesting children
-  numChildren bds = min 2 (length bds)
+  -- A program is either empty (zero children) or a binding group and the remaining program it scopes over (two children).
+  numChildren ProgNil        = 0
+  numChildren (ProgCons _ _) = 2
 
-instance Walker HermitC HermitM CoreProgram where
-  childL 0 = lens $ consBindT exposeT idR (childL0of2 (:))
-  childL 1 = lens $ consBindT idR exposeT (childL1of2 (:))
+instance Walker HermitC HermitM CoreProg where
+  childL 0 = lens $ progConsT exposeT idR (childL0of2 ProgCons)
+  childL 1 = lens $ progConsT idR exposeT (childL1of2 ProgCons)
   childL n = failT (missingChild n)
 
 -- | Translate an empty list.
-nilT :: b -> TranslateH [a] b
-nilT b = contextfreeT $ \ e -> case e of
-                           [] -> pure b
-                           _  -> fail "no match for []"
+progNilT :: b -> TranslateH CoreProg b
+progNilT b = contextfreeT $ \ case
+                                ProgNil       -> pure b
+                                ProgCons _ _  -> fail "no match for ProgNil"
 
-consBindT' :: TranslateH CoreBind a1 -> TranslateH CoreProgram a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH CoreProgram b
-consBindT' t1 t2 f = translate $ \ c e -> case e of
-        bd:bds -> f (apply t1 (c @@ 0) bd) (apply t2 (addBinding bd c @@ 1) bds)
-        _      -> fail "no match for consBind"
+progConsT' :: TranslateH CoreBind a1 -> TranslateH CoreProg a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH CoreProg b
+progConsT' t1 t2 f = translate $ \ c e -> case e of
+                                            ProgCons bd p -> f (apply t1 (c @@ 0) bd) (apply t2 (addBinding bd c @@ 1) p)
+                                            _             -> fail "no match for ProgCons"
 
--- | Translate a program of the form: ('CoreBind' @:@ 'CoreProgram')
-consBindT :: TranslateH CoreBind a1 -> TranslateH CoreProgram a2 -> (a1 -> a2 -> b) -> TranslateH CoreProgram b
-consBindT t1 t2 f = consBindT' t1 t2 (liftA2 f)
+-- | Translate a program of the form: ('CoreBind' @:@ 'CoreProg')
+progConsT :: TranslateH CoreBind a1 -> TranslateH CoreProg a2 -> (a1 -> a2 -> b) -> TranslateH CoreProg b
+progConsT t1 t2 f = progConsT' t1 t2 (liftA2 f)
 
--- | Rewrite all children of a program of the form: ('CoreBind' @:@ 'CoreProgram')
-consBindAllR :: RewriteH CoreBind -> RewriteH CoreProgram -> RewriteH CoreProgram
-consBindAllR r1 r2 = consBindT r1 r2 (:)
+-- | Rewrite all children of a program of the form: ('CoreBind' @:@ 'CoreProg')
+progConsAllR :: RewriteH CoreBind -> RewriteH CoreProg -> RewriteH CoreProg
+progConsAllR r1 r2 = progConsT r1 r2 ProgCons
 
--- | Rewrite any children of a program of the form: ('CoreBind' @:@ 'CoreProgram')
-consBindAnyR :: RewriteH CoreBind -> RewriteH CoreProgram -> RewriteH CoreProgram
-consBindAnyR r1 r2 = consBindT' (attemptR r1) (attemptR r2) (attemptAny2 (:))
+-- | Rewrite any children of a program of the form: ('CoreBind' @:@ 'CoreProg')
+progConsAnyR :: RewriteH CoreBind -> RewriteH CoreProg -> RewriteH CoreProg
+progConsAnyR r1 r2 = progConsT' (attemptR r1) (attemptR r2) (attemptAny2 ProgCons)
 
--- | Rewrite one child of a program of the form: ('CoreBind' @:@ 'CoreProgram')
-consBindOneR :: RewriteH CoreBind -> RewriteH CoreProgram -> RewriteH CoreProgram
-consBindOneR r1 r2 = consBindT' (withArgumentT r1) (withArgumentT r2) (attemptOne2 (:))
+-- | Rewrite one child of a program of the form: ('CoreBind' @:@ 'CoreProg')
+progConsOneR :: RewriteH CoreBind -> RewriteH CoreProg -> RewriteH CoreProg
+progConsOneR r1 r2 = progConsT' (withArgumentT r1) (withArgumentT r2) (attemptOne2 ProgCons)
 
 ---------------------------------------------------------------------
 
@@ -249,7 +255,7 @@ instance Walker HermitC HermitM CoreBind where
     where
       nonrec = nonRecT exposeT (childL1of2 NonRec)
       rec    = whenM (hasChildT n) $
-                  recT (const exposeT) (childLMofN n defToRecBind)
+                  recT (const exposeT) (childLMofN n defsToRecBind)
 
   allT t = nonRecT (extractT t) (\ _ -> id)
         <+ recT (\ _ -> extractT t) mconcat
@@ -278,7 +284,7 @@ nonRecR r = nonRecT r NonRec
 
 recT' :: (Int -> TranslateH CoreDef a) -> ([HermitM a] -> HermitM b) -> TranslateH CoreBind b
 recT' t f = translate $ \ c e -> case e of
-         Rec bds -> -- Notice how we add the scoping bindings here *before* decending into each individual definition.
+         Rec bds -> -- Notice how we add the scoping bindings here *before* descending into each individual definition.
                     let c' = addBinding (Rec bds) c
                      in f [ apply (t n) (c' @@ n) (Def v e') -- here we convert from (Id,CoreExpr) to CoreDef
                           | ((v,e'),n) <- zip bds [0..]
@@ -291,15 +297,15 @@ recT ts f = recT' ts (fmap f . sequence)
 
 -- | Rewrite all children of a binding group of the form: @Rec@ ['CoreDef']
 recAllR :: (Int -> RewriteH CoreDef) -> RewriteH CoreBind
-recAllR rs = recT rs defToRecBind
+recAllR rs = recT rs defsToRecBind
 
 -- | Rewrite any children of a binding group of the form: @Rec@ ['CoreDef']
 recAnyR :: (Int -> RewriteH CoreDef) -> RewriteH CoreBind
-recAnyR rs = recT' (attemptR . rs) (attemptAnyN defToRecBind)
+recAnyR rs = recT' (attemptR . rs) (attemptAnyN defsToRecBind)
 
 -- | Rewrite one child of a binding group of the form: @Rec@ ['CoreDef']
 recOneR :: (Int -> RewriteH CoreDef) -> RewriteH CoreBind
-recOneR rs = recT' (withArgumentT . rs) (attemptOneN defToRecBind)
+recOneR rs = recT' (withArgumentT . rs) (attemptOneN defsToRecBind)
 
 ---------------------------------------------------------------------
 
@@ -589,54 +595,54 @@ recDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
 recDefOneR rs = recOneR (\ n -> defR (rs n))
 
 
--- | Translate a program of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProgram'
-consNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreProgram a2 -> (Id -> a1 -> a2 -> b) -> TranslateH CoreProgram b
-consNonRecT t1 t2 f = consBindT (nonRecT t1 (,)) t2 (uncurry f)
+-- | Translate a program of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProg'
+consNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreProg a2 -> (Id -> a1 -> a2 -> b) -> TranslateH CoreProg b
+consNonRecT t1 t2 f = progConsT (nonRecT t1 (,)) t2 (uncurry f)
 
--- | Rewrite all children of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProgram'
-consNonRecAllR :: RewriteH CoreExpr -> RewriteH CoreProgram -> RewriteH CoreProgram
-consNonRecAllR r1 r2 = consBindAllR (nonRecR r1) r2
+-- | Rewrite all children of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProg'
+consNonRecAllR :: RewriteH CoreExpr -> RewriteH CoreProg -> RewriteH CoreProg
+consNonRecAllR r1 r2 = progConsAllR (nonRecR r1) r2
 
--- | Rewrite any children of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProgram'
-consNonRecAnyR :: RewriteH CoreExpr -> RewriteH CoreProgram -> RewriteH CoreProgram
-consNonRecAnyR r1 r2 = consBindAnyR (nonRecR r1) r2
+-- | Rewrite any children of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProg'
+consNonRecAnyR :: RewriteH CoreExpr -> RewriteH CoreProg -> RewriteH CoreProg
+consNonRecAnyR r1 r2 = progConsAnyR (nonRecR r1) r2
 
--- | Rewrite one child of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProgram'
-consNonRecOneR :: RewriteH CoreExpr -> RewriteH CoreProgram -> RewriteH CoreProgram
-consNonRecOneR r1 r2 = consBindOneR (nonRecR r1) r2
-
-
--- | Translate an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProgram'
-consRecT :: (Int -> TranslateH CoreDef a1) -> TranslateH CoreProgram a2 -> ([a1] -> a2 -> b) -> TranslateH CoreProgram b
-consRecT ts t = consBindT (recT ts id) t
-
--- | Rewrite all children of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProgram'
-consRecAllR :: (Int -> RewriteH CoreDef) -> RewriteH CoreProgram -> RewriteH CoreProgram
-consRecAllR rs r = consBindAllR (recAllR rs) r
-
--- | Rewrite any children of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProgram'
-consRecAnyR :: (Int -> RewriteH CoreDef) -> RewriteH CoreProgram -> RewriteH CoreProgram
-consRecAnyR rs r = consBindAnyR (recAnyR rs) r
-
--- | Rewrite one child of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProgram'
-consRecOneR :: (Int -> RewriteH CoreDef) -> RewriteH CoreProgram -> RewriteH CoreProgram
-consRecOneR rs r = consBindOneR (recOneR rs) r
+-- | Rewrite one child of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProg'
+consNonRecOneR :: RewriteH CoreExpr -> RewriteH CoreProg -> RewriteH CoreProg
+consNonRecOneR r1 r2 = progConsOneR (nonRecR r1) r2
 
 
--- | Translate an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProgram'
-consRecDefT :: (Int -> TranslateH CoreExpr a1) -> TranslateH CoreProgram a2 -> ([(Id,a1)] -> a2 -> b) -> TranslateH CoreProgram b
+-- | Translate an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
+consRecT :: (Int -> TranslateH CoreDef a1) -> TranslateH CoreProg a2 -> ([a1] -> a2 -> b) -> TranslateH CoreProg b
+consRecT ts t = progConsT (recT ts id) t
+
+-- | Rewrite all children of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
+consRecAllR :: (Int -> RewriteH CoreDef) -> RewriteH CoreProg -> RewriteH CoreProg
+consRecAllR rs r = progConsAllR (recAllR rs) r
+
+-- | Rewrite any children of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
+consRecAnyR :: (Int -> RewriteH CoreDef) -> RewriteH CoreProg -> RewriteH CoreProg
+consRecAnyR rs r = progConsAnyR (recAnyR rs) r
+
+-- | Rewrite one child of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
+consRecOneR :: (Int -> RewriteH CoreDef) -> RewriteH CoreProg -> RewriteH CoreProg
+consRecOneR rs r = progConsOneR (recOneR rs) r
+
+
+-- | Translate an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
+consRecDefT :: (Int -> TranslateH CoreExpr a1) -> TranslateH CoreProg a2 -> ([(Id,a1)] -> a2 -> b) -> TranslateH CoreProg b
 consRecDefT ts t = consRecT (\ n -> defT (ts n) (,)) t
 
--- | Rewrite all children of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProgram'
-consRecDefAllR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreProgram -> RewriteH CoreProgram
+-- | Rewrite all children of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
+consRecDefAllR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreProg -> RewriteH CoreProg
 consRecDefAllR rs r = consRecAllR (\ n -> defR (rs n)) r
 
--- | Rewrite any children of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProgram'
-consRecDefAnyR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreProgram -> RewriteH CoreProgram
+-- | Rewrite any children of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
+consRecDefAnyR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreProg -> RewriteH CoreProg
 consRecDefAnyR rs r = consRecAnyR (\ n -> defR (rs n)) r
 
--- | Rewrite one child of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProgram'
-consRecDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreProgram -> RewriteH CoreProgram
+-- | Rewrite one child of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
+consRecDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreProg -> RewriteH CoreProg
 consRecDefOneR rs r = consRecOneR (\ n -> defR (rs n)) r
 
 
@@ -713,9 +719,9 @@ caseAltOneR t ts = caseOneR t (\ n -> altR (ts n))
 promoteModGutsR :: RewriteH ModGuts -> RewriteH Core
 promoteModGutsR = promoteWithFailMsgR "This rewrite can only succeed at the module level."
 
--- | Promote a rewrite on 'CoreProgram' to a rewrite on 'Core'.
-promoteProgramR :: RewriteH CoreProgram -> RewriteH Core
-promoteProgramR = promoteWithFailMsgR "This rewrite can only succeed at program nodes (the top-level)."
+-- | Promote a rewrite on 'CoreProg' to a rewrite on 'Core'.
+promoteProgR :: RewriteH CoreProg -> RewriteH Core
+promoteProgR = promoteWithFailMsgR "This rewrite can only succeed at program nodes (the top-level)."
 
 -- | Promote a rewrite on 'CoreBind' to a rewrite on 'Core'.
 promoteBindR :: RewriteH CoreBind -> RewriteH Core
@@ -739,9 +745,9 @@ promoteExprR = promoteWithFailMsgR "This rewrite can only succeed at expression 
 promoteModGutsT :: TranslateH ModGuts b -> TranslateH Core b
 promoteModGutsT = promoteWithFailMsgT "This translate can only succeed at the module level."
 
--- | Promote a translate on 'CoreProgram' to a translate on 'Core'.
-promoteProgramT :: TranslateH CoreProgram b -> TranslateH Core b
-promoteProgramT = promoteWithFailMsgT "This translate can only succeed at program nodes (the top-level)."
+-- | Promote a translate on 'CoreProg' to a translate on 'Core'.
+promoteProgT :: TranslateH CoreProg b -> TranslateH Core b
+promoteProgT = promoteWithFailMsgT "This translate can only succeed at program nodes (the top-level)."
 
 -- | Promote a translate on 'CoreBind' to a translate on 'Core'.
 promoteBindT :: TranslateH CoreBind b -> TranslateH Core b

@@ -27,9 +27,10 @@ corePrettyH _opts = do
         ppModGuts :: TranslateH GHC.ModGuts Value
         ppModGuts = arr (ppSDoc . GHC.mg_module)
 
-        -- DocH is not a monoid, so we can't use listT here
-        ppProgram :: TranslateH GHC.CoreProgram Value -- CoreProgram = [CoreBind]
-        ppProgram = translate $ \ c -> fmap toJSON . mapM (apply ppCoreBind c)
+        -- DocH is not a monoid.
+        -- GHC uses a list, which we print here. The CoreProg type is our doing.
+        ppCoreProg :: TranslateH CoreProg Value
+        ppCoreProg = translate $ \ c -> fmap toJSON . mapM (apply ppCoreBind c) . progToBinds
 
         ppCoreExpr :: TranslateH GHC.CoreExpr Value
         ppCoreExpr = varT (\i -> object [mkCon "Var", "value" .= ppSDoc i])
@@ -62,7 +63,7 @@ corePrettyH _opts = do
         ppCoreDef = defT ppCoreExpr $ \ i e -> object [mkCon "CoreDef", "var" .= ppSDoc i, "exp" .= e]
 
     promoteT ppCoreExpr
-     <+ promoteT ppProgram
+     <+ promoteT ppCoreProg
      <+ promoteT ppCoreBind
      <+ promoteT ppCoreDef
      <+ promoteT ppModGuts

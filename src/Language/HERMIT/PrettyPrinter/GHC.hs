@@ -36,8 +36,8 @@ corePrettyH opts = do
         ppModGuts :: PrettyH GHC.ModGuts
         ppModGuts = arr (ppSDoc . GHC.mg_binds)
 
-        ppProgram :: PrettyH GHC.CoreProgram
-        ppProgram = arr ppSDoc
+        ppCoreProg :: PrettyH CoreProg
+        ppCoreProg = arr (ppSDoc . progToBinds)
 
         ppCoreExpr :: PrettyH GHC.CoreExpr
         ppCoreExpr = arr ppSDoc
@@ -52,7 +52,7 @@ corePrettyH opts = do
         ppCoreDef = defT ppCoreExpr $ \ i e -> ppSDoc i <> text "=" <> e
 
     promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
-     <+ promoteT (ppProgram  :: PrettyH GHC.CoreProgram)
+     <+ promoteT (ppCoreProg :: PrettyH CoreProg)
      <+ promoteT (ppCoreBind :: PrettyH GHC.CoreBind)
      <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
      <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)

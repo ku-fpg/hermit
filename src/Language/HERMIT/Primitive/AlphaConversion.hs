@@ -60,9 +60,9 @@ externals = map (.+ Deep)
                [ "renames the bound variable in a Let expression with one binder to the given name."]
          ,  external "alpha-let" (promoteExprR alphaLet)
                [ "renames the bound variables in a Let expression."]
-         ,  external "alpha-top" (promoteProgramR . alphaConsOne . Just)
+         ,  external "alpha-top" (promoteProgR . alphaConsOne . Just)
                [ "renames the bound variable in a top-level binding with one binder to the given name."]
-         ,  external "alpha-top" (promoteProgramR alphaCons)
+         ,  external "alpha-top" (promoteProgR alphaCons)
                [ "renames the bound variables in a top-level binding."]
 
          , external "shadow-query" (promoteExprT shadowedNamesQuery)
@@ -231,17 +231,17 @@ alphaLet = alphaLetRec <+ alphaLetNonRec Nothing
 -----------------------------------------------------------------------
 
 -- | Alpha rename a non-recursive top-level binder.  Optionally takes a suggested new name.
-alphaConsNonRec :: Maybe TH.Name -> RewriteH CoreProgram
-alphaConsNonRec mn = setFailMsg (wrongFormForAlpha "NonRec v e : prog") $
-                     do NonRec v _ : _ <- idR
+alphaConsNonRec :: Maybe TH.Name -> RewriteH CoreProg
+alphaConsNonRec mn = setFailMsg (wrongFormForAlpha "ProgCons (NonRec v e) p") $
+                     do ProgCons (NonRec v _) _ <- idR
                         nameModifier <- consNonRecT (freshNameGenT mn) idR (\ _ nameGen _ -> nameGen)
                         v' <- constT (cloneIdH nameModifier v)
-                        consNonRecT idR (replaceIdR v v') (\ _ e1 e2 -> NonRec v' e1 : e2)
+                        consNonRecT idR (replaceIdR v v') (\ _ e1 e2 -> ProgCons (NonRec v' e1) e2)
 
 -- | Rename the specified identifier bound in a recursive top-level binder.  Optionally takes a suggested new name.
-alphaConsRecId :: Maybe TH.Name -> Id -> RewriteH CoreProgram
-alphaConsRecId mn v = setFailMsg (wrongFormForAlpha "Rec bs : prog") $
-                      do rbs@(Rec _) : _ <- idR
+alphaConsRecId :: Maybe TH.Name -> Id -> RewriteH CoreProg
+alphaConsRecId mn v = setFailMsg (wrongFormForAlpha "ProgCons (Rec bs) p") $
+                      do ProgCons rbs@(Rec _) _ <- idR
                          -- Cannot use freshNameGen directly, because we want to include
                          -- free variables from every bound expression, in the name generation function
                          -- as a result we must replicate the essence of freshNameGen in the next few lines
@@ -252,26 +252,26 @@ alphaConsRecId mn v = setFailMsg (wrongFormForAlpha "Rec bs : prog") $
                                          Just name -> const (show name)
                                          Nothing -> inventNames idsToAvoid
                          v' <- constT (cloneIdH nameGen v)
-                         consRecDefT (\ _ -> replaceIdR v v') (replaceIdR v v') (\ bs e -> Rec ((map.first) (replaceId v v') bs) : e)
+                         consRecDefT (\ _ -> replaceIdR v v') (replaceIdR v v') (\ bs e -> ProgCons (Rec $ (map.first) (replaceId v v') bs) e)
 
 -- | Rename all identifiers bound in a recursive top-level binder.
-alphaConsRec :: RewriteH CoreProgram
-alphaConsRec = setFailMsg (wrongFormForAlpha "Rec bs : prog") $
-               do Rec bs : _ <- idR
+alphaConsRec :: RewriteH CoreProg
+alphaConsRec = setFailMsg (wrongFormForAlpha "ProgCons (Rec bs) p") $
+               do ProgCons (Rec bs) _ <- idR
                   andR $ map (alphaConsRecId Nothing . fst) bs
 
 -- | Rename the identifier bound in a recursive top-level binder with a single recursively bound identifier.  Optionally takes a suggested new name.
-alphaConsRecOne :: Maybe TH.Name -> RewriteH CoreProgram
-alphaConsRecOne mn = setFailMsg (wrongFormForAlpha "Rec [(v,e)] : prog") $
-                     do Rec [(v, _)] : _ <- idR
+alphaConsRecOne :: Maybe TH.Name -> RewriteH CoreProg
+alphaConsRecOne mn = setFailMsg (wrongFormForAlpha "ProgCons (Rec [Def v e]) p") $
+                     do ProgCons (Rec [(v, _)]) _ <- idR
                         alphaConsRecId mn v
 
 -- | Rename the identifier bound in a top-level binder with a single bound identifier.  Optionally takes a suggested new name.
-alphaConsOne :: Maybe TH.Name -> RewriteH CoreProgram
+alphaConsOne :: Maybe TH.Name -> RewriteH CoreProg
 alphaConsOne mn = alphaConsNonRec mn <+ alphaConsRecOne mn
 
 -- | Rename all identifiers bound in a Let.
-alphaCons :: RewriteH CoreProgram
+alphaCons :: RewriteH CoreProg
 alphaCons = alphaConsRec <+ alphaConsNonRec Nothing
 
 -----------------------------------------------------------------------
@@ -280,7 +280,7 @@ alphaCons = alphaConsRec <+ alphaConsNonRec Nothing
 alpha :: RewriteH Core
 alpha = setFailMsg "Cannot alpha-rename here." $
            promoteExprR (alphaLam Nothing <+ alphaCaseBinder Nothing <+ alphaLet)
-        <+ promoteProgramR alphaCons
+        <+ promoteProgR alphaCons
 
 -- | Rename local variable with manifestly unique names (x, x0, x1, ...).
 unshadow :: RewriteH Core

@@ -45,9 +45,9 @@ instance BindEnv CoreExpr where
     bindings (Case _ sc _ alts) = sc : nub (concatMap bindings alts)
     bindings _                  = []
 
-instance BindEnv CoreProgram where
-    bindings :: CoreProgram -> [Id]
-    bindings prog = nub (concatMap bindings prog)
+instance BindEnv CoreProg where
+    bindings :: CoreProg -> [Id]
+    bindings p = nub (concatMap bindings $ progToBinds p)
 
 instance BindEnv CoreDef  where
     bindings :: CoreDef -> [Id]
@@ -56,7 +56,7 @@ instance BindEnv CoreDef  where
 bindingVarsT :: TranslateH Core [Var]
 bindingVarsT = translate $ \ c core -> case core of
           ModGutsCore _ -> fail "Cannot get binding vars at topmost level"
-          ProgramCore x -> apply (promoteT ((arr bindings) :: TranslateH CoreProgram [Var])) c x
+          ProgCore x    -> apply (promoteT ((arr bindings) :: TranslateH CoreProg [Var])) c x
           BindCore x    -> apply (promoteT ((arr bindings) :: TranslateH CoreBind [Var])) c x
           DefCore x     -> apply (promoteT ((arr bindings) :: TranslateH CoreDef [Var])) c x
           ExprCore x    -> apply (promoteT ((arr bindings) :: TranslateH CoreExpr [Var])) c x

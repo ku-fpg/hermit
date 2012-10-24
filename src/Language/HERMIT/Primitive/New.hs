@@ -169,7 +169,7 @@ showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
 
 coreNode :: Core -> String
 coreNode (ModGutsCore _) = "Module"
-coreNode (ProgramCore _) = "Program"
+coreNode (ProgCore _)    = "Program"
 coreNode (BindCore _)    = "Binding Group"
 coreNode (DefCore _)     = "Recursive Definition"
 coreNode (ExprCore _)    = "Expression"
@@ -177,9 +177,9 @@ coreNode (AltCore _)     = "Case Alternative"
 
 coreConstructor :: Core -> String
 coreConstructor (ModGutsCore _)    = "ModGuts"
-coreConstructor (ProgramCore prog) = case prog of
-                                       []    -> "[]"
-                                       (_:_) -> "(:)"
+coreConstructor (ProgCore prog)    = case prog of
+                                       ProgNil      -> "ProgNil"
+                                       ProgCons _ _ -> "ProgCons"
 coreConstructor (BindCore bnd)     = case bnd of
                                        Rec _      -> "Rec"
                                        NonRec _ _ -> "NonRec"
