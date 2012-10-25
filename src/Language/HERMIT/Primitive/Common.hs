@@ -22,6 +22,7 @@ import Data.List
 import Data.Monoid
 
 import Language.HERMIT.Kure
+import Language.HERMIT.CoreExtra
 import Language.HERMIT.Primitive.GHC
 
 

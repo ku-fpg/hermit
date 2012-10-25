@@ -95,7 +95,7 @@ substTopBindR b e =  contextfreeT $ \ p ->
                       then case e of
                              Type bty -> Just $ extendTvSubst emptySub b bty
                              Var x    -> Just $ extendTvSubst emptySub b (mkTyVarTy x)
-                             _        ->  Nothing
+                             _        -> Nothing
                       else Just $ extendSubst emptySub b e
           in
             case sub of
@@ -106,8 +106,8 @@ substTopBindR b e =  contextfreeT $ \ p ->
 --   x must not be free in e1.
 letSubstR :: RewriteH CoreExpr
 letSubstR =  prefixFailMsg "Let substition failed: " $
-             rewrite $ \ ctx exp -> case occurAnalyseExpr exp of
-                                     Let (NonRec b be) e -> apply (substExprR b be) ctx e
+             rewrite $ \ c exp -> case occurAnalyseExpr exp of
+                                     Let (NonRec b be) e -> apply (substExprR b be) c e
                                      _ -> fail "expression is not a non-recursive Let."
 
 -- | Perform let-substitution the specified number of times.
@@ -152,9 +152,8 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 
 -- | Output a list of all free variables in an expression.
 freeIdsQuery :: TranslateH CoreExpr String
-freeIdsQuery = do
-    frees <- freeIdsT
-    return $ "Free identifiers are: " ++ showVars frees
+freeIdsQuery = do frees <- freeIdsT
+                  return $ "Free identifiers are: " ++ showVars frees
 
 -- | Show a human-readable version of a list of 'Var's.
 showVars :: [Var] -> String

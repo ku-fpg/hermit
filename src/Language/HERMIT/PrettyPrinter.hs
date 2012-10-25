@@ -6,6 +6,7 @@ import GhcPlugins hiding ((<>))
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 import Language.HERMIT.Kure
+import Language.HERMIT.CoreExtra
 import Control.Arrow
 import Data.Monoid hiding ((<>))
 import Data.Default
@@ -251,7 +252,7 @@ ghcCorePrettyH =
         ppProg = progToBinds ^>> ppH
 
         ppDef :: PrettyH CoreDef
-        ppDef = defToPair ^>> ppH
+        ppDef = defToIdExpr ^>> ppH
 
 --        arr (PP.text . ppr . mg_module)
 

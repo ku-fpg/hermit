@@ -7,6 +7,7 @@ import Data.Char (isSpace)
 
 import qualified GhcPlugins as GHC
 import Language.HERMIT.Kure
+import Language.HERMIT.CoreExtra
 import Language.HERMIT.PrettyPrinter
 
 import Text.PrettyPrint.MarkedHughesPJ as PP

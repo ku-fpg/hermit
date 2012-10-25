@@ -20,10 +20,6 @@ module Language.HERMIT.Kure
        , Core(..)
        , CoreProg(..)
        , CoreDef(..)
-       , defToPair
-       , defsToRecBind
-       , progToBinds
-       , bindsToProg
        -- * Congruence combinators
        -- ** Modguts
        , modGutsT, modGutsR

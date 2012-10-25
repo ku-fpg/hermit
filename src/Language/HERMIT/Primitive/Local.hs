@@ -14,12 +14,14 @@ module Language.HERMIT.Primitive.Local
        , etaExpand
        , multiEtaExpand
        , flattenModule
-       , flattenProgram
+       , flattenProgramR
+       , flattenProgramT
        )
 where
 
 import GhcPlugins
 
+import Language.HERMIT.CoreExtra
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.External
@@ -65,7 +67,7 @@ externals =
          [ external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
                 ["Flatten all the top-level binding groups in the module to a single recursive binding group.",
                  "This can be useful if you intend to appply GHC RULES."]
-         , external "flatten-program" (promoteProgR flattenProgram :: RewriteH Core)
+         , external "flatten-program" (promoteProgR flattenProgramR :: RewriteH Core)
                 ["Flatten all the top-level binding groups in a program (list of binding groups) to a single recursive binding group.",
                  "This can be useful if you intend to appply GHC RULES."]
          ]
@@ -172,27 +174,27 @@ deadCodeElimination :: RewriteH CoreExpr
 deadCodeElimination = prefixFailMsg "Dead-code-elimination failed: " $
                       withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
       do Let (NonRec v _) e <- idR
-         guardMsg (v `notElem` coreExprFreeVars e) "no dead code to eliminate."
+         guardMsg (v `notElem` coreExprFreeVars e) "let-bound variable appears in the expression."
          return e
 
 ------------------------------------------------------------------------------
 
 -- | Flatten all the top-level binding groups in the module to a single recursive binding group.
 flattenModule :: RewriteH ModGuts
-flattenModule = modGutsR flattenProgram
+flattenModule = modGutsR flattenProgramR
+
+-- | Flatten all the top-level binding groups in a program to a program containing a single recursive binding group.
+flattenProgramR :: RewriteH CoreProg
+flattenProgramR = do bnd <- flattenProgramT
+                     return (bindsToProg [bnd])
 
 -- | Flatten all the top-level binding groups in a program to a single recursive binding group.
-flattenProgram :: RewriteH CoreProg
-flattenProgram = contextfreeT $ \ p ->
-                 let allbinds = foldr listOfBinds [] (progToBinds p)
-                     nodups   = nub $ map fst allbinds
-                 in
-                    if length allbinds == length nodups
-                     then return $ bindsToProg [Rec allbinds]
-                     else fail "Top-level bindings contain multiple occurances of a name."
-  where
-        listOfBinds :: CoreBind -> [(Id,CoreExpr)] -> [(Id,CoreExpr)]
-        listOfBinds (NonRec b e) others = (b, e) : others
-        listOfBinds (Rec bds)    others = bds ++ others
+flattenProgramT :: TranslateH CoreProg CoreBind
+flattenProgramT = (concatMap bindToIdExprs . progToBinds)
+                  ^>> acceptR (nodups . map fst) "Top-level bindings contain multiple occurrences of a name."
+                  >>^ Rec
+
+nodups :: Eq a => [a] -> Bool
+nodups as = length as == length (nub as)
 
 ------------------------------------------------------------------------------

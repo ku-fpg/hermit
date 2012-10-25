@@ -8,9 +8,10 @@ module Language.HERMIT.CoreExtra
             -- * GHC Core Extras
           , CoreTickish
           , defsToRecBind
-          , defToPair
+          , defToIdExpr
           , progToBinds
           , bindsToProg
+          , bindToIdExprs
 ) where
 
 import GhcPlugins
@@ -54,18 +55,23 @@ progToBinds (ProgCons bd p) = bd : progToBinds p
 bindsToProg :: [CoreBind] -> CoreProg
 bindsToProg = foldr ProgCons ProgNil
 
+-- | Extract the list of identifier/expression pairs from a binding group.
+bindToIdExprs :: CoreBind -> [(Id,CoreExpr)]
+bindToIdExprs (NonRec v e) = [(v,e)]
+bindToIdExprs (Rec bds)    = bds
+
 -- | A (potentially recursive) definition is an identifier and an expression.
 --   In GHC Core, recursive definitions are encoded as ('Id', 'CoreExpr') pairs.
 --   This data type is isomorphic.
 data CoreDef = Def Id CoreExpr
 
--- | Convert a definition to an ('Id','CoreExpr') pair.
-defToPair :: CoreDef -> (Id,CoreExpr)
-defToPair (Def v e) = (v,e)
+-- | Convert a definition to an identifier/expression pair.
+defToIdExpr :: CoreDef -> (Id,CoreExpr)
+defToIdExpr (Def v e) = (v,e)
 
 -- | Convert a list of recursive definitions into an (isomorphic) recursive binding group.
 defsToRecBind :: [CoreDef] -> CoreBind
-defsToRecBind = Rec . map defToPair
+defsToRecBind = Rec . map defToIdExpr
 
 -----------------------------------------------------------------------
 
