@@ -19,8 +19,6 @@ import Language.HERMIT.GHC
 
 import Control.Arrow
 
-import Data.Monoid
-
 import qualified Language.Haskell.TH as TH
 
 -- | 'External's involving navigating to named entities.
@@ -64,9 +62,16 @@ namedBinding _  _                        =  False
 
 -- | Find all the possible targets of \"consider\".
 considerTargets :: TranslateH Core [String]
-considerTargets = allT (collectT (promoteT $ nonRec <+ rec)) >>> arr concat
-    where nonRec = nonRecT mempty (\ v () -> [unqualifiedIdName v])
-          rec    = recT (const (arr (\ (Def v _) -> unqualifiedIdName v))) id
+considerTargets = allT $ collectT (promoteBindT nonRec <+ promoteDefT def)
+    where
+      nonRec :: TranslateH CoreBind String
+      nonRec = nonRecT (return ()) idToString
+
+      def :: TranslateH CoreDef String
+      def = defT (return ()) idToString
+
+      idToString :: Id -> () -> String
+      idToString v () = unqualifiedIdName v
 
 
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetIn | CaseOf | Casty | Ticky | TypeVar | Coerce
