@@ -27,7 +27,7 @@ fix-intro
     unfold 'wrap
     case-reduce
   }
-  dead-code-elimination
+  dead-let-elimination
   let-float-arg
   1
   unfold 'wrap

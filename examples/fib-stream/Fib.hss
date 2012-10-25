@@ -9,6 +9,6 @@ load "WWSplitTactic.hss"
     { consider lam ; alpha-lam 'm }
   }
 }
-innermost dead-code-elimination
+innermost dead-let-elimination
 any-call (unfold 'wrap)
 }

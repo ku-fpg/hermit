@@ -56,4 +56,4 @@ consider 'hanoi
     }
   }
 }
-innermost dead-code-elimination
+innermost dead-let-elimination

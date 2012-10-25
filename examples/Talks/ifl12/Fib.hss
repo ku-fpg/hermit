@@ -23,5 +23,5 @@ let-tuple 'xy
 one-td (fold 'unwrap)
 one-td (fold origwork)
 }
-innermost dead-code-elimination
+innermost dead-let-elimination
 { 0 ; 1 ; any-call (unfold 'wrap) ; simplify }

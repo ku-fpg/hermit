@@ -72,7 +72,7 @@ isVar :: TH.Name -> TranslateH CoreExpr ()
 isVar nm = varT (cmpTHName2Id nm) >>= guardM
 
 simplifyR :: RewriteH Core
-simplifyR = innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ deadCodeElimination))
+simplifyR = innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ deadLetElim))
 
 -- This left for Neil's IFL presentation. letTupleR is the more general version.
 letPairR :: TH.Name -> RewriteH CoreExpr

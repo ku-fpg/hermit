@@ -2,6 +2,7 @@ module Language.HERMIT.Primitive.Local.Let
        ( -- * Rewrites on Let Expressions
          letExternals
        , letIntro
+       , deadLetElim
        , letFloatApp
        , letFloatArg
        , letFloatLet
@@ -38,6 +39,12 @@ letExternals :: [External]
 letExternals =
          [ external "let-intro" (promoteExprR . letIntro :: TH.Name -> RewriteH Core)
                 [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
+         , external "dead-let-elimination" (promoteExprR deadLetElim :: RewriteH Core)
+                     [ "dead-let-elimination removes an unused let binding."
+                     , "(let v = e1 in e2) ==> e2, if v is not free in e2."
+                     , "condition: let is not-recursive" ]                                   .+ Eval .+ Shallow .+ Bash
+         , external "dead-code-elimination" (promoteExprR deadLetElim :: RewriteH Core)
+                     [ "Synonym for dead-let-elimination [deprecated]" ]  .+ Eval .+ Shallow -- TODO: delete this at some point
          -- , external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
          --             [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Unimplemented .+ Eval
          , external "let-float-app" (promoteExprR letFloatApp :: RewriteH Core)
@@ -68,6 +75,16 @@ letIntro ::  TH.Name -> RewriteH CoreExpr
 letIntro nm = prefixFailMsg "Let introduction failed: " $
               contextfreeT $ \ e -> do letvar <- newVarH (show nm) (exprType e)
                                        return $ Let (NonRec letvar e) (Var letvar)
+
+-- | Dead-code-elimination removes a let.
+--   (let v = E1 in E2) => E2, if v is not free in E2
+deadLetElim :: RewriteH CoreExpr
+deadLetElim = prefixFailMsg "Dead-let-elimination failed: " $
+              withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
+      do Let (NonRec v _) e <- idR
+         guardMsg (v `notElem` coreExprFreeVars e) "let-bound variable appears in the expression."
+         return e
+
 
 -- | (let v = ev in e) x ==> let v = ev in e x
 letFloatApp :: RewriteH CoreExpr

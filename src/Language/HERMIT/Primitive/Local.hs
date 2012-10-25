@@ -9,7 +9,6 @@ module Language.HERMIT.Primitive.Local
        , betaReduce
        , betaReducePlus
        , betaExpand
-       , deadCodeElimination
        , etaReduce
        , etaExpand
        , multiEtaExpand
@@ -28,8 +27,6 @@ import Language.HERMIT.External
 import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.GHC
--- import Language.HERMIT.Primitive.Debug
-
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.Local.Case
 import Language.HERMIT.Primitive.Local.Let
@@ -54,10 +51,6 @@ externals =
                      [ "perform one or more beta-reductions."]                               .+ Eval .+ Shallow .+ Bash
          , external "beta-expand" (promoteExprR betaExpand :: RewriteH Core)
                      [ "(let v = e1 in e2) ==> (\\ v -> e2) e1" ]                            .+ Shallow
-         , external "dead-code-elimination" (promoteExprR deadCodeElimination :: RewriteH Core)
-                     [ "dead-code-elimination removes a let."
-                     , "(let v = e1 in e2) ==> e2, if v is not free in e2."
-                     , "condition: let is not-recursive" ]                                   .+ Eval .+ Shallow .+ Bash
          , external "eta-reduce" (promoteExprR etaReduce :: RewriteH Core)
                      [ "(\\ v -> e1 v) ==> e1" ]                                             .+ Eval .+ Shallow .+ Bash
          , external "eta-expand" (promoteExprR . etaExpand :: TH.Name -> RewriteH Core)
@@ -165,17 +158,6 @@ etaExpand nm = prefixFailMsg "Eta-expansion failed: " $
 multiEtaExpand :: [TH.Name] -> RewriteH CoreExpr
 multiEtaExpand []       = idR
 multiEtaExpand (nm:nms) = etaExpand nm >>> lamR (multiEtaExpand nms)
-
-------------------------------------------------------------------------------
-
--- | Dead-code-elimination removes a let.
---   (let v = E1 in E2) => E2, if v is not free in E2
-deadCodeElimination :: RewriteH CoreExpr
-deadCodeElimination = prefixFailMsg "Dead-code-elimination failed: " $
-                      withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
-      do Let (NonRec v _) e <- idR
-         guardMsg (v `notElem` coreExprFreeVars e) "let-bound variable appears in the expression."
-         return e
 
 ------------------------------------------------------------------------------
 
