@@ -76,7 +76,7 @@ letIntro nm = prefixFailMsg "Let introduction failed: " $
               contextfreeT $ \ e -> do letvar <- newVarH (show nm) (exprType e)
                                        return $ Let (NonRec letvar e) (Var letvar)
 
--- | Dead-code-elimination removes a let.
+-- | Remove an unused let binding.
 --   (let v = E1 in E2) => E2, if v is not free in E2
 deadLetElim :: RewriteH CoreExpr
 deadLetElim = prefixFailMsg "Dead-let-elimination failed: " $
