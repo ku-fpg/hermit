@@ -2,7 +2,7 @@ module Language.HERMIT.Primitive.Local.Let
        ( -- * Rewrites on Let Expressions
          letExternals
        , letIntro
-       , deadLetElim
+       , letElim
        , letFloatApp
        , letFloatArg
        , letFloatLet
@@ -10,7 +10,6 @@ module Language.HERMIT.Primitive.Local.Let
        , letFloatExpr
        , letFloatLetTop
        , letToCase
-       , nonrecToRec
        )
 where
 
@@ -39,11 +38,11 @@ letExternals :: [External]
 letExternals =
          [ external "let-intro" (promoteExprR . letIntro :: TH.Name -> RewriteH Core)
                 [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
-         , external "dead-let-elimination" (promoteExprR deadLetElim :: RewriteH Core)
+         , external "dead-let-elimination" (promoteExprR letElim :: RewriteH Core)
                      [ "dead-let-elimination removes an unused let binding."
                      , "(let v = e1 in e2) ==> e2, if v is not free in e2."
                      , "condition: let is not-recursive" ]                                   .+ Eval .+ Shallow .+ Bash
-         , external "dead-code-elimination" (promoteExprR deadLetElim :: RewriteH Core)
+         , external "dead-code-elimination" (promoteExprR letElim :: RewriteH Core)
                      [ "Synonym for dead-let-elimination [deprecated]" ]  .+ Eval .+ Shallow -- TODO: delete this at some point
          -- , external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
          --             [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Unimplemented .+ Eval
@@ -65,9 +64,6 @@ letExternals =
                      [ "let v = ev in e ==> case ev of v -> e" ] .+ Commute .+ Shallow .+ PreCondition
          -- , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
          --             [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ] .+ Unimplemented
-         , external "nonrec-to-rec" (promoteBindR nonrecToRec :: RewriteH Core)
-                     [ "convert a non-recursive binding into a recursive binding group with a single definition."
-                     , "NonRec v e ==> Rec [Def v e]" ]
          ]
 
 -- | e => (let v = e in v), name of v is provided
@@ -78,9 +74,9 @@ letIntro nm = prefixFailMsg "Let introduction failed: " $
 
 -- | Remove an unused let binding.
 --   (let v = E1 in E2) => E2, if v is not free in E2
-deadLetElim :: RewriteH CoreExpr
-deadLetElim = prefixFailMsg "Dead-let-elimination failed: " $
-              withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
+letElim :: RewriteH CoreExpr
+letElim = prefixFailMsg "Dead-let-elimination failed: " $
+          withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
       do Let (NonRec v _) e <- idR
          guardMsg (v `notElem` coreExprFreeVars e) "let-bound variable appears in the expression."
          return e
@@ -138,9 +134,3 @@ letToCase = prefixFailMsg "Converting Let to Case failed: " $
      nameModifier <- freshNameGenT Nothing
      caseBndr <- constT (cloneIdH nameModifier v)
      letT mempty (replaceIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
-
--- | NonRec v e ==> Rec [Def v e]
-nonrecToRec :: RewriteH CoreBind
-nonrecToRec = setFailMsg (wrongExprForm "NonRec v e") $
-  do NonRec v e <- idR
-     return $ Rec [(v,e)]

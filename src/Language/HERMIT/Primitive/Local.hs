@@ -6,6 +6,7 @@ module Language.HERMIT.Primitive.Local
          -- ** Case Expressions
        , module Language.HERMIT.Primitive.Local.Case
          -- ** Miscellaneous
+       , nonrecToRec
        , betaReduce
        , betaReducePlus
        , betaExpand
@@ -43,7 +44,10 @@ import Control.Arrow
 --   (Many taken from Chapter 3 of Andre Santos' dissertation.)
 externals :: [External]
 externals =
-         [ external "beta-reduce" (promoteExprR betaReduce :: RewriteH Core)
+         [ external "nonrec-to-rec" (promoteBindR nonrecToRec :: RewriteH Core)
+                     [ "convert a non-recursive binding into a recursive binding group with a single definition."
+                     , "NonRec v e ==> Rec [Def v e]" ]
+         , external "beta-reduce" (promoteExprR betaReduce :: RewriteH Core)
                      [ "((\\ v -> E1) E2) ==> let v = E2 in E1"
                      , "this form of beta-reduction is safe if E2 is an arbitrary"
                      , "expression (won't duplicate work)" ]                                 .+ Eval .+ Shallow
@@ -66,6 +70,14 @@ externals =
          ]
          ++ letExternals
          ++ caseExternals
+
+------------------------------------------------------------------------------
+
+-- | NonRec v e ==> Rec [Def v e]
+nonrecToRec :: RewriteH CoreBind
+nonrecToRec = setFailMsg (wrongExprForm "NonRec v e") $
+  do NonRec v e <- idR
+     return $ Rec [(v,e)]
 
 ------------------------------------------------------------------------------
 
