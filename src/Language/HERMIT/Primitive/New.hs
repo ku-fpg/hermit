@@ -74,28 +74,6 @@ isVar nm = varT (cmpTHName2Id nm) >>= guardM
 simplifyR :: RewriteH Core
 simplifyR = innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ letElim))
 
--- This left for Neil's IFL presentation. letTupleR is the more general version.
-letPairR :: TH.Name -> RewriteH CoreExpr
-letPairR nm = do
-    Let (NonRec x e1) (Let (NonRec y e2) e) <- idR
-    ifM (letT (nonRecT (pure ()) const)
-              (letT (nonRecT freeVarsT (flip const)) (pure ()) const)
-              elem)
-        (fail "'x' is used in 'e2'")
-        (translate $ \ c _ -> do
-              tupleConId <- findId c "(,)"
-              fstId <- findId c "Data.Tuple.fst"
-              sndId <- findId c "Data.Tuple.snd"
-              let e1TyE = Type (exprType e1)
-                  e2TyE = Type (exprType e2)
-                  rhs = mkCoreApps (Var tupleConId) [e1TyE, e2TyE, e1, e2]
-              letId <- newVarH (show nm) (exprType rhs)
-              let fstE = mkCoreApps (Var fstId) [e1TyE, e2TyE, Var letId]
-                  sndE = mkCoreApps (Var sndId) [e1TyE, e2TyE, Var letId]
-              return $ Let (NonRec letId rhs)
-                      $ Let (NonRec x fstE)
-                       $ Let (NonRec y sndE) e)
-
 letTupleR :: TH.Name -> RewriteH CoreExpr
 letTupleR nm = translate $ \ c e -> do
     let collectLets :: CoreExpr -> ([(Id, CoreExpr)],CoreExpr)
@@ -107,31 +85,24 @@ letTupleR nm = translate $ \ c e -> do
 
     guardMsg (length bnds > 1) "cannot tuple: need at least two nonrec lets"
 
-    -- until we no longer need letPairR
-    if length bnds == 2
-      then apply (letPairR nm) c e
-      else do
-        -- check if tupling the bindings would cause unbound variables
-        let (ids, rhss) = unzip bnds
+    -- check if tupling the bindings would cause unbound variables
+    let (ids, rhss) = unzip bnds
+    frees <- mapM (apply freeVarsT c) (drop 1 rhss)
+    let used = concat $ zipWith intersect (map (flip take ids) [1..]) frees
+    if null used
+      then do
+        tupleConId <- findId c $ "(" ++ replicate (length bnds - 1) ',' ++ ")"
 
-        frees <- mapM (apply freeVarsT c) (drop 1 rhss)
+        let rhs = mkCoreApps (Var tupleConId) $ map (Type . exprType) rhss ++ rhss
+            varList = concat $ iterate (zipWith (flip (++)) $ repeat "0") $ map (:[]) ['a'..'z']
+        dc <- maybe (fail "cannot find tuple datacon") return $ isDataConId_maybe tupleConId
+        vs <- zipWithM newVarH varList $ dataConInstOrigArgTys dc $ map exprType rhss
 
-        let used = concat $ zipWith intersect (map (flip take ids) [1..]) frees
-
-        if null used
-          then do
-            tupleConId <- findId c $ "(" ++ replicate (length bnds - 1) ',' ++ ")"
-
-            let rhs = mkCoreApps (Var tupleConId) $ map (Type . exprType) rhss ++ rhss
-                varList = concat $ iterate (zipWith (flip (++)) $ repeat "0") $ map (:[]) ['a'..'z']
-            dc <- maybe (fail "cannot find tuple datacon") return $ isDataConId_maybe tupleConId
-            vs <- zipWithM newVarH varList $ dataConInstOrigArgTys dc $ map exprType rhss
-
-            letId <- newVarH (show nm) (exprType rhs)
-            return $ Let (NonRec letId rhs)
-                     $ foldr (\ (i,(v,oe)) b -> Let (NonRec v (Case (Var letId) letId (exprType oe) [(DataAlt dc, vs, Var $ vs !! i)])) b)
-                             body $ zip [0..] bnds
-          else fail "cannot tuple: some bindings are used in the rhs of others"
+        letId <- newVarH (show nm) (exprType rhs)
+        return $ Let (NonRec letId rhs)
+                 $ foldr (\ (i,(v,oe)) b -> Let (NonRec v (Case (Var letId) letId (exprType oe) [(DataAlt dc, vs, Var $ vs !! i)])) b)
+                         body $ zip [0..] bnds
+      else fail "cannot tuple: some bindings are used in the rhs of others"
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
