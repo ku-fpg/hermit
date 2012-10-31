@@ -69,8 +69,8 @@ letExternals =
 -- | e => (let v = e in v), name of v is provided
 letIntro ::  TH.Name -> RewriteH CoreExpr
 letIntro nm = prefixFailMsg "Let introduction failed: " $
-              contextfreeT $ \ e -> do letvar <- newVarH (show nm) (exprType e)
-                                       return $ Let (NonRec letvar e) (Var letvar)
+              contextfreeT $ \ e -> do v <- newVarH (show nm) (exprType e)
+                                       return $ Let (NonRec v e) (Var v)
 
 -- | Remove an unused let binding.
 --   (let v = E1 in E2) => E2, if v is not free in E2
