@@ -18,8 +18,10 @@ import Language.HERMIT.External
 import Language.HERMIT.GHC
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Utils
+import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Inline
+import Language.HERMIT.Primitive.AlphaConversion
 -- import Language.HERMIT.Primitive.Debug
 
 import qualified Language.Haskell.TH as TH
@@ -31,7 +33,7 @@ import MonadUtils (MonadIO) -- GHC's MonadIO
 externals ::  [External]
 externals = map ((.+ Experiment) . (.+ TODO))
          [ external "info" (info :: TranslateH Core String)
-                [ "tell me what you know about this expression or binding" ] .+ Unimplemented
+                [ "tell me what you know about this expression or binding" ]
          , external "expr-type" (promoteExprT exprTypeT :: TranslateH Core String)
                 [ "display the type of this expression"]
          , external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
@@ -65,6 +67,12 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "Abstract over a variable using a lambda.",
                   "e  ==>  (\\ x -> e) x"
                 ] .+ Shallow .+ Introduce .+ Context
+         , external "ww-fac-test" ((\ wrap unwrap -> promoteExprR $ workerWrapperFacTest wrap unwrap) :: TH.Name -> TH.Name -> RewriteH Core)
+                [ "Under construction "
+                ] .+ Introduce .+ Context .+ Experiment .+ PreCondition
+         , external "ww-split-test" ((\ wrap unwrap -> promoteDefR $ workerWrapperSplitTest wrap unwrap) :: TH.Name -> TH.Name -> RewriteH Core)
+                [ "Under construction "
+                ] .+ Introduce .+ Context .+ Experiment .+ PreCondition
          ]
 
 
@@ -72,7 +80,7 @@ isVar :: TH.Name -> TranslateH CoreExpr ()
 isVar nm = varT (cmpTHName2Id nm) >>= guardM
 
 simplifyR :: RewriteH Core
-simplifyR = innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ letElim))
+simplifyR = setFailMsg "Nothing to simplify." $ innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ letElim))
 
 letTupleR :: TH.Name -> RewriteH CoreExpr
 letTupleR nm = translate $ \ c e -> do
@@ -292,7 +300,7 @@ push nm = prefixFailMsg "push failed: " $
      do e <- idR
         case collectArgs e of
           (Var v,args) -> do
-                  guardMsg (nm `cmpTHName2Id` v) $ "could not find name " ++ show nm
+                  guardMsg (nm `cmpTHName2Id` v) $ "cannot find name " ++ show nm
                   guardMsg (not $ null args) $ "no argument for " ++ show nm
                   guardMsg (all isTypeArg $ init args) $ "initial arguments are not type arguments for " ++ show nm
                   case last args of
@@ -305,9 +313,81 @@ push nm = prefixFailMsg "push failed: " $
 --   e  ==>  (\ x. e) x
 abstract :: TH.Name -> RewriteH CoreExpr
 abstract nm = prefixFailMsg "abstraction failed: " $
-    do (c,e) <- exposeT
-       let name = TH.nameBase nm
-       case filter (cmpTHName2Id nm) (listBindings c) of
-         []         -> fail $ name ++ " is not in scope."
-         [v]        -> return (App (Lam v e) (Var v)) -- There might be issues if "v" is a type variable, I'm not sure.
-         _ : _ : _  -> fail $ "multiple variables named " ++ name ++ " in scope."
+   do e <- idR
+      v <- lookupMatchingVarT nm
+      return (App (Lam v e) (Var v)) -- There might be issues if "v" is a type variable, I'm not sure.
+
+lookupMatchingVars :: TH.Name -> HermitC -> [Var]
+lookupMatchingVars nm = filter (cmpTHName2Id nm) . listBindings
+
+lookupMatchingVarT :: TH.Name -> TranslateH a Var
+lookupMatchingVarT nm = prefixFailMsg ("Cannot resolve name " ++ TH.nameBase nm ++ ", ") $
+                        do c <- contextT
+                           case lookupMatchingVars nm c of
+                             []         -> fail "no matching variables in scope."
+                             [v]        -> return v
+                             _ : _ : _  -> fail "multiple matching variables in scope."
+
+workerWrapperFacTest :: TH.Name -> TH.Name -> RewriteH CoreExpr
+workerWrapperFacTest wrapNm unwrapNm = do wrapId   <- lookupMatchingVarT wrapNm
+                                          unwrapId <- lookupMatchingVarT unwrapNm
+                                          monomorphicWorkerWrapperFac wrapId unwrapId
+
+workerWrapperSplitTest :: TH.Name -> TH.Name -> RewriteH CoreDef
+workerWrapperSplitTest wrapNm unwrapNm = do wrapId   <- lookupMatchingVarT wrapNm
+                                            unwrapId <- lookupMatchingVarT unwrapNm
+                                            monomorphicWorkerWrapperSplit wrapId unwrapId
+
+
+monomorphicWorkerWrapperFac :: Id -> Id -> RewriteH CoreExpr
+monomorphicWorkerWrapperFac wrapId unwrapId = workerWrapperFac (Var wrapId) (Var unwrapId)
+
+monomorphicWorkerWrapperSplit :: Id -> Id -> RewriteH CoreDef
+monomorphicWorkerWrapperSplit wrapId unwrapId = workerWrapperSplit (Var wrapId) (Var unwrapId)
+
+
+-- wrap   :: b -> a
+-- unwrap :: a -> b
+-- fix typeA f ==> wrap (fix typeB (\ x -> unwrap (f (wrap (Var x)))))
+-- Very experimental, does not handle type variables properly.
+-- Assumes the arguments are monomorphic functions (all type variables have alread been applied)
+workerWrapperFac :: CoreExpr -> CoreExpr -> RewriteH CoreExpr
+workerWrapperFac wrap unwrap =
+  prefixFailMsg "Worker/wrapper Factorisation failed: " $
+  withPatFailMsg (wrongExprForm "fix type fun") $
+  do App (App (Var fi) typeA) f <- idR  -- fix :: forall a. (a -> a) -> a
+     translate $ \ c _ -> do fixId <- findId c "Data.Function.fix"
+                             guardMsg (fi == fixId) "applied function is not 'fix'."
+                             case splitFunTy_maybe (exprType wrap) of
+                               Nothing        -> fail "could not deconstruct wrapper type into a function."
+                               Just (tyB,tyA) -> do -- let tyBB = mkFunTy tyB tyB -- tyBB = (tyB -> tyB)
+                                                    x <- newVarH "x" tyB
+                                                    return $ App wrap
+                                                                 (App (App (Var fi) (Type tyB))
+                                                                      (Lam x (App unwrap
+                                                                                  (App f
+                                                                                       (App wrap
+                                                                                            (Var x)
+                                                                                       )
+                                                                                  )
+                                                                             )
+                                                                      )
+                                                                 )
+
+workerWrapperSplit :: CoreExpr -> CoreExpr -> RewriteH CoreDef
+workerWrapperSplit wrap unwrap =
+  let f    = TH.mkName "f"
+      w    = TH.mkName "w"
+      work = TH.mkName "work"
+      fx   = TH.mkName "fix"
+   in
+      fixIntro >>> defR ( appAllR idR (letIntro f)
+                            >>> letFloatArg
+                            >>> letAllR idR ( workerWrapperFac wrap unwrap
+                                                >>> appAllR idR (letIntro w)
+                                                >>> letFloatArg
+                                                >>> letNonRecAllR (unfold fx >>> alphaLetOne (Just work) >>> extractR simplifyR) idR
+                                                >>> letSubstR
+                                                >>> letFloatArg
+                                            )
+                        )
