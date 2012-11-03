@@ -6,6 +6,7 @@ module Language.HERMIT.Primitive.Local
          -- ** Case Expressions
        , module Language.HERMIT.Primitive.Local.Case
          -- ** Miscellaneous
+       , abstract
        , nonrecToRec
        , betaReduce
        , betaReducePlus
@@ -59,14 +60,16 @@ externals =
                      [ "(\\ v -> e1 v) ==> e1" ]                                             .+ Eval .+ Shallow .+ Bash
          , external "eta-expand" (promoteExprR . etaExpand :: TH.Name -> RewriteH Core)
                      [ "\"eta-expand 'v\" performs e1 ==> (\\ v -> e1 v)" ]                     .+ Shallow .+ Introduce
-         ]
-         ++
-         [ external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
+         , external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
                 ["Flatten all the top-level binding groups in the module to a single recursive binding group.",
                  "This can be useful if you intend to appply GHC RULES."]
          , external "flatten-program" (promoteProgR flattenProgramR :: RewriteH Core)
                 ["Flatten all the top-level binding groups in a program (list of binding groups) to a single recursive binding group.",
                  "This can be useful if you intend to appply GHC RULES."]
+         , external "abstract" (promoteExprR . abstract :: TH.Name -> RewriteH Core)
+                [ "Abstract over a variable using a lambda.",
+                  "e  ==>  (\\ x -> e) x"
+                ] .+ Shallow .+ Introduce .+ Context
          ]
          ++ letExternals
          ++ caseExternals
@@ -190,5 +193,15 @@ flattenProgramT = do bds <- arr (concatMap bindToIdExprs . progToBinds)
 
 nodups :: Eq a => [a] -> Bool
 nodups as = length as == length (nub as)
+
+------------------------------------------------------------------------------
+
+-- | Abstract over a variable using a lambda.
+--   e  ==>  (\ x. e) x
+abstract :: TH.Name -> RewriteH CoreExpr
+abstract nm = prefixFailMsg "abstraction failed: " $
+   do e <- idR
+      v <- lookupMatchingVarT nm
+      return (App (Lam v e) (Var v))
 
 ------------------------------------------------------------------------------

@@ -11,6 +11,8 @@ module Language.HERMIT.Primitive.Common
     , caseAltVarsWithBinderT
     , letVarsT
     , wrongExprForm
+    , lookupMatchingVars
+    , lookupMatchingVarT
     )
 where
 
@@ -23,14 +25,20 @@ import Data.Monoid
 
 import Language.HERMIT.Kure
 import Language.HERMIT.CoreExtra
+import Language.HERMIT.Context
+import Language.HERMIT.GHC
+
 import Language.HERMIT.Primitive.GHC
 
+import qualified Language.Haskell.TH as TH
+
+------------------------------------------------------------------------------
 
 class BindEnv a where
     bindings :: a -> [Id]
 
 -- | All the identifiers bound in this binding group.
-instance BindEnv  CoreBind where
+instance BindEnv CoreBind where
     bindings :: CoreBind -> [Id]
     bindings (NonRec b _) = [b]
     bindings (Rec bs)     = map fst bs
@@ -98,5 +106,20 @@ altFreeVarsT = altT freeVarsT $ \ _con ids frees coreBndr -> nub frees \\ nub (c
 
 wrongExprForm :: String -> String
 wrongExprForm form = "Expression does not have the form: " ++ form
+
+------------------------------------------------------------------------------
+
+-- | List all variables bound in the context that match the given name.
+lookupMatchingVars :: TH.Name -> HermitC -> [Var]
+lookupMatchingVars nm = filter (cmpTHName2Id nm) . listBindings
+
+-- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
+lookupMatchingVarT :: TH.Name -> TranslateH a Var
+lookupMatchingVarT nm = prefixFailMsg ("Cannot resolve name " ++ TH.nameBase nm ++ ", ") $
+                        do c <- contextT
+                           case lookupMatchingVars nm c of
+                             []         -> fail "no matching variables in scope."
+                             [v]        -> return v
+                             _ : _ : _  -> fail "multiple matching variables in scope."
 
 ------------------------------------------------------------------------------

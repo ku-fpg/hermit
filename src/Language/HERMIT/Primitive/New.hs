@@ -34,8 +34,8 @@ externals ::  [External]
 externals = map ((.+ Experiment) . (.+ TODO))
          [ external "info" (info :: TranslateH Core String)
                 [ "tell me what you know about this expression or binding" ]
-         , external "expr-type" (promoteExprT exprTypeT :: TranslateH Core String)
-                [ "display the type of this expression"]
+         -- , external "expr-type" (promoteExprT exprTypeT :: TranslateH Core String)
+         --        [ "display the type of this expression"]
          , external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
                 [ "determines if a rewrite could be successfully applied" ]
          , external "fix-intro" (promoteDefR fixIntro :: RewriteH Core)
@@ -63,10 +63,6 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
                 , "preference is given to applications with more arguments"
                 ] .+ Deep
-         , external "abstract" (promoteExprR . abstract :: TH.Name -> RewriteH Core)
-                [ "Abstract over a variable using a lambda.",
-                  "e  ==>  (\\ x -> e) x"
-                ] .+ Shallow .+ Introduce .+ Context
          , external "ww-fac-test" ((\ wrap unwrap -> promoteExprR $ workerWrapperFacTest wrap unwrap) :: TH.Name -> TH.Name -> RewriteH Core)
                 [ "Under construction "
                 ] .+ Introduce .+ Context .+ Experiment .+ PreCondition
@@ -135,10 +131,11 @@ info = translate $ \ c core -> do
 
          return (intercalate "\n" $ [pa,node,con,bds] ++ expExtra)
 
-exprTypeT :: TranslateH CoreExpr String
-exprTypeT = contextfreeT $ \ e -> do
-    dynFlags <- getDynFlags
-    return $ showExprType dynFlags e
+-- Subsumed by "info".
+-- exprTypeT :: TranslateH CoreExpr String
+-- exprTypeT = contextfreeT $ \ e -> do
+--     dynFlags <- getDynFlags
+--     return $ showExprType dynFlags e
 
 showExprType :: DynFlags -> CoreExpr -> String
 showExprType dynFlags = showPpr dynFlags . exprType
@@ -309,24 +306,12 @@ push nm = prefixFailMsg "push failed: " $
                      _       -> fail "argument is not a Case or Let."
           _ -> fail "no function to match."
 
--- | Abstract over a variable using a lambda.
---   e  ==>  (\ x. e) x
-abstract :: TH.Name -> RewriteH CoreExpr
-abstract nm = prefixFailMsg "abstraction failed: " $
-   do e <- idR
-      v <- lookupMatchingVarT nm
-      return (App (Lam v e) (Var v)) -- There might be issues if "v" is a type variable, I'm not sure.
+-- Should I include Coercions here?  I'm not sure how they are treated.
+isType :: CoreExpr -> Bool
+isType (Type _)  = True
+isType (Var v)   = isTKVar v
+isType _         = False
 
-lookupMatchingVars :: TH.Name -> HermitC -> [Var]
-lookupMatchingVars nm = filter (cmpTHName2Id nm) . listBindings
-
-lookupMatchingVarT :: TH.Name -> TranslateH a Var
-lookupMatchingVarT nm = prefixFailMsg ("Cannot resolve name " ++ TH.nameBase nm ++ ", ") $
-                        do c <- contextT
-                           case lookupMatchingVars nm c of
-                             []         -> fail "no matching variables in scope."
-                             [v]        -> return v
-                             _ : _ : _  -> fail "multiple matching variables in scope."
 
 workerWrapperFacTest :: TH.Name -> TH.Name -> RewriteH CoreExpr
 workerWrapperFacTest wrapNm unwrapNm = do wrapId   <- lookupMatchingVarT wrapNm
@@ -340,16 +325,42 @@ workerWrapperSplitTest wrapNm unwrapNm = do wrapId   <- lookupMatchingVarT wrapN
 
 
 monomorphicWorkerWrapperFac :: Id -> Id -> RewriteH CoreExpr
-monomorphicWorkerWrapperFac wrapId unwrapId = workerWrapperFac (Var wrapId) (Var unwrapId)
+monomorphicWorkerWrapperFac wrapId unwrapId = -- let wrapTy   = idType wrapId
+                                              --     unwrapTy = idType unwrapId
+                                              --     (wrapForallTyVars, wrapMainTy)     = splitForAllTys wrapTy
+                                              --     (unwrapForallTyVars, unwrapMainTy) = splitForAllTys unwrapTy
+
+                                              -- in  -- In progress: above are not used yet.
+                                                  workerWrapperFac (Var wrapId) (Var unwrapId)
+                                                -- workerWrapperFac (mkTyApps (Var wrapId)   wrapForallTys)
+                                                --                  (mkTyApps (Var unwrapId) unwrapForallTys)
+
+-- workerWrapperFac (Var wrapId) (Var unwrapId)
+-- splitForAllTys :: Type -> ([TyVar], Type)
 
 monomorphicWorkerWrapperSplit :: Id -> Id -> RewriteH CoreDef
 monomorphicWorkerWrapperSplit wrapId unwrapId = workerWrapperSplit (Var wrapId) (Var unwrapId)
 
+-- substTyWith :: [TyVar] -> [Type] -> Type -> Type
+-- mkTyApps  :: Expr b -> [Type]   -> Expr b
 
--- wrap   :: b -> a
--- unwrap :: a -> b
--- fix typeA f ==> wrap (fix typeB (\ x -> unwrap (f (wrap (Var x)))))
--- Very experimental, does not handle type variables properly.
+-- I assume there are GHC functions to do this, but I can't find them.
+-- in progress
+-- unifyTyVars :: [TyVar] -- | forall quantified type variables
+--             -> Type    -- | type containing forall quantified type variables
+--             -> Type    -- | type to unify with
+--             -> Maybe [Type]  -- | types that the variables have been unified with
+-- unifyTyVars vs tyGen tySpec = let unifyTyVarsAux tyGen tySpec vs
+--                                in undefined
+--   unifyTyVarsAux :: Type -> Type -> [(TyVar,[Type])] -> Maybe [(TyVar,[Type])]
+--   unifyTyVarsAux (TyVarTy v)   t             = match v t
+--   unifyTyVarsAux (AppTy s1 s2) (AppTy t1 t2) = match s1 t1 . match s2 t2
+
+
+-- f      :: a -> a
+-- wrap   :: forall x,y..z. b -> a
+-- unwrap :: forall p,q..r. a -> b
+-- fix tyA f ==> wrap (fix tyB (\ x -> unwrap (f (wrap (Var x)))))
 -- Assumes the arguments are monomorphic functions (all type variables have alread been applied)
 workerWrapperFac :: CoreExpr -> CoreExpr -> RewriteH CoreExpr
 workerWrapperFac wrap unwrap =
@@ -358,7 +369,8 @@ workerWrapperFac wrap unwrap =
   do App (App (Var fi) typeA) f <- idR  -- fix :: forall a. (a -> a) -> a
      translate $ \ c _ -> do fixId <- findId c "Data.Function.fix"
                              guardMsg (fi == fixId) "applied function is not 'fix'."
-                             case splitFunTy_maybe (exprType wrap) of
+                             guardMsg (isType typeA) "first argument to fix is not a type."
+                             case splitFunTy_maybe (exprType wrap) of  -- splitForAllTys :: Type -> ([TyVar], Type)
                                Nothing        -> fail "could not deconstruct wrapper type into a function."
                                Just (tyB,tyA) -> do -- let tyBB = mkFunTy tyB tyB -- tyBB = (tyB -> tyB)
                                                     x <- newVarH "x" tyB
