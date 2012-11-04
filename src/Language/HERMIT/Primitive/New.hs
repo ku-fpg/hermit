@@ -191,12 +191,24 @@ findIdMG modguts nm =
         ns  -> do dynFlags <- getDynFlags
                   fail $ "too many " ++ nm ++ " found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
 
+
+fixLocation :: String
+fixLocation = "Data.Function.fix"
+
+fixIdT :: TranslateH a Id
+fixIdT = contextonlyT $ \ c -> findId c fixLocation
+
+guardIsFixId :: Id -> TranslateH a ()
+guardIsFixId v = do fixId <- fixIdT
+                    guardMsg (v == fixId) (var2String v ++ " does not match " ++ fixLocation)
+
+
 -- |  f = e   ==>   f = fix (\ f -> e)
 fixIntro :: RewriteH CoreDef
 fixIntro = prefixFailMsg "Fix introduction failed: " $
-           do (c, Def f e) <- exposeT
-              constT $ do fixId <- findId c "Data.Function.fix"
-                          f' <- cloneIdH id f
+           do Def f e <- idR
+              fixId   <- fixIdT
+              constT $ do f' <- cloneIdH id f
                           let coreFix = App (App (Var fixId) (Type (idType f)))
                               emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars e))
                               sub      = extendSubst emptySub f (Var f')
@@ -206,12 +218,11 @@ fixIntro = prefixFailMsg "Fix introduction failed: " $
 
 fixSpecialization :: RewriteH CoreExpr
 fixSpecialization = do
-        fixId <- translate $ \ c _ -> findId c "Data.Function.fix"
 
         -- fix (t::*) (f :: t -> t) (a :: t) :: t
-        App (App (App (Var fx) (Type _)) _) _ <- idR
+        App (App (App (Var fixId) (Type _)) _) _ <- idR -- TODO: couldn't that Type be a Var?  Might be better to use my "isType" fucntion.
 
-        guardMsg (fx == fixId) "fixSpecialization only works on fix"
+        guardIsFixId fixId -- guardMsg (fx == fixId) "fixSpecialization only works on fix"
 
         let rr :: RewriteH CoreExpr
             rr = multiEtaExpand [TH.mkName "f",TH.mkName "a"]
@@ -230,10 +241,9 @@ fixSpecialization' = do
             )
             a <- idR
 
-        t' <- case a of
-                Type t2           -> return (applyTy t t2)
-                Var x | isTyVar x -> return (applyTy t (mkTyVarTy x))
-                _                 -> fail "Not a type variable." -- TODO: I've added this error message to avoid compiler-time warnings about missing cases, but this may have changed the semantics.  Generally I think this entire functions needs revisiting and cleaning up.  What's going on with all the dead-code (which I've commented out now).
+        t' <- case typeExprToType a of
+                Just t2           -> return (applyTy t t2)
+                Nothing           -> fail "Not a type variable." -- TODO: I've added this error message to avoid compiler-time warnings about missing cases, but this may have changed the semantics.  Generally I think this entire functions needs revisiting and cleaning up.  What's going on with all the dead-code (which I've commented out now).
 --                   Var  a2  -> mkAppTy t (exprType t2)
 --                   mkAppTy t t'
 
@@ -312,34 +322,45 @@ isType (Type _)  = True
 isType (Var v)   = isTKVar v
 isType _         = False
 
+-- | Convert a 'CoreExpr' expression that \is\ a 'Type' into a 'Type'.
+typeExprToType :: CoreExpr -> Maybe Type
+typeExprToType (Type t)            = Just t
+typeExprToType (Var v) | isTKVar v = Just (mkTyVarTy v)
+typeExprToType _                   = Nothing
+
+-- introSpecialisedPolyFun :: TH.Name -> TH.Name -> RewriteH CoreExpr
+-- introSpecialisedPolyFun funNm ty = do funId <- lookupMatchingVarT funNm
+--                                       tyVar <- lookupMatchingVarT ty
+
+
 
 workerWrapperFacTest :: TH.Name -> TH.Name -> RewriteH CoreExpr
 workerWrapperFacTest wrapNm unwrapNm = do wrapId   <- lookupMatchingVarT wrapNm
                                           unwrapId <- lookupMatchingVarT unwrapNm
-                                          monomorphicWorkerWrapperFac wrapId unwrapId
+                                          monomorphicWorkerWrapperFac (Var wrapId) (Var unwrapId)
 
 workerWrapperSplitTest :: TH.Name -> TH.Name -> RewriteH CoreDef
 workerWrapperSplitTest wrapNm unwrapNm = do wrapId   <- lookupMatchingVarT wrapNm
                                             unwrapId <- lookupMatchingVarT unwrapNm
-                                            monomorphicWorkerWrapperSplit wrapId unwrapId
+                                            monomorphicWorkerWrapperSplit (Var wrapId) (Var unwrapId)
 
 
-monomorphicWorkerWrapperFac :: Id -> Id -> RewriteH CoreExpr
-monomorphicWorkerWrapperFac wrapId unwrapId = -- let wrapTy   = idType wrapId
-                                              --     unwrapTy = idType unwrapId
-                                              --     (wrapForallTyVars, wrapMainTy)     = splitForAllTys wrapTy
-                                              --     (unwrapForallTyVars, unwrapMainTy) = splitForAllTys unwrapTy
+-- monomorphicWorkerWrapperFac :: Id -> Id -> RewriteH CoreExpr
+-- monomorphicWorkerWrapperFac wrapId unwrapId = -- let wrapTy   = idType wrapId
+--                                               --     unwrapTy = idType unwrapId
+--                                               --     (wrapForallTyVars, wrapMainTy)     = splitForAllTys wrapTy
+--                                               --     (unwrapForallTyVars, unwrapMainTy) = splitForAllTys unwrapTy
 
-                                              -- in  -- In progress: above are not used yet.
-                                                  workerWrapperFac (Var wrapId) (Var unwrapId)
-                                                -- workerWrapperFac (mkTyApps (Var wrapId)   wrapForallTys)
-                                                --                  (mkTyApps (Var unwrapId) unwrapForallTys)
+--                                               -- in  -- In progress: above are not used yet.
+--                                                   workerWrapperFac (Var wrapId) (Var unwrapId)
+--                                                 -- workerWrapperFac (mkTyApps (Var wrapId)   wrapForallTys)
+--                                                 --                  (mkTyApps (Var unwrapId) unwrapForallTys)
 
 -- workerWrapperFac (Var wrapId) (Var unwrapId)
 -- splitForAllTys :: Type -> ([TyVar], Type)
 
-monomorphicWorkerWrapperSplit :: Id -> Id -> RewriteH CoreDef
-monomorphicWorkerWrapperSplit wrapId unwrapId = workerWrapperSplit (Var wrapId) (Var unwrapId)
+-- monomorphicWorkerWrapperSplit :: Id -> Id -> RewriteH CoreDef
+-- monomorphicWorkerWrapperSplit wrapId unwrapId = workerWrapperSplit (Var wrapId) (Var unwrapId)
 
 -- substTyWith :: [TyVar] -> [Type] -> Type -> Type
 -- mkTyApps  :: Expr b -> [Type]   -> Expr b
@@ -362,32 +383,37 @@ monomorphicWorkerWrapperSplit wrapId unwrapId = workerWrapperSplit (Var wrapId) 
 -- unwrap :: forall p,q..r. a -> b
 -- fix tyA f ==> wrap (fix tyB (\ x -> unwrap (f (wrap (Var x)))))
 -- Assumes the arguments are monomorphic functions (all type variables have alread been applied)
-workerWrapperFac :: CoreExpr -> CoreExpr -> RewriteH CoreExpr
-workerWrapperFac wrap unwrap =
+monomorphicWorkerWrapperFac :: CoreExpr -> CoreExpr -> RewriteH CoreExpr
+monomorphicWorkerWrapperFac wrapE unwrapE =
   prefixFailMsg "Worker/wrapper Factorisation failed: " $
   withPatFailMsg (wrongExprForm "fix type fun") $
-  do App (App (Var fi) typeA) f <- idR  -- fix :: forall a. (a -> a) -> a
-     translate $ \ c _ -> do fixId <- findId c "Data.Function.fix"
-                             guardMsg (fi == fixId) "applied function is not 'fix'."
-                             guardMsg (isType typeA) "first argument to fix is not a type."
-                             case splitFunTy_maybe (exprType wrap) of  -- splitForAllTys :: Type -> ([TyVar], Type)
-                               Nothing        -> fail "could not deconstruct wrapper type into a function."
-                               Just (tyB,tyA) -> do -- let tyBB = mkFunTy tyB tyB -- tyBB = (tyB -> tyB)
-                                                    x <- newVarH "x" tyB
-                                                    return $ App wrap
-                                                                 (App (App (Var fi) (Type tyB))
-                                                                      (Lam x (App unwrap
-                                                                                  (App f
-                                                                                       (App wrap
-                                                                                            (Var x)
-                                                                                       )
-                                                                                  )
-                                                                             )
-                                                                      )
-                                                                 )
+  do App (App (Var fixId) fixTyE) f <- idR  -- fix :: forall a. (a -> a) -> a
+     guardIsFixId fixId
+     case typeExprToType fixTyE of
+       Nothing  -> fail "first argument to fix is not a type, this shouldn't have happened."
+       Just tyA -> case splitFunTy_maybe (exprType wrapE) of
+           Nothing                -> fail "type of wrapper is not a function."
+           Just (tyB,wrapTyA) -> case splitFunTy_maybe (exprType unwrapE) of
+             Nothing                    -> fail "type of unwrapper is not a function."
+             Just (unwrapTyA,unwrapTyB) -> do guardMsg (eqType wrapTyA unwrapTyA) ("argument type of unwrapper does not match result type of wrapper.")
+                                              guardMsg (eqType unwrapTyB tyB) ("argument type of wrapper does not match result type of unwrapper.")
+                                              guardMsg (eqType wrapTyA tyA) ("wrapper/unwrapper types do not match expression type.")
+                                              x <- constT (newVarH "x" tyB)
+                                              return $ App wrapE
+                                                           (App (App (Var fixId) (Type tyB))
+                                                                (Lam x (App unwrapE
+                                                                            (App f
+                                                                                 (App wrapE
+                                                                                      (Var x)
+                                                                                 )
+                                                                            )
+                                                                       )
+                                                                )
+                                                           )
 
-workerWrapperSplit :: CoreExpr -> CoreExpr -> RewriteH CoreDef
-workerWrapperSplit wrap unwrap =
+
+monomorphicWorkerWrapperSplit :: CoreExpr -> CoreExpr -> RewriteH CoreDef
+monomorphicWorkerWrapperSplit wrap unwrap =
   let f    = TH.mkName "f"
       w    = TH.mkName "w"
       work = TH.mkName "work"
@@ -395,7 +421,7 @@ workerWrapperSplit wrap unwrap =
    in
       fixIntro >>> defR ( appAllR idR (letIntro f)
                             >>> letFloatArg
-                            >>> letAllR idR ( workerWrapperFac wrap unwrap
+                            >>> letAllR idR ( monomorphicWorkerWrapperFac wrap unwrap
                                                 >>> appAllR idR (letIntro w)
                                                 >>> letFloatArg
                                                 >>> letNonRecAllR (unfold fx >>> alphaLetOne (Just work) >>> extractR simplifyR) idR
