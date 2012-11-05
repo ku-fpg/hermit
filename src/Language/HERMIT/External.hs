@@ -42,6 +42,7 @@ import Data.List
 
 import qualified Language.Haskell.TH as TH
 
+import Language.HERMIT.Core
 import Language.HERMIT.Kure
 
 -----------------------------------------------------------------

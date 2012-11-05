@@ -18,9 +18,10 @@ import qualified Data.IntMap as I
 
 import GhcPlugins hiding (Direction,L)
 
+import Language.HERMIT.Core
 import Language.HERMIT.Kure
-import Language.HERMIT.Kernel
 import Language.HERMIT.Monad
+import Language.HERMIT.Kernel
 
 ----------------------------------------------------------------------------
 

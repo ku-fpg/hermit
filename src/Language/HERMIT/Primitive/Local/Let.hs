@@ -20,8 +20,9 @@ import Control.Category((>>>))
 import Data.List
 import Data.Monoid
 
-import Language.HERMIT.Kure
+import Language.HERMIT.Core
 import Language.HERMIT.Monad
+import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 

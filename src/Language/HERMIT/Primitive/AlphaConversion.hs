@@ -27,6 +27,7 @@ import Control.Arrow
 import Data.Char (isDigit)
 import Data.List (intersect, (\\), nub)
 
+import Language.HERMIT.Core
 import Language.HERMIT.Context
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure

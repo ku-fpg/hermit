@@ -20,10 +20,11 @@ import Data.List
 import Control.Arrow
 import Control.Applicative
 
-import Language.HERMIT.GHC
-import Language.HERMIT.Kure
-import Language.HERMIT.External
+import Language.HERMIT.Core
 import Language.HERMIT.Monad
+import Language.HERMIT.Kure
+import Language.HERMIT.GHC
+import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC

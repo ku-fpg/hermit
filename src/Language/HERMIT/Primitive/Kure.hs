@@ -7,6 +7,7 @@ where
 
 import Control.Arrow
 
+import Language.HERMIT.Core
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 

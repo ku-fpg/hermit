@@ -1,8 +1,11 @@
 module Language.HERMIT.Primitive.Fold
-    ( externals
+    ( -- * Fold/Unfold Transformation
+      externals
     , foldR
     , stashFoldR
-    ) where
+    )
+
+where
 
 import GhcPlugins hiding (empty)
 
@@ -12,10 +15,11 @@ import Control.Monad
 import Data.List (intercalate)
 import qualified Data.Map as Map
 
-import Language.HERMIT.Monad
+import Language.HERMIT.Core
 import Language.HERMIT.Context
-import Language.HERMIT.External
+import Language.HERMIT.Monad
 import Language.HERMIT.Kure
+import Language.HERMIT.External
 import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.GHC hiding (externals)

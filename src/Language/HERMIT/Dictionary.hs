@@ -14,6 +14,7 @@ import Data.Dynamic
 import Data.List
 import Data.Map (Map, fromList, toList)
 
+import Language.HERMIT.Core
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 

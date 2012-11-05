@@ -1,19 +1,33 @@
-module Language.HERMIT.Primitive.Inline where
+module Language.HERMIT.Primitive.Inline
+         ( -- * Inlining
+           externals
+         , inline
+         , inlineName
+         , inlineScrutinee
+         , inlineCaseBinder
+         , inlineTargets
+         )
+
+where
 
 import GhcPlugins
 
 import Control.Arrow
 
-import Language.HERMIT.GHC
-import Language.HERMIT.Primitive.Common
--- import Language.HERMIT.Primitive.Debug (traceR)
-import Language.HERMIT.Primitive.GHC
-import Language.HERMIT.Primitive.Unfold
+import Language.HERMIT.Core
 import Language.HERMIT.Kure
 import Language.HERMIT.Context
+import Language.HERMIT.GHC
 import Language.HERMIT.External
 
+import Language.HERMIT.Primitive.Common
+-- import Language.HERMIT.Primitive.Debug (traceR)
+import Language.HERMIT.Primitive.GHC hiding (externals)
+import Language.HERMIT.Primitive.Unfold hiding (externals)
+
 import qualified Language.Haskell.TH as TH
+
+------------------------------------------------------------------------
 
 externals :: [External]
 externals =
@@ -29,6 +43,9 @@ externals =
                 [ "Inline if this variable is a case binder." ].+ Eval .+ Deep .+ Bash .+ TODO
             ]
 
+------------------------------------------------------------------------
+
+-- | If the current variable matches the given name, then inline it.
 inlineName :: TH.Name -> RewriteH CoreExpr
 inlineName nm = let name = TH.nameBase nm in
                 prefixFailMsg ("inline '" ++ name ++ " failed: ") $
@@ -37,12 +54,15 @@ inlineName nm = let name = TH.nameBase nm in
       guardMsg (cmpTHName2Id nm v) $ name ++ " does not match " ++ var2String v ++ "."
       inline
 
+-- | Inline the current variable.
 inline :: RewriteH CoreExpr
 inline = configurableInline False False
 
+-- | Inline the current variable, using the scrutinee rather than the case alternative if it is a case wild-card binder.
 inlineScrutinee :: RewriteH CoreExpr
 inlineScrutinee = configurableInline True False
 
+-- | If the current variable is a case wild-card binder, then inline it.
 inlineCaseBinder :: RewriteH CoreExpr
 inlineCaseBinder = configurableInline False True
 
@@ -74,6 +94,6 @@ ensureDepth d = do
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: TranslateH Core [String]
-inlineTargets = collectT $ promoteT $ ifM (testM inline)
-                                          (varT unqualifiedIdName)
-                                          (fail "cannot be inlined.")
+inlineTargets = collectT $ promoteT $ whenM (testM inline) (varT unqualifiedIdName)
+
+------------------------------------------------------------------------

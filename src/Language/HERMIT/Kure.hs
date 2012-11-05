@@ -16,10 +16,6 @@ module Language.HERMIT.Kure
        , RewriteH
        , LensH
        , idR
-       -- * Generic Data Type
-       , Core(..)
-       , CoreProg(..)
-       , CoreDef(..)
        -- * Congruence combinators
        -- ** Modguts
        , modGutsT, modGutsR
