@@ -1,18 +1,24 @@
-module Language.HERMIT.CoreExtra
+module Language.HERMIT.Core
           (
             -- * Generic Data Type
             -- $typenote
             Core(..)
           , CoreProg(..)
           , CoreDef(..)
-            -- * GHC Core Extras
           , CoreTickish
+            -- * Conversions to/from 'Core'
           , defsToRecBind
           , defToIdExpr
           , progToBinds
           , bindsToProg
           , bindToIdExprs
+            -- * Utilities
+          , isType
+          , typeExprToType
+          , appCount
 ) where
+
+import Data.Maybe(isJust)
 
 import GhcPlugins
 
@@ -77,5 +83,24 @@ defsToRecBind = Rec . map defToIdExpr
 
 -- | Unlike everything else, there is no synonym for 'Tickish' 'Id' provided by GHC, so we define one.
 type CoreTickish = Tickish Id
+
+-----------------------------------------------------------------------
+
+-- | Succeeds if the expression is either a 'Type' or type 'Var'.
+isType :: CoreExpr -> Bool
+isType = isJust . typeExprToType
+
+-- | Convert a 'CoreExpr' expression that \is\ a 'Type' into a 'Type'.
+typeExprToType :: CoreExpr -> Maybe Type
+typeExprToType (Type t)            = Just t
+typeExprToType (Var v) | isTKVar v = Just (mkTyVarTy v)
+typeExprToType _                   = Nothing
+
+-----------------------------------------------------------------------
+
+-- | Count the number of nested applications.
+appCount :: CoreExpr -> Int
+appCount (App e1 _) = appCount e1 + 1
+appCount _          = 0
 
 -----------------------------------------------------------------------

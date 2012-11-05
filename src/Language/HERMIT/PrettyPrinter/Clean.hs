@@ -8,7 +8,7 @@ import Data.Traversable (sequenceA)
 
 import qualified GhcPlugins as GHC
 import Language.HERMIT.Kure
-import Language.HERMIT.CoreExtra
+import Language.HERMIT.Core
 import Language.HERMIT.PrettyPrinter
 import Language.HERMIT.GHC
 

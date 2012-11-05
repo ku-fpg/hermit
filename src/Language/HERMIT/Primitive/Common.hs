@@ -24,7 +24,7 @@ import Data.List
 import Data.Monoid
 
 import Language.HERMIT.Kure
-import Language.HERMIT.CoreExtra
+import Language.HERMIT.Core
 import Language.HERMIT.Context
 import Language.HERMIT.GHC
 
@@ -111,7 +111,7 @@ wrongExprForm form = "Expression does not have the form: " ++ form
 
 -- | List all variables bound in the context that match the given name.
 lookupMatchingVars :: TH.Name -> HermitC -> [Var]
-lookupMatchingVars nm = filter (cmpTHName2Id nm) . listBindings
+lookupMatchingVars nm = filter (cmpTHName2Id nm) . boundIds
 
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
 lookupMatchingVarT :: TH.Name -> TranslateH a Var

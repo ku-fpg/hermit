@@ -25,6 +25,7 @@ import qualified Language.HERMIT.Primitive.Local as Local
 import qualified Language.HERMIT.Primitive.New as New
 import qualified Language.HERMIT.Primitive.Debug as Debug
 import qualified Language.HERMIT.Primitive.GHC as GHC
+import qualified Language.HERMIT.Primitive.FixPoint as FixPoint
 import qualified Language.HERMIT.Primitive.Fold as Fold
 import qualified Language.HERMIT.Primitive.Unfold as Unfold
 import qualified Language.HERMIT.Primitive.AlphaConversion as Alpha
@@ -49,6 +50,7 @@ prim_externals
                  ++ Local.externals
                  ++ Debug.externals
                  ++ New.externals
+                 ++ FixPoint.externals
                  ++ Fold.externals
                  ++ Unfold.externals
                  ++ Alpha.externals

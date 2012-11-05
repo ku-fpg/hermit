@@ -10,7 +10,7 @@ import Data.List (mapAccumL)
 -- import Language.HERMIT.Primitive.Debug
 import Language.HERMIT.Primitive.Navigation
 
-import Language.HERMIT.CoreExtra
+import Language.HERMIT.Core
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.External

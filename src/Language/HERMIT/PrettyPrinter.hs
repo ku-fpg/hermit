@@ -6,7 +6,7 @@ import GhcPlugins hiding ((<>))
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 import Language.HERMIT.Kure
-import Language.HERMIT.CoreExtra
+import Language.HERMIT.Core
 import Control.Arrow
 import Data.Monoid hiding ((<>))
 import Data.Default

@@ -77,7 +77,7 @@ import Language.KURE
 import Language.KURE.Injection
 import Language.KURE.Utilities
 
-import Language.HERMIT.CoreExtra
+import Language.HERMIT.Core
 import Language.HERMIT.Context
 import Language.HERMIT.Monad
 

@@ -18,13 +18,19 @@ module Language.HERMIT.Context
        , hermitPath
        , hermitModGuts
        , lookupHermitBinding
-       , listBindings
+       , boundIds
        , boundIn
+       , findId
 ) where
 
 import Prelude hiding (lookup)
 import GhcPlugins hiding (empty)
-import Data.Map hiding (map, foldr)
+import MonadUtils (MonadIO) -- GHC's MonadIO
+import Data.Map hiding (map, foldr, filter)
+import Data.List(find, intercalate)
+import qualified Language.Haskell.TH as TH
+
+import Language.HERMIT.GHC
 
 import Language.KURE
 
@@ -119,11 +125,25 @@ lookupHermitBinding :: Id -> HermitC -> Maybe HermitBinding
 lookupHermitBinding n env = lookup n (hermitBindings env)
 
 -- | List all the identifiers bound in a 'HermitC'.
-listBindings :: HermitC -> [Id]
-listBindings = keys . hermitBindings
+boundIds :: HermitC -> [Id]
+boundIds = keys . hermitBindings
 
 -- | Determine if an identifier is bound in the 'HermitC'.
 boundIn :: Id -> HermitC -> Bool
-boundIn i c = i `elem` listBindings c
+boundIn i c = i `elem` boundIds c
+
+------------------------------------------------------------------------
+
+-- | Lookup the name in the 'HermitC' first, then, failing that, in GHC's global reader environment.
+findId :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => HermitC -> String -> m Id
+findId c nm = maybe (findIdMG (hermitModGuts c) nm) return (find (cmpString2Id nm) (boundIds c))
+
+findIdMG :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => ModGuts -> String -> m Id
+findIdMG modguts nm =
+    case filter isValName $ findNameFromTH (mg_rdr_env modguts) $ TH.mkName nm of
+        []  -> fail $ "cannot find " ++ nm
+        [n] -> lookupId n
+        ns  -> do dynFlags <- getDynFlags
+                  fail $ "too many " ++ nm ++ " found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
 
 ------------------------------------------------------------------------

@@ -144,7 +144,7 @@ Library
        HERMIT
 
        Language.HERMIT.Context
-       Language.HERMIT.CoreExtra
+       Language.HERMIT.Core
        Language.HERMIT.Dictionary
        Language.HERMIT.Expr
        Language.HERMIT.External
@@ -157,6 +157,7 @@ Library
        Language.HERMIT.Plugin
 
        Language.HERMIT.Primitive.Debug
+       Language.HERMIT.Primitive.FixPoint
        Language.HERMIT.Primitive.Fold
        Language.HERMIT.Primitive.GHC
        Language.HERMIT.Primitive.Inline
@@ -168,7 +169,6 @@ Library
        Language.HERMIT.Primitive.New
        Language.HERMIT.Primitive.AlphaConversion
        Language.HERMIT.Primitive.Unfold
-       Language.HERMIT.Primitive.Utils
 
        Language.HERMIT.PrettyPrinter
        Language.HERMIT.PrettyPrinter.AST

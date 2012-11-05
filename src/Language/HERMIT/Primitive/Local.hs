@@ -22,7 +22,7 @@ where
 
 import GhcPlugins
 
-import Language.HERMIT.CoreExtra
+import Language.HERMIT.Core
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.External

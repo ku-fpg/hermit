@@ -88,16 +88,16 @@ externals = map (.+ Deep)
 -- 2.  Any bound variables in context.
 
 -- | List all visible identifiers (in the expression or the context).
-visibleIds :: TranslateH CoreExpr [Id]
-visibleIds = do ctx <- contextT
-                frees <- freeVarsT
-                return $ frees ++ listBindings ctx
+visibleIdsT :: TranslateH CoreExpr [Id]
+visibleIdsT = do c     <- contextT
+                 frees <- freeVarsT
+                 return (frees ++ boundIds c)
 
 -- | If a name is provided replace the string with that,
 --   otherwise modify the string making sure to /not/ clash with any visible identifiers.
 freshNameGenT :: Maybe TH.Name -> TranslateH CoreExpr (String -> String)
 freshNameGenT (Just nm) = return $ const (show nm)
-freshNameGenT Nothing   = visibleIds >>^ inventNames
+freshNameGenT Nothing   = visibleIdsT >>^ inventNames
 
 -- | Invent a new String based on the old one, but avoiding clashing with the given list of identifiers.
 inventNames :: [Id] -> String -> String
@@ -116,11 +116,10 @@ inventNames curr old = head
                      _       -> 0
 
 shadowedNamesT :: TranslateH CoreExpr [String]
-shadowedNamesT = do ctx         <- contextT
-                    frees       <- freeVarsT
+shadowedNamesT = do visibleIds  <- visibleIdsT
                     bindingIds  <- extractT bindingVarsT
                     return $ intersect (map getOccString bindingIds)
-                                       (map getOccString (frees ++ listBindings ctx))
+                                       (map getOccString visibleIds)
 
 -- | Output a list of all variables that shadowed by bindings in the is expression.
 shadowedNamesQuery :: TranslateH CoreExpr String
@@ -196,14 +195,14 @@ alphaLetNonRec mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
 alphaLetRecId :: Maybe TH.Name -> Id -> RewriteH CoreExpr
 alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
                      do Let (Rec {}) _ <- idR
-                        ctx <- contextT
+                        c <- contextT
                          -- Cannot use freshNameGen directly, because we want to include
                          -- free variables from every bound expression, in the name generation function
                          -- as a result we must replicate the essence of freshNameGen in the next few lines
                         frees <- letRecDefT (\ _ -> freeVarsT) freeVarsT (\ bindFrees exprFrees -> concatMap snd bindFrees ++ exprFrees)
                         let nameGen = case mn of
                                         Just name -> const (show name)
-                                        Nothing -> inventNames (frees ++ listBindings ctx)
+                                        Nothing -> inventNames (frees ++ boundIds c)
                         v' <- constT (cloneIdH nameGen v)
 
                         letRecDefT (\ _ -> replaceIdR v v') (replaceIdR v v') (\ bs e -> Let (Rec $ (map.first) (replaceId v v') bs) e)
@@ -245,9 +244,9 @@ alphaConsRecId mn v = setFailMsg (wrongFormForAlpha "ProgCons (Rec bs) p") $
                          -- Cannot use freshNameGen directly, because we want to include
                          -- free variables from every bound expression, in the name generation function
                          -- as a result we must replicate the essence of freshNameGen in the next few lines
-                         ctx <- contextT
+                         c <- contextT
                          frees <- consRecDefT (\ _ -> freeVarsT) idR (\ frees _ -> concatMap snd frees)
-                         let idsToAvoid = (nub frees \\ bindings rbs) ++ listBindings ctx
+                         let idsToAvoid = (nub frees \\ bindings rbs) ++ boundIds c
                              nameGen = case mn of
                                          Just name -> const (show name)
                                          Nothing -> inventNames idsToAvoid

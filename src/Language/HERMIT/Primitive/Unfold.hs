@@ -13,7 +13,7 @@ import Control.Applicative
 import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Common
 
-import Language.HERMIT.CoreExtra
+import Language.HERMIT.Core
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.External
