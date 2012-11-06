@@ -1,5 +1,5 @@
 module Language.HERMIT.GHC
-        (
+        ( -- * GHC Imports
         -- | Things that have been copied from GHC, or imported directly, for various reasons.
           ppIdInfo
         , var2String

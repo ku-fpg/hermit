@@ -34,7 +34,11 @@ import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------
 
+-- TODO: This "binding" thing seems a bit dubious.  It collects all bindings that appear at the current node, or in certain cases at child or grandchild nodes, but no deeper.  I think congruence combinators would be better structured.
+
+-- | Nodes in the 'Core' tree that may contain bindings.
 class BindEnv a where
+    -- | List all identifiers bound at this node.
     bindings :: a -> [Id]
 
 -- | All the identifiers bound in this binding group.
