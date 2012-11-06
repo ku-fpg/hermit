@@ -73,27 +73,29 @@ collectLets expr                   = ([],expr)
 letTupleR :: TH.Name -> RewriteH CoreExpr
 letTupleR nm = prefixFailMsg "Let-tuple failed: " $
   do (bnds, body) <- arr collectLets
-     guardMsg (length bnds > 1) "at least two non-recursive lets required."
+     let numBnds = length bnds
+     guardMsg (numBnds > 1) "at least two non-recursive let bindings required."
 
       -- check if tupling the bindings would cause unbound variables
      let (ids, rhss) = unzip bnds
          rhsTypes    = map exprType rhss
          frees       = mapM coreExprFreeVars (drop 1 rhss)
          used        = concat $ zipWith intersect (map (`take` ids) [1..]) frees
-
      if null used
-       then do tupleConId <- findIdT $ TH.mkName $ "(" ++ replicate (length bnds - 1) ',' ++ ")"
-               let rhs     = mkCoreApps (Var tupleConId) $ map Type rhsTypes ++ rhss
-                   varList = concat $ iterate (zipWith (flip (++)) $ repeat "0") $ map (:[]) ['a'..'z']
+
+       then do tupleConId <- findIdT $ TH.mkName $ "(" ++ replicate (numBnds - 1) ',' ++ ")"
                case isDataConId_maybe tupleConId of
                  Nothing -> fail "cannot find tuple data constructor."
-                 Just dc -> constT $ do vs    <- zipWithM newVarH varList $ dataConInstOrigArgTys dc rhsTypes
-                                        letId <- newVarH (show nm) (exprType rhs)
-                                        return $ Let (NonRec letId rhs)
-                                           $ foldr (\ (i,(v,oe)) b -> Let (NonRec v (Case (Var letId) letId (exprType oe) [(DataAlt dc, vs, Var $ vs !! i)])) b)
-                                               body $ zip [0..] bnds
+                 Just dc -> let rhs     = mkCoreApps (Var tupleConId) $ map Type rhsTypes ++ rhss
+                                varList = concat $ iterate (zipWith (flip (++)) $ repeat "0") $ map (:[]) ['a'..'z']
+                             in constT $ do vs    <- zipWithM newVarH varList (dataConInstOrigArgTys dc rhsTypes)
+                                            letId <- newVarH (show nm) (exprType rhs)
+                                            return $ Let (NonRec letId rhs)
+                                               $ foldr (\ (i,(v,oe)) b -> Let (NonRec v (Case (Var letId) letId (exprType oe) [(DataAlt dc, vs, Var $ vs !! i)])) b)
+                                                    body $ zip [0..] bnds
 
-       else fail "some bindings are used in the rhs of others"
+
+       else fail $ "the following bound variables are used in subsequent bindings: " ++ showVars used
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
