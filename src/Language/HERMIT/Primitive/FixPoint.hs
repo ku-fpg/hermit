@@ -5,7 +5,6 @@ import GhcPlugins as GHC hiding (varName)
 import Control.Arrow
 
 import Language.HERMIT.Core
-import Language.HERMIT.Context
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
@@ -38,11 +37,11 @@ externals = map ((.+ Experiment) . (.+ TODO))
 fixLocation :: String
 fixLocation = "Data.Function.fix"
 
-fixIdT :: TranslateH a Id
-fixIdT = contextonlyT $ \ c -> findId c fixLocation
+findFixId :: TranslateH a Id
+findFixId = findIdT (TH.mkName fixLocation)
 
 guardIsFixId :: Id -> TranslateH a ()
-guardIsFixId v = do fixId <- fixIdT
+guardIsFixId v = do fixId <- findFixId
                     guardMsg (v == fixId) (var2String v ++ " does not match " ++ fixLocation)
 
 
@@ -50,9 +49,9 @@ guardIsFixId v = do fixId <- fixIdT
 fixIntro :: RewriteH CoreDef
 fixIntro = prefixFailMsg "Fix introduction failed: " $
            do Def f e <- idR
-              fixId   <- fixIdT
+              fixId   <- findFixId
               constT $ do f' <- cloneIdH id f
-                          let coreFix = App (App (Var fixId) (Type (idType f)))
+                          let coreFix  = App (App (Var fixId) (Type (idType f)))
                               emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars e))
                               sub      = extendSubst emptySub f (Var f')
                           return $ Def f (coreFix (Lam f' (substExpr (text "fixIntro") sub e)))
@@ -116,13 +115,13 @@ fixSpecialization' = do
 
 
 workerWrapperFacTest :: TH.Name -> TH.Name -> RewriteH CoreExpr
-workerWrapperFacTest wrapNm unwrapNm = do wrapId   <- lookupMatchingVarT wrapNm
-                                          unwrapId <- lookupMatchingVarT unwrapNm
+workerWrapperFacTest wrapNm unwrapNm = do wrapId   <- findBoundVarT wrapNm
+                                          unwrapId <- findBoundVarT unwrapNm
                                           monomorphicWorkerWrapperFac (Var wrapId) (Var unwrapId)
 
 workerWrapperSplitTest :: TH.Name -> TH.Name -> RewriteH CoreDef
-workerWrapperSplitTest wrapNm unwrapNm = do wrapId   <- lookupMatchingVarT wrapNm
-                                            unwrapId <- lookupMatchingVarT unwrapNm
+workerWrapperSplitTest wrapNm unwrapNm = do wrapId   <- findBoundVarT wrapNm
+                                            unwrapId <- findBoundVarT unwrapNm
                                             monomorphicWorkerWrapperSplit (Var wrapId) (Var unwrapId)
 
 

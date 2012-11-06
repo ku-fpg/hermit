@@ -11,8 +11,8 @@ module Language.HERMIT.Primitive.Common
     , caseAltVarsWithBinderT
     , letVarsT
     , wrongExprForm
-    , lookupMatchingVars
-    , lookupMatchingVarT
+    , findBoundVarT
+    , findIdT
     )
 where
 
@@ -104,22 +104,39 @@ altFreeVarsT = altT freeVarsT $ \ _con ids frees coreBndr -> nub frees \\ nub (c
 
 ------------------------------------------------------------------------------
 
+-- | Constructs a common error message.
+--   Argument 'String' should be the desired form of the expression.
 wrongExprForm :: String -> String
 wrongExprForm form = "Expression does not have the form: " ++ form
 
 ------------------------------------------------------------------------------
 
--- | List all variables bound in the context that match the given name.
-lookupMatchingVars :: TH.Name -> HermitC -> [Var]
-lookupMatchingVars nm = filter (cmpTHName2Id nm) . boundIds
+-- Need a better error type so that we can factor out the repetition.
 
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
-lookupMatchingVarT :: TH.Name -> TranslateH a Var
-lookupMatchingVarT nm = prefixFailMsg ("Cannot resolve name " ++ TH.nameBase nm ++ ", ") $
+findBoundVarT :: TH.Name -> TranslateH a Var
+findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ TH.nameBase nm ++ ", ") $
                         do c <- contextT
-                           case lookupMatchingVars nm c of
+                           case findBoundVars nm c of
                              []         -> fail "no matching variables in scope."
                              [v]        -> return v
                              _ : _ : _  -> fail "multiple matching variables in scope."
+
+-- | Lookup the name in the 'HermitC' first, then, failing that, in GHC's global reader environment.
+findIdT :: TH.Name -> TranslateH a Id
+findIdT nm = prefixFailMsg ("Cannot resolve name " ++ TH.nameBase nm ++ ", ") $
+             do c <- contextT
+                case findBoundVars nm c of
+                  []         -> findIdMG nm
+                  [v]        -> return v
+                  _ : _ : _  -> fail "multiple matching variables in scope."
+
+findIdMG :: TH.Name -> TranslateH a Id
+findIdMG nm = contextonlyT $ \ c ->
+    case filter isValName $ findNameFromTH (mg_rdr_env $ hermitModGuts c) nm of
+      []  -> fail $ "variable not in scope."
+      [n] -> lookupId n
+      ns  -> do dynFlags <- getDynFlags
+                fail $ "multiple matches found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
 
 ------------------------------------------------------------------------------

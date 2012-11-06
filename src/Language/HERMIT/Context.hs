@@ -20,14 +20,12 @@ module Language.HERMIT.Context
        , lookupHermitBinding
        , boundIds
        , boundIn
-       , findId
+       , findBoundVars
 ) where
 
 import Prelude hiding (lookup)
 import GhcPlugins hiding (empty)
-import MonadUtils (MonadIO) -- GHC's MonadIO
 import Data.Map hiding (map, foldr, filter)
-import Data.List(find, intercalate)
 import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.GHC
@@ -134,16 +132,8 @@ boundIn i c = i `elem` boundIds c
 
 ------------------------------------------------------------------------
 
--- | Lookup the name in the 'HermitC' first, then, failing that, in GHC's global reader environment.
-findId :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => HermitC -> String -> m Id
-findId c nm = maybe (findIdMG (hermitModGuts c) nm) return (find (cmpString2Id nm) (boundIds c))
-
-findIdMG :: (MonadUnique m, MonadIO m, MonadThings m, HasDynFlags m) => ModGuts -> String -> m Id
-findIdMG modguts nm =
-    case filter isValName $ findNameFromTH (mg_rdr_env modguts) $ TH.mkName nm of
-        []  -> fail $ "cannot find " ++ nm
-        [n] -> lookupId n
-        ns  -> do dynFlags <- getDynFlags
-                  fail $ "too many " ++ nm ++ " found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
+-- | List all variables bound in the context that match the given name.
+findBoundVars :: TH.Name -> HermitC -> [Var]
+findBoundVars nm = filter (cmpTHName2Id nm) . boundIds
 
 ------------------------------------------------------------------------

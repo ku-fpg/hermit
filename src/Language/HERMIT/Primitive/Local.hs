@@ -201,7 +201,7 @@ nodups as = length as == length (nub as)
 abstract :: TH.Name -> RewriteH CoreExpr
 abstract nm = prefixFailMsg "abstraction failed: " $
    do e <- idR
-      v <- lookupMatchingVarT nm
+      v <- findBoundVarT nm
       return (App (Lam v e) (Var v))
 
 ------------------------------------------------------------------------------

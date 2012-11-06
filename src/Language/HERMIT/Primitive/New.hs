@@ -15,6 +15,8 @@ import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
+
+import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Inline
@@ -59,41 +61,74 @@ isVar :: TH.Name -> TranslateH CoreExpr ()
 isVar nm = varT (cmpTHName2Id nm) >>= guardM
 
 simplifyR :: RewriteH Core
-simplifyR = setFailMsg "Simplify failed: nothing to simplify." $ innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ letElim))
+simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
+            innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ letElim))
 
+
+collectLets :: CoreExpr -> ([(Id, CoreExpr)],CoreExpr)
+collectLets (Let (NonRec x e1) e2) = let (bs,expr) = collectLets e2 in ((x,e1):bs, expr)
+collectLets expr                   = ([],expr)
+
+-- | Combine nested non-recursive lets into case of a tuple.
 letTupleR :: TH.Name -> RewriteH CoreExpr
-letTupleR nm = translate $ \ c e -> do
-    let collectLets :: CoreExpr -> ([(Id, CoreExpr)],CoreExpr)
-        collectLets (Let (NonRec x e1) e2) = let (bs,expr) = collectLets e2
-                                             in ((x,e1):bs, expr)
-        collectLets expr = ([],expr)
+letTupleR nm = prefixFailMsg "Let-tuple failed: " $
+  do (bnds, body) <- arr collectLets
+     guardMsg (length bnds > 1) "at least two non-recursive lets required."
 
-        (bnds, body) = collectLets e
+      -- check if tupling the bindings would cause unbound variables
+     let (ids, rhss) = unzip bnds
+         rhsTypes    = map exprType rhss
+         frees       = mapM coreExprFreeVars (drop 1 rhss)
+         used        = concat $ zipWith intersect (map (`take` ids) [1..]) frees
 
-    guardMsg (length bnds > 1) "cannot tuple: need at least two nonrec lets"
+     if null used
+       then do tupleConId <- findIdT $ TH.mkName $ "(" ++ replicate (length bnds - 1) ',' ++ ")"
+               let rhs     = mkCoreApps (Var tupleConId) $ map Type rhsTypes ++ rhss
+                   varList = concat $ iterate (zipWith (flip (++)) $ repeat "0") $ map (:[]) ['a'..'z']
+               case isDataConId_maybe tupleConId of
+                 Nothing -> fail "cannot find tuple data constructor."
+                 Just dc -> constT $ do vs    <- zipWithM newVarH varList $ dataConInstOrigArgTys dc rhsTypes
+                                        letId <- newVarH (show nm) (exprType rhs)
+                                        return $ Let (NonRec letId rhs)
+                                           $ foldr (\ (i,(v,oe)) b -> Let (NonRec v (Case (Var letId) letId (exprType oe) [(DataAlt dc, vs, Var $ vs !! i)])) b)
+                                               body $ zip [0..] bnds
 
-    -- check if tupling the bindings would cause unbound variables
-    let (ids, rhss) = unzip bnds
-    frees <- mapM (apply freeVarsT c) (drop 1 rhss)
-    let used = concat $ zipWith intersect (map (flip take ids) [1..]) frees
-    if null used
-      then do
-        tupleConId <- findId c $ "(" ++ replicate (length bnds - 1) ',' ++ ")"
-
-        let rhs = mkCoreApps (Var tupleConId) $ map (Type . exprType) rhss ++ rhss
-            varList = concat $ iterate (zipWith (flip (++)) $ repeat "0") $ map (:[]) ['a'..'z']
-        dc <- maybe (fail "cannot find tuple datacon") return $ isDataConId_maybe tupleConId
-        vs <- zipWithM newVarH varList $ dataConInstOrigArgTys dc $ map exprType rhss
-
-        letId <- newVarH (show nm) (exprType rhs)
-        return $ Let (NonRec letId rhs)
-                 $ foldr (\ (i,(v,oe)) b -> Let (NonRec v (Case (Var letId) letId (exprType oe) [(DataAlt dc, vs, Var $ vs !! i)])) b)
-                         body $ zip [0..] bnds
-      else fail "cannot tuple: some bindings are used in the rhs of others"
+       else fail "some bindings are used in the rhs of others"
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
 -- let v = E1 in E2 E3 <=> E2 (let v = E1 in E3)
+
+
+-- letTupleR :: TH.Name -> RewriteH CoreExpr
+-- letTupleR nm = translate $ \ c e -> do
+--     let collectLets :: CoreExpr -> ([(Id, CoreExpr)],CoreExpr)
+--         collectLets (Let (NonRec x e1) e2) = let (bs,expr) = collectLets e2
+--                                              in ((x,e1):bs, expr)
+--         collectLets expr = ([],expr)
+
+--         (bnds, body) = collectLets e
+
+--     guardMsg (length bnds > 1) "cannot tuple: need at least two nonrec lets"
+
+--     -- check if tupling the bindings would cause unbound variables
+--     let (ids, rhss) = unzip bnds
+--     frees <- mapM (apply freeVarsT c) (drop 1 rhss)
+--     let used = concat $ zipWith intersect (map (`take` ids) [1..]) frees
+--     if null used
+--       then do
+--         tupleConId <- findId c $ "(" ++ replicate (length bnds - 1) ',' ++ ")"
+
+--         let rhs = mkCoreApps (Var tupleConId) $ map (Type . exprType) rhss ++ rhss
+--             varList = concat $ iterate (zipWith (flip (++)) $ repeat "0") $ map (:[]) ['a'..'z']
+--         dc <- maybe (fail "cannot find tuple datacon") return $ isDataConId_maybe tupleConId
+--         vs <- zipWithM newVarH varList $ dataConInstOrigArgTys dc $ map exprType rhss
+
+--         letId <- newVarH (show nm) (exprType rhs)
+--         return $ Let (NonRec letId rhs)
+--                  $ foldr (\ (i,(v,oe)) b -> Let (NonRec v (Case (Var letId) letId (exprType oe) [(DataAlt dc, vs, Var $ vs !! i)])) b)
+--                          body $ zip [0..] bnds
+--       else fail "cannot tuple: some bindings are used in the rhs of others"
 
 -- A few Queries.
 
@@ -103,7 +138,7 @@ info = translate $ \ c core -> do
          let pa       = "Path: " ++ show (contextPath c)
              node     = "Node: " ++ coreNode core
              con      = "Constructor: " ++ coreConstructor core
-             bds      = "Bindings in Scope: " ++ (show $ map unqualifiedIdName $ boundIds c)
+             bds      = "Bindings in Scope: " ++ show (map unqualifiedIdName $ boundIds c)
              expExtra = case core of
                           ExprCore e -> ["Type: " ++ showExprType dynFlags e] ++
                                         ["Free Variables: " ++ showVars (coreExprFreeVars e)] ++

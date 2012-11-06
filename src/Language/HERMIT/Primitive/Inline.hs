@@ -29,6 +29,7 @@ import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------
 
+-- | 'External's for inlining variables.
 externals :: [External]
 externals =
             [ external "inline" (promoteExprR inline :: RewriteH Core)
