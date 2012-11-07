@@ -46,7 +46,7 @@ import qualified Language.Haskell.TH as TH
 
 -- | Convert a variable to a neat string for printing.
 var2String :: Var -> String
-var2String = occNameString . nameOccName . varName
+var2String = occNameString . nameOccName . varName -- TODO: would getOccString be okay here?
 
 -- | Converts a GHC 'Name' to a Template Haskell 'TH.Name', going via a 'String'.
 name2THName :: Name -> TH.Name

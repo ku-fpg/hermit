@@ -31,7 +31,6 @@ import Data.List (intersect,nub)
 import Data.Monoid
 
 import Language.HERMIT.Core
--- import Language.HERMIT.Context
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
@@ -101,7 +100,7 @@ freshNameGenT mn = freshNameGenAvoiding mn <$> visibleVarsT
 
 -- | A generalisation of 'freshNameGen' that operates on any node, but only avoids name clashes with the results of the argument translation.
 freshNameGenAvoiding :: Maybe TH.Name -> [Var] -> (String -> String)
-freshNameGenAvoiding mn vs str = maybe (inventNames vs str) show mn
+freshNameGenAvoiding mn vs str = maybe (inventNames vs str) TH.nameBase mn
 
 -- | Invent a new String based on the old one, but avoiding clashing with the given list of identifiers.
 inventNames :: [Var] -> String -> String
