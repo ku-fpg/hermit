@@ -5,7 +5,7 @@ import qualified OccurAnal
 import Control.Arrow
 import Control.Monad
 import qualified Data.Map as Map
-import Data.List (mapAccumL)
+import Data.List (mapAccumL,(\\))
 
 -- import Language.HERMIT.Primitive.Debug
 import Language.HERMIT.Primitive.Navigation
@@ -174,6 +174,17 @@ coreExprFreeVars  = uniqSetToList . exprFreeVars
 -- | List all free identifiers (value-level free variables) in the expression.
 coreExprFreeIds :: CoreExpr -> [Id]
 coreExprFreeIds  = uniqSetToList . exprFreeIds
+
+-- | The free variables in a case alternative, which excludes any identifiers bound in the alternative.
+altFreeVarsT :: TranslateH CoreAlt [Var]
+altFreeVarsT = altT freeVarsT (\ _ vs fvs -> fvs \\ vs)
+
+-- | A variant of 'altFreeVarsT' that returns a function that accepts the case wild-card binder before giving a result.
+--   This is so we can use this with congruence combinators, for example:
+--
+--   caseT id (const altFreeVarsT) $ \ _ wild _ fvs -> [ f wild | f <- fvs ]
+altFreeVarsExclWildT :: TranslateH CoreAlt (Id -> [Var])
+altFreeVarsExclWildT = altT freeVarsT (\ _ vs fvs wild -> fvs \\ (wild : vs))
 
 ------------------------------------------------------------------------
 

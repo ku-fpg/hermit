@@ -14,26 +14,29 @@ module Language.HERMIT.Primitive.AlphaConversion
        , alphaCons
          -- ** Shadow Detection and Unshadowing
        , unshadow
-       , guardShadowingT
-       , shadowedNamesQuery
+       , intersectShadowsT
+       , visibleVarsT
        , freshNameGenT
+       , freshNameGenAvoiding
        , replaceIdR
        )
 where
 
 import GhcPlugins hiding (empty)
 
+import Control.Applicative
 import Control.Arrow
 import Data.Char (isDigit)
-import Data.List (intersect, (\\), nub)
+import Data.List (intersect,nub)
+import Data.Monoid
 
 import Language.HERMIT.Core
-import Language.HERMIT.Context
+-- import Language.HERMIT.Context
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
-import Language.HERMIT.Primitive.GHC(freeVarsT, substR)
 
+import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Common
 
 import qualified Language.Haskell.TH as TH
@@ -65,13 +68,12 @@ externals = map (.+ Deep)
                [ "renames the bound variable in a top-level binding with one binder to the given name."]
          ,  external "alpha-top" (promoteProgR alphaCons)
                [ "renames the bound variables in a top-level binding."]
-
-         , external "shadow-query" (promoteExprT shadowedNamesQuery)
-                [ "List variable names shadowed by bindings in this expression." ] .+ Query
-         , external "if-shadowing" (promoteExprT guardShadowingT)
-                [ "succeeds ONLY-IF bindings in this expression shadow free variable name(s)." ] .+ Predicate
+         -- , external "shadow-query" (promoteExprT shadowedNamesQuery)
+         --        [ "List variable names shadowed by bindings in this expression." ] .+ Query
+         -- , external "if-shadowing" (promoteExprT guardShadowingT)
+         --        [ "succeeds ONLY-IF bindings in this expression shadow free variable name(s)." ] .+ Predicate
          , external "unshadow" unshadow
-                [ "Rename local variable with manifestly unique names (x, x0, x1, ...)"]
+                [ "Rename local variables with manifestly unique names (x, x0, x1, ...)."]
 
          ]
 
@@ -89,26 +91,27 @@ externals = map (.+ Deep)
 -- 2.  Any bound variables in context.
 
 -- | List all visible identifiers (in the expression or the context).
-visibleIdsT :: TranslateH CoreExpr [Id]
-visibleIdsT = do c     <- contextT
-                 frees <- freeVarsT
-                 return (frees ++ boundIds c)
+visibleVarsT :: TranslateH CoreExpr [Var]
+visibleVarsT = boundIdsT `mappend` freeVarsT
 
 -- | If a name is provided replace the string with that,
---   otherwise modify the string making sure to /not/ clash with any visible identifiers.
+--   otherwise modify the string making sure to /not/ clash with any visible variables.
 freshNameGenT :: Maybe TH.Name -> TranslateH CoreExpr (String -> String)
-freshNameGenT (Just nm) = return $ const (show nm)
-freshNameGenT Nothing   = visibleIdsT >>^ inventNames
+freshNameGenT mn = freshNameGenAvoiding mn <$> visibleVarsT
+
+-- | A generalisation of 'freshNameGen' that operates on any node, but only avoids name clashes with the results of the argument translation.
+freshNameGenAvoiding :: Maybe TH.Name -> [Var] -> (String -> String)
+freshNameGenAvoiding mn vs str = maybe (inventNames vs str) show mn
 
 -- | Invent a new String based on the old one, but avoiding clashing with the given list of identifiers.
-inventNames :: [Id] -> String -> String
+inventNames :: [Var] -> String -> String
 inventNames curr old = head
                      [ nm
                      | nm <- old : [ base ++ show uq | uq <- [start ..] :: [Int] ]
                      , nm `notElem` names
                      ]
    where
-           names = map getOccString curr
+           names = nub (map getOccString curr)
            nums = reverse $ takeWhile isDigit (reverse old)
            baseLeng = length $ drop (length nums) old
            base = take baseLeng old
@@ -116,22 +119,18 @@ inventNames curr old = head
                      [(v,_)] -> v + 1
                      _       -> 0
 
-shadowedNamesT :: TranslateH CoreExpr [String]
-shadowedNamesT = do visibleIds  <- visibleIdsT
-                    bindingIds  <- extractT bindingVarsT
-                    return $ intersect (map getOccString bindingIds)
-                                       (map getOccString visibleIds)
+-- | Intersect the /visible/ components of two lists of variables.
+intersectShadowsT :: TranslateH a [Var] -> TranslateH a [Var] -> TranslateH a [String]
+intersectShadowsT t1 t2 = do vs1 <- t1
+                             vs2 <- t2
+                             return $ intersect (map getOccString vs1) (map getOccString vs2)
 
--- | Output a list of all variables that shadowed by bindings in the is expression.
-shadowedNamesQuery :: TranslateH CoreExpr String
-shadowedNamesQuery = do shadows <- shadowedNamesT
-                        return $ "Names shadowed by bindings in the current expression: " ++ show shadows
+-- | Succeed if there is no overlap between the /visible/ components of two lists of variables.
+guardShadowingT :: TranslateH a [Var] -> TranslateH a [Var] -> TranslateH a ()
+guardShadowingT t1 t2 = do ss <- intersectShadowsT t1 t2
+                           guardMsg (not $ null ss) "No shadowing detected."
 
--- | Succeed only if the bindings at this node shadow something in the context.
-guardShadowingT :: TranslateH CoreExpr ()
-guardShadowingT = ifM (shadowedNamesT >>^ null)
-                      (fail "Bindings at this node do not shadow.")
-                      (return ())
+-----------------------------------------------------------------------
 
 -- | Replace all occurrences of an identifier.
 --   Arguments are the original identifier and the replacement identifier, respectively.
@@ -195,18 +194,13 @@ alphaLetNonRec mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
 -- | Rename the specified identifier bound in a recursive let.  Optionally takes a suggested new name.
 alphaLetRecId :: Maybe TH.Name -> Id -> RewriteH CoreExpr
 alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
-                     do Let (Rec {}) _ <- idR
-                        c <- contextT
-                         -- Cannot use freshNameGen directly, because we want to include
-                         -- free variables from every bound expression, in the name generation function
-                         -- as a result we must replicate the essence of freshNameGen in the next few lines
-                        frees <- letRecDefT (\ _ -> freeVarsT) freeVarsT (\ bindFrees exprFrees -> concatMap snd bindFrees ++ exprFrees)
-                        let nameGen = case mn of
-                                        Just name -> const (show name)
-                                        Nothing -> inventNames (frees ++ boundIds c)
-                        v' <- constT (cloneIdH nameGen v)
-
-                        letRecDefT (\ _ -> replaceIdR v v') (replaceIdR v v') (\ bs e -> Let (Rec $ (map.first) (replaceId v v') bs) e)
+                     do usedVars <- boundIdsT `mappend`
+                                    letVarsT  `mappend`
+                                    letRecDefT (\ _ -> freeVarsT) freeVarsT (\ bndfvs vs -> concatMap snd bndfvs ++ vs)
+                        v' <- constT (cloneIdH (freshNameGenAvoiding mn usedVars) v)
+                        letRecDefT (\ _ -> replaceIdR v v')
+                                   (replaceIdR v v')
+                                   (\ bs e -> Let (Rec $ (map.first) (replaceId v v') bs) e)
 
 -- | Rename all identifiers bound in a recursive let.
 alphaLetRec :: RewriteH CoreExpr
@@ -241,18 +235,13 @@ alphaConsNonRec mn = setFailMsg (wrongFormForAlpha "ProgCons (NonRec v e) p") $
 -- | Rename the specified identifier bound in a recursive top-level binder.  Optionally takes a suggested new name.
 alphaConsRecId :: Maybe TH.Name -> Id -> RewriteH CoreProg
 alphaConsRecId mn v = setFailMsg (wrongFormForAlpha "ProgCons (Rec bs) p") $
-                      do ProgCons rbs@(Rec _) _ <- idR
-                         -- Cannot use freshNameGen directly, because we want to include
-                         -- free variables from every bound expression, in the name generation function
-                         -- as a result we must replicate the essence of freshNameGen in the next few lines
-                         c <- contextT
-                         frees <- consRecDefT (\ _ -> freeVarsT) idR (\ frees _ -> concatMap snd frees)
-                         let idsToAvoid = (nub frees \\ bindings rbs) ++ boundIds c
-                             nameGen = case mn of
-                                         Just name -> const (show name)
-                                         Nothing -> inventNames idsToAvoid
-                         v' <- constT (cloneIdH nameGen v)
-                         consRecDefT (\ _ -> replaceIdR v v') (replaceIdR v v') (\ bs e -> ProgCons (Rec $ (map.first) (replaceId v v') bs) e)
+                      do usedVars <- boundIdsT `mappend`
+                                     progConsT recVarsT (return ()) (\ vs () -> vs) `mappend`
+                                     consRecDefT (\ _ -> freeVarsT) idR (\ bndfvs _ -> concatMap snd bndfvs)
+                         v' <- constT (cloneIdH (freshNameGenAvoiding mn usedVars) v)
+                         consRecDefT (\ _ -> replaceIdR v v')
+                                     (replaceIdR v v')
+                                     (\ bs e -> ProgCons (Rec $ (map.first) (replaceId v v') bs) e)
 
 -- | Rename all identifiers bound in a recursive top-level binder.
 alphaConsRec :: RewriteH CoreProg
@@ -281,15 +270,28 @@ alpha :: RewriteH Core
 alpha = setFailMsg "Cannot alpha-rename here." $
            promoteExprR (alphaLam Nothing <+ alphaCaseBinder Nothing <+ alphaLet)
         <+ promoteProgR alphaCons
+        <+ promoteAltR alphaAlt
 
--- | Rename local variable with manifestly unique names (x, x0, x1, ...).
+-----------------------------------------------------------------------
+
+-- | Rename local variables with manifestly unique names (x, x0, x1, ...).
+--   Does not rename top-level definitions (though this may change in the future).
 unshadow :: RewriteH Core
 unshadow = setFailMsg "No shadows to eliminate." $
-           anytdR (promoteExprR (guardShadowingT >> (alphaLam Nothing <+ alphaCase <+ alphaLet)))
+           anytdR (promoteExprR unshadowExpr <+ promoteAltR unshadowAlt)
+
+  where
+    unshadowExpr :: RewriteH CoreExpr
+    unshadowExpr = do guardShadowingT (boundIdsT `mappend` freeVarsT) (letVarsT <+ fmap return (caseWildVarT <+ lamVarT))
+                      alphaLam Nothing <+ alphaLet <+ alphaCaseBinder Nothing
+
+    unshadowAlt :: RewriteH CoreAlt
+    unshadowAlt = do guardShadowingT (boundIdsT `mappend` altFreeVarsT) altVarsT
+                     alphaAlt
 
 -----------------------------------------------------------------------
 
 wrongFormForAlpha :: String -> String
-wrongFormForAlpha s = "Cannot alpha-rename: " ++ wrongExprForm s
+wrongFormForAlpha s = "Cannot alpha-rename, " ++ wrongExprForm s
 
 -----------------------------------------------------------------------

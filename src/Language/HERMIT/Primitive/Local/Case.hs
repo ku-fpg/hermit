@@ -86,9 +86,9 @@ letFloatCase = prefixFailMsg "Let floating from Case failed: " $
 caseFloatApp :: RewriteH CoreExpr
 caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
   do
-    captures      <- appT caseAltVarsT freeVarsT (flip (map . intersect))
-    binderCapture <- appT caseBinderVarT freeVarsT intersect
-    appT ((if null binderCapture then idR else alphaCaseBinder Nothing)
+    captures    <- appT caseAltVarsT freeVarsT (flip (map . intersect))
+    wildCapture <- appT caseWildVarT freeVarsT elem
+    appT ((if not wildCapture then idR else alphaCaseBinder Nothing)
           >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
          )
           idR
@@ -101,10 +101,10 @@ caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
 caseFloatArg :: RewriteH CoreExpr
 caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
   do
-    captures      <- appT freeVarsT caseAltVarsT (map . intersect)
-    binderCapture <- appT freeVarsT caseBinderVarT intersect
+    captures    <- appT freeVarsT caseAltVarsT (map . intersect)
+    wildCapture <- appT freeVarsT caseWildVarT (flip elem)
     appT idR
-         ((if null binderCapture then idR else alphaCaseBinder Nothing)
+         ((if not wildCapture then idR else alphaCaseBinder Nothing)
           >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
          )
          (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
@@ -119,11 +119,11 @@ caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
 caseFloatCase :: RewriteH CoreExpr
 caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
   do
-    captures <- caseT caseAltVarsT (const altFreeVarsT) $ \ vss bndr _ fs -> map (intersect (concatMap ($ bndr) fs)) vss
+    captures <- caseT caseAltVarsT (const altFreeVarsExclWildT) (\ vss bndr _ fs -> map (intersect (concatMap ($ bndr) fs)) vss)
     -- does the binder of the inner case, shadow a free variable in any of the outer case alts?
     -- notice, caseBinderVarT returns a singleton list
-    binderCapture <- caseT caseBinderVarT (const altFreeVarsT) $ \ innerBindr bndr _ fs -> intersect (concatMap ($ bndr) fs) innerBindr
-    caseT ((if null binderCapture then idR else alphaCaseBinder Nothing)
+    wildCapture <- caseT caseWildVarT (const altFreeVarsExclWildT) (\ innerBndr bndr _ fvs -> innerBndr `elem` concatMap ($ bndr) fvs)
+    caseT ((if not wildCapture then idR else alphaCaseBinder Nothing)
            >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
           )
           (const idR)

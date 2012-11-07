@@ -1,24 +1,30 @@
-{-# LANGUAGE InstanceSigs, FlexibleInstances, FlexibleContexts #-}
-
 -- | Note: this module should NOT export externals. It is for common
 --   transformations needed by the other primitive modules.
 module Language.HERMIT.Primitive.Common
-    ( altFreeVarsT
-    , bindings
-    , bindingVarsT
-    , caseAltVarsT
-    , caseBinderVarT
-    , caseAltVarsWithBinderT
+    ( -- * Utility Transformations
+      -- ** Collecting variables bound at a Node
+      progVarsT
+    , bindVarsT
+    , nonRecVarT
+    , recVarsT
+    , defVarT
+    , lamVarT
     , letVarsT
-    , wrongExprForm
+    , caseVarsT
+    , caseWildVarT
+    , caseAltVarsT
+    , altVarsT
+      -- ** Finding variables bound in the Context
+    , boundIdsT
     , findBoundVarT
     , findIdT
+      -- ** Error Message Generators
+    , wrongExprForm
     )
+
 where
 
 import GhcPlugins
-
-import Control.Arrow
 
 import Data.List
 import Data.Monoid
@@ -28,94 +34,61 @@ import Language.HERMIT.Core
 import Language.HERMIT.Context
 import Language.HERMIT.GHC
 
-import Language.HERMIT.Primitive.GHC
-
 import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------
 
--- TODO: This "binding" thing seems a bit dubious.  It collects all bindings that appear at the current node, or in certain cases at child or grandchild nodes, but no deeper.  I think congruence combinators would be better structured.
+-- | List all identifiers bound at the top-level in a program.
+progVarsT :: TranslateH CoreProg [Id]
+progVarsT = progNilT [] <+ progConsT bindVarsT progVarsT (++)
 
--- | Nodes in the 'Core' tree that may contain bindings.
-class BindEnv a where
-    -- | List all identifiers bound at this node.
-    bindings :: a -> [Id]
+-- | List all identifiers bound in a binding group.
+bindVarsT :: TranslateH CoreBind [Var]
+bindVarsT = fmap return nonRecVarT <+ recVarsT
 
--- | All the identifiers bound in this binding group.
-instance BindEnv CoreBind where
-    bindings :: CoreBind -> [Id]
-    bindings (NonRec b _) = [b]
-    bindings (Rec bs)     = map fst bs
+-- | Return the variable bound by a non-recursive let expression.
+nonRecVarT :: TranslateH CoreBind Var
+nonRecVarT = nonRecT mempty (\ v () -> v)
 
-instance BindEnv CoreAlt where
-    bindings :: CoreAlt -> [Id]
-    bindings (_,vs,_) = vs
+-- | List all identifiers bound in a recursive binding group.
+recVarsT :: TranslateH CoreBind [Id]
+recVarsT = recT (\ _ -> defVarT) id
 
-instance BindEnv CoreExpr where
-    bindings :: CoreExpr -> [Id]
-    bindings (Lam b _)          = [b]
-    bindings (Let bs _)         = bindings bs
-    bindings (Case _ sc _ alts) = sc : nub (concatMap bindings alts)
-    bindings _                  = []
+-- | Return the identifier bound by a recursive definition.
+defVarT :: TranslateH CoreDef Id
+defVarT = defT mempty (\ v () -> v)
 
-instance BindEnv CoreProg where
-    bindings :: CoreProg -> [Id]
-    bindings p = nub (concatMap bindings $ progToBinds p)
+-- | Return the variable bound by a lambda expression.
+lamVarT :: TranslateH CoreExpr Var
+lamVarT = lamT mempty (\ v () -> v)
 
-instance BindEnv CoreDef  where
-    bindings :: CoreDef -> [Id]
-    bindings (Def b _) = [b]
-
-bindingVarsT :: TranslateH Core [Var]
-bindingVarsT = translate $ \ c core -> case core of
-          ModGutsCore _ -> fail "Cannot get binding vars at topmost level"
-          ProgCore x    -> apply (promoteT ((arr bindings) :: TranslateH CoreProg [Var])) c x
-          BindCore x    -> apply (promoteT ((arr bindings) :: TranslateH CoreBind [Var])) c x
-          DefCore x     -> apply (promoteT ((arr bindings) :: TranslateH CoreDef [Var])) c x
-          ExprCore x    -> apply (promoteT ((arr bindings) :: TranslateH CoreExpr [Var])) c x
-          AltCore x     -> apply (promoteT ((arr bindings) :: TranslateH CoreAlt [Var])) c x
-
--- TODO.  Isn't there a better way to handle this ?
--- Although the work of this Translate is handled by bindingVarsT
--- This implementation fails for any expression that is not a Let.
--- This specific argument matching is required where it is used in Local/Let.hs and Local/Case.hs
+-- | List the variables bound by a let expression.
 letVarsT :: TranslateH CoreExpr [Var]
-letVarsT = setFailMsg "Not a Let expression." $
-           do Let bs _ <- idR
-              return (bindings bs)
+letVarsT = letT bindVarsT mempty (\ vs () -> vs)
 
--- | List of the list of Ids bound by each case alternative
-caseAltVarsT :: TranslateH CoreExpr [[Id]]
-caseAltVarsT = caseT mempty (const (extractT bindingVarsT)) $ \ () _ _ vs -> vs
+-- | List all variables bound by a case expression (in the alternatives and the wildcard binder).
+caseVarsT :: TranslateH CoreExpr [Var]
+caseVarsT = caseT mempty (\ _ -> altVarsT) (\ () v _ vss -> v : nub (concat vss))
 
--- | List of the list of Ids bound by each case alternative, including the Case binder in each list
-caseAltVarsWithBinderT :: TranslateH CoreExpr [[Id]]
-caseAltVarsWithBinderT = caseT mempty (const (extractT bindingVarsT)) $ \ () v _ vs -> map (v:) vs
+-- | Return the case wildcard binder.
+caseWildVarT :: TranslateH CoreExpr Var
+caseWildVarT = caseT mempty (\ _ -> return ()) (\ () v _ _ -> v)
 
--- | list containing the single Id of the case binder
-caseBinderVarT :: TranslateH CoreExpr [Id]
-caseBinderVarT = setFailMsg "Not a Case expression." $
-                 do Case _ b _ _ <- idR
-                    return [b]
+-- | List the variables bound by all alternatives in a case expression.
+caseAltVarsT :: TranslateH CoreExpr [[Var]]
+caseAltVarsT = caseT mempty (\ _ -> altVarsT) (\ () _ _ vss -> vss)
 
--- | Free variables for a CoreAlt, returns a function, which accepts
---   the coreBndr name, before giving a result.
---   This is so we can use this with congruence combinators:
---
---   caseT id (const altFreeVarsT) $ \ _ bndr _ fs -> [ f bndr | f <- fs ]
-altFreeVarsT :: TranslateH CoreAlt (Id -> [Var])
-altFreeVarsT = altT freeVarsT $ \ _con ids frees coreBndr -> nub frees \\ nub (coreBndr : ids)
-
-------------------------------------------------------------------------------
-
--- | Constructs a common error message.
---   Argument 'String' should be the desired form of the expression.
-wrongExprForm :: String -> String
-wrongExprForm form = "Expression does not have the form: " ++ form
+-- | List the variables bound by a case alternative.
+altVarsT :: TranslateH CoreAlt [Var]
+altVarsT = altT mempty (\ _ vs () -> vs)
 
 ------------------------------------------------------------------------------
 
 -- Need a better error type so that we can factor out the repetition.
+
+-- | Lifted version of 'boundIds'.
+boundIdsT :: TranslateH a [Id]
+boundIdsT = contextonlyT (return . boundIds)
 
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
 findBoundVarT :: TH.Name -> TranslateH a Var
@@ -142,5 +115,12 @@ findIdMG nm = contextonlyT $ \ c ->
       [n] -> lookupId n
       ns  -> do dynFlags <- getDynFlags
                 fail $ "multiple matches found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
+
+------------------------------------------------------------------------------
+
+-- | Constructs a common error message.
+--   Argument 'String' should be the desired form of the expression.
+wrongExprForm :: String -> String
+wrongExprForm form = "Expression does not have the form: " ++ form
 
 ------------------------------------------------------------------------------
