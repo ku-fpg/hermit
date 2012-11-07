@@ -5,7 +5,6 @@ import GhcPlugins as GHC hiding (varName)
 
 import Control.Applicative
 import Control.Arrow
-import Control.Monad
 
 import Data.List(intercalate,intersect)
 
@@ -82,18 +81,12 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
          frees       = mapM coreExprFreeVars (drop 1 rhss)
          used        = concat $ zipWith intersect (map (`take` ids) [1..]) frees
      if null used
-
        then do tupleConId <- findIdT $ TH.mkName $ "(" ++ replicate (numBnds - 1) ',' ++ ")"
                case isDataConId_maybe tupleConId of
                  Nothing -> fail "cannot find tuple data constructor."
                  Just dc -> let rhs     = mkCoreApps (Var tupleConId) $ map Type rhsTypes ++ rhss
-                                varList = concat $ iterate (zipWith (flip (++)) $ repeat "0") $ map (:[]) ['a'..'z']
-                             in constT $ do vs    <- zipWithM newVarH varList (dataConInstOrigArgTys dc rhsTypes)
-                                            letId <- newVarH (show nm) (exprType rhs)
-                                            return $ Let (NonRec letId rhs)
-                                               $ foldr (\ (i,(v,oe)) b -> Let (NonRec v (Case (Var letId) letId (exprType oe) [(DataAlt dc, vs, Var $ vs !! i)])) b)
-                                                    body $ zip [0..] bnds
-
+                             in constT $ do wild <- newVarH (show nm) (exprType rhs)
+                                            return $ Case rhs wild (exprType body) [(DataAlt dc, ids, body)]
 
        else fail $ "the following bound variables are used in subsequent bindings: " ++ showVars used
 
