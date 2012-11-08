@@ -226,12 +226,12 @@ instance Walker HermitC HermitM CoreProg where
 progNilT :: b -> TranslateH CoreProg b
 progNilT b = contextfreeT $ \case
                                ProgNil       -> pure b
-                               ProgCons _ _  -> fail "no match for ProgNil"
+                               ProgCons _ _  -> fail "not an empty program node."
 
 progConsT' :: TranslateH CoreBind a1 -> TranslateH CoreProg a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH CoreProg b
 progConsT' t1 t2 f = translate $ \ c -> \case
                                            ProgCons bd p -> f (apply t1 (c @@ 0) bd) (apply t2 (addBinding bd c @@ 1) p)
-                                           _             -> fail "no match for ProgCons"
+                                           _             -> fail "not a non-empty program node."
 
 -- | Translate a program of the form: ('CoreBind' @:@ 'CoreProg')
 progConsT :: TranslateH CoreBind a1 -> TranslateH CoreProg a2 -> (a1 -> a2 -> b) -> TranslateH CoreProg b
@@ -304,7 +304,7 @@ instance Walker HermitC HermitM CoreBind where
 nonRecT :: TranslateH CoreExpr a -> (Var -> a -> b) -> TranslateH CoreBind b
 nonRecT t f = translate $ \ c -> \case
                                     NonRec v e -> f v <$> apply t (c @@ 0) e
-                                    _          -> fail "not NonRec constructor"
+                                    _          -> fail "not a non-recursive binding-group node."
 
 -- | Rewrite the 'CoreExpr' child of a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
 nonRecR :: RewriteH CoreExpr -> RewriteH CoreBind
@@ -317,7 +317,7 @@ recT' t f = translate $ \ c -> \case
                      in f [ apply (t n) (c' @@ n) (Def v e) -- here we convert from (Id,CoreExpr) to CoreDef
                           | ((v,e),n) <- zip bds [0..]
                           ]
-         _       -> fail "not Rec constructor"
+         _       -> fail "not a recursive binding-group node."
 
 -- | Translate a binding group of the form: @Rec@ ['CoreDef']
 recT :: (Int -> TranslateH CoreDef a) -> ([a] -> b) -> TranslateH CoreBind b
@@ -501,19 +501,19 @@ instance Walker HermitC HermitM CoreExpr where
 varT :: (Var -> b) -> TranslateH CoreExpr b
 varT f = contextfreeT $ \case
                            Var v -> pure (f v)
-                           _     -> fail "no match for Var"
+                           _     -> fail "not a variable node."
 
 -- | Translate an expression of the form: @Lit@ 'Literal'
 litT :: (Literal -> b) -> TranslateH CoreExpr b
 litT f = contextfreeT $ \case
                            Lit x -> pure (f x)
-                           _     -> fail "no match for Lit"
+                           _     -> fail "not a literal node."
 
 
 appT' :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (HermitM a1 -> HermitM a2 -> HermitM b) -> TranslateH CoreExpr b
 appT' t1 t2 f = translate $ \ c -> \case
                                       App e1 e2 -> f (apply t1 (c @@ 0) e1) (apply t2 (c @@ 1) e2)
-                                      _         -> fail "no match for App"
+                                      _         -> fail "not an application node."
 
 -- | Translate an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
 appT :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (a1 -> a2 -> b) -> TranslateH CoreExpr b
@@ -535,7 +535,7 @@ appOneR r1 r2 = appT' (withArgumentT r1) (withArgumentT r2) (attemptOne2 App)
 lamT :: TranslateH CoreExpr a -> (Var -> a -> b) -> TranslateH CoreExpr b
 lamT t f = translate $ \ c -> \case
                                  Lam b e -> f b <$> apply t (addLambdaBinding b c @@ 0) e
-                                 _       -> fail "no match for Lam"
+                                 _       -> fail "not a lambda node."
 
 -- | Rewrite the 'CoreExpr' child of an expression of the form: @Lam@ 'Var' 'CoreExpr'
 lamR :: RewriteH CoreExpr -> RewriteH CoreExpr
@@ -547,7 +547,7 @@ letT' t1 t2 f = translate $ \ c -> \case
         Let bds e -> f (apply t1 (c @@ 0) bds) (apply t2 (addBinding bds c @@ 1) e)
                 -- use *original* env, because the bindings are self-binding,
                 -- if they are recursive. See recT'.
-        _         -> fail "no match for Let"
+        _         -> fail "not a let node."
 
 -- | Translate an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
 letT :: TranslateH CoreBind a1 -> TranslateH CoreExpr a2 -> (a1 -> a2 -> b) -> TranslateH CoreExpr b
@@ -571,7 +571,7 @@ caseT' t ts f = translate $ \ c -> \case
          Case e b ty alts -> f b ty (apply t (c @@ 0) e) $ [ apply (ts n) (addCaseBinding (b,e,alt) c @@ (n+1)) alt
                                                            | (alt,n) <- zip alts [0..]
                                                            ]
-         _                -> fail "no match for Case"
+         _                -> fail "not a case node."
 
 -- | Translate an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
 caseT :: TranslateH CoreExpr a1 -> (Int -> TranslateH CoreAlt a2) -> (a1 -> Id -> Type -> [a2] -> b) -> TranslateH CoreExpr b
@@ -593,7 +593,7 @@ caseOneR r rs = caseT' (withArgumentT r) (withArgumentT . rs) (\ b ty -> attempt
 castT :: TranslateH CoreExpr a -> (a -> Coercion -> b) -> TranslateH CoreExpr b
 castT t f = translate $ \ c -> \case
                                   Cast e cast -> f <$> apply t (c @@ 0) e <*> pure cast
-                                  _           -> fail "no match for Cast"
+                                  _           -> fail "not a cast node."
 
 -- | Rewrite the 'CoreExpr' child of an expression of the form: @Cast@ 'CoreExpr' 'Coercion'
 castR :: RewriteH CoreExpr -> RewriteH CoreExpr
@@ -603,7 +603,7 @@ castR r = castT r Cast
 tickT :: TranslateH CoreExpr a -> (CoreTickish -> a -> b) -> TranslateH CoreExpr b
 tickT t f = translate $ \ c -> \case
         Tick tk e -> f tk <$> apply t (c @@ 0) e
-        _         -> fail "no match for Tick"
+        _         -> fail "not a tick node."
 
 -- | Rewrite the 'CoreExpr' child of an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
 tickR :: RewriteH CoreExpr -> RewriteH CoreExpr
@@ -613,13 +613,13 @@ tickR r = tickT r Tick
 typeT :: (Type -> b) -> TranslateH CoreExpr b
 typeT f = contextfreeT $ \case
                             Type t -> pure (f t)
-                            _      -> fail "no match for Type"
+                            _      -> fail "not a type node."
 
 -- | Translate an expression of the form: @Coercion@ 'Coercion'
 coercionT :: (Coercion -> b) -> TranslateH CoreExpr b
 coercionT f = contextfreeT $ \case
                                 Coercion co -> pure (f co)
-                                _           -> fail "no match for Coercion"
+                                _           -> fail "not a coercion node."
 
 ---------------------------------------------------------------------
 
