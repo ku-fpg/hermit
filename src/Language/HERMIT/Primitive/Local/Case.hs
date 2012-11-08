@@ -1,7 +1,6 @@
 module Language.HERMIT.Primitive.Local.Case
        ( -- * Rewrites on Case Expressions
          caseExternals
-       , letFloatCase
        , caseFloatApp
        , caseFloatArg
        , caseFloatCase
@@ -18,7 +17,6 @@ import GhcPlugins
 
 import Data.List
 import Control.Arrow
-import Control.Applicative
 
 import Language.HERMIT.Core
 import Language.HERMIT.Monad
@@ -49,9 +47,7 @@ caseExternals =
          --   -- Again, don't think the lhs of this rule is possible to construct in core.
          -- , external "case-merging" (promoteR $ not_defined "case-merging" :: RewriteH Core)
          --             [ "case v of ...; d -> case v of alt -> e ==> case v of ...; alt -> e[v/d]" ] .+ Unimplemented .+ Eval
-           external "let-float-case" (promoteExprR letFloatCase :: RewriteH Core)
-                     [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]  .+ Commute .+ Shallow .+ Eval .+ Bash
-         , external "case-float-app" (promoteExprR caseFloatApp :: RewriteH Core)
+           external "case-float-app" (promoteExprR caseFloatApp :: RewriteH Core)
                      [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow .+ Bash
          , external "case-float-arg" (promoteExprR caseFloatArg :: RewriteH Core)
                      [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
@@ -71,16 +67,6 @@ caseExternals =
                 [ "Like case-split, but additionally inlines the matched constructor "
                 , "applications for all occurances of the named variable." ]
          ]
-
--- | case (let v = e1 in e2) of alts ==> let v = e1 in case e2 of alts
-letFloatCase :: RewriteH CoreExpr
-letFloatCase = prefixFailMsg "Let floating from Case failed: " $
-  do
-     captures <- caseT letVarsT (const (pure ())) $ \ vs _ _ _ -> vs
-     cFrees   <- freeVarsT -- so we get type variables too
-     caseT (if null (cFrees `intersect` captures) then idR else alphaLet)
-           (const idR)
-           (\ (Let bnds e) b ty alts -> Let bnds (Case e b ty alts))
 
 -- | (case s of alt1 -> e1; alt2 -> e2) v ==> case s of alt1 -> e1 v; alt2 -> e2 v
 caseFloatApp :: RewriteH CoreExpr

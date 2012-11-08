@@ -7,6 +7,7 @@ module Language.HERMIT.Primitive.Local.Let
        , letFloatArg
        , letFloatLet
        , letFloatLam
+       , letFloatCase
        , letFloatExpr
        , letFloatLetTop
        , letToCase
@@ -57,6 +58,8 @@ letExternals =
                      ]                                                                  .+ Commute .+ Shallow .+ Bash
          , external "let-float-let" (promoteExprR letFloatLet :: RewriteH Core)
                      [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow .+ Bash
+         , external "let-float-case" (promoteExprR letFloatCase :: RewriteH Core)
+                     [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]  .+ Commute .+ Shallow .+ Eval .+ Bash
          , external "let-float-top" (promoteProgR letFloatLetTop :: RewriteH Core)
                      [ "v = (let w = ew in ev) : bds ==> w = ew : v = ev : bds" ] .+ Commute .+ Shallow .+ Bash
          , external "let-float" (promoteProgR letFloatLetTop <+ promoteExprR letFloatExpr :: RewriteH Core)
@@ -66,6 +69,8 @@ letExternals =
          -- , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
          --             [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ] .+ Unimplemented
          ]
+
+-------------------------------------------------------------------------------------------
 
 -- | e => (let v = e in v), name of v is provided
 letIntro ::  TH.Name -> RewriteH CoreExpr
@@ -82,6 +87,16 @@ letElim = prefixFailMsg "Dead-let-elimination failed: " $
          guardMsg (v `notElem` coreExprFreeVars e) "let-bound variable appears in the expression."
          return e
 
+-- | let v = ev in e ==> case ev of v -> e
+letToCase :: RewriteH CoreExpr
+letToCase = prefixFailMsg "Converting Let to Case failed: " $
+            withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
+  do Let (NonRec v ev) _ <- idR
+     nameModifier <- freshNameGenT Nothing
+     caseBndr <- constT (cloneIdH nameModifier v)
+     letT mempty (replaceIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
+
+-------------------------------------------------------------------------------------------
 
 -- | (let v = ev in e) x ==> let v = ev in e x
 letFloatApp :: RewriteH CoreExpr
@@ -116,10 +131,21 @@ letFloatLam = prefixFailMsg "Let floating from Lam failed: " $
       then alphaLam Nothing >>> letFloatLam
       else return (Let (NonRec v2 e1) (Lam v1 e2))
 
+-- | @case (let bnds in e) of wild alts ==> let bnds in (case e of wild alts)@
+--   Fails if any variables bound in @bnds@ occurs in @alts@.
+letFloatCase :: RewriteH CoreExpr
+letFloatCase = prefixFailMsg "Let floating from Case failed: " $
+  do captures <- caseT letVarsT
+                       (\ _ -> altFreeVarsExclWildT)
+                       (\ vs wild _ fs -> vs `intersect` concatMap ($ wild) fs)
+     caseT (if null captures then idR else alphaLetVars captures)
+           (const idR)
+           (\ (Let bnds e) wild ty alts -> Let bnds (Case e wild ty alts))
+
 -- | Float a Let through an expression, whatever the context.
 letFloatExpr :: RewriteH CoreExpr
 letFloatExpr = setFailMsg "Unsuitable expression for Let floating." $
-               letFloatApp <+ letFloatArg <+ letFloatLet <+ letFloatLam
+               letFloatApp <+ letFloatArg <+ letFloatLet <+ letFloatLam <+ letFloatCase
 
 -- | NonRec v (Let (NonRec w ew) ev) `ProgCons` p ==> NonRec w ew `ProgCons` NonRec v ev `ProgCons` p
 letFloatLetTop :: RewriteH CoreProg
@@ -127,11 +153,4 @@ letFloatLetTop = setFailMsg ("Let floating to top level failed: " ++ wrongExprFo
   do NonRec v (Let (NonRec w ew) ev) `ProgCons` p <- idR
      return (NonRec w ew `ProgCons` NonRec v ev `ProgCons` p)
 
--- | let v = ev in e ==> case ev of v -> e
-letToCase :: RewriteH CoreExpr
-letToCase = prefixFailMsg "Converting Let to Case failed: " $
-            withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
-  do Let (NonRec v ev) _ <- idR
-     nameModifier <- freshNameGenT Nothing
-     caseBndr <- constT (cloneIdH nameModifier v)
-     letT mempty (replaceIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
+-------------------------------------------------------------------------------------------

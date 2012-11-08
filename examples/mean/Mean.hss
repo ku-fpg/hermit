@@ -5,7 +5,7 @@
   { 0 ; 1 ; let-intro 's }
   innermost let-float
   let-tuple 'sl
-  { 0 ; 0 ; abstract 'xs ; 0 ; let-intro 'sumlength }
+  { 0 ; abstract 'xs ; 0 ; let-intro 'sumlength }
 }
 innermost let-float
 consider 'sumlength

@@ -10,6 +10,8 @@ module Language.HERMIT.Primitive.Common
     , defVarT
     , lamVarT
     , letVarsT
+    , letRecVarsT
+    , letNonRecVarT
     , caseVarsT
     , caseWildVarT
     , caseAltVarsT
@@ -65,6 +67,14 @@ lamVarT = lamT mempty (\ v () -> v)
 -- | List the variables bound by a let expression.
 letVarsT :: TranslateH CoreExpr [Var]
 letVarsT = letT bindVarsT mempty (\ vs () -> vs)
+
+-- | List the variables bound by a recursive let expression.
+letRecVarsT :: TranslateH CoreExpr [Var]
+letRecVarsT = letT recVarsT mempty (\ vs () -> vs)
+
+-- | Return the variable bound by a non-recursive let expression.
+letNonRecVarT :: TranslateH CoreExpr Var
+letNonRecVarT = letT nonRecVarT mempty (\ v () -> v)
 
 -- | List all variables bound by a case expression (in the alternatives and the wildcard binder).
 caseVarsT :: TranslateH CoreExpr [Var]

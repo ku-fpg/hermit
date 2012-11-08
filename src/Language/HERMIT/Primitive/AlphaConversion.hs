@@ -9,6 +9,7 @@ module Language.HERMIT.Primitive.AlphaConversion
        , alphaAltIds
        , alphaAlt
        , alphaCase
+       , alphaLetVars
        , alphaLetRecIds
        , alphaLetOne
        , alphaLet
@@ -184,9 +185,7 @@ alphaAltIds = andR . map (alphaAltId Nothing)
 
 -- | Rename all identifiers bound in a case alternative.
 alphaAlt :: RewriteH CoreAlt
-alphaAlt = setFailMsg (wrongFormForAlpha "(con,vs,e)") $
-           do (_, vs, _) <- idR
-              alphaAltIds vs
+alphaAlt = altVarsT >>= alphaAltIds
 
 -----------------------------------------------------------------------
 
@@ -203,6 +202,10 @@ alphaLetNonRec mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
                        v' <- constT (cloneIdH nameModifier v)
                        letNonRecT idR (replaceIdR v v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
 
+-- | Alpha rename a non-recursive let binder if the variable appears in the argument list.  Optionally takes a suggested new name.
+alphaLetNonRecVars :: Maybe TH.Name -> [Var] -> RewriteH CoreExpr
+alphaLetNonRecVars mn vs = whenM ((`elem` vs) <$> letNonRecVarT) (alphaLetNonRec mn)
+
 -- | Rename the specified identifier bound in a recursive let.  Optionally takes a suggested new name.
 alphaLetRecId :: Maybe TH.Name -> Id -> RewriteH CoreExpr
 alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
@@ -218,10 +221,14 @@ alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
 alphaLetRecIds :: [Id] -> RewriteH CoreExpr
 alphaLetRecIds = andR . map (alphaLetRecId Nothing)
 
+-- | Rename the specified variables bound in a let.
+alphaLetVars :: [Var] -> RewriteH CoreExpr
+alphaLetVars vs = alphaLetNonRecVars Nothing vs <+ alphaLetRecIds vs
+
 -- | Rename all identifiers bound in a recursive let.
 alphaLetRec :: RewriteH CoreExpr
 alphaLetRec = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
-              letT recVarsT mempty (\ vs () -> vs) >>= alphaLetRecIds
+              letRecVarsT >>= alphaLetRecIds
 
 -- | Rename the identifier bound in a recursive let with a single recursively bound identifier.  Optionally takes a suggested new name.
 alphaLetRecOne :: Maybe TH.Name -> RewriteH CoreExpr
