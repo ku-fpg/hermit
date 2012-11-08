@@ -18,7 +18,6 @@ import Language.HERMIT.Core
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 
---import qualified Language.HERMIT.Primitive.Command as Command
 import qualified Language.HERMIT.Primitive.Kure as Kure
 import qualified Language.HERMIT.Primitive.Navigation as Navigation
 import qualified Language.HERMIT.Primitive.Inline as Inline

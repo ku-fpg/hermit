@@ -1,29 +1,49 @@
-module Language.HERMIT.Primitive.GHC where
+module Language.HERMIT.Primitive.GHC
+       ( -- * GHC-based Transformations
+         -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
+         externals
+         -- ** Free Variables
+       , coreExprFreeIds
+       , coreExprFreeVars
+       , freeIdsT
+       , freeVarsT
+       , altFreeVarsT
+       , altFreeVarsExclWildT
+         -- ** Substitution
+       , substR
+       , letSubstR
+       , safeLetSubstR
+       , safeLetSubstPlusR
+         -- ** Utilities
+       , inScope
+       , exprEqual
+       , showVars
+       , rules
+       )
+where
 
-import GhcPlugins hiding (empty)
+import GhcPlugins
 import qualified OccurAnal
+
 import Control.Arrow
 import Control.Monad
 import qualified Data.Map as Map
 import Data.List (mapAccumL,(\\))
 
--- import Language.HERMIT.Primitive.Debug
-import Language.HERMIT.Primitive.Navigation
-
 import Language.HERMIT.Core
-import Language.HERMIT.Kure
-import Language.HERMIT.Monad
-import Language.HERMIT.External
 import Language.HERMIT.Context
-import qualified Language.HERMIT.GHC as GHC
+import Language.HERMIT.Monad
+import Language.HERMIT.Kure
+import Language.HERMIT.External
+import Language.HERMIT.GHC
+
+import Language.HERMIT.Primitive.Navigation hiding (externals)
 
 import qualified Language.Haskell.TH as TH
--- import Debug.Trace
-
-import Prelude hiding (exp)
 
 ------------------------------------------------------------------------
 
+-- | Externals that reflect GHC functions.
 externals :: [External]
 externals =
          [ external "let-subst" (promoteExprR letSubstR :: RewriteH Core)
@@ -64,17 +84,19 @@ externals =
 
 ------------------------------------------------------------------------
 
-substR :: Id -> CoreExpr -> RewriteH Core
-substR b e = setFailMsg "Can only perform substitution on expressions or programs." $
-             promoteExprR (substExprR b e) <+ promoteProgR (substTopBindR b e)
+-- | Substitute all occurrences of a variable with an expression, in either a program or an expression.
+substR :: Var -> CoreExpr -> RewriteH Core
+substR v e = setFailMsg "Can only perform substitution on expressions or programs." $
+             promoteExprR (substExprR v e) <+ promoteProgR (substTopBindR v e)
 
+-- | Substitute all occurrences of a variable with an expression, in an expression.
 substExprR :: Var -> CoreExpr -> RewriteH CoreExpr
-substExprR v e =  contextfreeT $ \ exp ->
+substExprR v e =  contextfreeT $ \ expr ->
           -- The InScopeSet needs to include any free variables appearing in the
           -- expression to be substituted.  Constructing a NonRec Let expression
           -- to pass on to exprFeeVars takes care of this, but ...
           -- TODO Is there a better way to do this ???
-       let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars (Let (NonRec v e) exp)))
+       let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars (Let (NonRec v e) expr)))
         in do
               sub <- if isTyVar v
                        then case e of
@@ -82,9 +104,9 @@ substExprR v e =  contextfreeT $ \ exp ->
                               Var x    -> return $ extendTvSubst emptySub v (mkTyVarTy x)
                               _        -> fail "substExprR:  Var argument is a TyVar, but the expression is not a Type."
                        else return $ extendSubst emptySub v e
-              return $ substExpr (text "substR") sub exp
+              return $ substExpr (text "substR") sub expr
 
-
+-- | Substitute all occurrences of a variable with an expression, in a program.
 substTopBindR :: Var -> CoreExpr -> RewriteH CoreProg
 substTopBindR v e =  contextfreeT $ \ p ->
           -- TODO.  Do we need to initialize the emptySubst with bindFreeVars?
@@ -103,7 +125,7 @@ substTopBindR v e =  contextfreeT $ \ p ->
 --   x must not be free in e1.
 letSubstR :: RewriteH CoreExpr
 letSubstR =  prefixFailMsg "Let substition failed: " $
-             rewrite $ \ c exp -> case occurAnalyseExpr exp of
+             rewrite $ \ c expr -> case occurAnalyseExpr expr of
                                      Let (NonRec b be) e -> apply (substExprR b be) c e
                                      _ -> fail "expression is not a non-recursive Let."
 
@@ -112,10 +134,10 @@ letSubstNR :: Int -> RewriteH Core
 letSubstNR 0 = idR
 letSubstNR n = childR 1 (letSubstNR (n - 1)) >>> promoteExprR letSubstR
 
--- This is quite expensive (O(n) for the size of the sub-tree)
+-- | This is quite expensive (O(n) for the size of the sub-tree).
 safeLetSubstR :: RewriteH CoreExpr
 safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
-                 translate $ \ env exp ->
+                 translate $ \ env expr ->
     let   -- Lit?
           safeBind (Var {})   = True
           safeBind (Lam {})   = True
@@ -130,13 +152,13 @@ safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
           safeSubst IAmDead   = True    -- DCE
           safeSubst (OneOcc inLam oneBr _) = not inLam && oneBr -- do not inline inside a lambda or if in multiple case branches
           safeSubst _ = False   -- strange case, like a loop breaker
-   in case occurAnalyseExpr exp of
+   in case occurAnalyseExpr expr of
       -- By (our) definition, types are a trivial bind
       Let (NonRec b _) _
-         | isTyVar b -> apply letSubstR env exp
+         | isTyVar b -> apply letSubstR env expr
       Let (NonRec b be) _
          | isId b && (safeBind be || safeSubst (occInfo (idInfo b)))
-                     -> apply letSubstR env exp
+                     -> apply letSubstR env expr
          | otherwise -> fail "safety critera not met."
       _ -> fail "expression is not a non-recursive Let."
 
@@ -154,7 +176,7 @@ freeIdsQuery = do frees <- freeIdsT
 
 -- | Show a human-readable version of a list of 'Var's.
 showVars :: [Var] -> String
-showVars = show . map GHC.var2String
+showVars = show . map var2String
 
 -- | Lifted version of 'coreExprFreeIds'.
 freeIdsT :: TranslateH CoreExpr [Id]
@@ -223,20 +245,21 @@ rulesToRewriteH rs = translate $ \ c e -> do
     -- trace (showSDoc (ppr fn GhcPlugins.<+> ppr args $$ ppr rs)) $
     case lookupRule (const True) (const NoUnfolding) in_scope fn args rs of
         Nothing         -> fail "rule not matched"
-        Just (rule, exp)  -> do
-            let e' = mkApps exp (drop (ruleArity rule) args)
+        Just (rule, expr)  -> do
+            let e' = mkApps expr (drop (ruleArity rule) args)
             ifM (liftM (and . map (inScope c)) $ apply freeVarsT c e')
                 (return e')
                 (fail $ unlines ["Resulting expression after rule application contains variables that are not in scope."
                                 ,"This can probably be solved by running the flatten-module command at the top level."])
 
--- | See whether an identifier is in scope.
+-- | Determine whether an identifier is in scope.
 inScope :: HermitC -> Id -> Bool
 inScope c v = (v `boundIn` c) ||                 -- defined in this module
               case unfoldingInfo (idInfo v) of
                 CoreUnfolding {} -> True         -- defined elsewhere
                 _                -> False
 
+-- | Lookup a rule and attempt to construct a corresponding rewrite.
 rules ::  String -> RewriteH CoreExpr
 rules r = do
         theRules <- getHermitRules
@@ -282,7 +305,7 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
              , (v,e) <- case top_bnds of
                             Rec bnds -> bnds
                             NonRec b e -> [(b,e)]
-             ,  nm `GHC.cmpTHName2Id` v
+             ,  nm `cmpTHName2Id` v
              ] of
          [] -> fail $ "cannot find binding " ++ show nm
          [(v,e)] -> return $ modGuts { mg_rules = mg_rules modGuts
@@ -370,8 +393,8 @@ arityOf env nm =
         -- Note: the exprArity will call idArity if
         -- it hits an id; perhaps we should do the counting
         -- The advantage of idArity is it will terminate, though.
-        Just (BIND _ _ e) -> GHC.exprArity e
-        Just (CASE _ e _) -> GHC.exprArity e
+        Just (BIND _ _ e) -> exprArity e
+        Just (CASE _ e _) -> exprArity e
 
 -------------------------------------------
 
