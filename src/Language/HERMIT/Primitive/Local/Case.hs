@@ -176,7 +176,7 @@ caseSplit nm = do
                     dcs = tyConDataCons tycon
                     aNms = map (:[]) $ cycle ['a'..'z']
                 dcsAndVars <- mapM (\dc -> do
-                                        as <- sequence [ newVarH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
+                                        as <- sequence [ newIdH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
                                         return (dc,as)) dcs
                 return $ Case (Var i) i (exprType e) [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
 

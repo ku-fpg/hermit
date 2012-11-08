@@ -14,10 +14,8 @@ import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.AlphaConversion
 import Language.HERMIT.Primitive.New -- TODO: Sort out heirarchy
--- import Language.HERMIT.Primitive.Debug
 
 import qualified Language.Haskell.TH as TH
-
 
 
 externals ::  [External]
@@ -50,7 +48,7 @@ fixIntro :: RewriteH CoreDef
 fixIntro = prefixFailMsg "Fix introduction failed: " $
            do Def f e <- idR
               fixId   <- findFixId
-              constT $ do f' <- cloneIdH id f
+              constT $ do f' <- cloneVarH id f
                           let coreFix  = App (App (Var fixId) (Type (idType f)))
                               emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars e))
                               sub      = extendSubst emptySub f (Var f')
@@ -97,7 +95,7 @@ fixSpecialization' = do
 --                   mkAppTy t t'
 
 
-        v3 <- constT $ newVarH "f" t' -- (funArgTy t')
+        v3 <- constT $ newIdH "f" t' -- (funArgTy t')
         v4 <- constT $ newTypeVarH "a" (tyVarKind v2)
 
          -- f' :: \/ a -> T [a] -> (\/ b . T [b])
@@ -172,13 +170,13 @@ monomorphicWorkerWrapperFac wrapE unwrapE =
      case typeExprToType fixTyE of
        Nothing  -> fail "first argument to fix is not a type, this shouldn't have happened."
        Just tyA -> case splitFunTy_maybe (exprType wrapE) of
-           Nothing                -> fail "type of wrapper is not a function."
+           Nothing            -> fail "type of wrapper is not a function."
            Just (tyB,wrapTyA) -> case splitFunTy_maybe (exprType unwrapE) of
              Nothing                    -> fail "type of unwrapper is not a function."
              Just (unwrapTyA,unwrapTyB) -> do guardMsg (eqType wrapTyA unwrapTyA) ("argument type of unwrapper does not match result type of wrapper.")
                                               guardMsg (eqType unwrapTyB tyB) ("argument type of wrapper does not match result type of unwrapper.")
                                               guardMsg (eqType wrapTyA tyA) ("wrapper/unwrapper types do not match expression type.")
-                                              x <- constT (newVarH "x" tyB)
+                                              x <- constT (newIdH "x" tyB)
                                               return $ App wrapE
                                                            (App (App (Var fixId) (Type tyB))
                                                                 (Lam x (App unwrapE

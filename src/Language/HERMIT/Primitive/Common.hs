@@ -17,7 +17,7 @@ module Language.HERMIT.Primitive.Common
     , caseAltVarsT
     , altVarsT
       -- ** Finding variables bound in the Context
-    , boundIdsT
+    , boundVarsT
     , findBoundVarT
     , findIdT
       -- ** Error Message Generators
@@ -96,9 +96,9 @@ altVarsT = altT mempty (\ _ vs () -> vs)
 
 -- Need a better error type so that we can factor out the repetition.
 
--- | Lifted version of 'boundIds'.
-boundIdsT :: TranslateH a [Id]
-boundIdsT = contextonlyT (return . boundIds)
+-- | Lifted version of 'boundVars'.
+boundVarsT :: TranslateH a [Id]
+boundVarsT = contextonlyT (return . boundVars)
 
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
 findBoundVarT :: TH.Name -> TranslateH a Var

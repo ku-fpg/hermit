@@ -86,6 +86,8 @@ type CoreTickish = Tickish Id
 
 -----------------------------------------------------------------------
 
+-- TODO: I don't know what to do about Coercions here, because I don't understand them.
+
 -- | Succeeds if the expression is either a 'Type' or type 'Var'.
 isType :: CoreExpr -> Bool
 isType = isJust . typeExprToType

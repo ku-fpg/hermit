@@ -300,13 +300,13 @@ instance Walker HermitC HermitM CoreBind where
   oneR r = nonRecR (extractR r)
         <+ recOneR (\ _ -> extractR r)
 
--- | Translate a binding group of the form: @NonRec@ 'Id' 'CoreExpr'
-nonRecT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreBind b
+-- | Translate a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
+nonRecT :: TranslateH CoreExpr a -> (Var -> a -> b) -> TranslateH CoreBind b
 nonRecT t f = translate $ \ c -> \case
                                     NonRec v e -> f v <$> apply t (c @@ 0) e
                                     _          -> fail "not NonRec constructor"
 
--- | Rewrite the 'CoreExpr' child of a binding group of the form: @NonRec@ 'Id' 'CoreExpr'
+-- | Rewrite the 'CoreExpr' child of a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
 nonRecR :: RewriteH CoreExpr -> RewriteH CoreBind
 nonRecR r = nonRecT r NonRec
 
@@ -497,8 +497,8 @@ instance Walker HermitC HermitM CoreExpr where
 
 ---------------------------------------------------------------------
 
--- | Translate an expression of the form: @Var@ 'Id'
-varT :: (Id -> b) -> TranslateH CoreExpr b
+-- | Translate an expression of the form: @Var@ 'Var'
+varT :: (Var -> b) -> TranslateH CoreExpr b
 varT f = contextfreeT $ \case
                            Var v -> pure (f v)
                            _     -> fail "no match for Var"
@@ -531,13 +531,13 @@ appAnyR r1 r2 = appT' (attemptR r1) (attemptR r2) (attemptAny2 App)
 appOneR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
 appOneR r1 r2 = appT' (withArgumentT r1) (withArgumentT r2) (attemptOne2 App)
 
--- | Translate an expression of the form: @Lam@ 'Id' 'CoreExpr'
-lamT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreExpr b
+-- | Translate an expression of the form: @Lam@ 'Var' 'CoreExpr'
+lamT :: TranslateH CoreExpr a -> (Var -> a -> b) -> TranslateH CoreExpr b
 lamT t f = translate $ \ c -> \case
                                  Lam b e -> f b <$> apply t (addLambdaBinding b c @@ 0) e
                                  _       -> fail "no match for Lam"
 
--- | Rewrite the 'CoreExpr' child of an expression of the form: @Lam@ 'Id' 'CoreExpr'
+-- | Rewrite the 'CoreExpr' child of an expression of the form: @Lam@ 'Var' 'CoreExpr'
 lamR :: RewriteH CoreExpr -> RewriteH CoreExpr
 lamR r = lamT r Lam
 
@@ -642,19 +642,19 @@ recDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreBind
 recDefOneR rs = recOneR (\ n -> defR (rs n))
 
 
--- | Translate a program of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProg'
-consNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreProg a2 -> (Id -> a1 -> a2 -> b) -> TranslateH CoreProg b
+-- | Translate a program of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
+consNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreProg a2 -> (Var -> a1 -> a2 -> b) -> TranslateH CoreProg b
 consNonRecT t1 t2 f = progConsT (nonRecT t1 (,)) t2 (uncurry f)
 
--- | Rewrite all children of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProg'
+-- | Rewrite all children of an expression of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
 consNonRecAllR :: RewriteH CoreExpr -> RewriteH CoreProg -> RewriteH CoreProg
 consNonRecAllR r1 r2 = progConsAllR (nonRecR r1) r2
 
--- | Rewrite any children of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProg'
+-- | Rewrite any children of an expression of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
 consNonRecAnyR :: RewriteH CoreExpr -> RewriteH CoreProg -> RewriteH CoreProg
 consNonRecAnyR r1 r2 = progConsAnyR (nonRecR r1) r2
 
--- | Rewrite one child of an expression of the form: (@NonRec@ 'Id' 'CoreExpr') @:@ 'CoreProg'
+-- | Rewrite one child of an expression of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
 consNonRecOneR :: RewriteH CoreExpr -> RewriteH CoreProg -> RewriteH CoreProg
 consNonRecOneR r1 r2 = progConsOneR (nonRecR r1) r2
 
@@ -693,19 +693,19 @@ consRecDefOneR :: (Int -> RewriteH CoreExpr) -> RewriteH CoreProg -> RewriteH Co
 consRecDefOneR rs r = consRecOneR (\ n -> defR (rs n)) r
 
 
--- | Translate an expression of the form: @Let@ (@NonRec@ 'Id' 'CoreExpr') 'CoreExpr'
-letNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (Id -> a1 -> a2 -> b) -> TranslateH CoreExpr b
+-- | Translate an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
+letNonRecT :: TranslateH CoreExpr a1 -> TranslateH CoreExpr a2 -> (Var -> a1 -> a2 -> b) -> TranslateH CoreExpr b
 letNonRecT t1 t2 f = letT (nonRecT t1 (,)) t2 (uncurry f)
 
--- | Rewrite all children of an expression of the form: @Let@ (@NonRec@ 'Id' 'CoreExpr') 'CoreExpr'
+-- | Rewrite all children of an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
 letNonRecAllR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
 letNonRecAllR r1 r2 = letAllR (nonRecR r1) r2
 
--- | Rewrite any children of an expression of the form: @Let@ (@NonRec@ 'Id' 'CoreExpr') 'CoreExpr'
+-- | Rewrite any children of an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
 letNonRecAnyR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
 letNonRecAnyR r1 r2 = letAnyR (nonRecR r1) r2
 
--- | Rewrite one child of an expression of the form: @Let@ (@NonRec@ 'Id' 'CoreExpr') 'CoreExpr'
+-- | Rewrite one child of an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
 letNonRecOneR :: RewriteH CoreExpr -> RewriteH CoreExpr -> RewriteH CoreExpr
 letNonRecOneR r1 r2 = letOneR (nonRecR r1) r2
 

@@ -6,9 +6,9 @@ module Language.HERMIT.Monad
             HermitM
           , runHM
           , liftCoreM
-          , newVarH
+          , newIdH
           , newTypeVarH
-          , cloneIdH
+          , cloneVarH
             -- * Saving Definitions
           , Label
           , DefStash
@@ -137,9 +137,9 @@ newName name = do uq <- getUniqueM
                   return $ mkSystemVarName uq $ mkFastString name
 
 -- | Make a unique identifier for a specified type based on a provided name.
-newVarH :: String -> Type -> HermitM Id
-newVarH name ty = do name' <- newName name
-                     return $ mkLocalId name' ty
+newIdH :: String -> Type -> HermitM Id
+newIdH name ty = do name' <- newName name
+                    return $ mkLocalId name' ty
 
 -- | Make a unique type variable for a specified kind based on a provided name.
 newTypeVarH :: String -> Kind -> HermitM TyVar
@@ -147,15 +147,15 @@ newTypeVarH name kind = do name' <- newName name
                            return $ mkTyVar name' kind
 
 
--- | This gives an new version of an Id, with the same info, and a new textual name.
-cloneIdH :: (String -> String) -> Id -> HermitM Id
-cloneIdH nameMod b =
-        let name = nameMod $ getOccString b
-            ty   = idType b
+-- | This gives an new version of a 'Var', with the same info, and a new textual name.
+cloneVarH :: (String -> String) -> Var -> HermitM Var
+cloneVarH nameMod v =
+        let name = nameMod (getOccString v)
+            ty   = varType v
         in
-          if isTyVar b
+          if isTyVar v
            then newTypeVarH name ty
-           else newVarH name ty
+           else newIdH name ty
 
 ----------------------------------------------------------------------------
 

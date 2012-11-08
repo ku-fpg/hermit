@@ -85,7 +85,7 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
                case isDataConId_maybe tupleConId of
                  Nothing -> fail "cannot find tuple data constructor."
                  Just dc -> let rhs     = mkCoreApps (Var tupleConId) $ map Type rhsTypes ++ rhss
-                             in constT $ do wild <- newVarH (show nm) (exprType rhs)
+                             in constT $ do wild <- newIdH (show nm) (exprType rhs)
                                             return $ Case rhs wild (exprType body) [(DataAlt dc, ids, body)]
 
        else fail $ "the following bound variables are used in subsequent bindings: " ++ showVars used
@@ -133,7 +133,7 @@ info = translate $ \ c core -> do
          let pa       = "Path: " ++ show (contextPath c)
              node     = "Node: " ++ coreNode core
              con      = "Constructor: " ++ coreConstructor core
-             bds      = "Bindings in Scope: " ++ show (map unqualifiedIdName $ boundIds c)
+             bds      = "Bindings in Scope: " ++ show (map unqualifiedIdName $ boundVars c)
              expExtra = case core of
                           ExprCore e -> ["Type: " ++ showExprType dynFlags e] ++
                                         ["Free Variables: " ++ showVars (coreExprFreeVars e)] ++

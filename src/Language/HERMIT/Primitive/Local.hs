@@ -162,7 +162,7 @@ etaExpand :: TH.Name -> RewriteH CoreExpr
 etaExpand nm = prefixFailMsg "Eta-expansion failed: " $
                contextfreeT $ \ e ->
         case splitFunTy_maybe (exprType e) of
-          Just (arg_ty, _) -> do v1 <- newVarH (show nm) arg_ty
+          Just (arg_ty, _) -> do v1 <- newIdH (show nm) arg_ty
                                  return $ Lam v1 (App e (Var v1))
           _ -> case splitForAllTy_maybe (exprType e) of
                   Just (v,_) -> do v1 <- newTypeVarH (show nm) (tyVarKind v)

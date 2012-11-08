@@ -75,9 +75,9 @@ externals = map (.+ Deep)
 
 -----------------------------------------------------------------------
 --
--- freshNameGen is a function used in conjunction with cloneIdH, which clones an existing Id.
+-- freshNameGen is a function used in conjunction with cloneVarH, which clones an existing 'Var'.
 -- But, what name should the new Id have?
--- cloneIdH generates a new Unique -- so we are positive that the new Id will be new,
+-- cloneVarH generates a new Unique -- so we are positive that the new Var will be new,
 -- but freshNameGen tries to assign a Name that will be meaningful to the user, and
 -- not shadow other names in scope.
 -- So,  we start with the name of the original Id, and add an integer suffix
@@ -88,7 +88,7 @@ externals = map (.+ Deep)
 
 -- | List all visible identifiers (in the expression or the context).
 visibleVarsT :: TranslateH CoreExpr [Var]
-visibleVarsT = boundIdsT `mappend` freeVarsT
+visibleVarsT = boundVarsT `mappend` freeVarsT
 
 -- | If a name is provided replace the string with that,
 --   otherwise modify the string making sure to /not/ clash with any visible variables.
@@ -133,11 +133,11 @@ unshadow = setFailMsg "No shadows to eliminate." $
 
   where
     unshadowExpr :: RewriteH CoreExpr
-    unshadowExpr = do vs <- shadowedByT (boundIdsT `mappend` freeVarsT) (letVarsT <+ fmap return (caseWildVarT <+ lamVarT))
+    unshadowExpr = do vs <- shadowedByT (boundVarsT `mappend` freeVarsT) (letVarsT <+ fmap return (caseWildVarT <+ lamVarT))
                       alphaLam Nothing <+ alphaLetRecIds vs <+ alphaLetNonRec Nothing <+ alphaCaseBinder Nothing
 
     unshadowAlt :: RewriteH CoreAlt
-    unshadowAlt = shadowedByT altVarsT (boundIdsT `mappend` altFreeVarsT) >>= alphaAltIds
+    unshadowAlt = shadowedByT altVarsT (boundVarsT `mappend` altFreeVarsT) >>= alphaAltIds
 
 -----------------------------------------------------------------------
 
@@ -158,7 +158,7 @@ replaceId v v' i = if v == i then v' else i
 alphaLam :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLam mn = setFailMsg (wrongFormForAlpha "Lam v e") $
               do (v, nameModifier) <- lamT (freshNameGenT mn) (,)
-                 v' <- constT (cloneIdH nameModifier v)
+                 v' <- constT (cloneVarH nameModifier v)
                  lamT (replaceIdR v v') (\ _ -> Lam v')
 
 -----------------------------------------------------------------------
@@ -168,7 +168,7 @@ alphaCaseBinder :: Maybe TH.Name -> RewriteH CoreExpr
 alphaCaseBinder mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
                      do Case _ v _ _ <- idR
                         nameModifier <- freshNameGenT mn
-                        v' <- constT (cloneIdH nameModifier v)
+                        v' <- constT (cloneVarH nameModifier v)
                         caseT idR (\ _ -> replaceIdR v v') (\ e _ t alts -> Case e v' t alts)
 
 -----------------------------------------------------------------------
@@ -176,7 +176,7 @@ alphaCaseBinder mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
 -- | Rename the specified identifier in a case alternative.  Optionally takes a suggested new name.
 alphaAltId :: Maybe TH.Name -> Id -> RewriteH CoreAlt
 alphaAltId mn v = do nameModifier <- altT (freshNameGenT mn) (\ _ _ nameGen -> nameGen)
-                     v' <- constT (cloneIdH nameModifier v)
+                     v' <- constT (cloneVarH nameModifier v)
                      altT (replaceIdR v v') (\ con vs e -> (con, map (replaceId v v') vs, e))
 
 -- | Rename the specified identifiers in a case alternative.
@@ -199,7 +199,7 @@ alphaCase = alphaCaseBinder Nothing >+> caseAnyR (fail "") (const alphaAlt)
 alphaLetNonRec :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLetNonRec mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
                     do (v, nameModifier) <- letNonRecT idR (freshNameGenT mn) (\ v _ nameMod -> (v, nameMod))
-                       v' <- constT (cloneIdH nameModifier v)
+                       v' <- constT (cloneVarH nameModifier v)
                        letNonRecT idR (replaceIdR v v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
 
 -- | Alpha rename a non-recursive let binder if the variable appears in the argument list.  Optionally takes a suggested new name.
@@ -209,10 +209,10 @@ alphaLetNonRecVars mn vs = whenM ((`elem` vs) <$> letNonRecVarT) (alphaLetNonRec
 -- | Rename the specified identifier bound in a recursive let.  Optionally takes a suggested new name.
 alphaLetRecId :: Maybe TH.Name -> Id -> RewriteH CoreExpr
 alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
-                     do usedVars <- boundIdsT `mappend`
+                     do usedVars <- boundVarsT `mappend`
                                     letVarsT  `mappend`
                                     letRecDefT (\ _ -> freeVarsT) freeVarsT (\ bndfvs vs -> concatMap snd bndfvs ++ vs)
-                        v' <- constT (cloneIdH (freshNameGenAvoiding mn usedVars) v)
+                        v' <- constT (cloneVarH (freshNameGenAvoiding mn usedVars) v)
                         letRecDefT (\ _ -> replaceIdR v v')
                                    (replaceIdR v v')
                                    (\ bs e -> Let (Rec $ (map.first) (replaceId v v') bs) e)
@@ -251,16 +251,16 @@ alphaConsNonRec :: Maybe TH.Name -> RewriteH CoreProg
 alphaConsNonRec mn = setFailMsg (wrongFormForAlpha "ProgCons (NonRec v e) p") $
                      do ProgCons (NonRec v _) _ <- idR
                         nameModifier <- consNonRecT (freshNameGenT mn) idR (\ _ nameGen _ -> nameGen)
-                        v' <- constT (cloneIdH nameModifier v)
+                        v' <- constT (cloneVarH nameModifier v)
                         consNonRecT idR (replaceIdR v v') (\ _ e1 e2 -> ProgCons (NonRec v' e1) e2)
 
 -- | Rename the specified identifier bound in a recursive top-level binder.  Optionally takes a suggested new name.
 alphaConsRecId :: Maybe TH.Name -> Id -> RewriteH CoreProg
 alphaConsRecId mn v = setFailMsg (wrongFormForAlpha "ProgCons (Rec bs) p") $
-                      do usedVars <- boundIdsT `mappend`
+                      do usedVars <- boundVarsT `mappend`
                                      progConsT recVarsT (return ()) (\ vs () -> vs) `mappend`
                                      consRecDefT (\ _ -> freeVarsT) idR (\ bndfvs _ -> concatMap snd bndfvs)
-                         v' <- constT (cloneIdH (freshNameGenAvoiding mn usedVars) v)
+                         v' <- constT (cloneVarH (freshNameGenAvoiding mn usedVars) v)
                          consRecDefT (\ _ -> replaceIdR v v')
                                      (replaceIdR v v')
                                      (\ bs e -> ProgCons (Rec $ (map.first) (replaceId v v') bs) e)

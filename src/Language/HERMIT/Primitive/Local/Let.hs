@@ -75,7 +75,7 @@ letExternals =
 -- | e => (let v = e in v), name of v is provided
 letIntro ::  TH.Name -> RewriteH CoreExpr
 letIntro nm = prefixFailMsg "Let introduction failed: " $
-              contextfreeT $ \ e -> do v <- newVarH (show nm) (exprType e)
+              contextfreeT $ \ e -> do v <- newIdH (show nm) (exprType e)
                                        return $ Let (NonRec v e) (Var v)
 
 -- | Remove an unused let binding.
@@ -93,7 +93,7 @@ letToCase = prefixFailMsg "Converting Let to Case failed: " $
             withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
   do Let (NonRec v ev) _ <- idR
      nameModifier <- freshNameGenT Nothing
-     caseBndr <- constT (cloneIdH nameModifier v)
+     caseBndr <- constT (cloneVarH nameModifier v)
      letT mempty (replaceIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
 
 -------------------------------------------------------------------------------------------
