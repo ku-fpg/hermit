@@ -1,4 +1,4 @@
-HERMIT = perl ../../scripts/hermit.pl
+HERMIT = hermit
 
 fib:
 	- $(HERMIT) Fib.hs Fib.hss resume
