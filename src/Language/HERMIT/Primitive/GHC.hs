@@ -68,39 +68,36 @@ substR :: Id -> CoreExpr -> RewriteH Core
 substR b e = setFailMsg "Can only perform substitution on expressions or programs." $
              promoteExprR (substExprR b e) <+ promoteProgR (substTopBindR b e)
 
-substExprR :: Id -> CoreExpr -> RewriteH CoreExpr
-substExprR b e =  contextfreeT $ \ exp ->
+substExprR :: Var -> CoreExpr -> RewriteH CoreExpr
+substExprR v e =  contextfreeT $ \ exp ->
           -- The InScopeSet needs to include any free variables appearing in the
           -- expression to be substituted.  Constructing a NonRec Let expression
           -- to pass on to exprFeeVars takes care of this, but ...
           -- TODO Is there a better way to do this ???
-          let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars (Let (NonRec b e) exp)))
-              sub = if isTyVar b
-                     then case e of
-                            Type bty -> Just $ extendTvSubst emptySub b bty
-                            Var x    -> Just $ extendTvSubst emptySub b (mkTyVarTy x)
-                            _        -> Nothing
-                     else Just $ extendSubst emptySub b e
-          in
-            case sub of
-              Just sub' -> return $ substExpr (text "substR") sub' exp
-              Nothing -> fail "substExprR:  Id argument is a TyVar, but the expression is not a Type."
+       let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars (Let (NonRec v e) exp)))
+        in do
+              sub <- if isTyVar v
+                       then case e of
+                              Type vty -> return $ extendTvSubst emptySub v vty
+                              Var x    -> return $ extendTvSubst emptySub v (mkTyVarTy x)
+                              _        -> fail "substExprR:  Var argument is a TyVar, but the expression is not a Type."
+                       else return $ extendSubst emptySub v e
+              return $ substExpr (text "substR") sub exp
 
 
-substTopBindR :: Id -> CoreExpr -> RewriteH CoreProg
-substTopBindR b e =  contextfreeT $ \ p ->
+substTopBindR :: Var -> CoreExpr -> RewriteH CoreProg
+substTopBindR v e =  contextfreeT $ \ p ->
           -- TODO.  Do we need to initialize the emptySubst with bindFreeVars?
-          let emptySub =  emptySubst -- mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-              sub = if isTyVar b
+       let emptySub =  emptySubst -- mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+        in do
+              sub <- if isTyVar v
                       then case e of
-                             Type bty -> Just $ extendTvSubst emptySub b bty
-                             Var x    -> Just $ extendTvSubst emptySub b (mkTyVarTy x)
-                             _        -> Nothing
-                      else Just $ extendSubst emptySub b e
-          in
-            case sub of
-              Just sub' -> return $ bindsToProg $ snd (mapAccumL substBind sub' (progToBinds p))
-              Nothing   -> fail "substTopBindR:  Id argument is a TyVar, but the expression is not a Type."
+                             Type vty -> return $ extendTvSubst emptySub v vty
+                             Var x    -> return $ extendTvSubst emptySub v (mkTyVarTy x)
+                             _        -> fail "substTopBindR:  Var argument is a TyVar, but the expression is not a Type."
+                      else return $ extendSubst emptySub v e
+              return $ bindsToProg $ snd (mapAccumL substBind sub (progToBinds p))
+
 
 -- | (let x = e1 in e2) ==> (e2[e1/x]),
 --   x must not be free in e1.
@@ -235,11 +232,10 @@ rulesToRewriteH rs = translate $ \ c e -> do
 
 -- | See whether an identifier is in scope.
 inScope :: HermitC -> Id -> Bool
-inScope c i = maybe (case unfoldingInfo (idInfo i) of
-                        CoreUnfolding {} -> True -- defined elsewhere
-                        _ -> False)
-                    (const True) -- defined in this module
-                    (lookupHermitBinding i c)
+inScope c v = (v `boundIn` c) ||                 -- defined in this module
+              case unfoldingInfo (idInfo v) of
+                CoreUnfolding {} -> True         -- defined elsewhere
+                _                -> False
 
 rules ::  String -> RewriteH CoreExpr
 rules r = do
