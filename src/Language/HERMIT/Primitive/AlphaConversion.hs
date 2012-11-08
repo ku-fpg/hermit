@@ -6,15 +6,16 @@ module Language.HERMIT.Primitive.AlphaConversion
        , alpha
        , alphaLam
        , alphaCaseBinder
+       , alphaAltIds
        , alphaAlt
        , alphaCase
+       , alphaLetRecIds
        , alphaLetOne
        , alphaLet
        , alphaConsOne
        , alphaCons
          -- ** Shadow Detection and Unshadowing
        , unshadow
-       , intersectShadowsT
        , visibleVarsT
        , freshNameGenT
        , freshNameGenAvoiding
@@ -27,7 +28,7 @@ import GhcPlugins hiding (empty)
 import Control.Applicative
 import Control.Arrow
 import Data.Char (isDigit)
-import Data.List (intersect,nub)
+import Data.List (nub)
 import Data.Monoid
 
 import Language.HERMIT.Core
@@ -67,13 +68,8 @@ externals = map (.+ Deep)
                [ "renames the bound variable in a top-level binding with one binder to the given name."]
          ,  external "alpha-top" (promoteProgR alphaCons)
                [ "renames the bound variables in a top-level binding."]
-         -- , external "shadow-query" (promoteExprT shadowedNamesQuery)
-         --        [ "List variable names shadowed by bindings in this expression." ] .+ Query
-         -- , external "if-shadowing" (promoteExprT guardShadowingT)
-         --        [ "succeeds ONLY-IF bindings in this expression shadow free variable name(s)." ] .+ Predicate
          , external "unshadow" unshadow
                 [ "Rename local variables with manifestly unique names (x, x0, x1, ...)."]
-
          ]
 
 -----------------------------------------------------------------------
@@ -118,16 +114,29 @@ inventNames curr old = head
                      [(v,_)] -> v + 1
                      _       -> 0
 
--- | Intersect the /visible/ components of two lists of variables.
-intersectShadowsT :: TranslateH a [Var] -> TranslateH a [Var] -> TranslateH a [String]
-intersectShadowsT t1 t2 = do vs1 <- t1
-                             vs2 <- t2
-                             return $ intersect (map getOccString vs1) (map getOccString vs2)
 
--- | Succeed if there is no overlap between the /visible/ components of two lists of variables.
-guardShadowingT :: TranslateH a [Var] -> TranslateH a [Var] -> TranslateH a ()
-guardShadowingT t1 t2 = do ss <- intersectShadowsT t1 t2
-                           guardMsg (not $ null ss) "No shadowing detected."
+-- | Remove all variables from the first list that shadow a variable in the second list.
+shadowedBy :: [Var] -> [Var] -> [Var]
+shadowedBy vs fvs = filter (\ v -> getOccString v `elem` map getOccString fvs) vs
+
+-- | Lifted version of 'shadowedBy'.
+--   Additionally, it fails if no shadows are found.
+shadowedByT :: TranslateH a [Var] -> TranslateH a [Var] -> TranslateH a [Var]
+shadowedByT t1 t2 = (shadowedBy <$> t1 <*> t2) >>> acceptR (not . null) "No shadowing detected."
+
+-- | Rename local variables with manifestly unique names (x, x0, x1, ...).
+--   Does not rename top-level definitions (though this may change in the future).
+unshadow :: RewriteH Core
+unshadow = setFailMsg "No shadows to eliminate." $
+           anytdR (promoteExprR unshadowExpr <+ promoteAltR unshadowAlt)
+
+  where
+    unshadowExpr :: RewriteH CoreExpr
+    unshadowExpr = do vs <- shadowedByT (boundIdsT `mappend` freeVarsT) (letVarsT <+ fmap return (caseWildVarT <+ lamVarT))
+                      alphaLam Nothing <+ alphaLetRecIds vs <+ alphaLetNonRec Nothing <+ alphaCaseBinder Nothing
+
+    unshadowAlt :: RewriteH CoreAlt
+    unshadowAlt = shadowedByT altVarsT (boundIdsT `mappend` altFreeVarsT) >>= alphaAltIds
 
 -----------------------------------------------------------------------
 
@@ -169,11 +178,15 @@ alphaAltId mn v = do nameModifier <- altT (freshNameGenT mn) (\ _ _ nameGen -> n
                      v' <- constT (cloneIdH nameModifier v)
                      altT (replaceIdR v v') (\ con vs e -> (con, map (replaceId v v') vs, e))
 
+-- | Rename the specified identifiers in a case alternative.
+alphaAltIds :: [Id] -> RewriteH CoreAlt
+alphaAltIds = andR . map (alphaAltId Nothing)
+
 -- | Rename all identifiers bound in a case alternative.
 alphaAlt :: RewriteH CoreAlt
 alphaAlt = setFailMsg (wrongFormForAlpha "(con,vs,e)") $
            do (_, vs, _) <- idR
-              andR $ map (alphaAltId Nothing) vs
+              alphaAltIds vs
 
 -----------------------------------------------------------------------
 
@@ -201,11 +214,14 @@ alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
                                    (replaceIdR v v')
                                    (\ bs e -> Let (Rec $ (map.first) (replaceId v v') bs) e)
 
+-- | Rename the specified identifiers bound in a recursive let.
+alphaLetRecIds :: [Id] -> RewriteH CoreExpr
+alphaLetRecIds = andR . map (alphaLetRecId Nothing)
+
 -- | Rename all identifiers bound in a recursive let.
 alphaLetRec :: RewriteH CoreExpr
 alphaLetRec = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
-              do Let (Rec bs) _ <- idR
-                 andR $ map (alphaLetRecId Nothing . fst) bs
+              letT recVarsT mempty (\ vs () -> vs) >>= alphaLetRecIds
 
 -- | Rename the identifier bound in a recursive let with a single recursively bound identifier.  Optionally takes a suggested new name.
 alphaLetRecOne :: Maybe TH.Name -> RewriteH CoreExpr
@@ -242,11 +258,14 @@ alphaConsRecId mn v = setFailMsg (wrongFormForAlpha "ProgCons (Rec bs) p") $
                                      (replaceIdR v v')
                                      (\ bs e -> ProgCons (Rec $ (map.first) (replaceId v v') bs) e)
 
+-- | Rename the specified identifiers bound in a program node containing a recursive binding group.
+alphaConsRecIds :: [Id] -> RewriteH CoreProg
+alphaConsRecIds = andR . map (alphaConsRecId Nothing)
+
 -- | Rename all identifiers bound in a recursive top-level binder.
 alphaConsRec :: RewriteH CoreProg
 alphaConsRec = setFailMsg (wrongFormForAlpha "ProgCons (Rec bs) p") $
-               do ProgCons (Rec bs) _ <- idR
-                  andR $ map (alphaConsRecId Nothing . fst) bs
+               progConsT recVarsT mempty (\ vs () -> vs) >>= alphaConsRecIds
 
 -- | Rename the identifier bound in a recursive top-level binder with a single recursively bound identifier.  Optionally takes a suggested new name.
 alphaConsRecOne :: Maybe TH.Name -> RewriteH CoreProg
@@ -270,23 +289,6 @@ alpha = setFailMsg "Cannot alpha-rename here." $
            promoteExprR (alphaLam Nothing <+ alphaCaseBinder Nothing <+ alphaLet)
         <+ promoteProgR alphaCons
         <+ promoteAltR alphaAlt
-
------------------------------------------------------------------------
-
--- | Rename local variables with manifestly unique names (x, x0, x1, ...).
---   Does not rename top-level definitions (though this may change in the future).
-unshadow :: RewriteH Core
-unshadow = setFailMsg "No shadows to eliminate." $
-           anytdR (promoteExprR unshadowExpr <+ promoteAltR unshadowAlt)
-
-  where
-    unshadowExpr :: RewriteH CoreExpr
-    unshadowExpr = do guardShadowingT (boundIdsT `mappend` freeVarsT) (letVarsT <+ fmap return (caseWildVarT <+ lamVarT))
-                      alphaLam Nothing <+ alphaLet <+ alphaCaseBinder Nothing
-
-    unshadowAlt :: RewriteH CoreAlt
-    unshadowAlt = do guardShadowingT (boundIdsT `mappend` altFreeVarsT) altVarsT
-                     alphaAlt
 
 -----------------------------------------------------------------------
 
