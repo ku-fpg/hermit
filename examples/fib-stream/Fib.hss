@@ -1,14 +1,12 @@
 flatten-module
 consider 'fib
 {
-load "../WWSplitTactic.hss"
-{ 0 ; 1
-  { 0
-    any-call (unfold 'unwrap)
+  load "../WWSplitTactic.hss"
+  {rhs-of 'work
+    unfold 'unwrap
     any-call (unfold 'f)
     { consider lam ; alpha-lam 'm }
   }
-}
-innermost dead-let-elimination
-any-call (unfold 'wrap)
+  simplify
+  any-call (unfold 'wrap)
 }
