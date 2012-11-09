@@ -3,7 +3,7 @@ consider 'fib
 
 {
 
-load "WWSplitTactic.hss"
+load "../WWSplitTactic.hss"
 consider 'work ; remember origwork
 
 -- work = unwrap (f (wrap work))

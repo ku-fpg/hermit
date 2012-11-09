@@ -1,6 +1,6 @@
 flatten-module
 consider 'fac
-load "WWSplitTactic.hss"
+load "../WWSplitTactic.hss"
 {
   0 ; 1
   {

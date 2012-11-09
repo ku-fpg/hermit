@@ -1,7 +1,7 @@
 flatten-module
 consider 'fib
 {
-load "WWSplitTactic.hss"
+load "../WWSplitTactic.hss"
 { 0 ; 1
   { 0
     any-call (unfold 'unwrap)

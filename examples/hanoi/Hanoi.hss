@@ -2,7 +2,7 @@ flatten-module
 
 -- do the w/w split
 consider 'hanoi
-{ load "../fib-tuple/WWSplitTactic.hss" }
+{ load "../WWSplitTactic.hss" }
 
 { consider 'work
   remember origwork
