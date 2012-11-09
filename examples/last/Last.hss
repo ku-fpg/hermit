@@ -1,34 +1,20 @@
 flatten-module
 consider 'last
-consider 'last
-fix-intro
-{ 0
-  { 1
-    let-intro 'f
+{consider 'last
+  load "../WWSplitTactic.hss"
+  {rhs-of 'work
+     eta-expand 'b
+     0
+     eta-expand 'bs
+     0
+     unfold 'unwrap
+     unfold 'f
+     case-reduce
+     consider app
+     unfold 'wrap
+     case-reduce
   }
-  let-float-arg
-  { 1
-    unfold-rule "ww"
-    1
-    unfold 'fix
-    alpha-let 'work
-    0
-    0
-    0
-    any-td (unfold '.)
-    eta-expand 'b
-    0
-    eta-expand 'bs
-    0
-    unfold 'unwrap
-    unfold 'f
-    case-reduce
-    consider app
-    unfold 'wrap
-    case-reduce
-  }
-  dead-let-elimination
-  let-float-arg
-  1
-  unfold 'wrap
 }
+simplify
+any-call (unfold 'wrap)
+
