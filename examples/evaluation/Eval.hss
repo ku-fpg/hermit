@@ -1,23 +1,19 @@
 flatten-module
 consider 'eval
 load "../WWSplitTactic.hss"
-{ 0
-  alpha-let 'body
-  1
-  { 1 ; unfold 'wrap }
-  { 0 ; 0 ; 0
-    eta-expand 'e ; down
-    eta-expand 's ; down
-    eta-expand 'f ; down
-    unfold 'unwrap
-    one-td (unfold 'body)
-    bash
-    {
-      consider case ; 2 ; 0 ; abstract 'm
-      consider case ; 2 ; 0 ; abstract 'n
-    }
-    any-bu (fold 'unwrap)
-    any-bu (unfold-rule "fusion")
-  }
+{rhs-of 'work
+   eta-expand 'e ; 0
+   eta-expand 's ; 0
+   eta-expand 'f ; 0
+   unfold 'unwrap
+   one-td (unfold 'f)
+   bash
+   {
+     consider case ; 2 ; 0 ; abstract 'm
+     consider case ; 2 ; 0 ; abstract 'n
+   }
+   any-bu (fold 'unwrap)
+   any-bu (unfold-rule "fusion")
 }
-bash
+simplify
+any-call (unfold 'wrap)
