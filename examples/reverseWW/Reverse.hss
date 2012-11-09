@@ -1,0 +1,29 @@
+flatten-module
+consider 'rev
+{consider 'rev
+  load "../WWSplitTactic.hss"
+  {rhs-of 'work
+     any-call (unfold 'wrap)
+     any-call (unfold 'f)
+     any-call (unfold 'unwrap)
+     any-call (unfold '.)
+     simplify
+     alpha-lam 'ys
+     {0
+       eta-expand 'acc
+       innermost case-float
+       one-td (unfold-rule "repH []")
+       one-td (unfold 'id)
+       one-td (unfold-rule "repH ++")
+       one-td (unfold-rule "rep-abs-fusion")
+       one-td (unfold 'repH)
+       any-call (unfold '.)
+       any-call (unfold-rule "(:) ++")
+       any-call (unfold-rule "[] ++")
+     }
+  }
+}
+any-call (unfold 'wrap)
+any-call (unfold '.)
+any-call (unfold 'absH)
+simplify

@@ -1,28 +1,20 @@
 flatten-module
 consider 'fac
 load "../WWSplitTactic.hss"
-{
-  0 ; 1
+{rhs-of 'work
+  eta-expand 'x
+  one-td (unfold 'unwrap)
+  one-td (unfold 'f)
+  one-td (unfold 'wrap)
+  simplify
   {
-    1
-    eta-expand 'n
-    one-td (unfold 'wrap)
+    consider alt ; 0 ; case-float-arg
+    consider alt ; 0 ; case-float-arg
   }
-  {
-    0 ; 0 ; 0
-    eta-expand 'x
-    one-td (unfold 'unwrap)
-    one-td (unfold 'f)
-    one-td (unfold 'wrap)
-    simplify
-    {
-      consider alt ; 0 ; case-float-arg
-      consider alt ; 0 ; case-float-arg
-    }
   one-td (unfold '-)
   one-td (unfold '*)
   simplify
   innermost case-float-case
-  }
 }
 simplify
+{ consider let ; 1 ; eta-expand 'n ; any-call (unfold 'wrap) }

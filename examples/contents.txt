@@ -161,23 +161,24 @@ Quicksort
 * Main rewrites: any-call
 
 
-Reverse
-=======
+Reverse and ReverseWW
+=====================
 
 * Higher-level script than in the Haskell 2012 paper.
+
+* The WW version uses the WW-Split Tactic.
 
 * Completed.  Lower-level version has been published.
 
 * Main rewrites: any-call
 
 
+
+
 Talks
 =====
 
-* This directory is for the code that Neil intends to demo at Nottingham, IFL and Haskell.
-
-* Don't mess with it without telling him!
-
+* This directory is for the code that Neil demonstrated at Nottingham, IFL, Haskell and MVD.
 
 
 To Do
