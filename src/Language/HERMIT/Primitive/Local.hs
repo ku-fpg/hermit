@@ -78,8 +78,10 @@ externals =
 
 -- | NonRec v e ==> Rec [Def v e]
 nonrecToRec :: RewriteH CoreBind
-nonrecToRec = setFailMsg (wrongExprForm "NonRec v e") $
+nonrecToRec = prefixFailMsg "Converting non-recursive binding to recursive binding failed: " $
+              setFailMsg (wrongExprForm "NonRec v e") $
   do NonRec v e <- idR
+     guardMsg (isId v) "type variables cannot be defined recursively."
      return $ Rec [(v,e)]
 
 ------------------------------------------------------------------------------
@@ -146,28 +148,28 @@ betaExpand = setFailMsg ("Beta-expansion failed: " ++ wrongExprForm "Let (NonRec
 -- | (\\ v -> e1 v) ==> e1
 etaReduce :: RewriteH CoreExpr
 etaReduce = prefixFailMsg "Eta-reduction failed: " $
-            withPatFailMsg (wrongExprForm "Lam v1 (App f (Var v2))") $
-       (do Lam v1 (App f (Var v2)) <- idR
-           guardMsg (v1 == v2) "the expression has the right form, but the variables are not equal."
-           guardMsg (v1 `notElem` coreExprFreeIds f) $ var2String v1 ++ " is free in the function being applied."
-           return f) <+
-       (do Lam v1 (App f (Type ty)) <- idR
-           Just v2 <- return (getTyVar_maybe ty)
-           guardMsg (v1 == v2) "type variables are not equal."
-           guardMsg (v1 `notElem` coreExprFreeVars f) $ var2String v1 ++ " is free in the function being applied."
-           return f)
+            withPatFailMsg (wrongExprForm "Lam v1 (App f e)") $
+            do Lam v1 (App f e) <- idR
+               case e of
+                  Var v2  -> guardMsg (v1 == v2) "the expression has the right form, but the variables are not equal."
+                  Type ty -> case getTyVar_maybe ty of
+                               Nothing -> fail "the argument expression is not a type variable."
+                               Just v2 -> guardMsg (v1 == v2) "type variables are not equal."
+                  _       -> fail "the argument expression is not a variable."
+               guardMsg (v1 `notElem` coreExprFreeIds f) $ var2String v1 ++ " is free in the function being applied."
+               return f
 
 -- | e1 ==> (\\ v -> e1 v)
 etaExpand :: TH.Name -> RewriteH CoreExpr
 etaExpand nm = prefixFailMsg "Eta-expansion failed: " $
-               contextfreeT $ \ e ->
-        case splitFunTy_maybe (exprType e) of
-          Just (arg_ty, _) -> do v1 <- newIdH (show nm) arg_ty
-                                 return $ Lam v1 (App e (Var v1))
-          _ -> case splitForAllTy_maybe (exprType e) of
-                  Just (v,_) -> do v1 <- newTypeVarH (show nm) (tyVarKind v)
-                                   return $ Lam v1 (App e (Type (mkTyVarTy v1)))
-                  Nothing -> fail "TODO: Add useful error message here."
+               contextfreeT $ \ e -> let ty = exprType e in
+        case splitFunTy_maybe ty of
+          Just (argTy, _) -> do v <- newIdH (show nm) argTy
+                                return $ Lam v (App e (Var v))
+          Nothing         -> case splitForAllTy_maybe ty of
+                               Just (tv,_) -> do v <- newTypeVarH (show nm) (tyVarKind tv)
+                                                 return $ Lam v (App e (Type (mkTyVarTy v)))
+                               Nothing -> fail "type of expression is not a function or a forall."
 
 -- | Perform multiple eta-expansions.
 multiEtaExpand :: [TH.Name] -> RewriteH CoreExpr
