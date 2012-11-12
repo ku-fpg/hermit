@@ -93,6 +93,7 @@ letToCase :: RewriteH CoreExpr
 letToCase = prefixFailMsg "Converting Let to Case failed: " $
             withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
   do Let (NonRec v ev) _ <- idR
+     guardMsg (not $ isType ev) "cannot case on a type."
      nameModifier <- freshNameGenT Nothing
      caseBndr <- constT (cloneVarH nameModifier v)
      letT mempty (replaceIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
@@ -150,8 +151,10 @@ letFloatExpr = setFailMsg "Unsuitable expression for Let floating." $
 
 -- | NonRec v (Let (NonRec w ew) ev) `ProgCons` p ==> NonRec w ew `ProgCons` NonRec v ev `ProgCons` p
 letFloatLetTop :: RewriteH CoreProg
-letFloatLetTop = setFailMsg ("Let floating to top level failed: " ++ wrongExprForm "NonRec v (Let (NonRec w ew) ev) `ProgCons` p") $
+letFloatLetTop = prefixFailMsg "Let floating to top level failed: " $
+                 withPatFailMsg (wrongExprForm "NonRec v (Let (NonRec w ew) ev) `ProgCons` p") $
   do NonRec v (Let (NonRec w ew) ev) `ProgCons` p <- idR
+     guardMsg (not $ isType ew) "type bindings are not allowed at the top level."
      return (NonRec w ew `ProgCons` NonRec v ev `ProgCons` p)
 
 -------------------------------------------------------------------------------------------
