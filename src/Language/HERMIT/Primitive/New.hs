@@ -28,8 +28,6 @@ externals ::  [External]
 externals = map ((.+ Experiment) . (.+ TODO))
          [ external "info" (info :: TranslateH Core String)
                 [ "tell me what you know about this expression or binding" ]
-         -- , external "expr-type" (promoteExprT exprTypeT :: TranslateH Core String)
-         --        [ "display the type of this expression"]
          , external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
                 [ "determines if a rewrite could be successfully applied" ]
          , external "cleanup-unfold" (promoteExprR cleanupUnfold :: RewriteH Core)
@@ -55,9 +53,12 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 ] .+ Deep
          ]
 
+------------------------------------------------------------------------------------------------------
 
 isVar :: TH.Name -> TranslateH CoreExpr ()
 isVar nm = varT (cmpTHName2Id nm) >>= guardM
+
+------------------------------------------------------------------------------------------------------
 
 simplifyR :: RewriteH Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
@@ -75,6 +76,8 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
      let numBnds = length bnds
      guardMsg (numBnds > 1) "at least two non-recursive let bindings required."
 
+     -- TODO: check the expressions are not types (or that the ids are actually Ids).
+
       -- check if tupling the bindings would cause unbound variables
      let (ids, rhss) = unzip bnds
          rhsTypes    = map exprType rhss
@@ -84,7 +87,7 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
        then do tupleConId <- findIdT $ TH.mkName $ "(" ++ replicate (numBnds - 1) ',' ++ ")"
                case isDataConId_maybe tupleConId of
                  Nothing -> fail "cannot find tuple data constructor."
-                 Just dc -> let rhs     = mkCoreApps (Var tupleConId) $ map Type rhsTypes ++ rhss
+                 Just dc -> let rhs = mkCoreApps (Var tupleConId) $ map Type rhsTypes ++ rhss
                              in constT $ do wild <- newIdH (show nm) (exprType rhs)
                                             return $ Case rhs wild (exprType body) [(DataAlt dc, ids, body)]
 
@@ -94,36 +97,7 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
 -- let v = E1 in E2 E3 <=> E2 (let v = E1 in E3)
 
-
--- letTupleR :: TH.Name -> RewriteH CoreExpr
--- letTupleR nm = translate $ \ c e -> do
---     let collectLets :: CoreExpr -> ([(Id, CoreExpr)],CoreExpr)
---         collectLets (Let (NonRec x e1) e2) = let (bs,expr) = collectLets e2
---                                              in ((x,e1):bs, expr)
---         collectLets expr = ([],expr)
-
---         (bnds, body) = collectLets e
-
---     guardMsg (length bnds > 1) "cannot tuple: need at least two nonrec lets"
-
---     -- check if tupling the bindings would cause unbound variables
---     let (ids, rhss) = unzip bnds
---     frees <- mapM (apply freeVarsT c) (drop 1 rhss)
---     let used = concat $ zipWith intersect (map (`take` ids) [1..]) frees
---     if null used
---       then do
---         tupleConId <- findId c $ "(" ++ replicate (length bnds - 1) ',' ++ ")"
-
---         let rhs = mkCoreApps (Var tupleConId) $ map (Type . exprType) rhss ++ rhss
---             varList = concat $ iterate (zipWith (flip (++)) $ repeat "0") $ map (:[]) ['a'..'z']
---         dc <- maybe (fail "cannot find tuple datacon") return $ isDataConId_maybe tupleConId
---         vs <- zipWithM newVarH varList $ dataConInstOrigArgTys dc $ map exprType rhss
-
---         letId <- newVarH (show nm) (exprType rhs)
---         return $ Let (NonRec letId rhs)
---                  $ foldr (\ (i,(v,oe)) b -> Let (NonRec v (Case (Var letId) letId (exprType oe) [(DataAlt dc, vs, Var $ vs !! i)])) b)
---                          body $ zip [0..] bnds
---       else fail "cannot tuple: some bindings are used in the rhs of others"
+------------------------------------------------------------------------------------------------------
 
 -- A few Queries.
 
@@ -135,7 +109,7 @@ info = translate $ \ c core -> do
              con      = "Constructor: " ++ coreConstructor core
              bds      = "Bindings in Scope: " ++ show (map unqualifiedIdName $ boundVars c)
              expExtra = case core of
-                          ExprCore e -> ["Type: " ++ showExprType dynFlags e] ++
+                          ExprCore e -> ["Type: " ++ showExprTypeOrKind dynFlags e] ++
                                         ["Free Variables: " ++ showVars (coreExprFreeVars e)] ++
                                            case e of
                                              Var v -> ["Identifier Info: " ++ showIdInfo dynFlags v]
@@ -144,14 +118,8 @@ info = translate $ \ c core -> do
 
          return (intercalate "\n" $ [pa,node,con,bds] ++ expExtra)
 
--- Subsumed by "info".
--- exprTypeT :: TranslateH CoreExpr String
--- exprTypeT = contextfreeT $ \ e -> do
---     dynFlags <- getDynFlags
---     return $ showExprType dynFlags e
-
-showExprType :: DynFlags -> CoreExpr -> String
-showExprType dynFlags = showPpr dynFlags . exprType
+showExprTypeOrKind :: DynFlags -> CoreExpr -> String
+showExprTypeOrKind dynFlags = showPpr dynFlags . exprTypeOrKind
 
 showIdInfo :: DynFlags -> Id -> String
 showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
@@ -192,6 +160,7 @@ testQuery r = f <$> testM r
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."
 
+------------------------------------------------------------------------------------------------------
 
 -- | cleanupUnfold cleans a unfold operation
 --  (for example, an inline or rule application)
@@ -226,6 +195,7 @@ withUnfold rr = prefixFailMsg "any-call failed: " $
         rec :: RewriteH Core
         rec = withUnfold rr
 
+------------------------------------------------------------------------------------------------------
 
 -- | Push a function through a Case or Let expression.
 --   Unsafe if the function is not strict.
@@ -242,3 +212,5 @@ push nm = prefixFailMsg "push failed: " $
                      Let {}  -> letFloatArg
                      _       -> fail "argument is not a Case or Let."
           _ -> fail "no function to match."
+
+------------------------------------------------------------------------------------------------------

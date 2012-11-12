@@ -15,6 +15,7 @@ module Language.HERMIT.Core
             -- * Utilities
           , isType
           , typeExprToType
+          , exprTypeOrKind
           , appCount
 ) where
 
@@ -97,6 +98,12 @@ typeExprToType :: CoreExpr -> Maybe Type
 typeExprToType (Type t)            = Just t
 typeExprToType (Var v) | isTKVar v = Just (mkTyVarTy v)
 typeExprToType _                   = Nothing
+
+-- | GHC's 'exprType' function throws an error if applied to a 'Type' (but, inconsistently, return a 'Kind' if applied to a type variable).
+--   This function returns the 'Kind' of a 'Type', but otherwise behaves as 'exprType'.
+exprTypeOrKind :: CoreExpr -> Type
+exprTypeOrKind (Type t) = typeKind t
+exprTypeOrKind e        = exprType e
 
 -----------------------------------------------------------------------
 

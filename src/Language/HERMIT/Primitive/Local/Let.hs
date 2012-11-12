@@ -74,8 +74,9 @@ letExternals =
 
 -- | e => (let v = e in v), name of v is provided
 letIntro ::  TH.Name -> RewriteH CoreExpr
-letIntro nm = prefixFailMsg "Let introduction failed: " $
-              contextfreeT $ \ e -> do v <- newIdH (show nm) (exprType e)
+letIntro nm = prefixFailMsg "Let-introduction failed: " $
+              contextfreeT $ \ e -> do guardMsg (not $ isType e) "let expressions may not return a type."
+                                       v <- newIdH (show nm) (exprTypeOrKind e)
                                        return $ Let (NonRec v e) (Var v)
 
 -- | Remove an unused let binding.

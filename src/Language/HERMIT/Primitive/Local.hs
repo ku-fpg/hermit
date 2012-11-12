@@ -167,7 +167,7 @@ etaExpand nm = prefixFailMsg "Eta-expansion failed: " $
           Just (argTy, _) -> do v <- newIdH (show nm) argTy
                                 return $ Lam v (App e (Var v))
           Nothing         -> case splitForAllTy_maybe ty of
-                               Just (tv,_) -> do v <- newTypeVarH (show nm) (tyVarKind tv)
+                               Just (tv,_) -> do v <- newTyVarH (show nm) (tyVarKind tv)
                                                  return $ Lam v (App e (Type (mkTyVarTy v)))
                                Nothing -> fail "type of expression is not a function or a forall."
 

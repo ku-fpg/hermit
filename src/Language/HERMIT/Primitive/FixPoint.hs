@@ -96,7 +96,7 @@ fixSpecialization' = do
 
 
         v3 <- constT $ newIdH "f" t' -- (funArgTy t')
-        v4 <- constT $ newTypeVarH "a" (tyVarKind v2)
+        v4 <- constT $ newTyVarH "a" (tyVarKind v2)
 
          -- f' :: \/ a -> T [a] -> (\/ b . T [b])
         let f' = Lam v4  (Cast (Var v3)
