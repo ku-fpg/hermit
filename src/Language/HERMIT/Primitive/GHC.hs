@@ -27,7 +27,6 @@ import qualified OccurAnal
 
 import Control.Arrow
 import Control.Monad
-import qualified Data.Map as Map
 import Data.List (intercalate,mapAccumL,(\\))
 
 import Language.HERMIT.Core
@@ -76,7 +75,7 @@ externals =
                                         .+ Introduce
          , external "cast-elim" (promoteExprR castElimination)
                 ["cast-elim removes casts"]
-                                        .+ Shallow .+ TODO
+                                        .+ Shallow .+ Experiment .+ TODO
          , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
                 ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
          , external "occur-analysis" (promoteExprR occurAnalyseExprR :: RewriteH Core)
@@ -131,10 +130,12 @@ letSubstR =  prefixFailMsg "Let substition failed: " $
                                      Let (NonRec b be) e -> apply (substExprR b be) c e
                                      _ -> fail "expression is not a non-recursive Let."
 
--- | Perform let-substitution the specified number of times.
-letSubstNR :: Int -> RewriteH Core
-letSubstNR 0 = idR
-letSubstNR n = childR 1 (letSubstNR (n - 1)) >>> promoteExprR letSubstR
+
+-- Neil: Commented this out as it's not (currently) used.
+--  Perform let-substitution the specified number of times.
+-- letSubstNR :: Int -> RewriteH Core
+-- letSubstNR 0 = idR
+-- letSubstNR n = childR 1 (letSubstNR (n - 1)) >>> promoteExprR letSubstR
 
 -- | This is quite expensive (O(n) for the size of the sub-tree).
 safeLetSubstR :: RewriteH CoreExpr
@@ -283,11 +284,12 @@ lookupRule :: (Activation -> Bool)	-- When rule is active
 	    -> [CoreRule] -> Maybe (CoreRule, CoreExpr)
 -}
 
-rulesToEnv :: [CoreRule] -> Map.Map String (RewriteH CoreExpr)
-rulesToEnv rs = Map.fromList
-        [ ( unpackFS (ruleName r), rulesToRewriteH [r] )
-        | r <- rs
-        ]
+-- Neil: Commented this out as its not (currently) used.
+-- rulesToEnv :: [CoreRule] -> Map.Map String (RewriteH CoreExpr)
+-- rulesToEnv rs = Map.fromList
+--         [ ( unpackFS (ruleName r), rulesToRewriteH [r] )
+--         | r <- rs
+--         ]
 
 rulesToRewriteH :: [CoreRule] -> RewriteH CoreExpr
 rulesToRewriteH rs = translate $ \ c e -> do
@@ -395,12 +397,6 @@ lookupUsageDetails = lookupVarEnv
 
 -}
 
-{-
-joinT :: TranslateH a (TranslateH b c) -> (a -> TranslateH b c)
-joinT f e0 = translate $ \ c e1 -> do
-                t <- apply f c e0
-                apply t c e1
--}
 
 exprEqual :: CoreExpr -> CoreExpr -> Bool
 exprEqual e1 e2 = eqExpr (mkInScopeSet $ exprsFreeVars [e1, e2]) e1 e2
