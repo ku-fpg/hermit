@@ -28,7 +28,7 @@ import qualified OccurAnal
 import Control.Arrow
 import Control.Monad
 import qualified Data.Map as Map
-import Data.List (mapAccumL,(\\))
+import Data.List (intercalate,mapAccumL,(\\))
 
 import Language.HERMIT.Core
 import Language.HERMIT.Context
@@ -43,10 +43,12 @@ import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------
 
--- | Externals that reflect GHC functions.
+-- | Externals that reflect GHC functions, or are derived from GHC functions.
 externals :: [External]
 externals =
-         [ external "let-subst" (promoteExprR letSubstR :: RewriteH Core)
+         [ external "info" (info :: TranslateH Core String)
+                [ "display information about the current node." ]
+         , external "let-subst" (promoteExprR letSubstR :: RewriteH Core)
                 [ "Let substitution"
                 , "(let x = e1 in e2) ==> (e2[e1/x])"
                 , "x must not be free in e1." ]                           .+ Deep
@@ -166,6 +168,62 @@ safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
 -- the end of the stack of lets.
 safeLetSubstPlusR :: RewriteH CoreExpr
 safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
+
+------------------------------------------------------------------------
+
+info :: TranslateH Core String
+info = translate $ \ c core -> do
+         dynFlags <- getDynFlags
+         let pa       = "Path: " ++ show (contextPath c)
+             node     = "Node: " ++ coreNode core
+             con      = "Constructor: " ++ coreConstructor core
+             bds      = "Bindings in Scope: " ++ show (map unqualifiedVarName $ boundVars c)
+             expExtra = case core of
+                          ExprCore e -> ["Type or Kind: " ++ showExprTypeOrKind dynFlags e] ++
+                                        ["Free Variables: " ++ showVars (coreExprFreeVars e)]
+                                           --  ++
+                                           -- case e of
+                                           --   Var v -> ["Identifier Info: " ++ showIdInfo dynFlags v] -- TODO: what if this is a TyVar?
+                                           --   _     -> []
+                          _          -> []
+
+         return (intercalate "\n" $ [pa,node,con,bds] ++ expExtra)
+
+showExprTypeOrKind :: DynFlags -> CoreExpr -> String
+showExprTypeOrKind dynFlags = showPpr dynFlags . exprTypeOrKind
+
+-- showIdInfo :: DynFlags -> Id -> String
+-- showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
+
+coreNode :: Core -> String
+coreNode (ModGutsCore _) = "Module"
+coreNode (ProgCore _)    = "Program"
+coreNode (BindCore _)    = "Binding Group"
+coreNode (DefCore _)     = "Recursive Definition"
+coreNode (ExprCore _)    = "Expression"
+coreNode (AltCore _)     = "Case Alternative"
+
+coreConstructor :: Core -> String
+coreConstructor (ModGutsCore _)    = "ModGuts"
+coreConstructor (ProgCore prog)    = case prog of
+                                       ProgNil      -> "ProgNil"
+                                       ProgCons _ _ -> "ProgCons"
+coreConstructor (BindCore bnd)     = case bnd of
+                                       Rec _      -> "Rec"
+                                       NonRec _ _ -> "NonRec"
+coreConstructor (DefCore _)        = "Def"
+coreConstructor (AltCore _)        = "(,,)"
+coreConstructor (ExprCore expr)    = case expr of
+                                       Var _        -> "Var"
+                                       Type _       -> "Type"
+                                       Lit _        -> "Lit"
+                                       App _ _      -> "App"
+                                       Lam _ _      -> "Lam"
+                                       Let _ _      -> "Let"
+                                       Case _ _ _ _ -> "Case"
+                                       Cast _ _     -> "Cast"
+                                       Tick _ _     -> "Tick"
+                                       Coercion _   -> "Coercion"
 
 ------------------------------------------------------------------------
 
@@ -305,7 +363,7 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
              , (v,e) <- case top_bnds of
                             Rec bnds -> bnds
                             NonRec b e -> [(b,e)]
-             ,  nm `cmpTHName2Id` v
+             ,  nm `cmpTHName2Var` v
              ] of
          [] -> fail $ "cannot find binding " ++ show nm
          [(v,e)] -> return $ modGuts { mg_rules = mg_rules modGuts

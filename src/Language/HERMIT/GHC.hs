@@ -5,12 +5,12 @@ module Language.HERMIT.GHC
         , var2String
         , thRdrNameGuesses
         , name2THName
-        , id2THName
+        , var2THName
         , cmpTHName2Name
         , cmpString2Name
-        , cmpTHName2Id
-        , cmpString2Id
-        , unqualifiedIdName
+        , cmpTHName2Var
+        , cmpString2Var
+        , unqualifiedVarName
         , findNameFromTH
         , alphaTyVars
         , Type(..)
@@ -33,7 +33,6 @@ import qualified Language.Haskell.TH as TH
 
 --------------------------------------------------------------------------
 
--- idName :: Id -> Name
 -- varName :: Var -> Name
 -- nameOccName :: Name -> OccName
 -- occNameString :: OccName -> String
@@ -52,13 +51,13 @@ var2String = occNameString . nameOccName . varName -- TODO: would getOccString b
 name2THName :: Name -> TH.Name
 name2THName = TH.mkName . getOccString
 
--- | Converts an 'Id' to a Template Haskell 'TH.Name', going via a 'String'.
-id2THName :: Id -> TH.Name
-id2THName = name2THName . idName
+-- | Converts an 'Var' to a Template Haskell 'TH.Name', going via a 'String'.
+var2THName :: Var -> TH.Name
+var2THName = name2THName . varName
 
--- | Get the unqualified name from an Id/Var.
-unqualifiedIdName :: Id -> String
-unqualifiedIdName = TH.nameBase . id2THName
+-- | Get the unqualified name from an Var.
+unqualifiedVarName :: Var -> String
+unqualifiedVarName = TH.nameBase . var2THName
 
 -- | Hacks until we can find the correct way of doing these.
 cmpTHName2Name :: TH.Name -> Name -> Bool
@@ -66,15 +65,15 @@ cmpTHName2Name th_nm = cmpString2Name (TH.nameBase th_nm)
 
 -- | Hacks until we can find the correct way of doing these.
 cmpString2Name :: String -> Name -> Bool
-cmpString2Name str_nm ghc_nm = str_nm == getOccString ghc_nm -- occNameString (nameOccName ghc_nm)
+cmpString2Name str nm = str == getOccString nm -- occNameString (nameOccName ghc_nm)
 
 -- | Hacks until we can find the correct way of doing these.
-cmpTHName2Id :: TH.Name -> Id -> Bool
-cmpTHName2Id nm = cmpTHName2Name nm . idName
+cmpTHName2Var :: TH.Name -> Var -> Bool
+cmpTHName2Var nm = cmpTHName2Name nm . varName
 
 -- | Hacks until we can find the correct way of doing these.
-cmpString2Id :: String -> Id -> Bool
-cmpString2Id str_nm = cmpString2Name str_nm . idName
+cmpString2Var :: String -> Var -> Bool
+cmpString2Var str = cmpString2Name str . varName
 
 -- | This is hopeless O(n), because the we could not generate the 'OccName's that match,
 -- for use of the GHC 'OccEnv'.

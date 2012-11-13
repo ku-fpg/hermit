@@ -96,7 +96,7 @@ letToCase = prefixFailMsg "Converting Let to Case failed: " $
      guardMsg (not $ isType ev) "cannot case on a type."
      nameModifier <- freshNameGenT Nothing
      caseBndr <- constT (cloneVarH nameModifier v)
-     letT mempty (replaceIdR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
+     letT mempty (replaceVarR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
 
 -------------------------------------------------------------------------------------------
 

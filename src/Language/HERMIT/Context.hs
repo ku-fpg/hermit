@@ -133,6 +133,6 @@ boundIn i c = i `elem` boundVars c
 
 -- | List all variables bound in the context that match the given name.
 findBoundVars :: TH.Name -> HermitC -> [Var]
-findBoundVars nm = filter (cmpTHName2Id nm) . boundVars
+findBoundVars nm = filter (cmpTHName2Var nm) . boundVars
 
 ------------------------------------------------------------------------

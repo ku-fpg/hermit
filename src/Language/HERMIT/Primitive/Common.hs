@@ -97,7 +97,7 @@ altVarsT = altT mempty (\ _ vs () -> vs)
 -- Need a better error type so that we can factor out the repetition.
 
 -- | Lifted version of 'boundVars'.
-boundVarsT :: TranslateH a [Id]
+boundVarsT :: TranslateH a [Var]
 boundVarsT = contextonlyT (return . boundVars)
 
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.

@@ -22,6 +22,8 @@ import Control.Arrow
 
 import qualified Language.Haskell.TH as TH
 
+---------------------------------------------------------------------------------------
+
 -- | 'External's involving navigating to named entities.
 externals :: [External]
 externals = map (.+ Navigation)
@@ -37,6 +39,8 @@ externals = map (.+ Navigation)
                 [ "binding-group-of '<v> focuses on the binding group that binds the variable <v>" ]
             ]
 
+---------------------------------------------------------------------------------------
+
 -- | Find the path to the RHS of the binding group of the given name.
 bindingGroupOf :: TH.Name -> TranslateH Core Path
 bindingGroupOf = oneNonEmptyPathToT . bindGroup
@@ -51,14 +55,14 @@ rhsOf nm = onePathToT (namedBinding nm) >>^ (++ [0])
 
 -- | Verify that this is a binding group defining the given name.
 bindGroup :: TH.Name -> Core -> Bool
-bindGroup nm (BindCore (NonRec v _))  =  nm `cmpTHName2Id` v
-bindGroup nm (BindCore (Rec bds))     =  any (cmpTHName2Id nm . fst) bds
+bindGroup nm (BindCore (NonRec v _))  =  nm `cmpTHName2Var` v
+bindGroup nm (BindCore (Rec bds))     =  any (cmpTHName2Var nm . fst) bds
 bindGroup _  _                        =  False
 
 -- | Verify that this is the definition of the given name.
 namedBinding :: TH.Name -> Core -> Bool
-namedBinding nm (BindCore (NonRec v _))  =  nm `cmpTHName2Id` v
-namedBinding nm (DefCore (Def v _))      =  nm `cmpTHName2Id` v
+namedBinding nm (BindCore (NonRec v _))  =  nm `cmpTHName2Var` v
+namedBinding nm (DefCore (Def v _))      =  nm `cmpTHName2Var` v
 namedBinding _  _                        =  False
 
 -- | Find all the possible targets of \"consider\".
@@ -66,13 +70,13 @@ considerTargets :: TranslateH Core [String]
 considerTargets = allT $ collectT (promoteBindT nonRec <+ promoteDefT def)
     where
       nonRec :: TranslateH CoreBind String
-      nonRec = nonRecT (return ()) idToString
+      nonRec = nonRecT (return ()) constUnq
 
       def :: TranslateH CoreDef String
-      def = defT (return ()) idToString
+      def = defT (return ()) constUnq
 
-      idToString :: Id -> () -> String
-      idToString v () = unqualifiedIdName v
+      constUnq :: Var -> () -> String
+      constUnq v () = unqualifiedVarName v
 
 
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetIn | CaseOf | Casty | Ticky | TypeVar | Coerce
@@ -121,3 +125,5 @@ underConsideration Ticky       (ExprCore (Tick _ _))      = True
 underConsideration TypeVar     (ExprCore (Type _))        = True
 underConsideration Coerce      (ExprCore (Coercion _))    = True
 underConsideration _           _                          = False
+
+---------------------------------------------------------------------------------------

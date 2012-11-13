@@ -6,10 +6,9 @@ import GhcPlugins as GHC hiding (varName)
 import Control.Applicative
 import Control.Arrow
 
-import Data.List(intercalate,intersect)
+import Data.List(intersect)
 
 import Language.HERMIT.Core
-import Language.HERMIT.Context
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
@@ -26,9 +25,7 @@ import qualified Language.Haskell.TH as TH
 
 externals ::  [External]
 externals = map ((.+ Experiment) . (.+ TODO))
-         [ external "info" (info :: TranslateH Core String)
-                [ "tell me what you know about this expression or binding" ]
-         , external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
+         [ external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
                 [ "determines if a rewrite could be successfully applied" ]
          , external "cleanup-unfold" (promoteExprR cleanupUnfold :: RewriteH Core)
                 [ "clean up immeduate nested fully-applied lambdas, from the bottom up"]
@@ -55,8 +52,9 @@ externals = map ((.+ Experiment) . (.+ TODO))
 
 ------------------------------------------------------------------------------------------------------
 
+-- TODO: what about Type constructors around TyVars?
 isVar :: TH.Name -> TranslateH CoreExpr ()
-isVar nm = varT (cmpTHName2Id nm) >>= guardM
+isVar nm = varT (cmpTHName2Var nm) >>= guardM
 
 ------------------------------------------------------------------------------------------------------
 
@@ -65,7 +63,7 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
             innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ letElim))
 
 
-collectLets :: CoreExpr -> ([(Id, CoreExpr)],CoreExpr)
+collectLets :: CoreExpr -> ([(Var, CoreExpr)],CoreExpr)
 collectLets (Let (NonRec x e1) e2) = let (bs,expr) = collectLets e2 in ((x,e1):bs, expr)
 collectLets expr                   = ([],expr)
 
@@ -76,20 +74,21 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
      let numBnds = length bnds
      guardMsg (numBnds > 1) "at least two non-recursive let bindings required."
 
-     -- TODO: check the expressions are not types (or that the ids are actually Ids).
+     let (vs, rhss)  = unzip bnds
+     guardMsg (all isId vs) "cannot tuple type variables." -- TODO: it'd be better if collectLets stopped on reaching a TyVar
 
-      -- check if tupling the bindings would cause unbound variables
-     let (ids, rhss) = unzip bnds
-         rhsTypes    = map exprType rhss
-         frees       = mapM coreExprFreeVars (drop 1 rhss)
-         used        = concat $ zipWith intersect (map (`take` ids) [1..]) frees
+     -- check if tupling the bindings would cause unbound variables
+     let
+         rhsTypes = map exprType rhss
+         frees    = map coreExprFreeVars (drop 1 rhss)
+         used     = concat $ zipWith intersect (map (`take` vs) [1..]) frees
      if null used
        then do tupleConId <- findIdT $ TH.mkName $ "(" ++ replicate (numBnds - 1) ',' ++ ")"
                case isDataConId_maybe tupleConId of
                  Nothing -> fail "cannot find tuple data constructor."
                  Just dc -> let rhs = mkCoreApps (Var tupleConId) $ map Type rhsTypes ++ rhss
                              in constT $ do wild <- newIdH (show nm) (exprType rhs)
-                                            return $ Case rhs wild (exprType body) [(DataAlt dc, ids, body)]
+                                            return $ Case rhs wild (exprType body) [(DataAlt dc, vs, body)]
 
        else fail $ "the following bound variables are used in subsequent bindings: " ++ showVars used
 
@@ -98,61 +97,6 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
 -- let v = E1 in E2 E3 <=> E2 (let v = E1 in E3)
 
 ------------------------------------------------------------------------------------------------------
-
--- A few Queries.
-
-info :: TranslateH Core String
-info = translate $ \ c core -> do
-         dynFlags <- getDynFlags
-         let pa       = "Path: " ++ show (contextPath c)
-             node     = "Node: " ++ coreNode core
-             con      = "Constructor: " ++ coreConstructor core
-             bds      = "Bindings in Scope: " ++ show (map unqualifiedIdName $ boundVars c)
-             expExtra = case core of
-                          ExprCore e -> ["Type: " ++ showExprTypeOrKind dynFlags e] ++
-                                        ["Free Variables: " ++ showVars (coreExprFreeVars e)] ++
-                                           case e of
-                                             Var v -> ["Identifier Info: " ++ showIdInfo dynFlags v]
-                                             _     -> []
-                          _          -> []
-
-         return (intercalate "\n" $ [pa,node,con,bds] ++ expExtra)
-
-showExprTypeOrKind :: DynFlags -> CoreExpr -> String
-showExprTypeOrKind dynFlags = showPpr dynFlags . exprTypeOrKind
-
-showIdInfo :: DynFlags -> Id -> String
-showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
-
-coreNode :: Core -> String
-coreNode (ModGutsCore _) = "Module"
-coreNode (ProgCore _)    = "Program"
-coreNode (BindCore _)    = "Binding Group"
-coreNode (DefCore _)     = "Recursive Definition"
-coreNode (ExprCore _)    = "Expression"
-coreNode (AltCore _)     = "Case Alternative"
-
-coreConstructor :: Core -> String
-coreConstructor (ModGutsCore _)    = "ModGuts"
-coreConstructor (ProgCore prog)    = case prog of
-                                       ProgNil      -> "ProgNil"
-                                       ProgCons _ _ -> "ProgCons"
-coreConstructor (BindCore bnd)     = case bnd of
-                                       Rec _      -> "Rec"
-                                       NonRec _ _ -> "NonRec"
-coreConstructor (DefCore _)        = "Def"
-coreConstructor (AltCore _)        = "(,,)"
-coreConstructor (ExprCore expr)    = case expr of
-                                       Var _        -> "Var"
-                                       Type _       -> "Type"
-                                       Lit _        -> "Lit"
-                                       App _ _      -> "App"
-                                       Lam _ _      -> "Lam"
-                                       Let _ _      -> "Let"
-                                       Case _ _ _ _ -> "Case"
-                                       Cast _ _     -> "Cast"
-                                       Tick _ _     -> "Tick"
-                                       Coercion _   -> "Coercion"
 
 testQuery :: RewriteH Core -> TranslateH Core String
 testQuery r = f <$> testM r
@@ -204,7 +148,7 @@ push nm = prefixFailMsg "push failed: " $
      do e <- idR
         case collectArgs e of
           (Var v,args) -> do
-                  guardMsg (nm `cmpTHName2Id` v) $ "cannot find name " ++ show nm
+                  guardMsg (nm `cmpTHName2Var` v) $ "cannot find name " ++ show nm
                   guardMsg (not $ null args) $ "no argument for " ++ show nm
                   guardMsg (all isTypeArg $ init args) $ "initial arguments are not type arguments for " ++ show nm
                   case last args of

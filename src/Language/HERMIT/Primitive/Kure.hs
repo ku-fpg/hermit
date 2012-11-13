@@ -67,6 +67,8 @@ externals = map (.+ KURE)
        [ "cause a failing check to succeed, a succeeding check to fail" ] .+ Predicate
    ]
 
+------------------------------------------------------------------------------------
+
 hfocusR :: TranslateH Core Path -> RewriteH Core -> RewriteH Core
 hfocusR tp r = do p <- tp
                   pathR p r

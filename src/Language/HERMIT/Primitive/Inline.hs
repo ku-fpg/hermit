@@ -21,7 +21,6 @@ import Language.HERMIT.GHC
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Common
--- import Language.HERMIT.Primitive.Debug (traceR)
 import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Unfold hiding (externals)
 
@@ -52,7 +51,7 @@ inlineName nm = let name = TH.nameBase nm in
                 prefixFailMsg ("inline '" ++ name ++ " failed: ") $
                 withPatFailMsg (wrongExprForm "Var v") $
    do Var v <- idR
-      guardMsg (cmpTHName2Id nm v) $ name ++ " does not match " ++ var2String v ++ "."
+      guardMsg (cmpTHName2Var nm v) $ " does not match " ++ var2String v ++ "."
       inline
 
 -- | Inline the current variable.
@@ -95,6 +94,6 @@ ensureDepth d = do
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: TranslateH Core [String]
-inlineTargets = collectT $ promoteT $ whenM (testM inline) (varT unqualifiedIdName)
+inlineTargets = collectT $ promoteT $ whenM (testM inline) (varT unqualifiedVarName)
 
 ------------------------------------------------------------------------

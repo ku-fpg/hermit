@@ -74,16 +74,21 @@ fixSpecialization = do
 
 
 fixSpecialization' :: RewriteH CoreExpr
-fixSpecialization' = do
+fixSpecialization' =
+     do
         -- In normal form now
-        App (App (App (Var fx) (Type t))
+        App (App (App (Var fx) fixTyE)
                  (Lam _ (Lam v2 (App (App e _) _a2)))
             )
             a <- idR
 
+        t  <- case typeExprToType fixTyE of
+                Nothing -> fail "first argument to fix is not a type, this shouldn't have happened."
+                Just ty -> return ty
+
         t' <- case typeExprToType a of
                 Just t2           -> return (applyTy t t2)
-                Nothing           -> fail "Not a type variable." -- TODO: I've added this error message to avoid compiler-time warnings about missing cases, but this may have changed the semantics.  Generally I think this entire functions needs revisiting and cleaning up.  What's going on with all the dead-code (which I've commented out now).
+                Nothing           -> fail "Not a type variable." -- TODO:  I think this entire functions needs revisiting and cleaning up.  What's going on with all the dead-code (which I've commented out now).
 --                   Var  a2  -> mkAppTy t (exprType t2)
 --                   mkAppTy t t'
 

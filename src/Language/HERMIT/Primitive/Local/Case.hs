@@ -68,6 +68,8 @@ caseExternals =
                 , "applications for all occurances of the named variable." ]
          ]
 
+------------------------------------------------------------------------------
+
 -- | (case s of alt1 -> e1; alt2 -> e2) v ==> case s of alt1 -> e1 v; alt2 -> e2 v
 caseFloatApp :: RewriteH CoreExpr
 caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
@@ -169,7 +171,7 @@ caseSplit :: TH.Name -> RewriteH CoreExpr
 caseSplit nm = do
     frees <- freeIdsT
     contextfreeT $ \ e ->
-        case [ i | i <- frees, cmpTHName2Id nm i ] of
+        case [ i | i <- frees, cmpTHName2Var nm i ] of
             []    -> fail "caseSplit: provided name is not free"
             (i:_) -> do
                 let (tycon, tys) = splitTyConApp (idType i)
@@ -187,3 +189,4 @@ caseSplit nm = do
 caseSplitInline :: TH.Name -> RewriteH Core
 caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineName nm)
 
+------------------------------------------------------------------------------
