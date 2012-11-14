@@ -131,7 +131,7 @@ Library
                  data-default >= 0.5.0,
                  ghc == 7.6.*,
                  haskeline >= 0.7.0.3,
-                 kure >= 2.4.7,
+                 kure >= 2.4.9,
                  marked-pretty >= 0.1,
                  mtl >= 2.1.2,
                  stm >= 2.4,
