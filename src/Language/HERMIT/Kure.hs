@@ -280,25 +280,25 @@ instance Walker HermitC HermitM CoreBind where
       rec    = whenM (hasChildT n) $
                   recT (const exposeT) (childLMofN n defsToRecBind)
 
-  allT :: Monoid b => TranslateH (Generic CoreBind) b -> TranslateH CoreBind b
-  allT t = nonRecT (extractT t) (\ _ -> id)
-        <+ recT (\ _ -> extractT t) mconcat
+  -- allT :: Monoid b => TranslateH (Generic CoreBind) b -> TranslateH CoreBind b
+  -- allT t = nonRecT (extractT t) (\ _ -> id)
+  --       <+ recT (\ _ -> extractT t) mconcat
 
-  oneT :: TranslateH (Generic CoreBind) b -> TranslateH CoreBind b
-  oneT t = nonRecT (extractT t) (\ _ -> id)
-        <+ recT' (\ _ -> extractT t) catchesM
+  -- oneT :: TranslateH (Generic CoreBind) b -> TranslateH CoreBind b
+  -- oneT t = nonRecT (extractT t) (\ _ -> id)
+  --       <+ recT' (\ _ -> extractT t) catchesM
 
-  allR :: RewriteH (Generic CoreBind) -> RewriteH CoreBind
-  allR r = nonRecR (extractR r)
-        <+ recAllR (\ _ -> extractR r)
+  -- allR :: RewriteH (Generic CoreBind) -> RewriteH CoreBind
+  -- allR r = nonRecR (extractR r)
+  --       <+ recAllR (\ _ -> extractR r)
 
-  anyR :: RewriteH (Generic CoreBind) -> RewriteH CoreBind
-  anyR r = nonRecR (extractR r)
-        <+ recAnyR (\ _ -> extractR r)
+  -- anyR :: RewriteH (Generic CoreBind) -> RewriteH CoreBind
+  -- anyR r = nonRecR (extractR r)
+  --       <+ recAnyR (\ _ -> extractR r)
 
-  oneR :: RewriteH (Generic CoreBind) -> RewriteH CoreBind
-  oneR r = nonRecR (extractR r)
-        <+ recOneR (\ _ -> extractR r)
+  -- oneR :: RewriteH (Generic CoreBind) -> RewriteH CoreBind
+  -- oneR r = nonRecR (extractR r)
+  --       <+ recOneR (\ _ -> extractR r)
 
 -- | Translate a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
 nonRecT :: TranslateH CoreExpr a -> (Var -> a -> b) -> TranslateH CoreBind b
@@ -445,55 +445,55 @@ instance Walker HermitC HermitM CoreExpr where
        caseChooseL = whenM (hasChildT n) $
                            caseT idR (const exposeT) (\ e v t -> childLMofN (n-1) (Case e v t))
 
-  allT :: Monoid b => TranslateH (Generic CoreExpr) b -> TranslateH CoreExpr b
-  allT t = varT (\ _ -> mempty)
-        <+ litT (\ _ -> mempty)
-        <+ appT (extractT t) (extractT t) mappend
-        <+ lamT (extractT t) (\ _ -> id)
-        <+ letT (extractT t) (extractT t) mappend
-        <+ caseT (extractT t) (\ _ -> extractT t) (\ r _ _ rs -> mconcat (r:rs))
-        <+ castT (extractT t) const
-        <+ tickT (extractT t) (\ _ -> id)
-        <+ typeT (\ _ -> mempty)
-        <+ coercionT (\ _ -> mempty)
+  -- allT :: Monoid b => TranslateH (Generic CoreExpr) b -> TranslateH CoreExpr b
+  -- allT t = varT (\ _ -> mempty)
+  --       <+ litT (\ _ -> mempty)
+  --       <+ appT (extractT t) (extractT t) mappend
+  --       <+ lamT (extractT t) (\ _ -> id)
+  --       <+ letT (extractT t) (extractT t) mappend
+  --       <+ caseT (extractT t) (\ _ -> extractT t) (\ r _ _ rs -> mconcat (r:rs))
+  --       <+ castT (extractT t) const
+  --       <+ tickT (extractT t) (\ _ -> id)
+  --       <+ typeT (\ _ -> mempty)
+  --       <+ coercionT (\ _ -> mempty)
 
-  oneT :: TranslateH (Generic CoreExpr) b -> TranslateH CoreExpr b
-  oneT t = appT' (extractT t) (extractT t) (<<+)
-        <+ lamT (extractT t) (\ _ -> id)
-        <+ letT' (extractT t) (extractT t) (<<+)
-        <+ caseT' (extractT t) (\ _ -> extractT t) (\ _ _ r rs -> catchesM (r:rs))
-        <+ castT (extractT t) const
-        <+ tickT (extractT t) (\ _ -> id)
+  -- oneT :: TranslateH (Generic CoreExpr) b -> TranslateH CoreExpr b
+  -- oneT t = appT' (extractT t) (extractT t) (<<+)
+  --       <+ lamT (extractT t) (\ _ -> id)
+  --       <+ letT' (extractT t) (extractT t) (<<+)
+  --       <+ caseT' (extractT t) (\ _ -> extractT t) (\ _ _ r rs -> catchesM (r:rs))
+  --       <+ castT (extractT t) const
+  --       <+ tickT (extractT t) (\ _ -> id)
 
-  allR :: RewriteH (Generic CoreExpr) -> RewriteH CoreExpr
-  allR r = varT Var
-        <+ litT Lit
-        <+ appAllR (extractR r) (extractR r)
-        <+ lamR (extractR r)
-        <+ letAllR (extractR r) (extractR r)
-        <+ caseAllR (extractR r) (\ _ -> extractR r)
-        <+ castR (extractR r)
-        <+ tickR (extractR r)
-        <+ typeT Type
-        <+ coercionT Coercion
+  -- allR :: RewriteH (Generic CoreExpr) -> RewriteH CoreExpr
+  -- allR r = varT Var
+  --       <+ litT Lit
+  --       <+ appAllR (extractR r) (extractR r)
+  --       <+ lamR (extractR r)
+  --       <+ letAllR (extractR r) (extractR r)
+  --       <+ caseAllR (extractR r) (\ _ -> extractR r)
+  --       <+ castR (extractR r)
+  --       <+ tickR (extractR r)
+  --       <+ typeT Type
+  --       <+ coercionT Coercion
 
-  anyR :: RewriteH (Generic CoreExpr) -> RewriteH CoreExpr
-  anyR r = appAnyR (extractR r) (extractR r)
-        <+ lamR (extractR r)
-        <+ letAnyR (extractR r) (extractR r)
-        <+ caseAnyR (extractR r) (\ _ -> extractR r)
-        <+ castR (extractR r)
-        <+ tickR (extractR r)
-        <+ fail "anyR failed"
+  -- anyR :: RewriteH (Generic CoreExpr) -> RewriteH CoreExpr
+  -- anyR r = appAnyR (extractR r) (extractR r)
+  --       <+ lamR (extractR r)
+  --       <+ letAnyR (extractR r) (extractR r)
+  --       <+ caseAnyR (extractR r) (\ _ -> extractR r)
+  --       <+ castR (extractR r)
+  --       <+ tickR (extractR r)
+  --       <+ fail "anyR failed"
 
-  oneR :: RewriteH (Generic CoreExpr) -> RewriteH CoreExpr
-  oneR r = appOneR (extractR r) (extractR r)
-        <+ lamR (extractR r)
-        <+ letOneR (extractR r) (extractR r)
-        <+ caseOneR (extractR r) (\ _ -> extractR r)
-        <+ castR (extractR r)
-        <+ tickR (extractR r)
-        <+ fail "oneR failed"
+  -- oneR :: RewriteH (Generic CoreExpr) -> RewriteH CoreExpr
+  -- oneR r = appOneR (extractR r) (extractR r)
+  --       <+ lamR (extractR r)
+  --       <+ letOneR (extractR r) (extractR r)
+  --       <+ caseOneR (extractR r) (\ _ -> extractR r)
+  --       <+ castR (extractR r)
+  --       <+ tickR (extractR r)
+  --       <+ fail "oneR failed"
 
 ---------------------------------------------------------------------
 
