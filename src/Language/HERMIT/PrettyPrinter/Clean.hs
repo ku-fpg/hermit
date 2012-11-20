@@ -74,6 +74,10 @@ corePrettyH opts = do
 
     let hideNotes = True
 
+        optional :: Maybe DocH -> (DocH -> DocH) -> DocH
+        optional Nothing  _ = empty
+        optional (Just d) k = k d
+
         ppVar :: GHC.Var -> DocH
         ppVar = ppName . GHC.varName
 
@@ -106,9 +110,6 @@ corePrettyH opts = do
                                             _        -> Just $ ppVar' False var
                      | otherwise = Just $ ppVar var
 
-        ppIdBinder :: GHC.Id -> DocH
-        ppIdBinder var = ppVar var
-
         -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
         -- that we are eliding infomation here.
         ppSDoc :: (GHC.Outputable a) => a -> MDoc b
@@ -118,7 +119,7 @@ corePrettyH opts = do
 
         ppModGuts :: PrettyH GHC.ModGuts
         ppModGuts =   arr $ \ m -> hang (keyword "module" <+> ppSDoc (GHC.mg_module m) <+> keyword "where") 2
-                                   (vcat [ (ppIdBinder v <+> specialSymbol TypeOfSymbol <+> ppCoreType True (GHC.idType v))
+                                   (vcat [ (optional (ppBinder v) (\b -> b <+> specialSymbol TypeOfSymbol <+> ppCoreType True (GHC.idType v)))
                                          | bnd <- GHC.mg_binds m
                                          , v <- case bnd of
                                                   GHC.NonRec f _ -> [f]
@@ -208,7 +209,7 @@ corePrettyH opts = do
 
         ppCoreExpr0 :: PrettyH GHC.CoreExpr
         ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b _ty alts ->
-                            (keyword "case" <+> s <+> keyword "of" <+> ppIdBinder b) $$
+                            (keyword "case" <+> s <+> keyword "of" <+> optional (ppBinder b) id) $$
                               nest 2 (vcat alts))
                   <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
                   <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
@@ -226,7 +227,7 @@ corePrettyH opts = do
                       GHC.DEFAULT      -> symbol '_' <+> ppIds ids <+> e
               where
                      ppIds ids | null ids  = specialSymbol RightArrowSymbol
-                               | otherwise = hsep (map ppIdBinder ids) <+> specialSymbol RightArrowSymbol
+                               | otherwise = hsep (map (flip optional id . ppBinder) ids) <+> specialSymbol RightArrowSymbol
 
         -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
         ppCoreDef :: PrettyH CoreDef
@@ -237,9 +238,7 @@ corePrettyH opts = do
                         RetLam vs e0 -> hang (pre <+> specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
                         _ -> hang pre 2 (normalExpr e)
             where
-                pre = case ppBinder i of
-                        Nothing -> empty
-                        Just p  -> p <+> symbol '='
+                pre = optional (ppBinder i) (<+> symbol '=')
 
     promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
      <+ promoteT (ppCoreProg :: PrettyH CoreProg)
