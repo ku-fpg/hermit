@@ -30,14 +30,14 @@ dump "ifl-paper/4-casesplit.tex" "clean" "latex" 82
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
 --   unfold 'f
 { 1 ; any-call (unfold 'f) }
-{ 2 ; 0 ; 1 ; any-bu (unfold 'f) }
+{ 2 ; 0 ; 1 ; any-call (unfold 'f) }
 simplify
 dump "ifl-paper/5-unfoldf.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
 --   unfold 'work
-2 ; 0 ; { 1 ; any-bu (unfold origwork) }
+2 ; 0 ; { 1 ; any-call (unfold origwork) }
 dump "ifl-paper/6-stashapply.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)
@@ -74,5 +74,5 @@ dump "ifl-paper/11-stashfold.tex" "clean" "latex" 82
 -- work (n+1) = let (x,y) = work n in (y,x+y)
 top ; consider 'fib
 innermost dead-let-elimination
-{ 0 ; 1 ; any-call (unfold 'wrap) ; simplify }
+any-call (unfold 'wrap) ; simplify
 dump "ifl-paper/12-final.tex" "clean" "latex" 82
