@@ -8,8 +8,21 @@ import GhcPlugins
 import Data.List
 import System.IO
 
+import Data.Char (isDigit)
+import Data.Default
+
 -- | Given a list of 'CommandLineOption's, produce the 'ModGuts' to 'ModGuts' function required to build a plugin.
 type HermitPass = [CommandLineOption] -> ModGuts -> CoreM ModGuts
+
+data Options = Options { pass :: Int }
+
+instance Default Options where
+    def = Options { pass = 0 }
+
+parse :: [String] -> Options -> Options
+parse (('-':'p':n):rest) o | all isDigit n = parse rest $ o { pass = read n }
+parse (_:rest) o = parse rest o -- unknown option
+parse [] o       = o
 
 -- | Build a hermit plugin. This mainly handles the per-module options.
 hermitPlugin :: HermitPass -> Plugin
@@ -23,18 +36,20 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
             liftIO $ hSetBuffering stdout NoBuffering
 
             dynFlags <- getDynFlags
+            putMsgS ("len: " ++ show (length todos))
 
-            let
-                myPass = CoreDoPluginPass "HERMIT" $ modFilter dynFlags hp opts
+            let (m_opts, h_opts) = partition (isInfixOf ":") opts
+                hermit_opts = parse h_opts def
+                myPass = CoreDoPluginPass "HERMIT" $ modFilter dynFlags hp m_opts
                 -- at front, for now
-                allPasses = myPass : todos
+                allPasses = insertAt (pass hermit_opts) myPass todos
 
             return allPasses
 
 -- | Determine whether to act on this module, choose plugin pass.
 modFilter :: DynFlags -> HermitPass -> HermitPass
 modFilter dynFlags hp opts guts | null modOpts && not (null opts) = return guts -- don't process this module
-                       | otherwise    = hp modOpts guts
+                                | otherwise    = putMsgS ("opts given: " ++ unlines modOpts) >> hp modOpts guts
     where modOpts = filterOpts dynFlags opts guts
 
 -- | Filter options to those pertaining to this module, stripping module prefix.
@@ -42,3 +57,7 @@ filterOpts :: DynFlags -> [CommandLineOption] -> ModGuts -> [CommandLineOption]
 filterOpts dynFlags opts guts = [ drop len nm | nm <- opts, modName `isPrefixOf` nm ]
     where modName = showPpr dynFlags $ mg_module guts
           len = length modName + 1 -- for the colon
+
+insertAt :: Int -> a -> [a] -> [a]
+insertAt n x xs = pre ++ (x : suf)
+    where (pre,suf) = splitAt n xs
