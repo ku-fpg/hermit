@@ -90,37 +90,41 @@ build-type:          Simple
 Cabal-Version:       >= 1.14
 
 extra-source-files:
+    examples/WWSplitTactic.hss
     examples/concatVanishes/ConcatVanishes.hss
     examples/concatVanishes/Flatten.hs
     examples/concatVanishes/Flatten.hss
     examples/concatVanishes/HList.hs
-    examples/concatVanishes/Makefile
     examples/concatVanishes/QSort.hs
     examples/concatVanishes/QSort.hss
     examples/concatVanishes/Rev.hs
     examples/concatVanishes/Rev.hss
-    examples/contents.txt
+    examples/evaluation/Eval.hs
+    examples/evaluation/Eval.hss
+    examples/factorial/Fac.hs
+    examples/factorial/Fac.hss
     examples/fib-stream/Fib.hs
     examples/fib-stream/Fib.hss
-    examples/fib-stream/Makefile
     examples/fib-stream/Nat.hs
     examples/fib-stream/Stream.hs
-    examples/fib-stream/WWSplitTactic.hss
     examples/fib-tuple/Fib.hs
     examples/fib-tuple/Fib.hss
-    examples/fib-tuple/Makefile
-    examples/fib-tuple/WWSplitTactic.hss
-    examples/fib-tuple/blog.txt
+    examples/flatten/HList.hs
+    examples/flatten/Flatten.hs
+    examples/flatten/Flatten.hss
     examples/hanoi/Hanoi.hs
     examples/hanoi/Hanoi.hss
-    examples/hanoi/Makefile
-    examples/map/Map.hs
-    examples/map/Map.hss
-    examples/map/Makefile
+    examples/last/Last.hs
+    examples/last/Last.hss
+    examples/mean/Mean.hs
+    examples/mean/Mean.hss
+    examples/qsort/HList.hs
+    examples/qsort/QSort.hs
+    examples/qsort/QSort.hss
     examples/reverse/HList.hs
-    examples/reverse/Makefile
     examples/reverse/Reverse.hs
     examples/reverse/Reverse.hss
+    examples/reverse/ReverseWW.hss
 
 Library
   ghc-options: -Wall -fno-warn-orphans
@@ -131,7 +135,7 @@ Library
                  data-default >= 0.5.0,
                  ghc == 7.6.*,
                  haskeline >= 0.7.0.3,
-                 kure >= 2.4.9,
+                 kure >= 2.4.10,
                  marked-pretty >= 0.1,
                  mtl >= 2.1.2,
                  stm >= 2.4,
@@ -156,6 +160,7 @@ Library
 
        Language.HERMIT.Plugin
 
+       Language.HERMIT.Primitive.AlphaConversion
        Language.HERMIT.Primitive.Debug
        Language.HERMIT.Primitive.FixPoint
        Language.HERMIT.Primitive.Fold
@@ -167,7 +172,6 @@ Library
        Language.HERMIT.Primitive.Local.Case
        Language.HERMIT.Primitive.Navigation
        Language.HERMIT.Primitive.New
-       Language.HERMIT.Primitive.AlphaConversion
        Language.HERMIT.Primitive.Unfold
 
        Language.HERMIT.PrettyPrinter
