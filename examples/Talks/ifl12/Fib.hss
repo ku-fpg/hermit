@@ -1,4 +1,4 @@
-set-pp-expr-type Omit
+set-pp-expr-type Show
 flatten-module
 consider 'fib
 {
@@ -11,9 +11,9 @@ any-call (unfold 'unwrap)
 down
 case-split-inline 'n
 { 1 ; any-call (unfold 'f) }
-{ 2 ; 0 ; 1 ; any-bu (unfold 'f) }
+{ 2 ; 0 ; 1 ; any-call (unfold 'f) }
 simplify
-2 ; 0 ; { 1 ; any-bu (unfold origwork) }
+2 ; 0 ; { 1 ; any-call (unfold origwork) }
 any-bu (unfold-rule precondition)
 { 1 ; 1 ; let-intro 'x }
 { 0 ; 1 ; let-intro 'y }
@@ -24,4 +24,6 @@ one-td (fold 'unwrap)
 one-td (fold origwork)
 }
 innermost dead-let-elimination
-{ 0 ; 1 ; any-call (unfold 'wrap) ; simplify }
+any-call (unfold 'wrap)
+simplify
+

@@ -22,13 +22,13 @@ down ; case-split-inline 'n
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
 
 { 1 ; any-call (unfold 'f) }
-{ 2 ; 0 ; 1 ; any-bu (unfold 'f) }
+{ 2 ; 0 ; 1 ; any-call (unfold 'f) }
 simplify
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
 
-2 ; 0 ; { 1 ; any-bu (unfold origwork) }
+2 ; 0 ; { 1 ; any-call (unfold origwork) }
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
@@ -60,4 +60,6 @@ one-td (fold origwork)
 }
 
 innermost dead-let-elimination
-{ 0 ; 1 ; any-call (unfold 'wrap) ; simplify }
+any-call (unfold 'wrap)
+simplify
+
