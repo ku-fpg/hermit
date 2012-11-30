@@ -36,7 +36,6 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
             liftIO $ hSetBuffering stdout NoBuffering
 
             dynFlags <- getDynFlags
-            putMsgS ("len: " ++ show (length todos))
 
             let (m_opts, h_opts) = partition (isInfixOf ":") opts
                 hermit_opts = parse h_opts def
@@ -49,7 +48,7 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
 -- | Determine whether to act on this module, choose plugin pass.
 modFilter :: DynFlags -> HermitPass -> HermitPass
 modFilter dynFlags hp opts guts | null modOpts && not (null opts) = return guts -- don't process this module
-                                | otherwise    = putMsgS ("opts given: " ++ unlines modOpts) >> hp modOpts guts
+                                | otherwise                       = hp modOpts guts
     where modOpts = filterOpts dynFlags opts guts
 
 -- | Filter options to those pertaining to this module, stripping module prefix.
