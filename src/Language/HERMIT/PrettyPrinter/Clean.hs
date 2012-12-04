@@ -119,7 +119,7 @@ corePrettyH opts = do
 
         ppModGuts :: PrettyH GHC.ModGuts
         ppModGuts =   arr $ \ m -> hang (keyword "module" <+> ppSDoc (GHC.mg_module m) <+> keyword "where") 2
-                                   (vcat [ (optional (ppBinder v) (\b -> b <+> specialSymbol TypeOfSymbol <+> ppCoreType True (GHC.idType v)))
+                                   (vcat [ (optional (ppBinder v) (\b -> b <+> specialSymbol TypeOfSymbol <+> normalExpr (ppCoreType True (GHC.idType v))))
                                          | bnd <- GHC.mg_binds m
                                          , v <- case bnd of
                                                   GHC.NonRec f _ -> [f]
@@ -186,24 +186,27 @@ corePrettyH opts = do
                    <+ varT (\ i p -> RetAtom (attrP p $ ppVar i))
                    <+ litT (\ i p -> RetAtom (attrP p $ ppSDoc i))
                    <+ typeT (\ t p -> case po_exprTypes opts of
-                                      Show     -> RetAtom (attrP p $ ppCoreType False t)
+                                      Show     -> case ppCoreType False t of
+                                                    RetAtom d -> RetAtom $ attrP p d
+                                                    RetExpr d -> RetExpr $ attrP p d
+                                                    _ -> error "not possible!"
                                       Abstract -> RetAtom (attrP p $ typeSymbol)
                                       Omit     -> RetEmpty)
                    <+ (ppCoreExpr0 >>^ \ e p -> RetExpr (attrP p e))
 
-        ppCoreType :: Bool -> GHC.Type -> DocH
-        ppCoreType isTySig = normalExpr . go
+        ppCoreType :: Bool -> GHC.Type -> RetExpr
+        ppCoreType isTySig = go
             where go (TyVarTy v)   = RetAtom $ ppVar' isTySig v
                   go (LitTy tylit) = RetAtom $ ppLitTy isTySig tylit
-                  go (AppTy t1 t2) = RetExpr $ ppCoreType isTySig t1 <+> ppCoreType isTySig t2
+                  go (AppTy t1 t2) = RetExpr $ normalExpr (go t1) <+> normalExpr (go t2)
                   go (TyConApp tyCon tys)
                     | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = go (FunTy ty1 ty2)
-                    | GHC.isTupleTyCon tyCon = case map (ppCoreType isTySig) tys of
+                    | GHC.isTupleTyCon tyCon = case map (normalExpr . go) tys of
                                                 [] -> RetAtom $ tyText "()"
-                                                ds -> RetExpr $ tyText "(" <> (foldr1 (\d r -> d <> tyText "," <+> r) ds) <> tyText ")"
-                    | otherwise = RetAtom $ ppName' isTySig (GHC.getName tyCon) <+> sep (map (ppCoreType isTySig) tys) -- has spaces, but we never want parens
-                  go (FunTy ty1 ty2) = RetExpr $ atomExpr (go ty1) <+> text "->" <+> ppCoreType isTySig ty2
-                  go (ForAllTy v ty) = RetExpr $ specialSymbol ForallSymbol <+> ppVar' isTySig v <+> symbol '.' <+> ppCoreType isTySig ty
+                                                ds -> RetAtom $ tyText "(" <> (foldr1 (\d r -> d <> tyText "," <+> r) ds) <> tyText ")"
+                    | otherwise = RetAtom $ ppName' isTySig (GHC.getName tyCon) <+> sep (map (normalExpr . go) tys) -- has spaces, but we never want parens
+                  go (FunTy ty1 ty2) = RetExpr $ atomExpr (go ty1) <+> tyText "->" <+> normalExpr (go ty2)
+                  go (ForAllTy v ty) = RetExpr $ specialSymbol ForallSymbol <+> ppVar' isTySig v <+> symbol '.' <+> normalExpr (go ty)
 
                   tyText = if isTySig then text else markColor TypeColor . text
 
