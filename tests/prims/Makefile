@@ -1,8 +1,6 @@
-HERMIT = perl ../../scripts/runtests.pl
-
 boot::
-	- $(HERMIT) Test.hs Test.hss resume | tee Test.out
+	- hermit Test.hs +main:Main Test.hss resume -- -v0 | tee Test.out
 	diff -s Test.out Test.expected.out
 
 interactive::
-	- $(HERMIT) Test.hs
+	- hermit Test.hs
