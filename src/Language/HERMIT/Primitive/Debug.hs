@@ -25,11 +25,11 @@ externals = map (.+ Debug)
          ]
 
 -- | If the 'Rewrite' fails, print out the 'Core', with a message.
-observeFailureR :: (Injection a Core, Generic a ~ Core) => String -> RewriteH a -> RewriteH a
+observeFailureR :: (Injection a Core) => String -> RewriteH a -> RewriteH a
 observeFailureR str m = m <+ observeR str
 
 -- | Print out the 'Core', with a message.
-observeR :: (Injection a Core, Generic a ~ Core) => String -> RewriteH a
+observeR :: (Injection a Core) => String -> RewriteH a
 observeR msg = extractR $ sideEffectR $ \ cxt core ->
         sendDebugMessage $ DebugCore msg cxt core
 

@@ -1,7 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections, LambdaCase, InstanceSigs #-}
 
--- Note: InstanceSigs don't expand type families (annoyingly), as of GHC 7.6.1.  Check if this has been fixed in the next version.
-
 module Language.HERMIT.Kure
        (
        -- * KURE Modules
@@ -88,81 +86,9 @@ type TranslateH a b = Translate HermitC HermitM a b
 type RewriteH a = Rewrite HermitC HermitM a
 type LensH a b = Lens HermitC HermitM a b
 
--- | A synonym for the identity rewrite.  Convienient to avoid importing Control.Category.
+-- | A synonym for the identity rewrite.  Convienient to avoid importing Control.Category and hiding the Prelude id.
 idR :: RewriteH a
 idR = Control.Category.id
-
----------------------------------------------------------------------
-
-instance Node Core where
-  type Generic Core = Core
-
-  numChildren :: Core -> Int
-  numChildren (ModGutsCore x) = numChildren x
-  numChildren (ProgCore x)    = numChildren x
-  numChildren (BindCore x)    = numChildren x
-  numChildren (DefCore x)     = numChildren x
-  numChildren (ExprCore x)    = numChildren x
-  numChildren (AltCore x)     = numChildren x
-
--- Defining Walker instances for the Generic type 'Core' is almost entirely automated by KURE.
--- Unfortunately, you still need to pattern match on the 'Core' data type.
-
-instance Walker HermitC HermitM Core where
-
-  childL :: Int -> LensH Core (Generic Core)
-  childL n = lens $ translate $ \ c -> \case
-          ModGutsCore x -> childLgeneric n c x
-          ProgCore x    -> childLgeneric n c x
-          BindCore x    -> childLgeneric n c x
-          DefCore x     -> childLgeneric n c x
-          ExprCore x    -> childLgeneric n c x
-          AltCore x     -> childLgeneric n c x
-
-  allT :: Monoid b => TranslateH (Generic Core) b -> TranslateH Core b
-  allT t = translate $ \ c -> \case
-          ModGutsCore x -> allTgeneric t c x
-          ProgCore x    -> allTgeneric t c x
-          BindCore x    -> allTgeneric t c x
-          DefCore x     -> allTgeneric t c x
-          ExprCore x    -> allTgeneric t c x
-          AltCore x     -> allTgeneric t c x
-
-  oneT :: TranslateH (Generic Core) b -> TranslateH Core b
-  oneT t = translate $ \ c -> \case
-          ModGutsCore x -> oneTgeneric t c x
-          ProgCore x    -> oneTgeneric t c x
-          BindCore x    -> oneTgeneric t c x
-          DefCore x     -> oneTgeneric t c x
-          ExprCore x    -> oneTgeneric t c x
-          AltCore x     -> oneTgeneric t c x
-
-  allR :: RewriteH (Generic Core) -> RewriteH Core
-  allR r = rewrite $ \ c -> \case
-          ModGutsCore x -> allRgeneric r c x
-          ProgCore x    -> allRgeneric r c x
-          BindCore x    -> allRgeneric r c x
-          DefCore x     -> allRgeneric r c x
-          ExprCore x    -> allRgeneric r c x
-          AltCore x     -> allRgeneric r c x
-
-  anyR :: RewriteH (Generic Core) -> RewriteH Core
-  anyR r = rewrite $ \ c -> \case
-          ModGutsCore x -> anyRgeneric r c x
-          ProgCore x    -> anyRgeneric r c x
-          BindCore x    -> anyRgeneric r c x
-          DefCore x     -> anyRgeneric r c x
-          ExprCore x    -> anyRgeneric r c x
-          AltCore x     -> anyRgeneric r c x
-
-  oneR :: RewriteH (Generic Core) -> RewriteH Core
-  oneR r = rewrite $ \ c -> \case
-          ModGutsCore x -> oneRgeneric r c x
-          ProgCore x    -> oneRgeneric r c x
-          BindCore x    -> oneRgeneric r c x
-          DefCore x     -> oneRgeneric r c x
-          ExprCore x    -> oneRgeneric r c x
-          AltCore x     -> oneRgeneric r c x
 
 ---------------------------------------------------------------------
 
@@ -175,28 +101,6 @@ instance Injection ModGuts Core where
   retract (ModGutsCore guts) = Just guts
   retract _                  = Nothing
 
-instance Node ModGuts where
-  type Generic ModGuts = Core
-
-  numChildren :: ModGuts -> Int
-  numChildren _ = 1
-
-instance Walker HermitC HermitM ModGuts where
-
-  childL :: Int -> LensH ModGuts (Generic ModGuts)
-  childL 0 = lens $ modGutsT exposeT (childL1of2 $ \ modguts p -> modguts {mg_binds = progToBinds p})
-  childL n = failT (missingChild n)
-
--- | Translate a module.
---   Slightly different to the other congruence combinators: it passes in *all* of the original to the reconstruction function.
-modGutsT :: TranslateH CoreProg a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
-modGutsT t f = translate $ \ c modGuts -> f modGuts <$> apply t (c @@ 0) (bindsToProg (mg_binds modGuts))
-
--- | Rewrite the 'CoreProg' child of a module.
-modGutsR :: RewriteH CoreProg -> RewriteH ModGuts
-modGutsR r = modGutsT r (\ modguts p -> modguts {mg_binds = progToBinds p})
-
----------------------------------------------------------------------
 
 instance Injection CoreProg Core where
 
@@ -207,20 +111,177 @@ instance Injection CoreProg Core where
   retract (ProgCore bds) = Just bds
   retract _              = Nothing
 
-instance Node CoreProg where
-  type Generic CoreProg = Core
 
-  -- A program is either empty (zero children) or a binding group and the remaining program it scopes over (two children).
-  numChildren :: CoreProg -> Int
-  numChildren ProgNil        = 0
-  numChildren (ProgCons _ _) = 2
+instance Injection CoreBind Core where
 
-instance Walker HermitC HermitM CoreProg where
+  inject :: CoreBind -> Core
+  inject = BindCore
 
-  childL :: Int -> LensH CoreProg (Generic CoreProg)
-  childL 0 = lens $ progConsT exposeT idR (childL0of2 ProgCons)
-  childL 1 = lens $ progConsT idR exposeT (childL1of2 ProgCons)
-  childL n = failT (missingChild n)
+  retract :: Core -> Maybe CoreBind
+  retract (BindCore bnd)  = Just bnd
+  retract _               = Nothing
+
+
+instance Injection CoreDef Core where
+
+  inject :: CoreDef -> Core
+  inject = DefCore
+
+  retract :: Core -> Maybe CoreDef
+  retract (DefCore def) = Just def
+  retract _             = Nothing
+
+
+instance Injection CoreAlt Core where
+
+  inject :: CoreAlt -> Core
+  inject = AltCore
+
+  retract :: Core -> Maybe CoreAlt
+  retract (AltCore expr) = Just expr
+  retract _              = Nothing
+
+
+instance Injection CoreExpr Core where
+
+  inject :: CoreExpr -> Core
+  inject = ExprCore
+
+  retract :: Core -> Maybe CoreExpr
+  retract (ExprCore expr) = Just expr
+  retract _               = Nothing
+
+---------------------------------------------------------------------
+
+instance Node Core where
+
+  numChildren :: Core -> Int
+  numChildren (ModGutsCore _) = 1
+  numChildren (ProgCore p)    = -- A program is either empty (zero children) or a binding group and the remaining program it scopes over (two children).
+                                case p of
+                                  ProgNil       -> 0
+                                  ProgCons _ _  -> 2
+  numChildren (BindCore bnd)  = case bnd of
+                                  NonRec _ _  -> 1
+                                  Rec defs    -> length defs
+  numChildren (DefCore _)     = 1
+  numChildren (AltCore _)     = 1
+  numChildren (ExprCore e)    = case e of
+                                  Var _          -> 0
+                                  Lit _          -> 0
+                                  App _ _        -> 2
+                                  Lam _ _        -> 1
+                                  Let _ _        -> 2
+                                  Case _ _ _ es  -> 1 + length es
+                                  Cast _ _       -> 1
+                                  Tick _ _       -> 1
+                                  Type _         -> 0
+                                  Coercion _     -> 0
+
+---------------------------------------------------------------------
+
+instance Walker HermitC HermitM Core where
+
+  childL :: Int -> LensH Core Core
+  childL n = lens $ flip (ifM $ hasChildT n) (fail $ missingChild n) $ translate $ \ c -> \case
+          ModGutsCore guts -> apply childLmodguts c guts
+          ProgCore p       -> apply childLprog c p
+          BindCore bn      -> apply childLbind c bn
+          DefCore def      -> apply childLdef c def
+          AltCore alt      -> apply childLalt c alt
+          ExprCore e       -> apply childLexpr c e
+    where
+      childLmodguts :: TranslateH ModGuts ((HermitC,Core) , Core -> HermitM Core)
+      childLmodguts = modGutsT exposeT (childL1of2 $ \ guts p -> guts {mg_binds = progToBinds p})
+
+      childLprog :: TranslateH CoreProg ((HermitC,Core) , Core -> HermitM Core)
+      childLprog = case n of
+                     0  -> progConsT exposeT idR (childL0of2 ProgCons)
+                     1  -> progConsT idR exposeT (childL1of2 ProgCons)
+                     _  -> error "This shouldn't happen.  Cannot occur due to 'hasChild' check above."
+
+      childLbind :: TranslateH CoreBind ((HermitC,Core) , Core -> HermitM Core)
+      childLbind = let nonrec = nonRecT exposeT (childL1of2 NonRec)
+                       rec    = recT (const exposeT) (childLMofN n defsToRecBind)
+                    in case n of
+                         0 -> nonrec <+ rec
+                         _ -> rec
+
+      childLdef :: TranslateH CoreDef ((HermitC,Core) , Core -> HermitM Core)
+      childLdef = defT exposeT (childL1of2 Def)
+
+      childLalt :: TranslateH CoreAlt ((HermitC,Core) , Core -> HermitM Core)
+      childLalt = altT exposeT (childL2of3 (,,))
+
+      childLexpr :: TranslateH CoreExpr ((HermitC,Core) , Core -> HermitM Core)
+      childLexpr = let -- Note we use index (n-1) because 0 refers to the expression being scrutinised.
+                       caseChooseL = caseT idR (const exposeT) (\ e v t -> childLMofN (n-1) (Case e v t))
+                    in case n of
+                         0  ->    appT  exposeT idR         (childL0of2 App)
+                               <+ lamT  exposeT             (childL1of2 Lam)
+                               <+ letT  exposeT idR         (childL0of2 Let)
+                               <+ caseT exposeT (const idR) (childL0of4 Case)
+                               <+ castT exposeT             (childL0of2 Cast)
+                               <+ tickT exposeT             (childL1of2 Tick)
+
+                         1  ->    appT idR exposeT (childL1of2 App)
+                               <+ letT idR exposeT (childL1of2 Let)
+                               <+ caseChooseL
+
+                         _  ->    caseChooseL
+
+  allT :: Monoid b => TranslateH Core b -> TranslateH Core b
+  allT t = let allTrec  = recT (\ _ -> extractT t) mconcat
+               allTcase = caseT (extractT t) (\ _ -> extractT t) (\ r _ _ rs -> mconcat (r:rs))
+            in translate $ \ c -> \case
+                BindCore bnd@(Rec _)       -> prefixFailMsg "allT failed for Rec: " $ apply allTrec c bnd
+                ExprCore e@(Case _ _ _ _)  -> prefixFailMsg "allT failed for Case: " $ apply allTcase c e
+                core                       -> apply (allTdefault t) c core
+
+  oneT :: TranslateH Core b -> TranslateH Core b
+  oneT t = let oneTrec  = recT' (\ _ -> extractT t) catchesM
+               oneTcase = caseT' (extractT t) (\ _ -> extractT t) (\ _ _ r rs -> catchesM (r:rs))
+            in translate $ \ c -> \case
+                BindCore bnd@(Rec _)       -> setFailMsg "oneT failed for Rec" $ apply oneTrec c bnd
+                ExprCore e@(Case _ _ _ _)  -> setFailMsg "oneT failed for Case" $ apply oneTcase c e
+                core                       -> apply (oneTdefault t) c core
+
+  allR :: RewriteH Core -> RewriteH Core
+  allR r = let allRrec  = recAllR (\ _ -> extractR r)
+               allRcase = caseAllR (extractR r) (\ _ -> extractR r)
+            in rewrite $ \ c -> \case
+                 BindCore bnd@(Rec _)       -> prefixFailMsg "allR failed for Rec: " $ inject <$> apply allRrec c bnd
+                 ExprCore e@(Case _ _ _ _)  -> prefixFailMsg "allR failed for Case: " $ inject <$> apply allRcase c e
+                 core                       -> apply (allRdefault r) c core
+
+  anyR :: RewriteH Core -> RewriteH Core
+  anyR r = let anyRrec  = recAnyR (\ _ -> extractR r)
+               anyRcase = caseAnyR (extractR r) (\ _ -> extractR r)
+            in rewrite $ \ c -> \case
+                 BindCore bnd@(Rec _)       -> setFailMsg "anyR failed for Rec" $ inject <$> apply anyRrec c bnd
+                 ExprCore e@(Case _ _ _ _)  -> setFailMsg "anyR failed for Case" $ inject <$> apply anyRcase c e
+                 core                       -> apply (anyRdefault r) c core
+
+  oneR :: RewriteH Core -> RewriteH Core
+  oneR r = let oneRrec  = recOneR (\ _ -> extractR r)
+               oneRcase = caseOneR (extractR r) (\ _ -> extractR r)
+            in rewrite $ \ c -> \case
+                 BindCore bnd@(Rec _)       -> setFailMsg "oneR failed for Rec" $ inject <$> apply oneRrec c bnd
+                 ExprCore e@(Case _ _ _ _)  -> setFailMsg "oneR failed for Case" $ inject <$> apply oneRcase c e
+                 core                       -> apply (oneRdefault r) c core
+
+---------------------------------------------------------------------
+
+-- | Translate a module.
+--   Slightly different to the other congruence combinators: it passes in /all/ of the original to the reconstruction function.
+modGutsT :: TranslateH CoreProg a -> (ModGuts -> a -> b) -> TranslateH ModGuts b
+modGutsT t f = translate $ \ c modGuts -> f modGuts <$> apply t (c @@ 0) (bindsToProg (mg_binds modGuts))
+
+-- | Rewrite the 'CoreProg' child of a module.
+modGutsR :: RewriteH CoreProg -> RewriteH ModGuts
+modGutsR r = modGutsT r (\ modguts p -> modguts {mg_binds = progToBinds p})
+
+---------------------------------------------------------------------
 
 -- | Translate an empty list.
 progNilT :: b -> TranslateH CoreProg b
@@ -250,55 +311,6 @@ progConsOneR :: RewriteH CoreBind -> RewriteH CoreProg -> RewriteH CoreProg
 progConsOneR r1 r2 = progConsT' (withArgumentT r1) (withArgumentT r2) (attemptOne2 ProgCons)
 
 ---------------------------------------------------------------------
-
-instance Injection CoreBind Core where
-
-  inject :: CoreBind -> Core
-  inject = BindCore
-
-  retract :: Core -> Maybe CoreBind
-  retract (BindCore bnd)  = Just bnd
-  retract _               = Nothing
-
-instance Node CoreBind where
-  type Generic CoreBind = Core
-
-  numChildren :: CoreBind -> Int
-  numChildren (NonRec _ _) = 1
-  numChildren (Rec defs)   = length defs
-
-instance Walker HermitC HermitM CoreBind where
-
-  childL :: Int -> LensH CoreBind (Generic CoreBind)
-  childL n = lens $ setFailMsg (missingChild n) $
-               case n of
-                 0 -> nonrec <+ rec
-                 _ -> rec
-
-    where
-      nonrec = nonRecT exposeT (childL1of2 NonRec)
-      rec    = whenM (hasChildT n) $
-                  recT (const exposeT) (childLMofN n defsToRecBind)
-
-  allT :: Monoid b => TranslateH (Generic CoreBind) b -> TranslateH CoreBind b
-  allT t = nonRecT (extractT t) (\ _ -> id)
-        <+ recT (\ _ -> extractT t) mconcat
-
-  oneT :: TranslateH (Generic CoreBind) b -> TranslateH CoreBind b
-  oneT t = nonRecT (extractT t) (\ _ -> id)
-        <+ recT' (\ _ -> extractT t) catchesM
-
-  allR :: RewriteH (Generic CoreBind) -> RewriteH CoreBind
-  allR r = nonRecR (extractR r)
-        <+ recAllR (\ _ -> extractR r)
-
-  anyR :: RewriteH (Generic CoreBind) -> RewriteH CoreBind
-  anyR r = nonRecR (extractR r)
-        <+ recAnyR (\ _ -> extractR r)
-
-  oneR :: RewriteH (Generic CoreBind) -> RewriteH CoreBind
-  oneR r = nonRecR (extractR r)
-        <+ recOneR (\ _ -> extractR r)
 
 -- | Translate a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
 nonRecT :: TranslateH CoreExpr a -> (Var -> a -> b) -> TranslateH CoreBind b
@@ -337,27 +349,6 @@ recOneR rs = recT' (withArgumentT . rs) (attemptOneN defsToRecBind)
 
 ---------------------------------------------------------------------
 
-instance Injection CoreDef Core where
-
-  inject :: CoreDef -> Core
-  inject = DefCore
-
-  retract :: Core -> Maybe CoreDef
-  retract (DefCore def) = Just def
-  retract _             = Nothing
-
-instance Node CoreDef where
-  type Generic CoreDef = Core
-
-  numChildren :: CoreDef -> Int
-  numChildren _ = 1
-
-instance Walker HermitC HermitM CoreDef where
-
-  childL :: Int -> LensH CoreDef (Generic CoreDef)
-  childL 0 = lens $ defT exposeT (childL1of2 Def)
-  childL n = failT (missingChild n)
-
 -- | Translate a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
 defT :: TranslateH CoreExpr a -> (Id -> a -> b) -> TranslateH CoreDef b
 defT t f = translate $ \ c (Def v e) -> f v <$> apply t (c @@ 0) e
@@ -368,27 +359,6 @@ defR r = defT r Def
 
 ---------------------------------------------------------------------
 
-instance Injection CoreAlt Core where
-
-  inject :: CoreAlt -> Core
-  inject = AltCore
-
-  retract :: Core -> Maybe CoreAlt
-  retract (AltCore expr) = Just expr
-  retract _              = Nothing
-
-instance Node CoreAlt where
-  type Generic CoreAlt = Core
-
-  numChildren :: CoreAlt -> Int
-  numChildren _ = 1
-
-instance Walker HermitC HermitM CoreAlt where
-
-  childL :: Int -> LensH CoreAlt (Generic CoreAlt)
-  childL 0 = lens $ altT exposeT (childL2of3 (,,))
-  childL n = failT (missingChild n)
-
 -- | Translate a case alternative of the form: ('AltCon', ['Id'], 'CoreExpr')
 altT :: TranslateH CoreExpr a -> (AltCon -> [Id] -> a -> b) -> TranslateH CoreAlt b
 altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (addAltBindings bs c @@ 0) e
@@ -396,104 +366,6 @@ altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (addAltBindings bs
 -- | Rewrite the 'CoreExpr' child of a case alternative of the form: ('AltCon', 'Id', 'CoreExpr')
 altR :: RewriteH CoreExpr -> RewriteH CoreAlt
 altR r = altT r (,,)
-
----------------------------------------------------------------------
-
-instance Injection CoreExpr Core where
-
-  inject :: CoreExpr -> Core
-  inject = ExprCore
-
-  retract :: Core -> Maybe CoreExpr
-  retract (ExprCore expr) = Just expr
-  retract _               = Nothing
-
-instance Node CoreExpr where
-  type Generic CoreExpr = Core
-
-  numChildren :: CoreExpr -> Int
-  numChildren (Var _)         = 0
-  numChildren (Lit _)         = 0
-  numChildren (App _ _)       = 2
-  numChildren (Lam _ _)       = 1
-  numChildren (Let _ _)       = 2
-  numChildren (Case _ _ _ es) = 1 + length es
-  numChildren (Cast _ _)      = 1
-  numChildren (Tick _ _)      = 1
-  numChildren (Type _)        = 0
-  numChildren (Coercion _)    = 0
-
-instance Walker HermitC HermitM CoreExpr where
-
-  childL :: Int -> LensH CoreExpr (Generic CoreExpr)
-  childL n = lens $ setFailMsg (missingChild n) $
-               case n of
-                 0  ->    appT  exposeT idR         (childL0of2 App)
-                       <+ lamT  exposeT             (childL1of2 Lam)
-                       <+ letT  exposeT idR         (childL0of2 Let)
-                       <+ caseT exposeT (const idR) (childL0of4 Case)
-                       <+ castT exposeT             (childL0of2 Cast)
-                       <+ tickT exposeT             (childL1of2 Tick)
-
-                 1  ->    appT idR exposeT (childL1of2 App)
-                       <+ letT idR exposeT (childL1of2 Let)
-                       <+ caseChooseL
-
-                 _  ->    caseChooseL
-     where
-       -- Note we use index (n-1) because 0 refers to the expression being scrutinised.
-       caseChooseL = whenM (hasChildT n) $
-                           caseT idR (const exposeT) (\ e v t -> childLMofN (n-1) (Case e v t))
-
-  allT :: Monoid b => TranslateH (Generic CoreExpr) b -> TranslateH CoreExpr b
-  allT t = varT (\ _ -> mempty)
-        <+ litT (\ _ -> mempty)
-        <+ appT (extractT t) (extractT t) mappend
-        <+ lamT (extractT t) (\ _ -> id)
-        <+ letT (extractT t) (extractT t) mappend
-        <+ caseT (extractT t) (\ _ -> extractT t) (\ r _ _ rs -> mconcat (r:rs))
-        <+ castT (extractT t) const
-        <+ tickT (extractT t) (\ _ -> id)
-        <+ typeT (\ _ -> mempty)
-        <+ coercionT (\ _ -> mempty)
-
-  oneT :: TranslateH (Generic CoreExpr) b -> TranslateH CoreExpr b
-  oneT t = appT' (extractT t) (extractT t) (<<+)
-        <+ lamT (extractT t) (\ _ -> id)
-        <+ letT' (extractT t) (extractT t) (<<+)
-        <+ caseT' (extractT t) (\ _ -> extractT t) (\ _ _ r rs -> catchesM (r:rs))
-        <+ castT (extractT t) const
-        <+ tickT (extractT t) (\ _ -> id)
-
-  allR :: RewriteH (Generic CoreExpr) -> RewriteH CoreExpr
-  allR r = varT Var
-        <+ litT Lit
-        <+ appAllR (extractR r) (extractR r)
-        <+ lamR (extractR r)
-        <+ letAllR (extractR r) (extractR r)
-        <+ caseAllR (extractR r) (\ _ -> extractR r)
-        <+ castR (extractR r)
-        <+ tickR (extractR r)
-        <+ typeT Type
-        <+ coercionT Coercion
-
-  anyR :: RewriteH (Generic CoreExpr) -> RewriteH CoreExpr
-  anyR r = appAnyR (extractR r) (extractR r)
-        <+ lamR (extractR r)
-        <+ letAnyR (extractR r) (extractR r)
-        <+ caseAnyR (extractR r) (\ _ -> extractR r)
-        <+ castR (extractR r)
-        <+ tickR (extractR r)
-        <+ fail "anyR failed"
-
-  oneR :: RewriteH (Generic CoreExpr) -> RewriteH CoreExpr
-  oneR r = appOneR (extractR r) (extractR r)
-        <+ lamR (extractR r)
-        <+ letOneR (extractR r) (extractR r)
-        <+ caseOneR (extractR r) (\ _ -> extractR r)
-        <+ castR (extractR r)
-        <+ tickR (extractR r)
-        <+ fail "oneR failed"
 
 ---------------------------------------------------------------------
 
