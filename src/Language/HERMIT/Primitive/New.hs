@@ -6,8 +6,9 @@ import GhcPlugins as GHC hiding (varName)
 import Control.Applicative
 import Control.Arrow
 
-import Data.List(intersect)
+import Data.List(intersect,transpose)
 
+import Language.HERMIT.Context
 import Language.HERMIT.Core
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
@@ -48,6 +49,8 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
                 , "preference is given to applications with more arguments"
                 ] .+ Deep
+         , external "static-arg" (promoteDefR staticArg :: RewriteH Core)
+                [ "perform the static argument transformation on a recursive function" ]
          ]
 
 ------------------------------------------------------------------------------------------------------
@@ -95,6 +98,62 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
 -- let v = E1 in E2 E3 <=> E2 (let v = E1 in E3)
+
+staticArg :: RewriteH CoreDef
+staticArg = prefixFailMsg "static-arg failed: " $ do
+    Def f rhs <- idR
+    let (bnds, body) = collectBinders rhs
+    guardMsg (notNull bnds) "rhs is not a function"
+    c <- contextT
+    constT $ do
+        let bodyContext = foldr addLambdaBinding c bnds
+
+        cps <- apply (callsT (var2THName f) (collectArgsT >>> arr snd)) bodyContext (ExprCore body)
+        let cps' = transpose cps ++ repeat []
+            (ps,dbnds) = unzip [ (i,b') | ((i,b),exprs) <- zip (zip [0..] bnds) cps'
+                                        , notNull exprs
+                                        , Just b' <- [isDynamic b exprs]
+                                        ]
+
+            isDynamic _ []                      = Nothing -- all were static, so static
+            isDynamic b ((Var b'):es)           | b == b' = isDynamic b es
+            isDynamic b ((Type (TyVarTy v)):es) | b == v  = isDynamic b es
+                      -- todo: Coercion is also possible here
+            isDynamic b _                       = Just b -- not a simple repass, so dynamic
+
+        wkr <- newIdH (var2String f ++ "'") (exprType (mkCoreLams dbnds body))
+
+        let replaceCall :: RewriteH CoreExpr
+            replaceCall = do
+                (_,exprs) <- collectArgsT
+                return $ mkApps (Var wkr) [ e | (p,e) <- zip [0..] exprs, (p::Int) `elem` ps ]
+
+        ExprCore body' <- apply (callsR (var2THName f) replaceCall) bodyContext (ExprCore body)
+
+        return $ Def f $ mkCoreLams bnds $ Let (Rec [(wkr, mkCoreLams dbnds body')])
+                                             $ mkApps (Var wkr) (varsToCoreExprs dbnds)
+
+-- | Like GHC's collectArgs, but fails if not an application
+collectArgsT :: TranslateH CoreExpr (CoreExpr, [CoreExpr])
+collectArgsT = do
+    App {} <- idR
+    arr collectArgs
+
+-- | Succeeds if we are looking at an application of given function
+callG :: TH.Name -> TranslateH CoreExpr ()
+callG nm = prefixFailMsg "callG failed: " $ do
+    (Var i,_) <- collectArgsT
+    guardMsg (cmpTHName2Var nm i) $ "not a call to " ++ show nm
+    return ()
+
+-- | Apply a rewrite to all applications of a given function in a top-down manner, pruning on success.
+callsR :: TH.Name -> RewriteH CoreExpr -> RewriteH Core
+callsR nm rr = prunetdR (promoteExprR $ callG nm >> rr)
+
+-- | Apply a translate to all applications of a given function in a top-down manner,
+--   pruning on success, collecting the results.
+callsT :: TH.Name -> TranslateH CoreExpr b -> TranslateH Core [b]
+callsT nm t = collectPruneT (promoteExprT $ callG nm >> t)
 
 ------------------------------------------------------------------------------------------------------
 
