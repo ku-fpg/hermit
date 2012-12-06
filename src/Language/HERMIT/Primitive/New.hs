@@ -108,18 +108,20 @@ staticArg = prefixFailMsg "static-arg failed: " $ do
     constT $ do
         let bodyContext = foldr addLambdaBinding c bnds
 
-        cps <- apply (callsT (var2THName f) (collectArgsT >>> arr snd)) bodyContext (ExprCore body)
-        let cps' = transpose cps ++ repeat []
-            (ps,dbnds) = unzip [ (i,b') | ((i,b),exprs) <- zip (zip [0..] bnds) cps'
-                                        , notNull exprs
-                                        , Just b' <- [isDynamic b exprs]
-                                        ]
+        callPats <- apply (callsT (var2THName f) (collectArgsT >>> arr snd)) bodyContext (ExprCore body)
+        let argExprs = transpose callPats
+            numCalls = maximum $ map length argExprs
+            -- ensure argument is present in every call (partial applications boo)
+            argExprs' = [ if length es == numCalls then es else [] | es <- argExprs ] ++ repeat []
+            (ps,dbnds) = unzip [ (i,b) | ((i,b),exprs) <- zip (zip [0..] bnds) argExprs'
+                                       , null exprs || isDynamic b exprs
+                                       ]
 
-            isDynamic _ []                      = Nothing -- all were static, so static
+            isDynamic _ []                      = False -- all were static, so static
             isDynamic b ((Var b'):es)           | b == b' = isDynamic b es
             isDynamic b ((Type (TyVarTy v)):es) | b == v  = isDynamic b es
                       -- todo: Coercion is also possible here
-            isDynamic b _                       = Just b -- not a simple repass, so dynamic
+            isDynamic _ _                       = True -- not a simple repass, so dynamic
 
         wkr <- newIdH (var2String f ++ "'") (exprType (mkCoreLams dbnds body))
 
