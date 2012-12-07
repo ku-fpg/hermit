@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleInstances, FlexibleContexts, TupleSections, LambdaCase, InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, TupleSections, LambdaCase, InstanceSigs #-}
 
 module Language.HERMIT.Kure
        (
@@ -163,7 +163,7 @@ instance Injection CoreExpr Core where
 
 ---------------------------------------------------------------------
 
-instance Node HermitC Core where
+instance Walker HermitC Core where
 
   childrenL :: MonadCatch m => MultiLens HermitC m Core Core
   childrenL = multiLens $ translate $ \ c -> \case
