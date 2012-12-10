@@ -1,6 +1,7 @@
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
 module Language.HERMIT.PrettyPrinter.Clean where
 
+import Control.Monad (ap)
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
@@ -141,10 +142,7 @@ corePrettyH opts = do
         appendBind (Just v) xs = v : xs
 
         ppCoreExprR :: TranslateH GHC.CoreExpr RetExpr
-        ppCoreExprR = do
-               ret <- ppCoreExprPR
-               absPath <- absPathT
-               return $ ret (rootPath absPath)
+        ppCoreExprR = ppCoreExprPR `ap` rootPathT
 
         ppCoreExprPR :: TranslateH GHC.CoreExpr (Path -> RetExpr)
         ppCoreExprPR = lamT ppCoreExprR (\ v e _ -> case e of

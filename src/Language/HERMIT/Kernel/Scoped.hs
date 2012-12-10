@@ -47,10 +47,6 @@ emptyLocalPath = LocalPath []
 localPath2Path :: LocalPath -> Path
 localPath2Path (LocalPath p) = reverse p
 
--- Convert between path representations.
--- path2LocalPath :: Path -> LocalPath
--- path2LocalPath p = LocalPath (reverse p)
-
 localPaths2Paths :: [LocalPath] -> [Path]
 localPaths2Paths = reverse . map localPath2Path
 

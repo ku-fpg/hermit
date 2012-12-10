@@ -5,7 +5,6 @@ module Language.HERMIT.Context
          HermitC
        , initHermitC
          -- ** Adding to the Context
-       , (@@)
        , addAltBindings
        , addBinding
        , addCaseBinding
@@ -65,16 +64,16 @@ data HermitC = HermitC
 
 -- | The HERMIT context stores an 'AbsolutePath' to the current node in the tree.
 instance PathContext HermitC where
-  contextPath :: HermitC -> AbsolutePath
-  contextPath = hermitPath
+  absPath :: HermitC -> AbsolutePath
+  absPath = hermitPath
+
+  (@@) :: HermitC -> Int -> HermitC
+  c @@ v = c { hermitPath = extendAbsPath v (hermitPath c) }
+
 
 -- | Create the initial HERMIT 'HermitC' by providing a 'ModGuts'.
 initHermitC :: ModGuts -> HermitC
 initHermitC modGuts = HermitC empty 0 rootAbsPath modGuts
-
--- | Update the context by extending the stored 'AbsolutePath' to a child.
-(@@) :: HermitC -> Int -> HermitC
-(@@) c v = c { hermitPath = extendAbsPath v (hermitPath c) }
 
 ------------------------------------------------------------------------
 

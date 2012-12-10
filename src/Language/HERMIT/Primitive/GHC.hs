@@ -175,7 +175,7 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 info :: TranslateH Core String
 info = translate $ \ c core -> do
          dynFlags <- getDynFlags
-         let pa       = "Path: " ++ show (contextPath c)
+         let pa       = "Path: " ++ show (absPath c)
              node     = "Node: " ++ coreNode core
              con      = "Constructor: " ++ coreConstructor core
              bds      = "Bindings in Scope: " ++ show (map unqualifiedVarName $ boundVars c)
