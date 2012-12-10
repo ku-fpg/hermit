@@ -166,7 +166,7 @@ corePrettyH opts = do
                    <+ (acceptR (\ e -> case e of
                                          GHC.App (GHC.Type _) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
                                          GHC.App (GHC.App (GHC.Var _) (GHC.Type _)) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
-                                         _ -> False) "TODO: add decent error message here" >>>
+                                         _ -> False) >>>
                                (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetLam vs e0) _ ->
                                         RetExpr $ hang (e1 <+>
                                                             symbol '(' <>

@@ -77,7 +77,8 @@ configurableInline scrutinee caseBinderOnly =
    withPatFailMsg (wrongExprForm "Var v") $
    do (c, Var v) <- exposeT
       (e,d) <- getUnfolding scrutinee caseBinderOnly v c
-      return e >>> accepterR (extractT $ ensureDepth d) "values in inlined expression have been rebound."
+      return e >>> (setFailMsg "values in inlined expression have been rebound." $
+                    accepterR (extractT $ ensureDepth d))
 
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
