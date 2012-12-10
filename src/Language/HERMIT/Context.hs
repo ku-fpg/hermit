@@ -68,7 +68,7 @@ instance PathContext HermitC where
   absPath = hermitPath
 
   (@@) :: HermitC -> Int -> HermitC
-  c @@ v = c { hermitPath = extendAbsPath v (hermitPath c) }
+  c @@ n = c { hermitPath = extendAbsPath n (hermitPath c) }
 
 
 -- | Create the initial HERMIT 'HermitC' by providing a 'ModGuts'.
