@@ -96,9 +96,9 @@ instance Injection ModGuts Core where
   inject :: ModGuts -> Core
   inject = ModGutsCore
 
-  retract :: Core -> Maybe ModGuts
-  retract (ModGutsCore guts) = Just guts
-  retract _                  = Nothing
+  project :: Core -> Maybe ModGuts
+  project (ModGutsCore guts) = Just guts
+  project _                  = Nothing
 
 
 instance Injection CoreProg Core where
@@ -106,9 +106,9 @@ instance Injection CoreProg Core where
   inject :: CoreProg -> Core
   inject = ProgCore
 
-  retract :: Core -> Maybe CoreProg
-  retract (ProgCore bds) = Just bds
-  retract _              = Nothing
+  project :: Core -> Maybe CoreProg
+  project (ProgCore bds) = Just bds
+  project _              = Nothing
 
 
 instance Injection CoreBind Core where
@@ -116,9 +116,9 @@ instance Injection CoreBind Core where
   inject :: CoreBind -> Core
   inject = BindCore
 
-  retract :: Core -> Maybe CoreBind
-  retract (BindCore bnd)  = Just bnd
-  retract _               = Nothing
+  project :: Core -> Maybe CoreBind
+  project (BindCore bnd)  = Just bnd
+  project _               = Nothing
 
 
 instance Injection CoreDef Core where
@@ -126,9 +126,9 @@ instance Injection CoreDef Core where
   inject :: CoreDef -> Core
   inject = DefCore
 
-  retract :: Core -> Maybe CoreDef
-  retract (DefCore def) = Just def
-  retract _             = Nothing
+  project :: Core -> Maybe CoreDef
+  project (DefCore def) = Just def
+  project _             = Nothing
 
 
 instance Injection CoreAlt Core where
@@ -136,9 +136,9 @@ instance Injection CoreAlt Core where
   inject :: CoreAlt -> Core
   inject = AltCore
 
-  retract :: Core -> Maybe CoreAlt
-  retract (AltCore expr) = Just expr
-  retract _              = Nothing
+  project :: Core -> Maybe CoreAlt
+  project (AltCore expr) = Just expr
+  project _              = Nothing
 
 
 instance Injection CoreExpr Core where
@@ -146,9 +146,9 @@ instance Injection CoreExpr Core where
   inject :: CoreExpr -> Core
   inject = ExprCore
 
-  retract :: Core -> Maybe CoreExpr
-  retract (ExprCore expr) = Just expr
-  retract _               = Nothing
+  project :: Core -> Maybe CoreExpr
+  project (ExprCore expr) = Just expr
+  project _               = Nothing
 
 ---------------------------------------------------------------------
 
