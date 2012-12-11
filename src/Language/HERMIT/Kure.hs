@@ -327,7 +327,7 @@ appOneR r1 r2 = unwrapOneR $ appAllR (wrapOneR r1) (wrapOneR r2)
 -- | Translate an expression of the form: @Lam@ 'Var' 'CoreExpr'
 lamT :: Monad m => Translate HermitC m CoreExpr a -> (Var -> a -> b) -> Translate HermitC m CoreExpr b
 lamT t f = translate $ \ c -> \case
-                                 Lam b e -> f b <$> apply t (addLambdaBinding b c @@ 0) e
+                                 Lam v e -> f v <$> apply t (addLambdaBinding v c @@ 0) e
                                  _       -> fail "not a lambda node."
 
 -- | Rewrite the 'CoreExpr' child of an expression of the form: @Lam@ 'Var' 'CoreExpr'
