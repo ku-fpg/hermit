@@ -33,13 +33,12 @@ import GhcPlugins
 --     (b) the types are complicated and we're not sure that we understand them.
 
 -- | Core is the sum type of all nodes in the AST that we wish to be able to traverse.
---   All 'Node' instances in HERMIT define their 'Generic' type to be 'Core'.
-data Core = ModGutsCore  ModGuts            -- ^ The module.
-          | ProgCore     CoreProg           -- ^ A program (a telescope of top-level binding groups).
-          | BindCore     CoreBind           -- ^ A binding group.
-          | DefCore      CoreDef            -- ^ A recursive definition.
-          | ExprCore     CoreExpr           -- ^ An expression.
-          | AltCore      CoreAlt            -- ^ A case alternative.
+data Core = GutsCore  ModGuts            -- ^ The module.
+          | ProgCore  CoreProg           -- ^ A program (a telescope of top-level binding groups).
+          | BindCore  CoreBind           -- ^ A binding group.
+          | DefCore   CoreDef            -- ^ A recursive definition.
+          | ExprCore  CoreExpr           -- ^ An expression.
+          | AltCore   CoreAlt            -- ^ A case alternative.
 
 ---------------------------------------------------------------------
 

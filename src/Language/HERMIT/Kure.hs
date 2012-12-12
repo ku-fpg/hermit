@@ -94,10 +94,10 @@ type LensH a b      = Lens      HermitC HermitM a b
 instance Injection ModGuts Core where
 
   inject :: ModGuts -> Core
-  inject = ModGutsCore
+  inject = GutsCore
 
   project :: Core -> Maybe ModGuts
-  project (ModGutsCore guts) = Just guts
+  project (GutsCore guts) = Just guts
   project _                  = Nothing
 
 
@@ -157,12 +157,12 @@ instance Walker HermitC Core where
   allR :: forall m. MonadCatch m => Rewrite HermitC m Core -> Rewrite HermitC m Core
   allR r = prefixFailMsg "allR failed: " $
            rewrite $ \ c -> \case
-             ModGutsCore guts -> inject <$> apply allRmodguts c guts
-             ProgCore p       -> inject <$> apply allRprog c p
-             BindCore bn      -> inject <$> apply allRbind c bn
-             DefCore def      -> inject <$> apply allRdef c def
-             AltCore alt      -> inject <$> apply allRalt c alt
-             ExprCore e       -> inject <$> apply allRexpr c e
+             GutsCore guts  -> inject <$> apply allRmodguts c guts
+             ProgCore p     -> inject <$> apply allRprog c p
+             BindCore bn    -> inject <$> apply allRbind c bn
+             DefCore def    -> inject <$> apply allRdef c def
+             AltCore alt    -> inject <$> apply allRalt c alt
+             ExprCore e     -> inject <$> apply allRexpr c e
     where
       allRmodguts :: MonadCatch m => Rewrite HermitC m ModGuts
       allRmodguts = modGutsR (extractR r)
@@ -170,14 +170,14 @@ instance Walker HermitC Core where
 
       allRprog :: MonadCatch m => Rewrite HermitC m CoreProg
       allRprog = readerT $ \case
-                     ProgCons _ _ -> progConsAllR (extractR r) (extractR r)
-                     _            -> idR
+                              ProgCons _ _ -> progConsAllR (extractR r) (extractR r)
+                              _            -> idR
       {-# INLINE allRprog #-}
 
       allRbind :: MonadCatch m => Rewrite HermitC m CoreBind
       allRbind = readerT $ \case
-        NonRec _ _  -> nonRecR (extractR r)
-        Rec _       -> recAllR (const $ extractR r)
+                              NonRec _ _  -> nonRecR (extractR r)
+                              Rec _       -> recAllR (const $ extractR r)
       {-# INLINE allRbind #-}
 
       allRdef :: MonadCatch m => Rewrite HermitC m CoreDef
@@ -190,13 +190,13 @@ instance Walker HermitC Core where
 
       allRexpr :: MonadCatch m => Rewrite HermitC m CoreExpr
       allRexpr = readerT $ \case
-        App _ _      -> appAllR  (extractR r) (extractR r)
-        Lam _ _      -> lamR  (extractR r)
-        Let _ _      -> letAllR  (extractR r) (extractR r)
-        Case _ _ _ _ -> caseAllR (extractR r) (const $ extractR r)
-        Cast _ _     -> castR (extractR r)
-        Tick _ _     -> tickR (extractR r)
-        _            -> idR
+                              App _ _      -> appAllR  (extractR r) (extractR r)
+                              Lam _ _      -> lamR  (extractR r)
+                              Let _ _      -> letAllR  (extractR r) (extractR r)
+                              Case _ _ _ _ -> caseAllR (extractR r) (const $ extractR r)
+                              Cast _ _     -> castR (extractR r)
+                              Tick _ _     -> tickR (extractR r)
+                              _            -> idR
       {-# INLINE allRexpr #-}
 
 ---------------------------------------------------------------------
@@ -204,11 +204,11 @@ instance Walker HermitC Core where
 -- | Translate a module.
 --   Slightly different to the other congruence combinators: it passes in /all/ of the original to the reconstruction function.
 modGutsT :: Monad m => Translate HermitC m CoreProg a -> (ModGuts -> a -> b) -> Translate HermitC m ModGuts b
-modGutsT t f = translate $ \ c modGuts -> f modGuts <$> apply t (c @@ 0) (bindsToProg $ mg_binds modGuts)
+modGutsT t f = translate $ \ c guts -> f guts <$> apply t (c @@ 0) (bindsToProg $ mg_binds guts)
 
 -- | Rewrite the 'CoreProg' child of a module.
 modGutsR :: Monad m => Rewrite HermitC m CoreProg -> Rewrite HermitC m ModGuts
-modGutsR r = modGutsT r (\ modguts p -> modguts {mg_binds = progToBinds p})
+modGutsR r = modGutsT r (\ guts p -> guts {mg_binds = progToBinds p})
 
 ---------------------------------------------------------------------
 

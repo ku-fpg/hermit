@@ -197,34 +197,34 @@ showExprTypeOrKind dynFlags = showPpr dynFlags . exprTypeOrKind
 -- showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
 
 coreNode :: Core -> String
-coreNode (ModGutsCore _) = "Module"
-coreNode (ProgCore _)    = "Program"
-coreNode (BindCore _)    = "Binding Group"
-coreNode (DefCore _)     = "Recursive Definition"
-coreNode (ExprCore _)    = "Expression"
-coreNode (AltCore _)     = "Case Alternative"
+coreNode (GutsCore _)  = "Module"
+coreNode (ProgCore _)  = "Program"
+coreNode (BindCore _)  = "Binding Group"
+coreNode (DefCore _)   = "Recursive Definition"
+coreNode (ExprCore _)  = "Expression"
+coreNode (AltCore _)   = "Case Alternative"
 
 coreConstructor :: Core -> String
-coreConstructor (ModGutsCore _)    = "ModGuts"
-coreConstructor (ProgCore prog)    = case prog of
-                                       ProgNil      -> "ProgNil"
-                                       ProgCons _ _ -> "ProgCons"
-coreConstructor (BindCore bnd)     = case bnd of
-                                       Rec _      -> "Rec"
-                                       NonRec _ _ -> "NonRec"
-coreConstructor (DefCore _)        = "Def"
-coreConstructor (AltCore _)        = "(,,)"
-coreConstructor (ExprCore expr)    = case expr of
-                                       Var _        -> "Var"
-                                       Type _       -> "Type"
-                                       Lit _        -> "Lit"
-                                       App _ _      -> "App"
-                                       Lam _ _      -> "Lam"
-                                       Let _ _      -> "Let"
-                                       Case _ _ _ _ -> "Case"
-                                       Cast _ _     -> "Cast"
-                                       Tick _ _     -> "Tick"
-                                       Coercion _   -> "Coercion"
+coreConstructor (GutsCore _)     = "ModGuts"
+coreConstructor (ProgCore prog)  = case prog of
+                                     ProgNil      -> "ProgNil"
+                                     ProgCons _ _ -> "ProgCons"
+coreConstructor (BindCore bnd)   = case bnd of
+                                     Rec _      -> "Rec"
+                                     NonRec _ _ -> "NonRec"
+coreConstructor (DefCore _)      = "Def"
+coreConstructor (AltCore _)      = "(,,)"
+coreConstructor (ExprCore expr)  = case expr of
+                                     Var _        -> "Var"
+                                     Type _       -> "Type"
+                                     Lit _        -> "Lit"
+                                     App _ _      -> "App"
+                                     Lam _ _      -> "Lam"
+                                     Let _ _      -> "Let"
+                                     Case _ _ _ _ -> "Case"
+                                     Cast _ _     -> "Cast"
+                                     Tick _ _     -> "Tick"
+                                     Coercion _   -> "Coercion"
 
 ------------------------------------------------------------------------
 
