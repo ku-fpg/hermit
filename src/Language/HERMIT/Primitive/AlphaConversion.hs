@@ -125,7 +125,7 @@ shadowedBy vs fvs = filter (\ v -> getOccString v `elem` map getOccString fvs) v
 -- | Lifted version of 'shadowedBy'.
 --   Additionally, it fails if no shadows are found.
 shadowedByT :: TranslateH a [Var] -> TranslateH a [Var] -> TranslateH a [Var]
-shadowedByT t1 t2 = (shadowedBy <$> t1 <*> t2) >>> acceptR (not . null) "No shadowing detected."
+shadowedByT t1 t2 = setFailMsg "No shadows detected." $ (shadowedBy <$> t1 <*> t2) >>> acceptR (not . null)
 
 -- | Rename local variables with manifestly unique names (x, x0, x1, ...).
 --   Does not rename top-level definitions (though this may change in the future).

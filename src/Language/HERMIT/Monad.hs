@@ -34,8 +34,7 @@ import MonadUtils       -- from GHC
 import Control.Monad
 import Control.Arrow
 
-import Language.KURE.Combinators
-import Language.KURE.Utilities
+import Language.KURE
 
 import Language.HERMIT.Core
 import Language.HERMIT.Context
