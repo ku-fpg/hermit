@@ -76,7 +76,7 @@ foldR nm =  prefixFailMsg "Fold failed: " $
 
 fold :: Id -> CoreExpr -> CoreExpr -> Maybe CoreExpr
 fold i lam exp = do
-    let (vs,body) = foldArgs lam
+    let (vs,body) = collectBinders lam
         -- return Nothing if not equal, so sequence will fail below
         checkEqual :: Maybe CoreExpr -> Maybe CoreExpr -> Maybe CoreExpr
         checkEqual m1 m2 = ifM (exprEqual <$> m1 <*> m2) m1 Nothing
@@ -87,12 +87,6 @@ fold i lam exp = do
 
     es <- sequence [ join (Map.lookup v m) | v <- vs ]
     return $ mkCoreApps (Var i) es
-
--- | Collect arguments to function we are folding, so we can unify with them.
-foldArgs :: CoreExpr -> ([Var], CoreExpr)
-foldArgs = go []
-    where go vs (Lam v e) = go (v:vs) e
-          go vs e         = (reverse vs, e)
 
 -- Note: Id in the concrete instance is first
 -- (not the Id found in the definition we are trying to fold).
@@ -145,6 +139,10 @@ foldMatch vs as (Case s b ty alts) (Case s' b' ty' alts')
     y <- zipWithM altMatch alts alts'
     return (x ++ concat y)
 foldMatch vs as (Cast e c)   (Cast e' c')  | coreEqCoercion c c' = foldMatch vs as e e'
+-- don't try to alpha type variables for now
+foldMatch vs _  (Type t@(TyVarTy v)) e@(Type t') | v `elem` vs = return [(v,e)]
+                                                 | eqType t t' = return []
+                                                 | otherwise   = Nothing
 foldMatch _ _   (Type t)     (Type t')     | eqType t t' = return []
 foldMatch _ _   (Coercion c) (Coercion c') | coreEqCoercion c c' = return []
 foldMatch _ _ _ _ = Nothing
