@@ -1,8 +1,8 @@
 module Language.HERMIT.Primitive.Local.Let
        ( -- * Rewrites on Let Expressions
-         letExternals
+         letElim
+       , letExternals
        , letIntro
-       , letElim
        , letFloatApp
        , letFloatArg
        , letFloatLet
@@ -10,7 +10,11 @@ module Language.HERMIT.Primitive.Local.Let
        , letFloatCase
        , letFloatExpr
        , letFloatLetTop
+       , letNonRecElim
+       , letRecElim
        , letToCase
+       , letUnfloatApp
+       , letUnfloatCase
        )
 where
 
@@ -68,6 +72,13 @@ letExternals =
                      [ "let v = ev in e ==> case ev of v -> e" ] .+ Commute .+ Shallow .+ PreCondition
          -- , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
          --             [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ] .+ Unimplemented
+         , external "let-unfloat" (promoteExprR (letUnfloatApp <+ letUnfloatCase) >+> anybuR (promoteExprR letElim) :: RewriteH Core)
+                     [ "Unfloat a let if possible." ] .+ Commute .+ Shallow
+         , external "let-unfloat-app" ((promoteExprR letUnfloatApp >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
+                     [ "let v = ev in f a ==> (let v = ev in f) (let v = ev in a)" ] .+ Commute .+ Shallow
+         , external "let-unfloat-case" ((promoteExprR letUnfloatCase >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
+                     [ "let v = ev in case s of p -> e ==> case (let v = ev in s) of p -> let v = ev in e"
+                     , "if v does not shadow a pattern binder in p" ] .+ Commute .+ Shallow
          ]
 
 -------------------------------------------------------------------------------------------
@@ -79,14 +90,34 @@ letIntro nm = prefixFailMsg "Let-introduction failed: " $
                                        v <- newIdH (show nm) (exprTypeOrKind e)
                                        return $ Let (NonRec v e) (Var v)
 
--- | Remove an unused let binding.
---   (let v = E1 in E2) => E2, if v is not free in E2
 letElim :: RewriteH CoreExpr
-letElim = prefixFailMsg "Dead-let-elimination failed: " $
+letElim = letNonRecElim <+ letRecElim
+
+-- | Remove an unused non-recursive let binding.
+--   (let v = E1 in E2) => E2, if v is not free in E2
+letNonRecElim :: RewriteH CoreExpr
+letNonRecElim = prefixFailMsg "Dead-let-elimination failed: " $
           withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
       do Let (NonRec v _) e <- idR
          guardMsg (v `notElem` coreExprFreeVars e) "let-bound variable appears in the expression."
          return e
+
+-- TODO: find the GHC way to do this, as this implementation will be defeated by mutual recursion
+-- | Remove all unused recursive let bindings in the current group.
+letRecElim :: RewriteH CoreExpr
+letRecElim = prefixFailMsg "Dead-let-elimination failed: " $ do
+    Let (Rec bnds) body <- idR
+    (vsAndFrees, bodyFrees) <- letT (recT (\_ -> defT freeVarsT (,)) id) freeVarsT (,)
+    -- binder is alive if it is found free anywhere but its own rhs
+    let living = [ v
+                 | (v,_) <- vsAndFrees
+                 , v `elem` bodyFrees || v `elem` (concat [ fs | (v',fs) <- vsAndFrees, v' /= v ])
+                 ]
+    if null living
+        then return body
+        else if length living == length bnds
+                then fail "no dead code."
+                else return $ Let (Rec [ (v,rhs) | (v,rhs) <- bnds, v `elem` living ]) body
 
 -- | let v = ev in e ==> case ev of v -> e
 letToCase :: RewriteH CoreExpr
@@ -158,3 +189,15 @@ letFloatLetTop = prefixFailMsg "Let floating to top level failed: " $
      return (NonRec w ew `ProgCons` NonRec v ev `ProgCons` p)
 
 -------------------------------------------------------------------------------------------
+
+letUnfloatCase :: RewriteH CoreExpr
+letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $ do
+    Let bnds (Case s w ty alts) <- idR
+    captured <- letT bindVarsT caseVarsT intersect
+    guardMsg (null captured) "let bindings would capture case pattern bindings."
+    return $ Case (Let bnds s) w ty [ (ac, vs, Let bnds e) | (ac, vs, e) <- alts ]
+
+letUnfloatApp :: RewriteH CoreExpr
+letUnfloatApp = prefixFailMsg "Let unfloating from app failed: " $ do
+    Let bnds (App e1 e2) <- idR
+    return $ App (Let bnds e1) (Let bnds e2)
