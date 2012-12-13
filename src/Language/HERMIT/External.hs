@@ -1,5 +1,4 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts,
-             GADTs, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, GADTs, TypeSynonymInstances, FlexibleInstances #-}
 
 module Language.HERMIT.External
        (
@@ -73,8 +72,8 @@ data CmdTag = Shell          -- ^ Shell command.
             | PreCondition   -- ^ Operation has a precondition.
             | Debug          -- ^ Commands to help debugging.
             | VersionControl -- ^ Version control.
-            | Bash           -- ^ Commands that are run by 'Language.HERMIT.Dicitonary.bash'.
-            | Context        -- ^ a command that uses its context, like inline
+            | Bash           -- ^ Commands that are run by 'Language.HERMIT.Dictionary.bash'.
+            | Context        -- ^ A command that uses its context, such as inline
 
 
             | TODO           -- ^ TODO: check before the release.

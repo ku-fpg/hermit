@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, GADTs, KindSignatures, InstanceSigs #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module Language.HERMIT.Monad
           (
@@ -65,9 +65,8 @@ putStash :: DefStash -> HermitM ()
 putStash s = HermitM (\ _ _ -> return $ return (s, ()))
 
 sendDebugMessage :: DebugMessage -> HermitM ()
-sendDebugMessage msg =
-        do env <- HermitM $ \ ch s -> return $ return (s, ch)
-           hs_debugChan env msg
+sendDebugMessage msg = do env <- HermitM $ \ ch s -> return $ return (s, ch)
+                          hs_debugChan env msg
 
 -- | Save a definition for future use.
 saveDef :: Label -> CoreDef -> HermitM ()
@@ -173,9 +172,8 @@ cloneVarH nameMod v =
 ----------------------------------------------------------------------------
 
 -- | A message packet.
-data DebugMessage :: * where
-        DebugTick    :: String                    -> DebugMessage
-        DebugCore    :: String -> HermitC -> Core -> DebugMessage       -- A postcard
+data DebugMessage  =  DebugTick String
+                   |  DebugCore String HermitC Core    -- ^ A postcard.
 
 mkHermitMEnv :: (DebugMessage -> HermitM ()) -> HermitMEnv
 mkHermitMEnv debugger = HermitMEnv

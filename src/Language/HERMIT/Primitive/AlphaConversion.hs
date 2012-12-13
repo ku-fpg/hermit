@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Language.HERMIT.Primitive.AlphaConversion
        ( -- * Alpha-Renaming and Shadowing
          externals

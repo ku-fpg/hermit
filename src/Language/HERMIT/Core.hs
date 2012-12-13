@@ -26,7 +26,7 @@ import GhcPlugins
 ---------------------------------------------------------------------
 
 -- $typenote
---   NOTE: 'Type' is not included in the generic datatype.
+--   NOTE: 'Type' is not included in the sum type.
 --   However, we could have included it and provided the facility for descending into types.
 --   We have not done so because
 --     (a) we do not need that functionality, and

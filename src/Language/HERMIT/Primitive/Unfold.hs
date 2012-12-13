@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, TypeFamilies, FlexibleContexts, TupleSections #-}
+{-# LANGUAGE TupleSections #-}
 module Language.HERMIT.Primitive.Unfold
     ( externals
     , stashDef

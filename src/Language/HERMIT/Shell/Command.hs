@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, GADTs, KindSignatures, TypeFamilies, DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, GADTs, TypeFamilies, DeriveDataTypeable #-}
 
 module Language.HERMIT.Shell.Command
        ( -- * The HERMIT Command-line Shell
@@ -35,8 +35,6 @@ import Language.HERMIT.PrettyPrinter
 
 import Language.HERMIT.Primitive.Navigation
 import Language.HERMIT.Primitive.Inline
-
--- import Language.HERMIT.Primitive.GHC
 
 import System.Console.ANSI
 import System.IO
