@@ -1,6 +1,6 @@
 flatten-module
 consider 'mapPlus1Int
-{load "../fib-tuple/WWSplitTactic.hss"
+{load "../WWSplitTactic.hss"
   consider 'work
 
   remember origwork
