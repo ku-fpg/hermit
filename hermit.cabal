@@ -1,5 +1,5 @@
 Name:                hermit
-Version:             0.1.4.0
+Version:             0.1.6.0
 Synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
 Description:
   HERMIT uses Haskell to express semi-formal models,
@@ -38,12 +38,12 @@ Description:
   .
   @
    $ hermit Reverse.hs Reverse.hss resume
-   [starting HERMIT v0.1.4.0 on Reverse.hs]
+   [starting HERMIT v0.1.6.0 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:main:Main: -fplugin-opt=HERMIT:main:Main:resume
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.1.4.0 ... linking ... done.
+   Loading package hermit-0.1.6.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    Linking Reverse ...
    $ ./Reverse
@@ -54,12 +54,12 @@ Description:
   .
   @
    $ hermit Reverse.hs
-   [starting HERMIT v0.1.4.0 on Reverse.hs]
+   [starting HERMIT v0.1.6.0 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:main:Main:
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.1.4.0 ... linking ... done.
+   Loading package hermit-0.1.6.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    module main:Main where
    \ \ rev ∷ ∀ a . [] a -> [] a
@@ -135,7 +135,7 @@ Library
                  data-default >= 0.5.0,
                  ghc == 7.6.*,
                  haskeline >= 0.7.0.3,
-                 kure >= 2.6.13,
+                 kure >= 2.6.14,
                  marked-pretty >= 0.1,
                  mtl >= 2.1.2,
                  stm >= 2.4,
