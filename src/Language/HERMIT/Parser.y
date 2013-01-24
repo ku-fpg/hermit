@@ -23,6 +23,7 @@ import Data.List (intercalate)
     '}'     { ScopeEnd }
     ';'     { StmtEnd }
     '\''    { Tick }
+    core    { CoreString $$ }
     quoted  { Quote $$ }
     ident   { Ident $$ }
     infixop { InfixOp $$ }
@@ -49,6 +50,7 @@ e2   : e2 arg          { AppH $1 $2 }
 -- | Expressions that can be arguments in an application.
 arg  : '\'' ident      { SrcName $2 }
      | quoted          { CmdName $1 }
+     | core            { CoreExpr $1 }
      | e4              { $1 }
 
 -- | Expressions that can be in any position of an application.
@@ -71,6 +73,7 @@ data ExprH
     = SrcName String                -- ^ Variable names (refers to source code).
     | CmdName String                -- ^ Commands (to be looked up in 'Language.HERMIT.Dictionary').
     | AppH ExprH ExprH              -- ^ Application.
+    | CoreExpr String               -- ^ Core Fragment TODO: change from String to CoreExpr
     deriving (Eq, Show)
 
 data Token
@@ -80,30 +83,39 @@ data Token
     | ScopeEnd
     | StmtEnd
     | Tick
+    | CoreString String
     | Quote String
     | Ident String
     | InfixOp String
     deriving (Eq, Show)
 
 lexer :: String -> Either String [Token]
-lexer []        = Right []
-lexer ('\n':cs) = fmap (StmtEnd:)    $ lexer cs
-lexer (';' :cs) = fmap (StmtEnd:)    $ lexer cs
-lexer ('(' :cs) = fmap (ParenLeft:)  $ lexer cs
-lexer (')' :cs) = fmap (ParenRight:) $ lexer cs
-lexer ('{' :cs) = fmap (ScopeStart:) $ lexer cs
-lexer ('}' :cs) = fmap (ScopeEnd:)   $ lexer cs
-lexer ('\'':cs) = fmap (Tick:)       $ lexer cs
-lexer ('\"':cs) = let (str,rest) = span (/='\"') cs
-                  in case rest of
-                        ('\"':cs') -> fmap (Quote str:) $ lexer cs'
-                        _          -> Left "lexer: no matching quote"
-lexer s@(c:cs) | isSpace c = lexer cs
-               | isIdFirstChar c = let (i,s') = span isIdChar s
-                                   in fmap (Ident i:) $ lexer s'
-               | isInfixId     c = let (op,s') = span isInfixId s
-                                   in fmap (InfixOp op:) $ lexer s'
-lexer s         = Left $ "lexer: no match on " ++ s
+lexer []           = Right []
+lexer ('\n':cs)    = fmap (StmtEnd:)    $ lexer cs
+lexer (';' :cs)    = fmap (StmtEnd:)    $ lexer cs
+lexer ('(' :cs)    = fmap (ParenLeft:)  $ lexer cs
+lexer (')' :cs)    = fmap (ParenRight:) $ lexer cs
+lexer ('{' :cs)    = fmap (ScopeStart:) $ lexer cs
+lexer ('}' :cs)    = fmap (ScopeEnd:)   $ lexer cs
+lexer ('\'':cs)    = fmap (Tick:)       $ lexer cs
+lexer ('\"':cs)    = let (str,rest) = span (/='\"') cs
+                     in case rest of
+                           ('\"':cs') -> fmap (Quote str:) $ lexer cs'
+                           _          -> Left "lexer: no matching quote"
+lexer ('[':'|':cs) = do (str,cs') <- lexCore cs
+                        fmap (CoreString str:) $ lexer cs'
+lexer s@(c:cs)     | isSpace       c = lexer cs
+                   | isIdFirstChar c = let (i,s') = span isIdChar s
+                                       in fmap (Ident i:) $ lexer s'
+                   | isInfixId     c = let (op,s') = span isInfixId s
+                                       in fmap (InfixOp op:) $ lexer s'
+lexer s            = Left $ "lexer: no match on " ++ s
+
+lexCore :: String -> Either String (String,String)
+lexCore ('|':']':rest) = Right ([],rest)
+lexCore (c:cs)         = do (c',r) <- lexCore cs
+                            return (c:c',r)
+lexCore []             = Left "lexer: no closing |]"
 
 ---------------------------------------------
 
