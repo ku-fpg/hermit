@@ -34,20 +34,25 @@ StmtH : StmtH ';' scoped { $1 ++ [$3] }
       | {- empty -}      { [] }
 
 scoped : '{' StmtH '}' { ScopeH $2 }
-       | E1            { ExprH (e1ToExprH $1) }
+       | ExprH         { ExprH $1 }
 
-E1   : E2 infixop E1   { Infix $1 $2 $3 }
-     | E2              { E2 $1 }
+-- | Top level expression term.
+--   Infix operators bind less tightly than application.
+ExprH : e2 infixop ExprH   { AppH (AppH (CmdName $2) $1) $3 }
+      | e2                 { $1 }
 
-E2   : E2 Arg          { App $1 $2 }
-     | E4              { E4 $1 }
+-- | Expressions without infix operators in them.
+e2   : e2 arg          { AppH $1 $2 }
+     | e4              { $1 }
 
-Arg  : '\'' ident      { ArgSrc $2 }
-     | quoted          { ArgCmd $1 }
-     | E4              { ArgE4 $1 }
+-- | Expressions that can be arguments in an application.
+arg  : '\'' ident      { SrcName $2 }
+     | quoted          { CmdName $1 }
+     | e4              { $1 }
 
-E4   : '(' E1 ')'      { Parens $2 }
-     | ident           { Cmd $1 }
+-- | Expressions that can be in any position of an application.
+e4   : '(' ExprH ')'   { $2 }
+     | ident           { CmdName $1 }
 
 {
 
@@ -66,41 +71,6 @@ data ExprH
     | CmdName String                -- ^ Commands (to be looked up in 'Language.HERMIT.Dictionary').
     | AppH ExprH ExprH              -- ^ Application.
     deriving (Eq, Show)
-
--- | Top level expression term.
---   Infix operators bind less tightly than application.
-data E1 = Infix E2 String E1
-        | E2 E2
-
--- | Expressions without infix operators in them.
-data E2 = App E2 Arg
-        | E4 E4
-
--- | Expressions that can be arguments in an application.
-data Arg = ArgSrc String
-         | ArgCmd String -- for quoted strings
-         | ArgE4 E4
-
--- | Expressions that can be in any position of an application.
-data E4 = Parens E1
-        | Cmd String
-
-e1ToExprH :: E1 -> ExprH
-e1ToExprH (Infix e2 op e1) = AppH (AppH (CmdName op) (e2ToExprH e2)) (e1ToExprH e1)
-e1ToExprH (E2 e2)          = e2ToExprH e2
-
-e2ToExprH :: E2 -> ExprH
-e2ToExprH (App e2 e3)      = AppH (e2ToExprH e2) (e3ToExprH e3)
-e2ToExprH (E4 e4)          = e4ToExprH e4
-
-e3ToExprH :: Arg -> ExprH
-e3ToExprH (ArgSrc s)       = SrcName s
-e3ToExprH (ArgCmd s)       = CmdName s
-e3ToExprH (ArgE4 e4)       = e4ToExprH e4
-
-e4ToExprH :: E4 -> ExprH
-e4ToExprH (Parens e1)          = e1ToExprH e1
-e4ToExprH (Cmd s)          = CmdName s
 
 data Token
     = ParenLeft
