@@ -16,7 +16,7 @@ import qualified Data.Map as M
 import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.External
-import Language.HERMIT.Expr
+import Language.HERMIT.Parser
 
 -- | Interpret an 'ExprH' by looking up the appropriate 'Dynamic'(s) in the provided 'Data.Map', then interpreting the 'Dynamic'(s) with the provided 'Interp's, returning the first interpretation to succeed (or an error string if none succeed).
 interpExprH :: M.Map String [Dynamic] -> [Interp a] -> ExprH -> Either String a

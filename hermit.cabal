@@ -131,6 +131,7 @@ Library
   Build-Depends: base >= 4 && < 5,
                  aeson >= 0.6.0.2,
                  ansi-terminal >= 0.5.5,
+                 array,
                  containers >= 0.5.0.0,
                  data-default >= 0.5.0,
                  ghc == 7.6.*,
@@ -150,13 +151,13 @@ Library
        Language.HERMIT.Context
        Language.HERMIT.Core
        Language.HERMIT.Dictionary
-       Language.HERMIT.Expr
        Language.HERMIT.External
        Language.HERMIT.Kernel
        Language.HERMIT.Kernel.Scoped
        Language.HERMIT.Kure
        Language.HERMIT.Interp
        Language.HERMIT.Monad
+       Language.HERMIT.Parser
 
        Language.HERMIT.Plugin
 

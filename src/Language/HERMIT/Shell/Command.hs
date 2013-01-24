@@ -27,10 +27,10 @@ import Language.HERMIT.Core
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.Dictionary
-import Language.HERMIT.Expr
 import Language.HERMIT.External
 import Language.HERMIT.Interp
 import Language.HERMIT.Kernel.Scoped
+import Language.HERMIT.Parser
 import Language.HERMIT.PrettyPrinter
 
 import Language.HERMIT.Primitive.Navigation
