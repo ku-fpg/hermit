@@ -14,6 +14,7 @@ import Data.List (intercalate)
 %name parser
 %tokentype { Token }
 %error { parseError }
+%monad { Either String } { >>= } { return }
 
 %token
     '('     { ParenLeft }
@@ -56,8 +57,8 @@ e4   : '(' ExprH ')'   { $2 }
 
 {
 
-parseError :: [Token] -> a
-parseError ts = error $ "parse error: " ++ show ts
+parseError :: [Token] -> Either String a
+parseError ts = Left $ "parse error: " ++ show ts
 
 -- | Nested lists to represent scoping structure.
 data StmtH expr
@@ -127,7 +128,7 @@ test = do
                      test
 
 parseStmtsH :: String -> Either String [StmtH ExprH]
-parseStmtsH = fmap parser . lexer
+parseStmtsH s = lexer s >>= parser
 
 -- TODO: This is a quick hack that's better than just saying "N"; I have no idea how accurate this is.
 
