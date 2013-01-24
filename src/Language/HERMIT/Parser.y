@@ -114,25 +114,25 @@ data Token
     | InfixOp String
     deriving (Eq, Show)
 
-lexer :: String -> [Token]
-lexer []        = []
-lexer ('\n':cs) = StmtEnd    : lexer cs
-lexer (';' :cs) = StmtEnd    : lexer cs
-lexer ('(' :cs) = ParenLeft  : lexer cs
-lexer (')' :cs) = ParenRight : lexer cs
-lexer ('{' :cs) = ScopeStart : lexer cs
-lexer ('}' :cs) = ScopeEnd   : lexer cs
-lexer ('\'':cs) = Tick       : lexer cs
+lexer :: String -> Either String [Token]
+lexer []        = Right []
+lexer ('\n':cs) = fmap (StmtEnd:)    $ lexer cs
+lexer (';' :cs) = fmap (StmtEnd:)    $ lexer cs
+lexer ('(' :cs) = fmap (ParenLeft:)  $ lexer cs
+lexer (')' :cs) = fmap (ParenRight:) $ lexer cs
+lexer ('{' :cs) = fmap (ScopeStart:) $ lexer cs
+lexer ('}' :cs) = fmap (ScopeEnd:)   $ lexer cs
+lexer ('\'':cs) = fmap (Tick:)       $ lexer cs
 lexer ('\"':cs) = let (str,rest) = span (/='\"') cs
                   in case rest of
-                        ('\"':cs') -> Quote str : lexer cs'
-                        _          -> error "lexer: no matching quote"
+                        ('\"':cs') -> fmap (Quote str:) $ lexer cs'
+                        _          -> Left "lexer: no matching quote"
 lexer s@(c:cs) | isSpace c = lexer cs
                | isIdFirstChar c = let (i,s') = span isIdChar s
-                                   in Ident i : lexer s'
+                                   in fmap (Ident i:) $ lexer s'
                | isInfixId     c = let (op,s') = span isInfixId s
-                                   in InfixOp op : lexer s'
-lexer s         = error $ "lexer: no match on " ++ s
+                                   in fmap (InfixOp op:) $ lexer s'
+lexer s         = Left $ "lexer: no match on " ++ s
 
 ---------------------------------------------
 
@@ -148,7 +148,7 @@ isIdChar c = isIdFirstChar c || c `elem` "_-'"
 isInfixId :: Char -> Bool
 isInfixId c = c `elem` "+*/._-:<>"
 
--- | Use ghci Expr.hs to run this test function.
+-- | Use ghci Parser.hs to run this test function.
 test = do
     ln <- getLine
     case ln of
@@ -157,7 +157,7 @@ test = do
                      test
 
 parseStmtsH :: String -> Either String [StmtH ExprH]
-parseStmtsH = Right . parser . lexer
+parseStmtsH = fmap parser . lexer
 
 -- TODO: This is a quick hack that's better than just saying "N"; I have no idea how accurate this is.
 
