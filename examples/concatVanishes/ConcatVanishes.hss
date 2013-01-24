@@ -1,4 +1,3 @@
-flatten-module
 consider let
 { consider def ; fix-intro }
 safe-let-subst
