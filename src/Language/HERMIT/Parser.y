@@ -7,7 +7,7 @@ module Language.HERMIT.Parser
     , StmtH(..)
     ) where
 
-import Data.Char (isSpace, isAlphaNum)
+import Data.Char (isSpace, isAlpha, isAlphaNum)
 import Data.List (intercalate)
 }
 
@@ -121,11 +121,11 @@ lexCore []             = Left "lexer: no closing |]"
 
 -- | Chars that are valid in identifiers anywhere.
 isIdFirstChar :: Char -> Bool
-isIdFirstChar c = isAlphaNum c || c `elem` "$[]:."
+isIdFirstChar c = c `elem` "_$[]:." || isAlpha c
 
 -- | Chars that are valid in identifiers, but not as the first character.
 isIdChar :: Char -> Bool
-isIdChar c = isIdFirstChar c || c `elem` "_-'"
+isIdChar c = isAlphaNum c || c `elem` "-'" || isIdFirstChar c
 
 -- | Chars that are valid in infix operators.
 isInfixId :: Char -> Bool
