@@ -8,3 +8,5 @@ BEFORE.HERMIT.*
 AFTER.HERMIT.*
 examples/Haskell2012/paper/
 examples/IFL2012/ifl-paper/
+src/Language/HERMIT/Parser.hs
+src/Language/HERMIT/ParserCore.hs
