@@ -1,9 +1,5 @@
 import Prelude hiding (sum, length)
 
--- so we can let-tuple
-import Data.Tuple
-import GHC.Tuple
-
 {-# NOINLINE mean #-}
 mean :: [Int] -> Int
 mean xs = sum xs `div` length xs

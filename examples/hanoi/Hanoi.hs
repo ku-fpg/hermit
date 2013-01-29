@@ -5,7 +5,6 @@ import Criterion.Main
 import Control.Monad (forM_)
 
 import Data.Function (fix)
-import GHC.Tuple
 
 data Nat = Z | S Nat
 

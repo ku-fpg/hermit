@@ -1,9 +1,6 @@
 -- so we can fix-intro
 import Data.Function (fix)
 
--- so we can let-tuple
-import GHC.Tuple
-
 import Prelude hiding ((+))
 
 data Nat = Z | S Nat
