@@ -13,6 +13,7 @@ module Language.HERMIT.Core
           , bindsToProg
           , bindToIdExprs
             -- * Utilities
+          , isValue
           , isType
           , typeExprToType
           , exprTypeOrKind
@@ -86,7 +87,12 @@ type CoreTickish = Tickish Id
 
 -----------------------------------------------------------------------
 
--- TODO: I don't know what to do about Coercions here, because I don't understand them.
+-- TODO: I don't understand coercions very well, so I exclude them from both values and types.
+
+-- | Succeeds if the expression is not a 'Type', type 'Var', or 'Coercion'.
+isValue :: CoreExpr -> Bool
+isValue (Coercion _) = False
+isValue e            = not (isType e)
 
 -- | Succeeds if the expression is either a 'Type' or type 'Var'.
 isType :: CoreExpr -> Bool

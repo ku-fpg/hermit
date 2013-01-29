@@ -146,7 +146,7 @@ safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
           safeBind (Lam {})   = True
           safeBind e@(App {}) =
                  case collectArgs e of
-                   (Var f,args) -> arityOf env f > length (filter (not . isTypeArg) args)
+                   (Var f,args) -> arityOf env f > length (filter isValue args) -- Neil: I've changed this to "isValue" rather than "not . isTypeArg", as the latter only excluded the "Type" constructor.  This may not be the right thing to do though.
                    (other,args) -> case collectBinders other of
                                      (bds,_) -> length bds > length args
           safeBind _          = False

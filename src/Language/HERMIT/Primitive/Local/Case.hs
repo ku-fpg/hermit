@@ -140,7 +140,7 @@ caseReduce = letTransform >>> tryR (repeatR letSubstR)
                               Nothing -> fail "head of scrutinee is not a data constructor."
                               Just (dc, args) ->
                                 case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
-                                    [(bs,e')] -> let (tyArgs, valArgs) = span isTypeArg args
+                                    [(bs,e')] -> let (tyArgs, valArgs) = span isType args
                                                      tyBndrs = takeWhile isTyVar bs -- it is possible the pattern constructor binds a type
                                                                                     -- if the constructor is existentially quantified
                                                      existentials = reverse $ take (length tyBndrs) $ reverse tyArgs

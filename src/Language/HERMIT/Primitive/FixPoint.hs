@@ -60,61 +60,39 @@ fixSpecialization :: RewriteH CoreExpr
 fixSpecialization = do
 
         -- fix (t::*) (f :: t -> t) (a :: t) :: t
-        App (App (App (Var fixId) (Type _)) _) _ <- idR -- TODO: couldn't that Type be a Var?  Might be better to use my "isType" fucntion.
+        App (App (App (Var fixId) tyE) _) _ <- idR
 
-        guardIsFixId fixId -- guardMsg (fx == fixId) "fixSpecialization only works on fix"
+        guardIsFixId fixId
+        guardMsg (isType tyE) "First argument to fix is not a type, this shouldn't have happened."
 
-        let rr :: RewriteH CoreExpr
-            rr = multiEtaExpand [TH.mkName "f",TH.mkName "a"]
+        let r :: RewriteH CoreExpr
+            r = multiEtaExpand [TH.mkName "f",TH.mkName "a"]
 
             sub :: RewriteH Core
-            sub = pathR [0,1] (promoteR rr)
-        -- be careful this does not loop (it should not)
-        extractR sub >>> fixSpecialization'
+            sub = pathR [0,1] (promoteR r)
 
+        extractR sub >>> do -- In normal form now
+                            App (App (App (Var fx) fixTyE)
+                                     (Lam _ (Lam v2 (App (App e _) _a2)))
+                                )
+                                a <- idR
 
-fixSpecialization' :: RewriteH CoreExpr
-fixSpecialization' =
-     do
-        -- In normal form now
-        App (App (App (Var fx) fixTyE)
-                 (Lam _ (Lam v2 (App (App e _) _a2)))
-            )
-            a <- idR
+                            constT $ do t  <- case typeExprToType fixTyE of
+                                                Nothing  -> fail "First argument to fix is not a type, this shouldn't have happened."
+                                                Just ty  -> return ty
 
-        t  <- case typeExprToType fixTyE of
-                Nothing -> fail "first argument to fix is not a type, this shouldn't have happened."
-                Just ty -> return ty
+                                        t' <- case typeExprToType a of
+                                                Nothing  -> fail "Not a type variable."
+                                                Just t2  -> return (applyTy t t2)
 
-        t' <- case typeExprToType a of
-                Just t2           -> return (applyTy t t2)
-                Nothing           -> fail "Not a type variable." -- TODO:  I think this entire functions needs revisiting and cleaning up.  What's going on with all the dead-code (which I've commented out now).
---                   Var  a2  -> mkAppTy t (exprType t2)
---                   mkAppTy t t'
+                                        v3 <- newIdH "f" t'
+                                        v4 <- newTyVarH "a" (tyVarKind v2)
 
+                                        -- f' :: \/ a -> T [a] -> (\/ b . T [b])
+                                        let f' = Lam v4 (Cast (Var v3) (mkUnsafeCo t' (applyTy t (mkTyVarTy v4))))
+                                            e' = Lam v3 (App (App e f') a)
 
-        -- TODO: t2' isn't used anywhere -- which means that a2 is never used ???
---        let t2' = case a2 of
---                   Type t2  -> applyTy t t2
---                   Var  a2  -> mkAppTy t (exprType t2)
---                   mkAppTy t t'
-
-
-        v3 <- constT $ newIdH "f" t' -- (funArgTy t')
-        v4 <- constT $ newTyVarH "a" (tyVarKind v2)
-
-         -- f' :: \/ a -> T [a] -> (\/ b . T [b])
-        let f' = Lam v4  (Cast (Var v3)
-                               (mkUnsafeCo t' (applyTy t (mkTyVarTy v4))))
-        let e' = Lam v3 (App (App e f') a)
-
-        return $ App (App (Var fx) (Type t')) e'
-
-
--- introSpecialisedPolyFun :: TH.Name -> TH.Name -> RewriteH CoreExpr
--- introSpecialisedPolyFun funNm ty = do funId <- lookupMatchingVarT funNm
---                                       tyVar <- lookupMatchingVarT ty
-
+                                        return $ App (App (Var fx) (Type t')) e'
 
 
 workerWrapperFacTest :: TH.Name -> TH.Name -> RewriteH CoreExpr
