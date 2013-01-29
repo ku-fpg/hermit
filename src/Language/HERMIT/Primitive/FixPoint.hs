@@ -71,28 +71,27 @@ fixSpecialization = do
             sub :: RewriteH Core
             sub = pathR [0,1] (promoteR r)
 
-        extractR sub >>> do -- In normal form now
-                            App (App (App (Var fx) fixTyE)
-                                     (Lam _ (Lam v2 (App (App e _) _a2)))
-                                )
-                                a <- idR
+        App (App (App (Var fx) fixTyE)
+                 (Lam _ (Lam v2 (App (App e _) _a2)))
+            )
+            a <- extractR sub -- In normal form now
 
-                            constT $ do t  <- case typeExprToType fixTyE of
-                                                Nothing  -> fail "First argument to fix is not a type, this shouldn't have happened."
-                                                Just ty  -> return ty
+        constT $ do t  <- case typeExprToType fixTyE of
+                            Nothing  -> fail "First argument to fix is not a type, this shouldn't have happened."
+                            Just ty  -> return ty
 
-                                        t' <- case typeExprToType a of
-                                                Nothing  -> fail "Not a type variable."
-                                                Just t2  -> return (applyTy t t2)
+                    t' <- case typeExprToType a of
+                            Nothing  -> fail "Not a type variable."
+                            Just t2  -> return (applyTy t t2)
 
-                                        v3 <- newIdH "f" t'
-                                        v4 <- newTyVarH "a" (tyVarKind v2)
+                    v3 <- newIdH "f" t'
+                    v4 <- newTyVarH "a" (tyVarKind v2)
 
-                                        -- f' :: \/ a -> T [a] -> (\/ b . T [b])
-                                        let f' = Lam v4 (Cast (Var v3) (mkUnsafeCo t' (applyTy t (mkTyVarTy v4))))
-                                            e' = Lam v3 (App (App e f') a)
+                    -- f' :: \/ a -> T [a] -> (\/ b . T [b])
+                    let f' = Lam v4 (Cast (Var v3) (mkUnsafeCo t' (applyTy t (mkTyVarTy v4))))
+                        e' = Lam v3 (App (App e f') a)
 
-                                        return $ App (App (Var fx) (Type t')) e'
+                    return $ App (App (Var fx) (Type t')) e'
 
 
 workerWrapperFacTest :: TH.Name -> TH.Name -> RewriteH CoreExpr
