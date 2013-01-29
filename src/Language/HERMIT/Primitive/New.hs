@@ -53,6 +53,8 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "perform the static argument transformation on a recursive function" ]
          , external "unsafe-replace" (promoteExprR . unsafeReplace :: CoreString -> RewriteH Core)
                 [ "replace the currently focused expression with a new expression" ]
+         , external "inline-all" (inlineAll :: [TH.Name] -> RewriteH Core)
+                [ "inline all named functions in a bottom-up manner" ]
          ]
 
 ------------------------------------------------------------------------------------------------------
@@ -218,3 +220,6 @@ push nm = prefixFailMsg "push failed: " $
 
 unsafeReplace :: CoreString -> RewriteH CoreExpr
 unsafeReplace = contextonlyT . parseCore . unCoreString
+
+inlineAll :: [TH.Name] -> RewriteH Core
+inlineAll = innermostR . foldr (\nm rr -> promoteExprR (inlineName nm) <+ rr) (fail "inline-all: nothing to do")
