@@ -14,6 +14,7 @@ import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
+import Language.HERMIT.ParserCore
 
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC
@@ -51,6 +52,8 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 ] .+ Deep
          , external "static-arg" (promoteDefR staticArg :: RewriteH Core)
                 [ "perform the static argument transformation on a recursive function" ]
+         , external "unsafe-replace" (promoteExprR . unsafeReplace :: String -> RewriteH Core)
+                [ "replace the currently focused expression with a new expression" ]
          ]
 
 ------------------------------------------------------------------------------------------------------
@@ -217,3 +220,6 @@ push nm = prefixFailMsg "push failed: " $
           _ -> fail "no function to match."
 
 ------------------------------------------------------------------------------------------------------
+
+unsafeReplace :: String -> RewriteH CoreExpr
+unsafeReplace = contextonlyT . parseCore
