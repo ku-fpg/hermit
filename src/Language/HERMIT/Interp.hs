@@ -49,6 +49,7 @@ interpExpr = interpExpr' False
 
 interpExpr' :: Bool -> M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
 interpExpr' _   _   (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
+interpExpr' _   _   (CoreFragment str) = return [ toDyn $ CoreBox (CoreString str) ]
 interpExpr' rhs env (CmdName str)
                                         -- An Int is either a Path, or will be interpreted specially later.
   | all isDigit str                     = let i = read str in

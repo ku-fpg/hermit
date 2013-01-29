@@ -52,7 +52,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 ] .+ Deep
          , external "static-arg" (promoteDefR staticArg :: RewriteH Core)
                 [ "perform the static argument transformation on a recursive function" ]
-         , external "unsafe-replace" (promoteExprR . unsafeReplace :: String -> RewriteH Core)
+         , external "unsafe-replace" (promoteExprR . unsafeReplace :: CoreString -> RewriteH Core)
                 [ "replace the currently focused expression with a new expression" ]
          ]
 
@@ -221,5 +221,5 @@ push nm = prefixFailMsg "push failed: " $
 
 ------------------------------------------------------------------------------------------------------
 
-unsafeReplace :: String -> RewriteH CoreExpr
-unsafeReplace = contextonlyT . parseCore
+unsafeReplace :: CoreString -> RewriteH CoreExpr
+unsafeReplace = contextonlyT . parseCore . unCoreString

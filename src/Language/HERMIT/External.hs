@@ -30,6 +30,8 @@ module Language.HERMIT.External
        , TranslateCoreStringBox(..)
        , TranslateCoreCheckBox(..)
        , NameBox(..)
+       , CoreString(..)
+       , CoreBox(..)
        , TranslateCorePathBox(..)
        , StringBox(..)
 
@@ -306,6 +308,14 @@ instance Extern (TranslateH Core Path) where
     type Box (TranslateH Core Path) = TranslateCorePathBox
     box = TranslateCorePathBox
     unbox (TranslateCorePathBox i) = i
+
+newtype CoreString = CoreString { unCoreString :: String }
+data CoreBox = CoreBox CoreString deriving Typeable
+
+instance Extern CoreString where
+    type Box CoreString = CoreBox
+    box = CoreBox
+    unbox (CoreBox i) = i
 
 
 data StringBox = StringBox String deriving Typeable

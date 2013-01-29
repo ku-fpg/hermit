@@ -50,7 +50,7 @@ e2   : e2 arg          { AppH $1 $2 }
 -- | Expressions that can be arguments in an application.
 arg  : '\'' ident      { SrcName $2 }
      | quoted          { CmdName $1 }
-     | core            { CoreExpr $1 }
+     | core            { CoreFragment $1 }
      | e4              { $1 }
 
 -- | Expressions that can be in any position of an application.
@@ -73,7 +73,7 @@ data ExprH
     = SrcName String                -- ^ Variable names (refers to source code).
     | CmdName String                -- ^ Commands (to be looked up in 'Language.HERMIT.Dictionary').
     | AppH ExprH ExprH              -- ^ Application.
-    | CoreExpr String               -- ^ Core Fragment TODO: change from String to CoreExpr
+    | CoreFragment String           -- ^ Core Fragment
     deriving (Eq, Show)
 
 data Token
