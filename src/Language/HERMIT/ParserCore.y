@@ -2,13 +2,13 @@
 module Language.HERMIT.ParserCore (parseCore) where
 
 import Control.Monad.Reader
-import Data.Char (isSpace, isAlpha, isAlphaNum)
--- import Data.List (intercalate)
+import Data.Char (isSpace, isAlpha, isAlphaNum, isDigit)
 
 import GhcPlugins
 
 import Language.HERMIT.Context
 import Language.HERMIT.Monad
+import Language.HERMIT.Primitive.Common
 
 import Language.Haskell.TH as TH
 }
@@ -56,12 +56,21 @@ import Language.Haskell.TH as TH
 %%
 
 -- | Top level expression term.
-expr : NAME   {% asks (findBoundVars (TH.mkName $1)) >>= \ nms ->
-                 case nms of
-                    [] -> fail $ "core parse error: " ++ $1 ++ " not found in context."
-                    [nm] -> return $ Var nm
-                    _    -> fail $ "core parse error: " ++ $1 ++ " bound multiple times in context."
-              }
+expr : app             { $1 }
+
+app : app arg          { App $1 $2 }
+    | arg              { $1 }
+
+arg : '(' expr ')'     { $2 }
+    | var              { $1 }
+    | intlit           { $1 }
+    | strlit           { $1 }
+
+intlit : INTEGER        { mkIntExpr $1 } -- mkIntLit makes a primitive Int#
+
+strlit : STRING         {% lift $ mkStringExpr $1 }
+
+var : NAME   {% ask >>= \c -> lift (findId (TH.mkName $1) c) >>= return . Var }
 {
 
 type CoreParseM a = ReaderT HermitC HermitM a
@@ -119,6 +128,8 @@ lexer ('\"':cs)    = let (str,rest) = span (/='\"') cs
                            ('\"':cs') -> fmap (Tstring str:) $ lexer cs'
                            _          -> Left "lexer: no matching quote"
 lexer s@(c:cs)     | isSpace       c = lexer cs
+                   | isDigit       c = let (i,s') = span isDigit s
+                                       in fmap (Tinteger (read i):) $ lexer s'
                    | isIdFirstChar c = let (i,s') = span isIdChar s
                                        in fmap (Tname i:) $ lexer s'
                    | isInfixId     c = let (op,s') = span isInfixId s

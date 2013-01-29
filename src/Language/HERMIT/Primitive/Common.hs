@@ -20,6 +20,7 @@ module Language.HERMIT.Primitive.Common
     , boundVarsT
     , findBoundVarT
     , findIdT
+    , findId
       -- ** Error Message Generators
     , wrongExprForm
     )
@@ -35,6 +36,7 @@ import Language.HERMIT.Kure
 import Language.HERMIT.Core
 import Language.HERMIT.Context
 import Language.HERMIT.GHC
+import Language.HERMIT.Monad
 
 import qualified Language.Haskell.TH as TH
 
@@ -112,14 +114,16 @@ findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ TH.nameBase nm ++ ",
 -- | Lookup the name in the 'HermitC' first, then, failing that, in GHC's global reader environment.
 findIdT :: TH.Name -> TranslateH a Id
 findIdT nm = prefixFailMsg ("Cannot resolve name " ++ TH.nameBase nm ++ ", ") $
-             do c <- contextT
-                case findBoundVars nm c of
-                  []         -> findIdMG nm
-                  [v]        -> return v
-                  _ : _ : _  -> fail "multiple matching variables in scope."
+             contextonlyT (findId nm)
 
-findIdMG :: TH.Name -> TranslateH a Id
-findIdMG nm = contextonlyT $ \ c ->
+findId :: TH.Name -> HermitC -> HermitM Id
+findId nm c = case findBoundVars nm c of
+                []         -> findIdMG nm c
+                [v]        -> return v
+                _ : _ : _  -> fail "multiple matching variables in scope."
+
+findIdMG :: TH.Name -> HermitC -> HermitM Id
+findIdMG nm c =
     case filter isValName $ findNameFromTH (mg_rdr_env $ hermitModGuts c) nm of
       []  -> fail $ "variable not in scope."
       [n] -> lookupId n
