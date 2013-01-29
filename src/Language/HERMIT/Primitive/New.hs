@@ -16,7 +16,6 @@ import Language.HERMIT.External
 import Language.HERMIT.GHC
 import Language.HERMIT.ParserCore
 
-import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Inline
@@ -85,16 +84,12 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
 
      -- check if tupling the bindings would cause unbound variables
      let
-         rhsTypes = map exprType rhss
          frees    = map coreExprFreeVars (drop 1 rhss)
          used     = concat $ zipWith intersect (map (`take` vs) [1..]) frees
      if null used
-       then do tupleConId <- findIdT $ TH.mkName $ "(" ++ replicate (numBnds - 1) ',' ++ ")"
-               case isDataConId_maybe tupleConId of
-                 Nothing -> fail "cannot find tuple data constructor."
-                 Just dc -> let rhs = mkCoreApps (Var tupleConId) $ map Type rhsTypes ++ rhss
-                             in constT $ do wild <- newIdH (show nm) (exprType rhs)
-                                            return $ Case rhs wild (exprType body) [(DataAlt dc, vs, body)]
+       then let rhs = mkCoreTup rhss
+            in constT $ do wild <- newIdH (show nm) (exprType rhs)
+                           return $ mkSmallTupleCase vs body wild rhs
 
        else fail $ "the following bound variables are used in subsequent bindings: " ++ showVars used
 
