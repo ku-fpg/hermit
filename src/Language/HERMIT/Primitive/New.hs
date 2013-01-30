@@ -207,7 +207,7 @@ push nm = prefixFailMsg "push failed: " $
           (Var v,args) -> do
                   guardMsg (nm `cmpTHName2Var` v) $ "cannot find name " ++ show nm
                   guardMsg (not $ null args) $ "no argument for " ++ show nm
-                  guardMsg (all isType $ init args) $ "initial arguments are not type arguments for " ++ show nm
+                  guardMsg (all isTypeArg $ init args) $ "initial arguments are not type arguments for " ++ show nm
                   case last args of
                      Case {} -> caseFloatArg
                      Let {}  -> letFloatArg
@@ -218,3 +218,5 @@ push nm = prefixFailMsg "push failed: " $
 
 unsafeReplace :: CoreString -> RewriteH CoreExpr
 unsafeReplace = contextonlyT . parseCore . unCoreString
+
+------------------------------------------------------------------------------------------------------

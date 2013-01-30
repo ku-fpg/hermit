@@ -14,13 +14,9 @@ module Language.HERMIT.Core
           , bindToIdExprs
             -- * Utilities
           , isValue
-          , isType
-          , typeExprToType
           , exprTypeOrKind
           , appCount
 ) where
-
-import Data.Maybe(isJust)
 
 import GhcPlugins
 
@@ -89,20 +85,10 @@ type CoreTickish = Tickish Id
 
 -- TODO: I don't understand coercions very well, so I exclude them from both values and types.
 
--- | Succeeds if the expression is not a 'Type', type 'Var', or 'Coercion'.
+-- | Succeeds if the expression is not a 'Type' or 'Coercion'.
+--   This function mathces the documentation for 'isValArg', but 'isValArg' succeeds for coercions.
 isValue :: CoreExpr -> Bool
-isValue (Coercion _) = False
-isValue e            = not (isType e)
-
--- | Succeeds if the expression is either a 'Type' or type 'Var'.
-isType :: CoreExpr -> Bool
-isType = isJust . typeExprToType
-
--- | Convert a 'CoreExpr' expression that \is\ a 'Type' into a 'Type'.
-typeExprToType :: CoreExpr -> Maybe Type
-typeExprToType (Type t)            = Just t
-typeExprToType (Var v) | isTKVar v = Just (mkTyVarTy v)
-typeExprToType _                   = Nothing
+isValue = not . isTyCoArg
 
 -- | GHC's 'exprType' function throws an error if applied to a 'Type' (but, inconsistently, return a 'Kind' if applied to a type variable).
 --   This function returns the 'Kind' of a 'Type', but otherwise behaves as 'exprType'.

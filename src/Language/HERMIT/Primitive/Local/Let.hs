@@ -86,7 +86,7 @@ letExternals =
 -- | e => (let v = e in v), name of v is provided
 letIntro ::  TH.Name -> RewriteH CoreExpr
 letIntro nm = prefixFailMsg "Let-introduction failed: " $
-              contextfreeT $ \ e -> do guardMsg (not $ isType e) "let expressions may not return a type."
+              contextfreeT $ \ e -> do guardMsg (not $ isTypeArg e) "let expressions may not return a type."
                                        v <- newIdH (show nm) (exprTypeOrKind e)
                                        return $ Let (NonRec v e) (Var v)
 
@@ -97,10 +97,10 @@ letElim = letNonRecElim <+ letRecElim
 --   (let v = E1 in E2) => E2, if v is not free in E2
 letNonRecElim :: RewriteH CoreExpr
 letNonRecElim = prefixFailMsg "Dead-let-elimination failed: " $
-          withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
-      do Let (NonRec v _) e <- idR
-         guardMsg (v `notElem` coreExprFreeVars e) "let-bound variable appears in the expression."
-         return e
+                withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
+                do Let (NonRec v _) e <- idR
+                   guardMsg (v `notElem` coreExprFreeVars e) "let-bound variable appears in the expression."
+                   return e
 
 -- TODO: find the GHC way to do this, as this implementation will be defeated by mutual recursion
 -- | Remove all unused recursive let bindings in the current group.
