@@ -21,6 +21,9 @@ import Data.List (intercalate)
     ')'     { ParenRight }
     '{'     { ScopeStart }
     '}'     { ScopeEnd }
+    '['     { ListStart }
+    ','     { ListDelim }
+    ']'     { ListEnd }
     ';'     { StmtEnd }
     '\''    { Tick }
     core    { CoreString $$ }
@@ -45,18 +48,20 @@ ExprH : e2 infixop ExprH   { AppH (AppH (CmdName $2) $1) $3 }
 
 -- | Expressions without infix operators in them.
 e2   : e2 arg          { AppH $1 $2 }
-     | e4              { $1 }
+     | arg             { $1 }
 
 -- | Expressions that can be arguments in an application.
 arg  : '\'' ident      { SrcName $2 }
+     | '\'' '[' ']'    { SrcName "[]" } -- special case, since we also use [] for lists
      | quoted          { CmdName $1 }
-     | core            { CoreFragment $1 }
-     | e4              { $1 }
-
--- | Expressions that can be in any position of an application.
-e4   : '(' ExprH ')'   { $2 }
+     | core            { CoreH $1 }
+     | '[' exprs ']'   { ListH $2 }
+     | '(' ExprH ')'   { $2 }
      | ident           { CmdName $1 }
 
+exprs : ExprH           { [$1] }
+      | ExprH ',' exprs { $1 : $3 }
+      | {- empty -}     { [] }
 {
 
 parseError :: [Token] -> Either String a
@@ -73,7 +78,8 @@ data ExprH
     = SrcName String                -- ^ Variable names (refers to source code).
     | CmdName String                -- ^ Commands (to be looked up in 'Language.HERMIT.Dictionary').
     | AppH ExprH ExprH              -- ^ Application.
-    | CoreFragment String           -- ^ Core Fragment
+    | CoreH String                  -- ^ Core Fragment
+    | ListH [ExprH]                 -- ^ List of expressions
     deriving (Eq, Show)
 
 data Token
@@ -81,6 +87,9 @@ data Token
     | ParenRight
     | ScopeStart
     | ScopeEnd
+    | ListStart
+    | ListDelim
+    | ListEnd
     | StmtEnd
     | Tick
     | CoreString String
@@ -104,6 +113,9 @@ lexer ('\"':cs)    = let (str,rest) = span (/='\"') cs
                            _          -> Left "lexer: no matching quote"
 lexer ('[':'|':cs) = do (str,cs') <- lexCore cs
                         fmap (CoreString str:) $ lexer cs'
+lexer ('[' :cs)    = fmap (ListStart:)  $ lexer cs
+lexer (',' :cs)    = fmap (ListDelim:)  $ lexer cs
+lexer (']' :cs)    = fmap (ListEnd:)    $ lexer cs
 lexer s@(c:cs)     | isSpace       c = lexer cs
                    | isIdFirstChar c = let (i,s') = span isIdChar s
                                        in fmap (Ident i:) $ lexer s'
@@ -121,11 +133,11 @@ lexCore []             = Left "lexer: no closing |]"
 
 -- | Chars that are valid in identifiers anywhere.
 isIdFirstChar :: Char -> Bool
-isIdFirstChar c = isAlphaNum c || c `elem` "$[]:."
+isIdFirstChar c = isAlphaNum c || c `elem` "$_:."
 
 -- | Chars that are valid in identifiers, but not as the first character.
 isIdChar :: Char -> Bool
-isIdChar c = isIdFirstChar c || c `elem` "_-'"
+isIdChar c = isIdFirstChar c || c `elem` "-'"
 
 -- | Chars that are valid in infix operators.
 isInfixId :: Char -> Bool
@@ -136,7 +148,8 @@ test = do
     ln <- getLine
     case ln of
         "quit" -> return ()
-        _      -> do print $ parseStmtsH ln
+        _      -> do print $ lexer ln
+                     print $ parseStmtsH ln
                      test
 
 parseStmtsH :: String -> Either String [StmtH ExprH]

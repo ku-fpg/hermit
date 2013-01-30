@@ -47,9 +47,17 @@ instance Functor Interp where
 interpExpr :: M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
 interpExpr = interpExpr' False
 
+-- input: list length n, each elem is a variable length list of possible interpretations
+-- output: variable length list, each elem is list of length n
+fromDynList :: [[Dynamic]] -> [[Dynamic]]
+fromDynList [] = [[]]
+fromDynList (hs:dynss) = [ h:t | h <- hs, t <- fromDynList dynss ]
+
 interpExpr' :: Bool -> M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
 interpExpr' _   _   (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
-interpExpr' _   _   (CoreFragment str) = return [ toDyn $ CoreBox (CoreString str) ]
+interpExpr' _   _   (CoreH str)   = return [ toDyn $ CoreBox (CoreString str) ]
+interpExpr' _   env (ListH exprs) = do dyns <- mapM (interpExpr env) exprs
+                                       return [ toDyn $ ListNameBox (map unbox l) | dl <- fromDynList dyns, Just l <- [mapM fromDynamic dl] ]
 interpExpr' rhs env (CmdName str)
                                         -- An Int is either a Path, or will be interpreted specially later.
   | all isDigit str                     = let i = read str in
