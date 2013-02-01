@@ -193,7 +193,7 @@ letFloatLetTop = prefixFailMsg "Let floating to top level failed: " $
 letUnfloatCase :: RewriteH CoreExpr
 letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $ do
     Let bnds (Case s w ty alts) <- idR
-    captured <- letT bindVarsT caseVarsT intersect
+    captured <- letT bindVarsT caseIdsT intersect
     guardMsg (null captured) "let bindings would capture case pattern bindings."
     return $ Case (Let bnds s) w ty [ (ac, vs, Let bnds e) | (ac, vs, e) <- alts ]
 

@@ -3,19 +3,22 @@
 module Language.HERMIT.Primitive.Common
     ( -- * Utility Transformations
       -- ** Collecting variables bound at a Node
-      progVarsT
+      progIdsT
+    , consIdsT
+    , consRecIdsT
+    , consNonRecIdT
     , bindVarsT
     , nonRecVarT
-    , recVarsT
-    , defVarT
+    , recIdsT
+    , defIdT
     , lamVarT
     , letVarsT
-    , letRecVarsT
+    , letRecIdsT
     , letNonRecVarT
-    , caseVarsT
-    , caseWildVarT
-    , caseAltVarsT
-    , altVarsT
+    , caseIdsT
+    , caseWildIdT
+    , caseAltIdsT
+    , altIdsT
       -- ** Finding variables bound in the Context
     , boundVarsT
     , findBoundVarT
@@ -43,24 +46,36 @@ import qualified Language.Haskell.TH as TH
 ------------------------------------------------------------------------------
 
 -- | List all identifiers bound at the top-level in a program.
-progVarsT :: TranslateH CoreProg [Id]
-progVarsT = progNilT [] <+ progConsT bindVarsT progVarsT (++)
+progIdsT :: TranslateH CoreProg [Id]
+progIdsT = progNilT [] <+ progConsT bindVarsT progIdsT (++)
 
--- | List all identifiers bound in a binding group.
+-- | List the identifiers bound by the top-level binding group at the head of the program.
+consIdsT :: TranslateH CoreProg [Id]
+consIdsT = progConsT bindVarsT mempty (\ vs () -> vs)
+
+-- | List the identifiers bound by a recursive top-level binding group at the head of the program.
+consRecIdsT :: TranslateH CoreProg [Id]
+consRecIdsT = progConsT recIdsT mempty (\ vs () -> vs)
+
+-- | Return the identifier bound by a non-recursive top-level binding at the head of the program.
+consNonRecIdT :: TranslateH CoreProg Id
+consNonRecIdT = progConsT nonRecVarT mempty (\ v () -> v)
+
+-- | List all variables bound in a binding group.
 bindVarsT :: TranslateH CoreBind [Var]
-bindVarsT = fmap return nonRecVarT <+ recVarsT
+bindVarsT = fmap return nonRecVarT <+ recIdsT
 
 -- | Return the variable bound by a non-recursive let expression.
 nonRecVarT :: TranslateH CoreBind Var
 nonRecVarT = nonRecT mempty (\ v () -> v)
 
 -- | List all identifiers bound in a recursive binding group.
-recVarsT :: TranslateH CoreBind [Id]
-recVarsT = recT (\ _ -> defVarT) id
+recIdsT :: TranslateH CoreBind [Id]
+recIdsT = recT (\ _ -> defIdT) id
 
 -- | Return the identifier bound by a recursive definition.
-defVarT :: TranslateH CoreDef Id
-defVarT = defT mempty (\ v () -> v)
+defIdT :: TranslateH CoreDef Id
+defIdT = defT mempty (\ v () -> v)
 
 -- | Return the variable bound by a lambda expression.
 lamVarT :: TranslateH CoreExpr Var
@@ -70,29 +85,29 @@ lamVarT = lamT mempty (\ v () -> v)
 letVarsT :: TranslateH CoreExpr [Var]
 letVarsT = letT bindVarsT mempty (\ vs () -> vs)
 
--- | List the variables bound by a recursive let expression.
-letRecVarsT :: TranslateH CoreExpr [Var]
-letRecVarsT = letT recVarsT mempty (\ vs () -> vs)
+-- | List the identifiers bound by a recursive let expression.
+letRecIdsT :: TranslateH CoreExpr [Id]
+letRecIdsT = letT recIdsT mempty (\ vs () -> vs)
 
 -- | Return the variable bound by a non-recursive let expression.
 letNonRecVarT :: TranslateH CoreExpr Var
 letNonRecVarT = letT nonRecVarT mempty (\ v () -> v)
 
--- | List all variables bound by a case expression (in the alternatives and the wildcard binder).
-caseVarsT :: TranslateH CoreExpr [Var]
-caseVarsT = caseT mempty (\ _ -> altVarsT) (\ () v _ vss -> v : nub (concat vss))
+-- | List all identifiers bound by a case expression (in the alternatives and the wildcard binder).
+caseIdsT :: TranslateH CoreExpr [Id]
+caseIdsT = caseT mempty (\ _ -> altIdsT) (\ () v _ vss -> v : nub (concat vss))
 
 -- | Return the case wildcard binder.
-caseWildVarT :: TranslateH CoreExpr Var
-caseWildVarT = caseT mempty (\ _ -> return ()) (\ () v _ _ -> v)
+caseWildIdT :: TranslateH CoreExpr Id
+caseWildIdT = caseT mempty (\ _ -> return ()) (\ () v _ _ -> v)
 
--- | List the variables bound by all alternatives in a case expression.
-caseAltVarsT :: TranslateH CoreExpr [[Var]]
-caseAltVarsT = caseT mempty (\ _ -> altVarsT) (\ () _ _ vss -> vss)
+-- | List the identifiers bound by all alternatives in a case expression.
+caseAltIdsT :: TranslateH CoreExpr [[Id]]
+caseAltIdsT = caseT mempty (\ _ -> altIdsT) (\ () _ _ vss -> vss)
 
--- | List the variables bound by a case alternative.
-altVarsT :: TranslateH CoreAlt [Var]
-altVarsT = altT mempty (\ _ vs () -> vs)
+-- | List the identifiers bound by a case alternative.
+altIdsT :: TranslateH CoreAlt [Id]
+altIdsT = altT mempty (\ _ vs () -> vs)
 
 ------------------------------------------------------------------------------
 

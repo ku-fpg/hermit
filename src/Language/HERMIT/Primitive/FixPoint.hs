@@ -187,7 +187,7 @@ monomorphicWorkerWrapperSplit wrap unwrap =
                             >>> letAllR idR ( monomorphicWorkerWrapperFac wrap unwrap
                                                 >>> appAllR idR (letIntro w)
                                                 >>> letFloatArg
-                                                >>> letNonRecAllR (unfold fx >>> alphaLetOne (Just work) >>> extractR simplifyR) idR
+                                                >>> letNonRecAllR (unfold fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
                                                 >>> letSubstR
                                                 >>> letFloatArg
                                             )

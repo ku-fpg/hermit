@@ -74,8 +74,8 @@ caseExternals =
 caseFloatApp :: RewriteH CoreExpr
 caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
   do
-    captures    <- appT caseAltVarsT freeVarsT (flip (map . intersect))
-    wildCapture <- appT caseWildVarT freeVarsT elem
+    captures    <- appT caseAltIdsT freeVarsT (flip (map . intersect))
+    wildCapture <- appT caseWildIdT freeVarsT elem
     appT ((if not wildCapture then idR else alphaCaseBinder Nothing)
           >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
          )
@@ -89,8 +89,8 @@ caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
 caseFloatArg :: RewriteH CoreExpr
 caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
   do
-    captures    <- appT freeVarsT caseAltVarsT (map . intersect)
-    wildCapture <- appT freeVarsT caseWildVarT (flip elem)
+    captures    <- appT freeVarsT caseAltIdsT (map . intersect)
+    wildCapture <- appT freeVarsT caseWildIdT (flip elem)
     appT idR
          ((if not wildCapture then idR else alphaCaseBinder Nothing)
           >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
@@ -107,10 +107,10 @@ caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
 caseFloatCase :: RewriteH CoreExpr
 caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
   do
-    captures <- caseT caseAltVarsT (const altFreeVarsExclWildT) (\ vss bndr _ fs -> map (intersect (concatMap ($ bndr) fs)) vss)
+    captures <- caseT caseAltIdsT (const altFreeVarsExclWildT) (\ vss bndr _ fs -> map (intersect (concatMap ($ bndr) fs)) vss)
     -- does the binder of the inner case, shadow a free variable in any of the outer case alts?
     -- notice, caseBinderVarT returns a singleton list
-    wildCapture <- caseT caseWildVarT (const altFreeVarsExclWildT) (\ innerBndr bndr _ fvs -> innerBndr `elem` concatMap ($ bndr) fvs)
+    wildCapture <- caseT caseWildIdT (const altFreeVarsExclWildT) (\ innerBndr bndr _ fvs -> innerBndr `elem` concatMap ($ bndr) fvs)
     caseT ((if not wildCapture then idR else alphaCaseBinder Nothing)
            >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
           )
@@ -120,7 +120,7 @@ caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
 -- | let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e
 caseFloatLet :: RewriteH CoreExpr
 caseFloatLet = prefixFailMsg "Case floating from Let failed: " $
-  do vs <- letNonRecT caseAltVarsT idR (\ letVar caseVars _ -> elem letVar $ concat caseVars)
+  do vs <- letNonRecT caseAltIdsT idR (\ letVar caseVars _ -> elem letVar $ concat caseVars)
      let bdsAction = if not vs then idR else nonRecR alphaCase
      letT bdsAction idR $ \ (NonRec v (Case s b ty alts)) e -> Case s b ty [ (con, ids, Let (NonRec v ec) e) | (con, ids, ec) <- alts]
 
