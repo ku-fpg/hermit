@@ -35,9 +35,11 @@ fib (S (S n)) = fib (S n) + fib n
 
 wrap :: (Nat -> (Nat, Nat)) -> Nat -> Nat
 wrap h = fst . h
+{-# NOINLINE wrap #-}
 
 unwrap :: (Nat -> Nat) -> Nat -> (Nat, Nat)
 unwrap h n = (h n, h (S n))
+{-# NOINLINE unwrap #-}
 
 main :: IO ()
 main = print $ toInt $ fib (fromInt 30)

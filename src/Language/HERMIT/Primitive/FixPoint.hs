@@ -27,16 +27,24 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "specialize a fix with a given argument"] .+ Shallow
          , external "ww-fac" ((\ wrap unwrap -> promoteExprR $ workerWrapperFac wrap unwrap) :: CoreString -> CoreString -> RewriteH Core)
                 [ "Worker/Wrapper Factorisation",
-                  "For any f :: a -> a, and given wrap :: b -> a and unwrap :: a -> b as arguments, then",
-                  "fix f ==> wrap (fix (unwrap . f . wrap))",
-                  "Note: the pre-condition  fix (wrap . unwrap . f) == fix f  is expected to hold."
-                ] .+ Introduce .+ Context .+ Experiment .+ PreCondition
-         , external "ww-fac-test" ((\ wrap unwrap -> promoteExprR $ workerWrapperFacTest wrap unwrap) :: TH.Name -> TH.Name -> RewriteH Core)
-                [ "Under construction "
-                ] .+ Introduce .+ Context .+ Experiment .+ PreCondition
-         , external "ww-split-test" ((\ wrap unwrap -> promoteDefR $ workerWrapperSplitTest wrap unwrap) :: TH.Name -> TH.Name -> RewriteH Core)
-                [ "Under construction "
-                ] .+ Introduce .+ Context .+ Experiment .+ PreCondition
+                  "For any \"f :: a -> a\", and given \"wrap :: b -> a\" and \"unwrap :: a -> b\" as arguments, then",
+                  "fix f  ==>  wrap (fix (unwrap . f . wrap))",
+                  "Note: the pre-condition \"fix (wrap . unwrap . f) == fix f\" is expected to hold."
+                ] .+ Introduce .+ Context .+ PreCondition
+         , external "ww-split" ((\ wrap unwrap -> promoteDefR $ workerWrapperSplit wrap unwrap) :: CoreString -> CoreString -> RewriteH Core)
+         [ "Worker/Wrapper Split",
+                  "For any \"g :: a\", and given \"wrap :: b -> a\" and \"unwrap :: a -> b\" as arguments, then",
+                  "g = expr  ==> g = let f = \\ g -> expr",
+                  "                   in let work = unwrap (f (wrap work))",
+                  "                       in wrap work",
+                  "Note: the pre-condition \"fix (wrap . unwrap . f) == fix f\" is expected to hold."
+                ] .+ Introduce .+ Context .+ PreCondition
+         -- , external "ww-fac-test" ((\ wrap unwrap -> promoteExprR $ workerWrapperFacTest wrap unwrap) :: TH.Name -> TH.Name -> RewriteH Core)
+         --        [ "Under construction "
+         --        ] .+ Introduce .+ Context .+ Experiment .+ PreCondition
+         -- , external "ww-split-test" ((\ wrap unwrap -> promoteDefR $ workerWrapperSplitTest wrap unwrap) :: TH.Name -> TH.Name -> RewriteH Core)
+         --        [ "Under construction "
+         --        ] .+ Introduce .+ Context .+ Experiment .+ PreCondition
          ]
 
 fixLocation :: String
@@ -94,54 +102,30 @@ fixSpecialization = do
                     return $ App (App (Var fx) (Type t')) e'
 
 
+--------------------------------------------------------------------------------------------------
+
+parseCoreExprT :: CoreString -> TranslateH a CoreExpr
+parseCoreExprT = contextonlyT . parseCore . unCoreString
+
 workerWrapperFac :: CoreString -> CoreString -> RewriteH CoreExpr
-workerWrapperFac wrapS unwrapS = do wrapE   <- contextonlyT (parseCore (unCoreString wrapS))
-                                    unwrapE <- contextonlyT (parseCore (unCoreString unwrapS))
+workerWrapperFac wrapS unwrapS = do wrapE   <- parseCoreExprT wrapS
+                                    unwrapE <- parseCoreExprT unwrapS
                                     monomorphicWorkerWrapperFac wrapE unwrapE
 
-workerWrapperFacTest :: TH.Name -> TH.Name -> RewriteH CoreExpr
-workerWrapperFacTest wrapNm unwrapNm = do wrapId   <- findBoundVarT wrapNm
-                                          unwrapId <- findBoundVarT unwrapNm
-                                          monomorphicWorkerWrapperFac (Var wrapId) (Var unwrapId)
+workerWrapperSplit :: CoreString -> CoreString -> RewriteH CoreDef
+workerWrapperSplit wrapS unwrapS = do wrapE   <- parseCoreExprT wrapS
+                                      unwrapE <- parseCoreExprT unwrapS
+                                      monomorphicWorkerWrapperSplit wrapE unwrapE
 
-workerWrapperSplitTest :: TH.Name -> TH.Name -> RewriteH CoreDef
-workerWrapperSplitTest wrapNm unwrapNm = do wrapId   <- findBoundVarT wrapNm
-                                            unwrapId <- findBoundVarT unwrapNm
-                                            monomorphicWorkerWrapperSplit (Var wrapId) (Var unwrapId)
+-- workerWrapperFacTest :: TH.Name -> TH.Name -> RewriteH CoreExpr
+-- workerWrapperFacTest wrapNm unwrapNm = do wrapId   <- findBoundVarT wrapNm
+--                                           unwrapId <- findBoundVarT unwrapNm
+--                                           monomorphicWorkerWrapperFac (Var wrapId) (Var unwrapId)
 
-
--- monomorphicWorkerWrapperFac :: Id -> Id -> RewriteH CoreExpr
--- monomorphicWorkerWrapperFac wrapId unwrapId = -- let wrapTy   = idType wrapId
---                                               --     unwrapTy = idType unwrapId
---                                               --     (wrapForallTyVars, wrapMainTy)     = splitForAllTys wrapTy
---                                               --     (unwrapForallTyVars, unwrapMainTy) = splitForAllTys unwrapTy
-
---                                               -- in  -- In progress: above are not used yet.
---                                                   workerWrapperFac (Var wrapId) (Var unwrapId)
---                                                 -- workerWrapperFac (mkTyApps (Var wrapId)   wrapForallTys)
---                                                 --                  (mkTyApps (Var unwrapId) unwrapForallTys)
-
--- workerWrapperFac (Var wrapId) (Var unwrapId)
--- splitForAllTys :: Type -> ([TyVar], Type)
-
--- monomorphicWorkerWrapperSplit :: Id -> Id -> RewriteH CoreDef
--- monomorphicWorkerWrapperSplit wrapId unwrapId = workerWrapperSplit (Var wrapId) (Var unwrapId)
-
--- substTyWith :: [TyVar] -> [Type] -> Type -> Type
--- mkTyApps  :: Expr b -> [Type]   -> Expr b
-
--- I assume there are GHC functions to do this, but I can't find them.
--- in progress
--- unifyTyVars :: [TyVar] -- | forall quantified type variables
---             -> Type    -- | type containing forall quantified type variables
---             -> Type    -- | type to unify with
---             -> Maybe [Type]  -- | types that the variables have been unified with
--- unifyTyVars vs tyGen tySpec = let unifyTyVarsAux tyGen tySpec vs
---                                in undefined
---   unifyTyVarsAux :: Type -> Type -> [(TyVar,[Type])] -> Maybe [(TyVar,[Type])]
---   unifyTyVarsAux (TyVarTy v)   t             = match v t
---   unifyTyVarsAux (AppTy s1 s2) (AppTy t1 t2) = match s1 t1 . match s2 t2
-
+-- workerWrapperSplitTest :: TH.Name -> TH.Name -> RewriteH CoreDef
+-- workerWrapperSplitTest wrapNm unwrapNm = do wrapId   <- findBoundVarT wrapNm
+--                                             unwrapId <- findBoundVarT unwrapNm
+--                                             monomorphicWorkerWrapperSplit (Var wrapId) (Var unwrapId)
 
 -- f      :: a -> a
 -- wrap   :: forall x,y..z. b -> a
@@ -192,3 +176,5 @@ monomorphicWorkerWrapperSplit wrap unwrap =
                                                 >>> letFloatArg
                                             )
                         )
+
+--------------------------------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 flatten-module
 consider 'last
 {consider 'last
-  load "../WWSplitTactic.hss"
+  ww-split [| wrap t |] [| unwrap t |]
   {rhs-of 'work
      eta-expand 'b
      0
