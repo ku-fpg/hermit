@@ -70,7 +70,7 @@ intlit : INTEGER        { mkIntExpr $1 } -- mkIntLit makes a primitive Int#
 
 strlit : STRING         {% lift $ mkStringExpr $1 }
 
-var : NAME   {% ask >>= \c -> lift (findId (TH.mkName $1) c) >>= return . Var }
+var : NAME   {% ask >>= \c -> lift (findId (TH.mkName $1) c) >>= \v -> return (if isId v then Var v else Type (mkTyVarTy v)) }
 {
 
 type CoreParseM a = ReaderT HermitC HermitM a
