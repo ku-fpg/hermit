@@ -7,6 +7,7 @@ import Data.Char (isSpace, isAlpha, isAlphaNum, isDigit)
 import GhcPlugins
 
 import Language.HERMIT.Context
+import Language.HERMIT.External
 import Language.HERMIT.Monad
 import Language.HERMIT.Primitive.Common
 
@@ -150,9 +151,9 @@ isIdChar c = isAlphaNum c || c `elem` "-'" || isIdFirstChar c
 isInfixId :: Char -> Bool
 isInfixId c = c `elem` "+*/._-:<>"
 
-parseCore :: String -> HermitC -> HermitM CoreExpr
-parseCore s c = case lexer s of
-                    Left msg -> fail msg
-                    Right tokens -> runReaderT (parser tokens) c
-
+parseCore :: CoreString -> HermitC -> HermitM CoreExpr
+parseCore (CoreString s) c =
+    case lexer s of
+        Left msg -> fail msg
+        Right tokens -> runReaderT (parser tokens) c
 }

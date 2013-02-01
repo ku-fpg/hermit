@@ -219,7 +219,7 @@ push nm = prefixFailMsg "push failed: " $
 ------------------------------------------------------------------------------------------------------
 
 unsafeReplace :: CoreString -> RewriteH CoreExpr
-unsafeReplace = contextonlyT . parseCore . unCoreString
+unsafeReplace = contextonlyT . parseCore
 
 ------------------------------------------------------------------------------------------------------
 

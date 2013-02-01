@@ -105,7 +105,7 @@ fixSpecialization = do
 --------------------------------------------------------------------------------------------------
 
 parseCoreExprT :: CoreString -> TranslateH a CoreExpr
-parseCoreExprT = contextonlyT . parseCore . unCoreString
+parseCoreExprT = contextonlyT . parseCore
 
 workerWrapperFac :: CoreString -> CoreString -> RewriteH CoreExpr
 workerWrapperFac wrapS unwrapS = do wrapE   <- parseCoreExprT wrapS
