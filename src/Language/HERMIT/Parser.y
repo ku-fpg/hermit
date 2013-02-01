@@ -177,6 +177,8 @@ unparseExprH (AppH (AppH (CmdName nm) e1) e2)
         | all isInfixId nm
         = unparseAtom e1 ++ " " ++ nm ++ " " ++ unparseAtom e2
 unparseExprH (AppH e1 e2) = unparseExprH e1 ++ " " ++ unparseAtom e2
+unparseExprH (CoreH s)    = "[|" ++ s ++ "|]"
+unparseExprH (ListH es)   = "[" ++ intercalate "," (map unparseExprH es) ++ "]"
 
 unparseAtom :: ExprH -> String
 unparseAtom e@(AppH {}) = "(" ++ unparseExprH e ++ ")"
