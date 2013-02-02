@@ -33,7 +33,7 @@ simplify
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
 
-any-bu (unfold-rule precondition)
+any-bu (ww-assumption-A [| wrap |] [| unwrap |])
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)

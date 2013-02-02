@@ -2,6 +2,7 @@ module Language.HERMIT.Primitive.FixPoint where
 
 import GhcPlugins as GHC hiding (varName)
 
+import Control.Applicative
 import Control.Arrow
 
 import Language.HERMIT.Core
@@ -24,7 +25,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
          , external "fix-spec" (promoteExprR fixSpecialization :: RewriteH Core)
                 [ "specialize a fix with a given argument"] .+ Shallow
-         , external "ww-fac" ((\ wrap unwrap -> promoteExprR $ workerWrapperFac wrap unwrap) :: CoreString -> CoreString -> RewriteH Core)
+         , external "ww-factorisation" ((\ wrap unwrap -> promoteExprR $ workerWrapperFac wrap unwrap) :: CoreString -> CoreString -> RewriteH Core)
                 [ "Worker/Wrapper Factorisation",
                   "For any \"f :: a -> a\", and given \"wrap :: b -> a\" and \"unwrap :: a -> b\" as arguments, then",
                   "fix f  ==>  wrap (fix (unwrap . f . wrap))",
@@ -38,12 +39,12 @@ externals = map ((.+ Experiment) . (.+ TODO))
                   "                       in wrap work",
                   "Note: the pre-condition \"fix (wrap . unwrap . f) == fix f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
-         -- , external "ww-fac-test" ((\ wrap unwrap -> promoteExprR $ workerWrapperFacTest wrap unwrap) :: TH.Name -> TH.Name -> RewriteH Core)
-         --        [ "Under construction "
-         --        ] .+ Introduce .+ Context .+ Experiment .+ PreCondition
-         -- , external "ww-split-test" ((\ wrap unwrap -> promoteDefR $ workerWrapperSplitTest wrap unwrap) :: TH.Name -> TH.Name -> RewriteH Core)
-         --        [ "Under construction "
-         --        ] .+ Introduce .+ Context .+ Experiment .+ PreCondition
+         , external "ww-assumption-A" ((\ wrap unwrap -> promoteExprR $ wwAssA wrap unwrap) :: CoreString -> CoreString -> RewriteH Core)
+                [ "Worker/Wrapper Assumption A",
+                  "For a \"wrap :: b -> a\" and an \"unwrap :: b -> a\", then",
+                  "wrap (unwrap x)  ==>  x",
+                  "Note: only use this if it's true!"
+                ] .+ PreCondition
          ]
 
 fixLocation :: String
@@ -113,46 +114,31 @@ workerWrapperSplit wrapS unwrapS = do wrapE   <- setCoreExprT wrapS
                                       unwrapE <- setCoreExprT unwrapS
                                       monomorphicWorkerWrapperSplit wrapE unwrapE
 
--- workerWrapperFacTest :: TH.Name -> TH.Name -> RewriteH CoreExpr
--- workerWrapperFacTest wrapNm unwrapNm = do wrapId   <- findBoundVarT wrapNm
---                                           unwrapId <- findBoundVarT unwrapNm
---                                           monomorphicWorkerWrapperFac (Var wrapId) (Var unwrapId)
-
--- workerWrapperSplitTest :: TH.Name -> TH.Name -> RewriteH CoreDef
--- workerWrapperSplitTest wrapNm unwrapNm = do wrapId   <- findBoundVarT wrapNm
---                                             unwrapId <- findBoundVarT unwrapNm
---                                             monomorphicWorkerWrapperSplit (Var wrapId) (Var unwrapId)
-
 -- f      :: a -> a
 -- wrap   :: forall x,y..z. b -> a
 -- unwrap :: forall p,q..r. a -> b
 -- fix tyA f ==> wrap (fix tyB (\ x -> unwrap (f (wrap (Var x)))))
 -- Assumes the arguments are monomorphic functions (all type variables have already been applied)
 monomorphicWorkerWrapperFac :: CoreExpr -> CoreExpr -> RewriteH CoreExpr
-monomorphicWorkerWrapperFac wrapE unwrapE =
+monomorphicWorkerWrapperFac wrap unwrap =
   prefixFailMsg "Worker/wrapper Factorisation failed: " $
   withPatFailMsg (wrongExprForm "fix type fun") $
-  do App (App (Var fixId) (Type tyA)) f <- idR  -- fix :: forall a. (a -> a) -> a
+  do App (App (Var fixId) (Type tyE)) f <- idR  -- fix :: forall a. (a -> a) -> a
      guardIsFixId fixId
-     case splitFunTy_maybe (exprType wrapE) of
-       Nothing            -> fail "type of wrapper is not a function."
-       Just (tyB,wrapTyA) -> case splitFunTy_maybe (exprType unwrapE) of
-             Nothing                    -> fail "type of unwrapper is not a function."
-             Just (unwrapTyA,unwrapTyB) -> do guardMsg (eqType wrapTyA unwrapTyA) ("argument type of unwrapper does not match result type of wrapper.")
-                                              guardMsg (eqType unwrapTyB tyB) ("argument type of wrapper does not match result type of unwrapper.")
-                                              guardMsg (eqType wrapTyA tyA) ("wrapper/unwrapper types do not match expression type.")
-                                              x <- constT (newIdH "x" tyB)
-                                              return $ App wrapE
-                                                           (App (App (Var fixId) (Type tyB))
-                                                                (Lam x (App unwrapE
-                                                                            (App f
-                                                                                 (App wrapE
-                                                                                      (Var x)
-                                                                                 )
-                                                                            )
-                                                                       )
-                                                                )
-                                                           )
+     (tyA,tyB) <- checkWrapUnwrapTypes wrap unwrap
+     guardMsg (eqType tyA tyE) ("wrapper/unwrapper types do not match expression type.")
+     x <- constT (newIdH "x" tyB)
+     return $ App wrap
+                  (App (App (Var fixId) (Type tyB))
+                       (Lam x (App unwrap
+                                   (App f
+                                        (App wrap
+                                             (Var x)
+                                        )
+                                   )
+                              )
+                       )
+                  )
 
 
 monomorphicWorkerWrapperSplit :: CoreExpr -> CoreExpr -> RewriteH CoreDef
@@ -172,5 +158,27 @@ monomorphicWorkerWrapperSplit wrap unwrap =
                                                 >>> letFloatArg
                                             )
                         )
+
+wwAssA :: CoreString -> CoreString -> RewriteH CoreExpr
+wwAssA wrapS unwrapS = do App wrap (App unwrap x) <- idR
+                          guardMsgM (equalsCoreStringExpr wrapS wrap)     "given wrapper does not match expression."
+                          guardMsgM (equalsCoreStringExpr unwrapS unwrap) "given unwrapper does not match expression."
+                          _ <- checkWrapUnwrapTypes wrap unwrap
+                          return x
+
+--------------------------------------------------------------------------------------------------
+
+equalsCoreStringExpr :: CoreString -> CoreExpr -> TranslateH a Bool
+equalsCoreStringExpr s e = exprEqual e <$> setCoreExprT s
+
+checkWrapUnwrapTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
+checkWrapUnwrapTypes wrap unwrap = do (wrapTyB,wrapTyA)     <- safeSplitFunTy (exprType wrap) "wrapper"
+                                      (unwrapTyA,unwrapTyB) <- safeSplitFunTy (exprType unwrap) "unwrapper"
+                                      guardMsg (eqType wrapTyA unwrapTyA) ("argument type of unwrapper does not match result type of wrapper.")
+                                      guardMsg (eqType unwrapTyB wrapTyB) ("argument type of wrapper does not match result type of unwrapper.")
+                                      return (wrapTyA,wrapTyB)
+
+safeSplitFunTy :: MonadCatch m => Type -> String -> m (Type,Type)
+safeSplitFunTy t s = maybe (fail $ "type of " ++ s ++ " is not a function type.") return (splitFunTy_maybe t)
 
 --------------------------------------------------------------------------------------------------

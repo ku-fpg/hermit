@@ -7,8 +7,6 @@ import Prelude hiding ((+))
 
 data Nat = Z | S Nat
 
-{-# RULES "precondition" forall w . wrap (unwrap w) = w #-}
-
 (+) :: Nat -> Nat -> Nat
 Z      + n = n
 (S n') + n = S (n' + n)
