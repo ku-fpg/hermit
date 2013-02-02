@@ -1,7 +1,7 @@
 flatten-module
 consider 'fib
 {
-  load "../WWSplitTactic.hss"
+  ww-split [| wrap Nat |] [| unwrap Nat |]
   {rhs-of 'work
     unfold 'unwrap
     any-call (unfold 'f)

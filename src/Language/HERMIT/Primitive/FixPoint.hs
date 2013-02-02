@@ -57,6 +57,14 @@ externals = map ((.+ Experiment) . (.+ TODO))
                   "fix t (\\ x -> wrap (unwrap (f x)))  ==>  fix t f",
                   "Note: only use this if it's true!"
                 ] .+ PreCondition
+         -- , external "fix-comp" ((promoteExprR $ forewardT fixComputationRule) :: RewriteH Core)
+         --        [ "Fixed-Point Computation Rule",
+         --          "fix t f  ==>  f (fix t f)"
+         --        ]
+         -- , external "fix-comp-sym" ((promoteExprR $ backwardT fixComputationRule) :: RewriteH Core)
+         --        [ "Fixed-Point Computation Rule (in reverse)",
+         --          "f (fix t f)  ==>  fix t f"
+         --        ]
          ]
 
 fixLocation :: String
@@ -134,8 +142,8 @@ workerWrapperSplit wrapS unwrapS = do wrapE   <- setCoreExprT wrapS
 monomorphicWorkerWrapperFac :: CoreExpr -> CoreExpr -> RewriteH CoreExpr
 monomorphicWorkerWrapperFac wrap unwrap =
   prefixFailMsg "Worker/wrapper Factorisation failed: " $
-  do (tA,f)    <- checkIsFixExpr
-     (tyA,tyB) <- checkWrapUnwrapTypes wrap unwrap
+  do (tA,f)    <- checkFixExpr
+     (tyA,tyB) <- checkFunctionsWithInverseTypes unwrap wrap
      guardMsg (eqType tyA tA) ("wrapper/unwrapper types do not match expression type.")
      x         <- constT (newIdH "x" tyB)
      fixId     <- findFixId
@@ -175,7 +183,7 @@ wwAssA :: CoreString -> CoreString -> RewriteH CoreExpr
 wwAssA wrapS unwrapS = do App wrap (App unwrap x) <- idR
                           guardMsgM (equalsCoreStringExpr wrapS wrap)     "given wrapper does not match expression."
                           guardMsgM (equalsCoreStringExpr unwrapS unwrap) "given unwrapper does not match expression."
-                          _ <- checkWrapUnwrapTypes wrap unwrap
+                          _ <- checkFunctionsWithInverseTypes unwrap wrap
                           return x
 
 -- | wrap (unwrap (f x))  ==>  f x
@@ -187,8 +195,71 @@ wwAssB wrapS unwrapS fS = do App _ (App _ (App f _)) <- idR
 
 -- | fix t (\ x -> wrap (unwrap (f x)))  ==>  fix t f
 wwAssC :: CoreString -> CoreString -> CoreString -> RewriteH CoreExpr
-wwAssC wrapS unwrapS fS = do _ <- checkIsFixExpr
+wwAssC wrapS unwrapS fS = do _ <- checkFixExpr
                              appAllR idR (lamR (wwAssB wrapS unwrapS fS) >>> etaReduce)
+
+--------------------------------------------------------------------------------------------------
+
+-- | fix ty f  <==>  f (fix ty f)
+fixComputationRule :: BiRewriteH CoreExpr
+fixComputationRule = bidirectional computationL computationR
+  where
+    computationL :: RewriteH CoreExpr
+    computationL = prefixFailMsg "fix computation rule failed: " $
+                   do (_,f) <- checkFixExpr
+                      fixf  <- idR
+                      return (App f fixf)
+
+    computationR :: RewriteH CoreExpr
+    computationR = prefixFailMsg "fix computation rule failed: " $
+                   do App f fixf <- idR
+                      (_,f') <- checkFixExpr <<< constant fixf
+                      guardMsg (exprEqual f f') "external function does not match internal expression"
+                      return fixf
+
+
+-- | fix tyA (\ a -> f (g a))  <==>  f (fix tyB (\ b -> g (f b))
+rollingRule :: BiRewriteH CoreExpr
+rollingRule = bidirectional rollingRuleL rollingRuleR
+  where
+    rollingRuleL :: RewriteH CoreExpr
+    rollingRuleL = prefixFailMsg "rolling rule failed: " $
+                   withPatFailMsg wrongFixBody $
+                   do (tyA, Lam a (App f (App g (Var a')))) <- checkFixExpr
+                      guardMsg (a == a') wrongFixBody
+                      (tyA',tyB) <- checkFunctionsWithInverseTypes g f
+                      guardMsg (eqType tyA tyA') "Type mismatch: this shouldn't have happened, report this as a bug."
+                      res <- rollingRuleResult tyB g f
+                      return (App f res)
+
+    rollingRuleR :: RewriteH CoreExpr
+    rollingRuleR = prefixFailMsg "(reversed) rolling rule failed: " $
+                   withPatFailMsg "not an application" $
+                   do App f fx <- idR
+                      withPatFailMsg "body of fix does not have the form Lam v (App f (App g (Var v)))" $
+                        do (tyB, Lam b (App f' (App g (Var b')))) <- checkFixExpr <<< constant fx
+                           guardMsg (b == b') wrongFixBody
+                           guardMsg (exprEqual f f') "external function does not match internal expression"
+                           (tyA,tyB') <- checkFunctionsWithInverseTypes g f
+                           guardMsg (eqType tyB tyB') "Type mismatch: this shouldn't have happened, report this as a bug."
+                           rollingRuleResult tyA f g
+
+    rollingRuleResult :: Type -> CoreExpr -> CoreExpr -> TranslateH z CoreExpr
+    rollingRuleResult ty f g = do fixId <- findFixId
+                                  x <- constT (newIdH "x" ty)
+                                  return (App (App (Var fixId)
+                                                   (Type ty)
+                                              )
+                                              (Lam x (App f
+                                                          (App g
+                                                               (Var x)
+                                                          )
+                                                     )
+                                              )
+                                         )
+
+    wrongFixBody :: String
+    wrongFixBody = "body of fix does not have the form Lam v (App f (App g (Var v)))"
 
 --------------------------------------------------------------------------------------------------
 
@@ -196,25 +267,25 @@ equalsCoreStringExpr :: CoreString -> CoreExpr -> TranslateH a Bool
 equalsCoreStringExpr s e = exprEqual e <$> setCoreExprT s
 
 -- | Check that the expression has the form "fix t (f :: t -> t)", returning "t" and "f".
-checkIsFixExpr :: TranslateH CoreExpr (Type,CoreExpr)
-checkIsFixExpr = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
-                 do App (App (Var fixId) (Type ty)) f <- idR
-                    guardIsFixId fixId
-                    return (ty,f)
+checkFixExpr :: TranslateH CoreExpr (Type,CoreExpr)
+checkFixExpr = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
+               do App (App (Var fixId) (Type ty)) f <- idR
+                  guardIsFixId fixId
+                  return (ty,f)
 
 checkEndoFunction :: MonadCatch m => CoreExpr -> m Type
-checkEndoFunction f = do (ty1,ty2) <- safeSplitFunTy (exprType f) "endo function"
+checkEndoFunction f = do (ty1,ty2) <- typesOfFunExpr f
                          guardMsg (eqType ty1 ty2) ("argument and result types differ.")
                          return ty1
 
-checkWrapUnwrapTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
-checkWrapUnwrapTypes wrap unwrap = do (wrapTyB,wrapTyA)     <- safeSplitFunTy (exprType wrap) "wrapper"
-                                      (unwrapTyA,unwrapTyB) <- safeSplitFunTy (exprType unwrap) "unwrapper"
-                                      guardMsg (eqType wrapTyA unwrapTyA) ("argument type of unwrapper does not match result type of wrapper.")
-                                      guardMsg (eqType unwrapTyB wrapTyB) ("argument type of wrapper does not match result type of unwrapper.")
-                                      return (wrapTyA,wrapTyB)
+checkFunctionsWithInverseTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
+checkFunctionsWithInverseTypes f g = do (fdom,fcod) <- typesOfFunExpr f
+                                        (gdom,gcod) <- typesOfFunExpr g
+                                        guardMsg (eqType fdom gcod) ("functions do not have inverse types.")
+                                        guardMsg (eqType gdom fcod) ("functions do not have inverse types.")
+                                        return (fdom,fcod)
 
-safeSplitFunTy :: MonadCatch m => Type -> String -> m (Type,Type)
-safeSplitFunTy t s = maybe (fail $ "type of " ++ s ++ " is not a function type.") return (splitFunTy_maybe t)
+typesOfFunExpr :: MonadCatch m => CoreExpr -> m (Type,Type)
+typesOfFunExpr e = maybe (fail "not a function type.") return (splitFunTy_maybe $ exprType e)
 
 --------------------------------------------------------------------------------------------------

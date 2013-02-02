@@ -2,15 +2,11 @@ flatten-module
 consider 'flatten
 {
   consider 'flatten
-  fix-intro
-  0
-  unfold-rule "ww"
-  any-call (unfold '.)
+  ww-split [| wrap t |] [| unwrap t |]
   any-call (unfold 'wrap)
   any-call (unfold 'unwrap)
   any-call (unfold '.)
   bash
-  unshadow
   any-bu case-float-arg
   {
     consider case
@@ -25,13 +21,7 @@ consider 'flatten
       unfold-rule "(.) id"
     }
   }
-  {
-    consider app
-    unfold 'fix
-    alpha-let 'work
-  }
 }
 bash
-try unshadow
 one-td (unfold 'absH)
 

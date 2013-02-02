@@ -6,11 +6,13 @@ module Language.HERMIT.Kure
 
        -- | All the required functionality of KURE is exported here, so other modules do not need to import KURE directly.
          module Language.KURE
+       , module Language.KURE.BiTranslate
        , module Language.KURE.Lens
        -- * Synonyms
        -- | In HERMIT, 'Translate', 'Rewrite' and 'Lens' always operate on the same context and monad.
        , TranslateH
        , RewriteH
+       , BiRewriteH
        , LensH
        -- * Congruence combinators
        -- ** Modguts
@@ -66,6 +68,7 @@ where
 import GhcPlugins hiding (empty)
 
 import Language.KURE
+import Language.KURE.BiTranslate
 import Language.KURE.Lens
 
 import Language.HERMIT.Core
@@ -78,6 +81,7 @@ import Control.Monad
 
 type TranslateH a b = Translate HermitC HermitM a b
 type RewriteH a     = Rewrite   HermitC HermitM a
+type BiRewriteH a   = BiRewrite HermitC HermitM a
 type LensH a b      = Lens      HermitC HermitM a b
 
 -- I find it annoying that Applicative is not a superclass of Monad.
@@ -292,8 +296,8 @@ altR r = altT r (,,)
 
 ---------------------------------------------------------------------
 
--- | Translate an expression of the form: @Var@ 'Var'
-varT :: Monad m => (Var -> b) -> Translate HermitC m CoreExpr b
+-- | Translate an expression of the form: @Var@ 'Id'
+varT :: Monad m => (Id -> b) -> Translate HermitC m CoreExpr b
 varT f = contextfreeT $ \case
                            Var v -> return (f v)
                            _     -> fail "not a variable node."

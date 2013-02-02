@@ -17,7 +17,5 @@ wrap s n = s !! n
 unwrap :: (Nat -> a) -> Stream a
 unwrap f = map f nats
 
-{-# RULES "ww" forall f.  fix f = wrap (fix (unwrap . f . wrap)) #-}
-
 main :: IO ()
 main = print (fromNat $ fib $ toNat 30)
