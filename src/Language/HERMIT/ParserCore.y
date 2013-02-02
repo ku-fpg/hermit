@@ -11,6 +11,8 @@ import Language.HERMIT.External
 import Language.HERMIT.Monad
 import Language.HERMIT.Primitive.Common
 
+import Language.KURE.MonadCatch (prefixFailMsg)
+
 import Language.Haskell.TH as TH
 }
 
@@ -63,16 +65,23 @@ app : app arg          { App $1 $2 }
     | arg              { $1 }
 
 arg : '(' expr ')'     { $2 }
+    | '(' ')'          {% lookupName "()" Var }
     | var              { $1 }
     | intlit           { $1 }
     | strlit           { $1 }
 
-intlit : INTEGER        { mkIntExpr $1 } -- mkIntLit makes a primitive Int#
+intlit : INTEGER       { mkIntExpr $1 } -- mkIntLit makes a primitive Int#
 
-strlit : STRING         {% lift $ mkStringExpr $1 }
+strlit : STRING        {% lift $ mkStringExpr $1 }
 
-var : NAME   {% ask >>= \c -> lift (findId (TH.mkName $1) c) >>= \v -> return (if isId v then Var v else Type (mkTyVarTy v)) }
+var : NAME             {% lookupName $1 $ \v -> if isId v then Var v else Type (mkTyVarTy v) }
 {
+
+lookupName :: String -> (Id -> CoreExpr) -> CoreParseM CoreExpr
+lookupName nm k = do
+    c <- ask
+    v <- lift $ prefixFailMsg (nm ++ " lookup: ") $ findId (TH.mkName nm) c
+    return (k v)
 
 type CoreParseM a = ReaderT HermitC HermitM a
 
@@ -121,7 +130,7 @@ lexer ('_' :cs)    = fmap (Twild:)       $ lexer cs
 lexer ('(' :cs)    = fmap (Toparen:)     $ lexer cs
 lexer (')' :cs)    = fmap (Tcparen:)     $ lexer cs
 lexer (':':':':cs) = fmap (Tcoloncolon:) $ lexer cs
-lexer (':' :cs)    = fmap (Tcolon:)      $ lexer cs
+-- lexer (':' :cs)    = fmap (Tcolon:)      $ lexer cs
 lexer ('\\':cs)    = fmap (Tlambda:)     $ lexer cs
 lexer ('-':'>':cs) = fmap (Tarrow:)      $ lexer cs
 lexer ('\"':cs)    = let (str,rest) = span (/='\"') cs
@@ -141,11 +150,11 @@ lexer s            = Left $ "lexer: no match on " ++ s
 
 -- | Chars that are valid in identifiers anywhere.
 isIdFirstChar :: Char -> Bool
-isIdFirstChar c = c `elem` "_$[]:." || isAlpha c
+isIdFirstChar c = c `elem` "_$[]:.=" || isAlpha c
 
 -- | Chars that are valid in identifiers, but not as the first character.
 isIdChar :: Char -> Bool
-isIdChar c = isAlphaNum c || c `elem` "-'" || isIdFirstChar c
+isIdChar c = isAlphaNum c || c `elem` "#-'" || isIdFirstChar c
 
 -- | Chars that are valid in infix operators.
 isInfixId :: Char -> Bool

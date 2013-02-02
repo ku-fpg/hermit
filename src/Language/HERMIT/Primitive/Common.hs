@@ -140,10 +140,32 @@ findId nm c = case findBoundVars nm c of
 findIdMG :: TH.Name -> HermitC -> HermitM Id
 findIdMG nm c =
     case filter isValName $ findNameFromTH (mg_rdr_env $ hermitModGuts c) nm of
-      []  -> fail $ "variable not in scope."
+      []  -> findIdBuiltIn nm
       [n] -> lookupId n
       ns  -> do dynFlags <- getDynFlags
                 fail $ "multiple matches found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
+
+findIdBuiltIn :: TH.Name -> HermitM Id
+findIdBuiltIn = go . TH.nameBase
+    where go ":"     = dataConId consDataCon
+          go "[]"    = dataConId nilDataCon
+
+          go "True"  = return trueDataConId
+          go "False" = return falseDataConId
+
+          go "<"     = return ltDataConId
+          go "=="    = return eqDataConId
+          go ">"     = return gtDataConId
+
+          go "I#"    = dataConId intDataCon
+
+          go "()"    = return unitDataConId
+          -- TODO: add more as needed
+          --       http://www.haskell.org/ghc/docs/latest/html/libraries/ghc/TysWiredIn.html
+          go _   = fail "variable not in scope."
+
+          dataConId :: DataCon -> HermitM Id
+          dataConId = return . dataConWorkId
 
 ------------------------------------------------------------------------------
 
