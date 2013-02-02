@@ -32,7 +32,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
                   "Note: the pre-condition \"fix (wrap . unwrap . f) == fix f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-split" ((\ wrap unwrap -> promoteDefR $ workerWrapperSplit wrap unwrap) :: CoreString -> CoreString -> RewriteH Core)
-         [ "Worker/Wrapper Split",
+                [ "Worker/Wrapper Split",
                   "For any \"g :: a\", and given \"wrap :: b -> a\" and \"unwrap :: a -> b\" as arguments, then",
                   "g = expr  ==> g = let f = \\ g -> expr",
                   "                   in let work = unwrap (f (wrap work))",
@@ -43,6 +43,18 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "Worker/Wrapper Assumption A",
                   "For a \"wrap :: b -> a\" and an \"unwrap :: b -> a\", then",
                   "wrap (unwrap x)  ==>  x",
+                  "Note: only use this if it's true!"
+                ] .+ PreCondition
+         , external "ww-assumption-B" ((\ wrap unwrap f -> promoteExprR $ wwAssB wrap unwrap f) :: CoreString -> CoreString -> CoreString -> RewriteH Core)
+                [ "Worker/Wrapper Assumption B",
+                  "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\" then",
+                  "wrap (unwrap (f x))  ==>  f x",
+                  "Note: only use this if it's true!"
+                ] .+ PreCondition
+         , external "ww-assumption-C" ((\ wrap unwrap f -> promoteExprR $ wwAssC wrap unwrap f) :: CoreString -> CoreString -> CoreString -> RewriteH Core)
+                [ "Worker/Wrapper Assumption C",
+                  "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\" then",
+                  "fix t (\\ x -> wrap (unwrap (f x)))  ==>  fix t f",
                   "Note: only use this if it's true!"
                 ] .+ PreCondition
          ]
@@ -122,12 +134,11 @@ workerWrapperSplit wrapS unwrapS = do wrapE   <- setCoreExprT wrapS
 monomorphicWorkerWrapperFac :: CoreExpr -> CoreExpr -> RewriteH CoreExpr
 monomorphicWorkerWrapperFac wrap unwrap =
   prefixFailMsg "Worker/wrapper Factorisation failed: " $
-  withPatFailMsg (wrongExprForm "fix type fun") $
-  do App (App (Var fixId) (Type tyE)) f <- idR  -- fix :: forall a. (a -> a) -> a
-     guardIsFixId fixId
+  do (tA,f)    <- checkIsFixExpr
      (tyA,tyB) <- checkWrapUnwrapTypes wrap unwrap
-     guardMsg (eqType tyA tyE) ("wrapper/unwrapper types do not match expression type.")
-     x <- constT (newIdH "x" tyB)
+     guardMsg (eqType tyA tA) ("wrapper/unwrapper types do not match expression type.")
+     x         <- constT (newIdH "x" tyB)
+     fixId     <- findFixId
      return $ App wrap
                   (App (App (Var fixId) (Type tyB))
                        (Lam x (App unwrap
@@ -159,6 +170,7 @@ monomorphicWorkerWrapperSplit wrap unwrap =
                                             )
                         )
 
+-- | wrap (unwrap x)  ==>  x
 wwAssA :: CoreString -> CoreString -> RewriteH CoreExpr
 wwAssA wrapS unwrapS = do App wrap (App unwrap x) <- idR
                           guardMsgM (equalsCoreStringExpr wrapS wrap)     "given wrapper does not match expression."
@@ -166,10 +178,34 @@ wwAssA wrapS unwrapS = do App wrap (App unwrap x) <- idR
                           _ <- checkWrapUnwrapTypes wrap unwrap
                           return x
 
+-- | wrap (unwrap (f x))  ==>  f x
+wwAssB :: CoreString -> CoreString -> CoreString -> RewriteH CoreExpr
+wwAssB wrapS unwrapS fS = do App _ (App _ (App f _)) <- idR
+                             guardMsgM (equalsCoreStringExpr fS f) "given body function does not match expression."
+                             _ <- checkEndoFunction f
+                             wwAssA wrapS unwrapS
+
+-- | fix t (\ x -> wrap (unwrap (f x)))  ==>  fix t f
+wwAssC :: CoreString -> CoreString -> CoreString -> RewriteH CoreExpr
+wwAssC wrapS unwrapS fS = do _ <- checkIsFixExpr
+                             appAllR idR (lamR (wwAssB wrapS unwrapS fS) >>> etaReduce)
+
 --------------------------------------------------------------------------------------------------
 
 equalsCoreStringExpr :: CoreString -> CoreExpr -> TranslateH a Bool
 equalsCoreStringExpr s e = exprEqual e <$> setCoreExprT s
+
+-- | Check that the expression has the form "fix t (f :: t -> t)", returning "t" and "f".
+checkIsFixExpr :: TranslateH CoreExpr (Type,CoreExpr)
+checkIsFixExpr = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
+                 do App (App (Var fixId) (Type ty)) f <- idR
+                    guardIsFixId fixId
+                    return (ty,f)
+
+checkEndoFunction :: MonadCatch m => CoreExpr -> m Type
+checkEndoFunction f = do (ty1,ty2) <- safeSplitFunTy (exprType f) "endo function"
+                         guardMsg (eqType ty1 ty2) ("argument and result types differ.")
+                         return ty1
 
 checkWrapUnwrapTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
 checkWrapUnwrapTypes wrap unwrap = do (wrapTyB,wrapTyA)     <- safeSplitFunTy (exprType wrap) "wrapper"
