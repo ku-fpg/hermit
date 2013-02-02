@@ -9,7 +9,6 @@ import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
-import Language.HERMIT.ParserCore
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.Local
@@ -104,17 +103,14 @@ fixSpecialization = do
 
 --------------------------------------------------------------------------------------------------
 
-parseCoreExprT :: CoreString -> TranslateH a CoreExpr
-parseCoreExprT = contextonlyT . parseCore
-
 workerWrapperFac :: CoreString -> CoreString -> RewriteH CoreExpr
-workerWrapperFac wrapS unwrapS = do wrapE   <- parseCoreExprT wrapS
-                                    unwrapE <- parseCoreExprT unwrapS
+workerWrapperFac wrapS unwrapS = do wrapE   <- setCoreExprT wrapS
+                                    unwrapE <- setCoreExprT unwrapS
                                     monomorphicWorkerWrapperFac wrapE unwrapE
 
 workerWrapperSplit :: CoreString -> CoreString -> RewriteH CoreDef
-workerWrapperSplit wrapS unwrapS = do wrapE   <- parseCoreExprT wrapS
-                                      unwrapE <- parseCoreExprT unwrapS
+workerWrapperSplit wrapS unwrapS = do wrapE   <- setCoreExprT wrapS
+                                      unwrapE <- setCoreExprT unwrapS
                                       monomorphicWorkerWrapperSplit wrapE unwrapE
 
 -- workerWrapperFacTest :: TH.Name -> TH.Name -> RewriteH CoreExpr
