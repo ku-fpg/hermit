@@ -5,12 +5,10 @@ import Prelude hiding (last)
 
 unwrap         :: ([a] -> a) -> a -> [a] -> a
 unwrap f a as  = f (a:as)
-{-# NOINLINE unwrap #-}
 
 wrap           :: (a -> [a] -> a) -> [a] -> a
 wrap f []      = error "wrap _ []"
 wrap f (a:as)  = f a as
-{-# NOINLINE wrap #-}
 
 -- last :: [a] -> a
 last []        = error "last []"

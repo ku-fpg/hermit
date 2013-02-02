@@ -1,3 +1,5 @@
+module Main where
+
 -- so we can fix-intro
 import Data.Function (fix)
 
@@ -5,7 +7,6 @@ import Prelude hiding ((+))
 
 data Nat = Z | S Nat
 
-{-# RULES "ww" forall f . fix f = wrap (fix (unwrap . f . wrap)) #-}
 {-# RULES "precondition" forall w . wrap (unwrap w) = w #-}
 
 (+) :: Nat -> Nat -> Nat
@@ -35,11 +36,9 @@ fib (S (S n)) = fib (S n) + fib n
 
 wrap :: (Nat -> (Nat, Nat)) -> Nat -> Nat
 wrap h = fst . h
-{-# NOINLINE wrap #-}
 
 unwrap :: (Nat -> Nat) -> Nat -> (Nat, Nat)
 unwrap h n = (h n, h (S n))
-{-# NOINLINE unwrap #-}
 
 main :: IO ()
 main = print $ toInt $ fib (fromInt 30)
