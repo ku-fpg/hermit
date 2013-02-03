@@ -26,7 +26,6 @@ unwrap g e s f = case g e of
 wrap :: (Expr -> (Int -> Mint) -> Mint -> Mint) -> Expr -> Mint
 wrap h e = h e Just Nothing
 
-{-# RULES "ww"     forall f. fix f = wrap (fix (unwrap . f . wrap)) #-}
 {-# RULES "fusion" forall w. unwrap (wrap w) = w                    #-} -- has precondition
 
 main :: IO ()

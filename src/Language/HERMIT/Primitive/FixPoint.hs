@@ -2,6 +2,7 @@ module Language.HERMIT.Primitive.FixPoint where
 
 import GhcPlugins as GHC hiding (varName)
 
+import Control.Applicative
 import Control.Arrow
 
 import Language.HERMIT.Core
@@ -19,11 +20,11 @@ import qualified Language.Haskell.TH as TH
 
 
 externals ::  [External]
-externals = map ((.+ Experiment) . (.+ TODO))
+externals = map (.+ Experiment)
          [ external "fix-intro" (promoteDefR fixIntro :: RewriteH Core)
                 [ "rewrite a recursive binding into a non-recursive binding using fix" ]
-         , external "fix-spec" (promoteExprR fixSpecialization :: RewriteH Core)
-                [ "specialize a fix with a given argument"] .+ Shallow
+         -- , external "fix-spec" (promoteExprR fixSpecialization :: RewriteH Core)
+         --        [ "specialize a fix with a given argument"] .+ Shallow
          , external "ww-factorisation" ((\ wrap unwrap -> promoteExprBiR $ workerWrapperFac wrap unwrap) :: CoreString -> CoreString -> BiRewriteH Core)
                 [ "Worker/Wrapper Factorisation",
                   "For any \"f :: a -> a\", and given \"wrap :: b -> a\" and \"unwrap :: a -> b\" as arguments, then",
@@ -66,61 +67,51 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 ]
          ]
 
-
-
-fixLocation :: String
-fixLocation = "Data.Function.fix"
-
-findFixId :: TranslateH a Id
-findFixId = findIdT (TH.mkName fixLocation)
-
-guardIsFixId :: Id -> TranslateH a ()
-guardIsFixId v = do fixId <- findFixId
-                    guardMsg (v == fixId) (var2String v ++ " does not match " ++ fixLocation)
-
+--------------------------------------------------------------------------------------------------
 
 -- |  f = e   ==>   f = fix (\ f -> e)
 fixIntro :: RewriteH CoreDef
 fixIntro = prefixFailMsg "Fix introduction failed: " $
            do Def f e <- idR
-              fixId   <- findFixId
-              constT $ do f' <- cloneVarH id f
-                          let coreFix  = App (App (Var fixId) (Type (idType f)))
-                              emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars e))
-                              sub      = extendSubst emptySub f (Var f')
-                          return $ Def f (coreFix (Lam f' (substExpr (text "fixIntro") sub e)))
+              f' <- constT $ cloneVarH id f
+              let emptySub = mkEmptySubst (mkInScopeSet $ exprFreeVars e)
+                  sub      = extendSubst emptySub f (Var f')
+                  e'       = substExpr (text "fixIntro") sub e
+              Def f <$> mkFix (Lam f' e')
+
+--------------------------------------------------------------------------------------------------
 
 -- ironically, this is an instance of worker/wrapper itself.
 
-fixSpecialization :: RewriteH CoreExpr
-fixSpecialization = do
+-- fixSpecialization :: RewriteH CoreExpr
+-- fixSpecialization = do
 
-        -- fix (t::*) (f :: t -> t) (a :: t) :: t
-        App (App (App (Var fixId) (Type _)) _) _ <- idR
+--         -- fix (t::*) (f :: t -> t) (a :: t) :: t
+--         App (App (App (Var fixId) (Type _)) _) _ <- idR
 
-        guardIsFixId fixId
+--         guardIsFixId fixId
 
-        let r :: RewriteH CoreExpr
-            r = multiEtaExpand [TH.mkName "f",TH.mkName "a"]
+--         let r :: RewriteH CoreExpr
+--             r = multiEtaExpand [TH.mkName "f",TH.mkName "a"]
 
-            sub :: RewriteH Core
-            sub = pathR [0,1] (promoteR r)
+--             sub :: RewriteH Core
+--             sub = pathR [0,1] (promoteR r)
 
-        App (App (App (Var fx) (Type t))
-                 (Lam _ (Lam v2 (App (App e _) _a2)))
-            )
-            (Type t2) <- extractR sub -- In normal form now
+--         App (App (App (Var fx) (Type t))
+--                  (Lam _ (Lam v2 (App (App e _) _a2)))
+--             )
+--             (Type t2) <- extractR sub -- In normal form now
 
-        constT $ do let t' = applyTy t t2
+--         constT $ do let t' = applyTy t t2
 
-                    v3 <- newIdH "f" t'
-                    v4 <- newTyVarH "a" (tyVarKind v2)
+--                     v3 <- newIdH "f" t'
+--                     v4 <- newTyVarH "a" (tyVarKind v2)
 
-                    -- f' :: \/ a -> T [a] -> (\/ b . T [b])
-                    let f' = Lam v4 (Cast (Var v3) (mkUnsafeCo t' (applyTy t (mkTyVarTy v4))))
-                        e' = Lam v3 (App (App e f') (Type t2))
+--                     -- f' :: \/ a -> T [a] -> (\/ b . T [b])
+--                     let f' = Lam v4 (Cast (Var v3) (mkUnsafeCo t' (applyTy t (mkTyVarTy v4))))
+--                         e' = Lam v3 (App (App e f') (Type t2))
 
-                    return $ App (App (Var fx) (Type t')) e'
+--                     return $ App (App (Var fx) (Type t')) e'
 
 
 --------------------------------------------------------------------------------------------------
@@ -319,10 +310,22 @@ checkFunctionsWithInverseTypes f g = do (fdom,fcod) <- typesOfFunExpr f
 typesOfFunExpr :: MonadCatch m => CoreExpr -> m (Type,Type)
 typesOfFunExpr e = maybe (fail "not a function type.") return (splitFunTy_maybe $ exprType e)
 
+--------------------------------------------------------------------------------------------------
+
 -- | f -> fix f
 mkFix :: CoreExpr -> TranslateH z CoreExpr
 mkFix f = do t <- checkEndoFunction f
              fixId <- findFixId
              return $ App (App (Var fixId) (Type t)) f
+
+fixLocation :: String
+fixLocation = "Data.Function.fix"
+
+findFixId :: TranslateH a Id
+findFixId = findIdT (TH.mkName fixLocation)
+
+guardIsFixId :: Id -> TranslateH a ()
+guardIsFixId v = do fixId <- findFixId
+                    guardMsg (v == fixId) (var2String v ++ " does not match " ++ fixLocation)
 
 --------------------------------------------------------------------------------------------------

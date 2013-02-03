@@ -10,7 +10,7 @@ wrap           :: (a -> [a] -> a) -> [a] -> a
 wrap f []      = error "wrap _ []"
 wrap f (a:as)  = f a as
 
--- last :: [a] -> a
+last           :: [a] -> a
 last []        = error "last []"
 last [a]       = a
 last (_:a:as)  = last (a:as)

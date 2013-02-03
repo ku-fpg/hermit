@@ -1,6 +1,6 @@
 flatten-module
 consider 'eval
-load "../WWSplitTactic.hss"
+ww-split [| wrap |] [| unwrap |]
 {rhs-of 'work
    eta-expand 'e ; 0
    eta-expand 's ; 0

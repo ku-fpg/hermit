@@ -1,6 +1,7 @@
 flatten-module
 consider 'last
-{consider 'last
+static-arg
+{ 0 ; alpha-lam 't ; consider 'last'
   ww-split [| wrap t |] [| unwrap t |]
   {rhs-of 'work
      eta-expand 'b
@@ -15,6 +16,5 @@ consider 'last
      case-reduce
   }
 }
-simplify
 any-call (unfold 'wrap)
-
+bash

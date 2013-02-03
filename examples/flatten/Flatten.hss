@@ -1,7 +1,7 @@
 flatten-module
 consider 'flatten
-{
-  consider 'flatten
+static-arg
+{ 0 ; alpha-lam 't ; consider 'flatten'
   ww-split [| wrap t |] [| unwrap t |]
   any-call (unfold 'wrap)
   any-call (unfold 'unwrap)
@@ -22,6 +22,5 @@ consider 'flatten
     }
   }
 }
+any-call (unfold 'absH)
 bash
-one-td (unfold 'absH)
-
