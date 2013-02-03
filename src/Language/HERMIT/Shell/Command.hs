@@ -129,6 +129,7 @@ interpShellCommand :: [Interp ShellCommand]
 interpShellCommand =
                 [ interp $ \ (ShellCommandBox cmd)       -> cmd
                 , interp $ \ (RewriteCoreBox rr)         -> AstEffect (Apply rr)
+                , interp $ \ (BiRewriteCoreBox br)       -> AstEffect (Apply $ forewardT br)
                 , interp $ \ (TranslateCorePathBox tt)   -> AstEffect (Pathfinder tt)
                 , interp $ \ (StringBox str)             -> QueryFun (Message str)
                 , interp $ \ (TranslateCoreStringBox tt) -> QueryFun (QueryT tt)

@@ -27,6 +27,7 @@ module Language.HERMIT.External
        , TagBox(..)
        , IntBox(..)
        , RewriteCoreBox(..)
+       , BiRewriteCoreBox(..)
        , TranslateCoreStringBox(..)
        , TranslateCoreCheckBox(..)
        , NameBox(..)
@@ -280,6 +281,14 @@ instance Extern (RewriteH Core) where
     type Box (RewriteH Core) = RewriteCoreBox
     box = RewriteCoreBox
     unbox (RewriteCoreBox i) = i
+
+data BiRewriteCoreBox = BiRewriteCoreBox (BiRewriteH Core) deriving Typeable
+
+instance Extern (BiRewriteH Core) where
+    type Box (BiRewriteH Core) = BiRewriteCoreBox
+    box = BiRewriteCoreBox
+    unbox (BiRewriteCoreBox i) = i
+
 
 data TranslateCoreStringBox = TranslateCoreStringBox (TranslateH Core String) deriving Typeable
 

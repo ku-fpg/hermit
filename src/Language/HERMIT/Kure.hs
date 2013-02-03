@@ -55,6 +55,8 @@ module Language.HERMIT.Kure
        , promoteDefR
        , promoteExprR
        , promoteAltR
+       -- ** BiRewrite Promotions
+       , promoteBiExprR
        -- ** Translate Promotions
        , promoteModGutsT
        , promoteProgT
@@ -580,6 +582,12 @@ promoteAltR = promoteWithFailMsgR "This rewrite can only succeed at case alterna
 -- | Promote a rewrite on 'CoreExpr' to a rewrite on 'Core'.
 promoteExprR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m Core
 promoteExprR = promoteWithFailMsgR "This rewrite can only succeed at expression nodes."
+
+---------------------------------------------------------------------
+
+-- | Promote a bidirectional rewrite on 'CoreExpr' to a bidirectional rewrite on 'Core'.
+promoteBiExprR :: Monad m => BiRewrite HermitC m CoreExpr -> BiRewrite HermitC m Core
+promoteBiExprR b = bidirectional (promoteExprR $ forewardT b) (promoteExprR $ backwardT b)
 
 ---------------------------------------------------------------------
 

@@ -23,6 +23,8 @@ externals = map (.+ KURE)
        [ "perform the first translate, and then, if it fails, perform the second rewrite" ]
    , external ">>>"        ((>>>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "compose rewrites, requiring both to succeed" ]
+   , external ">>>"        ((>>>) :: BiRewriteH Core -> BiRewriteH Core -> BiRewriteH Core)
+       [ "compose bidirectional rewrites, requiring both to succeed" ]
    , external ">+>"        ((>+>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "compose rewrites, allowing one to fail" ]
    , external "try"        (tryR :: RewriteH Core -> RewriteH Core)
@@ -65,6 +67,8 @@ externals = map (.+ KURE)
        [ "apply a rewrite only if the check succeeds" ] .+ Predicate
    , external "not"        (notM :: TranslateH Core () -> TranslateH Core ())
        [ "cause a failing check to succeed, a succeeding check to fail" ] .+ Predicate
+   , external "invert"     (invert :: BiRewriteH Core -> BiRewriteH Core)
+       [ "reverse a bidirectional rewrite" ]
    ]
 
 ------------------------------------------------------------------------------------

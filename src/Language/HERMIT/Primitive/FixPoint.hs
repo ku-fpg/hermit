@@ -38,29 +38,29 @@ externals = map ((.+ Experiment) . (.+ TODO))
                   "                        in wrap work",
                   "Note: the pre-condition \"fix a (wrap . unwrap . f) == fix a f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
-         , external "ww-assumption-A" ((\ wrap unwrap -> promoteExprR $ forewardT $ wwAssA wrap unwrap) :: CoreString -> CoreString -> RewriteH Core)
+         , external "ww-assumption-A" ((\ wrap unwrap -> promoteBiExprR $ wwAssA wrap unwrap) :: CoreString -> CoreString -> BiRewriteH Core)
                 [ "Worker/Wrapper Assumption A",
                   "For a \"wrap :: b -> a\" and an \"unwrap :: b -> a\", then",
                   "wrap (unwrap x)  ==>  x",
                   "Note: only use this if it's true!"
                 ] .+ PreCondition
-         , external "ww-assumption-B" ((\ wrap unwrap f -> promoteExprR $ forewardT $ wwAssB wrap unwrap f) :: CoreString -> CoreString -> CoreString -> RewriteH Core)
+         , external "ww-assumption-B" ((\ wrap unwrap f -> promoteBiExprR $ wwAssB wrap unwrap f) :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
                 [ "Worker/Wrapper Assumption B",
                   "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\" then",
                   "wrap (unwrap (f x))  ==>  f x",
                   "Note: only use this if it's true!"
                 ] .+ PreCondition
-         , external "ww-assumption-C" ((\ wrap unwrap f -> promoteExprR $ forewardT $ wwAssC wrap unwrap f) :: CoreString -> CoreString -> CoreString -> RewriteH Core)
+         , external "ww-assumption-C" ((\ wrap unwrap f -> promoteBiExprR $ wwAssC wrap unwrap f) :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
                 [ "Worker/Wrapper Assumption C",
                   "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\" then",
                   "fix t (\\ x -> wrap (unwrap (f x)))  ==>  fix t f",
                   "Note: only use this if it's true!"
                 ] .+ PreCondition
-         , external "fix-computation" ((promoteExprR $ forewardT fixComputationRule) :: RewriteH Core)
+         , external "fix-computation" ((promoteBiExprR fixComputationRule) :: BiRewriteH Core)
                 [ "Fixed-Point Computation Rule",
                   "fix t f  ==>  f (fix t f)"
                 ]
-         , external "rolling-rule" ((promoteExprR $ forewardT rollingRule) :: RewriteH Core)
+         , external "rolling-rule" ((promoteBiExprR rollingRule) :: BiRewriteH Core)
                 [ "Rolling Rule",
                   "fix tyA (\\ a -> f (g a))  <==>  f (fix tyB (\\ b -> g (f b))"
                 ]
@@ -269,7 +269,7 @@ rollingRule = bidirectional rollingRuleL rollingRuleR
                    withPatFailMsg "not an application" $
                    do App f fx <- idR
                       withPatFailMsg "body of fix does not have the form Lam v (App f (App g (Var v)))" $
-                        do (tyB, Lam b (App f' (App g (Var b')))) <- checkFixExpr <<< constant fx
+                        do (tyB, Lam b (App g (App f' (Var b')))) <- checkFixExpr <<< constant fx
                            guardMsg (b == b') wrongFixBody
                            guardMsg (exprEqual f f') "external function does not match internal expression"
                            (tyA,tyB') <- checkFunctionsWithInverseTypes g f
@@ -299,7 +299,7 @@ rollingRule = bidirectional rollingRuleL rollingRuleR
 parseWrapUnwrap :: CoreString -> CoreString -> TranslateH z (Type,Type,CoreExpr,CoreExpr)
 parseWrapUnwrap wrapS unwrapS = do wrap   <- setCoreExprT wrapS
                                    unwrap <- setCoreExprT unwrapS
-                                   setFailMsg "Given expressions do not form a valid wrap/unwrap pair." $
+                                   setFailMsg "given expressions do not form a valid wrap/unwrap pair." $
                                      do (a,b) <- checkFunctionsWithInverseTypes unwrap wrap
                                         return (a,b,wrap,unwrap)
 
