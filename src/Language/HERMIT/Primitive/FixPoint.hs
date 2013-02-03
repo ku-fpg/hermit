@@ -2,7 +2,6 @@ module Language.HERMIT.Primitive.FixPoint where
 
 import GhcPlugins as GHC hiding (varName)
 
-import Control.Applicative
 import Control.Arrow
 
 import Language.HERMIT.Core
@@ -28,44 +27,46 @@ externals = map ((.+ Experiment) . (.+ TODO))
          , external "ww-factorisation" ((\ wrap unwrap -> promoteExprR $ workerWrapperFac wrap unwrap) :: CoreString -> CoreString -> RewriteH Core)
                 [ "Worker/Wrapper Factorisation",
                   "For any \"f :: a -> a\", and given \"wrap :: b -> a\" and \"unwrap :: a -> b\" as arguments, then",
-                  "fix f  ==>  wrap (fix (unwrap . f . wrap))",
-                  "Note: the pre-condition \"fix (wrap . unwrap . f) == fix f\" is expected to hold."
+                  "fix a f  ==>  wrap (fix b (unwrap . f . wrap))",
+                  "Note: the pre-condition \"fix a (wrap . unwrap . f) == fix a f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-split" ((\ wrap unwrap -> promoteDefR $ workerWrapperSplit wrap unwrap) :: CoreString -> CoreString -> RewriteH Core)
                 [ "Worker/Wrapper Split",
                   "For any \"g :: a\", and given \"wrap :: b -> a\" and \"unwrap :: a -> b\" as arguments, then",
-                  "g = expr  ==> g = let f = \\ g -> expr",
-                  "                   in let work = unwrap (f (wrap work))",
-                  "                       in wrap work",
-                  "Note: the pre-condition \"fix (wrap . unwrap . f) == fix f\" is expected to hold."
+                  "g = expr  ==>  g = let f = \\ g -> expr",
+                  "                    in let work = unwrap (f (wrap work))",
+                  "                        in wrap work",
+                  "Note: the pre-condition \"fix a (wrap . unwrap . f) == fix a f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
-         , external "ww-assumption-A" ((\ wrap unwrap -> promoteExprR $ wwAssA wrap unwrap) :: CoreString -> CoreString -> RewriteH Core)
+         , external "ww-assumption-A" ((\ wrap unwrap -> promoteExprR $ forewardT $ wwAssA wrap unwrap) :: CoreString -> CoreString -> RewriteH Core)
                 [ "Worker/Wrapper Assumption A",
                   "For a \"wrap :: b -> a\" and an \"unwrap :: b -> a\", then",
                   "wrap (unwrap x)  ==>  x",
                   "Note: only use this if it's true!"
                 ] .+ PreCondition
-         , external "ww-assumption-B" ((\ wrap unwrap f -> promoteExprR $ wwAssB wrap unwrap f) :: CoreString -> CoreString -> CoreString -> RewriteH Core)
+         , external "ww-assumption-B" ((\ wrap unwrap f -> promoteExprR $ forewardT $ wwAssB wrap unwrap f) :: CoreString -> CoreString -> CoreString -> RewriteH Core)
                 [ "Worker/Wrapper Assumption B",
                   "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\" then",
                   "wrap (unwrap (f x))  ==>  f x",
                   "Note: only use this if it's true!"
                 ] .+ PreCondition
-         , external "ww-assumption-C" ((\ wrap unwrap f -> promoteExprR $ wwAssC wrap unwrap f) :: CoreString -> CoreString -> CoreString -> RewriteH Core)
+         , external "ww-assumption-C" ((\ wrap unwrap f -> promoteExprR $ forewardT $ wwAssC wrap unwrap f) :: CoreString -> CoreString -> CoreString -> RewriteH Core)
                 [ "Worker/Wrapper Assumption C",
                   "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\" then",
                   "fix t (\\ x -> wrap (unwrap (f x)))  ==>  fix t f",
                   "Note: only use this if it's true!"
                 ] .+ PreCondition
-         -- , external "fix-comp" ((promoteExprR $ forewardT fixComputationRule) :: RewriteH Core)
-         --        [ "Fixed-Point Computation Rule",
-         --          "fix t f  ==>  f (fix t f)"
-         --        ]
-         -- , external "fix-comp-sym" ((promoteExprR $ backwardT fixComputationRule) :: RewriteH Core)
-         --        [ "Fixed-Point Computation Rule (in reverse)",
-         --          "f (fix t f)  ==>  fix t f"
-         --        ]
+         , external "fix-computation" ((promoteExprR $ forewardT fixComputationRule) :: RewriteH Core)
+                [ "Fixed-Point Computation Rule",
+                  "fix t f  ==>  f (fix t f)"
+                ]
+         , external "rolling-rule" ((promoteExprR $ forewardT rollingRule) :: RewriteH Core)
+                [ "Rolling Rule",
+                  "fix tyA (\\ a -> f (g a))  <==>  f (fix tyB (\\ b -> g (f b))"
+                ]
          ]
+
+
 
 fixLocation :: String
 fixLocation = "Data.Function.fix"
@@ -134,11 +135,9 @@ workerWrapperSplit wrapS unwrapS = do wrapE   <- setCoreExprT wrapS
                                       unwrapE <- setCoreExprT unwrapS
                                       monomorphicWorkerWrapperSplit wrapE unwrapE
 
--- f      :: a -> a
--- wrap   :: forall x,y..z. b -> a
--- unwrap :: forall p,q..r. a -> b
--- fix tyA f ==> wrap (fix tyB (\ x -> unwrap (f (wrap (Var x)))))
--- Assumes the arguments are monomorphic functions (all type variables have already been applied)
+
+-- | For any "f :: a -> a", and given "wrap :: b -> a" and "unwrap :: a -> b" as arguments, then
+--   fix a f  ==>  wrap (fix b (unwrap . f . wrap))
 monomorphicWorkerWrapperFac :: CoreExpr -> CoreExpr -> RewriteH CoreExpr
 monomorphicWorkerWrapperFac wrap unwrap =
   prefixFailMsg "Worker/wrapper Factorisation failed: " $
@@ -159,7 +158,7 @@ monomorphicWorkerWrapperFac wrap unwrap =
                        )
                   )
 
-
+-- | g = expr  ==>  g = let f = \\ g -> expr in let work = unwrap (f (wrap work)) in wrap work
 monomorphicWorkerWrapperSplit :: CoreExpr -> CoreExpr -> RewriteH CoreDef
 monomorphicWorkerWrapperSplit wrap unwrap =
   let f    = TH.mkName "f"
@@ -178,25 +177,58 @@ monomorphicWorkerWrapperSplit wrap unwrap =
                                             )
                         )
 
--- | wrap (unwrap x)  ==>  x
-wwAssA :: CoreString -> CoreString -> RewriteH CoreExpr
-wwAssA wrapS unwrapS = do App wrap (App unwrap x) <- idR
-                          guardMsgM (equalsCoreStringExpr wrapS wrap)     "given wrapper does not match expression."
-                          guardMsgM (equalsCoreStringExpr unwrapS unwrap) "given unwrapper does not match expression."
-                          _ <- checkFunctionsWithInverseTypes unwrap wrap
-                          return x
+-- | wrap (unwrap x)  <==>  x
+wwAssA :: CoreString -> CoreString -> BiRewriteH CoreExpr
+wwAssA wrapS unwrapS = bidirectional wwAL wwAR
+  where
+    wwAL :: RewriteH CoreExpr
+    wwAL = do (_,_,wrap,unwrap) <- parseWrapUnwrap wrapS unwrapS
+              App wrap' (App unwrap' x) <- idR
+              guardMsg (exprEqual wrap wrap')     "given wrapper does not match expression."
+              guardMsg (exprEqual unwrap unwrap') "given unwrapper does not match expression."
+              return x
 
--- | wrap (unwrap (f x))  ==>  f x
-wwAssB :: CoreString -> CoreString -> CoreString -> RewriteH CoreExpr
-wwAssB wrapS unwrapS fS = do App _ (App _ (App f _)) <- idR
-                             guardMsgM (equalsCoreStringExpr fS f) "given body function does not match expression."
-                             _ <- checkEndoFunction f
-                             wwAssA wrapS unwrapS
+    wwAR :: RewriteH CoreExpr
+    wwAR = do (a,_,wrap,unwrap) <- parseWrapUnwrap wrapS unwrapS
+              x <- checkExprType a
+              return $ App wrap (App unwrap x)
 
--- | fix t (\ x -> wrap (unwrap (f x)))  ==>  fix t f
-wwAssC :: CoreString -> CoreString -> CoreString -> RewriteH CoreExpr
-wwAssC wrapS unwrapS fS = do _ <- checkFixExpr
-                             appAllR idR (lamR (wwAssB wrapS unwrapS fS) >>> etaReduce)
+-- | wrap (unwrap (f x))  <==>  f x
+wwAssB :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
+wwAssB wrapS unwrapS fS = bidirectional wwBL wwBR
+  where
+    wwA :: BiRewriteH CoreExpr
+    wwA = wwAssA wrapS unwrapS
+
+    wwBL :: RewriteH CoreExpr
+    wwBL = do App _ (App _ (App f _)) <- idR
+              _  <- checkEndoFunction f
+              f' <- setCoreExprT fS
+              guardMsg (exprEqual f f') "given body function does not match expression."
+              forewardT wwA
+
+    wwBR :: RewriteH CoreExpr
+    wwBR = do App f _ <- idR
+              _  <- checkEndoFunction f
+              f' <- setCoreExprT fS
+              guardMsg (exprEqual f f') "given body function does not match expression."
+              backwardT wwA
+
+
+-- | fix t (\ x -> wrap (unwrap (f x)))  <==>  fix t f
+wwAssC :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
+wwAssC wrapS unwrapS fS = bidirectional wwCL wwCR
+  where
+    wwB :: BiRewriteH CoreExpr
+    wwB = wwAssB wrapS unwrapS fS
+
+    wwCL :: RewriteH CoreExpr
+    wwCL = do _ <- checkFixExpr
+              appAllR idR (lamR (forewardT wwB) >>> etaReduce)
+
+    wwCR :: RewriteH CoreExpr
+    wwCR = do _ <- checkFixExpr
+              appAllR idR (etaExpand (TH.mkName "x") >>> lamR (backwardT wwB))
 
 --------------------------------------------------------------------------------------------------
 
@@ -263,8 +295,18 @@ rollingRule = bidirectional rollingRuleL rollingRuleR
 
 --------------------------------------------------------------------------------------------------
 
-equalsCoreStringExpr :: CoreString -> CoreExpr -> TranslateH a Bool
-equalsCoreStringExpr s e = exprEqual e <$> setCoreExprT s
+-- | Given "wrap" and "unwrap" strings, returns types A and B, and "wrap" and "unwrap" expressions.
+parseWrapUnwrap :: CoreString -> CoreString -> TranslateH z (Type,Type,CoreExpr,CoreExpr)
+parseWrapUnwrap wrapS unwrapS = do wrap   <- setCoreExprT wrapS
+                                   unwrap <- setCoreExprT unwrapS
+                                   setFailMsg "Given expressions do not form a valid wrap/unwrap pair." $
+                                     do (a,b) <- checkFunctionsWithInverseTypes unwrap wrap
+                                        return (a,b,wrap,unwrap)
+
+checkExprType :: Type -> RewriteH CoreExpr
+checkExprType t = do e <- idR
+                     guardMsg (exprType e `eqType` t) "expression has wrong type."
+                     return e
 
 -- | Check that the expression has the form "fix t (f :: t -> t)", returning "t" and "f".
 checkFixExpr :: TranslateH CoreExpr (Type,CoreExpr)
