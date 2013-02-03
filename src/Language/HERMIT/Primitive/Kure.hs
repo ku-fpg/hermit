@@ -69,6 +69,10 @@ externals = map (.+ KURE)
        [ "cause a failing check to succeed, a succeeding check to fail" ] .+ Predicate
    , external "invert"     (invert :: BiRewriteH Core -> BiRewriteH Core)
        [ "reverse a bidirectional rewrite" ]
+   , external "foreward"   (forewardT :: BiRewriteH Core -> RewriteH Core)
+       [ "apply a bidirectional rewrite forewards" ]
+   , external "backward"   (backwardT :: BiRewriteH Core -> RewriteH Core)
+       [ "apply a bidirectional rewrite backwards" ]
    ]
 
 ------------------------------------------------------------------------------------
