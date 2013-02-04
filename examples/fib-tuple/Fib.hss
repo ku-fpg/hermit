@@ -8,7 +8,7 @@ consider 'work ; remember origwork
 
 -- work = unwrap (f (wrap work))
 
-down ; eta-expand 'n
+0 ; eta-expand 'n
 
 -- work n = unwrap (f (wrap work)) n
 
@@ -16,7 +16,7 @@ any-call (unfold 'unwrap)
 
 -- work n = (f (wrap work) n, f (wrap work) (n+1))
 
-down ; case-split-inline 'n
+0 ; case-split-inline 'n
 
 -- work 0     = (f (wrap work) 0, f (wrap work) 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))

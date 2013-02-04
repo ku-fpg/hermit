@@ -14,7 +14,7 @@ dump "ifl-paper/2-afterstash.tex" "clean" "latex" 82
 
 -- work = unwrap (f (wrap work))
 --   extensionality (eta-expand)
-down ; eta-expand 'n
+0 ; eta-expand 'n
 
 -- work n = unwrap (f (wrap work)) n
 --   unfold 'unwrap
@@ -23,7 +23,7 @@ dump "ifl-paper/3-unfoldunwrap.tex" "clean" "latex" 82
 
 -- work n = (f (wrap work) n, f (wrap work) (n+1))
 --   case 'n
-down ; case-split-inline 'n
+0 ; case-split-inline 'n
 dump "ifl-paper/4-casesplit.tex" "clean" "latex" 82
 
 -- work 0     = (f (wrap work) 0, f (wrap work) 1)

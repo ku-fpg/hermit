@@ -5,10 +5,10 @@ consider 'fib
 load "WWSplitTactic.hss"
 consider 'work
 remember origwork
-down
+0
 eta-expand 'n
 any-call (unfold 'unwrap)
-down
+0
 case-split-inline 'n
 { 1 ; any-call (unfold 'f) }
 { 2 ; 0 ; 1 ; any-call (unfold 'f) }
