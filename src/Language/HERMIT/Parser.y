@@ -52,6 +52,7 @@ e2   : e2 arg          { AppH $1 $2 }
 
 -- | Expressions that can be arguments in an application.
 arg  : '\'' ident      { SrcName $2 }
+     | '\'' infixop    { SrcName $2 }
      | '\'' '[' ']'    { SrcName "[]" } -- special case, since we also use [] for lists
      | quoted          { CmdName $1 }
      | core            { CoreH $1 }
