@@ -1,4 +1,13 @@
-module Language.HERMIT.Primitive.FixPoint where
+module Language.HERMIT.Primitive.FixPoint
+       ( -- * Operations on the Fixed Point Operator (fix)
+         -- | Note that many of these operations require 'Data.Function.fix' to be in scope.
+         Language.HERMIT.Primitive.FixPoint.externals
+         -- ** Rewrites and BiRewrites on Fixed Points
+       , fixIntro
+       , fixComputationRule
+       , rollingRule
+       )
+where
 
 import GhcPlugins as GHC hiding (varName)
 
@@ -18,7 +27,7 @@ import Language.HERMIT.Primitive.New -- TODO: Sort out heirarchy
 
 import qualified Language.Haskell.TH as TH
 
-
+-- | Externals for manipulating fixed points, and for the worker/wrapper transformation.
 externals ::  [External]
 externals = map (.+ Experiment)
          [ external "fix-intro" (promoteDefR fixIntro :: RewriteH Core)
@@ -76,7 +85,7 @@ externals = map (.+ Experiment)
 
 --------------------------------------------------------------------------------------------------
 
--- |  f = e   ==>   f = fix (\ f -> e)
+-- |  @f = e@   ==\>   @f = fix (\\ f -> e)@
 fixIntro :: RewriteH CoreDef
 fixIntro = prefixFailMsg "Fix introduction failed: " $
            do Def f e <- idR
@@ -248,7 +257,7 @@ wwAssC wrapS unwrapS fS = bidirectional wwCL wwCR
 
 --------------------------------------------------------------------------------------------------
 
--- | fix ty f  <==>  f (fix ty f)
+-- | @fix ty f@  \<==\>  @f (fix ty f)@
 fixComputationRule :: BiRewriteH CoreExpr
 fixComputationRule = bidirectional computationL computationR
   where
@@ -266,7 +275,7 @@ fixComputationRule = bidirectional computationL computationR
                       return fixf
 
 
--- | fix tyA (\ a -> f (g a))  <==>  f (fix tyB (\ b -> g (f b))
+-- | @fix tyA (\\ a -> f (g a))@  \<==\>  @f (fix tyB (\\ b -> g (f b))@
 rollingRule :: BiRewriteH CoreExpr
 rollingRule = bidirectional rollingRuleL rollingRuleR
   where
@@ -282,7 +291,7 @@ rollingRule = bidirectional rollingRuleL rollingRuleR
 
     rollingRuleR :: RewriteH CoreExpr
     rollingRuleR = prefixFailMsg "(reversed) rolling rule failed: " $
-                   withPatFailMsg "not an application" $
+                   withPatFailMsg "not an application." $
                    do App f fx <- idR
                       withPatFailMsg wrongFixBody $
                         do (tyB, Lam b (App g (App f' (Var b')))) <- checkFixExpr <<< constant fx
@@ -325,7 +334,8 @@ checkExprType t = do e <- idR
 checkFixExpr :: TranslateH CoreExpr (Type,CoreExpr)
 checkFixExpr = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
                do App (App (Var fixId) (Type ty)) f <- idR
-                  guardIsFixId fixId
+                  fixId' <- findFixId
+                  guardMsg (fixId == fixId') (var2String fixId ++ " does not match " ++ fixLocation)
                   return (ty,f)
 
 checkEndoFunction :: MonadCatch m => CoreExpr -> m Type
@@ -345,7 +355,7 @@ typesOfFunExpr e = maybe (fail "not a function type.") return (splitFunTy_maybe 
 
 --------------------------------------------------------------------------------------------------
 
--- | f -> fix f
+-- | f  ==>  fix f
 mkFix :: CoreExpr -> TranslateH z CoreExpr
 mkFix f = do t <- checkEndoFunction f
              fixId <- findFixId
@@ -356,9 +366,5 @@ fixLocation = "Data.Function.fix"
 
 findFixId :: TranslateH a Id
 findFixId = findIdT (TH.mkName fixLocation)
-
-guardIsFixId :: Id -> TranslateH a ()
-guardIsFixId v = do fixId <- findFixId
-                    guardMsg (v == fixId) (var2String v ++ " does not match " ++ fixLocation)
 
 --------------------------------------------------------------------------------------------------
