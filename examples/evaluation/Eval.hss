@@ -13,7 +13,7 @@ ww-split [| wrap |] [| unwrap |]
      consider case ; 2 ; 0 ; abstract 'n
    }
    any-bu (fold 'unwrap)
-   any-bu (unfold-rule "fusion")
+   any-bu (foreward (ww-fusion [| wrap |] [|unwrap|] [|work|]))
 }
 simplify
 any-call (unfold 'wrap)
