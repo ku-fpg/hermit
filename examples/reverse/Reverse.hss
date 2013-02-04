@@ -1,30 +1,29 @@
--- set-renderer latex
--- set-renderer unicode-console
--- unicode-terminal
-
 flatten-module
-
--- This is the outer rev, with the big lambda
 consider 'rev
-   consider 'rev
-   fix-intro
-   any-call (unfold-rule "ww")
-   any-call (unfold '.)
-   any-call (unfold 'wrap)
-   any-call (unfold 'unwrap)
-   any-call (unfold '.)
-   unshadow ; bash
-   any-bu case-float-arg
-   any-bu (apply-rule "repH ++") ; bash
-   any-bu (apply-rule "repH []") ; bash
-   any-bu (unfold-rule "rep-abs-fusion")
-
-   -- This is just a setup to all completion
-   { consider case ; eta-expand 'ys ; any-bu case-float-app }
-   any-call (unfold 'repH)
-   any-call (unfold '.)
-   any-call (unfold-rule "(:) ++")
-   any-call (unfold-rule "[] ++")
-   any-call (unfold 'fix) ; bash
-   unshadow
-   any-call (unfold 'absH)
+static-arg
+{ 0 ; alpha-lam 't ; consider def
+  ww-split [| wrap t |] [| unwrap t |]
+  {rhs-of 'work
+     any-call (unfold 'wrap)
+     any-call (unfold 'f)
+     any-call (unfold 'unwrap)
+     simplify
+     alpha-lam 'ys
+     {0
+       eta-expand 'acc
+       innermost case-float
+       one-td (unfold-rule "repH []")
+       one-td (unfold 'id)
+       one-td (unfold-rule "repH ++")
+       one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work xs |]))
+       one-td (unfold 'repH)
+       any-call (unfold '.)
+       any-call (unfold-rule "(:) ++")
+       any-call (unfold-rule "[] ++")
+     }
+  }
+}
+bash
+any-call (unfold 'wrap)
+any-call (unfold '.)
+any-call (unfold 'absH)

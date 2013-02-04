@@ -21,11 +21,3 @@ absH f = f []
 
 -- Should be somewhere else
 {-# RULES "(.) id" forall f .    f . id = f #-}
-
--- has preconditon
-{-# RULES "rep-abs-fusion" forall h . repH (absH h) = h #-}
-
-
-
-
-

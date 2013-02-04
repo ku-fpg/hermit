@@ -1,0 +1,30 @@
+-- set-renderer latex
+-- set-renderer unicode-console
+-- unicode-terminal
+
+flatten-module
+
+-- This is the outer rev, with the big lambda
+consider 'rev
+   consider 'rev
+   fix-intro
+   any-call (unfold-rule "ww")
+   any-call (unfold '.)
+   any-call (unfold 'wrap)
+   any-call (unfold 'unwrap)
+   any-call (unfold '.)
+   unshadow ; bash
+   any-bu case-float-arg
+   any-bu (apply-rule "repH ++") ; bash
+   any-bu (apply-rule "repH []") ; bash
+   any-bu (unfold-rule "rep-abs-fusion")
+
+   -- This is just a setup to all completion
+   { consider case ; eta-expand 'ys ; any-bu case-float-app }
+   any-call (unfold 'repH)
+   any-call (unfold '.)
+   any-call (unfold-rule "(:) ++")
+   any-call (unfold-rule "[] ++")
+   any-call (unfold 'fix) ; bash
+   unshadow
+   any-call (unfold 'absH)

@@ -1,21 +1,21 @@
 flatten-module
 consider 'qsort
-{
-  consider 'qsort
-  fix-intro
-  0
-  unfold-rule "ww"
-  any-call (unfold '.)
+static-arg
+{ 0 ; alpha-lam 't ; consider def
+  ww-split [| wrap t |] [| unwrap t |]
   any-call (unfold 'wrap)
   any-call (unfold 'unwrap)
   any-call (unfold '.)
   bash
   any-td case-float-arg
   bash
-  {
-    consider case
+  { consider case
     any-td (unfold-rule "repH ++")
-    any-td (unfold-rule "rep-abs-fusion")
+    { consider case ; 1
+      alpha-alt ['bs,'cs]
+      one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work bs |]))
+      one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work cs |]))
+    }
     any-td (unfold-rule "repH (:)")
     any-td (unfold-rule "repH []")
     any-call (unfold '.)
@@ -25,11 +25,6 @@ consider 'qsort
     }
     any-td (unfold-rule "(.) id")
   }
-}
-{
-  consider app
-  unfold 'fix
-  alpha-let 'work
 }
 bash
 one-td (unfold 'absH)

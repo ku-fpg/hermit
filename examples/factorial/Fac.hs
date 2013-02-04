@@ -1,5 +1,7 @@
 {-# LANGUAGE MagicHash #-}
 
+module Main where
+
 import Prelude hiding ((*),(-))
 import GHC.Exts
 import Data.Function(fix)
@@ -14,8 +16,6 @@ unwrap h x = case h (I# x) of
 
 wrap :: (Int# -> Int#) -> Int -> Int
 wrap h (I# x) = I# (h x)
-
-{-# RULES "ww"     forall f. fix f = wrap (fix (unwrap . f . wrap)) #-}
 
 main :: IO ()
 main = print (fac 10)

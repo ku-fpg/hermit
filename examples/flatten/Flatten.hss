@@ -1,7 +1,7 @@
 flatten-module
 consider 'flatten
 static-arg
-{ 0 ; alpha-lam 't ; consider 'flatten'
+{ 0 ; alpha-lam 't ; consider def
   ww-split [| wrap t |] [| unwrap t |]
   any-call (unfold 'wrap)
   any-call (unfold 'unwrap)
@@ -12,7 +12,8 @@ static-arg
     consider case
     any-bu (apply-rule "repH ++")
     bash
-    any-bu (unfold-rule "rep-abs-fusion")
+    one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work l |]))
+    one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work r |]))
     {
       2
       0

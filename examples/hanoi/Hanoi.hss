@@ -2,7 +2,7 @@ flatten-module
 
 -- do the w/w split
 consider 'hanoi
-{ load "../WWSplitTactic.hss" }
+{ ww-split [| wrap |] [| unwrap |] }
 
 { consider 'work
   remember origwork
@@ -18,7 +18,7 @@ consider 'hanoi
   { 2 ; down ; case-split-inline 'a
     { 1 ; any-call (unfold 'f) ; simplify
       any-call (unfold origwork)
-      any-call (unfold-rule pc)
+      any-call (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
       any-call (unfold 'f)
       simplify
       any-call (unfold-rule "[] ++")
@@ -27,13 +27,13 @@ consider 'hanoi
     { 2 ; any-call (unfold 'f) ; simplify
 
       any-call (unfold origwork)
-      any-call (unfold-rule pc)
+      any-call (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
       any-call (unfold 'f)
       simplify
 
       -- recursion decrements by two, so must do this again
       any-call (unfold origwork)
-      any-call (unfold-rule pc)
+      any-call (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
 
       -- time to let intro
       -- need a "occurance 'work" like consider

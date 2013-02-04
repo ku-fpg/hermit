@@ -1,6 +1,6 @@
 flatten-module
 consider 'fac
-load "../WWSplitTactic.hss"
+ww-split [| wrap |] [| unwrap |]
 {rhs-of 'work
   eta-expand 'x
   one-td (unfold 'unwrap)

@@ -1,6 +1,6 @@
 module Main where
 
-import Criterion.Main
+-- import Criterion.Main
 
 import Control.Monad (forM_)
 
@@ -38,8 +38,6 @@ main = do
 --        [ bench "4" $ whnf hanoi 4
 --        ]
 
-{-# RULES "ww" forall work. fix work = wrap (fix (unwrap . work . wrap)) #-}
-{-# RULES "pc" forall w. wrap (unwrap w) = w #-}
 {-# RULES "++ []" forall l. l ++ [] = l #-}
 {-# RULES "[] ++" forall l. [] ++ l = l #-}
 

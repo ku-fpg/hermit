@@ -1,7 +1,7 @@
 flatten-module
 consider 'last
 static-arg
-{ 0 ; alpha-lam 't ; consider 'last'
+{ 0 ; alpha-lam 't ; consider def
   ww-split [| wrap t |] [| unwrap t |]
   {rhs-of 'work
      eta-expand 'b

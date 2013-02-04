@@ -1,14 +1,13 @@
-consider let
-{ consider def ; fix-intro }
-safe-let-subst
-unfold-rule "ww"
-any-call (unfold '.)
+static-arg
+{ 0 ; alpha-lam 't ; consider def
+  ww-split [| wrap t |] [| unwrap t |]
+}
+-- safe-let-subst
+-- unfold-rule "ww"
+-- any-call (unfold '.)
 any-call (unfold 'wrap)
 one-td (unfold 'unwrap)
 any-call (unfold '.)
 innermost (bash >+> push 'repH >+> unfold-rule "repH ++" >+> unfold-rule "repH (:)" >+> apply-rule ". id"  >+> apply-rule "id ." >+> unfold-rule "repH []" >+> unfold-rule "[] ++" >+> unfold-rule "[] ++" >+> unfold-rule "(:) ++")
 any-td (unfold-rule "rep-abs-fusion")
-{ consider app ; unfold 'fix ; alpha-let 'work }
-bash
 any-call (unfold 'absH)
-try unshadow
