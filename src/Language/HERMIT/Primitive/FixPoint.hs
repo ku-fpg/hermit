@@ -27,11 +27,14 @@ import Language.HERMIT.Primitive.New -- TODO: Sort out heirarchy
 
 import qualified Language.Haskell.TH as TH
 
+--------------------------------------------------------------------------------------------------
+
 -- | Externals for manipulating fixed points, and for the worker/wrapper transformation.
 externals ::  [External]
 externals = map (.+ Experiment)
          [ external "fix-intro" (promoteDefR fixIntro :: RewriteH Core)
-                [ "rewrite a recursive binding into a non-recursive binding using fix" ]
+                [ "rewrite a recursive binding into a non-recursive binding using fix"
+                ] .+ Introduce .+ Context
          -- , external "fix-spec" (promoteExprR fixSpecialization :: RewriteH Core)
          --        [ "specialize a fix with a given argument"] .+ Shallow
          , external "ww-factorisation" ((\ wrap unwrap -> promoteExprBiR $ workerWrapperFac wrap unwrap) :: CoreString -> CoreString -> BiRewriteH Core)
@@ -132,8 +135,8 @@ fixIntro = prefixFailMsg "Fix introduction failed: " $
 
 --------------------------------------------------------------------------------------------------
 
--- | For any "f :: a -> a", and given "wrap :: b -> a" and "unwrap :: a -> b" as arguments, then
---   fix tyA f  <==>  wrap (fix tyB (\\ b -> unwrap (f (wrap b))))
+-- | For any @f :: a -> a@, and given @wrap :: b -> a@ and @unwrap :: a -> b@ as arguments, then
+--   @fix tyA f@  \<==\>  @wrap (fix tyB (\\ b -> unwrap (f (wrap b))))@
 workerWrapperFac :: CoreString -> CoreString -> BiRewriteH CoreExpr
 workerWrapperFac wrapS unwrapS = bidirectional wwL wwR
   where
@@ -161,9 +164,10 @@ workerWrapperFac wrapS unwrapS = bidirectional wwL wwR
     wrongFixBody :: String
     wrongFixBody = "body of fix does not have the form Lam b (App unwrap (App f (App wrap (Var b))))"
 
+--------------------------------------------------------------------------------------------------
 
--- | Given "wrap :: b -> a", "unwrap :: a -> b" and "work :: b" as arguments, then
---   unwrap (wrap work)  <==>  work
+-- | Given @wrap :: b -> a@, @unwrap :: a -> b@ and @work :: b@ as arguments, then
+--   @unwrap (wrap work)@  \<==\>  @work@
 workerWrapperFusion :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
 workerWrapperFusion wrapS unwrapS workS = bidirectional fusL fusR
   where
@@ -185,7 +189,9 @@ workerWrapperFusion wrapS unwrapS workS = bidirectional fusL fusR
               guardMsg (exprEqual work work') "given worker function does not match expression."
               return $ App unwrap (App wrap work)
 
--- | \ wrap unwrap ->  (g = expr  ==>  g = let f = \\ g -> expr in let work = unwrap (f (wrap work)) in wrap work)
+--------------------------------------------------------------------------------------------------
+
+-- | \\ wrap unwrap ->  (@g = expr@  ==>  @g = let f = \\ g -> expr in let work = unwrap (f (wrap work)) in wrap work)@
 workerWrapperSplit :: CoreString -> CoreString -> RewriteH CoreDef
 workerWrapperSplit wrap unwrap =
   let f    = TH.mkName "f"
@@ -204,7 +210,9 @@ workerWrapperSplit wrap unwrap =
                                             )
                         )
 
--- | wrap (unwrap x)  <==>  x
+--------------------------------------------------------------------------------------------------
+
+-- | @wrap (unwrap x)@  \<==\>  @x@
 wwAssA :: CoreString -> CoreString -> BiRewriteH CoreExpr
 wwAssA wrapS unwrapS = bidirectional wwAL wwAR
   where
@@ -218,7 +226,7 @@ wwAssA wrapS unwrapS = bidirectional wwAL wwAR
               x <- checkExprType a
               return $ App wrap (App unwrap x)
 
--- | wrap (unwrap (f x))  <==>  f x
+-- | @wrap (unwrap (f x))@  \<==\>  @f x@
 wwAssB :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
 wwAssB wrapS unwrapS fS = bidirectional wwBL wwBR
   where
@@ -227,20 +235,20 @@ wwAssB wrapS unwrapS fS = bidirectional wwBL wwBR
 
     wwBL :: RewriteH CoreExpr
     wwBL = do App _ (App _ (App f _)) <- idR
-              _  <- checkEndoFunction f
+              _  <- endoFunType f
               f' <- setCoreExprT fS
               guardMsg (exprEqual f f') "given body function does not match expression."
               forewardT wwA
 
     wwBR :: RewriteH CoreExpr
     wwBR = do App f _ <- idR
-              _  <- checkEndoFunction f
+              _  <- endoFunType f
               f' <- setCoreExprT fS
               guardMsg (exprEqual f f') "given body function does not match expression."
               backwardT wwA
 
 
--- | fix t (\ x -> wrap (unwrap (f x)))  <==>  fix t f
+-- | @fix t (\ x -> wrap (unwrap (f x)))@  \<==\>  @fix t f@
 wwAssC :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
 wwAssC wrapS unwrapS fS = bidirectional wwCL wwCR
   where
@@ -338,26 +346,18 @@ checkFixExpr = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a
                   guardMsg (fixId == fixId') (var2String fixId ++ " does not match " ++ fixLocation)
                   return (ty,f)
 
-checkEndoFunction :: MonadCatch m => CoreExpr -> m Type
-checkEndoFunction f = do (ty1,ty2) <- typesOfFunExpr f
-                         guardMsg (eqType ty1 ty2) ("argument and result types differ.")
-                         return ty1
-
 checkFunctionsWithInverseTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
-checkFunctionsWithInverseTypes f g = do (fdom,fcod) <- typesOfFunExpr f
-                                        (gdom,gcod) <- typesOfFunExpr g
+checkFunctionsWithInverseTypes f g = do (fdom,fcod) <- funArgResTypes f
+                                        (gdom,gcod) <- funArgResTypes g
                                         guardMsg (eqType fdom gcod) ("functions do not have inverse types.")
                                         guardMsg (eqType gdom fcod) ("functions do not have inverse types.")
                                         return (fdom,fcod)
-
-typesOfFunExpr :: MonadCatch m => CoreExpr -> m (Type,Type)
-typesOfFunExpr e = maybe (fail "not a function type.") return (splitFunTy_maybe $ exprType e)
 
 --------------------------------------------------------------------------------------------------
 
 -- | f  ==>  fix f
 mkFix :: CoreExpr -> TranslateH z CoreExpr
-mkFix f = do t <- checkEndoFunction f
+mkFix f = do t <- endoFunType f
              fixId <- findFixId
              return $ App (App (Var fixId) (Type t)) f
 

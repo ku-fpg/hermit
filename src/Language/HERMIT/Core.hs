@@ -13,12 +13,15 @@ module Language.HERMIT.Core
           , bindsToProg
           , bindToIdExprs
             -- * Utilities
-          , isValue
           , exprTypeOrKind
           , appCount
+          , endoFunType
+          , funArgResTypes
 ) where
 
 import GhcPlugins
+
+import Language.KURE.Combinators.Monad
 
 ---------------------------------------------------------------------
 
@@ -83,13 +86,6 @@ type CoreTickish = Tickish Id
 
 -----------------------------------------------------------------------
 
--- TODO: I don't understand coercions very well, so I exclude them from both values and types.
-
--- | Succeeds if the expression is not a 'Type' or 'Coercion'.
---   This function mathces the documentation for 'isValArg', but 'isValArg' succeeds for coercions.
-isValue :: CoreExpr -> Bool
-isValue = not . isTyCoArg
-
 -- | GHC's 'exprType' function throws an error if applied to a 'Type' (but, inconsistently, return a 'Kind' if applied to a type variable).
 --   This function returns the 'Kind' of a 'Type', but otherwise behaves as 'exprType'.
 exprTypeOrKind :: CoreExpr -> Type
@@ -102,5 +98,17 @@ exprTypeOrKind e        = exprType e
 appCount :: CoreExpr -> Int
 appCount (App e1 _) = appCount e1 + 1
 appCount _          = 0
+
+-----------------------------------------------------------------------
+
+-- | Return the domain/codomain type of an endofunction expression.
+endoFunType :: Monad m => CoreExpr -> m Type
+endoFunType f = do (ty1,ty2) <- funArgResTypes f
+                   guardMsg (eqType ty1 ty2) ("argument and result types differ.")
+                   return ty1
+
+-- | Return the domain and codomain types of a function expression.
+funArgResTypes :: Monad m => CoreExpr -> m (Type,Type)
+funArgResTypes e = maybe (fail "not a function type.") return (splitFunTy_maybe $ exprType e)
 
 -----------------------------------------------------------------------
