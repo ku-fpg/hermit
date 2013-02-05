@@ -59,7 +59,7 @@ caseExternals =
                      [ "Float a Case whatever the context." ] .+ Commute .+ Shallow .+ PreCondition
          , external "case-reduce" (promoteExprR caseReduce :: RewriteH Core)
                      [ "case-of-known-constructor"
-                     , "case C v1..vn of C w1..wn -> e ==> e[v1/w1..vn/wn]" ] .+ Shallow .+ Eval .+ Bash
+                     , "case C v1..vn of C w1..wn -> e ==> let { w1 = v1 ; .. ; wn = vn } in e" ] .+ Shallow .+ Eval .+ Bash
          , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
                 [ "case-split 'x"
                 , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ]
@@ -132,21 +132,20 @@ caseFloat = setFailMsg "Unsuitable expression for Case floating." $
 
 -- | Case-of-known-constructor rewrite.
 caseReduce :: RewriteH CoreExpr
-caseReduce = letTransform >>> tryR (repeatR letSubstR)
-    where letTransform = prefixFailMsg "Case reduction failed: " $
-                         withPatFailMsg (wrongExprForm "Case e v t alts") $
-                         do Case s binder _ alts <- idR
-                            case isDataCon s of
-                              Nothing -> fail "head of scrutinee is not a data constructor."
-                              Just (dc, args) ->
-                                case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
-                                    [(bs,e')] -> let (tyArgs, valArgs) = span isTypeArg args
-                                                     tyBndrs = takeWhile isTyVar bs -- it is possible the pattern constructor binds a type
-                                                                                    -- if the constructor is existentially quantified
-                                                     existentials = reverse $ take (length tyBndrs) $ reverse tyArgs
-                                                  in return $ nestedLets e' $ (binder, s) : zip bs (existentials ++ valArgs)
-                                    []   -> fail "no matching alternative."
-                                    _    -> fail "more than one matching alternative."
+caseReduce = prefixFailMsg "Case reduction failed: " $
+             withPatFailMsg (wrongExprForm "Case e v t alts") $ do
+  Case s binder _ alts <- idR
+  case isDataCon s of
+    Nothing -> fail "head of scrutinee is not a data constructor."
+    Just (dc, args) ->
+      case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
+        [(bs,e')] -> let (tyArgs, valArgs) = span isTypeArg args
+                         tyBndrs = takeWhile isTyVar bs -- it is possible the pattern constructor binds a type
+                                                        -- if the constructor is existentially quantified
+                         existentials = reverse $ take (length tyBndrs) $ reverse tyArgs
+                      in return $ nestedLets e' $ (binder, s) : zip bs (existentials ++ valArgs)
+        []   -> fail "no matching alternative."
+        _    -> fail "more than one matching alternative."
 
 -- | If expression is a constructor application, return the relevant bits.
 isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])
