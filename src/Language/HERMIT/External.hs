@@ -35,7 +35,8 @@ module Language.HERMIT.External
        , CoreBox(..)
        , TranslateCorePathBox(..)
        , StringBox(..)
-       , ListNameBox(..)
+       , NameListBox(..)
+       , StringListBox(..)
 ) where
 
 import Data.Map hiding (map)
@@ -333,10 +334,18 @@ instance Extern String where
     box = StringBox
     unbox (StringBox i) = i
 
-data ListNameBox = ListNameBox [TH.Name] deriving Typeable
+-----------------------------------------------------------------
+
+data NameListBox = NameListBox [TH.Name] deriving Typeable
 
 instance Extern [TH.Name] where
-    type Box [TH.Name] = ListNameBox
-    box = ListNameBox
-    unbox (ListNameBox l) = l
------------------------------------------------------------------
+    type Box [TH.Name] = NameListBox
+    box = NameListBox
+    unbox (NameListBox l) = l
+
+data StringListBox = StringListBox [String] deriving Typeable
+
+instance Extern [String] where
+    type Box [String] = StringListBox
+    box = StringListBox
+    unbox (StringListBox l) = l

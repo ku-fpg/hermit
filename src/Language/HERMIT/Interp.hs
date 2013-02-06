@@ -7,7 +7,7 @@ module Language.HERMIT.Interp
         , interpExprH
         ) where
 
-import Control.Monad (liftM2)
+import Control.Monad (liftM, liftM2)
 
 import Data.Char
 import Data.Dynamic
@@ -53,11 +53,15 @@ fromDynList :: [[Dynamic]] -> [[Dynamic]]
 fromDynList [] = [[]]
 fromDynList (hs:dynss) = [ h:t | h <- hs, t <- fromDynList dynss ]
 
+toBoxedList :: (Extern a, Typeable b) => [[Dynamic]] -> ([a] -> b) -> [Dynamic]
+toBoxedList dyns boxCon = [ toDyn $ boxCon (map unbox l) | dl <- dyns, Just l <- [mapM fromDynamic dl] ]
+
 interpExpr' :: Bool -> M.Map String [Dynamic] -> ExprH -> Either String [Dynamic]
 interpExpr' _   _   (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
 interpExpr' _   _   (CoreH str)   = return [ toDyn $ CoreBox (CoreString str) ]
-interpExpr' _   env (ListH exprs) = do dyns <- mapM (interpExpr env) exprs
-                                       return [ toDyn $ ListNameBox (map unbox l) | dl <- fromDynList dyns, Just l <- [mapM fromDynamic dl] ]
+interpExpr' _   env (ListH exprs) = do dyns <- liftM fromDynList $ mapM (interpExpr' True env) exprs
+                                       return $    toBoxedList dyns NameListBox
+                                                ++ toBoxedList dyns StringListBox
 interpExpr' rhs env (CmdName str)
                                         -- An Int is either a Path, or will be interpreted specially later.
   | all isDigit str                     = let i = read str in

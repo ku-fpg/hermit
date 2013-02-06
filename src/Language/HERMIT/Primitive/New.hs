@@ -36,7 +36,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "push a function <f> into argument."
                 , "Unsafe if f is not strict." ] .+ PreCondition
                         -- TODO: does not work with rules with no arguments
-         , external "unfold-rule" ((\ nm -> promoteExprR (rules nm >>> cleanupUnfold)) :: String -> RewriteH Core)
+         , external "unfold-rule" ((\ nm -> promoteExprR (rule nm >>> cleanupUnfold)) :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ]
          , external "var" (promoteExprT . isVar :: TH.Name -> TranslateH Core ())
                  [ "var '<v> returns successfully for variable v, and fails otherwise.",

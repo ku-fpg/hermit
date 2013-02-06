@@ -18,6 +18,7 @@ module Language.HERMIT.Primitive.GHC
        , inScope
        , exprEqual
        , showVars
+       , rule
        , rules
        )
 where
@@ -64,10 +65,12 @@ externals =
                 [ "List the free identifiers in this expression." ] .+ Query .+ Deep
          , external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH Core)
                 [ "Deshadow a program." ] .+ Deep
-         , external "apply-rule" (promoteExprR . rules :: String -> RewriteH Core)
+         , external "apply-rule" (promoteExprR . rule :: String -> RewriteH Core)
                 [ "apply a named GHC rule" ] .+ Shallow
          , external "apply-rule" (rules_help :: TranslateH Core String)
                 [ "list rules that can be used" ] .+ Query
+         , external "apply-rules" (promoteExprR . rules :: [String] -> RewriteH Core)
+                [ "apply named GHC rules, succeeds if any of the rules succeed" ] .+ Shallow
          , external "compare-values" compareValues
                 ["compare the rhs of two values."] .+ Query .+ Predicate
          , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
@@ -76,8 +79,6 @@ externals =
          , external "cast-elim" (promoteExprR castElimination)
                 ["cast-elim removes casts"]
                                         .+ Shallow .+ Experiment .+ TODO
-         , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
-                ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
          , external "occur-analysis" (promoteExprR occurAnalyseExprR :: RewriteH Core)
                 ["Performs dependency anlaysis on a CoreExpr.",
                  "This can be useful to simplify a recursive let to a non-recursive let."] .+ Deep
@@ -305,8 +306,8 @@ rulesToRewriteH rs = translate $ \ c e -> do
     -- trace (showSDoc (ppr fn GhcPlugins.<+> ppr args $$ ppr rs)) $
     case lookupRule (const True) (const NoUnfolding) in_scope fn args [r | r <- rs, ru_fn r == idName fn] of
         Nothing         -> fail "rule not matched"
-        Just (rule, expr)  -> do
-            let e' = mkApps expr (drop (ruleArity rule) args)
+        Just (r, expr)  -> do
+            let e' = mkApps expr (drop (ruleArity r) args)
             ifM (liftM (and . map (inScope c)) $ apply freeVarsT c e')
                 (return e')
                 (fail $ unlines ["Resulting expression after rule application contains variables that are not in scope."
@@ -320,22 +321,25 @@ inScope c v = (v `boundIn` c) ||                 -- defined in this module
                 _                -> False
 
 -- | Lookup a rule and attempt to construct a corresponding rewrite.
-rules ::  String -> RewriteH CoreExpr
-rules r = do
-        theRules <- getHermitRules
-        case lookup r theRules of
-               Nothing -> fail $ "failed to find rule: " ++ show r
-               Just rr -> rulesToRewriteH rr
+rule :: String -> RewriteH CoreExpr
+rule r = do
+    theRules <- getHermitRules
+    case lookup r theRules of
+        Nothing -> fail $ "failed to find rule: " ++ show r
+        Just rr -> rulesToRewriteH rr
+
+rules :: [String] -> RewriteH CoreExpr
+rules = orR . map rule
 
 getHermitRules :: TranslateH a [(String, [CoreRule])]
 getHermitRules = translate $ \ env _ -> do
     rb <- liftCoreM getRuleBase
-    let other_rules = [ rule
+    let other_rules = [ r
                         | top_bnds <- mg_binds (hermitModGuts env)
                         , bnd <- case top_bnds of
                                      Rec bnds -> map fst bnds
                                      NonRec b _ -> [b]
-                        , rule <- idCoreRules bnd
+                        , r <- idCoreRules bnd
                         ]
     return [ ( unpackFS (ruleName r), [r] )
            | r <- mg_rules (hermitModGuts env) ++ other_rules ++ concat (nameEnvElts rb)
