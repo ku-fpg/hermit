@@ -303,7 +303,7 @@ rulesToRewriteH rs = translate $ \ c e -> do
         _rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
     -- Finally, we try match the rules
     -- trace (showSDoc (ppr fn GhcPlugins.<+> ppr args $$ ppr rs)) $
-    case lookupRule (const True) (const NoUnfolding) in_scope fn args rs of
+    case lookupRule (const True) (const NoUnfolding) in_scope fn args [r | r <- rs, ru_fn r == idName fn] of
         Nothing         -> fail "rule not matched"
         Just (rule, expr)  -> do
             let e' = mkApps expr (drop (ruleArity rule) args)
