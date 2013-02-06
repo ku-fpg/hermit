@@ -1,29 +1,21 @@
 flatten-module
 consider 'rev
-static-arg
-{ 0 ; alpha-lam 't ; consider def
-  ww-split [| wrap t |] [| unwrap t |]
-  {rhs-of 'work
-     any-call (unfold 'wrap)
-     any-call (unfold 'f)
-     any-call (unfold 'unwrap)
-     simplify
-     alpha-lam 'ys
-     {0
-       eta-expand 'acc
-       innermost case-float
-       one-td (unfold-rule "repH []")
-       one-td (unfold 'id)
-       one-td (unfold-rule "repH ++")
-       one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work xs |]))
-       one-td (unfold 'repH)
-       any-call (unfold '.)
-       any-call (unfold-rule "(:) ++")
-       any-call (unfold-rule "[] ++")
-     }
-  }
-}
+ww-split-param 1 [|wrap|] [|unwrap|]
 bash
+{consider lam ; alpha-lam 't}
 any-call (unfold 'wrap)
-any-call (unfold '.)
+any-call (unfold 'unwrap)
+simplify
+{rhs-of 'work
+   alpha-lam 'ys
+   0
+   eta-expand 'acc
+   innermost case-float
+   one-td (unfold-rule "repH ++")
+   one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work xs |]))
+   any-call (unfold-rule "repH (:)")
+   simplify
+   any-call (unfold-rule "repH []")
+   any-call (unfold 'id)
+}
 any-call (unfold 'absH)

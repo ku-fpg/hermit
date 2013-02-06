@@ -1,31 +1,29 @@
 flatten-module
 consider 'qsort
-static-arg
-{ 0 ; alpha-lam 't ; consider def
-  ww-split [| wrap t |] [| unwrap t |]
-  any-call (unfold 'wrap)
-  any-call (unfold 'unwrap)
-  any-call (unfold '.)
-  bash
-  any-td case-float-arg
-  bash
-  { consider case
-    any-td (unfold-rule "repH ++")
-    { consider case ; 1
-      alpha-alt ['bs,'cs]
-      one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work bs |]))
-      one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work cs |]))
-    }
-    any-td (unfold-rule "repH (:)")
-    any-td (unfold-rule "repH []")
-    any-call (unfold '.)
-    bash
-    { consider let
-      repeat let-subst -- maybe if we folded the (.) then safe-let-subst would fire and this would be unneccassary
-    }
-    any-td (unfold-rule "(.) id")
-  }
-}
+ww-split-param 1 [|wrap|] [|unwrap|]
 bash
+{consider lam ; alpha-lam 't}
+any-call (unfold 'wrap)
+any-call (unfold 'unwrap)
+simplify
+{rhs-of 'work
+  alpha-lam 'xs
+  any-td case-float-arg
+  0
+  eta-expand 'acc
+  bash
+  {consider case ; consider case ; consider alt
+     alpha-alt ['bs,'cs]
+     any-td (unfold-rule "repH ++")
+     any-bu case-float-arg
+     simplify
+     one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work bs |]))
+     one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work cs |]))
+     any-call (unfold-rule "repH (:)")
+     simplify
+  }
+  any-call (unfold-rule "repH []")
+  any-call (unfold 'id)
+}
 one-td (unfold 'absH)
 

@@ -1,20 +1,17 @@
 flatten-module
 consider 'last
-static-arg
-{ 0 ; alpha-lam 't ; consider def
-  ww-split [| wrap t |] [| unwrap t |]
-  {rhs-of 'work
-     eta-expand 'b
-     0
-     eta-expand 'bs
-     0
-     unfold 'unwrap
-     unfold 'f
-     case-reduce
-     consider app
-     unfold 'wrap
-     case-reduce
-  }
+ww-split-param 1 [|wrap|] [|unwrap|]
+{rhs-of 'work
+   eta-expand 'b
+   0
+   eta-expand 'bs
+   0
+   unfold 'unwrap
+   unfold 'f
+   case-reduce
+   consider app
+   unfold 'wrap
+   case-reduce
 }
 any-call (unfold 'wrap)
 bash

@@ -19,10 +19,6 @@ absH f = f []
 {-# RULES "repH []" 	             repH [] = id  	       	         #-}
 {-# RULES "repH (:)" forall x xs   . repH (x:xs) = ((:) x) . repH xs     #-}
 
--- Should be in the "List" module
-{-# RULES "(:) ++" forall x xs ys . (x:xs) ++ ys = x : (xs ++ ys) #-}
-{-# RULES "[] ++"  forall xs      . [] ++ xs     = xs #-}
-
 
 
 

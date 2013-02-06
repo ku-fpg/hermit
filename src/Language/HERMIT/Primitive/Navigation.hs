@@ -6,8 +6,10 @@ module Language.HERMIT.Primitive.Navigation
        , bindingGroupOf
        , considerName
        , rhsOf
-       , considerables
        , considerTargets
+       , Considerable(..)
+       , considerables
+       , considerConstructT
        )
 where
 
@@ -65,7 +67,7 @@ namedBinding nm (BindCore (NonRec v _))  =  nm `cmpTHName2Var` v
 namedBinding nm (DefCore (Def v _))      =  nm `cmpTHName2Var` v
 namedBinding _  _                        =  False
 
--- | Find all the possible targets of \"consider\".
+-- | Find the names of all the variables that could be targets of \"consider\".
 considerTargets :: TranslateH Core [String]
 considerTargets = allT $ collectT (promoteBindT nonRec <+ promoteDefT def)
     where
@@ -79,6 +81,7 @@ considerTargets = allT $ collectT (promoteBindT nonRec <+ promoteDefT def)
       constUnq v () = unqualifiedVarName v
 
 
+-- | Language constructs that can be zoomed to.
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetIn | CaseOf | Casty | Ticky | TypeVar | Coerce
 
 recognizedConsiderables :: String
@@ -104,7 +107,11 @@ considerables =   [ ("bind",Binding)
 considerConstruct :: String -> TranslateH Core Path
 considerConstruct str = case string2considerable str of
                           Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". " ++ recognizedConsiderables ++ ".  Or did you mean \"consider '" ++ str ++ "\"?"
-                          Just c  -> oneNonEmptyPathToT (underConsideration c)
+                          Just c  -> considerConstructT c
+
+-- | Find the 'Path' to the first matching construct.
+considerConstructT :: Considerable -> TranslateH Core Path
+considerConstructT = oneNonEmptyPathToT . underConsideration
 
 string2considerable :: String -> Maybe Considerable
 string2considerable = flip lookup considerables

@@ -19,10 +19,12 @@ import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
-import Language.HERMIT.Primitive.GHC
-import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.Local
+
 import Language.HERMIT.Primitive.AlphaConversion
+import Language.HERMIT.Primitive.Common
+import Language.HERMIT.Primitive.GHC
+import Language.HERMIT.Primitive.Local
+import Language.HERMIT.Primitive.Navigation
 import Language.HERMIT.Primitive.New -- TODO: Sort out heirarchy
 
 import qualified Language.Haskell.TH as TH
@@ -35,6 +37,14 @@ externals = map (.+ Experiment)
          [ external "fix-intro" (promoteDefR fixIntro :: RewriteH Core)
                 [ "rewrite a recursive binding into a non-recursive binding using fix"
                 ] .+ Introduce .+ Context
+         , external "fix-computation" ((promoteExprBiR fixComputationRule) :: BiRewriteH Core)
+                [ "Fixed-Point Computation Rule",
+                  "fix t f  <==>  f (fix t f)"
+                ]
+         , external "rolling-rule" ((promoteExprBiR rollingRule) :: BiRewriteH Core)
+                [ "Rolling Rule",
+                  "fix tyA (\\ a -> f (g a))  <==>  f (fix tyB (\\ b -> g (f b))"
+                ]
          -- , external "fix-spec" (promoteExprR fixSpecialization :: RewriteH Core)
          --        [ "specialize a fix with a given argument"] .+ Shallow
          , external "ww-factorisation" ((\ wrap unwrap -> promoteExprBiR $ workerWrapperFac wrap unwrap) :: CoreString -> CoreString -> BiRewriteH Core)
@@ -58,32 +68,27 @@ externals = map (.+ Experiment)
                   "                        in wrap work",
                   "Note: the pre-condition \"fix a (wrap . unwrap . f) == fix a f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
-         , external "ww-assumption-A" ((\ wrap unwrap -> promoteExprBiR $ wwAssA wrap unwrap) :: CoreString -> CoreString -> BiRewriteH Core)
+         , external "ww-split-param" ((\ n wrap unwrap -> promoteDefR $ workerWrapperSplitParam n wrap unwrap) :: Int -> CoreString -> CoreString -> RewriteH Core)
+                [ "Worker/Wrapper Split - Type Paramater Variant"
+                ] .+ Introduce .+ Context .+ PreCondition .+ TODO .+ Experiment
+         , external "ww-assumption-A" ((\ wrap unwrap -> promoteExprBiR $ wwA wrap unwrap) :: CoreString -> CoreString -> BiRewriteH Core)
                 [ "Worker/Wrapper Assumption A",
                   "For a \"wrap :: b -> a\" and an \"unwrap :: b -> a\", then",
                   "wrap (unwrap x)  <==>  x",
                   "Note: only use this if it's true!"
-                ] .+ PreCondition
-         , external "ww-assumption-B" ((\ wrap unwrap f -> promoteExprBiR $ wwAssB wrap unwrap f) :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
+                ] .+ Context .+ PreCondition
+         , external "ww-assumption-B" ((\ wrap unwrap f -> promoteExprBiR $ wwB wrap unwrap f) :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
                 [ "Worker/Wrapper Assumption B",
                   "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\" then",
                   "wrap (unwrap (f x))  <==>  f x",
                   "Note: only use this if it's true!"
-                ] .+ PreCondition
-         , external "ww-assumption-C" ((\ wrap unwrap f -> promoteExprBiR $ wwAssC wrap unwrap f) :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
+                ] .+ Context .+ PreCondition
+         , external "ww-assumption-C" ((\ wrap unwrap f -> promoteExprBiR $ wwC wrap unwrap f) :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
                 [ "Worker/Wrapper Assumption C",
                   "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\" then",
                   "fix t (\\ x -> wrap (unwrap (f x)))  <==>  fix t f",
                   "Note: only use this if it's true!"
-                ] .+ PreCondition
-         , external "fix-computation" ((promoteExprBiR fixComputationRule) :: BiRewriteH Core)
-                [ "Fixed-Point Computation Rule",
-                  "fix t f  <==>  f (fix t f)"
-                ]
-         , external "rolling-rule" ((promoteExprBiR rollingRule) :: BiRewriteH Core)
-                [ "Rolling Rule",
-                  "fix tyA (\\ a -> f (g a))  <==>  f (fix tyB (\\ b -> g (f b))"
-                ]
+                ] .+ Context .+ PreCondition
          ]
 
 --------------------------------------------------------------------------------------------------
@@ -97,6 +102,59 @@ fixIntro = prefixFailMsg "Fix introduction failed: " $
                   sub      = extendSubst emptySub f (Var f')
                   e'       = substExpr (text "fixIntro") sub e
               Def f <$> mkFix (Lam f' e')
+
+--------------------------------------------------------------------------------------------------
+
+-- | @fix ty f@  \<==\>  @f (fix ty f)@
+fixComputationRule :: BiRewriteH CoreExpr
+fixComputationRule = bidirectional computationL computationR
+  where
+    computationL :: RewriteH CoreExpr
+    computationL = prefixFailMsg "fix computation rule failed: " $
+                   do (_,f) <- isFixExpr
+                      fixf  <- idR
+                      return (App f fixf)
+
+    computationR :: RewriteH CoreExpr
+    computationR = prefixFailMsg "fix computation rule failed: " $
+                   do App f fixf <- idR
+                      (_,f') <- isFixExpr <<< constant fixf
+                      guardMsg (exprEqual f f') "external function does not match internal expression"
+                      return fixf
+
+
+-- | @fix tyA (\\ a -> f (g a))@  \<==\>  @f (fix tyB (\\ b -> g (f b))@
+rollingRule :: BiRewriteH CoreExpr
+rollingRule = bidirectional rollingRuleL rollingRuleR
+  where
+    rollingRuleL :: RewriteH CoreExpr
+    rollingRuleL = prefixFailMsg "rolling rule failed: " $
+                   withPatFailMsg wrongFixBody $
+                   do (tyA, Lam a (App f (App g (Var a')))) <- isFixExpr
+                      guardMsg (a == a') wrongFixBody
+                      (tyA',tyB) <- funsWithInverseTypes g f
+                      guardMsg (eqType tyA tyA') "Type mismatch: this shouldn't have happened, report this as a bug."
+                      res <- rollingRuleResult tyB g f
+                      return (App f res)
+
+    rollingRuleR :: RewriteH CoreExpr
+    rollingRuleR = prefixFailMsg "(reversed) rolling rule failed: " $
+                   withPatFailMsg "not an application." $
+                   do App f fx <- idR
+                      withPatFailMsg wrongFixBody $
+                        do (tyB, Lam b (App g (App f' (Var b')))) <- isFixExpr <<< constant fx
+                           guardMsg (b == b') wrongFixBody
+                           guardMsg (exprEqual f f') "external function does not match internal expression"
+                           (tyA,tyB') <- funsWithInverseTypes g f
+                           guardMsg (eqType tyB tyB') "Type mismatch: this shouldn't have happened, report this as a bug."
+                           rollingRuleResult tyA f g
+
+    rollingRuleResult :: Type -> CoreExpr -> CoreExpr -> TranslateH z CoreExpr
+    rollingRuleResult ty f g = do x <- constT (newIdH "x" ty)
+                                  mkFix (Lam x (App f (App g (Var x))))
+
+    wrongFixBody :: String
+    wrongFixBody = "body of fix does not have the form: Lam v (App f (App g (Var v)))"
 
 --------------------------------------------------------------------------------------------------
 
@@ -137,221 +195,185 @@ fixIntro = prefixFailMsg "Fix introduction failed: " $
 
 -- | For any @f :: a -> a@, and given @wrap :: b -> a@ and @unwrap :: a -> b@ as arguments, then
 --   @fix tyA f@  \<==\>  @wrap (fix tyB (\\ b -> unwrap (f (wrap b))))@
-workerWrapperFac :: CoreString -> CoreString -> BiRewriteH CoreExpr
-workerWrapperFac wrapS unwrapS = bidirectional wwL wwR
+workerWrapperFacBR :: CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
+workerWrapperFacBR wrap unwrap = beforeBiR (wrapUnwrapTypes wrap unwrap)
+                                           (\ (tyA,tyB) -> bidirectional (wwL tyA tyB) wwR)
   where
-    wwL :: RewriteH CoreExpr
-    wwL = prefixFailMsg "worker/wrapper factorisation failed: " $
-          do (tyA,tyB,wrap,unwrap) <- parseWrapUnwrap wrapS unwrapS
-             (tA,f) <- checkFixExpr
-             guardMsg (eqType tyA tA) ("wrapper/unwrapper types do not match fix body type.")
-             b  <- constT (newIdH "x" tyB)
-             fx <- mkFix (Lam b (App unwrap (App f (App wrap (Var b)))))
-             return $ App wrap fx
+    wwL :: Type -> Type -> RewriteH CoreExpr
+    wwL tyA tyB = prefixFailMsg "worker/wrapper factorisation failed: " $
+                  do (tA,f)    <- isFixExpr
+                     guardMsg (eqType tyA tA) ("wrapper/unwrapper types do not match fix body type.")
+                     b  <- constT (newIdH "x" tyB)
+                     fx <- mkFix (Lam b (App unwrap (App f (App wrap (Var b)))))
+                     return $ App wrap fx
 
     wwR :: RewriteH CoreExpr
     wwR = prefixFailMsg "(reverse) worker/wrapper factorisation failed: " $
-          withPatFailMsg "not an application" $
-          do App wrap fx <- idR
+          withPatFailMsg "not an application." $
+          do App wrap2 fx <- idR
              withPatFailMsg wrongFixBody $
-               do (tyB, Lam b (App unwrap (App f (App wrap' (Var b'))))) <- checkFixExpr <<< constant fx
+               do (_, Lam b (App unwrap1 (App f (App wrap1 (Var b'))))) <- isFixExpr <<< constant fx
                   guardMsg (b == b') wrongFixBody
-                  (_,tyB') <- parseWrapUnwrapMatching wrapS unwrapS wrap unwrap
-                  guardMsg (exprEqual wrap wrap') "wrapper does not match applied function"
-                  guardMsg (eqType tyB tyB') "Type mismatch: this shouldn't have happened, report this as a bug."
+                  guardMsg (exprEqual wrap wrap2) "given wrapper does not match applied function."
+                  guardMsg (exprEqual wrap wrap1) "given wrapper does not match wrapper in body of fix."
+                  guardMsg (exprEqual unwrap unwrap1) "given unwrapper does not match unwrapper in body of fix."
                   mkFix f
 
     wrongFixBody :: String
     wrongFixBody = "body of fix does not have the form Lam b (App unwrap (App f (App wrap (Var b))))"
 
+-- | For any @f :: a -> a@, and given @wrap :: b -> a@ and @unwrap :: a -> b@ as arguments, then
+--   @fix tyA f@  \<==\>  @wrap (fix tyB (\\ b -> unwrap (f (wrap b))))@
+workerWrapperFac :: CoreString -> CoreString -> BiRewriteH CoreExpr
+workerWrapperFac = parse2beforeBiR workerWrapperFacBR
+
 --------------------------------------------------------------------------------------------------
 
 -- | Given @wrap :: b -> a@, @unwrap :: a -> b@ and @work :: b@ as arguments, then
 --   @unwrap (wrap work)@  \<==\>  @work@
-workerWrapperFusion :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
-workerWrapperFusion wrapS unwrapS workS = bidirectional fusL fusR
+workerWrapperFusionBR :: CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
+workerWrapperFusionBR wrap unwrap work = beforeBiR (prefixFailMsg "worker/wrapper fusion failed: " $
+                                                    do (_,tyB) <- wrapUnwrapTypes wrap unwrap
+                                                       guardMsg (exprType work `eqType` tyB) "type of worker does not match types of wrap/unwrap."
+                                                   )
+                                                   (\ () -> bidirectional fusL fusR)
   where
     fusL :: RewriteH CoreExpr
     fusL = prefixFailMsg "worker/wrapper fusion failed: " $
-           withPatFailMsg "not a function applied to two arguments." $
-           do App unwrap (App wrap work) <- idR
-              (_,tyB) <- parseWrapUnwrapMatching wrapS unwrapS wrap unwrap
-              work' <- setCoreExprT workS
-              guardMsg (exprEqual work work') "given worker function does not match expression."
-              _ <- checkExprType tyB <<< constant work
+           withPatFailMsg (wrongExprForm "App unwrap (App wrap work)") $
+           do App unwrap' (App wrap' work') <- idR
+              guardMsg (exprEqual wrap wrap') "given wrapper does not match wrapper in expression."
+              guardMsg (exprEqual unwrap unwrap') "given unwrapper does not match unwrapper in expression."
+              guardMsg (exprEqual work work') "given worker function does not worker in expression."
               return work
 
     fusR :: RewriteH CoreExpr
     fusR = prefixFailMsg "(reverse) worker/wrapper fusion failed: " $
-           do (_,tyB,wrap,unwrap) <- parseWrapUnwrap wrapS unwrapS
-              work  <- checkExprType tyB
-              work' <- setCoreExprT workS
+           do work' <- idR
               guardMsg (exprEqual work work') "given worker function does not match expression."
               return $ App unwrap (App wrap work)
+
+-- | Given @wrap :: b -> a@, @unwrap :: a -> b@ and @work :: b@ as arguments, then
+--   @unwrap (wrap work)@  \<==\>  @work@
+workerWrapperFusion :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
+workerWrapperFusion = parse3beforeBiR workerWrapperFusionBR
 
 --------------------------------------------------------------------------------------------------
 
 -- | \\ wrap unwrap ->  (@g = expr@  ==>  @g = let f = \\ g -> expr in let work = unwrap (f (wrap work)) in wrap work)@
-workerWrapperSplit :: CoreString -> CoreString -> RewriteH CoreDef
-workerWrapperSplit wrap unwrap =
+workerWrapperSplitR :: CoreExpr -> CoreExpr -> RewriteH CoreDef
+workerWrapperSplitR wrap unwrap =
   let f    = TH.mkName "f"
       w    = TH.mkName "w"
       work = TH.mkName "work"
       fx   = TH.mkName "fix"
    in
       fixIntro >>> defR ( appAllR idR (letIntro f)
-                            >>> letFloatArg
-                            >>> letAllR idR ( forewardT (workerWrapperFac wrap unwrap)
-                                                >>> appAllR idR (letIntro w)
-                                                >>> letFloatArg
-                                                >>> letNonRecAllR (unfold fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
-                                                >>> letSubstR
-                                                >>> letFloatArg
-                                            )
-                        )
+                           >>> letFloatArg
+                           >>> letAllR idR ( forewardT (workerWrapperFacBR wrap unwrap)
+                                               >>> appAllR idR (letIntro w)
+                                               >>> letFloatArg
+                                               >>> letNonRecAllR (unfold fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
+                                               >>> letSubstR
+                                               >>> letFloatArg
+                                           )
+                       )
+
+-- | \\ wrap unwrap ->  (@g = expr@  ==>  @g = let f = \\ g -> expr in let work = unwrap (f (wrap work)) in wrap work)@
+workerWrapperSplit :: CoreString -> CoreString -> RewriteH CoreDef
+workerWrapperSplit wrapS unwrapS = (parseCoreExprT wrapS &&& parseCoreExprT unwrapS) >>= uncurry workerWrapperSplitR
+
+workerWrapperSplitParam :: Int -> CoreString -> CoreString -> RewriteH CoreDef
+workerWrapperSplitParam n wrapS unwrapS =  prefixFailMsg "worker/wrapper split (forall variant) failed: " $
+                                           do guardMsg (n == 1) "currently only supports 1 type paramater."
+                                              withPatFailMsg "right-hand-side of definition does not have the form: Lam t e" $
+                                                do Def _ (Lam t _) <- idR
+                                                   guardMsg (isTyVar t) "first argument is not a type."
+                                                   let splitAtDefR :: RewriteH Core
+                                                       splitAtDefR = do p <- considerConstructT Definition
+                                                                        pathR p $ promoteR $ do wrap   <- parseCoreExprT wrapS
+                                                                                                unwrap <- parseCoreExprT unwrapS
+                                                                                                let ty = Type (TyVarTy t)
+                                                                                                workerWrapperSplitR (App wrap ty) (App unwrap ty)
+                                                   staticArg >>> extractR splitAtDefR
 
 --------------------------------------------------------------------------------------------------
 
 -- | @wrap (unwrap x)@  \<==\>  @x@
-wwAssA :: CoreString -> CoreString -> BiRewriteH CoreExpr
-wwAssA wrapS unwrapS = bidirectional wwAL wwAR
+wwAssA :: CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
+wwAssA wrap unwrap = beforeBiR (wrapUnwrapTypes wrap unwrap) (\ (tyA,_) -> bidirectional wwAL (wwAR tyA))
   where
     wwAL :: RewriteH CoreExpr
-    wwAL = do App wrap (App unwrap x) <- idR
-              _ <- parseWrapUnwrapMatching wrapS unwrapS wrap unwrap
+    wwAL = withPatFailMsg (wrongExprForm "App wrap (App unwrap x)") $
+           do App wrap' (App unwrap' x) <- idR
+              guardMsg (exprEqual wrap wrap')     "given wrapper does not match wrapper in expression."
+              guardMsg (exprEqual unwrap unwrap') "given unwrapper does not match unwrapper in expression."
               return x
 
-    wwAR :: RewriteH CoreExpr
-    wwAR = do (a,_,wrap,unwrap) <- parseWrapUnwrap wrapS unwrapS
-              x <- checkExprType a
-              return $ App wrap (App unwrap x)
+    wwAR :: Type -> RewriteH CoreExpr
+    wwAR tyA = do x <- idR
+                  guardMsg (exprType x `eqType` tyA) "type of expression does not match types of wrap/unwrap."
+                  return $ App wrap (App unwrap x)
+
+-- | @wrap (unwrap x)@  \<==\>  @x@
+wwA :: CoreString -> CoreString -> BiRewriteH CoreExpr
+wwA = parse2beforeBiR wwAssA
+
 
 -- | @wrap (unwrap (f x))@  \<==\>  @f x@
-wwAssB :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
-wwAssB wrapS unwrapS fS = bidirectional wwBL wwBR
+wwAssB :: CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
+wwAssB wrap unwrap f = bidirectional wwBL wwBR
   where
-    wwA :: BiRewriteH CoreExpr
-    wwA = wwAssA wrapS unwrapS
+    assA :: BiRewriteH CoreExpr
+    assA = wwAssA wrap unwrap
 
     wwBL :: RewriteH CoreExpr
-    wwBL = do App _ (App _ (App f _)) <- idR
-              _  <- endoFunType f
-              f' <- setCoreExprT fS
+    wwBL = withPatFailMsg (wrongExprForm "App wrap (App unwrap (App f x))") $
+           do App _ (App _ (App f' _)) <- idR
               guardMsg (exprEqual f f') "given body function does not match expression."
-              forewardT wwA
+              forewardT assA
 
     wwBR :: RewriteH CoreExpr
-    wwBR = do App f _ <- idR
-              _  <- endoFunType f
-              f' <- setCoreExprT fS
+    wwBR = withPatFailMsg (wrongExprForm "App f x") $
+           do App f' _ <- idR
               guardMsg (exprEqual f f') "given body function does not match expression."
-              backwardT wwA
+              backwardT assA
+
+-- | @wrap (unwrap (f x))@  \<==\>  @f x@
+wwB :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
+wwB = parse3beforeBiR wwAssB
 
 
 -- | @fix t (\ x -> wrap (unwrap (f x)))@  \<==\>  @fix t f@
-wwAssC :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
-wwAssC wrapS unwrapS fS = bidirectional wwCL wwCR
+wwAssC :: CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
+wwAssC wrap unwrap f = beforeBiR isFixExpr (\ _ -> bidirectional wwCL wwCR)
   where
-    wwB :: BiRewriteH CoreExpr
-    wwB = wwAssB wrapS unwrapS fS
+    assB :: BiRewriteH CoreExpr
+    assB = wwAssB wrap unwrap f
 
     wwCL :: RewriteH CoreExpr
-    wwCL = do _ <- checkFixExpr
-              appAllR idR (lamR (forewardT wwB) >>> etaReduce)
+    wwCL = appAllR idR (lamR (forewardT assB) >>> etaReduce)
 
     wwCR :: RewriteH CoreExpr
-    wwCR = do _ <- checkFixExpr
-              appAllR idR (etaExpand (TH.mkName "x") >>> lamR (backwardT wwB))
+    wwCR = appAllR idR (etaExpand (TH.mkName "x") >>> lamR (backwardT assB))
+
+-- | @fix t (\ x -> wrap (unwrap (f x)))@  \<==\>  @fix t f@
+wwC :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
+wwC = parse3beforeBiR wwAssC
 
 --------------------------------------------------------------------------------------------------
-
--- | @fix ty f@  \<==\>  @f (fix ty f)@
-fixComputationRule :: BiRewriteH CoreExpr
-fixComputationRule = bidirectional computationL computationR
-  where
-    computationL :: RewriteH CoreExpr
-    computationL = prefixFailMsg "fix computation rule failed: " $
-                   do (_,f) <- checkFixExpr
-                      fixf  <- idR
-                      return (App f fixf)
-
-    computationR :: RewriteH CoreExpr
-    computationR = prefixFailMsg "fix computation rule failed: " $
-                   do App f fixf <- idR
-                      (_,f') <- checkFixExpr <<< constant fixf
-                      guardMsg (exprEqual f f') "external function does not match internal expression"
-                      return fixf
-
-
--- | @fix tyA (\\ a -> f (g a))@  \<==\>  @f (fix tyB (\\ b -> g (f b))@
-rollingRule :: BiRewriteH CoreExpr
-rollingRule = bidirectional rollingRuleL rollingRuleR
-  where
-    rollingRuleL :: RewriteH CoreExpr
-    rollingRuleL = prefixFailMsg "rolling rule failed: " $
-                   withPatFailMsg wrongFixBody $
-                   do (tyA, Lam a (App f (App g (Var a')))) <- checkFixExpr
-                      guardMsg (a == a') wrongFixBody
-                      (tyA',tyB) <- checkFunctionsWithInverseTypes g f
-                      guardMsg (eqType tyA tyA') "Type mismatch: this shouldn't have happened, report this as a bug."
-                      res <- rollingRuleResult tyB g f
-                      return (App f res)
-
-    rollingRuleR :: RewriteH CoreExpr
-    rollingRuleR = prefixFailMsg "(reversed) rolling rule failed: " $
-                   withPatFailMsg "not an application." $
-                   do App f fx <- idR
-                      withPatFailMsg wrongFixBody $
-                        do (tyB, Lam b (App g (App f' (Var b')))) <- checkFixExpr <<< constant fx
-                           guardMsg (b == b') wrongFixBody
-                           guardMsg (exprEqual f f') "external function does not match internal expression"
-                           (tyA,tyB') <- checkFunctionsWithInverseTypes g f
-                           guardMsg (eqType tyB tyB') "Type mismatch: this shouldn't have happened, report this as a bug."
-                           rollingRuleResult tyA f g
-
-    rollingRuleResult :: Type -> CoreExpr -> CoreExpr -> TranslateH z CoreExpr
-    rollingRuleResult ty f g = do x <- constT (newIdH "x" ty)
-                                  mkFix (Lam x (App f (App g (Var x))))
-
-    wrongFixBody :: String
-    wrongFixBody = "body of fix does not have the form Lam v (App f (App g (Var v)))"
-
---------------------------------------------------------------------------------------------------
-
--- | As 'parseWrapUnwrap' but also checks that the parsed string match the given expressions.
-parseWrapUnwrapMatching :: CoreString -> CoreString -> CoreExpr -> CoreExpr -> TranslateH z (Type,Type)
-parseWrapUnwrapMatching wrapS unwrapS wrapE unwrapE = do (a,b,wrap,unwrap) <- parseWrapUnwrap wrapS unwrapS
-                                                         guardMsg (exprEqual wrap wrapE) "given wrapper does not match expression"
-                                                         guardMsg (exprEqual unwrap unwrapE) "given unwrapper does not match expression"
-                                                         return (a,b)
-
--- | Given "wrap" and "unwrap" strings, returns types A and B, and "wrap" and "unwrap" expressions.
-parseWrapUnwrap :: CoreString -> CoreString -> TranslateH z (Type,Type,CoreExpr,CoreExpr)
-parseWrapUnwrap wrapS unwrapS = do wrap   <- setCoreExprT wrapS
-                                   unwrap <- setCoreExprT unwrapS
-                                   setFailMsg "given expressions do not form a valid wrap/unwrap pair." $
-                                     do (a,b) <- checkFunctionsWithInverseTypes unwrap wrap
-                                        return (a,b,wrap,unwrap)
-
-checkExprType :: Type -> RewriteH CoreExpr
-checkExprType t = do e <- idR
-                     guardMsg (exprType e `eqType` t) "expression has wrong type."
-                     return e
 
 -- | Check that the expression has the form "fix t (f :: t -> t)", returning "t" and "f".
-checkFixExpr :: TranslateH CoreExpr (Type,CoreExpr)
-checkFixExpr = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
-               do App (App (Var fixId) (Type ty)) f <- idR
-                  fixId' <- findFixId
-                  guardMsg (fixId == fixId') (var2String fixId ++ " does not match " ++ fixLocation)
-                  return (ty,f)
+isFixExpr :: TranslateH CoreExpr (Type,CoreExpr)
+isFixExpr = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
+            do App (App (Var fixId) (Type ty)) f <- idR
+               fixId' <- findFixId
+               guardMsg (fixId == fixId') (var2String fixId ++ " does not match " ++ fixLocation)
+               return (ty,f)
 
-checkFunctionsWithInverseTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
-checkFunctionsWithInverseTypes f g = do (fdom,fcod) <- funArgResTypes f
-                                        (gdom,gcod) <- funArgResTypes g
-                                        guardMsg (eqType fdom gcod) ("functions do not have inverse types.")
-                                        guardMsg (eqType gdom fcod) ("functions do not have inverse types.")
-                                        return (fdom,fcod)
+wrapUnwrapTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
+wrapUnwrapTypes wrap unwrap = setFailMsg "given expressions have the wrong types to form a valid wrap/unwrap pair." $
+                              funsWithInverseTypes unwrap wrap
 
 --------------------------------------------------------------------------------------------------
 
@@ -366,5 +388,13 @@ fixLocation = "Data.Function.fix"
 
 findFixId :: TranslateH a Id
 findFixId = findIdT (TH.mkName fixLocation)
+
+--------------------------------------------------------------------------------------------------
+
+parse2beforeBiR :: (CoreExpr -> CoreExpr -> BiRewriteH a) -> CoreString -> CoreString -> BiRewriteH a
+parse2beforeBiR f s1 s2 = beforeBiR (parseCoreExprT s1 &&& parseCoreExprT s2) (uncurry f)
+
+parse3beforeBiR :: (CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH a) -> CoreString -> CoreString -> CoreString -> BiRewriteH a
+parse3beforeBiR f s1 s2 s3 = beforeBiR ((parseCoreExprT s1 &&& parseCoreExprT s2) &&& parseCoreExprT s3) ((uncurry.uncurry) f)
 
 --------------------------------------------------------------------------------------------------

@@ -17,11 +17,13 @@ module Language.HERMIT.Core
           , appCount
           , endoFunType
           , funArgResTypes
+          , funsWithInverseTypes
 ) where
 
 import GhcPlugins
 
 import Language.KURE.Combinators.Monad
+import Language.KURE.MonadCatch
 
 ---------------------------------------------------------------------
 
@@ -110,5 +112,14 @@ endoFunType f = do (ty1,ty2) <- funArgResTypes f
 -- | Return the domain and codomain types of a function expression.
 funArgResTypes :: Monad m => CoreExpr -> m (Type,Type)
 funArgResTypes e = maybe (fail "not a function type.") return (splitFunTy_maybe $ exprType e)
+
+-- | Check two expressions have types @a -> b@ and @b -> a@, returning @(a,b)@.
+funsWithInverseTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
+funsWithInverseTypes f g = do (fdom,fcod) <- funArgResTypes f
+                              (gdom,gcod) <- funArgResTypes g
+                              setFailMsg "functions do not have inverse types." $
+                                do guardM (eqType fdom gcod)
+                                   guardM (eqType gdom fcod)
+                                   return (fdom,fcod)
 
 -----------------------------------------------------------------------

@@ -1,10 +1,4 @@
-static-arg
-{ 0 ; alpha-lam 't ; consider def
-  ww-split [| wrap t |] [| unwrap t |]
-}
--- safe-let-subst
--- unfold-rule "ww"
--- any-call (unfold '.)
+ww-split-param 1 [|wrap|] [|unwrap|]
 any-call (unfold 'wrap)
 one-td (unfold 'unwrap)
 any-call (unfold '.)

@@ -67,7 +67,7 @@ externals = map (.+ KURE)
        [ "apply a rewrite only if the check succeeds" ] .+ Predicate
    , external "not"        (notM :: TranslateH Core () -> TranslateH Core ())
        [ "cause a failing check to succeed, a succeeding check to fail" ] .+ Predicate
-   , external "invert"     (invert :: BiRewriteH Core -> BiRewriteH Core)
+   , external "invert"     (invertBiT :: BiRewriteH Core -> BiRewriteH Core)
        [ "reverse a bidirectional rewrite" ]
    , external "foreward"   (forewardT :: BiRewriteH Core -> RewriteH Core)
        [ "apply a bidirectional rewrite forewards" ]

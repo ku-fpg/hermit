@@ -18,6 +18,3 @@ absH f = f []
 {-# RULES "repH ++" forall xs ys   . repH (xs ++ ys) = repH xs . repH ys #-}
 {-# RULES "repH []" 	             repH [] = id  	       	         #-}
 {-# RULES "repH (:)" forall x xs   . repH (x:xs) = ((:) x) . repH xs     #-}
-
--- Should be somewhere else
-{-# RULES "(.) id" forall f .    f . id = f #-}
