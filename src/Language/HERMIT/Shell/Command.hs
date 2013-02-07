@@ -98,6 +98,7 @@ data MetaCommand
    | Dump String String String Int
    | LoadFile String  -- load a file on top of the current node
    | SaveFile String
+   | Delete SAST
    deriving Typeable
 
 instance Extern MetaCommand where
@@ -154,6 +155,10 @@ shell_externals = map (.+ Shell)
        [ "stops HERMIT; resumes compile" ]
    , external "abort"           Abort     -- UNIX Exit
        [ "hard UNIX-style exit; does not return to GHC; does not save" ]
+   , external "delete"          (Delete . SAST)
+       [ "garbage-collect a given AST; does not remove from command log" ]
+   , external "gc"              (SessionStateEffect gc)
+       [ "garbage-collect all ASTs except for the initial and current AST" ]
    , external "display"         Display
        [ "redisplays current state" ]
    , external "left"            (Direction L)
@@ -224,6 +229,15 @@ changeRenderer renderer = SessionStateEffect $ \ _ st ->
           Nothing -> return st          -- TODO: should fail with message
           Just r  -> return $ st { cl_render = r }
 
+gc :: CommandLineState -> SessionState -> IO SessionState
+gc clst st = do
+    let k = cl_kernel clst
+        cursor = cl_cursor st
+        initSAST = cl_initSAST clst
+    asts <- listS k
+    mapM_ (deleteS k) [ sast | sast <- asts, sast `notElem` [cursor, initSAST] ]
+    return st
+
 ----------------------------------------------------------------------------------
 
 catch :: IO a -> (String -> IO a) -> IO a
@@ -259,9 +273,10 @@ iokm2clm msg = iokm2clm' msg return
 data CommandLineState = CommandLineState
         { cl_graph       :: [(SAST,ExprH,SAST)]
         , cl_tags        :: [(String,SAST)]
-        -- these two should be in a reader
+        -- these three should be in a reader
         , cl_dict        :: Dictionary
         , cl_kernel      :: ScopedKernel
+        , cl_initSAST    :: SAST
         -- and the session state (perhaps in a seperate state?)
         , cl_session     :: SessionState
         }
@@ -348,7 +363,7 @@ commandLine filesToLoad behavior modGuts = do
     flip scopedKernel modGuts $ \ skernel sast -> do
 
         let sessionState = SessionState sast "clean" def unicodeConsole 80 False False var
-            shellState = CommandLineState [] [] dict skernel sessionState
+            shellState = CommandLineState [] [] dict skernel sast sessionState
 
         completionMVar <- newMVar shellState
 
@@ -499,6 +514,7 @@ performMetaCommand :: MonadIO m => MetaCommand -> CLM m ()
 performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
 performMetaCommand Resume = do st <- get
                                liftIO $ resumeS (cl_kernel st) (cl_cursor $ cl_session st)
+performMetaCommand (Delete sast) = gets cl_kernel >>= liftIO . flip deleteS sast
 performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
     case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
