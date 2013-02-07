@@ -31,6 +31,8 @@ externals = map (.+ KURE)
        [ "tries a rewrite, and performs an identity if this rewrite fails" ]
    , external "repeat"     (repeatR :: RewriteH Core -> RewriteH Core)
        [ "repeats a rewrite until it would fail" ] .+ Loop
+   , external "replicate"  ((\ n -> andR . replicate n)  :: Int -> RewriteH Core -> RewriteH Core)
+       [ "repeats a rewrite n times" ]
    , external "all"        (allR :: RewriteH Core -> RewriteH Core)
        [ "apply a rewrite to all children of the node, requiring success at every child" ] .+ Shallow
    , external "any"        (anyR :: RewriteH Core -> RewriteH Core)
