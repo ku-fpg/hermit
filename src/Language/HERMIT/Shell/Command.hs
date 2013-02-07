@@ -155,7 +155,7 @@ shell_externals = map (.+ Shell)
        [ "stops HERMIT; resumes compile" ]
    , external "abort"           Abort     -- UNIX Exit
        [ "hard UNIX-style exit; does not return to GHC; does not save" ]
-   , external "delete"          (Delete . SAST)
+   , external "gc"              (Delete . SAST)
        [ "garbage-collect a given AST; does not remove from command log" ]
    , external "gc"              (SessionStateEffect gc)
        [ "garbage-collect all ASTs except for the initial and current AST" ]
