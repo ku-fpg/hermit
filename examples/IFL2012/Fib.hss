@@ -43,7 +43,7 @@ dump "ifl-paper/6-stashapply.tex" "clean" "latex" 82
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
 --   wrap . unwrap = id (precondition)
-any-bu (unfold-rule precondition)
+any-call (unfold-rule precondition)
 dump "ifl-paper/7-precondition.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)
@@ -52,7 +52,7 @@ dump "ifl-paper/7-precondition.tex" "clean" "latex" 82
 { 1 ; 1 ; let-intro 'x }
 { 0 ; 1 ; let-intro 'y }
 innermost (let-float-arg <+ let-float-app)
-one-td (fold 'y)
+any-call (fold 'y)
 dump "ifl-paper/8-xandy.tex" "clean" "latex" 82
 
 let-tuple 'xy
@@ -61,13 +61,13 @@ dump "ifl-paper/9-lettuple.tex" "clean" "latex" 82
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = (f (wrap work) n, f (wrap work) (n+1)) in (y,x+y)
 --   fold 'unwrap
-one-td (fold 'unwrap)
+any-call (fold 'unwrap)
 dump "ifl-paper/10-foldunwrap.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
 --   fold 'work
-one-td (fold origwork)
+any-call (fold origwork)
 dump "ifl-paper/11-stashfold.tex" "clean" "latex" 82
 
 -- work 0     = (0, 1)

@@ -42,7 +42,7 @@ simplify
 { 1; let-intro 'w }
 let-float-arg
 { rhs-of 'w
-  unfold 'fix ; alpha-let 'work
+  unfold 'fix ; alpha-let ['work]
   simplify
 }
 let-subst
