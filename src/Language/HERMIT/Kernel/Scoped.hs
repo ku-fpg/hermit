@@ -127,9 +127,15 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 m <- atomically $ readTMVar store
                                 (ast, base, rel) <- get sAst m
                                 queryK kernel ast (focusT (pathStackToLens base rel) t) env
-            , deleteS     = \ (SAST sAst) -> atomically $ do
-                                m <- takeTMVar store
-                                putTMVar store $ I.delete sAst m
+            , deleteS     = \ (SAST sAst) -> safeTakeTMVar store $ \ m -> do
+                                (ast,_,_) <- get sAst m
+                                let m' = I.delete sAst m
+                                    fst3 (x,_,_) = x
+                                    asts = I.foldr ((:) . fst3) [] m'
+                                if ast `elem` asts
+                                    then return ()
+                                    else deleteK kernel ast
+                                atomically $ putTMVar store m'
             , listS       = do m <- atomically $ readTMVar store
                                return [ SAST sAst | sAst <- I.keys m ]
             , pathS       = \ (SAST sAst) -> atomically $ do
