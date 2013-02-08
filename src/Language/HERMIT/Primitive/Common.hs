@@ -24,8 +24,9 @@ module Language.HERMIT.Primitive.Common
     , findBoundVarT
     , findIdT
     , findId
-      -- ** Error Message Generators
+      -- ** Miscallaneous
     , wrongExprForm
+    , nodups
     )
 
 where
@@ -173,5 +174,11 @@ findIdBuiltIn = go . TH.nameBase
 --   Argument 'String' should be the desired form of the expression.
 wrongExprForm :: String -> String
 wrongExprForm form = "Expression does not have the form: " ++ form
+
+------------------------------------------------------------------------------
+
+-- | Determine if a list contains no duplicated elements.
+nodups :: Eq a => [a] -> Bool
+nodups as = length as == length (nub as)
 
 ------------------------------------------------------------------------------

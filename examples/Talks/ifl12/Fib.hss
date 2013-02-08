@@ -14,14 +14,15 @@ case-split-inline 'n
 { 2 ; 0 ; 1 ; any-call (unfold 'f) }
 simplify
 2 ; 0 ; { 1 ; any-call (unfold origwork) }
-any-bu (unfold-rule precondition)
+any-call (unfold-rule precondition)
 { 1 ; 1 ; let-intro 'x }
 { 0 ; 1 ; let-intro 'y }
-innermost (let-float-arg <+ let-float-app)
-one-td (fold 'y)
+innermost let-float
+try (reorder-lets ['x,'y])
+any-call (fold 'y)
 let-tuple 'xy
-one-td (fold 'unwrap)
-one-td (fold origwork)
+any-call (fold 'unwrap)
+any-call (fold origwork)
 }
 innermost dead-let-elimination
 any-call (unfold 'wrap)

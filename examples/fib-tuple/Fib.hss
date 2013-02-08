@@ -40,7 +40,8 @@ any-bu (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
 
 { 1 ; 1 ; let-intro 'x }
 { 0 ; 1 ; let-intro 'y }
-innermost (let-float-arg <+ let-float-app)
+innermost let-float
+try (reorder-lets ['x,'y])
 one-td (fold 'y)
 let-tuple 'xy
 

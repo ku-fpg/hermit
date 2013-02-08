@@ -17,17 +17,16 @@ one-td (unfold-rule "rep-abs-fusion")
 any-td (unfold 'repH)
 any-td (unfold '.)
 bash
-focus (consider case) (eta-expand 'ys)
+focus (consider case) (eta-expand 'acc)
 one-td case-float-app
 one-td (unfold-rule "(:) ++")
 any-td (unfold-rule "[] ++")
 one-td (unfold 'fix)
 bash
-alpha-let 'work
+alpha-let ['work]
 one-td (unfold 'absH)
 down ; down ; down
-alpha-lam 'xs
+alpha-lam 'ys
 down
-alpha-lam 'acc
 }
 bash

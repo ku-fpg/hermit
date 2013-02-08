@@ -15,12 +15,15 @@ module Language.HERMIT.Primitive.Local.Let
        , letToCase
        , letUnfloatApp
        , letUnfloatCase
+       , reorderNonRecLets
        )
 where
 
 import GhcPlugins
 
-import Control.Category((>>>))
+import Control.Applicative
+import Control.Arrow
+import Control.Monad
 
 import Data.List
 import Data.Monoid
@@ -79,6 +82,10 @@ letExternals =
          , external "let-unfloat-case" ((promoteExprR letUnfloatCase >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
                      [ "let v = ev in case s of p -> e ==> case (let v = ev in s) of p -> let v = ev in e"
                      , "if v does not shadow a pattern binder in p" ] .+ Commute .+ Shallow
+         , external "reorder-lets" (promoteExprR . reorderNonRecLets :: [TH.Name] -> RewriteH Core)
+                     [ "Re-order a sequence of nested non-recursive let bindings.",
+                       "The argument list should contain the let-bound variables, in the desired order."
+                     ]
          ]
 
 -------------------------------------------------------------------------------------------
@@ -178,7 +185,7 @@ letFloatCase = prefixFailMsg "Let floating from Case failed: " $
 -- | Float a Let through an expression, whatever the context.
 letFloatExpr :: RewriteH CoreExpr
 letFloatExpr = setFailMsg "Unsuitable expression for Let floating." $
-               letFloatApp <+ letFloatArg <+ letFloatLet <+ letFloatLam <+ letFloatCase
+               letFloatArg <+ letFloatApp <+ letFloatLet <+ letFloatLam <+ letFloatCase
 
 -- | NonRec v (Let (NonRec w ew) ev) `ProgCons` p ==> NonRec w ew `ProgCons` NonRec v ev `ProgCons` p
 letFloatLetTop :: RewriteH CoreProg
@@ -191,13 +198,52 @@ letFloatLetTop = prefixFailMsg "Let floating to top level failed: " $
 -------------------------------------------------------------------------------------------
 
 letUnfloatCase :: RewriteH CoreExpr
-letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $ do
-    Let bnds (Case s w ty alts) <- idR
-    captured <- letT bindVarsT caseIdsT intersect
-    guardMsg (null captured) "let bindings would capture case pattern bindings."
-    return $ Case (Let bnds s) w ty [ (ac, vs, Let bnds e) | (ac, vs, e) <- alts ]
+letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $
+                 withPatFailMsg (wrongExprForm "Let bnds (Case s w ty alts)") $
+  do Let bnds (Case s w ty alts) <- idR
+     captured <- letT bindVarsT caseIdsT intersect
+     guardMsg (null captured) "let bindings would capture case pattern bindings."
+     return $ Case (Let bnds s) w ty [ (ac, vs, Let bnds e) | (ac, vs, e) <- alts ]
 
 letUnfloatApp :: RewriteH CoreExpr
-letUnfloatApp = prefixFailMsg "Let unfloating from app failed: " $ do
-    Let bnds (App e1 e2) <- idR
-    return $ App (Let bnds e1) (Let bnds e2)
+letUnfloatApp = prefixFailMsg "Let unfloating from app failed: " $
+                withPatFailMsg (wrongExprForm "Let bnds (App e1 e2)") $
+  do Let bnds (App e1 e2) <- idR
+     return $ App (Let bnds e1) (Let bnds e2)
+
+-------------------------------------------------------------------------------------------
+
+-- | Re-order a sequence of nested non-recursive let bindings.
+--   The argument list should contain the let-bound variables, in the desired order.
+reorderNonRecLets :: [TH.Name] -> RewriteH CoreExpr
+reorderNonRecLets ns = prefixFailMsg "Reorder lets failed: " $
+                 do guardMsg (not $ null ns) "no names given."
+                    guardMsg (nodups ns) "duplicate names given."
+                    e <- idR
+                    (ves,x) <- setFailMsg "insufficient non-recursive lets." $ takeNonRecLets (length ns) e
+                    guardMsg (noneFreeIn ves) "some of the bound variables appear in the right-hand-sides."
+                    e' <- mkNonRecLets <$> mapM (lookupName ves) ns <*> pure x
+                    guardMsg (not $ exprEqual e e') "bindings already in specified order."
+                    return e'
+
+  where
+    takeNonRecLets :: Monad m => Int -> CoreExpr -> m ([(Var,CoreExpr)],CoreExpr)
+    takeNonRecLets 0 x                      = return ([],x)
+    takeNonRecLets n (Let (NonRec v1 e1) x) = first ((v1,e1):) `liftM` takeNonRecLets (n-1) x
+    takeNonRecLets _ _                      = fail "insufficient non-recursive lets."
+
+    noneFreeIn :: [(Var,CoreExpr)] -> Bool
+    noneFreeIn ves = let (vs,es) = unzip ves
+                      in all (`notElem` concatMap coreExprFreeVars es) vs
+
+    lookupName :: Monad m => [(Var,CoreExpr)] -> TH.Name -> m (Var,CoreExpr)
+    lookupName ves nm = case filter (cmpTHName2Var nm . fst) ves of
+                          []   -> fail $ "name " ++ show nm ++ " not matched."
+                          [ve] -> return ve
+                          _    -> fail $ "multiple matches for " ++ show nm ++ "."
+
+    mkNonRecLets :: [(Var,CoreExpr)] -> CoreExpr -> CoreExpr
+    mkNonRecLets []          x  = x
+    mkNonRecLets ((v,e):ves) x  = Let (NonRec v e) (mkNonRecLets ves x)
+
+-------------------------------------------------------------------------------------------

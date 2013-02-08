@@ -46,6 +46,7 @@ consider 'hanoi
           { 1 ; 1 ; 0 ; 1 ; let-intro 'w }
         }
         innermost let-float
+        try (reorder-lets ['u,'v,'w])
         any-call (fold 'u)
         any-call (fold 'v)
         any-call (fold 'w)

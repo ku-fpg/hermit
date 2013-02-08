@@ -2,6 +2,7 @@
   { 1 ; let-intro 'l }
   { 0 ; 1 ; let-intro 's }
   innermost let-float
+  try (reorder-lets ['s,'l])
   let-tuple 'sl
   { 0 ; abstract 'xs ; 0 ; let-intro 'sumlength }
 }
@@ -21,6 +22,7 @@ remember sumlen
   { 1 ; 1 ; let-intro 'l }
   { 0 ; 1 ; 1 ; let-intro 's }
   innermost let-float
+  try (reorder-lets ['s,'l])
   let-tuple 'sl
   { 0 ; fold sumlen }
 }

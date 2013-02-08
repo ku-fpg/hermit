@@ -35,8 +35,6 @@ import Language.HERMIT.Primitive.Local.Let
 
 import qualified Language.Haskell.TH as TH
 
-import Data.List(nub)
-
 import Control.Arrow
 
 ------------------------------------------------------------------------------
@@ -192,9 +190,6 @@ flattenProgramT :: TranslateH CoreProg CoreBind
 flattenProgramT = do bds <- arr (concatMap bindToIdExprs . progToBinds)
                      guardMsg (nodups $ map fst bds) "Top-level bindings contain multiple occurrences of a name."
                      return (Rec bds)
-
-nodups :: Eq a => [a] -> Bool
-nodups as = length as == length (nub as)
 
 ------------------------------------------------------------------------------
 
