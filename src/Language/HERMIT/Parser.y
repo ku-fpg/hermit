@@ -53,7 +53,7 @@ e2   : e2 arg          { AppH $1 $2 }
 -- | Expressions that can be arguments in an application.
 arg  : '\'' ident      { SrcName $2 }
      | '\'' infixop    { SrcName $2 }
-     | '\'' '[' ']'    { SrcName "[]" } -- special case, since we also use [] for lists
+     | '\'' quoted     { SrcName $2 }
      | quoted          { CmdName $1 }
      | core            { CoreH $1 }
      | '[' exprs ']'   { ListH $2 }
@@ -108,10 +108,8 @@ lexer (')' :cs)    = fmap (ParenRight:) $ lexer cs
 lexer ('{' :cs)    = fmap (ScopeStart:) $ lexer cs
 lexer ('}' :cs)    = fmap (ScopeEnd:)   $ lexer cs
 lexer ('\'':cs)    = fmap (Tick:)       $ lexer cs
-lexer ('\"':cs)    = let (str,rest) = span (/='\"') cs
-                     in case rest of
-                           ('\"':cs') -> fmap (Quote str:) $ lexer cs'
-                           _          -> Left "lexer: no matching quote"
+lexer ('\"':cs)    = do (str,cs') <- lexString cs
+                        fmap (Quote str:) $ lexer cs'
 lexer ('[':'|':cs) = do (str,cs') <- lexCore cs
                         fmap (CoreString str:) $ lexer cs'
 lexer ('[' :cs)    = fmap (ListStart:)  $ lexer cs
@@ -123,6 +121,14 @@ lexer s@(c:cs)     | isSpace       c = lexer cs
                    | isInfixId     c = let (op,s') = span isInfixId s
                                        in fmap (InfixOp op:) $ lexer s'
 lexer s            = Left $ "lexer: no match on " ++ s
+
+lexString :: String -> Either String (String,String)
+lexString ('\"':cs)      = Right ([],cs)
+lexString ('\\':'\"':cs) = do (c',r) <- lexString cs
+                              return ('"':c',r)
+lexString (c:cs)         = do (c',r) <- lexString cs
+                              return (c:c',r)
+lexString []             = Left "lexer: no matching quote"
 
 lexCore :: String -> Either String (String,String)
 lexCore ('|':']':rest) = Right ([],rest)
@@ -170,7 +176,11 @@ numStmtsH = sum . map numStmtH
 ---------------------------------------------
 
 unparseExprH :: ExprH -> String
-unparseExprH (SrcName nm) = "'" ++ nm
+unparseExprH (SrcName nm)
+  | nm /= "" && (all isInfixId nm || isIdFirstChar (head nm) && all (isIdChar) (tail nm)) = "'" ++ nm
+  | otherwise = "'\"" ++ concatMap escape nm ++ "\"" where
+      escape '\"' = "\\\""
+      escape c    = [c]
 unparseExprH (CmdName nm)
         |  all isIdChar nm = nm
         | otherwise    = show nm     -- with quotes
