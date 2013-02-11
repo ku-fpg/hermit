@@ -69,7 +69,11 @@ externals = map (.+ Experiment)
                   "Note: the pre-condition \"fix a (wrap . unwrap . f) == fix a f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-split-param" ((\ n wrap unwrap -> promoteDefR $ workerWrapperSplitParam n wrap unwrap) :: Int -> CoreString -> CoreString -> RewriteH Core)
-                [ "Worker/Wrapper Split - Type Paramater Variant"
+                [ "Worker/Wrapper Split - Type Paramater Variant",
+                  "For any \"g :: forall t1 t2 .. tn . a\", and given \"wrap :: forall t1 t2 .. tn . b -> a\" and \"unwrap :: forall t1 t2 .. tn . a -> b\" as arguments, then",
+                  "g = expr  ==>  g = \\ t1 t2 .. tn -> let f = \\ g -> expr t1 t2 .. tn",
+                  "                                      in let work = unwrap t1 t2 .. tn (f (wrap t1 t2  ..tn work))",
+                  "                                          in wrap t1 t2 .. tn work"
                 ] .+ Introduce .+ Context .+ PreCondition .+ TODO .+ Experiment
          , external "ww-assumption-A" ((\ wrap unwrap -> promoteExprBiR $ wwA wrap unwrap) :: CoreString -> CoreString -> BiRewriteH Core)
                 [ "Worker/Wrapper Assumption A",
@@ -95,7 +99,7 @@ externals = map (.+ Experiment)
 
 -- |  @f = e@   ==\>   @f = fix (\\ f -> e)@
 fixIntro :: RewriteH CoreDef
-fixIntro = prefixFailMsg "Fix introduction failed: " $
+fixIntro = prefixFailMsg "fix introduction failed: " $
            do Def f e <- idR
               f' <- constT $ cloneVarH id f
               let emptySub = mkEmptySubst (mkInScopeSet $ exprFreeVars e)
@@ -283,19 +287,22 @@ workerWrapperSplitR wrap unwrap =
 workerWrapperSplit :: CoreString -> CoreString -> RewriteH CoreDef
 workerWrapperSplit wrapS unwrapS = (parseCoreExprT wrapS &&& parseCoreExprT unwrapS) >>= uncurry workerWrapperSplitR
 
+-- | As 'workerWrapperSplit' but performs the static-argument transformation for @n@ type paramaters first, providing these types as arguments to all calls of wrap and unwrap.
+--   This is useful if the expression, and wrap and unwrap, all have a @forall@ type.
 workerWrapperSplitParam :: Int -> CoreString -> CoreString -> RewriteH CoreDef
-workerWrapperSplitParam n wrapS unwrapS =  prefixFailMsg "worker/wrapper split (forall variant) failed: " $
-                                           do guardMsg (n == 1) "currently only supports 1 type paramater."
-                                              withPatFailMsg "right-hand-side of definition does not have the form: Lam t e" $
-                                                do Def _ (Lam t _) <- idR
-                                                   guardMsg (isTyVar t) "first argument is not a type."
-                                                   let splitAtDefR :: RewriteH Core
-                                                       splitAtDefR = do p <- considerConstructT Definition
-                                                                        pathR p $ promoteR $ do wrap   <- parseCoreExprT wrapS
-                                                                                                unwrap <- parseCoreExprT unwrapS
-                                                                                                let ty = Type (TyVarTy t)
-                                                                                                workerWrapperSplitR (App wrap ty) (App unwrap ty)
-                                                   staticArg >>> extractR splitAtDefR
+workerWrapperSplitParam 0 = workerWrapperSplit
+workerWrapperSplitParam n = \ wrapS unwrapS -> prefixFailMsg "worker/wrapper split (forall variant) failed: " $
+                                               do guardMsg (n == 1) "currently only supports 1 type paramater."
+                                                  withPatFailMsg "right-hand-side of definition does not have the form: Lam t e" $
+                                                    do Def _ (Lam t _) <- idR
+                                                       guardMsg (isTyVar t) "first argument is not a type."
+                                                       let splitAtDefR :: RewriteH Core
+                                                           splitAtDefR = do p <- considerConstructT Definition
+                                                                            pathR p $ promoteR $ do wrap   <- parseCoreExprT wrapS
+                                                                                                    unwrap <- parseCoreExprT unwrapS
+                                                                                                    let ty = Type (TyVarTy t)
+                                                                                                    workerWrapperSplitR (App wrap ty) (App unwrap ty)
+                                                       staticArg >>> extractR splitAtDefR
 
 --------------------------------------------------------------------------------------------------
 
