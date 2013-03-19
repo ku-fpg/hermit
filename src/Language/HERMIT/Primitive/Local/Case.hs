@@ -150,7 +150,7 @@ caseReduce = prefixFailMsg "Case reduction failed: " $
 -- | If expression is a constructor application, return the relevant bits.
 isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])
 isDataCon expr = case fn of
-                    Var i -> do dc <- isDataConId_maybe i
+                    Var i -> do dc <- isDataConWorkId_maybe i
                                 return (dc, args)
                     _ -> fail "not a var"
     where (fn, args) = collectArgs expr
