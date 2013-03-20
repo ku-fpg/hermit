@@ -7,6 +7,8 @@ module Language.HERMIT.Primitive.Local.Case
        , caseFloatLet
        , caseFloat
        , caseReduce
+       , caseReduceDatacon
+       , caseReduceLiteral
        , caseSplit
        , caseSplitInline
        )
@@ -28,6 +30,7 @@ import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Inline
 import Language.HERMIT.Primitive.AlphaConversion
+import Language.HERMIT.Primitive.Local.Let (letElim)
 
 import qualified Language.Haskell.TH as TH
 
@@ -58,8 +61,12 @@ caseExternals =
          , external "case-float" (promoteExprR caseFloat :: RewriteH Core)
                      [ "Float a Case whatever the context." ] .+ Commute .+ Shallow .+ PreCondition
          , external "case-reduce" (promoteExprR caseReduce :: RewriteH Core)
+                     [ "case-reduce-datacon <+ case-reduce-literal" ] .+ Shallow .+ Eval .+ Bash
+         , external "case-reduce-datacon" (promoteExprR caseReduceDatacon :: RewriteH Core)
                      [ "case-of-known-constructor"
-                     , "case C v1..vn of C w1..wn -> e ==> let { w1 = v1 ; .. ; wn = vn } in e" ] .+ Shallow .+ Eval .+ Bash
+                     , "case C v1..vn of C w1..wn -> e ==> let { w1 = v1 ; .. ; wn = vn } in e" ] .+ Shallow .+ Eval
+         , external "case-reduce-literal" (promoteExprR caseReduceLiteral :: RewriteH Core)
+                     [ "case L of L -> e ==> e" ] .+ Shallow .+ Eval
          , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
                 [ "case-split 'x"
                 , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ]
@@ -130,10 +137,28 @@ caseFloat :: RewriteH CoreExpr
 caseFloat = setFailMsg "Unsuitable expression for Case floating." $
             caseFloatApp <+ caseFloatArg <+ caseFloatCase <+ caseFloatLet
 
--- | Case-of-known-constructor rewrite.
 caseReduce :: RewriteH CoreExpr
-caseReduce = prefixFailMsg "Case reduction failed: " $
-             withPatFailMsg (wrongExprForm "Case e v t alts") $ do
+caseReduce = caseReduceDatacon <+ caseReduceLiteral
+
+-- NB: LitAlt cases don't do evaluation
+caseReduceLiteral :: RewriteH CoreExpr
+caseReduceLiteral = go >>> tryR letElim
+    where go = prefixFailMsg "Case reduction failed: " $
+               withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $ do
+                    Case (Lit l) binder _ alts <- idR
+                    guardMsg (not (litIsLifted l)) "cannot case reduce lifted literals" -- see Trac #5603
+                    e <- case [ rhs | (LitAlt l', _, rhs) <- alts, l == l' ] of
+                            [e'] -> return e'
+                            []   -> case [ rhs | (DEFAULT, _, rhs) <- alts ] of
+                                        [e''] -> return e''
+                                        _     -> fail "no matching alternative."
+                            _    -> fail "more than one matching alternative."
+                    return $ Let (NonRec binder (Lit l)) e
+
+-- | Case-of-known-constructor rewrite.
+caseReduceDatacon :: RewriteH CoreExpr
+caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
+                    withPatFailMsg (wrongExprForm "Case e v t alts") $ do
   Case s binder _ alts <- idR
   case isDataCon s of
     Nothing -> fail "head of scrutinee is not a data constructor."
