@@ -217,8 +217,11 @@ corePrettyH opts = do
     --              <+ typeT (\ty -> text "Type" <+> nest 2 (ppSDoc ty))
                   <+ coercionT (\co -> text "Coercion" $$ nest 2 (ppSDoc co))
 
+        ppCoreTypeSig :: PrettyH GHC.CoreExpr
+        ppCoreTypeSig = arr $ normalExpr . ppCoreType False . GHC.exprType
+
         ppCoreBind :: PrettyH GHC.CoreBind
-        ppCoreBind = nonRecT ppCoreExprR ppDefFun
+        ppCoreBind = nonRecT (ppCoreExprR &&& ppCoreTypeSig) ppDefFun
                   <+ recT (const ppCoreDef) (\ bnds -> keyword "rec" <+> vcat bnds)
 
         ppCoreAlt :: PrettyH GHC.CoreAlt
@@ -232,14 +235,17 @@ corePrettyH opts = do
 
         -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
         ppCoreDef :: PrettyH CoreDef
-        ppCoreDef = defT ppCoreExprR ppDefFun
+        ppCoreDef = defT (ppCoreExprR &&& ppCoreTypeSig) ppDefFun
 
-        ppDefFun :: GHC.Id -> RetExpr -> DocH
-        ppDefFun i e = case e of
-                        RetLam vs e0 -> hang (pre <+> specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
-                        _ -> hang pre 2 (normalExpr e)
+        ppDefFun :: GHC.Id -> (RetExpr, DocH) -> DocH
+        ppDefFun i (e,ty) = case po_exprTypes opts of
+                                Show -> (markColor TypeColor $ ppVar' False i <+> text "::" <+> ty) $+$ body
+                                _    -> body
             where
                 pre = optional (ppBinder i) (<+> symbol '=')
+                body = case e of
+                        RetLam vs e0 -> hang (pre <+> specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
+                        _ -> hang pre 2 (normalExpr e)
 
     promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
      <+ promoteT (ppCoreProg :: PrettyH CoreProg)
