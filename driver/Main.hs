@@ -73,6 +73,7 @@ main4 file_nm hermit_args module_args ghc_args = do
                   , "-O2"
                   , "-dcore-lint"
                   , "-fsimple-list-literals"
+                  , "-fexpose-all-unfoldings"
 --                  , "-v0"
                   , "-fplugin=HERMIT"
                   ] ++
