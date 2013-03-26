@@ -341,6 +341,9 @@ shellComplete mvar rPrev so_far = do
     cl <- runKureM return fail mcls -- TO DO: probably shouldn't use fail here.
     return $ (map simpleCompletion . nub . filter (so_far `isPrefixOf`)) cl
 
+setLoading :: MonadIO m => Bool -> CLM m ()
+setLoading b = modify $ \st -> st { cl_session = (cl_session st) { cl_loading = b } }
+
 -- | The first argument is a list of files to load.
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
 commandLine filesToLoad behavior modGuts = do
@@ -348,7 +351,7 @@ commandLine filesToLoad behavior modGuts = do
     let ws_complete = " ()"
 
     let startup = do
-            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = True } }
+            setLoading True
             sequence_ [ performMetaCommand $ case fileName of
                          "abort"  -> Abort
                          "resume" -> Resume
@@ -356,7 +359,7 @@ commandLine filesToLoad behavior modGuts = do
                       | fileName <- reverse filesToLoad
                       , not (null fileName)
                       ] `ourCatch` \ msg -> liftIO . putStrLn $ "Booting Failure: " ++ msg
-            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = False } }
+            setLoading False
 
     var <- GHC.liftIO $ atomically $ newTVar M.empty
 
@@ -506,7 +509,12 @@ performQuery (Inquiry f) = do
 
 -- These two need to use Inquiry
 performQuery (Message msg) = liftIO (putStrLn msg)
-performQuery Display = showFocus
+-- Explicit calls to display should work no matter what the loading state is.
+performQuery Display = do
+    load_st <- gets (cl_loading . cl_session)
+    setLoading False
+    showFocus
+    setLoading load_st
 
 -------------------------------------------------------------------------------
 
@@ -532,11 +540,11 @@ performMetaCommand (LoadFile fileName) = do
                         Left  msg  -> throwError ("Parse failure: " ++ msg)
                         Right stmts -> do
                             load_st <- gets (cl_loading . cl_session)
-                            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = True } }
+                            setLoading True
                             evalStmts stmts `catchError` (\ err -> do
-                                    modify $ \ st -> st { cl_session = (cl_session st) { cl_loading = load_st } }
+                                    setLoading load_st
                                     throwError err)
-                            modify $ \st -> st { cl_session = (cl_session st) { cl_loading = load_st } }
+                            setLoading load_st
                             putStrToConsole $ "[done, loaded " ++ show (numStmtsH stmts) ++  " commands]" -- TODO: This is better than saying "N", but not very robust.
                             showFocus
           Left (err :: IOException) -> throwError ("IO error: " ++ show err)
