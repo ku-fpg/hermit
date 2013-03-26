@@ -198,7 +198,9 @@ corePrettyH opts = do
                   go (AppTy t1 t2) = RetExpr $ normalExpr (go t1) <+> normalExpr (go t2)
                   go (TyConApp tyCon tys)
                     | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = go (FunTy ty1 ty2)
-                    | tyCon == GHC.listTyCon = RetAtom $ tyText "[" <> normalExpr (go (head tys)) <> tyText "]"
+                    | tyCon == GHC.listTyCon = RetAtom $ tyText "[" <> (case map (normalExpr . go) tys of
+                                                                            []    -> empty
+                                                                            (t:_) -> t) <> tyText "]"
                     | GHC.isTupleTyCon tyCon = case map (normalExpr . go) tys of
                                                 [] -> RetAtom $ tyText "()"
                                                 ds -> RetAtom $ tyText "(" <> (foldr1 (\d r -> d <> tyText "," <+> r) ds) <> tyText ")"
