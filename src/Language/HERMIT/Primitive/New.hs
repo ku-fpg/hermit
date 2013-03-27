@@ -53,11 +53,20 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "perform the static argument transformation on a recursive function" ]
          , external "unsafe-replace" (promoteExprR . unsafeReplace :: CoreString -> RewriteH Core)
                 [ "replace the currently focused expression with a new expression" ]
+         , external "unsafe-replace" (promoteExprR . unsafeReplaceStash :: String -> RewriteH Core)
+                [ "replace the currently focused expression with an expression from the stash"
+                , "DOES NOT ensure expressions have the same type, or that free variables in the replacement expression are in scope" ]
          , external "inline-all" (inlineAll :: [TH.Name] -> RewriteH Core)
                 [ "inline all named functions in a bottom-up manner" ]
          ]
 
 ------------------------------------------------------------------------------------------------------
+
+unsafeReplaceStash :: String -> RewriteH CoreExpr
+unsafeReplaceStash label = prefixFailMsg "unsafe-replace failed: " $
+    translate $ \ c e -> do
+        Def i rhs <- lookupDef label
+        return rhs
 
 -- TODO: what about Type constructors around TyVars?
 isVar :: TH.Name -> TranslateH CoreExpr ()
