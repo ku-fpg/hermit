@@ -20,15 +20,21 @@ module Language.HERMIT.Primitive.GHC
        , showVars
        , rule
        , rules
+       , lintExprT
+       , lintProgramT
+       , lintModuleT
        )
 where
 
 import GhcPlugins
+import qualified Bag
+import qualified CoreLint
 import qualified OccurAnal
 
 import Control.Arrow
 import Control.Monad
 import Data.List (intercalate,mapAccumL,(\\))
+import Data.Map (keys)
 
 import Language.HERMIT.Core
 import Language.HERMIT.Context
@@ -82,6 +88,16 @@ externals =
          , external "occur-analysis" (promoteExprR occurAnalyseExprR :: RewriteH Core)
                 ["Performs dependency anlaysis on a CoreExpr.",
                  "This can be useful to simplify a recursive let to a non-recursive let."] .+ Deep
+         , external "lintExpr" (promoteExprT lintExprT :: TranslateH Core String)
+                ["Runs GHC's Core Lint, which typechecks the current expression."
+                ,"Note: this can miss several things that a whole-module core lint will find."
+                ,"For instance, running this on the RHS of a binding, the type of the RHS will"
+                ,"not be checked against the type of the binding. Running on the whole let expression"
+                ,"will catch that however."] .+ Deep .+ Debug .+ Query
+         , external "lintProg" (promoteProgT lintProgramT :: TranslateH Core String)
+                ["Runs GHC's Core Lint, which typechecks the top level list of bindings."] .+ Deep .+ Debug .+ Query
+         , external "lintModule" (promoteModGutsT lintModuleT :: TranslateH Core String)
+                ["Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
          ]
 
 ------------------------------------------------------------------------
@@ -470,3 +486,28 @@ castElimination = do
                           co' = optCoercion (getCvSubst subst) co
 -}
 
+-- | Run the Core Lint typechecker.
+-- Fails on errors, with error messages.
+-- Succeeds returning warnings.
+lintModuleT :: TranslateH ModGuts String
+lintModuleT = arr (bindsToProg . mg_binds) >>> lintProgramT
+
+lintProgramT :: TranslateH CoreProg String
+lintProgramT = do
+    bnds <- arr progToBinds
+    dflags <- constT getDynFlags
+    let (warns, errs) = CoreLint.lintCoreBindings bnds
+        dumpSDocs endMsg = Bag.foldBag (\d r -> d ++ ('\n':r)) (showSDoc dflags) endMsg
+    if Bag.isEmptyBag errs 
+        then return $ dumpSDocs "Core Lint Passed" warns
+        else fail   $ dumpSDocs "Core Lint Failed" errs
+    
+-- | Note: this can miss several things that a whole-module core lint will find.
+-- For instance, running this on the RHS of a binding, the type of the RHS will
+-- not be checked against the type of the binding. Running on the whole let expression
+-- will catch that however.
+lintExprT :: TranslateH CoreExpr String
+lintExprT = translate $ \ c e -> do
+    dflags <- getDynFlags
+    maybe (return "Core Lint Passed") (fail . showSDoc dflags) 
+                 $ CoreLint.lintUnfolding noSrcLoc (keys $ hermitBindings c) e

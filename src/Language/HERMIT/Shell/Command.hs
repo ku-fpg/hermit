@@ -23,6 +23,7 @@ import Data.Dynamic
 import qualified Data.Map as M
 import Data.Maybe
 
+import Language.HERMIT.Context
 import Language.HERMIT.Core
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
@@ -33,8 +34,9 @@ import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.Parser
 import Language.HERMIT.PrettyPrinter
 
-import Language.HERMIT.Primitive.Navigation
+import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Inline
+import Language.HERMIT.Primitive.Navigation
 
 import System.Console.ANSI
 import System.IO
@@ -187,6 +189,11 @@ shell_externals = map (.+ Shell)
        [ "goto a specific step in the derivation" ]                             .+ VersionControl
    , external "goto"            (SessionStateEffect . navigation . GotoTag)
        [ "goto a named step in the derivation" ]
+   , external "set-auto-corelint" (\ bStr -> SessionStateEffect $ \ _ st -> case reads bStr of
+                                                                                [(b,"")] -> return $ st { cl_corelint = b }
+                                                                                _        -> return st )
+       [ "set-auto-corelint <True|False>; False by default" 
+       , "run core lint type-checker after every rewrite, reverting on failure" ]
    , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st ->
        case M.lookup pp pp_dictionary of
          Nothing -> do
@@ -296,6 +303,7 @@ data SessionState = SessionState
         , cl_nav         :: Bool                                       -- ^ keyboard input the the nav panel
         , cl_loading     :: Bool                                       -- ^ if loading a file
         , cl_tick        :: TVar (M.Map String Int)                    -- ^ The list of ticked messages
+        , cl_corelint    :: Bool                                       -- ^ if true, run core lint on module after each rewrite
         }
 
 -------------------------------------------------------------------------------
@@ -365,7 +373,7 @@ commandLine filesToLoad behavior modGuts = do
 
     flip scopedKernel modGuts $ \ skernel sast -> do
 
-        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False var
+        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False var False
             shellState = CommandLineState [] [] dict skernel sast sessionState
 
         completionMVar <- newMVar shellState
@@ -439,9 +447,16 @@ evalExpr expr = do
 performAstEffect :: MonadIO m => AstEffect -> ExprH -> CLM m ()
 performAstEffect (Apply rr) expr = do
     st <- get
-    iokm2clm' "Rewrite failed: "
-              (\ ast' -> put (newSAST expr ast' st) >> showFocus)
-              (applyS (cl_kernel st) (cl_cursor $ cl_session st) rr (cl_kernel_env $ cl_session st))
+    ast' <- iokm2clm "Rewrite failed: " $ applyS (cl_kernel st) (cl_cursor $ cl_session st) rr (cl_kernel_env $ cl_session st)
+
+    let commit = put (newSAST expr ast' st) >> showFocus
+        scopeBreakingLintT = contextonlyT (return . hermitModGuts) >>> lintModuleT
+
+    if cl_corelint (cl_session st)
+        then liftIO (queryS (cl_kernel st) ast' scopeBreakingLintT (cl_kernel_env $ cl_session st))
+             >>= runKureM (\ warns -> putStrToConsole warns >> commit)
+                          (\ errs -> liftIO (deleteS (cl_kernel st) ast') >> fail errs)
+        else commit
 
 performAstEffect (Pathfinder t) expr = do
     st <- get
