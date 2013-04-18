@@ -189,9 +189,10 @@ shell_externals = map (.+ Shell)
        [ "goto a specific step in the derivation" ]                             .+ VersionControl
    , external "goto"            (SessionStateEffect . navigation . GotoTag)
        [ "goto a named step in the derivation" ]
-   , external "set-auto-corelint" (\ bStr -> SessionStateEffect $ \ _ st -> case reads bStr of
-                                                                                [(b,"")] -> return $ st { cl_corelint = b }
-                                                                                _        -> return st )
+   , external "set-auto-corelint" (\ bStr -> SessionStateEffect $ \ _ st -> 
+        case reads bStr of
+            [(b,"")] -> return $ st { cl_corelint = b }
+            _        -> return st )
        [ "set-auto-corelint <True|False>; False by default" 
        , "run core lint type-checker after every rewrite, reverting on failure" ]
    , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st ->
@@ -210,12 +211,10 @@ shell_externals = map (.+ Shell)
        [ "dump <filename> <pretty-printer> <renderer> <width>"]
    , external "set-width"   (\ n -> SessionStateEffect $ \ _ st -> return $ st { cl_width = n })
        ["set the width of the screen"]
-   , external "set-pp-expr-type"
-                (\ str -> SessionStateEffect $ \ _ st -> case reads str :: [(ShowOption,String)] of
-                                                 [(opt,"")] -> return $ st { cl_pretty_opts =
-                                                                                 (cl_pretty_opts st) { po_exprTypes = opt }
-                                                                           }
-                                                 _ -> return st)
+   , external "set-pp-expr-type" (\ str -> SessionStateEffect $ \ _ st -> 
+        case reads str :: [(ShowOption,String)] of
+            [(opt,"")] -> return $ st { cl_pretty_opts = (cl_pretty_opts st) { po_exprTypes = opt } }
+            _          -> return st)
        ["set how to show expression-level types (Show|Abstact|Omit)"]
    , external "{"   BeginScope
        ["push current lens onto a stack"]       -- tag as internal
