@@ -1,4 +1,5 @@
 {
+{-# LANGUAGE CPP #-}
 module Language.HERMIT.ParserCore (parseCore) where
 
 import Control.Monad.Reader
@@ -70,12 +71,21 @@ arg : '(' expr ')'     { $2 }
     | intlit           { $1 }
     | strlit           { $1 }
 
-intlit : INTEGER       { mkIntExpr $1 } -- mkIntLit makes a primitive Int#
+intlit : INTEGER       {% mkIntExpr' $1 } -- mkIntLit makes a primitive Int#
 
 strlit : STRING        {% lift $ mkStringExpr $1 }
 
 var : NAME             {% lookupName $1 $ \v -> if isId v then Var v else Type (mkTyVarTy v) }
 {
+
+mkIntExpr' :: Integer -> CoreParseM CoreExpr
+#if __GLASGOW_HASKELL__ > 706
+mkIntExpr' i = do
+    dflags <- lift getDynFlags
+    return $ mkIntExpr dflags i
+#else
+mkIntExpr' i = return $ mkIntExpr i
+#endif
 
 lookupName :: String -> (Id -> CoreExpr) -> CoreParseM CoreExpr
 lookupName nm k = do

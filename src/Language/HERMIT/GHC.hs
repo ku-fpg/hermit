@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Language.HERMIT.GHC
         ( -- * GHC Imports
         -- | Things that have been copied from GHC, or imported directly, for various reasons.
@@ -28,7 +29,9 @@ import TypeRep (Type(..))
 import Panic (GhcException(ProgramError), throwGhcException)
 import CoreArity
 
+#if __GLASGOW_HASKELL__ <= 706
 import Data.Maybe (isJust)
+#endif
 import qualified Language.Haskell.TH as TH
 
 --------------------------------------------------------------------------
@@ -109,7 +112,12 @@ ppIdInfo v info
     has_caf_info = not (mayHaveCafRefs caf_info)
 
     str_info = strictnessInfo info
-    has_strictness = isJust str_info
+    has_strictness = 
+#if __GLASGOW_HASKELL__ > 706
+        True
+#else
+        isJust str_info
+#endif
 
     unf_info = unfoldingInfo info
     has_unf = hasSomeUnfolding unf_info

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Language.HERMIT.Primitive.GHC
        ( -- * GHC-based Transformations
          -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
@@ -320,7 +321,12 @@ rulesToRewriteH rs = translate $ \ c e -> do
         _rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
     -- Finally, we try match the rules
     -- trace (showSDoc (ppr fn GhcPlugins.<+> ppr args $$ ppr rs)) $
+#if __GLASGOW_HASKELL__ > 706
+    dflags <- getDynFlags
+    case lookupRule dflags (const True) (const NoUnfolding) in_scope fn args [r | r <- rs, ru_fn r == idName fn] of
+#else
     case lookupRule (const True) (const NoUnfolding) in_scope fn args [r | r <- rs, ru_fn r == idName fn] of
+#endif
         Nothing         -> fail "rule not matched"
         Just (r, expr)  -> do
             let e' = mkApps expr (drop (ruleArity r) args)
