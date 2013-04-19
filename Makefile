@@ -6,4 +6,6 @@ clean:
 
 FILE="src/Language/HERMIT/Shell/Command.hs"
 ghci:
+	happy src/Language/HERMIT/Parser.y
+	happy src/Language/HERMIT/ParserCore.y
 	ghc --interactive -Wall -package ghc -isrc/ ${FILE}
