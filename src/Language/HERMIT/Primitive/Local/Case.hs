@@ -164,12 +164,15 @@ caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
     Nothing -> fail "head of scrutinee is not a data constructor."
     Just (dc, args) ->
       case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
-        [(bs,e')] -> let (tyArgs, valArgs) = span isTypeArg args
-                         tyBndrs = takeWhile isTyVar bs -- it is possible the pattern constructor binds a type
-                                                        -- if the constructor is existentially quantified
-                         existentials = reverse $ take (length tyBndrs) $ reverse tyArgs
-                      in return $ nestedLets e' $ (binder, s) : zip bs (existentials ++ valArgs)
-        []   -> fail "no matching alternative."
+        [(bs,rhs)] -> let (tyArgs, valArgs) = span isTypeArg args
+                          tyBndrs           = takeWhile isTyVar bs -- it is possible the pattern constructor binds a type
+                                                                   -- if the constructor is existentially quantified
+                          existentials      = reverse $ take (length tyBndrs) $ reverse tyArgs
+                     in return $ nestedLets rhs $ (binder, s) : zip bs (existentials ++ valArgs)
+        []   -> case alts of -- DEFAULT is always first in the list.
+                  (DEFAULT, bs, rhs) : _ ->  do guardMsg (null bs) "Default case alternative has bound variables, I don't understand how this happened.  Report this as a bug."
+                                                return $ nestedLets rhs [(binder,s)]
+                  _                      ->  fail "no matching alternative."
         _    -> fail "more than one matching alternative."
 
 -- | If expression is a constructor application, return the relevant bits.
