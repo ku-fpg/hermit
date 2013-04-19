@@ -150,7 +150,7 @@ caseReduceLiteral =
                        [rhs] -> return rhs
                        []    -> defaultRHS alts
                        _     -> fail "more than one matching alternative."
-                return $ Let (NonRec binder (Lit l)) e
+                return $ mkCoreLet (NonRec binder (Lit l)) e
 
 -- | Case-of-known-constructor rewrite.
 caseReduceDatacon :: RewriteH CoreExpr
@@ -166,15 +166,15 @@ caseReduceDatacon =
                                                 tyBndrs           = takeWhile isTyVar bs -- it is possible the pattern constructor binds a type
                                                                                          -- if the constructor is existentially quantified
                                                 existentials      = reverse $ take (length tyBndrs) $ reverse tyArgs
-                                             in return $ nestedLets rhs $ zip bs (existentials ++ valArgs) -- TODO: currently this can capture free variables with the nested lets, needs fixing.
+                                             in return $ flip mkCoreLets rhs $ zipWith NonRec bs (existentials ++ valArgs) -- TODO: currently this can capture free variables with the nested lets, needs fixing.
                               []   -> defaultRHS alts
                               _    -> fail "more than one matching alternative."
-                       return $ Let (NonRec binder s) e
+                       return $ mkCoreLet (NonRec binder s) e
 
 defaultRHS :: Monad m => [CoreAlt] -> m CoreExpr
-defaultRHS alts = case [ rhs | (DEFAULT, _, rhs) <- alts ] of
-                    [rhs]  -> return rhs
-                    _      -> fail "no matching alternative."
+defaultRHS ((DEFAULT, _, rhs) : _) = return rhs
+defaultRHS _                       = fail "no matching alternative."
+
 
 -- | If expression is a constructor application, return the relevant bits.
 isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])
@@ -183,10 +183,6 @@ isDataCon expr = case fn of
                                 return (dc, args)
                     _ -> fail "not a var"
     where (fn, args) = collectArgs expr
-
--- | We don't want to use the recursive let here, so nest a bunch of non-recursive lets
-nestedLets :: CoreExpr -> [(Id, CoreExpr)] -> CoreExpr
-nestedLets = foldr (\(b,rhs) -> Let $ NonRec b rhs)
 
 -- | Case split a free variable in an expression:
 --
