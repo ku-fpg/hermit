@@ -148,7 +148,7 @@ isIdChar c = isIdFirstChar c || c `elem` "-'"
 
 -- | Chars that are valid in infix operators.
 isInfixId :: Char -> Bool
-isInfixId c = c `elem` "+*/._-:<>"
+isInfixId c = c `elem` "!£$^&*-+=@#<>?/.:|#" -- I removed '_' as I don't think it's a valid infix-operator symbol.
 
 -- | Use ghci Parser.hs to run this test function.
 test = do
