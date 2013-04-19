@@ -30,7 +30,6 @@ import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Inline
 import Language.HERMIT.Primitive.AlphaConversion
-import Language.HERMIT.Primitive.Local.Let (letElim)
 
 import qualified Language.Haskell.TH as TH
 
@@ -142,38 +141,40 @@ caseReduce = caseReduceDatacon <+ caseReduceLiteral
 
 -- NB: LitAlt cases don't do evaluation
 caseReduceLiteral :: RewriteH CoreExpr
-caseReduceLiteral = go >>> tryR letElim
-    where go = prefixFailMsg "Case reduction failed: " $
-               withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $ do
-                    Case (Lit l) binder _ alts <- idR
-                    guardMsg (not (litIsLifted l)) "cannot case reduce lifted literals" -- see Trac #5603
-                    e <- case [ rhs | (LitAlt l', _, rhs) <- alts, l == l' ] of
-                            [e'] -> return e'
-                            []   -> case [ rhs | (DEFAULT, _, rhs) <- alts ] of
-                                        [e''] -> return e''
-                                        _     -> fail "no matching alternative."
-                            _    -> fail "more than one matching alternative."
-                    return $ Let (NonRec binder (Lit l)) e
+caseReduceLiteral =
+             prefixFailMsg "Case reduction failed: " $
+             withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $
+             do Case (Lit l) binder _ alts <- idR
+                guardMsg (not (litIsLifted l)) "cannot case-reduce lifted literals" -- see Trac #5603
+                e <- case [ rhs | (LitAlt l', _, rhs) <- alts, l == l' ] of
+                       [rhs] -> return rhs
+                       []    -> defaultRHS alts
+                       _     -> fail "more than one matching alternative."
+                return $ Let (NonRec binder (Lit l)) e
 
 -- | Case-of-known-constructor rewrite.
 caseReduceDatacon :: RewriteH CoreExpr
-caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
-                    withPatFailMsg (wrongExprForm "Case e v t alts") $ do
-  Case s binder _ alts <- idR
-  case isDataCon s of
-    Nothing -> fail "head of scrutinee is not a data constructor."
-    Just (dc, args) ->
-      case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
-        [(bs,rhs)] -> let (tyArgs, valArgs) = span isTypeArg args
-                          tyBndrs           = takeWhile isTyVar bs -- it is possible the pattern constructor binds a type
-                                                                   -- if the constructor is existentially quantified
-                          existentials      = reverse $ take (length tyBndrs) $ reverse tyArgs
-                     in return $ nestedLets rhs $ (binder, s) : zip bs (existentials ++ valArgs)
-        []   -> case alts of -- DEFAULT is always first in the list.
-                  (DEFAULT, bs, rhs) : _ ->  do guardMsg (null bs) "Default case alternative has bound variables, I don't understand how this happened.  Report this as a bug."
-                                                return $ nestedLets rhs [(binder,s)]
-                  _                      ->  fail "no matching alternative."
-        _    -> fail "more than one matching alternative."
+caseReduceDatacon =
+             prefixFailMsg "Case reduction failed: " $
+             withPatFailMsg (wrongExprForm "Case e v t alts") $
+             do Case s binder _ alts <- idR
+                case isDataCon s of
+                  Nothing -> fail "head of scrutinee is not a data constructor."
+                  Just (dc, args) ->
+                    do e <- case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
+                              [(bs,rhs)] -> let (tyArgs, valArgs) = span isTypeArg args
+                                                tyBndrs           = takeWhile isTyVar bs -- it is possible the pattern constructor binds a type
+                                                                                         -- if the constructor is existentially quantified
+                                                existentials      = reverse $ take (length tyBndrs) $ reverse tyArgs
+                                             in return $ nestedLets rhs $ zip bs (existentials ++ valArgs) -- TODO: currently this can capture free variables with the nested lets, needs fixing.
+                              []   -> defaultRHS alts
+                              _    -> fail "more than one matching alternative."
+                       return $ Let (NonRec binder s) e
+
+defaultRHS :: Monad m => [CoreAlt] -> m CoreExpr
+defaultRHS alts = case [ rhs | (DEFAULT, _, rhs) <- alts ] of
+                    [rhs]  -> return rhs
+                    _      -> fail "no matching alternative."
 
 -- | If expression is a constructor application, return the relevant bits.
 isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])
