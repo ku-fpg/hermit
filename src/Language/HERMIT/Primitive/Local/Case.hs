@@ -149,11 +149,11 @@ caseReduceLiteral = go >>> tryR letElim
                     guardMsg (not (litIsLifted l)) "cannot case reduce lifted literals" -- see Trac #5603
                     e <- case [ rhs | (LitAlt l', _, rhs) <- alts, l == l' ] of
                             [e'] -> return e'
-                            []   -> case [ rhs | (DEFAULT, _, rhs) <- alts ] of
-                                        [e''] -> return e''
-                                        _     -> fail "no matching alternative."
+                            []   -> case alts of -- DEFAULT is always first in the list.
+                                        (DEFAULT,_,rhs) : _ -> return rhs
+                                        _                   -> fail "no matching alternative."
                             _    -> fail "more than one matching alternative."
-                    return $ Let (NonRec binder (Lit l)) e
+                    return $ mkCoreLets [NonRec binder (Lit l)] e
 
 -- | Case-of-known-constructor rewrite.
 caseReduceDatacon :: RewriteH CoreExpr
@@ -168,10 +168,10 @@ caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
                           tyBndrs           = takeWhile isTyVar bs -- it is possible the pattern constructor binds a type
                                                                    -- if the constructor is existentially quantified
                           existentials      = reverse $ take (length tyBndrs) $ reverse tyArgs
-                     in return $ nestedLets rhs $ (binder, s) : zip bs (existentials ++ valArgs)
+                     in return $ flip mkCoreLets rhs $ (NonRec binder s) : zipWith NonRec bs (existentials ++ valArgs)
         []   -> case alts of -- DEFAULT is always first in the list.
                   (DEFAULT, bs, rhs) : _ ->  do guardMsg (null bs) "Default case alternative has bound variables, I don't understand how this happened.  Report this as a bug."
-                                                return $ nestedLets rhs [(binder,s)]
+                                                return $ mkCoreLets [NonRec binder s] rhs
                   _                      ->  fail "no matching alternative."
         _    -> fail "more than one matching alternative."
 
@@ -182,10 +182,6 @@ isDataCon expr = case fn of
                                 return (dc, args)
                     _ -> fail "not a var"
     where (fn, args) = collectArgs expr
-
--- | We don't want to use the recursive let here, so nest a bunch of non-recursive lets
-nestedLets :: CoreExpr -> [(Id, CoreExpr)] -> CoreExpr
-nestedLets = foldr (\(b,rhs) -> Let $ NonRec b rhs)
 
 -- | Case split a free variable in an expression:
 --
