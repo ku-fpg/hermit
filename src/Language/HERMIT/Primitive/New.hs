@@ -58,9 +58,9 @@ externals = map ((.+ Experiment) . (.+ TODO))
 
 unsafeReplaceStash :: String -> RewriteH CoreExpr
 unsafeReplaceStash label = prefixFailMsg "unsafe-replace failed: " $
-    translate $ \ c e -> do
-        Def i rhs <- lookupDef label
-        return rhs
+    contextfreeT $ \ e -> do
+        Def _ rhs <- lookupDef label
+        if eqType (exprType e) (exprType rhs) then return rhs else fail "expression types differ."
 
 -- TODO: what about Type constructors around TyVars?
 isVar :: TH.Name -> TranslateH CoreExpr ()
