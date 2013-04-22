@@ -19,6 +19,7 @@ import Language.HERMIT.ParserCore
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Inline
+import Language.HERMIT.Primitive.Unfold
 -- import Language.HERMIT.Primitive.Debug
 
 import qualified Language.Haskell.TH as TH
@@ -28,16 +29,9 @@ externals ::  [External]
 externals = map ((.+ Experiment) . (.+ TODO))
          [ external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
                 [ "determines if a rewrite could be successfully applied" ]
-         , external "cleanup-unfold" (promoteExprR cleanupUnfold :: RewriteH Core)
-                [ "clean up immeduate nested fully-applied lambdas, from the bottom up"]
-         , external "unfold" (promoteExprR . unfold :: TH.Name -> RewriteH Core)
-                [ "inline a definition, and apply the arguments; tranditional unfold"]
          , external "push" (promoteExprR . push :: TH.Name -> RewriteH Core)
                 [ "push a function <f> into argument."
                 , "Unsafe if f is not strict." ] .+ PreCondition
-                        -- TODO: does not work with rules with no arguments
-         , external "unfold-rule" ((\ nm -> promoteExprR (rule nm >>> cleanupUnfold)) :: String -> RewriteH Core)
-                [ "apply a named GHC rule" ]
          , external "var" (promoteExprT . isVar :: TH.Name -> TranslateH Core ())
                  [ "var '<v> returns successfully for variable v, and fails otherwise.",
                    "Useful in combination with \"when\", as in: when (var v) r" ] .+ Predicate
@@ -76,7 +70,7 @@ isVar nm = varT (cmpTHName2Var nm) >>= guardM
 
 simplifyR :: RewriteH Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
-            innermostR (promoteExprR (unfold (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ letElim))
+            innermostR (promoteExprR (unfoldR (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ letElim))
 
 
 collectLets :: CoreExpr -> ([(Var, CoreExpr)],CoreExpr)
@@ -173,27 +167,6 @@ testQuery r = f <$> testM r
     f False = "Rewrite would fail."
 
 ------------------------------------------------------------------------------------------------------
-
--- | cleanupUnfold cleans a unfold operation
---  (for example, an inline or rule application)
--- It is used at the level of the top-redex.
-cleanupUnfold :: RewriteH CoreExpr
-cleanupUnfold = betaReducePlus >>> safeLetSubstPlusR
-
-unfold :: TH.Name -> RewriteH CoreExpr
-unfold nm = translate $ \ env e0 -> do
-        let n = appCount e0
-        let sub :: RewriteH Core
-            sub = pathR (replicate n 0) (promoteR $ inlineName nm)
-
-            sub2 :: RewriteH CoreExpr
-            sub2 = extractR sub
-
-        e1 <- apply sub2 env e0
-
-        -- only cleanup if 1 or more arguments
-        if n > 0 then apply cleanupUnfold env e1
-                 else return e1
 
 -- match in a top-down manner,
 withUnfold :: RewriteH Core -> RewriteH Core

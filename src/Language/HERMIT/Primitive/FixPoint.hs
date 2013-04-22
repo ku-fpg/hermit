@@ -26,6 +26,7 @@ import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Navigation
 import Language.HERMIT.Primitive.New -- TODO: Sort out heirarchy
+import Language.HERMIT.Primitive.Unfold
 
 import qualified Language.Haskell.TH as TH
 
@@ -277,7 +278,7 @@ workerWrapperSplitR wrap unwrap =
                            >>> letAllR idR ( forewardT (workerWrapperFacBR wrap unwrap)
                                                >>> appAllR idR (letIntro w)
                                                >>> letFloatArg
-                                               >>> letNonRecAllR (unfold fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
+                                               >>> letNonRecAllR (unfoldR fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
                                                >>> letSubstR
                                                >>> letFloatArg
                                            )

@@ -23,7 +23,7 @@ import Language.HERMIT.External
 import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.GHC hiding (externals)
-import Language.HERMIT.Primitive.Unfold hiding (externals)
+import Language.HERMIT.Primitive.Inline hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 

@@ -1,23 +1,27 @@
-{-# LANGUAGE TupleSections #-}
 module Language.HERMIT.Primitive.Unfold
     ( externals
-    , stashDef
-    , stashApply
-    , getUnfolding
+    , cleanupUnfoldR
+    , rememberR
+    , unfoldR
+    , unfoldStashR
     ) where
 
 import GhcPlugins hiding (empty)
-import Control.Monad
 import Control.Applicative
+import Control.Arrow
+import Control.Monad
 
-import Language.HERMIT.Primitive.GHC hiding (externals)
+import qualified Language.Haskell.TH as TH
+
 import Language.HERMIT.Primitive.Common
+import Language.HERMIT.Primitive.GHC hiding (externals)
+import Language.HERMIT.Primitive.Inline hiding (externals)
+import Language.HERMIT.Primitive.Local hiding (externals)
 
 import Language.HERMIT.Core
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.External
-import Language.HERMIT.Context
 import Language.HERMIT.GHC
 
 import Prelude hiding (exp)
@@ -26,38 +30,65 @@ import Prelude hiding (exp)
 
 externals :: [External]
 externals =
-         [ external "remember" stashDef
-                ["Remember the current binding, allowing it to be folded/unfolded in the future."]
-         , external "unfold" (promoteExprR . stashApply)
-                ["Unfold a remembered definition."]
-         ]
+    [ external "cleanup-unfold" (promoteExprR cleanupUnfoldR :: RewriteH Core)
+        [ "Clean up immediately nested fully-applied lambdas, from the bottom up"] .+ Deep
+    , external "remember" rememberR
+        ["Remember the current binding, allowing it to be folded/unfolded in the future."] .+ Context
+    , external "unfold" (promoteExprR . unfoldStashR)
+        ["Unfold a remembered definition."] .+ Deep .+ Context
+    , external "unfold" (promoteExprR . unfoldR :: TH.Name -> RewriteH Core)
+        [ "Inline a definition, and apply the arguments; traditional unfold"] .+ Deep .+ Context
+    , external "unfold-rule" ((\ nm -> promoteExprR (rule nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
+        [ "Apply a named GHC rule" ] .+ Deep .+ Context -- TODO: does not work with rules with no arguments
+    ]
 
 ------------------------------------------------------------------------
+
+-- | cleanupUnfoldR cleans a unfold operation
+--  (for example, an inline or rule application)
+-- It is used at the level of the top-redex.
+cleanupUnfoldR :: RewriteH CoreExpr
+cleanupUnfoldR = betaReducePlus >>> safeLetSubstPlusR
+
+unfoldR :: TH.Name -> RewriteH CoreExpr
+unfoldR nm = translate $ \ env e0 -> do
+        let n = appCount e0
+        let sub :: RewriteH Core
+            sub = pathR (replicate n 0) (promoteR $ inlineName nm)
+
+            sub2 :: RewriteH CoreExpr
+            sub2 = extractR sub
+
+        e1 <- apply sub2 env e0
+
+        -- only cleanup if 1 or more arguments
+        if n > 0 then apply cleanupUnfoldR env e1
+                 else return e1
 
 -- NOTE: Using a Rewrite because of the way the Kernel is set up.
 --       This is a temperary hack until we work out the best way to structure the Kernel.
 
 -- | Stash a binding with a name for later use.
 -- Allows us to look at past definitions.
-stashDef :: String -> RewriteH Core
-stashDef label = sideEffectR $ \ _ core ->
+rememberR :: String -> RewriteH Core
+rememberR label = sideEffectR $ \ _ core ->
   case core of
     DefCore def           -> saveDef label def
     BindCore (NonRec i e) -> saveDef label (Def i e)
-    _                     -> fail "stashDef: not a binding"
+    _                     -> fail "remember: not a binding"
 
 -- | Stash a binding with a name for later use.
 -- Allows us to look at past definitions.
--- stashDef :: String -> TranslateH Core ()
--- stashDef label = contextfreeT $ \ core ->
+-- rememberR :: String -> TranslateH Core ()
+-- rememberR label = contextfreeT $ \ core ->
 --     case core of
 --         DefCore def -> saveDef label def
 --         BindCore (NonRec i e) -> saveDef label (Def i e)
---         _           -> fail "stashDef: not a binding"
+--         _           -> fail "remember: not a binding"
 
 -- | Apply a stashed definition (like inline, but looks in stash instead of context).
-stashApply :: String -> RewriteH CoreExpr
-stashApply label = setFailMsg "Inlining stashed definition failed: " $
+unfoldStashR :: String -> RewriteH CoreExpr
+unfoldStashR label = setFailMsg "Inlining stashed definition failed: " $
                    withPatFailMsg (wrongExprForm "Var v") $
                    do (c, Var v) <- exposeT
                       constT $ do Def i rhs <- lookupDef label
@@ -67,35 +98,3 @@ stashApply label = setFailMsg "Inlining stashed definition failed: " $
                                              (fail "some free variables in stashed definition are no longer in scope.")
                                     else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v
 
-getUnfolding :: Monad m
-             => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
-             -> Bool -- ^ Only succeed if this variable is a case binder.
-             -> Id -> HermitC -> m (CoreExpr, Int)
-getUnfolding scrutinee caseBinderOnly i c =
-    case lookupHermitBinding i c of
-        Nothing -> case unfoldingInfo (idInfo i) of
-                     CoreUnfolding { uf_tmpl = uft } -> if caseBinderOnly then fail "not a case binder" else return (uft, 0)
-                     _                               -> fail $ "cannot find unfolding in Env or IdInfo."
-        Just (LAM {}) -> fail $ "variable is lambda-bound."
-        Just (BIND depth _ e') -> if caseBinderOnly then fail "not a case binder." else return (e', depth)
-        Just (CASE depth s coreAlt) -> return $ if scrutinee
-                                                 then (s, depth)
-                                                 else let tys = tyConAppArgs (idType i)
-                                                       in either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
-
--- | Convert lhs of case alternative to a constructor application expression,
---   or a default expression in the case of the DEFAULT alternative.
---   Accepts a list of types to apply to the constructor before the value args.
---
--- > data T a b = C a b Int
---
--- Pseudocode:
---
--- > alt2Exp (...) [a,b] (C, [x,y,z]) ==> C a b (x::a) (y::b) (z::Int)
---
--- The 'Either' denotes whether we picked the default (scrutinee) or built an expression.
--- This matters for the depth check.
-alt2Exp :: CoreExpr -> [Type] -> (AltCon,[Id]) -> Either CoreExpr CoreExpr
-alt2Exp d _   (DEFAULT   , _ ) = Left d
-alt2Exp _ _   (LitAlt l  , _ ) = Right $ Lit l
-alt2Exp _ tys (DataAlt dc, as) = Right $ mkCoreConApps dc (map Type tys ++ map Var as)

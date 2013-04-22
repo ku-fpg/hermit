@@ -1,6 +1,8 @@
+{-# LANGUAGE TupleSections #-}
 module Language.HERMIT.Primitive.Inline
          ( -- * Inlining
            externals
+         , getUnfolding
          , inline
          , inlineName
          , inlineScrutinee
@@ -22,7 +24,6 @@ import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
-import Language.HERMIT.Primitive.Unfold hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 
@@ -92,6 +93,39 @@ ensureDepth d = do
                                                        else (i,0)
     -- traceR $ "greater values (" ++ show d ++ "): " ++ show (filter ((> d) . snd) ds)
     return $ all (toSnd (<= d)) ds
+
+getUnfolding :: Monad m
+             => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
+             -> Bool -- ^ Only succeed if this variable is a case binder.
+             -> Id -> HermitC -> m (CoreExpr, Int)
+getUnfolding scrutinee caseBinderOnly i c =
+    case lookupHermitBinding i c of
+        Nothing -> case unfoldingInfo (idInfo i) of
+                     CoreUnfolding { uf_tmpl = uft } -> if caseBinderOnly then fail "not a case binder" else return (uft, 0)
+                     _                               -> fail $ "cannot find unfolding in Env or IdInfo."
+        Just (LAM {}) -> fail $ "variable is lambda-bound."
+        Just (BIND depth _ e') -> if caseBinderOnly then fail "not a case binder." else return (e', depth)
+        Just (CASE depth s coreAlt) -> return $ if scrutinee
+                                                 then (s, depth)
+                                                 else let tys = tyConAppArgs (idType i)
+                                                       in either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
+
+-- | Convert lhs of case alternative to a constructor application expression,
+--   or a default expression in the case of the DEFAULT alternative.
+--   Accepts a list of types to apply to the constructor before the value args.
+--
+-- > data T a b = C a b Int
+--
+-- Pseudocode:
+--
+-- > alt2Exp (...) [a,b] (C, [x,y,z]) ==> C a b (x::a) (y::b) (z::Int)
+--
+-- The 'Either' denotes whether we picked the default (scrutinee) or built an expression.
+-- This matters for the depth check.
+alt2Exp :: CoreExpr -> [Type] -> (AltCon,[Id]) -> Either CoreExpr CoreExpr
+alt2Exp d _   (DEFAULT   , _ ) = Left d
+alt2Exp _ _   (LitAlt l  , _ ) = Right $ Lit l
+alt2Exp _ tys (DataAlt dc, as) = Right $ mkCoreConApps dc (map Type tys ++ map Var as)
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: TranslateH Core [String]
