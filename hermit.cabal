@@ -127,7 +127,6 @@ extra-source-files:
 Library
   ghc-options: -Wall -fno-warn-orphans
   Build-Depends: base >= 4 && < 5,
-                 aeson >= 0.6.0.2,
                  ansi-terminal >= 0.5.5,
                  array,
                  containers >= 0.5.0.0,
@@ -138,8 +137,7 @@ Library
                  marked-pretty >= 0.1,
                  mtl >= 2.1.2,
                  stm >= 2.4,
-                 template-haskell >= 2.8.0.0,
-                 text >= 0.11.2.3
+                 template-haskell >= 2.8.0.0
 
   default-language: Haskell2010
 
@@ -178,7 +176,6 @@ Library
        Language.HERMIT.PrettyPrinter.AST
        Language.HERMIT.PrettyPrinter.Clean
        Language.HERMIT.PrettyPrinter.GHC
-       Language.HERMIT.PrettyPrinter.JSON
 
        Language.HERMIT.Shell.Command
 
