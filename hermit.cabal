@@ -185,6 +185,8 @@ Library
 
        Language.HERMIT.Primitive.Common
 
+       Paths_hermit
+
   Hs-Source-Dirs: src
 
 Executable hermit

@@ -8,14 +8,8 @@ import System.Environment
 import System.Process
 import System.Exit
 
-import Paths_hermit as P
-import Data.Version
-
 import Data.List (isPrefixOf)
 import System.Directory (doesFileExist)
-
-hermit_version :: String
-hermit_version = "HERMIT v" ++ showVersion P.version
 
 usage :: IO ()
 usage = putStrLn $ unlines
