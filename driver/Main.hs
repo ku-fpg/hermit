@@ -2,6 +2,8 @@
 
 module Main where
 
+import HERMIT.Driver
+
 import System.Environment
 import System.Process
 import System.Exit
@@ -67,23 +69,13 @@ main3 file_nm args ghc_args = main4 file_nm hermit_args (sepMods margs) ghc_args
 main4 file_nm hermit_args []          ghc_args = main4 file_nm hermit_args [("main:Main", [])] ghc_args
 main4 file_nm hermit_args module_args ghc_args = do
         putStrLn $ "[starting " ++ hermit_version ++ " on " ++ file_nm ++ "]"
-        let cmds =
-                  [ file_nm
-                  , "-fforce-recomp"
-                  , "-O2"
-                  , "-dcore-lint"
-                  , "-fsimple-list-literals"
-                  , "-fexpose-all-unfoldings"
---                  , "-v0"
-                  , "-fplugin=HERMIT"
-                  ] ++
-                  [ "-fplugin-opt=HERMIT:" ++ opt
-                  | opt <- hermit_args
-                  ] ++
-                  [ "-fplugin-opt=HERMIT:" ++ m_nm ++ ":" ++ opt
-                  | (m_nm, m_opts) <- module_args
-                  , opt <- "" : m_opts
-                  ] ++ ghc_args
+        let cmds = file_nm : ghcFlags ++
+                    [ "-fplugin=HERMIT" ] ++
+                    [ "-fplugin-opt=HERMIT:" ++ opt | opt <- hermit_args ] ++
+                    [ "-fplugin-opt=HERMIT:" ++ m_nm ++ ":" ++ opt
+                    | (m_nm, m_opts) <- module_args
+                    , opt <- "" : m_opts
+                    ] ++ ghc_args
         putStrLn $ "% ghc " ++ unwords cmds
         (_,_,_,r) <- createProcess $ proc "ghc" cmds
         ex <- waitForProcess r
