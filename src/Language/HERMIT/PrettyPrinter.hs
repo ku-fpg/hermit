@@ -100,6 +100,7 @@ data SpecialSymbol
         = LambdaSymbol
         | TypeOfSymbol
         | RightArrowSymbol
+        | CastSymbol
         | CoercionSymbol
         | TypeSymbol
         | TypeBindSymbol
@@ -117,7 +118,8 @@ instance RenderSpecial Char where
         renderSpecial LambdaSymbol        = '\\'  -- lambda
         renderSpecial TypeOfSymbol        = ':'   -- ::
         renderSpecial RightArrowSymbol    = '>'   -- ->
-        renderSpecial CoercionSymbol      = 'C'   -- <<coercion>>>
+        renderSpecial CastSymbol          = '~'   -- |>
+        renderSpecial CoercionSymbol      = '#'   -- <<coercion>>>
         renderSpecial TypeSymbol          = 'T'   -- <<type>>>
         renderSpecial TypeBindSymbol      = 't'   -- <<type binding>>
         renderSpecial ForallSymbol        = 'F'   -- forall
@@ -129,12 +131,13 @@ instance Monoid ASCII where
         mappend (ASCII xs) (ASCII ys) = ASCII (xs ++ ys)
 
 instance RenderSpecial ASCII where
-        renderSpecial LambdaSymbol        = ASCII "\\"  -- lambda
+        renderSpecial LambdaSymbol        = ASCII "\\"   -- lambda
         renderSpecial TypeOfSymbol        = ASCII "::"   -- ::
         renderSpecial RightArrowSymbol    = ASCII "->"   -- ->
-        renderSpecial CoercionSymbol      = ASCII "~"   -- <<coercion>>>
-        renderSpecial TypeSymbol          = ASCII "*"   -- <<type>>>
-        renderSpecial TypeBindSymbol      = ASCII "*"   -- <<type>>>
+        renderSpecial CastSymbol          = ASCII "|>"   -- |>
+        renderSpecial CoercionSymbol      = ASCII "~#"   -- <<coercion>>>
+        renderSpecial TypeSymbol          = ASCII "*"    -- <<type>>>
+        renderSpecial TypeBindSymbol      = ASCII "*"    -- <<type>>>
         renderSpecial ForallSymbol        = ASCII "\\/"
 
 newtype Unicode = Unicode Char
@@ -143,9 +146,10 @@ instance RenderSpecial Unicode where
         renderSpecial LambdaSymbol        = Unicode '\x03BB'
         renderSpecial TypeOfSymbol        = Unicode '\x2237'     -- called PROPORTION
         renderSpecial RightArrowSymbol    = Unicode '\x2192'
+        renderSpecial CastSymbol          = Unicode '\x25B9'
         renderSpecial CoercionSymbol      = Unicode '\x25A0'
         renderSpecial TypeSymbol          = Unicode '\x25b2'
-        renderSpecial TypeBindSymbol      = Unicode '\x25b2' -- Unicode '\x25B9'
+        renderSpecial TypeBindSymbol      = Unicode '\x25b2'
         renderSpecial ForallSymbol        = Unicode '\x2200'
 
 newtype LaTeX = LaTeX String
@@ -158,9 +162,10 @@ instance RenderSpecial LaTeX where
         renderSpecial LambdaSymbol        = LaTeX "\\ensuremath{\\lambda}"
         renderSpecial TypeOfSymbol        = LaTeX ":\\!:"  -- too wide
         renderSpecial RightArrowSymbol    = LaTeX "\\ensuremath{\\shortrightarrow}"
+        renderSpecial CastSymbol          = LaTeX "\\ensuremath{\\triangleright}"
         renderSpecial CoercionSymbol      = LaTeX "\\ensuremath{\\blacksquare}"
         renderSpecial TypeSymbol          = LaTeX "\\ensuremath{\\blacktriangle}"
-        renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\blacktriangle}" -- LaTeX "\\ensuremath{\\triangleright}"
+        renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\blacktriangle}"
         renderSpecial ForallSymbol        = LaTeX "\\ensuremath{\\forall}"
 
 
@@ -174,13 +179,14 @@ instance RenderSpecial HTML where
         renderSpecial LambdaSymbol        = HTML "&#955;"
         renderSpecial TypeOfSymbol        = HTML "&#8759;"
         renderSpecial RightArrowSymbol    = HTML "&#8594;"
+        renderSpecial CastSymbol          = HTML "&#9657;"
         renderSpecial CoercionSymbol      = HTML "&#9632;"
         renderSpecial TypeSymbol          = HTML "&#9650;"
-        renderSpecial TypeBindSymbol      = HTML "&#9650;" -- HTML "&#9657;"
+        renderSpecial TypeBindSymbol      = HTML "&#9650;"
         renderSpecial ForallSymbol        = HTML "&#8704;"
 
 
-renderSpecialFont :: (RenderSpecial a) => Char -> Maybe a
+renderSpecialFont :: RenderSpecial a => Char -> Maybe a
 renderSpecialFont = fmap renderSpecial . flip M.lookup specialFontMap
 
 specialFontMap :: M.Map Char SpecialSymbol

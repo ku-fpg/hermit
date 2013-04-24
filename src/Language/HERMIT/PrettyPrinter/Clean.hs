@@ -64,6 +64,9 @@ normalExpr (RetExpr e0)    = e0
 normalExpr (RetAtom e0)    = e0
 normalExpr (RetEmpty)      = empty
 
+castSymbol :: DocH
+castSymbol = markColor CoercionColor (specialFont $ char $ renderSpecial CastSymbol)
+
 coercionSymbol :: DocH
 coercionSymbol = markColor CoercionColor (specialFont $ char $ renderSpecial CoercionSymbol)
 
@@ -97,7 +100,7 @@ corePrettyH opts = do
                 | isInfix name = ppParens $ markColor color $ text name
                 | otherwise    = markColor color $ text name
           where name = GHC.occNameString $ GHC.nameOccName $ nm
-                isInfix = all isInfixId -- \ n -> n `elem` "!@#$%^&*-._+=:?/\\<>'")
+                isInfix = all isInfixId
                 color = if useVarColor then VarColor else TypeColor
 
         ppLitTy :: Bool -> TyLit -> DocH
@@ -185,6 +188,7 @@ corePrettyH opts = do
                                                   _             -> case e2 of -- if our only args are types, and they are omitted, don't paren
                                                                     RetEmpty -> e1
                                                                     args -> RetApp (atomExpr e1) (appendArg [] args))
+                   <+ caseT ppCoreExpr (const ppCoreAlt) (\ s b _ alts p -> RetExpr $ attrP p ((keyword "case" <+> s <+> keyword "of" <+> optional (ppBinder b) id) $$ nest 2 (vcat alts)))
                    <+ varT (\ i p -> RetAtom (attrP p $ ppVar i))
                    <+ litT (\ i p -> RetAtom (attrP p $ ppSDoc i))
                    <+ typeT (\ t p -> case po_exprTypes opts of
@@ -194,14 +198,17 @@ corePrettyH opts = do
                                                     _         -> error "not possible!"
                                       Abstract -> RetAtom (attrP p typeSymbol)
                                       Omit     -> RetEmpty)
-                   <+ coercionT (\ co p -> case po_exprTypes opts of
-                                             Show     ->  case ppCoreCoercion co of
-                                                            RetAtom d -> RetAtom $ attrP p d
-                                                            RetExpr d -> RetExpr $ attrP p d
-                                                            _         -> error "not possible!"
-                                             Abstract -> RetAtom (attrP p coercionSymbol)
-                                             Omit     -> RetEmpty)
-                   <+ (ppCoreExpr0 >>^ \ e p -> RetExpr (attrP p e))
+                   <+ coercionT ppCoreCoercion
+                   <+ castT ppCoreExprR (\ e co p -> let e' = case e of
+                                                                RetAtom a -> a
+                                                                _         -> ppParens (normalExpr e)
+                                                      in case ppCoreCoercion co p of
+                                                           RetEmpty    -> e
+                                                           RetAtom pCo -> RetExpr $ attrP p (e' <+> castSymbol <+> pCo)
+                                                           pCo         -> RetExpr $ attrP p (e' <+> castSymbol <+> ppParens (normalExpr pCo))
+                                                     )
+                   <+ tickT ppCoreExpr (\ i e p -> RetExpr $ attrP p (text "Tick" $$ nest 2 (ppSDoc i <+> parens e)))
+
 
         ppCoreType :: Bool -> GHC.Type -> RetExpr
         ppCoreType isTySig = go
@@ -222,18 +229,11 @@ corePrettyH opts = do
 
                   tyText = if isTySig then text else markColor TypeColor . text
 
-        -- TODO: improve this
-        ppCoreCoercion :: GHC.Coercion -> RetExpr
-        ppCoreCoercion co = RetExpr (text "Coercion" $$ nest 2 (ppSDoc co))
-
-        ppCoreExpr0 :: PrettyH GHC.CoreExpr
-        ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b _ty alts ->
-                            (keyword "case" <+> s <+> keyword "of" <+> optional (ppBinder b) id) $$
-                              nest 2 (vcat alts))
-                  <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
-                  <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
-    --              <+ typeT (\ty -> text "Type" <+> nest 2 (ppSDoc ty))
-    --              <+ coercionT (\co -> text "Coercion" $$ nest 2 (ppSDoc co))
+        ppCoreCoercion :: GHC.Coercion -> Path -> RetExpr
+        ppCoreCoercion co p = case po_exprTypes opts of
+                                             Show     -> RetExpr $ attrP p (markColor CoercionColor (nest 2 (ppSDoc co))) -- TODO: improve this
+                                             Abstract -> RetAtom $ attrP p coercionSymbol
+                                             Omit     -> RetEmpty
 
         ppCoreTypeSig :: PrettyH GHC.CoreExpr
         ppCoreTypeSig = arr $ normalExpr . ppCoreType False . GHC.exprType
