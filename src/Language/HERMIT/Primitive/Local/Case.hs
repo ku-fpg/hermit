@@ -137,44 +137,34 @@ caseFloat = setFailMsg "Unsuitable expression for Case floating." $
             caseFloatApp <+ caseFloatArg <+ caseFloatCase <+ caseFloatLet
 
 caseReduce :: RewriteH CoreExpr
-caseReduce = caseReduceDatacon <+ caseReduceLiteral
+caseReduce = setFailMsg "Unsuitable expression for Case reduction." $
+             caseReduceDatacon <+ caseReduceLiteral
 
 -- NB: LitAlt cases don't do evaluation
 caseReduceLiteral :: RewriteH CoreExpr
 caseReduceLiteral =
              prefixFailMsg "Case reduction failed: " $
              withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $
-             do Case (Lit l) binder _ alts <- idR
+             do Case (Lit l) wild _ alts <- idR
                 guardMsg (not (litIsLifted l)) "cannot case-reduce lifted literals" -- see Trac #5603
-                e <- case [ rhs | (LitAlt l', _, rhs) <- alts, l == l' ] of
-                       [rhs] -> return rhs
-                       []    -> defaultRHS alts
-                       _     -> fail "more than one matching alternative."
-                return $ mkCoreLet (NonRec binder (Lit l)) e
+                case findAlt (LitAlt l) alts of
+                  Nothing          -> fail "no matching alternative."
+                  Just (_, _, rhs) -> return $ mkCoreLet (NonRec wild (Lit l)) rhs
 
 -- | Case-of-known-constructor rewrite.
 caseReduceDatacon :: RewriteH CoreExpr
 caseReduceDatacon =
              prefixFailMsg "Case reduction failed: " $
              withPatFailMsg (wrongExprForm "Case e v t alts") $
-             do Case s binder _ alts <- idR
+             do Case s wild _ alts <- idR
                 case isDataCon s of
-                  Nothing -> fail "head of scrutinee is not a data constructor."
-                  Just (dc, args) ->
-                    do e <- case [ (bs, rhs) | (DataAlt dc', bs, rhs) <- alts, dc == dc' ] of
-                              [(bs,rhs)] -> let (tyArgs, valArgs) = span isTypeArg args
-                                                tyBndrs           = takeWhile isTyVar bs -- it is possible the pattern constructor binds a type
-                                                                                         -- if the constructor is existentially quantified
-                                                existentials      = reverse $ take (length tyBndrs) $ reverse tyArgs
-                                             in return $ flip mkCoreLets rhs $ zipWith NonRec bs (existentials ++ valArgs) -- TODO: currently this can capture free variables with the nested lets, needs fixing.
-                              []   -> defaultRHS alts
-                              _    -> fail "more than one matching alternative."
-                       return $ mkCoreLet (NonRec binder s) e
-
-defaultRHS :: Monad m => [CoreAlt] -> m CoreExpr
-defaultRHS ((DEFAULT, _, rhs) : _) = return rhs
-defaultRHS _                       = fail "no matching alternative."
-
+                  Nothing         -> fail "head of scrutinee is not a data constructor."
+                  Just (dc, args) -> case findAlt (DataAlt dc) alts of
+                                       Nothing           -> fail "no matching alternative."
+                                       Just (_, bs, rhs) -> -- It is possible the pattern constructor binds a type if the constructor is existentially quantified.
+                                                            -- trimConArgs drops the universally quantified types, but not the existentially quantified types.
+                                                            let existentialsAndValArgs = trimConArgs (DataAlt dc) args
+                                                             in return $ flip mkCoreLets rhs $ zipWith NonRec (wild : bs) (s : existentialsAndValArgs)  -- TODO: currently this can capture free variables with the nested lets, needs fixing.
 
 -- | If expression is a constructor application, return the relevant bits.
 isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])
