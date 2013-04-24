@@ -34,6 +34,7 @@ data SyntaxForColor             -- (suggestion)
         = KeywordColor          -- bold
         | SyntaxColor
         | VarColor
+        | CoercionColor
         | TypeColor
         | LitColor
     deriving Show
@@ -99,6 +100,7 @@ data SpecialSymbol
         = LambdaSymbol
         | TypeOfSymbol
         | RightArrowSymbol
+        | CoercionSymbol
         | TypeSymbol
         | TypeBindSymbol
         | ForallSymbol
@@ -108,12 +110,16 @@ class RenderSpecial a where
         renderSpecial :: SpecialSymbol -> a
 
 
+-- This instance is special.  It is used as an index, forming an association list.
+-- Thus all of the rhs must be distinct characters.
+-- Think of RenderSpecial as a special font.
 instance RenderSpecial Char where
         renderSpecial LambdaSymbol        = '\\'  -- lambda
         renderSpecial TypeOfSymbol        = ':'   -- ::
         renderSpecial RightArrowSymbol    = '>'   -- ->
+        renderSpecial CoercionSymbol      = 'C'   -- <<coercion>>>
         renderSpecial TypeSymbol          = 'T'   -- <<type>>>
-        renderSpecial TypeBindSymbol      = 'T'   -- <<type>>>
+        renderSpecial TypeBindSymbol      = 't'   -- <<type binding>>
         renderSpecial ForallSymbol        = 'F'   -- forall
 
 newtype ASCII = ASCII String
@@ -126,6 +132,7 @@ instance RenderSpecial ASCII where
         renderSpecial LambdaSymbol        = ASCII "\\"  -- lambda
         renderSpecial TypeOfSymbol        = ASCII "::"   -- ::
         renderSpecial RightArrowSymbol    = ASCII "->"   -- ->
+        renderSpecial CoercionSymbol      = ASCII "~"   -- <<coercion>>>
         renderSpecial TypeSymbol          = ASCII "*"   -- <<type>>>
         renderSpecial TypeBindSymbol      = ASCII "*"   -- <<type>>>
         renderSpecial ForallSymbol        = ASCII "\\/"
@@ -136,6 +143,7 @@ instance RenderSpecial Unicode where
         renderSpecial LambdaSymbol        = Unicode '\x03BB'
         renderSpecial TypeOfSymbol        = Unicode '\x2237'     -- called PROPORTION
         renderSpecial RightArrowSymbol    = Unicode '\x2192'
+        renderSpecial CoercionSymbol      = Unicode '\x25A0'
         renderSpecial TypeSymbol          = Unicode '\x25b2'
         renderSpecial TypeBindSymbol      = Unicode '\x25b2' -- Unicode '\x25B9'
         renderSpecial ForallSymbol        = Unicode '\x2200'
@@ -150,6 +158,7 @@ instance RenderSpecial LaTeX where
         renderSpecial LambdaSymbol        = LaTeX "\\ensuremath{\\lambda}"
         renderSpecial TypeOfSymbol        = LaTeX ":\\!:"  -- too wide
         renderSpecial RightArrowSymbol    = LaTeX "\\ensuremath{\\shortrightarrow}"
+        renderSpecial CoercionSymbol      = LaTeX "\\ensuremath{\\blacksquare}"
         renderSpecial TypeSymbol          = LaTeX "\\ensuremath{\\blacktriangle}"
         renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\blacktriangle}" -- LaTeX "\\ensuremath{\\triangleright}"
         renderSpecial ForallSymbol        = LaTeX "\\ensuremath{\\forall}"
@@ -165,6 +174,7 @@ instance RenderSpecial HTML where
         renderSpecial LambdaSymbol        = HTML "&#955;"
         renderSpecial TypeOfSymbol        = HTML "&#8759;"
         renderSpecial RightArrowSymbol    = HTML "&#8594;"
+        renderSpecial CoercionSymbol      = HTML "&#9632;"
         renderSpecial TypeSymbol          = HTML "&#9650;"
         renderSpecial TypeBindSymbol      = HTML "&#9650;" -- HTML "&#9657;"
         renderSpecial ForallSymbol        = HTML "&#8704;"
@@ -291,11 +301,12 @@ instance RenderCode LaTeX where
         rDoHighlight False _ = LaTeX "}"
         rDoHighlight _ [] = LaTeX $ "{"
         rDoHighlight _ (Color col:_) = LaTeX $ "{" ++ case col of
-                        KeywordColor -> "\\color{hermit:keyword}"       -- blue
-                        SyntaxColor  -> "\\color{hermit:syntax}"        -- red
-                        VarColor     -> ""
-                        TypeColor    -> "\\color{hermit:type}"          -- green
-                        LitColor     -> "\\color{hermit:lit}"           -- cyan
+                        KeywordColor  -> "\\color{hermit:keyword}"       -- blue
+                        SyntaxColor   -> "\\color{hermit:syntax}"        -- red
+                        VarColor      -> ""
+                        CoercionColor -> "\\color{hermit:coercion}"      -- yellow
+                        TypeColor     -> "\\color{hermit:type}"          -- green
+                        LitColor      -> "\\color{hermit:lit}"           -- cyan
         rDoHighlight o (_:rest) = rDoHighlight o rest
 
         rEnd = LaTeX "\n" -- \\end{Verbatim}"
@@ -314,11 +325,12 @@ instance RenderCode HTML where
         rDoHighlight False _ = HTML "</span>"
         rDoHighlight _ [] = HTML $ "<span>"
         rDoHighlight _ (Color col:_) = HTML $ case col of
-                        KeywordColor -> "<span class=\"hermit-keyword\">"       -- blue
-                        SyntaxColor  -> "<span class=\"hermit-syntax\">"        -- red
-                        VarColor     -> "<span>"
-                        TypeColor    -> "<span class=\"hermit-type\">"          -- green
-                        LitColor     -> "<span class=\"hermit-lit\">"           -- cyan
+                        KeywordColor  -> "<span class=\"hermit-keyword\">"       -- blue
+                        SyntaxColor   -> "<span class=\"hermit-syntax\">"        -- red
+                        VarColor      -> "<span>"
+                        CoercionColor -> "<span class=\"hermit-coercion\">"      -- yellow
+                        TypeColor     -> "<span class=\"hermit-type\">"          -- green
+                        LitColor      -> "<span class=\"hermit-lit\">"           -- cyan
         rDoHighlight o (_:rest) = rDoHighlight o rest
         rEnd = HTML "\n"
 

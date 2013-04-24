@@ -62,6 +62,9 @@ normalExpr (RetExpr e0)    = e0
 normalExpr (RetAtom e0)    = e0
 normalExpr (RetEmpty)      = empty
 
+coercionSymbol :: DocH
+coercionSymbol = markColor CoercionColor (specialFont $ char $ renderSpecial CoercionSymbol)
+
 typeSymbol :: DocH
 typeSymbol = markColor TypeColor (specialFont $ char $ renderSpecial TypeSymbol)
 
@@ -186,9 +189,16 @@ corePrettyH opts = do
                                       Show     -> case ppCoreType False t of
                                                     RetAtom d -> RetAtom $ attrP p d
                                                     RetExpr d -> RetExpr $ attrP p d
-                                                    _ -> error "not possible!"
-                                      Abstract -> RetAtom (attrP p $ typeSymbol)
+                                                    _         -> error "not possible!"
+                                      Abstract -> RetAtom (attrP p typeSymbol)
                                       Omit     -> RetEmpty)
+                   <+ coercionT (\ co p -> case po_exprTypes opts of
+                                             Show     ->  case ppCoreCoercion co of
+                                                            RetAtom d -> RetAtom $ attrP p d
+                                                            RetExpr d -> RetExpr $ attrP p d
+                                                            _         -> error "not possible!"
+                                             Abstract -> RetAtom (attrP p coercionSymbol)
+                                             Omit     -> RetEmpty)
                    <+ (ppCoreExpr0 >>^ \ e p -> RetExpr (attrP p e))
 
         ppCoreType :: Bool -> GHC.Type -> RetExpr
@@ -210,6 +220,10 @@ corePrettyH opts = do
 
                   tyText = if isTySig then text else markColor TypeColor . text
 
+        -- TODO: improve this
+        ppCoreCoercion :: GHC.Coercion -> RetExpr
+        ppCoreCoercion co = RetExpr (text "Coercion" $$ nest 2 (ppSDoc co))
+
         ppCoreExpr0 :: PrettyH GHC.CoreExpr
         ppCoreExpr0 = caseT ppCoreExpr (const ppCoreAlt) (\ s b _ty alts ->
                             (keyword "case" <+> s <+> keyword "of" <+> optional (ppBinder b) id) $$
@@ -217,7 +231,7 @@ corePrettyH opts = do
                   <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 ((parens e) <+> ppSDoc co))
                   <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
     --              <+ typeT (\ty -> text "Type" <+> nest 2 (ppSDoc ty))
-                  <+ coercionT (\co -> text "Coercion" $$ nest 2 (ppSDoc co))
+    --              <+ coercionT (\co -> text "Coercion" $$ nest 2 (ppSDoc co))
 
         ppCoreTypeSig :: PrettyH GHC.CoreExpr
         ppCoreTypeSig = arr $ normalExpr . ppCoreType False . GHC.exprType

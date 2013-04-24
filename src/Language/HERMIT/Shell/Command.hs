@@ -189,11 +189,11 @@ shell_externals = map (.+ Shell)
        [ "goto a specific step in the derivation" ]                             .+ VersionControl
    , external "goto"            (SessionStateEffect . navigation . GotoTag)
        [ "goto a named step in the derivation" ]
-   , external "set-auto-corelint" (\ bStr -> SessionStateEffect $ \ _ st -> 
+   , external "set-auto-corelint" (\ bStr -> SessionStateEffect $ \ _ st ->
         case reads bStr of
             [(b,"")] -> return $ st { cl_corelint = b }
             _        -> return st )
-       [ "set-auto-corelint <True|False>; False by default" 
+       [ "set-auto-corelint <True|False>; False by default"
        , "run core lint type-checker after every rewrite, reverting on failure" ]
    , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st ->
        case M.lookup pp pp_dictionary of
@@ -211,7 +211,7 @@ shell_externals = map (.+ Shell)
        [ "dump <filename> <pretty-printer> <renderer> <width>"]
    , external "set-width"   (\ n -> SessionStateEffect $ \ _ st -> return $ st { cl_width = n })
        ["set the width of the screen"]
-   , external "set-pp-expr-type" (\ str -> SessionStateEffect $ \ _ st -> 
+   , external "set-pp-expr-type" (\ str -> SessionStateEffect $ \ _ st ->
         case reads str :: [(ShowOption,String)] of
             [(opt,"")] -> return $ st { cl_pretty_opts = (cl_pretty_opts st) { po_exprTypes = opt } }
             _          -> return st)
@@ -615,13 +615,14 @@ instance RenderCode UnicodeTerminal where
         rDoHighlight _ (Color col:_) = UnicodeTerminal $ \ h _ -> do
                 hSetSGR h [ Reset ]
                 hSetSGR h $ case col of
-                        KeywordColor -> [ SetConsoleIntensity BoldIntensity
-                                        , SetColor Foreground Dull Blue
-                                        ]
-                        SyntaxColor  -> [ SetColor Foreground Dull Red ]
-                        VarColor     -> []   -- as is
-                        TypeColor    -> [ SetColor Foreground Dull Green ]
-                        LitColor     -> [ SetColor Foreground Dull Cyan ]
+                        KeywordColor  -> [ SetConsoleIntensity BoldIntensity
+                                         , SetColor Foreground Dull Blue
+                                         ]
+                        SyntaxColor   -> [ SetColor Foreground Dull Red ]
+                        VarColor      -> []   -- as is
+                        CoercionColor -> [ SetColor Foreground Dull Yellow ]
+                        TypeColor     -> [ SetColor Foreground Dull Green ]
+                        LitColor      -> [ SetColor Foreground Dull Cyan ]
         rDoHighlight o (_:rest) = rDoHighlight o rest
         rEnd = UnicodeTerminal $ \ h _ -> hPutStrLn h ""
 
