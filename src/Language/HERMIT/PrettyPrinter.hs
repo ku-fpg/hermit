@@ -113,8 +113,8 @@ instance RenderSpecial Char where
         renderSpecial TypeOfSymbol        = ':'   -- ::
         renderSpecial RightArrowSymbol    = '>'   -- ->
         renderSpecial TypeSymbol          = 'T'   -- <<type>>>
-        renderSpecial TypeBindSymbol      = 'a'   -- a
-        renderSpecial ForallSymbol      = 'F'   -- forall
+        renderSpecial TypeBindSymbol      = 'T'   -- <<type>>>
+        renderSpecial ForallSymbol        = 'F'   -- forall
 
 newtype ASCII = ASCII String
 
@@ -127,7 +127,7 @@ instance RenderSpecial ASCII where
         renderSpecial TypeOfSymbol        = ASCII "::"   -- ::
         renderSpecial RightArrowSymbol    = ASCII "->"   -- ->
         renderSpecial TypeSymbol          = ASCII "*"   -- <<type>>>
-        renderSpecial TypeBindSymbol      = ASCII "*"   -- a
+        renderSpecial TypeBindSymbol      = ASCII "*"   -- <<type>>>
         renderSpecial ForallSymbol        = ASCII "\\/"
 
 newtype Unicode = Unicode Char
@@ -137,7 +137,7 @@ instance RenderSpecial Unicode where
         renderSpecial TypeOfSymbol        = Unicode '\x2237'     -- called PROPORTION
         renderSpecial RightArrowSymbol    = Unicode '\x2192'
         renderSpecial TypeSymbol          = Unicode '\x25b2'
-        renderSpecial TypeBindSymbol      = Unicode '\x25B9'
+        renderSpecial TypeBindSymbol      = Unicode '\x25b2' -- Unicode '\x25B9'
         renderSpecial ForallSymbol        = Unicode '\x2200'
 
 newtype LaTeX = LaTeX String
@@ -151,7 +151,7 @@ instance RenderSpecial LaTeX where
         renderSpecial TypeOfSymbol        = LaTeX ":\\!:"  -- too wide
         renderSpecial RightArrowSymbol    = LaTeX "\\ensuremath{\\shortrightarrow}"
         renderSpecial TypeSymbol          = LaTeX "\\ensuremath{\\blacktriangle}"
-        renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\triangleright}"
+        renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\blacktriangle}" -- LaTeX "\\ensuremath{\\triangleright}"
         renderSpecial ForallSymbol        = LaTeX "\\ensuremath{\\forall}"
 
 
@@ -166,7 +166,7 @@ instance RenderSpecial HTML where
         renderSpecial TypeOfSymbol        = HTML "&#8759;"
         renderSpecial RightArrowSymbol    = HTML "&#8594;"
         renderSpecial TypeSymbol          = HTML "&#9650;"
-        renderSpecial TypeBindSymbol      = HTML "&#9657;"
+        renderSpecial TypeBindSymbol      = HTML "&#9650;" -- HTML "&#9657;"
         renderSpecial ForallSymbol        = HTML "&#8704;"
 
 
