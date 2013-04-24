@@ -23,13 +23,13 @@ import Data.Dynamic
 import qualified Data.Map as M
 import Data.Maybe
 
-import Language.HERMIT.Context
 import Language.HERMIT.Core
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.Dictionary
 import Language.HERMIT.External
 import Language.HERMIT.Interp
+import Language.HERMIT.Kernel (queryK)
 import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.Parser
 import Language.HERMIT.PrettyPrinter
@@ -189,11 +189,11 @@ shell_externals = map (.+ Shell)
        [ "goto a specific step in the derivation" ]                             .+ VersionControl
    , external "goto"            (SessionStateEffect . navigation . GotoTag)
        [ "goto a named step in the derivation" ]
-   , external "set-auto-corelint" (\ bStr -> SessionStateEffect $ \ _ st -> 
+   , external "set-auto-corelint" (\ bStr -> SessionStateEffect $ \ _ st ->
         case reads bStr of
             [(b,"")] -> return $ st { cl_corelint = b }
             _        -> return st )
-       [ "set-auto-corelint <True|False>; False by default" 
+       [ "set-auto-corelint <True|False>; False by default"
        , "run core lint type-checker after every rewrite, reverting on failure" ]
    , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st ->
        case M.lookup pp pp_dictionary of
@@ -211,7 +211,7 @@ shell_externals = map (.+ Shell)
        [ "dump <filename> <pretty-printer> <renderer> <width>"]
    , external "set-width"   (\ n -> SessionStateEffect $ \ _ st -> return $ st { cl_width = n })
        ["set the width of the screen"]
-   , external "set-pp-expr-type" (\ str -> SessionStateEffect $ \ _ st -> 
+   , external "set-pp-expr-type" (\ str -> SessionStateEffect $ \ _ st ->
         case reads str :: [(ShowOption,String)] of
             [(opt,"")] -> return $ st { cl_pretty_opts = (cl_pretty_opts st) { po_exprTypes = opt } }
             _          -> return st)
@@ -446,15 +446,18 @@ evalExpr expr = do
 performAstEffect :: MonadIO m => AstEffect -> ExprH -> CLM m ()
 performAstEffect (Apply rr) expr = do
     st <- get
-    ast' <- iokm2clm "Rewrite failed: " $ applyS (cl_kernel st) (cl_cursor $ cl_session st) rr (cl_kernel_env $ cl_session st)
 
-    let commit = put (newSAST expr ast' st) >> showFocus
-        scopeBreakingLintT = contextonlyT (return . hermitModGuts) >>> lintModuleT
+    let sk = cl_kernel st
+        kEnv = cl_kernel_env $ cl_session st
+
+    sast' <- iokm2clm "Rewrite failed: " $ applyS sk (cl_cursor $ cl_session st) rr kEnv
+
+    let commit = put (newSAST expr sast' st) >> showFocus
 
     if cl_corelint (cl_session st)
-        then liftIO (queryS (cl_kernel st) ast' scopeBreakingLintT (cl_kernel_env $ cl_session st))
+        then liftIO (toASTS sk sast' >>= \ ast' -> queryK (kernelS sk) ast' lintModuleT kEnv)
              >>= runKureM (\ warns -> putStrToConsole warns >> commit)
-                          (\ errs -> liftIO (deleteS (cl_kernel st) ast') >> fail errs)
+                          (\ errs  -> liftIO (deleteS sk sast') >> fail errs)
         else commit
 
 performAstEffect (Pathfinder t) expr = do
