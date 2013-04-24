@@ -80,6 +80,9 @@ data ScopedKernel = ScopedKernel
         , modPathS    ::            SAST -> (LocalPath -> LocalPath)  -> HermitMEnv   -> IO (KureM SAST)
         , beginScopeS ::            SAST                                              -> IO SAST
         , endScopeS   ::            SAST                                              -> IO SAST
+        -- means of accessing the underlying kernel, obviously for unsafe purposes
+        , kernelS     ::                                                                 Kernel
+        , toASTS      ::            SAST                                              -> IO AST
         }
 
 -- | A /handle/ for an 'AST' combined with scoping information.
@@ -168,6 +171,11 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                     rel : base' -> do k <- newKey
                                                       putTMVar store $ I.insert k (ast, base', rel) m
                                                       return $ SAST k
+            , kernelS     = kernel
+            , toASTS      = \ (SAST sAst) -> do
+                                m <- atomically $ readTMVar store
+                                (ast, _, _) <- get sAst m
+                                return ast
             }
 
     callback skernel $ SAST 0
