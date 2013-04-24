@@ -7,8 +7,10 @@ module Language.HERMIT.Parser
     , StmtH(..)
     ) where
 
-import Data.Char (isSpace, isAlphaNum)
+import Data.Char (isSpace)
 import Data.List (intercalate)
+
+import Language.HERMIT.Syntax
 }
 
 %name parser
@@ -137,18 +139,6 @@ lexCore (c:cs)         = do (c',r) <- lexCore cs
 lexCore []             = Left "lexer: no closing |]"
 
 ---------------------------------------------
-
--- | Chars that are valid in identifiers anywhere.
-isIdFirstChar :: Char -> Bool
-isIdFirstChar c = isAlphaNum c || c `elem` "$_:."
-
--- | Chars that are valid in identifiers, but not as the first character.
-isIdChar :: Char -> Bool
-isIdChar c = isIdFirstChar c || c `elem` "-'"
-
--- | Chars that are valid in infix operators.
-isInfixId :: Char -> Bool
-isInfixId c = c `elem` "!£$^&*-+=@#<>?/.:|#" -- I removed '_' as I don't think it's a valid infix-operator symbol.
 
 -- | Use ghci Parser.hs to run this test function.
 test = do

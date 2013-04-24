@@ -149,10 +149,10 @@ Library
        Language.HERMIT.Core
        Language.HERMIT.Dictionary
        Language.HERMIT.External
+       Language.HERMIT.Interp
        Language.HERMIT.Kernel
        Language.HERMIT.Kernel.Scoped
        Language.HERMIT.Kure
-       Language.HERMIT.Interp
        Language.HERMIT.Monad
        Language.HERMIT.Parser
        Language.HERMIT.ParserCore
@@ -184,6 +184,8 @@ Library
        Language.HERMIT.GHC
 
        Language.HERMIT.Primitive.Common
+
+       Language.HERMIT.Syntax
 
        Paths_hermit
 

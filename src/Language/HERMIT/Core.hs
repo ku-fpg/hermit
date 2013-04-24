@@ -14,10 +14,10 @@ module Language.HERMIT.Core
           , bindToIdExprs
             -- * Utilities
           , exprTypeOrKind
-          , appCount
           , endoFunType
           , funArgResTypes
           , funsWithInverseTypes
+          , appCount
 ) where
 
 import GhcPlugins

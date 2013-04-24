@@ -7,6 +7,8 @@ import Data.Char (isSpace)
 import Data.Traversable (sequenceA)
 
 import qualified GhcPlugins as GHC
+
+import Language.HERMIT.Syntax
 import Language.HERMIT.Kure
 import Language.HERMIT.Core
 import Language.HERMIT.PrettyPrinter
@@ -95,7 +97,7 @@ corePrettyH opts = do
                 | isInfix name = ppParens $ markColor color $ text name
                 | otherwise    = markColor color $ text name
           where name = GHC.occNameString $ GHC.nameOccName $ nm
-                isInfix = all (\ n -> n `elem` "!@#$%^&*-._+=:?/\\<>'")
+                isInfix = all isInfixId -- \ n -> n `elem` "!@#$%^&*-._+=:?/\\<>'")
                 color = if useVarColor then VarColor else TypeColor
 
         ppLitTy :: Bool -> TyLit -> DocH
