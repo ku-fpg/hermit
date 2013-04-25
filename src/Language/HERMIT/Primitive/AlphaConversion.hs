@@ -7,7 +7,7 @@ module Language.HERMIT.Primitive.AlphaConversion
        , alphaLam
        , alphaCaseBinder
        , alphaAltWith
-       , alphaAltIds
+       , alphaAltVars
        , alphaAlt
        , alphaCase
        , alphaLetWith
@@ -143,7 +143,7 @@ unshadow = setFailMsg "No shadows to eliminate." $
                       alphaLam Nothing <+ alphaLetVars vs <+ alphaCaseBinder Nothing
 
     unshadowAlt :: RewriteH CoreAlt
-    unshadowAlt = shadowedByT altIdsT (boundVarsT `mappend` altFreeVarsT) >>= alphaAltIds
+    unshadowAlt = shadowedByT altVarsT (boundVarsT `mappend` altFreeVarsT) >>= alphaAltVars
 
 -----------------------------------------------------------------------
 
@@ -185,28 +185,28 @@ alphaCaseBinder mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
 
 -----------------------------------------------------------------------
 
--- | Rename the specified identifier in a case alternative.  Optionally takes a suggested new name.
-alphaAltId :: Maybe TH.Name -> Id -> RewriteH CoreAlt
-alphaAltId mn v = do nameModifier <- altT (freshNameGenT mn) (\ _ _ nameGen -> nameGen)
-                     v' <- constT (cloneVarH nameModifier v)
-                     altT (replaceVarR v v') (\ con vs e -> (con, map (replaceVar v v') vs, e))
+-- | Rename the specified variable in a case alternative.  Optionally takes a suggested new name.
+alphaAltVar :: Maybe TH.Name -> Var -> RewriteH CoreAlt
+alphaAltVar mn v = do nameModifier <- altT (freshNameGenT mn) (\ _ _ nameGen -> nameGen)
+                      v' <- constT (cloneVarH nameModifier v)
+                      altT (replaceVarR v v') (\ con vs e -> (con, map (replaceVar v v') vs, e))
 
--- | Rename the specified identifiers in a case alternative, using the suggested names where provided.
-alphaAltIdsWith :: [(Maybe TH.Name,Id)] -> RewriteH CoreAlt
-alphaAltIdsWith = andR . map (uncurry alphaAltId)
+-- | Rename the specified variables in a case alternative, using the suggested names where provided.
+alphaAltVarsWith :: [(Maybe TH.Name,Var)] -> RewriteH CoreAlt
+alphaAltVarsWith = andR . map (uncurry alphaAltVar)
 
--- | Rename the identifiers bound in a case alternative with the given list of suggested names.
+-- | Rename the variables bound in a case alternative with the given list of suggested names.
 alphaAltWith :: [TH.Name] -> RewriteH CoreAlt
-alphaAltWith ns = do vs <- altIdsT
-                     alphaAltIdsWith $ zip (map Just ns) vs
+alphaAltWith ns = do vs <- altVarsT
+                     alphaAltVarsWith $ zip (map Just ns) vs
 
--- | Rename the specified identifiers in a case alternative.
-alphaAltIds :: [Id] -> RewriteH CoreAlt
-alphaAltIds = alphaAltIdsWith . zip (repeat Nothing)
+-- | Rename the specified variables in a case alternative.
+alphaAltVars :: [Var] -> RewriteH CoreAlt
+alphaAltVars = alphaAltVarsWith . zip (repeat Nothing)
 
 -- | Rename all identifiers bound in a case alternative.
 alphaAlt :: RewriteH CoreAlt
-alphaAlt = altIdsT >>= alphaAltIds
+alphaAlt = altVarsT >>= alphaAltVars
 
 -----------------------------------------------------------------------
 

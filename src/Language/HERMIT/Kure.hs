@@ -288,9 +288,9 @@ defR r = defT r Def
 
 ---------------------------------------------------------------------
 
--- | Translate a case alternative of the form: ('AltCon', ['Id'], 'CoreExpr')
-altT :: Monad m => Translate HermitC m CoreExpr a -> (AltCon -> [Id] -> a -> b) -> Translate HermitC m CoreAlt b
-altT t f = translate $ \ c (con,bs,e) -> f con bs <$> apply t (addAltBindings bs c @@ 0) e
+-- | Translate a case alternative of the form: ('AltCon', ['Var'], 'CoreExpr')
+altT :: Monad m => Translate HermitC m CoreExpr a -> (AltCon -> [Var] -> a -> b) -> Translate HermitC m CoreAlt b
+altT t f = translate $ \ c (con,vs,e) -> f con vs <$> apply t (addAltBindings vs c @@ 0) e
 
 -- | Rewrite the 'CoreExpr' child of a case alternative of the form: ('AltCon', 'Id', 'CoreExpr')
 altR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreAlt
@@ -541,19 +541,19 @@ letRecDefOneR :: MonadCatch m => (Int -> Rewrite HermitC m CoreExpr) -> Rewrite 
 letRecDefOneR rs r = letRecOneR (\ n -> defR (rs n)) r
 
 
--- | Translate an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Id'], 'CoreExpr')]
-caseAltT :: Monad m => Translate HermitC m CoreExpr a1 -> (Int -> Translate HermitC m CoreExpr a2) -> (a1 -> Id -> Type -> [(AltCon,[Id],a2)] -> b) -> Translate HermitC m CoreExpr b
+-- | Translate an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
+caseAltT :: Monad m => Translate HermitC m CoreExpr a1 -> (Int -> Translate HermitC m CoreExpr a2) -> (a1 -> Id -> Type -> [(AltCon,[Var],a2)] -> b) -> Translate HermitC m CoreExpr b
 caseAltT t ts = caseT t (\ n -> altT (ts n) (,,))
 
--- | Rewrite all children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Id'], 'CoreExpr')]
+-- | Rewrite all children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
 caseAltAllR :: Monad m => Rewrite HermitC m CoreExpr -> (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreExpr
 caseAltAllR t ts = caseAllR t (\ n -> altR (ts n))
 
--- | Rewrite any children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Id'], 'CoreExpr')]
+-- | Rewrite any children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
 caseAltAnyR :: MonadCatch m => Rewrite HermitC m CoreExpr -> (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreExpr
 caseAltAnyR t ts = caseAnyR t (\ n -> altR (ts n))
 
--- | Rewrite one child of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Id'], 'CoreExpr')]
+-- | Rewrite one child of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
 caseAltOneR :: MonadCatch m => Rewrite HermitC m CoreExpr -> (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreExpr
 caseAltOneR t ts = caseOneR t (\ n -> altR (ts n))
 

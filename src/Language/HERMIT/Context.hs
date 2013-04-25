@@ -105,14 +105,16 @@ addLambdaBinding v c = let nextDepth = succ (hermitDepth c)
                              , hermitDepth    = nextDepth
                              }
 
--- | Add the identifiers bound by a 'DataCon' in a case. Like lambda bindings,
+-- | Add the variables bound by a 'DataCon' in a case. Like lambda bindings,
 -- in that we know nothing about them, but all bound at the same depth,
 -- so we cannot just fold 'addLambdaBinding' over the list.
-addAltBindings :: [Id] -> HermitC -> HermitC
+addAltBindings :: [Var] -> HermitC -> HermitC
 addAltBindings vs c = let nextDepth = succ (hermitDepth c)
                        in c { hermitBindings = foldr (\ v bds -> insert v (LAM nextDepth) bds) (hermitBindings c) vs
                             , hermitDepth    = nextDepth
                             }
+-- TODO: Is treating case-alternative bindings as lambda bindings okay?
+--       There's no issues with lambda bindings being sequential and case-alternative bindings being in parallel?
 
 ------------------------------------------------------------------------
 

@@ -15,10 +15,10 @@ module Language.HERMIT.Primitive.Common
     , letVarsT
     , letRecIdsT
     , letNonRecVarT
-    , caseIdsT
+    , caseVarsT
     , caseWildIdT
-    , caseAltIdsT
-    , altIdsT
+    , caseAltVarsT
+    , altVarsT
       -- ** Finding variables bound in the Context
     , boundVarsT
     , findBoundVarT
@@ -94,21 +94,21 @@ letRecIdsT = letT recIdsT mempty (\ vs () -> vs)
 letNonRecVarT :: TranslateH CoreExpr Var
 letNonRecVarT = letT nonRecVarT mempty (\ v () -> v)
 
--- | List all identifiers bound by a case expression (in the alternatives and the wildcard binder).
-caseIdsT :: TranslateH CoreExpr [Id]
-caseIdsT = caseT mempty (\ _ -> altIdsT) (\ () v _ vss -> v : nub (concat vss))
+-- | List all variables bound by a case expression (in the alternatives and the wildcard binder).
+caseVarsT :: TranslateH CoreExpr [Var]
+caseVarsT = caseT mempty (\ _ -> altVarsT) (\ () v _ vss -> v : nub (concat vss))
 
 -- | Return the case wildcard binder.
 caseWildIdT :: TranslateH CoreExpr Id
 caseWildIdT = caseT mempty (\ _ -> return ()) (\ () v _ _ -> v)
 
--- | List the identifiers bound by all alternatives in a case expression.
-caseAltIdsT :: TranslateH CoreExpr [[Id]]
-caseAltIdsT = caseT mempty (\ _ -> altIdsT) (\ () _ _ vss -> vss)
+-- | List the variables bound by all alternatives in a case expression.
+caseAltVarsT :: TranslateH CoreExpr [[Var]]
+caseAltVarsT = caseT mempty (\ _ -> altVarsT) (\ () _ _ vss -> vss)
 
--- | List the identifiers bound by a case alternative.
-altIdsT :: TranslateH CoreAlt [Id]
-altIdsT = altT mempty (\ _ vs () -> vs)
+-- | List the variables bound by a case alternative.
+altVarsT :: TranslateH CoreAlt [Var]
+altVarsT = altT mempty (\ _ vs () -> vs)
 
 ------------------------------------------------------------------------------
 
