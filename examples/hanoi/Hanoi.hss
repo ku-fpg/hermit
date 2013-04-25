@@ -29,7 +29,7 @@ consider 'hanoi
       any-call (unfold origwork)
       any-call (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
       any-call (unfold 'f)
-      simplify
+      innermost let-subst ; simplify
 
       -- recursion decrements by two, so must do this again
       any-call (unfold origwork)
