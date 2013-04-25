@@ -418,13 +418,8 @@ ourCatch m failure = do
 
 
 
-evalStmts :: MonadIO m => [StmtH ExprH] -> CLM m ()
-evalStmts = mapM_ evalExpr . scopes
-    where scopes :: [StmtH ExprH] -> [ExprH]
-          scopes [] = []
-          scopes (ExprH e:ss) = e : scopes ss
-          scopes (ScopeH s:ss) = (CmdName "{" : scopes s) ++ [CmdName "}"] ++ scopes ss
-
+evalStmts :: MonadIO m => [ExprH] -> CLM m ()
+evalStmts = mapM_ evalExpr
 
 evalExpr :: MonadIO m => ExprH -> CLM m ()
 evalExpr expr = do
@@ -553,7 +548,7 @@ performMetaCommand (LoadFile fileName) = do
         putStrToConsole $ "[loading " ++ fileName ++ "]"
         res <- liftIO $ try (readFile fileName)
         case res of
-          Right str -> case parseStmtsH (normalize str) of
+          Right str -> case parseStmtsH str of
                         Left  msg  -> throwError ("Parse failure: " ++ msg)
                         Right stmts -> do
                             load_st <- gets (cl_loading . cl_session)
@@ -565,14 +560,6 @@ performMetaCommand (LoadFile fileName) = do
                             putStrToConsole $ "[done, loaded " ++ show (numStmtsH stmts) ++  " commands]" -- TODO: This is better than saying "N", but not very robust.
                             showFocus
           Left (err :: IOException) -> throwError ("IO error: " ++ show err)
-  where
-   normalize = unlines
-             . map (++ ";")     -- HACK!
-             . map rmComment
-             . lines
-   rmComment []     = []
-   rmComment xs     | "--" `isPrefixOf` xs = [] -- we need a real parser and lexer here!
-   rmComment (x:xs) = x : rmComment xs
 
 performMetaCommand (SaveFile fileName) = do
         st <- get

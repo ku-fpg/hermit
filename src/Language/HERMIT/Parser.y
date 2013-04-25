@@ -4,7 +4,6 @@ module Language.HERMIT.Parser
     , unparseExprH
     , numStmtsH
     , ExprH(..)
-    , StmtH(..)
     ) where
 
 import Data.Char (isSpace)
@@ -35,13 +34,19 @@ import Language.HERMIT.Syntax
 
 %%
 
-StmtH : StmtH ';' scoped { $1 ++ [$3] }
-      | StmtH ';'        { $1 }
-      | scoped           { [$1] }
-      | {- empty -}      { [] }
+scoped : '{' scoped { CmdName "{" : $2 }
+       | '}' scoped { CmdName "}" : $2 }
+       | slist      { $1 }
 
-scoped : '{' StmtH '}' { ScopeH $2 }
-       | ExprH         { ExprH $1 }
+slist : stmts       { $1 }
+      | {- empty -} { [] }
+
+-- | Be really liberal about where ';' can be!
+--   Recall that newlines are lexed as ';'
+stmts : ExprH            { [$1] }
+      | ExprH '}' scoped { [$1, CmdName "}"] ++ $3 }
+      | ExprH ';' scoped { $1 : $3 }
+      | ';' scoped       { $2 }
 
 -- | Top level expression term.
 --   Infix operators bind less tightly than application.
@@ -58,23 +63,19 @@ arg  : '\'' ident      { SrcName $2 }
      | '\'' quoted     { SrcName $2 }
      | quoted          { CmdName $1 }
      | core            { CoreH $1 }
-     | '[' exprs ']'   { ListH $2 }
+     | '[' elist ']'   { ListH $2 }
      | '(' ExprH ')'   { $2 }
      | ident           { CmdName $1 }
 
+elist : exprs       { $1 }
+      | {- empty -} { [] }
+
 exprs : ExprH           { [$1] }
       | ExprH ',' exprs { $1 : $3 }
-      | {- empty -}     { [] }
 {
 
 parseError :: [Token] -> Either String a
 parseError ts = Left $ "parse error: " ++ show ts
-
--- | Nested lists to represent scoping structure.
-data StmtH expr
-    = ExprH expr
-    | ScopeH [StmtH expr]
-    deriving (Eq, Show)
 
 -- | A simple expression language AST, for things parsed from 'String' or JSON structures.
 data ExprH
@@ -114,6 +115,7 @@ lexer ('\"':cs)    = do (str,cs') <- lexString cs
                         fmap (Quote str:) $ lexer cs'
 lexer ('[':'|':cs) = do (str,cs') <- lexCore cs
                         fmap (CoreString str:) $ lexer cs'
+lexer ('-':'-':cs) = let (_,s') = span (/= '\n') cs in lexer s'
 lexer ('[' :cs)    = fmap (ListStart:)  $ lexer cs
 lexer (',' :cs)    = fmap (ListDelim:)  $ lexer cs
 lexer (']' :cs)    = fmap (ListEnd:)    $ lexer cs
@@ -149,34 +151,30 @@ test = do
                      print $ parseStmtsH ln
                      test
 
-parseStmtsH :: String -> Either String [StmtH ExprH]
+parseStmtsH :: String -> Either String [ExprH]
 parseStmtsH s = lexer s >>= parser
 
--- TODO: This is a quick hack that's better than just saying "N"; I have no idea how accurate this is.
-
--- | Count the total number of statements.
-numStmtH :: StmtH expr -> Int
-numStmtH (ExprH _)   = 1
-numStmtH (ScopeH ss) = numStmtsH ss
-
--- | Count the total number of statements.
-numStmtsH :: [StmtH expr] -> Int
-numStmtsH = sum . map numStmtH
-
+numStmtsH :: [ExprH] -> Int
+numStmtsH = length . filter isCounted
+    where isCounted (CmdName "{") = False
+          isCounted (CmdName "}") = False
+          isCounted _             = True
 ---------------------------------------------
 
 unparseExprH :: ExprH -> String
 unparseExprH (SrcName nm)
-  | nm /= "" && (all isInfixId nm || isIdFirstChar (head nm) && all (isIdChar) (tail nm)) = "'" ++ nm
-  | otherwise = "'\"" ++ concatMap escape nm ++ "\"" where
-      escape '\"' = "\\\""
-      escape c    = [c]
+    | nm /= "" && (all isInfixId nm || isIdFirstChar (head nm) && all (isIdChar) (tail nm)) = "'" ++ nm
+    | otherwise = "'\"" ++ concatMap escape nm ++ "\""
+        where escape '\"' = "\\\""
+              escape c    = [c]
 unparseExprH (CmdName nm)
-        |  all isIdChar nm = nm
-        | otherwise    = show nm     -- with quotes
+    | nm == "{"       = "{ "
+    | nm == "}"       = " }"
+    | all isIdChar nm = nm
+    | otherwise       = show nm     -- with quotes
 unparseExprH (AppH (AppH (CmdName nm) e1) e2)
-        | all isInfixId nm
-        = unparseAtom e1 ++ " " ++ nm ++ " " ++ unparseAtom e2
+    | all isInfixId nm
+    = unparseAtom e1 ++ " " ++ nm ++ " " ++ unparseAtom e2
 unparseExprH (AppH e1 e2) = unparseExprH e1 ++ " " ++ unparseAtom e2
 unparseExprH (CoreH s)    = "[|" ++ s ++ "|]"
 unparseExprH (ListH es)   = "[" ++ intercalate "," (map unparseExprH es) ++ "]"
@@ -184,14 +182,6 @@ unparseExprH (ListH es)   = "[" ++ intercalate "," (map unparseExprH es) ++ "]"
 unparseAtom :: ExprH -> String
 unparseAtom e@(AppH {}) = "(" ++ unparseExprH e ++ ")"
 unparseAtom e           = unparseExprH e
-
-
-unparseStmtH :: StmtH ExprH -> String
-unparseStmtH (ExprH expr)   = unparseExprH expr
-unparseStmtH (ScopeH stmts) = "{ " ++ unparseStmtsH stmts ++ "}"
-
-unparseStmtsH :: [StmtH ExprH] -> String
-unparseStmtsH stmts = intercalate " ; " (map unparseStmtH stmts)
 
 ---------------------------------------------
 
