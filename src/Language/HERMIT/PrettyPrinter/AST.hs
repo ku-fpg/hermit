@@ -1,5 +1,9 @@
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
-module Language.HERMIT.PrettyPrinter.AST where
+module Language.HERMIT.PrettyPrinter.AST
+  ( -- * HERMIT's AST Pretty-Printer for GHC Core
+    corePrettyH
+  )
+where
 
 import Control.Arrow hiding ((<+>))
 
@@ -13,15 +17,10 @@ import Language.HERMIT.PrettyPrinter.Common
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
-listify :: (MDoc a -> MDoc a -> MDoc a) -> [MDoc a] -> MDoc a
-listify _  []     = text "[]"
-listify op (d:ds) = op (text "[ " <> d) (foldr (\e es -> op (text ", " <> e) es) (text "]") ds)
+---------------------------------------------------------------------------
 
--- | like vcat and hcat, only make the list syntax explicit
-vlist, hlist :: [MDoc a] -> MDoc a
-vlist = listify ($$)
-hlist = listify (<+>)
-
+-- | Pretty print a fragment of GHC Core using HERMIT's \"AST\" pretty printer.
+--   This displays the tree of constructors using nested indentation.
 corePrettyH :: PrettyOptions -> PrettyH Core
 corePrettyH opts = do
     dynFlags <- constT GHC.getDynFlags
@@ -78,3 +77,5 @@ corePrettyH opts = do
      <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
      <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
      <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
+
+---------------------------------------------------------------------------

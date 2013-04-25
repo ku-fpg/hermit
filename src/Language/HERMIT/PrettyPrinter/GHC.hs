@@ -1,5 +1,9 @@
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
-module Language.HERMIT.PrettyPrinter.GHC where
+module Language.HERMIT.PrettyPrinter.GHC
+  ( -- * GHC's standard Pretty-Printer for GHC Core
+    corePrettyH
+  )
+where
 
 import Control.Arrow hiding ((<+>))
 
@@ -12,15 +16,9 @@ import Language.HERMIT.PrettyPrinter.Common
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
-listify :: (MDoc a -> MDoc a -> MDoc a) -> [MDoc a] -> MDoc a
-listify _  []     = text "[]"
-listify op (d:ds) = op (text "[ " <> d) (foldr (\e es -> op (text ", " <> e) es) (text "]") ds)
+---------------------------------------------------------------------------
 
--- | like vcat and hcat, only make the list syntax explicit
-vlist, hlist :: [MDoc a] -> MDoc a
-vlist = listify ($$)
-hlist = listify (<+>)
-
+-- | This pretty printer is just a reflection of GHC's standard pretty printer.
 corePrettyH :: PrettyOptions -> PrettyH Core
 corePrettyH opts = do
     dynFlags <- constT GHC.getDynFlags
@@ -58,3 +56,5 @@ corePrettyH opts = do
      <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
      <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
      <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
+
+---------------------------------------------------------------------------

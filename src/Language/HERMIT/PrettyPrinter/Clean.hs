@@ -1,4 +1,8 @@
-module Language.HERMIT.PrettyPrinter.Clean where
+module Language.HERMIT.PrettyPrinter.Clean
+  ( -- * HERMIT's Clean Pretty-Printer for GHC Core
+    corePrettyH
+  )
+where
 
 import Control.Monad (ap)
 import Control.Arrow hiding ((<+>))
@@ -18,14 +22,7 @@ import TypeRep (TyLit(..))
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
-listify :: (MDoc a -> MDoc a -> MDoc a) -> [MDoc a] -> MDoc a
-listify _  []     = text "[]"
-listify op (d:ds) = op (text "[ " <> d) (foldr (\e es -> op (text ", " <> e) es) (text "]") ds)
-
--- | like vcat and hcat, only make the list syntax explicit
-vlist, hlist :: [MDoc a] -> MDoc a
-vlist = listify ($$)
-hlist = listify (<+>)
+------------------------------------------------------------------------------------------------
 
 data RetExpr
         = RetLam [DocH] DocH
@@ -76,6 +73,9 @@ typeSymbol = markColor TypeColor (specialFont $ char $ renderSpecial TypeSymbol)
 typeBindSymbol :: DocH
 typeBindSymbol = markColor TypeColor (specialFont $ char $ renderSpecial TypeBindSymbol)
 
+------------------------------------------------------------------------------------------------
+
+-- | Pretty print a fragment of GHC Core using HERMIT's \"Clean\" pretty printer.
 corePrettyH :: PrettyOptions -> PrettyH Core
 corePrettyH opts = do
     dynFlags <- constT GHC.getDynFlags
@@ -271,3 +271,5 @@ corePrettyH opts = do
      <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
      <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
      <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
+
+------------------------------------------------------------------------------------------------

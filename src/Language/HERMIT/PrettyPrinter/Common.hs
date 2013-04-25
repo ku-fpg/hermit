@@ -2,12 +2,12 @@
 
 module Language.HERMIT.PrettyPrinter.Common where
 
-import GhcPlugins hiding ((<>))
+import GhcPlugins hiding ((<>),(<+>),($$))
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 import Language.HERMIT.Kure
 import Language.HERMIT.Core
-import Control.Arrow
+import Control.Arrow hiding ((<+>))
 import Data.Monoid hiding ((<>))
 import Data.Default
 import Data.Char
@@ -118,7 +118,7 @@ instance RenderSpecial Char where
         renderSpecial LambdaSymbol        = '\\'  -- lambda
         renderSpecial TypeOfSymbol        = ':'   -- ::
         renderSpecial RightArrowSymbol    = '>'   -- ->
-        renderSpecial CastSymbol          = '~'   -- |>
+        renderSpecial CastSymbol          = '~'   -- "|>"
         renderSpecial CoercionSymbol      = '#'   -- <<coercion>>>
         renderSpecial TypeSymbol          = 'T'   -- <<type>>>
         renderSpecial TypeBindSymbol      = 't'   -- <<type binding>>
@@ -134,7 +134,7 @@ instance RenderSpecial ASCII where
         renderSpecial LambdaSymbol        = ASCII "\\"   -- lambda
         renderSpecial TypeOfSymbol        = ASCII "::"   -- ::
         renderSpecial RightArrowSymbol    = ASCII "->"   -- ->
-        renderSpecial CastSymbol          = ASCII "|>"   -- |>
+        renderSpecial CastSymbol          = ASCII "|>"   -- "|>"
         renderSpecial CoercionSymbol      = ASCII "~#"   -- <<coercion>>>
         renderSpecial TypeSymbol          = ASCII "*"    -- <<type>>>
         renderSpecial TypeBindSymbol      = ASCII "*"    -- <<type>>>
@@ -367,3 +367,15 @@ instance RenderCode DebugPretty where
 
         rEnd = DebugPretty "(END)\n"
 
+-------------------------------------------------------------------------------
+
+listify :: (MDoc a -> MDoc a -> MDoc a) -> [MDoc a] -> MDoc a
+listify _  []     = PP.text "[]"
+listify op (d:ds) = op (PP.text "[ " <> d) (foldr (\e es -> op (PP.text ", " <> e) es) (PP.text "]") ds)
+
+-- | like vcat and hcat, only make the list syntax explicit
+vlist, hlist :: [MDoc a] -> MDoc a
+vlist = listify ($$)
+hlist = listify (<+>)
+
+-------------------------------------------------------------------------------
