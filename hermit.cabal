@@ -173,9 +173,9 @@ Library
        Language.HERMIT.Primitive.New
        Language.HERMIT.Primitive.Unfold
 
-       Language.HERMIT.PrettyPrinter
        Language.HERMIT.PrettyPrinter.AST
        Language.HERMIT.PrettyPrinter.Clean
+       Language.HERMIT.PrettyPrinter.Common
        Language.HERMIT.PrettyPrinter.GHC
 
        Language.HERMIT.Shell.Command

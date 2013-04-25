@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module Language.HERMIT.PrettyPrinter where
+module Language.HERMIT.PrettyPrinter.Common where
 
 import GhcPlugins hiding ((<>))
 

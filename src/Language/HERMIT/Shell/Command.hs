@@ -32,7 +32,7 @@ import Language.HERMIT.Interp
 import Language.HERMIT.Kernel (queryK)
 import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.Parser
-import Language.HERMIT.PrettyPrinter
+import Language.HERMIT.PrettyPrinter.Common
 
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Inline

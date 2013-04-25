@@ -11,7 +11,7 @@ import qualified GhcPlugins as GHC
 import Language.HERMIT.Syntax
 import Language.HERMIT.Kure
 import Language.HERMIT.Core
-import Language.HERMIT.PrettyPrinter
+import Language.HERMIT.PrettyPrinter.Common
 import Language.HERMIT.GHC
 
 import TypeRep (TyLit(..))
