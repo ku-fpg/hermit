@@ -101,60 +101,72 @@ instance Injection ModGuts Core where
 
   inject :: ModGuts -> Core
   inject = GutsCore
+  {-# INLINE inject #-}
 
   project :: Core -> Maybe ModGuts
   project (GutsCore guts) = Just guts
   project _                  = Nothing
+  {-# INLINE project #-}
 
 
 instance Injection CoreProg Core where
 
   inject :: CoreProg -> Core
   inject = ProgCore
+  {-# INLINE inject #-}
 
   project :: Core -> Maybe CoreProg
   project (ProgCore bds) = Just bds
   project _              = Nothing
+  {-# INLINE project #-}
 
 
 instance Injection CoreBind Core where
 
   inject :: CoreBind -> Core
   inject = BindCore
+  {-# INLINE inject #-}
 
   project :: Core -> Maybe CoreBind
   project (BindCore bnd)  = Just bnd
   project _               = Nothing
+  {-# INLINE project #-}
 
 
 instance Injection CoreDef Core where
 
   inject :: CoreDef -> Core
   inject = DefCore
+  {-# INLINE inject #-}
 
   project :: Core -> Maybe CoreDef
   project (DefCore def) = Just def
   project _             = Nothing
+  {-# INLINE project #-}
 
 
 instance Injection CoreAlt Core where
 
   inject :: CoreAlt -> Core
   inject = AltCore
+  {-# INLINE inject #-}
 
   project :: Core -> Maybe CoreAlt
   project (AltCore expr) = Just expr
   project _              = Nothing
+  {-# INLINE project #-}
 
 
 instance Injection CoreExpr Core where
 
   inject :: CoreExpr -> Core
   inject = ExprCore
+  {-# INLINE inject #-}
 
   project :: Core -> Maybe CoreExpr
   project (ExprCore expr) = Just expr
   project _               = Nothing
+  {-# INLINE project #-}
 
 ---------------------------------------------------------------------
 
@@ -196,14 +208,17 @@ instance Walker HermitC Core where
 
       allRexpr :: MonadCatch m => Rewrite HermitC m CoreExpr
       allRexpr = readerT $ \case
-                              App _ _      -> appAllR  (extractR r) (extractR r)
-                              Lam _ _      -> lamR  (extractR r)
-                              Let _ _      -> letAllR  (extractR r) (extractR r)
+                              App _ _      -> appAllR (extractR r) (extractR r)
+                              Lam _ _      -> lamR (extractR r)
+                              Let _ _      -> letAllR (extractR r) (extractR r)
                               Case _ _ _ _ -> caseAllR (extractR r) (const $ extractR r)
                               Cast _ _     -> castR (extractR r)
                               Tick _ _     -> tickR (extractR r)
                               _            -> idR
       {-# INLINE allRexpr #-}
+
+-- NOTE: I tried telling GHC to inline allR and compilation hit the (default) simplifier tick limit.
+-- TODO: Investigate whether that was achieving useful optimisations.
 
 ---------------------------------------------------------------------
 
@@ -211,10 +226,12 @@ instance Walker HermitC Core where
 --   Slightly different to the other congruence combinators: it passes in /all/ of the original to the reconstruction function.
 modGutsT :: Monad m => Translate HermitC m CoreProg a -> (ModGuts -> a -> b) -> Translate HermitC m ModGuts b
 modGutsT t f = translate $ \ c guts -> f guts <$> apply t (c @@ 0) (bindsToProg $ mg_binds guts)
+{-# INLINE modGutsT #-}
 
 -- | Rewrite the 'CoreProg' child of a module.
 modGutsR :: Monad m => Rewrite HermitC m CoreProg -> Rewrite HermitC m ModGuts
 modGutsR r = modGutsT r (\ guts p -> guts {mg_binds = progToBinds p})
+{-# INLINE modGutsR #-}
 
 ---------------------------------------------------------------------
 
@@ -223,24 +240,29 @@ progNilT :: Monad m => b -> Translate HermitC m CoreProg b
 progNilT b = contextfreeT $ \case
                                ProgNil       -> return b
                                ProgCons _ _  -> fail "not an empty program node."
+{-# INLINE progNilT #-}
 
 -- | Translate a program of the form: ('CoreBind' @:@ 'CoreProg')
 progConsT :: Monad m => Translate HermitC m CoreBind a1 -> Translate HermitC m CoreProg a2 -> (a1 -> a2 -> b) -> Translate HermitC m CoreProg b
 progConsT t1 t2 f = translate $ \ c -> \case
                                           ProgCons bd p -> f <$> apply t1 (c @@ 0) bd <*> apply t2 (addBinding bd c @@ 1) p
                                           _             -> fail "not a non-empty program node."
+{-# INLINE progConsT #-}
 
 -- | Rewrite all children of a program of the form: ('CoreBind' @:@ 'CoreProg')
 progConsAllR :: Monad m => Rewrite HermitC m CoreBind -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 progConsAllR r1 r2 = progConsT r1 r2 ProgCons
+{-# INLINE progConsAllR #-}
 
 -- | Rewrite any children of a program of the form: ('CoreBind' @:@ 'CoreProg')
 progConsAnyR :: MonadCatch m => Rewrite HermitC m CoreBind -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 progConsAnyR r1 r2 = unwrapAnyR $ progConsAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE progConsAnyR #-}
 
 -- | Rewrite one child of a program of the form: ('CoreBind' @:@ 'CoreProg')
 progConsOneR :: MonadCatch m => Rewrite HermitC m CoreBind -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 progConsOneR r1 r2 = unwrapOneR $  progConsAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE progConsOneR #-}
 
 ---------------------------------------------------------------------
 
@@ -249,10 +271,12 @@ nonRecT :: Monad m => Translate HermitC m CoreExpr a -> (Var -> a -> b) -> Trans
 nonRecT t f = translate $ \ c -> \case
                                     NonRec v e -> f v <$> apply t (c @@ 0) e
                                     _          -> fail "not a non-recursive binding-group node."
+{-# INLINE nonRecT #-}
 
 -- | Rewrite the 'CoreExpr' child of a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
 nonRecR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreBind
 nonRecR r = nonRecT r NonRec
+{-# INLINE nonRecR #-}
 
 -- | Translate a binding group of the form: @Rec@ ['CoreDef']
 recT :: Monad m => (Int -> Translate HermitC m CoreDef a) -> ([a] -> b) -> Translate HermitC m CoreBind b
@@ -263,38 +287,46 @@ recT t f = translate $ \ c -> \case
                                        | ((v,e),n) <- zip bds [0..]
                                        ]
          _       -> fail "not a recursive binding-group node."
+{-# INLINE recT #-}
 
 -- | Rewrite all children of a binding group of the form: @Rec@ ['CoreDef']
 recAllR :: Monad m => (Int -> Rewrite HermitC m CoreDef) -> Rewrite HermitC m CoreBind
 recAllR rs = recT rs defsToRecBind
+{-# INLINE recAllR #-}
 
 -- | Rewrite any children of a binding group of the form: @Rec@ ['CoreDef']
 recAnyR :: MonadCatch m => (Int -> Rewrite HermitC m CoreDef) -> Rewrite HermitC m CoreBind
 recAnyR rs = unwrapAnyR $ recAllR (wrapAnyR . rs)
+{-# INLINE recAnyR #-}
 
 -- | Rewrite one child of a binding group of the form: @Rec@ ['CoreDef']
 recOneR :: MonadCatch m => (Int -> Rewrite HermitC m CoreDef) -> Rewrite HermitC m CoreBind
 recOneR rs = unwrapOneR $ recAllR (wrapOneR . rs)
+{-# INLINE recOneR #-}
 
 ---------------------------------------------------------------------
 
 -- | Translate a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
 defT :: Monad m => Translate HermitC m CoreExpr a -> (Id -> a -> b) -> Translate HermitC m CoreDef b
 defT t f = translate $ \ c (Def v e) -> f v <$> apply t (c @@ 0) e
+{-# INLINE defT #-}
 
 -- | Rewrite the 'CoreExpr' child of a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
 defR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreDef
 defR r = defT r Def
+{-# INLINE defR #-}
 
 ---------------------------------------------------------------------
 
 -- | Translate a case alternative of the form: ('AltCon', ['Var'], 'CoreExpr')
 altT :: Monad m => Translate HermitC m CoreExpr a -> (AltCon -> [Var] -> a -> b) -> Translate HermitC m CoreAlt b
 altT t f = translate $ \ c (con,vs,e) -> f con vs <$> apply t (addAltBindings vs c @@ 0) e
+{-# INLINE altT #-}
 
 -- | Rewrite the 'CoreExpr' child of a case alternative of the form: ('AltCon', 'Id', 'CoreExpr')
 altR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreAlt
 altR r = altT r (,,)
+{-# INLINE altR #-}
 
 ---------------------------------------------------------------------
 
@@ -303,43 +335,48 @@ varT :: Monad m => (Id -> b) -> Translate HermitC m CoreExpr b
 varT f = contextfreeT $ \case
                            Var v -> return (f v)
                            _     -> fail "not a variable node."
+{-# INLINE varT #-}
 
 -- | Translate an expression of the form: @Lit@ 'Literal'
 litT :: Monad m => (Literal -> b) -> Translate HermitC m CoreExpr b
 litT f = contextfreeT $ \case
                            Lit x -> return (f x)
                            _     -> fail "not a literal node."
-
+{-# INLINE litT #-}
 
 -- | Translate an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
 appT :: Monad m => Translate HermitC m CoreExpr a1 -> Translate HermitC m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate HermitC m CoreExpr b
 appT t1 t2 f = translate $ \ c -> \case
                                      App e1 e2 -> f <$> apply t1 (c @@ 0) e1 <*> apply t2 (c @@ 1) e2
                                      _         -> fail "not an application node."
+{-# INLINE appT #-}
 
 -- | Rewrite all children of an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
 appAllR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 appAllR r1 r2 = appT r1 r2 App
+{-# INLINE appAllR #-}
 
 -- | Rewrite any children of an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
 appAnyR :: MonadCatch m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 appAnyR r1 r2 = unwrapAnyR $ appAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE appAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
 appOneR :: MonadCatch m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 appOneR r1 r2 = unwrapOneR $ appAllR (wrapOneR r1) (wrapOneR r2)
-
+{-# INLINE appOneR #-}
 
 -- | Translate an expression of the form: @Lam@ 'Var' 'CoreExpr'
 lamT :: Monad m => Translate HermitC m CoreExpr a -> (Var -> a -> b) -> Translate HermitC m CoreExpr b
 lamT t f = translate $ \ c -> \case
                                  Lam v e -> f v <$> apply t (addLambdaBinding v c @@ 0) e
                                  _       -> fail "not a lambda node."
+{-# INLINE lamT #-}
 
 -- | Rewrite the 'CoreExpr' child of an expression of the form: @Lam@ 'Var' 'CoreExpr'
 lamR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 lamR r = lamT r Lam
-
+{-# INLINE lamR #-}
 
 -- | Translate an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
 letT :: Monad m => Translate HermitC m CoreBind a1 -> Translate HermitC m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate HermitC m CoreExpr b
@@ -348,18 +385,22 @@ letT t1 t2 f = translate $ \ c -> \case
                      -- If the bindings are recursive, they will be added to the context by recT.
                      f <$> apply t1 (c @@ 0) bds <*> apply t2 (addBinding bds c @@ 1) e
         _         -> fail "not a let node."
+{-# INLINE letT #-}
 
 -- | Rewrite all children of an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
 letAllR :: Monad m => Rewrite HermitC m CoreBind -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letAllR r1 r2 = letT r1 r2 Let
+{-# INLINE letAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
 letAnyR :: MonadCatch m => Rewrite HermitC m CoreBind -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letAnyR r1 r2 = unwrapAnyR $ letAnyR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE letAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
 letOneR :: MonadCatch m => Rewrite HermitC m CoreBind -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letOneR r1 r2 = unwrapOneR $ letOneR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE letOneR #-}
 
 
 -- | Translate an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
@@ -372,51 +413,60 @@ caseT t ts f = translate $ \ c -> \case
                                             | (alt,n) <- zip alts [0..]
                                             ]
          _                -> fail "not a case node."
+{-# INLINE caseT #-}
 
 -- | Rewrite all children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
 caseAllR :: Monad m => Rewrite HermitC m CoreExpr -> (Int -> Rewrite HermitC m CoreAlt) -> Rewrite HermitC m CoreExpr
 caseAllR r rs = caseT r rs Case
+{-# INLINE caseAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
 caseAnyR :: MonadCatch m => Rewrite HermitC m CoreExpr -> (Int -> Rewrite HermitC m CoreAlt) -> Rewrite HermitC m CoreExpr
 caseAnyR r rs = unwrapAnyR $ caseAllR (wrapAnyR r) (wrapAnyR . rs)
+{-# INLINE caseAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
 caseOneR :: MonadCatch m => Rewrite HermitC m CoreExpr -> (Int -> Rewrite HermitC m CoreAlt) -> Rewrite HermitC m CoreExpr
 caseOneR r rs = unwrapOneR $ caseAllR (wrapOneR r) (wrapOneR . rs)
-
+{-# INLINE caseOneR #-}
 
 -- | Translate an expression of the form: @Cast@ 'CoreExpr' 'Coercion'
 castT :: Monad m => Translate HermitC m CoreExpr a -> (a -> Coercion -> b) -> Translate HermitC m CoreExpr b
 castT t f = translate $ \ c -> \case
                                   Cast e cast -> f <$> apply t (c @@ 0) e <*> return cast
                                   _           -> fail "not a cast node."
+{-# INLINE castT #-}
 
 -- | Rewrite the 'CoreExpr' child of an expression of the form: @Cast@ 'CoreExpr' 'Coercion'
 castR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 castR r = castT r Cast
+{-# INLINE castR #-}
 
 -- | Translate an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
 tickT :: Monad m => Translate HermitC m CoreExpr a -> (CoreTickish -> a -> b) -> Translate HermitC m CoreExpr b
 tickT t f = translate $ \ c -> \case
         Tick tk e -> f tk <$> apply t (c @@ 0) e
         _         -> fail "not a tick node."
+{-# INLINE tickT #-}
 
 -- | Rewrite the 'CoreExpr' child of an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
 tickR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 tickR r = tickT r Tick
+{-# INLINE tickR #-}
 
 -- | Translate an expression of the form: @Type@ 'Type'
 typeT :: Monad m => (Type -> b) -> Translate HermitC m CoreExpr b
 typeT f = contextfreeT $ \case
                             Type t -> return (f t)
                             _      -> fail "not a type node."
+{-# INLINE typeT #-}
 
 -- | Translate an expression of the form: @Coercion@ 'Coercion'
 coercionT :: Monad m => (Coercion -> b) -> Translate HermitC m CoreExpr b
 coercionT f = contextfreeT $ \case
                                 Coercion co -> return (f co)
                                 _           -> fail "not a coercion node."
+{-# INLINE coercionT #-}
 
 ---------------------------------------------------------------------
 
@@ -425,194 +475,239 @@ coercionT f = contextfreeT $ \case
 -- | Translate a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
 recDefT :: Monad m => (Int -> Translate HermitC m CoreExpr a1) -> ([(Id,a1)] -> b) -> Translate HermitC m CoreBind b
 recDefT ts = recT (\ n -> defT (ts n) (,))
+{-# INLINE recDefT #-}
 
 -- | Rewrite all children of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
 recDefAllR :: Monad m => (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreBind
 recDefAllR rs = recAllR (\ n -> defR (rs n))
+{-# INLINE recDefAllR #-}
 
 -- | Rewrite any children of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
 recDefAnyR :: MonadCatch m => (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreBind
 recDefAnyR rs = recAnyR (\ n -> defR (rs n))
+{-# INLINE recDefAnyR #-}
 
 -- | Rewrite one child of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
 recDefOneR :: MonadCatch m => (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreBind
 recDefOneR rs = recOneR (\ n -> defR (rs n))
+{-# INLINE recDefOneR #-}
 
 
 -- | Translate a program of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
 consNonRecT :: Monad m => Translate HermitC m CoreExpr a1 -> Translate HermitC m CoreProg a2 -> (Var -> a1 -> a2 -> b) -> Translate HermitC m CoreProg b
 consNonRecT t1 t2 f = progConsT (nonRecT t1 (,)) t2 (uncurry f)
+{-# INLINE consNonRecT #-}
 
 -- | Rewrite all children of an expression of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
 consNonRecAllR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 consNonRecAllR r1 r2 = progConsAllR (nonRecR r1) r2
+{-# INLINE consNonRecAllR #-}
 
 -- | Rewrite any children of an expression of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
 consNonRecAnyR :: MonadCatch m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 consNonRecAnyR r1 r2 = progConsAnyR (nonRecR r1) r2
+{-# INLINE consNonRecAnyR #-}
 
 -- | Rewrite one child of an expression of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
 consNonRecOneR :: MonadCatch m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 consNonRecOneR r1 r2 = progConsOneR (nonRecR r1) r2
+{-# INLINE consNonRecOneR #-}
 
 
 -- | Translate an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
 consRecT :: Monad m => (Int -> Translate HermitC m CoreDef a1) -> Translate HermitC m CoreProg a2 -> ([a1] -> a2 -> b) -> Translate HermitC m CoreProg b
 consRecT ts t = progConsT (recT ts id) t
+{-# INLINE consRecT #-}
 
 -- | Rewrite all children of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
 consRecAllR :: Monad m => (Int -> Rewrite HermitC m CoreDef) -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 consRecAllR rs r = progConsAllR (recAllR rs) r
+{-# INLINE consRecAllR #-}
 
 -- | Rewrite any children of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
 consRecAnyR :: MonadCatch m => (Int -> Rewrite HermitC m CoreDef) -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 consRecAnyR rs r = progConsAnyR (recAnyR rs) r
+{-# INLINE consRecAnyR #-}
 
 -- | Rewrite one child of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
 consRecOneR :: MonadCatch m => (Int -> Rewrite HermitC m CoreDef) -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 consRecOneR rs r = progConsOneR (recOneR rs) r
+{-# INLINE consRecOneR #-}
 
 
 -- | Translate an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
 consRecDefT :: Monad m => (Int -> Translate HermitC m CoreExpr a1) -> Translate HermitC m CoreProg a2 -> ([(Id,a1)] -> a2 -> b) -> Translate HermitC m CoreProg b
 consRecDefT ts t = consRecT (\ n -> defT (ts n) (,)) t
+{-# INLINE consRecDefT #-}
 
 -- | Rewrite all children of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
 consRecDefAllR :: Monad m => (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 consRecDefAllR rs r = consRecAllR (\ n -> defR (rs n)) r
+{-# INLINE consRecDefAllR #-}
 
 -- | Rewrite any children of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
 consRecDefAnyR :: MonadCatch m => (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 consRecDefAnyR rs r = consRecAnyR (\ n -> defR (rs n)) r
+{-# INLINE consRecDefAnyR #-}
 
 -- | Rewrite one child of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
 consRecDefOneR :: MonadCatch m => (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreProg -> Rewrite HermitC m CoreProg
 consRecDefOneR rs r = consRecOneR (\ n -> defR (rs n)) r
+{-# INLINE consRecDefOneR #-}
 
 
 -- | Translate an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
 letNonRecT :: Monad m => Translate HermitC m CoreExpr a1 -> Translate HermitC m CoreExpr a2 -> (Var -> a1 -> a2 -> b) -> Translate HermitC m CoreExpr b
 letNonRecT t1 t2 f = letT (nonRecT t1 (,)) t2 (uncurry f)
+{-# INLINE letNonRecT #-}
 
 -- | Rewrite all children of an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
 letNonRecAllR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letNonRecAllR r1 r2 = letAllR (nonRecR r1) r2
+{-# INLINE letNonRecAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
 letNonRecAnyR :: MonadCatch m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letNonRecAnyR r1 r2 = letAnyR (nonRecR r1) r2
+{-# INLINE letNonRecAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
 letNonRecOneR :: MonadCatch m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letNonRecOneR r1 r2 = letOneR (nonRecR r1) r2
+{-# INLINE letNonRecOneR #-}
 
 
 -- | Translate an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
 letRecT :: Monad m => (Int -> Translate HermitC m CoreDef a1) -> Translate HermitC m CoreExpr a2 -> ([a1] -> a2 -> b) -> Translate HermitC m CoreExpr b
 letRecT ts t = letT (recT ts id) t
+{-# INLINE letRecT #-}
 
 -- | Rewrite all children of an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
 letRecAllR :: Monad m => (Int -> Rewrite HermitC m CoreDef) -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letRecAllR rs r = letAllR (recAllR rs) r
+{-# INLINE letRecAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
 letRecAnyR :: MonadCatch m => (Int -> Rewrite HermitC m CoreDef) -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letRecAnyR rs r = letAnyR (recAnyR rs) r
+{-# INLINE letRecAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
 letRecOneR :: MonadCatch m => (Int -> Rewrite HermitC m CoreDef) -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letRecOneR rs r = letOneR (recOneR rs) r
+{-# INLINE letRecOneR #-}
 
 
 -- | Translate an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
 letRecDefT :: Monad m => (Int -> Translate HermitC m CoreExpr a1) -> Translate HermitC m CoreExpr a2 -> ([(Id,a1)] -> a2 -> b) -> Translate HermitC m CoreExpr b
 letRecDefT ts t = letRecT (\ n -> defT (ts n) (,)) t
+{-# INLINE letRecDefT #-}
 
 -- | Rewrite all children of an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
 letRecDefAllR :: Monad m => (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letRecDefAllR rs r = letRecAllR (\ n -> defR (rs n)) r
+{-# INLINE letRecDefAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
 letRecDefAnyR :: MonadCatch m => (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letRecDefAnyR rs r = letRecAnyR (\ n -> defR (rs n)) r
+{-# INLINE letRecDefAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
 letRecDefOneR :: MonadCatch m => (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreExpr -> Rewrite HermitC m CoreExpr
 letRecDefOneR rs r = letRecOneR (\ n -> defR (rs n)) r
+{-# INLINE letRecDefOneR #-}
 
 
 -- | Translate an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
 caseAltT :: Monad m => Translate HermitC m CoreExpr a1 -> (Int -> Translate HermitC m CoreExpr a2) -> (a1 -> Id -> Type -> [(AltCon,[Var],a2)] -> b) -> Translate HermitC m CoreExpr b
 caseAltT t ts = caseT t (\ n -> altT (ts n) (,,))
+{-# INLINE caseAltT #-}
 
 -- | Rewrite all children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
 caseAltAllR :: Monad m => Rewrite HermitC m CoreExpr -> (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreExpr
 caseAltAllR t ts = caseAllR t (\ n -> altR (ts n))
+{-# INLINE caseAltAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
 caseAltAnyR :: MonadCatch m => Rewrite HermitC m CoreExpr -> (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreExpr
 caseAltAnyR t ts = caseAnyR t (\ n -> altR (ts n))
+{-# INLINE caseAltAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
 caseAltOneR :: MonadCatch m => Rewrite HermitC m CoreExpr -> (Int -> Rewrite HermitC m CoreExpr) -> Rewrite HermitC m CoreExpr
 caseAltOneR t ts = caseOneR t (\ n -> altR (ts n))
+{-# INLINE caseAltOneR #-}
 
 ---------------------------------------------------------------------
 
 -- | Promote a rewrite on 'ModGuts' to a rewrite on 'Core'.
 promoteModGutsR :: Monad m => Rewrite HermitC m ModGuts -> Rewrite HermitC m Core
 promoteModGutsR = promoteWithFailMsgR "This rewrite can only succeed at the module level."
+{-# INLINE promoteModGutsR #-}
 
 -- | Promote a rewrite on 'CoreProg' to a rewrite on 'Core'.
 promoteProgR :: Monad m => Rewrite HermitC m CoreProg -> Rewrite HermitC m Core
 promoteProgR = promoteWithFailMsgR "This rewrite can only succeed at program nodes (the top-level)."
+{-# INLINE promoteProgR #-}
 
 -- | Promote a rewrite on 'CoreBind' to a rewrite on 'Core'.
 promoteBindR :: Monad m => Rewrite HermitC m CoreBind -> Rewrite HermitC m Core
 promoteBindR = promoteWithFailMsgR "This rewrite can only succeed at binding group nodes."
+{-# INLINE promoteBindR #-}
 
 -- | Promote a rewrite on 'CoreDef' to a rewrite on 'Core'.
 promoteDefR :: Monad m => Rewrite HermitC m CoreDef -> Rewrite HermitC m Core
 promoteDefR = promoteWithFailMsgR "This rewrite can only succeed at recursive definition nodes."
+{-# INLINE promoteDefR #-}
 
 -- | Promote a rewrite on 'CoreAlt' to a rewrite on 'Core'.
 promoteAltR :: Monad m => Rewrite HermitC m CoreAlt -> Rewrite HermitC m Core
 promoteAltR = promoteWithFailMsgR "This rewrite can only succeed at case alternative nodes."
+{-# INLINE promoteAltR #-}
 
 -- | Promote a rewrite on 'CoreExpr' to a rewrite on 'Core'.
 promoteExprR :: Monad m => Rewrite HermitC m CoreExpr -> Rewrite HermitC m Core
 promoteExprR = promoteWithFailMsgR "This rewrite can only succeed at expression nodes."
+{-# INLINE promoteExprR #-}
 
 ---------------------------------------------------------------------
 
 -- | Promote a bidirectional rewrite on 'CoreExpr' to a bidirectional rewrite on 'Core'.
 promoteExprBiR :: Monad m => BiRewrite HermitC m CoreExpr -> BiRewrite HermitC m Core
 promoteExprBiR b = bidirectional (promoteExprR $ forewardT b) (promoteExprR $ backwardT b)
+{-# INLINE promoteExprBiR #-}
 
 ---------------------------------------------------------------------
 
 -- | Promote a translate on 'ModGuts' to a translate on 'Core'.
 promoteModGutsT :: Monad m => Translate HermitC m ModGuts b -> Translate HermitC m Core b
 promoteModGutsT = promoteWithFailMsgT "This translate can only succeed at the module level."
+{-# INLINE promoteModGutsT #-}
 
 -- | Promote a translate on 'CoreProg' to a translate on 'Core'.
 promoteProgT :: Monad m => Translate HermitC m CoreProg b -> Translate HermitC m Core b
 promoteProgT = promoteWithFailMsgT "This translate can only succeed at program nodes (the top-level)."
+{-# INLINE promoteProgT #-}
 
 -- | Promote a translate on 'CoreBind' to a translate on 'Core'.
 promoteBindT :: Monad m => Translate HermitC m CoreBind b -> Translate HermitC m Core b
 promoteBindT = promoteWithFailMsgT "This translate can only succeed at binding group nodes."
+{-# INLINE promoteBindT #-}
 
 -- | Promote a translate on 'CoreDef' to a translate on 'Core'.
 promoteDefT :: Monad m => Translate HermitC m CoreDef b -> Translate HermitC m Core b
 promoteDefT = promoteWithFailMsgT "This translate can only succeed at recursive definition nodes."
+{-# INLINE promoteDefT #-}
 
 -- | Promote a translate on 'CoreAlt' to a translate on 'Core'.
 promoteAltT :: Monad m => Translate HermitC m CoreAlt b -> Translate HermitC m Core b
 promoteAltT = promoteWithFailMsgT "This translate can only succeed at case alternative nodes."
+{-# INLINE promoteAltT #-}
 
 -- | Promote a translate on 'CoreExpr' to a translate on 'Core'.
 promoteExprT :: Monad m => Translate HermitC m CoreExpr b -> Translate HermitC m Core b
 promoteExprT = promoteWithFailMsgT "This translate can only succeed at expression nodes."
+{-# INLINE promoteExprT #-}
 
 ---------------------------------------------------------------------

@@ -57,16 +57,19 @@ infixr 5 `ProgCons`
 progToBinds :: CoreProg -> [CoreBind]
 progToBinds ProgNil         = []
 progToBinds (ProgCons bd p) = bd : progToBinds p
+-- recursive, don't inline
 
 -- | Build a program from a list of bindings.
 --   Note that bindings earlier in the list are considered scope over bindings later in the list.
 bindsToProg :: [CoreBind] -> CoreProg
 bindsToProg = foldr ProgCons ProgNil
+{-# INLINE bindsToProg #-}
 
 -- | Extract the list of identifier/expression pairs from a binding group.
 bindToIdExprs :: CoreBind -> [(Id,CoreExpr)]
 bindToIdExprs (NonRec v e) = [(v,e)]
 bindToIdExprs (Rec bds)    = bds
+{-# INLINE bindToIdExprs #-}
 
 -- | A (potentially recursive) definition is an identifier and an expression.
 --   In GHC Core, recursive definitions are encoded as ('Id', 'CoreExpr') pairs.
@@ -76,10 +79,12 @@ data CoreDef = Def Id CoreExpr
 -- | Convert a definition to an identifier/expression pair.
 defToIdExpr :: CoreDef -> (Id,CoreExpr)
 defToIdExpr (Def v e) = (v,e)
+{-# INLINE defToIdExpr #-}
 
 -- | Convert a list of recursive definitions into an (isomorphic) recursive binding group.
 defsToRecBind :: [CoreDef] -> CoreBind
 defsToRecBind = Rec . map defToIdExpr
+{-# INLINE defsToRecBind #-}
 
 -----------------------------------------------------------------------
 
@@ -93,6 +98,7 @@ type CoreTickish = Tickish Id
 exprTypeOrKind :: CoreExpr -> Type
 exprTypeOrKind (Type t) = typeKind t
 exprTypeOrKind e        = exprType e
+{-# INLINE exprTypeOrKind #-}
 
 -----------------------------------------------------------------------
 
@@ -100,6 +106,7 @@ exprTypeOrKind e        = exprType e
 appCount :: CoreExpr -> Int
 appCount (App e1 _) = appCount e1 + 1
 appCount _          = 0
+{-# INLINE appCount #-}
 
 -----------------------------------------------------------------------
 
@@ -108,10 +115,12 @@ endoFunType :: Monad m => CoreExpr -> m Type
 endoFunType f = do (ty1,ty2) <- funArgResTypes f
                    guardMsg (eqType ty1 ty2) ("argument and result types differ.")
                    return ty1
+{-# INLINE endoFunType #-}
 
 -- | Return the domain and codomain types of a function expression.
 funArgResTypes :: Monad m => CoreExpr -> m (Type,Type)
 funArgResTypes e = maybe (fail "not a function type.") return (splitFunTy_maybe $ exprType e)
+{-# INLINE funArgResTypes #-}
 
 -- | Check two expressions have types @a -> b@ and @b -> a@, returning @(a,b)@.
 funsWithInverseTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
@@ -121,5 +130,6 @@ funsWithInverseTypes f g = do (fdom,fcod) <- funArgResTypes f
                                 do guardM (eqType fdom gcod)
                                    guardM (eqType gdom fcod)
                                    return (fdom,fcod)
+{-# INLINE funsWithInverseTypes #-}
 
 -----------------------------------------------------------------------

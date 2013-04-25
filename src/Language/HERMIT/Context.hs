@@ -47,6 +47,7 @@ hermitBindingDepth :: HermitBinding -> Int
 hermitBindingDepth (LAM d)      = d
 hermitBindingDepth (BIND d _ _) = d
 hermitBindingDepth (CASE d _ _) = d
+{-# INLINE hermitBindingDepth #-}
 
 ------------------------------------------------------------------------
 
@@ -66,14 +67,16 @@ data HermitC = HermitC
 instance PathContext HermitC where
   absPath :: HermitC -> AbsolutePath
   absPath = hermitPath
+  {-# INLINE absPath #-}
 
   (@@) :: HermitC -> Int -> HermitC
   c @@ n = c { hermitPath = hermitPath c @@ n }
-
+  {-# INLINE (@@) #-}
 
 -- | Create the initial HERMIT 'HermitC' by providing a 'ModGuts'.
 initHermitC :: ModGuts -> HermitC
 initHermitC modGuts = HermitC empty 0 rootAbsPath modGuts
+{-# INLINE initHermitC #-}
 
 ------------------------------------------------------------------------
 
@@ -88,6 +91,7 @@ addBinding corebind c = let nextDepth = succ (hermitDepth c)
                         in c { hermitBindings = newBds
                              , hermitDepth    = nextDepth
                              }
+{-# INLINE addBinding #-}
 
 -- | Add the bindings for a specific case alternative.
 addCaseBinding :: (Id,CoreExpr,CoreAlt) -> HermitC -> HermitC
@@ -95,6 +99,7 @@ addCaseBinding (v,e,(con,vs,_)) c = let nextDepth = succ (hermitDepth c)
                                      in c { hermitBindings = insert v (CASE nextDepth e (con,vs)) (hermitBindings c)
                                           , hermitDepth    = nextDepth
                                           }
+{-# INLINE addCaseBinding #-}
 
 -- | Add a lambda bound variable to a context.
 --   All that is known is the variable, which may shadow something.
@@ -104,6 +109,7 @@ addLambdaBinding v c = let nextDepth = succ (hermitDepth c)
                         in c { hermitBindings = insert v (LAM nextDepth) (hermitBindings c)
                              , hermitDepth    = nextDepth
                              }
+{-# INLINE addLambdaBinding #-}
 
 -- | Add the variables bound by a 'DataCon' in a case. Like lambda bindings,
 -- in that we know nothing about them, but all bound at the same depth,
@@ -113,6 +119,7 @@ addAltBindings vs c = let nextDepth = succ (hermitDepth c)
                        in c { hermitBindings = foldr (\ v bds -> insert v (LAM nextDepth) bds) (hermitBindings c) vs
                             , hermitDepth    = nextDepth
                             }
+{-# INLINE addAltBindings #-}
 -- TODO: Is treating case-alternative bindings as lambda bindings okay?
 --       There's no issues with lambda bindings being sequential and case-alternative bindings being in parallel?
 
@@ -121,19 +128,23 @@ addAltBindings vs c = let nextDepth = succ (hermitDepth c)
 -- | Lookup the binding for a variable in a context.
 lookupHermitBinding :: Var -> HermitC -> Maybe HermitBinding
 lookupHermitBinding n env = lookup n (hermitBindings env)
+{-# INLINE lookupHermitBinding #-}
 
 -- | List all the variables bound in a context.
 boundVars :: HermitC -> [Var]
 boundVars = keys . hermitBindings
+{-# INLINE boundVars #-}
 
 -- | Determine if a variable is bound in a context.
 boundIn :: Var -> HermitC -> Bool
 boundIn i c = i `elem` boundVars c
+{-# INLINE boundIn #-}
 
 ------------------------------------------------------------------------
 
 -- | List all variables bound in the context that match the given name.
 findBoundVars :: TH.Name -> HermitC -> [Var]
 findBoundVars nm = filter (cmpTHName2Var nm) . boundVars
+{-# INLINE findBoundVars #-}
 
 ------------------------------------------------------------------------

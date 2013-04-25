@@ -82,9 +82,11 @@ externals = map (.+ KURE)
 hfocusR :: TranslateH Core Path -> RewriteH Core -> RewriteH Core
 hfocusR tp r = do p <- tp
                   pathR p r
+{-# INLINE hfocusR #-}
 
 hfocusT :: TranslateH Core Path -> TranslateH Core String -> TranslateH Core String
 hfocusT tp t = do p <- tp
                   pathT p t
+{-# INLINE hfocusT #-}
 
 ------------------------------------------------------------------------------------
