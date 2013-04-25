@@ -16,5 +16,5 @@ ww-split [| wrap |] [| unwrap |]
   simplify
   innermost case-float-case
 }
-simplify
+bash
 { consider let ; 1 ; eta-expand 'n ; any-call (unfold 'wrap) }

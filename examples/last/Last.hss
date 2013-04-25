@@ -8,10 +8,10 @@ ww-split-param 1 [|wrap|] [|unwrap|]
    0
    unfold 'unwrap
    unfold 'f
-   case-reduce
+   bash
    consider app
    unfold 'wrap
-   case-reduce
+   bash
 }
 any-call (unfold 'wrap)
 bash
