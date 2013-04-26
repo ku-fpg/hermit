@@ -1,3 +1,4 @@
+-- note: need to cabal install temporary to run
 module Test where
 
 import Control.Monad
@@ -74,7 +75,7 @@ main = do
                                 , ")" ]
                 diff = unwords [ "diff", "-b", "-U 5", gfile, dfile ]
 
-            putStrLn cmd
+            -- putStrLn cmd
             (_,_,_,r) <- createProcess $ shell cmd
             ex <- waitForProcess r
 
