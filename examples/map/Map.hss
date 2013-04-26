@@ -45,3 +45,4 @@ consider 'mapPlus1Int
     innermost (unfold-rule precondition2)
   }
 }
+simplify
