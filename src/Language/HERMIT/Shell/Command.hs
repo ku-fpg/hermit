@@ -276,6 +276,9 @@ iokm2clm' msg ret m = liftIO m >>= runKureM ret (throwError . (msg ++))
 iokm2clm :: MonadIO m => String -> IO (KureM a) -> CLM m a
 iokm2clm msg = iokm2clm' msg return
 
+iokm2clm'' :: MonadIO m => IO (KureM a) -> CLM m a
+iokm2clm'' = iokm2clm ""
+
 data CommandLineState = CommandLineState
         { cl_graph       :: [(SAST,ExprH,SAST)]
         , cl_tags        :: [(String,SAST)]
@@ -450,9 +453,10 @@ performAstEffect (Apply rr) expr = do
     let commit = put (newSAST expr sast' st) >> showFocus
 
     if cl_corelint (cl_session st)
-        then liftIO (toASTS sk sast' >>= \ ast' -> queryK (kernelS sk) ast' lintModuleT kEnv)
-             >>= runKureM (\ warns -> putStrToConsole warns >> commit)
-                          (\ errs  -> liftIO (deleteS sk sast') >> fail errs)
+        then do ast' <- iokm2clm'' $ toASTS sk sast'
+                liftIO (queryK (kernelS sk) ast' lintModuleT kEnv)
+                >>= runKureM (\ warns -> putStrToConsole warns >> commit)
+                             (\ errs  -> liftIO (deleteS sk sast') >> fail errs)
         else commit
 
 performAstEffect (Pathfinder t) expr = do
@@ -473,13 +477,13 @@ performAstEffect (Direction dir) expr = do
 
 performAstEffect BeginScope expr = do
         st <- get
-        ast <- liftIO $ beginScopeS (cl_kernel st) (cl_cursor (cl_session st))
+        ast <- iokm2clm'' $ beginScopeS (cl_kernel st) (cl_cursor (cl_session st))
         put $ newSAST expr ast st
         showFocus
 
 performAstEffect EndScope expr = do
         st <- get
-        ast <- liftIO $ endScopeS (cl_kernel st) (cl_cursor (cl_session st))
+        ast <- iokm2clm'' $ endScopeS (cl_kernel st) (cl_cursor (cl_session st))
         put $ newSAST expr ast st
         showFocus
 
@@ -533,8 +537,8 @@ performQuery Display = do
 performMetaCommand :: MonadIO m => MetaCommand -> CLM m ()
 performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
 performMetaCommand Resume = do st <- get
-                               liftIO $ resumeS (cl_kernel st) (cl_cursor $ cl_session st)
-performMetaCommand (Delete sast) = gets cl_kernel >>= liftIO . flip deleteS sast
+                               iokm2clm'' $ resumeS (cl_kernel st) (cl_cursor $ cl_session st)
+performMetaCommand (Delete sast) = gets cl_kernel >>= iokm2clm'' . flip deleteS sast
 performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
     case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of

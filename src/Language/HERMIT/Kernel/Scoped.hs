@@ -12,7 +12,7 @@ module Language.HERMIT.Kernel.Scoped
 
 import Control.Arrow
 import Control.Concurrent.STM
-import Control.Exception.Base (bracketOnError)
+import Control.Exception (bracketOnError, catch, SomeException)
 
 import qualified Data.IntMap as I
 
@@ -70,19 +70,19 @@ pathStackToLens ps p = injectL >>> pathL (concat $ localPaths2Paths (p:ps))
 
 -- | An alternative HERMIT kernel, that provides scoping.
 data ScopedKernel = ScopedKernel
-        { resumeS     ::            SAST                                              -> IO ()
+        { resumeS     ::            SAST                                              -> IO (KureM ())
         , abortS      ::                                                                 IO ()
         , applyS      ::            SAST -> RewriteH Core             -> HermitMEnv   -> IO (KureM SAST)
         , queryS      :: forall a . SAST -> TranslateH Core a         -> HermitMEnv   -> IO (KureM a)
-        , deleteS     ::            SAST                                              -> IO ()
+        , deleteS     ::            SAST                                              -> IO (KureM ())
         , listS       ::                                                                 IO [SAST]
-        , pathS       ::            SAST                                              -> IO [Path]
+        , pathS       ::            SAST                                              -> IO (KureM [Path])
         , modPathS    ::            SAST -> (LocalPath -> LocalPath)  -> HermitMEnv   -> IO (KureM SAST)
-        , beginScopeS ::            SAST                                              -> IO SAST
-        , endScopeS   ::            SAST                                              -> IO SAST
+        , beginScopeS ::            SAST                                              -> IO (KureM SAST)
+        , endScopeS   ::            SAST                                              -> IO (KureM SAST)
         -- means of accessing the underlying kernel, obviously for unsafe purposes
         , kernelS     ::                                                                 Kernel
-        , toASTS      ::            SAST                                              -> IO AST
+        , toASTS      ::            SAST                                              -> IO (KureM AST)
         }
 
 -- | A /handle/ for an 'AST' combined with scoping information.
@@ -94,8 +94,13 @@ type SASTStore = I.IntMap (AST, [LocalPath], LocalPath)
 get :: Monad m => Int -> SASTStore -> m (AST, [LocalPath], LocalPath)
 get sAst m = maybe (fail "scopedKernel: invalid SAST") return (I.lookup sAst m)
 
-safeTakeTMVar :: TMVar a -> (a -> IO b) -> IO b
-safeTakeTMVar mvar = bracketOnError (atomically $ takeTMVar mvar) (atomically . putTMVar mvar)
+-- | Ensures that the TMVar is replaced when an error is thrown, and all exceptions are lifted into KureM failures.
+safeTakeTMVar :: TMVar a -> (a -> IO b) -> IO (KureM b)
+safeTakeTMVar mvar = catchFails . bracketOnError (atomically $ takeTMVar mvar) (atomically . putTMVar mvar)
+
+-- | Lifts exceptions into KureM failures.
+catchFails :: IO a -> IO (KureM a)
+catchFails io = (io >>= (return.return)) `catch` (\e -> return $ fail $ show (e :: SomeException))
 
 -- | Start a HERMIT client by providing an IO function that takes the initial 'ScopedKernel' and inital 'SAST' handle.
 --   The 'Modguts' to 'CoreM' Modguts' function required by GHC Plugins is returned.
@@ -104,17 +109,13 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
     store <- newTMVarIO $ I.fromList [(0,(initAST, [], emptyLocalPath))]
     key <- newTMVarIO (1::Int)
 
-    let failCleanup :: SASTStore -> String -> IO (KureM a)
-        failCleanup m msg = atomically $ do putTMVar store m
-                                            return $ fail msg
-
     let newKey = do
             k <- takeTMVar key
             putTMVar key (k+1)
             return k
 
         skernel = ScopedKernel
-            { resumeS     = \ (SAST sAst) -> do
+            { resumeS     = \ (SAST sAst) -> catchFails $ do
                                 m <- atomically $ readTMVar store
                                 (ast,_,_) <- get sAst m
                                 resumeK kernel ast
@@ -124,12 +125,13 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 applyK kernel ast (focusR (pathStackToLens base rel) rr) env
                                   >>= runKureM (\ ast' -> atomically $ do k <- newKey
                                                                           putTMVar store $ I.insert k (ast', base, rel) m
-                                                                          return $ return $ SAST k)
-                                                   (failCleanup m)
-            , queryS      = \ (SAST sAst) t env -> do
+                                                                          return $ SAST k)
+                                               fail
+            , queryS      = \ (SAST sAst) t env -> catchFails $ do
                                 m <- atomically $ readTMVar store
                                 (ast, base, rel) <- get sAst m
                                 queryK kernel ast (focusT (pathStackToLens base rel) t) env
+                                    >>= runKureM return fail
             , deleteS     = \ (SAST sAst) -> safeTakeTMVar store $ \ m -> do
                                 (ast,_,_) <- get sAst m
                                 let m' = I.delete sAst m
@@ -141,8 +143,8 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 atomically $ putTMVar store m'
             , listS       = do m <- atomically $ readTMVar store
                                return [ SAST sAst | sAst <- I.keys m ]
-            , pathS       = \ (SAST sAst) -> atomically $ do
-                                m <- readTMVar store
+            , pathS       = \ (SAST sAst) -> catchFails $ do
+                                m <- atomically $ readTMVar store
                                 (_, base, rel) <- get sAst m
                                 return $ localPaths2Paths (rel : base)
             , modPathS    = \ (SAST sAst) f env -> safeTakeTMVar store $ \ m -> do
@@ -150,29 +152,27 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 let rel' = f rel
                                 queryK kernel ast (testLensT (pathStackToLens base rel')) env
                                   >>= runKureM (\ b -> if rel == rel'
-                                                        then failCleanup m "Path is unchanged, nothing to do."
+                                                        then fail "Path is unchanged, nothing to do."
                                                         else if b
                                                               then atomically $ do k <- newKey
                                                                                    putTMVar store $ I.insert k (ast, base, rel') m
-                                                                                   return (return $ SAST k)
-                                                              else failCleanup m "Invalid path created.")
-                                                   (failCleanup m)
-            , beginScopeS = \ (SAST sAst) -> atomically $ do
-                                m <- takeTMVar store
+                                                                                   return $ SAST k
+                                                              else fail "Invalid path created.")
+                                               fail
+            , beginScopeS = \ (SAST sAst) -> safeTakeTMVar store $ \m -> do
                                 (ast, base, rel) <- get sAst m
-                                k <- newKey
-                                putTMVar store $ I.insert k (ast, rel : base, emptyLocalPath) m
-                                return $ SAST k
-            , endScopeS   = \ (SAST sAst) -> atomically $ do
-                                m <- takeTMVar store
+                                atomically $ do k <- newKey
+                                                putTMVar store $ I.insert k (ast, rel : base, emptyLocalPath) m
+                                                return $ SAST k
+            , endScopeS   = \ (SAST sAst) -> safeTakeTMVar store $ \m -> do
                                 (ast, base, _) <- get sAst m
                                 case base of
                                     []          -> fail "Scoped Kernel: no scope to end."
-                                    rel : base' -> do k <- newKey
-                                                      putTMVar store $ I.insert k (ast, base', rel) m
-                                                      return $ SAST k
+                                    rel : base' -> atomically $ do k <- newKey
+                                                                   putTMVar store $ I.insert k (ast, base', rel) m
+                                                                   return $ SAST k
             , kernelS     = kernel
-            , toASTS      = \ (SAST sAst) -> do
+            , toASTS      = \ (SAST sAst) -> catchFails $ do
                                 m <- atomically $ readTMVar store
                                 (ast, _, _) <- get sAst m
                                 return ast
