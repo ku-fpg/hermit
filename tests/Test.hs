@@ -15,9 +15,11 @@ import HERMIT.Driver
 type Test = (FilePath, FilePath, FilePath)
 
 -- subdirectory names
+golden, dump :: String
 golden = "golden"
 dump = "dump"
 
+tests :: [Test]
 tests = [ ("concatVanishes", "Flatten.hs", "Flatten.hss")
         , ("concatVanishes", "QSort.hs"  , "QSort.hss"  )
         , ("concatVanishes", "Rev.hs"    , "Rev.hss"    )
@@ -47,6 +49,7 @@ mkTestScript h hss = do
                   , "resume" ]
     hClose h
 
+main :: IO ()
 main = do
     pwd <- getCurrentDirectory
 
@@ -76,21 +79,21 @@ main = do
                 diff = unwords [ "diff", "-b", "-U 5", gfile, dfile ]
 
             -- putStrLn cmd
-            (_,_,_,r) <- createProcess $ shell cmd
-            ex <- waitForProcess r
+            (_,_,_,rHermit) <- createProcess $ shell cmd
+            exHermit <- waitForProcess rHermit
 
-            case ex of
+            case exHermit of
                 ExitFailure i -> putStrLn $ "HERMIT failed with code: " ++ show i
                 ExitSuccess   -> do
                     -- putStrLn diff
-                    (_,mbStdoutH,_,r) <- createProcess $ (shell diff) { std_out = CreatePipe }
-                    ex <- waitForProcess r
-                    case ex of
+                    (_,mbStdoutH,_,rDiff) <- createProcess $ (shell diff) { std_out = CreatePipe }
+                    exDiff <- waitForProcess rDiff
+                    case exDiff of
                         ExitFailure i | i > 1 -> putStrLn $ "diff failed with code: " ++ show i
                         _ -> maybe (putStrLn "error: no stdout!")
-                                   (\h -> do output <- hGetContents h
-                                             if null output
-                                             then putStrLn "passed."
-                                             else do putStrLn "failed:"
-                                                     putStrLn output)
+                                   (\hDiff -> do output <- hGetContents hDiff
+                                                 if null output
+                                                 then putStrLn "passed."
+                                                 else do putStrLn "failed:"
+                                                         putStrLn output)
                                    mbStdoutH
