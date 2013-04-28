@@ -67,6 +67,9 @@ castSymbol = markColor CoercionColor (specialFont $ char $ renderSpecial CastSym
 coercionSymbol :: DocH
 coercionSymbol = markColor CoercionColor (specialFont $ char $ renderSpecial CoercionSymbol)
 
+coercionBindSymbol :: DocH
+coercionBindSymbol = markColor CoercionColor (specialFont $ char $ renderSpecial CoercionBindSymbol)
+
 typeSymbol :: DocH
 typeSymbol = markColor TypeColor (specialFont $ char $ renderSpecial TypeSymbol)
 
@@ -87,35 +90,35 @@ corePrettyH opts = do
         optional (Just d) k = k d
 
         ppVar :: GHC.Var -> DocH
-        ppVar = ppName . GHC.varName
+        ppVar v = ppName (varColor v) (GHC.varName v)
 
-        ppName :: GHC.Name -> DocH
-        ppName = ppName' True
+        varColor :: GHC.Var -> SyntaxForColor
+        varColor var | GHC.isTyVar var = TypeColor
+                     | GHC.isCoVar var = CoercionColor
+                     | otherwise       = IdColor
 
-        ppVar' :: Bool -> GHC.Var -> DocH
-        ppVar' useVarColor = ppName' useVarColor . GHC.varName
+        ppName :: SyntaxForColor -> GHC.Name -> DocH
+        ppName color nm  = let name = GHC.occNameString (GHC.nameOccName nm)
+                               doc  = markColor color (text name)
+                            in if all isInfixId name
+                                then ppParens doc
+                                else doc
 
-        ppName' :: Bool -> GHC.Name -> DocH
-        ppName' useVarColor nm
-                | isInfix name = ppParens $ markColor color $ text name
-                | otherwise    = markColor color $ text name
-          where name = GHC.occNameString $ GHC.nameOccName $ nm
-                isInfix = all isInfixId
-                color = if useVarColor then VarColor else TypeColor
-
-        ppLitTy :: Bool -> TyLit -> DocH
-        ppLitTy useVarColor tylit = markColor color $ text $ case tylit of
-                                                                NumTyLit i -> show i
-                                                                StrTyLit fs -> show fs
-            where color = if useVarColor then VarColor else TypeColor
-
+        ppLitTy :: TyLit -> DocH
+        ppLitTy tylit = typeColor $ text $ case tylit of
+                                             NumTyLit i  -> show i
+                                             StrTyLit fs -> show fs
 
         -- binders are vars that is bound by lambda or case, etc.
         ppBinder :: GHC.Var -> Maybe DocH
         ppBinder var | GHC.isTyVar var = case po_exprTypes opts of
                                             Abstract -> Just $ typeBindSymbol
                                             Omit     -> Nothing
-                                            _        -> Just $ ppVar' False var
+                                            _        -> Just $ ppVar var
+                     | GHC.isCoVar var = case po_exprTypes opts of
+                                            Abstract -> Just $ coercionBindSymbol
+                                            Omit     -> Nothing
+                                            _        -> Just $ ppVar var
                      | otherwise = Just $ ppVar var
 
         -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
@@ -127,7 +130,7 @@ corePrettyH opts = do
 
         ppModGuts :: PrettyH GHC.ModGuts
         ppModGuts =   arr $ \ m -> hang (keyword "module" <+> ppSDoc (GHC.mg_module m) <+> keyword "where") 2
-                                   (vcat [ (optional (ppBinder v) (\b -> b <+> specialSymbol TypeOfSymbol <+> normalExpr (ppCoreType True (GHC.idType v))))
+                                   (vcat [ (optional (ppBinder v) (\b -> b <+> specialSymbol TypeOfSymbol <+> normalExpr (ppCoreType (GHC.idType v))))
                                          | bnd <- GHC.mg_binds m
                                          , v <- case bnd of
                                                   GHC.NonRec f _ -> [f]
@@ -192,7 +195,7 @@ corePrettyH opts = do
                    <+ varT (\ i p -> RetAtom (attrP p $ ppVar i))
                    <+ litT (\ i p -> RetAtom (attrP p $ ppSDoc i))
                    <+ typeT (\ t p -> case po_exprTypes opts of
-                                      Show     -> case ppCoreType False t of
+                                      Show     -> case ppCoreType t of
                                                     RetAtom d -> RetAtom $ attrP p d
                                                     RetExpr d -> RetExpr $ attrP p d
                                                     _         -> error "not possible!"
@@ -210,10 +213,10 @@ corePrettyH opts = do
                    <+ tickT ppCoreExpr (\ i e p -> RetExpr $ attrP p (text "Tick" $$ nest 2 (ppSDoc i <+> parens e)))
 
 
-        ppCoreType :: Bool -> GHC.Type -> RetExpr
-        ppCoreType isTySig = go
-            where go (TyVarTy v)   = RetAtom $ ppVar' isTySig v
-                  go (LitTy tylit) = RetAtom $ ppLitTy isTySig tylit
+        ppCoreType :: GHC.Type -> RetExpr
+        ppCoreType = go
+            where go (TyVarTy v)   = RetAtom $ ppVar v
+                  go (LitTy tylit) = RetAtom $ ppLitTy tylit
                   go (AppTy t1 t2) = RetExpr $ normalExpr (go t1) <+> normalExpr (go t2)
                   go (TyConApp tyCon tys)
                     | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = go (FunTy ty1 ty2)
@@ -223,44 +226,44 @@ corePrettyH opts = do
                     | GHC.isTupleTyCon tyCon = case map (normalExpr . go) tys of
                                                 [] -> RetAtom $ tyText "()"
                                                 ds -> RetAtom $ tyText "(" <> (foldr1 (\d r -> d <> tyText "," <+> r) ds) <> tyText ")"
-                    | otherwise = RetAtom $ ppName' isTySig (GHC.getName tyCon) <+> sep (map (normalExpr . go) tys) -- has spaces, but we never want parens
+                    | otherwise = RetAtom $ ppName TypeColor (GHC.getName tyCon) <+> sep (map (normalExpr . go) tys) -- has spaces, but we never want parens
                   go (FunTy ty1 ty2) = RetExpr $ atomExpr (go ty1) <+> tyText "->" <+> normalExpr (go ty2)
-                  go (ForAllTy v ty) = RetExpr $ specialSymbol ForallSymbol <+> ppVar' isTySig v <+> symbol '.' <+> normalExpr (go ty)
+                  go (ForAllTy v ty) = RetExpr $ specialSymbol ForallSymbol <+> ppVar v <+> symbol '.' <+> normalExpr (go ty)
 
-                  tyText = if isTySig then text else markColor TypeColor . text
+                  tyText = typeColor . text
 
         ppCoreCoercion :: GHC.Coercion -> Path -> RetExpr
         ppCoreCoercion co p = case po_exprTypes opts of
-                                             Show     -> RetExpr $ attrP p (markColor CoercionColor (nest 2 (ppSDoc co))) -- TODO: improve this
+                                             Show     -> RetExpr $ attrP p (coercionColor $ nest 2 $ ppSDoc co) -- TODO: improve this
                                              Abstract -> RetAtom $ attrP p coercionSymbol
                                              Omit     -> RetEmpty
 
         ppCoreTypeSig :: PrettyH GHC.CoreExpr
-        ppCoreTypeSig = arr $ normalExpr . ppCoreType False . GHC.exprType
+        ppCoreTypeSig = arr $ normalExpr . ppCoreType . GHC.exprType
 
         ppCoreBind :: PrettyH GHC.CoreBind
         ppCoreBind = nonRecT (ppCoreExprR &&& ppCoreTypeSig) ppDefFun
                   <+ recT (const ppCoreDef) (\ bnds -> keyword "rec" <+> vcat bnds)
 
         ppCoreAlt :: PrettyH GHC.CoreAlt
-        ppCoreAlt = altT ppCoreExpr $ \ con ids e -> case con of
-                      GHC.DataAlt dcon -> hang (ppName (GHC.dataConName dcon) <+> ppIds ids) 2 e
-                      GHC.LitAlt lit   -> hang (ppSDoc lit <+> ppIds ids) 2 e
-                      GHC.DEFAULT      -> symbol '_' <+> ppIds ids <+> e
-              where
-                     ppIds ids | null ids  = specialSymbol RightArrowSymbol
-                               | otherwise = hsep (map (flip optional id . ppBinder) ids) <+> specialSymbol RightArrowSymbol
+        ppCoreAlt = altT ppCoreExpr $ \ con vs e -> let ppVars = if null vs
+                                                                  then specialSymbol RightArrowSymbol
+                                                                  else hsep (map (flip optional id . ppBinder) vs) <+> specialSymbol RightArrowSymbol
+                                                     in case con of
+                      GHC.DataAlt dcon -> hang (ppName IdColor (GHC.dataConName dcon) <+> ppVars) 2 e
+                      GHC.LitAlt lit   -> hang (ppSDoc lit <+> ppVars) 2 e
+                      GHC.DEFAULT      -> symbol '_' <+> ppVars <+> e
 
         -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
         ppCoreDef :: PrettyH CoreDef
         ppCoreDef = defT (ppCoreExprR &&& ppCoreTypeSig) ppDefFun
 
-        ppDefFun :: GHC.Id -> (RetExpr, DocH) -> DocH
-        ppDefFun i (e,ty) = case po_exprTypes opts of
-                                Show -> (markColor TypeColor $ ppVar' False i <+> text "::" <+> ty) $+$ body
+        ppDefFun :: GHC.Var -> (RetExpr, DocH) -> DocH
+        ppDefFun v (e,ty) = case po_exprTypes opts of
+                                Show -> (ppVar v <+> specialSymbol TypeOfSymbol <+> ty) $+$ body
                                 _    -> body
             where
-                pre = optional (ppBinder i) (<+> symbol '=')
+                pre = optional (ppBinder v) (<+> symbol '=')
                 body = case e of
                         RetLam vs e0 -> hang (pre <+> specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
                         _ -> hang pre 2 (normalExpr e)

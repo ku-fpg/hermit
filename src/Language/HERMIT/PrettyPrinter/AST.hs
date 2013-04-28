@@ -43,10 +43,10 @@ corePrettyH opts = do
         ppCoreProg = translate $ \ c -> fmap vlist . sequenceA . map (apply ppCoreBind c) . progToBinds
 
         ppCoreExpr :: PrettyH GHC.CoreExpr
-        ppCoreExpr = varT (\i -> text "Var" <+> varColor (ppSDoc i))
+        ppCoreExpr = varT (\i -> text "Var" <+> idColor (ppSDoc i))
                   <+ litT (\i -> text "Lit" <+> ppSDoc i)
                   <+ appT ppCoreExpr ppCoreExpr (\ a b -> text "App" $$ nest 2 (cat [parens a, parens b]))
-                  <+ lamT ppCoreExpr (\ v e -> text "Lam" <+> varColor (ppSDoc v) $$ nest 2 (parens e))
+                  <+ lamT ppCoreExpr (\ v e -> text "Lam" <+> idColor (ppSDoc v) $$ nest 2 (parens e))
                   <+ letT ppCoreBind ppCoreExpr (\ b e -> text "Let" $$ nest 2 (cat [parens b, parens e]))
                   <+ caseT ppCoreExpr (const ppCoreAlt) (\s b ty alts ->
                             text "Case" $$ nest 2 (parens s)
@@ -69,7 +69,7 @@ corePrettyH opts = do
 
         -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
         ppCoreDef :: PrettyH CoreDef
-        ppCoreDef = defT ppCoreExpr $ \ i e -> parens $ varColor (ppSDoc i) <> text "," <> e
+        ppCoreDef = defT ppCoreExpr $ \ i e -> parens $ idColor (ppSDoc i) <> text "," <> e
 
     promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
      <+ promoteT (ppCoreProg :: PrettyH CoreProg)

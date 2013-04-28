@@ -33,7 +33,7 @@ data Attr = PathAttr Path
 data SyntaxForColor             -- (suggestion)
         = KeywordColor          -- bold
         | SyntaxColor
-        | VarColor
+        | IdColor
         | CoercionColor
         | TypeColor
         | LitColor
@@ -49,11 +49,18 @@ attr a p = mark (PushAttr a) <> p <> mark PopAttr
 attrP :: Path -> DocH -> DocH
 attrP _ doc = doc -- attr . PathAttr
 
-varColor :: DocH -> DocH
-varColor = attr (Color VarColor)
+idColor :: DocH -> DocH
+idColor = markColor IdColor
+
+typeColor :: DocH -> DocH
+typeColor = markColor TypeColor
+
+coercionColor :: DocH -> DocH
+coercionColor = markColor CoercionColor
+
 
 keywordColor :: DocH -> DocH
-keywordColor = attr (Color KeywordColor)
+keywordColor = markColor KeywordColor
 
 markColor :: SyntaxForColor -> DocH -> DocH
 markColor = attr . Color
@@ -102,6 +109,7 @@ data SpecialSymbol
         | RightArrowSymbol
         | CastSymbol
         | CoercionSymbol
+        | CoercionBindSymbol
         | TypeSymbol
         | TypeBindSymbol
         | ForallSymbol
@@ -118,8 +126,9 @@ instance RenderSpecial Char where
         renderSpecial LambdaSymbol        = '\\'  -- lambda
         renderSpecial TypeOfSymbol        = ':'   -- ::
         renderSpecial RightArrowSymbol    = '>'   -- ->
-        renderSpecial CastSymbol          = '~'   -- "|>"
-        renderSpecial CoercionSymbol      = '#'   -- <<coercion>>>
+        renderSpecial CastSymbol          = '#'   -- "|>"
+        renderSpecial CoercionSymbol      = 'C'   -- <<coercion>>>
+        renderSpecial CoercionBindSymbol  = 'c'   -- <<coercion>>>
         renderSpecial TypeSymbol          = 'T'   -- <<type>>>
         renderSpecial TypeBindSymbol      = 't'   -- <<type binding>>
         renderSpecial ForallSymbol        = 'F'   -- forall
@@ -136,8 +145,9 @@ instance RenderSpecial ASCII where
         renderSpecial RightArrowSymbol    = ASCII "->"   -- ->
         renderSpecial CastSymbol          = ASCII "|>"   -- "|>"
         renderSpecial CoercionSymbol      = ASCII "~#"   -- <<coercion>>>
+        renderSpecial CoercionBindSymbol  = ASCII "~#"   -- <<coercion binding>>>
         renderSpecial TypeSymbol          = ASCII "*"    -- <<type>>>
-        renderSpecial TypeBindSymbol      = ASCII "*"    -- <<type>>>
+        renderSpecial TypeBindSymbol      = ASCII "*"    -- <<type binding>>>
         renderSpecial ForallSymbol        = ASCII "\\/"
 
 newtype Unicode = Unicode Char
@@ -148,8 +158,9 @@ instance RenderSpecial Unicode where
         renderSpecial RightArrowSymbol    = Unicode '\x2192'
         renderSpecial CastSymbol          = Unicode '\x25B9'
         renderSpecial CoercionSymbol      = Unicode '\x25A0'
+        renderSpecial CoercionBindSymbol  = Unicode '\x25A1'
         renderSpecial TypeSymbol          = Unicode '\x25b2'
-        renderSpecial TypeBindSymbol      = Unicode '\x25b2'
+        renderSpecial TypeBindSymbol      = Unicode '\x25b3'
         renderSpecial ForallSymbol        = Unicode '\x2200'
 
 newtype LaTeX = LaTeX String
@@ -164,8 +175,9 @@ instance RenderSpecial LaTeX where
         renderSpecial RightArrowSymbol    = LaTeX "\\ensuremath{\\shortrightarrow}"
         renderSpecial CastSymbol          = LaTeX "\\ensuremath{\\triangleright}"
         renderSpecial CoercionSymbol      = LaTeX "\\ensuremath{\\blacksquare}"
+        renderSpecial CoercionBindSymbol  = LaTeX "\\ensuremath{\\square}"
         renderSpecial TypeSymbol          = LaTeX "\\ensuremath{\\blacktriangle}"
-        renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\blacktriangle}"
+        renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\vartriangle}"
         renderSpecial ForallSymbol        = LaTeX "\\ensuremath{\\forall}"
 
 
@@ -181,8 +193,9 @@ instance RenderSpecial HTML where
         renderSpecial RightArrowSymbol    = HTML "&#8594;"
         renderSpecial CastSymbol          = HTML "&#9657;"
         renderSpecial CoercionSymbol      = HTML "&#9632;"
+        renderSpecial CoercionBindSymbol  = HTML "&#9633;"
         renderSpecial TypeSymbol          = HTML "&#9650;"
-        renderSpecial TypeBindSymbol      = HTML "&#9650;"
+        renderSpecial TypeBindSymbol      = HTML "&#9651;"
         renderSpecial ForallSymbol        = HTML "&#8704;"
 
 
@@ -309,7 +322,7 @@ instance RenderCode LaTeX where
         rDoHighlight _ (Color col:_) = LaTeX $ "{" ++ case col of
                         KeywordColor  -> "\\color{hermit:keyword}"       -- blue
                         SyntaxColor   -> "\\color{hermit:syntax}"        -- red
-                        VarColor      -> ""
+                        IdColor       -> ""
                         CoercionColor -> "\\color{hermit:coercion}"      -- yellow
                         TypeColor     -> "\\color{hermit:type}"          -- green
                         LitColor      -> "\\color{hermit:lit}"           -- cyan
@@ -333,7 +346,7 @@ instance RenderCode HTML where
         rDoHighlight _ (Color col:_) = HTML $ case col of
                         KeywordColor  -> "<span class=\"hermit-keyword\">"       -- blue
                         SyntaxColor   -> "<span class=\"hermit-syntax\">"        -- red
-                        VarColor      -> "<span>"
+                        IdColor       -> "<span>"
                         CoercionColor -> "<span class=\"hermit-coercion\">"      -- yellow
                         TypeColor     -> "<span class=\"hermit-type\">"          -- green
                         LitColor      -> "<span class=\"hermit-lit\">"           -- cyan

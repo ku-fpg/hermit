@@ -613,7 +613,7 @@ instance RenderCode UnicodeTerminal where
                                          , SetColor Foreground Dull Blue
                                          ]
                         SyntaxColor   -> [ SetColor Foreground Dull Red ]
-                        VarColor      -> []   -- as is
+                        IdColor       -> []   -- as is
                         CoercionColor -> [ SetColor Foreground Dull Yellow ]
                         TypeColor     -> [ SetColor Foreground Dull Green ]
                         LitColor      -> [ SetColor Foreground Dull Cyan ]
