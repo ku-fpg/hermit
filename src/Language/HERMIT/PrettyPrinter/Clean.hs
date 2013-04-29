@@ -159,7 +159,7 @@ corePrettyH opts = do
                               Omit     -> RetEmpty
                               Abstract -> RetAtom coercionSymbol
                               Show     -> ppCoreCoercion co
-                              Kind     -> RetExpr (ppCoKind co)
+                              Kind     -> RetExpr (coercionSymbol <+> specialSymbol TypeOfSymbol <+> ppCoKind co)
 
         -- binders are vars that is bound by lambda or case, etc.
         ppBinder :: GHC.Var -> Maybe DocH
@@ -171,7 +171,8 @@ corePrettyH opts = do
                                            Omit     -> Nothing
                                            Abstract -> Just coercionBindSymbol
                                            Show     -> Just (ppVar var)
-                                           Kind     -> Just (ppParens $ ppCoKind $ GHC.CoVarCo var)
+                                           Kind     -> Just $ ppParens (coercionBindSymbol <+> specialSymbol TypeOfSymbol <+> ppCoKind (GHC.CoVarCo var))
+                                                       -- TODO: refactor this to be more systematic.  It should be possible to request type sigs for all type bindings.
                      | otherwise       = Just $ ppVar var
 
         -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
@@ -340,7 +341,7 @@ corePrettyH opts = do
                                                  in case po_coercions opts of
                                                       Omit     -> empty
                                                       Show     -> (ppVar v <+> coTySig) $+$ body
-                                                      _        -> coercionBindSymbol <+> coTySig
+                                                      _        -> (coercionBindSymbol <+> coTySig)
                                            else (ppVar v <+> specialSymbol TypeOfSymbol <+> ty) $+$ body
                               Omit     -> if GHC.isTyVar v
                                            then empty
