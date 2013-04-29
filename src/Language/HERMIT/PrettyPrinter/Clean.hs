@@ -23,6 +23,7 @@ import Language.HERMIT.PrettyPrinter.Common
 import Language.HERMIT.GHC
 
 import TypeRep (TyLit(..))
+import Pair
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
@@ -151,24 +152,26 @@ corePrettyH opts = do
         ppTypeMode t = case po_exprTypes opts of
                          Omit     -> RetEmpty
                          Abstract -> RetAtom typeSymbol
-                         Show     -> ppCoreType t
+                         _        -> ppCoreType t
 
         ppCoercionMode :: GHC.Coercion -> RetExpr
         ppCoercionMode co = case po_coercions opts of
                               Omit     -> RetEmpty
                               Abstract -> RetAtom coercionSymbol
                               Show     -> ppCoreCoercion co
+                              Kind     -> RetExpr (ppCoKind co)
 
         -- binders are vars that is bound by lambda or case, etc.
         ppBinder :: GHC.Var -> Maybe DocH
         ppBinder var | GHC.isTyVar var = case po_exprTypes opts of
                                            Omit     -> Nothing
                                            Abstract -> Just typeBindSymbol
-                                           Show     -> Just (ppVar var)
+                                           _        -> Just (ppVar var)
                      | GHC.isCoVar var = case po_coercions opts of
                                            Omit     -> Nothing
                                            Abstract -> Just coercionBindSymbol
                                            Show     -> Just (ppVar var)
+                                           Kind     -> Just (ppParens $ ppCoKind $ GHC.CoVarCo var)
                      | otherwise       = Just $ ppVar var
 
         -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
@@ -288,9 +291,9 @@ corePrettyH opts = do
         ppCoreCoercion (GHC.ForAllCo v co)     = let e = ppCoreCoercion co
                                                   in case po_exprTypes opts of
                                                        Omit -> e
-                                                       _    -> RetExpr (specialSymbol ForallSymbol <+> optional (ppBinder v) id <+> symbol '.' <+> normalExprWithParensExceptApp e)
+                                                       _    -> RetExpr (specialSymbol ForallSymbol <+> optional (ppBinder v) (\d -> d <+> symbol '.' <+> normalExprWithParensExceptApp e))
         ppCoreCoercion (GHC.TransCo co1 co2)   = RetExpr (normalExprWithParensExceptApp (ppCoreCoercion co1) <+> coChar ';' <+> normalExprWithParensExceptApp (ppCoreCoercion co2))
-        ppCoreCoercion (GHC.UnsafeCo t1 t2)    = RetExpr (normalExprWithParensExceptApp (ppTypeMode t1) <+> coChar '~' <+> normalExprWithParensExceptApp (ppTypeMode t2))
+        ppCoreCoercion (GHC.UnsafeCo t1 t2)    = RetExpr (ppTypePairCoercion t1 t2)
         ppCoreCoercion (GHC.NthCo n co)        = RetExpr (coKeyword "nth" <+> coText (show n) <+> normalExprWithParens (ppCoreCoercion co))
         ppCoreCoercion (GHC.InstCo co t)       = let e = ppCoreCoercion co
                                                   in case po_exprTypes opts of
@@ -302,9 +305,16 @@ corePrettyH opts = do
                                                   in ppApp e1 e2
         ppCoreCoercion (GHC.AxiomInstCo ax cs) = RetApp (coercionColor $ ppSDoc ax) (map ppCoreCoercion cs) -- TODO: add pretty printer for Coercion Axioms
 
+        ppTypePairCoercion :: Type -> Type -> DocH
+        ppTypePairCoercion t1 t2 = normalExprWithParensExceptApp (ppTypeMode t1) <+> coChar '~' <+> normalExprWithParensExceptApp (ppTypeMode t2)
+
+        ppCoKind :: GHC.Coercion -> DocH
+        ppCoKind = uncurry ppTypePairCoercion . unPair . GHC.coercionKind
 
         ppCoreTypeSig :: PrettyH GHC.CoreExpr
-        ppCoreTypeSig = arr $ normalExpr . ppCoreType . GHC.exprType
+        ppCoreTypeSig = arr (\case
+                                GHC.Coercion c -> ppCoKind c
+                                e              -> normalExpr $ ppCoreType $ GHC.exprType e)
 
         ppCoreBind :: PrettyH GHC.CoreBind
         ppCoreBind = nonRecT (ppCoreExprR &&& ppCoreTypeSig) ppDefFun
@@ -325,8 +335,17 @@ corePrettyH opts = do
 
         ppDefFun :: GHC.Var -> (RetExpr, DocH) -> DocH
         ppDefFun v (e,ty) = case po_exprTypes opts of
-                                Show -> (ppVar v <+> specialSymbol TypeOfSymbol <+> ty) $+$ body
-                                _    -> body
+                              Show     -> if GHC.isCoVar v
+                                           then let coTySig = specialSymbol TypeOfSymbol <+> ty
+                                                 in case po_coercions opts of
+                                                      Omit     -> empty
+                                                      Show     -> (ppVar v <+> coTySig) $+$ body
+                                                      _        -> coercionBindSymbol <+> coTySig
+                                           else (ppVar v <+> specialSymbol TypeOfSymbol <+> ty) $+$ body
+                              Omit     -> if GHC.isTyVar v
+                                           then empty
+                                           else body
+                              _    -> body
             where
                 pre = optional (ppBinder v) (<+> symbol '=')
                 body = case e of

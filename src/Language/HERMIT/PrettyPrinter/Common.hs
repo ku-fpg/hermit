@@ -85,8 +85,15 @@ data PrettyOptions = PrettyOptions
         , po_width           :: Int
         } deriving Show
 
-data ShowOption = Show | Abstract | Omit
-        deriving (Eq, Ord, Show, Read)
+data ShowOption = Show | Abstract | Omit | Kind deriving (Eq, Ord, Show, Read)
+
+-- Types don't have a Kind showing option.
+updateTypeShowOption :: ShowOption -> PrettyOptions -> PrettyOptions
+updateTypeShowOption Kind po = po
+updateTypeShowOption opt  po = po { po_exprTypes = opt }
+
+updateCoShowOption :: ShowOption -> PrettyOptions -> PrettyOptions
+updateCoShowOption opt po  = po { po_coercions = opt }
 
 instance Default PrettyOptions where
   def = PrettyOptions

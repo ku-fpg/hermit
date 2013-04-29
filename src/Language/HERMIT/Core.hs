@@ -13,6 +13,7 @@ module Language.HERMIT.Core
           , bindsToProg
           , bindToIdExprs
             -- * Utilities
+          , isCoArg
           , exprTypeOrKind
           , endoFunType
           , funArgResTypes
@@ -99,6 +100,12 @@ exprTypeOrKind :: CoreExpr -> Type
 exprTypeOrKind (Type t) = typeKind t
 exprTypeOrKind e        = exprType e
 {-# INLINE exprTypeOrKind #-}
+
+-- | Returns @True@ iff the expression is a 'Coercion' expression at its top level.
+isCoArg :: CoreExpr -> Bool
+isCoArg (Coercion {}) = True
+isCoArg _             = False
+{-# INLINE isCoArg #-}
 
 -----------------------------------------------------------------------
 

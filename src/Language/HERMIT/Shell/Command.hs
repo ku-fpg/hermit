@@ -213,12 +213,12 @@ shell_externals = map (.+ Shell)
        ["set the width of the screen"]
    , external "set-pp-expr-type" (\ str -> SessionStateEffect $ \ _ st ->
         case reads str :: [(ShowOption,String)] of
-            [(opt,"")] -> return $ st { cl_pretty_opts = (cl_pretty_opts st) { po_exprTypes = opt } }
+            [(opt,"")] -> return $ st { cl_pretty_opts = updateTypeShowOption opt (cl_pretty_opts st) }
             _          -> return st)
        ["set how to show expression-level types (Show|Abstact|Omit)"]
    , external "set-pp-coercion" (\ str -> SessionStateEffect $ \ _ st ->
         case reads str :: [(ShowOption,String)] of
-            [(opt,"")] -> return $ st { cl_pretty_opts = (cl_pretty_opts st) { po_coercions = opt } }
+            [(opt,"")] -> return $ st { cl_pretty_opts = updateCoShowOption opt (cl_pretty_opts st) }
             _          -> return st)
        ["set how to show coercions (Show|Abstact|Omit)"]
    , external "{"   BeginScope
