@@ -8,7 +8,9 @@ import Control.Monad (ap)
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
+import Data.List (partition)
 import Data.Traversable (sequenceA)
+
 
 import qualified GhcPlugins as GHC
 
@@ -46,35 +48,63 @@ keyword :: String -> DocH
 keyword = markColor KeywordColor . text
 
 ppParens :: DocH -> DocH
-ppParens p = symbol '(' <> p <> symbol ')' -- :: markColor SyntaxColor
+ppParens p = symbol '(' <> p <> symbol ')'
 
-atomExpr :: RetExpr -> DocH
-atomExpr (RetAtom e) = e
-atomExpr other       = ppParens (normalExpr other)
+normalExprWithParens :: RetExpr -> DocH
+normalExprWithParens (RetAtom e)   = e
+normalExprWithParens RetEmpty      = empty
+normalExprWithParens (RetApp d []) = d
+normalExprWithParens other         = ppParens (normalExpr other)
+
+normalExprWithParensExceptApp :: RetExpr -> DocH
+normalExprWithParensExceptApp e@(RetApp _ _) = normalExpr e
+normalExprWithParensExceptApp e              = normalExprWithParens e
 
 normalExpr :: RetExpr -> DocH
-normalExpr (RetLam vs e0) = hang (specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e0
-normalExpr (RetLet vs e0) = sep [ keyword "let" <+> vcat vs, keyword "in" <+> e0 ]
-normalExpr (RetApp fn xs) = sep [ hsep (fn : map atomExpr (takeWhile isAtom xs))
-                                , nest 2 (sep (map atomExpr (dropWhile isAtom xs))) ]
-normalExpr (RetExpr e0)    = e0
-normalExpr (RetAtom e0)    = e0
-normalExpr (RetEmpty)      = empty
+normalExpr (RetLam vs e)  = hang (specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e
+normalExpr (RetLet vs e)  = sep [ keyword "let" <+> vcat vs, keyword "in" <+> e ]
+normalExpr (RetApp fn xs) = let (xs1,xs2) = partition isAtom xs
+                             in sep [ hsep (fn : map normalExpr xs1)
+                                    , nest 2 (sep $ map normalExprWithParens xs2) ]
+normalExpr (RetExpr e)    = e
+normalExpr (RetAtom e)    = e
+normalExpr (RetEmpty)     = empty
+
+coChar :: Char -> DocH
+coChar = coercionColor . char
+
+coSymbol :: SpecialSymbol -> DocH
+coSymbol = coercionColor . specialFont . char . renderSpecial
 
 castSymbol :: DocH
-castSymbol = markColor CoercionColor (specialFont $ char $ renderSpecial CastSymbol)
+castSymbol = coSymbol CastSymbol
 
 coercionSymbol :: DocH
-coercionSymbol = markColor CoercionColor (specialFont $ char $ renderSpecial CoercionSymbol)
+coercionSymbol = coSymbol CoercionSymbol
 
 coercionBindSymbol :: DocH
-coercionBindSymbol = markColor CoercionColor (specialFont $ char $ renderSpecial CoercionBindSymbol)
+coercionBindSymbol = coSymbol CoercionBindSymbol
+
+coText :: String -> DocH
+coText = coercionColor . text
+
+coKeyword :: String -> DocH
+coKeyword = coText -- An alternative would be keyword.
+
+tySymbol :: SpecialSymbol -> DocH
+tySymbol = typeColor . specialFont . char . renderSpecial
 
 typeSymbol :: DocH
-typeSymbol = markColor TypeColor (specialFont $ char $ renderSpecial TypeSymbol)
+typeSymbol = tySymbol TypeSymbol
 
 typeBindSymbol :: DocH
-typeBindSymbol = markColor TypeColor (specialFont $ char $ renderSpecial TypeBindSymbol)
+typeBindSymbol = tySymbol TypeBindSymbol
+
+typeArrow :: DocH
+typeArrow = tySymbol RightArrowSymbol
+
+tyText :: String -> DocH
+tyText = typeColor . text
 
 ------------------------------------------------------------------------------------------------
 
@@ -109,6 +139,9 @@ corePrettyH opts = do
                                              NumTyLit i  -> show i
                                              StrTyLit fs -> show fs
 
+        ppTyCon :: GHC.TyCon -> DocH
+        ppTyCon = ppName TypeColor . GHC.getName
+
         -- binders are vars that is bound by lambda or case, etc.
         ppBinder :: GHC.Var -> Maybe DocH
         ppBinder var | GHC.isTyVar var = case po_exprTypes opts of
@@ -123,7 +156,7 @@ corePrettyH opts = do
 
         -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
         -- that we are eliding infomation here.
-        ppSDoc :: (GHC.Outputable a) => a -> MDoc b
+        ppSDoc :: GHC.Outputable a => a -> MDoc b
         ppSDoc = toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showSDoc dynFlags . GHC.ppr
             where toDoc s | any isSpace s = parens (text s)
                           | otherwise     = text s
@@ -145,19 +178,24 @@ corePrettyH opts = do
         ppCoreExpr :: PrettyH GHC.CoreExpr
         ppCoreExpr = ppCoreExprR >>^ normalExpr
 
-        appendArg xs (RetEmpty) = xs
-        appendArg xs e          = xs ++ [e]
+        ppApp :: RetExpr -> RetExpr -> RetExpr
+        ppApp e1 e2 = case e1 of
+                        RetApp f xs   -> RetApp f (snocNonEmpty xs e2)
+                        _             -> case e2 of -- if there are no (displayed) args then don't parenthesise
+                                           RetEmpty -> e1
+                                           args     -> RetApp (normalExprWithParens e1) (snocNonEmpty [] args)
 
-        appendBind Nothing  xs = xs
-        appendBind (Just v) xs = v : xs
+        snocNonEmpty :: [RetExpr] -> RetExpr -> [RetExpr]
+        snocNonEmpty xs RetEmpty = xs
+        snocNonEmpty xs e        = xs ++ [e]
 
         ppCoreExprR :: TranslateH GHC.CoreExpr RetExpr
         ppCoreExprR = ppCoreExprPR `ap` rootPathT
 
         ppCoreExprPR :: TranslateH GHC.CoreExpr (Path -> RetExpr)
         ppCoreExprPR = lamT ppCoreExprR (\ v e _ -> case e of
-                                                  RetLam vs e0  -> RetLam (appendBind (ppBinder v) vs) e0
-                                                  _             -> RetLam (appendBind (ppBinder v) []) (normalExpr e))
+                                                  RetLam vs e0  -> RetLam (consMaybe (ppBinder v) vs) e0
+                                                  _             -> RetLam (consMaybe (ppBinder v) []) (normalExpr e))
 
                    <+ letT ppCoreBind ppCoreExprR
                                        (\ bd e _ -> case e of
@@ -185,58 +223,72 @@ corePrettyH opts = do
 
                       )
 
-                   <+ appT ppCoreExprR ppCoreExprR
-                                       (\ e1 e2 _ -> case e1 of
-                                                  RetApp f xs   -> RetApp f (appendArg xs e2)
-                                                  _             -> case e2 of -- if our only args are types, and they are omitted, don't paren
-                                                                    RetEmpty -> e1
-                                                                    args -> RetApp (atomExpr e1) (appendArg [] args))
+                   <+ appT ppCoreExprR ppCoreExprR (\ e1 e2 _ -> ppApp e1 e2)
+
                    <+ caseT ppCoreExpr (const ppCoreAlt) (\ s b _ alts p -> RetExpr $ attrP p ((keyword "case" <+> s <+> keyword "of" <+> optional (ppBinder b) id) $$ nest 2 (vcat alts)))
                    <+ varT (\ i p -> RetAtom (attrP p $ ppVar i))
                    <+ litT (\ i p -> RetAtom (attrP p $ ppSDoc i))
-                   <+ typeT (\ t p -> case po_exprTypes opts of
-                                      Show     -> case ppCoreType t of
-                                                    RetAtom d -> RetAtom $ attrP p d
-                                                    RetExpr d -> RetExpr $ attrP p d
-                                                    _         -> error "not possible!"
-                                      Abstract -> RetAtom (attrP p typeSymbol)
-                                      Omit     -> RetEmpty)
-                   <+ coercionT ppCoreCoercion
-                   <+ castT ppCoreExprR (\ e co p -> let e' = case e of
-                                                                RetAtom a -> a
-                                                                _         -> ppParens (normalExpr e)
-                                                      in case ppCoreCoercion co p of
+                   <+ typeT (\ t p -> attrPAtomExpr p $ ppTypeMode t)
+                   <+ coercionT (\ co p -> attrPAtomExpr p $ ppCoreCoercionMode co)
+                   <+ castT ppCoreExprR (\ e co p -> let e' = normalExprWithParensExceptApp e
+                                                      in case ppCoreCoercionMode co of
                                                            RetEmpty    -> e
                                                            RetAtom pCo -> RetExpr $ attrP p (e' <+> castSymbol <+> pCo)
-                                                           pCo         -> RetExpr $ attrP p (e' <+> castSymbol <+> ppParens (normalExpr pCo))
+                                                           pCo         -> RetExpr $ attrP p (e' <+> castSymbol <+> normalExprWithParensExceptApp pCo)
                                                      )
                    <+ tickT ppCoreExpr (\ i e p -> RetExpr $ attrP p (text "Tick" $$ nest 2 (ppSDoc i <+> parens e)))
 
+        attrPAtomExpr :: Path -> RetExpr -> RetExpr
+        attrPAtomExpr p (RetAtom d) = RetAtom (attrP p d)
+        attrPAtomExpr p (RetExpr d) = RetExpr (attrP p d)
+        attrPAtomExpr _ e           = e
+
+        ppTypeMode :: GHC.Type -> RetExpr
+        ppTypeMode t = case po_exprTypes opts of
+                          Show     -> ppCoreType t
+                          Abstract -> RetAtom typeSymbol
+                          Omit     -> RetEmpty
 
         ppCoreType :: GHC.Type -> RetExpr
-        ppCoreType = go
-            where go (TyVarTy v)   = RetAtom $ ppVar v
-                  go (LitTy tylit) = RetAtom $ ppLitTy tylit
-                  go (AppTy t1 t2) = RetExpr $ normalExpr (go t1) <+> normalExpr (go t2)
-                  go (TyConApp tyCon tys)
-                    | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = go (FunTy ty1 ty2)
-                    | tyCon == GHC.listTyCon = RetAtom $ tyText "[" <> (case map (normalExpr . go) tys of
-                                                                            []    -> empty
-                                                                            (t:_) -> t) <> tyText "]"
-                    | GHC.isTupleTyCon tyCon = case map (normalExpr . go) tys of
+        ppCoreType (TyVarTy v)   = RetAtom (ppVar v)
+        ppCoreType (LitTy tylit) = RetAtom (ppLitTy tylit)
+        ppCoreType (AppTy t1 t2) = let e1 = ppCoreType t1
+                                       e2 = ppCoreType t2
+                                    in ppApp e1 e2
+        ppCoreType (FunTy ty1 ty2) = RetExpr $ normalExprWithParensExceptApp (ppCoreType ty1) <+> typeArrow <+> normalExpr (ppCoreType ty2)
+        ppCoreType (ForAllTy v ty) = RetExpr $ specialSymbol ForallSymbol <+> ppVar v <+> symbol '.' <+> normalExpr (ppCoreType ty)
+        ppCoreType (TyConApp tyCon tys)
+                    | GHC.isFunTyCon tyCon, [ty1,ty2] <- tys = ppCoreType (FunTy ty1 ty2)
+                    | tyCon == GHC.listTyCon = RetAtom $ tyText "[" <> (case map (normalExpr . ppCoreType) tys of
+                                                                            []  -> empty
+                                                                            t:_ -> t                     ) <> tyText "]"
+                    | GHC.isTupleTyCon tyCon = case map (normalExpr . ppCoreType) tys of
                                                 [] -> RetAtom $ tyText "()"
                                                 ds -> RetAtom $ tyText "(" <> (foldr1 (\d r -> d <> tyText "," <+> r) ds) <> tyText ")"
-                    | otherwise = RetAtom $ ppName TypeColor (GHC.getName tyCon) <+> sep (map (normalExpr . go) tys) -- has spaces, but we never want parens
-                  go (FunTy ty1 ty2) = RetExpr $ atomExpr (go ty1) <+> tyText "->" <+> normalExpr (go ty2)
-                  go (ForAllTy v ty) = RetExpr $ specialSymbol ForallSymbol <+> ppVar v <+> symbol '.' <+> normalExpr (go ty)
+                    | otherwise = RetApp (ppTyCon tyCon) (map ppCoreType tys)
 
-                  tyText = typeColor . text
 
-        ppCoreCoercion :: GHC.Coercion -> Path -> RetExpr
-        ppCoreCoercion co p = case po_exprTypes opts of
-                                             Show     -> RetExpr $ attrP p (coercionColor $ nest 2 $ ppSDoc co) -- TODO: improve this
-                                             Abstract -> RetAtom $ attrP p coercionSymbol
-                                             Omit     -> RetEmpty
+        ppCoreCoercionMode :: GHC.Coercion -> RetExpr
+        ppCoreCoercionMode co = case po_exprTypes opts of
+                                  Show     -> ppCoreCoercion co
+                                  Abstract -> RetAtom coercionSymbol
+                                  Omit     -> RetEmpty
+
+        ppCoreCoercion :: GHC.Coercion -> RetExpr
+        ppCoreCoercion (GHC.Refl t)            = RetExpr (coKeyword "refl" <+> normalExprWithParens (ppCoreType t))
+        ppCoreCoercion (GHC.CoVarCo v)         = RetAtom (ppVar v)
+        ppCoreCoercion (GHC.SymCo co)          = RetExpr (coKeyword "sym" <+> normalExprWithParens (ppCoreCoercion co))
+        ppCoreCoercion (GHC.ForAllCo v co)     = RetExpr (specialSymbol ForallSymbol <+> ppVar v <+> symbol '.' <+> normalExprWithParensExceptApp (ppCoreCoercion co))
+        ppCoreCoercion (GHC.TransCo co1 co2)   = RetExpr (normalExprWithParensExceptApp (ppCoreCoercion co1) <+> coChar ';' <+> normalExprWithParensExceptApp (ppCoreCoercion co2))
+        ppCoreCoercion (GHC.UnsafeCo t1 t2)    = RetExpr (normalExprWithParensExceptApp (ppCoreType t1) <+> coChar '~' <+> normalExprWithParensExceptApp (ppCoreType t2))
+        ppCoreCoercion (GHC.NthCo n co)        = RetExpr (coKeyword "nth" <+> coText (show n) <+> normalExprWithParens (ppCoreCoercion co))
+        ppCoreCoercion (GHC.InstCo co t)       = RetExpr (normalExprWithParensExceptApp (ppCoreCoercion co) <+> coChar '@' <+> normalExprWithParensExceptApp (ppCoreType t))
+        ppCoreCoercion (GHC.TyConAppCo tc cs)  = RetApp (ppTyCon tc) (map ppCoreCoercion cs)
+        ppCoreCoercion (GHC.AppCo co1 co2)     = let e1 = ppCoreCoercion co1
+                                                     e2 = ppCoreCoercion co2
+                                                  in ppApp e1 e2
+        ppCoreCoercion (GHC.AxiomInstCo ax cs) = RetApp (coercionColor $ ppSDoc ax) (map ppCoreCoercion cs) -- TODO: add pretty printer for Coercion Axioms
+
 
         ppCoreTypeSig :: PrettyH GHC.CoreExpr
         ppCoreTypeSig = arr $ normalExpr . ppCoreType . GHC.exprType
@@ -274,5 +326,11 @@ corePrettyH opts = do
      <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
      <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
      <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
+
+------------------------------------------------------------------------------------------------
+
+consMaybe :: Maybe a -> [a] -> [a]
+consMaybe Nothing  as = as
+consMaybe (Just a) as = a : as
 
 ------------------------------------------------------------------------------------------------
