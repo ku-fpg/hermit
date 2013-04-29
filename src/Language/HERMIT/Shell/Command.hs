@@ -216,6 +216,11 @@ shell_externals = map (.+ Shell)
             [(opt,"")] -> return $ st { cl_pretty_opts = (cl_pretty_opts st) { po_exprTypes = opt } }
             _          -> return st)
        ["set how to show expression-level types (Show|Abstact|Omit)"]
+   , external "set-pp-coercion" (\ str -> SessionStateEffect $ \ _ st ->
+        case reads str :: [(ShowOption,String)] of
+            [(opt,"")] -> return $ st { cl_pretty_opts = (cl_pretty_opts st) { po_coercions = opt } }
+            _          -> return st)
+       ["set how to show coercions (Show|Abstact|Omit)"]
    , external "{"   BeginScope
        ["push current lens onto a stack"]       -- tag as internal
    , external "}"   EndScope
