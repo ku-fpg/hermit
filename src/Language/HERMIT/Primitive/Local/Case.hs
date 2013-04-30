@@ -162,28 +162,18 @@ caseReduceDatacon =
   where
     go :: RewriteH CoreExpr
     go = do Case e wild _ alts <- idR
-            case isDataCon e of
-              Nothing         -> fail "head of scrutinee is not a data constructor."
-              Just (dc, args) -> case findAlt (DataAlt dc) alts of
-                                   Nothing             -> fail "no matching alternative."
-                                   Just (dc', vs, rhs) -> -- dc' is either DEFAULT or dc
-                                                          -- It is possible the pattern constructor binds one or more existentially quantified types.
-                                                          -- trimConArgs drops the universally quantified types from the expression arguments, but not the existentially quantified types.
-                                                          let es      = trimConArgs (DataAlt dc) args
-                                                              fvss    = map coreExprFreeVars args
-                                                              shadows = [ v | (v,n) <- zip vs [1..], any (elem v) (drop n fvss) ]
-                                                           in if | any (elem wild) fvss  -> alphaCaseBinder Nothing >>> go
-                                                                 | not (null shadows)    -> caseOneR (fail "scrutinee") (\ _ -> acceptR (\ (dc'',_,_) -> dc'' == dc') >>> alphaAltVars shadows) >>> go
-                                                                 | null shadows          -> return $ flip mkCoreLets rhs $ zipWith NonRec (wild : vs) (e : es)
+            case exprIsConApp_maybe idUnfolding e of
+              Nothing                -> fail "head of scrutinee is not a data constructor."
+              Just (dc, univTys, es) -> case findAlt (DataAlt dc) alts of
+                Nothing             -> fail "no matching alternative."
+                Just (dc', vs, rhs) -> -- dc' is either DEFAULT or dc
+                                       -- NB: It is possible that es contains one or more existentially quantified types.
+                                       let fvss    = map coreExprFreeVars $ map Type univTys ++ es
+                                           shadows = [ v | (v,n) <- zip vs [1..], any (elem v) (drop n fvss) ]
+                                       in if | any (elem wild) fvss  -> alphaCaseBinder Nothing >>> go
+                                             | not (null shadows)    -> caseOneR (fail "scrutinee") (\ _ -> acceptR (\ (dc'',_,_) -> dc'' == dc') >>> alphaAltVars shadows) >>> go
+                                             | null shadows          -> return $ flip mkCoreLets rhs $ zipWith NonRec (wild : vs) (e : es)
 -- WARNING: The alpha-renaming to avoid variable capture has not been tested.  We need testing infrastructure!
-
--- | If expression is a constructor application, return the relevant bits.
-isDataCon :: CoreExpr -> Maybe (DataCon, [CoreExpr])
-isDataCon expr = case fn of
-                    Var i -> do dc <- isDataConWorkId_maybe i
-                                return (dc, args)
-                    _ -> fail "not a var"
-    where (fn, args) = collectArgs expr
 
 -- | Case split a free variable in an expression:
 --
