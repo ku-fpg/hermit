@@ -10,7 +10,6 @@ import Control.Monad (ap)
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
-import Data.List (partition)
 import Data.Traversable (sequenceA)
 
 
@@ -66,7 +65,7 @@ normalExprWithParensExceptApp e              = normalExprWithParens e
 normalExpr :: RetExpr -> DocH
 normalExpr (RetLam vs e)  = hang (specialSymbol LambdaSymbol <+> hsep vs <+> specialSymbol RightArrowSymbol) 2 e
 normalExpr (RetLet vs e)  = sep [ keyword "let" <+> vcat vs, keyword "in" <+> e ]
-normalExpr (RetApp fn xs) = let (xs1,xs2) = partition isAtom xs
+normalExpr (RetApp fn xs) = let (xs1,xs2) = span isAtom xs
                              in sep [ hsep (fn : map normalExpr xs1)
                                     , nest 2 (sep $ map normalExprWithParens xs2) ]
 normalExpr (RetExpr e)    = e
