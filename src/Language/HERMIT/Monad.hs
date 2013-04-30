@@ -168,19 +168,6 @@ newTyVarH name kind = do name' <- newName name
                          return $ mkTyVar name' kind
 {-# INLINE newTyVarH #-}
 
--- Not sure whether this would be useful or not.
---  Make either a new identifier of a given type, or type variable of a given kind.
---   Note that as 'Id' and 'TyVar' are synonyms of 'Var', and 'Kind' is a synonym of 'Type',
---   the choice is determined entirely by the 'Either' constructor.
--- newVarH :: String -> Either Type Kind -> HermitM Var
--- newVarH name = either (newIdH name) (newTypeVarH name)
-
---   Make either a new identifier of a given type, or type variable of a given kind,
---   and wrap it in a 'Var' or 'Type' constructor, respectively.
--- newVarExprH :: String -> Either Type Kind -> HermitM CoreExpr
--- newVarExprH str (Left ty) = Var <$> newIdH str ty
--- newVarExprH str (Right k) = (Type . mkTyVarTy) <$> newTypeVarH str k
-
 -- | This gives an new version of a 'Var', with the same info, and a new textual name.
 cloneVarH :: (String -> String) -> Var -> HermitM Var
 cloneVarH nameMod v =

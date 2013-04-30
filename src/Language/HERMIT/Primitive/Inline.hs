@@ -125,7 +125,7 @@ getUnfolding scrutinee caseBinderOnly i c =
 alt2Exp :: CoreExpr -> [Type] -> (AltCon,[Id]) -> Either CoreExpr CoreExpr
 alt2Exp d _   (DEFAULT   , _ ) = Left d
 alt2Exp _ _   (LitAlt l  , _ ) = Right $ Lit l
-alt2Exp _ tys (DataAlt dc, as) = Right $ mkCoreConApps dc (map Type tys ++ map Var as)
+alt2Exp _ tys (DataAlt dc, as) = Right $ mkCoreConApps dc (map Type tys ++ map varToCoreExpr as)
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: TranslateH Core [String]

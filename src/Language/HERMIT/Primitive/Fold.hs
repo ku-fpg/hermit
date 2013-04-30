@@ -86,7 +86,7 @@ fold i lam exp = do
     let m = Map.fromListWith checkEqual [(k,Just v) | (k,v) <- al ]
 
     es <- sequence [ join (Map.lookup v m) | v <- vs ]
-    return $ mkCoreApps (Var i) es
+    return $ mkCoreApps (varToCoreExpr i) es
 
 -- Note: Id in the concrete instance is first
 -- (not the Id found in the definition we are trying to fold).

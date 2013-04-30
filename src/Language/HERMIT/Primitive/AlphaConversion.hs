@@ -150,7 +150,7 @@ unshadow = setFailMsg "No shadows to eliminate." $
 -- | Replace all occurrences of a specified variable.
 --   Arguments are the variable to replace and the replacement variable, respectively.
 replaceVarR :: (Injection a Core) => Var -> Var -> RewriteH a
-replaceVarR v v' = extractR $ tryR $ substR v (Var v')
+replaceVarR v v' = extractR $ tryR $ substR v $ varToCoreExpr v'
 
 -- | Given a variable to replace, and a replacement, produce a 'Var' @->@ 'Var' function that
 --   acts as in identity for all 'Var's except the one to replace, for which it returns the replacment.

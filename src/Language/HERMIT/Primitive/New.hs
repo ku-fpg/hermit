@@ -107,8 +107,7 @@ staticArg = prefixFailMsg "static-arg failed: " $ do
     Def f rhs <- idR
     let (bnds, body) = collectBinders rhs
     guardMsg (notNull bnds) "rhs is not a function"
-    c <- contextT
-    constT $ do
+    contextonlyT $ \ c -> do
         let bodyContext = foldl (flip addLambdaBinding) c bnds
 
         callPats <- apply (callsT (var2THName f) (collectArgsT >>> arr snd)) bodyContext (ExprCore body)

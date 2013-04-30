@@ -110,35 +110,20 @@ substR v e = setFailMsg "Can only perform substitution on expressions or program
 
 -- | Substitute all occurrences of a variable with an expression, in an expression.
 substExprR :: Var -> CoreExpr -> RewriteH CoreExpr
-substExprR v e =  contextfreeT $ \ expr ->
-          -- The InScopeSet needs to include any free variables appearing in the
-          -- expression to be substituted.  Constructing a NonRec Let expression
-          -- to pass on to exprFeeVars takes care of this, but ...
-          -- TODO Is there a better way to do this ???
-       let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars (Let (NonRec v e) expr)))
-        in do
-              sub <- if isTyVar v
-                       then case e of
-                              Type vty -> return $ extendTvSubst emptySub v vty
-                              Var x    -> return $ extendTvSubst emptySub v (mkTyVarTy x)
-                              _        -> fail "substExprR:  Var argument is a TyVar, but the expression is not a Type."
-                       else return $ extendSubst emptySub v e
-              return $ substExpr (text "substR") sub expr
+substExprR v e =  contextfreeT $ \ expr -> do
+    -- The InScopeSet needs to include any free variables appearing in the
+    -- expression to be substituted.  Constructing a NonRec Let expression
+    -- to pass on to exprFeeVars takes care of this, but ...
+    -- TODO Is there a better way to do this ???
+    let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars (Let (NonRec v e) expr)))
+    return $ substExpr (text "substR") (extendSubst emptySub v e) expr
 
 -- | Substitute all occurrences of a variable with an expression, in a program.
 substTopBindR :: Var -> CoreExpr -> RewriteH CoreProg
-substTopBindR v e =  contextfreeT $ \ p ->
-          -- TODO.  Do we need to initialize the emptySubst with bindFreeVars?
-       let emptySub =  emptySubst -- mkEmptySubst (mkInScopeSet (exprFreeVars exp))
-        in do
-              sub <- if isTyVar v
-                      then case e of
-                             Type vty -> return $ extendTvSubst emptySub v vty
-                             Var x    -> return $ extendTvSubst emptySub v (mkTyVarTy x)
-                             _        -> fail "substTopBindR:  Var argument is a TyVar, but the expression is not a Type."
-                      else return $ extendSubst emptySub v e
-              return $ bindsToProg $ snd (mapAccumL substBind sub (progToBinds p))
-
+substTopBindR v e =  contextfreeT $ \ p -> do
+    -- TODO.  Do we need to initialize the emptySubst with bindFreeVars?
+    let emptySub =  emptySubst -- mkEmptySubst (mkInScopeSet (exprFreeVars exp))
+    return $ bindsToProg $ snd (mapAccumL substBind (extendSubst emptySub v e) (progToBinds p))
 
 -- | (let x = e1 in e2) ==> (e2[e1/x]),
 --   x must not be free in e1.
@@ -504,10 +489,10 @@ lintProgramT = do
     dflags <- constT getDynFlags
     let (warns, errs) = CoreLint.lintCoreBindings bnds
         dumpSDocs endMsg = Bag.foldBag (\d r -> d ++ ('\n':r)) (showSDoc dflags) endMsg
-    if Bag.isEmptyBag errs 
+    if Bag.isEmptyBag errs
         then return $ dumpSDocs "Core Lint Passed" warns
         else fail   $ dumpSDocs "Core Lint Failed" errs
-    
+
 -- | Note: this can miss several things that a whole-module core lint will find.
 -- For instance, running this on the RHS of a binding, the type of the RHS will
 -- not be checked against the type of the binding. Running on the whole let expression
@@ -515,5 +500,5 @@ lintProgramT = do
 lintExprT :: TranslateH CoreExpr String
 lintExprT = translate $ \ c e -> do
     dflags <- getDynFlags
-    maybe (return "Core Lint Passed") (fail . showSDoc dflags) 
+    maybe (return "Core Lint Passed") (fail . showSDoc dflags)
                  $ CoreLint.lintUnfolding noSrcLoc (keys $ hermitBindings c) e

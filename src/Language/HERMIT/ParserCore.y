@@ -75,7 +75,7 @@ intlit : INTEGER       {% mkIntExpr' $1 } -- mkIntLit makes a primitive Int#
 
 strlit : STRING        {% lift $ mkStringExpr $1 }
 
-var : NAME             {% lookupName $1 $ \v -> if isId v then Var v else Type (mkTyVarTy v) }
+var : NAME             {% lookupName $1 varToCoreExpr }
 {
 
 mkIntExpr' :: Integer -> CoreParseM CoreExpr

@@ -163,10 +163,10 @@ etaExpand nm = prefixFailMsg "Eta-expansion failed: " $
                contextfreeT $ \ e -> let ty = exprType e in
         case splitFunTy_maybe ty of
           Just (argTy, _) -> do v <- newIdH (show nm) argTy
-                                return $ Lam v (App e (Var v))
+                                return $ Lam v (App e (varToCoreExpr v))
           Nothing         -> case splitForAllTy_maybe ty of
                                Just (tv,_) -> do v <- newTyVarH (show nm) (tyVarKind tv)
-                                                 return $ Lam v (App e (Type (mkTyVarTy v)))
+                                                 return $ Lam v (App e (varToCoreExpr v))
                                Nothing -> fail "type of expression is not a function or a forall."
 
 -- | Perform multiple eta-expansions.
@@ -199,6 +199,6 @@ abstract :: TH.Name -> RewriteH CoreExpr
 abstract nm = prefixFailMsg "abstraction failed: " $
    do e <- idR
       v <- findBoundVarT nm
-      return (App (Lam v e) (Var v))
+      return (App (Lam v e) (varToCoreExpr v))
 
 ------------------------------------------------------------------------------

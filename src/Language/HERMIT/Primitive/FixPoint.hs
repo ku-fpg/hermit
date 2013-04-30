@@ -101,12 +101,9 @@ externals = map (.+ Experiment)
 -- |  @f = e@   ==\>   @f = fix (\\ f -> e)@
 fixIntro :: RewriteH CoreDef
 fixIntro = prefixFailMsg "fix introduction failed: " $
-           do Def f e <- idR
+           do Def f _ <- idR
               f' <- constT $ cloneVarH id f
-              let emptySub = mkEmptySubst (mkInScopeSet $ exprFreeVars e)
-                  sub      = extendSubst emptySub f (Var f')
-                  e'       = substExpr (text "fixIntro") sub e
-              Def f <$> mkFix (Lam f' e')
+              Def f <$> (mkFix =<< (defT (extractR $ substR f $ varToCoreExpr f') (\ _ e' -> Lam f' e')))
 
 --------------------------------------------------------------------------------------------------
 
@@ -389,7 +386,7 @@ wrapUnwrapTypes wrap unwrap = setFailMsg "given expressions have the wrong types
 mkFix :: CoreExpr -> TranslateH z CoreExpr
 mkFix f = do t <- endoFunType f
              fixId <- findFixId
-             return $ App (App (Var fixId) (Type t)) f
+             return $ mkCoreApps (varToCoreExpr fixId) [Type t, f]
 
 fixLocation :: String
 fixLocation = "Data.Function.fix"
