@@ -43,7 +43,8 @@ fixName = map (\c -> if c == '.' then '_' else c)
 mkTestScript :: Handle -> FilePath -> IO ()
 mkTestScript h hss = do
     hPutStrLn h
-        $ unlines [ "load \"" ++ hss ++ "\""
+        $ unlines [ "set-auto-corelint True"
+                  , "load \"" ++ hss ++ "\""
                   , "top ; down"
                   , "display" -- all the bindings
                   , "resume" ]
@@ -55,7 +56,7 @@ main = do
 
     forM_ tests $ \ (dir, hs, hss) -> do
         withTempFile pwd "Test.hss" $ \ fp h -> do
-            putStr $ "Running " ++ dir ++ " - "
+            putStr $ "Running " ++ dir </> hs ++ " - "
 
             let fixed = fixName (concat [dir, "_", hs, "_", hss])
                 gfile = pwd </> golden </> fixed <.> "ref"
