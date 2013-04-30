@@ -147,11 +147,14 @@ caseReduceLiteral :: RewriteH CoreExpr
 caseReduceLiteral =
              prefixFailMsg "Case reduction failed: " $
              withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $
-             do Case (Lit l) wild _ alts <- idR
-                guardMsg (not (litIsLifted l)) "cannot case-reduce lifted literals" -- see Trac #5603
-                case findAlt (LitAlt l) alts of
-                  Nothing          -> fail "no matching alternative."
-                  Just (_, _, rhs) -> return $ mkCoreLet (NonRec wild (Lit l)) rhs
+             do Case s wild _ alts <- idR
+                case exprIsLiteral_maybe idUnfolding s of
+                    Nothing -> fail "scrutinee is not a literal."
+                    Just l  -> do
+                        guardMsg (not (litIsLifted l)) "cannot case-reduce lifted literals" -- see Trac #5603
+                        case findAlt (LitAlt l) alts of
+                            Nothing          -> fail "no matching alternative."
+                            Just (_, _, rhs) -> return $ mkCoreLet (NonRec wild (Lit l)) rhs
 
 -- | Case-of-known-constructor rewrite.
 caseReduceDatacon :: RewriteH CoreExpr
