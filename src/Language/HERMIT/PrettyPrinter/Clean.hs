@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE CPP, LambdaCase #-}
 
 module Language.HERMIT.PrettyPrinter.Clean
   ( -- * HERMIT's Clean Pretty-Printer for GHC Core
@@ -304,7 +304,13 @@ corePrettyH opts = do
         ppCoreCoercion (GHC.AppCo co1 co2)     = let e1 = ppCoreCoercion co1
                                                      e2 = ppCoreCoercion co2
                                                   in ppApp e1 e2
+#if __GLASGOW_HASKELL__ > 706
+        -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
+        ppCoreCoercion (GHC.AxiomInstCo ax idx cs) = RetApp (coercionColor $ ppSDoc ax) (RetAtom (ppSDoc idx) : map ppCoreCoercion cs)
+        ppCoreCoercion (GHC.LRCo lr co) = RetApp (coercionColor $ ppSDoc lr) [ppCoreCoercion co]
+#else
         ppCoreCoercion (GHC.AxiomInstCo ax cs) = RetApp (coercionColor $ ppSDoc ax) (map ppCoreCoercion cs) -- TODO: add pretty printer for Coercion Axioms
+#endif
 
         ppTypePairCoercion :: Type -> Type -> DocH
         ppTypePairCoercion t1 t2 = normalExprWithParensExceptApp (ppTypeMode t1) <+> coChar '~' <+> normalExprWithParensExceptApp (ppTypeMode t2)
