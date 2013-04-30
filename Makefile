@@ -9,3 +9,6 @@ ghci:
 	happy src/Language/HERMIT/Parser.y
 	happy src/Language/HERMIT/ParserCore.y
 	ghc --interactive -Wall -package ghc -isrc/ ${FILE}
+
+test:
+	( cd tests ; runghc Test.hs )
