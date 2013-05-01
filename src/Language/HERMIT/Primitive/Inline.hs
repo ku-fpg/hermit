@@ -13,14 +13,16 @@ module Language.HERMIT.Primitive.Inline
 where
 
 import GhcPlugins
+import TcType (tcSplitDFunTy)
 
 import Control.Arrow
 
-import Language.HERMIT.Core
-import Language.HERMIT.Kure
 import Language.HERMIT.Context
-import Language.HERMIT.GHC
+import Language.HERMIT.Core
 import Language.HERMIT.External
+import Language.HERMIT.GHC
+import Language.HERMIT.Kure
+import Language.HERMIT.Monad
 
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
@@ -77,7 +79,7 @@ configurableInline scrutinee caseBinderOnly =
    prefixFailMsg "Inline failed: " $
    withPatFailMsg (wrongExprForm "Var v") $
    do (c, Var v) <- exposeT
-      (e,d) <- getUnfolding scrutinee caseBinderOnly v c
+      (e,d) <- constT $ getUnfolding scrutinee caseBinderOnly v c
       return e >>> (setFailMsg "values in inlined expression have been rebound." $
                     accepterR (extractT $ ensureDepth d))
 
@@ -94,15 +96,17 @@ ensureDepth d = do
     -- traceR $ "greater values (" ++ show d ++ "): " ++ show (filter ((> d) . snd) ds)
     return $ all (toSnd (<= d)) ds
 
-getUnfolding :: Monad m
-             => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
+getUnfolding :: Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
              -> Bool -- ^ Only succeed if this variable is a case binder.
-             -> Id -> HermitC -> m (CoreExpr, Int)
+             -> Id -> HermitC -> HermitM (CoreExpr, Int)
 getUnfolding scrutinee caseBinderOnly i c =
     case lookupHermitBinding i c of
-        Nothing -> case unfoldingInfo (idInfo i) of
-                     CoreUnfolding { uf_tmpl = uft } -> if caseBinderOnly then fail "not a case binder" else return (uft, 0)
-                     _                               -> fail $ "cannot find unfolding in Env or IdInfo."
+        Nothing -> if caseBinderOnly
+                   then fail "not a case binder"
+                   else case unfoldingInfo (idInfo i) of
+                            CoreUnfolding { uf_tmpl = uft } -> return (uft, 0)
+                            DFunUnfolding _arity dc args    -> dFunExpr dc args (idType i) >>= return . (,0)
+                            _                               -> fail $ "cannot find unfolding in Env or IdInfo."
         Just (LAM {}) -> fail $ "variable is lambda-bound."
         Just (BIND depth _ e') -> if caseBinderOnly then fail "not a case binder." else return (e', depth)
         Just (CASE depth s coreAlt) -> return $ if scrutinee
@@ -130,5 +134,22 @@ alt2Exp _ tys (DataAlt dc, as) = Right $ mkCoreConApps dc (map Type tys ++ map v
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: TranslateH Core [String]
 inlineTargets = collectT $ promoteT $ whenM (testM inline) (varT unqualifiedVarName)
+
+-- | Build a CoreExpr for a DFunUnfolding
+dFunExpr :: DataCon -> [DFunArg CoreExpr] -> Type -> HermitM CoreExpr
+dFunExpr dc args ty = do
+    let (_, _, _, tcArgs) = tcSplitDFunTy ty
+        (forallTvs, ty')  = splitForAllTys ty
+        (argTys, _resTy)  = splitFunTys ty'
+
+    ids <- mapM (uncurry newIdH) $ zip [ [ch] | ch <- cycle ['a'..'z'] ] argTys
+    vars <- mapM (cloneVarH id) forallTvs
+
+    let allVars = varsToCoreExprs $ vars ++ ids
+
+        mkArg (DFunLamArg i) = allVars !! i
+        mkArg (DFunPolyArg e) = mkCoreApps e allVars
+
+    return $ mkCoreConApps dc $ map Type tcArgs ++ map mkArg args
 
 ------------------------------------------------------------------------

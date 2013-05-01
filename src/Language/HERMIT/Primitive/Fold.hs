@@ -68,11 +68,8 @@ foldR nm =  prefixFailMsg "Fold failed: " $
                 []  -> fail "cannot find name."
                 [i] -> return i
                 is  -> fail $ "multiple names match: " ++ intercalate ", " (map var2String is)
-        either fail
-               (\(rhs,_d) -> maybe (fail "no match.")
-                                   return
-                                   (fold i rhs e))
-               (getUnfolding False False i c)
+        (rhs,_d) <- getUnfolding False False i c
+        maybe (fail "no match.") return (fold i rhs e)
 
 fold :: Id -> CoreExpr -> CoreExpr -> Maybe CoreExpr
 fold i lam exp = do
