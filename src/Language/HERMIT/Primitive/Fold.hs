@@ -3,6 +3,7 @@ module Language.HERMIT.Primitive.Fold
       externals
     , foldR
     , stashFoldR
+    , stashFoldAnyR
     )
 
 where
@@ -33,26 +34,27 @@ import Prelude hiding (exp)
 
 externals :: [External]
 externals =
-         [ external "fold" (promoteExprR . foldR)
-                ["fold a definition"
-                ,""
-                ,"double :: Int -> Int"
-                ,"double x = x + x"
-                ,""
-                ,"5 + 5 + 6"
-                ,"any-bu (fold 'double)"
-                ,"double 5 + 6"
-                ,""
-                ,"Note: due to associativity, if you wanted to fold 5 + 6 + 6, "
-                ,"you first need to apply an associativity rewrite."
-                ] .+ Context .+ Deep
-         , external "fold" (promoteExprR . stashFoldR)
-                ["Fold a remembered definition."] .+ Context .+ Deep
-         ]
+    [ external "fold" (promoteExprR . foldR)
+        [ "fold a definition"
+        , ""
+        , "double :: Int -> Int"
+        , "double x = x + x"
+        , ""
+        , "5 + 5 + 6"
+        , "any-bu (fold 'double)"
+        , "double 5 + 6"
+        , ""
+        , "Note: due to associativity, if you wanted to fold 5 + 6 + 6, "
+        , "you first need to apply an associativity rewrite." ]  .+ Context .+ Deep
+    , external "fold" (promoteExprR . stashFoldR)
+        [ "Fold a remembered definition." ]                      .+ Context .+ Deep
+    , external "fold-any" (promoteExprR stashFoldAnyR)
+        [ "Attempt to fold any of the remembered definitions." ] .+ Context .+ Deep
+    ]
 
 ------------------------------------------------------------------------
 
-stashFoldR :: String -> RewriteH CoreExpr
+stashFoldR :: Label -> RewriteH CoreExpr
 stashFoldR label = prefixFailMsg "Fold failed: " $
     translate $ \ c e -> do
         Def i rhs <- lookupDef label
@@ -60,6 +62,10 @@ stashFoldR label = prefixFailMsg "Fold failed: " $
         maybe (fail "no match.")
               return
               (fold i rhs e)
+
+stashFoldAnyR :: RewriteH CoreExpr
+stashFoldAnyR = setFailMsg "Fold failed: no definitions could be folded." $
+    catchesM =<< map stashFoldR <$> (Map.keys <$> constT getStash)
 
 foldR :: TH.Name -> RewriteH CoreExpr
 foldR nm =  prefixFailMsg "Fold failed: " $
@@ -70,6 +76,8 @@ foldR nm =  prefixFailMsg "Fold failed: " $
                 is  -> fail $ "multiple names match: " ++ intercalate ", " (map var2String is)
         (rhs,_d) <- getUnfolding False False i c
         maybe (fail "no match.") return (fold i rhs e)
+
+------------------------------------------------------------------------
 
 fold :: Id -> CoreExpr -> CoreExpr -> Maybe CoreExpr
 fold i lam exp = do
