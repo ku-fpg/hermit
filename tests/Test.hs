@@ -44,6 +44,8 @@ mkTestScript :: Handle -> FilePath -> IO ()
 mkTestScript h hss = do
     hPutStrLn h
         $ unlines [ "set-auto-corelint True"
+                  , "set-pp-expr-type Show"
+                  , "set-fail-hard True"
                   , "load \"" ++ hss ++ "\""
                   , "top ; down"
                   , "display" -- all the bindings
@@ -85,16 +87,17 @@ main = do
 
             case exHermit of
                 ExitFailure i -> putStrLn $ "HERMIT failed with code: " ++ show i
-                ExitSuccess   -> do
-                    -- putStrLn diff
-                    (_,mbStdoutH,_,rDiff) <- createProcess $ (shell diff) { std_out = CreatePipe }
-                    exDiff <- waitForProcess rDiff
-                    case exDiff of
-                        ExitFailure i | i > 1 -> putStrLn $ "diff failed with code: " ++ show i
-                        _ -> maybe (putStrLn "error: no stdout!")
-                                   (\hDiff -> do output <- hGetContents hDiff
-                                                 if null output
-                                                 then putStrLn "passed."
-                                                 else do putStrLn "failed:"
-                                                         putStrLn output)
-                                   mbStdoutH
+                ExitSuccess   -> return ()
+
+            -- putStrLn diff
+            (_,mbStdoutH,_,rDiff) <- createProcess $ (shell diff) { std_out = CreatePipe }
+            exDiff <- waitForProcess rDiff
+            case exDiff of
+                ExitFailure i | i > 1 -> putStrLn $ "diff failed with code: " ++ show i
+                _ -> maybe (putStrLn "error: no stdout!")
+                           (\hDiff -> do output <- hGetContents hDiff
+                                         if null output
+                                         then putStrLn "passed."
+                                         else do putStrLn "failed:"
+                                                 putStrLn output)
+                           mbStdoutH
