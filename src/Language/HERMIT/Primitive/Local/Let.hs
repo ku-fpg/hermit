@@ -193,7 +193,7 @@ letFloatCast = prefixFailMsg "Let floating from Cast failed: " $
 -- | Float a Let through an expression, whatever the context.
 letFloatExpr :: RewriteH CoreExpr
 letFloatExpr = setFailMsg "Unsuitable expression for Let floating." $
-               letFloatArg <+ letFloatApp <+ letFloatLet <+ letFloatLam <+ letFloatCase
+               letFloatArg <+ letFloatApp <+ letFloatLet <+ letFloatLam <+ letFloatCase <+ letFloatCast
 
 -- | NonRec v (Let (NonRec w ew) ev) `ProgCons` p ==> NonRec w ew `ProgCons` NonRec v ev `ProgCons` p
 letFloatLetTop :: RewriteH CoreProg
