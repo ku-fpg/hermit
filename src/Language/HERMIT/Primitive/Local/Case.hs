@@ -2,7 +2,7 @@
 
 module Language.HERMIT.Primitive.Local.Case
        ( -- * Rewrites on Case Expressions
-         caseExternals
+         externals
        , caseFloatApp
        , caseFloatArg
        , caseFloatCase
@@ -29,9 +29,9 @@ import Language.HERMIT.GHC
 import Language.HERMIT.External
 
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.GHC
-import Language.HERMIT.Primitive.Inline
-import Language.HERMIT.Primitive.AlphaConversion
+import Language.HERMIT.Primitive.GHC hiding (externals)
+import Language.HERMIT.Primitive.Inline hiding (externals)
+import Language.HERMIT.Primitive.AlphaConversion hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 
@@ -39,42 +39,39 @@ import qualified Language.Haskell.TH as TH
 ------------------------------------------------------------------------------
 
 -- | Externals relating to Case expressions.
-caseExternals :: [External]
-caseExternals =
-         [ -- I'm not sure this is possible. In core, v2 can only be a Constructor, Lit, or DEFAULT
-           -- In the last case, v1 is already inlined in e. So we can't construct v2 as a Var.
-         --   external "case-elimination" (promoteR $ not_defined "case-elimination" :: RewriteH Core)
-         --             [ "case v1 of v2 -> e ==> e[v1/v2]" ]                                         .+ Unimplemented .+ Eval
-         --   -- Again, don't think the lhs of this rule is possible to construct in core.
-         -- , external "default-binding-elim" (promoteR $ not_defined "default-binding-elim" :: RewriteH Core)
-         --             [ "case v of ...;w -> e ==> case v of ...;w -> e[v/w]" ]                      .+ Unimplemented .+ Eval
-         --   -- Again, don't think the lhs of this rule is possible to construct in core.
-         -- , external "case-merging" (promoteR $ not_defined "case-merging" :: RewriteH Core)
-         --             [ "case v of ...; d -> case v of alt -> e ==> case v of ...; alt -> e[v/d]" ] .+ Unimplemented .+ Eval
-           external "case-float-app" (promoteExprR caseFloatApp :: RewriteH Core)
-                     [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow .+ Bash
-         , external "case-float-arg" (promoteExprR caseFloatArg :: RewriteH Core)
-                     [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
-         , external "case-float-case" (promoteExprR caseFloatCase :: RewriteH Core)
-                     [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval .+ Bash
-         , external "case-float-let" (promoteExprR caseFloatLet :: RewriteH Core)
-                     [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow .+ Bash
-         , external "case-float" (promoteExprR caseFloat :: RewriteH Core)
-                     [ "Float a Case whatever the context." ] .+ Commute .+ Shallow .+ PreCondition
-         , external "case-reduce" (promoteExprR caseReduce :: RewriteH Core)
-                     [ "case-reduce-datacon <+ case-reduce-literal" ] .+ Shallow .+ Eval .+ Bash
-         , external "case-reduce-datacon" (promoteExprR caseReduceDatacon :: RewriteH Core)
-                     [ "case-of-known-constructor"
-                     , "case C v1..vn of C w1..wn -> e ==> let { w1 = v1 ; .. ; wn = vn } in e" ] .+ Shallow .+ Eval
-         , external "case-reduce-literal" (promoteExprR caseReduceLiteral :: RewriteH Core)
-                     [ "case L of L -> e ==> e" ] .+ Shallow .+ Eval
-         , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
-                [ "case-split 'x"
-                , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ]
-         , external "case-split-inline" (caseSplitInline :: TH.Name -> RewriteH Core)
-                [ "Like case-split, but additionally inlines the matched constructor "
-                , "applications for all occurances of the named variable." ]
-         ]
+externals :: [External]
+externals =
+    [ -- I'm not sure this is possible. In core, v2 can only be a Constructor, Lit, or DEFAULT
+      -- In the last case, v1 is already inlined in e. So we can't construct v2 as a Var.
+      --   external "case-elimination" (promoteR $ not_defined "case-elimination" :: RewriteH Core)
+      --     [ "case v1 of v2 -> e ==> e[v1/v2]" ]                                         .+ Unimplemented .+ Eval
+      --   -- Again, don't think the lhs of this rule is possible to construct in core.
+      -- , external "case-merging" (promoteR $ not_defined "case-merging" :: RewriteH Core)
+      --     [ "case v of ...; d -> case v of alt -> e ==> case v of ...; alt -> e[v/d]" ] .+ Unimplemented .+ Eval
+      external "case-float-app" (promoteExprR caseFloatApp :: RewriteH Core)
+        [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow .+ Bash
+    , external "case-float-arg" (promoteExprR caseFloatArg :: RewriteH Core)
+        [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
+    , external "case-float-case" (promoteExprR caseFloatCase :: RewriteH Core)
+        [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval .+ Bash
+    , external "case-float-let" (promoteExprR caseFloatLet :: RewriteH Core)
+        [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow .+ Bash
+    , external "case-float" (promoteExprR caseFloat :: RewriteH Core)
+        [ "Float a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
+    , external "case-reduce" (promoteExprR caseReduce :: RewriteH Core)
+        [ "case-reduce-datacon <+ case-reduce-literal" ]                     .+ Shallow .+ Eval .+ Bash
+    , external "case-reduce-datacon" (promoteExprR caseReduceDatacon :: RewriteH Core)
+        [ "case-of-known-constructor"
+        , "case C v1..vn of C w1..wn -> e ==> let { w1 = v1 ; .. ; wn = vn } in e" ]    .+ Shallow .+ Eval
+    , external "case-reduce-literal" (promoteExprR caseReduceLiteral :: RewriteH Core)
+        [ "case L of L -> e ==> e" ]                                         .+ Shallow .+ Eval
+    , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
+        [ "case-split 'x"
+        , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ]
+    , external "case-split-inline" (caseSplitInline :: TH.Name -> RewriteH Core)
+        [ "Like case-split, but additionally inlines the matched constructor "
+        , "applications for all occurances of the named variable." ]
+    ]
 
 ------------------------------------------------------------------------------
 

@@ -1,13 +1,14 @@
 module Language.HERMIT.Primitive.Local.Let
        ( -- * Rewrites on Let Expressions
-         letElim
-       , letExternals
+         externals
+       , letElim
        , letIntro
        , letFloatApp
        , letFloatArg
        , letFloatLet
        , letFloatLam
        , letFloatCase
+       , letFloatCast
        , letFloatExpr
        , letFloatLetTop
        , letNonRecElim
@@ -35,58 +36,58 @@ import Language.HERMIT.External
 import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.GHC
-import Language.HERMIT.Primitive.AlphaConversion
+import Language.HERMIT.Primitive.GHC hiding (externals)
+import Language.HERMIT.Primitive.AlphaConversion hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------
 
 -- | Externals relating to Let expressions.
-letExternals :: [External]
-letExternals =
-         [ external "let-intro" (promoteExprR . letIntro :: TH.Name -> RewriteH Core)
-                [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
-         , external "dead-let-elimination" (promoteExprR letElim :: RewriteH Core)
-                     [ "dead-let-elimination removes an unused let binding."
-                     , "(let v = e1 in e2) ==> e2, if v is not free in e2."
-                     , "condition: let is not-recursive" ]                                   .+ Eval .+ Shallow .+ Bash
-         , external "dead-code-elimination" (promoteExprR letElim :: RewriteH Core)
-                     [ "Synonym for dead-let-elimination [deprecated]" ]  .+ Eval .+ Shallow -- TODO: delete this at some point
-         -- , external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
-         --             [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Unimplemented .+ Eval
-         , external "let-float-app" (promoteExprR letFloatApp :: RewriteH Core)
-                     [ "(let v = ev in e) x ==> let v = ev in e x" ]                    .+ Commute .+ Shallow .+ Bash
-         , external "let-float-arg" (promoteExprR letFloatArg :: RewriteH Core)
-                     [ "f (let v = ev in e) ==> let v = ev in f e" ]                    .+ Commute .+ Shallow .+ Bash
-         , external "let-float-lam" (promoteExprR letFloatLam :: RewriteH Core)
-                     [ "(\\ v1 -> let v2 = e1 in e2)  ==>  let v2 = e1 in (\\ v1 -> e2), if v1 is not free in e2.",
-                       "If v1 = v2 then v1 will be alpha-renamed."
-                     ]                                                                  .+ Commute .+ Shallow .+ Bash
-         , external "let-float-let" (promoteExprR letFloatLet :: RewriteH Core)
-                     [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow .+ Bash
-         , external "let-float-case" (promoteExprR letFloatCase :: RewriteH Core)
-                     [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]  .+ Commute .+ Shallow .+ Eval .+ Bash
-         , external "let-float-top" (promoteProgR letFloatLetTop :: RewriteH Core)
-                     [ "v = (let w = ew in ev) : bds ==> w = ew : v = ev : bds" ] .+ Commute .+ Shallow .+ Bash
-         , external "let-float" (promoteProgR letFloatLetTop <+ promoteExprR letFloatExpr :: RewriteH Core)
-                     [ "Float a Let whatever the context." ] .+ Commute .+ Shallow .+ Bash
-         , external "let-to-case" (promoteExprR letToCase :: RewriteH Core)
-                     [ "let v = ev in e ==> case ev of v -> e" ] .+ Commute .+ Shallow .+ PreCondition
-         -- , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
-         --             [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ] .+ Unimplemented
-         , external "let-unfloat" (promoteExprR (letUnfloatApp <+ letUnfloatCase) >+> anybuR (promoteExprR letElim) :: RewriteH Core)
-                     [ "Unfloat a let if possible." ] .+ Commute .+ Shallow
-         , external "let-unfloat-app" ((promoteExprR letUnfloatApp >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
-                     [ "let v = ev in f a ==> (let v = ev in f) (let v = ev in a)" ] .+ Commute .+ Shallow
-         , external "let-unfloat-case" ((promoteExprR letUnfloatCase >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
-                     [ "let v = ev in case s of p -> e ==> case (let v = ev in s) of p -> let v = ev in e"
-                     , "if v does not shadow a pattern binder in p" ] .+ Commute .+ Shallow
-         , external "reorder-lets" (promoteExprR . reorderNonRecLets :: [TH.Name] -> RewriteH Core)
-                     [ "Re-order a sequence of nested non-recursive let bindings.",
-                       "The argument list should contain the let-bound variables, in the desired order."
-                     ]
-         ]
+externals :: [External]
+externals =
+    [ external "let-intro" (promoteExprR . letIntro :: TH.Name -> RewriteH Core)
+        [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
+    , external "dead-let-elimination" (promoteExprR letElim :: RewriteH Core)
+        [ "dead-let-elimination removes an unused let binding."
+        , "(let v = e1 in e2) ==> e2, if v is not free in e2."
+        , "condition: let is not-recursive" ]                                   .+ Eval .+ Shallow .+ Bash
+    , external "dead-code-elimination" (promoteExprR letElim :: RewriteH Core)
+        [ "Synonym for dead-let-elimination [deprecated]" ]                     .+ Eval .+ Shallow -- TODO: delete this at some point
+--    , external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
+--        [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Unimplemented .+ Eval
+    , external "let-float-app" (promoteExprR letFloatApp :: RewriteH Core)
+        [ "(let v = ev in e) x ==> let v = ev in e x" ]                         .+ Commute .+ Shallow .+ Bash
+    , external "let-float-arg" (promoteExprR letFloatArg :: RewriteH Core)
+        [ "f (let v = ev in e) ==> let v = ev in f e" ]                         .+ Commute .+ Shallow .+ Bash
+    , external "let-float-lam" (promoteExprR letFloatLam :: RewriteH Core)
+        [ "(\\ v1 -> let v2 = e1 in e2)  ==>  let v2 = e1 in (\\ v1 -> e2), if v1 is not free in e2."
+        , "If v1 = v2 then v1 will be alpha-renamed." ]                         .+ Commute .+ Shallow .+ Bash
+    , external "let-float-let" (promoteExprR letFloatLet :: RewriteH Core)
+        [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow .+ Bash
+    , external "let-float-case" (promoteExprR letFloatCase :: RewriteH Core)
+        [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]     .+ Commute .+ Shallow .+ Eval .+ Bash
+    , external "let-float-cast" (promoteExprR letFloatCast)
+        [ "cast (let bnds in e) co ==> let bnds in cast e co" ]                 .+ Shallow
+    , external "let-float-top" (promoteProgR letFloatLetTop :: RewriteH Core)
+        [ "v = (let w = ew in ev) : bds ==> w = ew : v = ev : bds" ]            .+ Commute .+ Shallow .+ Bash
+    , external "let-float" (promoteProgR letFloatLetTop <+ promoteExprR letFloatExpr :: RewriteH Core)
+        [ "Float a Let whatever the context." ]                                 .+ Commute .+ Shallow .+ Bash
+    , external "let-to-case" (promoteExprR letToCase :: RewriteH Core)
+        [ "let v = ev in e ==> case ev of v -> e" ]                             .+ Commute .+ Shallow .+ PreCondition
+--    , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
+--        [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ] .+ Unimplemented
+    , external "let-unfloat" (promoteExprR (letUnfloatApp <+ letUnfloatCase) >+> anybuR (promoteExprR letElim) :: RewriteH Core)
+        [ "Unfloat a let if possible." ]                                        .+ Commute .+ Shallow
+    , external "let-unfloat-app" ((promoteExprR letUnfloatApp >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
+        [ "let v = ev in f a ==> (let v = ev in f) (let v = ev in a)" ]         .+ Commute .+ Shallow
+    , external "let-unfloat-case" ((promoteExprR letUnfloatCase >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
+        [ "let v = ev in case s of p -> e ==> case (let v = ev in s) of p -> let v = ev in e"
+        , "if v does not shadow a pattern binder in p" ]                        .+ Commute .+ Shallow
+    , external "reorder-lets" (promoteExprR . reorderNonRecLets :: [TH.Name] -> RewriteH Core)
+        [ "Re-order a sequence of nested non-recursive let bindings."
+        , "The argument list should contain the let-bound variables, in the desired order." ]
+    ]
 
 -------------------------------------------------------------------------------------------
 
@@ -181,6 +182,13 @@ letFloatCase = prefixFailMsg "Let floating from Case failed: " $
      caseT (if null captures then idR else alphaLetVars captures)
            (const idR)
            (\ (Let bnds e) wild ty alts -> Let bnds (Case e wild ty alts))
+
+-- | @cast (let bnds in e) co ==> let bnds in cast e co@
+letFloatCast :: RewriteH CoreExpr
+letFloatCast = prefixFailMsg "Let floating from Cast failed: " $
+               withPatFailMsg (wrongExprForm "Cast (Let bnds e) co") $
+  do Cast (Let bnds e) co <- idR
+     return (Let bnds (Cast e co))
 
 -- | Float a Let through an expression, whatever the context.
 letFloatExpr :: RewriteH CoreExpr

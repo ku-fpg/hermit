@@ -30,8 +30,10 @@ import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.Local.Case
-import Language.HERMIT.Primitive.Local.Let
+import Language.HERMIT.Primitive.Local.Case hiding (externals)
+import qualified Language.HERMIT.Primitive.Local.Case as Case
+import Language.HERMIT.Primitive.Local.Let hiding (externals)
+import qualified Language.HERMIT.Primitive.Local.Let as Let
 
 import qualified Language.Haskell.TH as TH
 
@@ -43,34 +45,33 @@ import Control.Arrow
 --   (Many taken from Chapter 3 of Andre Santos' dissertation.)
 externals :: [External]
 externals =
-         [ external "nonrec-to-rec" (promoteBindR nonrecToRec :: RewriteH Core)
-                     [ "convert a non-recursive binding into a recursive binding group with a single definition."
-                     , "NonRec v e ==> Rec [Def v e]" ]
-         , external "beta-reduce" (promoteExprR betaReduce :: RewriteH Core)
-                     [ "((\\ v -> E1) E2) ==> let v = E2 in E1"
-                     , "this form of beta-reduction is safe if E2 is an arbitrary"
-                     , "expression (won't duplicate work)" ]                                 .+ Eval .+ Shallow
-         , external "beta-reduce-plus" (promoteExprR betaReducePlus :: RewriteH Core)
-                     [ "perform one or more beta-reductions."]                               .+ Eval .+ Shallow .+ Bash
-         , external "beta-expand" (promoteExprR betaExpand :: RewriteH Core)
-                     [ "(let v = e1 in e2) ==> (\\ v -> e2) e1" ]                            .+ Shallow
-         , external "eta-reduce" (promoteExprR etaReduce :: RewriteH Core)
-                     [ "(\\ v -> e1 v) ==> e1" ]                                             .+ Eval .+ Shallow .+ Bash
-         , external "eta-expand" (promoteExprR . etaExpand :: TH.Name -> RewriteH Core)
-                     [ "\"eta-expand 'v\" performs e1 ==> (\\ v -> e1 v)" ]                     .+ Shallow .+ Introduce
-         , external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
-                ["Flatten all the top-level binding groups in the module to a single recursive binding group.",
-                 "This can be useful if you intend to appply GHC RULES."]
-         , external "flatten-program" (promoteProgR flattenProgramR :: RewriteH Core)
-                ["Flatten all the top-level binding groups in a program (list of binding groups) to a single recursive binding group.",
-                 "This can be useful if you intend to appply GHC RULES."]
-         , external "abstract" (promoteExprR . abstract :: TH.Name -> RewriteH Core)
-                [ "Abstract over a variable using a lambda.",
-                  "e  ==>  (\\ x -> e) x"
-                ] .+ Shallow .+ Introduce .+ Context
-         ]
-         ++ letExternals
-         ++ caseExternals
+    [ external "nonrec-to-rec" (promoteBindR nonrecToRec :: RewriteH Core)
+        [ "convert a non-recursive binding into a recursive binding group with a single definition."
+        , "NonRec v e ==> Rec [Def v e]" ]
+    , external "beta-reduce" (promoteExprR betaReduce :: RewriteH Core)
+        [ "((\\ v -> E1) E2) ==> let v = E2 in E1"
+        , "this form of beta-reduction is safe if E2 is an arbitrary"
+        , "expression (won't duplicate work)" ]                                 .+ Eval .+ Shallow
+    , external "beta-reduce-plus" (promoteExprR betaReducePlus :: RewriteH Core)
+        [ "perform one or more beta-reductions."]                               .+ Eval .+ Shallow .+ Bash
+    , external "beta-expand" (promoteExprR betaExpand :: RewriteH Core)
+        [ "(let v = e1 in e2) ==> (\\ v -> e2) e1" ]                            .+ Shallow
+    , external "eta-reduce" (promoteExprR etaReduce :: RewriteH Core)
+        [ "(\\ v -> e1 v) ==> e1" ]                                             .+ Eval .+ Shallow .+ Bash
+    , external "eta-expand" (promoteExprR . etaExpand :: TH.Name -> RewriteH Core)
+        [ "\"eta-expand 'v\" performs e1 ==> (\\ v -> e1 v)" ]                  .+ Shallow .+ Introduce
+    , external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
+        [ "Flatten all the top-level binding groups in the module to a single recursive binding group."
+        , "This can be useful if you intend to appply GHC RULES." ]
+    , external "flatten-program" (promoteProgR flattenProgramR :: RewriteH Core)
+        [ "Flatten all the top-level binding groups in a program (list of binding groups) to a single recursive binding group."
+        , "This can be useful if you intend to appply GHC RULES." ]
+    , external "abstract" (promoteExprR . abstract :: TH.Name -> RewriteH Core)
+        [ "Abstract over a variable using a lambda."
+        , "e  ==>  (\\ x -> e) x" ]                                             .+ Shallow .+ Introduce .+ Context
+    ]
+    ++ Let.externals
+    ++ Case.externals
 
 ------------------------------------------------------------------------------
 
