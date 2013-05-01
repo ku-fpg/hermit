@@ -189,6 +189,12 @@ shell_externals = map (.+ Shell)
        [ "goto a specific step in the derivation" ]                             .+ VersionControl
    , external "goto"            (SessionStateEffect . navigation . GotoTag)
        [ "goto a named step in the derivation" ]
+   , external "set-fail-hard" (\ bStr -> SessionStateEffect $ \ _ st ->
+        case reads bStr of
+            [(b,"")] -> return $ st { cl_failhard = b }
+            _        -> return st )
+       [ "set-fail-hard <True|False>; False by default"
+       , "any rewrite failure causes compilation to abort" ]
    , external "set-auto-corelint" (\ bStr -> SessionStateEffect $ \ _ st ->
         case reads bStr of
             [(b,"")] -> return $ st { cl_corelint = b }
@@ -302,15 +308,16 @@ newSAST expr sast st = st { cl_session = (cl_session st) { cl_cursor = sast }
 
 -- Session-local issues; things that are never saved.
 data SessionState = SessionState
-        { cl_cursor      :: SAST                                       -- ^ the current AST
-        , cl_pretty      :: String                                     -- ^ which pretty printer to use
-        , cl_pretty_opts :: PrettyOptions                              -- ^ The options for the pretty printer
-        , cl_render      :: Handle -> PrettyOptions -> DocH -> IO ()   -- ^ the way of outputing to the screen
-        , cl_width       :: Int                                        -- ^ how wide is the screen?
-        , cl_nav         :: Bool                                       -- ^ keyboard input the the nav panel
-        , cl_loading     :: Bool                                       -- ^ if loading a file
-        , cl_tick        :: TVar (M.Map String Int)                    -- ^ The list of ticked messages
-        , cl_corelint    :: Bool                                       -- ^ if true, run core lint on module after each rewrite
+        { cl_cursor      :: SAST                                     -- ^ the current AST
+        , cl_pretty      :: String                                   -- ^ which pretty printer to use
+        , cl_pretty_opts :: PrettyOptions                            -- ^ The options for the pretty printer
+        , cl_render      :: Handle -> PrettyOptions -> DocH -> IO () -- ^ the way of outputing to the screen
+        , cl_width       :: Int                                      -- ^ how wide is the screen?
+        , cl_nav         :: Bool                                     -- ^ keyboard input the the nav panel
+        , cl_loading     :: Bool                                     -- ^ if loading a file
+        , cl_tick        :: TVar (M.Map String Int)                  -- ^ The list of ticked messages
+        , cl_corelint    :: Bool                                     -- ^ if true, run core lint on module after each rewrite
+        , cl_failhard    :: Bool                                     -- ^ if true, abort on *any* failure
         }
 
 -------------------------------------------------------------------------------
@@ -380,7 +387,7 @@ commandLine filesToLoad behavior modGuts = do
 
     flip scopedKernel modGuts $ \ skernel sast -> do
 
-        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False var False
+        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False var False False
             shellState = CommandLineState [] [] dict skernel sast sessionState
 
         completionMVar <- newMVar shellState
@@ -417,14 +424,16 @@ loop completionMVar = loop'
 
 ourCatch :: MonadIO m => CLM IO () -> (String -> CLM m ()) -> CLM m ()
 ourCatch m failure = do
-                st <- get
-                (res,st') <- liftIO $ runStateT (runErrorT m) st
-                put st'
-                case res of
-                  Left msg -> failure msg
-                  Right () -> return ()
-
-
+    st <- get
+    (res,st') <- liftIO $ runStateT (runErrorT m) st
+    put st'
+    case res of
+        Left msg -> if cl_failhard (cl_session st')
+                    then do
+                        performQuery Display
+                        liftIO $ putStrLn msg >> abortS (cl_kernel st')
+                    else failure msg
+        Right () -> return ()
 
 evalStmts :: MonadIO m => [ExprH] -> CLM m ()
 evalStmts = mapM_ evalExpr
