@@ -81,12 +81,13 @@ data ShellEffect :: * where
    deriving Typeable
 
 data QueryFun :: * where
-   QueryT        :: TranslateH Core String   -> QueryFun
+   QueryString   :: TranslateH Core String                          -> QueryFun
+   QueryDocH     :: (PrettyH Core -> TranslateH Core DocH)          -> QueryFun
    -- These two be can generalized into
    --  (CommandLineState -> IO String)
-   Display       ::                             QueryFun
-   Message       :: String                   -> QueryFun
-   Inquiry       ::(CommandLineState -> SessionState -> IO String) -> QueryFun
+   Display       ::                                                    QueryFun
+   Message       :: String                                          -> QueryFun
+   Inquiry       :: (CommandLineState -> SessionState -> IO String) -> QueryFun
    deriving Typeable
 
 instance Extern QueryFun where
@@ -135,7 +136,8 @@ interpShellCommand =
                 , interp $ \ (BiRewriteCoreBox br)       -> AstEffect (Apply $ forewardT br)
                 , interp $ \ (TranslateCorePathBox tt)   -> AstEffect (Pathfinder tt)
                 , interp $ \ (StringBox str)             -> QueryFun (Message str)
-                , interp $ \ (TranslateCoreStringBox tt) -> QueryFun (QueryT tt)
+                , interp $ \ (TranslateCoreStringBox tt) -> QueryFun (QueryString tt)
+                , interp $ \ (TranslateCoreDocHBox tt)   -> QueryFun (QueryDocH $ unTranslateDocH tt)
                 , interp $ \ (TranslateCoreCheckBox tt)  -> AstEffect (CorrectnessCritera tt)
                 , interp $ \ (effect :: AstEffect)       -> AstEffect effect
                 , interp $ \ (effect :: ShellEffect)     -> ShellEffect effect
@@ -526,11 +528,18 @@ performShellEffect (SessionStateEffect f) = do
 -------------------------------------------------------------------------------
 
 performQuery :: MonadIO m => QueryFun -> CLM m ()
-performQuery (QueryT q) = do
+performQuery (QueryString q) = do
     st <- get
     iokm2clm' "Query failed: "
               putStrToConsole
               (queryS (cl_kernel st) (cl_cursor $ cl_session st) q (cl_kernel_env $ cl_session st))
+
+performQuery (QueryDocH q) = do
+    st <- get
+    let ss = cl_session st
+    iokm2clm' "Query failed: "
+              (liftIO . cl_render ss stdout (cl_pretty_opts ss))
+              (queryS (cl_kernel st) (cl_cursor ss) (q $ pretty ss) (cl_kernel_env ss))
 
 performQuery (Inquiry f) = do
     st <- get

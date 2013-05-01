@@ -1,22 +1,37 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, TypeFamilies #-}
 
 module Language.HERMIT.PrettyPrinter.Common where
 
+import Control.Arrow hiding ((<+>))
+
+import Data.Char
+import Data.Default
+import Data.Monoid hiding ((<>))
+import qualified Data.Map as M
+import Data.Typeable
+
 import GhcPlugins hiding ((<>),(<+>),($$))
 
-import Text.PrettyPrint.MarkedHughesPJ as PP
-import Language.HERMIT.Kure
 import Language.HERMIT.Core
-import Control.Arrow hiding ((<+>))
-import Data.Monoid hiding ((<>))
-import Data.Default
-import Data.Char
-import qualified Data.Map as M
+import Language.HERMIT.External
+import Language.HERMIT.Kure
+
 import System.IO
 
+import Text.PrettyPrint.MarkedHughesPJ as PP
 
 -- A HERMIT document
 type DocH = MDoc HermitMark
+
+-- newtype wrapper for proper instance selection
+newtype TranslateDocH a = TranslateDocH { unTranslateDocH :: PrettyH a -> TranslateH a DocH }
+
+data TranslateCoreDocHBox = TranslateCoreDocHBox (TranslateDocH Core) deriving Typeable
+
+instance Extern (TranslateDocH Core) where
+    type Box (TranslateDocH Core) = TranslateCoreDocHBox
+    box = TranslateCoreDocHBox
+    unbox (TranslateCoreDocHBox i) = i
 
 -- These are the zero-width marks on the document
 data HermitMark

@@ -1,7 +1,9 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Language.HERMIT.Primitive.Unfold
     ( externals
     , cleanupUnfoldR
     , rememberR
+    , showStashT
     , unfoldR
     , unfoldStashR
     ) where
@@ -11,7 +13,11 @@ import Control.Applicative
 import Control.Arrow
 import Control.Monad
 
+import qualified Data.Map as Map
+
 import qualified Language.Haskell.TH as TH
+
+import Language.HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..))
 
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
@@ -26,20 +32,24 @@ import Language.HERMIT.GHC
 
 import Prelude hiding (exp)
 
+import qualified Text.PrettyPrint.MarkedHughesPJ as PP
+
 ------------------------------------------------------------------------
 
 externals :: [External]
 externals =
     [ external "cleanup-unfold" (promoteExprR cleanupUnfoldR :: RewriteH Core)
-        [ "Clean up immediately nested fully-applied lambdas, from the bottom up"] .+ Deep
+        [ "Clean up immediately nested fully-applied lambdas, from the bottom up" ] .+ Deep
     , external "remember" rememberR
-        ["Remember the current binding, allowing it to be folded/unfolded in the future."] .+ Context
+        [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
     , external "unfold" (promoteExprR . unfoldStashR)
-        ["Unfold a remembered definition."] .+ Deep .+ Context
+        [ "Unfold a remembered definition." ] .+ Deep .+ Context
     , external "unfold" (promoteExprR . unfoldR :: TH.Name -> RewriteH Core)
-        [ "Inline a definition, and apply the arguments; traditional unfold"] .+ Deep .+ Context
+        [ "Inline a definition, and apply the arguments; traditional unfold" ] .+ Deep .+ Context
     , external "unfold-rule" ((\ nm -> promoteExprR (rule nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
         [ "Apply a named GHC rule" ] .+ Deep .+ Context -- TODO: does not work with rules with no arguments
+    , external "show-remembered" (TranslateDocH showStashT :: TranslateDocH Core)
+        [ "Display all remembered definitions." ]
     ]
 
 ------------------------------------------------------------------------
@@ -66,11 +76,11 @@ unfoldR nm = translate $ \ env e0 -> do
                  else return e1
 
 -- NOTE: Using a Rewrite because of the way the Kernel is set up.
---       This is a temperary hack until we work out the best way to structure the Kernel.
+--       This is a temporary hack until we work out the best way to structure the Kernel.
 
 -- | Stash a binding with a name for later use.
 -- Allows us to look at past definitions.
-rememberR :: String -> RewriteH Core
+rememberR :: Label -> RewriteH Core
 rememberR label = sideEffectR $ \ _ core ->
   case core of
     DefCore def           -> saveDef label def
@@ -90,11 +100,19 @@ rememberR label = sideEffectR $ \ _ core ->
 unfoldStashR :: String -> RewriteH CoreExpr
 unfoldStashR label = setFailMsg "Inlining stashed definition failed: " $
                    withPatFailMsg (wrongExprForm "Var v") $
-                   do (c, Var v) <- exposeT
-                      constT $ do Def i rhs <- lookupDef label
-                                  if idName i == idName v -- TODO: Is there a reason we're not just using equality on Id?
-                                    then ifM (all (inScope c) <$> apply freeVarsT c rhs)
-                                             (return rhs)
-                                             (fail "some free variables in stashed definition are no longer in scope.")
-                                    else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v
+    do (c, Var v) <- exposeT
+       constT $ do Def i rhs <- lookupDef label
+                   if idName i == idName v -- TODO: Is there a reason we're not just using equality on Id?
+                   then ifM (all (inScope c) <$> apply freeVarsT c rhs)
+                            (return rhs)
+                            (fail "some free variables in stashed definition are no longer in scope.")
+                   else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v
 
+showStashT :: Injection CoreDef a => PrettyH a -> TranslateH a DocH
+showStashT pp = do
+    stash <- constT getStash
+    docs <- contextonlyT $ \ c ->
+        mapM (\ (l,d) -> do dfn <- apply (extractT pp) c d
+                            return $ PP.text ("[ " ++ l ++ " ]") PP.$+$ dfn PP.$+$ PP.space)
+             (Map.toList stash)
+    return $ PP.vcat docs

@@ -41,7 +41,7 @@ import Language.HERMIT.Context
 
 ----------------------------------------------------------------------------
 
--- | A label for individual defintions.
+-- | A label for individual definitions.
 type Label = String
 
 -- | A store of saved definitions.
