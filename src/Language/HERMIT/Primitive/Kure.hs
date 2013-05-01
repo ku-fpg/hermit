@@ -20,7 +20,9 @@ externals = map (.+ KURE)
    , external "fail"       (fail :: String -> RewriteH Core)
        [ "a failing rewrite"]
    , external "<+"         ((<+) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
-       [ "perform the first translate, and then, if it fails, perform the second rewrite" ]
+       [ "perform the first rewrite, and then, if it fails, perform the second rewrite" ]
+   , external "<+"         ((<+) :: TranslateH Core () -> TranslateH Core () -> TranslateH Core ())
+       [ "perform the first check, and then, if it fails, perform the second check" ]
    , external ">>>"        ((>>>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "compose rewrites, requiring both to succeed" ]
    , external ">>>"        ((>>>) :: BiRewriteH Core -> BiRewriteH Core -> BiRewriteH Core)
