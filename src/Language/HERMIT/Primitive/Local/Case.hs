@@ -6,6 +6,7 @@ module Language.HERMIT.Primitive.Local.Case
        , caseFloatApp
        , caseFloatArg
        , caseFloatCase
+       , caseFloatCast
        , caseFloatLet
        , caseFloat
        , caseReduce
@@ -54,6 +55,8 @@ externals =
         [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
     , external "case-float-case" (promoteExprR caseFloatCase :: RewriteH Core)
         [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval .+ Bash
+    , external "case-float-cast" (promoteExprR caseFloatCast)
+        [ "cast (case s of p -> e) co ==> case s of p -> cast e co" ]        .+ Shallow .+ Commute .+ Bash
     , external "case-float-let" (promoteExprR caseFloatLet :: RewriteH Core)
         [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow .+ Bash
     , external "case-float" (promoteExprR caseFloat :: RewriteH Core)
@@ -86,8 +89,7 @@ caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
          )
           idR
           (\(Case s b _ty alts) v -> let newTy = exprType (App (case head alts of (_,_,f) -> f) v)
-                                     in Case s b newTy [ (c, ids, App f v)
-                                                       | (c,ids,f) <- alts ])
+                                     in Case s b newTy $ mapAlts (flip App v) alts)
 
 -- | @f (case s of alt1 -> e1; alt2 -> e2)@ ==> @case s of alt1 -> f e1; alt2 -> f e2@
 --   Only safe if @f@ is strict.
@@ -101,8 +103,7 @@ caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
           >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
          )
          (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
-                                    in Case s b newTy [ (c, ids, App f e)
-                                                      | (c,ids,e) <- alts ])
+                                    in Case s b newTy $ mapAlts (App f) alts)
 
 -- | case (case s1 of alt11 -> e11; alt12 -> e12) of alt21 -> e21; alt22 -> e22
 --   ==>
@@ -120,20 +121,27 @@ caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
            >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
           )
           (const idR)
-          (\ (Case s1 b1 _ alts1) b2 ty alts2 -> Case s1 b1 ty [ (c1, ids1, Case e1 b2 ty alts2) | (c1, ids1, e1) <- alts1 ])
+          (\ (Case s1 b1 _ alts1) b2 ty alts2 -> Case s1 b1 ty $ mapAlts (\s -> Case s b2 ty alts2) alts1)
 
--- | let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e
+-- | let v = case s of alt1 -> e1 in e ==> case s of alt1 -> let v = e1 in e
 caseFloatLet :: RewriteH CoreExpr
 caseFloatLet = prefixFailMsg "Case floating from Let failed: " $
   do vs <- letNonRecT caseAltVarsT idR (\ letVar caseVars _ -> elem letVar $ concat caseVars)
      let bdsAction = if not vs then idR else nonRecR alphaCase
-     letT bdsAction idR $ \ (NonRec v (Case s b ty alts)) e -> Case s b ty [ (con, ids, Let (NonRec v ec) e) | (con, ids, ec) <- alts]
+     letT bdsAction idR $ \ (NonRec v (Case s b ty alts)) e -> Case s b ty $ mapAlts (flip Let e . NonRec v) alts
 
+-- | cast (case s of p -> e) co ==> case s of p -> cast e co
+caseFloatCast :: RewriteH CoreExpr
+caseFloatCast = prefixFailMsg "Case float from cast failed: " $
+                withPatFailMsg (wrongExprForm "Cast (Case s bnd ty alts) co") $
+    do Cast (Case s bnd _ alts) co <- idR
+       let alts' = mapAlts (flip Cast co) alts
+       return $ Case s bnd (coreAltsType alts') alts'
 
 -- | Float a Case whatever the context.
 caseFloat :: RewriteH CoreExpr
 caseFloat = setFailMsg "Unsuitable expression for Case floating." $
-            caseFloatApp <+ caseFloatArg <+ caseFloatCase <+ caseFloatLet
+    caseFloatApp <+ caseFloatArg <+ caseFloatCase <+ caseFloatLet <+ caseFloatCast
 
 caseReduce :: RewriteH CoreExpr
 caseReduce = setFailMsg "Unsuitable expression for Case reduction." $
@@ -141,24 +149,21 @@ caseReduce = setFailMsg "Unsuitable expression for Case reduction." $
 
 -- NB: LitAlt cases don't do evaluation
 caseReduceLiteral :: RewriteH CoreExpr
-caseReduceLiteral =
-             prefixFailMsg "Case reduction failed: " $
-             withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $
-             do Case s wild _ alts <- idR
-                case exprIsLiteral_maybe idUnfolding s of
-                    Nothing -> fail "scrutinee is not a literal."
-                    Just l  -> do
-                        guardMsg (not (litIsLifted l)) "cannot case-reduce lifted literals" -- see Trac #5603
-                        case findAlt (LitAlt l) alts of
-                            Nothing          -> fail "no matching alternative."
-                            Just (_, _, rhs) -> return $ mkCoreLet (NonRec wild (Lit l)) rhs
+caseReduceLiteral = prefixFailMsg "Case reduction failed: " $
+                    withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $
+    do Case s wild _ alts <- idR
+       case exprIsLiteral_maybe idUnfolding s of
+        Nothing -> fail "scrutinee is not a literal."
+        Just l  -> do guardMsg (not (litIsLifted l)) "cannot case-reduce lifted literals" -- see Trac #5603
+                      case findAlt (LitAlt l) alts of
+                        Nothing          -> fail "no matching alternative."
+                        Just (_, _, rhs) -> return $ mkCoreLet (NonRec wild (Lit l)) rhs
 
 -- | Case-of-known-constructor rewrite.
 caseReduceDatacon :: RewriteH CoreExpr
-caseReduceDatacon =
-             prefixFailMsg "Case reduction failed: " $
-             withPatFailMsg (wrongExprForm "Case e v t alts")
-             go
+caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
+                    withPatFailMsg (wrongExprForm "Case e v t alts")
+                    go
   where
     go :: RewriteH CoreExpr
     go = do Case e wild _ alts <- idR
@@ -205,3 +210,6 @@ caseSplitInline :: TH.Name -> RewriteH Core
 caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineName nm)
 
 ------------------------------------------------------------------------------
+
+mapAlts :: (CoreExpr -> CoreExpr) -> [CoreAlt] -> [CoreAlt]
+mapAlts f alts = [ (ac, vs, f e) | (ac, vs, e) <- alts ]
