@@ -1,10 +1,12 @@
 module Language.HERMIT.Primitive.Local
        ( -- * Local Structural Manipulations
          Language.HERMIT.Primitive.Local.externals
-         -- ** Let Expressions
-       , module Language.HERMIT.Primitive.Local.Let
          -- ** Case Expressions
        , module Language.HERMIT.Primitive.Local.Case
+         -- ** Cast Expressions
+       , module Language.HERMIT.Primitive.Local.Cast
+         -- ** Let Expressions
+       , module Language.HERMIT.Primitive.Local.Let
          -- ** Miscellaneous
        , abstract
        , nonrecToRec
@@ -32,6 +34,8 @@ import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.Local.Case hiding (externals)
 import qualified Language.HERMIT.Primitive.Local.Case as Case
+import Language.HERMIT.Primitive.Local.Cast hiding (externals)
+import qualified Language.HERMIT.Primitive.Local.Cast as Cast
 import Language.HERMIT.Primitive.Local.Let hiding (externals)
 import qualified Language.HERMIT.Primitive.Local.Let as Let
 
@@ -70,8 +74,9 @@ externals =
         [ "Abstract over a variable using a lambda."
         , "e  ==>  (\\ x -> e) x" ]                                             .+ Shallow .+ Introduce .+ Context
     ]
-    ++ Let.externals
     ++ Case.externals
+    ++ Cast.externals
+    ++ Let.externals
 
 ------------------------------------------------------------------------------
 
