@@ -12,6 +12,7 @@ module Language.HERMIT.Primitive.GHC
        , altFreeVarsExclWildT
          -- ** Substitution
        , substR
+       , substExprR
        , letSubstR
        , safeLetSubstR
        , safeLetSubstPlusR
