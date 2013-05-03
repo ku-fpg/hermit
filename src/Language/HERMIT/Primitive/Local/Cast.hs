@@ -25,7 +25,9 @@ import Language.HERMIT.Primitive.Common
 -- | Externals relating to Case expressions.
 externals :: [External]
 externals =
-    [ external "cast-elim-refl" (promoteExprR castElimRefl)
+    [ external "cast-elim" (promoteExprR castElim)
+        [ "cast-elim-refl <+ cast-elim-sym" ] .+ Shallow .+ Bash
+    , external "cast-elim-refl" (promoteExprR castElimRefl)
         [ "cast e co ==> e ; if co is a reflexive coercion" ] .+ Shallow .+ Bash
     , external "cast-elim-sym" (promoteExprR castElimSym)
         [ "removes pairs of symmetric casts" ]                .+ Shallow .+ Bash
@@ -33,9 +35,15 @@ externals =
         [ "removes pairs of symmetric casts possibly separated by let or case forms" ] .+ Deep
     , external "cast-float-app" (promoteExprR castFloatApp)
         [ "(cast e (c1 -> c2)) x ==> cast (e (cast x (sym c1))) c2" ] .+ Shallow
+    , external "cast-elim-unsafe" (promoteExprR castElimUnsafe)
+        [ "removes casts regardless of whether it is safe to do so" ] .+ Shallow .+ Experiment .+ TODO
     ]
 
 ------------------------------------------------------------------------------
+
+castElim :: RewriteH CoreExpr
+castElim = setFailMsg "Cast elimination failed: " $
+    castElimRefl <+ castElimSym
 
 castElimRefl :: RewriteH CoreExpr
 castElimRefl = prefixFailMsg "Reflexive cast elimination failed: " $
@@ -101,4 +109,7 @@ castElimSymPlus = do
       --sym _ _ = False
   go c1 e
 
-
+castElimUnsafe :: RewriteH CoreExpr
+castElimUnsafe = do
+    Cast e _ <- idR
+    return e

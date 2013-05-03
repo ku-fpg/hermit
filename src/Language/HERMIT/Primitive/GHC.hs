@@ -84,9 +84,6 @@ externals =
          , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
                 ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
                                         .+ Introduce
-         , external "cast-elim" (promoteExprR castElimination)
-                ["cast-elim removes casts"]
-                                        .+ Shallow .+ Experiment .+ TODO
          , external "occur-analysis" (promoteExprR occurAnalyseExprR :: RewriteH Core)
                 ["Performs dependency anlaysis on a CoreExpr.",
                  "This can be useful to simplify a recursive let to a non-recursive let."] .+ Deep
@@ -463,20 +460,6 @@ arityOf env nm =
         Just (CASE _ e _) -> exprArity e
 
 -------------------------------------------
-
--- remove a cast;
--- TODO: check for validity of removing this cast
-castElimination :: RewriteH CoreExpr
-castElimination = do
-        Cast e _ <- idR
-        return e
-
-{-
-    go (Cast e co)      | isReflCo co' = go e
-       	                | otherwise    = Cast (go e) co'
-                        where
-                          co' = optCoercion (getCvSubst subst) co
--}
 
 -- | Run the Core Lint typechecker.
 -- Fails on errors, with error messages.
