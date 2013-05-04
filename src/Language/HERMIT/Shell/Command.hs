@@ -3,6 +3,7 @@
 module Language.HERMIT.Shell.Command
        ( -- * The HERMIT Command-line Shell
          commandLine
+       , interactive
 ) where
 
 import qualified GhcPlugins as GHC
@@ -370,8 +371,11 @@ setLoading b = modify $ \st -> st { cl_session = (cl_session st) { cl_loading = 
 
 -- | The first argument is a list of files to load.
 commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
-commandLine filesToLoad behavior modGuts = do
-    let dict = dictionary $ all_externals shell_externals
+commandLine filesToLoad behavior = scopedKernel (interactive filesToLoad behavior [])
+
+interactive :: [FilePath] -> Behavior -> [External] -> ScopedKernel -> SAST -> IO ()
+interactive filesToLoad behavior exts skernel sast = do
+    let dict = dictionary $ all_externals $ shell_externals ++ exts
     let ws_complete = " ()"
 
     let startup = do
@@ -387,18 +391,16 @@ commandLine filesToLoad behavior modGuts = do
 
     var <- GHC.liftIO $ atomically $ newTVar M.empty
 
-    flip scopedKernel modGuts $ \ skernel sast -> do
+    let sessionState = SessionState sast "clean" def unicodeConsole 80 False False var False False
+        shellState = CommandLineState [] [] dict skernel sast sessionState
 
-        let sessionState = SessionState sast "clean" def unicodeConsole 80 False False var False False
-            shellState = CommandLineState [] [] dict skernel sast sessionState
+    completionMVar <- newMVar shellState
 
-        completionMVar <- newMVar shellState
-
-        _ <- runInputTBehavior behavior
+    _ <- runInputTBehavior behavior
                 (setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings)
                 (evalStateT (runErrorT (startup >> showFocus >> loop completionMVar)) shellState)
 
-        return ()
+    return ()
 
 loop :: (MonadIO m, m ~ InputT IO) => MVar CommandLineState -> CLM m ()
 loop completionMVar = loop'

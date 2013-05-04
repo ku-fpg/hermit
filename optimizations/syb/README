@@ -1,0 +1,6 @@
+cd syb-opt
+cabal install
+cd ..
+hermit Sum.hs -opt=HERMIT.SYB +main:Main:
+hermit> rhs-of 'mapInt
+hermit> opt-syb

@@ -1,0 +1,22 @@
+name:                syb-opt
+version:             0.1.0.0
+-- synopsis:
+-- description:
+-- license:
+-- license-file:        LICENSE
+author:              Andrew Farmer
+maintainer:          afarmer@ittc.ku.edu
+-- copyright:
+-- category:
+build-type:          Simple
+cabal-version:       >=1.8
+
+library
+  exposed-modules:     HERMIT.SYB
+  -- other-modules:
+  build-depends: base,
+                 ghc >= 7.6,
+                 hermit,
+                 syb,
+                 template-haskell,
+                 containers

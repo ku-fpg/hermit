@@ -149,17 +149,20 @@ Library
        Language.HERMIT.Core
        Language.HERMIT.Dictionary
        Language.HERMIT.External
+       Language.HERMIT.GHC
        Language.HERMIT.Interp
        Language.HERMIT.Kernel
        Language.HERMIT.Kernel.Scoped
        Language.HERMIT.Kure
        Language.HERMIT.Monad
+       Language.HERMIT.Optimize
        Language.HERMIT.Parser
        Language.HERMIT.ParserCore
 
        Language.HERMIT.Plugin
 
        Language.HERMIT.Primitive.AlphaConversion
+       Language.HERMIT.Primitive.Common
        Language.HERMIT.Primitive.Debug
        Language.HERMIT.Primitive.FixPoint
        Language.HERMIT.Primitive.Fold
@@ -182,10 +185,6 @@ Library
        Language.HERMIT.Shell.Command
 
   Other-modules:
-       Language.HERMIT.GHC
-
-       Language.HERMIT.Primitive.Common
-
        Language.HERMIT.Syntax
 
        Paths_hermit

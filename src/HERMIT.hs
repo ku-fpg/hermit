@@ -2,7 +2,7 @@ module HERMIT (plugin) where
 
 import GhcPlugins
 
-import Language.HERMIT.Shell.Command as Dispatch
+import qualified Language.HERMIT.Shell.Command as Dispatch
 import Language.HERMIT.Plugin
 import System.Console.Haskeline (defaultBehavior)
 

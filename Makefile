@@ -4,7 +4,7 @@ boot:
 clean:
 	cabal clean
 
-FILE="src/Language/HERMIT/Shell/Command.hs"
+FILE="src/Language/HERMIT/Optimize.hs"
 ghci:
 	happy src/Language/HERMIT/Parser.y
 	happy src/Language/HERMIT/ParserCore.y
