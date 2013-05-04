@@ -1,7 +1,7 @@
 cd syb-opt
 cabal install
 cd ..
-hermit Sum.hs -opt=HERMIT.SYB +Main
+hermit Sum.hs -opt=HERMIT.Optimization.SYB +Main
 
 hermit> rhs-of 'mapInt
 - or -
