@@ -1,0 +1,37 @@
+To run the SYBOPT tests, you need HERMIT built on a GHC HEAD that is patched to
+avoid a space leak. This has still not been merged upstream, but hopefully soon.
+For now, follow (all of) the instructions here:
+
+https://github.com/ku-fpg/hermit/wiki/GHC-HEAD
+
+You also need to cabal install parseargs and parallel.
+
+Once that is done, cabal install the syb optimization. You can find it in the:
+
+optimizations/syb/syb-opt
+
+directory of the hermit git repository. Simply enter that directory and type:
+
+cabal install
+
+Now to actually run the benchmarks:
+
+make
+make run
+
+==============================================================================
+
+To change which tests are run, edit the list 'tests' at the bottom of 'Tests.hs'
+To disable SYBOPT tests, add following to 'tests' list comprehension:
+    , null (ghcFlags t)
+
+make         : After changing Main.hs or Tests.hs
+make run     : To run the tests once
+make profile : To profile the tests (see time spent in traversal)
+               NB: you need all libraries built with profiling, only do this for Hand
+make space   : Profiles the space usage of GHC while compiling the tests (to make sure
+               the space leak patch to GHC was successful). Not necessary.
+make final   : To run the tests 10 times, giving average and std_dev
+
+What we call MapTree in the paper is in Map/. What we call MapLogic is in Update/.
+Note that the Update/Tree test has been commented out in Tests.hs for this reason.

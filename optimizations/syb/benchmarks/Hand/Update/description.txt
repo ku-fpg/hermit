@@ -1,0 +1,2 @@
+For Tree, update increments every odd number.
+For Logic, update changes all variables of the form "?*" to "y*".
