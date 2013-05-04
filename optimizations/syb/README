@@ -1,3 +1,10 @@
+You need HERMIT built on a GHC HEAD that is patched against a space leak to run these.
+Follow the directions here:
+
+https://github.com/ku-fpg/hermit/wiki/GHC-HEAD
+
+Once that is done:
+
 cd syb-opt
 cabal install
 cd ..
