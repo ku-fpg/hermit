@@ -1,6 +1,6 @@
 name:                syb-opt
 version:             0.1.0.0
-author:              Andrew Farmer
+author:              Michael D. Adams and Andrew Farmer
 maintainer:          afarmer@ittc.ku.edu
 build-type:          Simple
 cabal-version:       >=1.14
