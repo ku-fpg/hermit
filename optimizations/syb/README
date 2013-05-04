@@ -1,14 +1,9 @@
 cd syb-opt
 cabal install
 cd ..
-hermit Sum.hs -opt=HERMIT.Optimization.SYB +Main
 
-hermit> rhs-of 'mapInt
+hermit Sum.hs -opt=HERMIT.Optimization.SYB +Main mapInt
 - or -
-hermit> rhs-of 'mapIntM
-
-hermit> opt-syb
-hermit> any-call (unfold 'id)
-hermit> innermost letrec-subst-trivial
-hermit> simplify
--- you should see something that looks like the definition of map or mapM!
+hermit Sum.hs -opt=HERMIT.Optimization.SYB +Main mapIntM
+- or -
+hermit Sum.hs -opt=HERMIT.Optimization.SYB +Main mapInt mapIntM

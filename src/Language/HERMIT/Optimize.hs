@@ -9,7 +9,6 @@ module Language.HERMIT.Optimize
 
 import GhcPlugins
 
-import Control.Applicative
 import Control.Monad.Error
 import Control.Monad.State
 
@@ -32,7 +31,6 @@ data OptState = OptState { kernel :: ScopedKernel
 
 run :: Injection a Core => RewriteH a -> OptimizeM ()
 run rr = do
-    liftIO $ putStrLn "running"
     k <- gets kernel
     ast <- gets sast
     env <- gets mEnv
@@ -57,7 +55,9 @@ interactive exts = do
 
 runO :: OptimizeM () -> ScopedKernel -> SAST -> IO ()
 runO opt skernel ast = do
-    let env = mkHermitMEnv $ \ _ -> return ()
+    let env = mkHermitMEnv $ liftIO . debug
+        debug (DebugTick msg) = putStrLn msg
+        debug (DebugCore msg _c _e) = putStrLn $ "Core: " ++ msg
         initState = OptState skernel ast env
         errAction err = putStrLn err >> abortS skernel
 
@@ -65,8 +65,9 @@ runO opt skernel ast = do
 
     either errAction (\() -> resumeS skernel (sast st) >>= runKureM return errAction) res
 
-optimize :: OptimizeM () -> Plugin
-optimize os = hermitPlugin $ \ opts -> scopedKernel $ runO os
+-- | NB: type CommandLineOption = String
+optimize :: ([CommandLineOption] -> OptimizeM ()) -> Plugin
+optimize f = hermitPlugin $ scopedKernel . runO . f
 
 {-
 -- | Given a list of 'CommandLineOption's, produce the 'ModGuts' to 'ModGuts' function required to build a plugin.

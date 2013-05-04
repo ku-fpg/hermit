@@ -5,7 +5,7 @@ import GhcPlugins
 import qualified Outputable (showSDocDebug)
 
 import Control.Arrow
-import Control.Monad (liftM, liftM2)
+import Control.Monad
 import Data.Generics (gshow)
 import Data.List (intercalate, intersect, partition)
 import GHC.Fingerprint (Fingerprint(..), fingerprintFingerprints)
@@ -28,18 +28,25 @@ import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Inline (inline)
 import Language.HERMIT.Primitive.Local hiding (externals)
 import Language.HERMIT.Primitive.Navigation hiding (externals)
+import Language.HERMIT.Primitive.New hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 
 plugin :: Plugin
-plugin = optimize $ do
-    run optSYB
-    interactive externals
+plugin = optimize $ \ opts -> do
+    forM_ opts $ \ o -> do
+        liftIO $ putStrLn $ "optimizing: " ++ o
+        run $ do
+            path <- rhsOf $ TH.mkName o
+            pathR path $ optSYB >>> tryR (innermostR $ promoteExprR letrecSubstTrivialR) >>> tryR simplifyR
+
+    -- uncomment if you want to browse the result in the shell
+    -- the externals defined in this file will be available to you
+    -- interactive externals
 
 optSYB :: RewriteH Core
 optSYB = do
-    repeatR (traceR "START"
-             >>> (onetdR (promoteExprR stashFoldAnyR >>> traceR "!!!!! USED MEMOIZED BINDING !!!!!!")
+    repeatR (onetdR (promoteExprR stashFoldAnyR >>> traceR "!!!!! USED MEMOIZED BINDING !!!!!!")
                           <+ traceR "MID" >>> anytdR (repeatR (promoteExprR (
                                                                    rule "append"
                                                                 <+ rule "[]++"
@@ -77,7 +84,6 @@ optSYB = do
                                                                  ((promoteExprR memoize >>> traceR "MEMOIZING")
                                                                   <+ (promoteExprR (forcePrims [TH.mkName "fingerprintFingerprints", TH.mkName "eqWord#"])
                                                                       >>> traceR "FORCING"))))
-             >>> traceR "END")
 
 externals ::  [External]
 externals = map ((.+ Experiment) . (.+ TODO)) [

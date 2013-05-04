@@ -46,7 +46,7 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
 -- | Determine whether to act on this module, choose plugin pass.
 modFilter :: HermitPass -> HermitPass
 modFilter hp opts guts | null modOpts && not (null opts) = return guts -- don't process this module
-                       | otherwise                       = hp modOpts guts
+                       | otherwise                       = hp (filter (not . null) modOpts) guts
     where modOpts = filterOpts opts guts
 
 -- | Filter options to those pertaining to this module, stripping module prefix.
