@@ -28,7 +28,8 @@ usage = putStrLn $ unlines
         ,"If a module name is not supplied, the module main:Main is assumed."
         ,""
         ,"HERMIT_ARGS"
-        ,"  -pN        : where 0 <= N < 18 is the position in the pipeline in which HERMIT should run, 0 being at the beginning"
+        ,"  -pN         : where 0 <= N < 18 is the position in the pipeline in which HERMIT should run, 0 being at the beginning"
+        ,"  -opt=MODULE : where MODULE is the module containing a HERMIT optimization plugin"
         ,""
         ,"MOD_ARGS"
         ,"  SCRIPTNAME : name of script file to run for this module"
@@ -63,10 +64,11 @@ main3 file_nm args ghc_args = main4 file_nm hermit_args (sepMods margs) ghc_args
 main4 file_nm hermit_args []          ghc_args = main4 file_nm hermit_args [("main:Main", [])] ghc_args
 main4 file_nm hermit_args module_args ghc_args = do
         putStrLn $ "[starting " ++ hermit_version ++ " on " ++ file_nm ++ "]"
-        let cmds = file_nm : ghcFlags ++
-                    [ "-fplugin=HERMIT" ] ++
-                    [ "-fplugin-opt=HERMIT:" ++ opt | opt <- hermit_args ] ++
-                    [ "-fplugin-opt=HERMIT:" ++ m_nm ++ ":" ++ opt
+        let (pluginName, hermit_args') = getPlugin hermit_args
+            cmds = file_nm : ghcFlags ++
+                    [ "-fplugin=" ++ pluginName ] ++
+                    [ "-fplugin-opt=" ++ pluginName ++ ":" ++ opt | opt <- hermit_args' ] ++
+                    [ "-fplugin-opt=" ++ pluginName ++ ":" ++ m_nm ++ ":" ++ opt
                     | (m_nm, m_opts) <- module_args
                     , opt <- "" : m_opts
                     ] ++ ghc_args
@@ -74,3 +76,9 @@ main4 file_nm hermit_args module_args ghc_args = do
         (_,_,_,r) <- createProcess $ proc "ghc" cmds
         ex <- waitForProcess r
         exitWith ex
+
+getPlugin :: [String] -> (String, [String])
+getPlugin = go "HERMIT" []
+    where go plug flags [] = (plug, flags)
+          go plug flags (f:fs) | "-opt=" `isPrefixOf` f = go (drop 5 f) flags fs
+                               | otherwise              = go plug (f:flags) fs
