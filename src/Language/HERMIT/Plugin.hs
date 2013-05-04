@@ -35,26 +35,24 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
             -- This is a bit of a hack; otherwise we lose what we've not seen
             liftIO $ hSetBuffering stdout NoBuffering
 
-            dynFlags <- getDynFlags
-
             let (m_opts, h_opts) = partition (isInfixOf ":") opts
                 hermit_opts = parse h_opts def
-                myPass = CoreDoPluginPass "HERMIT" $ modFilter dynFlags hp m_opts
+                myPass = CoreDoPluginPass "HERMIT" $ modFilter hp m_opts
                 -- at front, for now
                 allPasses = insertAt (pass hermit_opts) myPass todos
 
             return allPasses
 
 -- | Determine whether to act on this module, choose plugin pass.
-modFilter :: DynFlags -> HermitPass -> HermitPass
-modFilter dynFlags hp opts guts | null modOpts && not (null opts) = return guts -- don't process this module
-                                | otherwise                       = hp modOpts guts
-    where modOpts = filterOpts dynFlags opts guts
+modFilter :: HermitPass -> HermitPass
+modFilter hp opts guts | null modOpts && not (null opts) = return guts -- don't process this module
+                       | otherwise                       = hp modOpts guts
+    where modOpts = filterOpts opts guts
 
 -- | Filter options to those pertaining to this module, stripping module prefix.
-filterOpts :: DynFlags -> [CommandLineOption] -> ModGuts -> [CommandLineOption]
-filterOpts dynFlags opts guts = [ drop len nm | nm <- opts, modName `isPrefixOf` nm ]
-    where modName = showPpr dynFlags $ mg_module guts
+filterOpts :: [CommandLineOption] -> ModGuts -> [CommandLineOption]
+filterOpts opts guts = [ drop len nm | nm <- opts, modName `isPrefixOf` nm ]
+    where modName = moduleNameString $ moduleName $ mg_module guts
           len = length modName + 1 -- for the colon
 
 insertAt :: Int -> a -> [a] -> [a]

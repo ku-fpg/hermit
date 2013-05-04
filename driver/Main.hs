@@ -20,9 +20,9 @@ usage = putStrLn $ unlines
         ,"       hermit File.hs [HERMIT_ARGS] [+module_name [MOD_ARGS]]* [-- [ghc-args]]"
         ,""
         ,"examples: hermit Foo.hs Foo.hss"
-        ,"          hermit Foo.hs -p6 +main:Main Foo.hss"
-        ,"          hermit Foo.hs +main:Main Foo.hss resume"
-        ,"          hermit Foo.hs +main:Main Foo.hss +other:Other Bar.hss"
+        ,"          hermit Foo.hs -p6 +Main Foo.hss"
+        ,"          hermit Foo.hs +Main Foo.hss resume"
+        ,"          hermit Foo.hs +Main Foo.hss +Other.Module.Name Bar.hss"
         ,"          hermit Foo.hs -- -ddump-simpl -ddump-to-file"
         ,""
         ,"If a module name is not supplied, the module main:Main is assumed."
@@ -43,9 +43,9 @@ main = do
 
 main1 :: [String] -> IO ()
 main1 [] = usage
-main1 [file_nm,script_nm] = do
+main1 args@[file_nm,script_nm] = do
     e <- doesFileExist script_nm
-    if e then main4 file_nm [] [("main:Main", [script_nm])] [] else usage
+    if e then main4 file_nm [] [("Main", [script_nm])] [] else main2 args
 main1 other = main2 other
 
 main2 (file_nm:rest) = case span (/= "--") rest of
@@ -61,7 +61,7 @@ main3 file_nm args ghc_args = main4 file_nm hermit_args (sepMods margs) ghc_args
           sepMods (('+':mod_nm):rest) = (mod_nm, mod_opts) : sepMods next
             where (mod_opts, next) = span (not . isPrefixOf "+") rest
 
-main4 file_nm hermit_args []          ghc_args = main4 file_nm hermit_args [("main:Main", [])] ghc_args
+main4 file_nm hermit_args []          ghc_args = main4 file_nm hermit_args [("Main", [])] ghc_args
 main4 file_nm hermit_args module_args ghc_args = do
         putStrLn $ "[starting " ++ hermit_version ++ " on " ++ file_nm ++ "]"
         let (pluginName, hermit_args') = getPlugin hermit_args
