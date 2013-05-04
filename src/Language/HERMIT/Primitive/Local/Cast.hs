@@ -36,7 +36,7 @@ externals =
     , external "cast-float-app" (promoteExprR castFloatApp)
         [ "(cast e (c1 -> c2)) x ==> cast (e (cast x (sym c1))) c2" ] .+ Shallow
     , external "cast-elim-unsafe" (promoteExprR castElimUnsafe)
-        [ "removes casts regardless of whether it is safe to do so" ] .+ Shallow .+ Experiment .+ TODO
+        [ "removes casts regardless of whether it is safe to do so" ] .+ Shallow .+ Experiment .+ Unsafe .+ TODO
     ]
 
 ------------------------------------------------------------------------------

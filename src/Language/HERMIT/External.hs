@@ -78,7 +78,8 @@ data CmdTag = Shell          -- ^ Shell command.
             | VersionControl -- ^ Version control.
             | Bash           -- ^ Commands that are run by 'Language.HERMIT.Dictionary.bash'.
             | Context        -- ^ A command that uses its context, such as inline
-
+            | Unsafe         -- ^ Commands that are either not type safe (may cause core lint to fail),
+                             --   or allow behavior-altering changes.
 
             | TODO           -- ^ TODO: check before the release.
             | Unimplemented  -- ^ Something is not finished yet, do not use.
@@ -113,7 +114,7 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
           [ (Shell,        "Shell-specific commands")
           , (Eval,         "The arrow of evaluation (reduces a term)")
           , (KURE,         "Commands the directly reflect the KURE DSL")
-          , (Loop,        "Command may operate multiple times")
+          , (Loop,         "Command may operate multiple times")
           , (Deep,         "Command may make a deep change, can be O(n)")
           , (Shallow,      "Command operates on local nodes only, O(1)")
           , (Navigation,   "Navigate via focus, or directional command")
@@ -124,8 +125,9 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
           , (PreCondition, "Operation has a (perhaps undocumented) precondition")
           , (Debug,        "Commands specifically to help debugging")
           , (VersionControl,"Version Control for Core Syntax")
-          , (Bash,         "Commands that run as part of the bash command.")
-          , (Context,      "Commands that use their context, like inlining")
+          , (Bash,         "Commands that run as part of the bash command")
+          , (Context,      "Commands that use their context, such as inlining")
+          , (Unsafe,       "Commands that are not type safe (may cause core lint to fail), or allow behavior-altering changes")
 
           , (TODO,         "TO BE assessed before a release")
           , (Unimplemented,"Something is not finished yet; do not used")

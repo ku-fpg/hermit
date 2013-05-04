@@ -46,21 +46,15 @@ externals = map ((.+ Experiment) . (.+ TODO))
          , external "static-arg" (promoteDefR staticArg :: RewriteH Core)
                 [ "perform the static argument transformation on a recursive function" ]
          , external "unsafe-replace" (promoteExprR . unsafeReplace :: CoreString -> RewriteH Core)
-                [ "replace the currently focused expression with a new expression" ]
+                [ "replace the currently focused expression with a new expression" ] .+ Unsafe
          , external "unsafe-replace" (promoteExprR . unsafeReplaceStash :: String -> RewriteH Core)
                 [ "replace the currently focused expression with an expression from the stash"
-                , "DOES NOT ensure expressions have the same type, or that free variables in the replacement expression are in scope" ]
+                , "DOES NOT ensure expressions have the same type, or that free variables in the replacement expression are in scope" ] .+ Unsafe
          , external "inline-all" (inlineAll :: [TH.Name] -> RewriteH Core)
                 [ "inline all named functions in a bottom-up manner" ]
          ]
 
 ------------------------------------------------------------------------------------------------------
-
-unsafeReplaceStash :: String -> RewriteH CoreExpr
-unsafeReplaceStash label = prefixFailMsg "unsafe-replace failed: " $
-    contextfreeT $ \ e -> do
-        Def _ rhs <- lookupDef label
-        if eqType (exprType e) (exprType rhs) then return rhs else fail "expression types differ."
 
 -- TODO: what about Type constructors around TyVars?
 isVar :: TH.Name -> TranslateH CoreExpr ()
@@ -199,11 +193,22 @@ push nm = prefixFailMsg "push failed: " $
 
 ------------------------------------------------------------------------------------------------------
 
-unsafeReplace :: CoreString -> RewriteH CoreExpr
-unsafeReplace = parseCoreExprT
-
 parseCoreExprT :: CoreString -> TranslateH a CoreExpr
 parseCoreExprT = contextonlyT . parseCore
+
+unsafeReplace :: CoreString -> RewriteH CoreExpr
+unsafeReplace core =
+    translate $ \ c e -> do
+        e' <- parseCore core c
+        guardMsg (eqType (exprType e) (exprType e')) "expression types differ."
+        return e'
+
+unsafeReplaceStash :: String -> RewriteH CoreExpr
+unsafeReplaceStash label = prefixFailMsg "unsafe-replace failed: " $
+    contextfreeT $ \ e -> do
+        Def _ rhs <- lookupDef label
+        guardMsg (eqType (exprType e) (exprType rhs)) "expression types differ."
+        return rhs
 
 ------------------------------------------------------------------------------------------------------
 
