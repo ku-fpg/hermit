@@ -1,5 +1,5 @@
 {-# LANGUAGE DoAndIfThenElse #-} -- why do we need this?
-module HERMIT.SYB where
+module HERMIT.Optimization.SYB where
 
 import GhcPlugins
 import qualified Outputable (showSDocDebug)
@@ -40,8 +40,8 @@ optSYB :: RewriteH Core
 optSYB = do
     repeatR (traceR "START"
              >>> (onetdR (promoteExprR stashFoldAnyR >>> traceR "!!!!! USED MEMOIZED BINDING !!!!!!")
-                          <+ traceR "MID" >>> anytdR (repeatR (promoteExprR (rule "map"
-                                                                <+ rule "append"
+                          <+ traceR "MID" >>> anytdR (repeatR (promoteExprR (
+                                                                   rule "append"
                                                                 <+ rule "[]++"
                                                                 <+ castElimRefl
                                                                 <+ castElimSymPlus
@@ -53,7 +53,8 @@ optSYB = do
                                                                 <+ letSubstTrivialR
                                                                 <+ caseReduce)
                                                                >>> traceR "SIMPLIFYING"))
-                                              <+ anybuR (promoteExprR ((memoFloatMemoLet
+                                              <+ anybuR (promoteExprR ((
+                                                              memoFloatMemoLet
                                                            <+ memoFloatMemoBind
                                                            <+ memoFloatApp
                                                            <+ memoFloatArg
