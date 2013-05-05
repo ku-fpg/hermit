@@ -32,6 +32,7 @@ import GhcPlugins
 import qualified Bag
 import qualified CoreLint
 import qualified OccurAnal
+import IOEnv
 
 import Control.Arrow
 import Control.Monad
@@ -339,6 +340,8 @@ rules = orR . map rule
 getHermitRules :: TranslateH a [(String, [CoreRule])]
 getHermitRules = translate $ \ env _ -> do
     rb <- liftCoreM getRuleBase
+    hscEnv <- liftCoreM getHscEnv
+    rb' <- liftM eps_rule_base $ liftIO $ runIOEnv () $ readMutVar (hsc_EPS hscEnv)
     let other_rules = [ r
                         | top_bnds <- mg_binds (hermitModGuts env)
                         , bnd <- case top_bnds of
@@ -347,7 +350,7 @@ getHermitRules = translate $ \ env _ -> do
                         , r <- idCoreRules bnd
                         ]
     return [ ( unpackFS (ruleName r), [r] )
-           | r <- mg_rules (hermitModGuts env) ++ other_rules ++ concat (nameEnvElts rb)
+           | r <- mg_rules (hermitModGuts env) ++ other_rules ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
            ]
 
 rules_help :: TranslateH Core String
