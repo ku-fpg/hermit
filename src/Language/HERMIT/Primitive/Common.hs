@@ -33,6 +33,7 @@ module Language.HERMIT.Primitive.Common
       -- ** Miscallaneous
     , wrongExprForm
     , nodups
+    , mapAlts
     )
 
 where
@@ -222,3 +223,7 @@ nodups :: Eq a => [a] -> Bool
 nodups as = length as == length (nub as)
 
 ------------------------------------------------------------------------------
+
+mapAlts :: (CoreExpr -> CoreExpr) -> [CoreAlt] -> [CoreAlt]
+mapAlts f alts = [ (ac, vs, f e) | (ac, vs, e) <- alts ]
+

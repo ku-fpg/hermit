@@ -210,6 +210,3 @@ caseSplitInline :: TH.Name -> RewriteH Core
 caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineName nm)
 
 ------------------------------------------------------------------------------
-
-mapAlts :: (CoreExpr -> CoreExpr) -> [CoreAlt] -> [CoreAlt]
-mapAlts f alts = [ (ac, vs, f e) | (ac, vs, e) <- alts ]
