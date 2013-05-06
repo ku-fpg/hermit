@@ -23,7 +23,6 @@ import Language.HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..))
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Inline hiding (externals)
-import Language.HERMIT.Primitive.Local hiding (externals)
 
 import Language.HERMIT.Core
 import Language.HERMIT.Kure
@@ -60,8 +59,23 @@ externals =
 -- | cleanupUnfoldR cleans a unfold operation
 --  (for example, an inline or rule application)
 -- It is used at the level of the top-redex.
+-- Invariant: will not introduce let bindings
 cleanupUnfoldR :: RewriteH CoreExpr
-cleanupUnfoldR = betaReducePlus >>> safeLetSubstPlusR
+cleanupUnfoldR = do
+    (f, args) <- collectArgsT
+    let (vs, body) = collectBinders f
+        lenargs = length args
+        lenvs = length vs
+        comp = compare lenargs lenvs
+        body' = case comp of
+                    LT -> mkCoreLams (drop lenargs vs) body
+                    _  -> body
+        bnds = zipWith NonRec vs args
+    body'' <- contextonlyT $ \ c -> do
+        apply (andR $ replicate (length bnds) letSubstR) c $ mkCoreLets bnds body'
+    return $ case comp of
+                GT -> mkCoreApps body'' $ drop lenvs args
+                _  -> body''
 
 unfoldR :: TH.Name -> RewriteH CoreExpr
 unfoldR nm = callG nm >> unfoldAppR
