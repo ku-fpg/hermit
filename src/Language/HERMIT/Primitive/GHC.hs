@@ -16,15 +16,19 @@ module Language.HERMIT.Primitive.GHC
        , letSubstR
        , safeLetSubstR
        , safeLetSubstPlusR
+         -- ** Equality
+       , exprEqual
+       , exprsEqual
+       , coreEqual
          -- ** Utilities
        , inScope
-       , exprEqual
        , showVars
        , rule
        , rules
        , lintExprT
        , lintProgramT
        , lintModuleT
+       , equivalent
        )
 where
 
@@ -414,6 +418,16 @@ lookupUsageDetails = lookupVarEnv
 exprEqual :: CoreExpr -> CoreExpr -> Bool
 exprEqual e1 e2 = eqExpr (mkInScopeSet $ exprsFreeVars [e1, e2]) e1 e2
 
+exprsEqual :: [CoreExpr] -> Bool
+exprsEqual = equivalent exprEqual
+
+-- Drew: surely this exists generally somewhere?
+-- for instance:
+--      equivalent ((==) `on` length) :: [[a]] -> Bool
+-- checks if all lists have the same length
+equivalent :: (a -> a -> Bool) -> [a] -> Bool
+equivalent _  []     = True
+equivalent eq (x:xs) = all (eq x) xs
 
 -- The ideas for this function are directly extracted from
 -- the GHC function, CoreUtils.eqExprX
