@@ -84,7 +84,7 @@ unfoldR nm = callG nm >> unfoldAppR
 --      Var ==> inlines
 --      App ==> inlines the head of the function call for the app tree
 unfoldAppR :: RewriteH CoreExpr
-unfoldAppR = go >+> cleanupUnfoldR
+unfoldAppR = go >>> cleanupUnfoldR
     where go :: RewriteH CoreExpr
           go = inline <+ appAllR go idR
 
