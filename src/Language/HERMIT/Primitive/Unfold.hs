@@ -62,7 +62,8 @@ externals =
 -- Invariant: will not introduce let bindings
 cleanupUnfoldR :: RewriteH CoreExpr
 cleanupUnfoldR = do
-    (f, args) <- collectArgsT
+    (f, args) <- arr collectArgs -- we don't use collectArgsT because in this case
+                                 -- its ok if 'args' is an empty list
     let (vs, body) = collectBinders f
         lenargs = length args
         lenvs = length vs
