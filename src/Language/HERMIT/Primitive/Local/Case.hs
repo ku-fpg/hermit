@@ -9,6 +9,9 @@ module Language.HERMIT.Primitive.Local.Case
        , caseFloatCast
        , caseFloatLet
        , caseFloat
+       , caseUnfloat
+       , caseUnfloatApp
+       , caseUnfloatArgs
        , caseReduce
        , caseReduceDatacon
        , caseReduceLiteral
@@ -21,6 +24,7 @@ where
 import GhcPlugins
 
 import Data.List
+import Data.Monoid
 import Control.Arrow
 
 import Language.HERMIT.Core
@@ -61,6 +65,12 @@ externals =
         [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow .+ Bash
     , external "case-float" (promoteExprR caseFloat :: RewriteH Core)
         [ "Float a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
+    , external "case-unfloat" (promoteExprR caseUnfloat :: RewriteH Core)
+        [ "Unfloat a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
+    , external "case-unfloat-args" (promoteExprR caseUnfloatArgs :: RewriteH Core)
+        [ "Unfloat a Case whose alternatives are parallel applications of the same function." ] .+ Commute .+ Shallow .+ PreCondition
+    , external "case-unfloat-app" (promoteExprR caseUnfloatApp :: RewriteH Core)
+        [ "Unfloat a Case whole alternatives are applications of different functions with the same arguments." ] .+ Commute .+ Shallow .+ PreCondition
     , external "case-reduce" (promoteExprR caseReduce :: RewriteH Core)
         [ "case-reduce-datacon <+ case-reduce-literal" ]                     .+ Shallow .+ Eval .+ Bash
     , external "case-reduce-datacon" (promoteExprR caseReduceDatacon :: RewriteH Core)
@@ -142,6 +152,33 @@ caseFloatCast = prefixFailMsg "Case float from cast failed: " $
 caseFloat :: RewriteH CoreExpr
 caseFloat = setFailMsg "Unsuitable expression for Case floating." $
     caseFloatApp <+ caseFloatArg <+ caseFloatCase <+ caseFloatLet <+ caseFloatCast
+
+------------------------------------------------------------------------------
+
+caseUnfloat :: RewriteH CoreExpr
+caseUnfloat = setFailMsg "Case unfloating failed." $
+    caseUnfloatApp <+ caseUnfloatArgs
+
+caseUnfloatApp :: RewriteH CoreExpr
+caseUnfloatApp = fail "caseUnfloatApp: TODO"
+
+caseUnfloatArgs :: RewriteH CoreExpr
+caseUnfloatArgs = prefixFailMsg "Case unfloating into arguments failed: " $
+                  withPatFailMsg (wrongExprForm "Case s v t alts") $
+    do Case s wild _ty alts <- idR
+       (vss, fs, argss) <- caseT mempty (\_ -> altT collectArgsT $ \ _ac vs (fn, args) -> (vs, fn, args))
+                                        (\ () _ _ alts -> unzip3 [ (wild:vs, fn, args) | (vs,fn,args) <- alts ])
+       guardMsg (exprsEqual fs) "alternatives are not parallel in function call."
+       guardMsg (all null $ zipWith intersect (map coreExprFreeVars fs) vss) "function bound by case binders."
+       return $ mkCoreApps (head fs) [ if isTyCoArg (head args)
+                                       then head args -- TODO: is is possible for well-type case to have different
+                                                      -- type arguments in different alternatives? Obviously not with
+                                                      -- monomorphic types, but maybe with polymorphism?
+                                       else let alts' = [ (ac, vs, arg) | ((ac,vs,_),arg) <- zip alts args ]
+                                            in Case s wild (coreAltsType alts') alts'
+                                     | args <- transpose argss ]
+
+------------------------------------------------------------------------------
 
 caseReduce :: RewriteH CoreExpr
 caseReduce = setFailMsg "Unsuitable expression for Case reduction." $
