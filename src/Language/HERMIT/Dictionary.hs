@@ -1,13 +1,14 @@
 {-# LANGUAGE GADTs, ScopedTypeVariables #-}
 
 module Language.HERMIT.Dictionary
-       ( -- * The HERMIT Dictionary
-         -- | This is the main namespace. Things tend to be untyped, because the API is accessed via (untyped) names.
-         Dictionary
-       , all_externals
-       , dictionary
-       , pp_dictionary
-)  where
+    ( -- * The HERMIT Dictionary
+      -- | This is the main namespace. Things tend to be untyped, because the API is accessed via (untyped) names.
+      Dictionary
+    , all_externals
+    , dictionary
+    , pp_dictionary
+    , metaCmd
+    ) where
 
 -- import Data.Default (def)
 import Data.Dynamic
