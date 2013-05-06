@@ -5,6 +5,7 @@ module Language.HERMIT.Primitive.Unfold
     , rememberR
     , showStashT
     , unfoldR
+    , unfoldAppR
     , unfoldStashR
     ) where
 
@@ -46,6 +47,8 @@ externals =
         [ "Unfold a remembered definition." ] .+ Deep .+ Context
     , external "unfold" (promoteExprR . unfoldR :: TH.Name -> RewriteH Core)
         [ "Inline a definition, and apply the arguments; traditional unfold" ] .+ Deep .+ Context
+    , external "unfold-app" (promoteExprR unfoldAppR :: RewriteH Core)
+        [ "In application f x y z, unfold f." ] .+ Deep .+ Context
     , external "unfold-rule" ((\ nm -> promoteExprR (rule nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
         [ "Apply a named GHC rule" ] .+ Deep .+ Context -- TODO: does not work with rules with no arguments
     , external "show-remembered" (TranslateDocH showStashT :: TranslateDocH Core)
@@ -61,19 +64,15 @@ cleanupUnfoldR :: RewriteH CoreExpr
 cleanupUnfoldR = betaReducePlus >>> safeLetSubstPlusR
 
 unfoldR :: TH.Name -> RewriteH CoreExpr
-unfoldR nm = translate $ \ env e0 -> do
-        let n = appCount e0
-        let sub :: RewriteH Core
-            sub = pathR (replicate n 0) (promoteR $ inlineName nm)
+unfoldR nm = callG nm >> unfoldAppR
 
-            sub2 :: RewriteH CoreExpr
-            sub2 = extractR sub
-
-        e1 <- apply sub2 env e0
-
-        -- only cleanup if 1 or more arguments
-        if n > 0 then apply cleanupUnfoldR env e1
-                 else return e1
+-- | A more powerful 'inline'. Matches two cases:
+--      Var ==> inlines
+--      App ==> inlines the head of the function call for the app tree
+unfoldAppR :: RewriteH CoreExpr
+unfoldAppR = go >+> cleanupUnfoldR
+    where go :: RewriteH CoreExpr
+          go = inline <+ appAllR go idR
 
 -- NOTE: Using a Rewrite because of the way the Kernel is set up.
 --       This is a temporary hack until we work out the best way to structure the Kernel.

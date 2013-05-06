@@ -16,6 +16,5 @@ simplify
    any-call (unfold-rule "repH (:)")
    any-call (unfold-rule "repH []")
    simplify
-   any-call (unfold 'id)
 }
 any-call (unfold 'absH)

@@ -65,9 +65,13 @@ callG :: TH.Name -> TranslateH CoreExpr ()
 callG nm = prefixFailMsg "callG failed: " $ callT nm >>= \_ -> constT (return ())
 
 -- | Succeeds if we are looking at an application of given function
+--   returning zero or more arguments to which it is applied.
 callT :: TH.Name -> TranslateH CoreExpr (CoreExpr, [CoreExpr])
-callT nm = prefixFailMsg "callT failed: " $ do
-    t@(Var i, _) <- collectArgsT
+callT nm = prefixFailMsg "callT failed: " $ contextfreeT $ \ e -> do
+    t@(Var i, _) <- case e of
+                        Var {} -> return (e, [])
+                        App {} -> return $ collectArgs e
+                        _      -> fail "not an application or variable occurance."
     guardMsg (cmpTHName2Var nm i) $ "not a call to " ++ show nm
     return t
 
