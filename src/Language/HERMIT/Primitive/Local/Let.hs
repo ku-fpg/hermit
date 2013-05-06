@@ -17,6 +17,7 @@ module Language.HERMIT.Primitive.Local.Let
        , letUnfloat
        , letUnfloatApp
        , letUnfloatCase
+       , letUnfloatLam
        , reorderNonRecLets
        )
 where
