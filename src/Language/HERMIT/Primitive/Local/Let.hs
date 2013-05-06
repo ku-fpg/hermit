@@ -14,6 +14,7 @@ module Language.HERMIT.Primitive.Local.Let
        , letNonRecElim
        , letRecElim
        , letToCase
+       , letUnfloat
        , letUnfloatApp
        , letUnfloatCase
        , reorderNonRecLets
@@ -77,7 +78,7 @@ externals =
         [ "let v = ev in e ==> case ev of v -> e" ]                             .+ Commute .+ Shallow .+ PreCondition
 --    , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
 --        [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ] .+ Unimplemented
-    , external "let-unfloat" (promoteExprR (letUnfloatApp <+ letUnfloatCase) >+> anybuR (promoteExprR letElim) :: RewriteH Core)
+    , external "let-unfloat" (promoteExprR letUnfloat >+> anybuR (promoteExprR letElim) :: RewriteH Core)
         [ "Unfloat a let if possible." ]                                        .+ Commute .+ Shallow
     , external "let-unfloat-app" ((promoteExprR letUnfloatApp >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
         [ "let v = ev in f a ==> (let v = ev in f) (let v = ev in a)" ]         .+ Commute .+ Shallow
@@ -205,19 +206,30 @@ letFloatLetTop = prefixFailMsg "Let floating to top level failed: " $
 
 -------------------------------------------------------------------------------------------
 
+letUnfloat :: RewriteH CoreExpr
+letUnfloat = letUnfloatCase <+ letUnfloatApp <+ letUnfloatLam
+
 letUnfloatCase :: RewriteH CoreExpr
 letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $
                  withPatFailMsg (wrongExprForm "Let bnds (Case s w ty alts)") $
   do Let bnds (Case s w ty alts) <- idR
      captured <- letT bindVarsT caseVarsT intersect
      guardMsg (null captured) "let bindings would capture case pattern bindings."
-     return $ Case (Let bnds s) w ty [ (ac, vs, Let bnds e) | (ac, vs, e) <- alts ]
+     return $ Case (Let bnds s) w ty $ mapAlts (Let bnds) alts
 
 letUnfloatApp :: RewriteH CoreExpr
 letUnfloatApp = prefixFailMsg "Let unfloating from app failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (App e1 e2)") $
   do Let bnds (App e1 e2) <- idR
      return $ App (Let bnds e1) (Let bnds e2)
+
+letUnfloatLam :: RewriteH CoreExpr
+letUnfloatLam = prefixFailMsg "Let unfloating from lambda failed: " $
+                withPatFailMsg (wrongExprForm "Let bnds (Lam v e)") $
+  do Let bnds (Lam v e) <- idR
+     safe <- letT bindVarsT lamVarT $ flip notElem
+     guardMsg safe "let bindings would capture lambda binding."
+     return $ Lam v $ Let bnds e
 
 -------------------------------------------------------------------------------------------
 
