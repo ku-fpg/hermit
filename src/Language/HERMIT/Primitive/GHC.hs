@@ -324,6 +324,7 @@ inScope :: HermitC -> Id -> Bool
 inScope c v = (v `boundIn` c) ||                 -- defined in this module
               case unfoldingInfo (idInfo v) of
                 CoreUnfolding {} -> True         -- defined elsewhere
+                DFunUnfolding {} -> True
                 _                -> False
 
 -- | Lookup a rule and attempt to construct a corresponding rewrite.
