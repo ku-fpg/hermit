@@ -36,7 +36,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
                  [ "var '<v> returns successfully for variable v, and fails otherwise.",
                    "Useful in combination with \"when\", as in: when (var v) r" ] .+ Predicate
          , external "simplify" (simplifyR :: RewriteH Core)
-                [ "innermost (unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ dead-let-elimination)" ]
+                [ "innermost (unfold '$ <+ unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ dead-let-elimination)" ] .+ Bash
          , external "let-tuple" (promoteExprR . letTupleR :: TH.Name -> RewriteH Core)
                 [ "let x = e1 in (let y = e2 in e) ==> let t = (e1,e2) in (let x = fst t in (let y = snd t in e))" ]
          , external "any-call" (withUnfold :: RewriteH Core -> RewriteH Core)
@@ -64,8 +64,12 @@ isVar nm = varT (cmpTHName2Var nm) >>= guardM
 
 simplifyR :: RewriteH Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
-            innermostR (promoteExprR (unfoldR (TH.mkName ".") <+ betaReducePlus <+ safeLetSubstR <+ caseReduce <+ letElim))
-
+    innermostR (promoteExprR (unfoldR (TH.mkName "$")
+                           <+ unfoldR (TH.mkName ".")
+                           <+ betaReducePlus
+                           <+ safeLetSubstR
+                           <+ caseReduce
+                           <+ letElim))
 
 collectLets :: CoreExpr -> ([(Var, CoreExpr)],CoreExpr)
 collectLets (Let (NonRec x e1) e2) = let (bs,expr) = collectLets e2 in ((x,e1):bs, expr)
