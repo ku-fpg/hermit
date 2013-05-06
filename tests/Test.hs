@@ -75,7 +75,7 @@ main = do
 
             let cmd = unwords $ [ "(", "cd", pathp, ";", "ghc" , hs ] ++ ghcFlags ++
                                 [ "-fplugin=HERMIT"
-                                , "-fplugin-opt=HERMIT:main:Main:" ++ fp -- made by mkTestScript
+                                , "-fplugin-opt=HERMIT:Main:" ++ fp -- made by mkTestScript
                                 , "-v0"
                                 , "&> " ++ dfile
                                 , ")" ]
