@@ -16,6 +16,7 @@ import Language.HERMIT.External
 import Language.HERMIT.GHC
 import Language.HERMIT.ParserCore
 
+import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Inline
@@ -132,28 +133,6 @@ staticArg = prefixFailMsg "static-arg failed: " $ do
 
         return $ Def f $ mkCoreLams bnds $ Let (Rec [(wkr, mkCoreLams dbnds body')])
                                              $ mkApps (Var wkr) (varsToCoreExprs dbnds)
-
--- | Like GHC's collectArgs, but fails if not an application
-collectArgsT :: TranslateH CoreExpr (CoreExpr, [CoreExpr])
-collectArgsT = do
-    App {} <- idR
-    arr collectArgs
-
--- | Succeeds if we are looking at an application of given function
-callG :: TH.Name -> TranslateH CoreExpr ()
-callG nm = prefixFailMsg "callG failed: " $ do
-    (Var i,_) <- collectArgsT
-    guardMsg (cmpTHName2Var nm i) $ "not a call to " ++ show nm
-    return ()
-
--- | Apply a rewrite to all applications of a given function in a top-down manner, pruning on success.
-callsR :: TH.Name -> RewriteH CoreExpr -> RewriteH Core
-callsR nm rr = prunetdR (promoteExprR $ callG nm >> rr)
-
--- | Apply a translate to all applications of a given function in a top-down manner,
---   pruning on success, collecting the results.
-callsT :: TH.Name -> TranslateH CoreExpr b -> TranslateH Core [b]
-callsT nm t = collectPruneT (promoteExprT $ callG nm >> t)
 
 ------------------------------------------------------------------------------------------------------
 

@@ -2,8 +2,14 @@
 --   transformations needed by the other primitive modules.
 module Language.HERMIT.Primitive.Common
     ( -- * Utility Transformations
+      -- ** Finding function calls.
+      callG
+    , callT
+    , callsR
+    , callsT
+    , collectArgsT
       -- ** Collecting variables bound at a Node
-      progIdsT
+    , progIdsT
     , consIdsT
     , consRecIdsT
     , consNonRecIdT
@@ -33,6 +39,8 @@ where
 
 import GhcPlugins
 
+import Control.Arrow
+
 import Data.List
 import Data.Monoid
 
@@ -43,6 +51,34 @@ import Language.HERMIT.GHC
 import Language.HERMIT.Monad
 
 import qualified Language.Haskell.TH as TH
+
+------------------------------------------------------------------------------
+
+-- | Like GHC's collectArgs, but fails if not an application
+collectArgsT :: TranslateH CoreExpr (CoreExpr, [CoreExpr])
+collectArgsT = do
+    App {} <- idR
+    arr collectArgs
+
+-- | Succeeds if we are looking at an application of given function
+callG :: TH.Name -> TranslateH CoreExpr ()
+callG nm = prefixFailMsg "callG failed: " $ callT nm >>= \_ -> constT (return ())
+
+-- | Succeeds if we are looking at an application of given function
+callT :: TH.Name -> TranslateH CoreExpr (CoreExpr, [CoreExpr])
+callT nm = prefixFailMsg "callT failed: " $ do
+    t@(Var i, _) <- collectArgsT
+    guardMsg (cmpTHName2Var nm i) $ "not a call to " ++ show nm
+    return t
+
+-- | Apply a rewrite to all applications of a given function in a top-down manner, pruning on success.
+callsR :: TH.Name -> RewriteH CoreExpr -> RewriteH Core
+callsR nm rr = prunetdR (promoteExprR $ callG nm >> rr)
+
+-- | Apply a translate to all applications of a given function in a top-down manner,
+--   pruning on success, collecting the results.
+callsT :: TH.Name -> TranslateH CoreExpr b -> TranslateH Core [b]
+callsT nm t = collectPruneT (promoteExprT $ callG nm >> t)
 
 ------------------------------------------------------------------------------
 
