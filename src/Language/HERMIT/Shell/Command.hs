@@ -220,7 +220,7 @@ shell_externals = map (.+ Shell)
        [ "dump <filename> <pretty-printer> <renderer> <width>"]
    , external "set-width"   (\ n -> SessionStateEffect $ \ _ st -> return $ st { cl_width = n })
        ["set the width of the screen"]
-   , external "set-pp-expr-type" (\ str -> SessionStateEffect $ \ _ st ->
+   , external "set-pp-type" (\ str -> SessionStateEffect $ \ _ st ->
         case reads str :: [(ShowOption,String)] of
             [(opt,"")] -> return $ st { cl_pretty_opts = updateTypeShowOption opt (cl_pretty_opts st) }
             _          -> return st)

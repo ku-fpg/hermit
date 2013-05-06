@@ -6,7 +6,7 @@ set-renderer unicode-console
 consider 'rev
    dump "paper/0-start-rev.tex" "clean" "latex" 56
 
-   set-pp-expr-type Omit
+   set-pp-type Omit
    dump "paper/0b-start-rev.tex" "clean" "latex" 56
 
    down
@@ -21,7 +21,7 @@ consider 'rev
    prune-td (unfold '.)
    dump "paper/4-after-unfold-dot.tex" "clean" "latex" 56
 
-   prune-td (unfold 'wrap) ;    prune-td (unfold 'wrap) 
+   prune-td (unfold 'wrap) ;    prune-td (unfold 'wrap)
    prune-td (unfold 'unwrap)
    prune-td (unfold '.)
    dump "paper/7-wrap-unwrap-inlined.tex" "clean" "latex" 56
@@ -39,7 +39,7 @@ consider 'rev
 
    dump "paper/9-rule-rep-append.tex" "clean" "latex" 56
 
-   prune-td (unfold-rule "rep-abs-fusion") 
+   prune-td (unfold-rule "rep-abs-fusion")
    dump "paper/11-rep-app-fusion.tex" "clean" "latex" 56
 
    prune-td (unfold 'repH)
@@ -58,4 +58,4 @@ consider 'rev
 resume
 
 
-   
+

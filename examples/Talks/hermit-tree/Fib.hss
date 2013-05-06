@@ -1,4 +1,4 @@
-set-pp-expr-type Show
+set-pp-type Show
 flatten-module
 consider 'fib
 {

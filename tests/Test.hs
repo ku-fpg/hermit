@@ -44,7 +44,7 @@ mkTestScript :: Handle -> FilePath -> IO ()
 mkTestScript h hss = do
     hPutStrLn h
         $ unlines [ "set-auto-corelint True"
-                  , "set-pp-expr-type Show"
+                  , "set-pp-type Show"
                   , "set-fail-hard True"
                   , "load \"" ++ hss ++ "\""
                   , "top ; down"
