@@ -110,7 +110,7 @@ staticArg = prefixFailMsg "static-arg failed: " $ do
     contextonlyT $ \ c -> do
         let bodyContext = foldl (flip addLambdaBinding) c bnds
 
-        callPats <- apply (callsT (var2THName f) (collectArgsT >>> arr snd)) bodyContext (ExprCore body)
+        callPats <- apply (callsT (var2THName f) (callT >>> arr snd)) bodyContext (ExprCore body)
         let argExprs = transpose callPats
             numCalls = length callPats
             -- ensure argument is present in every call (partial applications boo)
@@ -127,7 +127,7 @@ staticArg = prefixFailMsg "static-arg failed: " $ do
 
         let replaceCall :: RewriteH CoreExpr
             replaceCall = do
-                (_,exprs) <- collectArgsT
+                (_,exprs) <- callT
                 return $ mkApps (Var wkr) [ e | (p,e) <- zip [0..] exprs, (p::Int) `elem` ps ]
 
         ExprCore body' <- apply (callsR (var2THName f) replaceCall) bodyContext (ExprCore body)

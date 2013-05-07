@@ -3,11 +3,13 @@
 module Language.HERMIT.Primitive.Common
     ( -- * Utility Transformations
       -- ** Finding function calls.
-      callG
-    , callT
+      callT
+    , callPredT
+    , callNameT
+    , callSaturatedT
+    , callNameG
     , callsR
     , callsT
-    , collectArgsT
       -- ** Collecting variables bound at a Node
     , progIdsT
     , consIdsT
@@ -40,8 +42,6 @@ where
 
 import GhcPlugins
 
-import Control.Arrow
-
 import Data.List
 import Data.Monoid
 
@@ -55,35 +55,43 @@ import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------
 
--- | Like GHC's collectArgs, but fails if not an application
-collectArgsT :: TranslateH CoreExpr (CoreExpr, [CoreExpr])
-collectArgsT = do
-    App {} <- idR
-    arr collectArgs
+-- | Lift GHC's collectArgs
+callT :: TranslateH CoreExpr (CoreExpr, [CoreExpr])
+callT = do
+    e <- idR
+    case e of
+        Var {} -> return (e, [])
+        App {} -> return (collectArgs e)
+        _      -> fail "not an application or variable occurence."
 
--- | Succeeds if we are looking at an application of given function
-callG :: TH.Name -> TranslateH CoreExpr ()
-callG nm = prefixFailMsg "callG failed: " $ callT nm >>= \_ -> constT (return ())
+callPredT :: (Id -> [CoreExpr] -> Bool) -> TranslateH CoreExpr (CoreExpr, [CoreExpr])
+callPredT p = do
+    call@(Var i, args) <- callT
+    guardMsg (p i args) "predicate failed."
+    return call
 
 -- | Succeeds if we are looking at an application of given function
 --   returning zero or more arguments to which it is applied.
-callT :: TH.Name -> TranslateH CoreExpr (CoreExpr, [CoreExpr])
-callT nm = prefixFailMsg "callT failed: " $ contextfreeT $ \ e -> do
-    t@(Var i, _) <- case e of
-                        Var {} -> return (e, [])
-                        App {} -> return $ collectArgs e
-                        _      -> fail "not an application or variable occurance."
-    guardMsg (cmpTHName2Var nm i) $ "not a call to " ++ show nm
-    return t
+callNameT :: TH.Name -> TranslateH CoreExpr (CoreExpr, [CoreExpr])
+callNameT nm = setFailMsg ("callNameT: not a call to " ++ show nm) $
+    callPredT (const . cmpTHName2Var nm)
+
+callSaturatedT :: TranslateH CoreExpr (CoreExpr, [CoreExpr])
+callSaturatedT = callPredT (\ i args -> idArity i == length args)
+
+
+-- | Succeeds if we are looking at an application of given function
+callNameG :: TH.Name -> TranslateH CoreExpr ()
+callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >>= \_ -> constT (return ())
 
 -- | Apply a rewrite to all applications of a given function in a top-down manner, pruning on success.
 callsR :: TH.Name -> RewriteH CoreExpr -> RewriteH Core
-callsR nm rr = prunetdR (promoteExprR $ callG nm >> rr)
+callsR nm rr = prunetdR (promoteExprR $ callNameG nm >> rr)
 
 -- | Apply a translate to all applications of a given function in a top-down manner,
 --   pruning on success, collecting the results.
 callsT :: TH.Name -> TranslateH CoreExpr b -> TranslateH Core [b]
-callsT nm t = collectPruneT (promoteExprT $ callG nm >> t)
+callsT nm t = collectPruneT (promoteExprT $ callNameG nm >> t)
 
 ------------------------------------------------------------------------------
 

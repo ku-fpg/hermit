@@ -1,12 +1,15 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, TupleSections #-}
 module Language.HERMIT.Primitive.Unfold
     ( externals
     , cleanupUnfoldR
     , rememberR
     , showStashT
-    , unfoldNameR
     , unfoldR
+    , unfoldPredR
+    , unfoldNameR
+    , unfoldSaturatedR
     , unfoldStashR
+    , specializeR
     ) where
 
 import GhcPlugins hiding (empty)
@@ -44,10 +47,14 @@ externals =
         [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
     , external "unfold" (promoteExprR . unfoldStashR)
         [ "Unfold a remembered definition." ] .+ Deep .+ Context
-    , external "unfold" (promoteExprR . unfoldNameR :: TH.Name -> RewriteH Core)
-        [ "Inline a definition, and apply the arguments; traditional unfold" ] .+ Deep .+ Context
     , external "unfold" (promoteExprR unfoldR :: RewriteH Core)
         [ "In application f x y z, unfold f." ] .+ Deep .+ Context
+    , external "unfold" (promoteExprR . unfoldNameR :: TH.Name -> RewriteH Core)
+        [ "Inline a definition, and apply the arguments; traditional unfold" ] .+ Deep .+ Context
+    , external "unfold-saturated" (promoteExprR unfoldSaturatedR :: RewriteH Core)
+        [ "Unfold a definition only if the function is fulled applied." ] .+ Deep .+ Context
+    , external "specialize" (promoteExprR specializeR :: RewriteH Core)
+        [ "Specialize an application to its type and coercion arguments." ] .+ Deep .+ Context
     , external "unfold-rule" ((\ nm -> promoteExprR (rule nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
         [ "Apply a named GHC rule" ] .+ Deep .+ Context -- TODO: does not work with rules with no arguments
     , external "show-remembered" (TranslateDocH showStashT :: TranslateDocH Core)
@@ -62,8 +69,7 @@ externals =
 -- Invariant: will not introduce let bindings
 cleanupUnfoldR :: RewriteH CoreExpr
 cleanupUnfoldR = do
-    (f, args) <- arr collectArgs -- we don't use collectArgsT because in this case
-                                 -- its ok if 'args' is an empty list
+    (f, args) <- callT <+ (idR >>> arr (,[]))
     let (vs, body) = collectBinders f
         lenargs = length args
         lenvs = length vs
@@ -78,9 +84,6 @@ cleanupUnfoldR = do
                 GT -> mkCoreApps body'' $ drop lenvs args
                 _  -> body''
 
-unfoldNameR :: TH.Name -> RewriteH CoreExpr
-unfoldNameR nm = callG nm >> unfoldR
-
 -- | A more powerful 'inline'. Matches two cases:
 --      Var ==> inlines
 --      App ==> inlines the head of the function call for the app tree
@@ -88,6 +91,18 @@ unfoldR :: RewriteH CoreExpr
 unfoldR = go >>> cleanupUnfoldR
     where go :: RewriteH CoreExpr
           go = inline <+ appAllR go idR
+
+unfoldPredR :: (Id -> [CoreExpr] -> Bool) -> RewriteH CoreExpr
+unfoldPredR p = callPredT p >>= \ _ -> unfoldR
+
+unfoldNameR :: TH.Name -> RewriteH CoreExpr
+unfoldNameR nm = callNameT nm >>= \ _ -> unfoldR
+
+unfoldSaturatedR :: RewriteH CoreExpr
+unfoldSaturatedR = callSaturatedT >>= \ _ -> unfoldR
+
+specializeR :: RewriteH CoreExpr
+specializeR = unfoldPredR (const (all isTyCoArg))
 
 -- NOTE: Using a Rewrite because of the way the Kernel is set up.
 --       This is a temporary hack until we work out the best way to structure the Kernel.
