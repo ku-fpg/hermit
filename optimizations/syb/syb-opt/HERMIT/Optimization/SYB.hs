@@ -33,16 +33,19 @@ import Language.HERMIT.Primitive.New hiding (externals)
 import qualified Language.Haskell.TH as TH
 
 plugin :: Plugin
-plugin = optimize $ \ opts -> do
-    forM_ opts $ \ o -> do
-        liftIO $ putStrLn $ "optimizing: " ++ o
-        run $ do
-            path <- rhsOf $ TH.mkName o
-            pathR path $ optSYB >>> tryR (innermostR $ promoteExprR letrecSubstTrivialR) >>> tryR simplifyR
+plugin = optimize $ \ opts -> phase 0 $ do
+    let (opts', targets) = partition (`elem` ["interactive", "interactive-only"]) opts
+    if "interactive-only" `elem` opts'
+    then return ()
+    else forM_ targets $ \ t -> do
+            liftIO $ putStrLn $ "optimizing: " ++ t
+            at (rhsOf $ TH.mkName t) $ do
+                run $ optSYB >>> tryR (innermostR $ promoteExprR letrecSubstTrivialR) >>> tryR simplifyR
 
-    -- uncomment if you want to browse the result in the shell
-    -- the externals defined in this file will be available to you
-    -- interactive externals
+    -- pass either interactive or interactive-only flags to dump into a shell at the end
+    if null opts'
+    then return ()
+    else interactive externals []
 
 optSYB :: RewriteH Core
 optSYB = do

@@ -136,8 +136,10 @@ Library
                  kure >= 2.6.19,
                  marked-pretty >= 0.1,
                  mtl >= 2.1.2,
+                 operational >= 0.2.2.1,
                  stm >= 2.4,
-                 template-haskell >= 2.8.0.0
+                 template-haskell >= 2.8.0.0,
+                 transformers
 
   default-language: Haskell2010
 

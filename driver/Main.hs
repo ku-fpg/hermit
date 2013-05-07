@@ -28,7 +28,6 @@ usage = putStrLn $ unlines
         ,"If a module name is not supplied, the module main:Main is assumed."
         ,""
         ,"HERMIT_ARGS"
-        ,"  -pN         : where 0 <= N < 18 is the position in the pipeline in which HERMIT should run, 0 being at the beginning"
         ,"  -opt=MODULE : where MODULE is the module containing a HERMIT optimization plugin"
         ,""
         ,"MOD_ARGS"

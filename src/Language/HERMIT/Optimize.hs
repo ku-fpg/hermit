@@ -1,19 +1,27 @@
-{-# LANGUAGE FlexibleContexts, RankNTypes, GADTs, ImpredicativeTypes, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures, GADTs #-}
 module Language.HERMIT.Optimize
-       ( -- * The HERMIT Plugin
-         optimize
-       , at
-       , run
-       , interactive
-)  where
+    ( -- * The HERMIT Plugin
+      optimize
+      -- ** Running translations
+    , query
+    , run
+      -- ** Using the shell
+    , interactive
+      -- ** Target modifiers
+    , at
+    , phase
+    , allPhases
+    ) where
 
-import GhcPlugins
+import GhcPlugins hiding (Target, singleton)
 
-import Control.Monad.Error
-import Control.Monad.State
+import Control.Monad.Operational
+import Control.Monad.IO.Class
+
+import Data.Default
 
 import Language.HERMIT.Core
-import Language.HERMIT.External
+import Language.HERMIT.External hiding (Query, Shell)
 import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
@@ -22,101 +30,92 @@ import qualified Language.HERMIT.Shell.Command as Shell
 
 import System.Console.Haskeline (defaultBehavior)
 
-newtype OptimizeM a = OptimizeM { runOptimizeM :: ErrorT String (StateT OptState IO) a }
-    deriving (Monad, MonadIO, Functor, MonadState OptState, MonadError String)
+data Target = Target { atPhase :: Maybe (Either Int CorePass) {- phase which its after -}
+                     , times :: Maybe Int
+                     , focus :: TranslateH Core Path
+                     }
 
-data OptState = OptState { kernel :: ScopedKernel
-                         , sast :: SAST
-                         , mEnv :: HermitMEnv }
+instance Default Target where
+    def = Target { atPhase = Just $ Left 0 -- everything defaults to first phase
+                 , times = Just 1
+                 , focus = constT $ return []
+                 }
 
-run :: Injection a Core => RewriteH a -> OptimizeM ()
-run rr = do
-    k <- gets kernel
-    ast <- gets sast
-    env <- gets mEnv
+data OInst :: * -> * where
+    RR       :: RewriteH Core                     -> OInst ()
+    Query    :: TranslateH Core a                 -> OInst a
+    Shell    :: [External] -> [CommandLineOption] -> OInst ()
+    SetT     :: (Target -> Target)                -> OInst Target -- returns previous target
+    IOAction :: IO a                              -> OInst a
 
-    kres <- liftIO (applyS k ast (extractR (promoteR rr :: RewriteH Core)) env)
-    runKureM (\ast' -> modify (\s -> s { sast = ast' })) throwError kres
+-- using operational, but would we nice to use Neil's constrained-normal package!
+-- Also, we use it with a newtype instead of a type synonym like normal,
+-- so we can declare a MonadIO instance!
+newtype OM a = OM { unOM :: Program OInst a }
 
-at :: TranslateH Core Path -> OptimizeM () -> OptimizeM ()
-at = undefined
--- at t m =
+-- class Monad m => MonadIO m where
+instance Monad OM where
+    return = OM . return
+    (OM m) >>= k = OM (m >>= unOM . k)
 
---interactive :: [FilePath] -> Behavior -> ScopedKernel -> SAST -> IO ()
-interactive :: [External] -> OptimizeM ()
-interactive exts = do
-    k <- gets kernel
-    ast <- gets sast
+instance MonadIO OM where
+    liftIO = OM . singleton . IOAction
 
-    liftIO $ Shell.interactive [] defaultBehavior exts k ast
+optimize :: ([CommandLineOption] -> OM ()) -> Plugin
+optimize f = hermitPlugin $ \ pi -> runOM pi . f
 
---display :: OptimizeM ()
---display = OptimizeM [corePrettyH def
-
-runO :: OptimizeM () -> ScopedKernel -> SAST -> IO ()
-runO opt skernel ast = do
+runOM :: PhaseInfo -> OM () -> ModGuts -> CoreM ModGuts
+runOM pi comp = scopedKernel $ \ kernel initSAST ->
     let env = mkHermitMEnv $ liftIO . debug
         debug (DebugTick msg) = putStrLn msg
         debug (DebugCore msg _c _e) = putStrLn $ "Core: " ++ msg
-        initState = OptState skernel ast env
-        errAction err = putStrLn err >> abortS skernel
 
-    (res, st) <- flip runStateT initState $ runErrorT $ runOptimizeM opt
+        errorAbort err = putStrLn err >> abortS kernel
 
-    either errAction (\() -> resumeS skernel (sast st) >>= runKureM return errAction) res
+        active :: Target -> Bool
+        active t = maybe True (either (== phaseNum pi) (`elem` phasesDone pi)) $ atPhase t
 
--- | NB: type CommandLineOption = String
-optimize :: ([CommandLineOption] -> OptimizeM ()) -> Plugin
-optimize f = hermitPlugin $ scopedKernel . runO . f
+        go :: Target -> Program OInst () -> SAST -> IO ()
+        go t m sast | active t =
+            case view m of
+                Return a            -> resumeS kernel sast >>= runKureM return errorAbort
+                RR rr       :>>= k  -> applyS kernel sast (focus t >>= flip pathR (extractR rr)) env
+                                        >>= runKureM (go t (k ())) errorAbort
+                Query tr    :>>= k  -> queryS kernel sast (focus t >>= flip pathT (extractT tr)) env
+                                        >>= runKureM (\ x -> go t (k x) sast) errorAbort
+                -- TODO: rework shell so it can return to k
+                Shell es os :>>= _k -> Shell.interactive os defaultBehavior es kernel sast
+                IOAction m  :>>= k  -> m >>= \ x -> go t (k x) sast
+                SetT f      :>>= k  -> go (f t) (k t) sast
+                    | otherwise = resumeS kernel sast >>= runKureM return errorAbort
+    in go def (unOM comp) initSAST
 
-{-
--- | Given a list of 'CommandLineOption's, produce the 'ModGuts' to 'ModGuts' function required to build a plugin.
-type HermitPass = [CommandLineOption] -> ModGuts -> CoreM ModGuts
+interactive :: [External] -> [CommandLineOption] -> OM ()
+interactive es os = OM . singleton $ Shell es os
 
-data Options = Options { pass :: Int }
+run :: RewriteH Core -> OM ()
+run = OM . singleton . RR
 
-instance Default Options where
-    def = Options { pass = 0 }
+query :: TranslateH Core a -> OM a
+query = OM . singleton . Query
 
-parse :: [String] -> Options -> Options
-parse (('-':'p':n):rest) o | all isDigit n = parse rest $ o { pass = read n }
-parse (_:rest) o = parse rest o -- unknown option
-parse [] o       = o
+------------------------ target modifiers -------------------------
 
--- | Build a hermit plugin. This mainly handles the per-module options.
-hermitPlugin :: HermitPass -> Plugin
-hermitPlugin hp = defaultPlugin { installCoreToDos = install }
-    where
-        install :: [CommandLineOption] -> [CoreToDo] -> CoreM [CoreToDo]
-        install opts todos = do
-            reinitializeGlobals
+setTarget :: (Target -> Target) -> OM Target
+setTarget = OM . singleton . SetT
 
-            -- This is a bit of a hack; otherwise we lose what we've not seen
-            liftIO $ hSetBuffering stdout NoBuffering
+modifyTarget :: (Target -> Target) -> OM a -> OM a
+modifyTarget f m = do
+    t' <- setTarget f
+    r <- m
+    _ <- setTarget (const t')
+    return r
 
-            dynFlags <- getDynFlags
+at :: TranslateH Core Path -> OM a -> OM a
+at tr = modifyTarget (\t -> t { focus = tr })
 
-            let (m_opts, h_opts) = partition (isInfixOf ":") opts
-                hermit_opts = parse h_opts def
-                myPass = CoreDoPluginPass "HERMIT" $ modFilter dynFlags hp m_opts
-                -- at front, for now
-                allPasses = insertAt (pass hermit_opts) myPass todos
+phase :: Int -> OM a -> OM a
+phase n = modifyTarget (\t -> t { atPhase = Just (Left n) })
 
-            return allPasses
-
--- | Determine whether to act on this module, choose plugin pass.
-modFilter :: DynFlags -> HermitPass -> HermitPass
-modFilter dynFlags hp opts guts | null modOpts && not (null opts) = return guts -- don't process this module
-                                | otherwise                       = hp modOpts guts
-    where modOpts = filterOpts dynFlags opts guts
-
--- | Filter options to those pertaining to this module, stripping module prefix.
-filterOpts :: DynFlags -> [CommandLineOption] -> ModGuts -> [CommandLineOption]
-filterOpts dynFlags opts guts = [ drop len nm | nm <- opts, modName `isPrefixOf` nm ]
-    where modName = showPpr dynFlags $ mg_module guts
-          len = length modName + 1 -- for the colon
-
-insertAt :: Int -> a -> [a] -> [a]
-insertAt n x xs = pre ++ (x : suf)
-    where (pre,suf) = splitAt n xs
--}
+allPhases :: OM a -> OM a
+allPhases = modifyTarget (\t -> t { atPhase = Nothing })
