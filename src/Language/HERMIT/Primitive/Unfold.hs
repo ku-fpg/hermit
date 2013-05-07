@@ -4,8 +4,8 @@ module Language.HERMIT.Primitive.Unfold
     , cleanupUnfoldR
     , rememberR
     , showStashT
+    , unfoldNameR
     , unfoldR
-    , unfoldAppR
     , unfoldStashR
     ) where
 
@@ -44,9 +44,9 @@ externals =
         [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
     , external "unfold" (promoteExprR . unfoldStashR)
         [ "Unfold a remembered definition." ] .+ Deep .+ Context
-    , external "unfold" (promoteExprR . unfoldR :: TH.Name -> RewriteH Core)
+    , external "unfold" (promoteExprR . unfoldNameR :: TH.Name -> RewriteH Core)
         [ "Inline a definition, and apply the arguments; traditional unfold" ] .+ Deep .+ Context
-    , external "unfold-app" (promoteExprR unfoldAppR :: RewriteH Core)
+    , external "unfold" (promoteExprR unfoldR :: RewriteH Core)
         [ "In application f x y z, unfold f." ] .+ Deep .+ Context
     , external "unfold-rule" ((\ nm -> promoteExprR (rule nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
         [ "Apply a named GHC rule" ] .+ Deep .+ Context -- TODO: does not work with rules with no arguments
@@ -78,14 +78,14 @@ cleanupUnfoldR = do
                 GT -> mkCoreApps body'' $ drop lenvs args
                 _  -> body''
 
-unfoldR :: TH.Name -> RewriteH CoreExpr
-unfoldR nm = callG nm >> unfoldAppR
+unfoldNameR :: TH.Name -> RewriteH CoreExpr
+unfoldNameR nm = callG nm >> unfoldR
 
 -- | A more powerful 'inline'. Matches two cases:
 --      Var ==> inlines
 --      App ==> inlines the head of the function call for the app tree
-unfoldAppR :: RewriteH CoreExpr
-unfoldAppR = go >>> cleanupUnfoldR
+unfoldR :: RewriteH CoreExpr
+unfoldR = go >>> cleanupUnfoldR
     where go :: RewriteH CoreExpr
           go = inline <+ appAllR go idR
 

@@ -275,7 +275,7 @@ workerWrapperSplitR wrap unwrap =
                            >>> letAllR idR ( forewardT (workerWrapperFacBR wrap unwrap)
                                                >>> appAllR idR (letIntro w)
                                                >>> letFloatArg
-                                               >>> letNonRecAllR (unfoldR fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
+                                               >>> letNonRecAllR (unfoldNameR fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
                                                >>> letSubstR
                                                >>> letFloatArg
                                            )

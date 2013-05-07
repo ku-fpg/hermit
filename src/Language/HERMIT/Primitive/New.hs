@@ -65,9 +65,9 @@ isVar nm = varT (cmpTHName2Var nm) >>= guardM
 
 simplifyR :: RewriteH Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
-    innermostR (promoteExprR (unfoldR (TH.mkName "$")
-                           <+ unfoldR (TH.mkName ".")
-                           <+ unfoldR (TH.mkName "id")
+    innermostR (promoteExprR (unfoldNameR (TH.mkName "$")
+                           <+ unfoldNameR (TH.mkName ".")
+                           <+ unfoldNameR (TH.mkName "id")
                            <+ betaReducePlus
                            <+ safeLetSubstR
                            <+ caseReduce
