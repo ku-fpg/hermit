@@ -66,7 +66,7 @@ optimize f = hermitPlugin $ \ pi -> runOM pi . f
 
 runOM :: PhaseInfo -> OM () -> ModGuts -> CoreM ModGuts
 runOM pi comp = scopedKernel $ \ kernel initSAST ->
-    let env = mkHermitMEnv $ liftIO . debug
+    let env = mkHermitMEnv $ GhcPlugins.liftIO . debug
         debug (DebugTick msg) = putStrLn msg
         debug (DebugCore msg _c _e) = putStrLn $ "Core: " ++ msg
 
