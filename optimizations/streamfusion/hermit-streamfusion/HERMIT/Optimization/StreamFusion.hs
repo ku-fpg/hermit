@@ -12,7 +12,6 @@ import Language.HERMIT.Monad
 import Language.HERMIT.Optimize
 
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.Debug hiding (externals)
 import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Local hiding (externals)
 import Language.HERMIT.Primitive.New hiding (externals)
@@ -42,13 +41,6 @@ myanybuR r = setFailMsg "anybuR failed" $
     let go = anyR go >+> promoteR r
     in go
 {-# INLINE myanybuR #-}
-
--- | Apply a 'Rewrite' in a top-down manner, succeeding if any succeed.
-myanytdR :: (Walker c g, MonadCatch m, Injection a g) => Rewrite c m a -> Rewrite c m g
-myanytdR r = setFailMsg "anytdR failed" $
-    let go = promoteR r >+> anyR go
-    in go
-{-# INLINE myanytdR #-}
 
 bash :: RewriteH Core
 bash = metaCmd (all_externals externals) Bash (setFailMsg "Nothing to do." . myinnermostR . orR)
@@ -98,40 +90,3 @@ exposeStreamConstructor = tryR $ extractR $ repeatR $
     onetdR (promoteExprR $ rules ["stream/unstream", "unstream/stream"]
                            <+ letUnfloat <+ letElim <+ caseUnfloat)
      <+ simplifyR <+ promoteExprR unfoldR
-
-{-
-concatMapSR :: RewriteH CoreExpr
-concatMapSR = prefixFailMsg "concatMapSR failed: " $ do
-    (_concatMapS, [aTy, bTy, f, outerStream]) <- callNameT (TH.mkName "concatMapS")
-    -- find concatMapS'
-    concatMapS'id <- findIdT $ TH.mkName "concatMapS'"
-    fixStepid <- findIdT $ TH.mkName "fixStep"
-    -- find the type of the inner state
-    c <- contextT -- TODO: properly extend context
-    (v, n@(Lam s _), st) <- constT $ apply exposeInnerStreamT c f
-    let st' = mkCoreTup [varToCoreExpr v, st]
-    stId <- constT $ newIdH "st" (exprType st')
-    wild <- constT $ cloneVarH ("wild_"++) stId
-    let stFn = Lam v st'
-        fixApp = mkCoreApps (varToCoreExpr fixStepid) [aTy, bTy, Type $ exprType st, varToCoreExpr v, mkCoreApp n (varToCoreExpr s)]
-        nFn = mkCoreLams [stId] $ mkSmallTupleCase [v,s] fixApp wild (varToCoreExpr stId)
-        res = mkCoreApps (varToCoreExpr concatMapS'id) [Type (exprType st'), bTy, aTy, nFn, stFn, outerStream]
-    return res
-
-exposeInnerStreamT :: TranslateH CoreExpr ( CoreBndr -- the 'x' in 'concatMap (\x -> ...) ...'
-                                          , CoreExpr -- inner stream stepper function
-                                          , CoreExpr -- inner stream state
-                                          )
-exposeInnerStreamT = prefixFailMsg "exposeInnerStreamT failed: " $
-    (do Lam v e <- lamR exposeStreamConstructor >>> observeR "after unfloat"
-        case exprIsConApp_maybe idUnfolding e of
-            Nothing -> fail "not a datacon app"
-            Just (dc, _univTys, [_sTy, n, st]) -> return (v, n, st) -- TODO make sure dc is Stream
-            _ -> fail "incorrect number of arguments.")
-    <+ (unfoldR >>> observeR "after unfoldR" >>> exposeInnerStreamT)
-
-exposeStreamConstructor :: RewriteH CoreExpr
-exposeStreamConstructor = tryR $ extractR $ repeatR $
-    onetdR (promoteExprR $ rules ["stream/unstream", "unstream/stream"] <+ letUnfloat <+ letElim <+ caseUnfloat)
-     <+ simplifyR <+ promoteExprR unfoldR
--}
