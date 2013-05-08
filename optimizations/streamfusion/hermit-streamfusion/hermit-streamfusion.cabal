@@ -1,0 +1,29 @@
+name:                hermit-streamfusion
+version:             0.1.0.0
+synopsis:            Stream Fusion optimization for lists implemented as a HERMIT plugin.
+-- description:
+homepage:            https://github.com/ku-fpg/hermit
+license:             BSD3
+license-file:        LICENSE
+author:              Andrew Farmer
+maintainer:          afarmer@ittc.ku.edu
+-- copyright:
+category:            Development
+build-type:          Simple
+cabal-version:       >=1.14
+
+library
+    exposed-modules:
+        HERMIT.Optimization.StreamFusion
+        HERMIT.Optimization.StreamFusion.Prelude
+
+--    other-modules:
+
+    build-depends:
+        base,
+        ghc >= 7.6,
+        hermit,
+        template-haskell
+
+    ghc-options: -Wall
+    default-language: Haskell2010
