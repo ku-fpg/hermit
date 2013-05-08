@@ -8,6 +8,8 @@ module Language.HERMIT.Primitive.Common
     , callNameT
     , callSaturatedT
     , callNameG
+    , callDataConT
+    , callDataConNameT
     , callsR
     , callsT
       -- ** Collecting variables bound at a Node
@@ -76,13 +78,28 @@ callNameT :: TH.Name -> TranslateH CoreExpr (CoreExpr, [CoreExpr])
 callNameT nm = setFailMsg ("callNameT: not a call to " ++ show nm) $
     callPredT (const . cmpTHName2Var nm)
 
+-- | Succeeds if we are looking at a fully saturated function call.
 callSaturatedT :: TranslateH CoreExpr (CoreExpr, [CoreExpr])
 callSaturatedT = callPredT (\ i args -> idArity i == length args)
-
+-- TODO: probably better to calculate arity based on Id's type, as
+--       idArity is conservatively set to zero by default.
 
 -- | Succeeds if we are looking at an application of given function
 callNameG :: TH.Name -> TranslateH CoreExpr ()
 callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >>= \_ -> constT (return ())
+
+-- | Succeeds if we are looking at an application of a data constructor.
+callDataConT :: TranslateH CoreExpr (DataCon, [Type], [CoreExpr])
+callDataConT = prefixFailMsg "callDataConT failed:" $
+    contextfreeT (return . exprIsConApp_maybe idUnfolding)
+        >>= maybe (fail "not a datacon application.") return
+
+-- | Succeeds if we are looking at an application of a named data constructor.
+callDataConNameT :: TH.Name -> TranslateH CoreExpr (DataCon, [Type], [CoreExpr])
+callDataConNameT nm = do
+    res@(dc,_,_) <- callDataConT
+    guardMsg (cmpTHName2Name nm (dataConName dc)) "wrong datacon."
+    return res
 
 -- | Apply a rewrite to all applications of a given function in a top-down manner, pruning on success.
 callsR :: TH.Name -> RewriteH CoreExpr -> RewriteH Core
