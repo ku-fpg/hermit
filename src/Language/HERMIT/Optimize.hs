@@ -7,18 +7,18 @@ module Language.HERMIT.Optimize
     , run
       -- ** Using the shell
     , interactive
-      -- ** Target modifiers
+      -- ** Active modifiers
     , at
     , phase
+    , after
+    , before
     , allPhases
     ) where
 
-import GhcPlugins hiding (Target, singleton)
+import GhcPlugins hiding (singleton)
 
 import Control.Monad.Operational
-import Control.Monad.IO.Class
-
-import Data.Default
+import Control.Monad.State hiding (guard)
 
 import Language.HERMIT.Core
 import Language.HERMIT.External hiding (Query, Shell)
@@ -30,39 +30,21 @@ import qualified Language.HERMIT.Shell.Command as Shell
 
 import System.Console.Haskeline (defaultBehavior)
 
-data Target = Target { atPhase :: Maybe (Either Int CorePass) {- phase which its after -}
-                     , times :: Maybe Int
-                     , focus :: TranslateH Core Path
-                     }
-
-instance Default Target where
-    def = Target { atPhase = Just $ Left 0 -- everything defaults to first phase
-                 , times = Just 1
-                 , focus = constT $ return []
-                 }
-
 data OInst :: * -> * where
     RR       :: RewriteH Core                     -> OInst ()
     Query    :: TranslateH Core a                 -> OInst a
     Shell    :: [External] -> [CommandLineOption] -> OInst ()
-    SetT     :: (Target -> Target)                -> OInst Target -- returns previous target
-    IOAction :: IO a                              -> OInst a
+    Guard    :: (PhaseInfo -> Bool) -> OM ()      -> OInst ()
+    Focus    :: TranslateH Core Path -> OM ()     -> OInst ()
 
 -- using operational, but would we nice to use Neil's constrained-normal package!
--- Also, we use it with a newtype instead of a type synonym like normal,
--- so we can declare a MonadIO instance!
-newtype OM a = OM { unOM :: Program OInst a }
-
--- class Monad m => MonadIO m where
-instance Monad OM where
-    return = OM . return
-    (OM m) >>= k = OM (m >>= unOM . k)
-
-instance MonadIO OM where
-    liftIO = OM . singleton . IOAction
+type OM a = ProgramT OInst (StateT InterpState IO) a
 
 optimize :: ([CommandLineOption] -> OM ()) -> Plugin
 optimize f = hermitPlugin $ \ pi -> runOM pi . f
+
+data InterpState = InterpState { ast :: SAST, shellHack :: Maybe ([External], [CommandLineOption]) }
+type InterpM a = StateT InterpState IO a
 
 runOM :: PhaseInfo -> OM () -> ModGuts -> CoreM ModGuts
 runOM pi comp = scopedKernel $ \ kernel initSAST ->
@@ -70,52 +52,61 @@ runOM pi comp = scopedKernel $ \ kernel initSAST ->
         debug (DebugTick msg) = putStrLn msg
         debug (DebugCore msg _c _e) = putStrLn $ "Core: " ++ msg
 
-        errorAbort err = putStrLn err >> abortS kernel
+        errorAbortIO err = putStrLn err >> abortS kernel
+        errorAbort = liftIO . errorAbortIO
 
-        active :: Target -> Bool
-        active t = maybe True (either (== phaseNum pi) (`elem` phasesDone pi)) $ atPhase t
-
-        go :: Target -> Program OInst () -> SAST -> IO ()
-        go t m sast | active t =
-            case view m of
-                Return a            -> resumeS kernel sast >>= runKureM return errorAbort
-                RR rr       :>>= k  -> applyS kernel sast (focus t >>= flip pathR (extractR rr)) env
-                                        >>= runKureM (go t (k ())) errorAbort
-                Query tr    :>>= k  -> queryS kernel sast (focus t >>= flip pathT (extractT tr)) env
-                                        >>= runKureM (\ x -> go t (k x) sast) errorAbort
+        go :: Path -> ProgramT OInst (StateT InterpState IO) () -> InterpM ()
+        go path m = do
+            sast <- gets ast
+            v <- viewT m
+            case v of
+                Return a            -> return ()
+                RR rr       :>>= k  -> liftIO (applyS kernel sast (pathR path (extractR rr)) env)
+                                        >>= runKureM (\sast' -> modify (\s -> s { ast = sast' }))
+                                                     errorAbort >> go path (k ())
+                Query tr    :>>= k  -> liftIO (queryS kernel sast (pathT path (extractT tr)) env)
+                                        >>= runKureM (go path . k) errorAbort
                 -- TODO: rework shell so it can return to k
-                Shell es os :>>= _k -> Shell.interactive os defaultBehavior es kernel sast
-                IOAction m  :>>= k  -> m >>= \ x -> go t (k x) sast
-                SetT f      :>>= k  -> go (f t) (k t) sast
-                    | otherwise = resumeS kernel sast >>= runKureM return errorAbort
-    in go def (unOM comp) initSAST
+                --       this will significantly simplify this code
+                --       as we can just call the shell directly here
+                Shell es os :>>= _k -> modify (\s -> s { shellHack = Just (es,os) })
+                                       -- liftIO $ Shell.interactive os defaultBehavior es kernel sast
+                                       -- calling the shell directly causes indefinite MVar problems
+                                       -- because the state monad never finishes (I think)
+                Guard p m   :>>= k  -> when (p pi) (go path m) >> go path (k ())
+                Focus tp m  :>>= k  -> liftIO (queryS kernel sast (extractT tp) env)
+                                        >>= runKureM (flip go m) errorAbort >> go path (k ())
+    in do st <- execStateT (go [] comp) $ InterpState initSAST Nothing
+          let sast = ast st
+          maybe (liftIO (resumeS kernel sast) >>= runKureM return errorAbortIO)
+                (\(es,os) -> liftIO $ Shell.interactive os defaultBehavior es kernel sast)
+                (shellHack st)
 
 interactive :: [External] -> [CommandLineOption] -> OM ()
-interactive es os = OM . singleton $ Shell es os
+interactive es os = singleton $ Shell es os
 
 run :: RewriteH Core -> OM ()
-run = OM . singleton . RR
+run = singleton . RR
 
 query :: TranslateH Core a -> OM a
-query = OM . singleton . Query
+query = singleton . Query
 
 ------------------------ target modifiers -------------------------
 
-setTarget :: (Target -> Target) -> OM Target
-setTarget = OM . singleton . SetT
+guard :: (PhaseInfo -> Bool) -> OM () -> OM ()
+guard p = singleton . Guard p
 
-modifyTarget :: (Target -> Target) -> OM a -> OM a
-modifyTarget f m = do
-    t' <- setTarget f
-    r <- m
-    _ <- setTarget (const t')
-    return r
+at :: TranslateH Core Path -> OM () -> OM ()
+at tp = singleton . Focus tp
 
-at :: TranslateH Core Path -> OM a -> OM a
-at tr = modifyTarget (\t -> t { focus = tr })
+phase :: Int -> OM () -> OM ()
+phase n = guard ((n ==) . phaseNum)
 
-phase :: Int -> OM a -> OM a
-phase n = modifyTarget (\t -> t { atPhase = Just (Left n) })
+after :: CorePass -> OM () -> OM ()
+after cp = guard ((cp `elem`) . phasesDone)
 
-allPhases :: OM a -> OM a
-allPhases = modifyTarget (\t -> t { atPhase = Nothing })
+before :: CorePass -> OM () -> OM ()
+before cp = guard ((cp `notElem`) . phasesDone)
+
+allPhases :: OM () -> OM ()
+allPhases = guard (const True)

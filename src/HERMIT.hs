@@ -5,4 +5,4 @@ import GhcPlugins
 import Language.HERMIT.Optimize
 
 plugin :: Plugin
-plugin = optimize $ interactive []
+plugin = optimize $ \ options -> phase 0 $ interactive [] options
