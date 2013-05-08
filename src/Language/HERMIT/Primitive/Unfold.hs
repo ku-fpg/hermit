@@ -7,6 +7,7 @@ module Language.HERMIT.Primitive.Unfold
     , unfoldR
     , unfoldPredR
     , unfoldNameR
+    , unfoldAnyR
     , unfoldSaturatedR
     , unfoldStashR
     , specializeR
@@ -97,6 +98,9 @@ unfoldPredR p = callPredT p >>= \ _ -> unfoldR
 
 unfoldNameR :: TH.Name -> RewriteH CoreExpr
 unfoldNameR nm = callNameT nm >>= \ _ -> unfoldR
+
+unfoldAnyR :: [TH.Name] -> RewriteH CoreExpr
+unfoldAnyR = orR . map unfoldNameR
 
 unfoldSaturatedR :: RewriteH CoreExpr
 unfoldSaturatedR = callSaturatedT >>= \ _ -> unfoldR
