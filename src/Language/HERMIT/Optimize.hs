@@ -35,6 +35,8 @@ data OInst :: * -> * where
     Query    :: TranslateH Core a                 -> OInst a
     Shell    :: [External] -> [CommandLineOption] -> OInst ()
     Guard    :: (PhaseInfo -> Bool) -> OM ()      -> OInst ()
+    -- with some refactoring of the interpreter I'm pretty sure
+    -- we can make Focus polymorphic
     Focus    :: TranslateH Core Path -> OM ()     -> OInst ()
 
 -- using operational, but would we nice to use Neil's constrained-normal package!

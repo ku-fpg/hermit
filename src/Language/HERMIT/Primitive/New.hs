@@ -40,7 +40,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "innermost (unfold 'id <+ unfold '$ <+ unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ dead-let-elimination)" ] .+ Bash
          , external "let-tuple" (promoteExprR . letTupleR :: TH.Name -> RewriteH Core)
                 [ "let x = e1 in (let y = e2 in e) ==> let t = (e1,e2) in (let x = fst t in (let y = snd t in e))" ]
-         , external "any-call" (withUnfold :: RewriteH Core -> RewriteH Core)
+         , external "any-call" (anyCallR :: RewriteH Core -> RewriteH Core)
                 [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
                 , "preference is given to applications with more arguments"
                 ] .+ Deep
@@ -146,8 +146,8 @@ testQuery r = f <$> testM r
 ------------------------------------------------------------------------------------------------------
 
 -- match in a top-down manner,
-withUnfold :: RewriteH Core -> RewriteH Core
-withUnfold rr = prefixFailMsg "any-call failed: " $
+anyCallR :: RewriteH Core -> RewriteH Core
+anyCallR rr = prefixFailMsg "any-call failed: " $
                 readerT $ \ e -> case e of
         ExprCore (App {}) -> childR 1 rec >+> (rr <+ childR 0 rec)
         ExprCore (Var {}) -> rr
@@ -155,7 +155,7 @@ withUnfold rr = prefixFailMsg "any-call failed: " $
    where
 
         rec :: RewriteH Core
-        rec = withUnfold rr
+        rec = anyCallR rr
 
 ------------------------------------------------------------------------------------------------------
 
