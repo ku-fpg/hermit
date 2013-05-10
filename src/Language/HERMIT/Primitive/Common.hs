@@ -2,8 +2,9 @@
 --   transformations needed by the other primitive modules.
 module Language.HERMIT.Primitive.Common
     ( -- * Utility Transformations
+      applyInContextT
       -- ** Finding function calls.
-      callT
+    , callT
     , callPredT
     , callNameT
     , callSaturatedT
@@ -54,6 +55,12 @@ import Language.HERMIT.GHC
 import Language.HERMIT.Monad
 
 import qualified Language.Haskell.TH as TH
+
+------------------------------------------------------------------------------
+
+-- | Apply a transformation to a value in the current context.
+applyInContextT :: Translate c m a b -> a -> Translate c m a b
+applyInContextT t a = contextonlyT $ \ c -> apply t c a
 
 ------------------------------------------------------------------------------
 

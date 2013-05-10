@@ -55,8 +55,7 @@ concatMapSR :: RewriteH CoreExpr
 concatMapSR = do
     (_, [aTy, bTy, f, outerStream]) <- callNameT (TH.mkName "concatMapS")
 
-    c <- contextT
-    (v, n@(Lam s _), st) <- constT $ apply exposeInnerStreamT c f
+    (v, n@(Lam s _), st) <- applyInContextT exposeInnerStreamT f
 
     flattenSid <- findIdT $ TH.mkName "flattenS"
     fixStepid <- findIdT $ TH.mkName "fixStep"
