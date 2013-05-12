@@ -15,7 +15,8 @@ module Language.HERMIT.Optimize
     , allPhases
     ) where
 
-import GhcPlugins hiding (singleton)
+import GhcPlugins hiding (singleton, liftIO)
+import qualified GhcPlugins as GHC
 
 import Control.Monad.Operational
 import Control.Monad.State hiding (guard)
@@ -50,7 +51,7 @@ type InterpM a = StateT InterpState IO a
 
 runOM :: PhaseInfo -> OM () -> ModGuts -> CoreM ModGuts
 runOM pi comp = scopedKernel $ \ kernel initSAST ->
-    let env = mkHermitMEnv $ GhcPlugins.liftIO . debug
+    let env = mkHermitMEnv $ GHC.liftIO . debug
         debug (DebugTick msg) = putStrLn msg
         debug (DebugCore msg _c _e) = putStrLn $ "Core: " ++ msg
 
