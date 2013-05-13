@@ -1,0 +1,3 @@
+[submodule "optimizations/syb"]
+	path = optimizations/syb
+	url = git@github.com:xich/hermit-syb.git
