@@ -1,1 +1,0 @@
-Maps the (+1) function over a big Tree Int.
