@@ -4,6 +4,7 @@ module Language.HERMIT.Shell.Command
        ( -- * The HERMIT Command-line Shell
          commandLine
        , interactive
+       , unicodeConsole
 ) where
 
 import qualified GhcPlugins as GHC

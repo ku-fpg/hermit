@@ -28,10 +28,10 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
 
             let (m_opts, _h_opts) = partition (isInfixOf ":") opts
                 passes = map getCorePass todos
-                allPasses = foldr (\ (n,p,seen) r -> mkPass n seen : p : r)
-                                  [mkPass (length todos) passes]
-                                  (zip3 [0..] todos (inits passes))
-                mkPass n ps = CoreDoPluginPass ("HERMIT" ++ show n) $ modFilter hp (PhaseInfo n ps) m_opts
+                allPasses = foldr (\ (n,p,seen,notyet) r -> mkPass n seen notyet : p : r)
+                                  [mkPass (length todos) passes []]
+                                  (zip4 [0..] todos (inits passes) (tails passes))
+                mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n) $ modFilter hp (PhaseInfo n ps ps') m_opts
 
             return allPasses
 
@@ -118,5 +118,9 @@ getCorePass (CoreDoPluginPass nm _) = PluginPass nm
 getCorePass CoreDoNothing       = NoOp
 getCorePass _                   = Unknown
 
-data PhaseInfo = PhaseInfo { phaseNum :: Int, phasesDone :: [CorePass] }
+data PhaseInfo = 
+    PhaseInfo { phaseNum :: Int
+              , phasesDone :: [CorePass]
+              , phasesLeft :: [CorePass]
+              }
     deriving (Read, Show, Eq)

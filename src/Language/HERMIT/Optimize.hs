@@ -7,6 +7,8 @@ module Language.HERMIT.Optimize
     , run
       -- ** Using the shell
     , interactive
+    , display
+    , setPretty
       -- ** Active modifiers
     , at
     , phase
@@ -15,11 +17,13 @@ module Language.HERMIT.Optimize
     , allPhases
     ) where
 
-import GhcPlugins hiding (singleton, liftIO)
+import GhcPlugins hiding (singleton, liftIO, display)
 import qualified GhcPlugins as GHC
 
 import Control.Monad.Operational
 import Control.Monad.State hiding (guard)
+
+import Data.Default
 
 import Language.HERMIT.Core
 import Language.HERMIT.External hiding (Query, Shell)
@@ -27,9 +31,12 @@ import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.Plugin
+import Language.HERMIT.PrettyPrinter.Common
+import qualified Language.HERMIT.PrettyPrinter.Clean as Clean
 import qualified Language.HERMIT.Shell.Command as Shell
 
 import System.Console.Haskeline (defaultBehavior)
+import System.IO (stdout)
 
 data OInst :: * -> * where
     RR       :: RewriteH Core                     -> OInst ()
@@ -44,13 +51,18 @@ data OInst :: * -> * where
 type OM a = ProgramT OInst (StateT InterpState IO) a
 
 optimize :: ([CommandLineOption] -> OM ()) -> Plugin
-optimize f = hermitPlugin $ \ pi -> runOM pi . f
+optimize f = hermitPlugin $ \ phaseInfo -> runOM phaseInfo . f
 
-data InterpState = InterpState { ast :: SAST, shellHack :: Maybe ([External], [CommandLineOption]) }
+data InterpState = 
+    InterpState { isAST :: SAST
+                , isPretty :: PrettyH Core
+                -- TODO: remove once shell can return
+                , shellHack :: Maybe ([External], [CommandLineOption]) 
+                }
 type InterpM a = StateT InterpState IO a
 
 runOM :: PhaseInfo -> OM () -> ModGuts -> CoreM ModGuts
-runOM pi comp = scopedKernel $ \ kernel initSAST ->
+runOM phaseInfo opt = scopedKernel $ \ kernel initSAST ->
     let env = mkHermitMEnv $ GHC.liftIO . debug
         debug (DebugTick msg) = putStrLn msg
         debug (DebugCore msg _c _e) = putStrLn $ "Core: " ++ msg
@@ -58,17 +70,19 @@ runOM pi comp = scopedKernel $ \ kernel initSAST ->
         errorAbortIO err = putStrLn err >> abortS kernel
         errorAbort = liftIO . errorAbortIO
 
-        go :: Path -> ProgramT OInst (StateT InterpState IO) () -> InterpM ()
-        go path m = do
-            sast <- gets ast
-            v <- viewT m
+        initState = InterpState initSAST (Clean.corePrettyH def) Nothing
+
+        eval :: Path -> ProgramT OInst (StateT InterpState IO) () -> InterpM ()
+        eval path comp = do
+            sast <- gets isAST
+            v <- viewT comp
             case v of
-                Return a            -> return ()
+                Return _            -> return ()
                 RR rr       :>>= k  -> liftIO (applyS kernel sast (pathR path (extractR rr)) env)
-                                        >>= runKureM (\sast' -> modify (\s -> s { ast = sast' }))
-                                                     errorAbort >> go path (k ())
+                                        >>= runKureM (\sast' -> modify (\s -> s { isAST = sast' }))
+                                                     errorAbort >> eval path (k ())
                 Query tr    :>>= k  -> liftIO (queryS kernel sast (pathT path (extractT tr)) env)
-                                        >>= runKureM (go path . k) errorAbort
+                                        >>= runKureM (eval path . k) errorAbort
                 -- TODO: rework shell so it can return to k
                 --       this will significantly simplify this code
                 --       as we can just call the shell directly here
@@ -76,11 +90,12 @@ runOM pi comp = scopedKernel $ \ kernel initSAST ->
                                        -- liftIO $ Shell.interactive os defaultBehavior es kernel sast
                                        -- calling the shell directly causes indefinite MVar problems
                                        -- because the state monad never finishes (I think)
-                Guard p m   :>>= k  -> when (p pi) (go path m) >> go path (k ())
+                Guard p m   :>>= k  -> when (p phaseInfo) (eval path m) >> eval path (k ())
                 Focus tp m  :>>= k  -> liftIO (queryS kernel sast (extractT tp) env)
-                                        >>= runKureM (flip go m) errorAbort >> go path (k ())
-    in do st <- execStateT (go [] comp) $ InterpState initSAST Nothing
-          let sast = ast st
+                                        >>= runKureM (flip eval m) errorAbort >> eval path (k ())
+
+    in do st <- execStateT (eval [] opt) initState
+          let sast = isAST st
           maybe (liftIO (resumeS kernel sast) >>= runKureM return errorAbortIO)
                 (\(es,os) -> liftIO $ Shell.interactive os defaultBehavior es kernel sast)
                 (shellHack st)
@@ -94,7 +109,7 @@ run = singleton . RR
 query :: TranslateH Core a -> OM a
 query = singleton . Query
 
------------------------- target modifiers -------------------------
+----------------------------- guards ------------------------------
 
 guard :: (PhaseInfo -> Bool) -> OM () -> OM ()
 guard p = singleton . Guard p
@@ -106,10 +121,22 @@ phase :: Int -> OM () -> OM ()
 phase n = guard ((n ==) . phaseNum)
 
 after :: CorePass -> OM () -> OM ()
-after cp = guard ((cp `elem`) . phasesDone)
+after cp = guard (\phaseInfo -> case phasesDone phaseInfo of
+                            [] -> False
+                            xs -> last xs == cp)
 
 before :: CorePass -> OM () -> OM ()
-before cp = guard ((cp `notElem`) . phasesDone)
+before cp = guard (\phaseInfo -> case phasesLeft phaseInfo of
+                            (x:_) | cp == x -> True
+                            _               -> False)
 
 allPhases :: OM () -> OM ()
 allPhases = guard (const True)
+
+----------------------------- other ------------------------------
+
+display :: OM ()
+display = gets isPretty >>= query >>= liftIO . Shell.unicodeConsole stdout def
+
+setPretty :: PrettyH Core -> OM ()
+setPretty pp = modify $ \s -> s { isPretty = pp }
