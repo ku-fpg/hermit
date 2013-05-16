@@ -122,7 +122,6 @@ extra-source-files:
     examples/reverse/HList.hs
     examples/reverse/Reverse.hs
     examples/reverse/Reverse.hss
-    examples/reverse/ReverseWW.hss
 
 Library
   ghc-options: -Wall -fno-warn-orphans
@@ -203,3 +202,7 @@ Executable hermit
     Main-Is: Main.hs
     Hs-Source-Dirs: driver
     Ghc-Options:
+
+source-repository head
+  type:     git
+  location: git://github.com/ku-fpg/hermit.git
