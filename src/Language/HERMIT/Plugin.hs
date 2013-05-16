@@ -38,8 +38,9 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
 -- | Determine whether to act on this module, choose plugin pass.
 -- NB: we have the ability to stick module info in the phase info here
 modFilter :: HermitPass -> HermitPass
-modFilter hp pi opts guts | null modOpts && not (null opts) = return guts -- don't process this module
-                          | otherwise                       = hp pi (filter (not . null) modOpts) guts
+modFilter hp pInfo opts guts 
+    | null modOpts && not (null opts) = return guts -- don't process this module
+    | otherwise                       = hp pInfo (filter (not . null) modOpts) guts
     where modOpts = filterOpts opts guts
 
 -- | Filter options to those pertaining to this module, stripping module prefix.
@@ -116,7 +117,7 @@ getCorePass (CoreDoRuleCheck {}) = RuleCheck
 getCorePass (CoreDoPasses {})   = Passes -- these should be flattened out in practice
 getCorePass (CoreDoPluginPass nm _) = PluginPass nm
 getCorePass CoreDoNothing       = NoOp
-getCorePass _                   = Unknown
+-- getCorePass _                   = Unknown
 
 data PhaseInfo = 
     PhaseInfo { phaseNum :: Int
