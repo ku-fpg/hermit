@@ -1,5 +1,5 @@
 Name:                hermit
-Version:             0.1.7.0
+Version:             0.1.8.0
 Synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
 Description:
   HERMIT uses Haskell to express semi-formal models,
@@ -36,12 +36,12 @@ Description:
   .
   @
    $ hermit Reverse.hs Reverse.hss resume
-   [starting HERMIT v0.1.7.0 on Reverse.hs]
-   % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:main:Main: -fplugin-opt=HERMIT:main:Main:resume
+   [starting HERMIT v0.1.8.0 on Reverse.hs]
+   % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fexpose-all-unfoldings -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:Main:Reverse.hss -fplugin-opt=HERMIT:Main:resume
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.1.7.0 ... linking ... done.
+   Loading package hermit-0.1.8.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    Linking Reverse ...
    $ ./Reverse
@@ -52,24 +52,24 @@ Description:
   .
   @
    $ hermit Reverse.hs
-   [starting HERMIT v0.1.7.0 on Reverse.hs]
-   % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:main:Main:
+   [starting HERMIT v0.1.8.0 on Reverse.hs]
+   % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fexpose-all-unfoldings -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:Main:
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.1.7.0 ... linking ... done.
+   Loading package hermit-0.1.8.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    module main:Main where
-   \ \ rev ∷ ∀ a . [] a -> [] a
-   \ \ unwrap ∷ ∀ a . ([] a -> [] a) -> [] a -> H a
-   \ \ wrap ∷ ∀ a . ([] a -> H a) -> [] a -> [] a
+   \ \ rev ∷ ∀ a . [a] -> [a]
+   \ \ unwrap ∷ ∀ a . ([a] -> [a]) -> [a] -> H a
+   \ \ wrap ∷ ∀ a . ([a] -> H a) -> [a] -> [a]
    \ \ main ∷ IO ()
    \ \ main ∷ IO ()
    hermit\<0\>
    ...
   @
   .
-  To resume compile, use resume.
+  To resume compilation, use resume.
   .
   @
    ...
@@ -133,7 +133,7 @@ Library
                  data-default >= 0.5.0,
                  ghc >= 7.6,
                  haskeline >= 0.7.0.3,
-                 kure >= 2.6.19,
+                 kure >= 2.6.22,
                  marked-pretty >= 0.1,
                  mtl >= 2.1.2,
                  operational >= 0.2.2.1,
@@ -203,17 +203,3 @@ Executable hermit
     Main-Is: Main.hs
     Hs-Source-Dirs: driver
     Ghc-Options:
-
---Executable hermit-opt
---    Build-Depends: base >= 4 && < 5,
---                   Cabal,
---                   directory >= 1.2.0.0,
---                   filepath >= 1.3.0.2,
---                   hermit,
---                   temporary >= 1.1.2.4,
---                   process
---
---    default-language: Haskell2010
---    Main-Is: Opt.hs
---    Hs-Source-Dirs: driver
---    Ghc-Options:
