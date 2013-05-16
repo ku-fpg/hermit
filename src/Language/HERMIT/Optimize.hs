@@ -9,6 +9,7 @@ module Language.HERMIT.Optimize
     , interactive
     , display
     , setPretty
+    , setPrettyOptions
       -- ** Active modifiers
     , at
     , phase
@@ -55,7 +56,8 @@ optimize f = hermitPlugin $ \ phaseInfo -> runOM phaseInfo . f
 
 data InterpState = 
     InterpState { isAST :: SAST
-                , isPretty :: PrettyH Core
+                , isPretty :: PrettyOptions -> PrettyH Core
+                , isPrettyOptions :: PrettyOptions
                 -- TODO: remove once shell can return
                 , shellHack :: Maybe ([External], [CommandLineOption]) 
                 }
@@ -70,7 +72,7 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST ->
         errorAbortIO err = putStrLn err >> abortS kernel
         errorAbort = liftIO . errorAbortIO
 
-        initState = InterpState initSAST (Clean.corePrettyH def) Nothing
+        initState = InterpState initSAST Clean.corePrettyH def Nothing
 
         eval :: Path -> ProgramT OInst (StateT InterpState IO) () -> InterpM ()
         eval path comp = do
@@ -136,7 +138,12 @@ allPhases = guard (const True)
 ----------------------------- other ------------------------------
 
 display :: OM ()
-display = gets isPretty >>= query >>= liftIO . Shell.unicodeConsole stdout def
+display = do
+    po <- gets isPrettyOptions
+    gets isPretty >>= query . ($ po) >>= liftIO . Shell.unicodeConsole stdout po
 
-setPretty :: PrettyH Core -> OM ()
+setPretty :: (PrettyOptions -> PrettyH Core) -> OM ()
 setPretty pp = modify $ \s -> s { isPretty = pp }
+
+setPrettyOptions :: PrettyOptions -> OM ()
+setPrettyOptions po = modify $ \s -> s { isPrettyOptions = po }
