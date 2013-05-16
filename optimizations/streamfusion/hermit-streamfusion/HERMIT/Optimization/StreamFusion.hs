@@ -79,8 +79,7 @@ exposeInnerStreamT
                            , CoreExpr   -- inner stream stepper function
                            , CoreExpr ) -- inner stream state
 exposeInnerStreamT =
-   (lamR exposeStreamConstructor >>>
-    lamT (callDataConNameT $ TH.mkName "Stream")
+   (lamT (exposeStreamConstructor >>> callDataConNameT (TH.mkName "Stream"))
          (\ v (_dc, _univTys, [_sTy, n, st]) -> (v, n, st)))
     <+ (unfoldR >>> exposeInnerStreamT)
 
