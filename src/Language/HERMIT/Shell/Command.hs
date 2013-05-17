@@ -205,21 +205,21 @@ shell_externals = map (.+ Shell)
             _        -> return st )
        [ "set-auto-corelint <True|False>; False by default"
        , "run core lint type-checker after every rewrite, reverting on failure" ]
-   , external "setpp"           (\ pp -> SessionStateEffect $ \ _ st ->
+   , external "set-pp"           (\ pp -> SessionStateEffect $ \ _ st ->
        case M.lookup pp pp_dictionary of
          Nothing -> do
             putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
             return st
          Just _ -> return $ st { cl_pretty = pp })
        [ "set the pretty printer"
-       , "use 'setpp ls' to list available pretty printers" ]
-   , external "set-renderer"    changeRenderer
+       , "use 'set-pp ls' to list available pretty printers" ]
+   , external "set-pp-renderer"    changeRenderer
        [ "set the output renderer mode"]
-   , external "set-renderer"    showRenderers
+   , external "set-pp-renderer"    showRenderers
        [ "set the output renderer mode"]
    , external "dump"    Dump
        [ "dump <filename> <pretty-printer> <renderer> <width>"]
-   , external "set-width"   (\ n -> SessionStateEffect $ \ _ st -> return $ st { cl_width = n })
+   , external "set-pp-width"   (\ n -> SessionStateEffect $ \ _ st -> return $ st { cl_width = n })
        ["set the width of the screen"]
    , external "set-pp-type" (\ str -> SessionStateEffect $ \ _ st ->
         case reads str :: [(ShowOption,String)] of
