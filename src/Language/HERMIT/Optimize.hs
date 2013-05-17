@@ -16,6 +16,8 @@ module Language.HERMIT.Optimize
     , after
     , before
     , allPhases
+    , firstPhase
+    , lastPhase
     ) where
 
 import GhcPlugins hiding (singleton, liftIO, display)
@@ -134,6 +136,12 @@ before cp = guard (\phaseInfo -> case phasesLeft phaseInfo of
 
 allPhases :: OM () -> OM ()
 allPhases = guard (const True)
+
+firstPhase :: OM () -> OM ()
+firstPhase = guard (null . phasesDone)
+
+lastPhase :: OM () -> OM ()
+lastPhase = guard (null . phasesLeft)
 
 ----------------------------- other ------------------------------
 
