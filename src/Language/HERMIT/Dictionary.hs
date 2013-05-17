@@ -8,9 +8,11 @@ module Language.HERMIT.Dictionary
     , mkDict
     , pp_dictionary
     , bashR
+    , bashDebugR
     ) where
 
--- import Data.Default (def)
+import Control.Arrow
+
 import Data.Dynamic
 import Data.List
 import Data.Map (Map, fromList, toList)
@@ -75,6 +77,8 @@ mkDict externs = toDictionary externs'
                 -- Runs every command matching the tag predicate with innermostR (fix point anybuR),
                 -- Only fails if all of them fail the first time.
                 , external "bash" (bashR externs) (bashHelp externs) .+ Eval .+ Deep .+ Loop
+                , external "debug-bash" (bashDebugR True externs)
+                    [ "verbose bash - most useful with set-auto-corelint True" ] .+ Eval .+ Deep .+ Loop
                 ]
 
 --------------------------------------------------------------------------
@@ -131,8 +135,13 @@ bashPredicate :: CmdTag
 bashPredicate = Bash
 
 bashR :: [External] -> RewriteH Core
-bashR = setFailMsg "bashR: nothing to do."
-      . innermostR . orR . map snd . matchingExternals bashPredicate
+bashR = bashDebugR False
+
+bashDebugR :: Bool -> [External] -> RewriteH Core
+bashDebugR debug exts =
+    setFailMsg "bashR: nothing to do."
+    $ innermostR $ orR [ if debug then rr >>> Debug.observeR (externName e) else rr
+                       | (e,rr) <- matchingExternals bashPredicate exts ]
 
 bashHelp :: [External] -> [String]
 bashHelp exts =
