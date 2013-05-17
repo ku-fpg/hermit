@@ -1,0 +1,28 @@
+{rhs-of 'mean ; 0
+  { 1 ; let-intro 'l }
+  { 0 ; 1 ; let-intro 's }
+  innermost let-float
+  try (reorder-lets ['s,'l])
+  let-tuple 'sl
+  { 0 ; abstract 'xs ; 0 ; let-intro 'sumlength }
+}
+innermost let-float
+consider 'sumlength
+nonrec-to-rec           -- since we intend sumlength to be a recursive function
+0
+remember sumlen
+{ 0 ; 0
+  case-split-inline 'xs
+  any-call (unfold 'sum)
+  any-call (unfold 'length)
+  simplify
+  2
+  alpha-alt ['y,'ys]
+  0
+  { 1 ; 1 ; let-intro 'l }
+  { 0 ; 1 ; 1 ; let-intro 's }
+  innermost let-float
+  try (reorder-lets ['s,'l])
+  let-tuple 'sl
+  { 0 ; fold sumlen }
+}
