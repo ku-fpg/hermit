@@ -11,12 +11,12 @@ one-td (unfold 'unwrap)
 any-td (unfold '.)
 bash
 unshadow
+down
 one-td case-float-arg
 one-td (unfold-rule "repH ++")
 one-td (unfold-rule "rep-abs-fusion")
 any-td (unfold 'repH)
 any-td (unfold '.)
-bash
 focus (consider case) (eta-expand 'acc)
 one-td case-float-app
 one-td (unfold-rule "(:) ++")
