@@ -4,8 +4,8 @@ module Language.HERMIT.Dictionary
     ( -- * The HERMIT Dictionary
       -- | This is the main namespace. Things tend to be untyped, because the API is accessed via (untyped) names.
       Dictionary
-    , all_externals
-    , dictionary
+    , externals
+    , mkDict
     , pp_dictionary
     , metaCmd
     ) where
@@ -42,12 +42,14 @@ import qualified Language.HERMIT.PrettyPrinter.GHC as GHCPP
 --   Looking up a 'Dynamic' (via a 'String' key) returns a list, as there can be multiple 'Dynamic's with the same name.
 type Dictionary = Map String [Dynamic]
 
-prim_externals :: [External]
-prim_externals =
+-- | List of all 'External's provided by HERMIT.
+externals :: [External]
+externals =
        Alpha.externals
     ++ Debug.externals
     ++ FixPoint.externals
     ++ Fold.externals
+    ++ GHC.externals
     ++ Inline.externals
     ++ Kure.externals
     ++ Local.externals
@@ -55,14 +57,9 @@ prim_externals =
     ++ New.externals
     ++ Unfold.externals
 
--- The GHC.externals here is a bit of a hack. Not sure about this
--- | Augment a list of 'External's by adding all of HERMIT's primitive 'External's, plus any GHC RULES pragmas in the module.
-all_externals :: [External] -> [External]
-all_externals my_externals = prim_externals ++ my_externals ++ GHC.externals
-
 -- | Create a dictionary from a list of 'External's.
-dictionary :: [External] -> Dictionary
-dictionary externs = toDictionary externs'
+mkDict :: [External] -> Dictionary
+mkDict externs = toDictionary externs'
   where
         msg = layoutTxt 60 (map (show . fst) dictionaryOfTags)
         externs' = externs ++
@@ -112,11 +109,11 @@ make_help :: [External] -> [String]
 make_help = concatMap snd . toList . toHelp
 
 help_command :: [External] -> String -> String
-help_command externals m
+help_command exts m
         | [(ct :: CmdTag,"")] <- reads m
-        = unlines $ make_help $ filter (tagMatch ct) externals
-help_command externals "all"
-        = unlines $ make_help externals
+        = unlines $ make_help $ filter (tagMatch ct) exts
+help_command exts "all"
+        = unlines $ make_help exts
 help_command _ "categories" = unlines $
                 [ "categories" ] ++
                 [ "----------" ] ++
@@ -125,8 +122,8 @@ help_command _ "categories" = unlines $
                 , let txt = show cmd
                 ]
 
-help_command externals m = unlines $ make_help $ pathPrefix m
-    where pathPrefix p = filter (isInfixOf p . externName) externals
+help_command exts m = unlines $ make_help $ pathPrefix m
+    where pathPrefix p = filter (isInfixOf p . externName) exts
 
 layoutTxt :: Int -> [String] -> [String]
 layoutTxt n (w1:w2:ws) | length w1 + length w2 >= n = w1 : layoutTxt n (w2:ws)

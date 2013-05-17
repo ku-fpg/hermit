@@ -29,6 +29,7 @@ import Control.Monad.State hiding (guard)
 import Data.Default
 
 import Language.HERMIT.Core
+import Language.HERMIT.Dictionary
 import Language.HERMIT.External hiding (Query, Shell)
 import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.Kure
@@ -36,7 +37,7 @@ import Language.HERMIT.Monad
 import Language.HERMIT.Plugin
 import Language.HERMIT.PrettyPrinter.Common
 import qualified Language.HERMIT.PrettyPrinter.Clean as Clean
-import qualified Language.HERMIT.Shell.Command as Shell
+import Language.HERMIT.Shell.Command
 
 import System.Console.Haskeline (defaultBehavior)
 import System.IO (stdout)
@@ -56,12 +57,12 @@ type OM a = ProgramT OInst (StateT InterpState IO) a
 optimize :: ([CommandLineOption] -> OM ()) -> Plugin
 optimize f = hermitPlugin $ \ phaseInfo -> runOM phaseInfo . f
 
-data InterpState = 
+data InterpState =
     InterpState { isAST :: SAST
                 , isPretty :: PrettyOptions -> PrettyH Core
                 , isPrettyOptions :: PrettyOptions
                 -- TODO: remove once shell can return
-                , shellHack :: Maybe ([External], [CommandLineOption]) 
+                , shellHack :: Maybe ([External], [CommandLineOption])
                 }
 type InterpM a = StateT InterpState IO a
 
@@ -101,11 +102,11 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST ->
     in do st <- execStateT (eval [] opt) initState
           let sast = isAST st
           maybe (liftIO (resumeS kernel sast) >>= runKureM return errorAbortIO)
-                (\(es,os) -> liftIO $ Shell.interactive os defaultBehavior es kernel sast)
+                (\(es,os) -> liftIO $ commandLine os defaultBehavior es kernel sast)
                 (shellHack st)
 
 interactive :: [External] -> [CommandLineOption] -> OM ()
-interactive es os = singleton $ Shell es os
+interactive es os = singleton $ Shell (externals ++ es) os
 
 run :: RewriteH Core -> OM ()
 run = singleton . RR
@@ -148,7 +149,7 @@ lastPhase = guard (null . phasesLeft)
 display :: OM ()
 display = do
     po <- gets isPrettyOptions
-    gets isPretty >>= query . ($ po) >>= liftIO . Shell.unicodeConsole stdout po
+    gets isPretty >>= query . ($ po) >>= liftIO . unicodeConsole stdout po
 
 setPretty :: (PrettyOptions -> PrettyH Core) -> OM ()
 setPretty pp = modify $ \s -> s { isPretty = pp }

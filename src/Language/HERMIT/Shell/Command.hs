@@ -3,7 +3,6 @@
 module Language.HERMIT.Shell.Command
        ( -- * The HERMIT Command-line Shell
          commandLine
-       , interactive
        , unicodeConsole
 ) where
 
@@ -371,12 +370,9 @@ setLoading :: MonadIO m => Bool -> CLM m ()
 setLoading b = modify $ \st -> st { cl_session = (cl_session st) { cl_loading = b } }
 
 -- | The first argument is a list of files to load.
-commandLine :: [String] -> Behavior -> GHC.ModGuts -> GHC.CoreM GHC.ModGuts
-commandLine filesToLoad behavior = scopedKernel (interactive filesToLoad behavior [])
-
-interactive :: [FilePath] -> Behavior -> [External] -> ScopedKernel -> SAST -> IO ()
-interactive filesToLoad behavior exts skernel sast = do
-    let dict = dictionary $ all_externals $ shell_externals ++ exts
+commandLine :: [FilePath] -> Behavior -> [External] -> ScopedKernel -> SAST -> IO ()
+commandLine filesToLoad behavior exts skernel sast = do
+    let dict = mkDict $ shell_externals ++ exts
     let ws_complete = " ()"
 
     let startup = do
