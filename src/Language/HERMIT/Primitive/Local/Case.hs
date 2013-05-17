@@ -138,7 +138,7 @@ caseFloatLet :: RewriteH CoreExpr
 caseFloatLet = prefixFailMsg "Case floating from Let failed: " $
   do vs <- letNonRecT caseAltVarsT idR (\ letVar caseVars _ -> elem letVar $ concat caseVars)
      let bdsAction = if not vs then idR else nonRecR alphaCase
-     letT bdsAction idR $ \ (NonRec v (Case s b ty alts)) e -> Case s b ty $ mapAlts (flip Let e . NonRec v) alts
+     letT bdsAction idR $ \ (NonRec v (Case s b _ alts)) e -> Case s b (exprType e) $ mapAlts (flip Let e . NonRec v) alts
 
 -- | cast (case s of p -> e) co ==> case s of p -> cast e co
 caseFloatCast :: RewriteH CoreExpr
