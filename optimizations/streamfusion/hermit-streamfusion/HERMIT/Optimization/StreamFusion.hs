@@ -6,7 +6,7 @@ import GhcPlugins
 
 import Language.HERMIT.Core
 import Language.HERMIT.Dictionary -- for bash
-import Language.HERMIT.External -- for bash
+import Language.HERMIT.External
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.Optimize
@@ -22,18 +22,11 @@ import Language.Haskell.TH as TH
 plugin :: Plugin
 plugin = optimize $ \ opts -> phase 0 $ do
     run $ tryR $ repeatR (myanybuR (rules ["foldlS", "concatMapS", "mapS", "enumFromToS", "filterS", "zipS", "stream/unstream", "unstream/stream"])
-                         <+ bash)
+                         <+ bashR externals)
                  >>> tryR (myanybuR concatMapSR)
                  >>> repeatR (anyCallR $ promoteExprR $ unfoldAnyR $ map TH.mkName ["fixStep", "foldlS", "flattenS", "mapS", "enumFromToS", "filterS", "zipS"])
-                 >>> bash
-    interactive externals opts
-
--- | A fixed-point traveral, starting with the innermost term.
-myinnermostR :: (Walker c g, MonadCatch m, Injection a g) => Rewrite c m a -> Rewrite c m g
-myinnermostR r = setFailMsg "innermostR failed" $
-    let go = myanybuR (promoteR r >>> tryR go)
-    in go
-{-# INLINE myinnermostR #-}
+                 >>> bashR externals
+    interactive sfexts opts
 
 -- | Apply a 'Rewrite' in a bottom-up manner, succeeding if any succeed.
 myanybuR :: (Walker c g, MonadCatch m, Injection a g) => Rewrite c m a -> Rewrite c m g
@@ -42,11 +35,8 @@ myanybuR r = setFailMsg "anybuR failed" $
     in go
 {-# INLINE myanybuR #-}
 
-bash :: RewriteH Core
-bash = metaCmd (all_externals externals) Bash (setFailMsg "Nothing to do." . myinnermostR . orR)
-
-externals :: [External]
-externals =
+sfexts :: [External]
+sfexts =
     [ external "concatmap" (promoteExprR concatMapSR :: RewriteH Core)
         [ "special rule for concatmap" ]
     ]

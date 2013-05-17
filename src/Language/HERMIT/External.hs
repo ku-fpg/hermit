@@ -13,6 +13,7 @@ module Language.HERMIT.External
        , toHelp
        , external
        , Extern(..)
+       , matchingExternals
        -- * Tags
        , CmdTag(..)
        , TagE
@@ -216,6 +217,12 @@ external nm fn help = External
         , externHelp = map ("  " ++) help
         , externTags = []
         }
+
+-- | Get all the 'External's which match a given tag predicate
+-- and box a Translate of the appropriate type.
+matchingExternals :: (Extern tr, Tag t) => t -> [External] -> [(External, tr)]
+matchingExternals tag exts = [ (e,tr) | e <- exts, tagMatch tag e
+                                      , Just tr <- [fmap unbox $ fromDynamic $ externFun e] ]
 
 -- | Build a 'Data.Map' from names to 'Dynamic' values.
 toDictionary :: [External] -> Map ExternalName [Dynamic]

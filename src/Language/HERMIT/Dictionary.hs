@@ -7,7 +7,7 @@ module Language.HERMIT.Dictionary
     , externals
     , mkDict
     , pp_dictionary
-    , metaCmd
+    , bashR
     ) where
 
 -- import Data.Default (def)
@@ -74,12 +74,7 @@ mkDict externs = toDictionary externs'
                      ] ++ map ("            " ++) (tail msg))  .+ Query .+ Shell
                 -- Runs every command matching the tag predicate with innermostR (fix point anybuR),
                 -- Only fails if all of them fail the first time.
-                , let bashPredicate = Bash -- Shallow .& Eval .& (notT Loop)
-                  in external "bash"
-                              (metaCmd externs bashPredicate (setFailMsg "Nothing to do." . innermostR . orR))
-                              (metaHelp externs bashPredicate
-                                [ "Iteratively apply the following rewrites until nothing changes:" ])
-                              .+ Eval .+ Deep .+ Loop
+                , external "bash" (bashR externs) (bashHelp externs) .+ Eval .+ Deep .+ Loop
                 ]
 
 --------------------------------------------------------------------------
@@ -132,28 +127,17 @@ layoutTxt _ other = other
 
 --------------------------------------------------------------------------
 
--- TODO: We need to think harder about bash/metaCmd.
+bashPredicate :: CmdTag
+bashPredicate = Bash
 
--- TODO: supply map of command-name -> arguments?
--- otherwise fromDynamic will fail for any rewrite that takes arguments.
-metaCmd :: Tag a
-        => [External]                         -- ^ universe of commands to search
-        -> a                                  -- ^ tag matching predicate
-        -> ([RewriteH Core] -> RewriteH Core) -- ^ means to combine the matched rewrites
-        -> RewriteH Core
-metaCmd externs p = ($ [ rw | e <- externs
-                            , tagMatch p e
-                            , Just rw <- [fmap unbox $ fromDynamic $ externFun e] ])
+bashR :: [External] -> RewriteH Core
+bashR = setFailMsg "bashR: nothing to do."
+      . innermostR . orR . map snd . matchingExternals bashPredicate
 
-metaHelp :: Tag a
-        => [External]                         -- ^ universe of commands to search
-        -> a                                  -- ^ tag matching predicate
-        -> [String]                           -- ^ help text preamble
-        -> [String]
-metaHelp externs p = (++ [ externName e
-                         | e <- externs
-                         , tagMatch p e
-                         -- necessary so we don't list things that don't type correctly
-                         , Just (_ :: RewriteH Core) <- [fmap unbox $ fromDynamic $ externFun e] ])
+bashHelp :: [External] -> [String]
+bashHelp exts =
+    "Iteratively apply the following rewrites until nothing changes:"
+    : [ externName e | (e,_ :: RewriteH Core) <- matchingExternals bashPredicate exts ]
 
-------------------------------------
+--------------------------------------------------------------------------
+
