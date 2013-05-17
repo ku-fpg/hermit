@@ -12,14 +12,6 @@ HList.hs:20:11: Warning:
     Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‛repH’
 
 HList.hs:28:11: Warning:
-    Rule ". id" may never fire because ‛.’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‛.’
-
-HList.hs:29:11: Warning:
-    Rule "id ." may never fire because ‛.’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‛.’
-
-HList.hs:33:11: Warning:
     Rule "rep-abs-fusion" may never fire
       because ‛repH’ might inline first
     Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‛repH’

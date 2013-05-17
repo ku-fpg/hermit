@@ -3,5 +3,3 @@ consider 'qsort
 { load "ConcatVanishes.hss" }
 one-td let-subst
 bash
-
-
