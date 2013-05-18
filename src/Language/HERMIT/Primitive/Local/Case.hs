@@ -167,7 +167,7 @@ caseUnfloatArgs = prefixFailMsg "Case unfloating into arguments failed: " $
                   withPatFailMsg (wrongExprForm "Case s v t alts") $
     do Case s wild _ty alts <- idR
        (vss, fs, argss) <- caseT mempty (\_ -> altT callT $ \ _ac vs (fn, args) -> (vs, fn, args))
-                                        (\ () _ _ alts -> unzip3 [ (wild:vs, fn, args) | (vs,fn,args) <- alts ])
+                                        (\ () _ _ alts' -> unzip3 [ (wild:vs, fn, args) | (vs,fn,args) <- alts' ])
        guardMsg (exprsEqual fs) "alternatives are not parallel in function call."
        guardMsg (all null $ zipWith intersect (map coreExprFreeVars fs) vss) "function bound by case binders."
        return $ mkCoreApps (head fs) [ if isTyCoArg (head args)
