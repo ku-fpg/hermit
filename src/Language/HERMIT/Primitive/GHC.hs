@@ -50,6 +50,7 @@ import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 
+import Language.HERMIT.Primitive.Debug hiding (externals)
 import Language.HERMIT.Primitive.Navigation hiding (externals)
 
 import qualified Language.Haskell.TH as TH
@@ -493,7 +494,7 @@ lintProgramT = do
         dumpSDocs endMsg = Bag.foldBag (\d r -> d ++ ('\n':r)) (showSDoc dflags) endMsg
     if Bag.isEmptyBag errs
         then return $ dumpSDocs "Core Lint Passed" warns
-        else fail   $ dumpSDocs "Core Lint Failed" errs
+        else observeR (dumpSDocs "" errs) >>> fail "Core Lint Failed"
 
 -- | Note: this can miss several things that a whole-module core lint will find.
 -- For instance, running this on the RHS of a binding, the type of the RHS will
