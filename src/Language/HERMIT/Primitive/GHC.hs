@@ -110,7 +110,7 @@ externals =
 -- | Substitute all occurrences of a variable with an expression, in either a program or an expression.
 substR :: Var -> CoreExpr -> RewriteH Core
 substR v e = setFailMsg "Can only perform substitution on expressions or programs." $
-             promoteExprR (substExprR v e) <+ promoteProgR (substTopBindR v e)
+             promoteExprR (substExprR v e) <+ promoteProgR (substTopBindR v e) <+ promoteAltR (substAltR v e)
 
 -- | Substitute all occurrences of a variable with an expression, in an expression.
 substExprR :: Var -> CoreExpr -> RewriteH CoreExpr
@@ -128,6 +128,13 @@ substTopBindR v e =  contextfreeT $ \ p -> do
     -- TODO.  Do we need to initialize the emptySubst with bindFreeVars?
     let emptySub =  emptySubst -- mkEmptySubst (mkInScopeSet (exprFreeVars exp))
     return $ bindsToProg $ snd (mapAccumL substBind (extendSubst emptySub v e) (progToBinds p))
+
+-- | Substitute all occurrences of a variable with an expression, in a case alternative.
+substAltR :: Var -> CoreExpr -> RewriteH CoreAlt
+substAltR v e = do (_, vs, _) <- idR
+                   if v `elem` vs
+                    then fail "variable is shadowed by a case-alternative constructor argument."
+                    else altR (substExprR v e)
 
 -- | (let x = e1 in e2) ==> (e2[e1/x]),
 --   x must not be free in e1.
