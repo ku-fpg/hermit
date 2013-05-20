@@ -14,6 +14,7 @@ module Language.HERMIT.Kure
        , RewriteH
        , BiRewriteH
        , LensH
+
        -- * Congruence combinators
        -- ** Modguts
        , modGutsT, modGutsR
@@ -47,6 +48,14 @@ module Language.HERMIT.Kure
        , consRecT, consRecAllR, consRecAnyR, consRecOneR
        , consRecDefT, consRecDefAllR, consRecDefAnyR, consRecDefOneR
        , caseAltT, caseAltAllR, caseAltAnyR, caseAltOneR
+       -- * Congruence Combinators for Traversing Types
+       , tyVarT
+       , litTyT
+       , appTyT, appTyAllR, appTyAnyR, appTyOneR
+       , funTyT, funTyAllR, funTyAnyR, funTyOneR
+       , forallTyT, forallTyR
+       , tyConAppT, tyConAppAllR, tyConAppAnyR, tyConAppOneR
+
        -- * Promotion Combinators
        -- ** Rewrite Promotions
        , promoteModGutsR
@@ -68,6 +77,7 @@ module Language.HERMIT.Kure
 where
 
 import GhcPlugins hiding (empty)
+import TypeRep
 
 import Language.KURE
 import Language.KURE.BiTranslate
@@ -709,5 +719,122 @@ promoteAltT = promoteWithFailMsgT "This translate can only succeed at case alter
 promoteExprT :: Monad m => Translate HermitC m CoreExpr b -> Translate HermitC m Core b
 promoteExprT = promoteWithFailMsgT "This translate can only succeed at expression nodes."
 {-# INLINE promoteExprT #-}
+
+
+---------------------------------------------------------------------
+---------------------------------------------------------------------
+
+
+-- Type Traversals
+
+instance Walker TypeC Type where
+
+  allR :: MonadCatch m => Rewrite TypeC m Type -> Rewrite TypeC m Type
+  allR r = prefixFailMsg "allR failed: " $
+           readerT $ \case
+                        AppTy _ _     -> appTyAllR r r
+                        FunTy _ _     -> funTyAllR r r
+                        ForAllTy _ _  -> forallTyR r
+                        TyConApp _ _  -> tyConAppAllR (const r)
+                        _             -> idR
+
+---------------------------------------------------------------------
+
+-- | Translate a type of the form: @TyVarTy@ 'TyVar'
+tyVarT :: Monad m => (TyVar -> b) -> Translate TypeC m Type b
+tyVarT f = contextfreeT $ \case
+                             TyVarTy v -> return (f v)
+                             _         -> fail "not a type-variable node."
+{-# INLINE tyVarT #-}
+
+
+-- | Translate a type of the form: @LitTy@ 'TyLit'
+litTyT :: Monad m => (TyLit -> b) -> Translate TypeC m Type b
+litTyT f = contextfreeT $ \case
+                           LitTy x -> return (f x)
+                           _       -> fail "not a type-literal node."
+{-# INLINE litTyT #-}
+
+
+-- | Translate a type of the form: @AppTy@ 'Type' 'Type'
+appTyT :: Monad m => Translate TypeC m Type a1 -> Translate TypeC m Type a2 -> (a1 -> a2 -> b) -> Translate TypeC m Type b
+appTyT t1 t2 f = translate $ \ c -> \case
+                                     AppTy ty1 ty2 -> f <$> apply t1 (c @@ 0) ty1 <*> apply t2 (c @@ 1) ty2
+                                     _             -> fail "not an type-application node."
+{-# INLINE appTyT #-}
+
+-- | Rewrite all children of a type of the form: @AppTy@ 'Type' 'Type'
+appTyAllR :: Monad m => Rewrite TypeC m Type -> Rewrite TypeC m Type -> Rewrite TypeC m Type
+appTyAllR r1 r2 = appTyT r1 r2 AppTy
+{-# INLINE appTyAllR #-}
+
+-- | Rewrite any children of a type of the form: @AppTy@ 'Type' 'Type'
+appTyAnyR :: MonadCatch m => Rewrite TypeC m Type -> Rewrite TypeC m Type -> Rewrite TypeC m Type
+appTyAnyR r1 r2 = unwrapAnyR $ appTyAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE appTyAnyR #-}
+
+-- | Rewrite one child of a type of the form: @AppTy@ 'Type' 'Type'
+appTyOneR :: MonadCatch m => Rewrite TypeC m Type -> Rewrite TypeC m Type -> Rewrite TypeC m Type
+appTyOneR r1 r2 = unwrapOneR $ appTyAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE appTyOneR #-}
+
+
+-- | Translate a type of the form: @FunTy@ 'Type' 'Type'
+funTyT :: Monad m => Translate TypeC m Type a1 -> Translate TypeC m Type a2 -> (a1 -> a2 -> b) -> Translate TypeC m Type b
+funTyT t1 t2 f = translate $ \ c -> \case
+                                     FunTy ty1 ty2 -> f <$> apply t1 (c @@ 0) ty1 <*> apply t2 (c @@ 1) ty2
+                                     _             -> fail "not an type-function node."
+{-# INLINE funTyT #-}
+
+-- | Rewrite all children of a type of the form: @FunTy@ 'Type' 'Type'
+funTyAllR :: Monad m => Rewrite TypeC m Type -> Rewrite TypeC m Type -> Rewrite TypeC m Type
+funTyAllR r1 r2 = funTyT r1 r2 FunTy
+{-# INLINE funTyAllR #-}
+
+-- | Rewrite any children of a type of the form: @FunTy@ 'Type' 'Type'
+funTyAnyR :: MonadCatch m => Rewrite TypeC m Type -> Rewrite TypeC m Type -> Rewrite TypeC m Type
+funTyAnyR r1 r2 = unwrapAnyR $ funTyAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE funTyAnyR #-}
+
+-- | Rewrite one child of a type of the form: @FunTy@ 'Type' 'Type'
+funTyOneR :: MonadCatch m => Rewrite TypeC m Type -> Rewrite TypeC m Type -> Rewrite TypeC m Type
+funTyOneR r1 r2 = unwrapOneR $ funTyAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE funTyOneR #-}
+
+
+-- | Translate a type of the form: @ForAllTy@ 'TyVar' 'Type'
+forallTyT :: Monad m => Translate TypeC m Type a -> (TyVar -> a -> b) -> Translate TypeC m Type b
+forallTyT t f = translate $ \ c -> \case
+                                      ForAllTy v ty -> f v <$> apply t (addForallTyVar v c @@ 0) ty
+                                      _             -> fail "not a forall-type node."
+{-# INLINE forallTyT #-}
+
+-- | Rewrite the 'Type' body of a type of the form: @ForAllTy@ 'TyVar' 'Type'
+forallTyR :: Monad m => Rewrite TypeC m Type -> Rewrite TypeC m Type
+forallTyR r = forallTyT r ForAllTy
+{-# INLINE forallTyR #-}
+
+
+-- | Translate a type of the form: @TyConApp@ ['KindOrType']
+tyConAppT :: Monad m => (Int -> Translate TypeC m KindOrType a) -> (TyCon -> [a] -> b) -> Translate TypeC m Type b
+tyConAppT t f = translate $ \ c -> \case
+                                      TyConApp con tys -> f con <$> sequence [ apply (t n) (c @@ n) ty | (ty,n) <- zip tys [0..] ]
+                                      _                -> fail "not a type-constructor--application node."
+{-# INLINE tyConAppT #-}
+
+-- | Rewrite all children of a type of the form: @TyConApp@ ['KindOrType']
+tyConAppAllR :: Monad m => (Int -> Rewrite TypeC m KindOrType) -> Rewrite TypeC m Type
+tyConAppAllR rs = tyConAppT rs TyConApp
+{-# INLINE tyConAppAllR #-}
+
+-- | Rewrite any children of a type of the form: @TyConApp@ ['KindOrType']
+tyConAppAnyR :: MonadCatch m => (Int -> Rewrite TypeC m KindOrType) -> Rewrite TypeC m Type
+tyConAppAnyR rs = unwrapAnyR $ tyConAppAllR (wrapAnyR . rs)
+{-# INLINE tyConAppAnyR #-}
+
+-- | Rewrite one child of a type of the form: @TyConApp@ ['KindOrType']
+tyConAppOneR :: MonadCatch m => (Int -> Rewrite TypeC m KindOrType) -> Rewrite TypeC m Type
+tyConAppOneR rs = unwrapOneR $ tyConAppAllR (wrapOneR . rs)
+{-# INLINE tyConAppOneR #-}
 
 ---------------------------------------------------------------------

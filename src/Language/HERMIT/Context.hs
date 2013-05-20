@@ -21,6 +21,12 @@ module Language.HERMIT.Context
          -- ** Bindings
        , HermitBinding(..)
        , hermitBindingDepth
+         -- * Context for 'Type' Traversals
+       , TypeC
+       , initTypeC
+       , typePath
+       , forallTyVars
+       , addForallTyVar
 ) where
 
 import Prelude hiding (lookup)
@@ -146,5 +152,41 @@ boundIn i c = i `elem` boundVars c
 findBoundVars :: TH.Name -> HermitC -> [Var]
 findBoundVars nm = filter (cmpTHName2Var nm) . boundVars
 {-# INLINE findBoundVars #-}
+
+------------------------------------------------------------------------
+------------------------------------------------------------------------
+
+-- Type Traversals
+
+
+-- | A context for 'Type' traversals.
+data TypeC = TypeC { forallTyVars :: [TyVar]        -- ^ All universally quantified type variables that are in scope,
+                                                    --   and have been declared within the type being traversed.
+                   , typePath     :: AbsolutePath   -- ^ The 'AbsolutePath' to the current node from the root of the 'Type'.
+                   }
+
+
+-- | The HERMIT context stores an 'AbsolutePath' to the current node in the tree.
+instance PathContext TypeC where
+  absPath :: TypeC -> AbsolutePath
+  absPath = typePath
+  {-# INLINE absPath #-}
+
+  (@@) :: TypeC -> Int -> TypeC
+  c @@ n = c { typePath = typePath c @@ n }
+  {-# INLINE (@@) #-}
+
+
+-- | Create an initial (empty) context for 'Type' traversals.
+initTypeC :: TypeC
+initTypeC = TypeC { forallTyVars = []
+                  , typePath     = rootAbsPath
+                  }
+{-# INLINE initTypeC #-}
+
+-- | Add a universally quantified type variable to a type context.
+addForallTyVar :: TyVar -> TypeC -> TypeC
+addForallTyVar v c = c { forallTyVars = v : forallTyVars c }
+{-# INLINE addForallTyVar #-}
 
 ------------------------------------------------------------------------
