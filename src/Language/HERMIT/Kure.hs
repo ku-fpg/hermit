@@ -77,12 +77,12 @@ module Language.HERMIT.Kure
 where
 
 import GhcPlugins hiding (empty)
-import TypeRep
 
 import Language.KURE
 import Language.KURE.BiTranslate
 import Language.KURE.Lens
 
+import Language.HERMIT.GHC
 import Language.HERMIT.Core
 import Language.HERMIT.Context
 import Language.HERMIT.Monad

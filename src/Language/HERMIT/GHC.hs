@@ -15,6 +15,7 @@ module Language.HERMIT.GHC
         , findNameFromTH
         , alphaTyVars
         , Type(..)
+        , TyLit(..)
         , GhcException(..)
         , throwGhcException
         , exprArity
@@ -25,7 +26,7 @@ import GhcPlugins
 -- hacky direct GHC imports
 import Convert (thRdrNameGuesses)
 import TysPrim (alphaTyVars)
-import TypeRep (Type(..))
+import TypeRep (Type(..),TyLit(..))
 import Panic (GhcException(ProgramError), throwGhcException)
 import CoreArity
 
@@ -112,7 +113,7 @@ ppIdInfo v info
     has_caf_info = not (mayHaveCafRefs caf_info)
 
     str_info = strictnessInfo info
-    has_strictness = 
+    has_strictness =
 #if __GLASGOW_HASKELL__ > 706
         True
 #else

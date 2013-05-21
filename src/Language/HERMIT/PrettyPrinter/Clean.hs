@@ -12,16 +12,16 @@ import Control.Arrow hiding ((<+>))
 import Data.Char (isSpace)
 import Data.Traversable (sequenceA)
 
-
+import GhcPlugins (TyCon(..), Coercion(..), Var(..), Expr(..), Bind(..))
 import qualified GhcPlugins as GHC
 
+import Language.HERMIT.GHC
 import Language.HERMIT.Syntax
 import Language.HERMIT.Kure
 import Language.HERMIT.Core
-import Language.HERMIT.PrettyPrinter.Common
-import Language.HERMIT.GHC
 
-import TypeRep (TyLit(..))
+import Language.HERMIT.PrettyPrinter.Common
+
 import Pair
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
@@ -121,10 +121,10 @@ corePrettyH opts = do
         optional Nothing  _ = empty
         optional (Just d) k = k d
 
-        ppVar :: GHC.Var -> DocH
+        ppVar :: Var -> DocH
         ppVar v = ppName (varColor v) (GHC.varName v)
 
-        varColor :: GHC.Var -> SyntaxForColor
+        varColor :: Var -> SyntaxForColor
         varColor var | GHC.isTyVar var = TypeColor
                      | GHC.isCoVar var = CoercionColor
                      | otherwise       = IdColor
@@ -141,19 +141,19 @@ corePrettyH opts = do
                                              NumTyLit i  -> show i
                                              StrTyLit fs -> show fs
 
-        ppTyCon :: GHC.TyCon -> DocH
+        ppTyCon :: TyCon -> DocH
         ppTyCon = ppName TypeColor . GHC.getName
 
-        ppTyConCo :: GHC.TyCon -> DocH
+        ppTyConCo :: TyCon -> DocH
         ppTyConCo = ppName CoercionColor . GHC.getName
 
-        ppTypeMode :: GHC.Type -> RetExpr
+        ppTypeMode :: Type -> RetExpr
         ppTypeMode t = case po_exprTypes opts of
                          Omit     -> RetEmpty
                          Abstract -> RetAtom typeSymbol
                          _        -> ppCoreType t
 
-        ppCoercionMode :: GHC.Coercion -> RetExpr
+        ppCoercionMode :: Coercion -> RetExpr
         ppCoercionMode co = case po_coercions opts of
                               Omit     -> RetEmpty
                               Abstract -> RetAtom coercionSymbol
@@ -161,7 +161,7 @@ corePrettyH opts = do
                               Kind     -> RetExpr (coercionSymbol <+> specialSymbol TypeOfSymbol <+> ppCoKind co)
 
         -- binders are vars that is bound by lambda or case, etc.
-        ppBinder :: GHC.Var -> Maybe DocH
+        ppBinder :: Var -> Maybe DocH
         ppBinder var | GHC.isTyVar var = case po_exprTypes opts of
                                            Omit     -> Nothing
                                            Abstract -> Just typeBindSymbol
@@ -170,7 +170,7 @@ corePrettyH opts = do
                                            Omit     -> Nothing
                                            Abstract -> Just coercionBindSymbol
                                            Show     -> Just (ppVar var)
-                                           Kind     -> Just $ ppParens (coercionBindSymbol <+> specialSymbol TypeOfSymbol <+> ppCoKind (GHC.CoVarCo var))
+                                           Kind     -> Just $ ppParens (coercionBindSymbol <+> specialSymbol TypeOfSymbol <+> ppCoKind (CoVarCo var))
                                                        -- TODO: refactor this to be more systematic.  It should be possible to request type sigs for all type bindings.
                      | otherwise       = Just $ ppVar var
 
@@ -186,8 +186,8 @@ corePrettyH opts = do
                                    (vcat [ (optional (ppBinder v) (\b -> b <+> specialSymbol TypeOfSymbol <+> normalExpr (ppCoreType $ GHC.idType v)))
                                          | bnd <- GHC.mg_binds m
                                          , v <- case bnd of
-                                                  GHC.NonRec f _ -> [f]
-                                                  GHC.Rec bnds -> map fst bnds
+                                                  NonRec f _ -> [f]
+                                                  Rec bnds -> map fst bnds
                                        ])
 
         -- DocH is not a monoid.
@@ -224,14 +224,14 @@ corePrettyH opts = do
                    -- HACKs
     {-
                    <+ (acceptR (\ e -> case e of
-                                         GHC.App (GHC.Var v) (GHC.Type t) | po_exprTypes opts == Abstract -> True
+                                         GHC.App (Var v) (GHC.Type t) | po_exprTypes opts == Abstract -> True
                                          _ -> False) >>>
                                (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetAtom e2) ->
                                         RetAtom (e1 <+> e2))))
     -}
                    <+ (acceptR (\ e -> case e of
-                                         GHC.App (GHC.Type _) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
-                                         GHC.App (GHC.App (GHC.Var _) (GHC.Type _)) (GHC.Lam {}) | po_exprTypes opts == Omit -> True
+                                         App (Type _) (Lam {}) | po_exprTypes opts == Omit -> True
+                                         App (App (Var _) (Type _)) (Lam {}) | po_exprTypes opts == Omit -> True
                                          _ -> False) >>>
                                (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetLam vs e0) _ ->
                                         RetExpr $ hang (e1 <+>
@@ -263,7 +263,7 @@ corePrettyH opts = do
         attrPAtomExpr p (RetExpr d) = RetExpr (attrP p d)
         attrPAtomExpr _ e           = e
 
-        ppCoreType :: GHC.Type -> RetExpr
+        ppCoreType :: Type -> RetExpr
         ppCoreType (TyVarTy v)   = RetAtom (ppVar v)
         ppCoreType (LitTy tylit) = RetAtom (ppLitTy tylit)
         ppCoreType (AppTy t1 t2) = let e1 = ppCoreType t1
@@ -281,46 +281,46 @@ corePrettyH opts = do
                                                 ds -> RetAtom $ tyText "(" <> (foldr1 (\d r -> d <> tyText "," <+> r) ds) <> tyText ")"
                     | otherwise              = RetApp (ppTyCon tyCon) (map ppCoreType tys)
 
-        ppCoreCoercion :: GHC.Coercion -> RetExpr
-        ppCoreCoercion (GHC.Refl t)            = let refl = coKeyword "refl"
-                                                  in case po_exprTypes opts of
-                                                       Omit -> RetAtom refl
-                                                       _    -> RetExpr (refl <+> normalExprWithParens (ppTypeMode t))
-        ppCoreCoercion (GHC.CoVarCo v)         = RetAtom (ppVar v)
-        ppCoreCoercion (GHC.SymCo co)          = RetExpr (coKeyword "sym" <+> normalExprWithParens (ppCoreCoercion co))
-        ppCoreCoercion (GHC.ForAllCo v co)     = let e = ppCoreCoercion co
-                                                  in case po_exprTypes opts of
-                                                       Omit -> e
-                                                       _    -> RetExpr (specialSymbol ForallSymbol <+> optional (ppBinder v) (\d -> d <+> symbol '.' <+> normalExprWithParensExceptApp e))
-        ppCoreCoercion (GHC.TransCo co1 co2)   = RetExpr (normalExprWithParensExceptApp (ppCoreCoercion co1) <+> coChar ';' <+> normalExprWithParensExceptApp (ppCoreCoercion co2))
-        ppCoreCoercion (GHC.UnsafeCo t1 t2)    = RetExpr (ppTypePairCoercion t1 t2)
-        ppCoreCoercion (GHC.NthCo n co)        = RetExpr (coKeyword "nth" <+> coText (show n) <+> normalExprWithParens (ppCoreCoercion co))
-        ppCoreCoercion (GHC.InstCo co t)       = let e = ppCoreCoercion co
-                                                  in case po_exprTypes opts of
-                                                       Omit -> e
-                                                       _    -> RetExpr (normalExprWithParensExceptApp e <+> coChar '@' <+> normalExprWithParensExceptApp (ppTypeMode t))
-        ppCoreCoercion (GHC.TyConAppCo tc cs)  = RetApp (ppTyConCo tc) (map ppCoreCoercion cs)
-        ppCoreCoercion (GHC.AppCo co1 co2)     = let e1 = ppCoreCoercion co1
-                                                     e2 = ppCoreCoercion co2
-                                                  in ppApp e1 e2
+        ppCoreCoercion :: Coercion -> RetExpr
+        ppCoreCoercion (Refl t)            = let refl = coKeyword "refl"
+                                              in case po_exprTypes opts of
+                                                   Omit -> RetAtom refl
+                                                   _    -> RetExpr (refl <+> normalExprWithParens (ppTypeMode t))
+        ppCoreCoercion (CoVarCo v)         = RetAtom (ppVar v)
+        ppCoreCoercion (SymCo co)          = RetExpr (coKeyword "sym" <+> normalExprWithParens (ppCoreCoercion co))
+        ppCoreCoercion (ForAllCo v co)     = let e = ppCoreCoercion co
+                                              in case po_exprTypes opts of
+                                                   Omit -> e
+                                                   _    -> RetExpr (specialSymbol ForallSymbol <+> optional (ppBinder v) (\d -> d <+> symbol '.' <+> normalExprWithParensExceptApp e))
+        ppCoreCoercion (TransCo co1 co2)   = RetExpr (normalExprWithParensExceptApp (ppCoreCoercion co1) <+> coChar ';' <+> normalExprWithParensExceptApp (ppCoreCoercion co2))
+        ppCoreCoercion (UnsafeCo t1 t2)    = RetExpr (ppTypePairCoercion t1 t2)
+        ppCoreCoercion (NthCo n co)        = RetExpr (coKeyword "nth" <+> coText (show n) <+> normalExprWithParens (ppCoreCoercion co))
+        ppCoreCoercion (InstCo co t)       = let e = ppCoreCoercion co
+                                              in case po_exprTypes opts of
+                                                   Omit -> e
+                                                   _    -> RetExpr (normalExprWithParensExceptApp e <+> coChar '@' <+> normalExprWithParensExceptApp (ppTypeMode t))
+        ppCoreCoercion (TyConAppCo tc cs)  = RetApp (ppTyConCo tc) (map ppCoreCoercion cs)
+        ppCoreCoercion (AppCo co1 co2)     = let e1 = ppCoreCoercion co1
+                                                 e2 = ppCoreCoercion co2
+                                              in ppApp e1 e2
 #if __GLASGOW_HASKELL__ > 706
         -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
-        ppCoreCoercion (GHC.AxiomInstCo ax idx cs) = RetApp (coercionColor $ ppSDoc ax) (RetAtom (ppSDoc idx) : map ppCoreCoercion cs)
-        ppCoreCoercion (GHC.LRCo lr co) = RetApp (coercionColor $ ppSDoc lr) [ppCoreCoercion co]
+        ppCoreCoercion (AxiomInstCo ax idx cs) = RetApp (coercionColor $ ppSDoc ax) (RetAtom (ppSDoc idx) : map ppCoreCoercion cs)
+        ppCoreCoercion (LRCo lr co) = RetApp (coercionColor $ ppSDoc lr) [ppCoreCoercion co]
 #else
-        ppCoreCoercion (GHC.AxiomInstCo ax cs) = RetApp (coercionColor $ ppSDoc ax) (map ppCoreCoercion cs) -- TODO: add pretty printer for Coercion Axioms
+        ppCoreCoercion (AxiomInstCo ax cs) = RetApp (coercionColor $ ppSDoc ax) (map ppCoreCoercion cs) -- TODO: add pretty printer for Coercion Axioms
 #endif
 
         ppTypePairCoercion :: Type -> Type -> DocH
         ppTypePairCoercion t1 t2 = normalExprWithParensExceptApp (ppTypeMode t1) <+> coChar '~' <+> normalExprWithParensExceptApp (ppTypeMode t2)
 
-        ppCoKind :: GHC.Coercion -> DocH
+        ppCoKind :: Coercion -> DocH
         ppCoKind = uncurry ppTypePairCoercion . unPair . GHC.coercionKind
 
         ppCoreTypeSig :: PrettyH GHC.CoreExpr
         ppCoreTypeSig = arr (\case
-                                GHC.Coercion c -> ppCoKind c
-                                e              -> normalExpr $ ppCoreType $ GHC.exprType e)
+                                Coercion c -> ppCoKind c
+                                e          -> normalExpr $ ppCoreType $ GHC.exprType e)
 
         ppCoreBind :: PrettyH GHC.CoreBind
         ppCoreBind = nonRecT (ppCoreExprR &&& ppCoreTypeSig) ppDefFun
@@ -339,7 +339,7 @@ corePrettyH opts = do
         ppCoreDef :: PrettyH CoreDef
         ppCoreDef = defT (ppCoreExprR &&& ppCoreTypeSig) ppDefFun
 
-        ppDefFun :: GHC.Var -> (RetExpr, DocH) -> DocH
+        ppDefFun :: Var -> (RetExpr, DocH) -> DocH
         ppDefFun v (e,ty) = case po_exprTypes opts of
                               Show     -> if GHC.isCoVar v
                                            then let coTySig = specialSymbol TypeOfSymbol <+> ty
