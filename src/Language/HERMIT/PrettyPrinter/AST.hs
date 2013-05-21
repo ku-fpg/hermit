@@ -105,10 +105,10 @@ corePrettyH opts = do
         ppCoreCoercion (InstCo co t)       = text "InstCo" $$ nest 2 (cat [parens (ppCoreCoercion co), ppTypeColParen t])
 #if __GLASGOW_HASKELL__ > 706
         -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
-        ppCoreCoercion (AxiomInstCo ax idx cs) = text "AxiomInstCo" <+> ppSDoc ax <+> ppSDoc idx $$ nest 2 (vlist $ map ppCoreCoercion cs) -- TODO: add pretty printer for Coercion Axioms
+        ppCoreCoercion (AxiomInstCo ax idx cs) = text "AxiomInstCo" <+> ppSDoc ax <+> ppSDoc idx $$ nest 2 (vlist $ map ppCoreCoercion cs)
         ppCoreCoercion (LRCo lr co) = text "LRCo" <+> ppSDoc lr $$ nest 2 (parens $ ppCoreCoercion co)
 #else
-        ppCoreCoercion (AxiomInstCo ax cs) = text "AxiomInstCo" <+> ppSDoc ax $$ nest 2 (vlist $ map ppCoreCoercion cs) -- TODO: add pretty printer for Coercion Axioms
+        ppCoreCoercion (AxiomInstCo ax cs) = text "AxiomInstCo" <+> ppSDoc ax $$ nest 2 (vlist $ map ppCoreCoercion cs)
 #endif
 
         ppVar :: Var -> DocH

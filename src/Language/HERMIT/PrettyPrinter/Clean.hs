@@ -282,10 +282,9 @@ corePrettyH opts = do
                     | otherwise              = RetApp (ppTyCon tyCon) (map ppCoreType tys)
 
         ppCoreCoercion :: Coercion -> RetExpr
-        ppCoreCoercion (Refl t)            = let refl = coKeyword "refl"
-                                              in case po_exprTypes opts of
-                                                   Omit -> RetAtom refl
-                                                   _    -> RetExpr (refl <+> normalExprWithParens (ppTypeMode t))
+        ppCoreCoercion (Refl t)            = case po_exprTypes opts of
+                                               Omit -> RetAtom (coText "<_>")
+                                               _    -> RetAtom (coText "<" <> normalExpr (ppTypeMode t) <> coText ">")
         ppCoreCoercion (CoVarCo v)         = RetAtom (ppVar v)
         ppCoreCoercion (SymCo co)          = RetExpr (coKeyword "sym" <+> normalExprWithParens (ppCoreCoercion co))
         ppCoreCoercion (ForAllCo v co)     = let e = ppCoreCoercion co
@@ -293,29 +292,25 @@ corePrettyH opts = do
                                                    Omit -> e
                                                    _    -> RetExpr (specialSymbol ForallSymbol <+> optional (ppBinder v) (\d -> d <+> symbol '.' <+> normalExprWithParensExceptApp e))
         ppCoreCoercion (TransCo co1 co2)   = RetExpr (normalExprWithParensExceptApp (ppCoreCoercion co1) <+> coChar ';' <+> normalExprWithParensExceptApp (ppCoreCoercion co2))
-        ppCoreCoercion (UnsafeCo t1 t2)    = RetExpr (ppTypePairCoercion t1 t2)
+        ppCoreCoercion (UnsafeCo t1 t2)    = RetExpr (coKeyword "unsafe" <+> normalExprWithParens (ppTypeMode t1) <+> normalExprWithParens (ppTypeMode t2))
         ppCoreCoercion (NthCo n co)        = RetExpr (coKeyword "nth" <+> coText (show n) <+> normalExprWithParens (ppCoreCoercion co))
         ppCoreCoercion (InstCo co t)       = let e = ppCoreCoercion co
                                               in case po_exprTypes opts of
                                                    Omit -> e
                                                    _    -> RetExpr (normalExprWithParensExceptApp e <+> coChar '@' <+> normalExprWithParensExceptApp (ppTypeMode t))
         ppCoreCoercion (TyConAppCo tc cs)  = RetApp (ppTyConCo tc) (map ppCoreCoercion cs)
-        ppCoreCoercion (AppCo co1 co2)     = let e1 = ppCoreCoercion co1
-                                                 e2 = ppCoreCoercion co2
-                                              in ppApp e1 e2
+        ppCoreCoercion (AppCo co1 co2)     = ppApp (ppCoreCoercion co1) (ppCoreCoercion co2)
 #if __GLASGOW_HASKELL__ > 706
         -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
-        ppCoreCoercion (AxiomInstCo ax idx cs) = RetApp (coercionColor $ ppSDoc ax) (RetAtom (ppSDoc idx) : map ppCoreCoercion cs)
+        ppCoreCoercion (AxiomInstCo ax idx cs) = RetApp (ppName CoercionColor $ GHC.coAxiomName ax) (RetAtom (ppSDoc idx) : map ppCoreCoercion cs)
         ppCoreCoercion (LRCo lr co) = RetApp (coercionColor $ ppSDoc lr) [ppCoreCoercion co]
 #else
-        ppCoreCoercion (AxiomInstCo ax cs) = RetApp (coercionColor $ ppSDoc ax) (map ppCoreCoercion cs) -- TODO: add pretty printer for Coercion Axioms
+        ppCoreCoercion (AxiomInstCo ax cs) = RetApp (ppName CoercionColor $ GHC.coAxiomName ax) (map ppCoreCoercion cs)
 #endif
 
-        ppTypePairCoercion :: Type -> Type -> DocH
-        ppTypePairCoercion t1 t2 = normalExprWithParensExceptApp (ppTypeMode t1) <+> coChar '~' <+> normalExprWithParensExceptApp (ppTypeMode t2)
-
         ppCoKind :: Coercion -> DocH
-        ppCoKind = uncurry ppTypePairCoercion . unPair . GHC.coercionKind
+        ppCoKind co = let (t1,t2) = unPair (GHC.coercionKind co)
+                       in normalExprWithParensExceptApp (ppTypeMode t1) <+> coChar '~' <+> normalExprWithParensExceptApp (ppTypeMode t2)
 
         ppCoreTypeSig :: PrettyH GHC.CoreExpr
         ppCoreTypeSig = arr (\case

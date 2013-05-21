@@ -59,7 +59,7 @@ name2THName = TH.mkName . getOccString
 var2THName :: Var -> TH.Name
 var2THName = name2THName . varName
 
--- | Get the unqualified name from an Var.
+-- | Get the unqualified name from an 'Var'.
 unqualifiedVarName :: Var -> String
 unqualifiedVarName = TH.nameBase . var2THName
 
