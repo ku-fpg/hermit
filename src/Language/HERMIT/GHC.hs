@@ -1,27 +1,28 @@
 {-# LANGUAGE CPP #-}
 module Language.HERMIT.GHC
-        ( -- * GHC Imports
-        -- | Things that have been copied from GHC, or imported directly, for various reasons.
-          ppIdInfo
-        , var2String
-        , thRdrNameGuesses
-        , name2THName
-        , var2THName
-        , cmpTHName2Name
-        , cmpString2Name
-        , cmpTHName2Var
-        , cmpString2Var
-        , unqualifiedVarName
-        , findNameFromTH
-        , alphaTyVars
-        , Type(..)
-        , TyLit(..)
-        , GhcException(..)
-        , throwGhcException
-        , exprArity
-) where
+    ( -- * GHC Imports
+      -- | Things that have been copied from GHC, or imported directly, for various reasons.
+      ppIdInfo
+    , var2String
+    , thRdrNameGuesses
+    , name2THName
+    , var2THName
+    , cmpTHName2Name
+    , cmpString2Name
+    , cmpTHName2Var
+    , cmpString2Var
+    , unqualifiedVarName
+    , findNameFromTH
+    , alphaTyVars
+    , Type(..)
+    , TyLit(..)
+    , GhcException(..)
+    , throwGhcException
+    , exprArity
+    , coAxiomName
+    ) where
 
-import GhcPlugins
+import GhcPlugins as GHC
 
 -- hacky direct GHC imports
 import Convert (thRdrNameGuesses)
@@ -32,10 +33,20 @@ import CoreArity
 
 #if __GLASGOW_HASKELL__ <= 706
 import Data.Maybe (isJust)
+#else
+import qualified CoAxiom -- for coAxiomName
 #endif
 import qualified Language.Haskell.TH as TH
 
 --------------------------------------------------------------------------
+
+#if __GLASGOW_HASKELL__ <= 706
+coAxiomName :: CoAxiom -> Name
+coAxiomName = GHC.coAxiomName
+#else
+coAxiomName :: CoAxiom.CoAxiom br -> Name
+coAxiomName = CoAxiom.coAxiomName
+#endif
 
 -- varName :: Var -> Name
 -- nameOccName :: Name -> OccName

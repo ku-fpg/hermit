@@ -302,10 +302,10 @@ corePrettyH opts = do
         ppCoreCoercion (AppCo co1 co2)     = ppApp (ppCoreCoercion co1) (ppCoreCoercion co2)
 #if __GLASGOW_HASKELL__ > 706
         -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
-        ppCoreCoercion (AxiomInstCo ax idx cs) = RetApp (ppName CoercionColor $ GHC.coAxiomName ax) (RetAtom (ppSDoc idx) : map ppCoreCoercion cs)
+        ppCoreCoercion (AxiomInstCo ax idx cs) = RetApp (ppName CoercionColor $ coAxiomName ax) (RetAtom (ppSDoc idx) : map ppCoreCoercion cs)
         ppCoreCoercion (LRCo lr co) = RetApp (coercionColor $ ppSDoc lr) [ppCoreCoercion co]
 #else
-        ppCoreCoercion (AxiomInstCo ax cs) = RetApp (ppName CoercionColor $ GHC.coAxiomName ax) (map ppCoreCoercion cs)
+        ppCoreCoercion (AxiomInstCo ax cs) = RetApp (ppName CoercionColor $ coAxiomName ax) (map ppCoreCoercion cs)
 #endif
 
         ppCoKind :: Coercion -> DocH
