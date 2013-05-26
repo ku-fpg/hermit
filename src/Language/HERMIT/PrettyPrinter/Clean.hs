@@ -310,7 +310,7 @@ corePrettyH opts = do
 
         ppCoKind :: Coercion -> DocH
         ppCoKind co = let (t1,t2) = unPair (GHC.coercionKind co)
-                       in normalExprWithParensExceptApp (ppTypeMode t1) <+> coChar '~' <+> normalExprWithParensExceptApp (ppTypeMode t2)
+                       in normalExprWithParensExceptApp (ppTypeMode t1) <+> coText "~#" <+> normalExprWithParensExceptApp (ppTypeMode t2)
 
         ppCoreTypeSig :: PrettyH GHC.CoreExpr
         ppCoreTypeSig = arr (\case

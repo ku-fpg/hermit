@@ -19,7 +19,7 @@ module Language.HERMIT.GHC
     , GhcException(..)
     , throwGhcException
     , exprArity
-    , coAxiomName
+    , Language.HERMIT.GHC.coAxiomName
     ) where
 
 import GhcPlugins as GHC
