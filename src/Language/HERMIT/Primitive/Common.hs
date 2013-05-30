@@ -213,7 +213,7 @@ findId nm c = case findBoundVars nm c of
 
 findIdMG :: TH.Name -> HermitC -> HermitM Id
 findIdMG nm c =
-    case filter isValName $ findNameFromTH (globalRdrEnv c) nm of
+    case filter isValName $ findNameFromTH (hermitC_globalRdrEnv c) nm of
       []  -> findIdBuiltIn nm
       [n] -> lookupId n
       ns  -> do dynFlags <- getDynFlags

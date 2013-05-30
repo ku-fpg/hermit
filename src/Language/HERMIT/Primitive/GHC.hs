@@ -356,7 +356,7 @@ getHermitRules = contextonlyT $ \ c -> do
     hscEnv <- liftCoreM getHscEnv
     rb'    <- liftM eps_rule_base $ liftIO $ runIOEnv () $ readMutVar (hsc_EPS hscEnv)
     return [ ( unpackFS (ruleName r), [r] )
-           | r <- coreRules c ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
+           | r <- hermitC_coreRules c ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
            ]
 
 rules_help :: TranslateH Core String

@@ -93,7 +93,6 @@ ensureDepth d = do
                         promoteExprT $ varT $ \ i -> if i `elem` frees
                                                        then maybe (i,0) (\b -> (i,hermitBindingDepth b)) (lookupHermitBinding i c)
                                                        else (i,0)
-    -- traceR $ "greater values (" ++ show d ++ "): " ++ show (filter ((> d) . snd) ds)
     return $ all (toSnd (<= d)) ds
 
 getUnfolding :: Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
