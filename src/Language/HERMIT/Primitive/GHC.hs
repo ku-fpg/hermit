@@ -351,19 +351,12 @@ rules :: [String] -> RewriteH CoreExpr
 rules = orR . map rule
 
 getHermitRules :: TranslateH a [(String, [CoreRule])]
-getHermitRules = translate $ \ env _ -> do
-    rb <- liftCoreM getRuleBase
+getHermitRules = contextonlyT $ \ c -> do
+    rb     <- liftCoreM getRuleBase
     hscEnv <- liftCoreM getHscEnv
-    rb' <- liftM eps_rule_base $ liftIO $ runIOEnv () $ readMutVar (hsc_EPS hscEnv)
-    let other_rules = [ r
-                        | top_bnds <- mg_binds (hermitModGuts env)
-                        , bnd <- case top_bnds of
-                                     Rec bnds -> map fst bnds
-                                     NonRec b _ -> [b]
-                        , r <- idCoreRules bnd
-                        ]
+    rb'    <- liftM eps_rule_base $ liftIO $ runIOEnv () $ readMutVar (hsc_EPS hscEnv)
     return [ ( unpackFS (ruleName r), [r] )
-           | r <- mg_rules (hermitModGuts env) ++ other_rules ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
+           | r <- coreRules c ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
            ]
 
 rules_help :: TranslateH Core String

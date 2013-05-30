@@ -13,7 +13,8 @@ module Language.HERMIT.Context
        , hermitBindings
        , hermitDepth
        , hermitPath
-       , hermitModGuts
+       , globalRdrEnv
+       , coreRules
        , lookupHermitBinding
        , boundVars
        , boundIn
@@ -34,9 +35,10 @@ import GhcPlugins hiding (empty)
 import Data.Map hiding (map, foldr, filter)
 import qualified Language.Haskell.TH as TH
 
-import Language.HERMIT.GHC
-
 import Language.KURE
+
+import Language.HERMIT.Core
+import Language.HERMIT.GHC
 
 ------------------------------------------------------------------------
 
@@ -64,7 +66,8 @@ data HermitC = HermitC
         { hermitBindings :: Map Var HermitBinding   -- ^ All (important) bindings in scope.
         , hermitDepth    :: Int                     -- ^ The depth of the bindings.
         , hermitPath     :: AbsolutePath            -- ^ The 'AbsolutePath' to the current node from the root.
-        , hermitModGuts  :: ModGuts                 -- ^ The 'ModGuts' of the current module.
+        , globalRdrEnv   :: GlobalRdrEnv            -- ^ The top-level lexical environment.
+        , coreRules      :: [CoreRule]              -- ^ GHC rewrite RULES.
         }
 
 ------------------------------------------------------------------------
@@ -81,7 +84,17 @@ instance PathContext HermitC where
 
 -- | Create the initial HERMIT 'HermitC' by providing a 'ModGuts'.
 initHermitC :: ModGuts -> HermitC
-initHermitC modGuts = HermitC empty 0 rootAbsPath modGuts
+initHermitC modGuts = HermitC
+                        { hermitBindings = empty
+                        , hermitDepth    = 0
+                        , hermitPath     = rootAbsPath
+                        , globalRdrEnv   = mg_rdr_env modGuts
+                        , coreRules      = mg_rules modGuts ++ other_rules
+                        }
+
+    where other_rules :: [CoreRule]
+          other_rules = mg_binds modGuts >>= bindToIdExprs >>= (idCoreRules . fst)
+          {-# INLINE other_rules #-}
 {-# INLINE initHermitC #-}
 
 ------------------------------------------------------------------------
