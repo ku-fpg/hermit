@@ -46,14 +46,7 @@ import qualified Language.Haskell.TH as TH
 -- | Externals relating to Case expressions.
 externals :: [External]
 externals =
-    [ -- I'm not sure this is possible. In core, v2 can only be a Constructor, Lit, or DEFAULT
-      -- In the last case, v1 is already inlined in e. So we can't construct v2 as a Var.
-      --   external "case-elimination" (promoteR $ not_defined "case-elimination" :: RewriteH Core)
-      --     [ "case v1 of v2 -> e ==> e[v1/v2]" ]                                         .+ Unimplemented .+ Eval
-      --   -- Again, don't think the lhs of this rule is possible to construct in core.
-      -- , external "case-merging" (promoteR $ not_defined "case-merging" :: RewriteH Core)
-      --     [ "case v of ...; d -> case v of alt -> e ==> case v of ...; alt -> e[v/d]" ] .+ Unimplemented .+ Eval
-      external "case-float-app" (promoteExprR caseFloatApp :: RewriteH Core)
+    [ external "case-float-app" (promoteExprR caseFloatApp :: RewriteH Core)
         [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow .+ Bash
     , external "case-float-arg" (promoteExprR caseFloatArg :: RewriteH Core)
         [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
@@ -69,8 +62,8 @@ externals =
         [ "Unfloat a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
     , external "case-unfloat-args" (promoteExprR caseUnfloatArgs :: RewriteH Core)
         [ "Unfloat a Case whose alternatives are parallel applications of the same function." ] .+ Commute .+ Shallow .+ PreCondition
-    , external "case-unfloat-app" (promoteExprR caseUnfloatApp :: RewriteH Core)
-        [ "Unfloat a Case whole alternatives are applications of different functions with the same arguments." ] .+ Commute .+ Shallow .+ PreCondition
+    -- , external "case-unfloat-app" (promoteExprR caseUnfloatApp :: RewriteH Core)
+    --     [ "Unfloat a Case whole alternatives are applications of different functions with the same arguments." ] .+ Commute .+ Shallow .+ PreCondition
     , external "case-reduce" (promoteExprR caseReduce :: RewriteH Core)
         [ "case-reduce-datacon <+ case-reduce-literal" ]                     .+ Shallow .+ Eval .+ Bash
     , external "case-reduce-datacon" (promoteExprR caseReduceDatacon :: RewriteH Core)
@@ -155,10 +148,12 @@ caseFloat = setFailMsg "Unsuitable expression for Case floating." $
 
 ------------------------------------------------------------------------------
 
+-- | Unfloat a Case whatever the context.
 caseUnfloat :: RewriteH CoreExpr
 caseUnfloat = setFailMsg "Case unfloating failed." $
     caseUnfloatApp <+ caseUnfloatArgs
 
+-- | Unimplemented!
 caseUnfloatApp :: RewriteH CoreExpr
 caseUnfloatApp = fail "caseUnfloatApp: TODO"
 

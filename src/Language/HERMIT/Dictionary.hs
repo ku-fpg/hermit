@@ -69,10 +69,10 @@ mkDict externs = toDictionary externs'
                     [ "(this message)" ] .+ Query .+ Shell
                 , external "help" (help_command externs')
                     ([ "help <command>|<category>|categories|all|<search-string>"
-                     , "displays help about a command or category."
+                     , "Displays help about a command, or all commands in a category."
                      , "Multiple items may match."
                      , ""
-                     , "categories: " ++ head msg
+                     , "Categories: " ++ head msg
                      ] ++ map ("            " ++) (tail msg))  .+ Query .+ Shell
                 -- Runs every command matching the tag predicate with innermostR (fix point anybuR),
                 -- Only fails if all of them fail the first time.
@@ -114,7 +114,7 @@ help_command exts m
 help_command exts "all"
         = unlines $ make_help exts
 help_command _ "categories" = unlines $
-                [ "categories" ] ++
+                [ "Categories" ] ++
                 [ "----------" ] ++
                 [ txt ++ " " ++ replicate (16 - length txt) '.' ++ " " ++ desc
                 | (cmd,desc) <- dictionaryOfTags

@@ -55,9 +55,9 @@ externals =
         , "(let v = e1 in e2) ==> e2, if v is not free in e2."
         , "condition: let is not-recursive" ]                                   .+ Eval .+ Shallow .+ Bash
     , external "dead-code-elimination" (promoteExprR letElim :: RewriteH Core)
-        [ "Synonym for dead-let-elimination [deprecated]" ]                     .+ Eval .+ Shallow -- TODO: delete this at some point
+        [ "Synonym for dead-let-elimination [deprecated]" ]                     .+ Eval .+ Shallow .+ Deprecated -- TODO: delete this at some point
 --    , external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
---        [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Unimplemented .+ Eval
+--        [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Eval
     , external "let-float-app" (promoteExprR letFloatApp :: RewriteH Core)
         [ "(let v = ev in e) x ==> let v = ev in e x" ]                         .+ Commute .+ Shallow .+ Bash
     , external "let-float-arg" (promoteExprR letFloatArg :: RewriteH Core)
@@ -78,7 +78,7 @@ externals =
     , external "let-to-case" (promoteExprR letToCase :: RewriteH Core)
         [ "let v = ev in e ==> case ev of v -> e" ]                             .+ Commute .+ Shallow .+ PreCondition
 --    , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
---        [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ] .+ Unimplemented
+--        [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ]
     , external "let-unfloat" (promoteExprR letUnfloat >+> anybuR (promoteExprR letElim) :: RewriteH Core)
         [ "Unfloat a let if possible." ]                                        .+ Commute .+ Shallow
     , external "let-unfloat-app" ((promoteExprR letUnfloatApp >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
@@ -207,9 +207,12 @@ letFloatLetTop = prefixFailMsg "Let floating to top level failed: " $
 
 -------------------------------------------------------------------------------------------
 
+-- | Unfloat a let if possible.
 letUnfloat :: RewriteH CoreExpr
 letUnfloat = letUnfloatCase <+ letUnfloatApp <+ letUnfloatLam
 
+-- | let v = ev in case s of p -> e ==> case (let v = ev in s) of p -> let v = ev in e,
+--   if v does not shadow a pattern binder in p
 letUnfloatCase :: RewriteH CoreExpr
 letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $
                  withPatFailMsg (wrongExprForm "Let bnds (Case s w ty alts)") $
@@ -218,6 +221,7 @@ letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $
      guardMsg (null captured) "let bindings would capture case pattern bindings."
      return $ Case (Let bnds s) w ty $ mapAlts (Let bnds) alts
 
+-- | let v = ev in f a ==> (let v = ev in f) (let v = ev in a)
 letUnfloatApp :: RewriteH CoreExpr
 letUnfloatApp = prefixFailMsg "Let unfloating from app failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (App e1 e2)") $

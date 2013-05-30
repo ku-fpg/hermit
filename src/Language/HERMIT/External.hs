@@ -63,28 +63,29 @@ type ExternalHelp = [String]
 --   (or the help function will not find it).
 --   These should be /user facing/, because they give the user
 --   a way of sub-dividing our confusing array of commands.
-data CmdTag = Shell          -- ^ Shell command.
+data CmdTag = Shell          -- ^ Shell-specific command.
             | Eval           -- ^ The arrow of evaluation (reduces a term).
             | KURE           -- ^ 'Language.KURE' command.
             | Loop           -- ^ Command may operate multiple times.
-            | Deep           -- ^ O(n)
-            | Shallow        -- ^ O(1)
+            | Deep           -- ^ Command may make a deep change, can be O(n).
+            | Shallow        -- ^ Command operates on local nodes only, O(1).
             | Navigation     -- ^ Uses 'Path' or 'Lens' to focus onto something.
             | Query          -- ^ A question we ask.
             | Predicate      -- ^ Something that passes or fails.
             | Introduce      -- ^ Introduce something, like a new name.
-            | Commute        -- ^ It's all about the commute.
-            | PreCondition   -- ^ Operation has a precondition.
-            | Debug          -- ^ Commands to help debugging.
-            | VersionControl -- ^ Version control.
+            | Commute        -- ^ Commute is when you swap nested terms.
+            | PreCondition   -- ^ Operation has a (perhaps undocumented) precondition.
+            | Debug          -- ^ Commands specifically to help debugging.
+            | VersionControl -- ^ Version control for Core syntax.
             | Bash           -- ^ Commands that are run by 'Language.HERMIT.Dictionary.bash'.
-            | Context        -- ^ A command that uses its context, such as inline
-            | Unsafe         -- ^ Commands that are either not type safe (may cause core lint to fail),
-                             --   or allow behavior-altering changes.
+            | Context        -- ^ A command that uses its context, such as inlining.
+            | Unsafe         -- ^ Commands that are not type safe (may cause Core Lint to fail),
+                             --   or may otherwise change the semantics of the program.
 
-            | TODO           -- ^ TODO: check before the release.
-            | Unimplemented  -- ^ Something is not finished yet, do not use.
+            | TODO           -- ^ An incomplete or potentially buggy command.
             | Experiment     -- ^ Things we are trying out.
+            | Deprecated     -- ^ A command that will be removed in a future release;
+                             --   it has probably been renamed or subsumed by another command.
 
 
 -- Unsure about these
@@ -112,32 +113,32 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
   where notes =
           -- These should give the user a clue about what the sub-commands
           -- might do
-          [ (Shell,        "Shell-specific commands")
-          , (Eval,         "The arrow of evaluation (reduces a term)")
-          , (KURE,         "Commands the directly reflect the KURE DSL")
-          , (Loop,         "Command may operate multiple times")
-          , (Deep,         "Command may make a deep change, can be O(n)")
-          , (Shallow,      "Command operates on local nodes only, O(1)")
-          , (Navigation,   "Navigate via focus, or directional command")
-          , (Query,        "Questions we ask")
-          , (Predicate,    "Something that passes or fails")
-          , (Introduce,    "Introduce something, like a new name")
-          , (Commute,      "Commute is when you swap nested terms")
-          , (PreCondition, "Operation has a (perhaps undocumented) precondition")
-          , (Debug,        "Commands specifically to help debugging")
-          , (VersionControl,"Version Control for Core Syntax")
-          , (Bash,         "Commands that run as part of the bash command")
-          , (Context,      "Commands that use their context, such as inlining")
-          , (Unsafe,       "Commands that are not type safe (may cause core lint to fail), or allow behavior-altering changes")
+          [ (Shell,        "Shell-specific command.")
+          , (Eval,         "The arrow of evaluation (reduces a term).")
+          , (KURE,         "Direct reflection of a combinator from the KURE DSL.")
+          , (Loop,         "Command may operate multiple times.")
+          , (Deep,         "Command may make a deep change, can be O(n).")
+          , (Shallow,      "Command operates on local nodes only, O(1).")
+          , (Navigation,   "Navigate via focus, or directional command.")
+          , (Query,        "A question we ask.")
+          , (Predicate,    "Something that passes or fails.")
+          , (Introduce,    "Introduce something, like a new name.")
+          , (Commute,      "Commute is when you swap nested terms.")
+          , (PreCondition, "Operation has a (perhaps undocumented) precondition.")
+          , (Debug,        "A command specifically to help debugging.")
+          , (VersionControl,"Version control for Core syntax.")
+          , (Bash,         "A command that runs as part of the \"bash\" command.")
+          , (Context,      "A command that uses its context, such as inlining.")
+          , (Unsafe,       "Commands that are not type safe (may cause Core Lint to fail), or may otherwise change the semantics of the program.")
 
-          , (TODO,         "TO BE assessed before a release")
-          , (Unimplemented,"Something is not finished yet; do not used")
-          , (Experiment,   "Things we are trying out")
+          , (TODO,         "An incomplete or potentially buggy command.")
+          , (Experiment,   "Things we are trying out, use at your own risk.")
+          , (Deprecated,   "A command that will be removed in a future release; it has probably been renamed or subsumed by another command.")
           ]
 
 
 -- Unfortunately, record update syntax seems to associate to the right.
--- This guy saves us some parentheses.
+-- These operators save us some parentheses.
 infixl 3 .+
 infixr 4 .||
 infixr 5 .&
