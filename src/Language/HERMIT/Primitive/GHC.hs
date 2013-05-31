@@ -192,7 +192,7 @@ info = translate $ \ c core -> do
          let pa       = "Path: " ++ show (absPath c)
              node     = "Node: " ++ coreNode core
              con      = "Constructor: " ++ coreConstructor core
-             bds      = "Bindings in Scope: " ++ show (map unqualifiedVarName $ boundVars c)
+             bds      = "Bindings in Scope: " ++ show (map var2String $ boundVars c)
              expExtra = case core of
                           ExprCore e -> ["Type or Kind: " ++ showExprTypeOrKind dynFlags e] ++
                                         ["Free Variables: " ++ showVars (coreExprFreeVars e)]

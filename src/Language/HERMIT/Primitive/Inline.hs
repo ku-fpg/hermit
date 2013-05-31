@@ -28,6 +28,7 @@ import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
 
 import qualified Language.Haskell.TH as TH
+import Language.Haskell.TH.Syntax (showName)
 
 ------------------------------------------------------------------------
 
@@ -50,8 +51,7 @@ externals =
 
 -- | If the current variable matches the given name, then inline it.
 inlineName :: TH.Name -> RewriteH CoreExpr
-inlineName nm = let name = TH.nameBase nm in
-                prefixFailMsg ("inline '" ++ name ++ " failed: ") $
+inlineName nm = prefixFailMsg ("inline '" ++ showName nm ++ " failed: ") $
                 withPatFailMsg (wrongExprForm "Var v") $
    do Var v <- idR
       guardMsg (cmpTHName2Var nm v) $ " does not match " ++ var2String v ++ "."
@@ -136,7 +136,7 @@ alt2Exp _ tys (DataAlt dc, as) = Right $ mkCoreConApps dc (map Type tys ++ map v
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: TranslateH Core [String]
-inlineTargets = collectT $ promoteT $ whenM (testM inline) (varT unqualifiedVarName)
+inlineTargets = collectT $ promoteT $ whenM (testM inline) (varT var2String)
 
 -- | Build a CoreExpr for a DFunUnfolding
 dFunExpr :: DataCon -> [DFunArg CoreExpr] -> Type -> HermitM CoreExpr

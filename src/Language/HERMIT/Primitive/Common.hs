@@ -55,6 +55,7 @@ import Language.HERMIT.GHC
 import Language.HERMIT.Monad
 
 import qualified Language.Haskell.TH as TH
+import Language.Haskell.TH.Syntax (showName)
 
 ------------------------------------------------------------------------------
 
@@ -193,7 +194,7 @@ boundVarsT = contextonlyT (return . boundVars)
 
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
 findBoundVarT :: TH.Name -> TranslateH a Var
-findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ TH.nameBase nm ++ ", ") $
+findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ showName nm ++ ", ") $
                         do c <- contextT
                            case findBoundVars nm c of
                              []         -> fail "no matching variables in scope."
@@ -202,7 +203,7 @@ findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ TH.nameBase nm ++ ",
 
 -- | Lookup the name in the 'HermitC' first, then, failing that, in GHC's global reader environment.
 findIdT :: TH.Name -> TranslateH a Id
-findIdT nm = prefixFailMsg ("Cannot resolve name " ++ TH.nameBase nm ++ ", ") $
+findIdT nm = prefixFailMsg ("Cannot resolve name " ++ showName nm ++ ", ") $
              contextonlyT (findId nm)
 
 findId :: TH.Name -> HermitC -> HermitM Id
@@ -213,14 +214,14 @@ findId nm c = case findBoundVars nm c of
 
 findIdMG :: TH.Name -> HermitC -> HermitM Id
 findIdMG nm c =
-    case filter isValName $ findNameFromTH (hermitC_globalRdrEnv c) nm of
+    case filter isValName $ findNamesFromTH (hermitC_globalRdrEnv c) nm of
       []  -> findIdBuiltIn nm
       [n] -> lookupId n
       ns  -> do dynFlags <- getDynFlags
                 fail $ "multiple matches found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
 
 findIdBuiltIn :: TH.Name -> HermitM Id
-findIdBuiltIn = go . TH.nameBase
+findIdBuiltIn = go . showName
     where go ":"     = dataConId consDataCon
           go "[]"    = dataConId nilDataCon
 

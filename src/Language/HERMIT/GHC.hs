@@ -11,8 +11,10 @@ module Language.HERMIT.GHC
     , cmpString2Name
     , cmpTHName2Var
     , cmpString2Var
-    , unqualifiedVarName
-    , findNameFromTH
+    , fqName
+    , uqName
+    , findNamesFromString
+    , findNamesFromTH
     , alphaTyVars
     , Type(..)
     , TyLit(..)
@@ -37,6 +39,7 @@ import Data.Maybe (isJust)
 import qualified CoAxiom -- for coAxiomName
 #endif
 import qualified Language.Haskell.TH as TH
+import Language.Haskell.TH.Syntax (showName)
 
 --------------------------------------------------------------------------
 
@@ -56,48 +59,62 @@ coAxiomName = CoAxiom.coAxiomName
 -- getOccString :: NamedThing a => a -> String
 
 -- TH.nameBase :: TH.Name -> String
+-- showName :: TH.Name -> String
 -- TH.mkName :: String -> TH.Name
 
--- | Convert a variable to a neat string for printing.
+-- | Get the unqualified name from a 'Name'.
+uqName :: Name -> String
+uqName = getOccString -- equivalent to: occNameString . getOccName
+
+-- | Get the fully qualified name from a 'Name'.
+fqName :: Name -> String
+fqName nm = modStr ++ uqName nm
+    where modStr = maybe "" (\m -> moduleNameString (moduleName m) ++ ".") (nameModule_maybe nm)
+
+-- | Convert a variable to a neat string for printing (unqualfied name).
 var2String :: Var -> String
-var2String = occNameString . nameOccName . varName -- TODO: would getOccString be okay here?
+var2String = uqName . varName 
 
 -- | Converts a GHC 'Name' to a Template Haskell 'TH.Name', going via a 'String'.
 name2THName :: Name -> TH.Name
-name2THName = TH.mkName . getOccString
+name2THName = TH.mkName . uqName
 
 -- | Converts an 'Var' to a Template Haskell 'TH.Name', going via a 'String'.
 var2THName :: Var -> TH.Name
 var2THName = name2THName . varName
 
--- | Get the unqualified name from an 'Var'.
-unqualifiedVarName :: Var -> String
-unqualifiedVarName = TH.nameBase . var2THName
-
--- | Hacks until we can find the correct way of doing these.
-cmpTHName2Name :: TH.Name -> Name -> Bool
-cmpTHName2Name th_nm = cmpString2Name (TH.nameBase th_nm)
-
--- | Hacks until we can find the correct way of doing these.
+-- | Compare a 'String' to a 'Name' for equality. 
+-- Strings containing a period are assumed to be fully qualified names.
 cmpString2Name :: String -> Name -> Bool
-cmpString2Name str nm = str == getOccString nm -- occNameString (nameOccName ghc_nm)
+cmpString2Name str nm | isQualified str = str == fqName nm 
+                      | otherwise       = str == uqName nm
 
--- | Hacks until we can find the correct way of doing these.
-cmpTHName2Var :: TH.Name -> Var -> Bool
-cmpTHName2Var nm = cmpTHName2Name nm . varName
+isQualified :: String -> Bool
+isQualified [] = False
+isQualified xs = '.' `elem` init xs -- pathological case is compose
 
--- | Hacks until we can find the correct way of doing these.
+-- | Compare a 'String' to a 'Var' for equality. See 'cmpString2Name'.
 cmpString2Var :: String -> Var -> Bool
 cmpString2Var str = cmpString2Name str . varName
 
--- | This is hopeless O(n), because the we could not generate the 'OccName's that match,
--- for use of the GHC 'OccEnv'.
-findNameFromTH :: GlobalRdrEnv -> TH.Name -> [Name]
-findNameFromTH rdrEnv nm =
-        [ gre_name elt
-        | elt <- concat $ occEnvElts rdrEnv
-        , cmpTHName2Name nm (gre_name elt)
-        ]
+-- | Compare a 'TH.Name' to a 'Name' for equality. See 'cmpString2Name'.
+cmpTHName2Name :: TH.Name -> Name -> Bool
+cmpTHName2Name th_nm = cmpString2Name (showName th_nm)
+
+-- | Compare a 'TH.Name' to a 'Var' for equality. See 'cmpString2Name'.
+cmpTHName2Var :: TH.Name -> Var -> Bool
+cmpTHName2Var nm = cmpTHName2Name nm . varName
+
+-- | Find 'Name's matching a given fully qualified or unqualified name.
+-- If given name is fully qualified, will only return first result, which is assumed unique.
+findNamesFromString :: GlobalRdrEnv -> String -> [Name]
+findNamesFromString rdrEnv str | isQualified str = take 1 res
+                               | otherwise       = res
+    where res = [ nm | elt <- globalRdrEnvElts rdrEnv, let nm = gre_name elt, cmpString2Name str nm ]
+
+-- | Find 'Name's matching a 'TH.Name'. See 'findNamesFromString'.
+findNamesFromTH :: GlobalRdrEnv -> TH.Name -> [Name]
+findNamesFromTH rdrEnv = findNamesFromString rdrEnv . showName
 
 -- | Pretty-print an identifier.
 ppIdInfo :: Id -> IdInfo -> SDoc

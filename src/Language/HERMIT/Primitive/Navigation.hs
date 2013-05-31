@@ -78,8 +78,7 @@ considerTargets = allT $ collectT (promoteBindT nonRec <+ promoteDefT def)
       def = defT (return ()) constUnq
 
       constUnq :: Var -> () -> String
-      constUnq v () = unqualifiedVarName v
-
+      constUnq v () = var2String v
 
 -- | Language constructs that can be zoomed to.
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetIn | CaseOf | Casty | Ticky | TypeVar | Coerce
