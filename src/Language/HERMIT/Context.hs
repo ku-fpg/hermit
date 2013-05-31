@@ -13,9 +13,11 @@ module Language.HERMIT.Context
        , boundIn
        , findBoundVars
          -- ** Bindings
-       , HermitBinding(..)
+       , HermitBindingSite(..)
        , BindingDepth
-       , hermitBindingDepth
+       , HermitBinding
+       , hermitBindingSiteExpr
+       , hermitBindingExpr
          -- ** Contexts that track Bindings
        , BindingContext
        , addBindingGroup
@@ -40,21 +42,32 @@ import Language.HERMIT.GHC
 -- | The depth of a binding.  Used, for example, to detect shadowing when inlining.
 type BindingDepth = Int
 
--- | HERMIT\'s representation of variable bindings.
-data HermitBinding
-        = BIND BindingDepth Bool CoreExpr                -- ^ Depth of the binding, whether it is recursive, and the bound expression
-                                                         --   (which cannot be inlined without checking for shadowing issues).
-        | DISEMBODIED BindingDepth                       -- ^ A binding with no bound expression, such as a lambda variable or case alternative variable.
-                                                         --   This constructor is also used for case alternative variable bindings, as they likewise lack a bound expression.
-        | CASEWILD BindingDepth CoreExpr (AltCon,[Var])  -- ^ For case wildcard binders, we store both the scrutinised expression,
-                                                         --   and the case alternative 'AltCon' (which can be converted to Constructor or Literal) and variables.
 
--- | Get the depth of a binding.
-hermitBindingDepth :: HermitBinding -> BindingDepth
-hermitBindingDepth (DISEMBODIED d)  = d
-hermitBindingDepth (BIND d _ _)     = d
-hermitBindingDepth (CASEWILD d _ _) = d
-{-# INLINE hermitBindingDepth #-}
+-- | HERMIT\'s representation of variable bindings.
+--   Bound expressions cannot be inlined without checking for shadowing issues (using the depth information).
+data HermitBindingSite
+        = REC CoreExpr
+        | NONREC CoreExpr
+        | LAM
+        | CASEALT
+        | FORALL
+        | CASEWILD CoreExpr (AltCon,[Var])  -- ^ We store both the scrutinised expression, and the case alternative 'AltCon' (which can be converted to Constructor or Literal) and variables.
+
+type HermitBinding = (BindingDepth, HermitBindingSite)
+
+-- | Retrieve the expression in a 'HermitBindingSite', if there is one.
+hermitBindingSiteExpr :: HermitBindingSite -> Maybe CoreExpr
+hermitBindingSiteExpr b = case b of
+                            REC e        -> Just e
+                            NONREC e     -> Just e
+                            CASEWILD e _ -> Just e
+                            _            -> Nothing
+{-# INLINE hermitBindingSiteExpr #-}
+
+-- | Retrieve the expression in a 'HermitBinding', if there is one.
+hermitBindingExpr :: HermitBinding -> Maybe CoreExpr
+hermitBindingExpr = hermitBindingSiteExpr . snd
+{-# INLINE hermitBindingExpr #-}
 
 ------------------------------------------------------------------------
 
@@ -62,44 +75,43 @@ class BindingContext c where
   -- | Add a complete set of parrallel bindings to the context.
   --   (Parallel bindings occur in recursive let bindings and case alternatives.)
   --   This can also be used for solitary bindings (e.g. lambdas).
-  --   A typical instance of this function would increment the current depth in the context, and provide the updated depth for use in constructing the bindings.
-  --   It is because of this depth maintainence that we take the bindings in parallel sets.
-  addHermitBindings :: (BindingDepth -> [(Var,HermitBinding)]) -> c -> c
+  --   Bindings are added in parallel sets to help with shadowing issues.
+  addHermitBindings :: [(Var,HermitBindingSite)] -> c -> c
 
 -------------------------------------------
 
 -- | Add a single binding to the context.
-addHermitBinding  :: BindingContext c => (BindingDepth -> (Var,HermitBinding)) -> c -> c
-addHermitBinding f = addHermitBindings (\ d -> [f d])
+addHermitBinding  :: BindingContext c => Var -> HermitBindingSite -> c -> c
+addHermitBinding v bd = addHermitBindings [(v,bd)]
 {-# INLINE addHermitBinding #-}
 
 -- | Add all bindings in a binding group to a context.
 addBindingGroup :: BindingContext c => CoreBind -> c -> c
-addBindingGroup (NonRec v e) = addHermitBinding  $ \ depth -> (v, BIND depth False e)
-addBindingGroup (Rec ies)    = addHermitBindings $ \ depth -> [ (i, BIND depth True e) | (i,e) <- ies ]
+addBindingGroup (NonRec v e) = addHermitBinding  v (NONREC e)
+addBindingGroup (Rec ies)    = addHermitBindings [ (i, REC e) | (i,e) <- ies ]
 {-# INLINE addBindingGroup #-}
 
 -- | Add a wildcard binding for a specific case alternative.
 addCaseWildBinding :: BindingContext c => (Id,CoreExpr,CoreAlt) -> c -> c
-addCaseWildBinding (i,e,(con,vs,_)) = addHermitBinding $ \ depth -> (i, CASEWILD depth e (con,vs))
+addCaseWildBinding (i,e,(con,vs,_)) = addHermitBinding i (CASEWILD e (con,vs))
 {-# INLINE addCaseWildBinding #-}
 
 -- | Add a lambda bound variable to a context.
 --   All that is known is the variable, which may shadow something.
 --   If so, we don't worry about that here, it is instead checked during inlining.
 addLambdaBinding :: BindingContext c => Var -> c -> c
-addLambdaBinding v =  addHermitBinding $ \ depth -> (v, DISEMBODIED depth)
+addLambdaBinding v = addHermitBinding v LAM
 {-# INLINE addLambdaBinding #-}
 
 -- | Add the variables bound by a 'DataCon' in a case.
 --   They are all bound at the same depth.
 addAltBindings :: BindingContext c => [Var] -> c -> c
-addAltBindings vs = addHermitBindings $ \ depth -> [ (v, DISEMBODIED depth) | v <- vs ]
+addAltBindings vs = addHermitBindings [ (v, CASEALT) | v <- vs ]
 {-# INLINE addAltBindings #-}
 
 -- | Add a universally quantified type variable to a context.
 addForallBinding :: BindingContext c => TyVar -> c -> c
-addForallBinding v = addHermitBinding $ \ depth -> (v, DISEMBODIED depth)
+addForallBinding v = addHermitBinding v FORALL
 {-# INLINE addForallBinding #-}
 
 ------------------------------------------------------------------------
@@ -167,13 +179,12 @@ initHermitC modGuts = HermitC
 ------------------------------------------------------------------------
 
 instance BindingContext HermitC where
-  addHermitBindings :: (BindingDepth -> [(Var,HermitBinding)]) -> HermitC -> HermitC
-  addHermitBindings f c = let nextDepth = succ (hermitC_depth c)
-                              vbs       = f nextDepth
-                           in
-                              c { hermitC_bindings = fromList vbs `union` hermitC_bindings c
-                                , hermitC_depth    = nextDepth
-                                }
+  addHermitBindings :: [(Var,HermitBindingSite)] -> HermitC -> HermitC
+  addHermitBindings vbs c = let nextDepth = succ (hermitC_depth c)
+                                vhbs      = [ (v, (nextDepth,b)) | (v,b) <- vbs ]
+                             in c { hermitC_bindings = fromList vhbs `union` hermitC_bindings c
+                                  , hermitC_depth    = nextDepth
+                                  }
   {-# INLINE addHermitBindings #-}
 
 ------------------------------------------------------------------------

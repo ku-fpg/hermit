@@ -91,7 +91,7 @@ ensureDepth d = do
     frees <- promoteT freeVarsT
     ds <- collectT $ do c <- contextT
                         promoteExprT $ varT $ \ i -> if i `elem` frees
-                                                       then maybe (i,0) (\b -> (i,hermitBindingDepth b)) (lookupHermitBinding i c)
+                                                       then maybe (i,0) (\ b -> (i, fst b)) (lookupHermitBinding i c)
                                                        else (i,0)
     return $ all (toSnd (<= d)) ds
 
@@ -106,12 +106,16 @@ getUnfolding scrutinee caseBinderOnly i c =
                             CoreUnfolding { uf_tmpl = uft } -> return (uft, 0)
                             DFunUnfolding _arity dc args    -> dFunExpr dc args (idType i) >>= return . (,0)
                             _                               -> fail $ "cannot find unfolding in Env or IdInfo."
-        Just (DISEMBODIED {}) -> fail $ "variable is not bound to an expression."
-        Just (BIND depth _ e') -> if caseBinderOnly then fail "not a case binder." else return (e', depth)
-        Just (CASEWILD depth s coreAlt) -> return $ if scrutinee
-                                                     then (s, depth)
-                                                     else let tys = tyConAppArgs (idType i)
-                                                           in either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
+        Just (depth,b) -> case b of
+                            CASEWILD s alt -> return $ if scrutinee
+                                                        then (s, depth)
+                                                        else let tys = tyConAppArgs (idType i)
+                                                              in either (,depth) (,depth+1) (alt2Exp s tys alt)
+                            _              -> if caseBinderOnly
+                                               then fail "not a case binder."
+                                               else case hermitBindingSiteExpr b of
+                                                      Just e  -> return (e, depth)
+                                                      Nothing -> fail $ "variable is not bound to an expression."
 
 -- | Convert lhs of case alternative to a constructor application expression,
 --   or a default expression in the case of the DEFAULT alternative.

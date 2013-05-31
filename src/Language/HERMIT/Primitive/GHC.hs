@@ -468,15 +468,15 @@ compareValues n1 n2 = do
 
 -- | Try to figure out the arity of an identifier.
 arityOf :: HermitC -> Id -> Int
-arityOf env nm =
-     case lookupHermitBinding nm env of
-        Nothing       -> idArity nm
-        Just (DISEMBODIED {}) -> 0
+arityOf env i =
+     case lookupHermitBinding i env of
+        Nothing       -> idArity i
         -- Note: the exprArity will call idArity if
         -- it hits an id; perhaps we should do the counting
         -- The advantage of idArity is it will terminate, though.
-        Just (BIND _ _ e)     -> exprArity e
-        Just (CASEWILD _ e _) -> exprArity e
+        Just b -> case hermitBindingExpr b of
+                    Just e  -> exprArity e
+                    Nothing -> 0 -- TODO: Why do we return 0 here?
 
 -------------------------------------------
 
