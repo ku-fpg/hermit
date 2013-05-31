@@ -86,6 +86,9 @@ externals =
     , external "let-unfloat-case" ((promoteExprR letUnfloatCase >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
         [ "let v = ev in case s of p -> e ==> case (let v = ev in s) of p -> let v = ev in e"
         , "if v does not shadow a pattern binder in p" ]                        .+ Commute .+ Shallow
+    , external "let-unfloat-lam" ((promoteExprR letUnfloatLam >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
+        [ "let v = ev in \\ x -> e ==> \\ x -> let v = ev in e"
+        , "if v does not shadow x" ]                                            .+ Commute .+ Shallow
     , external "reorder-lets" (promoteExprR . reorderNonRecLets :: [TH.Name] -> RewriteH Core)
         [ "Re-order a sequence of nested non-recursive let bindings."
         , "The argument list should contain the let-bound variables, in the desired order." ]
@@ -228,6 +231,8 @@ letUnfloatApp = prefixFailMsg "Let unfloating from app failed: " $
   do Let bnds (App e1 e2) <- idR
      return $ App (Let bnds e1) (Let bnds e2)
 
+-- | let v = ev in \ x -> e ==> \x -> let v = ev in e
+--   if v does not shadow x
 letUnfloatLam :: RewriteH CoreExpr
 letUnfloatLam = prefixFailMsg "Let unfloating from lambda failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (Lam v e)") $
