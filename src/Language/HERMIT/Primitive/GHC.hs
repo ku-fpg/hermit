@@ -504,4 +504,4 @@ lintExprT :: TranslateH CoreExpr String
 lintExprT = translate $ \ c e -> do
     dflags <- getDynFlags
     maybe (return "Core Lint Passed") (fail . showSDoc dflags)
-                 $ CoreLint.lintUnfolding noSrcLoc (keys $ hermitBindings c) e
+                 $ CoreLint.lintUnfolding noSrcLoc (keys $ hermitC_bindings c) e

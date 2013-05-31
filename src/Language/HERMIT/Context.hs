@@ -5,26 +5,24 @@ module Language.HERMIT.Context
          -- ** The Standard Context
          HermitC
        , initHermitC
+       , hermitC_bindings
        , hermitC_globalRdrEnv
        , hermitC_coreRules
+       , lookupHermitBinding
+       , boundVars
+       , boundIn
+       , findBoundVars
          -- ** Bindings
        , HermitBinding(..)
        , BindingDepth
        , hermitBindingDepth
          -- ** Contexts that track Bindings
        , BindingContext
-         -- *** Adding Bindings
        , addBindingGroup
        , addLambdaBinding
        , addAltBindings
        , addCaseWildBinding
        , addForallBinding
-         -- *** Querying Bindings
-       , hermitBindings
-       , lookupHermitBinding
-       , boundVars
-       , boundIn
-       , findBoundVars
 ) where
 
 import Prelude hiding (lookup)
@@ -61,81 +59,47 @@ hermitBindingDepth (CASEWILD d _ _) = d
 ------------------------------------------------------------------------
 
 class BindingContext c where
-  hermitBindings    :: c -> Map Var HermitBinding
-  addHermitBinding  :: Var -> HermitBinding -> c -> c
-  currentDepth      :: c -> BindingDepth
-  incDepth          :: c -> c
+  -- | Add a complete set of parrallel bindings to the context.
+  --   (Parallel bindings occur in recursive let bindings and case alternatives.)
+  --   This can also be used for solitary bindings (e.g. lambdas).
+  --   A typical instance of this function would increment the current depth in the context, and provide the updated depth for use in constructing the bindings.
+  --   It is because of this depth maintainence that we take the bindings in parallel sets.
+  addHermitBindings :: (BindingDepth -> [(Var,HermitBinding)]) -> c -> c
 
 -------------------------------------------
 
--- | Lookup the binding for a variable in a context.
-lookupHermitBinding :: BindingContext c => Var -> c -> Maybe HermitBinding
-lookupHermitBinding v = lookup v . hermitBindings
-{-# INLINE lookupHermitBinding #-}
-
--- | List all the variables bound in a context.
-boundVars :: BindingContext c => c -> [Var]
-boundVars = keys . hermitBindings
-{-# INLINE boundVars #-}
-
--- | Determine if a variable is bound in a context.
-boundIn :: BindingContext c => Var -> c -> Bool
-boundIn i c = i `elem` boundVars c
-{-# INLINE boundIn #-}
-
--- | List all variables bound in the context that match the given name.
-findBoundVars :: BindingContext c => TH.Name -> c -> [Var]
-findBoundVars nm = filter (cmpTHName2Var nm) . boundVars
-{-# INLINE findBoundVars #-}
-
--------------------------------------------
-
-nextDepth :: BindingContext c => c -> (BindingDepth,c)
-nextDepth c = let c' = incDepth c
-               in (currentDepth c', c')
-{-# INLINE nextDepth #-}
-
--------------------------------------------
-
-addHermitBindings :: BindingContext c => [(Var,HermitBinding)] -> c -> c
-addHermitBindings vbs c = foldr (uncurry addHermitBinding) c vbs
-{-# INLINE addHermitBindings #-}
+-- | Add a single binding to the context.
+addHermitBinding  :: BindingContext c => (BindingDepth -> (Var,HermitBinding)) -> c -> c
+addHermitBinding f = addHermitBindings (\ d -> [f d])
+{-# INLINE addHermitBinding #-}
 
 -- | Add all bindings in a binding group to a context.
 addBindingGroup :: BindingContext c => CoreBind -> c -> c
-addBindingGroup bnd c = let (depth,c')  = nextDepth c
-                            newBnds = case bnd of
-                                        NonRec v e  -> [ (v, BIND depth False e) ]
-                                        Rec ies     -> [ (i, BIND depth True e) | (i,e) <- ies ]
-                                                       -- All recursive binding in a binding group are at the same depth.
-                         in addHermitBindings newBnds c'
+addBindingGroup (NonRec v e) = addHermitBinding  $ \ depth -> (v, BIND depth False e)
+addBindingGroup (Rec ies)    = addHermitBindings $ \ depth -> [ (i, BIND depth True e) | (i,e) <- ies ]
 {-# INLINE addBindingGroup #-}
 
 -- | Add a wildcard binding for a specific case alternative.
 addCaseWildBinding :: BindingContext c => (Id,CoreExpr,CoreAlt) -> c -> c
-addCaseWildBinding (i,e,(con,vs,_)) c = let (depth,c') = nextDepth c
-                                         in addHermitBindings [(i,CASEWILD depth e (con,vs))] c'
+addCaseWildBinding (i,e,(con,vs,_)) = addHermitBinding $ \ depth -> (i, CASEWILD depth e (con,vs))
 {-# INLINE addCaseWildBinding #-}
 
 -- | Add a lambda bound variable to a context.
 --   All that is known is the variable, which may shadow something.
 --   If so, we don't worry about that here, it is instead checked during inlining.
 addLambdaBinding :: BindingContext c => Var -> c -> c
-addLambdaBinding v c = let (depth,c') = nextDepth c
-                         in addHermitBinding v (DISEMBODIED depth) c'
+addLambdaBinding v =  addHermitBinding $ \ depth -> (v, DISEMBODIED depth)
 {-# INLINE addLambdaBinding #-}
 
 -- | Add the variables bound by a 'DataCon' in a case.
 --   They are all bound at the same depth.
 addAltBindings :: BindingContext c => [Var] -> c -> c
-addAltBindings vs c = let (depth,c') = nextDepth c
-                       in addHermitBindings [ (v,DISEMBODIED depth) | v <- vs ] c'
+addAltBindings vs = addHermitBindings $ \ depth -> [ (v, DISEMBODIED depth) | v <- vs ]
 {-# INLINE addAltBindings #-}
 
 -- | Add a universally quantified type variable to a context.
 addForallBinding :: BindingContext c => TyVar -> c -> c
-addForallBinding v c = let (depth,c') = nextDepth c
-                        in addHermitBinding v (DISEMBODIED depth) c'
+addForallBinding v = addHermitBinding $ \ depth -> (v, DISEMBODIED depth)
 {-# INLINE addForallBinding #-}
 
 ------------------------------------------------------------------------
@@ -150,6 +114,28 @@ data HermitC = HermitC
         , hermitC_globalRdrEnv   :: GlobalRdrEnv            -- ^ The top-level lexical environment.
         , hermitC_coreRules      :: [CoreRule]              -- ^ GHC rewrite RULES.
         }
+
+------------------------------------------------------------------------
+
+-- | Lookup the binding for a variable in a context.
+lookupHermitBinding :: Var -> HermitC -> Maybe HermitBinding
+lookupHermitBinding v = lookup v . hermitC_bindings
+{-# INLINE lookupHermitBinding #-}
+
+-- | List all the variables bound in a context.
+boundVars :: HermitC -> [Var]
+boundVars = keys . hermitC_bindings
+{-# INLINE boundVars #-}
+
+-- | Determine if a variable is bound in a context.
+boundIn :: Var -> HermitC -> Bool
+boundIn i c = i `elem` boundVars c
+{-# INLINE boundIn #-}
+
+-- | List all variables bound in the context that match the given name.
+findBoundVars :: TH.Name -> HermitC -> [Var]
+findBoundVars nm = filter (cmpTHName2Var nm) . boundVars
+{-# INLINE findBoundVars #-}
 
 ------------------------------------------------------------------------
 
@@ -181,20 +167,13 @@ initHermitC modGuts = HermitC
 ------------------------------------------------------------------------
 
 instance BindingContext HermitC where
-  hermitBindings :: HermitC -> Map Var HermitBinding
-  hermitBindings = hermitC_bindings
-  {-# INLINE hermitBindings #-}
-
-  addHermitBinding :: Var -> HermitBinding -> HermitC -> HermitC
-  addHermitBinding v hb c = c { hermitC_bindings = insert v hb (hermitC_bindings c) }
-  {-# INLINE addHermitBinding #-}
-
-  currentDepth :: HermitC -> BindingDepth
-  currentDepth = hermitC_depth
-  {-# INLINE currentDepth #-}
-
-  incDepth :: HermitC -> HermitC
-  incDepth c = c { hermitC_depth = succ (hermitC_depth c) }
-  {-# INLINE incDepth #-}
+  addHermitBindings :: (BindingDepth -> [(Var,HermitBinding)]) -> HermitC -> HermitC
+  addHermitBindings f c = let nextDepth = succ (hermitC_depth c)
+                              vbs       = f nextDepth
+                           in
+                              c { hermitC_bindings = fromList vbs `union` hermitC_bindings c
+                                , hermitC_depth    = nextDepth
+                                }
+  {-# INLINE addHermitBindings #-}
 
 ------------------------------------------------------------------------
