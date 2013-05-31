@@ -471,12 +471,12 @@ arityOf :: HermitC -> Id -> Int
 arityOf env nm =
      case lookupHermitBinding nm env of
         Nothing       -> idArity nm
-        Just (LAM {}) -> 0
+        Just (DISEMBODIED {}) -> 0
         -- Note: the exprArity will call idArity if
         -- it hits an id; perhaps we should do the counting
         -- The advantage of idArity is it will terminate, though.
-        Just (BIND _ _ e) -> exprArity e
-        Just (CASE _ e _) -> exprArity e
+        Just (BIND _ _ e)     -> exprArity e
+        Just (CASEWILD _ e _) -> exprArity e
 
 -------------------------------------------
 

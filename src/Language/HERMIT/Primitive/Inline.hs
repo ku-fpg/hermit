@@ -106,12 +106,12 @@ getUnfolding scrutinee caseBinderOnly i c =
                             CoreUnfolding { uf_tmpl = uft } -> return (uft, 0)
                             DFunUnfolding _arity dc args    -> dFunExpr dc args (idType i) >>= return . (,0)
                             _                               -> fail $ "cannot find unfolding in Env or IdInfo."
-        Just (LAM {}) -> fail $ "variable is lambda-bound."
+        Just (DISEMBODIED {}) -> fail $ "variable is not bound to an expression."
         Just (BIND depth _ e') -> if caseBinderOnly then fail "not a case binder." else return (e', depth)
-        Just (CASE depth s coreAlt) -> return $ if scrutinee
-                                                 then (s, depth)
-                                                 else let tys = tyConAppArgs (idType i)
-                                                       in either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
+        Just (CASEWILD depth s coreAlt) -> return $ if scrutinee
+                                                     then (s, depth)
+                                                     else let tys = tyConAppArgs (idType i)
+                                                           in either (,depth) (,depth+1) (alt2Exp s tys coreAlt)
 
 -- | Convert lhs of case alternative to a constructor application expression,
 --   or a default expression in the case of the DEFAULT alternative.
