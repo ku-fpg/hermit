@@ -96,7 +96,7 @@ externals =
 
 -------------------------------------------------------------------------------------------
 
--- | e => (let v = e in v), name of v is provided
+-- | @e@ ==> @(let v = e in v)@, name of v is provided
 letIntro ::  TH.Name -> RewriteH CoreExpr
 letIntro nm = prefixFailMsg "Let-introduction failed: " $
               contextfreeT $ \ e -> do guardMsg (not $ isTypeArg e) "let expressions may not return a type."
@@ -107,7 +107,7 @@ letElim :: RewriteH CoreExpr
 letElim = letNonRecElim <+ letRecElim
 
 -- | Remove an unused non-recursive let binding.
---   (let v = E1 in E2) => E2, if v is not free in E2
+--   @let v = E1 in E2@ ==> @E2@, if @v@ is not free in @E2@
 letNonRecElim :: RewriteH CoreExpr
 letNonRecElim = prefixFailMsg "Dead-let-elimination failed: " $
                 withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
@@ -132,7 +132,7 @@ letRecElim = prefixFailMsg "Dead-let-elimination failed: " $ do
                 then fail "no dead code."
                 else return $ Let (Rec [ (v,rhs) | (v,rhs) <- bnds, v `elem` living ]) body
 
--- | let v = ev in e ==> case ev of v -> e
+-- | @let v = ev in e@ ==> @case ev of v -> e@
 letToCase :: RewriteH CoreExpr
 letToCase = prefixFailMsg "Converting Let to Case failed: " $
             withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
@@ -144,30 +144,30 @@ letToCase = prefixFailMsg "Converting Let to Case failed: " $
 
 -------------------------------------------------------------------------------------------
 
--- | (let v = ev in e) x ==> let v = ev in e x
+-- | @(let v = ev in e) x@ ==> @let v = ev in e x@
 letFloatApp :: RewriteH CoreExpr
 letFloatApp = prefixFailMsg "Let floating from App function failed: " $
   do vs <- appT letVarsT freeVarsT intersect
      let letAction = if null vs then idR else alphaLet
      appT letAction idR $ \ (Let bnds e) x -> Let bnds $ App e x
 
--- | f (let v = ev in e) ==> let v = ev in f e
+-- | @f (let v = ev in e)@ ==> @let v = ev in f e@
 letFloatArg :: RewriteH CoreExpr
 letFloatArg = prefixFailMsg "Let floating from App argument failed: " $
   do vs <- appT freeVarsT letVarsT intersect
      let letAction = if null vs then idR else alphaLet
      appT idR letAction $ \ f (Let bnds e) -> Let bnds $ App f e
 
--- | let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e
+-- | @let v = (let w = ew in ev) in e@ ==> @let w = ew in let v = ev in e@
 letFloatLet :: RewriteH CoreExpr
 letFloatLet = prefixFailMsg "Let floating from Let failed: " $
   do vs <- letNonRecT letVarsT freeVarsT (\ _ -> intersect)
      let bdsAction = if null vs then idR else nonRecR alphaLet
      letT bdsAction idR $ \ (NonRec v (Let bds ev)) e -> Let bds $ Let (NonRec v ev) e
 
--- | (\ v1 -> let v2 = e1 in e2)  ==>  let v2 = e1 in (\ v1 -> e2)
---   Fails if v1 occurs in e1.
---   If v1 = v2 then v1 will be alpha-renamed.
+-- | @(\ v1 -> let v2 = e1 in e2)@  ==>  @let v2 = e1 in (\ v1 -> e2)@
+--   Fails if @v1@ occurs in @e1@.
+--   If @v1@ = @v2@ then @v1@ will be alpha-renamed.
 letFloatLam :: RewriteH CoreExpr
 letFloatLam = prefixFailMsg "Let floating from Lam failed: " $
               withPatFailMsg (wrongExprForm "Lam v1 (Let (NonRec v2 e1) e2)") $
@@ -177,7 +177,7 @@ letFloatLam = prefixFailMsg "Let floating from Lam failed: " $
       then alphaLam Nothing >>> letFloatLam
       else return (Let (NonRec v2 e1) (Lam v1 e2))
 
--- | @case (let bnds in e) of wild alts ==> let bnds in (case e of wild alts)@
+-- | @case (let bnds in e) of wild alts@ ==> @let bnds in (case e of wild alts)@
 --   Fails if any variables bound in @bnds@ occurs in @alts@.
 letFloatCase :: RewriteH CoreExpr
 letFloatCase = prefixFailMsg "Let floating from Case failed: " $
@@ -188,19 +188,19 @@ letFloatCase = prefixFailMsg "Let floating from Case failed: " $
            (const idR)
            (\ (Let bnds e) wild ty alts -> Let bnds (Case e wild ty alts))
 
--- | @cast (let bnds in e) co ==> let bnds in cast e co@
+-- | @cast (let bnds in e) co@ ==> @let bnds in cast e co@
 letFloatCast :: RewriteH CoreExpr
 letFloatCast = prefixFailMsg "Let floating from Cast failed: " $
                withPatFailMsg (wrongExprForm "Cast (Let bnds e) co") $
   do Cast (Let bnds e) co <- idR
      return (Let bnds (Cast e co))
 
--- | Float a Let through an expression, whatever the context.
+-- | Float a 'Let' through an expression, whatever the context.
 letFloatExpr :: RewriteH CoreExpr
 letFloatExpr = setFailMsg "Unsuitable expression for Let floating." $
                letFloatArg <+ letFloatApp <+ letFloatLet <+ letFloatLam <+ letFloatCase <+ letFloatCast
 
--- | NonRec v (Let (NonRec w ew) ev) `ProgCons` p ==> NonRec w ew `ProgCons` NonRec v ev `ProgCons` p
+-- | @ProgCons (NonRec v (Let (NonRec w ew) ev)) p@ ==> @ProgCons (NonRec w ew) (ProgCons (NonRec v ev) p)@
 letFloatLetTop :: RewriteH CoreProg
 letFloatLetTop = prefixFailMsg "Let floating to top level failed: " $
                  withPatFailMsg (wrongExprForm "NonRec v (Let (NonRec w ew) ev) `ProgCons` p") $
@@ -210,12 +210,12 @@ letFloatLetTop = prefixFailMsg "Let floating to top level failed: " $
 
 -------------------------------------------------------------------------------------------
 
--- | Unfloat a let if possible.
+-- | Unfloat a 'Let' if possible.
 letUnfloat :: RewriteH CoreExpr
 letUnfloat = letUnfloatCase <+ letUnfloatApp <+ letUnfloatLam
 
--- | let v = ev in case s of p -> e ==> case (let v = ev in s) of p -> let v = ev in e,
---   if v does not shadow a pattern binder in p
+-- | @let v = ev in case s of p -> e@ ==> @case (let v = ev in s) of p -> let v = ev in e@,
+--   if @v@ does not shadow a pattern binder in @p@
 letUnfloatCase :: RewriteH CoreExpr
 letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $
                  withPatFailMsg (wrongExprForm "Let bnds (Case s w ty alts)") $
@@ -224,15 +224,15 @@ letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $
      guardMsg (null captured) "let bindings would capture case pattern bindings."
      return $ Case (Let bnds s) w ty $ mapAlts (Let bnds) alts
 
--- | let v = ev in f a ==> (let v = ev in f) (let v = ev in a)
+-- | @let v = ev in f a@ ==> @(let v = ev in f) (let v = ev in a)@
 letUnfloatApp :: RewriteH CoreExpr
 letUnfloatApp = prefixFailMsg "Let unfloating from app failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (App e1 e2)") $
   do Let bnds (App e1 e2) <- idR
      return $ App (Let bnds e1) (Let bnds e2)
 
--- | let v = ev in \ x -> e ==> \x -> let v = ev in e
---   if v does not shadow x
+-- | @let v = ev in \ x -> e@ ==> @\x -> let v = ev in e@
+--   if @v@ does not shadow @x@
 letUnfloatLam :: RewriteH CoreExpr
 letUnfloatLam = prefixFailMsg "Let unfloating from lambda failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (Lam v e)") $
