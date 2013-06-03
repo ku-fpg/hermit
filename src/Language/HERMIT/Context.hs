@@ -151,16 +151,6 @@ findBoundVars nm = filter (cmpTHName2Var nm) . boundVars
 
 ------------------------------------------------------------------------
 
--- | The HERMIT context stores an 'AbsolutePath' to the current node in the tree.
-instance PathContext HermitC where
-  absPath :: HermitC -> AbsolutePath
-  absPath = hermitC_path
-  {-# INLINE absPath #-}
-
-  (@@) :: HermitC -> Int -> HermitC
-  c @@ n = c { hermitC_path = hermitC_path c @@ n }
-  {-# INLINE (@@) #-}
-
 -- | Create the initial HERMIT 'HermitC' by providing a 'ModGuts'.
 initHermitC :: ModGuts -> HermitC
 initHermitC modGuts = HermitC
@@ -175,6 +165,20 @@ initHermitC modGuts = HermitC
           other_rules = mg_binds modGuts >>= bindToIdExprs >>= (idCoreRules . fst)
           {-# INLINE other_rules #-}
 {-# INLINE initHermitC #-}
+
+------------------------------------------------------------------------
+
+-- | Retrieve the 'AbsolutePath' to the current node, from the HERMIT context.
+instance ReadPath HermitC where
+  absPath :: HermitC -> AbsolutePath
+  absPath = hermitC_path
+  {-# INLINE absPath #-}
+
+-- | Extend the 'AbsolutePath' stored in the HERMIT context.
+instance ExtendPath HermitC where
+  (@@) :: HermitC -> Int -> HermitC
+  c @@ n = c { hermitC_path = hermitC_path c @@ n }
+  {-# INLINE (@@) #-}
 
 ------------------------------------------------------------------------
 
