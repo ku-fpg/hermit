@@ -14,6 +14,7 @@ import Control.Arrow
 import Control.Concurrent.STM
 import Control.Exception (bracketOnError, catch, SomeException)
 
+import Data.Monoid (mempty)
 import qualified Data.IntMap as I
 
 import GhcPlugins hiding (Direction,L)
@@ -34,39 +35,28 @@ data Direction = L -- ^ Left
                deriving (Eq,Show)
 
 -- | The path within the current local scope.
-newtype LocalPath a = LocalPath [a] deriving Eq
-
+type LocalPath = SnocPath
 type LocalPathH = LocalPath Int
 
-instance Show a => Show (LocalPath a) where
-  show (LocalPath p) = show (reverse p)
+pathStack2Paths :: [LocalPath a] -> LocalPath a -> [Path a]
+pathStack2Paths ps p = reverse (map snocPathToPath (p:ps))
 
--- | An empty 'LocalPath'.
-emptyLocalPath :: LocalPath a
-emptyLocalPath = LocalPath []
-
--- | Convert between path representations.
-localPath2Path :: LocalPath a -> Path a
-localPath2Path (LocalPath p) = reverse p
-
-localPaths2Paths :: [LocalPath a] -> [Path a]
-localPaths2Paths = reverse . map localPath2Path
+-- | Add a 'Path' to the end of a 'LocalPath'.
+extendLocalPath :: Path crumb -> LocalPath crumb -> LocalPath crumb
+extendLocalPath p (SnocPath sp) = SnocPath (reverse p ++ sp)
+{-# INLINE extendLocalPath #-}
 
 -- | Movement confined within the local scope.
 moveLocally :: Direction -> LocalPathH -> LocalPathH
-moveLocally D (LocalPath ns)             = LocalPath (0:ns)
-moveLocally U (LocalPath (_:ns))         = LocalPath ns
-moveLocally L (LocalPath (n:ns)) | n > 0 = LocalPath ((n-1):ns)
-moveLocally R (LocalPath (n:ns))         = LocalPath ((n+1):ns)
-moveLocally T _                          = LocalPath []
-moveLocally _ p                          = p
-
--- | Add a 'Path' to the end of a 'LocalPath'.
-extendLocalPath :: Path a -> LocalPath a -> LocalPath a
-extendLocalPath p (LocalPath lp) = LocalPath (reverse p ++ lp)
+moveLocally D (SnocPath ns)             = SnocPath (0:ns)
+moveLocally U (SnocPath (_:ns))         = SnocPath ns
+moveLocally L (SnocPath (n:ns)) | n > 0 = SnocPath ((n-1):ns)
+moveLocally R (SnocPath (n:ns))         = SnocPath ((n+1):ns)
+moveLocally T _                         = SnocPath []
+moveLocally _ p                         = p
 
 pathStackToLens :: [LocalPathH] -> LocalPathH -> LensH ModGuts Core
-pathStackToLens ps p = injectL >>> pathL (concat $ localPaths2Paths (p:ps))
+pathStackToLens ps p = injectL >>> pathL (concat $ pathStack2Paths ps p)
 
 ----------------------------------------------------------------------------
 
@@ -108,7 +98,7 @@ catchFails io = (io >>= (return.return)) `catch` (\e -> return $ fail $ show (e 
 --   The 'Modguts' to 'CoreM' Modguts' function required by GHC Plugins is returned.
 scopedKernel :: (ScopedKernel -> SAST -> IO ()) -> ModGuts -> CoreM ModGuts
 scopedKernel callback = hermitKernel $ \ kernel initAST -> do
-    store <- newTMVarIO $ I.fromList [(0,(initAST, [], emptyLocalPath))]
+    store <- newTMVarIO $ I.fromList [(0,(initAST, [], mempty))]
     key <- newTMVarIO (1::Int)
 
     let newKey = do
@@ -148,7 +138,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
             , pathS       = \ (SAST sAst) -> catchFails $ do
                                 m <- atomically $ readTMVar store
                                 (_, base, rel) <- get sAst m
-                                return $ localPaths2Paths (rel : base)
+                                return $ pathStack2Paths base rel
             , modPathS    = \ (SAST sAst) f env -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
                                 let rel' = f rel
@@ -164,7 +154,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
             , beginScopeS = \ (SAST sAst) -> safeTakeTMVar store $ \m -> do
                                 (ast, base, rel) <- get sAst m
                                 atomically $ do k <- newKey
-                                                putTMVar store $ I.insert k (ast, rel : base, emptyLocalPath) m
+                                                putTMVar store $ I.insert k (ast, rel : base, mempty) m
                                                 return $ SAST k
             , endScopeS   = \ (SAST sAst) -> safeTakeTMVar store $ \m -> do
                                 (ast, base, _) <- get sAst m

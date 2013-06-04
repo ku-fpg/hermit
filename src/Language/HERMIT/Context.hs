@@ -29,6 +29,7 @@ module Language.HERMIT.Context
 
 import Prelude hiding (lookup)
 import GhcPlugins hiding (empty)
+import Data.Monoid (mempty)
 import Data.Map hiding (map, foldr, filter)
 import qualified Language.Haskell.TH as TH
 
@@ -156,7 +157,7 @@ initHermitC :: ModGuts -> HermitC
 initHermitC modGuts = HermitC
                         { hermitC_bindings      = empty
                         , hermitC_depth         = 0
-                        , hermitC_path          = rootAbsPath
+                        , hermitC_path          = mempty
                         , hermitC_globalRdrEnv  = mg_rdr_env modGuts
                         , hermitC_coreRules     = mg_rules modGuts ++ other_rules
                         }
