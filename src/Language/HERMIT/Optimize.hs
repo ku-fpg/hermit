@@ -49,7 +49,7 @@ data OInst :: * -> * where
     Guard    :: (PhaseInfo -> Bool) -> OM ()      -> OInst ()
     -- with some refactoring of the interpreter I'm pretty sure
     -- we can make Focus polymorphic
-    Focus    :: TranslateH Core Path -> OM ()     -> OInst ()
+    Focus    :: TranslateH Core PathH -> OM ()    -> OInst ()
 
 -- using operational, but would we nice to use Neil's constrained-normal package!
 type OM a = ProgramT OInst (StateT InterpState IO) a
@@ -77,7 +77,7 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST ->
 
         initState = InterpState initSAST Clean.corePrettyH def Nothing
 
-        eval :: Path -> ProgramT OInst (StateT InterpState IO) () -> InterpM ()
+        eval :: PathH -> ProgramT OInst (StateT InterpState IO) () -> InterpM ()
         eval path comp = do
             sast <- gets isAST
             v <- viewT comp
@@ -119,7 +119,7 @@ query = singleton . Query
 guard :: (PhaseInfo -> Bool) -> OM () -> OM ()
 guard p = singleton . Guard p
 
-at :: TranslateH Core Path -> OM () -> OM ()
+at :: TranslateH Core PathH -> OM () -> OM ()
 at tp = singleton . Focus tp
 
 phase :: Int -> OM () -> OM ()

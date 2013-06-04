@@ -40,7 +40,7 @@ data HermitMark
     deriving Show
 
 -- These are the attributes
-data Attr = PathAttr Path
+data Attr = PathAttr PathH
           | Color SyntaxForColor
           | SpecialFont
     deriving Show
@@ -61,7 +61,7 @@ attr a p = mark (PushAttr a) <> p <> mark PopAttr
 -- The problem is that attributes span over multiple lines,
 -- messing up the latex output
 
-attrP :: Path -> DocH -> DocH
+attrP :: PathH -> DocH -> DocH
 attrP _ doc = doc -- attr . PathAttr
 
 idColor :: DocH -> DocH
@@ -93,7 +93,7 @@ data PrettyOptions = PrettyOptions
         , po_exprTypes       :: ShowOption      -- Do you hide types, and type arguments, as <>?
         , po_coercions       :: ShowOption      -- Do you hide coercions?
         , po_typesForBinders :: ShowOption      -- Do you give the types for all bindings?
-        , po_highlight       :: Maybe Path      -- This region should be highlighted (for sub-expression)
+        , po_highlight       :: Maybe PathH     -- This region should be highlighted (for sub-expression)
         , po_depth           :: Maybe Int       -- below this depth are ..., Nothing => infinite
         , po_notes           :: Bool            -- ^ notes might be added to output
         , po_ribbon          :: Float
@@ -245,7 +245,7 @@ class (RenderSpecial a, Monoid a) => RenderCode a where
 
 -- This is what the pretty printer can see
 data PrettyState = PrettyState
-        { prettyPath  :: Path
+        { prettyPath  :: PathH
         , prettyColor :: Maybe SyntaxForColor
         }
 

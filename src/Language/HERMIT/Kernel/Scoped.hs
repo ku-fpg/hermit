@@ -34,24 +34,26 @@ data Direction = L -- ^ Left
                deriving (Eq,Show)
 
 -- | The path within the current local scope.
-newtype LocalPath = LocalPath [Int] deriving Eq
+newtype LocalPath a = LocalPath [a] deriving Eq
 
-instance Show LocalPath where
+type LocalPathH = LocalPath Int
+
+instance Show a => Show (LocalPath a) where
   show (LocalPath p) = show (reverse p)
 
 -- | An empty 'LocalPath'.
-emptyLocalPath :: LocalPath
+emptyLocalPath :: LocalPath a
 emptyLocalPath = LocalPath []
 
 -- | Convert between path representations.
-localPath2Path :: LocalPath -> Path
+localPath2Path :: LocalPath a -> Path a
 localPath2Path (LocalPath p) = reverse p
 
-localPaths2Paths :: [LocalPath] -> [Path]
+localPaths2Paths :: [LocalPath a] -> [Path a]
 localPaths2Paths = reverse . map localPath2Path
 
 -- | Movement confined within the local scope.
-moveLocally :: Direction -> LocalPath -> LocalPath
+moveLocally :: Direction -> LocalPathH -> LocalPathH
 moveLocally D (LocalPath ns)             = LocalPath (0:ns)
 moveLocally U (LocalPath (_:ns))         = LocalPath ns
 moveLocally L (LocalPath (n:ns)) | n > 0 = LocalPath ((n-1):ns)
@@ -60,10 +62,10 @@ moveLocally T _                          = LocalPath []
 moveLocally _ p                          = p
 
 -- | Add a 'Path' to the end of a 'LocalPath'.
-extendLocalPath :: Path -> LocalPath -> LocalPath
+extendLocalPath :: Path a -> LocalPath a -> LocalPath a
 extendLocalPath p (LocalPath lp) = LocalPath (reverse p ++ lp)
 
-pathStackToLens :: [LocalPath] -> LocalPath -> LensH ModGuts Core
+pathStackToLens :: [LocalPathH] -> LocalPathH -> LensH ModGuts Core
 pathStackToLens ps p = injectL >>> pathL (concat $ localPaths2Paths (p:ps))
 
 ----------------------------------------------------------------------------
@@ -76,8 +78,8 @@ data ScopedKernel = ScopedKernel
         , queryS      :: forall a . SAST -> TranslateH Core a         -> HermitMEnv   -> IO (KureM a)
         , deleteS     ::            SAST                                              -> IO (KureM ())
         , listS       ::                                                                 IO [SAST]
-        , pathS       ::            SAST                                              -> IO (KureM [Path])
-        , modPathS    ::            SAST -> (LocalPath -> LocalPath)  -> HermitMEnv   -> IO (KureM SAST)
+        , pathS       ::            SAST                                              -> IO (KureM [PathH])
+        , modPathS    ::            SAST -> (LocalPathH -> LocalPathH)  -> HermitMEnv -> IO (KureM SAST)
         , beginScopeS ::            SAST                                              -> IO (KureM SAST)
         , endScopeS   ::            SAST                                              -> IO (KureM SAST)
         -- means of accessing the underlying kernel, obviously for unsafe purposes
@@ -89,9 +91,9 @@ data ScopedKernel = ScopedKernel
 newtype SAST = SAST Int deriving (Eq, Ord, Show)
 
 -- path stack, representing the base path, then the relative path
-type SASTStore = I.IntMap (AST, [LocalPath], LocalPath)
+type SASTStore = I.IntMap (AST, [LocalPathH], LocalPathH)
 
-get :: Monad m => Int -> SASTStore -> m (AST, [LocalPath], LocalPath)
+get :: Monad m => Int -> SASTStore -> m (AST, [LocalPathH], LocalPathH)
 get sAst m = maybe (fail "scopedKernel: invalid SAST") return (I.lookup sAst m)
 
 -- | Ensures that the TMVar is replaced when an error is thrown, and all exceptions are lifted into KureM failures.

@@ -212,7 +212,7 @@ corePrettyH opts = do
         ppCoreExprR :: TranslateH GHC.CoreExpr RetExpr
         ppCoreExprR = ppCoreExprPR `ap` rootPathT
 
-        ppCoreExprPR :: TranslateH GHC.CoreExpr (Path -> RetExpr)
+        ppCoreExprPR :: TranslateH GHC.CoreExpr (PathH -> RetExpr)
         ppCoreExprPR = lamT ppCoreExprR (\ v e _ -> case e of
                                                   RetLam vs e0  -> RetLam (consMaybe (ppBinder v) vs) e0
                                                   _             -> RetLam (consMaybe (ppBinder v) []) (normalExpr e))
@@ -258,7 +258,7 @@ corePrettyH opts = do
                                                      )
                    <+ tickT ppCoreExpr (\ i e p -> RetExpr $ attrP p (text "Tick" $$ nest 2 (ppSDoc i <+> parens e)))
 
-        attrPAtomExpr :: Path -> RetExpr -> RetExpr
+        attrPAtomExpr :: PathH -> RetExpr -> RetExpr
         attrPAtomExpr p (RetAtom d) = RetAtom (attrP p d)
         attrPAtomExpr p (RetExpr d) = RetExpr (attrP p d)
         attrPAtomExpr _ e           = e

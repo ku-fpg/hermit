@@ -63,9 +63,9 @@ externals = map (.+ KURE)
        [ "attempt to apply a rewrite in a top-down manner, prunning at successful rewrites" ] .+ Deep
    , external "innermost"  (innermostR :: RewriteH Core -> RewriteH Core)
        [ "a fixed-point traveral, starting with the innermost term" ] .+ Deep .+ Loop
-   , external "focus"      (hfocusR :: TranslateH Core Path -> RewriteH Core -> RewriteH Core)
+   , external "focus"      (hfocusR :: TranslateH Core PathH -> RewriteH Core -> RewriteH Core)
        [ "apply a rewrite to a focal point"] .+ Navigation .+ Deep
-   , external "focus"      (hfocusT :: TranslateH Core Path -> TranslateH Core String -> TranslateH Core String)
+   , external "focus"      (hfocusT :: TranslateH Core PathH -> TranslateH Core String -> TranslateH Core String)
        [ "apply a query at a focal point"] .+ Navigation .+ Deep
    , external "when"       ((>>) :: TranslateH Core () -> RewriteH Core -> RewriteH Core)
        [ "apply a rewrite only if the check succeeds" ] .+ Predicate
@@ -81,12 +81,12 @@ externals = map (.+ KURE)
 
 ------------------------------------------------------------------------------------
 
-hfocusR :: TranslateH Core Path -> RewriteH Core -> RewriteH Core
+hfocusR :: TranslateH Core PathH -> RewriteH Core -> RewriteH Core
 hfocusR tp r = do p <- tp
                   pathR p r
 {-# INLINE hfocusR #-}
 
-hfocusT :: TranslateH Core Path -> TranslateH Core String -> TranslateH Core String
+hfocusT :: TranslateH Core PathH -> TranslateH Core String -> TranslateH Core String
 hfocusT tp t = do p <- tp
                   pathT p t
 {-# INLINE hfocusT #-}

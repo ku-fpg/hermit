@@ -322,10 +322,10 @@ instance Extern TH.Name where
     box = NameBox
     unbox (NameBox i) = i
 
-data TranslateCorePathBox = TranslateCorePathBox (TranslateH Core Path) deriving Typeable
+data TranslateCorePathBox = TranslateCorePathBox (TranslateH Core PathH) deriving Typeable
 
-instance Extern (TranslateH Core Path) where
-    type Box (TranslateH Core Path) = TranslateCorePathBox
+instance Extern (TranslateH Core PathH) where
+    type Box (TranslateH Core PathH) = TranslateCorePathBox
     box = TranslateCorePathBox
     unbox (TranslateCorePathBox i) = i
 

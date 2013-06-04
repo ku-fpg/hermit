@@ -59,7 +59,7 @@ data AstEffect
    -- | This applys a rewrite (giving a whole new lower-level AST)
    = Apply      (RewriteH Core)
    -- | This changes the current location using a computed path
-   | Pathfinder (TranslateH Core Path)
+   | Pathfinder (TranslateH Core PathH)
    -- | This changes the currect location using directions
    | Direction  Direction
    --  | This changes the current location using a give path
@@ -603,7 +603,7 @@ putStrToConsole str = ifM (gets (cl_loading . cl_session))
 
 -------------------------------------------------------------------------------
 
-newtype UnicodeTerminal = UnicodeTerminal (Handle -> Maybe Path -> IO ())
+newtype UnicodeTerminal = UnicodeTerminal (Handle -> Maybe PathH -> IO ())
 
 instance RenderSpecial UnicodeTerminal where
         renderSpecial sym = UnicodeTerminal $ \ h _ -> hPutStr h [ch]
