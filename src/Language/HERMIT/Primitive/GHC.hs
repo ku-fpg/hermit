@@ -187,22 +187,24 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 ------------------------------------------------------------------------
 
 info :: TranslateH Core String
-info = translate $ \ c core -> do
-         dynFlags <- getDynFlags
-         let pa       = "Path: " ++ show (absPath c)
-             node     = "Node: " ++ coreNode core
-             con      = "Constructor: " ++ coreConstructor core
-             bds      = "Bindings in Scope: " ++ show (map var2String $ boundVars c)
-             expExtra = case core of
-                          ExprCore e -> ["Type or Kind: " ++ showExprTypeOrKind dynFlags e] ++
-                                        ["Free Variables: " ++ showVars (coreExprFreeVars e)]
-                                           --  ++
-                                           -- case e of
-                                           --   Var v -> ["Identifier Info: " ++ showIdInfo dynFlags v] -- TODO: what if this is a TyVar?
-                                           --   _     -> []
-                          _          -> []
+info = do crumbs <- childrenT
+          translate $ \ c core -> do
+            dynFlags <- getDynFlags
+            let pa       = "Path: " ++ show (absPath c)
+                node     = "Node: " ++ coreNode core
+                con      = "Constructor: " ++ coreConstructor core
+                children = "Children: " ++ show crumbs
+                bds      = "Bindings in Scope: " ++ show (map var2String $ boundVars c)
+                expExtra = case core of
+                             ExprCore e -> ["Type or Kind: " ++ showExprTypeOrKind dynFlags e] ++
+                                           ["Free Variables: " ++ showVars (coreExprFreeVars e)]
+                                              --  ++
+                                              -- case e of
+                                              --   Var v -> ["Identifier Info: " ++ showIdInfo dynFlags v] -- TODO: what if this is a TyVar?
+                                              --   _     -> []
+                             _          -> []
 
-         return (intercalate "\n" $ [pa,node,con,bds] ++ expExtra)
+            return (intercalate "\n" $ [pa,node,con,children,bds] ++ expExtra)
 
 showExprTypeOrKind :: DynFlags -> CoreExpr -> String
 showExprTypeOrKind dynFlags = showPpr dynFlags . exprTypeOrKind
