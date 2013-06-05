@@ -23,7 +23,9 @@ module Language.HERMIT.Core
           , appCount
             -- * Crumbs
           , Crumb(..)
-          , crumbToDeprecatedInt
+--          , crumbToDeprecatedInt
+          , deprecatedLeftSibling
+          , deprecatedRightSibling
 ) where
 
 import GhcPlugins
@@ -155,7 +157,7 @@ data Crumb = ModGuts_Prog
            | Alt_Con | Alt_Var Int | Alt_RHS
            deriving (Eq,Show)
            -- TODO: Write a prettier Show instance
-
+{-
 -- | Earlier versions of HERMIT used 'Int' as the crumb type.
 --   This function maps a 'Crumb' back to that corresponding 'Int', for backwards compatibility purposes.
 crumbToDeprecatedInt :: Crumb -> Maybe Int
@@ -187,5 +189,30 @@ crumbToDeprecatedInt = \case
                           Alt_Con        -> Nothing
                           Alt_Var _      -> Nothing
                           Alt_RHS        -> Just 0
+-}
+-- | Converts a 'Crumb' into the 'Crumb' pointing to its left-sibling, if a such a 'Crumb' exists.
+--   This is for backwards compatibility purposes with the old Int representation.
+deprecatedLeftSibling :: Crumb -> Maybe Crumb
+deprecatedLeftSibling = \case
+                           ProgCons_Tail       -> Just ProgCons_Bind
+                           Rec_Def n | n > 0   -> Just (Rec_Def (n-1))
+                           App_Arg             -> Just App_Fun
+                           Let_Body            -> Just Let_Bind
+                           Case_Alt n | n == 0 -> Just Case_Scrutinee
+                                      | n >  0 -> Just (Case_Alt (n-1))
+                           _                   -> Nothing
+
+-- | Converts a 'Crumb' into the 'Crumb' pointing to its right-sibling, if a such a 'Crumb' exists.
+--   This is for backwards compatibility purposes with the old Int representation.
+deprecatedRightSibling :: Crumb -> Maybe Crumb
+deprecatedRightSibling = \case
+                           ProgCons_Bind       -> Just ProgCons_Tail
+                           Rec_Def n           -> Just (Rec_Def (n+1))
+                           App_Fun             -> Just App_Arg
+                           Let_Bind            -> Just Let_Body
+                           Case_Scrutinee      -> Just (Case_Alt 0)
+                           Case_Alt n          -> Just (Case_Alt (n+1))
+                           _                   -> Nothing
+
 
 -----------------------------------------------------------------------

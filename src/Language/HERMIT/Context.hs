@@ -123,7 +123,7 @@ addForallBinding v = addHermitBinding v FORALL
 data HermitC = HermitC
         { hermitC_bindings       :: Map Var HermitBinding   -- ^ All (important) bindings in scope.
         , hermitC_depth          :: BindingDepth            -- ^ The depth of the bindings.
-        , hermitC_path           :: AbsolutePath Int        -- ^ The 'AbsolutePath' to the current node from the root, currently using Ints as crumbs.
+        , hermitC_path           :: AbsolutePath Crumb      -- ^ The 'AbsolutePath' to the current node from the root, currently using Ints as crumbs.
         , hermitC_globalRdrEnv   :: GlobalRdrEnv            -- ^ The top-level lexical environment.
         , hermitC_coreRules      :: [CoreRule]              -- ^ GHC rewrite RULES.
         }
@@ -170,14 +170,14 @@ initHermitC modGuts = HermitC
 ------------------------------------------------------------------------
 
 -- | Retrieve the 'AbsolutePath' to the current node, from the HERMIT context.
-instance ReadPath HermitC Int where
-  absPath :: HermitC -> AbsolutePath Int
+instance ReadPath HermitC Crumb where
+  absPath :: HermitC -> AbsolutePath Crumb
   absPath = hermitC_path
   {-# INLINE absPath #-}
 
 -- | Extend the 'AbsolutePath' stored in the HERMIT context.
-instance ExtendPath HermitC Int where
-  (@@) :: HermitC -> Int -> HermitC
+instance ExtendPath HermitC Crumb where
+  (@@) :: HermitC -> Crumb -> HermitC
   c @@ n = c { hermitC_path = hermitC_path c @@ n }
   {-# INLINE (@@) #-}
 

@@ -10,10 +10,12 @@ module Language.HERMIT.Kernel.Scoped
        , scopedKernel
 ) where
 
+
 import Control.Arrow
 import Control.Concurrent.STM
 import Control.Exception (bracketOnError, catch, SomeException)
 
+import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 import qualified Data.IntMap as I
 
@@ -30,15 +32,14 @@ import Language.HERMIT.Kernel
 data Direction = L -- ^ Left
                | R -- ^ Right
                | U -- ^ Up
-               | D -- ^ Down
                | T -- ^ Top
                deriving (Eq,Show)
 
 -- | The path within the current local scope.
 type LocalPath = SnocPath
-type LocalPathH = LocalPath Int
+type LocalPathH = LocalPath Crumb
 
-pathStack2Paths :: [LocalPath a] -> LocalPath a -> [Path a]
+pathStack2Paths :: [LocalPath crumb] -> LocalPath crumb -> [Path crumb]
 pathStack2Paths ps p = reverse (map snocPathToPath (p:ps))
 
 -- | Add a 'Path' to the end of a 'LocalPath'.
@@ -48,12 +49,13 @@ extendLocalPath p (SnocPath sp) = SnocPath (reverse p ++ sp)
 
 -- | Movement confined within the local scope.
 moveLocally :: Direction -> LocalPathH -> LocalPathH
-moveLocally D (SnocPath ns)             = SnocPath (0:ns)
-moveLocally U (SnocPath (_:ns))         = SnocPath ns
-moveLocally L (SnocPath (n:ns)) | n > 0 = SnocPath ((n-1):ns)
-moveLocally R (SnocPath (n:ns))         = SnocPath ((n+1):ns)
-moveLocally T _                         = SnocPath []
-moveLocally _ p                         = p
+moveLocally d (SnocPath p) = case p of
+                               []     -> mempty
+                               cr:crs -> case d of
+                                           T -> mempty
+                                           U -> SnocPath crs
+                                           L -> SnocPath (fromMaybe cr (deprecatedLeftSibling cr)  : crs)
+                                           R -> SnocPath (fromMaybe cr (deprecatedRightSibling cr) : crs)
 
 pathStackToLens :: [LocalPathH] -> LocalPathH -> LensH ModGuts Core
 pathStackToLens ps p = injectL >>> pathL (concat $ pathStack2Paths ps p)

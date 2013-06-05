@@ -149,7 +149,7 @@ testQuery r = f <$> testM r
 anyCallR :: RewriteH Core -> RewriteH Core
 anyCallR rr = prefixFailMsg "any-call failed: " $
                 readerT $ \ e -> case e of
-        ExprCore (App {}) -> childR 1 rec >+> (rr <+ childR 0 rec)
+        ExprCore (App {}) -> childR App_Arg rec >+> (rr <+ childR App_Fun rec)
         ExprCore (Var {}) -> rr
         _                 -> anyR rec
    where

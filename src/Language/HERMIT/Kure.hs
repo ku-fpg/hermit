@@ -73,6 +73,10 @@ module Language.HERMIT.Kure
        , promoteDefT
        , promoteExprT
        , promoteAltT
+
+       -- * Conversion to deprecated Int representation
+       , deprecatedIntToCrumbT
+       , deprecatedIntToPathT
        )
 where
 
@@ -95,7 +99,7 @@ type TranslateH a b = Translate HermitC HermitM a b
 type RewriteH a     = Rewrite   HermitC HermitM a
 type BiRewriteH a   = BiRewrite HermitC HermitM a
 type LensH a b      = Lens      HermitC HermitM a b
-type PathH          = Path Int
+type PathH          = Path Crumb
 
 -- I find it annoying that Applicative is not a superclass of Monad.
 (<$>) :: Monad m => (a -> b) -> m a -> m b
@@ -181,7 +185,7 @@ instance Injection CoreExpr Core where
 
 ---------------------------------------------------------------------
 
-instance (ExtendPath c Int, BindingContext c) => Walker c Core where
+instance (ExtendPath c Crumb, BindingContext c) => Walker c Core where
 
   allR :: forall m. MonadCatch m => Rewrite c m Core -> Rewrite c m Core
   allR r = prefixFailMsg "allR failed: " $
@@ -235,12 +239,12 @@ instance (ExtendPath c Int, BindingContext c) => Walker c Core where
 
 -- | Translate a module.
 --   Slightly different to the other congruence combinators: it passes in /all/ of the original to the reconstruction function.
-modGutsT :: (ExtendPath c Int, Monad m) => Translate c m CoreProg a -> (ModGuts -> a -> b) -> Translate c m ModGuts b
-modGutsT t f = translate $ \ c guts -> f guts <$> apply t (c @@ 0) (bindsToProg $ mg_binds guts)
+modGutsT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreProg a -> (ModGuts -> a -> b) -> Translate c m ModGuts b
+modGutsT t f = translate $ \ c guts -> f guts <$> apply t (c @@ ModGuts_Prog) (bindsToProg $ mg_binds guts)
 {-# INLINE modGutsT #-}
 
 -- | Rewrite the 'CoreProg' child of a module.
-modGutsR :: (ExtendPath c Int, Monad m) => Rewrite c m CoreProg -> Rewrite c m ModGuts
+modGutsR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreProg -> Rewrite c m ModGuts
 modGutsR r = modGutsT r (\ guts p -> guts {mg_binds = progToBinds p})
 {-# INLINE modGutsR #-}
 
@@ -254,88 +258,88 @@ progNilT b = contextfreeT $ \case
 {-# INLINE progNilT #-}
 
 -- | Translate a program of the form: ('CoreBind' @:@ 'CoreProg')
-progConsT :: (ExtendPath c Int, BindingContext c, Monad m) => Translate c m CoreBind a1 -> Translate c m CoreProg a2 -> (a1 -> a2 -> b) -> Translate c m CoreProg b
+progConsT :: (ExtendPath c Crumb, BindingContext c, Monad m) => Translate c m CoreBind a1 -> Translate c m CoreProg a2 -> (a1 -> a2 -> b) -> Translate c m CoreProg b
 progConsT t1 t2 f = translate $ \ c -> \case
-                                          ProgCons bd p -> f <$> apply t1 (c @@ 0) bd <*> apply t2 (addBindingGroup bd c @@ 1) p
+                                          ProgCons bd p -> f <$> apply t1 (c @@ ProgCons_Bind) bd <*> apply t2 (addBindingGroup bd c @@ ProgCons_Tail) p
                                           _             -> fail "not a non-empty program node."
 {-# INLINE progConsT #-}
 
 -- | Rewrite all children of a program of the form: ('CoreBind' @:@ 'CoreProg')
-progConsAllR :: (ExtendPath c Int, BindingContext c, Monad m) => Rewrite c m CoreBind -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+progConsAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => Rewrite c m CoreBind -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 progConsAllR r1 r2 = progConsT r1 r2 ProgCons
 {-# INLINE progConsAllR #-}
 
 -- | Rewrite any children of a program of the form: ('CoreBind' @:@ 'CoreProg')
-progConsAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreBind -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+progConsAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreBind -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 progConsAnyR r1 r2 = unwrapAnyR $ progConsAllR (wrapAnyR r1) (wrapAnyR r2)
 {-# INLINE progConsAnyR #-}
 
 -- | Rewrite one child of a program of the form: ('CoreBind' @:@ 'CoreProg')
-progConsOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreBind -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+progConsOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreBind -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 progConsOneR r1 r2 = unwrapOneR $  progConsAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE progConsOneR #-}
 
 ---------------------------------------------------------------------
 
 -- | Translate a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
-nonRecT :: (ExtendPath c Int, Monad m) => Translate c m CoreExpr a -> (Var -> a -> b) -> Translate c m CoreBind b
+nonRecT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreExpr a -> (Var -> a -> b) -> Translate c m CoreBind b
 nonRecT t f = translate $ \ c -> \case
-                                    NonRec v e -> f v <$> apply t (c @@ 0) e
+                                    NonRec v e -> f v <$> apply t (c @@ NonRec_RHS) e
                                     _          -> fail "not a non-recursive binding-group node."
 {-# INLINE nonRecT #-}
 
 -- | Rewrite the 'CoreExpr' child of a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
-nonRecR :: (ExtendPath c Int, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreBind
+nonRecR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreBind
 nonRecR r = nonRecT r NonRec
 {-# INLINE nonRecR #-}
 
 -- | Translate a binding group of the form: @Rec@ ['CoreDef']
-recT :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Translate c m CoreDef a) -> ([a] -> b) -> Translate c m CoreBind b
+recT :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Translate c m CoreDef a) -> ([a] -> b) -> Translate c m CoreBind b
 recT t f = translate $ \ c -> \case
          Rec bds -> -- Notice how we add the scoping bindings here *before* descending into each individual definition.
                     let c' = addBindingGroup (Rec bds) c
-                     in f <$> sequence [ apply (t n) (c' @@ n) (Def v e) -- here we convert from (Id,CoreExpr) to CoreDef
+                     in f <$> sequence [ apply (t n) (c' @@ Rec_Def n) (Def v e) -- here we convert from (Id,CoreExpr) to CoreDef
                                        | ((v,e),n) <- zip bds [0..]
                                        ]
          _       -> fail "not a recursive binding-group node."
 {-# INLINE recT #-}
 
 -- | Rewrite all children of a binding group of the form: @Rec@ ['CoreDef']
-recAllR :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreBind
+recAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreBind
 recAllR rs = recT rs defsToRecBind
 {-# INLINE recAllR #-}
 
 -- | Rewrite any children of a binding group of the form: @Rec@ ['CoreDef']
-recAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreBind
+recAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreBind
 recAnyR rs = unwrapAnyR $ recAllR (wrapAnyR . rs)
 {-# INLINE recAnyR #-}
 
 -- | Rewrite one child of a binding group of the form: @Rec@ ['CoreDef']
-recOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreBind
+recOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreBind
 recOneR rs = unwrapOneR $ recAllR (wrapOneR . rs)
 {-# INLINE recOneR #-}
 
 ---------------------------------------------------------------------
 
 -- | Translate a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
-defT :: (ExtendPath c Int, Monad m) => Translate c m CoreExpr a -> (Id -> a -> b) -> Translate c m CoreDef b
-defT t f = translate $ \ c (Def v e) -> f v <$> apply t (c @@ 0) e
+defT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreExpr a -> (Id -> a -> b) -> Translate c m CoreDef b
+defT t f = translate $ \ c (Def v e) -> f v <$> apply t (c @@ Def_RHS) e
 {-# INLINE defT #-}
 
 -- | Rewrite the 'CoreExpr' child of a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
-defR :: (ExtendPath c Int, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreDef
+defR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreDef
 defR r = defT r Def
 {-# INLINE defR #-}
 
 ---------------------------------------------------------------------
 
 -- | Translate a case alternative of the form: ('AltCon', ['Var'], 'CoreExpr')
-altT :: (ExtendPath c Int, BindingContext c, Monad m) => Translate c m CoreExpr a -> (AltCon -> [Var] -> a -> b) -> Translate c m CoreAlt b
-altT t f = translate $ \ c (con,vs,e) -> f con vs <$> apply t (addAltBindings vs c @@ 0) e
+altT :: (ExtendPath c Crumb, BindingContext c, Monad m) => Translate c m CoreExpr a -> (AltCon -> [Var] -> a -> b) -> Translate c m CoreAlt b
+altT t f = translate $ \ c (con,vs,e) -> f con vs <$> apply t (addAltBindings vs c @@ Alt_RHS) e
 {-# INLINE altT #-}
 
 -- | Rewrite the 'CoreExpr' child of a case alternative of the form: ('AltCon', 'Id', 'CoreExpr')
-altR :: (ExtendPath c Int, BindingContext c, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreAlt
+altR :: (ExtendPath c Crumb, BindingContext c, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreAlt
 altR r = altT r (,,)
 {-# INLINE altR #-}
 
@@ -356,112 +360,112 @@ litT f = contextfreeT $ \case
 {-# INLINE litT #-}
 
 -- | Translate an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
-appT :: (ExtendPath c Int, Monad m) => Translate c m CoreExpr a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
+appT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreExpr a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
 appT t1 t2 f = translate $ \ c -> \case
-                                     App e1 e2 -> f <$> apply t1 (c @@ 0) e1 <*> apply t2 (c @@ 1) e2
+                                     App e1 e2 -> f <$> apply t1 (c @@ App_Fun) e1 <*> apply t2 (c @@ App_Arg) e2
                                      _         -> fail "not an application node."
 {-# INLINE appT #-}
 
 -- | Rewrite all children of an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
-appAllR :: (ExtendPath c Int, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+appAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 appAllR r1 r2 = appT r1 r2 App
 {-# INLINE appAllR #-}
 
 -- | Rewrite any children of an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
-appAnyR :: (ExtendPath c Int, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+appAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 appAnyR r1 r2 = unwrapAnyR $ appAllR (wrapAnyR r1) (wrapAnyR r2)
 {-# INLINE appAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
-appOneR :: (ExtendPath c Int, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+appOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 appOneR r1 r2 = unwrapOneR $ appAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE appOneR #-}
 
 -- | Translate an expression of the form: @Lam@ 'Var' 'CoreExpr'
-lamT :: (ExtendPath c Int, BindingContext c, Monad m) => Translate c m CoreExpr a -> (Var -> a -> b) -> Translate c m CoreExpr b
+lamT :: (ExtendPath c Crumb, BindingContext c, Monad m) => Translate c m CoreExpr a -> (Var -> a -> b) -> Translate c m CoreExpr b
 lamT t f = translate $ \ c -> \case
-                                 Lam v e -> f v <$> apply t (addLambdaBinding v c @@ 0) e
+                                 Lam v e -> f v <$> apply t (addLambdaBinding v c @@ Lam_Body) e
                                  _       -> fail "not a lambda node."
 {-# INLINE lamT #-}
 
 -- | Rewrite the 'CoreExpr' child of an expression of the form: @Lam@ 'Var' 'CoreExpr'
-lamR :: (ExtendPath c Int, BindingContext c, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+lamR :: (ExtendPath c Crumb, BindingContext c, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 lamR r = lamT r Lam
 {-# INLINE lamR #-}
 
 -- | Translate an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
-letT :: (ExtendPath c Int, BindingContext c, Monad m) => Translate c m CoreBind a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
+letT :: (ExtendPath c Crumb, BindingContext c, Monad m) => Translate c m CoreBind a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
 letT t1 t2 f = translate $ \ c -> \case
         Let bds e -> -- Note we use the *original* context for the binding group.
                      -- If the bindings are recursive, they will be added to the context by recT.
-                     f <$> apply t1 (c @@ 0) bds <*> apply t2 (addBindingGroup bds c @@ 1) e
+                     f <$> apply t1 (c @@ Let_Bind) bds <*> apply t2 (addBindingGroup bds c @@ Let_Body) e
         _         -> fail "not a let node."
 {-# INLINE letT #-}
 
 -- | Rewrite all children of an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
-letAllR :: (ExtendPath c Int, BindingContext c, Monad m) => Rewrite c m CoreBind -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => Rewrite c m CoreBind -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letAllR r1 r2 = letT r1 r2 Let
 {-# INLINE letAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
-letAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreBind -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreBind -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letAnyR r1 r2 = unwrapAnyR $ letAnyR (wrapAnyR r1) (wrapAnyR r2)
 {-# INLINE letAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
-letOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreBind -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreBind -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letOneR r1 r2 = unwrapOneR $ letOneR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE letOneR #-}
 
 
 -- | Translate an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
-caseT :: (ExtendPath c Int, BindingContext c, Monad m) => Translate c m CoreExpr a1 -> (Int -> Translate c m CoreAlt a2) -> (a1 -> Id -> Type -> [a2] -> b) -> Translate c m CoreExpr b
+caseT :: (ExtendPath c Crumb, BindingContext c, Monad m) => Translate c m CoreExpr a1 -> (Int -> Translate c m CoreAlt a2) -> (a1 -> Id -> Type -> [a2] -> b) -> Translate c m CoreExpr b
 caseT t ts f = translate $ \ c -> \case
-         Case e x ty alts -> f <$> apply t (c @@ 0) e
+         Case e x ty alts -> f <$> apply t (c @@ Case_Scrutinee) e
                                <*> return x
                                <*> return ty
-                               <*> sequence [ apply (ts n) (addCaseWildBinding (x,e,alt) c @@ (n+1)) alt
+                               <*> sequence [ apply (ts n) (addCaseWildBinding (x,e,alt) c @@ Case_Alt n) alt
                                             | (alt,n) <- zip alts [0..]
                                             ]
          _                -> fail "not a case node."
 {-# INLINE caseT #-}
 
 -- | Rewrite all children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
-caseAllR :: (ExtendPath c Int, BindingContext c, Monad m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreAlt) -> Rewrite c m CoreExpr
+caseAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreAlt) -> Rewrite c m CoreExpr
 caseAllR r rs = caseT r rs Case
 {-# INLINE caseAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
-caseAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreAlt) -> Rewrite c m CoreExpr
+caseAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreAlt) -> Rewrite c m CoreExpr
 caseAnyR r rs = unwrapAnyR $ caseAllR (wrapAnyR r) (wrapAnyR . rs)
 {-# INLINE caseAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
-caseOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreAlt) -> Rewrite c m CoreExpr
+caseOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreAlt) -> Rewrite c m CoreExpr
 caseOneR r rs = unwrapOneR $ caseAllR (wrapOneR r) (wrapOneR . rs)
 {-# INLINE caseOneR #-}
 
 -- | Translate an expression of the form: @Cast@ 'CoreExpr' 'Coercion'
-castT :: (ExtendPath c Int, Monad m) => Translate c m CoreExpr a -> (a -> Coercion -> b) -> Translate c m CoreExpr b
+castT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreExpr a -> (a -> Coercion -> b) -> Translate c m CoreExpr b
 castT t f = translate $ \ c -> \case
-                                  Cast e cast -> f <$> apply t (c @@ 0) e <*> return cast
+                                  Cast e cast -> f <$> apply t (c @@ Cast_Expr) e <*> return cast
                                   _           -> fail "not a cast node."
 {-# INLINE castT #-}
 
 -- | Rewrite the 'CoreExpr' child of an expression of the form: @Cast@ 'CoreExpr' 'Coercion'
-castR :: (ExtendPath c Int, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+castR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 castR r = castT r Cast
 {-# INLINE castR #-}
 
 -- | Translate an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
-tickT :: (ExtendPath c Int, Monad m) => Translate c m CoreExpr a -> (CoreTickish -> a -> b) -> Translate c m CoreExpr b
+tickT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreExpr a -> (CoreTickish -> a -> b) -> Translate c m CoreExpr b
 tickT t f = translate $ \ c -> \case
-        Tick tk e -> f tk <$> apply t (c @@ 0) e
+        Tick tk e -> f tk <$> apply t (c @@ Tick_Expr) e
         _         -> fail "not a tick node."
 {-# INLINE tickT #-}
 
 -- | Rewrite the 'CoreExpr' child of an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
-tickR :: (ExtendPath c Int, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+tickR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 tickR r = tickT r Tick
 {-# INLINE tickR #-}
 
@@ -484,240 +488,240 @@ coercionT f = contextfreeT $ \case
 -- Some composite congruence combinators to export.
 
 -- | Translate a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
-recDefT :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Translate c m CoreExpr a1) -> ([(Id,a1)] -> b) -> Translate c m CoreBind b
+recDefT :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Translate c m CoreExpr a1) -> ([(Id,a1)] -> b) -> Translate c m CoreBind b
 recDefT ts = recT (\ n -> defT (ts n) (,))
 {-# INLINE recDefT #-}
 
 -- | Rewrite all children of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
-recDefAllR :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreBind
+recDefAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreBind
 recDefAllR rs = recAllR (\ n -> defR (rs n))
 {-# INLINE recDefAllR #-}
 
 -- | Rewrite any children of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
-recDefAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreBind
+recDefAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreBind
 recDefAnyR rs = recAnyR (\ n -> defR (rs n))
 {-# INLINE recDefAnyR #-}
 
 -- | Rewrite one child of a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
-recDefOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreBind
+recDefOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreBind
 recDefOneR rs = recOneR (\ n -> defR (rs n))
 {-# INLINE recDefOneR #-}
 
 
 -- | Translate a program of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
-consNonRecT :: (ExtendPath c Int, BindingContext c, Monad m) => Translate c m CoreExpr a1 -> Translate c m CoreProg a2 -> (Var -> a1 -> a2 -> b) -> Translate c m CoreProg b
+consNonRecT :: (ExtendPath c Crumb, BindingContext c, Monad m) => Translate c m CoreExpr a1 -> Translate c m CoreProg a2 -> (Var -> a1 -> a2 -> b) -> Translate c m CoreProg b
 consNonRecT t1 t2 f = progConsT (nonRecT t1 (,)) t2 (uncurry f)
 {-# INLINE consNonRecT #-}
 
 -- | Rewrite all children of an expression of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
-consNonRecAllR :: (ExtendPath c Int, BindingContext c, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+consNonRecAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 consNonRecAllR r1 r2 = progConsAllR (nonRecR r1) r2
 {-# INLINE consNonRecAllR #-}
 
 -- | Rewrite any children of an expression of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
-consNonRecAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+consNonRecAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 consNonRecAnyR r1 r2 = progConsAnyR (nonRecR r1) r2
 {-# INLINE consNonRecAnyR #-}
 
 -- | Rewrite one child of an expression of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
-consNonRecOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+consNonRecOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 consNonRecOneR r1 r2 = progConsOneR (nonRecR r1) r2
 {-# INLINE consNonRecOneR #-}
 
 
 -- | Translate an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
-consRecT :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Translate c m CoreDef a1) -> Translate c m CoreProg a2 -> ([a1] -> a2 -> b) -> Translate c m CoreProg b
+consRecT :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Translate c m CoreDef a1) -> Translate c m CoreProg a2 -> ([a1] -> a2 -> b) -> Translate c m CoreProg b
 consRecT ts t = progConsT (recT ts id) t
 {-# INLINE consRecT #-}
 
 -- | Rewrite all children of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
-consRecAllR :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+consRecAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 consRecAllR rs r = progConsAllR (recAllR rs) r
 {-# INLINE consRecAllR #-}
 
 -- | Rewrite any children of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
-consRecAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+consRecAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 consRecAnyR rs r = progConsAnyR (recAnyR rs) r
 {-# INLINE consRecAnyR #-}
 
 -- | Rewrite one child of an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
-consRecOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+consRecOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 consRecOneR rs r = progConsOneR (recOneR rs) r
 {-# INLINE consRecOneR #-}
 
 
 -- | Translate an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
-consRecDefT :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Translate c m CoreExpr a1) -> Translate c m CoreProg a2 -> ([(Id,a1)] -> a2 -> b) -> Translate c m CoreProg b
+consRecDefT :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Translate c m CoreExpr a1) -> Translate c m CoreProg a2 -> ([(Id,a1)] -> a2 -> b) -> Translate c m CoreProg b
 consRecDefT ts t = consRecT (\ n -> defT (ts n) (,)) t
 {-# INLINE consRecDefT #-}
 
 -- | Rewrite all children of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
-consRecDefAllR :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+consRecDefAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 consRecDefAllR rs r = consRecAllR (\ n -> defR (rs n)) r
 {-# INLINE consRecDefAllR #-}
 
 -- | Rewrite any children of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
-consRecDefAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+consRecDefAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 consRecDefAnyR rs r = consRecAnyR (\ n -> defR (rs n)) r
 {-# INLINE consRecDefAnyR #-}
 
 -- | Rewrite one child of an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
-consRecDefOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
+consRecDefOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreProg -> Rewrite c m CoreProg
 consRecDefOneR rs r = consRecOneR (\ n -> defR (rs n)) r
 {-# INLINE consRecDefOneR #-}
 
 
 -- | Translate an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
-letNonRecT :: (ExtendPath c Int, BindingContext c, Monad m) => Translate c m CoreExpr a1 -> Translate c m CoreExpr a2 -> (Var -> a1 -> a2 -> b) -> Translate c m CoreExpr b
+letNonRecT :: (ExtendPath c Crumb, BindingContext c, Monad m) => Translate c m CoreExpr a1 -> Translate c m CoreExpr a2 -> (Var -> a1 -> a2 -> b) -> Translate c m CoreExpr b
 letNonRecT t1 t2 f = letT (nonRecT t1 (,)) t2 (uncurry f)
 {-# INLINE letNonRecT #-}
 
 -- | Rewrite all children of an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
-letNonRecAllR :: (ExtendPath c Int, BindingContext c, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letNonRecAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letNonRecAllR r1 r2 = letAllR (nonRecR r1) r2
 {-# INLINE letNonRecAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
-letNonRecAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letNonRecAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letNonRecAnyR r1 r2 = letAnyR (nonRecR r1) r2
 {-# INLINE letNonRecAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
-letNonRecOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letNonRecOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letNonRecOneR r1 r2 = letOneR (nonRecR r1) r2
 {-# INLINE letNonRecOneR #-}
 
 
 -- | Translate an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
-letRecT :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Translate c m CoreDef a1) -> Translate c m CoreExpr a2 -> ([a1] -> a2 -> b) -> Translate c m CoreExpr b
+letRecT :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Translate c m CoreDef a1) -> Translate c m CoreExpr a2 -> ([a1] -> a2 -> b) -> Translate c m CoreExpr b
 letRecT ts t = letT (recT ts id) t
 {-# INLINE letRecT #-}
 
 -- | Rewrite all children of an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
-letRecAllR :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letRecAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letRecAllR rs r = letAllR (recAllR rs) r
 {-# INLINE letRecAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
-letRecAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letRecAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letRecAnyR rs r = letAnyR (recAnyR rs) r
 {-# INLINE letRecAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
-letRecOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letRecOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreDef) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letRecOneR rs r = letOneR (recOneR rs) r
 {-# INLINE letRecOneR #-}
 
 
 -- | Translate an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
-letRecDefT :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Translate c m CoreExpr a1) -> Translate c m CoreExpr a2 -> ([(Id,a1)] -> a2 -> b) -> Translate c m CoreExpr b
+letRecDefT :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Translate c m CoreExpr a1) -> Translate c m CoreExpr a2 -> ([(Id,a1)] -> a2 -> b) -> Translate c m CoreExpr b
 letRecDefT ts t = letRecT (\ n -> defT (ts n) (,)) t
 {-# INLINE letRecDefT #-}
 
 -- | Rewrite all children of an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
-letRecDefAllR :: (ExtendPath c Int, BindingContext c, Monad m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letRecDefAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letRecDefAllR rs r = letRecAllR (\ n -> defR (rs n)) r
 {-# INLINE letRecDefAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
-letRecDefAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letRecDefAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letRecDefAnyR rs r = letRecAnyR (\ n -> defR (rs n)) r
 {-# INLINE letRecDefAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
-letRecDefOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
+letRecDefOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
 letRecDefOneR rs r = letRecOneR (\ n -> defR (rs n)) r
 {-# INLINE letRecDefOneR #-}
 
 
 -- | Translate an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
-caseAltT :: (ExtendPath c Int, BindingContext c, Monad m) => Translate c m CoreExpr a1 -> (Int -> Translate c m CoreExpr a2) -> (a1 -> Id -> Type -> [(AltCon,[Var],a2)] -> b) -> Translate c m CoreExpr b
+caseAltT :: (ExtendPath c Crumb, BindingContext c, Monad m) => Translate c m CoreExpr a1 -> (Int -> Translate c m CoreExpr a2) -> (a1 -> Id -> Type -> [(AltCon,[Var],a2)] -> b) -> Translate c m CoreExpr b
 caseAltT t ts = caseT t (\ n -> altT (ts n) (,,))
 {-# INLINE caseAltT #-}
 
 -- | Rewrite all children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
-caseAltAllR :: (ExtendPath c Int, BindingContext c, Monad m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr
+caseAltAllR :: (ExtendPath c Crumb, BindingContext c, Monad m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr
 caseAltAllR t ts = caseAllR t (\ n -> altR (ts n))
 {-# INLINE caseAltAllR #-}
 
 -- | Rewrite any children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
-caseAltAnyR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr
+caseAltAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr
 caseAltAnyR t ts = caseAnyR t (\ n -> altR (ts n))
 {-# INLINE caseAltAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
-caseAltOneR :: (ExtendPath c Int, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr
+caseAltOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreExpr -> (Int -> Rewrite c m CoreExpr) -> Rewrite c m CoreExpr
 caseAltOneR t ts = caseOneR t (\ n -> altR (ts n))
 {-# INLINE caseAltOneR #-}
 
 ---------------------------------------------------------------------
 
 -- | Promote a rewrite on 'ModGuts' to a rewrite on 'Core'.
-promoteModGutsR :: (ExtendPath c Int, Monad m) => Rewrite c m ModGuts -> Rewrite c m Core
+promoteModGutsR :: (ExtendPath c Crumb, Monad m) => Rewrite c m ModGuts -> Rewrite c m Core
 promoteModGutsR = promoteWithFailMsgR "This rewrite can only succeed at the module level."
 {-# INLINE promoteModGutsR #-}
 
 -- | Promote a rewrite on 'CoreProg' to a rewrite on 'Core'.
-promoteProgR :: (ExtendPath c Int, Monad m) => Rewrite c m CoreProg -> Rewrite c m Core
+promoteProgR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreProg -> Rewrite c m Core
 promoteProgR = promoteWithFailMsgR "This rewrite can only succeed at program nodes (the top-level)."
 {-# INLINE promoteProgR #-}
 
 -- | Promote a rewrite on 'CoreBind' to a rewrite on 'Core'.
-promoteBindR :: (ExtendPath c Int, Monad m) => Rewrite c m CoreBind -> Rewrite c m Core
+promoteBindR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreBind -> Rewrite c m Core
 promoteBindR = promoteWithFailMsgR "This rewrite can only succeed at binding group nodes."
 {-# INLINE promoteBindR #-}
 
 -- | Promote a rewrite on 'CoreDef' to a rewrite on 'Core'.
-promoteDefR :: (ExtendPath c Int, Monad m) => Rewrite c m CoreDef -> Rewrite c m Core
+promoteDefR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreDef -> Rewrite c m Core
 promoteDefR = promoteWithFailMsgR "This rewrite can only succeed at recursive definition nodes."
 {-# INLINE promoteDefR #-}
 
 -- | Promote a rewrite on 'CoreAlt' to a rewrite on 'Core'.
-promoteAltR :: (ExtendPath c Int, Monad m) => Rewrite c m CoreAlt -> Rewrite c m Core
+promoteAltR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreAlt -> Rewrite c m Core
 promoteAltR = promoteWithFailMsgR "This rewrite can only succeed at case alternative nodes."
 {-# INLINE promoteAltR #-}
 
 -- | Promote a rewrite on 'CoreExpr' to a rewrite on 'Core'.
-promoteExprR :: (ExtendPath c Int, Monad m) => Rewrite c m CoreExpr -> Rewrite c m Core
+promoteExprR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr -> Rewrite c m Core
 promoteExprR = promoteWithFailMsgR "This rewrite can only succeed at expression nodes."
 {-# INLINE promoteExprR #-}
 
 ---------------------------------------------------------------------
 
 -- | Promote a bidirectional rewrite on 'CoreExpr' to a bidirectional rewrite on 'Core'.
-promoteExprBiR :: (ExtendPath c Int, Monad m) => BiRewrite c m CoreExpr -> BiRewrite c m Core
+promoteExprBiR :: (ExtendPath c Crumb, Monad m) => BiRewrite c m CoreExpr -> BiRewrite c m Core
 promoteExprBiR b = bidirectional (promoteExprR $ forewardT b) (promoteExprR $ backwardT b)
 {-# INLINE promoteExprBiR #-}
 
 ---------------------------------------------------------------------
 
 -- | Promote a translate on 'ModGuts' to a translate on 'Core'.
-promoteModGutsT :: (ExtendPath c Int, Monad m) => Translate c m ModGuts b -> Translate c m Core b
+promoteModGutsT :: (ExtendPath c Crumb, Monad m) => Translate c m ModGuts b -> Translate c m Core b
 promoteModGutsT = promoteWithFailMsgT "This translate can only succeed at the module level."
 {-# INLINE promoteModGutsT #-}
 
 -- | Promote a translate on 'CoreProg' to a translate on 'Core'.
-promoteProgT :: (ExtendPath c Int, Monad m) => Translate c m CoreProg b -> Translate c m Core b
+promoteProgT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreProg b -> Translate c m Core b
 promoteProgT = promoteWithFailMsgT "This translate can only succeed at program nodes (the top-level)."
 {-# INLINE promoteProgT #-}
 
 -- | Promote a translate on 'CoreBind' to a translate on 'Core'.
-promoteBindT :: (ExtendPath c Int, Monad m) => Translate c m CoreBind b -> Translate c m Core b
+promoteBindT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreBind b -> Translate c m Core b
 promoteBindT = promoteWithFailMsgT "This translate can only succeed at binding group nodes."
 {-# INLINE promoteBindT #-}
 
 -- | Promote a translate on 'CoreDef' to a translate on 'Core'.
-promoteDefT :: (ExtendPath c Int, Monad m) => Translate c m CoreDef b -> Translate c m Core b
+promoteDefT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreDef b -> Translate c m Core b
 promoteDefT = promoteWithFailMsgT "This translate can only succeed at recursive definition nodes."
 {-# INLINE promoteDefT #-}
 
 -- | Promote a translate on 'CoreAlt' to a translate on 'Core'.
-promoteAltT :: (ExtendPath c Int, Monad m) => Translate c m CoreAlt b -> Translate c m Core b
+promoteAltT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreAlt b -> Translate c m Core b
 promoteAltT = promoteWithFailMsgT "This translate can only succeed at case alternative nodes."
 {-# INLINE promoteAltT #-}
 
 -- | Promote a translate on 'CoreExpr' to a translate on 'Core'.
-promoteExprT :: (ExtendPath c Int, Monad m) => Translate c m CoreExpr b -> Translate c m Core b
+promoteExprT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreExpr b -> Translate c m Core b
 promoteExprT = promoteWithFailMsgT "This translate can only succeed at expression nodes."
 {-# INLINE promoteExprT #-}
 
@@ -862,5 +866,10 @@ deprecatedIntToCrumbT n = contextfreeT $ \case
                                             ExprCore (Tick _ _)        | n == 0                        -> return Tick_Expr
                                             _                                                          -> fail ("Child " ++ show n ++ " does not exist.")
 {-# INLINE deprecatedIntToCrumbT #-}
+
+-- | Builds a path to the first child, based on the old numbering system.
+deprecatedIntToPathT :: Monad m => Int -> Translate c m Core PathH
+deprecatedIntToPathT =  liftM return . deprecatedIntToCrumbT
+{-# INLINE deprecatedIntToPathT #-}
 
 ---------------------------------------------------------------------

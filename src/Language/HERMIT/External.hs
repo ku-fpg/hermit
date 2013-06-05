@@ -322,6 +322,7 @@ instance Extern TH.Name where
     box = NameBox
     unbox (NameBox i) = i
 
+-- TODO: Using Int here for now, need to update to Crumb.
 data TranslateCorePathBox = TranslateCorePathBox (TranslateH Core PathH) deriving Typeable
 
 instance Extern (TranslateH Core PathH) where

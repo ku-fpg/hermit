@@ -171,8 +171,8 @@ shell_externals = map (.+ Shell)
    , external "right"           (Direction R)
        [ "move to the previous child"]
    , external "up"              (Direction U)
-       [ "move to the parent"]
-   , external "down"            (Direction D)
+       [ "move to the parent node"]
+   , external "down"            (deprecatedIntToPathT 0 :: TranslateH Core PathH) -- TODO: short-term solution
        [ "move to the first child"]
    , external "tag"             Tag
        [ "tag <label> names the current AST with a label" ]
@@ -180,8 +180,8 @@ shell_externals = map (.+ Shell)
        [ "switch to navigate mode" ]
    , external "command-line"    (SessionStateEffect $ \ _ st -> return $ st { cl_nav = False })
        [ "switch to command line mode" ]
-   , external "top"            (Direction T)
-       [ "move to root of tree" ]
+   , external "top"             (Direction T)
+       [ "move to root of current scope" ]
    , external "back"            (SessionStateEffect $ navigation Back)
        [ "go back in the derivation" ]                                          .+ VersionControl
    , external "log"             (Inquiry showDerivationTree)

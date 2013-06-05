@@ -20,8 +20,6 @@ import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 
-import Control.Arrow
-
 import qualified Language.Haskell.TH as TH
 
 ---------------------------------------------------------------------------------------
@@ -53,7 +51,13 @@ considerName = oneNonEmptyPathToT . namedBinding
 
 -- | Find the path to the RHS of the definition of the given name.
 rhsOf :: TH.Name -> TranslateH Core PathH
-rhsOf nm = onePathToT (namedBinding nm) >>^ (++ [0])
+rhsOf nm = do p  <- onePathToT (namedBinding nm)
+              cr <- pathT p (   promoteBindT (nonRecT lastCrumbT $ \ _ cr -> cr)
+                             <+ promoteDefT  (defT    lastCrumbT $ \ _ cr -> cr)
+                            )
+              return (p ++ [cr])
+-- TODO: The new defintion is inefficient.  Try and improve it.  May need to generalise the KURE "onePathTo" combinators.
+-- rhsOf nm = onePathToT (namedBinding nm) >>^ (++ [0])
 
 -- | Verify that this is a binding group defining the given name.
 bindGroup :: TH.Name -> Core -> Bool
