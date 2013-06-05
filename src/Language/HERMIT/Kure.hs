@@ -839,3 +839,28 @@ tyConAppOneR rs = unwrapOneR $ tyConAppAllR (wrapOneR . rs)
 {-# INLINE tyConAppOneR #-}
 
 ---------------------------------------------------------------------
+
+-- | Earlier versions of HERMIT used 'Int' as the crumb type.
+--   This translation maps an 'Int' to the corresponding 'Crumb', for backwards compatibility purposes.
+deprecatedIntToCrumbT :: Monad m => Int -> Translate c m Core Crumb
+deprecatedIntToCrumbT n = contextfreeT $ \case
+                                            GutsCore _                 | n == 0                        -> return ModGuts_Prog
+                                            AltCore _                  | n == 0                        -> return Alt_RHS
+                                            DefCore _                  | n == 0                        -> return Def_RHS
+                                            ProgCore (ProgCons _ _)    | n == 0                        -> return ProgCons_Bind
+                                                                       | n == 1                        -> return ProgCons_Tail
+                                            BindCore (NonRec _ _)      | n == 0                        -> return NonRec_RHS
+                                            BindCore (Rec bds)         | (n >= 0) && (n < length bds)  -> return (Rec_Def n)
+                                            ExprCore (App _ _)         | n == 0                        -> return App_Fun
+                                                                       | n == 1                        -> return App_Arg
+                                            ExprCore (Lam _ _)         | n == 0                        -> return Lam_Body
+                                            ExprCore (Let _ _)         | n == 0                        -> return Let_Bind
+                                                                       | n == 1                        -> return Let_Body
+                                            ExprCore (Case _ _ _ alts) | n == 0                        -> return Case_Scrutinee
+                                                                       | (n > 0) && (n <= length alts) -> return (Case_Alt (n-1))
+                                            ExprCore (Cast _ _)        | n == 0                        -> return Cast_Expr
+                                            ExprCore (Tick _ _)        | n == 0                        -> return Tick_Expr
+                                            _                                                          -> fail ("Child " ++ show n ++ " does not exist.")
+{-# INLINE deprecatedIntToCrumbT #-}
+
+---------------------------------------------------------------------

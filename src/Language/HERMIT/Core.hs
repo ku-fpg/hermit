@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Language.HERMIT.Core
           (
             -- * Generic Data Type
@@ -19,6 +21,9 @@ module Language.HERMIT.Core
           , funArgResTypes
           , funsWithInverseTypes
           , appCount
+            -- * Crumbs
+          , Crumb(..)
+          , crumbToDeprecatedInt
 ) where
 
 import GhcPlugins
@@ -138,5 +143,49 @@ funsWithInverseTypes f g = do (fdom,fcod) <- funArgResTypes f
                                    guardM (eqType gdom fcod)
                                    return (fdom,fcod)
 {-# INLINE funsWithInverseTypes #-}
+
+-----------------------------------------------------------------------
+
+-- | Crumbs record a path through the tree, using descriptive constructor names.
+data Crumb = ModGuts_Prog
+           | ProgCons_Bind | ProgCons_Tail
+           | NonRec_RHS | NonRec_Var | Rec_Def Int
+           | Def_Id | Def_RHS
+           | App_Fun | App_Arg | Lam_Var | Lam_Body | Let_Bind | Let_Body | Case_Scrutinee | Case_Binder | Case_Type | Case_Alt Int | Cast_Expr | Cast_Co | Tick_Id | Tick_Expr | Type_Type | Co_Co
+           | Alt_Con | Alt_Var Int | Alt_RHS
+           deriving (Eq,Show)
+           -- TODO: Write a prettier Show instance
+
+-- | Earlier versions of HERMIT used 'Int' as the crumb type.
+--   This function maps a 'Crumb' back to that corresponding 'Int', for backwards compatibility purposes.
+crumbToDeprecatedInt :: Crumb -> Maybe Int
+crumbToDeprecatedInt = \case
+                          ModGuts_Prog   -> Just 0
+                          ProgCons_Bind  -> Just 0
+                          ProgCons_Tail  -> Just 1
+                          NonRec_RHS     -> Just 0
+                          NonRec_Var     -> Nothing
+                          Rec_Def n      -> Just n
+                          Def_Id         -> Nothing
+                          Def_RHS        -> Just 0
+                          App_Fun        -> Just 0
+                          App_Arg        -> Just 1
+                          Lam_Var        -> Nothing
+                          Lam_Body       -> Just 0
+                          Let_Bind       -> Just 0
+                          Let_Body       -> Just 1
+                          Case_Scrutinee -> Just 0
+                          Case_Binder    -> Nothing
+                          Case_Type      -> Nothing
+                          Case_Alt n     -> Just (n + 1)
+                          Cast_Expr      -> Just 0
+                          Cast_Co        -> Nothing
+                          Tick_Id        -> Nothing
+                          Tick_Expr      -> Just 0
+                          Type_Type      -> Nothing
+                          Co_Co          -> Nothing
+                          Alt_Con        -> Nothing
+                          Alt_Var _      -> Nothing
+                          Alt_RHS        -> Just 0
 
 -----------------------------------------------------------------------

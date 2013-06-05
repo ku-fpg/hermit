@@ -25,8 +25,6 @@ module Language.HERMIT.Context
        , addAltBindings
        , addCaseWildBinding
        , addForallBinding
-         -- * Crumbs
-       , Crumb(..)
 ) where
 
 import Prelude hiding (lookup)
@@ -118,15 +116,6 @@ addForallBinding v = addHermitBinding v FORALL
 {-# INLINE addForallBinding #-}
 
 ------------------------------------------------------------------------
-
--- | Crumbs record a path through the tree, using descriptive constructor names.
-data Crumb = ModGuts_Prog
-           | ProgCons_Bind | ProgCons_Tail
-           | NonRec_RHS | NonRec_Var | Rec_Def Int
-           | Def_Id | Def_RHS
-           | App_Fun | App_Arg | Lam_Var | Lam_Body | Let_Bind | Let_Body | Case_Scrutinee | Case_Binder | Case_Type | Case_Alt Int | Cast_Expr | Cast_Co | Tick_Id | Tick_Expr | Type_Type | Co_Co
-           | Alt_Con | Alt_Var Int | Alt_RHS
-           deriving (Eq,Show)
 
 -- | The HERMIT context, containing all bindings in scope and the current location in the AST.
 --   The bindings here are lazy by choice, so that we can avoid the cost
