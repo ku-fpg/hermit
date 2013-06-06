@@ -48,7 +48,7 @@ corePrettyH opts = do
         ppCoreAlt = arr ppSDoc
 
         ppCoreDef :: PrettyH CoreDef
-        ppCoreDef = defT ppCoreExpr $ \ i e -> ppSDoc i <> text "=" <> e
+        ppCoreDef = defT (arr ppSDoc) ppCoreExpr $ \ i e -> i <> text "=" <> e
 
     promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
      <+ promoteT (ppCoreProg :: PrettyH CoreProg)

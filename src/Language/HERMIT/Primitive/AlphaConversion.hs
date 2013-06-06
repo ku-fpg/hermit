@@ -169,9 +169,9 @@ replaceVars kvs v = fromMaybe v (lookup v kvs)
 -- | Alpha rename a lambda binder.  Optionally takes a suggested new name.
 alphaLam :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLam mn = setFailMsg (wrongFormForAlpha "Lam v e") $
-              do (v, nameModifier) <- lamT (freshNameGenT mn) (,)
+              do (v, nameModifier) <- lamT idR (freshNameGenT mn) (,)
                  v' <- constT (cloneVarH nameModifier v)
-                 lamT (replaceVarR v v') (\ _ -> Lam v')
+                 lamAnyR (arr $ replaceVar v v') (replaceVarR v v')
 
 -----------------------------------------------------------------------
 
@@ -181,15 +181,15 @@ alphaCaseBinder mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
                      do Case _ v _ _ <- idR
                         nameModifier <- freshNameGenT mn
                         v' <- constT (cloneVarH nameModifier v)
-                        caseT idR (\ _ -> replaceVarR v v') (\ e _ t alts -> Case e v' t alts)
+                        caseAnyR idR (return v') idR (\ _ -> replaceVarR v v')
 
 -----------------------------------------------------------------------
 
 -- | Rename the specified variable in a case alternative.  Optionally takes a suggested new name.
 alphaAltVar :: Maybe TH.Name -> Var -> RewriteH CoreAlt
-alphaAltVar mn v = do nameModifier <- altT (freshNameGenT mn) (\ _ _ nameGen -> nameGen)
+alphaAltVar mn v = do nameModifier <- altT idR (\ _ -> idR) (freshNameGenT mn) (\ _ _ nameGen -> nameGen)
                       v' <- constT (cloneVarH nameModifier v)
-                      altT (replaceVarR v v') (\ con vs e -> (con, map (replaceVar v v') vs, e))
+                      altAnyR (fail "") (\ _ -> arr (replaceVar v v')) (replaceVarR v v')
 
 -- | Rename the specified variables in a case alternative, using the suggested names where provided.
 alphaAltVarsWith :: [(Maybe TH.Name,Var)] -> RewriteH CoreAlt
@@ -212,16 +212,16 @@ alphaAlt = altVarsT >>= alphaAltVars
 
 -- | Rename all identifiers bound in a case expression.
 alphaCase :: RewriteH CoreExpr
-alphaCase = alphaCaseBinder Nothing >+> caseAnyR (fail "") (const alphaAlt)
+alphaCase = alphaCaseBinder Nothing >+> caseAllR idR idR idR (const alphaAlt)
 
 -----------------------------------------------------------------------
 
 -- | Alpha rename a non-recursive let binder.  Optionally takes a suggested new name.
 alphaLetNonRec :: Maybe TH.Name -> RewriteH CoreExpr
 alphaLetNonRec mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
-                    do (v, nameModifier) <- letNonRecT idR (freshNameGenT mn) (\ v _ nameMod -> (v, nameMod))
+                    do (v, nameModifier) <- letNonRecT idR mempty (freshNameGenT mn) (\ v () nameMod -> (v, nameMod))
                        v' <- constT (cloneVarH nameModifier v)
-                       letNonRecT idR (replaceVarR v v') (\ _ e1 e2 -> Let (NonRec v' e1) e2)
+                       letNonRecAnyR (return v') idR (replaceVarR v v')
 
 -- | Alpha rename a non-recursive let binder if the variable appears in the argument list.  Optionally takes a suggested new name.
 alphaLetNonRecVars :: Maybe TH.Name -> [Var] -> RewriteH CoreExpr
@@ -231,12 +231,11 @@ alphaLetNonRecVars mn vs = whenM ((`elem` vs) <$> letNonRecVarT) (alphaLetNonRec
 alphaLetRecId :: Maybe TH.Name -> Id -> RewriteH CoreExpr
 alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
                      do usedVars <- boundVarsT `mappend`
-                                    letVarsT  `mappend`
-                                    letRecDefT (\ _ -> freeVarsT) freeVarsT (\ bndfvs vs -> concatMap snd bndfvs ++ vs)
+                                    letRecT (\ _ -> defT idR freeVarsT (:)) freeVarsT (\ bndfvs vs -> concat bndfvs ++ vs)
+                               --     letVarsT  `mappend`
+                              --      letRecDefT (\ _ -> (idR,freeVarsT)) freeVarsT (\ bndfvs vs -> concatMap snd bndfvs ++ vs)
                         v' <- constT (cloneVarH (freshNameGenAvoiding mn usedVars) v)
-                        letRecDefT (\ _ -> replaceVarR v v')
-                                   (replaceVarR v v')
-                                   (\ bs e -> Let (Rec $ (map.first) (replaceVar v v') bs) e)
+                        letRecDefAnyR (\ _ -> (arr (replaceVar v v'), replaceVarR v v')) (replaceVarR v v')
 
 -- | Rename the specified identifiers in a recursive let, using the suggested names where provided.
 alphaLetRecIdsWith :: [(Maybe TH.Name,Id)] -> RewriteH CoreExpr
@@ -262,7 +261,7 @@ alphaConsNonRec :: TH.Name -> RewriteH CoreProg
 alphaConsNonRec n = setFailMsg (wrongFormForAlpha "ProgCons (NonRec v e) p") $
                     do ProgCons (NonRec v _) _ <- idR
                        v' <- constT (cloneVarH (\ _ -> TH.nameBase n) v)
-                       consNonRecT idR (replaceVarR v v') (\ _ e1 e2 -> ProgCons (NonRec v' e1) e2)
+                       consNonRecAnyR (return v') idR (replaceVarR v v')
 
 -- -- | Alpha rename a non-recursive top-level binder if the identifier appears in the argument list.  Optionally takes a suggested new name.
 -- alphaConsNonRecIds :: Maybe TH.Name -> [Id] -> RewriteH CoreProg
@@ -272,9 +271,7 @@ alphaConsNonRec n = setFailMsg (wrongFormForAlpha "ProgCons (NonRec v e) p") $
 alphaConsRecId :: TH.Name -> Id -> RewriteH CoreProg
 alphaConsRecId n v =  setFailMsg (wrongFormForAlpha "ProgCons (Rec bs) p") $
                       do v' <- constT (cloneVarH (\ _ -> TH.nameBase n) v)
-                         consRecDefT (\ _ -> replaceVarR v v')
-                                     (replaceVarR v v')
-                                     (\ bs e -> ProgCons (Rec $ (map.first) (replaceVar v v') bs) e)
+                         consRecDefAnyR (\ _ -> (arr (replaceVar v v'), replaceVarR v v')) (replaceVarR v v')
 
 -- | Rename the specified identifiers in a recursive top-level binding at the head of a program, using the suggested names where provided.
 alphaConsRecIdsWith :: [(TH.Name,Id)] -> RewriteH CoreProg

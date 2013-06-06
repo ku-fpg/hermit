@@ -123,7 +123,7 @@ addForallBinding v = addHermitBinding v FORALL
 data HermitC = HermitC
         { hermitC_bindings       :: Map Var HermitBinding   -- ^ All (important) bindings in scope.
         , hermitC_depth          :: BindingDepth            -- ^ The depth of the bindings.
-        , hermitC_path           :: AbsolutePath Crumb      -- ^ The 'AbsolutePath' to the current node from the root, currently using Ints as crumbs.
+        , hermitC_path           :: AbsolutePath Crumb      -- ^ The 'AbsolutePath' to the current node from the root.
         , hermitC_globalRdrEnv   :: GlobalRdrEnv            -- ^ The top-level lexical environment.
         , hermitC_coreRules      :: [CoreRule]              -- ^ GHC rewrite RULES.
         }

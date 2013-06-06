@@ -88,7 +88,7 @@ caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
     captures    <- appT caseAltVarsT freeVarsT (flip (map . intersect))
     wildCapture <- appT caseWildIdT freeVarsT elem
     appT ((if not wildCapture then idR else alphaCaseBinder Nothing)
-          >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
+          >>> caseAllR idR idR idR (\i -> if null (captures !! i) then idR else alphaAlt)
          )
           idR
           (\(Case s b _ty alts) v -> let newTy = exprType (App (case head alts of (_,_,f) -> f) v)
@@ -103,7 +103,7 @@ caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
     wildCapture <- appT freeVarsT caseWildIdT (flip elem)
     appT idR
          ((if not wildCapture then idR else alphaCaseBinder Nothing)
-          >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
+          >>> caseAllR idR idR idR (\i -> if null (captures !! i) then idR else alphaAlt)
          )
          (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
                                     in Case s b newTy $ mapAlts (App f) alts)
@@ -116,21 +116,23 @@ caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
 caseFloatCase :: RewriteH CoreExpr
 caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
   do
-    captures <- caseT caseAltVarsT (const altFreeVarsExclWildT) (\ vss bndr _ fs -> map (intersect (concatMap ($ bndr) fs)) vss)
+    captures <- caseT caseAltVarsT idR mempty (const altFreeVarsExclWildT) (\ vss bndr () fs -> map (intersect (concatMap ($ bndr) fs)) vss)
     -- does the binder of the inner case, shadow a free variable in any of the outer case alts?
     -- notice, caseBinderVarT returns a singleton list
-    wildCapture <- caseT caseWildIdT (const altFreeVarsExclWildT) (\ innerBndr bndr _ fvs -> innerBndr `elem` concatMap ($ bndr) fvs)
+    wildCapture <- caseT caseWildIdT idR mempty (const altFreeVarsExclWildT) (\ innerBndr bndr () fvs -> innerBndr `elem` concatMap ($ bndr) fvs)
     caseT ((if not wildCapture then idR else alphaCaseBinder Nothing)
-           >>> caseAllR idR (\i -> if null (captures !! i) then idR else alphaAlt)
+           >>> caseAllR idR idR idR (\i -> if null (captures !! i) then idR else alphaAlt)
           )
+          idR
+          idR
           (const idR)
           (\ (Case s1 b1 _ alts1) b2 ty alts2 -> Case s1 b1 ty $ mapAlts (\s -> Case s b2 ty alts2) alts1)
 
 -- | let v = case s of alt1 -> e1 in e ==> case s of alt1 -> let v = e1 in e
 caseFloatLet :: RewriteH CoreExpr
 caseFloatLet = prefixFailMsg "Case floating from Let failed: " $
-  do vs <- letNonRecT caseAltVarsT idR (\ letVar caseVars _ -> elem letVar $ concat caseVars)
-     let bdsAction = if not vs then idR else nonRecR alphaCase
+  do vs <- letNonRecT idR caseAltVarsT mempty (\ letVar caseVars () -> letVar `elem` concat caseVars)
+     let bdsAction = if not vs then idR else nonRecAllR idR alphaCase
      letT bdsAction idR $ \ (NonRec v (Case s b _ alts)) e -> Case s b (exprType e) $ mapAlts (flip Let e . NonRec v) alts
 
 -- | cast (case s of p -> e) co ==> case s of p -> cast e co
@@ -161,8 +163,8 @@ caseUnfloatArgs :: RewriteH CoreExpr
 caseUnfloatArgs = prefixFailMsg "Case unfloating into arguments failed: " $
                   withPatFailMsg (wrongExprForm "Case s v t alts") $
     do Case s wild _ty alts <- idR
-       (vss, fs, argss) <- caseT mempty (\_ -> altT callT $ \ _ac vs (fn, args) -> (vs, fn, args))
-                                        (\ () _ _ alts' -> unzip3 [ (wild:vs, fn, args) | (vs,fn,args) <- alts' ])
+       (vss, fs, argss) <- caseT mempty mempty mempty (\ _ -> altT mempty (\ _ -> idR) callT $ \ () vs (fn, args) -> (vs, fn, args))
+                                                      (\ () () () alts' -> unzip3 [ (wild:vs, fn, args) | (vs,fn,args) <- alts' ])
        guardMsg (exprsEqual fs) "alternatives are not parallel in function call."
        guardMsg (all null $ zipWith intersect (map coreExprFreeVars fs) vss) "function bound by case binders."
        return $ mkCoreApps (head fs) [ if isTyCoArg (head args)
@@ -208,7 +210,7 @@ caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
                                        let fvss    = map coreExprFreeVars $ map Type univTys ++ es
                                            shadows = [ v | (v,n) <- zip vs [1..], any (elem v) (drop n fvss) ]
                                        in if | any (elem wild) fvss  -> alphaCaseBinder Nothing >>> go
-                                             | not (null shadows)    -> caseOneR (fail "scrutinee") (\ _ -> acceptR (\ (dc'',_,_) -> dc'' == dc') >>> alphaAltVars shadows) >>> go
+                                             | not (null shadows)    -> caseOneR (fail "scrutinee") (fail "binder") (fail "type") (\ _ -> acceptR (\ (dc'',_,_) -> dc'' == dc') >>> alphaAltVars shadows) >>> go
                                              | null shadows          -> return $ flip mkCoreLets rhs $ zipWith NonRec (wild : vs) (e : es)
 -- WARNING: The alpha-renaming to avoid variable capture has not been tested.  We need testing infrastructure!
 

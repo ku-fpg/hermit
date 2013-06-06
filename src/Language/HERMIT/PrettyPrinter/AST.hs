@@ -48,33 +48,28 @@ corePrettyH opts = do
         ppCoreProg = translate $ \ c -> fmap vlist . sequenceA . map (apply ppCoreBind c) . progToBinds
 
         ppCoreExpr :: PrettyH GHC.CoreExpr
-        ppCoreExpr = varT (\i -> text "Var" <+> ppId i)
-                  <+ litT (\i -> text "Lit" <+> ppSDoc i)
+        ppCoreExpr = varT (arr $ \ i -> text "Var" <+> ppId i)
+                  <+ litT (arr $ \ x -> text "Lit" <+> ppSDoc x)
                   <+ appT ppCoreExpr ppCoreExpr (\ a b -> text "App" $$ nest 2 (cat [parens a, parens b]))
-                  <+ lamT ppCoreExpr (\ v e -> text "Lam" <+> ppVar v $$ nest 2 (parens e))
+                  <+ lamT (arr ppVar) ppCoreExpr (\ v e -> text "Lam" <+> v $$ nest 2 (parens e))
                   <+ letT ppCoreBind ppCoreExpr (\ b e -> text "Let" $$ nest 2 (cat [parens b, parens e]))
-                  <+ caseT ppCoreExpr (const ppCoreAlt) (\s b ty alts ->
-                            text "Case" $$ nest 2 (parens s)
-                                        $$ nest 2 (ppSDoc b)
-                                        $$ nest 2 (ppTypeColParen ty)
-                                        $$ nest 2 (vlist alts))
-                  <+ castT ppCoreExpr (\e co -> text "Cast" $$ nest 2 (parens e <+> ppCoercionColParen co))
-                  <+ tickT ppCoreExpr (\i e  -> text "Tick" $$ nest 2 (ppSDoc i <+> parens e))
-                  <+ typeT (\ ty -> text "Type" $$ nest 2 (ppTypeColParen ty))
-                  <+ coercionT (\ co -> text "Coercion" $$ nest 2 (ppCoercionColParen co))
+                  <+ caseT ppCoreExpr (arr ppSDoc) (arr ppTypeColParen) (const ppCoreAlt) (\s w ty alts ->
+                            text "Case" $$ nest 2 (parens s) $$ nest 2 w $$ nest 2 ty $$ nest 2 (vlist alts))
+                  <+ castT ppCoreExpr (arr ppCoercionColParen) (\ e co -> text "Cast" $$ nest 2 (parens e <+> co))
+                  <+ tickT (arr ppSDoc) ppCoreExpr (\ tk e  -> text "Tick" $$ nest 2 (tk <+> parens e))
+                  <+ typeT (arr $ \ ty -> text "Type" $$ nest 2 (ppTypeColParen ty))
+                  <+ coercionT (arr $ \ co -> text "Coercion" $$ nest 2 (ppCoercionColParen co))
 
         ppCoreBind :: PrettyH GHC.CoreBind
-        ppCoreBind = nonRecT ppCoreExpr (\ v e -> text "NonRec" <+> ppVar v $$ nest 2 (parens e))
+        ppCoreBind = nonRecT (arr ppVar) ppCoreExpr (\ v e -> text "NonRec" <+> v $$ nest 2 (parens e))
                   <+ recT (const ppCoreDef) (\bnds -> text "Rec" $$ nest 2 (vlist bnds))
 
         ppCoreAlt :: PrettyH GHC.CoreAlt
-        ppCoreAlt = altT ppCoreExpr $ \ con vs e -> text "Alt" <+> ppSDoc con
-                                                               <+> (hlist $ map ppVar vs)
-                                                               $$ nest 2 (parens e)
+        ppCoreAlt = altT (arr ppSDoc) (\ _ -> arr ppVar) ppCoreExpr $ \ con vs e -> text "Alt" <+> con <+> hlist vs $$ nest 2 (parens e)
 
         -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
         ppCoreDef :: PrettyH CoreDef
-        ppCoreDef = defT ppCoreExpr $ \ i e -> parens $ ppId i <> text "," <> e
+        ppCoreDef = defT (arr ppId) ppCoreExpr $ \ i e -> parens (i <> text "," <> e)
 
         ppTypeColParen :: Type -> DocH
         ppTypeColParen = typeColor . parens . ppCoreType

@@ -6,9 +6,9 @@ module Language.HERMIT.PrettyPrinter.Clean
   )
 where
 
-import Control.Monad (ap)
 import Control.Arrow hiding ((<+>))
 
+import Data.Monoid (mempty)
 import Data.Char (isSpace)
 import Data.Traversable (sequenceA)
 
@@ -210,15 +210,16 @@ corePrettyH opts = do
         snocNonEmpty xs e        = xs ++ [e]
 
         ppCoreExprR :: TranslateH GHC.CoreExpr RetExpr
-        ppCoreExprR = ppCoreExprPR `ap` rootPathT
+        ppCoreExprR = rootPathT >>= ppCoreExprPR
 
-        ppCoreExprPR :: TranslateH GHC.CoreExpr (PathH -> RetExpr)
-        ppCoreExprPR = lamT ppCoreExprR (\ v e _ -> case e of
-                                                  RetLam vs e0  -> RetLam (consMaybe (ppBinder v) vs) e0
-                                                  _             -> RetLam (consMaybe (ppBinder v) []) (normalExpr e))
+        ppCoreExprPR :: PathH -> TranslateH GHC.CoreExpr RetExpr
+        ppCoreExprPR p =
+                      lamT (arr ppBinder) ppCoreExprR (\ v e -> case e of
+                                                   RetLam vs e0  -> RetLam (consMaybe v vs) e0
+                                                   _             -> RetLam (consMaybe v []) (normalExpr e))
 
                    <+ letT ppCoreBind ppCoreExprR
-                                       (\ bd e _ -> case e of
+                                       (\ bd e -> case e of
                                                   RetLet vs e0  -> RetLet (bd : vs) e0
                                                   _             -> RetLet [bd] (normalExpr e))
                    -- HACKs
@@ -233,7 +234,7 @@ corePrettyH opts = do
                                          App (Type _) (Lam {}) | po_exprTypes opts == Omit -> True
                                          App (App (Var _) (Type _)) (Lam {}) | po_exprTypes opts == Omit -> True
                                          _ -> False) >>>
-                               (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetLam vs e0) _ ->
+                               (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetLam vs e0) ->
                                         RetExpr $ hang (e1 <+>
                                                             symbol '(' <>
                                                             specialSymbol LambdaSymbol <+>
@@ -243,20 +244,20 @@ corePrettyH opts = do
 
                       )
 
-                   <+ appT ppCoreExprR ppCoreExprR (\ e1 e2 _ -> ppApp e1 e2)
+                   <+ appT ppCoreExprR ppCoreExprR (\ e1 e2 -> ppApp e1 e2)
 
-                   <+ caseT ppCoreExpr (const ppCoreAlt) (\ s b _ alts p -> RetExpr $ attrP p ((keyword "case" <+> s <+> keyword "of" <+> optional (ppBinder b) id) $$ nest 2 (vcat alts)))
-                   <+ varT (\ i p -> RetAtom (attrP p $ ppVar i))
-                   <+ litT (\ i p -> RetAtom (attrP p $ ppSDoc i))
-                   <+ typeT (\ t p -> attrPAtomExpr p $ ppTypeMode t)
-                   <+ coercionT (\ co p -> attrPAtomExpr p $ ppCoercionMode co)
-                   <+ castT ppCoreExprR (\ e co p -> let e' = normalExprWithParensExceptApp e
-                                                      in case ppCoercionMode co of
-                                                           RetEmpty    -> e
-                                                           RetAtom pCo -> RetExpr $ attrP p (e' <+> castSymbol <+> pCo)
-                                                           pCo         -> RetExpr $ attrP p (e' <+> castSymbol <+> normalExprWithParensExceptApp pCo)
-                                                     )
-                   <+ tickT ppCoreExpr (\ i e p -> RetExpr $ attrP p (text "Tick" $$ nest 2 (ppSDoc i <+> parens e)))
+                   <+ caseT ppCoreExpr (arr ppBinder) mempty (const ppCoreAlt) (\ s b () alts -> RetExpr $ attrP p ((keyword "case" <+> s <+> keyword "of" <+> optional b id) $$ nest 2 (vcat alts)))
+                   <+ varT (arr $ \ i -> RetAtom (attrP p $ ppVar i))
+                   <+ litT (arr $ \ i -> RetAtom (attrP p $ ppSDoc i))
+                   <+ typeT (arr $ \ t -> attrPAtomExpr p $ ppTypeMode t)
+                   <+ coercionT (arr $ \ co -> attrPAtomExpr p $ ppCoercionMode co)
+                   <+ castT ppCoreExprR (arr ppCoercionMode) (\ e co -> let e' = normalExprWithParensExceptApp e
+                                                                         in case co of
+                                                                              RetEmpty    -> e
+                                                                              RetAtom pCo -> RetExpr $ attrP p (e' <+> castSymbol <+> pCo)
+                                                                              _           -> RetExpr $ attrP p (e' <+> castSymbol <+> normalExprWithParensExceptApp co)
+                                                             )
+                   <+ tickT (arr ppSDoc) ppCoreExpr (\ tk e -> RetExpr $ attrP p (text "Tick" $$ nest 2 (tk <+> parens e)))
 
         attrPAtomExpr :: PathH -> RetExpr -> RetExpr
         attrPAtomExpr p (RetAtom d) = RetAtom (attrP p d)
@@ -318,21 +319,21 @@ corePrettyH opts = do
                                 e          -> normalExpr $ ppCoreType $ GHC.exprType e)
 
         ppCoreBind :: PrettyH GHC.CoreBind
-        ppCoreBind = nonRecT (ppCoreExprR &&& ppCoreTypeSig) ppDefFun
+        ppCoreBind = nonRecT idR (ppCoreExprR &&& ppCoreTypeSig) ppDefFun
                   <+ recT (const ppCoreDef) (\ bnds -> keyword "rec" <+> vcat bnds)
 
         ppCoreAlt :: PrettyH GHC.CoreAlt
-        ppCoreAlt = altT ppCoreExpr $ \ con vs e -> let ppVars = if null vs
-                                                                  then specialSymbol RightArrowSymbol
-                                                                  else hsep (map (flip optional id . ppBinder) vs) <+> specialSymbol RightArrowSymbol
-                                                     in case con of
-                      GHC.DataAlt dcon -> hang (ppName IdColor (GHC.dataConName dcon) <+> ppVars) 2 e
-                      GHC.LitAlt lit   -> hang (ppSDoc lit <+> ppVars) 2 e
-                      GHC.DEFAULT      -> symbol '_' <+> ppVars <+> e
+        ppCoreAlt = altT idR (\ _ -> arr ppBinder) ppCoreExpr $ \ con vs e -> let ppVars = if null vs
+                                                                                            then specialSymbol RightArrowSymbol
+                                                                                            else hsep (map (flip optional id) vs) <+> specialSymbol RightArrowSymbol
+                                                                               in case con of
+                                                                                    GHC.DataAlt dcon -> hang (ppName IdColor (GHC.dataConName dcon) <+> ppVars) 2 e
+                                                                                    GHC.LitAlt lit   -> hang (ppSDoc lit <+> ppVars) 2 e
+                                                                                    GHC.DEFAULT      -> symbol '_' <+> ppVars <+> e
 
         -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
         ppCoreDef :: PrettyH CoreDef
-        ppCoreDef = defT (ppCoreExprR &&& ppCoreTypeSig) ppDefFun
+        ppCoreDef = defT idR (ppCoreExprR &&& ppCoreTypeSig) ppDefFun
 
         ppDefFun :: Var -> (RetExpr, DocH) -> DocH
         ppDefFun v (e,ty) = case po_exprTypes opts of

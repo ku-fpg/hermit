@@ -57,9 +57,9 @@ externals = map ((.+ Experiment) . (.+ TODO))
 
 ------------------------------------------------------------------------------------------------------
 
--- TODO: what about Type constructors around TyVars?
 isVar :: TH.Name -> TranslateH CoreExpr ()
-isVar nm = varT (cmpTHName2Var nm) >>= guardM
+isVar nm = (varT (arr $ cmpTHName2Var nm) <+ typeT (tyVarT (cmpTHName2Var nm)))
+           >>= guardM
 
 ------------------------------------------------------------------------------------------------------
 

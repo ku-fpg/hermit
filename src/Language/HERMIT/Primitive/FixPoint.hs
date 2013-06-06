@@ -14,6 +14,8 @@ import GhcPlugins as GHC hiding (varName)
 import Control.Applicative
 import Control.Arrow
 
+import Data.Monoid (mempty)
+
 import Language.HERMIT.Core
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
@@ -103,7 +105,7 @@ fixIntro :: RewriteH CoreDef
 fixIntro = prefixFailMsg "fix introduction failed: " $
            do Def f _ <- idR
               f' <- constT $ cloneVarH id f
-              Def f <$> (mkFix =<< (defT (extractR $ substR f $ varToCoreExpr f') (\ _ e' -> Lam f' e')))
+              Def f <$> (mkFix =<< (defT mempty (extractR $ substR f $ varToCoreExpr f') (\ () e' -> Lam f' e')))
 
 --------------------------------------------------------------------------------------------------
 
@@ -270,16 +272,16 @@ workerWrapperSplitR wrap unwrap =
       work = TH.mkName "work"
       fx   = TH.mkName "fix"
    in
-      fixIntro >>> defR ( appAllR idR (letIntro f)
-                           >>> letFloatArg
-                           >>> letAllR idR ( forewardT (workerWrapperFacBR wrap unwrap)
-                                               >>> appAllR idR (letIntro w)
-                                               >>> letFloatArg
-                                               >>> letNonRecAllR (unfoldNameR fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
-                                               >>> letSubstR
-                                               >>> letFloatArg
-                                           )
-                       )
+      fixIntro >>> defAllR idR ( appAllR idR (letIntro f)
+                                  >>> letFloatArg
+                                  >>> letAllR idR ( forewardT (workerWrapperFacBR wrap unwrap)
+                                                     >>> appAllR idR (letIntro w)
+                                                     >>> letFloatArg
+                                                     >>> letNonRecAllR idR (unfoldNameR fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
+                                                     >>> letSubstR
+                                                     >>> letFloatArg
+                                                  )
+                               )
 
 -- | \\ wrap unwrap ->  (@g = expr@  ==>  @g = let f = \\ g -> expr in let work = unwrap (f (wrap work)) in wrap work)@
 workerWrapperSplit :: CoreString -> CoreString -> RewriteH CoreDef
@@ -357,10 +359,10 @@ wwAssC wrap unwrap f = beforeBiR isFixExpr (\ _ -> bidirectional wwCL wwCR)
     assB = wwAssB wrap unwrap f
 
     wwCL :: RewriteH CoreExpr
-    wwCL = appAllR idR (lamR (forewardT assB) >>> etaReduce)
+    wwCL = appAllR idR (lamAllR idR (forewardT assB) >>> etaReduce)
 
     wwCR :: RewriteH CoreExpr
-    wwCR = appAllR idR (etaExpand "x" >>> lamR (backwardT assB))
+    wwCR = appAllR idR (etaExpand "x" >>> lamAllR idR (backwardT assB))
 
 -- | @fix t (\ x -> wrap (unwrap (f x)))@  \<==\>  @fix t f@
 wwC :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr

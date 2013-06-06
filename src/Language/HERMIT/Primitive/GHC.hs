@@ -40,6 +40,8 @@ import IOEnv
 
 import Control.Arrow
 import Control.Monad
+
+import Data.Monoid (mempty)
 import Data.List (intercalate,mapAccumL,(\\))
 import Data.Map (keys)
 
@@ -134,7 +136,7 @@ substAltR :: Var -> CoreExpr -> RewriteH CoreAlt
 substAltR v e = do (_, vs, _) <- idR
                    if v `elem` vs
                     then fail "variable is shadowed by a case-alternative constructor argument."
-                    else altR (substExprR v e)
+                    else altAllR idR (\ _ -> idR) (substExprR v e)
 
 -- | (let x = e1 in e2) ==> (e2[e1/x]),
 --   x must not be free in e1.
@@ -271,14 +273,14 @@ coreExprFreeIds  = uniqSetToList . exprFreeIds
 
 -- | The free variables in a case alternative, which excludes any identifiers bound in the alternative.
 altFreeVarsT :: TranslateH CoreAlt [Var]
-altFreeVarsT = altT freeVarsT (\ _ vs fvs -> fvs \\ vs)
+altFreeVarsT = altT mempty (\ _ -> idR) freeVarsT (\ () vs fvs -> fvs \\ vs)
 
 -- | A variant of 'altFreeVarsT' that returns a function that accepts the case wild-card binder before giving a result.
 --   This is so we can use this with congruence combinators, for example:
 --
 --   caseT id (const altFreeVarsT) $ \ _ wild _ fvs -> [ f wild | f <- fvs ]
 altFreeVarsExclWildT :: TranslateH CoreAlt (Id -> [Var])
-altFreeVarsExclWildT = altT freeVarsT (\ _ vs fvs wild -> fvs \\ (wild : vs))
+altFreeVarsExclWildT = altT mempty (\ _ -> idR) freeVarsT (\ () vs fvs wild -> fvs \\ (wild : vs))
 
 ------------------------------------------------------------------------
 

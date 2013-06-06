@@ -153,7 +153,7 @@ data Crumb = ModGuts_Prog
            | ProgCons_Bind | ProgCons_Tail
            | NonRec_RHS | NonRec_Var | Rec_Def Int
            | Def_Id | Def_RHS
-           | App_Fun | App_Arg | Lam_Var | Lam_Body | Let_Bind | Let_Body | Case_Scrutinee | Case_Binder | Case_Type | Case_Alt Int | Cast_Expr | Cast_Co | Tick_Id | Tick_Expr | Type_Type | Co_Co
+           | App_Fun | App_Arg | Lam_Var | Lam_Body | Let_Bind | Let_Body | Case_Scrutinee | Case_Binder | Case_Type | Case_Alt Int | Cast_Expr | Cast_Co | Tick_Tick | Tick_Expr | Type_Type | Co_Co
            | Alt_Con | Alt_Var Int | Alt_RHS
            deriving (Eq,Show)
            -- TODO: Write a prettier Show instance
@@ -182,7 +182,7 @@ crumbToDeprecatedInt = \case
                           Case_Alt n     -> Just (n + 1)
                           Cast_Expr      -> Just 0
                           Cast_Co        -> Nothing
-                          Tick_Id        -> Nothing
+                          Tick_Tick      -> Nothing
                           Tick_Expr      -> Just 0
                           Type_Type      -> Nothing
                           Co_Co          -> Nothing

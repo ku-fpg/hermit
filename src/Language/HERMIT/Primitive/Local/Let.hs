@@ -120,7 +120,7 @@ letNonRecElim = prefixFailMsg "Dead-let-elimination failed: " $
 letRecElim :: RewriteH CoreExpr
 letRecElim = prefixFailMsg "Dead-let-elimination failed: " $ do
     Let (Rec bnds) body <- idR
-    (vsAndFrees, bodyFrees) <- letT (recT (\_ -> defT freeVarsT (,)) id) freeVarsT (,)
+    (vsAndFrees, bodyFrees) <- letRecDefT (\ _ -> (idR,freeVarsT)) freeVarsT (,)
     -- binder is alive if it is found free anywhere but its own rhs
     let living = [ v
                  | (v,_) <- vsAndFrees
@@ -161,8 +161,8 @@ letFloatArg = prefixFailMsg "Let floating from App argument failed: " $
 -- | @let v = (let w = ew in ev) in e@ ==> @let w = ew in let v = ev in e@
 letFloatLet :: RewriteH CoreExpr
 letFloatLet = prefixFailMsg "Let floating from Let failed: " $
-  do vs <- letNonRecT letVarsT freeVarsT (\ _ -> intersect)
-     let bdsAction = if null vs then idR else nonRecR alphaLet
+  do vs <- letNonRecT mempty letVarsT freeVarsT (\ () -> intersect)
+     let bdsAction = if null vs then idR else nonRecAllR idR alphaLet
      letT bdsAction idR $ \ (NonRec v (Let bds ev)) e -> Let bds $ Let (NonRec v ev) e
 
 -- | @(\ v1 -> let v2 = e1 in e2)@  ==>  @let v2 = e1 in (\ v1 -> e2)@
@@ -182,9 +182,13 @@ letFloatLam = prefixFailMsg "Let floating from Lam failed: " $
 letFloatCase :: RewriteH CoreExpr
 letFloatCase = prefixFailMsg "Let floating from Case failed: " $
   do captures <- caseT letVarsT
+                       idR
+                       idR
                        (\ _ -> altFreeVarsExclWildT)
                        (\ vs wild _ fs -> vs `intersect` concatMap ($ wild) fs)
      caseT (if null captures then idR else alphaLetVars captures)
+           idR
+           idR
            (const idR)
            (\ (Let bnds e) wild ty alts -> Let bnds (Case e wild ty alts))
 

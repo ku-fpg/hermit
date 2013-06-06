@@ -13,6 +13,10 @@ module Language.HERMIT.Primitive.Navigation
        )
 where
 
+import Data.Monoid (mempty)
+
+import Control.Arrow (arr)
+
 import GhcPlugins as GHC
 
 import Language.HERMIT.Core
@@ -52,8 +56,8 @@ considerName = oneNonEmptyPathToT . namedBinding
 -- | Find the path to the RHS of the definition of the given name.
 rhsOf :: TH.Name -> TranslateH Core PathH
 rhsOf nm = do p  <- onePathToT (namedBinding nm)
-              cr <- pathT p (   promoteBindT (nonRecT lastCrumbT $ \ _ cr -> cr)
-                             <+ promoteDefT  (defT    lastCrumbT $ \ _ cr -> cr)
+              cr <- pathT p (   promoteBindT (nonRecT mempty lastCrumbT $ \ () cr -> cr)
+                             <+ promoteDefT  (defT    mempty lastCrumbT $ \ () cr -> cr)
                             )
               return (p ++ [cr])
 -- TODO: The new defintion is inefficient.  Try and improve it.  May need to generalise the KURE "onePathTo" combinators.
@@ -76,13 +80,10 @@ considerTargets :: TranslateH Core [String]
 considerTargets = allT $ collectT (promoteBindT nonRec <+ promoteDefT def)
     where
       nonRec :: TranslateH CoreBind String
-      nonRec = nonRecT (return ()) constUnq
+      nonRec = nonRecT (arr var2String) idR const
 
       def :: TranslateH CoreDef String
-      def = defT (return ()) constUnq
-
-      constUnq :: Var -> () -> String
-      constUnq v () = var2String v
+      def = defT (arr var2String) idR const
 
 -- | Language constructs that can be zoomed to.
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetIn | CaseOf | Casty | Ticky | TypeVar | Coerce

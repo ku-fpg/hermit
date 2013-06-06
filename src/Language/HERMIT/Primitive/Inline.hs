@@ -89,10 +89,9 @@ configurableInline scrutinee caseBinderOnly =
 ensureDepth :: Int -> TranslateH Core Bool
 ensureDepth d = do
     frees <- promoteT freeVarsT
-    ds <- collectT $ do c <- contextT
-                        promoteExprT $ varT $ \ i -> if i `elem` frees
-                                                       then maybe (i,0) (\ b -> (i, fst b)) (lookupHermitBinding i c)
-                                                       else (i,0)
+    ds <- collectT $ promoteExprT $ varT $ translate $ \ c i -> return $ if i `elem` frees
+                                                                          then maybe (i,0) (\ b -> (i, fst b)) (lookupHermitBinding i c)
+                                                                          else (i,0)
     return $ all (toSnd (<= d)) ds
 
 getUnfolding :: Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
@@ -136,7 +135,7 @@ alt2Exp _ tys (DataAlt dc, as) = Right $ mkCoreConApps dc (map Type tys ++ map v
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: TranslateH Core [String]
-inlineTargets = collectT $ promoteT $ whenM (testM inline) (varT var2String)
+inlineTargets = collectT $ promoteT $ whenM (testM inline) (varT $ arr var2String)
 
 -- | Build a CoreExpr for a DFunUnfolding
 dFunExpr :: DataCon -> [DFunArg CoreExpr] -> Type -> HermitM CoreExpr

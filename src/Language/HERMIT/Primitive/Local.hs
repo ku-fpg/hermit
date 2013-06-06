@@ -178,7 +178,7 @@ etaExpand nm = prefixFailMsg "Eta-expansion failed: " $
 -- | Perform multiple eta-expansions.
 multiEtaExpand :: [String] -> RewriteH CoreExpr
 multiEtaExpand []       = idR
-multiEtaExpand (nm:nms) = etaExpand nm >>> lamR (multiEtaExpand nms)
+multiEtaExpand (nm:nms) = etaExpand nm >>> lamAllR idR (multiEtaExpand nms)
 
 ------------------------------------------------------------------------------
 
