@@ -360,7 +360,7 @@ wwAssC wrap unwrap f = beforeBiR isFixExpr (\ _ -> bidirectional wwCL wwCR)
     wwCL = appAllR idR (lamR (forewardT assB) >>> etaReduce)
 
     wwCR :: RewriteH CoreExpr
-    wwCR = appAllR idR (etaExpand (TH.mkName "x") >>> lamR (backwardT assB))
+    wwCR = appAllR idR (etaExpand "x" >>> lamR (backwardT assB))
 
 -- | @fix t (\ x -> wrap (unwrap (f x)))@  \<==\>  @fix t f@
 wwC :: CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr

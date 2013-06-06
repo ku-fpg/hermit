@@ -62,7 +62,7 @@ externals =
         [ "(let v = e1 in e2) ==> (\\ v -> e2) e1" ]                            .+ Shallow
     , external "eta-reduce" (promoteExprR etaReduce :: RewriteH Core)
         [ "(\\ v -> e1 v) ==> e1" ]                                             .+ Eval .+ Shallow .+ Bash
-    , external "eta-expand" (promoteExprR . etaExpand :: TH.Name -> RewriteH Core)
+    , external "eta-expand" (promoteExprR . etaExpand . show :: TH.Name -> RewriteH Core)
         [ "\"eta-expand 'v\" performs e1 ==> (\\ v -> e1 v)" ]                  .+ Shallow .+ Introduce
     , external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
         [ "Flatten all the top-level binding groups in the module to a single recursive binding group."
@@ -164,19 +164,19 @@ etaReduce = prefixFailMsg "Eta-reduction failed: " $
                return f
 
 -- | e1 ==> (\\ v -> e1 v)
-etaExpand :: TH.Name -> RewriteH CoreExpr
+etaExpand :: String -> RewriteH CoreExpr
 etaExpand nm = prefixFailMsg "Eta-expansion failed: " $
                contextfreeT $ \ e -> let ty = exprType e in
         case splitFunTy_maybe ty of
-          Just (argTy, _) -> do v <- newIdH (show nm) argTy
+          Just (argTy, _) -> do v <- newIdH nm argTy
                                 return $ Lam v (App e (varToCoreExpr v))
           Nothing         -> case splitForAllTy_maybe ty of
-                               Just (tv,_) -> do v <- newTyVarH (show nm) (tyVarKind tv)
+                               Just (tv,_) -> do v <- newTyVarH nm (tyVarKind tv)
                                                  return $ Lam v (App e (varToCoreExpr v))
                                Nothing -> fail "type of expression is not a function or a forall."
 
 -- | Perform multiple eta-expansions.
-multiEtaExpand :: [TH.Name] -> RewriteH CoreExpr
+multiEtaExpand :: [String] -> RewriteH CoreExpr
 multiEtaExpand []       = idR
 multiEtaExpand (nm:nms) = etaExpand nm >>> lamR (multiEtaExpand nms)
 
