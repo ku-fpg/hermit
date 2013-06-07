@@ -149,7 +149,7 @@ lastPhase = guard (null . phasesLeft)
 display :: OM ()
 display = do
     po <- gets isPrettyOptions
-    gets isPretty >>= query . ($ po) >>= liftIO . unicodeConsole stdout po
+    gets isPretty >>= query . liftPrettyH . ($ po) >>= liftIO . unicodeConsole stdout po
 
 setPretty :: (PrettyOptions -> PrettyH Core) -> OM ()
 setPretty pp = modify $ \s -> s { isPretty = pp }

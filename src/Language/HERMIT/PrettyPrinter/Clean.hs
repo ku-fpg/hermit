@@ -16,6 +16,7 @@ import GhcPlugins (TyCon(..), Coercion(..), Var(..), Expr(..), Bind(..))
 import qualified GhcPlugins as GHC
 
 import Language.HERMIT.GHC
+import Language.HERMIT.Monad
 import Language.HERMIT.Syntax
 import Language.HERMIT.Kure
 import Language.HERMIT.Core
@@ -209,10 +210,10 @@ corePrettyH opts = do
         snocNonEmpty xs RetEmpty = xs
         snocNonEmpty xs e        = xs ++ [e]
 
-        ppCoreExprR :: TranslateH GHC.CoreExpr RetExpr
+        ppCoreExprR :: Translate PrettyC HermitM GHC.CoreExpr RetExpr
         ppCoreExprR = rootPathT >>= ppCoreExprPR
 
-        ppCoreExprPR :: PathH -> TranslateH GHC.CoreExpr RetExpr
+        ppCoreExprPR :: PathH -> Translate PrettyC HermitM GHC.CoreExpr RetExpr
         ppCoreExprPR p =
                       lamT (arr ppBinder) ppCoreExprR (\ v e -> case e of
                                                    RetLam vs e0  -> RetLam (consMaybe v vs) e0

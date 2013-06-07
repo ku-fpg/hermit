@@ -1,8 +1,44 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, TypeFamilies #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, TypeFamilies,
+             MultiParamTypeClasses, RankNTypes, FlexibleContexts #-}
 
-module Language.HERMIT.PrettyPrinter.Common where
-
-import Control.Arrow hiding ((<+>))
+module Language.HERMIT.PrettyPrinter.Common
+    ( -- * Documents
+      DocH
+    , Attr(..)
+    , attrP
+      -- ** Colors
+    , coercionColor
+    , idColor
+    , keywordColor
+    , markColor
+    , typeColor
+    , ShowOption(..)
+    , specialFont
+    , SpecialSymbol(..)
+    , SyntaxForColor(..)
+      -- * Renderers
+    , coreRenders
+    , renderCode
+    , RenderCode(..)
+    , renderSpecial
+    , RenderSpecial
+    , Unicode(..)
+      -- * Pretty Printer Traversals
+    , PrettyH
+    , liftPrettyH
+    , PrettyC -- intentionally abstract
+    , initPrettyC
+    , liftPrettyC
+    , TranslateDocH(..)
+    , TranslateCoreDocHBox(..)
+      -- * Pretty Printer Options
+    , PrettyOptions(..)
+    , updateTypeShowOption
+    , updateCoShowOption
+      -- * Utilities
+    , hlist
+    , vlist
+    ) where
 
 import Data.Char
 import Data.Default
@@ -10,11 +46,11 @@ import Data.Monoid hiding ((<>))
 import qualified Data.Map as M
 import Data.Typeable
 
-import GhcPlugins hiding ((<>),(<+>),($$))
-
+import Language.HERMIT.Context
 import Language.HERMIT.Core
 import Language.HERMIT.External
 import Language.HERMIT.Kure
+import Language.HERMIT.Monad
 
 import System.IO
 
@@ -73,7 +109,6 @@ typeColor = markColor TypeColor
 coercionColor :: DocH -> DocH
 coercionColor = markColor CoercionColor
 
-
 keywordColor :: DocH -> DocH
 keywordColor = markColor KeywordColor
 
@@ -83,8 +118,35 @@ markColor = attr . Color
 specialFont :: DocH -> DocH
 specialFont = attr SpecialFont
 
+type PrettyH a = Translate PrettyC HermitM a DocH
+-- TODO: change monads to something more restricted?
 
-type PrettyH a = TranslateH a DocH
+-- | Context for PrettyH translations.
+data PrettyC = PrettyC { prettyC_path :: AbsolutePath Crumb }
+
+-- | Note: 'PrettyC' has a 'AddBindings' instance so we can use
+--   the congruence combinators, but no 'ReadBindings' instance,
+--   as we don't actually accumulate bindings.
+instance AddBindings PrettyC where
+    addHermitBindings _ = id
+    {-# INLINE addHermitBindings #-}
+
+instance ReadPath PrettyC Crumb where
+    absPath = prettyC_path
+    {-# INLINE absPath #-}
+
+instance ExtendPath PrettyC Crumb where
+    c @@ n = c { prettyC_path = prettyC_path c @@ n }
+    {-# INLINE (@@) #-}
+
+liftPrettyH :: ReadPath c Crumb => PrettyH a -> Translate c HermitM a DocH
+liftPrettyH pp = translate $ \ c -> apply pp (liftPrettyC c)
+
+liftPrettyC :: ReadPath c Crumb => c -> PrettyC
+liftPrettyC c = PrettyC (absPath c)
+
+initPrettyC :: PrettyC
+initPrettyC = PrettyC mempty
 
 -- These are *recommendations* to the pretty printer.
 
@@ -234,23 +296,13 @@ specialFontMap = M.fromList
 
 
 class (RenderSpecial a, Monoid a) => RenderCode a where
-        rStart :: a
-        rStart = mempty
-        rEnd :: a
-        rEnd = mempty
+    rStart :: a
+    rStart = mempty
+    rEnd :: a
+    rEnd = mempty
 
-        rDoHighlight :: Bool -> [Attr]           -> a
-        rPutStr      :: String -> a
-
-
--- This is what the pretty printer can see
-data PrettyState = PrettyState
-        { prettyPath  :: PathH
-        , prettyColor :: Maybe SyntaxForColor
-        }
-
---stackToPrettyState :: [Attr] -> PrettyState
---stackToPrettyState =
+    rDoHighlight :: Bool -> [Attr]           -> a
+    rPutStr      :: String -> a
 
 renderCode :: RenderCode a => PrettyOptions -> DocH -> a
 renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\ _ -> rEnd) doc []
@@ -282,33 +334,6 @@ renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\
 -- Other options for pretty printing:
 -- * Does a top level program should function names, or complete listings?
 
--- This is the hacky old pretty printer, using the new API
-ghcCorePrettyH :: PrettyH Core
-ghcCorePrettyH =
-           promoteT (ppModule :: PrettyH ModGuts)
-        <+ promoteT (ppProg   :: PrettyH CoreProg)
-        <+ promoteT (ppH      :: PrettyH CoreBind)
-        <+ promoteT (ppDef    :: PrettyH CoreDef)
-        <+ promoteT (ppH      :: PrettyH CoreExpr)
-        <+ promoteT (ppH      :: PrettyH CoreAlt)
-  where
-
-        ppH :: (Outputable a) => PrettyH a
-        ppH = contextfreeT $ \e -> do
-            dynFlags <- getDynFlags
-            return $ PP.text $ showSDoc dynFlags $ ppr e
-
-        ppModule :: PrettyH ModGuts
-        ppModule = mg_module ^>> ppH
-
-        ppProg :: PrettyH CoreProg
-        ppProg = progToBinds ^>> ppH
-
-        ppDef :: PrettyH CoreDef
-        ppDef = defToIdExpr ^>> ppH
-
---        arr (PP.text . ppr . mg_module)
-
 --- Moving the renders back into the core hermit
 
 -------------------------------------------------------------------------------
@@ -329,8 +354,8 @@ coreRenders =
                         hPutStrLn h pretty)
         ]
 
-latexVerbatim :: String -> LaTeX -> LaTeX
-latexVerbatim str (LaTeX v) = LaTeX (str ++ v)
+-- latexVerbatim :: String -> LaTeX -> LaTeX
+-- latexVerbatim str (LaTeX v) = LaTeX (str ++ v)
 
 latexToString :: LaTeX -> String
 latexToString (LaTeX orig) = unlines $ map trunkSpaces $ lines orig where

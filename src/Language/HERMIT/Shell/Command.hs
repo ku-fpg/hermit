@@ -276,7 +276,7 @@ showFocus = do
         (return ())
         (iokm2clm' "Rendering error: "
                    (liftIO . cl_render (cl_session st) stdout (cl_pretty_opts $ cl_session st))
-                   (queryS (cl_kernel st) (cl_cursor $ cl_session st) (pretty $ cl_session st) (cl_kernel_env $ cl_session st))
+                   (queryS (cl_kernel st) (cl_cursor $ cl_session st) (liftPrettyH $ pretty $ cl_session st) (cl_kernel_env $ cl_session st))
         )
 
 -------------------------------------------------------------------------------
@@ -565,7 +565,7 @@ performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
     case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
       (Just pp, Just r) -> do doc <- iokm2clm "Bad pretty-printer or renderer option: " $
-                                         queryS (cl_kernel st) (cl_cursor $ cl_session st) (pp (cl_pretty_opts $ cl_session st)) (cl_kernel_env $ cl_session st)
+                                         queryS (cl_kernel st) (cl_cursor $ cl_session st) (liftPrettyH $ pp (cl_pretty_opts $ cl_session st)) (cl_kernel_env $ cl_session st)
                               liftIO $ do h <- openFile fileName WriteMode
                                           r h ((cl_pretty_opts $ cl_session st) { po_width = width }) doc
                                           hClose h
@@ -766,7 +766,7 @@ cl_kernel_env ss = mkHermitMEnv $ \ msg -> case msg of
                         GHC.liftIO $ putStrLn $ "<" ++ show c ++ "> " ++ msg'
                 DebugCore  msg' cxt core -> do
                         GHC.liftIO $ putStrLn $ "[" ++ msg' ++ "]"
-                        doc :: DocH <- apply (pretty ss) cxt core
+                        doc :: DocH <- apply (pretty ss) (liftPrettyC cxt) core
                         GHC.liftIO $ cl_render ss stdout (cl_pretty_opts ss) doc
 
 -- tick counter

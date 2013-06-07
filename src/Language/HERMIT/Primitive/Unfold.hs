@@ -22,7 +22,7 @@ import qualified Data.Map as Map
 
 import qualified Language.Haskell.TH as TH
 
-import Language.HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..))
+import Language.HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), initPrettyC)
 
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
@@ -144,8 +144,7 @@ unfoldStashR label = setFailMsg "Inlining stashed definition failed: " $
 showStashT :: Injection CoreDef a => PrettyH a -> TranslateH a DocH
 showStashT pp = do
     stash <- constT getStash
-    docs <- contextonlyT $ \ c ->
-        mapM (\ (l,d) -> do dfn <- apply (extractT pp) c d
-                            return $ PP.text ("[ " ++ l ++ " ]") PP.$+$ dfn PP.$+$ PP.space)
-             (Map.toList stash)
+    docs <- forM (Map.toList stash) $ \ (l,d) -> do
+                dfn <- constT $ apply (extractT pp) initPrettyC d
+                return $ PP.text ("[ " ++ l ++ " ]") PP.$+$ dfn PP.$+$ PP.space
     return $ PP.vcat docs
