@@ -58,8 +58,8 @@ externals = map ((.+ Experiment) . (.+ TODO))
 ------------------------------------------------------------------------------------------------------
 
 isVar :: TH.Name -> TranslateH CoreExpr ()
-isVar nm = (varT (arr $ cmpTHName2Var nm) <+ typeT (tyVarT (cmpTHName2Var nm)))
-           >>= guardM
+isVar nm = let matchName = arr (cmpTHName2Var nm)
+            in (varT matchName <+ typeT (tyVarT matchName)) >>= guardM
 
 ------------------------------------------------------------------------------------------------------
 
