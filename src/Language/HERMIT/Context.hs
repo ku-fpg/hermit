@@ -25,11 +25,9 @@ module Language.HERMIT.Context
        , boundIn
        , findBoundVars
          -- ** Accessing the Global Reader Environment from the context
-       , HasGlobalRdrEnv
-       , hermitGlobalRdrEnv
+       , HasGlobalRdrEnv(..)
          -- ** Accessing GHC rewrite rules from the context
-       , HasCoreRules
-       , hermitCoreRules
+       , HasCoreRules(..)
 ) where
 
 import Prelude hiding (lookup)
