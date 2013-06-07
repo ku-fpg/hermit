@@ -12,14 +12,14 @@ module Language.HERMIT.Context
        , hermitBindingSiteExpr
        , hermitBindingExpr
          -- ** Adding bindings to contexts
-       , AddBindings
+       , AddBindings(..)
        , addBindingGroup
        , addLambdaBinding
        , addAltBindings
        , addCaseWildBinding
        , addForallBinding
          -- ** Reading bindings from the context
-       , ReadBindings
+       , ReadBindings(..)
        , lookupHermitBinding
        , boundVars
        , boundIn

@@ -308,7 +308,11 @@ lookupRule :: (Activation -> Bool)	-- When rule is active
 --         | r <- rs
 --         ]
 
+#if __GLASGOW_HASKELL__ > 706
+rulesToRewriteH :: (ReadBindings c, HasDynFlags m, Monad m) => [CoreRule] -> Rewrite c m CoreExpr
+#else
 rulesToRewriteH :: (ReadBindings c, Monad m) => [CoreRule] -> Rewrite c m CoreExpr
+#endif
 rulesToRewriteH rs = translate $ \ c e -> do
     -- First, we normalize the lhs, so we can match it
     (Var fn,args) <- return $ collectArgs e
