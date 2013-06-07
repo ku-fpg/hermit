@@ -12,7 +12,10 @@ simplify
   0
   eta-expand 'acc
   bash
-  {consider case ; consider case ; consider alt
+  0
+  {  2
+     any-td (push 'repH)
+     consider alt
      alpha-alt ['bs,'cs]
      any-td (unfold-rule "repH ++")
      any-bu case-float-arg

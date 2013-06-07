@@ -466,12 +466,12 @@ letAllR r1 r2 = letT r1 r2 Let
 
 -- | Rewrite any children of an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
 letAnyR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreBind -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
-letAnyR r1 r2 = unwrapAnyR $ letAnyR (wrapAnyR r1) (wrapAnyR r2)
+letAnyR r1 r2 = unwrapAnyR $ letAllR (wrapAnyR r1) (wrapAnyR r2)
 {-# INLINE letAnyR #-}
 
 -- | Rewrite one child of an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
 letOneR :: (ExtendPath c Crumb, BindingContext c, MonadCatch m) => Rewrite c m CoreBind -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
-letOneR r1 r2 = unwrapOneR $ letOneR (wrapOneR r1) (wrapOneR r2)
+letOneR r1 r2 = unwrapOneR $ letAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE letOneR #-}
 
 
