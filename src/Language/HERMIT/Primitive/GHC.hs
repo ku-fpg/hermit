@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, FlexibleContexts #-}
 module Language.HERMIT.Primitive.GHC
        ( -- * GHC-based Transformations
          -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
@@ -43,7 +43,6 @@ import Control.Monad
 
 import Data.Monoid (mempty)
 import Data.List (intercalate,mapAccumL,(\\))
-import Data.Map (keys)
 
 import Language.HERMIT.Core
 import Language.HERMIT.Context
@@ -87,9 +86,9 @@ externals =
                 [ "list rules that can be used" ] .+ Query
          , external "apply-rules" (promoteExprR . rules :: [String] -> RewriteH Core)
                 [ "apply named GHC rules, succeeds if any of the rules succeed" ] .+ Shallow
-         , external "compare-values" compareValues
+         , external "compare-values" (compareValues ::  TH.Name -> TH.Name -> TranslateH Core ())
                 ["compare the rhs of two values."] .+ Query .+ Predicate
-         , external "add-rule" (\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name))
+         , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> TH.Name -> RewriteH Core)
                 ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
                                         .+ Introduce
          , external "occur-analysis" (promoteExprR occurAnalyseExprR :: RewriteH Core)
@@ -110,12 +109,12 @@ externals =
 ------------------------------------------------------------------------
 
 -- | Substitute all occurrences of a variable with an expression, in either a program or an expression.
-substR :: Var -> CoreExpr -> RewriteH Core
+substR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Var -> CoreExpr -> Rewrite c m Core
 substR v e = setFailMsg "Can only perform substitution on expressions or programs." $
              promoteExprR (substExprR v e) <+ promoteProgR (substTopBindR v e) <+ promoteAltR (substAltR v e)
 
 -- | Substitute all occurrences of a variable with an expression, in an expression.
-substExprR :: Var -> CoreExpr -> RewriteH CoreExpr
+substExprR :: Monad m => Var -> CoreExpr -> Rewrite c m CoreExpr
 substExprR v e =  contextfreeT $ \ expr -> do
     -- The InScopeSet needs to include any free variables appearing in the
     -- expression to be substituted.  Constructing a NonRec Let expression
@@ -125,14 +124,14 @@ substExprR v e =  contextfreeT $ \ expr -> do
     return $ substExpr (text "substR") (extendSubst emptySub v e) expr
 
 -- | Substitute all occurrences of a variable with an expression, in a program.
-substTopBindR :: Var -> CoreExpr -> RewriteH CoreProg
+substTopBindR :: Monad m => Var -> CoreExpr -> Rewrite c m CoreProg
 substTopBindR v e =  contextfreeT $ \ p -> do
     -- TODO.  Do we need to initialize the emptySubst with bindFreeVars?
     let emptySub =  emptySubst -- mkEmptySubst (mkInScopeSet (exprFreeVars exp))
     return $ bindsToProg $ snd (mapAccumL substBind (extendSubst emptySub v e) (progToBinds p))
 
 -- | Substitute all occurrences of a variable with an expression, in a case alternative.
-substAltR :: Var -> CoreExpr -> RewriteH CoreAlt
+substAltR :: (ExtendPath c Crumb, AddBindings c, Monad m) => Var -> CoreExpr -> Rewrite c m CoreAlt
 substAltR v e = do (_, vs, _) <- idR
                    if v `elem` vs
                     then fail "variable is shadowed by a case-alternative constructor argument."
@@ -140,7 +139,7 @@ substAltR v e = do (_, vs, _) <- idR
 
 -- | (let x = e1 in e2) ==> (e2[e1/x]),
 --   x must not be free in e1.
-letSubstR :: RewriteH CoreExpr
+letSubstR :: MonadCatch m => Rewrite c m CoreExpr
 letSubstR =  prefixFailMsg "Let substition failed: " $
              rewrite $ \ c expr -> case occurAnalyseExpr expr of
                                      Let (NonRec b be) e -> apply (substExprR b be) c e
@@ -149,12 +148,12 @@ letSubstR =  prefixFailMsg "Let substition failed: " $
 
 -- Neil: Commented this out as it's not (currently) used.
 --  Perform let-substitution the specified number of times.
--- letSubstNR :: Int -> RewriteH Core
+-- letSubstNR :: Int -> Rewrite c m Core
 -- letSubstNR 0 = idR
 -- letSubstNR n = childR 1 (letSubstNR (n - 1)) >>> promoteExprR letSubstR
 
 -- | This is quite expensive (O(n) for the size of the sub-tree).
-safeLetSubstR :: RewriteH CoreExpr
+safeLetSubstR :: (ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
 safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
                  translate $ \ env expr ->
     let   -- Lit?
@@ -183,12 +182,12 @@ safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
 
 -- | 'safeLetSubstPlusR' tries to inline a stack of bindings, stopping when reaches
 -- the end of the stack of lets.
-safeLetSubstPlusR :: RewriteH CoreExpr
+safeLetSubstPlusR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
 safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 
 ------------------------------------------------------------------------
 
-info :: TranslateH Core String
+info :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasDynFlags m, MonadCatch m) => Translate c m Core String
 info = do crumbs <- childrenT
           translate $ \ c core -> do
             dynFlags <- getDynFlags
@@ -247,7 +246,7 @@ coreConstructor (ExprCore expr)  = case expr of
 ------------------------------------------------------------------------
 
 -- | Output a list of all free variables in an expression.
-freeIdsQuery :: TranslateH CoreExpr String
+freeIdsQuery :: Monad m => Translate c m CoreExpr String
 freeIdsQuery = do frees <- freeIdsT
                   return $ "Free identifiers are: " ++ showVars frees
 
@@ -256,11 +255,11 @@ showVars :: [Var] -> String
 showVars = show . map var2String
 
 -- | Lifted version of 'coreExprFreeIds'.
-freeIdsT :: TranslateH CoreExpr [Id]
+freeIdsT :: Monad m => Translate c m CoreExpr [Id]
 freeIdsT = arr coreExprFreeIds
 
 -- | Lifted version of 'coreExprFreeVars'.
-freeVarsT :: TranslateH CoreExpr [Var]
+freeVarsT :: Monad m => Translate c m CoreExpr [Var]
 freeVarsT = arr coreExprFreeVars
 
 -- | List all free variables (including types) in the expression.
@@ -272,14 +271,14 @@ coreExprFreeIds :: CoreExpr -> [Id]
 coreExprFreeIds  = uniqSetToList . exprFreeIds
 
 -- | The free variables in a case alternative, which excludes any identifiers bound in the alternative.
-altFreeVarsT :: TranslateH CoreAlt [Var]
+altFreeVarsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt [Var]
 altFreeVarsT = altT mempty (\ _ -> idR) freeVarsT (\ () vs fvs -> fvs \\ vs)
 
 -- | A variant of 'altFreeVarsT' that returns a function that accepts the case wild-card binder before giving a result.
 --   This is so we can use this with congruence combinators, for example:
 --
 --   caseT id (const altFreeVarsT) $ \ _ wild _ fvs -> [ f wild | f <- fvs ]
-altFreeVarsExclWildT :: TranslateH CoreAlt (Id -> [Var])
+altFreeVarsExclWildT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt (Id -> [Var])
 altFreeVarsExclWildT = altT mempty (\ _ -> idR) freeVarsT (\ () vs fvs wild -> fvs \\ (wild : vs))
 
 ------------------------------------------------------------------------
@@ -290,7 +289,7 @@ altFreeVarsExclWildT = altT mempty (\ _ -> idR) freeVarsT (\ () vs fvs wild -> f
 --
 -- (Actually, within a single /type/ there might still be shadowing, because
 -- 'substTy' is a no-op for the empty substitution, but that's probably OK.)
-deShadowProgR :: RewriteH CoreProg
+deShadowProgR :: Monad m => Rewrite c m CoreProg
 deShadowProgR = arr (bindsToProg . deShadowBinds . progToBinds)
 
 ------------------------------------------------------------------------
@@ -303,13 +302,13 @@ lookupRule :: (Activation -> Bool)	-- When rule is active
 -}
 
 -- Neil: Commented this out as its not (currently) used.
--- rulesToEnv :: [CoreRule] -> Map.Map String (RewriteH CoreExpr)
+-- rulesToEnv :: [CoreRule] -> Map.Map String (Rewrite c m CoreExpr)
 -- rulesToEnv rs = Map.fromList
---         [ ( unpackFS (ruleName r), rulesToRewriteH [r] )
+--         [ ( unpackFS (ruleName r), rulesToRewrite c m [r] )
 --         | r <- rs
 --         ]
 
-rulesToRewriteH :: [CoreRule] -> RewriteH CoreExpr
+rulesToRewriteH :: (ReadBindings c, Monad m) => [CoreRule] -> Rewrite c m CoreExpr
 rulesToRewriteH rs = translate $ \ c e -> do
     -- First, we normalize the lhs, so we can match it
     (Var fn,args) <- return $ collectArgs e
@@ -336,7 +335,7 @@ rulesToRewriteH rs = translate $ \ c e -> do
                                 ,"This can probably be solved by running the flatten-module command at the top level."])
 
 -- | Determine whether an identifier is in scope.
-inScope :: HermitC -> Id -> Bool
+inScope :: ReadBindings c => c -> Id -> Bool
 inScope c v = (v `boundIn` c) ||                 -- defined in this module
               case unfoldingInfo (idInfo v) of
                 CoreUnfolding {} -> True         -- defined elsewhere
@@ -344,26 +343,26 @@ inScope c v = (v `boundIn` c) ||                 -- defined in this module
                 _                -> False
 
 -- | Lookup a rule and attempt to construct a corresponding rewrite.
-rule :: String -> RewriteH CoreExpr
+rule :: (ReadBindings c, HasCoreRules c) => String -> Rewrite c HermitM CoreExpr
 rule r = do
     theRules <- getHermitRules
     case lookup r theRules of
         Nothing -> fail $ "failed to find rule: " ++ show r
         Just rr -> rulesToRewriteH rr
 
-rules :: [String] -> RewriteH CoreExpr
+rules :: (ReadBindings c, HasCoreRules c) => [String] -> Rewrite c HermitM CoreExpr
 rules = orR . map rule
 
-getHermitRules :: TranslateH a [(String, [CoreRule])]
+getHermitRules :: HasCoreRules c => Translate c HermitM a [(String, [CoreRule])]
 getHermitRules = contextonlyT $ \ c -> do
     rb     <- liftCoreM getRuleBase
     hscEnv <- liftCoreM getHscEnv
     rb'    <- liftM eps_rule_base $ liftIO $ runIOEnv () $ readMutVar (hsc_EPS hscEnv)
     return [ ( unpackFS (ruleName r), [r] )
-           | r <- hermitC_coreRules c ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
+           | r <- hermitCoreRules c ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
            ]
 
-rules_help :: TranslateH Core String
+rules_help :: HasCoreRules c => Translate c HermitM Core String
 rules_help = do
     rulesEnv <- getHermitRules
     dynFlags <- constT getDynFlags
@@ -380,7 +379,7 @@ makeRule rule_name nm =   mkRule True   -- auto-generated
                                  []
 
 -- TODO: check if a top-level binding
-addCoreBindAsRule :: String -> TH.Name -> RewriteH ModGuts
+addCoreBindAsRule :: Monad m => String -> TH.Name -> Rewrite c m ModGuts
 addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
         case [ (v,e)
              | top_bnds <- mg_binds modGuts
@@ -403,7 +402,7 @@ occurAnalyseExpr :: CoreExpr -> CoreExpr
 occurAnalyseExpr = OccurAnal.occurAnalyseExpr
 
 -- | Lifted version of 'occurAnalyseExpr'
-occurAnalyseExprR :: RewriteH CoreExpr
+occurAnalyseExprR :: Monad m => Rewrite c m CoreExpr
 occurAnalyseExprR = arr occurAnalyseExpr
 
 
@@ -457,7 +456,7 @@ coreEqual (BindCore b1) (BindCore b2) = b1 `bindEqual` b2
 coreEqual (DefCore dc1) (DefCore dc2) = defsToRecBind [dc1] `bindEqual` defsToRecBind [dc2]
 coreEqual _             _             = Nothing
 
-compareValues :: TH.Name -> TH.Name -> TranslateH Core ()
+compareValues :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> TH.Name -> Translate c m Core ()
 compareValues n1 n2 = do
         p1 <- onePathToT (namedBinding n1)
         p2 <- onePathToT (namedBinding n2)
@@ -471,7 +470,7 @@ compareValues n1 n2 = do
 --------------------------------------------------------
 
 -- | Try to figure out the arity of an identifier.
-arityOf :: HermitC -> Id -> Int
+arityOf :: ReadBindings c => c -> Id -> Int
 arityOf env i =
      case lookupHermitBinding i env of
         Nothing       -> idArity i
@@ -504,8 +503,8 @@ lintProgramT = do
 -- For instance, running this on the RHS of a binding, the type of the RHS will
 -- not be checked against the type of the binding. Running on the whole let expression
 -- will catch that however.
-lintExprT :: TranslateH CoreExpr String
+lintExprT :: (ReadBindings c, Monad m, HasDynFlags m) => Translate c m CoreExpr String
 lintExprT = translate $ \ c e -> do
     dflags <- getDynFlags
     maybe (return "Core Lint Passed") (fail . showSDoc dflags)
-                 $ CoreLint.lintUnfolding noSrcLoc (keys $ hermitC_bindings c) e
+                 $ CoreLint.lintUnfolding noSrcLoc (boundVars c) e

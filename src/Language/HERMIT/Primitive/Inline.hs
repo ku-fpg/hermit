@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections, FlexibleContexts #-}
 module Language.HERMIT.Primitive.Inline
          ( -- * Inlining
            externals
@@ -50,7 +50,7 @@ externals =
 ------------------------------------------------------------------------
 
 -- | If the current variable matches the given name, then inline it.
-inlineName :: TH.Name -> RewriteH CoreExpr
+inlineName :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
 inlineName nm = prefixFailMsg ("inline '" ++ showName nm ++ " failed: ") $
                 withPatFailMsg (wrongExprForm "Var v") $
    do Var v <- idR
@@ -58,23 +58,24 @@ inlineName nm = prefixFailMsg ("inline '" ++ showName nm ++ " failed: ") $
       inline
 
 -- | Inline the current variable.
-inline :: RewriteH CoreExpr
+inline :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 inline = configurableInline False False
 
 -- | Inline the current variable, using the scrutinee rather than the case alternative if it is a case wild-card binder.
-inlineScrutinee :: RewriteH CoreExpr
+inlineScrutinee :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 inlineScrutinee = configurableInline True False
 
 -- | If the current variable is a case wild-card binder, then inline it.
-inlineCaseBinder :: RewriteH CoreExpr
+inlineCaseBinder :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 inlineCaseBinder = configurableInline False True
 
 -- | The implementation of inline, an important transformation.
 -- This *only* works on a Var of the given name. It can trivially
 -- be prompted to more general cases.
-configurableInline :: Bool -- ^ Inline the scrutinee instead of the patten match (for case binders).
+configurableInline :: (ExtendPath c Crumb, AddBindings c, ReadBindings c)
+                   => Bool -- ^ Inline the scrutinee instead of the patten match (for case binders).
                    -> Bool -- ^ Only inline if this variable is a case binder.
-                   -> RewriteH CoreExpr
+                   -> Rewrite c HermitM CoreExpr
 configurableInline scrutinee caseBinderOnly =
    prefixFailMsg "Inline failed: " $
    withPatFailMsg (wrongExprForm "Var v") $
@@ -86,7 +87,7 @@ configurableInline scrutinee caseBinderOnly =
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
 -- Assumes minimum depth is 0.
-ensureDepth :: Int -> TranslateH Core Bool
+ensureDepth :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => Int -> Translate c m Core Bool
 ensureDepth d = do
     frees <- promoteT freeVarsT
     ds <- collectT $ promoteExprT $ varT $ translate $ \ c i -> return $ if i `elem` frees
@@ -94,9 +95,10 @@ ensureDepth d = do
                                                                           else (i,0)
     return $ all (toSnd (<= d)) ds
 
-getUnfolding :: Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
+getUnfolding :: ReadBindings c
+             => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
              -> Bool -- ^ Only succeed if this variable is a case binder.
-             -> Id -> HermitC -> HermitM (CoreExpr, Int)
+             -> Id -> c -> HermitM (CoreExpr, Int)
 getUnfolding scrutinee caseBinderOnly i c =
     case lookupHermitBinding i c of
         Nothing -> if caseBinderOnly
@@ -134,7 +136,7 @@ alt2Exp _ _   (LitAlt l  , _ ) = Right $ Lit l
 alt2Exp _ tys (DataAlt dc, as) = Right $ mkCoreConApps dc (map Type tys ++ map varToCoreExpr as)
 
 -- | Get list of possible inline targets. Used by shell for completion.
-inlineTargets :: TranslateH Core [String]
+inlineTargets :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Translate c HermitM Core [String]
 inlineTargets = collectT $ promoteT $ whenM (testM inline) (varT $ arr var2String)
 
 -- | Build a CoreExpr for a DFunUnfolding
