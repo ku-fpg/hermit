@@ -1,0 +1,8 @@
+You need HERMIT built on GHC HEAD to run this optimization.
+
+Instructions: https://github.com/ku-fpg/hermit/wiki/GHC-HEAD
+
+(Note: you can skip the steps that only apply to hermit-syb)
+
+Once that is done, cabal install this package (and criterion),
+then see ../Makefile for examples of use.
