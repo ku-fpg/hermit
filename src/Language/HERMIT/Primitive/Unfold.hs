@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, ScopedTypeVariables, TupleSections #-}
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables, TupleSections, LambdaCase #-}
 module Language.HERMIT.Primitive.Unfold
     ( externals
     , cleanupUnfoldR
@@ -115,11 +115,10 @@ specializeR = unfoldPredR (const (all isTyCoArg))
 -- | Stash a binding with a name for later use.
 -- Allows us to look at past definitions.
 rememberR :: Label -> Rewrite c HermitM Core
-rememberR label = sideEffectR $ \ _ core ->
-  case core of
-    DefCore def           -> saveDef label def
-    BindCore (NonRec i e) -> saveDef label (Def i e)
-    _                     -> fail "remember: not a binding"
+rememberR label = sideEffectR $ \ _ -> \case
+                                          DefCore def           -> saveDef label def
+                                          BindCore (NonRec i e) -> saveDef label (Def i e)
+                                          _                     -> fail "remember: not a binding"
 
 -- | Stash a binding with a name for later use.
 -- Allows us to look at past definitions.

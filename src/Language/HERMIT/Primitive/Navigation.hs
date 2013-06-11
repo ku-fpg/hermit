@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
+
 module Language.HERMIT.Primitive.Navigation
        ( -- * Navigation
          externals
@@ -20,6 +22,7 @@ import Control.Arrow (arr)
 import GhcPlugins as GHC
 
 import Language.HERMIT.Core
+import Language.HERMIT.Context
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
@@ -32,35 +35,35 @@ import qualified Language.Haskell.TH as TH
 externals :: [External]
 externals = map (.+ Navigation)
             [
-              external "consider" considerName
+              external "consider" (considerName :: TH.Name -> TranslateH Core PathH)
                 [ "consider '<v> focuses on the definition of <v>" ]
-            , external "consider" considerConstruct
+            , external "consider" (considerConstruct :: String -> TranslateH Core PathH)
                 [ "consider <c> focuses on the first construct <c>.",
                   recognizedConsiderables]
-            , external "rhs-of" rhsOf
+            , external "rhs-of" (rhsOf :: TH.Name -> TranslateH Core PathH)
                 [ "rhs-of '<v> focuses on the right-hand-side of the definition of <v>" ]
-            , external "binding-group-of" bindingGroupOf
+            , external "binding-group-of" (bindingGroupOf :: TH.Name -> TranslateH Core PathH)
                 [ "binding-group-of '<v> focuses on the binding group that binds the variable <v>" ]
             ]
 
 ---------------------------------------------------------------------------------------
 
 -- | Find the path to the RHS of the binding group of the given name.
-bindingGroupOf :: TH.Name -> TranslateH Core PathH
+bindingGroupOf :: MonadCatch m => TH.Name -> Translate c m Core PathH
 bindingGroupOf = oneNonEmptyPathToT . bindGroup
 
 -- | Find the path to the definiiton of the provided name.
-considerName :: TH.Name -> TranslateH Core PathH
+considerName :: MonadCatch m => TH.Name -> Translate c m Core PathH
 considerName = oneNonEmptyPathToT . namedBinding
 
 -- | Find the path to the RHS of the definition of the given name.
-rhsOf :: TH.Name -> TranslateH Core PathH
+rhsOf :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core PathH
 rhsOf nm = do p  <- onePathToT (namedBinding nm)
               cr <- pathT p (   promoteBindT (nonRecT mempty lastCrumbT $ \ () cr -> cr)
                              <+ promoteDefT  (defT    mempty lastCrumbT $ \ () cr -> cr)
                             )
               return (p ++ [cr])
--- TODO: The new defintion is inefficient.  Try and improve it.  May need to generalise the KURE "onePathTo" combinators.
+-- TODO: The new definition is inefficient.  Try and improve it.  May need to generalise the KURE "onePathTo" combinators.
 -- rhsOf nm = onePathToT (namedBinding nm) >>^ (++ [0])
 
 -- | Verify that this is a binding group defining the given name.
@@ -76,13 +79,13 @@ namedBinding nm (DefCore (Def v _))      =  nm `cmpTHName2Var` v
 namedBinding _  _                        =  False
 
 -- | Find the names of all the variables that could be targets of \"consider\".
-considerTargets :: TranslateH Core [String]
+considerTargets :: forall c m. (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m Core [String]
 considerTargets = allT $ collectT (promoteBindT nonRec <+ promoteDefT def)
     where
-      nonRec :: TranslateH CoreBind String
+      nonRec :: Translate c m CoreBind String
       nonRec = nonRecT (arr var2String) idR const
 
-      def :: TranslateH CoreDef String
+      def :: Translate c m CoreDef String
       def = defT (arr var2String) idR const
 
 -- | Language constructs that can be zoomed to.
@@ -108,13 +111,13 @@ considerables =   [ ("bind",Binding)
                   , ("coerce",Coerce)
                   ]
 
-considerConstruct :: String -> TranslateH Core PathH
+considerConstruct :: MonadCatch m => String -> Translate c m Core PathH
 considerConstruct str = case string2considerable str of
                           Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". " ++ recognizedConsiderables ++ ".  Or did you mean \"consider '" ++ str ++ "\"?"
                           Just c  -> considerConstructT c
 
 -- | Find the path to the first matching construct.
-considerConstructT :: Considerable -> TranslateH Core PathH
+considerConstructT :: MonadCatch m => Considerable -> Translate c m Core PathH
 considerConstructT = oneNonEmptyPathToT . underConsideration
 
 string2considerable :: String -> Maybe Considerable
