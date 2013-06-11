@@ -149,13 +149,48 @@ funsWithInverseTypes f g = do (fdom,fcod) <- funArgResTypes f
 -----------------------------------------------------------------------
 
 -- | Crumbs record a path through the tree, using descriptive constructor names.
-data Crumb = ModGuts_Prog
+data Crumb =
+           -- ModGuts
+             ModGuts_Prog
+           -- Prog
            | ProgCons_Bind | ProgCons_Tail
-           | NonRec_RHS | NonRec_Var | Rec_Def Int
+           -- Bind
+           | NonRec_RHS | NonRec_Var
+           | Rec_Def Int
+           -- Def
            | Def_Id | Def_RHS
-           | Var_Id | Lit_Lit | App_Fun | App_Arg | Lam_Var | Lam_Body | Let_Bind | Let_Body | Case_Scrutinee | Case_Binder | Case_Type | Case_Alt Int | Cast_Expr | Cast_Co | Tick_Tick | Tick_Expr | Type_Type | Co_Co
+           -- Expr
+           | Var_Id
+           | Lit_Lit
+           | App_Fun | App_Arg
+           | Lam_Var | Lam_Body
+           | Let_Bind | Let_Body
+           | Case_Scrutinee | Case_Binder | Case_Type | Case_Alt Int
+           | Cast_Expr | Cast_Co
+           | Tick_Tick | Tick_Expr
+           | Type_Type
+           | Co_Co
+           -- Alt
            | Alt_Con | Alt_Var Int | Alt_RHS
-           | TyVarTy_TyVar | LitTy_TyLit | AppTy_Fun | AppTy_Arg | TyConApp_TyCon | TyConApp_Arg Int | FunTy_Dom | FunTy_CoDom | ForAllTy_Var | ForAllTy_Body
+           -- Type
+           | TyVarTy_TyVar
+           | LitTy_TyLit
+           | AppTy_Fun | AppTy_Arg
+           | TyConApp_TyCon | TyConApp_Arg Int
+           | FunTy_Dom | FunTy_CoDom
+           | ForAllTy_Var | ForAllTy_Body
+           -- Coercion
+           | Refl_Type
+           | TyConAppCo_TyCon | TyConAppCo_Arg Int
+           | AppCo_Fun | AppCo_Arg
+           | ForAllCo_TyVar | ForAllCo_Body
+           | CoVarCo_CoVar
+           | AxiomInstCo_Axiom | AxiomInstCo_Arg Int
+           | UnsafeCo_Left | UnsafeCo_Right
+           | SymCo_Co
+           | TransCo_Left | TransCo_Right
+           | NthCo_Int | NthCo_Co
+           | InstCo_Co | InstCo_Type
            deriving (Eq,Show)
            -- TODO: Write a prettier Show instance
 {-

@@ -48,14 +48,25 @@ module Language.HERMIT.Kure
        , consRecT, consRecAllR, consRecAnyR, consRecOneR
        , consRecDefT, consRecDefAllR, consRecDefAnyR, consRecDefOneR
        , caseAltT, caseAltAllR, caseAltAnyR, caseAltOneR
-       -- * Congruence Combinators for Traversing Types
+       -- ** Types
        , tyVarT, tyVarR
        , litTyT, litTyR
        , appTyT, appTyAllR, appTyAnyR, appTyOneR
        , funTyT, funTyAllR, funTyAnyR, funTyOneR
        , forAllTyT, forAllTyAllR, forAllTyAnyR, forAllTyOneR
        , tyConAppT, tyConAppAllR, tyConAppAnyR, tyConAppOneR
-
+       -- ** Coercions
+       , reflT, reflR
+       , tyConAppCoT, tyConAppCoAllR, tyConAppCoAnyR, tyConAppCoOneR
+       , appCoT, appCoAllR, appCoAnyR, appCoOneR
+       , forAllCoT, forAllCoAllR, forAllCoAnyR, forAllCoOneR
+       , coVarCoT, coVarCoR
+       , axiomInstCoT, axiomInstCoAllR, axiomInstCoAnyR, axiomInstCoOneR
+       , unsafeCoT, unsafeCoAllR, unsafeCoAnyR, unsafeCoOneR
+       , symCoT, symCoR
+       , transCoT, transCoAllR, transCoAnyR, transCoOneR
+       , nthCoT, nthCoAllR, nthCoAnyR, nthCoOneR
+       , instCoT, instCoAllR, instCoAnyR, instCoOneR
        -- * Promotion Combinators
        -- ** Rewrite Promotions
        , promoteModGutsR
@@ -120,7 +131,7 @@ instance Injection ModGuts Core where
 
   project :: Core -> Maybe ModGuts
   project (GutsCore guts) = Just guts
-  project _                  = Nothing
+  project _               = Nothing
   {-# INLINE project #-}
 
 
@@ -254,14 +265,14 @@ modGutsR r = modGutsT r (\ guts p -> guts {mg_binds = progToBinds p})
 progNilT :: Monad m => b -> Translate c m CoreProg b
 progNilT b = contextfreeT $ \case
                                ProgNil       -> return b
-                               ProgCons _ _  -> fail "not an empty program node."
+                               ProgCons _ _  -> fail "not an empty program."
 {-# INLINE progNilT #-}
 
 -- | Translate a program of the form: ('CoreBind' @:@ 'CoreProg')
 progConsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreBind a1 -> Translate c m CoreProg a2 -> (a1 -> a2 -> b) -> Translate c m CoreProg b
 progConsT t1 t2 f = translate $ \ c -> \case
                                           ProgCons bd p -> f <$> apply t1 (c @@ ProgCons_Bind) bd <*> apply t2 (addBindingGroup bd c @@ ProgCons_Tail) p
-                                          _             -> fail "not a non-empty program node."
+                                          _             -> fail "not a non-empty program."
 {-# INLINE progConsT #-}
 
 -- | Rewrite all children of a program of the form: ('CoreBind' @:@ 'CoreProg')
@@ -285,7 +296,7 @@ progConsOneR r1 r2 = unwrapOneR $  progConsAllR (wrapOneR r1) (wrapOneR r2)
 nonRecT :: (ExtendPath c Crumb, Monad m) => Translate c m Var a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreBind b
 nonRecT t1 t2 f = translate $ \ c -> \case
                                         NonRec v e -> f <$> apply t1 (c @@ NonRec_Var) v <*> apply t2 (c @@ NonRec_RHS) e
-                                        _          -> fail "not a non-recursive binding-group node."
+                                        _          -> fail "not a non-recursive binding group."
 {-# INLINE nonRecT #-}
 
 -- | Rewrite all children of a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
@@ -312,7 +323,7 @@ recT t f = translate $ \ c -> \case
                      in f <$> sequence [ apply (t n) (c' @@ Rec_Def n) (Def v e) -- here we convert from (Id,CoreExpr) to CoreDef
                                        | ((v,e),n) <- zip bds [0..]
                                        ]
-         _       -> fail "not a recursive binding-group node."
+         _       -> fail "not a recursive binding group."
 {-# INLINE recT #-}
 
 -- | Rewrite all children of a binding group of the form: @Rec@ ['CoreDef']
@@ -382,7 +393,7 @@ altOneR r1 rs r2 = unwrapOneR (altAllR (wrapOneR r1) (wrapOneR . rs) (wrapOneR r
 varT :: (ExtendPath c Crumb, Monad m) => Translate c m Id b -> Translate c m CoreExpr b
 varT t = translate $ \ c -> \case
                                Var v -> apply t (c @@ Var_Id) v
-                               _     -> fail "not a variable node."
+                               _     -> fail "not a variable."
 {-# INLINE varT #-}
 
 -- | Rewrite the 'Id' child in an expression of the form: @Var@ 'Id'
@@ -395,7 +406,7 @@ varR r = varT (Var <$> r)
 litT :: (ExtendPath c Crumb, Monad m) => Translate c m Literal b -> Translate c m CoreExpr b
 litT t = translate $ \ c -> \case
                                Lit x -> apply t (c @@ Lit_Lit) x
-                               _     -> fail "not a literal node."
+                               _     -> fail "not a literal."
 {-# INLINE litT #-}
 
 -- | Rewrite the 'Literal' child in an expression of the form: @Lit@ 'Literal'
@@ -408,7 +419,7 @@ litR r = litT (Lit <$> r)
 appT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreExpr a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
 appT t1 t2 f = translate $ \ c -> \case
                                      App e1 e2 -> f <$> apply t1 (c @@ App_Fun) e1 <*> apply t2 (c @@ App_Arg) e2
-                                     _         -> fail "not an application node."
+                                     _         -> fail "not an application."
 {-# INLINE appT #-}
 
 -- | Rewrite all children of an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
@@ -431,7 +442,7 @@ appOneR r1 r2 = unwrapOneR $ appAllR (wrapOneR r1) (wrapOneR r2)
 lamT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m Var a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
 lamT t1 t2 f = translate $ \ c -> \case
                                      Lam v e -> f <$> apply t1 (c @@ Lam_Var) v <*> apply t2 (addLambdaBinding v c @@ Lam_Body) e
-                                     _       -> fail "not a lambda node."
+                                     _       -> fail "not a lambda."
 {-# INLINE lamT #-}
 
 -- | Rewrite all children of an expression of the form: @Lam@ 'Var' 'CoreExpr'
@@ -490,7 +501,7 @@ caseT te tw tty talts f = translate $ \ c -> \case
                                <*> sequence [ apply (talts n) (addCaseWildBinding (w,e,alt) c @@ Case_Alt n) alt
                                             | (alt,n) <- zip alts [0..]
                                             ]
-         _                -> fail "not a case node."
+         _                -> fail "not a case."
 {-# INLINE caseT #-}
 
 -- | Rewrite all children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
@@ -528,7 +539,7 @@ caseOneR re rw rty ralts = unwrapOneR $ caseAllR (wrapOneR re) (wrapOneR rw) (wr
 castT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreExpr a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
 castT t1 t2 f = translate $ \ c -> \case
                                       Cast e co -> f <$> apply t1 (c @@ Cast_Expr) e <*> apply t2 (c @@ Cast_Co) co
-                                      _         -> fail "not a cast node."
+                                      _         -> fail "not a cast."
 {-# INLINE castT #-}
 
 -- | Rewrite all children of an expression of the form: @Cast@ 'CoreExpr' 'Coercion'
@@ -551,7 +562,7 @@ castOneR r1 r2 = unwrapOneR $ castAllR (wrapOneR r1) (wrapOneR r2)
 tickT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreTickish a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
 tickT t1 t2 f = translate $ \ c -> \case
                                       Tick tk e -> f <$> apply t1 (c @@ Tick_Tick) tk <*> apply t2 (c @@ Tick_Expr) e
-                                      _         -> fail "not a tick node."
+                                      _         -> fail "not a tick."
 {-# INLINE tickT #-}
 
 -- | Rewrite all children of an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
@@ -574,7 +585,7 @@ tickOneR r1 r2 = unwrapOneR $ tickAllR (wrapOneR r1) (wrapOneR r2)
 typeT :: Monad m => Translate c m Type b -> Translate c m CoreExpr b
 typeT t = translate $ \ c -> \case
                                 Type ty -> apply t c ty
-                                _       -> fail "not a type node."
+                                _       -> fail "not a type."
 {-# INLINE typeT #-}
 
 -- | Rewrite the 'Type' child in an expression of the form: @Type@ 'Type'
@@ -587,7 +598,7 @@ typeR r = typeT (Type <$> r)
 coercionT :: Monad m => Translate c m Coercion b -> Translate c m CoreExpr b
 coercionT t = translate $ \ c -> \case
                                     Coercion co -> apply t c co
-                                    _           -> fail "not a coercion node."
+                                    _           -> fail "not a coercion."
 {-# INLINE coercionT #-}
 
 -- | Rewrite the 'Coercion' child in an expression of the form: @Coercion@ 'Coercion'
@@ -861,7 +872,6 @@ promoteExprT = promoteWithFailMsgT "This translate can only succeed at expressio
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 
-
 -- Type Traversals
 
 instance (ExtendPath c Crumb, AddBindings c) => Walker c Type where
@@ -869,11 +879,11 @@ instance (ExtendPath c Crumb, AddBindings c) => Walker c Type where
   allR :: MonadCatch m => Rewrite c m Type -> Rewrite c m Type
   allR r = prefixFailMsg "allR failed: " $
            readerT $ \case
-                        AppTy _ _     -> appTyAllR r r
-                        FunTy _ _     -> funTyAllR r r
-                        ForAllTy _ _  -> forAllTyAllR idR r
-                        TyConApp _ _  -> tyConAppAllR idR (const r)
-                        _             -> idR
+                        AppTy{}     -> appTyAllR r r
+                        FunTy{}     -> funTyAllR r r
+                        ForAllTy{}  -> forAllTyAllR idR r
+                        TyConApp{}  -> tyConAppAllR idR (const r)
+                        _           -> idR
 
 ---------------------------------------------------------------------
 
@@ -881,7 +891,7 @@ instance (ExtendPath c Crumb, AddBindings c) => Walker c Type where
 tyVarT :: (ExtendPath c Crumb, Monad m) => Translate c m TyVar b -> Translate c m Type b
 tyVarT t = translate $ \ c -> \case
                                  TyVarTy v -> apply t (c @@ TyVarTy_TyVar) v
-                                 _         -> fail "not a type-variable node."
+                                 _         -> fail "not a type variable."
 {-# INLINE tyVarT #-}
 
 -- | Rewrite the 'TyVar' child of a type of the form: @TyVarTy@ 'TyVar'
@@ -894,7 +904,7 @@ tyVarR r = tyVarT (TyVarTy <$> r)
 litTyT :: (ExtendPath c Crumb, Monad m) => Translate c m TyLit b -> Translate c m Type b
 litTyT t = translate $ \ c -> \case
                                  LitTy x -> apply t (c @@ LitTy_TyLit) x
-                                 _       -> fail "not a type-literal node."
+                                 _       -> fail "not a type literal."
 {-# INLINE litTyT #-}
 
 -- | Rewrite the 'TyLit' child of a type of the form: @LitTy@ 'TyLit'
@@ -907,7 +917,7 @@ litTyR r = litTyT (LitTy <$> r)
 appTyT :: (ExtendPath c Crumb, Monad m) => Translate c m Type a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Type b
 appTyT t1 t2 f = translate $ \ c -> \case
                                      AppTy ty1 ty2 -> f <$> apply t1 (c @@ AppTy_Fun) ty1 <*> apply t2 (c @@ AppTy_Arg) ty2
-                                     _             -> fail "not an type-application node."
+                                     _             -> fail "not a type application."
 {-# INLINE appTyT #-}
 
 -- | Rewrite all children of a type of the form: @AppTy@ 'Type' 'Type'
@@ -930,7 +940,7 @@ appTyOneR r1 r2 = unwrapOneR $ appTyAllR (wrapOneR r1) (wrapOneR r2)
 funTyT :: (ExtendPath c Crumb, Monad m) => Translate c m Type a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Type b
 funTyT t1 t2 f = translate $ \ c -> \case
                                      FunTy ty1 ty2 -> f <$> apply t1 (c @@ FunTy_Dom) ty1 <*> apply t2 (c @@ FunTy_CoDom) ty2
-                                     _             -> fail "not an type-function node."
+                                     _             -> fail "not a function type."
 {-# INLINE funTyT #-}
 
 -- | Rewrite all children of a type of the form: @FunTy@ 'Type' 'Type'
@@ -953,7 +963,7 @@ funTyOneR r1 r2 = unwrapOneR $ funTyAllR (wrapOneR r1) (wrapOneR r2)
 forAllTyT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m Var a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Type b
 forAllTyT t1 t2 f = translate $ \ c -> \case
                                           ForAllTy v ty -> f <$> apply t1 (c @@ ForAllTy_Var) v <*> apply t2 (addForallBinding v c @@ ForAllTy_Body) ty
-                                          _             -> fail "not a forall-type node."
+                                          _             -> fail "not a forall type."
 {-# INLINE forAllTyT #-}
 
 -- | Rewrite all children of a type of the form: @ForAllTy@ 'Var' 'Type'
@@ -976,7 +986,7 @@ forAllTyOneR r1 r2 = unwrapOneR $ forAllTyAllR (wrapOneR r1) (wrapOneR r2)
 tyConAppT :: (ExtendPath c Crumb, Monad m) => Translate c m TyCon a1 -> (Int -> Translate c m KindOrType a2) -> (a1 -> [a2] -> b) -> Translate c m Type b
 tyConAppT t ts f = translate $ \ c -> \case
                                          TyConApp con tys -> f <$> apply t (c @@ TyConApp_TyCon) con <*> sequence [ apply (ts n) (c @@ TyConApp_Arg n) ty | (ty,n) <- zip tys [0..] ]
-                                         _                -> fail "not a type-constructor--application node."
+                                         _                -> fail "not a type-constructor application."
 {-# INLINE tyConAppT #-}
 
 -- | Rewrite all children of a type of the form: @TyConApp@ 'TyCon' ['KindOrType']
@@ -994,6 +1004,251 @@ tyConAppOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m TyCon -> (Int 
 tyConAppOneR r rs = unwrapOneR $ tyConAppAllR (wrapOneR r) (wrapOneR . rs)
 {-# INLINE tyConAppOneR #-}
 
+---------------------------------------------------------------------
+---------------------------------------------------------------------
+
+-- Coercion Traversals
+
+instance (ExtendPath c Crumb, AddBindings c) => Walker c Coercion where
+
+  allR :: MonadCatch m => Rewrite c m Coercion -> Rewrite c m Coercion
+  allR r = prefixFailMsg "allR failed: " $
+           readerT $ \case
+                        TyConAppCo{}  -> tyConAppCoAllR idR (const r)
+                        AppCo{}       -> appCoAllR r r
+                        ForAllCo{}    -> forAllCoAllR idR r
+                        AxiomInstCo{} -> axiomInstCoAllR idR (const r)
+                        SymCo{}       -> symCoR r
+                        TransCo{}     -> transCoAllR r r
+                        NthCo{}       -> nthCoAllR idR r
+                        InstCo{}      -> instCoAllR r idR
+                        _             -> idR
+
+---------------------------------------------------------------------
+
+-- | Translate a coercion of the form: @Refl@ 'Type'
+reflT :: (ExtendPath c Crumb, Monad m) => Translate c m Type b -> Translate c m Coercion b
+reflT t = translate $ \ c -> \case
+                                 Refl ty -> apply t (c @@ Refl_Type) ty
+                                 _       -> fail "not a reflexive coercion."
+{-# INLINE reflT #-}
+
+-- | Rewrite the 'Type' child of a coercion of the form: @Refl@ 'Type'
+reflR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Type -> Rewrite c m Coercion
+reflR r = reflT (Refl <$> r)
+{-# INLINE reflR #-}
+
+
+-- | Translate a coercion of the form: @TyConAppCo@ 'TyCon' ['Coercion']
+tyConAppCoT :: (ExtendPath c Crumb, Monad m) => Translate c m TyCon a1 -> (Int -> Translate c m Coercion a2) -> (a1 -> [a2] -> b) -> Translate c m Coercion b
+tyConAppCoT t ts f = translate $ \ c -> \case
+                                           TyConAppCo con coes -> f <$> apply t (c @@ TyConAppCo_TyCon) con <*> sequence [ apply (ts n) (c @@ TyConAppCo_Arg n) co | (co,n) <- zip coes [0..] ]
+                                           _                   -> fail "not a type-constructor coercion."
+{-# INLINE tyConAppCoT #-}
+
+-- | Rewrite all children of a coercion of the form: @TyConAppCo@ 'TyCon' ['Coercion']
+tyConAppCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m TyCon -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+tyConAppCoAllR r rs = tyConAppCoT r rs TyConAppCo
+{-# INLINE tyConAppCoAllR #-}
+
+-- | Rewrite any children of a coercion of the form: @TyConAppCo@ 'TyCon' ['Coercion']
+tyConAppCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m TyCon -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+tyConAppCoAnyR r rs = unwrapAnyR $ tyConAppCoAllR (wrapAnyR r) (wrapAnyR . rs)
+{-# INLINE tyConAppCoAnyR #-}
+
+-- | Rewrite one child of a coercion of the form: @TyConAppCo@ 'TyCon' ['Coercion']
+tyConAppCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m TyCon -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+tyConAppCoOneR r rs = unwrapOneR $ tyConAppCoAllR (wrapOneR r) (wrapOneR . rs)
+{-# INLINE tyConAppCoOneR #-}
+
+
+-- | Translate a coercion of the form: @AppCo@ 'Coercion' 'Coercion'
+appCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Coercion a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
+appCoT t1 t2 f = translate $ \ c -> \case
+                                     AppCo co1 co2 -> f <$> apply t1 (c @@ AppCo_Fun) co1 <*> apply t2 (c @@ AppCo_Arg) co2
+                                     _             -> fail "not a coercion application."
+{-# INLINE appCoT #-}
+
+-- | Rewrite all children of a coercion of the form: @AppCo@ 'Coercion' 'Coercion'
+appCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+appCoAllR r1 r2 = appCoT r1 r2 AppCo
+{-# INLINE appCoAllR #-}
+
+-- | Rewrite any children of a coercion of the form: @AppCo@ 'Coercion' 'Coercion'
+appCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+appCoAnyR r1 r2 = unwrapAnyR $ appCoAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE appCoAnyR #-}
+
+-- | Rewrite one child of a coercion of the form: @AppCo@ 'Coercion' 'Coercion'
+appCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+appCoOneR r1 r2 = unwrapOneR $ appCoAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE appCoOneR #-}
+
+
+-- | Translate a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion'
+forAllCoT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m TyVar a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
+forAllCoT t1 t2 f = translate $ \ c -> \case
+                                          ForAllCo v co -> f <$> apply t1 (c @@ ForAllCo_TyVar) v <*> apply t2 (addForallBinding v c @@ ForAllCo_Body) co
+                                          _             -> fail "not a forall coercion."
+{-# INLINE forAllCoT #-}
+
+-- | Rewrite all children of a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion'
+forAllCoAllR :: (ExtendPath c Crumb, AddBindings c, Monad m) => Rewrite c m TyVar -> Rewrite c m Coercion -> Rewrite c m Coercion
+forAllCoAllR r1 r2 = forAllCoT r1 r2 ForAllCo
+{-# INLINE forAllCoAllR #-}
+
+-- | Rewrite any children of a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion'
+forAllCoAnyR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m TyVar -> Rewrite c m Coercion -> Rewrite c m Coercion
+forAllCoAnyR r1 r2 = unwrapAnyR $ forAllCoAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE forAllCoAnyR #-}
+
+-- | Rewrite one child of a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion'
+forAllCoOneR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m TyVar -> Rewrite c m Coercion -> Rewrite c m Coercion
+forAllCoOneR r1 r2 = unwrapOneR $ forAllCoAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE forAllCoOneR #-}
+
+
+-- | Translate a coercion of the form: @CoVarCo@ 'CoVar'
+coVarCoT :: (ExtendPath c Crumb, Monad m) => Translate c m CoVar b -> Translate c m Coercion b
+coVarCoT t = translate $ \ c -> \case
+                                   CoVarCo v -> apply t (c @@ CoVarCo_CoVar) v
+                                   _         -> fail "not a coercion variable."
+{-# INLINE coVarCoT #-}
+
+-- | Rewrite the 'CoVar' child of a coercion of the form: @CoVarCo@ 'CoVar'
+coVarCoR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoVar -> Rewrite c m Coercion
+coVarCoR r = coVarCoT (CoVarCo <$> r)
+{-# INLINE coVarCoR #-}
+
+
+-- | Translate a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
+axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Translate c m CoAxiom a1 -> (Int -> Translate c m Coercion a2) -> (a1 -> [a2] -> b) -> Translate c m Coercion b
+axiomInstCoT t ts f = translate $ \ c -> \case
+                                            AxiomInstCo ax coes -> f <$> apply t (c @@ AxiomInstCo_Axiom) ax <*> sequence [ apply (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
+                                            _                   -> fail "not a coercion axiom instantiation."
+{-# INLINE axiomInstCoT #-}
+
+-- | Rewrite all children of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
+axiomInstCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoAxiom -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+axiomInstCoAllR r rs = axiomInstCoT r rs AxiomInstCo
+{-# INLINE axiomInstCoAllR #-}
+
+-- | Rewrite any children of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
+axiomInstCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoAxiom -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+axiomInstCoAnyR r rs = unwrapAnyR $ axiomInstCoAllR (wrapAnyR r) (wrapAnyR . rs)
+{-# INLINE axiomInstCoAnyR #-}
+
+-- | Rewrite one child of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
+axiomInstCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoAxiom -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+axiomInstCoOneR r rs = unwrapOneR $ axiomInstCoAllR (wrapOneR r) (wrapOneR . rs)
+{-# INLINE axiomInstCoOneR #-}
+
+
+-- | Translate a coercion of the form: @UnsafeCo@ 'Type' 'Type'
+unsafeCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Type a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
+unsafeCoT t1 t2 f = translate $ \ c -> \case
+                                          UnsafeCo ty1 ty2 -> f <$> apply t1 (c @@ UnsafeCo_Left) ty1 <*> apply t2 (c @@ UnsafeCo_Right) ty2
+                                          _                -> fail "not an unsafe coercion."
+{-# INLINE unsafeCoT #-}
+
+-- | Rewrite all children of a coercion of the form: @UnsafeCo@ 'Type' 'Type'
+unsafeCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Type -> Rewrite c m Type -> Rewrite c m Coercion
+unsafeCoAllR r1 r2 = unsafeCoT r1 r2 UnsafeCo
+{-# INLINE unsafeCoAllR #-}
+
+-- | Rewrite any children of a coercion of the form: @UnsafeCo@ 'Type' 'Type'
+unsafeCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Type -> Rewrite c m Type -> Rewrite c m Coercion
+unsafeCoAnyR r1 r2 = unwrapAnyR $ unsafeCoAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE unsafeCoAnyR #-}
+
+-- | Rewrite one child of a coercion of the form: @UnsafeCo@ 'Type' 'Type'
+unsafeCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Type -> Rewrite c m Type -> Rewrite c m Coercion
+unsafeCoOneR r1 r2 = unwrapOneR $ unsafeCoAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE unsafeCoOneR #-}
+
+
+-- | Translate a coercion of the form: @SymCo@ 'Coercion'
+symCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Coercion b -> Translate c m Coercion b
+symCoT t = translate $ \ c -> \case
+                                   SymCo co -> apply t (c @@ SymCo_Co) co
+                                   _        -> fail "not a symmetric coercion."
+{-# INLINE symCoT #-}
+
+-- | Rewrite the 'Coercion' child of a coercion of the form: @SymCo@ 'Coercion'
+symCoR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Coercion -> Rewrite c m Coercion
+symCoR r = symCoT (SymCo <$> r)
+{-# INLINE symCoR #-}
+
+
+-- | Translate a coercion of the form: @TransCo@ 'Coercion' 'Coercion'
+transCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Coercion a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
+transCoT t1 t2 f = translate $ \ c -> \case
+                                          TransCo co1 co2 -> f <$> apply t1 (c @@ TransCo_Left) co1 <*> apply t2 (c @@ TransCo_Right) co2
+                                          _               -> fail "not a transitive coercion."
+{-# INLINE transCoT #-}
+
+-- | Rewrite all children of a coercion of the form: @TransCo@ 'Coercion' 'Coercion'
+transCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+transCoAllR r1 r2 = transCoT r1 r2 TransCo
+{-# INLINE transCoAllR #-}
+
+-- | Rewrite any children of a coercion of the form: @TransCo@ 'Coercion' 'Coercion'
+transCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+transCoAnyR r1 r2 = unwrapAnyR $ transCoAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE transCoAnyR #-}
+
+-- | Rewrite one child of a coercion of the form: @TransCo@ 'Coercion' 'Coercion'
+transCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+transCoOneR r1 r2 = unwrapOneR $ transCoAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE transCoOneR #-}
+
+
+-- | Translate a coercion of the form: @NthCo@ 'Int' 'Coercion'
+nthCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Int a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
+nthCoT t1 t2 f = translate $ \ c -> \case
+                                          NthCo n co -> f <$> apply t1 (c @@ NthCo_Int) n <*> apply t2 (c @@ NthCo_Co) co
+                                          _          -> fail "not an Nth coercion."
+{-# INLINE nthCoT #-}
+
+-- | Rewrite all children of a coercion of the form: @NthCo@ 'Int' 'Coercion'
+nthCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Int -> Rewrite c m Coercion -> Rewrite c m Coercion
+nthCoAllR r1 r2 = nthCoT r1 r2 NthCo
+{-# INLINE nthCoAllR #-}
+
+-- | Rewrite any children of a coercion of the form: @NthCo@ 'Int' 'Coercion'
+nthCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Int -> Rewrite c m Coercion -> Rewrite c m Coercion
+nthCoAnyR r1 r2 = unwrapAnyR $ nthCoAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE nthCoAnyR #-}
+
+-- | Rewrite one child of a coercion of the form: @NthCo@ 'Int' 'Coercion'
+nthCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Int -> Rewrite c m Coercion -> Rewrite c m Coercion
+nthCoOneR r1 r2 = unwrapOneR $ nthCoAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE nthCoOneR #-}
+
+
+-- | Translate a coercion of the form: @InstCo@ 'Coercion' 'Type'
+instCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Coercion a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
+instCoT t1 t2 f = translate $ \ c -> \case
+                                          InstCo co ty -> f <$> apply t1 (c @@ InstCo_Co) co <*> apply t2 (c @@ InstCo_Type) ty
+                                          _            -> fail "not a coercion instantiation."
+{-# INLINE instCoT #-}
+
+-- | Rewrite all children of a coercion of the form: @InstCo@ 'Coercion' 'Type'
+instCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Coercion -> Rewrite c m Type -> Rewrite c m Coercion
+instCoAllR r1 r2 = instCoT r1 r2 InstCo
+{-# INLINE instCoAllR #-}
+
+-- | Rewrite any children of a coercion of the form: @InstCo@ 'Coercion' 'Type'
+instCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewrite c m Type -> Rewrite c m Coercion
+instCoAnyR r1 r2 = unwrapAnyR $ instCoAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE instCoAnyR #-}
+
+-- | Rewrite one child of a coercion of the form: @InstCo@ 'Coercion' 'Type'
+instCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewrite c m Type -> Rewrite c m Coercion
+instCoOneR r1 r2 = unwrapOneR $ instCoAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE instCoOneR #-}
+
+---------------------------------------------------------------------
 ---------------------------------------------------------------------
 
 -- | Earlier versions of HERMIT used 'Int' as the crumb type.
@@ -1024,4 +1279,5 @@ deprecatedIntToPathT :: Monad m => Int -> Translate c m Core PathH
 deprecatedIntToPathT =  liftM return . deprecatedIntToCrumbT
 {-# INLINE deprecatedIntToPathT #-}
 
+---------------------------------------------------------------------
 ---------------------------------------------------------------------
