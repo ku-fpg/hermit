@@ -34,7 +34,7 @@ import Prelude hiding (exp)
 
 externals :: [External]
 externals =
-    [ external "fold" (promoteExprR . foldR)
+    [ external "fold" (promoteExprR . foldR :: TH.Name -> RewriteH Core)
         [ "fold a definition"
         , ""
         , "double :: Int -> Int"
@@ -46,15 +46,15 @@ externals =
         , ""
         , "Note: due to associativity, if you wanted to fold 5 + 6 + 6, "
         , "you first need to apply an associativity rewrite." ]  .+ Context .+ Deep
-    , external "fold" (promoteExprR . stashFoldR)
+    , external "fold" (promoteExprR . stashFoldR :: Label -> RewriteH Core)
         [ "Fold a remembered definition." ]                      .+ Context .+ Deep
-    , external "fold-any" (promoteExprR stashFoldAnyR)
+    , external "fold-any" (promoteExprR stashFoldAnyR :: RewriteH Core)
         [ "Attempt to fold any of the remembered definitions." ] .+ Context .+ Deep
     ]
 
 ------------------------------------------------------------------------
 
-stashFoldR :: Label -> RewriteH CoreExpr
+stashFoldR :: ReadBindings c => Label -> Rewrite c HermitM CoreExpr
 stashFoldR label = prefixFailMsg "Fold failed: " $
     translate $ \ c e -> do
         Def i rhs <- lookupDef label
@@ -63,11 +63,11 @@ stashFoldR label = prefixFailMsg "Fold failed: " $
               return
               (fold i rhs e)
 
-stashFoldAnyR :: RewriteH CoreExpr
+stashFoldAnyR :: ReadBindings c => Rewrite c HermitM CoreExpr
 stashFoldAnyR = setFailMsg "Fold failed: no definitions could be folded." $
-    catchesM =<< map stashFoldR <$> (Map.keys <$> constT getStash)
+                catchesM =<< map stashFoldR <$> (Map.keys <$> constT getStash)
 
-foldR :: TH.Name -> RewriteH CoreExpr
+foldR :: ReadBindings c => TH.Name -> Rewrite c HermitM CoreExpr
 foldR nm =  prefixFailMsg "Fold failed: " $
     translate $ \ c e -> do
         i <- case findBoundVars nm c of
