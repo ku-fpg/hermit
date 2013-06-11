@@ -121,7 +121,7 @@ type PrettyH a = Translate PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?
 
 -- | Context for PrettyH translations.
-type PrettyC = SnocPath Crumb
+type PrettyC = AbsolutePath Crumb
 
 liftPrettyH :: ReadPath c Crumb => PrettyH a -> Translate c HermitM a DocH
 liftPrettyH pp = translate $ \ c -> apply pp (liftPrettyC c)
