@@ -1,25 +1,24 @@
 {-# LANGUAGE MultiWayIf, ScopedTypeVariables, FlexibleContexts #-}
 
 module Language.HERMIT.Primitive.Local.Case
-       ( -- * Rewrites on Case Expressions
-         externals
-       , caseFloatApp
-       , caseFloatArg
-       , caseFloatCase
-       , caseFloatCast
-       , caseFloatLet
-       , caseFloat
-       , caseUnfloat
-       , caseUnfloatApp
-       , caseUnfloatArgs
-       , caseReduce
-       , caseReduceDatacon
-       , caseReduceLiteral
-       , caseSplit
-       , caseSplitInline
-       )
-where
-
+    ( -- * Rewrites on Case Expressions
+      externals
+    , caseElim
+    , caseFloatApp
+    , caseFloatArg
+    , caseFloatCase
+    , caseFloatCast
+    , caseFloatLet
+    , caseFloat
+    , caseUnfloat
+    , caseUnfloatApp
+    , caseUnfloatArgs
+    , caseReduce
+    , caseReduceDatacon
+    , caseReduceLiteral
+    , caseSplit
+    , caseSplitInline
+    ) where
 
 import GhcPlugins
 
@@ -47,7 +46,9 @@ import qualified Language.Haskell.TH as TH
 -- | Externals relating to Case expressions.
 externals :: [External]
 externals =
-    [ external "case-float-app" (promoteExprR caseFloatApp :: RewriteH Core)
+    [ external "case-elim" (promoteExprR caseElim :: RewriteH Core)
+        [ "case s of w; C vs -> e ==> e if w and vs are not free in e" ]     .+ Shallow
+    , external "case-float-app" (promoteExprR caseFloatApp :: RewriteH Core)
         [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow .+ Bash
     , external "case-float-arg" (promoteExprR caseFloatArg :: RewriteH Core)
         [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
@@ -82,8 +83,19 @@ externals =
 
 ------------------------------------------------------------------------------
 
+-- | case s of w; C vs -> e ==> e if w and vs are not free in e
+caseElim :: Rewrite c HermitM CoreExpr
+caseElim = prefixFailMsg "Case elimination failed: " $
+           withPatFailMsg (wrongExprForm "Case s bnd ty alts") $ do
+    Case _ bnd _ alts <- idR
+    case alts of
+        [(_, vs, e)] -> do fvs <- applyInContextT freeVarsT e
+                           guardMsg (null $ intersect (bnd:vs) fvs) "wildcard or pattern binders free in RHS."
+                           return e
+        _ -> fail "more than one case alternative."
+
 -- | (case s of alt1 -> e1; alt2 -> e2) v ==> case s of alt1 -> e1 v; alt2 -> e2 v
-caseFloatApp ::  (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFloatApp :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
   do
     captures    <- appT caseAltVarsT freeVarsT (flip (map . intersect))
