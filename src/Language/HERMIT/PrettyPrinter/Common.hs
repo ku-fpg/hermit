@@ -46,7 +46,6 @@ import Data.Monoid hiding ((<>))
 import qualified Data.Map as M
 import Data.Typeable
 
-import Language.HERMIT.Context
 import Language.HERMIT.Core
 import Language.HERMIT.External
 import Language.HERMIT.Kure
@@ -122,41 +121,26 @@ type PrettyH a = Translate PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?
 
 -- | Context for PrettyH translations.
-data PrettyC = PrettyC { prettyC_path :: AbsolutePath Crumb }
-
--- | Note: 'PrettyC' has a 'AddBindings' instance so we can use
---   the congruence combinators, but no 'ReadBindings' instance,
---   as we don't actually accumulate bindings.
-instance AddBindings PrettyC where
-    addHermitBindings _ = id
-    {-# INLINE addHermitBindings #-}
-
-instance ReadPath PrettyC Crumb where
-    absPath = prettyC_path
-    {-# INLINE absPath #-}
-
-instance ExtendPath PrettyC Crumb where
-    c @@ n = c { prettyC_path = prettyC_path c @@ n }
-    {-# INLINE (@@) #-}
+type PrettyC = SnocPath Crumb
 
 liftPrettyH :: ReadPath c Crumb => PrettyH a -> Translate c HermitM a DocH
 liftPrettyH pp = translate $ \ c -> apply pp (liftPrettyC c)
 
 liftPrettyC :: ReadPath c Crumb => c -> PrettyC
-liftPrettyC c = PrettyC (absPath c)
+liftPrettyC = absPath
 
 initPrettyC :: PrettyC
-initPrettyC = PrettyC mempty
+initPrettyC = mempty
 
 -- These are *recommendations* to the pretty printer.
 
 data PrettyOptions = PrettyOptions
-        { po_fullyQualified  :: Bool            -- Do you show fully qualified names?
-        , po_exprTypes       :: ShowOption      -- Do you hide types, and type arguments, as <>?
-        , po_coercions       :: ShowOption      -- Do you hide coercions?
-        , po_typesForBinders :: ShowOption      -- Do you give the types for all bindings?
-        , po_highlight       :: Maybe PathH     -- This region should be highlighted (for sub-expression)
-        , po_depth           :: Maybe Int       -- below this depth are ..., Nothing => infinite
+        { po_fullyQualified  :: Bool            -- ^ Do you show fully qualified names?
+        , po_exprTypes       :: ShowOption      -- ^ Do you hide types, and type arguments, as <>?
+        , po_coercions       :: ShowOption      -- ^ Do you hide coercions?
+        , po_typesForBinders :: ShowOption      -- ^ Do you give the types for all bindings?
+        , po_highlight       :: Maybe PathH     -- ^ This region should be highlighted (for sub-expression)
+        , po_depth           :: Maybe Int       -- ^ below this depth are ..., Nothing => infinite
         , po_notes           :: Bool            -- ^ notes might be added to output
         , po_ribbon          :: Float
         , po_width           :: Int

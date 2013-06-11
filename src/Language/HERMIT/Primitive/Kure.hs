@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Language.HERMIT.Primitive.Kure
        ( -- * KURE Strategies
          -- This list contains reflections of the KURE strategies as 'External's.
@@ -8,6 +10,7 @@ where
 import Control.Arrow
 
 import Language.HERMIT.Core
+import Language.HERMIT.Context
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 
@@ -81,12 +84,12 @@ externals = map (.+ KURE)
 
 ------------------------------------------------------------------------------------
 
-hfocusR :: TranslateH Core PathH -> RewriteH Core -> RewriteH Core
+hfocusR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m Core PathH -> Rewrite c m Core -> Rewrite c m Core
 hfocusR tp r = do p <- tp
                   pathR p r
 {-# INLINE hfocusR #-}
 
-hfocusT :: TranslateH Core PathH -> TranslateH Core String -> TranslateH Core String
+hfocusT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m Core PathH -> Translate c m Core String -> Translate c m Core String
 hfocusT tp t = do p <- tp
                   pathT p t
 {-# INLINE hfocusT #-}

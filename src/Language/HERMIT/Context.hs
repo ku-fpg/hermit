@@ -83,6 +83,11 @@ class AddBindings c where
   --   Bindings are added in parallel sets to help with shadowing issues.
   addHermitBindings :: [(Var,HermitBindingSite)] -> c -> c
 
+-- | Here the bindings are just discarded.
+instance AddBindings (SnocPath crumb) where
+  addHermitBindings :: [(Var,HermitBindingSite)] -> SnocPath crumb -> SnocPath crumb
+  addHermitBindings _ = id
+
 -------------------------------------------
 
 -- | Add a single binding to the context.
