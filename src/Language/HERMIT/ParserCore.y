@@ -95,7 +95,7 @@ lookupName nm k = do
 
 type CoreParseM a = ReaderT HermitC HermitM a
 
-parseError :: [Token] -> CoreParseM a
+parseError :: Monad m => [Token] -> m a
 parseError ts = fail $ "core parse error: " ++ show ts
 
 data Token

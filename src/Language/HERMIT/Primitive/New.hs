@@ -1,10 +1,12 @@
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
+
 -- Placeholder for new prims
 module Language.HERMIT.Primitive.New where
 
 import GhcPlugins as GHC hiding (varName)
 
-import Control.Applicative
 import Control.Arrow
+import Control.Monad (liftM)
 
 import Data.List(intersect,transpose)
 
@@ -57,13 +59,13 @@ externals = map ((.+ Experiment) . (.+ TODO))
 
 ------------------------------------------------------------------------------------------------------
 
-isVar :: TH.Name -> TranslateH CoreExpr ()
+isVar :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> Translate c m CoreExpr ()
 isVar nm = let matchName = arr (cmpTHName2Var nm)
             in (varT matchName <+ typeT (tyVarT matchName)) >>= guardM
 
 ------------------------------------------------------------------------------------------------------
 
-simplifyR :: RewriteH Core
+simplifyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
     innermostR (promoteExprR (unfoldNameR (TH.mkName "$")
                            <+ unfoldNameR (TH.mkName ".")
@@ -78,7 +80,7 @@ collectLets (Let (NonRec x e1) e2) = let (bs,expr) = collectLets e2 in ((x,e1):b
 collectLets expr                   = ([],expr)
 
 -- | Combine nested non-recursive lets into case of a tuple.
-letTupleR :: TH.Name -> RewriteH CoreExpr
+letTupleR :: TH.Name -> Rewrite c HermitM CoreExpr
 letTupleR nm = prefixFailMsg "Let-tuple failed: " $
   do (bnds, body) <- arr collectLets
      let numBnds = length bnds
@@ -102,7 +104,7 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3
 -- let v = E1 in E2 E3 <=> E2 (let v = E1 in E3)
 
-staticArg :: RewriteH CoreDef
+staticArg :: forall c. (ExtendPath c Crumb, AddBindings c) => Rewrite c HermitM CoreDef
 staticArg = prefixFailMsg "static-arg failed: " $ do
     Def f rhs <- idR
     let (bnds, body) = collectBinders rhs
@@ -125,7 +127,7 @@ staticArg = prefixFailMsg "static-arg failed: " $ do
 
         wkr <- newIdH (var2String f ++ "'") (exprType (mkCoreLams dbnds body))
 
-        let replaceCall :: RewriteH CoreExpr
+        let replaceCall :: Monad m => Rewrite c m CoreExpr
             replaceCall = do
                 (_,exprs) <- callT
                 return $ mkApps (Var wkr) [ e | (p,e) <- zip [0..] exprs, (p::Int) `elem` ps ]
@@ -137,8 +139,8 @@ staticArg = prefixFailMsg "static-arg failed: " $ do
 
 ------------------------------------------------------------------------------------------------------
 
-testQuery :: RewriteH Core -> TranslateH Core String
-testQuery r = f <$> testM r
+testQuery :: MonadCatch m => Rewrite c m Core -> Translate c m Core String
+testQuery r = f `liftM` testM r
   where
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."
@@ -146,22 +148,22 @@ testQuery r = f <$> testM r
 ------------------------------------------------------------------------------------------------------
 
 -- match in a top-down manner,
-anyCallR :: RewriteH Core -> RewriteH Core
+anyCallR :: forall c m. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m Core -> Rewrite c m Core
 anyCallR rr = prefixFailMsg "any-call failed: " $
-                readerT $ \ e -> case e of
+              readerT $ \ e -> case e of
         ExprCore (App {}) -> childR App_Arg rec >+> (rr <+ childR App_Fun rec)
         ExprCore (Var {}) -> rr
         _                 -> anyR rec
    where
 
-        rec :: RewriteH Core
+        rec :: Rewrite c m Core
         rec = anyCallR rr
 
 ------------------------------------------------------------------------------------------------------
 
 -- | Push a function through a Case or Let expression.
 --   Unsafe if the function is not strict.
-push :: TH.Name -> RewriteH CoreExpr
+push :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
 push nm = prefixFailMsg "push failed: " $
      do e <- idR
         case collectArgs e of
@@ -176,6 +178,8 @@ push nm = prefixFailMsg "push failed: " $
           _ -> fail "no function to match."
 
 ------------------------------------------------------------------------------------------------------
+
+-- The types of these can probably be generalised after the Core Parser is generalised.
 
 parseCoreExprT :: CoreString -> TranslateH a CoreExpr
 parseCoreExprT = contextonlyT . parseCore
@@ -196,7 +200,7 @@ unsafeReplaceStash label = prefixFailMsg "unsafe-replace failed: " $
 
 ------------------------------------------------------------------------------------------------------
 
-inlineAll :: [TH.Name] -> RewriteH Core
-inlineAll = innermostR . foldr (\nm rr -> promoteExprR (inlineName nm) <+ rr) (fail "inline-all: nothing to do")
+inlineAll :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM Core
+inlineAll = innermostR . foldr (\ nm rr -> promoteExprR (inlineName nm) <+ rr) (fail "inline-all: nothing to do")
 
 ------------------------------------------------------------------------------------------------------
