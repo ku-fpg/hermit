@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, TypeFamilies,
+{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, TypeFamilies, InstanceSigs,
              MultiParamTypeClasses, RankNTypes, FlexibleContexts #-}
 
 module Language.HERMIT.PrettyPrinter.Common
@@ -40,12 +40,15 @@ module Language.HERMIT.PrettyPrinter.Common
     , vlist
     ) where
 
+import GhcPlugins hiding (($$), (<>), (<+>))
+
 import Data.Char
 import Data.Default
 import Data.Monoid hiding ((<>))
 import qualified Data.Map as M
 import Data.Typeable
 
+import Language.HERMIT.Context
 import Language.HERMIT.Core
 import Language.HERMIT.External
 import Language.HERMIT.Kure
@@ -87,6 +90,7 @@ data SyntaxForColor             -- (suggestion)
         | CoercionColor
         | TypeColor
         | LitColor
+        | WarningColor          -- highlight problems like unbound variables
     deriving Show
 
 attr :: Attr -> DocH -> DocH
@@ -121,16 +125,43 @@ type PrettyH a = Translate PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?
 
 -- | Context for PrettyH translations.
-type PrettyC = AbsolutePath Crumb
+data PrettyC = PrettyC { prettyC_path     :: AbsolutePath Crumb
+                       , prettyC_bindings :: M.Map Var HermitBinding }
 
-liftPrettyH :: ReadPath c Crumb => PrettyH a -> Translate c HermitM a DocH
+------------------------------------------------------------------------
+
+instance ReadPath PrettyC Crumb where
+  absPath :: PrettyC -> AbsolutePath Crumb
+  absPath = prettyC_path
+  {-# INLINE absPath #-}
+
+instance ExtendPath PrettyC Crumb where
+  (@@) :: PrettyC -> Crumb -> PrettyC
+  c @@ n = c { prettyC_path = prettyC_path c @@ n }
+  {-# INLINE (@@) #-}
+
+instance AddBindings PrettyC where
+  addHermitBindings :: [(Var,HermitBindingSite)] -> PrettyC -> PrettyC
+  addHermitBindings vbs c = let vhbs = [ (v, (0,b)) | (v,b) <- vbs ] -- TODO: do we care about depth?
+                             in c { prettyC_bindings = M.fromList vhbs `M.union` prettyC_bindings c }
+  {-# INLINE addHermitBindings #-}
+
+instance ReadBindings PrettyC where
+  hermitBindings :: PrettyC -> M.Map Var HermitBinding
+  hermitBindings = prettyC_bindings
+  {-# INLINE hermitBindings #-}
+
+------------------------------------------------------------------------
+
+liftPrettyH :: (ReadBindings c, ReadPath c Crumb) => PrettyH a -> Translate c HermitM a DocH
 liftPrettyH pp = translate $ \ c -> apply pp (liftPrettyC c)
 
-liftPrettyC :: ReadPath c Crumb => c -> PrettyC
-liftPrettyC = absPath
+liftPrettyC :: (ReadBindings c, ReadPath c Crumb) => c -> PrettyC
+liftPrettyC c = PrettyC { prettyC_path     = absPath c
+                        , prettyC_bindings = hermitBindings c }
 
 initPrettyC :: PrettyC
-initPrettyC = mempty
+initPrettyC = PrettyC mempty M.empty
 
 -- These are *recommendations* to the pretty printer.
 
@@ -295,7 +326,7 @@ renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\
           w = po_width opts
           rib = po_ribbon opts
 
-          marker ::  RenderCode a => PP.TextDetails HermitMark -> ([Attr] -> a) -> ([Attr]-> a)
+          marker :: RenderCode a => PP.TextDetails HermitMark -> ([Attr] -> a) -> ([Attr]-> a)
           marker m rest cols@(SpecialFont:_) = case m of
                   PP.Chr ch   -> special [ch] `mappend` rest cols
                   PP.Str str  -> special str `mappend` rest cols
@@ -359,6 +390,7 @@ instance RenderCode LaTeX where
                         CoercionColor -> "\\color{hermit:coercion}"      -- yellow
                         TypeColor     -> "\\color{hermit:type}"          -- green
                         LitColor      -> "\\color{hermit:lit}"           -- cyan
+                        WarningColor  -> "\\color{hermit:warning}"       -- black on yellow
         rDoHighlight o (_:rest) = rDoHighlight o rest
 
         rEnd = LaTeX "\n" -- \\end{Verbatim}"
@@ -383,6 +415,7 @@ instance RenderCode HTML where
                         CoercionColor -> "<span class=\"hermit-coercion\">"      -- yellow
                         TypeColor     -> "<span class=\"hermit-type\">"          -- green
                         LitColor      -> "<span class=\"hermit-lit\">"           -- cyan
+                        WarningColor  -> "<span class=\"hermit-warning\">"       -- black on yellow
         rDoHighlight o (_:rest) = rDoHighlight o rest
         rEnd = HTML "\n"
 

@@ -639,6 +639,7 @@ instance RenderCode UnicodeTerminal where
                         CoercionColor -> [ SetColor Foreground Dull Yellow ]
                         TypeColor     -> [ SetColor Foreground Dull Green ]
                         LitColor      -> [ SetColor Foreground Dull Cyan ]
+                        WarningColor  -> [ SetSwapForegroundBackground True, SetColor Foreground Vivid Yellow ]
         rDoHighlight o (_:rest) = rDoHighlight o rest
         rEnd = UnicodeTerminal $ \ h _ -> hPutStrLn h ""
 
