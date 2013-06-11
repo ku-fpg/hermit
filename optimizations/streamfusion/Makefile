@@ -1,8 +1,14 @@
-build:
+install:
 	( cd hermit-streamfusion ; cabal install --force-reinstalls )
 
-run:
-	hermit Main.hs -opt=HERMIT.Optimization.StreamFusion +Main -- -ddump-simpl -ddump-to-file
+list:
+	ghc --make -O2 Main.hs -fforce-recomp -ddump-prep -ddump-to-file
 
-flatten:
+hlist:
+	hermit Main.hs -opt=HERMIT.Optimization.StreamFusion +Main -- -ddump-prep -ddump-to-file
+
+vector:
 	ghc --make -O2 Concat.hs -fforce-recomp -ddump-prep -ddump-to-file
+
+hvector:
+	hermit Concat.hs -opt=HERMIT.Optimization.StreamFusion.Vector +Main -- -ddump-prep -ddump-to-file

@@ -22,15 +22,6 @@ import Criterion.Main as C
 
 import HERMIT.Optimization.StreamFusion.Vector
 
-c :: Monad m => (a -> m (M.Stream m b)) -> M.Stream m a -> M.Stream m b
-c = M.concatMapM
-
-f :: Monad m => (a -> m s) -> (s -> m (M.Step s b)) -> Size -> M.Stream m a -> M.Stream m b
-f = M.flatten
-
-r :: Monad m => a -> m a
-r = return
-
 concatTestV :: Int -> Int
 concatTestV z = V.sum $ V.concatMap (\(!x) -> V.enumFromN 1 x) $ V.enumFromN 1 z
 {-# NOINLINE concatTestV #-}

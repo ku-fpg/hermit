@@ -1,7 +1,7 @@
 module Main where
 
 import Criterion.Main
-import HERMIT.Optimization.StreamFusion.Prelude
+import HERMIT.Optimization.StreamFusion.List
 
 main = defaultMain [ bgroup "test" [ bench "100" $ whnf test 100
                                    , bench "1000" $ whnf test 1000
