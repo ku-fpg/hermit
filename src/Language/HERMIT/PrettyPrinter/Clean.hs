@@ -15,11 +15,12 @@ import Data.Traversable (sequenceA)
 import GhcPlugins (TyCon(..), Coercion(..), Var(..), Expr(..), Bind(..))
 import qualified GhcPlugins as GHC
 
+import Language.HERMIT.Context
+import Language.HERMIT.Core
 import Language.HERMIT.GHC
+import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.Syntax
-import Language.HERMIT.Kure
-import Language.HERMIT.Core
 
 import Language.HERMIT.PrettyPrinter.Common
 
@@ -248,7 +249,10 @@ corePrettyH opts = do
                    <+ appT ppCoreExprR ppCoreExprR (\ e1 e2 -> ppApp e1 e2)
 
                    <+ caseT ppCoreExpr (arr ppBinder) mempty (const ppCoreAlt) (\ s b () alts -> RetExpr $ attrP p ((keyword "case" <+> s <+> keyword "of" <+> optional b id) $$ nest 2 (vcat alts)))
-                   <+ varT (arr $ \ i -> RetAtom (attrP p $ ppVar i))
+                   <+ varT (translate $ \ c i -> return $ RetAtom $ attrP p
+                                                 $ if (GHC.isLocalId i) && (i `notElem` boundVars c)
+                                                   then ppName WarningColor (GHC.varName i)
+                                                   else ppVar i)
                    <+ litT (arr $ \ i -> RetAtom (attrP p $ ppSDoc i))
                    <+ typeT (arr $ \ t -> attrPAtomExpr p $ ppTypeMode t)
                    <+ coercionT (arr $ \ co -> attrPAtomExpr p $ ppCoercionMode co)
