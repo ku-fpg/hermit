@@ -81,7 +81,7 @@ externals =
         [ "let v = ev in e ==> case ev of v -> e" ]                             .+ Commute .+ Shallow .+ PreCondition
 --    , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
 --        [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ]
-    , external "let-unfloat" (promoteExprR letUnfloat >+> anybuR (promoteExprR letElim) :: RewriteH Core)
+    , external "let-unfloat" (promoteExprR letUnfloat :: RewriteH Core)
         [ "Unfloat a let if possible." ]                                        .+ Commute .+ Shallow
     , external "let-unfloat-app" ((promoteExprR letUnfloatApp >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
         [ "let v = ev in f a ==> (let v = ev in f) (let v = ev in a)" ]         .+ Commute .+ Shallow

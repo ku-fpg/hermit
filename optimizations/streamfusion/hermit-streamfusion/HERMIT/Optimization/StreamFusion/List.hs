@@ -1,11 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
-module HERMIT.Optimization.StreamFusion.Prelude where
-{-
-    ( stream
-    , unstream
-    , mapS
-    ) where
--}
+module HERMIT.Optimization.StreamFusion.List where
 
 data Stream a = forall s. Stream (s -> Step a s) s
 data Step a s = Done | Skip s | Yield a s
