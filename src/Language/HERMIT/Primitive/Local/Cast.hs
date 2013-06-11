@@ -13,6 +13,7 @@ import GhcPlugins
 import qualified Coercion (substCo, extendTvSubst)
 import Pair
 
+import Control.Arrow
 import Control.Monad
 
 import Language.HERMIT.Kure
@@ -32,7 +33,7 @@ externals =
     , external "cast-elim-sym" (promoteExprR castElimSym)
         [ "removes pairs of symmetric casts" ]                .+ Shallow .+ Bash
     , external "cast-elim-sym-plus" (promoteExprR castElimSymPlus)
-        [ "removes pairs of symmetric casts possibly separated by let or case forms" ] .+ Deep
+        [ "removes pairs of symmetric casts possibly separated by let or case forms" ] .+ Deep .+ TODO
     , external "cast-float-app" (promoteExprR castFloatApp)
         [ "(cast e (c1 -> c2)) x ==> cast (e (cast x (sym c1))) c2" ] .+ Shallow
     , external "cast-elim-unsafe" (promoteExprR castElimUnsafe)
@@ -77,9 +78,10 @@ castFloatApp = prefixFailMsg "Cast float from application failed: " $
 
 -- TODO: revisit
 castElimSymPlus :: RewriteH CoreExpr
-castElimSymPlus = do
-  Cast e c1 <- idR
-  let go _  (Var _) = fail "no symmetric casts found"
+castElimSymPlus = castT idR idR (flip go) >>> joinT
+  where
+      go :: Monad m => Coercion -> CoreExpr -> m CoreExpr
+      go _  (Var _) = fail "no symmetric casts found"
       go _  (Lit _) = fail "no symmetric casts found"
       go _  (App _ _) = fail "app unimplemented" {- focus [0] (go c1 (add arg)) -}
       go c1 (Lam x body)
@@ -99,6 +101,8 @@ castElimSymPlus = do
       go _  (Tick{}) = fail "unexpected tick"
       go _  (Type{}) = fail "unexpected type"
       go _  (Coercion{}) = fail "unexpected coercion"
+
+      sym :: Coercion -> Coercion -> Bool
       sym c1 c2
         | Pair c11 c12 <- coercionKind c1,
           Pair c21 c22 <- coercionKind c2,
@@ -107,7 +111,7 @@ castElimSymPlus = do
       --sym (SymCo c1) c2 = geq c1 c2
       --sym c1 (SymCo c2) = geq c1 c2
       --sym _ _ = False
-  go c1 e
+
 
 castElimUnsafe :: RewriteH CoreExpr
 castElimUnsafe = do
