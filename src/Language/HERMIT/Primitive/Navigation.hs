@@ -49,11 +49,11 @@ externals = map (.+ Navigation)
 ---------------------------------------------------------------------------------------
 
 -- | Find the path to the RHS of the binding group of the given name.
-bindingGroupOf :: MonadCatch m => TH.Name -> Translate c m Core PathH
+bindingGroupOf :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core PathH
 bindingGroupOf = oneNonEmptyPathToT . bindGroup
 
 -- | Find the path to the definiiton of the provided name.
-considerName :: MonadCatch m => TH.Name -> Translate c m Core PathH
+considerName :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core PathH
 considerName = oneNonEmptyPathToT . namedBinding
 
 -- | Find the path to the RHS of the definition of the given name.
@@ -111,13 +111,13 @@ considerables =   [ ("bind",Binding)
                   , ("coerce",Coerce)
                   ]
 
-considerConstruct :: MonadCatch m => String -> Translate c m Core PathH
+considerConstruct :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => String -> Translate c m Core PathH
 considerConstruct str = case string2considerable str of
                           Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". " ++ recognizedConsiderables ++ ".  Or did you mean \"consider '" ++ str ++ "\"?"
                           Just c  -> considerConstructT c
 
 -- | Find the path to the first matching construct.
-considerConstructT :: MonadCatch m => Considerable -> Translate c m Core PathH
+considerConstructT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Considerable -> Translate c m Core PathH
 considerConstructT = oneNonEmptyPathToT . underConsideration
 
 string2considerable :: String -> Maybe Considerable

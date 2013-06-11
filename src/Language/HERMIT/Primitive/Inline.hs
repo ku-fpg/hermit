@@ -44,7 +44,7 @@ externals =
             , external "inline" (promoteExprR . inlineName :: TH.Name -> RewriteH Core)
                 [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
             , external "inline-case-binder" (promoteExprR inlineCaseBinder :: RewriteH Core)
-                [ "Inline if this variable is a case binder." ].+ Eval .+ Deep .+ Bash .+ TODO
+                [ "Inline if this variable is a case binder." ].+ Eval .+ Deep {- this causes a Dead Id core list error if in bash .+ Bash -} .+ TODO
             ]
 
 ------------------------------------------------------------------------

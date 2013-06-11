@@ -35,11 +35,9 @@ fixStep a mr = mr >>= return . go
 
 plugin :: Plugin
 plugin = optimize $ \ opts -> phase 0 $ do
-    run $ tryR $     bashR externals
-                 >+> repeatR (anyCallR (promoteExprR (   concatMapSR
-                                                      <+ unfoldAnyR ['VS.concatMap, 'M.concatMap, 'V.concatMap]
-                                                      <+ rule "genericConcatMap")))
---                 >+> bashR externals -- causes 'occurance of dead Id' core lint error!
+    run $ tryR $ repeatR (anyCallR (promoteExprR (   concatMapSR
+                                                  <+ unfoldAnyR ['VS.concatMap, 'M.concatMap, 'V.concatMap]
+                                                  <+ rule "genericConcatMap")))
     interactive sfexts opts
 
 -- this currently slows things down, probably because of uneliminated streams/unstreams
