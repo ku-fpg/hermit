@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, TupleSections #-}
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables, TupleSections #-}
 module Language.HERMIT.Primitive.Unfold
     ( externals
     , cleanupUnfoldR
@@ -29,6 +29,7 @@ import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Inline hiding (externals)
 
 import Language.HERMIT.Core
+import Language.HERMIT.Context
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.External
@@ -44,9 +45,9 @@ externals :: [External]
 externals =
     [ external "cleanup-unfold" (promoteExprR cleanupUnfoldR :: RewriteH Core)
         [ "Clean up immediately nested fully-applied lambdas, from the bottom up" ] .+ Deep
-    , external "remember" rememberR
+    , external "remember" (rememberR :: Label -> RewriteH Core)
         [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
-    , external "unfold" (promoteExprR . unfoldStashR)
+    , external "unfold" (promoteExprR . unfoldStashR :: String -> RewriteH Core)
         [ "Unfold a remembered definition." ] .+ Deep .+ Context
     , external "unfold" (promoteExprR unfoldR :: RewriteH Core)
         [ "In application f x y z, unfold f." ] .+ Deep .+ Context
@@ -57,7 +58,7 @@ externals =
     , external "specialize" (promoteExprR specializeR :: RewriteH Core)
         [ "Specialize an application to its type and coercion arguments." ] .+ Deep .+ Context
     , external "unfold-rule" ((\ nm -> promoteExprR (rule nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
-        [ "Apply a named GHC rule" ] .+ Deep .+ Context -- TODO: does not work with rules with no arguments
+        [ "Apply a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
     , external "show-remembered" (TranslateDocH showStashT :: TranslateDocH Core)
         [ "Display all remembered definitions." ]
     ]
@@ -68,7 +69,7 @@ externals =
 --  (for example, an inline or rule application)
 -- It is used at the level of the top-redex.
 -- Invariant: will not introduce let bindings
-cleanupUnfoldR :: RewriteH CoreExpr
+cleanupUnfoldR :: MonadCatch m => Rewrite c m CoreExpr
 cleanupUnfoldR = do
     (f, args) <- callT <+ (idR >>> arr (,[]))
     let (vs, body) = collectBinders f
@@ -88,24 +89,24 @@ cleanupUnfoldR = do
 -- | A more powerful 'inline'. Matches two cases:
 --      Var ==> inlines
 --      App ==> inlines the head of the function call for the app tree
-unfoldR :: RewriteH CoreExpr
+unfoldR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 unfoldR = go >>> cleanupUnfoldR
-    where go :: RewriteH CoreExpr
+    where go :: Rewrite c HermitM CoreExpr
           go = inline <+ appAllR go idR
 
-unfoldPredR :: (Id -> [CoreExpr] -> Bool) -> RewriteH CoreExpr
+unfoldPredR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => (Id -> [CoreExpr] -> Bool) -> Rewrite c HermitM CoreExpr
 unfoldPredR p = callPredT p >>= \ _ -> unfoldR
 
-unfoldNameR :: TH.Name -> RewriteH CoreExpr
+unfoldNameR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
 unfoldNameR nm = callNameT nm >>= \ _ -> unfoldR
 
-unfoldAnyR :: [TH.Name] -> RewriteH CoreExpr
+unfoldAnyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
 unfoldAnyR = orR . map unfoldNameR
 
-unfoldSaturatedR :: RewriteH CoreExpr
+unfoldSaturatedR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 unfoldSaturatedR = callSaturatedT >>= \ _ -> unfoldR
 
-specializeR :: RewriteH CoreExpr
+specializeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 specializeR = unfoldPredR (const (all isTyCoArg))
 
 -- NOTE: Using a Rewrite because of the way the Kernel is set up.
@@ -113,7 +114,7 @@ specializeR = unfoldPredR (const (all isTyCoArg))
 
 -- | Stash a binding with a name for later use.
 -- Allows us to look at past definitions.
-rememberR :: Label -> RewriteH Core
+rememberR :: Label -> Rewrite c HermitM Core
 rememberR label = sideEffectR $ \ _ core ->
   case core of
     DefCore def           -> saveDef label def
@@ -122,7 +123,7 @@ rememberR label = sideEffectR $ \ _ core ->
 
 -- | Stash a binding with a name for later use.
 -- Allows us to look at past definitions.
--- rememberR :: String -> TranslateH Core ()
+-- rememberR :: String -> Translate c m Core ()
 -- rememberR label = contextfreeT $ \ core ->
 --     case core of
 --         DefCore def -> saveDef label def
@@ -130,9 +131,9 @@ rememberR label = sideEffectR $ \ _ core ->
 --         _           -> fail "remember: not a binding"
 
 -- | Apply a stashed definition (like inline, but looks in stash instead of context).
-unfoldStashR :: String -> RewriteH CoreExpr
+unfoldStashR :: ReadBindings c => String -> Rewrite c HermitM CoreExpr
 unfoldStashR label = setFailMsg "Inlining stashed definition failed: " $
-                   withPatFailMsg (wrongExprForm "Var v") $
+                     withPatFailMsg (wrongExprForm "Var v") $
     do (c, Var v) <- exposeT
        constT $ do Def i rhs <- lookupDef label
                    if idName i == idName v -- TODO: Is there a reason we're not just using equality on Id?
@@ -141,7 +142,7 @@ unfoldStashR label = setFailMsg "Inlining stashed definition failed: " $
                             (fail "some free variables in stashed definition are no longer in scope.")
                    else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v
 
-showStashT :: Injection CoreDef a => PrettyH a -> TranslateH a DocH
+showStashT :: Injection CoreDef a => PrettyH a -> Translate c HermitM a DocH
 showStashT pp = do
     stash <- constT getStash
     docs <- forM (Map.toList stash) $ \ (l,d) -> do
