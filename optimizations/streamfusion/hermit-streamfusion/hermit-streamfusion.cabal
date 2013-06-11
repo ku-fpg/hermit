@@ -15,7 +15,8 @@ cabal-version:       >=1.14
 library
     exposed-modules:
         HERMIT.Optimization.StreamFusion
-        HERMIT.Optimization.StreamFusion.Prelude
+        HERMIT.Optimization.StreamFusion.List
+        HERMIT.Optimization.StreamFusion.Vector
 
 --    other-modules:
 
@@ -23,7 +24,8 @@ library
         base,
         ghc >= 7.6,
         hermit,
-        template-haskell
+        template-haskell,
+        vector
 
     ghc-options: -Wall
     default-language: Haskell2010
