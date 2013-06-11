@@ -46,20 +46,34 @@ flattenTest !z = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN
     {-# INLINE step #-}
 {-# NOINLINE flattenTest #-}
 
+flattenTestDown :: Int -> Int
+flattenTestDown !z = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN 1 1 z
+  where
+    mk !x = (x,1)
+    {-# INLINE mk #-}
+    step (!i,!min)
+      | i>=min = VS.Yield i (i-1,min)
+      | otherwise = VS.Done
+    {-# INLINE step #-}
+{-# NOINLINE flattenTestDown #-}
+
 main = do
   print $ concatTestV 1000
   print $ concatTestS 1000
   print $ flattenTest 1000
+  print $ flattenTestDown 1000
   defaultMain
     [ bgroup "concat tests / 100"
       [ bench "concatTestV" $ whnf concatTestV 100
       , bench "concatTestS" $ whnf concatTestS 100
       , bench "flattenTest" $ whnf flattenTest 100
+      , bench "flattenTestDown" $ whnf flattenTestDown 100
       ]
     , bgroup "concat tests / 1000"
       [ bench "concatTestV" $ whnf concatTestV 1000
       , bench "concatTestS" $ whnf concatTestS 1000
       , bench "flattenTest" $ whnf flattenTest 1000
+      , bench "flattenTestDown" $ whnf flattenTestDown 1000
       ]
     ]
 
