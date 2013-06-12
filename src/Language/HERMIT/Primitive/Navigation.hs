@@ -27,13 +27,15 @@ import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 
+import Language.HERMIT.Primitive.Navigation.Crumbs
+
 import qualified Language.Haskell.TH as TH
 
 ---------------------------------------------------------------------------------------
 
 -- | 'External's involving navigating to named entities.
 externals :: [External]
-externals = map (.+ Navigation)
+externals = crumbExternals ++ map (.+ Navigation)
             [
               external "consider" (considerName :: TH.Name -> TranslateH Core PathH)
                 [ "consider '<v> focuses on the definition of <v>" ]

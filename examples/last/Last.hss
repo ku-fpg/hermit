@@ -3,9 +3,9 @@ consider 'last
 ww-split-param 1 [|wrap|] [|unwrap|]
 {rhs-of 'work
    eta-expand 'b
-   0
+   lam-body
    eta-expand 'bs
-   0
+   lam-body
    unfold 'unwrap
    unfold 'f
    bash

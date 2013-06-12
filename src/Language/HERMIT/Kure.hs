@@ -271,7 +271,7 @@ progNilT b = contextfreeT $ \case
 -- | Translate a program of the form: ('CoreBind' @:@ 'CoreProg')
 progConsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreBind a1 -> Translate c m CoreProg a2 -> (a1 -> a2 -> b) -> Translate c m CoreProg b
 progConsT t1 t2 f = translate $ \ c -> \case
-                                          ProgCons bd p -> f <$> apply t1 (c @@ ProgCons_Bind) bd <*> apply t2 (addBindingGroup bd c @@ ProgCons_Tail) p
+                                          ProgCons bd p -> f <$> apply t1 (c @@ ProgCons_Head) bd <*> apply t2 (addBindingGroup bd c @@ ProgCons_Tail) p
                                           _             -> fail "not a non-empty program."
 {-# INLINE progConsT #-}
 
@@ -1275,7 +1275,7 @@ deprecatedIntToCrumbT n = contextfreeT $ \case
                                             GutsCore _                 | n == 0                        -> return ModGuts_Prog
                                             AltCore _                  | n == 0                        -> return Alt_RHS
                                             DefCore _                  | n == 0                        -> return Def_RHS
-                                            ProgCore (ProgCons _ _)    | n == 0                        -> return ProgCons_Bind
+                                            ProgCore (ProgCons _ _)    | n == 0                        -> return ProgCons_Head
                                                                        | n == 1                        -> return ProgCons_Tail
                                             BindCore (NonRec _ _)      | n == 0                        -> return NonRec_RHS
                                             BindCore (Rec bds)         | (n >= 0) && (n < length bds)  -> return (Rec_Def n)

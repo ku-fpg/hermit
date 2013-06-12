@@ -10,7 +10,6 @@ module Language.HERMIT.Interp
 import Control.Monad (liftM, liftM2)
 
 import Data.Char
-import Data.Maybe (listToMaybe)
 import Data.Dynamic
 import qualified Data.Map as M
 
@@ -18,7 +17,6 @@ import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.External
 import Language.HERMIT.Parser
-import Language.HERMIT.Core (Crumb)
 import Language.HERMIT.Kure (deprecatedIntToPathT)
 
 -- | Interpret an 'ExprH' by looking up the appropriate 'Dynamic'(s) in the provided 'Data.Map', then interpreting the 'Dynamic'(s) with the provided 'Interp's, returning the first interpretation to succeed (or an error string if none succeed).
@@ -72,12 +70,11 @@ interpExpr' rhs env (CmdName str)
                                           return [ toDyn $ IntBox i
                                                  , toDyn $ TranslateCorePathBox (deprecatedIntToPathT i) -- TODO: Find a better long-term solution.
                                                  ]
-  | Just cr <- (maybeRead str :: Maybe Crumb) = return [ toDyn $ CrumbBox cr ]
   | Just dyn <- M.lookup str env        = return $ if rhs
                                                      then toDyn (StringBox str) : dyn
                                                      else dyn
   -- not a command, try as a string arg... worst case: dynApply fails with "bad type of expression"
-  -- best case: 'help ls' works instead of 'help "ls"'. this is likewise done in then clause above
+  -- best case: 'help ls' works instead of 'help "ls"'. this is likewise done in the clause above
   | rhs                                 = return [toDyn $ StringBox str]
   | otherwise                           = Left $ "User error, unrecognised HERMIT command: " ++ show str
 interpExpr' _ env (AppH e1 e2)              = dynAppMsg (interpExpr' False env e1) (interpExpr' True env e2)
@@ -87,11 +84,5 @@ dynAppMsg = liftM2 dynApply'
    where
            dynApply' :: [Dynamic] -> [Dynamic] -> [Dynamic]
            dynApply' fs xs = [ r | f <- fs, x <- xs, Just r <- return (dynApply f x)]
-
-
--------------------------------------------
-
-maybeRead :: Read a => String -> Maybe a
-maybeRead = fmap fst . listToMaybe . reads
 
 -------------------------------------------

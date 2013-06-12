@@ -153,7 +153,7 @@ data Crumb =
            -- ModGuts
              ModGuts_Prog
            -- Prog
-           | ProgCons_Bind | ProgCons_Tail
+           | ProgCons_Head | ProgCons_Tail
            -- Bind
            | NonRec_RHS | NonRec_Var
            | Rec_Def Int
@@ -233,7 +233,7 @@ crumbToDeprecatedInt = \case
 --   This is for backwards compatibility purposes with the old Int representation.
 deprecatedLeftSibling :: Crumb -> Maybe Crumb
 deprecatedLeftSibling = \case
-                           ProgCons_Tail       -> Just ProgCons_Bind
+                           ProgCons_Tail       -> Just ProgCons_Head
                            Rec_Def n | n > 0   -> Just (Rec_Def (n-1))
                            App_Arg             -> Just App_Fun
                            Let_Body            -> Just Let_Bind
@@ -245,7 +245,7 @@ deprecatedLeftSibling = \case
 --   This is for backwards compatibility purposes with the old Int representation.
 deprecatedRightSibling :: Crumb -> Maybe Crumb
 deprecatedRightSibling = \case
-                           ProgCons_Bind       -> Just ProgCons_Tail
+                           ProgCons_Head       -> Just ProgCons_Tail
                            Rec_Def n           -> Just (Rec_Def (n+1))
                            App_Fun             -> Just App_Arg
                            Let_Bind            -> Just Let_Body

@@ -2,15 +2,15 @@ flatten-module
 consider 'eval
 ww-split [| wrap |] [| unwrap |]
 {rhs-of 'work
-   eta-expand 'e ; 0
-   eta-expand 's ; 0
-   eta-expand 'f ; 0
+   eta-expand 'e ; lam-body
+   eta-expand 's ; lam-body
+   eta-expand 'f ; lam-body
    unfold 'unwrap
    one-td (unfold 'f)
    bash
    {
-     consider case ; 2 ; 0 ; abstract 'm
-     consider case ; 2 ; 0 ; abstract 'n
+     consider case ; [case-alt 1, alt-rhs] ; abstract 'm
+     consider case ; [case-alt 1, alt-rhs] ; abstract 'n
    }
    any-bu (fold 'unwrap)
    any-bu (foreward (ww-fusion [| wrap |] [|unwrap|] [|work|]))

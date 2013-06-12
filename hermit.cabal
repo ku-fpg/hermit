@@ -175,6 +175,7 @@ Library
        Language.HERMIT.Primitive.Local.Case
        Language.HERMIT.Primitive.Local.Cast
        Language.HERMIT.Primitive.Navigation
+       Language.HERMIT.Primitive.Navigation.Crumbs
        Language.HERMIT.Primitive.New
        Language.HERMIT.Primitive.Unfold
 
