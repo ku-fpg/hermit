@@ -22,6 +22,11 @@ module Language.HERMIT.GHC
     , throwGhcException
     , exprArity
     , Language.HERMIT.GHC.coAxiomName
+#if __GLASGOW_HASKELL__ > 706
+    , CoAxiom.BranchIndex
+    , CoAxiom.CoAxiom
+    , CoAxiom.Branched
+#endif
     ) where
 
 import GhcPlugins as GHC
@@ -73,7 +78,7 @@ fqName nm = modStr ++ uqName nm
 
 -- | Convert a variable to a neat string for printing (unqualfied name).
 var2String :: Var -> String
-var2String = uqName . varName 
+var2String = uqName . varName
 
 -- | Converts a GHC 'Name' to a Template Haskell 'TH.Name', going via a 'String'.
 name2THName :: Name -> TH.Name
@@ -83,10 +88,10 @@ name2THName = TH.mkName . uqName
 var2THName :: Var -> TH.Name
 var2THName = name2THName . varName
 
--- | Compare a 'String' to a 'Name' for equality. 
+-- | Compare a 'String' to a 'Name' for equality.
 -- Strings containing a period are assumed to be fully qualified names.
 cmpString2Name :: String -> Name -> Bool
-cmpString2Name str nm | isQualified str = str == fqName nm 
+cmpString2Name str nm | isQualified str = str == fqName nm
                       | otherwise       = str == uqName nm
 
 isQualified :: String -> Bool

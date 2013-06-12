@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, UndecidableInstances, TupleSections, LambdaCase, InstanceSigs, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, UndecidableInstances, TupleSections, LambdaCase, InstanceSigs, ScopedTypeVariables #-}
 
 module Language.HERMIT.Kure
        (
@@ -97,9 +97,9 @@ import Language.KURE
 import Language.KURE.BiTranslate
 import Language.KURE.Lens
 
-import Language.HERMIT.GHC
-import Language.HERMIT.Core
 import Language.HERMIT.Context
+import Language.HERMIT.Core
+import Language.HERMIT.GHC
 import Language.HERMIT.Monad
 
 import Control.Monad
@@ -1120,29 +1120,46 @@ coVarCoR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoVar -> Rewrite c m Co
 coVarCoR r = coVarCoT (CoVarCo <$> r)
 {-# INLINE coVarCoR #-}
 
-
 -- | Translate a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
+#if __GLASGOW_HASKELL__ > 706
+axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Translate c m (CoAxiom Branched) a1 -> (Int -> Translate c m Coercion a2) -> (a1 -> BranchIndex -> [a2] -> b) -> Translate c m Coercion b
+axiomInstCoT t ts f = translate $ \ c -> \case
+                                            AxiomInstCo ax idx coes -> f <$> apply t (c @@ AxiomInstCo_Axiom) ax <*> return idx <*> sequence [ apply (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
+                                            _                   -> fail "not a coercion axiom instantiation."
+#else
 axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Translate c m CoAxiom a1 -> (Int -> Translate c m Coercion a2) -> (a1 -> [a2] -> b) -> Translate c m Coercion b
 axiomInstCoT t ts f = translate $ \ c -> \case
                                             AxiomInstCo ax coes -> f <$> apply t (c @@ AxiomInstCo_Axiom) ax <*> sequence [ apply (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
                                             _                   -> fail "not a coercion axiom instantiation."
+#endif
 {-# INLINE axiomInstCoT #-}
 
 -- | Rewrite all children of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
+#if __GLASGOW_HASKELL__ > 706
+axiomInstCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m (CoAxiom Branched) -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+#else
 axiomInstCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoAxiom -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+#endif
 axiomInstCoAllR r rs = axiomInstCoT r rs AxiomInstCo
 {-# INLINE axiomInstCoAllR #-}
 
 -- | Rewrite any children of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
+#if __GLASGOW_HASKELL__ > 706
+axiomInstCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m (CoAxiom Branched) -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+#else
 axiomInstCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoAxiom -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+#endif
 axiomInstCoAnyR r rs = unwrapAnyR $ axiomInstCoAllR (wrapAnyR r) (wrapAnyR . rs)
 {-# INLINE axiomInstCoAnyR #-}
 
 -- | Rewrite one child of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
+#if __GLASGOW_HASKELL__ > 706
+axiomInstCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m (CoAxiom Branched) -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+#else
 axiomInstCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoAxiom -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+#endif
 axiomInstCoOneR r rs = unwrapOneR $ axiomInstCoAllR (wrapOneR r) (wrapOneR . rs)
 {-# INLINE axiomInstCoOneR #-}
-
 
 -- | Translate a coercion of the form: @UnsafeCo@ 'Type' 'Type'
 unsafeCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Type a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
