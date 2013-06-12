@@ -70,6 +70,10 @@ externals = map (.+ KURE)
        [ "apply a rewrite to a focal point"] .+ Navigation .+ Deep
    , external "focus"      (hfocusT :: TranslateH Core PathH -> TranslateH Core String -> TranslateH Core String)
        [ "apply a query at a focal point"] .+ Navigation .+ Deep
+   , external "focus"      (hfocusR . return :: PathH -> RewriteH Core -> RewriteH Core)
+       [ "apply a rewrite to a focal point"] .+ Navigation .+ Deep
+   , external "focus"      (hfocusT . return :: PathH -> TranslateH Core String -> TranslateH Core String)
+       [ "apply a query at a focal point"] .+ Navigation .+ Deep
    , external "when"       ((>>) :: TranslateH Core () -> RewriteH Core -> RewriteH Core)
        [ "apply a rewrite only if the check succeeds" ] .+ Predicate
    , external "not"        (notM :: TranslateH Core () -> TranslateH Core ())
