@@ -7,7 +7,7 @@ any-call (unfold 'wrap)
 any-call (unfold 'unwrap)
 simplify
 {rhs-of 'work
-   0
+   lam-body
    eta-expand 'acc
    innermost case-float
    any-call (unfold-rule "repH ++")

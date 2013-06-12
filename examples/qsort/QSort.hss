@@ -8,12 +8,14 @@ any-call (unfold 'unwrap)
 simplify
 {rhs-of 'work
   alpha-lam 'xs
+  lam-body
   any-td case-float-arg
-  0
   eta-expand 'acc
   bash
-  0
-  {  2
+  one-td inline-case-binder -- this used to be part of bash
+  bash
+  lam-body
+  {  case-alt 1
      any-td (push 'repH)
      consider alt
      alpha-alt ['bs,'cs]

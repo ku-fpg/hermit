@@ -10,13 +10,13 @@ consider 'hanoi
   any-call (unfold 'unwrap)
 
   -- establish the zero base case
-  down ; down ; down ; down ; down
+  [ def-rhs, lam-body, lam-body, lam-body, lam-body]
   case-split-inline 'n
-  { 1 ; any-call (unfold 'f) ; simplify }
+  { case-alt 0 ; any-call (unfold 'f) ; simplify }
 
   -- establish the one base case
-  { 2 ; down ; case-split-inline 'a
-    { 1 ; any-call (unfold 'f) ; simplify
+  { [case-alt 1, alt-rhs] ; case-split-inline 'a
+    { case-alt 0 ; any-call (unfold 'f) ; simplify
       any-call (unfold origwork)
       any-call (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
       any-call (unfold 'f)
@@ -24,7 +24,7 @@ consider 'hanoi
       any-call (unfold-rule "[] ++")
       any-call (unfold-rule "++ []")
     }
-    { 2 ; any-call (unfold 'f) ; simplify
+    { case-alt 1 ; any-call (unfold 'f) ; simplify
 
       any-call (unfold origwork)
       any-call (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
@@ -37,13 +37,13 @@ consider 'hanoi
 
       -- time to let intro
       -- need a "occurance 'work" like consider
-      { down
-        { 1
-          { 0 ; 1
-            { 0 ; 1 ; let-intro 'u }
-            { 1 ; 1 ; let-intro 'v }
+      { alt-rhs
+        { app-arg
+          { [app-fun, app-arg]
+            { [app-fun, app-arg] ; let-intro 'u }
+            { [app-arg, app-arg] ; let-intro 'v }
           }
-          { 1 ; 1 ; 0 ; 1 ; let-intro 'w }
+          { [app-arg, app-arg, app-fun, app-arg] ; let-intro 'w }
         }
         innermost let-float
         try (reorder-lets ['u,'v,'w])

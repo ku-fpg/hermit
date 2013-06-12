@@ -8,7 +8,7 @@ consider 'work ; remember origwork
 
 -- work = unwrap (f (wrap work))
 
-0 ; eta-expand 'n
+def-rhs ; eta-expand 'n
 
 -- work n = unwrap (f (wrap work)) n
 
@@ -16,19 +16,20 @@ any-call (unfold 'unwrap)
 
 -- work n = (f (wrap work) n, f (wrap work) (n+1))
 
-0 ; case-split-inline 'n
+lam-body ; case-split-inline 'n
 
 -- work 0     = (f (wrap work) 0, f (wrap work) 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+2))
 
-{ 1 ; any-call (unfold 'f) }
-{ 2 ; 0 ; 1 ; any-call (unfold 'f) }
+{ case-alt 0 ; any-call (unfold 'f) }
+{ [ case-alt 1, alt-rhs, app-arg] ; any-call (unfold 'f) }
 simplify
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
 
-2 ; 0 ; { 1 ; any-call (unfold origwork) }
+[ case-alt 1, alt-rhs ]
+{ app-arg ; any-call (unfold origwork) }
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
@@ -38,8 +39,8 @@ any-bu (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
 
-{ 1 ; 1 ; let-intro 'x }
-{ 0 ; 1 ; let-intro 'y }
+{ [app-arg, app-arg] ; let-intro 'x }
+{ [app-fun, app-arg] ; let-intro 'y }
 innermost let-float
 try (reorder-lets ['x,'y])
 one-td (fold 'y)

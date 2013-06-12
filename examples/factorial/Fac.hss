@@ -8,8 +8,8 @@ ww-split [| wrap |] [| unwrap |]
   one-td (unfold 'wrap)
   simplify
   {
-    consider alt ; 0 ; case-float-arg
-    consider alt ; 0 ; case-float-arg
+    consider alt ; alt-rhs ; case-float-arg
+    consider alt ; alt-rhs ; case-float-arg
   }
   one-td (unfold '-)
   one-td (unfold '*)
@@ -19,4 +19,4 @@ ww-split [| wrap |] [| unwrap |]
 simplify
 innermost (case-float <+ case-reduce)
 simplify
-{ consider let ; 1 ; eta-expand 'n ; any-call (unfold 'wrap) }
+{ [def-rhs, let-body] ; eta-expand 'n ; any-call (unfold 'wrap) }
