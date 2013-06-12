@@ -17,6 +17,8 @@ import TcType (tcSplitDFunTy)
 
 import Control.Arrow
 
+import Data.Set (member)
+
 import Language.HERMIT.Context
 import Language.HERMIT.Core
 import Language.HERMIT.External
@@ -90,7 +92,7 @@ configurableInline scrutinee caseBinderOnly =
 ensureDepth :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => Int -> Translate c m Core Bool
 ensureDepth d = do
     frees <- promoteT freeVarsT
-    ds <- collectT $ promoteExprT $ varT $ translate $ \ c i -> return $ if i `elem` frees
+    ds <- collectT $ promoteExprT $ varT $ translate $ \ c i -> return $ if i `member` frees
                                                                           then maybe (i,0) (\ b -> (i, fst b)) (lookupHermitBinding i c)
                                                                           else (i,0)
     return $ all (toSnd (<= d)) ds

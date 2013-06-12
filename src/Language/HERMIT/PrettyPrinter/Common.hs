@@ -46,6 +46,8 @@ import Data.Char
 import Data.Default
 import Data.Monoid hiding ((<>))
 import qualified Data.Map as M
+import Data.Set (Set)
+import qualified Data.Set as S
 import Data.Typeable
 
 import Language.HERMIT.Context
@@ -125,8 +127,8 @@ type PrettyH a = Translate PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?
 
 -- | Context for PrettyH translations.
-data PrettyC = PrettyC { prettyC_path     :: AbsolutePath Crumb
-                       , prettyC_bindings :: M.Map Var HermitBinding }
+data PrettyC = PrettyC { prettyC_path :: AbsolutePath Crumb
+                       , prettyC_vars :: Set Var}
 
 ------------------------------------------------------------------------
 
@@ -142,14 +144,22 @@ instance ExtendPath PrettyC Crumb where
 
 instance AddBindings PrettyC where
   addHermitBindings :: [(Var,HermitBindingSite)] -> PrettyC -> PrettyC
-  addHermitBindings vbs c = let vhbs = [ (v, (0,b)) | (v,b) <- vbs ] -- TODO: do we care about depth?
-                             in c { prettyC_bindings = M.fromList vhbs `M.union` prettyC_bindings c }
+  addHermitBindings vbs c = c { prettyC_vars = foldr S.insert (prettyC_vars c) (map fst vbs) }
+                            -- let vhbs = [ (v, (0,b)) | (v,b) <- vbs ] -- TODO: do we care about depth?
+                            --  in c { prettyC_bindings = M.fromList vhbs `M.union` prettyC_bindings c }
   {-# INLINE addHermitBindings #-}
 
-instance ReadBindings PrettyC where
-  hermitBindings :: PrettyC -> M.Map Var HermitBinding
-  hermitBindings = prettyC_bindings
-  {-# INLINE hermitBindings #-}
+-- instance ReadBindings PrettyC where
+--   hermitDepth :: PrettyC -> BindingDepth
+--   hermitDepth = prettyC_depth
+
+--   hermitBindings :: PrettyC -> M.Map Var HermitBinding
+--   hermitBindings = prettyC_bindings
+--   {-# INLINE hermitBindings #-}
+
+instance BoundVars PrettyC where
+  boundVars :: PrettyC -> Set Var
+  boundVars = prettyC_vars
 
 ------------------------------------------------------------------------
 
@@ -157,11 +167,13 @@ liftPrettyH :: (ReadBindings c, ReadPath c Crumb) => PrettyH a -> Translate c He
 liftPrettyH pp = translate $ \ c -> apply pp (liftPrettyC c)
 
 liftPrettyC :: (ReadBindings c, ReadPath c Crumb) => c -> PrettyC
-liftPrettyC c = PrettyC { prettyC_path     = absPath c
-                        , prettyC_bindings = hermitBindings c }
+liftPrettyC c = PrettyC { prettyC_path  = absPath c
+                        , prettyC_vars  = boundVars c }
 
 initPrettyC :: PrettyC
-initPrettyC = PrettyC mempty M.empty
+initPrettyC = PrettyC { prettyC_path = mempty
+                      , prettyC_vars = S.empty
+                      }
 
 -- These are *recommendations* to the pretty printer.
 

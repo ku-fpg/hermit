@@ -8,7 +8,9 @@ import GhcPlugins as GHC hiding (varName)
 import Control.Arrow
 import Control.Monad (liftM)
 
-import Data.List(intersect,transpose)
+import Data.List(transpose)
+import Data.Set (intersection, unions, fromList, toList)
+import qualified Data.Set as S
 
 import Language.HERMIT.Context
 import Language.HERMIT.Core
@@ -92,13 +94,13 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
      -- check if tupling the bindings would cause unbound variables
      let
          frees    = map coreExprFreeVars (drop 1 rhss)
-         used     = concat $ zipWith intersect (map (`take` vs) [1..]) frees
-     if null used
+         used     = unions $ zipWith intersection (map (fromList . (`take` vs)) [1..]) frees
+     if S.null used
        then let rhs = mkCoreTup rhss
             in constT $ do wild <- newIdH (show nm) (exprType rhs)
                            return $ mkSmallTupleCase vs body wild rhs
 
-       else fail $ "the following bound variables are used in subsequent bindings: " ++ showVars used
+       else fail $ "the following bound variables are used in subsequent bindings: " ++ showVars (toList used)
 
 -- Others
 -- let v = E1 in E2 E3 <=> (let v = E1 in E2) E3

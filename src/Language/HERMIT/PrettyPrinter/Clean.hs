@@ -11,6 +11,7 @@ import Control.Arrow hiding ((<+>))
 import Data.Monoid (mempty)
 import Data.Char (isSpace)
 import Data.Traversable (sequenceA)
+import Data.Set (notMember)
 
 import GhcPlugins (TyCon(..), Coercion(..), Var(..), Expr(..), Bind(..))
 import qualified GhcPlugins as GHC
@@ -250,7 +251,7 @@ corePrettyH opts = do
 
                    <+ caseT ppCoreExpr (arr ppBinder) mempty (const ppCoreAlt) (\ s b () alts -> RetExpr $ attrP p ((keyword "case" <+> s <+> keyword "of" <+> optional b id) $$ nest 2 (vcat alts)))
                    <+ varT (translate $ \ c i -> return $ RetAtom $ attrP p
-                                                 $ if (GHC.isLocalId i) && (i `notElem` boundVars c)
+                                                 $ if (GHC.isLocalId i) && (i `notMember` boundVars c)
                                                    then ppName WarningColor (GHC.varName i)
                                                    else ppVar i)
                    <+ litT (arr $ \ i -> RetAtom (attrP p $ ppSDoc i))

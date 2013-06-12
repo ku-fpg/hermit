@@ -49,6 +49,7 @@ import GhcPlugins
 
 import Data.List
 import Data.Monoid
+import qualified Data.Set as S
 
 import Control.Monad(liftM)
 
@@ -192,11 +193,11 @@ altVarsT = altT mempty (\ _ -> idR) mempty (\ () vs () -> vs)
 -- Need a better error type so that we can factor out the repetition.
 
 -- | Lifted version of 'boundVars'.
-boundVarsT :: (ReadBindings c, Monad m) => Translate c m a [Var]
+boundVarsT :: (BoundVars c, Monad m) => Translate c m a (S.Set Var)
 boundVarsT = contextonlyT (return . boundVars)
 
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
-findBoundVarT :: (ReadBindings c, MonadCatch m) => TH.Name -> Translate c m a Var
+findBoundVarT :: (BoundVars c, MonadCatch m) => TH.Name -> Translate c m a Var
 findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ showName nm ++ ", ") $
                         do c <- contextT
                            case findBoundVars nm c of
@@ -205,17 +206,17 @@ findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ showName nm ++ ", ")
                              _ : _ : _  -> fail "multiple matching variables in scope."
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findIdT :: (ReadBindings c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m) => TH.Name -> Translate c m a Id
+findIdT :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m) => TH.Name -> Translate c m a Id
 findIdT nm = prefixFailMsg ("Cannot resolve name " ++ showName nm ++ ", ") $
              contextonlyT (findId nm)
 
-findId :: (ReadBindings c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => TH.Name -> c -> m Id
+findId :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => TH.Name -> c -> m Id
 findId nm c = case findBoundVars nm c of
                 []         -> findIdMG nm c
                 [v]        -> return v
                 _ : _ : _  -> fail "multiple matching variables in scope."
 
-findIdMG :: (ReadBindings c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => TH.Name -> c -> m Id
+findIdMG :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => TH.Name -> c -> m Id
 findIdMG nm c =
     case filter isValName $ findNamesFromTH (hermitGlobalRdrEnv c) nm of
       []  -> findIdBuiltIn nm
