@@ -42,7 +42,8 @@ import Control.Arrow
 import Control.Monad
 
 import Data.Monoid (mempty)
-import Data.List (intercalate,mapAccumL,(\\))
+import Data.List (intercalate,mapAccumL)
+import Data.Set (Set, fromList, toList, (\\))
 
 import Language.HERMIT.Core
 import Language.HERMIT.Context
@@ -187,7 +188,7 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 
 ------------------------------------------------------------------------
 
-info :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasDynFlags m, MonadCatch m) => Translate c m Core String
+info :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasDynFlags m, MonadCatch m) => Translate c m Core String
 info = do crumbs <- childrenT
           translate $ \ c core -> do
             dynFlags <- getDynFlags
@@ -195,10 +196,10 @@ info = do crumbs <- childrenT
                 node     = "Node: " ++ coreNode core
                 con      = "Constructor: " ++ coreConstructor core
                 children = "Children: " ++ show crumbs
-                bds      = "Bindings in Scope: " ++ show (map var2String $ boundVars c)
+                bds      = "Bindings in Scope: " ++ show (map var2String $ toList $ boundVars c)
                 expExtra = case core of
                              ExprCore e -> ["Type or Kind: " ++ showExprTypeOrKind dynFlags e] ++
-                                           ["Free Variables: " ++ showVars (coreExprFreeVars e)]
+                                           ["Free Variables: " ++ showVars (toList $ coreExprFreeVars e)]
                                               --  ++
                                               -- case e of
                                               --   Var v -> ["Identifier Info: " ++ showIdInfo dynFlags v] -- TODO: what if this is a TyVar?
@@ -248,38 +249,38 @@ coreConstructor (ExprCore expr)  = case expr of
 -- | Output a list of all free variables in an expression.
 freeIdsQuery :: Monad m => Translate c m CoreExpr String
 freeIdsQuery = do frees <- freeIdsT
-                  return $ "Free identifiers are: " ++ showVars frees
+                  return $ "Free identifiers are: " ++ showVars (toList frees)
 
 -- | Show a human-readable version of a list of 'Var's.
 showVars :: [Var] -> String
 showVars = show . map var2String
 
 -- | Lifted version of 'coreExprFreeIds'.
-freeIdsT :: Monad m => Translate c m CoreExpr [Id]
+freeIdsT :: Monad m => Translate c m CoreExpr (Set Id)
 freeIdsT = arr coreExprFreeIds
 
 -- | Lifted version of 'coreExprFreeVars'.
-freeVarsT :: Monad m => Translate c m CoreExpr [Var]
+freeVarsT :: Monad m => Translate c m CoreExpr (Set Var)
 freeVarsT = arr coreExprFreeVars
 
 -- | List all free variables (including types) in the expression.
-coreExprFreeVars :: CoreExpr -> [Var]
-coreExprFreeVars  = uniqSetToList . exprFreeVars
+coreExprFreeVars :: CoreExpr -> Set Var
+coreExprFreeVars  = fromList . uniqSetToList . exprFreeVars
 
 -- | List all free identifiers (value-level free variables) in the expression.
-coreExprFreeIds :: CoreExpr -> [Id]
-coreExprFreeIds  = uniqSetToList . exprFreeIds
+coreExprFreeIds :: CoreExpr -> Set Id
+coreExprFreeIds  = fromList . uniqSetToList . exprFreeIds
 
 -- | The free variables in a case alternative, which excludes any identifiers bound in the alternative.
-altFreeVarsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt [Var]
-altFreeVarsT = altT mempty (\ _ -> idR) freeVarsT (\ () vs fvs -> fvs \\ vs)
+altFreeVarsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt (Set Var)
+altFreeVarsT = altT mempty (\ _ -> idR) freeVarsT (\ () vs fvs -> fvs \\ fromList vs)
 
 -- | A variant of 'altFreeVarsT' that returns a function that accepts the case wild-card binder before giving a result.
 --   This is so we can use this with congruence combinators, for example:
 --
 --   caseT id (const altFreeVarsT) $ \ _ wild _ fvs -> [ f wild | f <- fvs ]
-altFreeVarsExclWildT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt (Id -> [Var])
-altFreeVarsExclWildT = altT mempty (\ _ -> idR) freeVarsT (\ () vs fvs wild -> fvs \\ (wild : vs))
+altFreeVarsExclWildT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt (Id -> Set Var)
+altFreeVarsExclWildT = altT mempty (\ _ -> idR) freeVarsT (\ () vs fvs wild -> fvs \\ fromList (wild : vs))
 
 ------------------------------------------------------------------------
 
@@ -318,7 +319,7 @@ rulesToRewriteH rs = translate $ \ c e -> do
     (Var fn,args) <- return $ collectArgs e
     -- Question: does this include Id's, or Var's (which include type names)
     -- Assumption: Var's.
-    let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- coreExprFreeVars e ])
+    let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- toList (coreExprFreeVars e) ])
         -- The rough_args are just an attempt to try eliminate silly things
         -- that will never match
         _rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
@@ -333,7 +334,7 @@ rulesToRewriteH rs = translate $ \ c e -> do
         Nothing         -> fail "rule not matched"
         Just (r, expr)  -> do
             let e' = mkApps expr (drop (ruleArity r) args)
-            ifM (liftM (and . map (inScope c)) $ apply freeVarsT c e')
+            ifM (liftM (and . map (inScope c) . toList) $ apply freeVarsT c e')
                 (return e')
                 (fail $ unlines ["Resulting expression after rule application contains variables that are not in scope."
                                 ,"This can probably be solved by running the flatten-module command at the top level."])
@@ -507,8 +508,8 @@ lintProgramT = do
 -- For instance, running this on the RHS of a binding, the type of the RHS will
 -- not be checked against the type of the binding. Running on the whole let expression
 -- will catch that however.
-lintExprT :: (ReadBindings c, Monad m, HasDynFlags m) => Translate c m CoreExpr String
+lintExprT :: (BoundVars c, Monad m, HasDynFlags m) => Translate c m CoreExpr String
 lintExprT = translate $ \ c e -> do
     dflags <- getDynFlags
     maybe (return "Core Lint Passed") (fail . showSDoc dflags)
-                 $ CoreLint.lintUnfolding noSrcLoc (boundVars c) e
+                 $ CoreLint.lintUnfolding noSrcLoc (toList $ boundVars c) e

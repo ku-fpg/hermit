@@ -19,11 +19,11 @@ module Language.HERMIT.Context
        , addCaseWildBinding
        , addForallBinding
          -- ** Reading bindings from the context
-       , ReadBindings(..)
-       , lookupHermitBinding
-       , boundVars
+       , BoundVars(..)
        , boundIn
        , findBoundVars
+       , ReadBindings(..)
+       , lookupHermitBinding
          -- ** Accessing the Global Reader Environment from the context
        , HasGlobalRdrEnv(..)
          -- ** Accessing GHC rewrite rules from the context
@@ -34,6 +34,7 @@ import Prelude hiding (lookup)
 import GhcPlugins hiding (empty)
 import Data.Monoid (mempty)
 import Data.Map hiding (map, foldr, filter)
+import qualified Data.Set as S
 import qualified Language.Haskell.TH as TH
 
 import Language.KURE
@@ -126,29 +127,30 @@ addForallBinding v = addHermitBinding v FORALL
 
 ------------------------------------------------------------------------
 
+-- | A class of contexts that stores the set of variables in scope that have been bound during the traversal.
+class BoundVars c where
+  boundVars :: c -> S.Set Var
+
+-- | List all variables bound in the context that match the given name.
+findBoundVars :: BoundVars c => TH.Name -> c -> [Var]
+findBoundVars nm = filter (cmpTHName2Var nm) . S.toList . boundVars
+{-# INLINE findBoundVars #-}
+
+
 -- | A class of contexts from which HERMIT bindings can be retrieved.
-class ReadBindings c where
+class BoundVars c => ReadBindings c where
+  hermitDepth    :: c -> BindingDepth
   hermitBindings :: c -> Map Var HermitBinding
+
+-- | Determine if a variable is bound in a context.
+boundIn :: ReadBindings c => Var -> c -> Bool
+boundIn i c = i `member` hermitBindings c
+{-# INLINE boundIn #-}
 
 -- | Lookup the binding for a variable in a context.
 lookupHermitBinding :: ReadBindings c => Var -> c -> Maybe HermitBinding
 lookupHermitBinding v = lookup v . hermitBindings
 {-# INLINE lookupHermitBinding #-}
-
--- | List all the variables bound in a context.
-boundVars :: ReadBindings c => c -> [Var]
-boundVars = keys . hermitBindings
-{-# INLINE boundVars #-}
-
--- | Determine if a variable is bound in a context.
-boundIn :: ReadBindings c => Var -> c -> Bool
-boundIn i c = i `elem` boundVars c
-{-# INLINE boundIn #-}
-
--- | List all variables bound in the context that match the given name.
-findBoundVars :: ReadBindings c => TH.Name -> c -> [Var]
-findBoundVars nm = filter (cmpTHName2Var nm) . boundVars
-{-# INLINE findBoundVars #-}
 
 ------------------------------------------------------------------------
 
@@ -219,7 +221,16 @@ instance AddBindings HermitC where
 
 ------------------------------------------------------------------------
 
+instance BoundVars HermitC where
+  boundVars :: HermitC -> S.Set Var
+  boundVars =  keysSet . hermitC_bindings
+  {-# INLINE boundVars #-}
+
 instance ReadBindings HermitC where
+  hermitDepth :: HermitC -> BindingDepth
+  hermitDepth = hermitC_depth
+  {-# INLINE hermitDepth #-}
+
   hermitBindings :: HermitC -> Map Var HermitBinding
   hermitBindings = hermitC_bindings
   {-# INLINE hermitBindings #-}
