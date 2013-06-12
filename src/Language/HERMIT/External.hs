@@ -34,6 +34,8 @@ module Language.HERMIT.External
        , NameBox(..)
        , CoreString(..)
        , CoreBox(..)
+       , CrumbBox(..)
+       , PathBox(..)
        , TranslateCorePathBox(..)
        , StringBox(..)
        , NameListBox(..)
@@ -322,7 +324,24 @@ instance Extern TH.Name where
     box = NameBox
     unbox (NameBox i) = i
 
--- TODO: Using Int here for now, need to update to Crumb.
+-- TODO: We now have CrumbBoc, PathBox and TranslateCorePathBox.
+--       Ints are interpreted as a TranslateCorePathBox.
+--       This all needs cleaning up.
+
+data CrumbBox = CrumbBox Crumb deriving Typeable
+
+instance Extern Crumb where
+    type Box Crumb = CrumbBox
+    box = CrumbBox
+    unbox (CrumbBox cr) = cr
+
+data PathBox = PathBox PathH deriving Typeable
+
+instance Extern PathH where
+    type Box PathH = PathBox
+    box = PathBox
+    unbox (PathBox p) = p
+
 data TranslateCorePathBox = TranslateCorePathBox (TranslateH Core PathH) deriving Typeable
 
 instance Extern (TranslateH Core PathH) where

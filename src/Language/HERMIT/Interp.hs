@@ -10,6 +10,7 @@ module Language.HERMIT.Interp
 import Control.Monad (liftM, liftM2)
 
 import Data.Char
+import Data.Maybe (listToMaybe)
 import Data.Dynamic
 import qualified Data.Map as M
 
@@ -17,6 +18,7 @@ import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.External
 import Language.HERMIT.Parser
+import Language.HERMIT.Core (Crumb)
 import Language.HERMIT.Kure (deprecatedIntToPathT)
 
 -- | Interpret an 'ExprH' by looking up the appropriate 'Dynamic'(s) in the provided 'Data.Map', then interpreting the 'Dynamic'(s) with the provided 'Interp's, returning the first interpretation to succeed (or an error string if none succeed).
@@ -63,12 +65,14 @@ interpExpr' _   _   (CoreH str)   = return [ toDyn $ CoreBox (CoreString str) ]
 interpExpr' _   env (ListH exprs) = do dyns <- liftM fromDynList $ mapM (interpExpr' True env) exprs
                                        return $    toBoxedList dyns NameListBox
                                                 ++ toBoxedList dyns StringListBox
+                                                ++ toBoxedList dyns PathBox
 interpExpr' rhs env (CmdName str)
                                         -- An Int is either a Path, or will be interpreted specially later.
   | all isDigit str                     = let i = read str in
                                           return [ toDyn $ IntBox i
                                                  , toDyn $ TranslateCorePathBox (deprecatedIntToPathT i) -- TODO: Find a better long-term solution.
                                                  ]
+  | Just cr <- (maybeRead str :: Maybe Crumb) = return [ toDyn $ CrumbBox cr ]
   | Just dyn <- M.lookup str env        = return $ if rhs
                                                      then toDyn (StringBox str) : dyn
                                                      else dyn
@@ -83,3 +87,11 @@ dynAppMsg = liftM2 dynApply'
    where
            dynApply' :: [Dynamic] -> [Dynamic] -> [Dynamic]
            dynApply' fs xs = [ r | f <- fs, x <- xs, Just r <- return (dynApply f x)]
+
+
+-------------------------------------------
+
+maybeRead :: Read a => String -> Maybe a
+maybeRead = fmap fst . listToMaybe . reads
+
+-------------------------------------------

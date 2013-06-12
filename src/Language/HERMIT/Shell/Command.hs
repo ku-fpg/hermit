@@ -135,6 +135,8 @@ interpShellCommand =
                 [ interp $ \ (ShellCommandBox cmd)       -> cmd
                 , interp $ \ (RewriteCoreBox rr)         -> AstEffect (Apply rr)
                 , interp $ \ (BiRewriteCoreBox br)       -> AstEffect (Apply $ forewardT br)
+                , interp $ \ (CrumbBox cr)               -> AstEffect (Pathfinder $ return [cr])
+                , interp $ \ (PathBox p)                 -> AstEffect (Pathfinder $ return p)
                 , interp $ \ (TranslateCorePathBox tt)   -> AstEffect (Pathfinder tt)
                 , interp $ \ (StringBox str)             -> QueryFun (Message str)
                 , interp $ \ (TranslateCoreStringBox tt) -> QueryFun (QueryString tt)

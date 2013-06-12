@@ -191,8 +191,11 @@ data Crumb =
            | TransCo_Left | TransCo_Right
            | NthCo_Int | NthCo_Co
            | InstCo_Co | InstCo_Type
-           deriving (Eq,Show)
+           deriving (Eq,Read,Show)
            -- TODO: Write a prettier Show instance
+
+
+
 {-
 -- | Earlier versions of HERMIT used 'Int' as the crumb type.
 --   This function maps a 'Crumb' back to that corresponding 'Int', for backwards compatibility purposes.
