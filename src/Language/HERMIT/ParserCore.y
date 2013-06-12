@@ -3,7 +3,7 @@
 module Language.HERMIT.ParserCore (parseCore) where
 
 import Control.Monad.Reader
-import Data.Char (isSpace, isAlpha, isAlphaNum, isDigit)
+import Data.Char (isSpace, isDigit)
 
 import GhcPlugins
 
@@ -11,6 +11,7 @@ import Language.HERMIT.Context
 import Language.HERMIT.External
 import Language.HERMIT.Monad
 import Language.HERMIT.Primitive.Common
+import Language.HERMIT.Syntax (isCoreInfixIdChar, isCoreIdFirstChar, isCoreIdChar)
 
 import Language.KURE.MonadCatch (prefixFailMsg)
 
@@ -147,28 +148,16 @@ lexer ('\"':cs)    = let (str,rest) = span (/='\"') cs
                      in case rest of
                            ('\"':cs') -> fmap (Tstring str:) $ lexer cs'
                            _          -> Left "lexer: no matching quote"
-lexer s@(c:cs)     | isSpace       c = lexer cs
-                   | isDigit       c = let (i,s') = span isDigit s
-                                       in fmap (Tinteger (read i):) $ lexer s'
-                   | isIdFirstChar c = let (i,s') = span isIdChar s
-                                       in fmap (Tname i:) $ lexer s'
-                   | isInfixId     c = let (op,s') = span isInfixId s
-                                       in fmap (Tname op:) $ lexer s'
+lexer s@(c:cs) | isSpace           c = lexer cs
+               | isDigit           c = let (i,s') = span isDigit s
+                                         in fmap (Tinteger (read i):) $ lexer s'
+               | isCoreIdFirstChar c = let (i,s') = span isCoreIdChar s
+                                         in fmap (Tname i:) $ lexer s'
+               | isCoreInfixIdChar c = let (op,s') = span isCoreInfixIdChar s
+                                         in fmap (Tname op:) $ lexer s'
 lexer s            = Left $ "lexer: no match on " ++ s
 
 ---------------------------------------------
-
--- | Chars that are valid in identifiers anywhere.
-isIdFirstChar :: Char -> Bool
-isIdFirstChar c = c `elem` "_$[]:.=" || isAlpha c
-
--- | Chars that are valid in identifiers, but not as the first character.
-isIdChar :: Char -> Bool
-isIdChar c = isAlphaNum c || c `elem` "#-'" || isIdFirstChar c
-
--- | Chars that are valid in infix operators.
-isInfixId :: Char -> Bool
-isInfixId c = c `elem` "+*/._-:<>"
 
 parseCore :: CoreString -> HermitC -> HermitM CoreExpr
 parseCore (CoreString s) c =

@@ -135,7 +135,7 @@ corePrettyH opts = do
         ppName :: SyntaxForColor -> GHC.Name -> DocH
         ppName color nm  = let name = GHC.occNameString (GHC.nameOccName nm)
                                doc  = markColor color (text name)
-                            in if all isInfixId name
+                            in if all isScriptInfixIdChar name -- TODO: is "isScriptInfixId" the right predicate to use here?
                                 then ppParens doc
                                 else doc
 

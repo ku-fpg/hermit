@@ -9,7 +9,8 @@ module Language.HERMIT.Parser
 import Data.Char (isSpace)
 import Data.List (intercalate)
 
-import Language.HERMIT.Syntax
+import Language.HERMIT.Syntax (isScriptInfixIdChar, isScriptIdFirstChar, isScriptIdChar)
+
 }
 
 %name parser
@@ -119,11 +120,11 @@ lexer ('-':'-':cs) = let (_,s') = span (/= '\n') cs in lexer s'
 lexer ('[' :cs)    = fmap (ListStart:)  $ lexer cs
 lexer (',' :cs)    = fmap (ListDelim:)  $ lexer cs
 lexer (']' :cs)    = fmap (ListEnd:)    $ lexer cs
-lexer s@(c:cs)     | isSpace       c = lexer cs
-                   | isIdFirstChar c = let (i,s') = span isIdChar s
-                                       in fmap (Ident i:) $ lexer s'
-                   | isInfixId     c = let (op,s') = span isInfixId s
-                                       in fmap (InfixOp op:) $ lexer s'
+lexer s@(c:cs)     | isSpace             c = lexer cs
+                   | isScriptIdFirstChar c = let (i,s') = span isScriptIdChar s
+                                              in fmap (Ident i:) $ lexer s'
+                   | isScriptInfixIdChar c = let (op,s') = span isScriptInfixIdChar s
+                                              in fmap (InfixOp op:) $ lexer s'
 lexer s            = Left $ "lexer: no match on " ++ s
 
 lexString :: String -> Either String (String,String)
@@ -163,17 +164,17 @@ numStmtsH = length . filter isCounted
 
 unparseExprH :: ExprH -> String
 unparseExprH (SrcName nm)
-    | nm /= "" && (all isInfixId nm || isIdFirstChar (head nm) && all (isIdChar) (tail nm)) = "'" ++ nm
+    | nm /= "" && (all isScriptInfixIdChar nm || isScriptIdFirstChar (head nm) && all isScriptIdChar (tail nm)) = "'" ++ nm
     | otherwise = "'\"" ++ concatMap escape nm ++ "\""
         where escape '\"' = "\\\""
               escape c    = [c]
 unparseExprH (CmdName nm)
-    | nm == "{"       = "{ "
-    | nm == "}"       = " }"
-    | all isIdChar nm = nm
-    | otherwise       = show nm     -- with quotes
+    | nm == "{"             = "{ "
+    | nm == "}"             = " }"
+    | all isScriptIdChar nm = nm
+    | otherwise             = show nm     -- with quotes
 unparseExprH (AppH (AppH (CmdName nm) e1) e2)
-    | all isInfixId nm
+    | all isScriptInfixIdChar nm
     = unparseAtom e1 ++ " " ++ nm ++ " " ++ unparseAtom e2
 unparseExprH (AppH e1 e2) = unparseExprH e1 ++ " " ++ unparseAtom e2
 unparseExprH (CoreH s)    = "[|" ++ s ++ "|]"
