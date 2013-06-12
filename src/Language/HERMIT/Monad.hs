@@ -54,7 +54,7 @@ newtype HermitMEnv = HermitMEnv { hs_debugChan :: DebugMessage -> HermitM () }
 newtype HermitM a = HermitM (HermitMEnv -> DefStash -> CoreM (KureM (DefStash, a)))
 
 runHermitM :: HermitM a -> HermitMEnv -> DefStash -> CoreM (KureM (DefStash, a))
-runHermitM (HermitM f) = f{-# INLINE runHermitM #-}
+runHermitM (HermitM f) = f
 
 -- | Get the stash of saved definitions.
 getStash :: HermitM DefStash
