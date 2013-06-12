@@ -192,10 +192,10 @@ info :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasDy
 info = do crumbs <- childrenT
           translate $ \ c core -> do
             dynFlags <- getDynFlags
-            let pa       = "Path: " ++ show (absPath c)
+            let pa       = "Path: " ++ showCrumbs (snocPathToPath $ absPath c)
                 node     = "Node: " ++ coreNode core
                 con      = "Constructor: " ++ coreConstructor core
-                children = "Children: " ++ show crumbs
+                children = "Children: " ++ showCrumbs crumbs
                 bds      = "Bindings in Scope: " ++ show (map var2String $ toList $ boundVars c)
                 expExtra = case core of
                              ExprCore e -> ["Type or Kind: " ++ showExprTypeOrKind dynFlags e] ++

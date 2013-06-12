@@ -23,6 +23,7 @@ module Language.HERMIT.Core
           , appCount
             -- * Crumbs
           , Crumb(..)
+          , showCrumbs
 --          , crumbToDeprecatedInt
           , deprecatedLeftSibling
           , deprecatedRightSibling
@@ -32,6 +33,8 @@ import GhcPlugins
 
 import Language.KURE.Combinators.Monad
 import Language.KURE.MonadCatch
+
+import Data.List (intercalate)
 
 ---------------------------------------------------------------------
 
@@ -195,6 +198,29 @@ data Crumb =
            -- TODO: Write a prettier Show instance
 
 
+showCrumbs :: [Crumb] -> String
+showCrumbs crs = "[" ++ intercalate ", " (map showCrumb crs) ++ "]"
+
+-- Note, these should match the external names in Language.HERMIT.Primitive.Navigation.Crumbs
+showCrumb :: Crumb -> String
+showCrumb = \case
+               ModGuts_Prog   -> "prog"
+               ProgCons_Head  -> "prog-head"
+               ProgCons_Tail  -> "prog-tail"
+               NonRec_RHS     -> "nonrec-rhs"
+               Rec_Def n      -> "rec-def " ++ show n
+               Def_RHS        -> "def-rhs"
+               App_Fun        -> "app-fun"
+               App_Arg        -> "app-arg"
+               Lam_Body       -> "lam-body"
+               Let_Bind       -> "let-bind"
+               Let_Body       -> "let-body"
+               Case_Scrutinee -> "case-expr"
+               Case_Alt n     -> "case-alt " ++ show n
+               Cast_Expr      -> "case-expr"
+               Tick_Expr      -> "tick-expr"
+               Alt_RHS        -> "alt-rhs"
+               _              -> "Warning: Crumb should not be in use!  This is probably Neil's fault."
 
 {-
 -- | Earlier versions of HERMIT used 'Int' as the crumb type.
