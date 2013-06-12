@@ -67,12 +67,10 @@ hermitBindingSiteExpr b = case b of
                             NONREC e     -> Just e
                             CASEWILD e _ -> Just e
                             _            -> Nothing
-{-# INLINE hermitBindingSiteExpr #-}
 
 -- | Retrieve the expression in a 'HermitBinding', if there is one.
 hermitBindingExpr :: HermitBinding -> Maybe CoreExpr
 hermitBindingExpr = hermitBindingSiteExpr . snd
-{-# INLINE hermitBindingExpr #-}
 
 ------------------------------------------------------------------------
 
@@ -94,36 +92,30 @@ instance AddBindings (SnocPath crumb) where
 -- | Add a single binding to the context.
 addHermitBinding  :: AddBindings c => Var -> HermitBindingSite -> c -> c
 addHermitBinding v bd = addHermitBindings [(v,bd)]
-{-# INLINE addHermitBinding #-}
 
 -- | Add all bindings in a binding group to a context.
 addBindingGroup :: AddBindings c => CoreBind -> c -> c
 addBindingGroup (NonRec v e) = addHermitBinding  v (NONREC e)
 addBindingGroup (Rec ies)    = addHermitBindings [ (i, REC e) | (i,e) <- ies ]
-{-# INLINE addBindingGroup #-}
 
 -- | Add a wildcard binding for a specific case alternative.
 addCaseWildBinding :: AddBindings c => (Id,CoreExpr,CoreAlt) -> c -> c
 addCaseWildBinding (i,e,(con,vs,_)) = addHermitBinding i (CASEWILD e (con,vs))
-{-# INLINE addCaseWildBinding #-}
 
 -- | Add a lambda bound variable to a context.
 --   All that is known is the variable, which may shadow something.
 --   If so, we don't worry about that here, it is instead checked during inlining.
 addLambdaBinding :: AddBindings c => Var -> c -> c
 addLambdaBinding v = addHermitBinding v LAM
-{-# INLINE addLambdaBinding #-}
 
 -- | Add the variables bound by a 'DataCon' in a case.
 --   They are all bound at the same depth.
 addAltBindings :: AddBindings c => [Var] -> c -> c
 addAltBindings vs = addHermitBindings [ (v, CASEALT) | v <- vs ]
-{-# INLINE addAltBindings #-}
 
 -- | Add a universally quantified type variable to a context.
 addForallBinding :: AddBindings c => TyVar -> c -> c
 addForallBinding v = addHermitBinding v FORALL
-{-# INLINE addForallBinding #-}
 
 ------------------------------------------------------------------------
 
@@ -134,7 +126,6 @@ class BoundVars c where
 -- | List all variables bound in the context that match the given name.
 findBoundVars :: BoundVars c => TH.Name -> c -> [Var]
 findBoundVars nm = filter (cmpTHName2Var nm) . S.toList . boundVars
-{-# INLINE findBoundVars #-}
 
 
 -- | A class of contexts from which HERMIT bindings can be retrieved.
@@ -145,12 +136,10 @@ class BoundVars c => ReadBindings c where
 -- | Determine if a variable is bound in a context.
 boundIn :: ReadBindings c => Var -> c -> Bool
 boundIn i c = i `member` hermitBindings c
-{-# INLINE boundIn #-}
 
 -- | Lookup the binding for a variable in a context.
 lookupHermitBinding :: ReadBindings c => Var -> c -> Maybe HermitBinding
 lookupHermitBinding v = lookup v . hermitBindings
-{-# INLINE lookupHermitBinding #-}
 
 ------------------------------------------------------------------------
 
@@ -191,8 +180,6 @@ initHermitC modGuts = HermitC
 
     where other_rules :: [CoreRule]
           other_rules = mg_binds modGuts >>= bindToIdExprs >>= (idCoreRules . fst)
-          {-# INLINE other_rules #-}
-{-# INLINE initHermitC #-}
 
 ------------------------------------------------------------------------
 
@@ -200,13 +187,11 @@ initHermitC modGuts = HermitC
 instance ReadPath HermitC Crumb where
   absPath :: HermitC -> AbsolutePath Crumb
   absPath = hermitC_path
-  {-# INLINE absPath #-}
 
 -- | Extend the 'AbsolutePath' stored in the HERMIT context.
 instance ExtendPath HermitC Crumb where
   (@@) :: HermitC -> Crumb -> HermitC
   c @@ n = c { hermitC_path = hermitC_path c @@ n }
-  {-# INLINE (@@) #-}
 
 ------------------------------------------------------------------------
 
@@ -217,36 +202,30 @@ instance AddBindings HermitC where
                              in c { hermitC_bindings = fromList vhbs `union` hermitC_bindings c
                                   , hermitC_depth    = nextDepth
                                   }
-  {-# INLINE addHermitBindings #-}
 
 ------------------------------------------------------------------------
 
 instance BoundVars HermitC where
   boundVars :: HermitC -> S.Set Var
   boundVars =  keysSet . hermitC_bindings
-  {-# INLINE boundVars #-}
 
 instance ReadBindings HermitC where
   hermitDepth :: HermitC -> BindingDepth
   hermitDepth = hermitC_depth
-  {-# INLINE hermitDepth #-}
 
   hermitBindings :: HermitC -> Map Var HermitBinding
   hermitBindings = hermitC_bindings
-  {-# INLINE hermitBindings #-}
 
 ------------------------------------------------------------------------
 
 instance HasCoreRules HermitC where
   hermitCoreRules :: HermitC -> [CoreRule]
   hermitCoreRules = hermitC_coreRules
-  {-# INLINE hermitCoreRules #-}
 
 ------------------------------------------------------------------------
 
 instance HasGlobalRdrEnv HermitC where
   hermitGlobalRdrEnv :: HermitC -> GlobalRdrEnv
   hermitGlobalRdrEnv = hermitC_globalRdrEnv
-  {-# INLINE hermitGlobalRdrEnv #-}
 
 ------------------------------------------------------------------------
