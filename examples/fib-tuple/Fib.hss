@@ -39,8 +39,8 @@ any-bu (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)
 
-{ [app-arg, app-arg] ; let-intro 'x }
-{ [app-fun, app-arg] ; let-intro 'y }
+{ arg 3 ; arg 1 ; let-intro 'x }
+{ arg 2 ; let-intro 'y }
 innermost let-float
 try (reorder-lets ['x,'y])
 one-td (fold 'y)

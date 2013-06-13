@@ -1,6 +1,6 @@
 {rhs-of 'mean ; lam-body
-  { app-arg ; let-intro 'l }
-  { [app-fun, app-arg] ; let-intro 's }
+  { arg 2 ; let-intro 's }
+  { arg 3 ; let-intro 'l }
   innermost let-float
   try (reorder-lets ['s,'l])
   let-tuple 'sl
@@ -19,8 +19,8 @@ remember sumlen
   case-alt 1
   alpha-alt ['y,'ys]
   alt-rhs
-  { app-arg ; app-arg ; let-intro 'l }
-  { app-fun ; app-arg ; app-arg ; let-intro 's }
+  { arg 3 ; arg 3 ; let-intro 'l }
+  { arg 2 ; arg 3 ; let-intro 's }
   innermost let-float
   try (reorder-lets ['s,'l])
   let-tuple 'sl

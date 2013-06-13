@@ -38,12 +38,12 @@ consider 'hanoi
       -- time to let intro
       -- need a "occurance 'work" like consider
       { alt-rhs
-        { app-arg
-          { [app-fun, app-arg]
-            { [app-fun, app-arg] ; let-intro 'u }
-            { [app-arg, app-arg] ; let-intro 'v }
+        { arg 5
+          { arg 1
+            { arg 1 ; let-intro 'u }
+            { arg 2 ; arg 2 ; let-intro 'v }
           }
-          { [app-arg, app-arg, app-fun, app-arg] ; let-intro 'w }
+          { arg 2 ; arg 2 ; arg 1 ; let-intro 'w }
         }
         innermost let-float
         try (reorder-lets ['u,'v,'w])

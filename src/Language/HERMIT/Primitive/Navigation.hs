@@ -12,6 +12,7 @@ module Language.HERMIT.Primitive.Navigation
        , Considerable(..)
        , considerables
        , considerConstructT
+       , nthArgPath
        )
 where
 
@@ -46,6 +47,8 @@ externals = crumbExternals ++ map (.+ Navigation)
                 [ "rhs-of '<v> focuses on the right-hand-side of the definition of <v>" ]
             , external "binding-group-of" (bindingGroupOf :: TH.Name -> TranslateH Core PathH)
                 [ "binding-group-of '<v> focuses on the binding group that binds the variable <v>" ]
+            , external "arg" (promoteExprT . nthArgPath :: Int -> TranslateH Core PathH)
+                [ "arg n focuses on the (n-1)th argument of a nested application." ]
             ]
 
 ---------------------------------------------------------------------------------------
@@ -141,5 +144,14 @@ underConsideration Ticky       (ExprCore (Tick _ _))      = True
 underConsideration TypeVar     (ExprCore (Type _))        = True
 underConsideration Coerce      (ExprCore (Coercion _))    = True
 underConsideration _           _                          = False
+
+---------------------------------------------------------------------------------------
+
+-- | Construct a path to the (n-1)th argument in a nested sequence of 'App's.
+nthArgPath :: Monad m => Int -> Translate c m CoreExpr PathH
+nthArgPath n = contextfreeT $ \ e -> let funCrumbs = appCount e - 1 - n
+                                      in if funCrumbs < 0
+                                          then fail ("Argument " ++ show n ++ " does not exist.")
+                                          else return (replicate funCrumbs App_Fun ++ [App_Arg])
 
 ---------------------------------------------------------------------------------------

@@ -123,7 +123,7 @@ isCoArg _             = False
 appCount :: CoreExpr -> Int
 appCount (App e1 _) = appCount e1 + 1
 appCount _          = 0
-{-# INLINE appCount #-}
+-- don't inline, recursive
 
 -----------------------------------------------------------------------
 
