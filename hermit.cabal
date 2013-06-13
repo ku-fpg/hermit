@@ -155,6 +155,7 @@ Library
        Language.HERMIT.Kernel
        Language.HERMIT.Kernel.Scoped
        Language.HERMIT.Kure
+       Language.HERMIT.Kure.SumTypes
        Language.HERMIT.Monad
        Language.HERMIT.Optimize
        Language.HERMIT.Parser

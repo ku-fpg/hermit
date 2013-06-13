@@ -28,7 +28,6 @@ import Control.Monad.State hiding (guard)
 
 import Data.Default
 
-import Language.HERMIT.Core
 import Language.HERMIT.Dictionary
 import Language.HERMIT.External hiding (Query, Shell)
 import Language.HERMIT.Kernel.Scoped

@@ -8,6 +8,8 @@ module Language.HERMIT.Kure
          module Language.KURE
        , module Language.KURE.BiTranslate
        , module Language.KURE.Lens
+       -- * Sub-Modules
+       , module Language.HERMIT.Kure.SumTypes
        -- * Synonyms
        , TranslateH
        , RewriteH
@@ -101,6 +103,7 @@ import Language.HERMIT.Context
 import Language.HERMIT.Core
 import Language.HERMIT.GHC
 import Language.HERMIT.Monad
+import Language.HERMIT.Kure.SumTypes
 
 import Control.Monad
 
@@ -120,79 +123,6 @@ type PathH          = Path Crumb
 (<*>) :: Monad m => m (a -> b) -> m a -> m b
 (<*>) = ap
 {-# INLINE (<*>) #-}
-
----------------------------------------------------------------------
-
-instance Injection ModGuts Core where
-
-  inject :: ModGuts -> Core
-  inject = GutsCore
-  {-# INLINE inject #-}
-
-  project :: Core -> Maybe ModGuts
-  project (GutsCore guts) = Just guts
-  project _               = Nothing
-  {-# INLINE project #-}
-
-
-instance Injection CoreProg Core where
-
-  inject :: CoreProg -> Core
-  inject = ProgCore
-  {-# INLINE inject #-}
-
-  project :: Core -> Maybe CoreProg
-  project (ProgCore bds) = Just bds
-  project _              = Nothing
-  {-# INLINE project #-}
-
-
-instance Injection CoreBind Core where
-
-  inject :: CoreBind -> Core
-  inject = BindCore
-  {-# INLINE inject #-}
-
-  project :: Core -> Maybe CoreBind
-  project (BindCore bnd)  = Just bnd
-  project _               = Nothing
-  {-# INLINE project #-}
-
-
-instance Injection CoreDef Core where
-
-  inject :: CoreDef -> Core
-  inject = DefCore
-  {-# INLINE inject #-}
-
-  project :: Core -> Maybe CoreDef
-  project (DefCore def) = Just def
-  project _             = Nothing
-  {-# INLINE project #-}
-
-
-instance Injection CoreAlt Core where
-
-  inject :: CoreAlt -> Core
-  inject = AltCore
-  {-# INLINE inject #-}
-
-  project :: Core -> Maybe CoreAlt
-  project (AltCore expr) = Just expr
-  project _              = Nothing
-  {-# INLINE project #-}
-
-
-instance Injection CoreExpr Core where
-
-  inject :: CoreExpr -> Core
-  inject = ExprCore
-  {-# INLINE inject #-}
-
-  project :: Core -> Maybe CoreExpr
-  project (ExprCore expr) = Just expr
-  project _               = Nothing
-  {-# INLINE project #-}
 
 ---------------------------------------------------------------------
 

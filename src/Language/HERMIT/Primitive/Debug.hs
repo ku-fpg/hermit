@@ -8,7 +8,6 @@ module Language.HERMIT.Primitive.Debug
        )
 where
 
-import Language.HERMIT.Core
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.Monad

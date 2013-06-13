@@ -3,9 +3,7 @@
 module Language.HERMIT.Core
           (
             -- * Generic Data Type
-            -- $typenote
-            Core(..)
-          , CoreProg(..)
+            CoreProg(..)
           , CoreDef(..)
           , CoreTickish
             -- * Conversions to/from 'Core'
@@ -35,23 +33,6 @@ import Language.KURE.Combinators.Monad
 import Language.KURE.MonadCatch
 
 import Data.List (intercalate)
-
----------------------------------------------------------------------
-
--- $typenote
---   NOTE: 'Type' is not included in the sum type.
---   However, we could have included it and provided the facility for descending into types.
---   We have not done so because
---     (a) we do not need that functionality, and
---     (b) the types are complicated and we're not sure that we understand them.
-
--- | Core is the sum type of all nodes in the AST that we wish to be able to traverse.
-data Core = GutsCore  ModGuts            -- ^ The module.
-          | ProgCore  CoreProg           -- ^ A program (a telescope of top-level binding groups).
-          | BindCore  CoreBind           -- ^ A binding group.
-          | DefCore   CoreDef            -- ^ A recursive definition.
-          | ExprCore  CoreExpr           -- ^ An expression.
-          | AltCore   CoreAlt            -- ^ A case alternative.
 
 ---------------------------------------------------------------------
 

@@ -38,6 +38,7 @@ import Language.KURE
 
 import Language.HERMIT.Core
 import Language.HERMIT.Context
+import Language.HERMIT.Kure.SumTypes
 
 ----------------------------------------------------------------------------
 
