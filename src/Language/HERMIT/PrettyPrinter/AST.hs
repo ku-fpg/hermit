@@ -10,7 +10,6 @@ where
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
-import Data.Traversable (sequenceA)
 
 import GhcPlugins (Coercion(..), Var(..), Id, CoVar)
 import qualified GhcPlugins as GHC
@@ -45,7 +44,7 @@ corePrettyH opts = do
         -- DocH is not a monoid.
         -- GHC uses a list, which we print here. The CoreProg type is our doing.
         ppCoreProg :: PrettyH CoreProg
-        ppCoreProg = translate $ \ c -> fmap vlist . sequenceA . map (apply ppCoreBind c) . progToBinds
+        ppCoreProg = progConsT ppCoreBind ppCoreProg ($+$) <+ progNilT empty
 
         ppCoreExpr :: PrettyH GHC.CoreExpr
         ppCoreExpr = varT (arr $ \ i -> text "Var" <+> ppId i)
