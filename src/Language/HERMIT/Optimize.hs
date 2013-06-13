@@ -82,10 +82,10 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST ->
             v <- viewT comp
             case v of
                 Return _            -> return ()
-                RR rr       :>>= k  -> liftIO (applyS kernel sast (pathR path (extractR rr)) env)
+                RR rr       :>>= k  -> liftIO (applyS kernel sast (pathR path rr) env)
                                         >>= runKureM (\sast' -> modify (\s -> s { isAST = sast' }))
                                                      errorAbort >> eval path (k ())
-                Query tr    :>>= k  -> liftIO (queryS kernel sast (pathT path (extractT tr)) env)
+                Query tr    :>>= k  -> liftIO (queryS kernel sast (pathT path tr) env)
                                         >>= runKureM (eval path . k) errorAbort
                 -- TODO: rework shell so it can return to k
                 --       this will significantly simplify this code
@@ -95,7 +95,7 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST ->
                                        -- calling the shell directly causes indefinite MVar problems
                                        -- because the state monad never finishes (I think)
                 Guard p m   :>>= k  -> when (p phaseInfo) (eval path m) >> eval path (k ())
-                Focus tp m  :>>= k  -> liftIO (queryS kernel sast (extractT tp) env)
+                Focus tp m  :>>= k  -> liftIO (queryS kernel sast tp env)
                                         >>= runKureM (flip eval m) errorAbort >> eval path (k ())
 
     in do st <- execStateT (eval [] opt) initState
