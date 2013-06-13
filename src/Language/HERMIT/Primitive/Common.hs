@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
+{-# LANGUAGE CPP, ScopedTypeVariables, FlexibleContexts #-}
 
 -- | Note: this module should NOT export externals. It is for common
 --   transformations needed by the other primitive modules.
@@ -58,6 +58,8 @@ import Language.HERMIT.Core
 import Language.HERMIT.Context
 import Language.HERMIT.GHC
 
+import Language.HERMIT.Primitive.GHC
+
 import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH.Syntax (showName)
 
@@ -103,8 +105,14 @@ callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >>= \_ -> const
 -- | Succeeds if we are looking at an application of a data constructor.
 callDataConT :: MonadCatch m => Translate c m CoreExpr (DataCon, [Type], [CoreExpr])
 callDataConT = prefixFailMsg "callDataConT failed:" $
+#if __GLASGOW_HASKELL__ > 706
+    do mb <- contextfreeT $ \ e -> let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- S.toList (coreExprFreeVars e) ])
+                                   in return $ exprIsConApp_maybe (in_scope, idUnfolding) e
+       maybe (fail "not a datacon application.") return mb
+#else
     contextfreeT (return . exprIsConApp_maybe idUnfolding)
         >>= maybe (fail "not a datacon application.") return
+#endif
 
 -- | Succeeds if we are looking at an application of a named data constructor.
 callDataConNameT :: MonadCatch m => TH.Name -> Translate c m CoreExpr (DataCon, [Type], [CoreExpr])

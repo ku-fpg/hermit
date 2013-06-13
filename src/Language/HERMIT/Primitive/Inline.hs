@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, FlexibleContexts #-}
+{-# LANGUAGE CPP, TupleSections, FlexibleContexts #-}
 module Language.HERMIT.Primitive.Inline
          ( -- * Inlining
            externals
@@ -13,7 +13,10 @@ module Language.HERMIT.Primitive.Inline
 where
 
 import GhcPlugins
+#if __GLASGOW_HASKELL__ > 706
+#else
 import TcType (tcSplitDFunTy)
+#endif
 
 import Control.Arrow
 
@@ -107,7 +110,11 @@ getUnfolding scrutinee caseBinderOnly i c =
                    then fail "not a case binder"
                    else case unfoldingInfo (idInfo i) of
                             CoreUnfolding { uf_tmpl = uft } -> return (uft, 0)
+#if __GLASGOW_HASKELL__ > 706
+                            dunf@(DFunUnfolding {})         -> dFunExpr dunf >>= return . (,0)
+#else
                             DFunUnfolding _arity dc args    -> dFunExpr dc args (idType i) >>= return . (,0)
+#endif
                             _                               -> fail $ "cannot find unfolding in Env or IdInfo."
         Just (depth,b) -> case b of
                             CASEWILD s alt -> return $ if scrutinee
@@ -142,6 +149,25 @@ inlineTargets :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Translat
 inlineTargets = collectT $ promoteT $ whenM (testM inline) (varT $ arr var2String)
 
 -- | Build a CoreExpr for a DFunUnfolding
+#if __GLASGOW_HASKELL__ > 706
+{-
+data Unfolding
+  = ...
+  | DFunUnfolding {     -- The Unfolding of a DFunId
+                -- See Note [DFun unfoldings]
+                --     df = /\a1..am. \d1..dn. MkD t1 .. tk
+                        --                                 (op1 a1..am d1..dn)
+                    --                                 (op2 a1..am d1..dn)
+        df_bndrs :: [Var],      -- The bound variables [a1..m],[d1..dn]
+        df_con   :: DataCon,    -- The dictionary data constructor (never a newtype datacon)
+        df_args  :: [CoreExpr]  -- Args of the data con: types, superclasses and methods,
+    }                           -- in positional order
+-}
+dFunExpr :: Unfolding -> HermitM CoreExpr
+-- TODO: is this correct?
+dFunExpr dunf@(DFunUnfolding {}) = return $ trace "dFunExpr" $ mkCoreConApps (df_con dunf) (df_args dunf)
+dFunExpr _ = fail "dFunExpr: not a DFunUnfolding"
+#else
 dFunExpr :: DataCon -> [DFunArg CoreExpr] -> Type -> HermitM CoreExpr
 dFunExpr dc args ty = do
     let (_, _, _, tcArgs) = tcSplitDFunTy ty
@@ -157,5 +183,6 @@ dFunExpr dc args ty = do
         mkArg (DFunPolyArg e) = mkCoreApps e allVars
 
     return $ mkCoreConApps dc $ map Type tcArgs ++ map mkArg args
+#endif
 
 ------------------------------------------------------------------------
