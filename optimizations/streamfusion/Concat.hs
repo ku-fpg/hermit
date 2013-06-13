@@ -19,15 +19,18 @@ import Data.Vector.Fusion.Stream.Monadic as M
 import Data.Vector.Fusion.Stream.Size as VS
 
 import Criterion.Main as C
+import Control.Monad.ST
+import qualified Data.Vector.Unboxed.Mutable as VUM
+import qualified Data.Vector.Unboxed as VU
 
 import HERMIT.Optimization.StreamFusion.Vector
 
 concatTestV :: Int -> Int
-concatTestV z = V.sum $ V.concatMap (\(!x) -> V.enumFromN 1 x) $ V.enumFromN 1 z
+concatTestV n = V.sum $ V.concatMap (\(!x) -> V.enumFromN 1 x) $ V.enumFromN 1 n
 {-# NOINLINE concatTestV #-}
 
 concatTestS :: Int -> Int
-concatTestS z = VS.foldl' (+) 0 $ VS.concatMap (\(!x) -> VS.enumFromStepN 1 1 x) $ VS.enumFromStepN 1 1 z
+concatTestS n = VS.foldl' (+) 0 $ VS.concatMap (\(!x) -> VS.enumFromStepN 1 1 x) $ VS.enumFromStepN 1 1 n
 {-# NOINLINE concatTestS #-}
 
 -- | And again, this time we flatten the resulting stream. If this is fast
@@ -36,19 +39,19 @@ concatTestS z = VS.foldl' (+) 0 $ VS.concatMap (\(!x) -> VS.enumFromStepN 1 1 x)
 -- NOTE This does actually reduce to the desired tight loop.
 
 flattenTest :: Int -> Int
-flattenTest !z = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN 1 1 z
+flattenTest !n = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN 1 1 n
   where
     mk !x = (1,x)
     {-# INLINE mk #-}
     step (!i,!max)
---      | i<=max = VS.Yield i (i+1,max)
-      | max>(0::Int) = VS.Yield i (i+1,max-1)
+      | i<=max = VS.Yield i (i+1,max)
+--      | max>(0::Int) = VS.Yield i (i+1,max-1)
       | otherwise = VS.Done
     {-# INLINE step #-}
 {-# NOINLINE flattenTest #-}
 
 flattenTestDown :: Int -> Int
-flattenTestDown !z = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN 1 1 z
+flattenTestDown !n = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN 1 1 n
   where
     mk !x = (x,1)
     {-# INLINE mk #-}
@@ -60,12 +63,18 @@ flattenTestDown !z = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromS
 
 -- nestedConcatS 3 = sum [1,1,2,2,1,2,3,2,3,3]
 nestedConcatS :: Int -> Int
-nestedConcatS z = VS.foldl' (+) 0 $ VS.concatMap (\(!x) -> VS.concatMap (\(!y) -> VS.enumFromStepN y 1 x) $ VS.enumFromStepN 1 1 x) $ VS.enumFromStepN 1 1 z
+nestedConcatS n = VS.foldl' (+) 0 $ VS.concatMap (\(!x) -> VS.concatMap (\(!y) -> VS.enumFromStepN y 1 x) $ VS.enumFromStepN 1 1 x) $ VS.enumFromStepN 1 1 n
 {-# NOINLINE nestedConcatS #-}
+
+concatMapMonadic :: Int -> Int
+concatMapMonadic k = runST $ do
+    tbl <- VU.thaw $ VU.fromList [0 .. k]
+    M.foldl' (+) 0 $ M.concatMapM (\(!x) -> VUM.unsafeRead tbl x >>= \z -> return $ M.enumFromStepN 1 1 z) $ M.enumFromStepN 1 1 k
+{-# NOINLINE concatMapMonadic #-}
 
 {-
 nestedFlatten :: Int -> Int
-nestedFlatten !z = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN 1 1 z
+nestedFlatten !n = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN 1 1 n
   where
     mk !x = (1,1,x)
     {-# INLINE mk #-}
@@ -81,6 +90,7 @@ main = do
 --  print $ concatTestV 1000
   print $ concatTestS 1000
   print $ flattenTest 1000
+  print $ concatMapMonadic 1000
 --  print $ flattenTestDown 1000
   putStrLn $ "nestedConcatS: " Prelude.++ (show $ nestedConcatS 100)
 --  putStrLn $ "nestedFlatten: " Prelude.++ (show $ nestedFlatten 100)
@@ -89,14 +99,20 @@ main = do
       [ bench "concatTestS" $ whnf concatTestS 100
 --      , bench "concatTestV" $ whnf concatTestV 100
       , bench "flattenTest" $ whnf flattenTest 100
---      , bench "flattenTestDown" $ whnf flattenTestDown 100
+      , bench "concatMapMonadic" $ whnf concatMapMonadic 100
       ]
     , bgroup "concat tests / 1000"
       [ bench "concatTestS" $ whnf concatTestS 1000
 --      , bench "concatTestV" $ whnf concatTestV 1000
       , bench "flattenTest" $ whnf flattenTest 1000
---      , bench "flattenTestDown" $ whnf flattenTestDown 1000
+      , bench "concatMapMonadic" $ whnf concatMapMonadic 1000
       ]
+{-
+    , bgroup "concat tests / 10000"
+      [ bench "concatTestS" $ whnf concatTestS 10000
+      , bench "flattenTest" $ whnf flattenTest 10000
+      ]
+-}
     , bgroup "nested tests / 100"
       [ bench "nestedConcatS" $ whnf nestedConcatS 100
       ]

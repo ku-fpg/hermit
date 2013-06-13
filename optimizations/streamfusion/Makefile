@@ -8,7 +8,7 @@ hlist:
 	hermit Main.hs -opt=HERMIT.Optimization.StreamFusion +Main -- -ddump-prep -ddump-to-file
 
 vector:
-	ghc --make -O2 Concat.hs -fforce-recomp -ddump-prep -ddump-to-file
+	ghc --make -O2 Concat.hs -fforce-recomp -ddump-prep -ddump-simpl -ddump-to-file
 
 hvector:
 	hermit Concat.hs -opt=HERMIT.Optimization.StreamFusion.Vector +Main -- -ddump-prep -ddump-simpl -ddump-to-file

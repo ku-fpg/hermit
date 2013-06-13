@@ -8,7 +8,7 @@ import GhcPlugins
 import Language.HERMIT.Core
 import Language.HERMIT.Dictionary -- for bash
 import Language.HERMIT.External
-import Language.HERMIT.GHC
+-- import Language.HERMIT.GHC
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.Optimize
@@ -19,6 +19,9 @@ import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Local hiding (externals)
 import Language.HERMIT.Primitive.New hiding (externals)
 import Language.HERMIT.Primitive.Unfold hiding (externals)
+
+import Control.Monad
+import qualified Data.Set as S
 
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as G
@@ -60,27 +63,32 @@ concatMapSR = do
     -- concatMapM :: forall a m b. Monad m -> (a -> m (Stream m b)) -> Stream m a -> Stream m b
     (_, [aTy, mTy, bTy, mDict, f]) <- callNameT 'M.concatMapM
 
-    (v, n', st'') <- applyInContextT exposeInnerStreamT f
+    (cxt, vs, n', st'') <- applyInContextT exposeInnerStreamT f
     st <- return st'' >>> tryR (extractR sfSimp)
-    n@(Lam s _) <- return n' >>> tryR (extractR sfSimp) >>> (lamAllR idR idR <+ etaExpand "s")
+    n@(Lam s _) <- return n' >>> tryR (extractR sfSimp) >>> ensureLam
 
     flattenSid <- findIdT 'M.flatten
     fixStepid <- findIdT 'fixStep
-    returnid <- findIdT 'return
+    -- returnid <- findIdT 'return
     unknownid <- findIdT 'Size.Unknown
 
-    let st' = mkCoreTup [varToCoreExpr v, st]
+    let v = head vs
+        stash = mkCoreTup $ map varToCoreExpr vs
+        st' = mkCoreTup [stash, st]
     stId <- constT $ newIdH "st" (exprType st')
     wild <- constT $ cloneVarH ("wild_"++) stId
+    stashId <- constT $ newIdH "stash" (exprType stash)
+    wild' <- constT $ cloneVarH ("wild_"++) stashId
 
         -- fixStep :: forall a b m s. Monad m -> a -> m (VS.Step s b) -> m (VS.Step (a,s) b)
     let fixApp = mkCoreApps (varToCoreExpr fixStepid)
-                            [ aTy, bTy, mTy, Type $ exprType st, mDict
-                            , varToCoreExpr v, mkCoreApp n (varToCoreExpr s) ]
+                            [ Type (exprType stash), bTy, mTy, Type (exprType st), mDict
+                            , stash, mkCoreApp n (varToCoreExpr s) ]
+        innerCase = mkSmallTupleCase vs fixApp wild' (varToCoreExpr stashId)
         nFn = mkCoreLams [stId] $
-                mkSmallTupleCase [v,s] fixApp wild (varToCoreExpr stId)
+                mkSmallTupleCase [stashId,s] innerCase wild (varToCoreExpr stId)
         -- return :: forall m. Monad m -> (forall a. a -> m a)
-        mkFn = mkCoreLams [v] $ mkCoreApps (varToCoreExpr returnid) [mTy, mDict, Type $ exprType st', st']
+        mkFn = mkCoreLams [v] $ cxt st'
 
     -- flatten :: forall a m s b. Monad m -> (a -> m s) -> (s -> m (Step s b)) -> Size -> Stream m a -> Stream m b
     return $ mkCoreApps (varToCoreExpr flattenSid)
@@ -88,20 +96,43 @@ concatMapSR = do
                         , mDict, mkFn, nFn, varToCoreExpr unknownid]
 
 exposeInnerStreamT
-    :: TranslateH CoreExpr ( CoreBndr   -- the 'x' in 'concatMap (\x -> ...) ...'
+    :: TranslateH CoreExpr ( CoreExpr -> CoreExpr -- monadic context of inner stream
+                           , [Var]      -- the 'x' in 'concatMap (\x -> ...) ...'
                            , CoreExpr   -- inner stream stepper function
                            , CoreExpr ) -- inner stream state
 exposeInnerStreamT =
-   (lamT idR getDCFromReturn (\ v (_dc, _univTys, [_sTy, n, st, _sz]) -> (v, n, st)))
+   (lamT idR getDC (\ v (cxt, _dc, _univTys, [_sTy, n, st, _sz], _fvs, vs) -> (cxt, v:vs, n, st)))
     <+ ((unfoldR <+ letElim <+ letUnfloat <+ caseElim <+ caseUnfloat) >>> exposeInnerStreamT)
 
-getDCFromReturn :: TranslateH CoreExpr (DataCon, [Type], [CoreExpr])
-getDCFromReturn =
-    (do (_r, [_aTy, _mTy, _mDict, dcExp]) <- callNameT 'return
-        applyInContextT getDataConInfo dcExp) <+ (extractR floatAppOut >>> getDCFromReturn)
+getDC :: TranslateH CoreExpr ( CoreExpr -> CoreExpr -- context of DC
+                             , DataCon, [Type], [CoreExpr], [Var], [Var] )
+getDC = getDCFromReturn <+ getDCFromBind
 
-getDataConInfo :: TranslateH CoreExpr (DataCon, [Type], [CoreExpr])
-getDataConInfo = (callDataConNameT 'M.Stream) <+ (extractR floatAppOut >>> getDataConInfo)
+getDCFromBind :: TranslateH CoreExpr ( CoreExpr -> CoreExpr -- context of DC
+                                     , DataCon, [Type], [CoreExpr], [Var], [Var] )
+getDCFromBind = go <+ (extractR floatAppOut >>> getDCFromBind)
+    where go = do (b, [mTy, mDict, aTy, _bTy, lhs, rhs]) <- callNameT '(>>=)
+                  (x, (cxt, dc, tys, args, fvs, xs)) <- return rhs >>> ensureLam >>> lamT idR getDC (,)
+                  return (\e -> let e' = cxt e
+                                in mkCoreApps b [mTy, mDict, aTy, Type (exprType e), lhs, Lam x e']
+                         , dc, tys, args, fvs, if x `elem` fvs then (x:xs) else xs)
+
+ensureLam :: RewriteH CoreExpr
+ensureLam = tryR (extractR simplifyR) >>> (lamAllR idR idR <+ etaExpand "x")
+
+getDCFromReturn :: TranslateH CoreExpr ( CoreExpr -> CoreExpr
+                                       , DataCon, [Type], [CoreExpr], [Var], [Var] )
+getDCFromReturn = go <+ (extractR floatAppOut >>> getDCFromReturn)
+    where go = do (r, [mTy, mDict, _aTy, dcExp]) <- callNameT 'return
+                  (dc, tys, args, fvs) <- return dcExp >>> getDataConInfo
+                  return (\e -> mkCoreApps r [mTy, mDict, Type (exprType e), e]
+                         , dc, tys, args, fvs, [])
+
+getDataConInfo :: TranslateH CoreExpr (DataCon, [Type], [CoreExpr], [Var])
+getDataConInfo = go <+ (extractR floatAppOut >>> getDataConInfo)
+    where go = do (dc, tys, args) <- callDataConNameT 'M.Stream
+                  fvs <- liftM S.toList freeVarsT
+                  return (dc, tys, args, fvs)
 
 floatAppOut :: RewriteH Core
 floatAppOut = onetdR (promoteExprR $    (extractR (innermostR (promoteExprR letElim)) >>> observeR "letElim")
@@ -117,7 +148,7 @@ sfSimp = repeatR floatAppOut
 
 elimExistentials :: RewriteH CoreExpr
 elimExistentials = do
-    Case _s _bnd ty alts <- idR
+    Case _s _bnd _ty alts <- idR
     guardMsg (notNull [ v | (_,vs,_) <- alts, v <- vs, isTyVar v ])
              "no existential types in patterns"
     caseAllR (extractR sfSimp) idR idR (const idR) >>> observeR "before reduce" >>> caseReduce >>> observeR "result"
