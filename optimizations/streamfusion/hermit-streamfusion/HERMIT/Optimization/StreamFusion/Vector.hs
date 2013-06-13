@@ -8,6 +8,7 @@ import GhcPlugins
 import Language.HERMIT.Core
 import Language.HERMIT.Dictionary -- for bash
 import Language.HERMIT.External
+import Language.HERMIT.GHC
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.Optimize
@@ -59,8 +60,9 @@ concatMapSR = do
     -- concatMapM :: forall a m b. Monad m -> (a -> m (Stream m b)) -> Stream m a -> Stream m b
     (_, [aTy, mTy, bTy, mDict, f]) <- callNameT 'M.concatMapM
 
-    (v, n', st) <- applyInContextT exposeInnerStreamT f
-    n@(Lam s _) <- applyInContextT (lamAllR idR idR <+ etaExpand "s") n'
+    (v, n', st'') <- applyInContextT exposeInnerStreamT f
+    st <- return st'' >>> tryR (extractR sfSimp)
+    n@(Lam s _) <- return n' >>> tryR (extractR sfSimp) >>> (lamAllR idR idR <+ etaExpand "s")
 
     flattenSid <- findIdT 'M.flatten
     fixStepid <- findIdT 'fixStep
@@ -102,5 +104,20 @@ getDataConInfo :: TranslateH CoreExpr (DataCon, [Type], [CoreExpr])
 getDataConInfo = (callDataConNameT 'M.Stream) <+ (extractR floatAppOut >>> getDataConInfo)
 
 floatAppOut :: RewriteH Core
-floatAppOut = onetdR (promoteExprR $ letElim <+ letUnfloat <+ caseElim <+ caseUnfloat)
-              <+ simplifyR <+ promoteExprR unfoldR
+floatAppOut = onetdR (promoteExprR $    (extractR (innermostR (promoteExprR letElim)) >>> observeR "letElim")
+                                     <+ (letUnfloat >>> observeR "letUnfloat")
+                                     <+ (caseElim >>> observeR "caseElim")
+                                     <+ (elimExistentials >>> observeR "elimExistentials")
+                                     <+ (bracketR "caseUnfloat" caseUnfloat))
+              <+ (simplifyR >>> observeR "simplifyR")
+              <+ (promoteExprR unfoldR >>> observeR "unfoldR")
+
+sfSimp :: RewriteH Core
+sfSimp = repeatR floatAppOut
+
+elimExistentials :: RewriteH CoreExpr
+elimExistentials = do
+    Case _s _bnd ty alts <- idR
+    guardMsg (notNull [ v | (_,vs,_) <- alts, v <- vs, isTyVar v ])
+             "no existential types in patterns"
+    caseAllR (extractR sfSimp) idR idR (const idR) >>> observeR "before reduce" >>> caseReduce >>> observeR "result"
