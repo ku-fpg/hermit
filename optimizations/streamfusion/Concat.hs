@@ -41,7 +41,8 @@ flattenTest !z = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN
     mk !x = (1,x)
     {-# INLINE mk #-}
     step (!i,!max)
-      | i<=max = VS.Yield i (i+1,max)
+--      | i<=max = VS.Yield i (i+1,max)
+      | max>(0::Int) = VS.Yield i (i+1,max-1)
       | otherwise = VS.Done
     {-# INLINE step #-}
 {-# NOINLINE flattenTest #-}
@@ -57,23 +58,57 @@ flattenTestDown !z = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromS
     {-# INLINE step #-}
 {-# NOINLINE flattenTestDown #-}
 
+-- nestedConcatS 3 = sum [1,1,2,2,1,2,3,2,3,3]
+nestedConcatS :: Int -> Int
+nestedConcatS z = VS.foldl' (+) 0 $ VS.concatMap (\(!x) -> VS.concatMap (\(!y) -> VS.enumFromStepN y 1 x) $ VS.enumFromStepN 1 1 x) $ VS.enumFromStepN 1 1 z
+{-# NOINLINE nestedConcatS #-}
+
+{-
+nestedFlatten :: Int -> Int
+nestedFlatten !z = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN 1 1 z
+  where
+    mk !x = (1,1,x)
+    {-# INLINE mk #-}
+    step (!i,!j,!x)
+      | (i<=x) && (j<=i) = VS.Yield j (i,j+1,x)
+      |  i<=x            = VS.Skip (i+1,1,x)
+      | otherwise          = VS.Done
+    {-# INLINE step #-}
+{-# NOINLINE nestedFlatten #-}
+-}
+
 main = do
-  print $ concatTestV 1000
+--  print $ concatTestV 1000
   print $ concatTestS 1000
   print $ flattenTest 1000
-  print $ flattenTestDown 1000
+--  print $ flattenTestDown 1000
+  putStrLn $ "nestedConcatS: " Prelude.++ (show $ nestedConcatS 100)
+--  putStrLn $ "nestedFlatten: " Prelude.++ (show $ nestedFlatten 100)
   defaultMain
     [ bgroup "concat tests / 100"
-      [ bench "concatTestV" $ whnf concatTestV 100
-      , bench "concatTestS" $ whnf concatTestS 100
+      [ bench "concatTestS" $ whnf concatTestS 100
+--      , bench "concatTestV" $ whnf concatTestV 100
       , bench "flattenTest" $ whnf flattenTest 100
-      , bench "flattenTestDown" $ whnf flattenTestDown 100
+--      , bench "flattenTestDown" $ whnf flattenTestDown 100
       ]
     , bgroup "concat tests / 1000"
-      [ bench "concatTestV" $ whnf concatTestV 1000
-      , bench "concatTestS" $ whnf concatTestS 1000
+      [ bench "concatTestS" $ whnf concatTestS 1000
+--      , bench "concatTestV" $ whnf concatTestV 1000
       , bench "flattenTest" $ whnf flattenTest 1000
-      , bench "flattenTestDown" $ whnf flattenTestDown 1000
+--      , bench "flattenTestDown" $ whnf flattenTestDown 1000
       ]
+    , bgroup "nested tests / 100"
+      [ bench "nestedConcatS" $ whnf nestedConcatS 100
+      ]
+{-
+    , bgroup "nested tests / 10"
+      [ bench "nestedConcatS" $ whnf nestedConcatS 10
+      , bench "nestedFlatten" $ whnf nestedFlatten 10
+      ]
+    , bgroup "nested tests / 100"
+      [ bench "nestedConcatS" $ whnf nestedConcatS 100
+      , bench "nestedFlatten" $ whnf nestedFlatten 100
+      ]
+-}
     ]
 

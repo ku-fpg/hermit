@@ -6,8 +6,10 @@ module Language.HERMIT.Primitive.GHC
          -- ** Free Variables
        , coreExprFreeIds
        , coreExprFreeVars
+       , typeFreeVars
        , freeIdsT
        , freeVarsT
+       , freeTyVarsT
        , altFreeVarsT
        , altFreeVarsExclWildT
          -- ** Substitution
@@ -262,6 +264,14 @@ freeIdsT = arr coreExprFreeIds
 -- | Lifted version of 'coreExprFreeVars'.
 freeVarsT :: Monad m => Translate c m CoreExpr (Set Var)
 freeVarsT = arr coreExprFreeVars
+
+-- | Lifted version of 'typeFreeVars'.
+freeTyVarsT :: Monad m => Translate c m Type (Set Var)
+freeTyVarsT = arr typeFreeVars
+
+-- | List all free variables in a type.
+typeFreeVars :: Type -> Set Var
+typeFreeVars = fromList . uniqSetToList . tyVarsOfType
 
 -- | List all free variables (including types) in the expression.
 coreExprFreeVars :: CoreExpr -> Set Var

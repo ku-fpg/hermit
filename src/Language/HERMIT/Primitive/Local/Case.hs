@@ -183,13 +183,13 @@ caseUnfloatArgs = prefixFailMsg "Case unfloating into arguments failed: " $
                                                       (\ () () () alts' -> unzip3 [ (wild:vs, fn, args) | (vs,fn,args) <- alts' ])
        guardMsg (exprsEqual fs) "alternatives are not parallel in function call."
        guardMsg (all null $ zipWith intersect (map (toList.coreExprFreeVars) fs) vss) "function bound by case binders."
+       let argss' = transpose argss
+       guardMsg (all exprsEqual $ filter (isTyCoArg . head) argss') "function applied at different types."
        return $ mkCoreApps (head fs) [ if isTyCoArg (head args)
-                                       then head args -- TODO: is is possible for well-type case to have different
-                                                      -- type arguments in different alternatives? Obviously not with
-                                                      -- monomorphic types, but maybe with polymorphism?
+                                       then head args -- TODO: deal with existentials by tupling
                                        else let alts' = [ (ac, vs, arg) | ((ac,vs,_),arg) <- zip alts args ]
                                             in Case s wild (coreAltsType alts') alts'
-                                     | args <- transpose argss ]
+                                     | args <- argss' ]
 
 ------------------------------------------------------------------------------
 

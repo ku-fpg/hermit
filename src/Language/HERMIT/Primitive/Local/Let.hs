@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
 
 module Language.HERMIT.Primitive.Local.Let
        ( -- * Rewrites on Let Expressions
@@ -230,6 +230,8 @@ letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $
   do Let bnds (Case s w ty alts) <- idR
      captured <- letT bindVarsT caseVarsT intersect
      guardMsg (null captured) "let bindings would capture case pattern bindings."
+     unbound <- letT bindVarsT (caseT mempty mempty freeTyVarsT (const mempty) $ \ () () vs (_::[()]) -> toList vs) intersect
+     guardMsg (null unbound) "type variables in case signature would become unbound."
      return $ Case (Let bnds s) w ty $ mapAlts (Let bnds) alts
 
 -- | @let v = ev in f a@ ==> @(let v = ev in f) (let v = ev in a)@
