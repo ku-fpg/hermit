@@ -22,6 +22,7 @@ library
 
     build-depends:
         base,
+        containers,
         ghc >= 7.6,
         hermit,
         template-haskell,
