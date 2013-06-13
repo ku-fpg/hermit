@@ -300,6 +300,14 @@ lookupRule :: (Activation -> Bool)	-- When rule is active
             -> InScopeSet
 	    -> Id -> [CoreExpr]
 	    -> [CoreRule] -> Maybe (CoreRule, CoreExpr)
+
+GHC HEAD:
+type InScopeEnv = (InScopeSet, IdUnfoldingFun)
+
+lookupRule :: DynFlags -> InScopeEnv
+           -> (Activation -> Bool)      -- When rule is active
+           -> Id -> [CoreExpr]
+           -> [CoreRule] -> Maybe (CoreRule, CoreExpr)
 -}
 
 -- Neil: Commented this out as its not (currently) used.
@@ -327,7 +335,7 @@ rulesToRewriteH rs = translate $ \ c e -> do
     -- trace (showSDoc (ppr fn GhcPlugins.<+> ppr args $$ ppr rs)) $
 #if __GLASGOW_HASKELL__ > 706
     dflags <- getDynFlags
-    case lookupRule dflags (const True) (const NoUnfolding) in_scope fn args [r | r <- rs, ru_fn r == idName fn] of
+    case lookupRule dflags (in_scope, const NoUnfolding) (const True) fn args [r | r <- rs, ru_fn r == idName fn] of
 #else
     case lookupRule (const True) (const NoUnfolding) in_scope fn args [r | r <- rs, ru_fn r == idName fn] of
 #endif
