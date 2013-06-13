@@ -126,6 +126,7 @@ type PathH          = Path Crumb
 
 ---------------------------------------------------------------------
 
+-- | Walking over modules, programs, binding groups, definitions, expressions and case alternatives.
 instance (ExtendPath c Crumb, AddBindings c) => Walker c Core where
 
   allR :: forall m. MonadCatch m => Rewrite c m Core -> Rewrite c m Core
@@ -144,14 +145,14 @@ instance (ExtendPath c Crumb, AddBindings c) => Walker c Core where
 
       allRprog :: MonadCatch m => Rewrite c m CoreProg
       allRprog = readerT $ \case
-                              ProgCons _ _ -> progConsAllR (extractR r) (extractR r)
-                              _            -> idR
+                              ProgCons{}  -> progConsAllR (extractR r) (extractR r)
+                              _           -> idR
       {-# INLINE allRprog #-}
 
       allRbind :: MonadCatch m => Rewrite c m CoreBind
       allRbind = readerT $ \case
-                              NonRec _ _  -> nonRecAllR idR (extractR r) -- we don't descend into the Var
-                              Rec _       -> recAllR (const $ extractR r)
+                              NonRec{}  -> nonRecAllR idR (extractR r) -- we don't descend into the Var
+                              Rec _     -> recAllR (const $ extractR r)
       {-# INLINE allRbind #-}
 
       allRdef :: MonadCatch m => Rewrite c m CoreDef
@@ -164,17 +165,128 @@ instance (ExtendPath c Crumb, AddBindings c) => Walker c Core where
 
       allRexpr :: MonadCatch m => Rewrite c m CoreExpr
       allRexpr = readerT $ \case
-                              App _ _      -> appAllR (extractR r) (extractR r)
-                              Lam _ _      -> lamAllR idR (extractR r) -- we don't descend into the Var
-                              Let _ _      -> letAllR (extractR r) (extractR r)
-                              Case _ _ _ _ -> caseAllR (extractR r) idR idR (const $ extractR r) -- we don't descend into the case binder or Type
-                              Cast _ _     -> castAllR (extractR r) idR -- we don't descend into the Coercion
-                              Tick _ _     -> tickAllR idR (extractR r) -- we don't descend into the Tickish
-                              _            -> idR
+                              App{}   -> appAllR (extractR r) (extractR r)
+                              Lam{}   -> lamAllR idR (extractR r) -- we don't descend into the Var
+                              Let{}   -> letAllR (extractR r) (extractR r)
+                              Case{}  -> caseAllR (extractR r) idR idR (const $ extractR r) -- we don't descend into the case binder or Type
+                              Cast{}  -> castAllR (extractR r) idR -- we don't descend into the Coercion
+                              Tick{}  -> tickAllR idR (extractR r) -- we don't descend into the Tickish
+                              _       -> idR
       {-# INLINE allRexpr #-}
 
 -- NOTE: I tried telling GHC to inline allR and compilation hit the (default) simplifier tick limit.
 -- TODO: Investigate whether that was achieving useful optimisations.
+
+---------------------------------------------------------------------
+
+-- | Walking over types (only).
+instance (ExtendPath c Crumb, AddBindings c) => Walker c Type where
+
+  allR :: MonadCatch m => Rewrite c m Type -> Rewrite c m Type
+  allR r = prefixFailMsg "allR failed: " $
+           readerT $ \case
+                        AppTy{}     -> appTyAllR r r
+                        FunTy{}     -> funTyAllR r r
+                        ForAllTy{}  -> forAllTyAllR idR r
+                        TyConApp{}  -> tyConAppAllR idR (const r)
+                        _           -> idR
+
+---------------------------------------------------------------------
+
+-- | Walking over coercions (only).
+instance (ExtendPath c Crumb, AddBindings c) => Walker c Coercion where
+
+  allR :: MonadCatch m => Rewrite c m Coercion -> Rewrite c m Coercion
+  allR r = prefixFailMsg "allR failed: " $
+           readerT $ \case
+                        TyConAppCo{}  -> tyConAppCoAllR idR (const r)
+                        AppCo{}       -> appCoAllR r r
+                        ForAllCo{}    -> forAllCoAllR idR r
+                        AxiomInstCo{} -> axiomInstCoAllR idR (const r)
+                        SymCo{}       -> symCoR r
+                        TransCo{}     -> transCoAllR r r
+                        NthCo{}       -> nthCoAllR idR r
+                        InstCo{}      -> instCoAllR r idR
+                        _             -> idR
+
+---------------------------------------------------------------------
+
+-- | Walking over types and coercions.
+instance (ExtendPath c Crumb, AddBindings c) => Walker c TyCo where
+
+  allR :: forall m. MonadCatch m => Rewrite c m TyCo -> Rewrite c m TyCo
+  allR r = prefixFailMsg "allR failed: " $
+           rewrite $ \ c -> \case
+             TypeCore ty     -> inject <$> apply (allR $ extractR r) c ty -- exploiting the fact that types do not contain coercions
+             CoercionCore co -> inject <$> apply allRcoercion c co
+    where
+      allRcoercion :: MonadCatch m => Rewrite c m Coercion
+      allRcoercion = readerT $ \case
+                              Refl{}        -> reflR (extractR r)
+                              TyConAppCo{}  -> tyConAppCoAllR idR (const $ extractR r) -- we don't descend into the TyCon
+                              AppCo{}       -> appCoAllR (extractR r) (extractR r)
+                              ForAllCo{}    -> forAllCoAllR idR (extractR r) -- we don't descend into the TyVar
+                              AxiomInstCo{} -> axiomInstCoAllR idR (const $ extractR r) -- we don't descend into the axiom
+                              UnsafeCo{}    -> unsafeCoAllR (extractR r) (extractR r)
+                              SymCo{}       -> symCoR (extractR r)
+                              TransCo{}     -> transCoAllR (extractR r) (extractR r)
+                              InstCo{}      -> instCoAllR (extractR r) (extractR r)
+                              NthCo{}       -> nthCoAllR idR (extractR r) -- we don't descend into the Int
+                              _             -> idR
+      {-# INLINE allRcoercion #-}
+
+---------------------------------------------------------------------
+
+-- | Walking over modules, programs, binding groups, definitions, expressions and case alternatives.
+instance (ExtendPath c Crumb, AddBindings c) => Walker c CoreTC where
+
+  allR :: forall m. MonadCatch m => Rewrite c m CoreTC -> Rewrite c m CoreTC
+  allR r = prefixFailMsg "allR failed: " $
+           rewrite $ \ c -> \case
+             Core (GutsCore guts)  -> inject <$> apply allRmodguts c guts
+             Core (ProgCore p)     -> inject <$> apply allRprog c p
+             Core (BindCore bn)    -> inject <$> apply allRbind c bn
+             Core (DefCore def)    -> inject <$> apply allRdef c def
+             Core (AltCore alt)    -> inject <$> apply allRalt c alt
+             Core (ExprCore e)     -> inject <$> apply allRexpr c e
+             TyCo tyCo             -> inject <$> apply (allR $ extractR r) c tyCo -- exploiting the fact that only types and coercions appear within types and coercions
+    where
+      allRmodguts :: MonadCatch m => Rewrite c m ModGuts
+      allRmodguts = modGutsR (extractR r)
+      {-# INLINE allRmodguts #-}
+
+      allRprog :: MonadCatch m => Rewrite c m CoreProg
+      allRprog = readerT $ \case
+                              ProgCons{}  -> progConsAllR (extractR r) (extractR r)
+                              _           -> idR
+      {-# INLINE allRprog #-}
+
+      allRbind :: MonadCatch m => Rewrite c m CoreBind
+      allRbind = readerT $ \case
+                              NonRec{}  -> nonRecAllR idR (extractR r) -- we don't descend into the Var
+                              Rec _     -> recAllR (const $ extractR r)
+      {-# INLINE allRbind #-}
+
+      allRdef :: MonadCatch m => Rewrite c m CoreDef
+      allRdef = defAllR idR (extractR r) -- we don't descend into the Id
+      {-# INLINE allRdef #-}
+
+      allRalt :: MonadCatch m => Rewrite c m CoreAlt
+      allRalt = altAllR idR (const idR) (extractR r) -- we don't descend into the AltCon or Vars
+      {-# INLINE allRalt #-}
+
+      allRexpr :: MonadCatch m => Rewrite c m CoreExpr
+      allRexpr = readerT $ \case
+                              App{}      -> appAllR (extractR r) (extractR r)
+                              Lam{}      -> lamAllR idR (extractR r) -- we don't descend into the Var
+                              Let{}      -> letAllR (extractR r) (extractR r)
+                              Case{}     -> caseAllR (extractR r) idR (extractR r) (const $ extractR r) -- we don't descend into the case binder
+                              Cast{}     -> castAllR (extractR r) (extractR r)
+                              Tick{}     -> tickAllR idR (extractR r) -- we don't descend into the Tickish
+                              Type{}     -> typeR (extractR r)
+                              Coercion{} -> coercionR (extractR r)
+                              _          -> idR
+      {-# INLINE allRexpr #-}
 
 ---------------------------------------------------------------------
 
@@ -802,20 +914,7 @@ promoteExprT = promoteWithFailMsgT "This translate can only succeed at expressio
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 
--- Type Traversals
-
-instance (ExtendPath c Crumb, AddBindings c) => Walker c Type where
-
-  allR :: MonadCatch m => Rewrite c m Type -> Rewrite c m Type
-  allR r = prefixFailMsg "allR failed: " $
-           readerT $ \case
-                        AppTy{}     -> appTyAllR r r
-                        FunTy{}     -> funTyAllR r r
-                        ForAllTy{}  -> forAllTyAllR idR r
-                        TyConApp{}  -> tyConAppAllR idR (const r)
-                        _           -> idR
-
----------------------------------------------------------------------
+-- Types
 
 -- | Translate a type of the form: @TyVarTy@ 'TyVar'
 tyVarT :: (ExtendPath c Crumb, Monad m) => Translate c m TyVar b -> Translate c m Type b
@@ -937,24 +1036,7 @@ tyConAppOneR r rs = unwrapOneR $ tyConAppAllR (wrapOneR r) (wrapOneR . rs)
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
 
--- Coercion Traversals
-
-instance (ExtendPath c Crumb, AddBindings c) => Walker c Coercion where
-
-  allR :: MonadCatch m => Rewrite c m Coercion -> Rewrite c m Coercion
-  allR r = prefixFailMsg "allR failed: " $
-           readerT $ \case
-                        TyConAppCo{}  -> tyConAppCoAllR idR (const r)
-                        AppCo{}       -> appCoAllR r r
-                        ForAllCo{}    -> forAllCoAllR idR r
-                        AxiomInstCo{} -> axiomInstCoAllR idR (const r)
-                        SymCo{}       -> symCoR r
-                        TransCo{}     -> transCoAllR r r
-                        NthCo{}       -> nthCoAllR idR r
-                        InstCo{}      -> instCoAllR r idR
-                        _             -> idR
-
----------------------------------------------------------------------
+-- Coercions
 
 -- | Translate a coercion of the form: @Refl@ 'Type'
 reflT :: (ExtendPath c Crumb, Monad m) => Translate c m Type b -> Translate c m Coercion b
