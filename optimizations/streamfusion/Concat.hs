@@ -41,7 +41,8 @@ flattenTest !z = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN
     mk !x = (1,x)
     {-# INLINE mk #-}
     step (!i,!max)
-      | i<=max = VS.Yield i (i+1,max)
+--      | i<=max = VS.Yield i (i+1,max)
+      | max>(0::Int) = VS.Yield i (i+1,max-1)
       | otherwise = VS.Done
     {-# INLINE step #-}
 {-# NOINLINE flattenTest #-}
