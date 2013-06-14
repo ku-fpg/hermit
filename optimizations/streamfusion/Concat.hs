@@ -107,10 +107,18 @@ main = do
       , bench "flattenTest" $ whnf flattenTest 1000
       , bench "concatMapMonadic" $ whnf concatMapMonadic 1000
       ]
-{-
+{- for paper
+    , bgroup "concat tests / 5000"
+      [ bench "concatTestS" $ whnf concatTestS 5000
+      , bench "flattenTest" $ whnf flattenTest 5000
+      ]
     , bgroup "concat tests / 10000"
       [ bench "concatTestS" $ whnf concatTestS 10000
       , bench "flattenTest" $ whnf flattenTest 10000
+      ]
+    , bgroup "concat tests / 20000"
+      [ bench "concatTestS" $ whnf concatTestS 20000
+      , bench "flattenTest" $ whnf flattenTest 20000
       ]
 -}
     , bgroup "nested tests / 100"
