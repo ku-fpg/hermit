@@ -63,7 +63,7 @@ concatMapSR = do
     -- concatMapM :: forall a m b. Monad m -> (a -> m (Stream m b)) -> Stream m a -> Stream m b
     (_, [aTy, mTy, bTy, mDict, f]) <- callNameT 'M.concatMapM
 
-    (cxt, vs, n', st'') <- applyInContextT exposeInnerStreamT f
+    (cxt, v, vs, n', st'') <- return f >>> ensureLam >>> exposeInnerStreamT
     st <- return st'' >>> tryR (extractR sfSimp)
     n@(Lam s _) <- return n' >>> tryR (extractR sfSimp) >>> ensureLam
 
@@ -72,8 +72,7 @@ concatMapSR = do
     -- returnid <- findIdT 'return
     unknownid <- findIdT 'Size.Unknown
 
-    let v = head vs
-        stash = mkCoreTup $ map varToCoreExpr vs
+    let stash = mkCoreTup $ map varToCoreExpr vs
         st' = mkCoreTup [stash, st]
     stId <- constT $ newIdH "st" (exprType st')
     wild <- constT $ cloneVarH ("wild_"++) stId
@@ -97,42 +96,44 @@ concatMapSR = do
 
 exposeInnerStreamT
     :: TranslateH CoreExpr ( CoreExpr -> CoreExpr -- monadic context of inner stream
-                           , [Var]      -- the 'x' in 'concatMap (\x -> ...) ...'
+                           , Var        -- the 'x' in 'concatMap (\x -> ...) ...'
+                           , [Var]      -- list of captured variables to put in state
                            , CoreExpr   -- inner stream stepper function
                            , CoreExpr ) -- inner stream state
-exposeInnerStreamT =
-   (lamT idR getDC (\ v (cxt, _dc, _univTys, [_sTy, n, st, _sz], _fvs, vs) -> (cxt, v:vs, n, st)))
-    <+ ((unfoldR <+ letElim <+ letUnfloat <+ caseElim <+ caseUnfloat) >>> exposeInnerStreamT)
+exposeInnerStreamT = lamT idR getDC $ \ v (cxt, [_sTy, g, st, _sz], fvs, vs) ->
+                                            (cxt, v, if v `elem` fvs then (v:vs) else vs, g, st)
 
 getDC :: TranslateH CoreExpr ( CoreExpr -> CoreExpr -- context of DC
-                             , DataCon, [Type], [CoreExpr], [Var], [Var] )
+                             , [CoreExpr], [Var], [Var] )
 getDC = getDCFromReturn <+ getDCFromBind
 
 getDCFromBind :: TranslateH CoreExpr ( CoreExpr -> CoreExpr -- context of DC
-                                     , DataCon, [Type], [CoreExpr], [Var], [Var] )
+                                     , [CoreExpr], [Var], [Var] )
 getDCFromBind = go <+ (extractR floatAppOut >>> getDCFromBind)
     where go = do (b, [mTy, mDict, aTy, _bTy, lhs, rhs]) <- callNameT '(>>=)
-                  (x, (cxt, dc, tys, args, fvs, xs)) <- return rhs >>> ensureLam >>> lamT idR getDC (,)
+                  (x, (cxt, args, fvs, xs)) <- return rhs >>> ensureLam >>> lamT idR getDC (,)
                   return (\e -> let e' = cxt e
                                 in mkCoreApps b [mTy, mDict, aTy, Type (exprType e), lhs, Lam x e']
-                         , dc, tys, args, fvs, if x `elem` fvs then (x:xs) else xs)
+                         , args, fvs, if x `elem` fvs then (x:xs) else xs)
 
 ensureLam :: RewriteH CoreExpr
 ensureLam = tryR (extractR simplifyR) >>> (lamAllR idR idR <+ etaExpand "x")
 
 getDCFromReturn :: TranslateH CoreExpr ( CoreExpr -> CoreExpr
-                                       , DataCon, [Type], [CoreExpr], [Var], [Var] )
+                                       , [CoreExpr], [Var], [Var] )
 getDCFromReturn = go <+ (extractR floatAppOut >>> getDCFromReturn)
     where go = do (r, [mTy, mDict, _aTy, dcExp]) <- callNameT 'return
-                  (dc, tys, args, fvs) <- return dcExp >>> getDataConInfo
+                  (args, fvs) <- return dcExp >>> getDataConInfo
                   return (\e -> mkCoreApps r [mTy, mDict, Type (exprType e), e]
-                         , dc, tys, args, fvs, [])
+                         , args, fvs, [])
 
-getDataConInfo :: TranslateH CoreExpr (DataCon, [Type], [CoreExpr], [Var])
+-- | Return list of arguments to Stream (existential, generator, state)
+--   along with list of free variables.
+getDataConInfo :: TranslateH CoreExpr ([CoreExpr], [Var])
 getDataConInfo = go <+ (extractR floatAppOut >>> getDataConInfo)
-    where go = do (dc, tys, args) <- callDataConNameT 'M.Stream
+    where go = do (_dc, _tys, args) <- callDataConNameT 'M.Stream
                   fvs <- liftM S.toList freeVarsT
-                  return (dc, tys, args, fvs)
+                  return (args, fvs)
 
 floatAppOut :: RewriteH Core
 floatAppOut = onetdR (promoteExprR $    (extractR (innermostR (promoteExprR letElim)) >>> observeR "letElim")
