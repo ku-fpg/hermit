@@ -1,8 +1,9 @@
-{-# LANGUAGE CPP, FlexibleContexts #-}
+{-# LANGUAGE CPP, FlexibleContexts, ScopedTypeVariables #-}
 module Language.HERMIT.Primitive.GHC
        ( -- * GHC-based Transformations
          -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
          externals
+       , anyCallR
          -- ** Free Variables
        , coreExprFreeIds
        , coreExprFreeVars
@@ -27,10 +28,12 @@ module Language.HERMIT.Primitive.GHC
        , showVars
        , rule
        , rules
+       , equivalent
+         -- ** Lifted GHC capabilities
        , lintExprT
        , lintProgramT
        , lintModuleT
-       , equivalent
+       , specConstrR
        )
 where
 
@@ -39,12 +42,14 @@ import qualified Bag
 import qualified CoreLint
 import qualified OccurAnal
 import IOEnv
+import qualified SpecConstr
 
 import Control.Arrow
 import Control.Monad
 
+import Data.Function (on)
+import Data.List (intercalate,mapAccumL,deleteFirstsBy)
 import Data.Monoid (mempty)
-import Data.List (intercalate,mapAccumL)
 import Data.Set (Set, fromList, toList, (\\))
 
 import Language.HERMIT.Core
@@ -107,6 +112,11 @@ externals =
                 ["Runs GHC's Core Lint, which typechecks the top level list of bindings."] .+ Deep .+ Debug .+ Query
          , external "lintModule" (promoteModGutsT lintModuleT :: TranslateH Core String)
                 ["Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
+         , external "specConstr" (promoteModGutsR specConstrR :: RewriteH Core)
+                ["Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
+         , external "any-call" (anyCallR :: RewriteH Core -> RewriteH Core)
+                [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
+                , "preference is given to applications with more arguments" ] .+ Deep
          ]
 
 ------------------------------------------------------------------------
@@ -212,9 +222,6 @@ info = do crumbs <- childrenT
 
 showExprTypeOrKind :: DynFlags -> CoreExpr -> String
 showExprTypeOrKind dynFlags = showPpr dynFlags . exprTypeOrKind
-
--- showIdInfo :: DynFlags -> Id -> String
--- showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
 
 coreNode :: Core -> String
 coreNode (GutsCore _)  = "Module"
@@ -531,3 +538,36 @@ lintExprT = translate $ \ c e -> do
     dflags <- getDynFlags
     maybe (return "Core Lint Passed") (fail . showSDoc dflags)
                  $ CoreLint.lintUnfolding noSrcLoc (toList $ boundVars c) e
+
+specConstrR :: RewriteH ModGuts
+specConstrR = do
+    rs  <- extractT specRules
+    e'  <- contextfreeT $ liftCoreM . SpecConstr.specConstrProgram
+    rs' <- return e' >>> extractT specRules
+    let specRs = deleteFirstsBy ((==) `on` ru_name) rs' rs
+    return e' >>> extractR (repeatR (anyCallR (promoteExprR $ rulesToRewriteH specRs)))
+
+-- | Get all the specialization rules on a binding.
+--   These are created by SpecConstr and other GHC passes.
+idSpecRules :: TranslateH Id [CoreRule]
+idSpecRules = contextfreeT $ \ i -> let SpecInfo rs _ = specInfo (idInfo i) in return rs
+
+-- | Promote 'idSpecRules' to CoreBind.
+bindSpecRules :: TranslateH CoreBind [CoreRule]
+bindSpecRules =    recT (\_ -> defT idSpecRules (return ()) const) concat
+                <+ nonRecT idSpecRules (return ()) const
+
+-- | Find all specialization rules in a Core fragment.
+specRules :: TranslateH Core [CoreRule]
+specRules = crushtdT $ promoteBindT bindSpecRules
+
+-- | Top-down traversal tuned to matching function calls.
+anyCallR :: forall c m. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m)
+         => Rewrite c m Core -> Rewrite c m Core
+anyCallR rr = prefixFailMsg "any-call failed: " $
+              readerT $ \ e -> case e of
+        ExprCore (App {}) -> childR App_Arg rec >+> (rr <+ childR App_Fun rec)
+        ExprCore (Var {}) -> rr
+        _                 -> anyR rec
+    where rec :: Rewrite c m Core
+          rec = anyCallR rr

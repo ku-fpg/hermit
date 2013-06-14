@@ -44,10 +44,6 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 [ "innermost (unfold 'id <+ unfold '$ <+ unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ dead-let-elimination)" ] .+ Bash
          , external "let-tuple" (promoteExprR . letTupleR :: TH.Name -> RewriteH Core)
                 [ "let x = e1 in (let y = e2 in e) ==> let t = (e1,e2) in (let x = fst t in (let y = snd t in e))" ]
-         , external "any-call" (anyCallR :: RewriteH Core -> RewriteH Core)
-                [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
-                , "preference is given to applications with more arguments"
-                ] .+ Deep
          , external "static-arg" (promoteDefR staticArg :: RewriteH Core)
                 [ "perform the static argument transformation on a recursive function" ]
          , external "unsafe-replace" (promoteExprR . unsafeReplace :: CoreString -> RewriteH Core)
@@ -146,20 +142,6 @@ testQuery r = f `liftM` testM r
   where
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."
-
-------------------------------------------------------------------------------------------------------
-
--- match in a top-down manner,
-anyCallR :: forall c m. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m Core -> Rewrite c m Core
-anyCallR rr = prefixFailMsg "any-call failed: " $
-              readerT $ \ e -> case e of
-        ExprCore (App {}) -> childR App_Arg rec >+> (rr <+ childR App_Fun rec)
-        ExprCore (Var {}) -> rr
-        _                 -> anyR rec
-   where
-
-        rec :: Rewrite c m Core
-        rec = anyCallR rr
 
 ------------------------------------------------------------------------------------------------------
 
