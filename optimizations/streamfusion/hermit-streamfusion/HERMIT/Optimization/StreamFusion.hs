@@ -21,11 +21,13 @@ import Language.Haskell.TH as TH
 
 plugin :: Plugin
 plugin = optimize $ \ opts -> phase 0 $ do
+{-
     run $ tryR $ repeatR (myanybuR (rules ["foldlS", "concatMapS", "mapS", "enumFromToS", "filterS", "zipS", "stream/unstream", "unstream/stream"])
                          <+ bashR externals)
                  >>> tryR (myanybuR concatMapSR)
                  >>> repeatR (anyCallR $ promoteExprR $ unfoldAnyR $ map TH.mkName ["fixStep", "foldlS", "flattenS", "mapS", "enumFromToS", "filterS", "zipS"])
                  >>> bashR externals
+-}
     interactive sfexts opts
 
 -- | Apply a 'Rewrite' in a bottom-up manner, succeeding if any succeed.
@@ -61,7 +63,7 @@ concatMapSR = do
                 mkSmallTupleCase [v,s] fixApp wild (varToCoreExpr stId)
 
     return $ mkCoreApps (varToCoreExpr flattenSid)
-                        [ Type (exprType st'), bTy, aTy
+                        [ aTy, bTy, Type (exprType st')
                         , nFn, Lam v st', outerStream ]
 
 exposeInnerStreamT
@@ -76,5 +78,5 @@ exposeInnerStreamT =
 exposeStreamConstructor :: RewriteH CoreExpr
 exposeStreamConstructor = tryR $ extractR $ repeatR $
     onetdR (promoteExprR $ rules ["stream/unstream", "unstream/stream"]
-                           <+ letUnfloat <+ letElim <+ caseUnfloat)
+                           <+ letElim <+ letUnfloat <+ caseElim <+ caseUnfloat)
      <+ simplifyR <+ promoteExprR unfoldR

@@ -12,3 +12,9 @@ vector:
 
 hvector:
 	hermit Concat.hs -opt=HERMIT.Optimization.StreamFusion.Vector +Main -- -ddump-prep -ddump-simpl -ddump-to-file
+
+int:
+	ghc --make -O2 Intuition.hs -fforce-recomp -ddump-prep -ddump-to-file -Wall
+
+hint:
+	hermit Intuition.hs -opt=HERMIT.Optimization.StreamFusion +Main Intuition.hss -- -ddump-prep -ddump-simpl -ddump-to-file

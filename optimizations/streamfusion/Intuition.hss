@@ -1,0 +1,59 @@
+set-pp-type Omit
+consider 'g
+
+try unshadow
+dump "core/0-start.tex" "clean" "latex" 62
+
+consider let ; let-body ; let-body
+any-call (unfold-rule "enumFromToS")
+any-call (unfold 'flatten)
+any-call (unfold-rule "foldlS")
+simplify
+
+try unshadow
+dump "core/1-prefusion.tex" "clean" "latex" 62
+
+any-call (unfold-rule "stream/unstream")
+
+try unshadow
+dump "core/2-postfusion.tex" "clean" "latex" 62
+
+any-call (unfold 'enumFromToS)
+innermost let-float
+let-body ; let-body ; let-body
+
+try unshadow
+dump "core/3-unfoldenum.tex" "clean" "latex" 62
+
+any-call (unfold 'flattenS)
+
+try unshadow
+dump "core/4-unfoldflatten.tex" "clean" "latex" 62
+
+one-td case-reduce ; any-bu let-subst ; simplify
+
+try unshadow
+dump "core/5-casereduce.tex" "clean" "latex" 62
+
+any-call (unfold 'foldlS)
+any-call (unfold 'gEnum)
+any-call (unfold 'step)
+bash
+
+try unshadow
+set-pp-type Show
+dump "core/8-caserules.tex" "clean" "latex" 62
+
+top
+specConstr
+rhs-of 'g
+bash
+consider let
+let-subst
+alpha-let ['f,'go1,'go2]
+any-call (unfold 'f)
+bash
+innermost let-subst
+
+try unshadow
+dump "core/9-afterspecconstr.tex" "clean" "latex" 62

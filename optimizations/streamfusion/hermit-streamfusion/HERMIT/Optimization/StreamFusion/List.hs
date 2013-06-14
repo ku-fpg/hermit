@@ -1,9 +1,24 @@
 {-# LANGUAGE ExistentialQuantification #-}
-module HERMIT.Optimization.StreamFusion.List where
+module HERMIT.Optimization.StreamFusion.List
+    ( Stream(..)
+    , Step(..)
+    , stream
+    , unstream
+    , mapS
+    , foldlS
+    , concatMapS
+    , flatten
+    , flattenS
+    , fixStep
+    , enumFromToS
+    , filterS
+    , zipS
+    ) where
 
 data Stream a = forall s. Stream (s -> Step a s) s
 data Step a s = Done | Skip s | Yield a s
 
+{-# NOINLINE stream #-}
 stream :: [a] -> Stream a
 stream xs = Stream uncons xs
     where uncons :: [a] -> Step a [a]
@@ -17,8 +32,8 @@ unstream (Stream n s) = go s
                     Skip s'    -> go s'
                     Yield x s' -> x : go s'
 
-{-# RULES "stream/unstream" [~] forall xs. unstream (stream xs) = xs #-}
-{-# RULES "unstream/stream" [~] forall s.  stream (unstream s)  = s  #-}
+{-# RULES "unstream/stream" [~] forall xs. unstream (stream xs) = xs #-}
+{-# RULES "stream/unstream" [~] forall s.  stream (unstream s)  = s  #-}
 
 mapS :: (a -> b) -> Stream a -> Stream b
 mapS f (Stream n s) = Stream n' s
@@ -49,19 +64,25 @@ concatMapS f (Stream n s) = Stream n' (s, Nothing)
                                             Skip s' -> Skip (s, Just (Stream n'' s'))
                                             Yield x s' -> Yield x (s, Just (Stream n'' s'))
 
-flattenS :: (s -> Step b s) -> (a -> s) -> Stream a -> Stream b
-flattenS n'' f (Stream n s) = Stream n' (s, Nothing)
+flatten :: forall a b s. (a -> s) -> (s -> Step b s) -> [a] -> [b]
+flatten mk gFlatten = unstream . flattenS mk gFlatten . stream
+
+flattenS :: forall a b s. (a -> s) -> (s -> Step b s) -> Stream a -> Stream b
+flattenS mk gFlatten (Stream n s) = Stream n' sFlatten
     where n' (s, Nothing) = case n s of
-                                Done -> Done
-                                Skip s' -> Skip (s', Nothing)
-                                Yield x s' -> Skip (s', Just (f x))
-          n' (s, Just s'') = case n'' s'' of
-                                Done -> Skip (s, Nothing)
-                                Skip s' -> Skip (s, Just s')
-                                Yield x s' -> Yield x (s, Just s')
+                                    Done -> Done
+                                    Skip s' -> Skip (s', Nothing)
+                                    Yield x s' -> Skip (s', Just (mk x))
+          n' (s, Just s'') = case gFlatten s'' of
+                                    Done -> Skip (s, Nothing)
+                                    Skip s' -> Skip (s, Just s')
+                                    Yield x s' -> Yield x (s, Just s')
+          {-# INLINE n' #-}
+          sFlatten = (s, Nothing)
+          {-# INLINE sFlatten #-}
 
 {-# INLINE fixStep #-}
-fixStep :: a -> Step b s -> Step b (a,s)
+fixStep :: forall a b s. a -> Step b s -> Step b (a,s)
 fixStep _ Done        = Done
 fixStep a (Skip s)    = Skip (a,s)
 fixStep a (Yield b s) = Yield b (a,s)
@@ -69,9 +90,12 @@ fixStep a (Yield b s) = Yield b (a,s)
 {-# RULES "concatMapS" [~] forall f. concatMap f = unstream . concatMapS (stream . f) . stream #-}
 
 enumFromToS :: Enum a => a -> a -> Stream a
-enumFromToS l h = Stream n (fromEnum l)
-    where n s | s > fromEnum h = Done
-              | otherwise      = Yield (toEnum s) (succ s)
+enumFromToS l h = Stream gEnum sEnum
+    where {-# INLINE gEnum #-}
+          gEnum s | s > fromEnum h = Done
+                  | otherwise      = Yield (toEnum s) (succ s)
+          sEnum = fromEnum l
+          {-# INLINE sEnum #-}
 
 {-# RULES "enumFromToS" [~] forall l h. enumFromTo l h = unstream (enumFromToS l h) #-}
 
