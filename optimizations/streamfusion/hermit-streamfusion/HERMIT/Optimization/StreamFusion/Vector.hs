@@ -39,10 +39,13 @@ fixStep a mr = mr >>= return . go
 
 plugin :: Plugin
 plugin = optimize $ \ opts -> phase 0 $ do
-    run $ tryR $ repeatR (anyCallR (promoteExprR (   concatMapSR
+    run $ tryR $ repeatR (anyCallR (promoteExprR (   safeOpt
                                                   <+ unfoldAnyR ['VS.concatMap, 'M.concatMap, 'V.concatMap]
                                                   <+ rule "genericConcatMap")))
     interactive sfexts opts
+
+safeOpt :: RewriteH CoreExpr
+safeOpt = concatMapSR >>> ((lintExprT >>= \_ -> traceR "Success!") <+ traceR "Failed On Lint")
 
 -- this currently slows things down, probably because of uneliminated streams/unstreams
 -- need to implement rules to convert generic vector functions to stream equivalents and
@@ -136,13 +139,13 @@ getDataConInfo = go <+ (extractR floatAppOut >>> getDataConInfo)
                   return (args, fvs)
 
 floatAppOut :: RewriteH Core
-floatAppOut = onetdR (promoteExprR $    (extractR (innermostR (promoteExprR letElim)) >>> observeR "letElim")
-                                     <+ (letUnfloat >>> observeR "letUnfloat")
-                                     <+ (caseElim >>> observeR "caseElim")
-                                     <+ (elimExistentials >>> observeR "elimExistentials")
-                                     <+ (bracketR "caseUnfloat" caseUnfloat))
-              <+ (simplifyR >>> observeR "simplifyR")
-              <+ (promoteExprR unfoldR >>> observeR "unfoldR")
+floatAppOut = onetdR (promoteExprR $    (extractR (innermostR (promoteExprR letElim)) {- >>> observeR "letElim"-})
+                                     <+ (letUnfloat {- >>> observeR "letUnfloat"-})
+                                     <+ (caseElim {- >>> observeR "caseElim"-})
+                                     <+ (elimExistentials {- >>> observeR "elimExistentials"-})
+                                     <+ ({-bracketR "caseUnfloat"-} caseUnfloat))
+              <+ (simplifyR {- >>> observeR "simplifyR"-})
+              <+ (promoteExprR unfoldR {- >>> observeR "unfoldR"-})
 
 sfSimp :: RewriteH Core
 sfSimp = repeatR floatAppOut
@@ -152,4 +155,4 @@ elimExistentials = do
     Case _s _bnd _ty alts <- idR
     guardMsg (notNull [ v | (_,vs,_) <- alts, v <- vs, isTyVar v ])
              "no existential types in patterns"
-    caseAllR (extractR sfSimp) idR idR (const idR) >>> observeR "before reduce" >>> caseReduce >>> observeR "result"
+    caseAllR (extractR sfSimp) idR idR (const idR) >>> {- observeR "before reduce" >>> -} caseReduce -- >>> observeR "result"
