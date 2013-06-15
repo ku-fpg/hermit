@@ -18,3 +18,10 @@ int:
 
 hint:
 	hermit Intuition.hs -opt=HERMIT.Optimization.StreamFusion +Main Intuition.hss -- -ddump-prep -ddump-simpl -ddump-to-file
+
+paper:
+	ghc --make -O2 PaperResults.hs -fforce-recomp -ddump-prep -ddump-to-file
+
+hpaper:
+	hermit PaperResults.hs -opt=HERMIT.Optimization.StreamFusion.Vector +Main -- -ddump-prep -ddump-simpl -ddump-to-file
+
