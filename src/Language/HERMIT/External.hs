@@ -28,8 +28,10 @@ module Language.HERMIT.External
        , TagBox(..)
        , IntBox(..)
        , RewriteCoreBox(..)
+       , RewriteCoreTCBox(..)
        , BiRewriteCoreBox(..)
        , TranslateCoreStringBox(..)
+       , TranslateCoreTCStringBox(..)
        , TranslateCoreCheckBox(..)
        , NameBox(..)
        , CoreString(..)
@@ -269,10 +271,14 @@ class Typeable (Box a) => Extern a where
     -- | Unwrap a value from a 'Box'.
     unbox :: Box a -> a
 
+-----------------------------------------------------------------
+
 instance (Extern a, Extern b) => Extern (a -> b) where
     type Box (a -> b) = Box a -> Box b
     box f = box . f . unbox
     unbox f = unbox . f . box
+
+-----------------------------------------------------------------
 
 data TagBox = TagBox TagE deriving Typeable
 
@@ -281,6 +287,8 @@ instance Extern TagE where
     box = TagBox
     unbox (TagBox t) = t
 
+-----------------------------------------------------------------
+
 data IntBox = IntBox Int deriving Typeable
 
 instance Extern Int where
@@ -288,41 +296,70 @@ instance Extern Int where
     box = IntBox
     unbox (IntBox i) = i
 
+-----------------------------------------------------------------
+
 data RewriteCoreBox = RewriteCoreBox (RewriteH Core) deriving Typeable
 
 instance Extern (RewriteH Core) where
     type Box (RewriteH Core) = RewriteCoreBox
     box = RewriteCoreBox
-    unbox (RewriteCoreBox i) = i
+    unbox (RewriteCoreBox r) = r
+
+-----------------------------------------------------------------
+
+data RewriteCoreTCBox = RewriteCoreTCBox (RewriteH CoreTC) deriving Typeable
+
+instance Extern (RewriteH CoreTC) where
+    type Box (RewriteH CoreTC) = RewriteCoreTCBox
+    box = RewriteCoreTCBox
+    unbox (RewriteCoreTCBox r) = r
+
+-----------------------------------------------------------------
 
 data BiRewriteCoreBox = BiRewriteCoreBox (BiRewriteH Core) deriving Typeable
 
 instance Extern (BiRewriteH Core) where
     type Box (BiRewriteH Core) = BiRewriteCoreBox
     box = BiRewriteCoreBox
-    unbox (BiRewriteCoreBox i) = i
+    unbox (BiRewriteCoreBox b) = b
 
+-----------------------------------------------------------------
+
+data TranslateCoreTCStringBox = TranslateCoreTCStringBox (TranslateH CoreTC String) deriving Typeable
+
+instance Extern (TranslateH CoreTC String) where
+    type Box (TranslateH CoreTC String) = TranslateCoreTCStringBox
+    box = TranslateCoreTCStringBox
+    unbox (TranslateCoreTCStringBox t) = t
+
+-----------------------------------------------------------------
 
 data TranslateCoreStringBox = TranslateCoreStringBox (TranslateH Core String) deriving Typeable
 
 instance Extern (TranslateH Core String) where
     type Box (TranslateH Core String) = TranslateCoreStringBox
     box = TranslateCoreStringBox
-    unbox (TranslateCoreStringBox i) = i
+    unbox (TranslateCoreStringBox t) = t
+
+-----------------------------------------------------------------
 
 data TranslateCoreCheckBox = TranslateCoreCheckBox (TranslateH Core ()) deriving Typeable
 
 instance Extern (TranslateH Core ()) where
     type Box (TranslateH Core ()) = TranslateCoreCheckBox
     box = TranslateCoreCheckBox
-    unbox (TranslateCoreCheckBox i) = i
+    unbox (TranslateCoreCheckBox t) = t
+
+-----------------------------------------------------------------
 
 data NameBox = NameBox (TH.Name) deriving Typeable
 
 instance Extern TH.Name where
     type Box TH.Name = NameBox
     box = NameBox
-    unbox (NameBox i) = i
+    unbox (NameBox n) = n
+
+-----------------------------------------------------------------
 
 -- TODO: We now have CrumbBoc, PathBox and TranslateCorePathBox.
 --       Ints are interpreted as a TranslateCorePathBox.
@@ -335,6 +372,8 @@ instance Extern Crumb where
     box = CrumbBox
     unbox (CrumbBox cr) = cr
 
+-----------------------------------------------------------------
+
 data PathBox = PathBox PathH deriving Typeable
 
 instance Extern PathH where
@@ -342,12 +381,16 @@ instance Extern PathH where
     box = PathBox
     unbox (PathBox p) = p
 
+-----------------------------------------------------------------
+
 data TranslateCorePathBox = TranslateCorePathBox (TranslateH Core PathH) deriving Typeable
 
 instance Extern (TranslateH Core PathH) where
     type Box (TranslateH Core PathH) = TranslateCorePathBox
     box = TranslateCorePathBox
-    unbox (TranslateCorePathBox i) = i
+    unbox (TranslateCorePathBox t) = t
+
+-----------------------------------------------------------------
 
 newtype CoreString = CoreString { unCoreString :: String }
 data CoreBox = CoreBox CoreString deriving Typeable
@@ -355,14 +398,16 @@ data CoreBox = CoreBox CoreString deriving Typeable
 instance Extern CoreString where
     type Box CoreString = CoreBox
     box = CoreBox
-    unbox (CoreBox i) = i
+    unbox (CoreBox s) = s
+
+-----------------------------------------------------------------
 
 data StringBox = StringBox String deriving Typeable
 
 instance Extern String where
     type Box String = StringBox
     box = StringBox
-    unbox (StringBox i) = i
+    unbox (StringBox s) = s
 
 -----------------------------------------------------------------
 
@@ -373,9 +418,13 @@ instance Extern [TH.Name] where
     box = NameListBox
     unbox (NameListBox l) = l
 
+-----------------------------------------------------------------
+
 data StringListBox = StringListBox [String] deriving Typeable
 
 instance Extern [String] where
     type Box [String] = StringListBox
     box = StringListBox
     unbox (StringListBox l) = l
+
+-----------------------------------------------------------------

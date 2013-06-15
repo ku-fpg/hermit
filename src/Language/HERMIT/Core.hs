@@ -169,12 +169,13 @@ data Crumb =
            | AppCo_Fun | AppCo_Arg
            | ForAllCo_TyVar | ForAllCo_Body
            | CoVarCo_CoVar
-           | AxiomInstCo_Axiom | AxiomInstCo_Arg Int
+           | AxiomInstCo_Axiom | AxiomInstCo_Index | AxiomInstCo_Arg Int
            | UnsafeCo_Left | UnsafeCo_Right
            | SymCo_Co
            | TransCo_Left | TransCo_Right
            | NthCo_Int | NthCo_Co
            | InstCo_Co | InstCo_Type
+           | LRCo_LR | LRCo_Co
            deriving (Eq,Read,Show)
            -- TODO: Write a prettier Show instance
 
@@ -197,10 +198,38 @@ showCrumb = \case
                Let_Bind       -> "let-bind"
                Let_Body       -> "let-body"
                Case_Scrutinee -> "case-expr"
+               Case_Type      -> "case-type"
                Case_Alt n     -> "case-alt " ++ show n
-               Cast_Expr      -> "case-expr"
+               Cast_Expr      -> "cast-expr"
+               Cast_Co        -> "cast-co"
                Tick_Expr      -> "tick-expr"
                Alt_RHS        -> "alt-rhs"
+               Type_Type      -> "type"
+               Co_Co          -> "coercion"
+               -- Types
+               AppTy_Fun      -> "appTy-fun"
+               AppTy_Arg      -> "appTy-arg"
+               TyConApp_Arg n -> "tyCon-arg " ++ show n
+               FunTy_Dom      -> "fun-dom"
+               FunTy_CoDom    -> "fun-cod"
+               ForAllTy_Body  -> "forall-body"
+               -- Coercions
+               Refl_Type         -> "refl-type"
+               TyConAppCo_Arg n  -> "coCon-arg " ++ show n
+               AppCo_Fun         -> "appCo-fun"
+               AppCo_Arg         -> "appCo-arg"
+               ForAllCo_Body     -> "coForall-body"
+               AxiomInstCo_Arg n -> "axiom-inst " ++ show n
+               UnsafeCo_Left     -> "unsafe-left"
+               UnsafeCo_Right    -> "unsafe-right"
+               SymCo_Co          -> "sym-co"
+               TransCo_Left      -> "trans-left"
+               TransCo_Right     -> "trans-right"
+               NthCo_Co          -> "nth-co"
+               InstCo_Co         -> "inst-co"
+               InstCo_Type       -> "inst-type"
+               LRCo_Co           -> "lr-co"
+
                _              -> "Warning: Crumb should not be in use!  This is probably Neil's fault."
 
 {-

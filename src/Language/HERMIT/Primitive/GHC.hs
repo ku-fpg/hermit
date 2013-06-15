@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, FlexibleContexts, ScopedTypeVariables, LambdaCase #-}
 module Language.HERMIT.Primitive.GHC
        ( -- * GHC-based Transformations
          -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
@@ -69,7 +69,7 @@ import qualified Language.Haskell.TH as TH
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
 externals :: [External]
 externals =
-         [ external "info" (info :: TranslateH Core String)
+         [ external "info" (info :: TranslateH CoreTC String)
                 [ "display information about the current node." ]
          , external "let-subst" (promoteExprR letSubstR :: RewriteH Core)
                 [ "Let substitution"
@@ -200,28 +200,34 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 
 ------------------------------------------------------------------------
 
-info :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasDynFlags m, MonadCatch m) => Translate c m Core String
+info :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasDynFlags m, MonadCatch m) => Translate c m CoreTC String
 info = do crumbs <- childrenT
-          translate $ \ c core -> do
+          translate $ \ c coreTC -> do
             dynFlags <- getDynFlags
             let pa       = "Path: " ++ showCrumbs (snocPathToPath $ absPath c)
-                node     = "Node: " ++ coreNode core
-                con      = "Constructor: " ++ coreConstructor core
+                node     = "Node: " ++ coreTCNode coreTC
+                con      = "Constructor: " ++ coreTCConstructor coreTC
                 children = "Children: " ++ showCrumbs crumbs
                 bds      = "Bindings in Scope: " ++ show (map var2String $ toList $ boundVars c)
-                expExtra = case core of
-                             ExprCore e -> ["Type or Kind: " ++ showExprTypeOrKind dynFlags e] ++
-                                           ["Free Variables: " ++ showVars (toList $ coreExprFreeVars e)]
-                                              --  ++
-                                              -- case e of
-                                              --   Var v -> ["Identifier Info: " ++ showIdInfo dynFlags v] -- TODO: what if this is a TyVar?
-                                              --   _     -> []
-                             _          -> []
+                extra    = case coreTC of
+                             Core (ExprCore e)      -> ["Type or Kind: " ++ showPpr dynFlags (exprTypeOrKind e)] ++
+                                                       ["Free Variables: " ++ showVars (toList $ coreExprFreeVars e)] ++
+                                                       case e of
+                                                         Var i -> ["Identifier Info: " ++ showIdInfo dynFlags i]
+                                                         _     -> []
+                             TyCo (TypeCore ty)     -> ["Kind: " ++ showPpr dynFlags (typeKind ty)]
+                             TyCo (CoercionCore co) -> ["Kind: " ++ showPpr dynFlags (coercionType co) ] -- TODO: Revisit this, should we use coercionKind?
+                             _                      -> []
 
-            return (intercalate "\n" $ [pa,node,con,children,bds] ++ expExtra)
+            return (intercalate "\n" $ [pa,node,con,children,bds] ++ extra)
 
-showExprTypeOrKind :: DynFlags -> CoreExpr -> String
-showExprTypeOrKind dynFlags = showPpr dynFlags . exprTypeOrKind
+showIdInfo :: DynFlags -> Id -> String
+showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
+
+coreTCNode :: CoreTC -> String
+coreTCNode (Core core)           = coreNode core
+coreTCNode (TyCo TypeCore{})     = "Type"
+coreTCNode (TyCo CoercionCore{}) = "Coercion"
 
 coreNode :: Core -> String
 coreNode (GutsCore _)  = "Module"
@@ -230,6 +236,12 @@ coreNode (BindCore _)  = "Binding Group"
 coreNode (DefCore _)   = "Recursive Definition"
 coreNode (ExprCore _)  = "Expression"
 coreNode (AltCore _)   = "Case Alternative"
+
+coreTCConstructor :: CoreTC -> String
+coreTCConstructor = \case
+                       Core core              -> coreConstructor core
+                       TyCo (TypeCore ty)     -> typeConstructor ty
+                       TyCo (CoercionCore co) -> coercionConstructor co
 
 coreConstructor :: Core -> String
 coreConstructor (GutsCore _)     = "ModGuts"
@@ -252,6 +264,30 @@ coreConstructor (ExprCore expr)  = case expr of
                                      Cast _ _     -> "Cast"
                                      Tick _ _     -> "Tick"
                                      Coercion _   -> "Coercion"
+
+typeConstructor :: Type -> String
+typeConstructor = \case
+                     TyVarTy{}    -> "TyVarTy"
+                     AppTy{}      -> "AppTy"
+                     TyConApp{}   -> "TyConApp"
+                     FunTy{}      -> "FunTy"
+                     ForAllTy{}   -> "ForAllTy"
+                     LitTy{}      -> "LitTy"
+
+coercionConstructor :: Coercion -> String
+coercionConstructor = \case
+                         Refl{}        -> "Refl"
+                         TyConAppCo{}  -> "TyConAppCo"
+                         AppCo{}       -> "AppCo"
+                         ForAllCo{}    -> "ForAllCo"
+                         CoVarCo{}     -> "CoVarCo"
+                         AxiomInstCo{} -> "AxiomInstCo"
+                         UnsafeCo{}    -> "UnsafeCo"
+                         SymCo{}       -> "SymCo"
+                         TransCo{}     -> "TransCo"
+                         NthCo{}       -> "NthCo"
+                         InstCo{}      -> "InstCo"
+
 
 ------------------------------------------------------------------------
 

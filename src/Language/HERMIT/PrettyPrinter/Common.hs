@@ -7,6 +7,8 @@ module Language.HERMIT.PrettyPrinter.Common
     , Attr(..)
     , attrP
       -- ** Colors
+    , coText
+    , tyText
     , coercionColor
     , idColor
     , keywordColor
@@ -30,7 +32,7 @@ module Language.HERMIT.PrettyPrinter.Common
     , initPrettyC
     , liftPrettyC
     , TranslateDocH(..)
-    , TranslateCoreDocHBox(..)
+    , TranslateCoreTCDocHBox(..)
       -- * Pretty Printer Options
     , PrettyOptions(..)
     , updateTypeShowOption
@@ -66,12 +68,12 @@ type DocH = MDoc HermitMark
 -- newtype wrapper for proper instance selection
 newtype TranslateDocH a = TranslateDocH { unTranslateDocH :: PrettyH a -> TranslateH a DocH }
 
-data TranslateCoreDocHBox = TranslateCoreDocHBox (TranslateDocH Core) deriving Typeable
+data TranslateCoreTCDocHBox = TranslateCoreTCDocHBox (TranslateDocH CoreTC) deriving Typeable
 
-instance Extern (TranslateDocH Core) where
-    type Box (TranslateDocH Core) = TranslateCoreDocHBox
-    box = TranslateCoreDocHBox
-    unbox (TranslateCoreDocHBox i) = i
+instance Extern (TranslateDocH CoreTC) where
+    type Box (TranslateDocH CoreTC) = TranslateCoreTCDocHBox
+    box = TranslateCoreTCDocHBox
+    unbox (TranslateCoreTCDocHBox i) = i
 
 -- These are the zero-width marks on the document
 data HermitMark
@@ -104,6 +106,12 @@ attr a p = mark (PushAttr a) <> p <> mark PopAttr
 
 attrP :: PathH -> DocH -> DocH
 attrP _ doc = doc -- attr . PathAttr
+
+tyText :: String -> DocH
+tyText = typeColor . PP.text
+
+coText :: String -> DocH
+coText = coercionColor . PP.text
 
 idColor :: DocH -> DocH
 idColor = markColor IdColor

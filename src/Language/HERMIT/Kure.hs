@@ -69,6 +69,10 @@ module Language.HERMIT.Kure
        , transCoT, transCoAllR, transCoAnyR, transCoOneR
        , nthCoT, nthCoAllR, nthCoAnyR, nthCoOneR
        , instCoT, instCoAllR, instCoAnyR, instCoOneR
+#if __GLASGOW_HASKELL__ > 706
+       , lrCoT, lrAllR, lrAnyR, lrOneR
+#else
+#endif
        -- * Promotion Combinators
        -- ** Rewrite Promotions
        , promoteModGutsR
@@ -86,7 +90,6 @@ module Language.HERMIT.Kure
        , promoteDefT
        , promoteExprT
        , promoteAltT
-
        -- * Conversion to deprecated Int representation
        , deprecatedIntToCrumbT
        , deprecatedIntToPathT
@@ -202,11 +205,16 @@ instance (ExtendPath c Crumb, AddBindings c) => Walker c Coercion where
                         TyConAppCo{}  -> tyConAppCoAllR idR (const r)
                         AppCo{}       -> appCoAllR r r
                         ForAllCo{}    -> forAllCoAllR idR r
-                        AxiomInstCo{} -> axiomInstCoAllR idR (const r)
                         SymCo{}       -> symCoR r
                         TransCo{}     -> transCoAllR r r
                         NthCo{}       -> nthCoAllR idR r
                         InstCo{}      -> instCoAllR r idR
+#if __GLASGOW_HASKELL__ > 706
+                        LRCo{}        -> lrCoAllR idR r
+                        AxiomInstCo{} -> axiomInstCoAllR idR idR (const r)
+#else
+                        AxiomInstCo{} -> axiomInstCoAllR idR (const r)
+#endif
                         _             -> idR
 
 ---------------------------------------------------------------------
@@ -226,12 +234,17 @@ instance (ExtendPath c Crumb, AddBindings c) => Walker c TyCo where
                               TyConAppCo{}  -> tyConAppCoAllR idR (const $ extractR r) -- we don't descend into the TyCon
                               AppCo{}       -> appCoAllR (extractR r) (extractR r)
                               ForAllCo{}    -> forAllCoAllR idR (extractR r) -- we don't descend into the TyVar
-                              AxiomInstCo{} -> axiomInstCoAllR idR (const $ extractR r) -- we don't descend into the axiom
                               UnsafeCo{}    -> unsafeCoAllR (extractR r) (extractR r)
                               SymCo{}       -> symCoR (extractR r)
                               TransCo{}     -> transCoAllR (extractR r) (extractR r)
                               InstCo{}      -> instCoAllR (extractR r) (extractR r)
                               NthCo{}       -> nthCoAllR idR (extractR r) -- we don't descend into the Int
+#if __GLASGOW_HASKELL__ > 706
+                              LRCo{}        -> lrCoAllR idR r
+                              AxiomInstCo{} -> axiomInstCoAllR idR idR (const $ extractR r) -- we don't descend into the axiom or index
+#else
+                              AxiomInstCo{} -> axiomInstCoAllR idR (const $ extractR r) -- we don't descend into the axiom
+#endif
                               _             -> idR
       {-# INLINE allRcoercion #-}
 
@@ -624,27 +637,27 @@ tickOneR r1 r2 = unwrapOneR $ tickAllR (wrapOneR r1) (wrapOneR r2)
 
 
 -- | Translate an expression of the form: @Type@ 'Type'
-typeT :: Monad m => Translate c m Type b -> Translate c m CoreExpr b
+typeT :: (ExtendPath c Crumb, Monad m) => Translate c m Type b -> Translate c m CoreExpr b
 typeT t = translate $ \ c -> \case
-                                Type ty -> apply t c ty
+                                Type ty -> apply t (c @@ Type_Type) ty
                                 _       -> fail "not a type."
 {-# INLINE typeT #-}
 
 -- | Rewrite the 'Type' child in an expression of the form: @Type@ 'Type'
-typeR :: Monad m => Rewrite c m Type -> Rewrite c m CoreExpr
+typeR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Type -> Rewrite c m CoreExpr
 typeR r = typeT (Type <$> r)
 {-# INLINE typeR #-}
 
 
 -- | Translate an expression of the form: @Coercion@ 'Coercion'
-coercionT :: Monad m => Translate c m Coercion b -> Translate c m CoreExpr b
+coercionT :: (ExtendPath c Crumb, Monad m) => Translate c m Coercion b -> Translate c m CoreExpr b
 coercionT t = translate $ \ c -> \case
-                                    Coercion co -> apply t c co
+                                    Coercion co -> apply t (c @@ Co_Co) co
                                     _           -> fail "not a coercion."
 {-# INLINE coercionT #-}
 
 -- | Rewrite the 'Coercion' child in an expression of the form: @Coercion@ 'Coercion'
-coercionR :: Monad m => Rewrite c m Coercion -> Rewrite c m CoreExpr
+coercionR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Coercion -> Rewrite c m CoreExpr
 coercionR r = coercionT (Coercion <$> r)
 {-# INLINE coercionR #-}
 
@@ -1132,13 +1145,14 @@ coVarCoR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoVar -> Rewrite c m Co
 coVarCoR r = coVarCoT (CoVarCo <$> r)
 {-# INLINE coVarCoR #-}
 
--- | Translate a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
 #if __GLASGOW_HASKELL__ > 706
-axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Translate c m (CoAxiom Branched) a1 -> (Int -> Translate c m Coercion a2) -> (a1 -> BranchIndex -> [a2] -> b) -> Translate c m Coercion b
-axiomInstCoT t ts f = translate $ \ c -> \case
-                                            AxiomInstCo ax idx coes -> f <$> apply t (c @@ AxiomInstCo_Axiom) ax <*> return idx <*> sequence [ apply (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
-                                            _                   -> fail "not a coercion axiom instantiation."
+-- | Translate a coercion of the form: @AxiomInstCo@ ('CoAxiom' 'Branched') 'BranchIndex' ['Coercion']
+axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Translate c m (CoAxiom Branched) a1 -> Translate c m BranchIndex a2 -> (Int -> Translate c m Coercion a3) -> (a1 -> a2 -> [a3] -> b) -> Translate c m Coercion b
+axiomInstCoT t1 t2 ts f = translate $ \ c -> \case
+                                                AxiomInstCo ax idx coes -> f <$> apply t1 (c @@ AxiomInstCo_Axiom) ax <*> apply t2 (c @@ AxiomInstCo_Index) <*> sequence [ apply (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
+                                                _                       -> fail "not a coercion axiom instantiation."
 #else
+-- | Translate a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
 axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Translate c m CoAxiom a1 -> (Int -> Translate c m Coercion a2) -> (a1 -> [a2] -> b) -> Translate c m Coercion b
 axiomInstCoT t ts f = translate $ \ c -> \case
                                             AxiomInstCo ax coes -> f <$> apply t (c @@ AxiomInstCo_Axiom) ax <*> sequence [ apply (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
@@ -1146,31 +1160,37 @@ axiomInstCoT t ts f = translate $ \ c -> \case
 #endif
 {-# INLINE axiomInstCoT #-}
 
--- | Rewrite all children of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
 #if __GLASGOW_HASKELL__ > 706
-axiomInstCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m (CoAxiom Branched) -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+-- | Rewrite all children of a coercion of the form: @AxiomInstCo@ ('CoAxiom' 'Branched') 'BranchIndex' ['Coercion']
+axiomInstCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m (CoAxiom Branched) -> Rewrite c m BranchIndex -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+axiomInstCoAllR r1 r2 rs = axiomInstCoT r1 r2 rs AxiomInstCo
 #else
+-- | Rewrite all children of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
 axiomInstCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoAxiom -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
-#endif
 axiomInstCoAllR r rs = axiomInstCoT r rs AxiomInstCo
+#endif
 {-# INLINE axiomInstCoAllR #-}
 
--- | Rewrite any children of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
 #if __GLASGOW_HASKELL__ > 706
-axiomInstCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m (CoAxiom Branched) -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+-- | Rewrite any children of a coercion of the form: @AxiomInstCo@ ('CoAxiom' 'Branched') 'BranchIndex' ['Coercion']
+axiomInstCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m (CoAxiom Branched) -> Rewrite c m BranchIndex -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+axiomInstCoAnyR r1 r2 rs = unwrapAnyR $ axiomInstCoAllR (wrapAnyR r1) (wrapAnyR r2) (wrapAnyR . rs)
 #else
+-- | Rewrite any children of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
 axiomInstCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoAxiom -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
-#endif
 axiomInstCoAnyR r rs = unwrapAnyR $ axiomInstCoAllR (wrapAnyR r) (wrapAnyR . rs)
+#endif
 {-# INLINE axiomInstCoAnyR #-}
 
--- | Rewrite one child of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
 #if __GLASGOW_HASKELL__ > 706
-axiomInstCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m (CoAxiom Branched) -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+-- | Rewrite one child of a coercion of the form: @AxiomInstCo@ ('CoAxiom' 'Branched') 'BranchIndex' ['Coercion']
+axiomInstCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m (CoAxiom Branched) -> Rewrite c m BranchIndex -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
+axiomInstCoAnyR r1 r2 rs = unwrapOneR $ axiomInstCoAllR (wrapOneR r1) (wrapOneR r2) (wrapOneR . rs)
 #else
+-- | Rewrite one child of a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
 axiomInstCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoAxiom -> (Int -> Rewrite c m Coercion) -> Rewrite c m Coercion
-#endif
 axiomInstCoOneR r rs = unwrapOneR $ axiomInstCoAllR (wrapOneR r) (wrapOneR . rs)
+#endif
 {-# INLINE axiomInstCoOneR #-}
 
 -- | Translate a coercion of the form: @UnsafeCo@ 'Type' 'Type'
@@ -1253,6 +1273,32 @@ nthCoAnyR r1 r2 = unwrapAnyR $ nthCoAllR (wrapAnyR r1) (wrapAnyR r2)
 nthCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Int -> Rewrite c m Coercion -> Rewrite c m Coercion
 nthCoOneR r1 r2 = unwrapOneR $ nthCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE nthCoOneR #-}
+
+
+#if __GLASGOW_HASKELL__ > 706
+-- | Translate a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
+lrCoT :: (ExtendPath c Crumb, Monad m) => Translate c m LeftOrRight a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
+lrCoT t1 t2 f = translate $ \ c -> \case
+                                      LRCo lr co -> f <$> apply t1 (c @@ LRCo_LR) lr <*> apply t2 (c @@ LRCo_Co) co
+                                      _          -> fail "not a left/right coercion."
+{-# INLINE lrCoT #-}
+
+-- | Translate all children of a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
+lrCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m LeftOrRight -> Rewrite c m Coercion -> Rewrite c m Coercion
+lrCoAllR r1 r2 = lrCoT r1 r2 LRCo
+{-# INLINE lrCoAllR #-}
+
+-- | Translate any children of a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
+lrCoAnyR :: (ExtendPath c Crumb, Monad m) => Rewrite c m LeftOrRight -> Rewrite c m Coercion -> Rewrite c m Coercion
+lrCoAnyR r1 r2 = unwrapAnyR $ lrCoAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE lrCoAnyR #-}
+
+-- | Translate one child of a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
+lrCoAnyR :: (ExtendPath c Crumb, Monad m) => Rewrite c m LeftOrRight -> Rewrite c m Coercion -> Rewrite c m Coercion
+lrCoAnyR r1 r2 = unwrapOneR $ lrCoAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE lrCoOneR #-}
+#else
+#endif
 
 
 -- | Translate a coercion of the form: @InstCo@ 'Coercion' 'Type'

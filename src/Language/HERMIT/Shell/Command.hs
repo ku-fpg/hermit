@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, GADTs, TypeFamilies, DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, ScopedTypeVariables, GADTs, TypeFamilies, DeriveDataTypeable #-}
 
 module Language.HERMIT.Shell.Command
        ( -- * The HERMIT Command-line Shell
@@ -24,6 +24,7 @@ import Data.Dynamic
 import qualified Data.Map as M
 import Data.Maybe
 
+import Language.HERMIT.Context
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.Dictionary
@@ -54,21 +55,16 @@ data ShellCommand =  AstEffect   AstEffect
 
 -- | AstEffects are things that are recorded in our log and saved files.
 
-data AstEffect
-   -- | This applys a rewrite (giving a whole new lower-level AST)
-   = Apply      (RewriteH Core)
-   -- | This changes the current location using a computed path
-   | Pathfinder (TranslateH Core PathH)
-   -- | This changes the currect location using directions
-   | Direction  Direction
-   --  | This changes the current location using a give path
---   | PushFocus Path
+data AstEffect :: * where
+   Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> AstEffect -- ^ This applys a rewrite (giving a whole new lower-level AST).
+   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g PathH      -> AstEffect -- ^ This changes the current location using a computed path.
+   Direction  ::                                                Direction               -> AstEffect -- ^ This changes the currect location using directions.
 
-   | BeginScope
-   | EndScope
-   | Tag String                 -- ^ Adding a tag
-   -- | A precondition or other predicate that must not fail
-   | CorrectnessCritera  (TranslateH Core ())
+--   PushFocus Path -- This changes the current location using a give path
+   BeginScope ::                                                                           AstEffect
+   EndScope   ::                                                                           AstEffect
+   Tag        :: String                                                                 -> AstEffect -- ^ Adding a tag.
+   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g () -> AstEffect -- ^ A precondition or other predicate that must not fail
    deriving Typeable
 
 instance Extern AstEffect where
@@ -81,13 +77,13 @@ data ShellEffect :: * where
    deriving Typeable
 
 data QueryFun :: * where
-   QueryString   :: TranslateH Core String                          -> QueryFun
-   QueryDocH     :: (PrettyH Core -> TranslateH Core DocH)          -> QueryFun
+   QueryString   :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g String                             -> QueryFun
+   QueryDocH     ::                                                (PrettyH CoreTC -> TranslateH CoreTC DocH)      -> QueryFun
    -- These two be can generalized into
    --  (CommandLineState -> IO String)
-   Display       ::                                                    QueryFun
-   Message       :: String                                          -> QueryFun
-   Inquiry       :: (CommandLineState -> SessionState -> IO String) -> QueryFun
+   Display       ::                                                                                                   QueryFun
+   Message       ::                                                String                                          -> QueryFun
+   Inquiry       ::                                                (CommandLineState -> SessionState -> IO String) -> QueryFun
    deriving Typeable
 
 instance Extern QueryFun where
@@ -131,21 +127,23 @@ instance Extern ShellCommand where
 
 interpShellCommand :: [Interp ShellCommand]
 interpShellCommand =
-                [ interp $ \ (ShellCommandBox cmd)       -> cmd
-                , interp $ \ (RewriteCoreBox rr)         -> AstEffect (Apply rr)
-                , interp $ \ (BiRewriteCoreBox br)       -> AstEffect (Apply $ forewardT br)
-                , interp $ \ (CrumbBox cr)               -> AstEffect (Pathfinder $ return [cr])
-                , interp $ \ (PathBox p)                 -> AstEffect (Pathfinder $ return p)
-                , interp $ \ (TranslateCorePathBox tt)   -> AstEffect (Pathfinder tt)
-                , interp $ \ (StringBox str)             -> QueryFun (Message str)
-                , interp $ \ (TranslateCoreStringBox tt) -> QueryFun (QueryString tt)
-                , interp $ \ (TranslateCoreDocHBox tt)   -> QueryFun (QueryDocH $ unTranslateDocH tt)
-                , interp $ \ (TranslateCoreCheckBox tt)  -> AstEffect (CorrectnessCritera tt)
-                , interp $ \ (effect :: AstEffect)       -> AstEffect effect
-                , interp $ \ (effect :: ShellEffect)     -> ShellEffect effect
-                , interp $ \ (query :: QueryFun)         -> QueryFun query
-                , interp $ \ (meta :: MetaCommand)       -> MetaCommand meta
-                ]
+  [ interp $ \ (ShellCommandBox cmd)         -> cmd
+  , interp $ \ (RewriteCoreBox rr)           -> AstEffect (Apply rr)
+  , interp $ \ (RewriteCoreTCBox rr)         -> AstEffect (Apply rr)
+  , interp $ \ (BiRewriteCoreBox br)         -> AstEffect (Apply $ forewardT br)
+  , interp $ \ (CrumbBox cr)                 -> AstEffect (Pathfinder (return [cr] :: TranslateH CoreTC PathH))
+  , interp $ \ (PathBox p)                   -> AstEffect (Pathfinder (return p :: TranslateH CoreTC PathH))
+  , interp $ \ (TranslateCorePathBox tt)     -> AstEffect (Pathfinder tt)
+  , interp $ \ (StringBox str)               -> QueryFun (Message str)
+  , interp $ \ (TranslateCoreStringBox tt)   -> QueryFun (QueryString tt)
+  , interp $ \ (TranslateCoreTCStringBox tt) -> QueryFun (QueryString tt)
+  , interp $ \ (TranslateCoreTCDocHBox tt)   -> QueryFun (QueryDocH $ unTranslateDocH tt)
+  , interp $ \ (TranslateCoreCheckBox tt)    -> AstEffect (CorrectnessCritera tt)
+  , interp $ \ (effect :: AstEffect)         -> AstEffect effect
+  , interp $ \ (effect :: ShellEffect)       -> ShellEffect effect
+  , interp $ \ (query :: QueryFun)           -> QueryFun query
+  , interp $ \ (meta :: MetaCommand)         -> MetaCommand meta
+  ]
 -- TODO: move this into the shell, it is completely specific to the way
 -- the shell works. What about list, for example?
 
@@ -264,7 +262,7 @@ gc clst st = do
 catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
 
-pretty :: SessionState -> PrettyH Core
+pretty :: SessionState -> PrettyH CoreTC
 pretty ss = case M.lookup (cl_pretty ss) pp_dictionary of
                 Just pp -> pp (cl_pretty_opts ss)
                 Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty ss ++ ">>")
@@ -346,9 +344,10 @@ completionType = go . dropWhile isSpace
                  , ("rhs-of"  , ConsiderC)
                  ]
 
-completionQuery :: CommandLineState -> CompletionType -> IO (TranslateH Core [String])
-completionQuery _ ConsiderC = return $ considerTargets >>^ ((++ map fst considerables) . map ('\'':))
-completionQuery _ InlineC   = return $ inlineTargets   >>^ map ('\'':)
+-- TODO: For the moment, we promote the translations on Core to translations on CoreTC.  But we should probably update considerTargets and inlineTargets.
+completionQuery :: CommandLineState -> CompletionType -> IO (TranslateH CoreTC [String])
+completionQuery _ ConsiderC = return $ promoteT considerTargets >>^ ((++ map fst considerables) . map ('\'':))
+completionQuery _ InlineC   = return $ promoteT inlineTargets   >>^ map ('\'':)
 completionQuery s CommandC  = return $ pure (M.keys (cl_dict s))
 -- Need to modify opts in completionType function. No key can be a suffix of another key.
 completionQuery _ (AmbiguousC ts) = do
@@ -363,8 +362,8 @@ shellComplete mvar rPrev so_far = do
     -- (liftM.liftM) (map simpleCompletion . nub . filter (so_far `isPrefixOf`))
     --     $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
     -- TODO: I expect you want to build a silent version of the kernal_env for this query
-    mcls <- queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery (cl_kernel_env (cl_session st))
-    cl <- runKureM return fail mcls -- TO DO: probably shouldn't use fail here.
+    mcls <- queryS (cl_kernel st) (cl_cursor $ cl_session st) targetQuery (cl_kernel_env $ cl_session st)
+    cl <- runKureM return (\ _ -> return []) mcls
     return $ (map simpleCompletion . nub . filter (so_far `isPrefixOf`)) cl
 
 setLoading :: MonadIO m => Bool -> CLM m ()
@@ -768,7 +767,7 @@ cl_kernel_env ss = mkHermitMEnv $ \ msg -> case msg of
                         GHC.liftIO $ putStrLn $ "<" ++ show c ++ "> " ++ msg'
                 DebugCore  msg' cxt core -> do
                         GHC.liftIO $ putStrLn $ "[" ++ msg' ++ "]"
-                        doc :: DocH <- apply (pretty ss) (liftPrettyC cxt) core
+                        doc :: DocH <- apply (pretty ss) (liftPrettyC cxt) (inject core)
                         GHC.liftIO $ cl_render ss stdout (cl_pretty_opts ss) doc
 
 -- tick counter

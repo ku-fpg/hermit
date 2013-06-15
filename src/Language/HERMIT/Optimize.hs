@@ -1,4 +1,4 @@
-{-# LANGUAGE KindSignatures, GADTs #-}
+{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts #-}
 module Language.HERMIT.Optimize
     ( -- * The HERMIT Plugin
       optimize
@@ -31,6 +31,7 @@ import Data.Default
 import Language.HERMIT.Dictionary
 import Language.HERMIT.External hiding (Query, Shell)
 import Language.HERMIT.Kernel.Scoped
+import Language.HERMIT.Context
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.Plugin
@@ -42,13 +43,13 @@ import System.Console.Haskeline (defaultBehavior)
 import System.IO (stdout)
 
 data OInst :: * -> * where
-    RR       :: RewriteH Core                     -> OInst ()
-    Query    :: TranslateH Core a                 -> OInst a
     Shell    :: [External] -> [CommandLineOption] -> OInst ()
     Guard    :: (PhaseInfo -> Bool) -> OM ()      -> OInst ()
     -- with some refactoring of the interpreter I'm pretty sure
     -- we can make Focus polymorphic
-    Focus    :: TranslateH Core PathH -> OM ()    -> OInst ()
+    Focus    :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g PathH -> OM () -> OInst ()
+    RR       :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g                  -> OInst ()
+    Query    :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g a              -> OInst a
 
 -- using operational, but would we nice to use Neil's constrained-normal package!
 type OM a = ProgramT OInst (StateT InterpState IO) a
@@ -58,7 +59,7 @@ optimize f = hermitPlugin $ \ phaseInfo -> runOM phaseInfo . f
 
 data InterpState =
     InterpState { isAST :: SAST
-                , isPretty :: PrettyOptions -> PrettyH Core
+                , isPretty :: PrettyOptions -> PrettyH CoreTC
                 , isPrettyOptions :: PrettyOptions
                 -- TODO: remove once shell can return
                 , shellHack :: Maybe ([External], [CommandLineOption])
@@ -110,7 +111,7 @@ interactive es os = singleton $ Shell (externals ++ es) os
 run :: RewriteH Core -> OM ()
 run = singleton . RR
 
-query :: TranslateH Core a -> OM a
+query :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g a -> OM a
 query = singleton . Query
 
 ----------------------------- guards ------------------------------
@@ -150,7 +151,7 @@ display = do
     po <- gets isPrettyOptions
     gets isPretty >>= query . liftPrettyH . ($ po) >>= liftIO . unicodeConsole stdout po
 
-setPretty :: (PrettyOptions -> PrettyH Core) -> OM ()
+setPretty :: (PrettyOptions -> PrettyH CoreTC) -> OM ()
 setPretty pp = modify $ \s -> s { isPretty = pp }
 
 setPrettyOptions :: PrettyOptions -> OM ()

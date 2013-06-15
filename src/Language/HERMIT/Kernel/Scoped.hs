@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, FlexibleContexts #-}
 module Language.HERMIT.Kernel.Scoped
        (
          Direction(..)
@@ -22,6 +22,7 @@ import qualified Data.IntMap as I
 import GhcPlugins hiding (Direction,L)
 
 import Language.HERMIT.Core
+import Language.HERMIT.Context
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.Kernel
@@ -57,27 +58,34 @@ moveLocally d (SnocPath p) = case p of
                                            L -> SnocPath (fromMaybe cr (deprecatedLeftSibling cr)  : crs)
                                            R -> SnocPath (fromMaybe cr (deprecatedRightSibling cr) : crs)
 
-pathStackToLens :: [LocalPathH] -> LocalPathH -> LensH ModGuts Core
+
+pathStackToLens :: (Injection ModGuts g, Walker HermitC g) => [LocalPathH] -> LocalPathH -> LensH ModGuts g
 pathStackToLens ps p = injectL >>> pathL (concat $ pathStack2Paths ps p)
+
+-- This function is used to check the validity of paths, so which sum type we use is important.
+testPathStackT :: [LocalPathH] -> LocalPathH -> TranslateH ModGuts Bool
+testPathStackT ps p = testLensT (pathStackToLens ps p :: LensH ModGuts CoreTC)
 
 ----------------------------------------------------------------------------
 
 -- | An alternative HERMIT kernel, that provides scoping.
 data ScopedKernel = ScopedKernel
-        { resumeS     ::            SAST                                              -> IO (KureM ())
-        , abortS      ::                                                                 IO ()
-        , applyS      ::            SAST -> RewriteH Core             -> HermitMEnv   -> IO (KureM SAST)
-        , queryS      :: forall a . SAST -> TranslateH Core a         -> HermitMEnv   -> IO (KureM a)
-        , deleteS     ::            SAST                                              -> IO (KureM ())
-        , listS       ::                                                                 IO [SAST]
-        , pathS       ::            SAST                                              -> IO (KureM [PathH])
-        , modPathS    ::            SAST -> (LocalPathH -> LocalPathH)  -> HermitMEnv -> IO (KureM SAST)
-        , beginScopeS ::            SAST                                              -> IO (KureM SAST)
-        , endScopeS   ::            SAST                                              -> IO (KureM SAST)
-        -- means of accessing the underlying kernel, obviously for unsafe purposes
-        , kernelS     ::                                                                 Kernel
-        , toASTS      ::            SAST                                              -> IO (KureM AST)
-        }
+  { resumeS      ::            SAST                                              -> IO (KureM ())
+  , abortS       ::                                                                 IO ()
+  , applyS       :: forall g. (Injection ModGuts g, Walker HermitC g) =>
+                               SAST -> RewriteH g                  -> HermitMEnv -> IO (KureM SAST)
+  , queryS       :: forall a g . (Injection ModGuts g, Walker HermitC g) =>
+                               SAST -> TranslateH g a              -> HermitMEnv -> IO (KureM a)
+  , deleteS      ::            SAST                                              -> IO (KureM ())
+  , listS        ::                                                                 IO [SAST]
+  , pathS        ::            SAST                                              -> IO (KureM [PathH])
+  , modPathS     ::            SAST -> (LocalPathH -> LocalPathH)  -> HermitMEnv -> IO (KureM SAST)
+  , beginScopeS  ::            SAST                                              -> IO (KureM SAST)
+  , endScopeS    ::            SAST                                              -> IO (KureM SAST)
+  -- means of accessing the underlying kernel, obviously for unsafe purposes
+  , kernelS      ::                                                                 Kernel
+  , toASTS       ::            SAST                                              -> IO (KureM AST)
+  }
 
 -- | A /handle/ for an 'AST' combined with scoping information.
 newtype SAST = SAST Int deriving (Eq, Ord, Show)
@@ -144,7 +152,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
             , modPathS    = \ (SAST sAst) f env -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
                                 let rel' = f rel
-                                queryK kernel ast (testLensT (pathStackToLens base rel')) env
+                                queryK kernel ast (testPathStackT base rel') env
                                   >>= runKureM (\ b -> if rel == rel'
                                                         then fail "Path is unchanged, nothing to do."
                                                         else if b

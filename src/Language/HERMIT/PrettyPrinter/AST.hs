@@ -11,7 +11,7 @@ import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
 
-import GhcPlugins (Coercion(..), Var(..), Id, CoVar)
+import GhcPlugins (Coercion(..), Var(..))
 import qualified GhcPlugins as GHC
 
 import Language.HERMIT.GHC
@@ -25,7 +25,7 @@ import Text.PrettyPrint.MarkedHughesPJ as PP
 
 -- | Pretty print a fragment of GHC Core using HERMIT's \"AST\" pretty printer.
 --   This displays the tree of constructors using nested indentation.
-corePrettyH :: PrettyOptions -> PrettyH Core
+corePrettyH :: PrettyOptions -> PrettyH CoreTC
 corePrettyH opts = do
     dynFlags <- constT GHC.getDynFlags
 
@@ -41,84 +41,64 @@ corePrettyH opts = do
         ppModGuts :: PrettyH GHC.ModGuts
         ppModGuts = arr (ppSDoc . GHC.mg_module)
 
-        -- DocH is not a monoid.
-        -- GHC uses a list, which we print here. The CoreProg type is our doing.
         ppCoreProg :: PrettyH CoreProg
         ppCoreProg = progConsT ppCoreBind ppCoreProg ($+$) <+ progNilT empty
 
         ppCoreExpr :: PrettyH GHC.CoreExpr
-        ppCoreExpr = varT (arr $ \ i -> text "Var" <+> ppId i)
+        ppCoreExpr = varT (ppVar >>^ \ i -> text "Var" <+> i)
                   <+ litT (arr $ \ x -> text "Lit" <+> ppSDoc x)
                   <+ appT ppCoreExpr ppCoreExpr (\ a b -> text "App" $$ nest 2 (cat [parens a, parens b]))
-                  <+ lamT (arr ppVar) ppCoreExpr (\ v e -> text "Lam" <+> v $$ nest 2 (parens e))
+                  <+ lamT ppVar ppCoreExpr (\ v e -> text "Lam" <+> v $$ nest 2 (parens e))
                   <+ letT ppCoreBind ppCoreExpr (\ b e -> text "Let" $$ nest 2 (cat [parens b, parens e]))
-                  <+ caseT ppCoreExpr (arr ppSDoc) (arr ppTypeColParen) (const ppCoreAlt) (\s w ty alts ->
-                            text "Case" $$ nest 2 (parens s) $$ nest 2 w $$ nest 2 ty $$ nest 2 (vlist alts))
-                  <+ castT ppCoreExpr (arr ppCoercionColParen) (\ e co -> text "Cast" $$ nest 2 (parens e <+> co))
+                  <+ caseT ppCoreExpr ppVar ppType (const ppCoreAlt) (\s w ty alts ->
+                            text "Case" $$ nest 2 (parens s) $$ nest 2 w $$ nest 2 (parens ty) $$ nest 2 (vlist alts))
+                  <+ castT ppCoreExpr ppCoercion (\ e co -> text "Cast" $$ nest 2 (cat [parens e, parens co]))
                   <+ tickT (arr ppSDoc) ppCoreExpr (\ tk e  -> text "Tick" $$ nest 2 (tk <+> parens e))
-                  <+ typeT (arr $ \ ty -> text "Type" $$ nest 2 (ppTypeColParen ty))
-                  <+ coercionT (arr $ \ co -> text "Coercion" $$ nest 2 (ppCoercionColParen co))
+                  <+ typeT (ppType >>^ \ ty -> text "Type" $$ nest 2 (parens ty))
+                  <+ coercionT (ppCoercion >>^ \ co -> text "Coercion" $$ nest 2 (parens co))
 
         ppCoreBind :: PrettyH GHC.CoreBind
-        ppCoreBind = nonRecT (arr ppVar) ppCoreExpr (\ v e -> text "NonRec" <+> v $$ nest 2 (parens e))
-                  <+ recT (const ppCoreDef) (\bnds -> text "Rec" $$ nest 2 (vlist bnds))
+        ppCoreBind = nonRecT ppVar ppCoreExpr (\ v e -> text "NonRec" <+> v $$ nest 2 (parens e))
+                  <+ recT (const ppCoreDef) (\ bnds -> text "Rec" $$ nest 2 (vlist bnds))
 
         ppCoreAlt :: PrettyH GHC.CoreAlt
-        ppCoreAlt = altT (arr ppSDoc) (\ _ -> arr ppVar) ppCoreExpr $ \ con vs e -> text "Alt" <+> con <+> hlist vs $$ nest 2 (parens e)
+        ppCoreAlt = altT (arr ppSDoc) (\ _ -> ppVar) ppCoreExpr $ \ con vs e -> text "Alt" <+> con <+> hlist vs $$ nest 2 (parens e)
 
-        -- GHC uses a tuple, which we print here. The CoreDef type is our doing.
         ppCoreDef :: PrettyH CoreDef
-        ppCoreDef = defT (arr ppId) ppCoreExpr $ \ i e -> parens (i <> text "," <> e)
+        ppCoreDef = defT ppVar ppCoreExpr (\ i e -> text "Def" <+> i $$ nest 2 (parens e))
 
-        ppTypeColParen :: Type -> DocH
-        ppTypeColParen = typeColor . parens . ppCoreType
+        ppType :: PrettyH Type
+        ppType =  tyVarT (ppVar >>^ \ v -> tyText "TyVarTy" <+> v)
+               <+ litTyT (arr $ \ l -> tyText "LitTy" <+> ppSDoc l)
+               <+ appTyT ppType ppType (\ ty1 ty2 -> tyText "AppTy" $$ nest 2 (cat [parens ty1, parens ty2]))
+               <+ funTyT ppType ppType (\ ty1 ty2 -> tyText "FunTy" $$ nest 2 (cat [parens ty1, parens ty2]))
+               <+ forAllTyT ppVar ppType (\ v ty -> tyText "ForAllTy" <+> v $$ nest 2 (parens ty))
+               <+ tyConAppT (arr ppSDoc) (const ppType) (\ con tys -> tyText "TyConApp" <+> con $$ nest 2 (vlist $ map parens tys))
 
-        ppCoreType :: Type -> DocH
-        ppCoreType (TyVarTy v)     = text "TyVarTy" <+> ppTyVar v
-        ppCoreType (LitTy tylit)   = text "LitTy" <+> ppSDoc tylit
-        ppCoreType (AppTy ty1 ty2) = text "AppTy" $$ nest 2 (cat $ map (parens.ppCoreType) [ty1, ty2])
-        ppCoreType (FunTy ty1 ty2) = let a = ppCoreType ty1
-                                         b = ppCoreType ty2
-                                      in text "FunTy" $$ nest 2 (cat [parens a, parens b])
-        ppCoreType (ForAllTy v ty) = text "ForAllTy" <+> ppTyVar v $$ nest 2 (parens $ ppCoreType ty)
-        ppCoreType (TyConApp tyCon tys) = text "TyConApp" <+> ppSDoc tyCon $$ nest 2 (vlist $ map ppCoreType tys)
-
-        ppCoercionColParen :: Coercion -> DocH
-        ppCoercionColParen = coercionColor . parens . ppCoreCoercion
-
-        ppCoreCoercion :: Coercion -> DocH
-        ppCoreCoercion (Refl ty)           = text "Refl" $$ nest 2 (ppTypeColParen ty)
-        ppCoreCoercion (CoVarCo v)         = text "CoVarCo" <+> ppCoVar v
-        ppCoreCoercion (SymCo co)          = text "SymCo" $$ nest 2 (parens $ ppCoreCoercion co)
-        ppCoreCoercion (AppCo co1 co2)     = text "AppCo" $$ nest 2 (cat $ map (parens.ppCoreCoercion) [co1, co2])
-        ppCoreCoercion (ForAllCo v co)     = text "ForAllCo" <+> ppCoVar v $$ nest 2 (parens $ ppCoreCoercion co)
-        ppCoreCoercion (TransCo co1 co2)   = text "TransCo" $$ nest 2 (cat $ map (parens.ppCoreCoercion) [co1, co2])
-        ppCoreCoercion (TyConAppCo con cs) = text "TyConAppCo" <+> ppSDoc con $$ nest 2 (vlist $ map ppCoreCoercion cs)
-        ppCoreCoercion (UnsafeCo t1 t2)    = text "UnsafeCo" $$ nest 2 (cat $ map ppTypeColParen [t1, t2])
-        ppCoreCoercion (NthCo n co)        = text "NthCo" <+> text (show n) $$ (parens $ ppCoreCoercion co)
-        ppCoreCoercion (InstCo co t)       = text "InstCo" $$ nest 2 (cat [parens (ppCoreCoercion co), ppTypeColParen t])
+        ppCoercion :: PrettyH Coercion
+        ppCoercion =  reflT (ppType >>^ \ ty -> coText "Refl" $$ nest 2 (parens ty))
+                   <+ coVarCoT (ppVar >>^ \ v -> coText "CoVarCo" <+> v)
+                   <+ symCoT (ppCoercion >>^ \ co -> coText "SymCo" $$ nest 2 (parens co))
+                   <+ appCoT ppCoercion ppCoercion (\ co1 co2 -> coText "AppCo" $$ nest 2 (cat [parens co1, parens co2]))
+                   <+ forAllCoT ppVar ppCoercion (\ v co -> coText "ForAllCo" <+> v $$ nest 2 (parens co))
+                   <+ transCoT ppCoercion ppCoercion (\ co1 co2 -> coText "TransCo" $$ nest 2 (cat [parens co1, parens co2]))
+                   <+ tyConAppCoT (arr $ ppSDoc) (const ppCoercion) (\ con coes -> coText "TyConAppCo" <+> con $$ nest 2 (vlist $ map parens coes))
+                   <+ unsafeCoT ppType ppType (\ ty1 ty2 -> coText "UnsafeCo" $$ nest 2 (cat [parens ty1, parens ty2]))
+                   <+ nthCoT (arr $ coText . show) ppCoercion (\ n co -> coText "NthCo" <+> n $$ parens co)
+                   <+ instCoT ppCoercion ppType (\ co ty -> coText "InstCo" $$ nest 2 (cat [parens co, parens ty]))
 #if __GLASGOW_HASKELL__ > 706
         -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
-        ppCoreCoercion (AxiomInstCo ax idx cs) = text "AxiomInstCo" <+> ppSDoc ax <+> ppSDoc idx $$ nest 2 (vlist $ map ppCoreCoercion cs)
-        ppCoreCoercion (LRCo lr co) = text "LRCo" <+> ppSDoc lr $$ nest 2 (parens $ ppCoreCoercion co)
+                   <+ axiomInstCoT (arr ppSDoc) (arr ppSDoc) ppCoercion (\ ax idx coes -> coText "AxiomInstCo" <+> ax <+> idx $$ nest 2 (vlist $ map parens coes))
+                   <+ lrCoT (arr ppSDoc) ppCoercion (\ lr co -> coText "LRCo" <+> lr $$ nest 2 (parens co))
 #else
-        ppCoreCoercion (AxiomInstCo ax cs) = text "AxiomInstCo" <+> ppSDoc ax $$ nest 2 (vlist $ map ppCoreCoercion cs)
+                   <+ axiomInstCoT (arr ppSDoc) (const ppCoercion) (\ ax coes -> coText "AxiomInstCo" <+> ax $$ nest 2 (vlist $ map parens coes))
 #endif
 
-        ppVar :: Var -> DocH
-        ppVar v | GHC.isTyVar v = ppTyVar v
-                | GHC.isCoVar v = ppCoVar v
-                | otherwise     = ppId v
-
-        ppId :: Id -> DocH
-        ppId = idColor . ppSDoc
-
-        ppTyVar :: Id -> DocH
-        ppTyVar = typeColor . ppSDoc
-
-        ppCoVar :: CoVar -> DocH
-        ppCoVar = coercionColor . ppSDoc
-
+        ppVar :: PrettyH Var
+        ppVar = arr $ \ v -> let modCol | GHC.isTyVar v = typeColor
+                                        | GHC.isCoVar v = coercionColor
+                                        | otherwise     = idColor
+                              in modCol (ppSDoc v)
 
     promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
      <+ promoteT (ppCoreProg :: PrettyH CoreProg)
@@ -126,5 +106,7 @@ corePrettyH opts = do
      <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
      <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
      <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
+     <+ promoteT (ppType     :: PrettyH GHC.Type)
+     <+ promoteT (ppCoercion :: PrettyH Coercion)
 
 ---------------------------------------------------------------------------

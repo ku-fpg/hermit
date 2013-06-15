@@ -19,7 +19,7 @@ import Text.PrettyPrint.MarkedHughesPJ as PP
 ---------------------------------------------------------------------------
 
 -- | This pretty printer is just a reflection of GHC's standard pretty printer.
-corePrettyH :: PrettyOptions -> PrettyH Core
+corePrettyH :: PrettyOptions -> PrettyH CoreTC
 corePrettyH opts = do
     dynFlags <- constT GHC.getDynFlags
 
@@ -48,7 +48,13 @@ corePrettyH opts = do
         ppCoreAlt = arr ppSDoc
 
         ppCoreDef :: PrettyH CoreDef
-        ppCoreDef = defT (arr ppSDoc) ppCoreExpr $ \ i e -> i <> text "=" <> e
+        ppCoreDef = defT (arr ppSDoc) ppCoreExpr $ \ i e -> i <+> text "=" <+> e
+
+        ppType :: PrettyH GHC.Type
+        ppType = arr ppSDoc
+
+        ppCoercion :: PrettyH GHC.Coercion
+        ppCoercion = arr ppSDoc
 
     promoteT (ppCoreExpr :: PrettyH GHC.CoreExpr)
      <+ promoteT (ppCoreProg :: PrettyH CoreProg)
@@ -56,5 +62,7 @@ corePrettyH opts = do
      <+ promoteT (ppCoreDef  :: PrettyH CoreDef)
      <+ promoteT (ppModGuts  :: PrettyH GHC.ModGuts)
      <+ promoteT (ppCoreAlt  :: PrettyH GHC.CoreAlt)
+     <+ promoteT (ppType     :: PrettyH GHC.Type)
+     <+ promoteT (ppCoercion :: PrettyH GHC.Coercion)
 
 ---------------------------------------------------------------------------

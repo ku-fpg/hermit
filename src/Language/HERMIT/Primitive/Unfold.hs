@@ -60,7 +60,7 @@ externals =
         [ "Specialize an application to its type and coercion arguments." ] .+ Deep .+ Context
     , external "unfold-rule" ((\ nm -> promoteExprR (rule nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
         [ "Apply a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
-    , external "show-remembered" (TranslateDocH showStashT :: TranslateDocH Core)
+    , external "show-remembered" (TranslateDocH showStashT :: TranslateDocH CoreTC)
         [ "Display all remembered definitions." ]
     ]
 
