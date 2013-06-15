@@ -287,7 +287,9 @@ coercionConstructor = \case
                          TransCo{}     -> "TransCo"
                          NthCo{}       -> "NthCo"
                          InstCo{}      -> "InstCo"
-
+#if __GLASGOW_HASKELL__ > 706
+                         LRCo{}        -> "LRCo"
+#endif
 
 ------------------------------------------------------------------------
 

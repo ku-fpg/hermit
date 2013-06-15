@@ -88,7 +88,7 @@ corePrettyH opts = do
                    <+ instCoT ppCoercion ppType (\ co ty -> coText "InstCo" $$ nest 2 (cat [parens co, parens ty]))
 #if __GLASGOW_HASKELL__ > 706
         -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
-                   <+ axiomInstCoT (arr ppSDoc) (arr ppSDoc) ppCoercion (\ ax idx coes -> coText "AxiomInstCo" <+> ax <+> idx $$ nest 2 (vlist $ map parens coes))
+                   <+ axiomInstCoT (arr ppSDoc) (arr ppSDoc) (const ppCoercion) (\ ax idx coes -> coText "AxiomInstCo" <+> ax <+> idx $$ nest 2 (vlist $ map parens coes))
                    <+ lrCoT (arr ppSDoc) ppCoercion (\ lr co -> coText "LRCo" <+> lr $$ nest 2 (parens co))
 #else
                    <+ axiomInstCoT (arr ppSDoc) (const ppCoercion) (\ ax coes -> coText "AxiomInstCo" <+> ax $$ nest 2 (vlist $ map parens coes))
