@@ -57,3 +57,44 @@ innermost let-subst
 
 try unshadow
 dump "core/9-afterspecconstr.tex" "clean" "latex" 62
+
+set-pp-type Omit
+top
+rhs-of 'f
+any-call (unfold-rule "enumFromToS")
+any-call (unfold-rule "concatMapS")
+any-call (unfold-rule "foldlS")
+simplify
+any-call (unfold-rule "stream/unstream")
+{ 0 ; 1 ; 1 ; unfold } -- enumFromToS
+any-call (unfold 'concatMapS)
+bash
+innermost let-subst
+
+try unshadow
+dump "core/10-concatmap.tex" "clean" "latex" 62
+
+any-call (unfold 'foldlS)
+any-call (unfold 'enumFromToS)
+bash
+top ; specConstr
+rhs-of 'f
+consider let
+bash
+alpha-let ['go2,'go1]
+consider 'go2
+
+try unshadow
+dump "core/11-cmspecconstr.tex" "clean" "latex" 62
+
+tag prestaticarg
+static-arg
+
+try unshadow
+dump "core/12-staticarg.tex" "clean" "latex" 62
+
+up
+up
+any-call (unfold 'go2)
+bash
+goto prestaticarg
