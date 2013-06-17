@@ -137,6 +137,7 @@ type PrettyH a = Translate PrettyC HermitM a DocH
 -- | Context for PrettyH translations.
 data PrettyC = PrettyC { prettyC_path :: AbsolutePath Crumb
                        , prettyC_vars :: Set Var}
+                       -- TODO: Add PrettyOptions to PrettyC
 
 ------------------------------------------------------------------------
 
