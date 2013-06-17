@@ -23,6 +23,14 @@ import Text.PrettyPrint.MarkedHughesPJ as PP
 
 ---------------------------------------------------------------------------
 
+coText :: String -> DocH
+coText = coercionColor . text
+
+tyText :: String -> DocH
+tyText = typeColor . text
+
+---------------------------------------------------------------------------
+
 -- | Pretty print a fragment of GHC Core using HERMIT's \"AST\" pretty printer.
 --   This displays the tree of constructors using nested indentation.
 corePrettyH :: PrettyOptions -> PrettyH CoreTC

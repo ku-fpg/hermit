@@ -7,8 +7,6 @@ module Language.HERMIT.PrettyPrinter.Common
     , Attr(..)
     , attrP
       -- ** Colors
-    , coText
-    , tyText
     , coercionColor
     , idColor
     , keywordColor
@@ -106,12 +104,6 @@ attr a p = mark (PushAttr a) <> p <> mark PopAttr
 
 attrP :: AbsolutePathH -> DocH -> DocH
 attrP _ doc = doc -- attr . PathAttr
-
-tyText :: String -> DocH
-tyText = typeColor . PP.text
-
-coText :: String -> DocH
-coText = coercionColor . PP.text
 
 idColor :: DocH -> DocH
 idColor = markColor IdColor
