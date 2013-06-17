@@ -59,6 +59,27 @@ Description:
    ...
    Loading package hermit-0.1.8.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
+   ===================== Welcome to HERMIT =====================
+   HERMIT is a toolkit for the interactive transformation of GHC
+   core language programs. Documentation on HERMIT can be found
+   on the HERMIT web page at:
+   http:\/\/www.ittc.ku.edu\/csdl\/fpg\/software\/hermit.html
+   .
+   You have just loaded the interactive shell. To exit, type
+   \"abort\" or \"resume\" to abort or resume GHC compilation.
+   .
+   Type \"help\" for instructions on how to list or search the
+   available HERMIT commands.
+   .
+   To get started, you could try the following:
+   \ \ - type \"consider 'foo\", where \"foo\" is a function
+   \ \ \ \ defined in the module;
+   \ \ - type \"set-pp-type Show\" to switch on typing information;
+   \ \ - use natural numbers such as \"0\" and \"1\" to descend into
+   \ \ \ \ the definition, and \"up\" to ascend;
+   \ \ - type \"info\" for more information about the current node;
+   \ \ - type \"log\" to display an activity log.
+   =============================================================
    module main:Main where
    \ \ rev ∷ ∀ a . [a] -> [a]
    \ \ unwrap ∷ ∀ a . ([a] -> [a]) -> [a] -> H a
