@@ -376,7 +376,7 @@ setLoading b = modify $ \st -> st { cl_session = (cl_session st) { cl_loading = 
 
 banner :: String
 banner = unlines
-    [ "===================== Welcome to HERMIT ====================="
+    [ "===================== Welcome to HERMIT ======================"
     , "HERMIT is a toolkit for the interactive transformation of GHC"
     , "core language programs. Documentation on HERMIT can be found"
     , "on the HERMIT web page at:"
@@ -391,12 +391,13 @@ banner = unlines
     , "To get started, you could try the following:"
     , "  - type \"consider 'foo\", where \"foo\" is a function"
     , "    defined in the module;"
-    , "  - type \"set-pp-type Show\" to switch on typing information;"
-    , "  - use natural numbers such as \"0\" and \"1\" to descend into"
-    , "    the definition, and \"up\" to ascend;"
+    , "  - type \"set-pp-type Show\" to display full type information;"
     , "  - type \"info\" for more information about the current node;"
+    , "  - to descend into a child node, type the name of the child"
+    , "    (\"info\" includes a list of children of the current node\");"
+    , "  - to ascend, use the \"up\" command;"
     , "  - type \"log\" to display an activity log."
-    , "============================================================="
+    , "=============================================================="
     ]
 
 -- | The first argument is a list of files to load.
