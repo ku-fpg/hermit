@@ -394,8 +394,8 @@ corePrettyH opts =
                         <+ appCoT ppCoercionR ppCoercionR retApp
 #if __GLASGOW_HASKELL__ > 706
         -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
-                        <+ axiomInstCoT (coAxiomName ^>> ppName CoercionColor) (arr $ RetAtom . ppSDoc) (const ppCoercionR) (\ ax idx coes -> RetExpr (attrP p (coText "axiomInst") <+> attrP p (parenExpr ax) <+> attrP p (parenExpr idx) <+> sep (map parenExpr coes)))
-                        <+ lrCoT (arr (coercionColor . ppSDoc)) ppCoercionR (\ lr co -> RetExpr (attrP p lr <+> parenExpr co))
+                        <+ axiomInstCoT (coAxiomName ^>> ppName CoercionColor) (RetAtom <$> ppSDoc) (const ppCoercionR) (\ ax idx coes -> RetExpr (attrP p (coText "axiomInst") <+> attrP p (parenExpr ax) <+> attrP p (parenExpr idx) <+> sep (map parenExpr coes)))
+                        <+ lrCoT (coercionColor <$> ppSDoc) ppCoercionR (\ lr co -> RetExpr (attrP p lr <+> parenExpr co))
 #else
                         <+ axiomInstCoT (coAxiomName ^>> ppName CoercionColor) (const ppCoercionR) (\ ax coes -> RetExpr (attrP p (coText "axiomInst") <+> attrP p (parenExpr ax) <+> sep (map parenExpr coes)))
 #endif

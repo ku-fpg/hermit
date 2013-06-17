@@ -53,18 +53,23 @@ data ShellCommand =  AstEffect   AstEffect
                   |  QueryFun    QueryFun
                   |  MetaCommand MetaCommand
 
+-- GADTs can't have docs on constructors. See Haddock ticket #43.
 -- | AstEffects are things that are recorded in our log and saved files.
-
+--   - Apply a rewrite (giving a whole new lower-level AST).
+--   - Change the current location using a computed path.
+--   - Change the currect location using directions.
+--   - Begin or end a scope.
+--   - Add a tag.
+--   - Run a precondition or other predicate that must not fail.
 data AstEffect :: * where
-   Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> AstEffect -- ^ This applys a rewrite (giving a whole new lower-level AST).
-   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g PathH      -> AstEffect -- ^ This changes the current location using a computed path.
-   Direction  ::                                                Direction               -> AstEffect -- ^ This changes the currect location using directions.
-
+   Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> AstEffect
+   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g PathH      -> AstEffect
+   Direction  ::                                                Direction               -> AstEffect
 --   PushFocus Path -- This changes the current location using a give path
    BeginScope ::                                                                           AstEffect
    EndScope   ::                                                                           AstEffect
-   Tag        :: String                                                                 -> AstEffect -- ^ Adding a tag.
-   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g () -> AstEffect -- ^ A precondition or other predicate that must not fail
+   Tag        :: String                                                                 -> AstEffect
+   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g () -> AstEffect
    deriving Typeable
 
 instance Extern AstEffect where
@@ -369,6 +374,31 @@ shellComplete mvar rPrev so_far = do
 setLoading :: MonadIO m => Bool -> CLM m ()
 setLoading b = modify $ \st -> st { cl_session = (cl_session st) { cl_loading = b } }
 
+banner :: String
+banner = unlines
+    [ "===================== Welcome to HERMIT ====================="
+    , "HERMIT is a toolkit for the interactive transformation of GHC"
+    , "core language programs. Documentation on HERMIT can be found"
+    , "on the HERMIT web page at:"
+    , "http://www.ittc.ku.edu/csdl/fpg/software/hermit.html"
+    , ""
+    , "You have just loaded the interactive shell. To exit, type "
+    , "\"abort\" or \"resume\" to abort or resume GHC compilation."
+    , ""
+    , "Type \"help\" for instructions on how to list or search the"
+    , "available HERMIT commands."
+    , ""
+    , "To get started, you could try the following:"
+    , "  - type \"consider 'foo\", where \"foo\" is a function"
+    , "    defined in the module;"
+    , "  - type \"set-pp-type Show\" to switch on typing information;"
+    , "  - use natural numbers such as \"0\" and \"1\" to descend into"
+    , "    the definition, and \"up\" to ascend;"
+    , "  - type \"info\" for more information about the current node;"
+    , "  - type \"log\" to display an activity log."
+    , "============================================================="
+    ]
+
 -- | The first argument is a list of files to load.
 commandLine :: [FilePath] -> Behavior -> [External] -> ScopedKernel -> SAST -> IO ()
 commandLine filesToLoad behavior exts skernel sast = do
@@ -376,6 +406,7 @@ commandLine filesToLoad behavior exts skernel sast = do
     let ws_complete = " ()"
 
     let startup = do
+            liftIO $ putStrLn banner
             setLoading True
             sequence_ [ performMetaCommand $ case fileName of
                          "abort"  -> Abort
