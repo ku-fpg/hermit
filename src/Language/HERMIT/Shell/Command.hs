@@ -53,18 +53,23 @@ data ShellCommand =  AstEffect   AstEffect
                   |  QueryFun    QueryFun
                   |  MetaCommand MetaCommand
 
+-- GADTs can't have docs on constructors. See Haddock ticket #43.
 -- | AstEffects are things that are recorded in our log and saved files.
-
+--   - Apply a rewrite (giving a whole new lower-level AST).
+--   - Change the current location using a computed path.
+--   - Change the currect location using directions.
+--   - Begin or end a scope.
+--   - Add a tag.
+--   - Run a precondition or other predicate that must not fail.
 data AstEffect :: * where
-   Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> AstEffect -- ^ This applys a rewrite (giving a whole new lower-level AST).
-   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g PathH      -> AstEffect -- ^ This changes the current location using a computed path.
-   Direction  ::                                                Direction               -> AstEffect -- ^ This changes the currect location using directions.
-
+   Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> AstEffect
+   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g PathH      -> AstEffect
+   Direction  ::                                                Direction               -> AstEffect
 --   PushFocus Path -- This changes the current location using a give path
    BeginScope ::                                                                           AstEffect
    EndScope   ::                                                                           AstEffect
-   Tag        :: String                                                                 -> AstEffect -- ^ Adding a tag.
-   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g () -> AstEffect -- ^ A precondition or other predicate that must not fail
+   Tag        :: String                                                                 -> AstEffect
+   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g () -> AstEffect
    deriving Typeable
 
 instance Extern AstEffect where
