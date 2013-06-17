@@ -4,6 +4,7 @@ module Language.HERMIT.Context
        ( -- * HERMIT Contexts
          -- ** The Standard Context
          HermitC
+       , AbsolutePathH
        , initHermitC
          -- ** Bindings
        , HermitBindingSite(..)
@@ -155,13 +156,15 @@ class HasGlobalRdrEnv c where
 
 ------------------------------------------------------------------------
 
+type AbsolutePathH = AbsolutePath Crumb
+
 -- | The HERMIT context, containing all bindings in scope and the current location in the AST.
 --   The bindings here are lazy by choice, so that we can avoid the cost
 --   of building the context if we never use it.
 data HermitC = HermitC
         { hermitC_bindings       :: Map Var HermitBinding   -- ^ All (important) bindings in scope.
         , hermitC_depth          :: BindingDepth            -- ^ The depth of the bindings.
-        , hermitC_path           :: AbsolutePath Crumb      -- ^ The 'AbsolutePath' to the current node from the root.
+        , hermitC_path           :: AbsolutePathH           -- ^ The 'AbsolutePath' to the current node from the root.
         , hermitC_globalRdrEnv   :: GlobalRdrEnv            -- ^ The top-level lexical environment.
         , hermitC_coreRules      :: [CoreRule]              -- ^ GHC rewrite RULES.
         }

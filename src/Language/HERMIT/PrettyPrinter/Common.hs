@@ -82,7 +82,7 @@ data HermitMark
     deriving Show
 
 -- These are the attributes
-data Attr = PathAttr PathH
+data Attr = PathAttr AbsolutePathH
           | Color SyntaxForColor
           | SpecialFont
     deriving Show
@@ -104,7 +104,7 @@ attr a p = mark (PushAttr a) <> p <> mark PopAttr
 -- The problem is that attributes span over multiple lines,
 -- messing up the latex output
 
-attrP :: PathH -> DocH -> DocH
+attrP :: AbsolutePathH -> DocH -> DocH
 attrP _ doc = doc -- attr . PathAttr
 
 tyText :: String -> DocH

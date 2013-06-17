@@ -34,10 +34,10 @@ import Text.PrettyPrint.MarkedHughesPJ as PP
 ------------------------------------------------------------------------------------------------
 
 data RetExpr
-        = RetLam PathH [DocH] PathH DocH
-        | RetLet PathH [DocH] PathH DocH
+        = RetLam AbsolutePathH [DocH] AbsolutePathH DocH
+        | RetLet AbsolutePathH [DocH] AbsolutePathH DocH
         | RetApp DocH [RetExpr]
-        | RetForAll PathH [DocH] PathH DocH
+        | RetForAll AbsolutePathH [DocH] AbsolutePathH DocH
         | RetArrowType [DocH] -- TODO: store PathH here to mark arrows
         | RetExpr DocH
         | RetAtom DocH         -- parens not needed
@@ -52,20 +52,20 @@ retApp f             e        = RetApp (parenExpr f) [e]
 retApps :: RetExpr -> [RetExpr] -> RetExpr
 retApps = foldl retApp
 
-retLam :: PathH -> RetExpr -> RetExpr -> RetExpr
+retLam :: AbsolutePathH -> RetExpr -> RetExpr -> RetExpr
 retLam _ RetEmpty e            = e
 retLam p v (RetLam _ vs pb e)  = RetLam p (parenExpr v : vs) pb e
-retLam p v e                   = RetLam p [parenExpr v] (p ++ [Lam_Body]) (normalExpr e)
+retLam p v e                   = RetLam p [parenExpr v] (p @@ Lam_Body) (normalExpr e)
 
-retLet :: PathH -> RetExpr -> RetExpr -> RetExpr
+retLet :: AbsolutePathH -> RetExpr -> RetExpr -> RetExpr
 retLet _ RetEmpty body                    = body
 retLet p bnd      (RetLet _ bnds pb body) = RetLet p (normalExpr bnd : bnds) pb body
-retLet p bnd      body                    = RetLet p [normalExpr bnd] (p ++ [Let_Body]) (normalExpr body)
+retLet p bnd      body                    = RetLet p [normalExpr bnd] (p @@ Let_Body) (normalExpr body)
 
-retForAll :: PathH -> Crumb -> RetExpr -> RetExpr -> RetExpr
+retForAll :: AbsolutePathH -> Crumb -> RetExpr -> RetExpr -> RetExpr
 retForAll _ _ RetEmpty ty                      = ty
 retForAll p _  v       (RetForAll _ vs pb ty)  = RetForAll p (parenExpr v : vs) pb ty
-retForAll p cr v       ty                      = RetForAll p [parenExpr v] (p ++ [cr]) (normalExpr ty)
+retForAll p cr v       ty                      = RetForAll p [parenExpr v] (p @@ cr) (normalExpr ty)
 
 retArrowType :: RetExpr -> RetExpr -> RetExpr
 retArrowType ty1 (RetArrowType tys) = RetArrowType (parenExprExceptApp ty1 : tys)
@@ -107,7 +107,7 @@ parenExprExceptApp e              = parenExpr e
 
 ------------------------------------------------------------------------------------------------
 
-attrPAtomExpr :: PathH -> RetExpr -> RetExpr
+attrPAtomExpr :: AbsolutePathH -> RetExpr -> RetExpr
 attrPAtomExpr p (RetAtom d) = RetAtom (attrP p d)
 attrPAtomExpr p (RetExpr d) = RetExpr (attrP p d)
 attrPAtomExpr _ e           = e
@@ -237,13 +237,13 @@ corePrettyH opts =
 
         ppCoreBind :: PrettyH GHC.CoreBind
         ppCoreBind =   (nonRecT idR (ppCoreExprR &&& ppTypeSig) (,) >>> ppDef)
-                    <+ (do p <- rootPathT
+                    <+ (do p <- absPathT
                            recT (const ppCoreDef) (\ bnds -> attrP p (keyword "rec") <+> vcat bnds)
                        )
 
 
         ppCoreAlt :: PrettyH GHC.CoreAlt
-        ppCoreAlt = do p <- rootPathT
+        ppCoreAlt = do p <- absPathT
                        altT (readerT $ \case
                                           GHC.DataAlt dcon -> return (GHC.dataConName dcon) >>> ppName IdColor >>^ parenExpr
                                           GHC.LitAlt lit   -> return lit >>> ppSDoc
@@ -257,7 +257,7 @@ corePrettyH opts =
         ppCoreDef = defT idR (ppCoreExprR &&& ppTypeSig) (,) >>> ppDef
 
         ppDef :: PrettyH (Var,(RetExpr,DocH))
-        ppDef = do p          <- rootPathT
+        ppDef = do p          <- absPathT
                    (v,(e,ty)) <- idR
                    case po_coercions opts of
                      Omit | GHC.isCoVar v  -> return empty
@@ -279,9 +279,9 @@ corePrettyH opts =
         ppCoreExpr = ppCoreExprR >>^ normalExpr
 
         ppCoreExprR :: Translate PrettyC HermitM GHC.CoreExpr RetExpr
-        ppCoreExprR = rootPathT >>= ppCoreExprPR
+        ppCoreExprR = absPathT >>= ppCoreExprPR
           where
-            ppCoreExprPR :: PathH -> Translate PrettyC HermitM GHC.CoreExpr RetExpr
+            ppCoreExprPR :: AbsolutePathH -> Translate PrettyC HermitM GHC.CoreExpr RetExpr
             ppCoreExprPR p =
                       lamT ppBinderMode ppCoreExprR (retLam p)
 
@@ -337,9 +337,9 @@ corePrettyH opts =
                         _        -> ppTypeR
 
         ppTypeR :: Translate PrettyC HermitM Type RetExpr
-        ppTypeR = rootPathT >>= ppTypePR
+        ppTypeR = absPathT >>= ppTypePR
           where
-            ppTypePR :: PathH -> Translate PrettyC HermitM Type RetExpr
+            ppTypePR :: AbsolutePathH -> Translate PrettyC HermitM Type RetExpr
             ppTypePR p =
                    tyVarT (attrPAtomExpr p <$> ppVar)
                 <+ litTyT (attrPAtomExpr p <$> ppLitTy)
@@ -373,9 +373,9 @@ corePrettyH opts =
                             Kind     -> ppCoKind >>^ (\ k -> RetExpr (coercionSymbol `hasType` k))
 
         ppCoercionR :: Translate PrettyC HermitM Coercion RetExpr
-        ppCoercionR = rootPathT >>= ppCoercionPR
+        ppCoercionR = absPathT >>= ppCoercionPR
           where
-            ppCoercionPR :: PathH -> Translate PrettyC HermitM Coercion RetExpr
+            ppCoercionPR :: AbsolutePathH -> Translate PrettyC HermitM Coercion RetExpr
             ppCoercionPR p =
                            reflT (ppTypeModeR >>^ \ ty -> RetAtom $ attrP p $ if isEmptyR ty then coText "refl" else coText "<" <> normalExpr ty <> coText ">")
                         <+ coVarCoT (attrPAtomExpr p <$> ppVar)
