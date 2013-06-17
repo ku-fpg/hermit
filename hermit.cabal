@@ -1,5 +1,5 @@
 Name:                hermit
-Version:             0.1.8.0
+Version:             0.2.0.0
 Synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
 Description:
   HERMIT uses Haskell to express semi-formal models,
@@ -36,12 +36,12 @@ Description:
   .
   @
    $ hermit Reverse.hs Reverse.hss resume
-   [starting HERMIT v0.1.8.0 on Reverse.hs]
+   [starting HERMIT v0.2.0.0 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fexpose-all-unfoldings -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:Main:Reverse.hss -fplugin-opt=HERMIT:Main:resume
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.1.8.0 ... linking ... done.
+   Loading package hermit-0.2.0.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    Linking Reverse ...
    $ ./Reverse
@@ -52,12 +52,12 @@ Description:
   .
   @
    $ hermit Reverse.hs
-   [starting HERMIT v0.1.8.0 on Reverse.hs]
+   [starting HERMIT v0.2.0.0 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fexpose-all-unfoldings -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:Main:
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.1.8.0 ... linking ... done.
+   Loading package hermit-0.2.0.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    ===================== Welcome to HERMIT =====================
    HERMIT is a toolkit for the interactive transformation of GHC
@@ -227,5 +227,5 @@ Executable hermit
     Ghc-Options:
 
 source-repository head
-  type:     git
-  location: git://github.com/ku-fpg/hermit.git
+    type:     git
+    location: git://github.com/ku-fpg/hermit.git
