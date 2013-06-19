@@ -34,9 +34,6 @@ externals ::  [External]
 externals = map ((.+ Experiment) . (.+ TODO))
          [ external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
                 [ "determines if a rewrite could be successfully applied" ]
-         , external "push" (promoteExprR . push :: TH.Name -> RewriteH Core)
-                [ "push a function <f> into argument."
-                , "Unsafe if f is not strict." ] .+ PreCondition
          , external "var" (promoteExprT . isVar :: TH.Name -> TranslateH Core ())
                  [ "var '<v> returns successfully for variable v, and fails otherwise.",
                    "Useful in combination with \"when\", as in: when (var v) r" ] .+ Predicate
@@ -142,24 +139,6 @@ testQuery r = f `liftM` testM r
   where
     f True  = "Rewrite would succeed."
     f False = "Rewrite would fail."
-
-------------------------------------------------------------------------------------------------------
-
--- | Push a function through a Case or Let expression.
---   Unsafe if the function is not strict.
-push :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
-push nm = prefixFailMsg "push failed: " $
-     do e <- idR
-        case collectArgs e of
-          (Var v,args) -> do
-                  guardMsg (nm `cmpTHName2Var` v) $ "cannot find name " ++ show nm
-                  guardMsg (not $ null args) $ "no argument for " ++ show nm
-                  guardMsg (all isTypeArg $ init args) $ "initial arguments are not type arguments for " ++ show nm
-                  case last args of
-                     Case {} -> caseFloatArg
-                     Let {}  -> letFloatArg
-                     _       -> fail "argument is not a Case or Let."
-          _ -> fail "no function to match."
 
 ------------------------------------------------------------------------------------------------------
 

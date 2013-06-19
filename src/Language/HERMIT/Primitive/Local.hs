@@ -11,6 +11,7 @@ module Language.HERMIT.Primitive.Local
        , module Language.HERMIT.Primitive.Local.Let
          -- ** Miscellaneous
        , abstract
+       , push
        , nonrecToRec
        , betaReduce
        , betaReducePlus
@@ -78,6 +79,9 @@ externals =
     , external "abstract" (promoteExprR . abstract :: TH.Name -> RewriteH Core)
         [ "Abstract over a variable using a lambda."
         , "e  ==>  (\\ x -> e) x" ]                                             .+ Shallow .+ Introduce .+ Context
+    , external "push" (promoteExprR . push :: TH.Name -> RewriteH Core)
+        [ "Push a function <f> into a case-expression or let-expression argument."
+        , "Unsafe if f is not strict." ] .+ Shallow .+ Commute .+ PreCondition
     ]
     ++ Case.externals
     ++ Cast.externals
@@ -212,4 +216,22 @@ abstract nm = prefixFailMsg "abstraction failed: " $
       v <- findBoundVarT nm
       return (App (Lam v e) (varToCoreExpr v))
 
-------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------
+
+-- | Push a function through a Case or Let expression.
+--   Unsafe if the function is not strict.
+push :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
+push nm = prefixFailMsg "push failed: " $
+     do e <- idR
+        case collectArgs e of
+          (Var v,args) -> do
+                  guardMsg (nm `cmpTHName2Var` v) $ "cannot find name " ++ show nm
+                  guardMsg (not $ null args) $ "no argument for " ++ show nm
+                  guardMsg (all isTypeArg $ init args) $ "initial arguments are not type arguments for " ++ show nm
+                  case last args of
+                     Case {} -> caseFloatArg
+                     Let {}  -> letFloatArg
+                     _       -> fail "argument is not a Case or Let."
+          _ -> fail "no function to match."
+
+------------------------------------------------------------------------------------------------------
