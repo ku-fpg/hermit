@@ -114,6 +114,8 @@ import Language.HERMIT.Kure.SumTypes
 
 import Control.Monad
 
+import Data.Monoid (mempty)
+
 ---------------------------------------------------------------------
 
 type TranslateH a b = Translate HermitC HermitM a b
@@ -1282,8 +1284,8 @@ deprecatedIntToCrumbT n = contextfreeT $ \case
 {-# INLINE deprecatedIntToCrumbT #-}
 
 -- | Builds a path to the first child, based on the old numbering system.
-deprecatedIntToPathT :: Monad m => Int -> Translate c m Core PathH
-deprecatedIntToPathT =  liftM return . deprecatedIntToCrumbT
+deprecatedIntToPathT :: Monad m => Int -> Translate c m Core LocalPathH
+deprecatedIntToPathT =  liftM (mempty @@) . deprecatedIntToCrumbT
 {-# INLINE deprecatedIntToPathT #-}
 
 ---------------------------------------------------------------------

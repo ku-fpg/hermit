@@ -4,7 +4,6 @@ module Language.HERMIT.Kernel.Scoped
          Direction(..)
        , LocalPath
        , moveLocally
-       , extendLocalPath
        , ScopedKernel(..)
        , SAST(..)
        , scopedKernel
@@ -36,17 +35,8 @@ data Direction = L -- ^ Left
                | T -- ^ Top
                deriving (Eq,Show)
 
--- | The path within the current local scope.
-type LocalPath = SnocPath
-type LocalPathH = LocalPath Crumb
-
 pathStack2Paths :: [LocalPath crumb] -> LocalPath crumb -> [Path crumb]
 pathStack2Paths ps p = reverse (map snocPathToPath (p:ps))
-
--- | Add a 'Path' to the end of a 'LocalPath'.
-extendLocalPath :: Path crumb -> LocalPath crumb -> LocalPath crumb
-extendLocalPath p (SnocPath sp) = SnocPath (reverse p ++ sp)
-{-# INLINE extendLocalPath #-}
 
 -- | Movement confined within the local scope.
 moveLocally :: Direction -> LocalPathH -> LocalPathH

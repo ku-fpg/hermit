@@ -63,7 +63,7 @@ data ShellCommand =  AstEffect   AstEffect
 --   - Run a precondition or other predicate that must not fail.
 data AstEffect :: * where
    Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> AstEffect
-   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g PathH      -> AstEffect
+   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g LocalPathH -> AstEffect
    Direction  ::                                                Direction               -> AstEffect
 --   PushFocus Path -- This changes the current location using a give path
    BeginScope ::                                                                           AstEffect
@@ -136,8 +136,8 @@ interpShellCommand =
   , interp $ \ (RewriteCoreBox rr)           -> AstEffect (Apply rr)
   , interp $ \ (RewriteCoreTCBox rr)         -> AstEffect (Apply rr)
   , interp $ \ (BiRewriteCoreBox br)         -> AstEffect (Apply $ forewardT br)
-  , interp $ \ (CrumbBox cr)                 -> AstEffect (Pathfinder (return [cr] :: TranslateH CoreTC PathH))
-  , interp $ \ (PathBox p)                   -> AstEffect (Pathfinder (return p :: TranslateH CoreTC PathH))
+  , interp $ \ (CrumbBox cr)                 -> AstEffect (Pathfinder (return (mempty @@ cr) :: TranslateH CoreTC LocalPathH))
+  , interp $ \ (PathBox p)                   -> AstEffect (Pathfinder (return p :: TranslateH CoreTC LocalPathH))
   , interp $ \ (TranslateCorePathBox tt)     -> AstEffect (Pathfinder tt)
   , interp $ \ (StringBox str)               -> QueryFun (Message str)
   , interp $ \ (TranslateCoreStringBox tt)   -> QueryFun (QueryString tt)
@@ -176,7 +176,7 @@ shell_externals = map (.+ Shell)
        [ "move to the previous child"]
    , external "up"              (Direction U)
        [ "move to the parent node"]
-   , external "down"            (deprecatedIntToPathT 0 :: TranslateH Core PathH) -- TODO: short-term solution
+   , external "down"            (deprecatedIntToPathT 0 :: TranslateH Core LocalPathH) -- TODO: short-term solution
        [ "move to the first child"]
    , external "tag"             Tag
        [ "tag <label> names the current AST with a label" ]
@@ -510,7 +510,7 @@ performAstEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
     iokm2clm' "Cannot find path: "
-              (\ p -> do ast <- iokm2clm "Path is invalid: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (extendLocalPath p) (cl_kernel_env $ cl_session st)
+              (\ p -> do ast <- iokm2clm "Path is invalid: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (<> p) (cl_kernel_env $ cl_session st)
                          put $ newSAST expr ast st
                          showFocus)
               (queryS (cl_kernel st) (cl_cursor $ cl_session st) t (cl_kernel_env $ cl_session st))

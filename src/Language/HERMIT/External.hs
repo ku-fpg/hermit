@@ -51,6 +51,7 @@ import Data.List
 import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.Core
+import Language.HERMIT.Context (LocalPathH)
 import Language.HERMIT.Kure
 
 -----------------------------------------------------------------
@@ -374,19 +375,19 @@ instance Extern Crumb where
 
 -----------------------------------------------------------------
 
-data PathBox = PathBox PathH deriving Typeable
+data PathBox = PathBox LocalPathH deriving Typeable
 
-instance Extern PathH where
-    type Box PathH = PathBox
+instance Extern LocalPathH where
+    type Box LocalPathH = PathBox
     box = PathBox
     unbox (PathBox p) = p
 
 -----------------------------------------------------------------
 
-data TranslateCorePathBox = TranslateCorePathBox (TranslateH Core PathH) deriving Typeable
+data TranslateCorePathBox = TranslateCorePathBox (TranslateH Core LocalPathH) deriving Typeable
 
-instance Extern (TranslateH Core PathH) where
-    type Box (TranslateH Core PathH) = TranslateCorePathBox
+instance Extern (TranslateH Core LocalPathH) where
+    type Box (TranslateH Core LocalPathH) = TranslateCorePathBox
     box = TranslateCorePathBox
     unbox (TranslateCorePathBox t) = t
 

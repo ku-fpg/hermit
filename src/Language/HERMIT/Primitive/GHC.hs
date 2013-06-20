@@ -528,8 +528,8 @@ compareValues :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatc
 compareValues n1 n2 = do
         p1 <- onePathToT (namedBinding n1)
         p2 <- onePathToT (namedBinding n2)
-        e1 <- pathT p1 idR
-        e2 <- pathT p2 idR
+        e1 <- pathT (snocPathToPath p1) idR
+        e2 <- pathT (snocPathToPath p2) idR
         case e1 `coreEqual` e2 of
           Nothing    -> fail $ show n1 ++ " and " ++ show n2 ++ " are incomparable."
           Just False -> fail $ show n1 ++ " and " ++ show n2 ++ " are not equal."

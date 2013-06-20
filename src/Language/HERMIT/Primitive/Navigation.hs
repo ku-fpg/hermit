@@ -8,6 +8,7 @@ module Language.HERMIT.Primitive.Navigation
        , bindingGroupOf
        , considerName
        , rhsOf
+       , parentOf
        , considerTargets
        , Considerable(..)
        , considerables
@@ -38,36 +39,45 @@ import qualified Language.Haskell.TH as TH
 externals :: [External]
 externals = crumbExternals ++ map (.+ Navigation)
             [
-              external "consider" (considerName :: TH.Name -> TranslateH Core PathH)
+              external "consider" (considerName :: TH.Name -> TranslateH Core LocalPathH)
                 [ "consider '<v> focuses on the definition of <v>" ]
-            , external "consider" (considerConstruct :: String -> TranslateH Core PathH)
+            , external "consider" (considerConstruct :: String -> TranslateH Core LocalPathH)
                 [ "consider <c> focuses on the first construct <c>.",
                   recognizedConsiderables]
-            , external "rhs-of" (rhsOf :: TH.Name -> TranslateH Core PathH)
+            , external "rhs-of" (rhsOf :: TH.Name -> TranslateH Core LocalPathH)
                 [ "rhs-of '<v> focuses on the right-hand-side of the definition of <v>" ]
-            , external "binding-group-of" (bindingGroupOf :: TH.Name -> TranslateH Core PathH)
+            , external "binding-group-of" (bindingGroupOf :: TH.Name -> TranslateH Core LocalPathH)
                 [ "binding-group-of '<v> focuses on the binding group that binds the variable <v>" ]
-            , external "arg" (promoteExprT . nthArgPath :: Int -> TranslateH Core PathH)
+            , external "arg" (promoteExprT . nthArgPath :: Int -> TranslateH Core LocalPathH)
                 [ "arg n focuses on the (n-1)th argument of a nested application." ]
+            , external "parent-of" (parentOf :: TranslateH Core LocalPathH -> TranslateH Core LocalPathH)
+                [ "focus on the parent of another focal point." ]
             ]
 
 ---------------------------------------------------------------------------------------
 
+-- | Discard the last crumb of a non-empty 'LocalPathH'.
+parentOf :: MonadCatch m => Translate c m g LocalPathH -> Translate c m g LocalPathH
+parentOf t = withPatFailMsg "Path points to origin, there is no parent." $
+             do SnocPath (_:p) <- t
+                return (SnocPath p)
+
 -- | Find the path to the RHS of the binding group of the given name.
-bindingGroupOf :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core PathH
+bindingGroupOf :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core LocalPathH
 bindingGroupOf = oneNonEmptyPathToT . bindGroup
 
 -- | Find the path to the definiiton of the provided name.
-considerName :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core PathH
+considerName :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core LocalPathH
 considerName = oneNonEmptyPathToT . namedBinding
 
 -- | Find the path to the RHS of the definition of the given name.
-rhsOf :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core PathH
+rhsOf :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core LocalPathH
 rhsOf nm = do p  <- onePathToT (namedBinding nm)
-              cr <- pathT p (   promoteBindT (nonRecT mempty lastCrumbT $ \ () cr -> cr)
-                             <+ promoteDefT  (defT    mempty lastCrumbT $ \ () cr -> cr)
-                            )
-              return (p ++ [cr])
+              cr <- pathT (snocPathToPath p)
+                          (   promoteBindT (nonRecT mempty lastCrumbT $ \ () cr -> cr)
+                          <+ promoteDefT  (defT    mempty lastCrumbT $ \ () cr -> cr)
+                          )
+              return (p @@ cr)
 -- TODO: The new definition is inefficient.  Try and improve it.  May need to generalise the KURE "onePathTo" combinators.
 -- rhsOf nm = onePathToT (namedBinding nm) >>^ (++ [0])
 
@@ -116,13 +126,13 @@ considerables =   [ ("bind",Binding)
                   , ("coerce",Coerce)
                   ]
 
-considerConstruct :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => String -> Translate c m Core PathH
+considerConstruct :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => String -> Translate c m Core LocalPathH
 considerConstruct str = case string2considerable str of
                           Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". " ++ recognizedConsiderables ++ ".  Or did you mean \"consider '" ++ str ++ "\"?"
                           Just c  -> considerConstructT c
 
 -- | Find the path to the first matching construct.
-considerConstructT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Considerable -> Translate c m Core PathH
+considerConstructT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Considerable -> Translate c m Core LocalPathH
 considerConstructT = oneNonEmptyPathToT . underConsideration
 
 string2considerable :: String -> Maybe Considerable
@@ -148,10 +158,10 @@ underConsideration _           _                          = False
 ---------------------------------------------------------------------------------------
 
 -- | Construct a path to the (n-1)th argument in a nested sequence of 'App's.
-nthArgPath :: Monad m => Int -> Translate c m CoreExpr PathH
+nthArgPath :: Monad m => Int -> Translate c m CoreExpr LocalPathH
 nthArgPath n = contextfreeT $ \ e -> let funCrumbs = appCount e - 1 - n
                                       in if funCrumbs < 0
                                           then fail ("Argument " ++ show n ++ " does not exist.")
-                                          else return (replicate funCrumbs App_Fun ++ [App_Arg])
+                                          else return (SnocPath (replicate funCrumbs App_Fun) @@ App_Arg)
 
 ---------------------------------------------------------------------------------------

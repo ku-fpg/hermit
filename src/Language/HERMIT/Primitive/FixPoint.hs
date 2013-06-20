@@ -298,10 +298,11 @@ workerWrapperSplitParam n = \ wrapS unwrapS -> prefixFailMsg "worker/wrapper spl
                                                        guardMsg (isTyVar t) "first argument is not a type."
                                                        let splitAtDefR :: RewriteH Core
                                                            splitAtDefR = do p <- considerConstructT Definition
-                                                                            pathR p $ promoteR $ do wrap   <- parseCoreExprT wrapS
-                                                                                                    unwrap <- parseCoreExprT unwrapS
-                                                                                                    let ty = Type (TyVarTy t)
-                                                                                                    workerWrapperSplitR (App wrap ty) (App unwrap ty)
+                                                                            pathR (snocPathToPath p)
+                                                                              $ promoteR $ do wrap   <- parseCoreExprT wrapS
+                                                                                              unwrap <- parseCoreExprT unwrapS
+                                                                                              let ty = Type (TyVarTy t)
+                                                                                              workerWrapperSplitR (App wrap ty) (App unwrap ty)
                                                        staticArg >>> extractR splitAtDefR
 
 --------------------------------------------------------------------------------------------------

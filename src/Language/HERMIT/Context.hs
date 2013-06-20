@@ -2,9 +2,11 @@
 
 module Language.HERMIT.Context
        ( -- * HERMIT Contexts
+         -- ** Path Synonyms
+         AbsolutePathH
+       , LocalPathH
          -- ** The Standard Context
-         HermitC
-       , AbsolutePathH
+       , HermitC
        , initHermitC
          -- ** Bindings
        , HermitBindingSite(..)
@@ -169,6 +171,7 @@ instance HasGlobalRdrEnv GlobalRdrEnv where
 ------------------------------------------------------------------------
 
 type AbsolutePathH = AbsolutePath Crumb
+type LocalPathH = LocalPath Crumb
 
 -- | The HERMIT context, containing all bindings in scope and the current location in the AST.
 --   The bindings here are lazy by choice, so that we can avoid the cost

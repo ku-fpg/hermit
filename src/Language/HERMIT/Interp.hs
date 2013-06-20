@@ -17,7 +17,7 @@ import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.External
 import Language.HERMIT.Parser
-import Language.HERMIT.Kure (deprecatedIntToPathT)
+import Language.HERMIT.Kure (deprecatedIntToPathT,pathToSnocPath)
 
 -- | Interpret an 'ExprH' by looking up the appropriate 'Dynamic'(s) in the provided 'Data.Map', then interpreting the 'Dynamic'(s) with the provided 'Interp's, returning the first interpretation to succeed (or an error string if none succeed).
 interpExprH :: M.Map String [Dynamic] -> [Interp a] -> ExprH -> Either String a
@@ -63,7 +63,7 @@ interpExpr' _   _   (CoreH str)   = return [ toDyn $ CoreBox (CoreString str) ]
 interpExpr' _   env (ListH exprs) = do dyns <- liftM fromDynList $ mapM (interpExpr' True env) exprs
                                        return $    toBoxedList dyns NameListBox
                                                 ++ toBoxedList dyns StringListBox
-                                                ++ toBoxedList dyns PathBox
+                                                ++ toBoxedList dyns (PathBox . pathToSnocPath)
 interpExpr' rhs env (CmdName str)
                                         -- An Int is either a Path, or will be interpreted specially later.
   | all isDigit str                     = let i = read str in
