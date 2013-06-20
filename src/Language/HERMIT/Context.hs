@@ -1,4 +1,4 @@
-{-# LANGUAGE InstanceSigs, ConstraintKinds, MultiParamTypeClasses #-}
+{-# LANGUAGE InstanceSigs, ConstraintKinds, MultiParamTypeClasses, FlexibleInstances #-}
 
 module Language.HERMIT.Context
        ( -- * HERMIT Contexts
@@ -124,6 +124,10 @@ addForallBinding v = addHermitBinding v FORALL
 class BoundVars c where
   boundVars :: c -> S.Set Var
 
+instance BoundVars (S.Set Var) where
+  boundVars :: S.Set Var -> S.Set Var
+  boundVars = id
+
 -- | List all variables bound in the context that match the given name.
 findBoundVars :: BoundVars c => TH.Name -> c -> [Var]
 findBoundVars nm = filter (cmpTHName2Var nm) . S.toList . boundVars
@@ -148,11 +152,19 @@ lookupHermitBinding v = lookup v . hermitBindings
 class HasCoreRules c where
   hermitCoreRules :: c -> [CoreRule]
 
+instance HasCoreRules [CoreRule] where
+  hermitCoreRules :: [CoreRule] -> [CoreRule]
+  hermitCoreRules = id
+
 ------------------------------------------------------------------------
 
 -- | A class of contexts that store the Global Reader Environment.
 class HasGlobalRdrEnv c where
   hermitGlobalRdrEnv :: c -> GlobalRdrEnv
+
+instance HasGlobalRdrEnv GlobalRdrEnv where
+  hermitGlobalRdrEnv :: GlobalRdrEnv -> GlobalRdrEnv
+  hermitGlobalRdrEnv = id
 
 ------------------------------------------------------------------------
 
