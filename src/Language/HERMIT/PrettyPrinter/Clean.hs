@@ -12,7 +12,7 @@ import Control.Applicative ((<$>))
 import Data.Char (isSpace)
 import Data.Set (notMember)
 
-import GhcPlugins (TyCon(..), Coercion(..), Var(..), Expr(..))
+import GhcPlugins (TyCon(..), Coercion(..), Var(..))
 import qualified GhcPlugins as GHC
 
 import Language.HERMIT.Context
@@ -315,25 +315,18 @@ corePrettyH opts =
 
                    <+ letT ppCoreBind ppCoreExprR (retLet p)
                    -- HACKs
-    {-
-                   <+ (acceptR (\ e -> case e of
-                                         GHC.App (Var v) (GHC.Type t) | po_exprTypes opts == Abstract -> True
-                                         _ -> False) >>>
-                               (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetAtom e2) ->
-                                        RetAtom (e1 <+> e2))))
-    -}
-                   <+ (acceptR (\ e -> case e of
-                                         App (Type _) (Lam {}) | po_exprTypes opts == Omit -> True
-                                         App (App (Var _) (Type _)) (Lam {}) | po_exprTypes opts == Omit -> True
-                                         _ -> False) >>>
-                               (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetLam p' vs pb e0) ->
-                                        RetExpr $ hang (e1 <+>
-                                                            symbol p' '(' <>
-                                                            specialSymbol p' LambdaSymbol <+>
-                                                            hsep vs <+>
-                                                            specialSymbol pb RightArrowSymbol
-                                                       ) 2 (e0 <> symbol p' ')')))
-                      )
+                   -- <+ (acceptR (\ e -> case e of
+                   --                       App (Type _) (Lam {}) | po_exprTypes opts == Omit -> True
+                   --                       App (App (Var _) (Type _)) (Lam {}) | po_exprTypes opts == Omit -> True
+                   --                       _ -> False) >>>
+                   --             (appT ppCoreExprR ppCoreExprR (\ (RetAtom e1) (RetLam p' vs pb e0) ->
+                   --                      RetExpr $ hang (e1 <+>
+                   --                                          symbol p' '(' <>
+                   --                                          specialSymbol p' LambdaSymbol <+>
+                   --                                          hsep vs <+>
+                   --                                          specialSymbol pb RightArrowSymbol
+                   --                                     ) 2 (e0 <> symbol p' ')')))
+                   --    )
 
                    <+ appT ppCoreExprR ppCoreExprR (retApp p App_Fun App_Arg)
                    <+ caseT ppCoreExpr ppVar (ppTypeModeR >>> parenExpr) (const ppCoreAlt) (\ s w ty alts -> RetExpr ((keyword p "case" <+> s <+> keyword p "of" <+> w <+> ty) $$ nest 2 (vcat alts)))
