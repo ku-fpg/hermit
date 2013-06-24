@@ -83,7 +83,7 @@ mkDict externs = toDictionary externs'
 --------------------------------------------------------------------------
 
 -- | The pretty-printing dictionaries.
-pp_dictionary :: Map String (PrettyOptions -> PrettyH CoreTC)
+pp_dictionary :: Map String (PrettyH CoreTC)
 pp_dictionary = fromList
         [ ("clean",  Clean.corePrettyH)
         , ("ast",    AST.corePrettyH)

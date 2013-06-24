@@ -83,7 +83,7 @@ data ShellEffect :: * where
 
 data QueryFun :: * where
    QueryString   :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g String                             -> QueryFun
-   QueryDocH     ::                                                (PrettyH CoreTC -> TranslateH CoreTC DocH)      -> QueryFun
+   QueryDocH     ::                                     (PrettyC -> PrettyH CoreTC -> TranslateH CoreTC DocH)      -> QueryFun
    -- These two be can generalized into
    --  (CommandLineState -> IO String)
    Display       ::                                                                                                   QueryFun
@@ -269,18 +269,19 @@ catch = catchJust (\ (err :: IOException) -> return (show err))
 
 pretty :: SessionState -> PrettyH CoreTC
 pretty ss = case M.lookup (cl_pretty ss) pp_dictionary of
-                Just pp -> pp (cl_pretty_opts ss)
+                Just pp -> pp
                 Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty ss ++ ">>")
 
 showFocus :: MonadIO m => CLM m ()
 showFocus = do
     st <- get
+    let ss = cl_session st
     -- No not show focus while loading
     ifM (gets (cl_loading . cl_session))
         (return ())
         (iokm2clm' "Rendering error: "
-                   (liftIO . cl_render (cl_session st) stdout (cl_pretty_opts $ cl_session st))
-                   (queryS (cl_kernel st) (cl_cursor $ cl_session st) (liftPrettyH $ pretty $ cl_session st) (cl_kernel_env $ cl_session st))
+                   (liftIO . cl_render ss stdout (cl_pretty_opts ss))
+                   (queryS (cl_kernel st) (cl_cursor ss) (liftPrettyH (cl_pretty_opts ss) $ pretty ss) (cl_kernel_env ss))
         )
 
 -------------------------------------------------------------------------------
@@ -570,7 +571,7 @@ performQuery (QueryDocH q) = do
     let ss = cl_session st
     iokm2clm' "Query failed: "
               (liftIO . cl_render ss stdout (cl_pretty_opts ss))
-              (queryS (cl_kernel st) (cl_cursor ss) (q $ pretty ss) (cl_kernel_env ss))
+              (queryS (cl_kernel st) (cl_cursor ss) (q (initPrettyC $ cl_pretty_opts ss) $ pretty ss) (cl_kernel_env ss))
 
 performQuery (Inquiry f) = do
     st <- get
@@ -595,11 +596,12 @@ performMetaCommand Resume = do st <- get
 performMetaCommand (Delete sast) = gets cl_kernel >>= iokm2clm'' . flip deleteS sast
 performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
-    case (M.lookup (cl_pretty (cl_session st)) pp_dictionary,lookup renderer finalRenders) of
+    let ss = cl_session st
+    case (M.lookup (cl_pretty (ss)) pp_dictionary,lookup renderer finalRenders) of
       (Just pp, Just r) -> do doc <- iokm2clm "Bad pretty-printer or renderer option: " $
-                                         queryS (cl_kernel st) (cl_cursor $ cl_session st) (liftPrettyH $ pp (cl_pretty_opts $ cl_session st)) (cl_kernel_env $ cl_session st)
+                                         queryS (cl_kernel st) (cl_cursor ss) (liftPrettyH (cl_pretty_opts ss) pp) (cl_kernel_env ss)
                               liftIO $ do h <- openFile fileName WriteMode
-                                          r h ((cl_pretty_opts $ cl_session st) { po_width = width }) doc
+                                          r h ((cl_pretty_opts ss) { po_width = width }) doc
                                           hClose h
       _ -> throwError "dump: bad pretty-printer or renderer option"
 performMetaCommand (LoadFile fileName) = do
@@ -799,7 +801,7 @@ cl_kernel_env ss = mkHermitMEnv $ \ msg -> case msg of
                         GHC.liftIO $ putStrLn $ "<" ++ show c ++ "> " ++ msg'
                 DebugCore  msg' cxt core -> do
                         GHC.liftIO $ putStrLn $ "[" ++ msg' ++ "]"
-                        doc :: DocH <- apply (pretty ss) (liftPrettyC cxt) (inject core)
+                        doc :: DocH <- apply (pretty ss) (liftPrettyC (cl_pretty_opts ss) cxt) (inject core)
                         GHC.liftIO $ cl_render ss stdout (cl_pretty_opts ss) doc
 
 -- tick counter

@@ -185,9 +185,10 @@ typeArrow p = tySymbol p RightArrowSymbol
 -- TODO: PrettyOptions should be in the context.
 
 -- | Pretty print a fragment of GHC Core using HERMIT's \"Clean\" pretty printer.
-corePrettyH :: PrettyOptions -> PrettyH CoreTC
-corePrettyH opts =
-    let
+corePrettyH :: PrettyH CoreTC
+corePrettyH =
+  do opts <- prettyC_options ^<< contextT
+     let
         -- Use for any GHC structure
         ppSDoc :: GHC.Outputable a => PrettyH a
         ppSDoc = do dynFlags <- constT GHC.getDynFlags
@@ -433,13 +434,13 @@ corePrettyH opts =
 
         --------------------------------------------------------------------
 
-    in  promoteT (ppCoreExpr     :: PrettyH GHC.CoreExpr)
-     <+ promoteT (ppCoreProg     :: PrettyH CoreProg)
-     <+ promoteT (ppCoreBind     :: PrettyH GHC.CoreBind)
-     <+ promoteT (ppCoreDef      :: PrettyH CoreDef)
-     <+ promoteT (ppModGuts      :: PrettyH GHC.ModGuts)
-     <+ promoteT (ppCoreAlt      :: PrettyH GHC.CoreAlt)
-     <+ promoteT (ppType         :: PrettyH GHC.Type)
-     <+ promoteT (ppCoercion     :: PrettyH Coercion)
+     promoteT (ppCoreExpr     :: PrettyH GHC.CoreExpr)
+       <+ promoteT (ppCoreProg     :: PrettyH CoreProg)
+       <+ promoteT (ppCoreBind     :: PrettyH GHC.CoreBind)
+       <+ promoteT (ppCoreDef      :: PrettyH CoreDef)
+       <+ promoteT (ppModGuts      :: PrettyH GHC.ModGuts)
+       <+ promoteT (ppCoreAlt      :: PrettyH GHC.CoreAlt)
+       <+ promoteT (ppType         :: PrettyH GHC.Type)
+       <+ promoteT (ppCoercion     :: PrettyH Coercion)
 
 ------------------------------------------------------------------------------------------------

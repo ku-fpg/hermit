@@ -26,7 +26,7 @@ module Language.HERMIT.PrettyPrinter.Common
       -- * Pretty Printer Traversals
     , PrettyH
     , liftPrettyH
-    , PrettyC -- intentionally abstract
+    , PrettyC(..)
     , initPrettyC
     , liftPrettyC
     , TranslateDocH(..)
@@ -64,7 +64,7 @@ import Text.PrettyPrint.MarkedHughesPJ as PP
 type DocH = MDoc HermitMark
 
 -- newtype wrapper for proper instance selection
-newtype TranslateDocH a = TranslateDocH { unTranslateDocH :: PrettyH a -> TranslateH a DocH }
+newtype TranslateDocH a = TranslateDocH { unTranslateDocH :: PrettyC -> PrettyH a -> TranslateH a DocH }
 
 data TranslateCoreTCDocHBox = TranslateCoreTCDocHBox (TranslateDocH CoreTC) deriving Typeable
 
@@ -127,9 +127,10 @@ type PrettyH a = Translate PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?
 
 -- | Context for PrettyH translations.
-data PrettyC = PrettyC { prettyC_path :: AbsolutePath Crumb
-                       , prettyC_vars :: Set Var}
-                       -- TODO: Add PrettyOptions to PrettyC
+data PrettyC = PrettyC { prettyC_path    :: AbsolutePath Crumb
+                       , prettyC_vars    :: Set Var
+                       , prettyC_options :: PrettyOptions
+                       }
 
 ------------------------------------------------------------------------
 
@@ -164,16 +165,19 @@ instance BoundVars PrettyC where
 
 ------------------------------------------------------------------------
 
-liftPrettyH :: (ReadBindings c, ReadPath c Crumb) => PrettyH a -> Translate c HermitM a DocH
-liftPrettyH pp = translate $ \ c -> apply pp (liftPrettyC c)
+liftPrettyH :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> PrettyH a -> Translate c HermitM a DocH
+liftPrettyH = liftContext . liftPrettyC -- translate $ \ c -> apply pp (liftPrettyC c)
 
-liftPrettyC :: (ReadBindings c, ReadPath c Crumb) => c -> PrettyC
-liftPrettyC c = PrettyC { prettyC_path  = absPath c
-                        , prettyC_vars  = boundVars c }
+liftPrettyC :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> c -> PrettyC
+liftPrettyC opts c = PrettyC { prettyC_path    = absPath c
+                             , prettyC_vars    = boundVars c
+                             , prettyC_options = opts}
 
-initPrettyC :: PrettyC
-initPrettyC = PrettyC { prettyC_path = mempty
-                      , prettyC_vars = S.empty
+initPrettyC :: PrettyOptions -> PrettyC
+initPrettyC opts = PrettyC
+                      { prettyC_path    = mempty
+                      , prettyC_vars    = S.empty
+                      , prettyC_options = opts
                       }
 
 -- These are *recommendations* to the pretty printer.

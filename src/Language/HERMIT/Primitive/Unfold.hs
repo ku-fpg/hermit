@@ -23,7 +23,7 @@ import Data.Set (toList)
 
 import qualified Language.Haskell.TH as TH
 
-import Language.HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), initPrettyC)
+import Language.HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), PrettyC)
 
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
@@ -142,10 +142,10 @@ unfoldStashR label = setFailMsg "Inlining stashed definition failed: " $
                             (fail "some free variables in stashed definition are no longer in scope.")
                    else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v
 
-showStashT :: Injection CoreDef a => PrettyH a -> Translate c HermitM a DocH
-showStashT pp = do
+showStashT :: Injection CoreDef a => PrettyC -> PrettyH a -> Translate c HermitM a DocH
+showStashT pctx pp = do
     stash <- constT getStash
     docs <- forM (Map.toList stash) $ \ (l,d) -> do
-                dfn <- constT $ apply (extractT pp) initPrettyC d
+                dfn <- constT $ apply (extractT pp) pctx d
                 return $ PP.text ("[ " ++ l ++ " ]") PP.$+$ dfn PP.$+$ PP.space
     return $ PP.vcat docs

@@ -33,10 +33,10 @@ tyText = typeColor . text
 
 -- | Pretty print a fragment of GHC Core using HERMIT's \"AST\" pretty printer.
 --   This displays the tree of constructors using nested indentation.
-corePrettyH :: PrettyOptions -> PrettyH CoreTC
-corePrettyH opts = do
+corePrettyH :: PrettyH CoreTC
+corePrettyH = do
     dynFlags <- constT GHC.getDynFlags
-
+    opts <- prettyC_options ^<< contextT
     let hideNotes = po_notes opts
 
         -- Use for any GHC structure, the 'showSDoc' prefix is to remind us

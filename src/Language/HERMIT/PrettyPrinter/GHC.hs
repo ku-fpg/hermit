@@ -19,16 +19,16 @@ import Text.PrettyPrint.MarkedHughesPJ as PP
 ---------------------------------------------------------------------------
 
 -- | This pretty printer is just a reflection of GHC's standard pretty printer.
-corePrettyH :: PrettyOptions -> PrettyH CoreTC
-corePrettyH opts = do
+corePrettyH :: PrettyH CoreTC
+corePrettyH = do
     dynFlags <- constT GHC.getDynFlags
 
-    let hideNotes = po_notes opts
+    let
 
         -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
         -- that we are eliding infomation here.
         ppSDoc :: (GHC.Outputable a) => a -> MDoc b
-        ppSDoc = toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showSDoc dynFlags . GHC.ppr
+        ppSDoc = toDoc . GHC.showSDoc dynFlags . GHC.ppr
             where toDoc s | any isSpace s = parens (text s)
                           | otherwise     = text s
 
