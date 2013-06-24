@@ -139,11 +139,10 @@ getDataConInfo = go <+ (extractR floatAppOut >>> getDataConInfo)
 floatAppOut :: RewriteH Core
 floatAppOut =    simplifyR
               <+ (promoteExprR unfoldR >>> observeR "unfoldR")
-              <+ (onetdR (promoteExprR $    (extractR (innermostR (promoteExprR letElim)) >>> traceR "letElim")
-                                         <+ (letUnfloat >>> traceR "letUnfloat")
-                                         <+ (bracketR "caseElim" caseElim)
-                                         <+ (bracketR "elimExistentials" elimExistentials)
-                                         <+ (bracketR "caseUnfloat" (caseUnfloat >>> appAllR idR idR))))
+              <+ (onetdR (promoteExprR ((letUnfloat >>> traceR "letUnfloat")
+                                        <+ (bracketR "caseElim" caseElim)
+                                        <+ (bracketR "elimExistentials" elimExistentials)
+                                        <+ (bracketR "caseUnfloat" (caseUnfloat >>> appAllR idR idR)))))
 
 sfSimp :: RewriteH Core
 sfSimp = repeatR floatAppOut
