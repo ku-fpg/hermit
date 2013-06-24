@@ -161,6 +161,9 @@ coKeyword :: AbsolutePathH -> String -> DocH
 coKeyword = coText -- An alternative would be keyword.
 
 
+tyChar :: AbsolutePathH -> Char -> DocH
+tyChar p = attrP p . typeColor . char
+
 tyText :: AbsolutePathH -> String -> DocH
 tyText p = attrP p . typeColor . text
 
@@ -373,15 +376,15 @@ corePrettyH opts =
                 <+ forAllTyT ppVar ppTypeR (retForAll p ForAllTy_Body)
                 <+ tyConAppT (forkFirst ppTyCon) (\ _ -> ppTypeR)
                      (\ (pCon,tyCon) tys -> if | GHC.isFunTyCon tyCon && length tys == 2 -> let [ty1,ty2] = tys in retArrowType p (TyConApp_Arg 0) (TyConApp_Arg 1) ty1 ty2
-                                               | tyCon == GHC.listTyCon -> RetAtom $ tyText p "[" <> (case tys of
+                                               | tyCon == GHC.listTyCon -> RetAtom $ tyChar p '[' <> (case tys of
                                                                                                         []  -> empty
                                                                                                         t:_ -> normalExpr t)
-                                                                                                  <> tyText p "]"
-                                               | GHC.isTupleTyCon tyCon -> RetAtom $ tyText p "(" <> (if null tys
+                                                                                                  <> tyChar p ']'
+                                               | GHC.isTupleTyCon tyCon -> RetAtom $ tyChar p '(' <> (if null tys
                                                                                                        then empty
-                                                                                                       else foldr1 (\ ty r -> ty <> tyText p "," <+> r) (map normalExpr tys)
+                                                                                                       else foldr1 (\ ty r -> ty <> tyChar p ',' <+> r) (map normalExpr tys)
                                                                                                      )
-                                                                                                  <> tyText p ")"
+                                                                                                  <> tyChar p ')'
                                                | otherwise              -> retApps p TyConApp_Arg pCon tys
                      )
 
