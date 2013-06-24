@@ -5,8 +5,6 @@ import Control.Arrow
 
 import GhcPlugins
 
-import Language.HERMIT.Core
-import Language.HERMIT.Dictionary -- for bash
 import Language.HERMIT.External
 -- import Language.HERMIT.GHC
 import Language.HERMIT.Kure
