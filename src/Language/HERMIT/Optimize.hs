@@ -59,7 +59,7 @@ optimize f = hermitPlugin $ \ phaseInfo -> runOM phaseInfo . f
 
 data InterpState =
     InterpState { isAST :: SAST
-                , isPretty :: PrettyOptions -> PrettyH CoreTC
+                , isPretty :: PrettyH CoreTC
                 , isPrettyOptions :: PrettyOptions
                 -- TODO: remove once shell can return
                 , shellHack :: Maybe ([External], [CommandLineOption])
@@ -149,9 +149,9 @@ lastPhase = guard (null . phasesLeft)
 display :: OM ()
 display = do
     po <- gets isPrettyOptions
-    gets isPretty >>= query . liftPrettyH . ($ po) >>= liftIO . unicodeConsole stdout po
+    gets isPretty >>= query . liftPrettyH po >>= liftIO . unicodeConsole stdout po
 
-setPretty :: (PrettyOptions -> PrettyH CoreTC) -> OM ()
+setPretty :: PrettyH CoreTC -> OM ()
 setPretty pp = modify $ \s -> s { isPretty = pp }
 
 setPrettyOptions :: PrettyOptions -> OM ()
