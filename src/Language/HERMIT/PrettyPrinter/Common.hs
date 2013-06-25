@@ -166,7 +166,7 @@ instance BoundVars PrettyC where
 ------------------------------------------------------------------------
 
 liftPrettyH :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> PrettyH a -> Translate c HermitM a DocH
-liftPrettyH = liftContext . liftPrettyC -- translate $ \ c -> apply pp (liftPrettyC c)
+liftPrettyH = liftContext . liftPrettyC
 
 liftPrettyC :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> c -> PrettyC
 liftPrettyC opts c = PrettyC { prettyC_path    = absPath c

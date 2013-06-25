@@ -29,11 +29,11 @@ externals = map (.+ Debug)
          ]
 
 -- | If the 'Rewrite' fails, print out the 'Core', with a message.
-observeFailureR :: Injection a Core => String -> RewriteH a -> RewriteH a
+observeFailureR :: Injection a CoreTC => String -> RewriteH a -> RewriteH a
 observeFailureR str m = m <+ observeR str
 
 -- | Print out the 'Core', with a message.
-observeR :: Injection a Core => String -> RewriteH a
+observeR :: Injection a CoreTC => String -> RewriteH a
 observeR msg = extractR $ sideEffectR $ \ cxt core ->
         sendDebugMessage $ DebugCore msg cxt core
 
@@ -42,7 +42,7 @@ traceR :: String -> RewriteH a
 traceR msg = sideEffectR $ \ _ _ -> sendDebugMessage $ DebugTick msg
 
 -- | Show before and after a rewrite.
-bracketR :: Injection a Core => String -> RewriteH a -> RewriteH a
+bracketR :: Injection a CoreTC => String -> RewriteH a -> RewriteH a
 bracketR msg rr = do
     -- Be careful to only run the rr once, in case it has side effects.
     (e,r) <- idR &&& attemptM rr

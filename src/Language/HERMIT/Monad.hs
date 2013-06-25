@@ -160,12 +160,10 @@ cloneVarH nameMod v =
 ----------------------------------------------------------------------------
 
 -- | A message packet.
-data DebugMessage  =  DebugTick String
-                   |  DebugCore String HermitC Core    -- ^ A postcard.
+data DebugMessage = DebugTick String
+                  | DebugCore String HermitC CoreTC
 
 mkHermitMEnv :: (DebugMessage -> HermitM ()) -> HermitMEnv
-mkHermitMEnv debugger = HermitMEnv
-                { hs_debugChan = debugger
-                }
+mkHermitMEnv debugger = HermitMEnv { hs_debugChan = debugger }
 
 ----------------------------------------------------------------------------
