@@ -75,7 +75,7 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST ->
         errorAbortIO err = putStrLn err >> abortS kernel
         errorAbort = liftIO . errorAbortIO
 
-        initState = InterpState initSAST Clean.corePrettyH def Nothing
+        initState = InterpState initSAST Clean.ppCoreTC def Nothing
 
         eval :: PathH -> ProgramT OInst (StateT InterpState IO) () -> InterpM ()
         eval path comp = do

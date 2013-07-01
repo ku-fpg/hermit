@@ -1292,91 +1292,91 @@ deprecatedIntToPathT =  liftM (mempty @@) . deprecatedIntToCrumbT
 ---------------------------------------------------------------------
 
 -- | Promote a rewrite on 'ModGuts'.
-promoteModGutsR :: (ExtendPath c Crumb, Monad m, Injection ModGuts g) => Rewrite c m ModGuts -> Rewrite c m g
+promoteModGutsR :: (Monad m, Injection ModGuts g) => Rewrite c m ModGuts -> Rewrite c m g
 promoteModGutsR = promoteWithFailMsgR "This rewrite can only succeed at the module level."
 {-# INLINE promoteModGutsR #-}
 
 -- | Promote a rewrite on 'CoreProg'.
-promoteProgR :: (ExtendPath c Crumb, Monad m, Injection CoreProg g) => Rewrite c m CoreProg -> Rewrite c m g
+promoteProgR :: (Monad m, Injection CoreProg g) => Rewrite c m CoreProg -> Rewrite c m g
 promoteProgR = promoteWithFailMsgR "This rewrite can only succeed at program nodes (the top-level)."
 {-# INLINE promoteProgR #-}
 
 -- | Promote a rewrite on 'CoreBind'.
-promoteBindR :: (ExtendPath c Crumb, Monad m, Injection CoreBind g) => Rewrite c m CoreBind -> Rewrite c m g
+promoteBindR :: (Monad m, Injection CoreBind g) => Rewrite c m CoreBind -> Rewrite c m g
 promoteBindR = promoteWithFailMsgR "This rewrite can only succeed at binding group nodes."
 {-# INLINE promoteBindR #-}
 
 -- | Promote a rewrite on 'CoreDef'.
-promoteDefR :: (ExtendPath c Crumb, Monad m, Injection CoreDef g) => Rewrite c m CoreDef -> Rewrite c m g
+promoteDefR :: (Monad m, Injection CoreDef g) => Rewrite c m CoreDef -> Rewrite c m g
 promoteDefR = promoteWithFailMsgR "This rewrite can only succeed at recursive definition nodes."
 {-# INLINE promoteDefR #-}
 
 -- | Promote a rewrite on 'CoreAlt'.
-promoteAltR :: (ExtendPath c Crumb, Monad m, Injection CoreAlt g) => Rewrite c m CoreAlt -> Rewrite c m g
+promoteAltR :: (Monad m, Injection CoreAlt g) => Rewrite c m CoreAlt -> Rewrite c m g
 promoteAltR = promoteWithFailMsgR "This rewrite can only succeed at case alternative nodes."
 {-# INLINE promoteAltR #-}
 
 -- | Promote a rewrite on 'CoreExpr'.
-promoteExprR :: (ExtendPath c Crumb, Monad m, Injection CoreExpr g) => Rewrite c m CoreExpr -> Rewrite c m g
+promoteExprR :: (Monad m, Injection CoreExpr g) => Rewrite c m CoreExpr -> Rewrite c m g
 promoteExprR = promoteWithFailMsgR "This rewrite can only succeed at expression nodes."
 {-# INLINE promoteExprR #-}
 
 -- | Promote a rewrite on 'Type'.
-promoteTypeR :: (ExtendPath c Crumb, Monad m, Injection Type g) => Rewrite c m Type -> Rewrite c m g
+promoteTypeR :: (Monad m, Injection Type g) => Rewrite c m Type -> Rewrite c m g
 promoteTypeR = promoteWithFailMsgR "This rewrite can only succeed at type nodes."
 {-# INLINE promoteTypeR #-}
 
 -- | Promote a rewrite on 'Coercion'.
-promoteCoercionR :: (ExtendPath c Crumb, Monad m, Injection Coercion g) => Rewrite c m Coercion -> Rewrite c m g
+promoteCoercionR :: (Monad m, Injection Coercion g) => Rewrite c m Coercion -> Rewrite c m g
 promoteCoercionR = promoteWithFailMsgR "This rewrite can only succeed at coercion nodes."
 {-# INLINE promoteCoercionR #-}
 
 ---------------------------------------------------------------------
 
 -- | Promote a bidirectional rewrite on 'CoreExpr'.
-promoteExprBiR :: (ExtendPath c Crumb, Monad m, Injection CoreExpr g) => BiRewrite c m CoreExpr -> BiRewrite c m g
+promoteExprBiR :: (Monad m, Injection CoreExpr g) => BiRewrite c m CoreExpr -> BiRewrite c m g
 promoteExprBiR b = bidirectional (promoteExprR $ forewardT b) (promoteExprR $ backwardT b)
 {-# INLINE promoteExprBiR #-}
 
 ---------------------------------------------------------------------
 
 -- | Promote a translate on 'ModGuts'.
-promoteModGutsT :: (ExtendPath c Crumb, Monad m, Injection ModGuts g) => Translate c m ModGuts b -> Translate c m g b
+promoteModGutsT :: (Monad m, Injection ModGuts g) => Translate c m ModGuts b -> Translate c m g b
 promoteModGutsT = promoteWithFailMsgT "This translate can only succeed at the module level."
 {-# INLINE promoteModGutsT #-}
 
 -- | Promote a translate on 'CoreProg'.
-promoteProgT :: (ExtendPath c Crumb, Monad m, Injection CoreProg g) => Translate c m CoreProg b -> Translate c m g b
+promoteProgT :: (Monad m, Injection CoreProg g) => Translate c m CoreProg b -> Translate c m g b
 promoteProgT = promoteWithFailMsgT "This translate can only succeed at program nodes (the top-level)."
 {-# INLINE promoteProgT #-}
 
 -- | Promote a translate on 'CoreBind'.
-promoteBindT :: (ExtendPath c Crumb, Monad m, Injection CoreBind g) => Translate c m CoreBind b -> Translate c m g b
+promoteBindT :: (Monad m, Injection CoreBind g) => Translate c m CoreBind b -> Translate c m g b
 promoteBindT = promoteWithFailMsgT "This translate can only succeed at binding group nodes."
 {-# INLINE promoteBindT #-}
 
 -- | Promote a translate on 'CoreDef'.
-promoteDefT :: (ExtendPath c Crumb, Monad m, Injection CoreDef g) => Translate c m CoreDef b -> Translate c m g b
+promoteDefT :: (Monad m, Injection CoreDef g) => Translate c m CoreDef b -> Translate c m g b
 promoteDefT = promoteWithFailMsgT "This translate can only succeed at recursive definition nodes."
 {-# INLINE promoteDefT #-}
 
 -- | Promote a translate on 'CoreAlt'.
-promoteAltT :: (ExtendPath c Crumb, Monad m, Injection CoreAlt g) => Translate c m CoreAlt b -> Translate c m g b
+promoteAltT :: (Monad m, Injection CoreAlt g) => Translate c m CoreAlt b -> Translate c m g b
 promoteAltT = promoteWithFailMsgT "This translate can only succeed at case alternative nodes."
 {-# INLINE promoteAltT #-}
 
 -- | Promote a translate on 'CoreExpr'.
-promoteExprT :: (ExtendPath c Crumb, Monad m, Injection CoreExpr g) => Translate c m CoreExpr b -> Translate c m g b
+promoteExprT :: (Monad m, Injection CoreExpr g) => Translate c m CoreExpr b -> Translate c m g b
 promoteExprT = promoteWithFailMsgT "This translate can only succeed at expression nodes."
 {-# INLINE promoteExprT #-}
 
 -- | Promote a translate on 'Type'.
-promoteTypeT :: (ExtendPath c Crumb, Monad m, Injection Type g) => Translate c m Type b -> Translate c m g b
+promoteTypeT :: (Monad m, Injection Type g) => Translate c m Type b -> Translate c m g b
 promoteTypeT = promoteWithFailMsgT "This translate can only succeed at type nodes."
 {-# INLINE promoteTypeT #-}
 
 -- | Promote a translate on 'Coercion'.
-promoteCoercionT :: (ExtendPath c Crumb, Monad m, Injection Coercion g) => Translate c m Coercion b -> Translate c m g b
+promoteCoercionT :: (Monad m, Injection Coercion g) => Translate c m Coercion b -> Translate c m g b
 promoteCoercionT = promoteWithFailMsgT "This translate can only succeed at coercion nodes."
 {-# INLINE promoteCoercionT #-}
 
