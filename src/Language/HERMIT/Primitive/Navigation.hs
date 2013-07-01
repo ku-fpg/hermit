@@ -73,9 +73,9 @@ considerName = oneNonEmptyPathToT . namedBinding
 -- | Find the path to the RHS of the definition of the given name.
 rhsOf :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core LocalPathH
 rhsOf nm = do p  <- onePathToT (namedBinding nm)
-              cr <- pathT (snocPathToPath p)
+              cr <- localPathT p
                           (   promoteBindT (nonRecT mempty lastCrumbT $ \ () cr -> cr)
-                          <+ promoteDefT  (defT    mempty lastCrumbT $ \ () cr -> cr)
+                           <+ promoteDefT  (defT    mempty lastCrumbT $ \ () cr -> cr)
                           )
               return (p @@ cr)
 -- TODO: The new definition is inefficient.  Try and improve it.  May need to generalise the KURE "onePathTo" combinators.

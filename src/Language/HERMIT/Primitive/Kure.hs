@@ -90,12 +90,12 @@ externals = map (.+ KURE)
 
 hfocusR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m Core LocalPathH -> Rewrite c m Core -> Rewrite c m Core
 hfocusR tp r = do lp <- tp
-                  pathR (snocPathToPath lp) r
+                  localPathR lp r
 {-# INLINE hfocusR #-}
 
 hfocusT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m Core LocalPathH -> Translate c m Core String -> Translate c m Core String
 hfocusT tp t = do lp <- tp
-                  pathT (snocPathToPath lp) t
+                  localPathT lp t
 {-# INLINE hfocusT #-}
 
 ------------------------------------------------------------------------------------
