@@ -19,7 +19,7 @@ where
 
 import Data.Monoid (mempty)
 
-import Control.Arrow (arr)
+import Control.Arrow (arr, (>>>))
 
 import GhcPlugins as GHC
 
@@ -64,22 +64,16 @@ parentOf t = withPatFailMsg "Path points to origin, there is no parent." $
 
 -- | Find the path to the RHS of the binding group of the given name.
 bindingGroupOf :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core LocalPathH
-bindingGroupOf = oneNonEmptyPathToT . bindGroup
+bindingGroupOf nm = setFailMsg ("Binding group for \"" ++ show nm ++ "\" not found.") $ oneNonEmptyPathToT (arr $ bindGroup nm)
 
--- | Find the path to the definiiton of the provided name.
+-- | Find the path to the definition of the provided name.
 considerName :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core LocalPathH
-considerName = oneNonEmptyPathToT . namedBinding
+considerName nm = setFailMsg ("Definition for \"" ++ show nm ++ "\" not found.") $ oneNonEmptyPathToT (arr $ namedBinding nm)
 
 -- | Find the path to the RHS of the definition of the given name.
 rhsOf :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core LocalPathH
-rhsOf nm = do p  <- onePathToT (namedBinding nm)
-              cr <- localPathT p
-                          (   promoteBindT (nonRecT mempty lastCrumbT $ \ () cr -> cr)
-                           <+ promoteDefT  (defT    mempty lastCrumbT $ \ () cr -> cr)
-                          )
-              return (p @@ cr)
--- TODO: The new definition is inefficient.  Try and improve it.  May need to generalise the KURE "onePathTo" combinators.
--- rhsOf nm = onePathToT (namedBinding nm) >>^ (++ [0])
+rhsOf nm = setFailMsg ("Definition for \"" ++ show nm ++ "\" not found.") $ withLocalPathT $ onetdT $
+             accepterR (liftContext baseContext (arr $ namedBinding nm)) >>> defOrNonRecT mempty exposeLocalPathT (\ () p -> p)
 
 -- | Verify that this is a binding group defining the given name.
 bindGroup :: TH.Name -> Core -> Bool
@@ -133,7 +127,7 @@ considerConstruct str = case string2considerable str of
 
 -- | Find the path to the first matching construct.
 considerConstructT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Considerable -> Translate c m Core LocalPathH
-considerConstructT = oneNonEmptyPathToT . underConsideration
+considerConstructT con = oneNonEmptyPathToT (arr $ underConsideration con)
 
 string2considerable :: String -> Maybe Considerable
 string2considerable = flip lookup considerables

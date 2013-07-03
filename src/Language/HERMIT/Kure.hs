@@ -8,6 +8,8 @@ module Language.HERMIT.Kure
          module Language.KURE
        , module Language.KURE.BiTranslate
        , module Language.KURE.Lens
+       , module Language.KURE.ExtendableContext
+       , module Language.KURE.Pathfinder
        -- * Sub-Modules
        , module Language.HERMIT.Kure.SumTypes
        -- * Synonyms
@@ -42,6 +44,7 @@ module Language.HERMIT.Kure
        , typeT, typeR
        , coercionT, coercionR
        -- ** Composite Congruence Combinators
+       , defOrNonRecT, defOrNonRecAllR, defOrNonRecAnyR, defOrNonRecOneR
        , recDefT, recDefAllR, recDefAnyR, recDefOneR
        , letNonRecT, letNonRecAllR, letNonRecAnyR, letNonRecOneR
        , letRecT, letRecAllR, letRecAnyR, letRecOneR
@@ -105,6 +108,8 @@ import GhcPlugins hiding (empty)
 import Language.KURE
 import Language.KURE.BiTranslate
 import Language.KURE.Lens
+import Language.KURE.ExtendableContext
+import Language.KURE.Pathfinder
 
 import Language.HERMIT.Context
 import Language.HERMIT.Core
@@ -670,6 +675,29 @@ coercionR r = coercionT (Coercion <$> r)
 ---------------------------------------------------------------------
 
 -- Some composite congruence combinators to export.
+
+-- | Translate a definition of the form @NonRec 'Var' 'CoreExpr'@ or @Def 'Id' 'CoreExpr'@
+defOrNonRecT :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, MonadCatch m) => Translate c m Var a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m g b
+defOrNonRecT t1 t2 f = promoteBindT (nonRecT t1 t2 f)
+                    <+ promoteDefT  (defT    t1 t2 f)
+{-# INLINE defOrNonRecT #-}
+
+-- | Rewrite all children of a definition of the form @NonRec 'Var' 'CoreExpr'@ or @Def 'Id' 'CoreExpr'@
+defOrNonRecAllR :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Var -> Rewrite c m CoreExpr -> Rewrite c m g
+defOrNonRecAllR r1 r2 = promoteBindR (nonRecAllR r1 r2)
+                     <+ promoteDefR  (defAllR    r1 r2)
+{-# INLINE defOrNonRecAllR #-}
+
+-- | Rewrite any children of a definition of the form @NonRec 'Var' 'CoreExpr'@ or @Def 'Id' 'CoreExpr'@
+defOrNonRecAnyR :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Var -> Rewrite c m CoreExpr -> Rewrite c m g
+defOrNonRecAnyR r1 r2 = unwrapAnyR $ defOrNonRecAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE defOrNonRecAnyR #-}
+
+-- | Rewrite one child of a definition of the form @NonRec 'Var' 'CoreExpr'@ or @Def 'Id' 'CoreExpr'@
+defOrNonRecOneR :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Var -> Rewrite c m CoreExpr -> Rewrite c m g
+defOrNonRecOneR r1 r2 = unwrapAnyR $ defOrNonRecOneR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE defOrNonRecOneR #-}
+
 
 -- | Translate a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
 recDefT :: (ExtendPath c Crumb, AddBindings c, Monad m) => (Int -> (Translate c m Id a1, Translate c m CoreExpr a2)) -> ([(a1,a2)] -> b) -> Translate c m CoreBind b

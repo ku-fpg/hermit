@@ -525,9 +525,9 @@ coreEqual (DefCore dc1) (DefCore dc2) = defsToRecBind [dc1] `bindEqual` defsToRe
 coreEqual _             _             = Nothing
 
 compareValues :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> TH.Name -> Translate c m Core ()
-compareValues n1 n2 = do
-        p1 <- onePathToT (namedBinding n1)
-        p2 <- onePathToT (namedBinding n2)
+compareValues n1 n2 = do -- TODO: this can be made more efficient by performing a single traversal.  But I'm not sure of the intent.  What should happen if two things match a name?
+        p1 <- onePathToT (arr $ namedBinding n1)
+        p2 <- onePathToT (arr $ namedBinding n2)
         e1 <- localPathT p1 idR
         e2 <- localPathT p2 idR
         case e1 `coreEqual` e2 of

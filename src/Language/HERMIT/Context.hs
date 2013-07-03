@@ -41,6 +41,7 @@ import qualified Data.Set as S
 import qualified Language.Haskell.TH as TH
 
 import Language.KURE
+import Language.KURE.ExtendableContext
 
 import Language.HERMIT.Core
 import Language.HERMIT.GHC
@@ -85,10 +86,18 @@ class AddBindings c where
   --   Bindings are added in parallel sets to help with shadowing issues.
   addHermitBindings :: [(Var,HermitBindingSite)] -> c -> c
 
--- | Here the bindings are just discarded.
+-- | The bindings are just discarded.
 instance AddBindings (SnocPath crumb) where
   addHermitBindings :: [(Var,HermitBindingSite)] -> SnocPath crumb -> SnocPath crumb
   addHermitBindings _ = id
+
+-- | The bindings are added to the base context and the extra context.
+instance (AddBindings c, AddBindings e) => AddBindings (ExtendContext c e) where
+  addHermitBindings :: [(Var,HermitBindingSite)] -> ExtendContext c e -> ExtendContext c e
+  addHermitBindings bnds c = c
+                              { baseContext  = addHermitBindings bnds (baseContext c)
+                              , extraContext = addHermitBindings bnds (extraContext c)
+                              }
 
 -------------------------------------------
 
