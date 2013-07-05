@@ -22,7 +22,7 @@ isScriptIdFirstChar c = isAlphaNum c || c `elem` "$_:."
 
 -- | Characters that are valid identifier elements (a superset of 'isScriptIdFirstChar') in a HERMIT script.
 isScriptIdChar :: Char -> Bool
-isScriptIdChar c = isScriptIdFirstChar c || c `elem` "-'"
+isScriptIdChar c = isScriptIdFirstChar c || isScriptInfixIdChar c -- infix identifiers can appear in dictionary names
 
 -- | Characters that are valid in infix operators in a HERMIT script.
 isScriptInfixIdChar :: Char -> Bool
@@ -37,7 +37,7 @@ isCoreIdFirstChar c = c `elem` "_$[]:.=" || isAlpha c
 
 -- | Characters that are valid identifier elements (a superset of 'isCoreIdFirstChar') in a Core fragment.
 isCoreIdChar :: Char -> Bool
-isCoreIdChar c = isAlphaNum c || c `elem` "#-'" || isCoreIdFirstChar c
+isCoreIdChar c = isAlphaNum c || isCoreIdFirstChar c || isCoreInfixIdChar c
 
 -- | Characters that are valid in infix operators in a Core fragment.
 isCoreInfixIdChar :: Char -> Bool
