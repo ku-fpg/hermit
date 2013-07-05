@@ -98,7 +98,7 @@ considerTargets = allT $ collectT (promoteBindT nonRec <+ promoteDefT def)
       def = defT (arr var2String) idR const
 
 -- | Language constructs that can be zoomed to.
-data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetIn | CaseOf | Casty | Ticky | TypeVar | Coerce
+data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetExpr | CaseOf | Casty | Ticky | TypeExpr | CoercionExpr
 
 recognizedConsiderables :: String
 recognizedConsiderables = "Recognized constructs are: " ++ show (map fst considerables)
@@ -112,12 +112,12 @@ considerables =   [ ("bind",Binding)
                   , ("lit",Literal)
                   , ("app",Application)
                   , ("lam",Lambda)
-                  , ("let",LetIn)
+                  , ("let",LetExpr)
                   , ("case",CaseOf)
                   , ("cast",Casty)
                   , ("tick",Ticky)
-                  , ("type",TypeVar)
-                  , ("coerce",Coerce)
+                  , ("type",TypeExpr)
+                  , ("coerce",CoercionExpr)
                   ]
 
 considerConstruct :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => String -> Translate c m Core LocalPathH
@@ -133,21 +133,21 @@ string2considerable :: String -> Maybe Considerable
 string2considerable = flip lookup considerables
 
 underConsideration :: Considerable -> Core -> Bool
-underConsideration Binding     (BindCore _)               = True
-underConsideration Definition  (BindCore (NonRec _ _))    = True
-underConsideration Definition  (DefCore _)                = True
-underConsideration CaseAlt     (AltCore _)                = True
-underConsideration Variable    (ExprCore (Var _))         = True
-underConsideration Literal     (ExprCore (Lit _))         = True
-underConsideration Application (ExprCore (App _ _))       = True
-underConsideration Lambda      (ExprCore (Lam _ _))       = True
-underConsideration LetIn       (ExprCore (Let _ _))       = True
-underConsideration CaseOf      (ExprCore (Case _ _ _ _))  = True
-underConsideration Casty       (ExprCore (Cast _ _))      = True
-underConsideration Ticky       (ExprCore (Tick _ _))      = True
-underConsideration TypeVar     (ExprCore (Type _))        = True
-underConsideration Coerce      (ExprCore (Coercion _))    = True
-underConsideration _           _                          = False
+underConsideration Binding      (BindCore _)               = True
+underConsideration Definition   (BindCore (NonRec _ _))    = True
+underConsideration Definition   (DefCore _)                = True
+underConsideration CaseAlt      (AltCore _)                = True
+underConsideration Variable     (ExprCore (Var _))         = True
+underConsideration Literal      (ExprCore (Lit _))         = True
+underConsideration Application  (ExprCore (App _ _))       = True
+underConsideration Lambda       (ExprCore (Lam _ _))       = True
+underConsideration LetExpr      (ExprCore (Let _ _))       = True
+underConsideration CaseOf       (ExprCore (Case _ _ _ _))  = True
+underConsideration Casty        (ExprCore (Cast _ _))      = True
+underConsideration Ticky        (ExprCore (Tick _ _))      = True
+underConsideration TypeExpr     (ExprCore (Type _))        = True
+underConsideration CoercionExpr (ExprCore (Coercion _))    = True
+underConsideration _            _                          = False
 
 ---------------------------------------------------------------------------------------
 
