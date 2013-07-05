@@ -71,6 +71,19 @@ Hanoi
 
 * Interesting rewrites: ww-split tactic, case-split(-inline), fold, remember (and fold/unfold remembered defns), let-tuple
 
+
+Length
+======
+
+* Another accumulation example, but this time accumulating an Int.
+
+* Taken from: http://www.haskell.org/haskellwiki/Performance/Accumulating_parameter
+
+* Completed
+
+* Interesting rewrites: case-seq
+
+
 Map
 ===
 

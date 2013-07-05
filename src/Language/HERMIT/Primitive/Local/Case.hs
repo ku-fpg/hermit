@@ -78,10 +78,13 @@ externals =
         [ "case L of L -> e ==> e" ]                                         .+ Shallow .+ Eval
     , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
         [ "case-split 'x"
-        , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ]
+        , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ] .+ Shallow
     , external "case-split-inline" (caseSplitInline :: TH.Name -> RewriteH Core)
         [ "Like case-split, but additionally inlines the matched constructor "
-        , "applications for all occurances of the named variable." ]
+        , "applications for all occurances of the named variable." ] .+ Deep
+    , external "case-seq" (promoteExprR . caseSeq :: TH.Name -> RewriteH Core)
+        [ "Force evaluation of a variable by introducing a case."
+        , "case-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow
     ]
 
 ------------------------------------------------------------------------------
@@ -240,12 +243,12 @@ caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
                                              | null shadows           -> return $ flip mkCoreLets rhs $ zipWith NonRec (wild : vs) (e : es)
 -- WARNING: The alpha-renaming to avoid variable capture has not been tested.  We need testing infrastructure!
 
--- | Case split a free variable in an expression:
+-- | Case split a free identifier in an expression:
 --
--- Assume expression e which mentions x :: [a]
+-- Assume expression e which mentions i :: [a]
 --
--- e ==> case x of x
---         [] -> e
+-- e ==> case i of i
+--         []    -> e
 --         (a:b) -> e
 caseSplit :: TH.Name -> Rewrite c HermitM CoreExpr
 caseSplit nm = do
@@ -262,6 +265,20 @@ caseSplit nm = do
                                         return (dc,as)) dcs
                 return $ Case (Var i) i (exprType e) [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
              -- TODO: what about when multiple results are returned?  Should we not catch that as an error?
+
+-- | Force evaluation of a variable by introducing a case.
+--   This is equivalent to adding @(seq v)@ in the source code.
+--
+-- e -> case v of v
+--        _ -> v
+caseSeq :: TH.Name -> Rewrite c HermitM CoreExpr
+caseSeq nm = do
+    frees <- freeIdsT
+    contextfreeT $ \ e -> case filter (cmpTHName2Var nm) (toList frees) of
+                            []   -> fail "caseSplitSeq: provided name is not free"
+                            i:_  -> return $ Case (Var i) i (exprType e) [(DEFAULT, [], e)]
+
+-- TODO: Refactor the commonality betwen caseSplit and caseSeq
 
 -- | Like caseSplit, but additionally inlines the constructor applications
 -- for each occurance of the named variable.
