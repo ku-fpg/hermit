@@ -1,0 +1,31 @@
+flatten-module
+consider 'length
+ww-split-param 1 [| wrap |] [|unwrap |]
+bash
+any-call (unfold 'wrap)
+any-call (unfold 'unwrap)
+simplify
+{ rhs-of 'work
+  alpha-lam 'as
+  lam-body
+  push 'rep
+  eta-expand 'acc
+  lam-body
+  case-float-app
+  { [case-alt 0, alt-rhs]
+    unfold 'rep
+    unshadow
+    one-td inline-case-binder
+    case-elim
+  }
+  { case-alt 1
+    alpha-alt ['b, 'bs]
+    alt-rhs
+    apply-rule "rep-distr"
+    bash
+    unshadow
+    one-td (foreward (ww-fusion [| abs |] [| rep |] [| work bs |]))
+  }
+}
+one-td (unfold 'abs)
+
