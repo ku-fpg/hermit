@@ -13,7 +13,6 @@ module Language.HERMIT.Dictionary
 
 import Control.Arrow
 
-import Data.Dynamic
 import Data.List
 import Data.Map (Map, fromList, toList)
 
@@ -38,10 +37,6 @@ import qualified Language.HERMIT.PrettyPrinter.Clean as Clean
 import qualified Language.HERMIT.PrettyPrinter.GHC as GHCPP
 
 --------------------------------------------------------------------------
-
--- | A 'Dictionary' is a collection of 'Dynamic's.
---   Looking up a 'Dynamic' (via a 'String' key) returns a list, as there can be multiple 'Dynamic's with the same name.
-type Dictionary = Map String [Dynamic]
 
 -- | List of all 'External's provided by HERMIT.
 externals :: [External]

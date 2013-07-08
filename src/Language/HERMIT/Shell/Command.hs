@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, FlexibleContexts, ScopedTypeVariables, GADTs, TypeFamilies, DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, ScopedTypeVariables, GADTs, TypeFamilies, DeriveDataTypeable, LambdaCase #-}
 
 module Language.HERMIT.Shell.Command
        ( -- * The HERMIT Command-line Shell
@@ -475,13 +475,14 @@ evalStmts = mapM_ evalExpr
 evalExpr :: MonadIO m => ExprH -> CLM m ()
 evalExpr expr = do
     dict <- gets cl_dict
-    case interpExprH dict interpShellCommand expr of
-      Left msg  -> throwError msg
-      Right cmd -> case cmd of
-                     AstEffect effect   -> performAstEffect effect expr
-                     ShellEffect effect -> performShellEffect effect
-                     QueryFun query     -> performQuery query
-                     MetaCommand meta   -> performMetaCommand meta
+    runKureM (\case
+                 AstEffect effect   -> performAstEffect effect expr
+                 ShellEffect effect -> performShellEffect effect
+                 QueryFun query     -> performQuery query
+                 MetaCommand meta   -> performMetaCommand meta
+             )
+             throwError
+             (interpExprH dict interpShellCommand expr)
 
 -------------------------------------------------------------------------------
 

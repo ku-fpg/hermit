@@ -3,7 +3,8 @@
 module Language.HERMIT.External
        (
        -- * Externals
-         External
+         Dictionary
+       , External
        , ExternalName
        , ExternalHelp
        , externName
@@ -53,6 +54,12 @@ import qualified Language.Haskell.TH as TH
 import Language.HERMIT.Core
 import Language.HERMIT.Context (LocalPathH)
 import Language.HERMIT.Kure
+
+-----------------------------------------------------------------
+
+-- | A 'Dictionary' is a collection of 'Dynamic's.
+--   Looking up a 'Dynamic' (via a 'String' key) returns a list, as there can be multiple 'Dynamic's with the same name.
+type Dictionary = Map String [Dynamic]
 
 -----------------------------------------------------------------
 
