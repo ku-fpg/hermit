@@ -3,13 +3,13 @@
 module Language.HERMIT.External
        (
        -- * Externals
-         Dictionary
-       , External
+         External
        , ExternalName
        , ExternalHelp
        , externName
-       , externFun
+       , externDyn
        , externHelp
+       , Dictionary
        , toDictionary
        , toHelp
        , external
@@ -54,12 +54,6 @@ import qualified Language.Haskell.TH as TH
 import Language.HERMIT.Core
 import Language.HERMIT.Context (LocalPathH)
 import Language.HERMIT.Kure
-
------------------------------------------------------------------
-
--- | A 'Dictionary' is a collection of 'Dynamic's.
---   Looking up a 'Dynamic' (via a 'String' key) returns a list, as there can be multiple 'Dynamic's with the same name.
-type Dictionary = Map String [Dynamic]
 
 -----------------------------------------------------------------
 
@@ -217,7 +211,7 @@ notT = NotTag . toTagE
 -- | An 'External' is a 'Dynamic' value with some associated meta-data (name, help string and tags).
 data External = External
         { externName :: ExternalName        -- ^ Get the name of an 'External'.
-        , externFun  :: Dynamic             -- ^ Get the 'Dynamic' value stored in an 'External'.
+        , externDyn  :: Dynamic             -- ^ Get the 'Dynamic' value stored in an 'External'.
         , externHelp :: ExternalHelp        -- ^ Get the list of help 'String's for an 'External'.
         , externTags :: [CmdTag]            -- ^ List all the 'CmdTag's associated with an 'External'
         }
@@ -226,7 +220,7 @@ data External = External
 external :: Extern a => ExternalName -> a -> ExternalHelp -> External
 external nm fn help = External
         { externName = nm
-        , externFun  = toDyn (box fn)
+        , externDyn  = toDyn (box fn)
         , externHelp = map ("  " ++) help
         , externTags = []
         }
@@ -235,23 +229,27 @@ external nm fn help = External
 -- and box a Translate of the appropriate type.
 matchingExternals :: (Extern tr, Tag t) => t -> [External] -> [(External, tr)]
 matchingExternals tag exts = [ (e,tr) | e <- exts, tagMatch tag e
-                                      , Just tr <- [fmap unbox $ fromDynamic $ externFun e] ]
+                                      , Just tr <- [fmap unbox $ fromDynamic $ externDyn e] ]
+
+-- | A 'Dictionary' is a collection of 'Dynamic's.
+--   Looking up a 'Dynamic' (via an 'ExternalName' key) returns a list, as there can be multiple 'Dynamic's with the same name.
+type Dictionary = Map ExternalName [Dynamic]
 
 -- | Build a 'Data.Map' from names to 'Dynamic' values.
-toDictionary :: [External] -> Map ExternalName [Dynamic]
+toDictionary :: [External] -> Dictionary
 toDictionary
         -- TODO: check names are uniquely-prefixed
               = fromListWith (++) . map toD
   where
          toD :: External -> (ExternalName,[Dynamic])
-         toD e = (externName e,[externFun e])
+         toD e = (externName e,[externDyn e])
 
 -- | Build a 'Data.Map' from names to help information.
 toHelp :: [External] -> Map ExternalName ExternalHelp
 toHelp = fromListWith (++) . map toH
   where
          toH :: External -> (ExternalName,ExternalHelp)
-         toH e = (externName e, spaceout (externName e ++ " :: " ++ fixup (show (dynTypeRep (externFun e))))
+         toH e = (externName e, spaceout (externName e ++ " :: " ++ fixup (show (dynTypeRep (externDyn e))))
                                          (show (externTags e)) : externHelp e)
 
          spaceout xs ys = xs ++ replicate (width - (length xs + length ys)) ' ' ++ ys

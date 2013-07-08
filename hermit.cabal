@@ -207,6 +207,8 @@ Library
        Language.HERMIT.PrettyPrinter.GHC
 
        Language.HERMIT.Shell.Command
+       Language.HERMIT.Shell.Externals
+       Language.HERMIT.Shell.ImportR
 
   Other-modules:
        Language.HERMIT.Syntax

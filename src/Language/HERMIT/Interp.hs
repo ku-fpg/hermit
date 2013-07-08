@@ -55,19 +55,19 @@ toBoxedList :: (Extern a, Typeable b) => [[Dynamic]] -> ([a] -> b) -> [Dynamic]
 toBoxedList dyns boxCon = [ toDyn $ boxCon (map unbox l) | dl <- dyns, Just l <- [mapM fromDynamic dl] ]
 
 interpExpr' :: Bool -> Dictionary -> ExprH -> KureM [Dynamic]
-interpExpr' _   _   (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
-interpExpr' _   _   (CoreH str)   = return [ toDyn $ CoreBox (CoreString str) ]
-interpExpr' _   env (ListH exprs) = do dyns <- liftM fromDynList $ mapM (interpExpr' True env) exprs
-                                       return $    toBoxedList dyns NameListBox
-                                                ++ toBoxedList dyns StringListBox
-                                                ++ toBoxedList dyns (PathBox . pathToSnocPath)
-interpExpr' rhs env (CmdName str)
+interpExpr' _   _    (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
+interpExpr' _   _    (CoreH str)   = return [ toDyn $ CoreBox (CoreString str) ]
+interpExpr' _   dict (ListH exprs) = do dyns <- liftM fromDynList $ mapM (interpExpr' True dict) exprs
+                                        return $    toBoxedList dyns NameListBox
+                                                 ++ toBoxedList dyns StringListBox
+                                                 ++ toBoxedList dyns (PathBox . pathToSnocPath)
+interpExpr' rhs dict (CmdName str)
                                         -- An Int is either a Path, or will be interpreted specially later.
   | all isDigit str                     = let i = read str in
                                           return [ toDyn $ IntBox i
                                                  , toDyn $ TranslateCorePathBox (deprecatedIntToPathT i) -- TODO: Find a better long-term solution.
                                                  ]
-  | Just dyn <- M.lookup str env        = return $ if rhs
+  | Just dyn <- M.lookup str dict       = return $ if rhs
                                                      then toDyn (StringBox str) : dyn
                                                      else dyn
   -- not a command, try as a string arg... worst case: dynApply fails with "bad type of expression"
