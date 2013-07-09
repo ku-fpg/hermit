@@ -95,19 +95,19 @@ unfoldR = go >>> cleanupUnfoldR
           go = inline <+ appAllR go idR
 
 unfoldPredR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => (Id -> [CoreExpr] -> Bool) -> Rewrite c HermitM CoreExpr
-unfoldPredR p = callPredT p >>= \ _ -> unfoldR
+unfoldPredR p = callPredT p >> unfoldR
 
 unfoldNameR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
-unfoldNameR nm = callNameT nm >>= \ _ -> unfoldR
+unfoldNameR nm = callNameT nm >> unfoldR
 
 unfoldAnyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
 unfoldAnyR = orR . map unfoldNameR
 
 unfoldSaturatedR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-unfoldSaturatedR = callSaturatedT >>= \ _ -> unfoldR
+unfoldSaturatedR = callSaturatedT >> unfoldR
 
 specializeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-specializeR = unfoldPredR (const (all isTyCoArg))
+specializeR = unfoldPredR (const $ all isTyCoArg)
 
 -- NOTE: Using a Rewrite because of the way the Kernel is set up.
 --       This is a temporary hack until we work out the best way to structure the Kernel.
