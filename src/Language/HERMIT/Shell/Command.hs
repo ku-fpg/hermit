@@ -352,7 +352,7 @@ performMetaCommand (LoadFile fileName) = do
        setLoading True
        evalStmts stmts `catchError` (\ err -> setLoading load_st >> throwError err)
        setLoading load_st
-       putStrToConsole $ "[done, loaded " ++ show (numStmtsH stmts) ++  " commands]" -- TODO: This is better than saying "N", but not very robust.
+       putStrToConsole $ "[done, loaded " ++ show (length stmts) ++  " commands]"
        showFocus
 
 performMetaCommand (SaveFile fileName) = do

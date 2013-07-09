@@ -155,8 +155,8 @@ substAltR v e = do (_, vs, _) <- idR
 letSubstR :: MonadCatch m => Rewrite c m CoreExpr
 letSubstR =  prefixFailMsg "Let substition failed: " $
              rewrite $ \ c expr -> case occurAnalyseExpr expr of
-                                     Let (NonRec b be) e -> apply (substExprR b be) c e
-                                     _ -> fail "expression is not a non-recursive Let."
+                                     Let (NonRec v rhs) body -> apply (substExprR v rhs) c body
+                                     _                       -> fail "expression is not a non-recursive Let."
 
 
 -- Neil: Commented this out as it's not (currently) used.
@@ -168,13 +168,13 @@ letSubstR =  prefixFailMsg "Let substition failed: " $
 -- | This is quite expensive (O(n) for the size of the sub-tree).
 safeLetSubstR :: (ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
 safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
-                 translate $ \ env expr ->
-    let   -- Lit?
+                 translate $ \ c expr ->
+    let   -- what about other Expr constructors?
           safeBind (Var {})   = True
           safeBind (Lam {})   = True
           safeBind e@(App {}) =
                  case collectArgs e of
-                   (Var f,args) -> arityOf env f > length (filter (not . isTyCoArg) args) -- Neil: I've changed this to "not . isTyCoArg" rather than "not . isTypeArg".  This may not be the right thing to do though.
+                   (Var f,args) -> arityOf c f > length (filter (not . isTyCoArg) args) -- Neil: I've changed this to "not . isTyCoArg" rather than "not . isTypeArg".  This may not be the right thing to do though.
                    (other,args) -> case collectBinders other of
                                      (bds,_) -> length bds > length args
           safeBind _          = False
@@ -185,13 +185,10 @@ safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
           safeSubst _ = False   -- strange case, like a loop breaker
    in case occurAnalyseExpr expr of
       -- By (our) definition, types are a trivial bind
-      Let (NonRec b _) _
-         | isTyVar b -> apply letSubstR env expr
-      Let (NonRec b be) _
-         | isId b && (safeBind be || safeSubst (occInfo (idInfo b)))
-                     -> apply letSubstR env expr
-         | otherwise -> fail "safety critera not met."
-      _ -> fail "expression is not a non-recursive Let."
+      Let (NonRec v rhs) body  -> if isTyVar v || (isId v && (safeBind rhs || safeSubst (occInfo $ idInfo v)))
+                                   then apply (substExprR v rhs) c body
+                                   else fail "safety criteria not met."
+      _                        -> fail "expression is not a non-recursive Let."
 
 -- | 'safeLetSubstPlusR' tries to inline a stack of bindings, stopping when reaches
 -- the end of the stack of lets.
@@ -200,7 +197,7 @@ safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 
 ------------------------------------------------------------------------
 
-info :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasDynFlags m, MonadCatch m) => Translate c m CoreTC String
+info :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, BoundVars c, HasDynFlags m, MonadCatch m) => Translate c m CoreTC String
 info = do crumbs <- childrenT
           translate $ \ c coreTC -> do
             dynFlags <- getDynFlags
@@ -208,22 +205,22 @@ info = do crumbs <- childrenT
                 node     = "Node: " ++ coreTCNode coreTC
                 con      = "Constructor: " ++ coreTCConstructor coreTC
                 children = "Children: " ++ showCrumbs crumbs
-                bds      = "Bindings in Scope: " ++ show (map var2String $ toList $ boundVars c)
+                bds      = "Bindings in Scope: " ++ showVars (toList $ boundVars c)
                 extra    = case coreTC of
                              Core (ExprCore e)      -> let tyK    = exprKindOrType e
                                                         in [(if isKind tyK then "Kind: " else "Type: ") ++ showPpr dynFlags tyK] ++
                                                            ["Free Variables: " ++ showVars (toList $ coreExprFreeVars e)] ++
                                                            case e of
-                                                             Var i -> ["Identifier Info: " ++ showIdInfo dynFlags i]
+                                                             Var i -> ["Identifier Arity: " ++ show (arityOf c i)]
                                                              _     -> []
                              TyCo (TypeCore ty)     -> ["Kind: " ++ showPpr dynFlags (typeKind ty)]
-                             TyCo (CoercionCore co) -> ["Kind: " ++ showPpr dynFlags (coercionKind co) ] -- TODO: Revisit this, should we use coercionKind?
+                             TyCo (CoercionCore co) -> ["Kind: " ++ showPpr dynFlags (coercionKind co) ]
                              _                      -> []
 
             return (intercalate "\n" $ [pa,node,con,children,bds] ++ extra)
 
-showIdInfo :: DynFlags -> Id -> String
-showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
+-- showIdInfo :: DynFlags -> Id -> String
+-- showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
 
 coreTCNode :: CoreTC -> String
 coreTCNode (Core core)           = coreNode core
@@ -540,8 +537,8 @@ compareValues n1 n2 = do -- TODO: this can be made more efficient by performing 
 
 -- | Try to figure out the arity of an identifier.
 arityOf :: ReadBindings c => c -> Id -> Int
-arityOf env i =
-     case lookupHermitBinding i env of
+arityOf c i =
+     case lookupHermitBinding i c of
         Nothing       -> idArity i
         -- Note: the exprArity will call idArity if
         -- it hits an id; perhaps we should do the counting

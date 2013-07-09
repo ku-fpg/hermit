@@ -108,13 +108,17 @@ letIntro nm = prefixFailMsg "Let-introduction failed: " $
                                        return $ Let (NonRec v e) (Var v)
 
 letElim :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-letElim = letNonRecElim <+ letRecElim
+letElim = prefixFailMsg "Dead-let-elimination failed: " $
+          withPatFailMsg (wrongExprForm "Let binds expr") $
+          do Let bg _ <- idR
+             case bg of
+               NonRec{} -> letNonRecElim
+               Rec{}    -> letRecElim
 
 -- | Remove an unused non-recursive let binding.
 --   @let v = E1 in E2@ ==> @E2@, if @v@ is not free in @E2@
 letNonRecElim :: MonadCatch m => Rewrite c m CoreExpr
-letNonRecElim = prefixFailMsg "Dead-let-elimination failed: " $
-                withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
+letNonRecElim = withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
                 do Let (NonRec v _) e <- idR
                    guardMsg (v `notMember` coreExprFreeVars e) "let-bound variable appears in the expression."
                    return e
@@ -122,8 +126,8 @@ letNonRecElim = prefixFailMsg "Dead-let-elimination failed: " $
 -- TODO: find the GHC way to do this, as this implementation will be defeated by mutual recursion
 -- | Remove all unused recursive let bindings in the current group.
 letRecElim :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-letRecElim = prefixFailMsg "Dead-let-elimination failed: " $ do
-    Let (Rec bnds) body <- idR
+letRecElim = withPatFailMsg (wrongExprForm "Let (Rec v e1) e2") $
+ do Let (Rec bnds) body <- idR
     (vsAndFrees, bodyFrees) <- letRecDefT (\ _ -> (idR,freeVarsT)) freeVarsT (,)
     -- binder is alive if it is found free anywhere but its own rhs
     let living = [ v
