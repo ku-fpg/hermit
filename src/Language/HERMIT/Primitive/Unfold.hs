@@ -72,7 +72,7 @@ externals =
 -- Invariant: will not introduce let bindings
 cleanupUnfoldR :: MonadCatch m => Rewrite c m CoreExpr
 cleanupUnfoldR = do
-    (f, args) <- callT <+ (idR >>> arr (,[]))
+    (f, args) <- callT <+ arr (,[])
     let (vs, body) = collectBinders f
         lenargs = length args
         lenvs = length vs
@@ -81,8 +81,7 @@ cleanupUnfoldR = do
                     LT -> mkCoreLams (drop lenargs vs) body
                     _  -> body
         bnds = zipWith NonRec vs args
-    body'' <- contextonlyT $ \ c -> do
-        apply (andR $ replicate (length bnds) letSubstR) c $ mkCoreLets bnds body'
+    body'' <- andR (replicate (length bnds) letSubstR) <<< return (mkCoreLets bnds body')
     return $ case comp of
                 GT -> mkCoreApps body'' $ drop lenvs args
                 _  -> body''

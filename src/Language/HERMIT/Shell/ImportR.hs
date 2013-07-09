@@ -45,20 +45,20 @@ unscopedToScopedImportR = parse
     parse :: [UnscopedImportR] -> KureM [ScopedImportR]
     parse []     = return []
     parse (y:ys) = case y of
-                     ImportUnsupported -> fail "Unsupported AST effect."
+                     ImportUnsupported -> fail "unsupported AST effect."
                      ImportPrimUn pr   -> (ImportPrimSc pr :) <$> parse ys
                      ImportBeginScope  -> do (rs,zs) <- parseUntilEndScope ys
                                              (ImportScope rs :) <$> parse zs
-                     ImportEndScope    -> fail "Unmatched end-of-scope."
+                     ImportEndScope    -> fail "unmatched end-of-scope."
 
     parseUntilEndScope :: [UnscopedImportR] -> KureM ([ScopedImportR], [UnscopedImportR])
-    parseUntilEndScope []     = fail "No end-of-scope."
+    parseUntilEndScope []     = fail "missing end-of-scope."
     parseUntilEndScope (y:ys) = case y of
                                   ImportEndScope    -> return ([],ys)
-                                  ImportBeginScope  -> do (rs1,zs)  <- parseUntilEndScope ys
-                                                          first (ImportScope rs1 :) <$> parseUntilEndScope zs
+                                  ImportBeginScope  -> do (rs,zs)  <- parseUntilEndScope ys
+                                                          first (ImportScope rs :) <$> parseUntilEndScope zs
                                   ImportPrimUn pr   -> first (ImportPrimSc pr :) <$> parseUntilEndScope ys
-                                  ImportUnsupported -> fail "Unsupported AST effect."
+                                  ImportUnsupported -> fail "unsupported AST effect."
 
 -----------------------------------
 
