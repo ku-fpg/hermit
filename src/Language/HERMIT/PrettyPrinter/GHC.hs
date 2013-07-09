@@ -7,7 +7,7 @@ module Language.HERMIT.PrettyPrinter.GHC
   , ppCoreBind
   , ppCoreExpr
   , ppCoreAlt
-  , ppType
+  , ppKindOrType
   , ppCoercion
   )
 where
@@ -34,7 +34,7 @@ ppCoreTC =
        <+ promoteDefT      ppCoreDef
        <+ promoteModGutsT  ppModGuts
        <+ promoteAltT      ppCoreAlt
-       <+ promoteTypeT     ppType
+       <+ promoteTypeT     ppKindOrType
        <+ promoteCoercionT ppCoercion
 
 -- Use for any GHC structure.
@@ -62,8 +62,8 @@ ppCoreAlt = ppSDoc
 ppCoreDef :: PrettyH CoreDef
 ppCoreDef = defT ppSDoc ppCoreExpr $ \ i e -> i <+> char '=' <+> e
 
-ppType :: PrettyH GHC.Type
-ppType = ppSDoc
+ppKindOrType :: PrettyH GHC.Type
+ppKindOrType = ppSDoc
 
 ppCoercion :: PrettyH GHC.Coercion
 ppCoercion = ppSDoc

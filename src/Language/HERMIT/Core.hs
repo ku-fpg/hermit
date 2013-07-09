@@ -14,7 +14,7 @@ module Language.HERMIT.Core
           , bindToIdExprs
             -- * Utilities
           , isCoArg
-          , exprTypeOrKind
+          , exprKindOrType
           , endoFunType
           , funArgResTypes
           , funsWithInverseTypes
@@ -87,9 +87,9 @@ type CoreTickish = Tickish Id
 
 -- | GHC's 'exprType' function throws an error if applied to a 'Type'.
 --   This function returns the 'Kind' of a 'Type', but otherwise behaves as 'exprType'.
-exprTypeOrKind :: CoreExpr -> KindOrType
-exprTypeOrKind (Type t)  = typeKind t
-exprTypeOrKind e         = exprType e
+exprKindOrType :: CoreExpr -> KindOrType
+exprKindOrType (Type t)  = typeKind t
+exprKindOrType e         = exprType e
 
 -- | Returns @True@ iff the expression is a 'Coercion' expression at its top level.
 isCoArg :: CoreExpr -> Bool

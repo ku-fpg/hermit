@@ -104,7 +104,7 @@ externals =
 letIntro :: TH.Name -> Rewrite c HermitM CoreExpr
 letIntro nm = prefixFailMsg "Let-introduction failed: " $
               contextfreeT $ \ e -> do guardMsg (not $ isTypeArg e) "let expressions may not return a type."
-                                       v <- newIdH (show nm) (exprTypeOrKind e)
+                                       v <- newIdH (show nm) (exprKindOrType e)
                                        return $ Let (NonRec v e) (Var v)
 
 letElim :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr

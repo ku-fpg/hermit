@@ -70,9 +70,9 @@ coAxiomName = CoAxiom.coAxiomName
 -- showName :: TH.Name -> String
 -- TH.mkName :: String -> TH.Name
 
--- | Get the unqualified name from a 'Name'.
-uqName :: Name -> String
-uqName = getOccString -- equivalent to: occNameString . getOccName
+-- | Get the unqualified name from a 'NamedThing'.
+uqName :: NamedThing nm => nm -> String
+uqName = getOccString
 
 -- | Get the fully qualified name from a 'Name'.
 fqName :: Name -> String

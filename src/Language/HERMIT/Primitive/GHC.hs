@@ -210,9 +210,8 @@ info = do crumbs <- childrenT
                 children = "Children: " ++ showCrumbs crumbs
                 bds      = "Bindings in Scope: " ++ show (map var2String $ toList $ boundVars c)
                 extra    = case coreTC of
-                             Core (ExprCore e)      -> let tyK    = exprTypeOrKind e
-                                                           prefix = if isKind tyK then "Kind: " else "Type: "
-                                                        in [prefix ++ showPpr dynFlags (exprTypeOrKind e)] ++
+                             Core (ExprCore e)      -> let tyK    = exprKindOrType e
+                                                        in [(if isKind tyK then "Kind: " else "Type: ") ++ showPpr dynFlags tyK] ++
                                                            ["Free Variables: " ++ showVars (toList $ coreExprFreeVars e)] ++
                                                            case e of
                                                              Var i -> ["Identifier Info: " ++ showIdInfo dynFlags i]
