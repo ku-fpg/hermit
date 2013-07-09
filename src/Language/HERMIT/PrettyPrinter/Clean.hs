@@ -209,7 +209,7 @@ ppCoreTC =
 ppSDoc :: GHC.Outputable a => PrettyH a
 ppSDoc = do dynFlags <- constT GHC.getDynFlags
             p        <- absPathT
-            doc      <- arr (GHC.showSDoc dynFlags . GHC.ppr)
+            doc      <- arr (GHC.showPpr dynFlags)
             if any isSpace doc
              then return (cleanParens p (idText p doc))
              else return (idText p doc)
@@ -272,8 +272,8 @@ ppModGuts = do p    <- absPathT
       ppProg = progConsT ppBind ppProg ($+$) <+ progNilT empty
 
       ppBind :: PrettyH GHC.CoreBind
-      ppBind =    (absPathT >>= \ p -> nonRecT ppVar (GHC.exprType ^>> ppType) (\ v ty -> v <+> typeOfSymbol p <+> ty))
-               <+ recT (\ _ -> absPathT &&& defT ppVar (GHC.exprType ^>> ppType) (,)) (\ pvtys -> vcat [ v <+> typeOfSymbol p <+> ty | (p,(v,ty)) <- pvtys ])
+      ppBind =    (absPathT >>= \ p -> nonRecT ppVar (exprTypeOrKind ^>> ppType) (\ v ty -> v <+> typeOfSymbol p <+> ty))
+               <+ recT (\ _ -> absPathT &&& defT ppVar (exprTypeOrKind ^>> ppType) (,)) (\ pvtys -> vcat [ v <+> typeOfSymbol p <+> ty | (p,(v,ty)) <- pvtys ])
 
 ppCoreProg :: PrettyH CoreProg
 ppCoreProg = progConsT ppCoreBind ppCoreProg ($+$) <+ progNilT empty
@@ -382,7 +382,8 @@ ppTypeR = absPathT >>= ppTypePR
                                                                                                else foldr1 (\ ty r -> ty <> tyChar p ',' <+> r) (map normalExpr tys)
                                                                                              )
                                                                                           <> tyChar p ')'
-                                       | otherwise              -> retApps p TyConApp_Arg pCon tys
+                                       | isLiftedTypeKindCon tyCon -> RetAtom $ tyChar p '*'
+                                       | otherwise                 -> retApps p TyConApp_Arg pCon tys
              )
 
 --------------------------------------------------------------------
@@ -434,6 +435,6 @@ ppCoKind = do p <- absPathT
 --------------------------------------------------------------------
 
 ppTypeSig :: PrettyH GHC.CoreExpr
-ppTypeSig = coercionT ppCoKind <+ (GHC.exprType ^>> ppType)
+ppTypeSig = coercionT ppCoKind <+ (exprTypeOrKind ^>> ppType)
 
 ------------------------------------------------------------------------------------------------

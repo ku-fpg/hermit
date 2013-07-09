@@ -40,7 +40,7 @@ ppCoreTC =
 -- Use for any GHC structure.
 ppSDoc :: GHC.Outputable a => PrettyH a
 ppSDoc = do dynFlags <- constT GHC.getDynFlags
-            arr (toDoc . GHC.showSDoc dynFlags . GHC.ppr)
+            arr (toDoc . GHC.showPpr dynFlags)
     where toDoc s | any isSpace s = parens (text s)
                   | otherwise     = text s
 

@@ -21,6 +21,8 @@ module Language.HERMIT.GHC
     , GhcException(..)
     , throwGhcException
     , exprArity
+    , isKind
+    , isLiftedTypeKindCon
     , Language.HERMIT.GHC.coAxiomName
 #if __GLASGOW_HASKELL__ > 706
     , CoAxiom.BranchIndex
@@ -37,6 +39,7 @@ import TysPrim (alphaTyVars)
 import TypeRep (Type(..),TyLit(..))
 import Panic (GhcException(ProgramError), throwGhcException)
 import CoreArity
+import Kind (isKind,isLiftedTypeKindCon)
 
 #if __GLASGOW_HASKELL__ <= 706
 import Data.Maybe (isJust)

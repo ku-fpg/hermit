@@ -210,13 +210,15 @@ info = do crumbs <- childrenT
                 children = "Children: " ++ showCrumbs crumbs
                 bds      = "Bindings in Scope: " ++ show (map var2String $ toList $ boundVars c)
                 extra    = case coreTC of
-                             Core (ExprCore e)      -> ["Type or Kind: " ++ showPpr dynFlags (exprTypeOrKind e)] ++
-                                                       ["Free Variables: " ++ showVars (toList $ coreExprFreeVars e)] ++
-                                                       case e of
-                                                         Var i -> ["Identifier Info: " ++ showIdInfo dynFlags i]
-                                                         _     -> []
+                             Core (ExprCore e)      -> let tyK    = exprTypeOrKind e
+                                                           prefix = if isKind tyK then "Kind: " else "Type: "
+                                                        in [prefix ++ showPpr dynFlags (exprTypeOrKind e)] ++
+                                                           ["Free Variables: " ++ showVars (toList $ coreExprFreeVars e)] ++
+                                                           case e of
+                                                             Var i -> ["Identifier Info: " ++ showIdInfo dynFlags i]
+                                                             _     -> []
                              TyCo (TypeCore ty)     -> ["Kind: " ++ showPpr dynFlags (typeKind ty)]
-                             TyCo (CoercionCore co) -> ["Kind: " ++ showPpr dynFlags (coercionType co) ] -- TODO: Revisit this, should we use coercionKind?
+                             TyCo (CoercionCore co) -> ["Kind: " ++ showPpr dynFlags (coercionKind co) ] -- TODO: Revisit this, should we use coercionKind?
                              _                      -> []
 
             return (intercalate "\n" $ [pa,node,con,children,bds] ++ extra)

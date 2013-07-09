@@ -85,18 +85,16 @@ type CoreTickish = Tickish Id
 
 -----------------------------------------------------------------------
 
--- | GHC's 'exprType' function throws an error if applied to a 'Type' (but, inconsistently, return a 'Kind' if applied to a type variable).
+-- | GHC's 'exprType' function throws an error if applied to a 'Type'.
 --   This function returns the 'Kind' of a 'Type', but otherwise behaves as 'exprType'.
-exprTypeOrKind :: CoreExpr -> Type
-exprTypeOrKind (Type t) = typeKind t
-exprTypeOrKind e        = exprType e
-{-# INLINE exprTypeOrKind #-}
+exprTypeOrKind :: CoreExpr -> KindOrType
+exprTypeOrKind (Type t)  = typeKind t
+exprTypeOrKind e         = exprType e
 
 -- | Returns @True@ iff the expression is a 'Coercion' expression at its top level.
 isCoArg :: CoreExpr -> Bool
 isCoArg (Coercion {}) = True
 isCoArg _             = False
-{-# INLINE isCoArg #-}
 
 -----------------------------------------------------------------------
 
@@ -113,12 +111,10 @@ endoFunType :: Monad m => CoreExpr -> m Type
 endoFunType f = do (ty1,ty2) <- funArgResTypes f
                    guardMsg (eqType ty1 ty2) ("argument and result types differ.")
                    return ty1
-{-# INLINE endoFunType #-}
 
 -- | Return the domain and codomain types of a function expression.
 funArgResTypes :: Monad m => CoreExpr -> m (Type,Type)
 funArgResTypes e = maybe (fail "not a function type.") return (splitFunTy_maybe $ exprType e)
-{-# INLINE funArgResTypes #-}
 
 -- | Check two expressions have types @a -> b@ and @b -> a@, returning @(a,b)@.
 funsWithInverseTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
@@ -128,7 +124,6 @@ funsWithInverseTypes f g = do (fdom,fcod) <- funArgResTypes f
                                 do guardM (eqType fdom gcod)
                                    guardM (eqType gdom fcod)
                                    return (fdom,fcod)
-{-# INLINE funsWithInverseTypes #-}
 
 -----------------------------------------------------------------------
 

@@ -56,7 +56,7 @@ ppCoreTC =
 ppSDoc :: GHC.Outputable a => PrettyH a
 ppSDoc =  do dynFlags <- constT GHC.getDynFlags
              hideNotes  <- (po_notes . prettyC_options) ^<< contextT
-             arr (toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showSDoc dynFlags . GHC.ppr)
+             arr (toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showPpr dynFlags)
     where toDoc s | any isSpace s = parens (text s)
                   | otherwise     = text s
 
