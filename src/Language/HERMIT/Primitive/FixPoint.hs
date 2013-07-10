@@ -267,15 +267,13 @@ workerWrapperFusion = parse3beforeBiR workerWrapperFusionBR
 -- | \\ wrap unwrap ->  (@g = expr@  ==>  @g = let f = \\ g -> expr in let work = unwrap (f (wrap work)) in wrap work)@
 workerWrapperSplitR :: CoreExpr -> CoreExpr -> RewriteH CoreDef
 workerWrapperSplitR wrap unwrap =
-  let f    = TH.mkName "f"
-      w    = TH.mkName "w"
-      work = TH.mkName "work"
+  let work = TH.mkName "work"
       fx   = TH.mkName "fix"
    in
-      fixIntro >>> defAllR idR ( appAllR idR (letIntro f)
+      fixIntro >>> defAllR idR ( appAllR idR (letIntro "f")
                                   >>> letFloatArg
                                   >>> letAllR idR ( forewardT (workerWrapperFacBR wrap unwrap)
-                                                     >>> appAllR idR (letIntro w)
+                                                     >>> appAllR idR (letIntro "w")
                                                      >>> letFloatArg
                                                      >>> letNonRecAllR idR (unfoldNameR fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
                                                      >>> letSubstR

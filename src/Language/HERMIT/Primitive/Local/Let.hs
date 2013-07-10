@@ -52,7 +52,7 @@ import qualified Language.Haskell.TH as TH
 -- | Externals relating to Let expressions.
 externals :: [External]
 externals =
-    [ external "let-intro" (promoteExprR . letIntro :: TH.Name -> RewriteH Core)
+    [ external "let-intro" (promoteExprR . letIntro . show :: TH.Name -> RewriteH Core)
         [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
     , external "let-elim" (promoteExprR letElim :: RewriteH Core)
         [ "Remove an unused let binding."
@@ -98,10 +98,10 @@ externals =
 -------------------------------------------------------------------------------------------
 
 -- | @e@ ==> @(let v = e in v)@, name of v is provided
-letIntro :: TH.Name -> Rewrite c HermitM CoreExpr
+letIntro :: String -> Rewrite c HermitM CoreExpr
 letIntro nm = prefixFailMsg "Let-introduction failed: " $
               contextfreeT $ \ e -> do guardMsg (not $ isTypeArg e) "let expressions may not return a type."
-                                       v <- newIdH (show nm) (exprKindOrType e)
+                                       v <- newIdH nm (exprKindOrType e)
                                        return $ Let (NonRec v e) (Var v)
 
 letElim :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
@@ -257,13 +257,13 @@ letUnfloatLam = prefixFailMsg "Let unfloating from lambda failed: " $
 -- | Re-order a sequence of nested non-recursive let bindings.
 --   The argument list should contain the let-bound variables, in the desired order.
 reorderNonRecLets :: MonadCatch m => [TH.Name] -> Rewrite c m CoreExpr
-reorderNonRecLets ns = prefixFailMsg "Reorder lets failed: " $
-                 do guardMsg (not $ null ns) "no names given."
-                    guardMsg (nodups ns) "duplicate names given."
+reorderNonRecLets nms = prefixFailMsg "Reorder lets failed: " $
+                 do guardMsg (not $ null nms) "no names given."
+                    guardMsg (nodups nms) "duplicate names given."
                     e <- idR
-                    (ves,x) <- setFailMsg "insufficient non-recursive lets." $ takeNonRecLets (length ns) e
+                    (ves,x) <- setFailMsg "insufficient non-recursive lets." $ takeNonRecLets (length nms) e
                     guardMsg (noneFreeIn ves) "some of the bound variables appear in the right-hand-sides."
-                    e' <- mkNonRecLets `liftM` mapM (lookupName ves) ns `ap` return x
+                    e' <- mkNonRecLets `liftM` mapM (lookupName ves) nms `ap` return x
                     guardMsg (not $ exprEqual e e') "bindings already in specified order."
                     return e'
 
@@ -278,10 +278,11 @@ reorderNonRecLets ns = prefixFailMsg "Reorder lets failed: " $
                       in all (`notMember` unions (map coreExprFreeVars es)) vs
 
     lookupName :: Monad m => [(Var,CoreExpr)] -> TH.Name -> m (Var,CoreExpr)
-    lookupName ves nm = case filter (cmpTHName2Var nm . fst) ves of
-                          []   -> fail $ "name " ++ show nm ++ " not matched."
-                          [ve] -> return ve
-                          _    -> fail $ "multiple matches for " ++ show nm ++ "."
+    lookupName ves nm = let n = show nm
+                         in case filter (cmpString2Var n . fst) ves of
+                              []   -> fail $ "name " ++ n ++ " not matched."
+                              [ve] -> return ve
+                              _    -> fail $ "multiple matches for " ++ n ++ "."
 
     mkNonRecLets :: [(Var,CoreExpr)] -> CoreExpr -> CoreExpr
     mkNonRecLets []          x  = x

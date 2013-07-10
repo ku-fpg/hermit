@@ -47,7 +47,6 @@ import Data.Maybe (isJust)
 import qualified CoAxiom -- for coAxiomName
 #endif
 import qualified Language.Haskell.TH as TH
-import Language.Haskell.TH.Syntax (showName)
 
 --------------------------------------------------------------------------
 
@@ -107,7 +106,7 @@ cmpString2Var str = cmpString2Name str . varName
 
 -- | Compare a 'TH.Name' to a 'Name' for equality. See 'cmpString2Name'.
 cmpTHName2Name :: TH.Name -> Name -> Bool
-cmpTHName2Name th_nm = cmpString2Name (showName th_nm)
+cmpTHName2Name th_nm = cmpString2Name (show th_nm)
 
 -- | Compare a 'TH.Name' to a 'Var' for equality. See 'cmpString2Name'.
 cmpTHName2Var :: TH.Name -> Var -> Bool
@@ -122,7 +121,7 @@ findNamesFromString rdrEnv str | isQualified str = take 1 res
 
 -- | Find 'Name's matching a 'TH.Name'. See 'findNamesFromString'.
 findNamesFromTH :: GlobalRdrEnv -> TH.Name -> [Name]
-findNamesFromTH rdrEnv = findNamesFromString rdrEnv . showName
+findNamesFromTH rdrEnv = findNamesFromString rdrEnv . show
 
 -- | Pretty-print an identifier.
 ppIdInfo :: Id -> IdInfo -> SDoc

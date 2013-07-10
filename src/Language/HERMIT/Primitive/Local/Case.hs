@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, MultiWayIf, ScopedTypeVariables, FlexibleContexts #-}
+{-# LANGUAGE CPP, MultiWayIf, ScopedTypeVariables, FlexibleContexts, TupleSections #-}
 
 module Language.HERMIT.Primitive.Local.Case
     ( -- * Rewrites on Case Expressions
@@ -27,7 +27,7 @@ import Data.Monoid
 import Data.Set (intersection, fromList, toList, member, unions)
 import qualified Data.Set as S
 import Control.Arrow
-import Control.Monad (liftM)
+import Control.Applicative
 
 import Language.HERMIT.Core
 import Language.HERMIT.Context
@@ -104,7 +104,7 @@ caseElim = prefixFailMsg "Case elimination failed: " $
 caseFloatApp :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
   do
-    captures    <- appT (liftM (map fromList) caseAltVarsT) freeVarsT (flip (map . intersection))
+    captures    <- appT (map fromList <$> caseAltVarsT) freeVarsT (flip (map . intersection))
     wildCapture <- appT caseWildIdT freeVarsT member
     appT ((if not wildCapture then idR else alphaCaseBinder Nothing)
           >>> caseAllR idR idR idR (\i -> if S.null (captures !! i) then idR else alphaAlt)
@@ -118,7 +118,7 @@ caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
 caseFloatArg :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
   do
-    captures    <- appT freeVarsT (liftM (map fromList) caseAltVarsT) (map . intersection)
+    captures    <- appT freeVarsT (map fromList <$> caseAltVarsT) (map . intersection)
     wildCapture <- appT freeVarsT caseWildIdT (flip member)
     appT idR
          ((if not wildCapture then idR else alphaCaseBinder Nothing)
@@ -135,7 +135,7 @@ caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
 caseFloatCase :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
   do
-    captures <- caseT (liftM (map fromList) caseAltVarsT) idR mempty (const altFreeVarsExclWildT) (\ vss bndr () fs -> map (intersection (unions $ map ($ bndr) fs)) vss)
+    captures <- caseT (map fromList <$> caseAltVarsT) idR mempty (const altFreeVarsExclWildT) (\ vss bndr () fs -> map (intersection (unions $ map ($ bndr) fs)) vss)
     -- does the binder of the inner case, shadow a free variable in any of the outer case alts?
     -- notice, caseBinderVarT returns a singleton list
     wildCapture <- caseT caseWildIdT idR mempty (const altFreeVarsExclWildT) (\ innerBndr bndr () fvs -> innerBndr `member` unions (map ($ bndr) fvs))
@@ -245,40 +245,38 @@ caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
 
 -- | Case split a free identifier in an expression:
 --
--- Assume expression e which mentions i :: [a]
+-- E.g. Assume expression e which mentions i :: [a]
 --
 -- e ==> case i of i
---         []    -> e
---         (a:b) -> e
+--         []     -> e
+--         (a:as) -> e
 caseSplit :: TH.Name -> Rewrite c HermitM CoreExpr
-caseSplit nm = do
-    frees <- freeIdsT
-    contextfreeT $ \ e ->
-        case filter (cmpTHName2Var nm) (toList frees) of
-            []    -> fail "caseSplit: provided name is not free"
-            (i:_) -> do
-                let (tycon, tys) = splitTyConApp (idType i)
-                    dcs = tyConDataCons tycon
-                    aNms = map (:[]) $ cycle ['a'..'z']
-                dcsAndVars <- mapM (\dc -> do
-                                        as <- sequence [ newIdH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
-                                        return (dc,as)) dcs
-                return $ Case (Var i) i (exprType e) [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
-             -- TODO: what about when multiple results are returned?  Should we not catch that as an error?
+caseSplit nm = prefixFailMsg "caseSplit failed: " $
+               do i <- matchingFreeId nm
+                  let (tycon, tys) = splitTyConApp (idType i)
+                      aNms         = map (:[]) $ cycle ['a'..'z']
+                  contextfreeT $ \ e -> do dcsAndVars <- mapM (\ dc -> (dc,) <$> sequence [ newIdH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ])
+                                                              (tyConDataCons tycon)
+                                           return $ Case (Var i) i (exprType e) [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
 
--- | Force evaluation of a variable by introducing a case.
+-- | Force evaluation of an identifier by introducing a case.
 --   This is equivalent to adding @(seq v)@ in the source code.
 --
 -- e -> case v of v
---        _ -> v
+--        _ -> e
 caseSeq :: TH.Name -> Rewrite c HermitM CoreExpr
-caseSeq nm = do
-    frees <- freeIdsT
-    contextfreeT $ \ e -> case filter (cmpTHName2Var nm) (toList frees) of
-                            []   -> fail "caseSplitSeq: provided name is not free"
-                            i:_  -> return $ Case (Var i) i (exprType e) [(DEFAULT, [], e)]
+caseSeq nm = prefixFailMsg "caseSeq failed: " $
+             do i <- matchingFreeId nm
+                arr $ \ e -> Case (Var i) i (exprType e) [(DEFAULT, [], e)]
 
--- TODO: Refactor the commonality betwen caseSplit and caseSeq
+-- auxillary function for use by caseSplit and caseSeq
+matchingFreeId :: Monad m => TH.Name -> Translate c m CoreExpr Id
+matchingFreeId nm = do
+  fvs <- freeIdsT
+  case filter (cmpTHName2Var nm) (toList fvs) of
+    []    -> fail "provided name is not free."
+    [i]   -> return i
+    vs    -> fail ("provided name matches " ++ show (length vs) ++ " free identifiers.")
 
 -- | Like caseSplit, but additionally inlines the constructor applications
 -- for each occurance of the named variable.
