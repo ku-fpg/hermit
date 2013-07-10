@@ -57,4 +57,4 @@ consider 'hanoi
     }
   }
 }
-innermost dead-let-elimination
+innermost let-elim

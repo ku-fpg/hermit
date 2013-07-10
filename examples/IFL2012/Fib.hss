@@ -73,6 +73,6 @@ dump "ifl-paper/11-stashfold.tex" "clean" "latex" 82
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = work n in (y,x+y)
 top ; consider 'fib
-innermost dead-let-elimination
+innermost let-elim
 any-call (unfold 'wrap) ; simplify
 dump "ifl-paper/12-final.tex" "clean" "latex" 82

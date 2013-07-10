@@ -38,7 +38,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
                  [ "var '<v> returns successfully for variable v, and fails otherwise.",
                    "Useful in combination with \"when\", as in: when (var v) r" ] .+ Predicate
          , external "simplify" (simplifyR :: RewriteH Core)
-                [ "innermost (unfold 'id <+ unfold '$ <+ unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ dead-let-elimination)" ] .+ Bash
+                [ "innermost (unfold 'id <+ unfold '$ <+ unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ let-elim)" ] .+ Bash
          , external "let-tuple" (promoteExprR . letTupleR :: TH.Name -> RewriteH Core)
                 [ "let x = e1 in (let y = e2 in e) ==> let t = (e1,e2) in (let x = fst t in (let y = snd t in e))" ]
          , external "static-arg" (promoteDefR staticArg :: RewriteH Core)

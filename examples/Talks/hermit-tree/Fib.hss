@@ -24,7 +24,7 @@ let-tuple 'xy
 any-call (fold 'unwrap)
 any-call (fold origwork)
 }
-innermost dead-let-elimination
+innermost let-elim
 any-call (unfold 'wrap)
 simplify
 

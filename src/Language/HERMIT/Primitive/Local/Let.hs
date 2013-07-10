@@ -54,12 +54,9 @@ externals :: [External]
 externals =
     [ external "let-intro" (promoteExprR . letIntro :: TH.Name -> RewriteH Core)
         [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
-    , external "dead-let-elimination" (promoteExprR letElim :: RewriteH Core)
-        [ "dead-let-elimination removes an unused let binding."
-        , "(let v = e1 in e2) ==> e2, if v is not free in e2."
-        , "condition: let is not-recursive" ]                                   .+ Eval .+ Shallow .+ Bash
-    , external "dead-code-elimination" (promoteExprR letElim :: RewriteH Core)
-        [ "Synonym for dead-let-elimination [deprecated]" ]                     .+ Eval .+ Shallow .+ Deprecated -- TODO: delete this at some point
+    , external "let-elim" (promoteExprR letElim :: RewriteH Core)
+        [ "Remove an unused let binding."
+        , "(let v = e1 in e2) ==> e2, if v is not free in e1 or e2." ]          .+ Eval .+ Shallow .+ Bash
 --    , external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
 --        [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Eval
     , external "let-float-app" (promoteExprR letFloatApp :: RewriteH Core)
