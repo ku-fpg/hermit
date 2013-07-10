@@ -48,6 +48,9 @@ externals = map ((.+ Experiment) . (.+ TODO))
          , external "unsafe-replace" (promoteExprR . unsafeReplaceStash :: String -> RewriteH Core)
                 [ "replace the currently focused expression with an expression from the stash"
                 , "DOES NOT ensure expressions have the same type, or that free variables in the replacement expression are in scope" ] .+ Unsafe
+         , external "prog-nonrec-intro" ((\ nm core -> promoteProgR $ progNonRecIntroR (show nm) core) :: TH.Name -> CoreString -> RewriteH Core)
+                [ "Introduce a new top-level definition."
+                , "prog ==> ProgCons (v = e) prog" ] .+ Introduce
          , external "inline-all" (inlineAll :: [TH.Name] -> RewriteH Core)
                 [ "inline all named functions in a bottom-up manner" ]
          ]
@@ -160,6 +163,16 @@ unsafeReplaceStash label = prefixFailMsg "unsafe-replace failed: " $
         Def _ rhs <- lookupDef label
         guardMsg (eqType (exprType e) (exprType rhs)) "expression types differ."
         return rhs
+
+-- | @prog@ ==> @'ProgCons' (v = e) prog@
+progNonRecIntroR :: String -> CoreString -> RewriteH CoreProg
+progNonRecIntroR varName expr =
+  do e <- parseCoreExprT expr
+     guardMsg (not $ isTyCoArg e) "Top-level type or coercion definitions are prohibited."
+     -- TODO: if e is not type-correct, then exprType will crash.
+     --       Proposal: parseCore should check that its result is (locally) well-typed
+     contextfreeT $ \ prog -> do i <- newIdH varName (exprType e)
+                                 return $ ProgCons (NonRec i e) prog
 
 ------------------------------------------------------------------------------------------------------
 

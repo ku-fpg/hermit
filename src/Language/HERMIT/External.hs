@@ -398,6 +398,7 @@ instance Extern (TranslateH Core LocalPathH) where
 
 -----------------------------------------------------------------
 
+-- TODO: Is this deliberately called "CoreBox" rather than "CoreStringBox"?
 newtype CoreString = CoreString { unCoreString :: String }
 data CoreBox = CoreBox CoreString deriving Typeable
 

@@ -29,9 +29,9 @@ module Language.HERMIT.Primitive.GHC
        , rule
        , rules
        , equivalent
+       , dynFlagsT
          -- ** Lifted GHC capabilities
        , lintExprT
-       , lintProgramT
        , lintModuleT
        , specConstrR
        )
@@ -108,8 +108,6 @@ externals =
                 ,"For instance, running this on the RHS of a binding, the type of the RHS will"
                 ,"not be checked against the type of the binding. Running on the whole let expression"
                 ,"will catch that however."] .+ Deep .+ Debug .+ Query
-         , external "lintProg" (promoteProgT lintProgramT :: TranslateH Core String)
-                ["Runs GHC's Core Lint, which typechecks the top level list of bindings."] .+ Deep .+ Debug .+ Query
          , external "lintModule" (promoteModGutsT lintModuleT :: TranslateH Core String)
                 ["Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
          , external "specConstr" (promoteModGutsR specConstrR :: RewriteH Core)
@@ -431,7 +429,7 @@ getHermitRules = contextonlyT $ \ c -> do
 rules_help :: HasCoreRules c => Translate c HermitM Core String
 rules_help = do
     rulesEnv <- getHermitRules
-    dynFlags <- constT getDynFlags
+    dynFlags <- dynFlagsT
     return  $ (show (map fst rulesEnv) ++ "\n") ++
               showSDoc dynFlags (pprRulesForUser $ concatMap snd rulesEnv)
 
@@ -545,7 +543,7 @@ arityOf c i =
         -- The advantage of idArity is it will terminate, though.
         Just b -> case hermitBindingExpr b of
                     Just e  -> exprArity e
-                    Nothing -> 0 -- TODO: Why do we return 0 here?
+                    Nothing -> 0 -- conservative estimate, as we don't know what the expression looks like
 
 -------------------------------------------
 
@@ -553,17 +551,14 @@ arityOf c i =
 -- Fails on errors, with error messages.
 -- Succeeds returning warnings.
 lintModuleT :: TranslateH ModGuts String
-lintModuleT = arr (bindsToProg . mg_binds) >>> lintProgramT
-
-lintProgramT :: TranslateH CoreProg String
-lintProgramT = do
-    bnds <- arr progToBinds
-    dflags <- constT getDynFlags
-    let (warns, errs) = CoreLint.lintCoreBindings bnds
-        dumpSDocs endMsg = Bag.foldBag (\d r -> d ++ ('\n':r)) (showSDoc dflags) endMsg
-    if Bag.isEmptyBag errs
-        then return $ dumpSDocs "Core Lint Passed" warns
-        else observeR (dumpSDocs "" errs) >>> fail "Core Lint Failed"
+lintModuleT =
+  do dynFlags <- dynFlagsT
+     bnds     <- arr mg_binds
+     let (warns, errs)    = CoreLint.lintCoreBindings bnds
+         dumpSDocs endMsg = Bag.foldBag (\ d r -> d ++ ('\n':r)) (showSDoc dynFlags) endMsg
+     if Bag.isEmptyBag errs
+       then return $ dumpSDocs "Core Lint Passed" warns
+       else observeR (dumpSDocs "" errs) >>> fail "Core Lint Failed"
 
 -- | Note: this can miss several things that a whole-module core lint will find.
 -- For instance, running this on the RHS of a binding, the type of the RHS will
@@ -607,3 +602,11 @@ anyCallR rr = prefixFailMsg "any-call failed: " $
         _                 -> anyR rec
     where rec :: Rewrite c m Core
           rec = anyCallR rr
+
+-------------------------------------------
+
+-- | Lifted version of 'getDynFlags'.
+dynFlagsT :: HasDynFlags m => Translate c m a DynFlags
+dynFlagsT = constT getDynFlags
+
+-------------------------------------------

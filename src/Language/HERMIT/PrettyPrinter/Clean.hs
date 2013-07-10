@@ -19,7 +19,7 @@ import Control.Applicative ((<$>))
 import Data.Char (isSpace)
 import Data.Set (notMember)
 
-import GhcPlugins (TyCon(..), Coercion(..), Var(..), ModGuts, CoreExpr, CoreAlt, CoreBind, AltCon(..), KindOrType, Outputable, Name, mg_module, getDynFlags, showPpr, isLocalId, isTyVar, isCoVar, coercionKind, isFunTyCon, listTyCon, isTupleTyCon, getName)
+import GhcPlugins (TyCon(..), Coercion(..), Var(..), ModGuts, CoreExpr, CoreAlt, CoreBind, AltCon(..), KindOrType, Outputable, Name, mg_module, showPpr, isLocalId, isTyVar, isCoVar, coercionKind, isFunTyCon, listTyCon, isTupleTyCon, getName)
 
 import Language.HERMIT.Context
 import Language.HERMIT.Core
@@ -27,6 +27,8 @@ import Language.HERMIT.GHC
 import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.Syntax
+
+import Language.HERMIT.Primitive.GHC (dynFlagsT)
 
 import Language.HERMIT.PrettyPrinter.Common
 
@@ -206,7 +208,7 @@ ppCoreTC =
 
 -- Use for any GHC structure
 ppSDoc :: Outputable a => PrettyH a
-ppSDoc = do dynFlags <- constT getDynFlags
+ppSDoc = do dynFlags <- dynFlagsT
             p        <- absPathT
             doc      <- arr (showPpr dynFlags)
             if any isSpace doc

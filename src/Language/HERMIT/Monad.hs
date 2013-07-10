@@ -8,8 +8,7 @@ module Language.HERMIT.Monad
           , liftCoreM
           , newIdH
           , newTyVarH
-    --      , newVarExprH
-    --      , newVarH
+          , newCoVarH
           , cloneVarH
             -- * Saving Definitions
           , Label
@@ -39,6 +38,7 @@ import Language.KURE
 import Language.HERMIT.Core
 import Language.HERMIT.Context
 import Language.HERMIT.Kure.SumTypes
+import Language.HERMIT.GHC (uqName)
 
 ----------------------------------------------------------------------------
 
@@ -56,6 +56,12 @@ newtype HermitM a = HermitM (HermitMEnv -> DefStash -> CoreM (KureM (DefStash, a
 
 runHermitM :: HermitM a -> HermitMEnv -> DefStash -> CoreM (KureM (DefStash, a))
 runHermitM (HermitM f) = f
+
+-- | Eliminator for 'HermitM'.
+runHM :: HermitMEnv -> DefStash -> (DefStash -> a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b
+runHM env s success failure ma = runHermitM ma env s >>= runKureM (\ (a,b) -> success a b) failure
+
+----------------------------------------------------------------------------
 
 -- | Get the stash of saved definitions.
 getStash :: HermitM DefStash
@@ -76,10 +82,6 @@ saveDef l d = getStash >>= (insert l d >>> putStash)
 -- | Lookup a previously saved definition.
 lookupDef :: Label -> HermitM CoreDef
 lookupDef l = getStash >>= (lookup l >>> maybe (fail "Definition not found.") return)
-
--- | Eliminator for 'HermitM'.
-runHM :: HermitMEnv -> DefStash -> (DefStash -> a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b
-runHM env s success failure ma = runHermitM ma env s >>= runKureM (\ (a,b) -> success a b) failure
 
 ----------------------------------------------------------------------------
 
@@ -134,28 +136,29 @@ instance HasDynFlags HermitM where
 ----------------------------------------------------------------------------
 
 newName :: String -> HermitM Name
-newName name = do uq <- getUniqueM
-                  return $ mkSystemVarName uq $ mkFastString name
+newName nm = mkSystemVarName <$> getUniqueM <*> pure (mkFastString nm)
 
 -- | Make a unique identifier for a specified type based on a provided name.
 newIdH :: String -> Type -> HermitM Id
-newIdH name ty = do name' <- newName name
-                    return $ mkLocalId name' ty
+newIdH nm ty = mkLocalId <$> newName nm <*> pure ty
 
 -- | Make a unique type variable for a specified kind based on a provided name.
 newTyVarH :: String -> Kind -> HermitM TyVar
-newTyVarH name kind = do name' <- newName name
-                         return $ mkTyVar name' kind
+newTyVarH nm k = mkTyVar <$> newName nm <*> pure k
 
--- | This gives an new version of a 'Var', with the same info, and a new textual name.
+-- | Make a unique coercion variable for a specified type based on a provided name.
+newCoVarH :: String -> Type -> HermitM TyVar
+newCoVarH nm ty = mkCoVar <$> newName nm <*> pure ty
+
+-- | This gives an new version of a 'Var', with the same info, and a modified textual name.
 cloneVarH :: (String -> String) -> Var -> HermitM Var
-cloneVarH nameMod v =
-        let name = nameMod (getOccString v)
-            ty   = varType v
-        in
-          if isTyVar v
-           then newTyVarH name ty
-           else newIdH name ty
+cloneVarH nameMod v | isTyVar v = newTyVarH name ty
+                    | isCoVar v = newCoVarH name ty
+                    | isId v    = newIdH name ty
+                    | otherwise = fail "If this variable isn't a type, coercion or identifier, then what is it?"
+  where
+    name = nameMod (uqName v)
+    ty   = varType v
 
 ----------------------------------------------------------------------------
 

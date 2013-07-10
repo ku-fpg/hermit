@@ -18,12 +18,14 @@ import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
 
-import GhcPlugins (Coercion(..), Var(..))
-import qualified GhcPlugins as GHC
+import GhcPlugins (ModGuts, CoreExpr, CoreBind, CoreAlt, Coercion(..), Var(..), Outputable, mg_module, showPpr, isTyVar, isCoVar)
 
 import Language.HERMIT.GHC
 import Language.HERMIT.Kure
 import Language.HERMIT.Core
+
+import Language.HERMIT.Primitive.GHC (dynFlagsT)
+
 import Language.HERMIT.PrettyPrinter.Common
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
@@ -53,20 +55,20 @@ ppCoreTC =
 
 -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
 -- that we are eliding infomation here.
-ppSDoc :: GHC.Outputable a => PrettyH a
-ppSDoc =  do dynFlags <- constT GHC.getDynFlags
+ppSDoc :: Outputable a => PrettyH a
+ppSDoc =  do dynFlags   <- dynFlagsT
              hideNotes  <- (po_notes . prettyC_options) ^<< contextT
-             arr (toDoc . (if hideNotes then id else ("showSDoc: " ++)) . GHC.showPpr dynFlags)
+             arr (toDoc . (if hideNotes then id else ("showSDoc: " ++)) . showPpr dynFlags)
     where toDoc s | any isSpace s = parens (text s)
                   | otherwise     = text s
 
-ppModGuts :: PrettyH GHC.ModGuts
-ppModGuts =  GHC.mg_module ^>> ppSDoc
+ppModGuts :: PrettyH ModGuts
+ppModGuts =  mg_module ^>> ppSDoc
 
 ppCoreProg :: PrettyH CoreProg
 ppCoreProg = progConsT ppCoreBind ppCoreProg ($+$) <+ progNilT empty
 
-ppCoreExpr :: PrettyH GHC.CoreExpr
+ppCoreExpr :: PrettyH CoreExpr
 ppCoreExpr = varT (ppVar >>^ \ i -> text "Var" <+> i)
           <+ litT (ppSDoc >>^ \ x -> text "Lit" <+> x)
           <+ appT ppCoreExpr ppCoreExpr (\ a b -> text "App" $$ nest 2 (cat [parens a, parens b]))
@@ -79,11 +81,11 @@ ppCoreExpr = varT (ppVar >>^ \ i -> text "Var" <+> i)
           <+ typeT (ppKindOrType >>^ \ ty -> text "Type" $$ nest 2 (parens ty))
           <+ coercionT (ppCoercion >>^ \ co -> text "Coercion" $$ nest 2 (parens co))
 
-ppCoreBind :: PrettyH GHC.CoreBind
+ppCoreBind :: PrettyH CoreBind
 ppCoreBind = nonRecT ppVar ppCoreExpr (\ v e -> text "NonRec" <+> v $$ nest 2 (parens e))
           <+ recT (const ppCoreDef) (\ bnds -> text "Rec" $$ nest 2 (vlist bnds))
 
-ppCoreAlt :: PrettyH GHC.CoreAlt
+ppCoreAlt :: PrettyH CoreAlt
 ppCoreAlt = altT ppSDoc (\ _ -> ppVar) ppCoreExpr $ \ con vs e -> text "Alt" <+> con <+> hlist vs $$ nest 2 (parens e)
 
 ppCoreDef :: PrettyH CoreDef
@@ -120,8 +122,8 @@ ppCoercion =  reflT (ppKindOrType >>^ \ ty -> coText "Refl" $$ nest 2 (parens ty
 ppVar :: PrettyH Var
 ppVar = readerT $ \ v -> ppSDoc >>^ modCol v
   where
-    modCol v | GHC.isTyVar v = typeColor
-             | GHC.isCoVar v = coercionColor
-             | otherwise     = idColor
+    modCol v | isTyVar v  = typeColor
+             | isCoVar v  = coercionColor
+             | otherwise  = idColor
 
 ---------------------------------------------------------------------------
