@@ -446,10 +446,8 @@ makeRule rule_name nm =   mkRule True   -- auto-generated
 addCoreBindAsRule :: Monad m => String -> TH.Name -> Rewrite c m ModGuts
 addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
         case [ (v,e)
-             | top_bnds <- mg_binds modGuts
-             , (v,e) <- case top_bnds of
-                            Rec bnds -> bnds
-                            NonRec b e -> [(b,e)]
+             | bnd   <- mg_binds modGuts
+             , (v,e) <- bindToVarExprs bnd
              ,  nm `cmpTHName2Var` v
              ] of
          [] -> fail $ "cannot find binding " ++ show nm

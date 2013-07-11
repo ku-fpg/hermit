@@ -206,7 +206,7 @@ initHermitC modGuts = HermitC
                         }
 
     where other_rules :: [CoreRule]
-          other_rules = mg_binds modGuts >>= bindToIdExprs >>= (idCoreRules . fst)
+          other_rules = mg_binds modGuts >>= bindToVarExprs >>= (idCoreRules . fst)
 
 ------------------------------------------------------------------------
 

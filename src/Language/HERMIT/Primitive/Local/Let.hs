@@ -21,6 +21,7 @@ module Language.HERMIT.Primitive.Local.Let
        , letUnfloatCase
        , letUnfloatLam
        , reorderNonRecLets
+       , letTupleR
        )
 where
 
@@ -93,6 +94,9 @@ externals =
     , external "reorder-lets" (promoteExprR . reorderNonRecLets :: [TH.Name] -> RewriteH Core)
         [ "Re-order a sequence of nested non-recursive let bindings."
         , "The argument list should contain the let-bound variables, in the desired order." ]
+    , external "let-tuple" (promoteExprR . letTupleR . show :: TH.Name -> RewriteH Core)
+        [ "Combine nested non-recursive lets into case of a tuple."
+        , "E.g. let {v1 = e1 ; v2 = e2 ; v3 = e3} in body ==> case (e1,e2,e3) of {(v1,v2,v3) -> body}" ] .+ Commute
     ]
 
 -------------------------------------------------------------------------------------------
@@ -287,5 +291,33 @@ reorderNonRecLets nms = prefixFailMsg "Reorder lets failed: " $
     mkNonRecLets :: [(Var,CoreExpr)] -> CoreExpr -> CoreExpr
     mkNonRecLets []          x  = x
     mkNonRecLets ((v,e):ves) x  = Let (NonRec v e) (mkNonRecLets ves x)
+
+-------------------------------------------------------------------------------------------
+
+-- | Combine nested non-recursive lets into case of a tuple.
+--   E.g. let {v1 = e1 ; v2 = e2 ; v3 = e3} in body ==> case (e1,e2,e3) of {(v1,v2,v3) -> body}
+letTupleR :: String -> Rewrite c HermitM CoreExpr
+letTupleR nm = prefixFailMsg "Let-tuple failed: " $
+      do (bnds, body) <- arr collectLets
+         let numBnds = length bnds
+         guardMsg (numBnds > 1) "at least two non-recursive let bindings of identifiers required."
+
+         let (vs, rhss) = unzip bnds
+
+         -- check if tupling the bindings would cause unbound variables
+         let frees  = map coreExprFreeVars (drop 1 rhss)
+             used   = unions $ zipWith intersection (map (fromList . (`take` vs)) [1..]) frees
+         if S.null used
+           then let rhs = mkCoreTup rhss
+                in constT $ do wild <- newIdH nm (exprType rhs)
+                               return $ mkSmallTupleCase vs body wild rhs
+
+           else fail $ "the following bound variables are used in subsequent bindings: " ++ showVars (toList used)
+
+  where
+    -- we only collect identifiers (not type or coercion vars) because we intend to case on them.
+    collectLets :: CoreExpr -> ([(Id, CoreExpr)],CoreExpr)
+    collectLets (Let (NonRec v e) body) | isId v = first ((v,e):) (collectLets body)
+    collectLets expr                             = ([],expr)
 
 -------------------------------------------------------------------------------------------

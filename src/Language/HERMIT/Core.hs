@@ -11,7 +11,7 @@ module Language.HERMIT.Core
           , defToIdExpr
           , progToBinds
           , bindsToProg
-          , bindToIdExprs
+          , bindToVarExprs
             -- * Utilities
           , isCoArg
           , exprKindOrType
@@ -58,10 +58,10 @@ bindsToProg = foldr ProgCons ProgNil
 {-# INLINE bindsToProg #-}
 
 -- | Extract the list of identifier/expression pairs from a binding group.
-bindToIdExprs :: CoreBind -> [(Id,CoreExpr)]
-bindToIdExprs (NonRec v e) = [(v,e)]
-bindToIdExprs (Rec bds)    = bds
-{-# INLINE bindToIdExprs #-}
+bindToVarExprs :: CoreBind -> [(Var,CoreExpr)]
+bindToVarExprs (NonRec v e) = [(v,e)]
+bindToVarExprs (Rec bds)    = bds
+{-# INLINE bindToVarExprs #-}
 
 -- | A (potentially recursive) definition is an identifier and an expression.
 --   In GHC Core, recursive definitions are encoded as ('Id', 'CoreExpr') pairs.
