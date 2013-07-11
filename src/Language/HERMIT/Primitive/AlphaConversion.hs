@@ -38,6 +38,7 @@ import Language.HERMIT.Context
 import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
+import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Common
@@ -115,7 +116,7 @@ inventNames curr old = head
                      , nm `notMember` names
                      ]
    where
-           names = S.map getOccString curr
+           names = S.map uqName curr
            nums = reverse $ takeWhile isDigit (reverse old)
            baseLeng = length $ drop (length nums) old
            base = take baseLeng old
@@ -126,7 +127,7 @@ inventNames curr old = head
 
 -- | Remove all variables from the first set that shadow a variable in the second set.
 shadowedBy :: Set Var -> Set Var -> Set Var
-shadowedBy vs fvs = S.filter (\ v -> getOccString v `member` S.map getOccString fvs) vs
+shadowedBy vs fvs = S.filter (\ v -> uqName v `member` S.map uqName fvs) vs
 
 -- | Lifted version of 'shadowedBy'.
 --   Additionally, it fails if no shadows are found.

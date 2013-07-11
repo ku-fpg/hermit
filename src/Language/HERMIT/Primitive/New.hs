@@ -52,9 +52,16 @@ externals = map ((.+ Experiment) . (.+ TODO))
 
 ------------------------------------------------------------------------------------------------------
 
+-- TODO:  We might not want to match on TyVars and CoVars here.
+-- Probably better to have another predicate that operates on CoreTC, that way it can reach TyVars buried within types.
+-- But given the current setup (using Core for most things), changing "var" to operate on CoreTC would make it incompatible with other combinators.
+-- I'm not sure how to fix the current setup though.
 isVar :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> Translate c m CoreExpr ()
-isVar nm = let matchName = arr (cmpTHName2Var nm)
-            in (varT matchName <+ typeT (tyVarT matchName)) >>= guardM
+isVar nm = (varT matchName <+ typeT (tyVarT matchName) <+ coercionT (coVarCoT matchName))
+                 >>= guardM
+  where
+    matchName :: Monad m => Translate c m Var Bool
+    matchName = arr (cmpTHName2Var nm)
 
 ------------------------------------------------------------------------------------------------------
 
