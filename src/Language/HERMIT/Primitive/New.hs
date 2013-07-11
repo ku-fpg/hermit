@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables, MultiWayIf #-}
 
 -- Placeholder for new prims
 module Language.HERMIT.Primitive.New where
@@ -50,7 +50,12 @@ externals = map ((.+ Experiment) . (.+ TODO))
                 , "DOES NOT ensure expressions have the same type, or that free variables in the replacement expression are in scope" ] .+ Unsafe
          , external "prog-nonrec-intro" ((\ nm core -> promoteProgR $ progNonRecIntroR (show nm) core) :: TH.Name -> CoreString -> RewriteH Core)
                 [ "Introduce a new top-level definition."
+                , "prog-nonrec-into 'v [| e |]"
                 , "prog ==> ProgCons (v = e) prog" ] .+ Introduce
+         , external "let-nonrec-intro" ((\ nm core -> promoteExprR $ letNonRecIntroR (show nm) core) :: TH.Name -> CoreString -> RewriteH Core)
+                [ "Introduce a new definition as a non-recursive let binding."
+                , "let-nonrec-intro 'v [| e |]"
+                , "body ==> let v = e in body" ] .+ Introduce
          , external "inline-all" (inlineAll :: [TH.Name] -> RewriteH Core)
                 [ "inline all named functions in a bottom-up manner" ]
          ]
@@ -166,13 +171,25 @@ unsafeReplaceStash label = prefixFailMsg "unsafe-replace failed: " $
 
 -- | @prog@ ==> @'ProgCons' (v = e) prog@
 progNonRecIntroR :: String -> CoreString -> RewriteH CoreProg
-progNonRecIntroR varName expr =
+progNonRecIntroR nm expr =
   do e <- parseCoreExprT expr
      guardMsg (not $ isTyCoArg e) "Top-level type or coercion definitions are prohibited."
      -- TODO: if e is not type-correct, then exprType will crash.
      --       Proposal: parseCore should check that its result is (locally) well-typed
-     contextfreeT $ \ prog -> do i <- newIdH varName (exprType e)
+     contextfreeT $ \ prog -> do i <- newIdH nm (exprType e)
                                  return $ ProgCons (NonRec i e) prog
+
+-- | @body@ ==> @let v = e in body@
+letNonRecIntroR :: String -> CoreString -> RewriteH CoreExpr
+letNonRecIntroR nm expr =
+  do e <- parseCoreExprT expr
+     -- TODO: if e is not type-correct, then exprTypeOrKind will crash.
+     --       Proposal: parseCore should check that its result is (locally) well-typed
+     contextfreeT $ \ body -> do let tyk = exprKindOrType e
+                                 v <- if | isTypeArg e  -> newTyVarH nm tyk
+                                         | isCoArg e    -> newCoVarH nm tyk
+                                         | otherwise    -> newIdH nm tyk
+                                 return $ Let (NonRec v e) body
 
 ------------------------------------------------------------------------------------------------------
 
