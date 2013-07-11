@@ -1,0 +1,11 @@
+-- Worker/Wrapper Assumption A:  wrap (unwrap h) <=> h
+
+--  wrap (unwrap h)
+                              { unfold 'wrap }
+--  \ e -> unwrap h e Just Nothing
+                              { lam-body ; unfold 'unwrap }
+--  \ e -> case h e of {Nothing -> Nothing ; Just n -> Just n}
+                              { TODO }
+--  \ e ->  h e
+                              { eta-reduce  }
+--  h
