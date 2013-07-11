@@ -7,6 +7,7 @@ module Language.HERMIT.Primitive.Inline
          , inlineName
          , inlineScrutinee
          , inlineCaseBinder
+         , inlineAll
          , inlineTargets
          )
 
@@ -50,7 +51,16 @@ externals =
                 [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
             , external "inline-case-binder" (promoteExprR inlineCaseBinder :: RewriteH Core)
                 [ "Inline if this variable is a case binder." ].+ Eval .+ Deep {- this causes a Dead Id core list error if in bash .+ Bash -} .+ TODO
+            , external "inline-all" (inlineAll :: [TH.Name] -> RewriteH Core)
+                [ "Recursively inline all occurrences of the given names, in a bottom-up manner." ] .+ Deep
             ]
+
+------------------------------------------------------------------------
+
+-- | Recursively inline all occurrences of the given names.
+inlineAll :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM Core
+inlineAll []  = fail "inline-all failed: no names given."
+inlineAll nms = innermostR (promoteExprR $ orR $ map inlineName nms)
 
 ------------------------------------------------------------------------
 

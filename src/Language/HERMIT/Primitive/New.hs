@@ -23,7 +23,6 @@ import Language.HERMIT.ParserCore
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Local
-import Language.HERMIT.Primitive.Inline
 import Language.HERMIT.Primitive.Unfold
 -- import Language.HERMIT.Primitive.Debug
 
@@ -51,13 +50,11 @@ externals = map ((.+ Experiment) . (.+ TODO))
          , external "prog-nonrec-intro" ((\ nm core -> promoteProgR $ progNonRecIntroR (show nm) core) :: TH.Name -> CoreString -> RewriteH Core)
                 [ "Introduce a new top-level definition."
                 , "prog-nonrec-into 'v [| e |]"
-                , "prog ==> ProgCons (v = e) prog" ] .+ Introduce
+                , "prog ==> ProgCons (v = e) prog" ] .+ Introduce .+ Shallow
          , external "let-nonrec-intro" ((\ nm core -> promoteExprR $ letNonRecIntroR (show nm) core) :: TH.Name -> CoreString -> RewriteH Core)
                 [ "Introduce a new definition as a non-recursive let binding."
                 , "let-nonrec-intro 'v [| e |]"
-                , "body ==> let v = e in body" ] .+ Introduce
-         , external "inline-all" (inlineAll :: [TH.Name] -> RewriteH Core)
-                [ "inline all named functions in a bottom-up manner" ]
+                , "body ==> let v = e in body" ] .+ Introduce .+ Shallow
          ]
 
 ------------------------------------------------------------------------------------------------------
@@ -190,10 +187,5 @@ letNonRecIntroR nm expr =
                                          | isCoArg e    -> newCoVarH nm tyk
                                          | otherwise    -> newIdH nm tyk
                                  return $ Let (NonRec v e) body
-
-------------------------------------------------------------------------------------------------------
-
-inlineAll :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM Core
-inlineAll = innermostR . foldr (\ nm rr -> promoteExprR (inlineName nm) <+ rr) (fail "inline-all: nothing to do")
 
 ------------------------------------------------------------------------------------------------------
