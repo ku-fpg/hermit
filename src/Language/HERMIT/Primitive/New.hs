@@ -6,7 +6,6 @@ module Language.HERMIT.Primitive.New where
 import GhcPlugins as GHC hiding (varName)
 
 import Control.Arrow
-import Control.Monad (liftM)
 
 import Data.List(transpose)
 import Data.Set (intersection, unions, fromList, toList)
@@ -31,11 +30,9 @@ import qualified Language.Haskell.TH as TH
 
 externals ::  [External]
 externals = map ((.+ Experiment) . (.+ TODO))
-         [ external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
-                [ "determines if a rewrite could be successfully applied" ]
-         , external "var" (promoteExprT . isVar :: TH.Name -> TranslateH Core ())
-                 [ "var '<v> returns successfully for variable v, and fails otherwise.",
-                   "Useful in combination with \"when\", as in: when (var v) r" ] .+ Predicate
+         [ external "var" (promoteExprT . isVar :: TH.Name -> TranslateH Core ())
+                [ "var '<v> returns successfully for variable v, and fails otherwise.",
+                  "Useful in combination with \"when\", as in: when (var v) r" ] .+ Predicate
          , external "simplify" (simplifyR :: RewriteH Core)
                 [ "innermost (unfold 'id <+ unfold '$ <+ unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ let-elim)" ] .+ Bash
          , external "let-tuple" (promoteExprR . letTupleR :: TH.Name -> RewriteH Core)
@@ -136,14 +133,6 @@ staticArg = prefixFailMsg "static-arg failed: " $ do
 
         return $ Def f $ mkCoreLams bnds $ Let (Rec [(wkr, mkCoreLams dbnds body')])
                                              $ mkApps (Var wkr) (varsToCoreExprs dbnds)
-
-------------------------------------------------------------------------------------------------------
-
-testQuery :: MonadCatch m => Rewrite c m Core -> Translate c m Core String
-testQuery r = f `liftM` testM r
-  where
-    f True  = "Rewrite would succeed."
-    f False = "Rewrite would fail."
 
 ------------------------------------------------------------------------------------------------------
 
