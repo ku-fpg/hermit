@@ -11,6 +11,7 @@ where
 
 import GhcPlugins hiding (empty)
 
+import Control.Arrow
 import Control.Applicative
 import Control.Monad
 
@@ -77,9 +78,9 @@ foldR nm = prefixFailMsg "Fold failed: " $
                 vs  -> fail $ "multiple names match: " ++ intercalate ", " (map var2String vs)
 
 foldVarR :: ReadBindings c => Var -> Maybe BindingDepth -> Rewrite c HermitM CoreExpr
-foldVarR v md = translate $ \ c e ->
-             do (rhs,depth) <- getUnfolding scrutinee caseBinderOnly v c
-                guardMsg (maybe True (== depth) md) "foldVar failed: this is a shadowing occurrence of the variable."
+foldVarR v md =
+             do e <- idR
+                (rhs,_) <- getUnfoldingT scrutinee caseBinderOnly md <<< return v
                 maybe (fail "no match.") return (fold v rhs e)
   where
     scrutinee      = False

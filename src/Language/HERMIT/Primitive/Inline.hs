@@ -1,12 +1,13 @@
-{-# LANGUAGE CPP, TupleSections, FlexibleContexts #-}
+{-# LANGUAGE CPP, TupleSections, FlexibleContexts, ScopedTypeVariables #-}
 module Language.HERMIT.Primitive.Inline
          ( -- * Inlining
            externals
-         , getUnfolding
+         , getUnfoldingT
          , inline
          , inlineName
          , inlineScrutinee
          , inlineCaseBinder
+         , caseInlineScrutineeR
          , inlineAll
          , inlineTargets
          )
@@ -20,6 +21,7 @@ import TcType (tcSplitDFunTy)
 #endif
 
 import Control.Arrow
+import Control.Applicative
 
 import Data.Set (member)
 
@@ -34,7 +36,6 @@ import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
 
 import qualified Language.Haskell.TH as TH
-import Language.Haskell.TH.Syntax (showName)
 
 ------------------------------------------------------------------------
 
@@ -51,6 +52,7 @@ externals =
                 [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
             , external "inline-case-binder" (promoteExprR inlineCaseBinder :: RewriteH Core)
                 [ "Inline if this variable is a case binder." ].+ Eval .+ Deep {- this causes a Dead Id core list error if in bash .+ Bash -} .+ TODO
+                -- Neil:  I would really like to get inline-case-binder back in "bash".  Maybe when "auto-core-lint" is switched on, we could run the occurence analyser to update id-info?
             , external "inline-all" (inlineAll :: [TH.Name] -> RewriteH Core)
                 [ "Recursively inline all occurrences of the given names, in a bottom-up manner." ] .+ Deep
             ]
@@ -66,23 +68,29 @@ inlineAll nms = innermostR (promoteExprR $ orR $ map inlineName nms)
 
 -- | If the current variable matches the given name, then inline it.
 inlineName :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
-inlineName nm = prefixFailMsg ("inline '" ++ showName nm ++ " failed: ") $
-                withPatFailMsg (wrongExprForm "Var v") $
-   do Var v <- idR
-      guardMsg (cmpTHName2Var nm v) $ " does not match " ++ var2String v ++ "."
-      inline
+inlineName nm = configurableInline False False (arr $ cmpTHName2Var nm) Nothing
 
 -- | Inline the current variable.
 inline :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-inline = configurableInline False False
+inline = configurableInline False False (return True) Nothing
 
 -- | Inline the current variable, using the scrutinee rather than the case alternative if it is a case wild-card binder.
 inlineScrutinee :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-inlineScrutinee = configurableInline True False
+inlineScrutinee = configurableInline True False (return True) Nothing
 
 -- | If the current variable is a case wild-card binder, then inline it.
 inlineCaseBinder :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-inlineCaseBinder = configurableInline False True
+inlineCaseBinder = configurableInline False True (return True) Nothing
+
+-- | Inline the case wildcard binder as the case scrutinee everywhere in the case alternatives.
+caseInlineScrutineeR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseInlineScrutineeR = prefixFailMsg "case-inline-scrutinee failed: " $
+                       do w <- caseWildIdT
+                          caseAllR idR idR idR $ \ _ -> do depth <- hermitDepth <$> contextT -- The most recent depth is that of the wildcard binding at this point.
+                                                                                             -- This feels a bit fragile.
+                                                                                             -- An alternative is to alpha-rename the wildcard before we start.
+                                                           extractR $ anybuR (promoteExprR (configurableInline True True (arr (== w)) (Just depth)) :: Rewrite c HermitM Core)
+
 
 -- | The implementation of inline, an important transformation.
 -- This *only* works on a Var of the given name. It can trivially
@@ -90,12 +98,15 @@ inlineCaseBinder = configurableInline False True
 configurableInline :: (ExtendPath c Crumb, AddBindings c, ReadBindings c)
                    => Bool -- ^ Inline the scrutinee instead of the patten match (for case binders).
                    -> Bool -- ^ Only inline if this variable is a case binder.
+                   -> (Translate c HermitM Id Bool) -- ^ Only inline identifiers that satisfy this predicate.
+                   -> Maybe BindingDepth -- ^ Ensure the binding has a specific depth (useful if there are multiple (shadowing) occurrences of an identifier).
                    -> Rewrite c HermitM CoreExpr
-configurableInline scrutinee caseBinderOnly =
+configurableInline scrutinee caseBinderOnly p md =
    prefixFailMsg "Inline failed: " $
    withPatFailMsg (wrongExprForm "Var v") $
-   do (c, Var v) <- exposeT
-      (e,d) <- constT $ getUnfolding scrutinee caseBinderOnly v c
+   do b <- varT p
+      guardMsg b "identifier does not satisfy predicate."
+      (e,d) <- varT (getUnfoldingT scrutinee caseBinderOnly md)
       return e >>> (setFailMsg "values in inlined expression have been rebound." $
                     accepterR (extractT $ ensureDepth d))
 
@@ -110,32 +121,36 @@ ensureDepth d = do
                                                                           else (i,0)
     return $ all (toSnd (<= d)) ds
 
-getUnfolding :: ReadBindings c
-             => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
-             -> Bool -- ^ Only succeed if this variable is a case binder.
-             -> Id -> c -> HermitM (CoreExpr, BindingDepth)
-getUnfolding scrutinee caseBinderOnly i c =
-    case lookupHermitBinding i c of
+getUnfoldingT :: ReadBindings c
+              => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
+              -> Bool -- ^ Only succeed if this variable is a case binder.
+              -> Maybe BindingDepth -- ^ Ensure the binding has a specific depth (useful if there are multiple (shadowing) occurrences of an identifier)
+              -> Translate c HermitM Id (CoreExpr, BindingDepth)
+getUnfoldingT scrutinee caseBinderOnly md =
+   do (c, i) <- exposeT
+      case lookupHermitBinding i c of
         Nothing -> if caseBinderOnly
-                   then fail "not a case binder"
-                   else case unfoldingInfo (idInfo i) of
-                            CoreUnfolding { uf_tmpl = uft } -> return (uft, 0)
+                     then fail "not a case binder"
+                     else -- TODO: maybe check for depth 0 here?  But if there's a shadow, we'll be in the other branch anyway.  Maybe we should enter this branch if the depth check fails?
+                          case unfoldingInfo (idInfo i) of
+                               CoreUnfolding { uf_tmpl = uft } -> return (uft, 0)
 #if __GLASGOW_HASKELL__ > 706
-                            dunf@(DFunUnfolding {})         -> dFunExpr dunf >>= return . (,0)
+                               dunf@(DFunUnfolding {})         -> constT ((,0) <$> dFunExpr dunf)
 #else
-                            DFunUnfolding _arity dc args    -> dFunExpr dc args (idType i) >>= return . (,0)
+                               DFunUnfolding _arity dc args    -> constT ((,0) <$> dFunExpr dc args (idType i))
 #endif
-                            _                               -> fail $ "cannot find unfolding in Env or IdInfo."
-        Just (depth,b) -> case b of
-                            CASEWILD s alt -> return $ if scrutinee
-                                                        then (s, depth)
-                                                        else let tys = tyConAppArgs (idType i)
-                                                              in either (,depth) (,depth+1) (alt2Exp s tys alt)
-                            _              -> if caseBinderOnly
-                                               then fail "not a case binder."
-                                               else case hermitBindingSiteExpr b of
-                                                      Just e  -> return (e, depth)
-                                                      Nothing -> fail $ "variable is not bound to an expression."
+                               _                               -> fail $ "cannot find unfolding in Env or IdInfo."
+        Just (depth,b) -> do guardMsg (maybe True (== depth) md) "foldVar failed: this is a shadowing occurrence of the identifier."
+                             case b of
+                               CASEWILD s alt -> return $ if scrutinee
+                                                           then (s, depth)
+                                                           else let tys = tyConAppArgs (idType i)
+                                                                 in either (,depth) (,depth+1) (alt2Exp s tys alt)
+                               _              -> if caseBinderOnly
+                                                  then fail "not a case binder."
+                                                  else case hermitBindingSiteExpr b of
+                                                         Just e  -> return (e, depth)
+                                                         Nothing -> fail $ "variable is not bound to an expression."
 
 -- | Convert lhs of case alternative to a constructor application expression,
 --   or a default expression in the case of the DEFAULT alternative.

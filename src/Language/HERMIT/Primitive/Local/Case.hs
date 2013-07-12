@@ -322,17 +322,11 @@ altVarsUnused (_,vs,rhs) = all (`notMember` coreExprFreeVars rhs) vs
 -- | In the case alternatives, fold any occurrences of the case alt patterns to the wildcard binder.
 caseFoldWildR :: forall c.  (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFoldWildR = prefixFailMsg "case-fold-wild failed: " $
-                withPatFailMsg (wrongExprForm "Case e w ty alts") $
-                do Case _ w _ _ <- idR
+                do w <- caseWildIdT
                    caseAllR idR idR idR $ \ _ -> do depth <- hermitDepth <$> contextT -- The most recent depth is that of the wildcard binding at this point.
                                                                                       -- This feels a bit fragile.
                                                                                       -- An alternative is to alpha-rename the wildcard before we start.
                                                     extractR $ anybuR (promoteExprR (foldVarR w (Just depth)) :: Rewrite c HermitM Core)
-
-caseInlineScrutineeR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseInlineScrutineeR = do Case _ w _ _ <- idR
-                          -- getDepth + 1
-                          caseAllR idR idR idR (\ _ -> extractR $ anybuR (promoteExprR (inlineScrutinee {- TODO: temperary -}) :: Rewrite c HermitM Core))
 
 -- | A cleverer version of 'mergeCaseAlts' that first attempts to abstract out any occurrences of the alternative pattern using the wildcard binder.
 caseMergeAltsWithWildR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
