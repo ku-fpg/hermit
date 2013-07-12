@@ -102,7 +102,7 @@ configurableInline scrutinee caseBinderOnly =
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
 -- Assumes minimum depth is 0.
-ensureDepth :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => Int -> Translate c m Core Bool
+ensureDepth :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => BindingDepth -> Translate c m Core Bool
 ensureDepth d = do
     frees <- promoteT freeVarsT
     ds <- collectT $ promoteExprT $ varT $ translate $ \ c i -> return $ if i `member` frees
@@ -113,7 +113,7 @@ ensureDepth d = do
 getUnfolding :: ReadBindings c
              => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).
              -> Bool -- ^ Only succeed if this variable is a case binder.
-             -> Id -> c -> HermitM (CoreExpr, Int)
+             -> Id -> c -> HermitM (CoreExpr, BindingDepth)
 getUnfolding scrutinee caseBinderOnly i c =
     case lookupHermitBinding i c of
         Nothing -> if caseBinderOnly

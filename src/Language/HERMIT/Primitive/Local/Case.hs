@@ -18,8 +18,9 @@ module Language.HERMIT.Primitive.Local.Case
     , caseReduceLiteral
     , caseSplit
     , caseSplitInline
-    , mergeCaseAltsR
-    , mergeCaseAltsWithWildR
+    , caseMergeAltsR
+    , caseMergeAltsWithWildR
+    , caseMergeAltsElimR
     ) where
 
 import GhcPlugins
@@ -88,13 +89,18 @@ externals =
     , external "case-seq" (promoteExprR . caseSeq :: TH.Name -> RewriteH Core)
         [ "Force evaluation of a variable by introducing a case."
         , "case-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow
-    , external "merge-case-alts" (promoteExprR mergeCaseAltsR :: RewriteH Core)
+    , external "case-merge-alts" (promoteExprR caseMergeAltsR :: RewriteH Core)
         [ "Merge all case alternatives into a single default case."
         , "The RHS of each alternative must be the same."
         , "case s of {pat1 -> e ; pat2 -> e ; ... ; patn -> e} ==> case s of {_ -> e}" ]
-    , external "merge-case-alts-with-wild" (promoteExprR mergeCaseAltsWithWildR :: RewriteH Core)
+    , external "case-merge-alts-with-wild" (promoteExprR caseMergeAltsWithWildR :: RewriteH Core)
         [ "A cleverer version of 'mergeCaseAlts' that first attempts to"
-        , "abstract out any occurrences of the case alt pattern using the wildcard binder." ]
+        , "abstract out any occurrences of the alternative pattern using the wildcard binder." ] .+ Deep
+    , external "case-merge-alts-elim" (promoteExprR caseMergeAltsElimR :: RewriteH Core)
+        [ "Merge the case alternatives into a single default alternative (if possible),"
+        , "and then eliminate the case." ] .+ Deep
+    , external "case-fold-wild" (promoteExprR caseFoldWildR :: RewriteH Core)
+        [ "In the case alternatives, fold any occurrences of the case alt patterns to the wildcard binder." ]
     ]
 
 ------------------------------------------------------------------------------
@@ -300,28 +306,42 @@ caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineNa
 -- | Merge all case alternatives into a single default case.
 --   The RHS of each alternative must be the same.
 --   @case s of {pat1 -> e ; pat2 -> e ; ... ; patn -> e}@ ==> @case s of {_ -> e}@
-mergeCaseAltsR :: MonadCatch m => Rewrite c m CoreExpr
-mergeCaseAltsR = prefixFailMsg "merge-case-alts failed: " $
+caseMergeAltsR :: MonadCatch m => Rewrite c m CoreExpr
+caseMergeAltsR = prefixFailMsg "merge-case-alts failed: " $
                  withPatFailMsg (wrongExprForm "Case e w ty alts") $
                  do Case e w ty alts <- idR
                     guardMsg (not $ null alts) "zero alternatives cannot be merged."
                     let rhss = [ rhs | (_,_,rhs) <- alts ]
-                    guardMsg (exprsEqual rhss) "RHSs are not all equal."
-                    guardMsg (all altVarsUnused alts) "variables bound in case alt pattern appear free in alt RHS."
+                    guardMsg (exprsEqual rhss) "right-hand sides are not all equal."
+                    guardMsg (all altVarsUnused alts) "variables bound in case alt pattern appear free in alt right-hand side."
                     return $ Case e w ty [(DEFAULT,[],head rhss)]
 
 altVarsUnused :: CoreAlt -> Bool
 altVarsUnused (_,vs,rhs) = all (`notMember` coreExprFreeVars rhs) vs
 
--- | A cleverer version of 'mergeCaseAlts' that first attempts to abstract out any occurrences of the case alt pattern using the wildcard binder.
-mergeCaseAltsWithWildR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-mergeCaseAltsWithWildR = prefixFailMsg "merge-case-alts-with-wild failed: " $
+-- | In the case alternatives, fold any occurrences of the case alt patterns to the wildcard binder.
+caseFoldWildR :: forall c.  (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFoldWildR = prefixFailMsg "case-fold-wild failed: " $
+                withPatFailMsg (wrongExprForm "Case e w ty alts") $
+                do Case _ w _ _ <- idR
+                   caseAllR idR idR idR $ \ _ -> do depth <- hermitDepth <$> contextT -- The most recent depth is that of the wildcard binding at this point.
+                                                                                      -- This feels a bit fragile.
+                                                                                      -- An alternative is to alpha-rename the wildcard before we start.
+                                                    extractR $ anybuR (promoteExprR (foldVarR w (Just depth)) :: Rewrite c HermitM Core)
+
+caseInlineScrutineeR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseInlineScrutineeR = do Case _ w _ _ <- idR
+                          -- getDepth + 1
+                          caseAllR idR idR idR (\ _ -> extractR $ anybuR (promoteExprR (inlineScrutinee {- TODO: temperary -}) :: Rewrite c HermitM Core))
+
+-- | A cleverer version of 'mergeCaseAlts' that first attempts to abstract out any occurrences of the alternative pattern using the wildcard binder.
+caseMergeAltsWithWildR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseMergeAltsWithWildR = prefixFailMsg "merge-case-alts-with-wild failed: " $
                          withPatFailMsg (wrongExprForm "Case e w ty alts") $
-                         do Case _ w _ _ <- idR
-                            tryR (extractR $ anybuR (promoteExprR (foldVarR w) :: Rewrite c HermitM Core))
-                                 -- TODO: This is slightly buggy.
-                                 -- If there's another (shadowing) occurrence of the same wildcard-binder variable name, it too will get inlined.
-                                 -- We should probably check for depth to avoid this.
-                              >>> mergeCaseAltsR
+                         tryR caseFoldWildR >>> caseMergeAltsR
+
+-- | Merge the case alternatives into a single default alternative (if possible), and then eliminate the case.
+caseMergeAltsElimR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseMergeAltsElimR = tryR caseFoldWildR >>> tryR caseMergeAltsR >>> tryR caseInlineScrutineeR >>> caseElim
 
 ------------------------------------------------------------------------------

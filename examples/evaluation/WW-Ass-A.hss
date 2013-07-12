@@ -1,5 +1,8 @@
 -- Worker/Wrapper Assumption A:  wrap (unwrap h) <=> h
 
+rhs-of 'proof
+lam-body
+
 --  wrap (unwrap h)
                                   { unfold 'wrap }
 --  \ e -> unwrap h e Just Nothing
@@ -9,13 +12,7 @@
 --         case h e of wild
 --           Nothing -> Nothing
 --           Just n  -> Just n
-                                    { merge-case-alts-with-wild }
---         case h e of wild
---           DEFAULT -> wild
-                                    { one-td inline-scrutinee }
---         case h e of wild
---           DEFAULT -> h e
-                                    { case-elim }
+                                    { case-merge-alts-elim }
 --         h e
                                   }
 --  \ e -> h e

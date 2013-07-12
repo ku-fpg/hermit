@@ -73,14 +73,17 @@ foldR nm = prefixFailMsg "Fold failed: " $
            do c <- contextT
               case findBoundVars nm c of
                 []  -> fail "cannot find name."
-                [v] -> foldVarR v
+                [v] -> foldVarR v Nothing
                 vs  -> fail $ "multiple names match: " ++ intercalate ", " (map var2String vs)
 
--- TODO: Add depth argument
-foldVarR :: ReadBindings c => Var -> Rewrite c HermitM CoreExpr
-foldVarR v = translate $ \ c e ->
-             do (rhs,_d) <- getUnfolding False False v c
+foldVarR :: ReadBindings c => Var -> Maybe BindingDepth -> Rewrite c HermitM CoreExpr
+foldVarR v md = translate $ \ c e ->
+             do (rhs,depth) <- getUnfolding scrutinee caseBinderOnly v c
+                guardMsg (maybe True (== depth) md) "foldVar failed: this is a shadowing occurrence of the variable."
                 maybe (fail "no match.") return (fold v rhs e)
+  where
+    scrutinee      = False
+    caseBinderOnly = False
 
 ------------------------------------------------------------------------
 

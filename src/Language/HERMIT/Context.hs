@@ -187,7 +187,7 @@ type LocalPathH = LocalPath Crumb
 --   of building the context if we never use it.
 data HermitC = HermitC
         { hermitC_bindings       :: Map Var HermitBinding   -- ^ All (important) bindings in scope.
-        , hermitC_depth          :: BindingDepth            -- ^ The depth of the bindings.
+        , hermitC_depth          :: BindingDepth            -- ^ The depth of the most recent bindings.
         , hermitC_path           :: AbsolutePathH           -- ^ The 'AbsolutePath' to the current node from the root.
         , hermitC_globalRdrEnv   :: GlobalRdrEnv            -- ^ The top-level lexical environment.
         , hermitC_coreRules      :: [CoreRule]              -- ^ GHC rewrite RULES.
