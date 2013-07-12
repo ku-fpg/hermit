@@ -49,7 +49,7 @@ import Control.Monad
 
 import Data.Function (on)
 import Data.List (intercalate,mapAccumL,deleteFirstsBy)
-import Data.Monoid (mempty)
+import Data.Monoid (mempty) -- ,Sum(..))
 import Data.Set (Set, fromList, toList, (\\))
 
 import Language.HERMIT.Core
@@ -166,8 +166,9 @@ letSubstR =  prefixFailMsg "Let substition failed: " $
 -- | This is quite expensive (O(n) for the size of the sub-tree).
 safeLetSubstR :: (ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
 safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
-                 translate $ \ c expr ->
-    let   -- what about other Expr constructors?
+                 withPatFailMsg "expression is not a non-recursive Let." $
+  do c <- contextT
+     let   -- what about other Expr constructors?
           safeBind (Var {})   = True
           safeBind (Lam {})   = True
           safeBind e@(App {}) =
@@ -181,12 +182,21 @@ safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
           safeSubst IAmDead   = True    -- DCE
           safeSubst (OneOcc inLam oneBr _) = not inLam && oneBr -- do not inline inside a lambda or if in multiple case branches
           safeSubst _ = False   -- strange case, like a loop breaker
-   in case occurAnalyseExpr expr of
+     Let (NonRec v rhs) body <- arr occurAnalyseExpr
       -- By (our) definition, types are a trivial bind
-      Let (NonRec v rhs) body  -> if isTyVar v || (isId v && (safeBind rhs || safeSubst (occInfo $ idInfo v)))
-                                   then apply (substExprR v rhs) c body
-                                   else fail "safety criteria not met."
-      _                        -> fail "expression is not a non-recursive Let."
+     guardMsg (isTyVar v || (isId v && (safeBind rhs || safeSubst (occInfo $ idInfo v)))) "safety criteria not met."
+     constT $ apply (substExprR v rhs) c body
+
+
+
+-- Check that an identifier binding occurs (free) at-most once.
+-- affineIdT :: forall c m. (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => Id -> BindingDepth -> Translate c m Core Bool
+-- affineIdT i depth = numOccs >>^ getSum >>^ (<2)
+--   where
+--     numOccs :: Translate c m Core (Sum Int)
+--     numOccs =  crushbuT $ promoteExprT $ whenM (varT $ arr (== i))
+--                                                (contextonlyT (lookupHermitBindingSite i depth) >>> return (Sum 1))
+
 
 -- | 'safeLetSubstPlusR' tries to inline a stack of bindings, stopping when reaches
 -- the end of the stack of lets.

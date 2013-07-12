@@ -56,12 +56,18 @@ externals = map ((.+ Experiment) . (.+ TODO))
 -- Probably better to have another predicate that operates on CoreTC, that way it can reach TyVars buried within types.
 -- But given the current setup (using Core for most things), changing "var" to operate on CoreTC would make it incompatible with other combinators.
 -- I'm not sure how to fix the current setup though.
+-- isVar :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> Translate c m CoreExpr ()
+-- isVar nm = (varT matchName <+ typeT (tyVarT matchName) <+ coercionT (coVarCoT matchName))
+--                  >>= guardM
+--   where
+--     matchName :: Monad m => Translate c m Var Bool
+--     matchName = arr (cmpTHName2Var nm)
+
+-- TODO: there might be a better module for this
+
+-- | Test if the current expression is an identifier matching the given name.
 isVar :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> Translate c m CoreExpr ()
-isVar nm = (varT matchName <+ typeT (tyVarT matchName) <+ coercionT (coVarCoT matchName))
-                 >>= guardM
-  where
-    matchName :: Monad m => Translate c m Var Bool
-    matchName = arr (cmpTHName2Var nm)
+isVar nm = varT (arr $ cmpTHName2Var nm) >>= guardM
 
 ------------------------------------------------------------------------------------------------------
 

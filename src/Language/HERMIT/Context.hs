@@ -27,6 +27,7 @@ module Language.HERMIT.Context
        , findBoundVars
        , ReadBindings(..)
        , lookupHermitBinding
+       , lookupHermitBindingSite
          -- ** Accessing the Global Reader Environment from the context
        , HasGlobalRdrEnv(..)
          -- ** Accessing GHC rewrite rules from the context
@@ -34,10 +35,13 @@ module Language.HERMIT.Context
 ) where
 
 import Prelude hiding (lookup)
+
 import GhcPlugins hiding (empty)
+
 import Data.Monoid (mempty)
 import Data.Map hiding (map, foldr, filter)
 import qualified Data.Set as S
+
 import qualified Language.Haskell.TH as TH
 
 import Language.KURE
@@ -154,8 +158,14 @@ boundIn :: ReadBindings c => Var -> c -> Bool
 boundIn i c = i `member` hermitBindings c
 
 -- | Lookup the binding for a variable in a context.
-lookupHermitBinding :: ReadBindings c => Var -> c -> Maybe HermitBinding
-lookupHermitBinding v = lookup v . hermitBindings
+lookupHermitBinding :: (ReadBindings c, Monad m) => Var -> c -> m HermitBinding
+lookupHermitBinding v = maybe (fail "binding not found in HERMIT context.") return . lookup v . hermitBindings
+
+-- | Lookup the binding for a variable in a context, enusring it was bound at the specified depth.
+lookupHermitBindingSite :: (ReadBindings c, Monad m) => Var -> BindingDepth -> c -> m HermitBindingSite
+lookupHermitBindingSite v depth c = do (d,bnd) <- lookupHermitBinding v c
+                                       guardMsg (d == depth) "lookupHermitBinding succeeded, but depth does not match.  The variable has probably been shadowed."
+                                       return bnd
 
 ------------------------------------------------------------------------
 

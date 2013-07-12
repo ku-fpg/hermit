@@ -2,7 +2,6 @@
 
 module Language.HERMIT.Primitive.Kure
        ( -- * KURE Strategies
-         -- This list contains reflections of the KURE strategies as 'External's.
          externals
        )
 where
@@ -17,6 +16,7 @@ import Language.HERMIT.External
 
 ------------------------------------------------------------------------------------
 
+-- | -- This list contains reflections of the KURE strategies as 'External's.
 externals :: [External]
 externals = map (.+ KURE)
    [ external "id"         (idR :: RewriteH Core)
@@ -85,7 +85,7 @@ externals = map (.+ KURE)
        [ "Apply a bidirectional rewrite forewards." ]
    , external "backward"   (backwardT :: BiRewriteH Core -> RewriteH Core)
        [ "Apply a bidirectional rewrite backwards." ]
-   , external "test" (testQuery :: RewriteH Core -> TranslateH Core String)
+   , external "test"       (testQuery :: RewriteH Core -> TranslateH Core String)
        [ "Determine if a rewrite could be successfully applied." ]
    ]
 

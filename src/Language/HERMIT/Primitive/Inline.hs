@@ -22,6 +22,7 @@ import TcType (tcSplitDFunTy)
 
 import Control.Arrow
 import Control.Applicative
+import Control.Monad (liftM)
 
 import Data.Set (member)
 
@@ -111,15 +112,18 @@ configurableInline scrutinee caseBinderOnly p md =
                     accepterR (extractT $ ensureDepth d))
 
 
+-- TODO: The comment says "above a given depth", but the code checks the depths are <= a given depth.
+-- Also, I note that the code used to return 0 for free variables not in the HERMIT context.
+-- I removed it, as 0 <= d was always true (as we assume non-negative d).  However, if the <= should be >=, it will need reinstating.
+
 -- | Ensure all the free variables in an expression were bound above a given depth.
 -- Assumes minimum depth is 0.
 ensureDepth :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => BindingDepth -> Translate c m Core Bool
 ensureDepth d = do
     frees <- promoteT freeVarsT
-    ds <- collectT $ promoteExprT $ varT $ translate $ \ c i -> return $ if i `member` frees
-                                                                          then maybe (i,0) (\ b -> (i, fst b)) (lookupHermitBinding i c)
-                                                                          else (i,0)
-    return $ all (toSnd (<= d)) ds
+    ds <- collectT $ promoteExprT $ varT $ translate $ \ c i -> do guardM (i `member` frees)
+                                                                   fst `liftM` lookupHermitBinding i c
+    return $ all (<= d) ds
 
 getUnfoldingT :: ReadBindings c
               => Bool -- ^ Get the scrutinee instead of the patten match (for case binders).

@@ -329,13 +329,13 @@ caseFoldWildR = prefixFailMsg "case-fold-wild failed: " $
                                                     extractR $ anybuR (promoteExprR (foldVarR w (Just depth)) :: Rewrite c HermitM Core)
 
 -- | A cleverer version of 'mergeCaseAlts' that first attempts to abstract out any occurrences of the alternative pattern using the wildcard binder.
-caseMergeAltsWithWildR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseMergeAltsWithWildR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseMergeAltsWithWildR = prefixFailMsg "merge-case-alts-with-wild failed: " $
                          withPatFailMsg (wrongExprForm "Case e w ty alts") $
                          tryR caseFoldWildR >>> caseMergeAltsR
 
 -- | Merge the case alternatives into a single default alternative (if possible), and then eliminate the case.
-caseMergeAltsElimR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseMergeAltsElimR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseMergeAltsElimR = tryR caseFoldWildR >>> tryR caseMergeAltsR >>> tryR caseInlineScrutineeR >>> caseElim
 
 ------------------------------------------------------------------------------
