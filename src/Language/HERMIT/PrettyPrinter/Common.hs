@@ -33,8 +33,9 @@ module Language.HERMIT.PrettyPrinter.Common
     , TranslateCoreTCDocHBox(..)
       -- * Pretty Printer Options
     , PrettyOptions(..)
-    , updateTypeShowOption
     , updateCoShowOption
+    , updateTypeShowOption
+    , updateWidthOption
       -- * Utilities
     , hlist
     , vlist
@@ -204,6 +205,9 @@ updateTypeShowOption opt  po = po { po_exprTypes = opt }
 updateCoShowOption :: ShowOption -> PrettyOptions -> PrettyOptions
 updateCoShowOption opt po  = po { po_coercions = opt }
 
+updateWidthOption :: Int -> PrettyOptions -> PrettyOptions
+updateWidthOption w po = po { po_width = w }
+
 instance Default PrettyOptions where
   def = PrettyOptions
         { po_fullyQualified  = False
@@ -372,17 +376,17 @@ renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\
 
 coreRenders :: [(String,Handle -> PrettyOptions -> DocH -> IO ())]
 coreRenders =
-        [ ("latex", \ h w doc -> do
-                        let pretty = latexToString $ renderCode w doc
+        [ ("latex", \ h opts doc -> do
+                        let pretty = latexToString $ renderCode opts doc
                         hPutStr h pretty)
-        , ("html", \ h w doc -> do
-                        let HTML pretty = renderCode w doc
+        , ("html", \ h opts doc -> do
+                        let HTML pretty = renderCode opts doc
                         hPutStr h pretty)
-        , ("ascii", \ h w doc -> do
-                        let (ASCII pretty) = renderCode w doc
+        , ("ascii", \ h opts doc -> do
+                        let (ASCII pretty) = renderCode opts doc
                         hPutStrLn h pretty)
-        , ("debug", \ h w doc -> do
-                        let (DebugPretty pretty) = renderCode w doc
+        , ("debug", \ h opts doc -> do
+                        let (DebugPretty pretty) = renderCode opts doc
                         hPutStrLn h pretty)
         ]
 

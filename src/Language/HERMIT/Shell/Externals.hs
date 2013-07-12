@@ -205,7 +205,8 @@ shell_externals = map (.+ Shell)
        [ "set the output renderer mode"]
    , external "dump"    Dump
        [ "dump <filename> <pretty-printer> <renderer> <width>"]
-   , external "set-pp-width"   (\ n -> SessionStateEffect $ \ _ st -> return $ st { cl_width = n })
+   , external "set-pp-width" (\ w -> SessionStateEffect $ \ _ st ->
+        return $ st { cl_pretty_opts = updateWidthOption w (cl_pretty_opts st) })
        ["set the width of the screen"]
    , external "set-pp-type" (\ str -> SessionStateEffect $ \ _ st ->
         case reads str :: [(ShowOption,String)] of
@@ -284,7 +285,6 @@ data SessionState = SessionState
         , cl_pretty      :: String                                   -- ^ which pretty printer to use
         , cl_pretty_opts :: PrettyOptions                            -- ^ The options for the pretty printer
         , cl_render      :: Handle -> PrettyOptions -> DocH -> IO () -- ^ the way of outputing to the screen
-        , cl_width       :: Int                                      -- ^ how wide is the screen?
         , cl_nav         :: Bool                                     -- ^ keyboard input the the nav panel
         , cl_loading     :: Bool                                     -- ^ if loading a file
         , cl_tick        :: TVar (M.Map String Int)                  -- ^ The list of ticked messages
@@ -310,10 +310,9 @@ finalRenders =
         ] ++ coreRenders
 
 unicodeConsole :: Handle -> PrettyOptions -> DocH -> IO ()
-unicodeConsole h w doc = do
-    let (UnicodeTerminal prty) = renderCode w doc
+unicodeConsole h opts doc = do
+    let (UnicodeTerminal prty) = renderCode opts doc
     prty h Nothing
-
 
 instance RenderCode UnicodeTerminal where
         rPutStr txt  = UnicodeTerminal $ \ h _ -> hPutStr h txt

@@ -159,6 +159,7 @@ Library
                  operational >= 0.2.2.1,
                  stm >= 2.4,
                  template-haskell >= 2.8.0.0,
+                 terminfo >= 0.3.2.5,
                  transformers
 
   default-language: Haskell2010

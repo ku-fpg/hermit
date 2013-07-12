@@ -45,6 +45,7 @@ import System.IO
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 import System.Console.Haskeline hiding (catch)
+import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns)
 
 ----------------------------------------------------------------------------------
 
@@ -141,6 +142,11 @@ banner = unlines
     , "=============================================================="
     ]
 
+getTerminalWidth :: IO Int
+getTerminalWidth = do
+    term <- setupTermFromEnv
+    return $ fromMaybe 80 $ getCapability term termColumns
+
 -- | The first argument is a list of files to load.
 commandLine :: [FilePath] -> Behavior -> [External] -> ScopedKernel -> SAST -> IO ()
 commandLine filesToLoad behavior exts skernel sast = do
@@ -160,8 +166,9 @@ commandLine filesToLoad behavior exts skernel sast = do
             setLoading False
 
     var <- GHC.liftIO $ atomically $ newTVar M.empty
+    w <- getTerminalWidth
 
-    let sessionState = SessionState sast "clean" def unicodeConsole 80 False False var False False
+    let sessionState = SessionState sast "clean" (def { po_width = w}) unicodeConsole False False var False False
         shellState = CommandLineState [] [] dict skernel sast sessionState
 
     completionMVar <- newMVar shellState
