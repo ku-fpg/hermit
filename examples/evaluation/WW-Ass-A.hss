@@ -1,13 +1,23 @@
 -- Worker/Wrapper Assumption A:  wrap (unwrap h) <=> h
 
 --  wrap (unwrap h)
-                              { unfold 'wrap }
+                                  { unfold 'wrap }
 --  \ e -> unwrap h e Just Nothing
-                              { lam-body ; unfold 'unwrap }
---  \ e -> case h e of wild {Nothing -> Nothing ; Just n -> Just n}
-                              { any-td (fold 'wild) }
---  \ e -> case h e of wild {Nothing -> wild ; Just n -> wild}
-                              { TODO }
---  \ e ->  h e
-                              { eta-reduce  }
+                                  { lam-body
+--         unwrap h e Just Nothing
+                                    { unfold 'unwrap }
+--         case h e of wild
+--           Nothing -> Nothing
+--           Just n  -> Just n
+                                    { merge-case-alts-with-wild }
+--         case h e of wild
+--           DEFAULT -> wild
+                                    { one-td inline-scrutinee }
+--         case h e of wild
+--           DEFAULT -> h e
+                                    { case-elim }
+--         h e
+                                  }
+--  \ e -> h e
+                                  { eta-reduce  }
 --  h

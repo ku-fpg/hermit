@@ -18,13 +18,15 @@ module Language.HERMIT.Primitive.Local.Case
     , caseReduceLiteral
     , caseSplit
     , caseSplitInline
+    , mergeCaseAltsR
+    , mergeCaseAltsWithWildR
     ) where
 
 import GhcPlugins
 
 import Data.List
 import Data.Monoid
-import Data.Set (intersection, fromList, toList, member, unions)
+import Data.Set (intersection, fromList, toList, member, notMember, unions)
 import qualified Data.Set as S
 import Control.Arrow
 import Control.Applicative
@@ -40,6 +42,7 @@ import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Inline hiding (externals)
 import Language.HERMIT.Primitive.AlphaConversion hiding (externals)
+import Language.HERMIT.Primitive.Fold (foldVarR)
 
 import qualified Language.Haskell.TH as TH
 
@@ -85,6 +88,13 @@ externals =
     , external "case-seq" (promoteExprR . caseSeq :: TH.Name -> RewriteH Core)
         [ "Force evaluation of a variable by introducing a case."
         , "case-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow
+    , external "merge-case-alts" (promoteExprR mergeCaseAltsR :: RewriteH Core)
+        [ "Merge all case alternatives into a single default case."
+        , "The RHS of each alternative must be the same."
+        , "case s of {pat1 -> e ; pat2 -> e ; ... ; patn -> e} ==> case s of {_ -> e}" ]
+    , external "merge-case-alts-with-wild" (promoteExprR mergeCaseAltsWithWildR :: RewriteH Core)
+        [ "A cleverer version of 'mergeCaseAlts' that first attempts to"
+        , "abstract out any occurrences of the case alt pattern using the wildcard binder." ]
     ]
 
 ------------------------------------------------------------------------------
@@ -284,5 +294,34 @@ matchingFreeId nm = do
 -- > caseSplitInline nm = caseSplit nm >>> anybuR (inlineName nm)
 caseSplitInline :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM Core
 caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineName nm)
+
+------------------------------------------------------------------------------
+
+-- | Merge all case alternatives into a single default case.
+--   The RHS of each alternative must be the same.
+--   @case s of {pat1 -> e ; pat2 -> e ; ... ; patn -> e}@ ==> @case s of {_ -> e}@
+mergeCaseAltsR :: MonadCatch m => Rewrite c m CoreExpr
+mergeCaseAltsR = prefixFailMsg "merge-case-alts failed: " $
+                 withPatFailMsg (wrongExprForm "Case e w ty alts") $
+                 do Case e w ty alts <- idR
+                    guardMsg (not $ null alts) "zero alternatives cannot be merged."
+                    let rhss = [ rhs | (_,_,rhs) <- alts ]
+                    guardMsg (exprsEqual rhss) "RHSs are not all equal."
+                    guardMsg (all altVarsUnused alts) "variables bound in case alt pattern appear free in alt RHS."
+                    return $ Case e w ty [(DEFAULT,[],head rhss)]
+
+altVarsUnused :: CoreAlt -> Bool
+altVarsUnused (_,vs,rhs) = all (`notMember` coreExprFreeVars rhs) vs
+
+-- | A cleverer version of 'mergeCaseAlts' that first attempts to abstract out any occurrences of the case alt pattern using the wildcard binder.
+mergeCaseAltsWithWildR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+mergeCaseAltsWithWildR = prefixFailMsg "merge-case-alts-with-wild failed: " $
+                         withPatFailMsg (wrongExprForm "Case e w ty alts") $
+                         do Case _ w _ _ <- idR
+                            tryR (extractR $ anybuR (promoteExprR (foldVarR w) :: Rewrite c HermitM Core))
+                                 -- TODO: This is slightly buggy.
+                                 -- If there's another (shadowing) occurrence of the same wildcard-binder variable name, it too will get inlined.
+                                 -- We should probably check for depth to avoid this.
+                              >>> mergeCaseAltsR
 
 ------------------------------------------------------------------------------

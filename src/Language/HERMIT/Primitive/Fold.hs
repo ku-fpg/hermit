@@ -2,6 +2,7 @@ module Language.HERMIT.Primitive.Fold
     ( -- * Fold/Unfold Transformation
       externals
     , foldR
+    , foldVarR
     , stashFoldR
     , stashFoldAnyR
     )
@@ -68,14 +69,18 @@ stashFoldAnyR = setFailMsg "Fold failed: no definitions could be folded." $
                 catchesM =<< map stashFoldR <$> (Map.keys <$> constT getStash)
 
 foldR :: ReadBindings c => TH.Name -> Rewrite c HermitM CoreExpr
-foldR nm =  prefixFailMsg "Fold failed: " $
-    translate $ \ c e -> do
-        i <- case findBoundVars nm c of
+foldR nm = prefixFailMsg "Fold failed: " $
+           do c <- contextT
+              case findBoundVars nm c of
                 []  -> fail "cannot find name."
-                [i] -> return i
-                is  -> fail $ "multiple names match: " ++ intercalate ", " (map var2String is)
-        (rhs,_d) <- getUnfolding False False i c
-        maybe (fail "no match.") return (fold i rhs e)
+                [v] -> foldVarR v
+                vs  -> fail $ "multiple names match: " ++ intercalate ", " (map var2String vs)
+
+-- TODO: Add depth argument
+foldVarR :: ReadBindings c => Var -> Rewrite c HermitM CoreExpr
+foldVarR v = translate $ \ c e ->
+             do (rhs,_d) <- getUnfolding False False v c
+                maybe (fail "no match.") return (fold v rhs e)
 
 ------------------------------------------------------------------------
 
