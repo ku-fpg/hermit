@@ -28,5 +28,3 @@ wrap h e = h e Just Nothing
 
 main :: IO ()
 main = print (eval $ Val 5)
-
-proof = \ h -> wrap (unwrap h)

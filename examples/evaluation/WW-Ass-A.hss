@@ -1,8 +1,5 @@
 -- Worker/Wrapper Assumption A:  wrap (unwrap h) <=> h
 
-rhs-of 'proof
-lam-body
-
 --  wrap (unwrap h)
                                   { unfold 'wrap }
 --  \ e -> unwrap h e Just Nothing
