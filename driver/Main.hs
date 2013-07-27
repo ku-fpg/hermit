@@ -1,4 +1,4 @@
--- Simple driver for hermit
+{-# LANGUAGE ViewPatterns #-}
 
 module Main where
 
@@ -8,7 +8,7 @@ import System.Environment
 import System.Process
 import System.Exit
 
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, partition)
 import System.Directory (doesFileExist)
 
 usage :: IO ()
@@ -29,6 +29,11 @@ usage = putStrLn $ unlines
         ,""
         ,"HERMIT_ARGS"
         ,"  -opt=MODULE : where MODULE is the module containing a HERMIT optimization plugin"
+        ,"  -vN         : controls verbosity, where N is one of the following values:"
+        ,"                  0 : suppress HERMIT messages, pass -v0 to GHC"
+        ,"                  1 : suppress HERMIT messages"
+        ,"                  2 : pass -v0 to GHC"
+        ,"                  3 : (default) display all HERMIT and GHC messages"
         ,""
         ,"MOD_ARGS"
         ,"  SCRIPTNAME : name of script file to run for this module"
@@ -70,7 +75,7 @@ main4 file_nm hermit_args module_args ghc_args = do
                     [ "-fplugin-opt=" ++ pluginName ++ ":" ++ m_nm ++ ":" ++ opt
                     | (m_nm, m_opts) <- module_args
                     , opt <- "" : m_opts
-                    ] ++ ghc_args
+                    ] ++ ghc_args ++ extraGHCArgs hermit_args'
         putStrLn $ "% ghc " ++ unwords cmds
         (_,_,_,r) <- createProcess $ proc "ghc" cmds
         ex <- waitForProcess r
@@ -81,3 +86,13 @@ getPlugin = go "HERMIT" []
     where go plug flags [] = (plug, flags)
           go plug flags (f:fs) | "-opt=" `isPrefixOf` f = go (drop 5 f) flags fs
                                | otherwise              = go plug (f:flags) fs
+
+-- | See if the given HERMIT args imply any additional GHC args
+extraGHCArgs :: [String] -> [String]
+extraGHCArgs (matchArgs (`elem` ["-v0","-v2"]) -> Just (_,r)) = "-v0" : extraGHCArgs r
+extraGHCArgs _ = []
+
+matchArgs :: (String -> Bool) -> [String] -> Maybe ([String], [String])
+matchArgs p args = case partition p args of
+                    ([],_) -> Nothing
+                    (as,r) -> Just (as,r)

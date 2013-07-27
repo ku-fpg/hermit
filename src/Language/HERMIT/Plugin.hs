@@ -26,22 +26,22 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
             -- This is a bit of a hack; otherwise we lose what we've not seen
             liftIO $ hSetBuffering stdout NoBuffering
 
-            let (m_opts, _h_opts) = partition (isInfixOf ":") opts
-                passes = map getCorePass todos
+            let passes = map getCorePass todos
                 allPasses = foldr (\ (n,p,seen,notyet) r -> mkPass n seen notyet : p : r)
                                   [mkPass (length todos) passes []]
                                   (zip4 [0..] todos (inits passes) (tails passes))
-                mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n) $ modFilter hp (PhaseInfo n ps ps') m_opts
+                mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n) $ modFilter hp (PhaseInfo n ps ps') opts
 
             return allPasses
 
 -- | Determine whether to act on this module, choose plugin pass.
 -- NB: we have the ability to stick module info in the phase info here
 modFilter :: HermitPass -> HermitPass
-modFilter hp pInfo opts guts 
-    | null modOpts && not (null opts) = return guts -- don't process this module
-    | otherwise                       = hp pInfo (filter (not . null) modOpts) guts
-    where modOpts = filterOpts opts guts
+modFilter hp pInfo opts guts
+    | null modOpts && notNull opts = return guts -- don't process this module
+    | otherwise                    = hp pInfo (h_opts ++ filter notNull modOpts) guts
+    where modOpts = filterOpts m_opts guts
+          (m_opts, h_opts) = partition (isInfixOf ":") opts
 
 -- | Filter options to those pertaining to this module, stripping module prefix.
 filterOpts :: [CommandLineOption] -> ModGuts -> [CommandLineOption]
@@ -119,7 +119,7 @@ getCorePass (CoreDoPluginPass nm _) = PluginPass nm
 getCorePass CoreDoNothing       = NoOp
 -- getCorePass _                   = Unknown
 
-data PhaseInfo = 
+data PhaseInfo =
     PhaseInfo { phaseNum :: Int
               , phasesDone :: [CorePass]
               , phasesLeft :: [CorePass]

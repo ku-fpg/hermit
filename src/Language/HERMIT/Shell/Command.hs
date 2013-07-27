@@ -18,7 +18,7 @@ import Control.Monad.Error
 
 import Data.Char
 import Data.Monoid
-import Data.List (intercalate, isPrefixOf, nub)
+import Data.List (intercalate, isPrefixOf, nub, partition)
 import Data.Default (def)
 import qualified Data.Map as M
 import Data.Maybe
@@ -147,14 +147,17 @@ getTerminalWidth = do
     term <- setupTermFromEnv
     return $ fromMaybe 80 $ getCapability term termColumns
 
--- | The first argument is a list of files to load.
-commandLine :: [FilePath] -> Behavior -> [External] -> ScopedKernel -> SAST -> IO ()
-commandLine filesToLoad behavior exts skernel sast = do
+-- | The first argument includes a list of files to load.
+commandLine :: [GHC.CommandLineOption] -> Behavior -> [External] -> ScopedKernel -> SAST -> IO ()
+commandLine opts behavior exts skernel sast = do
     let dict = mkDict $ shell_externals ++ exts
     let ws_complete = " ()"
+    let (flags, filesToLoad) = partition (isPrefixOf "-") opts
 
     let startup = do
-            liftIO $ putStrLn banner
+            if any (`elem` ["-v0", "-v1"]) flags
+                then return ()
+                else liftIO $ putStrLn banner
             setLoading True
             sequence_ [ performMetaCommand $ case fileName of
                          "abort"  -> Abort
