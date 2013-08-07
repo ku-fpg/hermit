@@ -152,9 +152,7 @@ getUnfoldingT scrutinee caseBinderOnly md =
                                                                  in either (,depth) (,depth+1) (alt2Exp s tys alt)
                                _              -> if caseBinderOnly
                                                   then fail "not a case binder."
-                                                  else case hermitBindingSiteExpr b of
-                                                         Just e  -> return (e, depth)
-                                                         Nothing -> fail $ "variable is not bound to an expression."
+                                                  else (,depth) <$> liftKureM (hermitBindingSiteExpr b)
 
 -- | Convert lhs of case alternative to a constructor application expression,
 --   or a default expression in the case of the DEFAULT alternative.

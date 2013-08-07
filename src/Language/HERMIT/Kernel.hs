@@ -72,7 +72,7 @@ hermitKernel callback modGuts = do
             sendReqRead fn = sendReq (\ st -> (fmap.fmap) (,st) $ fn st)
 
         let sendReqWrite :: (KernelState -> CoreM KernelState) -> IO ()
-            sendReqWrite fn = sendReq (fmap ( return . ((),) ) . fn) >>= runKureM return fail
+            sendReqWrite fn = sendReq (fmap ( return . ((),) ) . fn) >>= liftKureM
 
         let kernel :: Kernel
             kernel = Kernel
@@ -95,7 +95,7 @@ hermitKernel callback modGuts = do
 
                 , deleteK = \ name -> sendReqWrite (return . delete name)
 
-                , listK = sendReqRead (return . return . keys) >>= runKureM return fail
+                , listK = sendReqRead (return . return . keys) >>= liftKureM
                 }
 
         -- We always start with AST 0

@@ -17,6 +17,8 @@ module Language.HERMIT.Context
          -- ** Adding bindings to contexts
        , AddBindings(..)
        , addBindingGroup
+       , addDefBinding
+       , addDefBindingsExcept
        , addLambdaBinding
        , addAltBindings
        , addCaseWildBinding
@@ -58,26 +60,29 @@ type BindingDepth = Int
 
 -- | HERMIT\'s representation of variable bindings.
 --   Bound expressions cannot be inlined without checking for shadowing issues (using the depth information).
-data HermitBindingSite
-        = REC CoreExpr
-        | NONREC CoreExpr
-        | LAM
-        | CASEALT
-        | FORALL
-        | CASEWILD CoreExpr (AltCon,[Var])  -- ^ We store both the scrutinised expression, and the case alternative 'AltCon' (which can be converted to Constructor or Literal) and variables.
+data HermitBindingSite = LAM                               -- ^ A lambda-bound variable.
+                       | NONREC CoreExpr                   -- ^ A non-recursive binding of an expression.
+                       | REC CoreExpr                      -- ^ A (potentially) recursive binding of an expression.
+                       | SELFREC                           -- ^ A (potentially) recursive binding of a superexpression of the current node.
+                       | CASEALT                           -- ^ A variable bound in a case alternative.
+                       | CASEWILD CoreExpr (AltCon,[Var])  -- ^ A case wildcard binder.  We store both the scrutinised expression, and the case alternative 'AltCon' and variables.
+                       | FORALL                            -- ^ A universally quantified type variable.
 
 type HermitBinding = (BindingDepth, HermitBindingSite)
 
 -- | Retrieve the expression in a 'HermitBindingSite', if there is one.
-hermitBindingSiteExpr :: HermitBindingSite -> Maybe CoreExpr
+hermitBindingSiteExpr :: HermitBindingSite -> KureM CoreExpr
 hermitBindingSiteExpr b = case b of
-                            REC e        -> Just e
-                            NONREC e     -> Just e
-                            CASEWILD e _ -> Just e
-                            _            -> Nothing
+                            LAM          -> fail "variable is lambda-bound, not bound to an expression."
+                            NONREC e     -> return e
+                            REC e        -> return e
+                            SELFREC      -> fail "identifier recursively refers to the expression under consideration."
+                            CASEALT      -> fail "variable is bound in a case alternative, not bound to an expression."
+                            CASEWILD e _ -> return e
+                            FORALL       -> fail "variable is a universally quantified type variable."
 
 -- | Retrieve the expression in a 'HermitBinding', if there is one.
-hermitBindingExpr :: HermitBinding -> Maybe CoreExpr
+hermitBindingExpr :: HermitBinding -> KureM CoreExpr
 hermitBindingExpr = hermitBindingSiteExpr . snd
 
 ------------------------------------------------------------------------
@@ -113,6 +118,16 @@ addHermitBinding v bd = addHermitBindings [(v,bd)]
 addBindingGroup :: AddBindings c => CoreBind -> c -> c
 addBindingGroup (NonRec v e) = addHermitBinding  v (NONREC e)
 addBindingGroup (Rec ies)    = addHermitBindings [ (i, REC e) | (i,e) <- ies ]
+
+-- | Add the binding for a recursive definition currently under examination.
+--   Note that because the expression may later be modified, the context only records the identifier, not the expression.
+addDefBinding :: AddBindings c => Id -> c -> c
+addDefBinding i = addHermitBinding i SELFREC
+
+-- | Add a list of recursive bindings to the context, except the nth binding in the list.
+--   The idea is to exclude the definition being descended into.
+addDefBindingsExcept :: AddBindings c => Int -> [(Id,CoreExpr)] -> c -> c
+addDefBindingsExcept n ies = addHermitBindings [ (i, REC e) | (m,(i,e)) <- zip [0..] ies, m /= n ]
 
 -- | Add a wildcard binding for a specific case alternative.
 addCaseWildBinding :: AddBindings c => (Id,CoreExpr,CoreAlt) -> c -> c

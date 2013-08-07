@@ -133,7 +133,7 @@ bashR = bashDebugR False
 
 bashDebugR :: Bool -> [External] -> RewriteH Core
 bashDebugR debug exts =
-    setFailMsg "bashR: nothing to do."
+    setFailMsg "bash failed: nothing to do."
     $ innermostR $ orR [ if debug then rr >>> Debug.observeR (externName e) else rr
                        | (e,rr) <- matchingExternals bashPredicate exts ]
 

@@ -384,11 +384,10 @@ nonRecOneR r1 r2 = unwrapOneR (nonRecAllR (wrapOneR r1) (wrapOneR r2))
 -- | Translate a binding group of the form: @Rec@ ['CoreDef']
 recT :: (ExtendPath c Crumb, AddBindings c, Monad m) => (Int -> Translate c m CoreDef a) -> ([a] -> b) -> Translate c m CoreBind b
 recT t f = translate $ \ c -> \case
-         Rec bds -> -- Notice how we add the scoping bindings here *before* descending into each individual definition.
-                    let c' = addBindingGroup (Rec bds) c
-                     in f <$> sequence [ apply (t n) (c' @@ Rec_Def n) (Def v e) -- here we convert from (Id,CoreExpr) to CoreDef
-                                       | ((v,e),n) <- zip bds [0..]
-                                       ]
+         Rec bds -> -- The group is recursive, so we add all other bindings in the group to the context (excluding the one under consideration).
+                    f <$> sequence [ apply (t n) (addDefBindingsExcept n bds c @@ Rec_Def n) (Def i e) -- here we convert from (Id,CoreExpr) to CoreDef
+                                   | ((i,e),n) <- zip bds [0..]
+                                   ]
          _       -> fail "not a recursive binding group."
 {-# INLINE recT #-}
 
@@ -410,22 +409,22 @@ recOneR rs = unwrapOneR $ recAllR (wrapOneR . rs)
 ---------------------------------------------------------------------
 
 -- | Translate a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
-defT :: (ExtendPath c Crumb, Monad m) => Translate c m Id a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreDef b
-defT t1 t2 f = translate $ \ c (Def v e) -> f <$> apply t1 (c @@ Def_Id) v <*> apply t2 (c @@ Def_RHS) e
+defT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m Id a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreDef b
+defT t1 t2 f = translate $ \ c (Def i e) -> f <$> apply t1 (c @@ Def_Id) i <*> apply t2 (addDefBinding i c @@ Def_RHS) e
 {-# INLINE defT #-}
 
 -- | Rewrite all children of a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
-defAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Id -> Rewrite c m CoreExpr -> Rewrite c m CoreDef
+defAllR :: (ExtendPath c Crumb, AddBindings c, Monad m) => Rewrite c m Id -> Rewrite c m CoreExpr -> Rewrite c m CoreDef
 defAllR r1 r2 = defT r1 r2 Def
 {-# INLINE defAllR #-}
 
 -- | Rewrite any children of a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
-defAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Id -> Rewrite c m CoreExpr -> Rewrite c m CoreDef
+defAnyR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m Id -> Rewrite c m CoreExpr -> Rewrite c m CoreDef
 defAnyR r1 r2 = unwrapAnyR (defAllR (wrapAnyR r1) (wrapAnyR r2))
 {-# INLINE defAnyR #-}
 
 -- | Rewrite one child of a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
-defOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Id -> Rewrite c m CoreExpr -> Rewrite c m CoreDef
+defOneR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m Id -> Rewrite c m CoreExpr -> Rewrite c m CoreDef
 defOneR r1 r2 = unwrapOneR (defAllR (wrapOneR r1) (wrapOneR r2))
 {-# INLINE defOneR #-}
 
@@ -677,24 +676,24 @@ coercionR r = coercionT (Coercion <$> r)
 -- Some composite congruence combinators to export.
 
 -- | Translate a definition of the form @NonRec 'Var' 'CoreExpr'@ or @Def 'Id' 'CoreExpr'@
-defOrNonRecT :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, MonadCatch m) => Translate c m Var a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m g b
+defOrNonRecT :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m Var a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m g b
 defOrNonRecT t1 t2 f = promoteBindT (nonRecT t1 t2 f)
                     <+ promoteDefT  (defT    t1 t2 f)
 {-# INLINE defOrNonRecT #-}
 
 -- | Rewrite all children of a definition of the form @NonRec 'Var' 'CoreExpr'@ or @Def 'Id' 'CoreExpr'@
-defOrNonRecAllR :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Var -> Rewrite c m CoreExpr -> Rewrite c m g
+defOrNonRecAllR :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m Var -> Rewrite c m CoreExpr -> Rewrite c m g
 defOrNonRecAllR r1 r2 = promoteBindR (nonRecAllR r1 r2)
                      <+ promoteDefR  (defAllR    r1 r2)
 {-# INLINE defOrNonRecAllR #-}
 
 -- | Rewrite any children of a definition of the form @NonRec 'Var' 'CoreExpr'@ or @Def 'Id' 'CoreExpr'@
-defOrNonRecAnyR :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Var -> Rewrite c m CoreExpr -> Rewrite c m g
+defOrNonRecAnyR :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m Var -> Rewrite c m CoreExpr -> Rewrite c m g
 defOrNonRecAnyR r1 r2 = unwrapAnyR $ defOrNonRecAllR (wrapAnyR r1) (wrapAnyR r2)
 {-# INLINE defOrNonRecAnyR #-}
 
 -- | Rewrite one child of a definition of the form @NonRec 'Var' 'CoreExpr'@ or @Def 'Id' 'CoreExpr'@
-defOrNonRecOneR :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Var -> Rewrite c m CoreExpr -> Rewrite c m g
+defOrNonRecOneR :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m Var -> Rewrite c m CoreExpr -> Rewrite c m g
 defOrNonRecOneR r1 r2 = unwrapAnyR $ defOrNonRecOneR (wrapAnyR r1) (wrapAnyR r2)
 {-# INLINE defOrNonRecOneR #-}
 

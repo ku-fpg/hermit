@@ -28,7 +28,7 @@ simplify
      simplify
   }
   any-call (unfold-rule "repH []")
-  any-call (unfold 'id)
+  bash
 }
 one-td (unfold 'absH)
 

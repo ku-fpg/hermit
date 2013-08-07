@@ -29,7 +29,7 @@ import Language.HERMIT.Primitive.Common
 externals :: [External]
 externals =
     [ external "cast-elim" (promoteExprR castElim :: RewriteH Core)
-        [ "cast-elim-refl <+ cast-elim-sym" ] .+ Shallow .+ Bash
+        [ "cast-elim-refl <+ cast-elim-sym" ] .+ Shallow -- don't include in "Bash", as sub-rewrites are tagged "Bash" already.
     , external "cast-elim-refl" (promoteExprR castElimRefl :: RewriteH Core)
         [ "cast e co ==> e ; if co is a reflexive coercion" ] .+ Shallow .+ Bash
     , external "cast-elim-sym" (promoteExprR castElimSym :: RewriteH Core)

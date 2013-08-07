@@ -72,11 +72,11 @@ externals =
     , external "let-float-case" (promoteExprR letFloatCase :: RewriteH Core)
         [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]     .+ Commute .+ Shallow .+ Eval .+ Bash
     , external "let-float-cast" (promoteExprR letFloatCast :: RewriteH Core)
-        [ "cast (let bnds in e) co ==> let bnds in cast e co" ]                 .+ Shallow
+        [ "cast (let bnds in e) co ==> let bnds in cast e co" ]                 .+ Commute .+ Shallow .+ Bash
     , external "let-float-top" (promoteProgR letFloatLetTop :: RewriteH Core)
         [ "v = (let w = ew in ev) : bds ==> w = ew : v = ev : bds" ]            .+ Commute .+ Shallow .+ Bash
     , external "let-float" (promoteProgR letFloatLetTop <+ promoteExprR letFloatExpr :: RewriteH Core)
-        [ "Float a Let whatever the context." ]                                 .+ Commute .+ Shallow .+ Bash
+        [ "Float a Let whatever the context." ]                                 .+ Commute .+ Shallow  -- Don't include in bash, as each sub-rewrite is tagged "Bash" already.
     , external "let-to-case" (promoteExprR letToCase :: RewriteH Core)
         [ "let v = ev in e ==> case ev of v -> e" ]                             .+ Commute .+ Shallow .+ PreCondition
 --    , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)

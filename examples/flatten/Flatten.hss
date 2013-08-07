@@ -15,6 +15,6 @@ simplify
    one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work r |]))
    any-call (unfold-rule "repH (:)")
    any-call (unfold-rule "repH []")
-   simplify
+   bash
 }
 any-call (unfold 'absH)

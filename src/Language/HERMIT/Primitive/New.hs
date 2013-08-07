@@ -31,8 +31,10 @@ externals = map ((.+ Experiment) . (.+ TODO))
          [ external "var" (promoteExprT . isVar :: TH.Name -> TranslateH Core ())
                 [ "var '<v> returns successfully for variable v, and fails otherwise.",
                   "Useful in combination with \"when\", as in: when (var v) r" ] .+ Predicate
+         , external "unfold-basic-combinator" (promoteExprR unfoldBasicCombinatorR :: RewriteH Core)
+                [ "Unfold the current expression if it is one of the basic combinators: ($), (.) or id." ] .+ Bash
          , external "simplify" (simplifyR :: RewriteH Core)
-                [ "innermost (unfold 'id <+ unfold '$ <+ unfold '. <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ let-elim)" ] .+ Bash
+                [ "innermost (unfold-basic-combinator <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ let-elim)" ]
          , external "static-arg" (promoteDefR staticArg :: RewriteH Core)
                 [ "perform the static argument transformation on a recursive function" ]
          , external "unsafe-replace" (promoteExprR . unsafeReplace :: CoreString -> RewriteH Core)
@@ -71,11 +73,17 @@ isVar nm = varT (arr $ cmpTHName2Var nm) >>= guardM
 
 ------------------------------------------------------------------------------------------------------
 
+-- | Unfold the current expression if it is one of the basic combinators: ($), (.) or id.
+--   This is intended to be used as a component of simplification traversals such as 'simplifyR' or 'bashR'.
+unfoldBasicCombinatorR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $
+     unfoldNameR (TH.mkName "$")
+  <+ unfoldNameR (TH.mkName ".")
+  <+ unfoldNameR (TH.mkName "id")
+
 simplifyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
-    innermostR (promoteExprR (unfoldNameR (TH.mkName "$")
-                           <+ unfoldNameR (TH.mkName ".")
-                           <+ unfoldNameR (TH.mkName "id")
+    innermostR (promoteExprR (unfoldBasicCombinatorR
                            <+ betaReducePlus
                            <+ safeLetSubstR
                            <+ caseReduce

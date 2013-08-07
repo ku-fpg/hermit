@@ -549,9 +549,9 @@ arityOf c i =
         -- Note: the exprArity will call idArity if
         -- it hits an id; perhaps we should do the counting
         -- The advantage of idArity is it will terminate, though.
-        Just b -> case hermitBindingExpr b of
-                    Just e  -> exprArity e
-                    Nothing -> 0 -- conservative estimate, as we don't know what the expression looks like
+        Just b -> runKureM exprArity
+                           (const 0) -- conservative estimate, as we don't know what the expression looks like
+                           (hermitBindingExpr b)
 
 -------------------------------------------
 

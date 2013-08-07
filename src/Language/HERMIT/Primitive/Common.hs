@@ -161,7 +161,7 @@ recIdsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreBin
 recIdsT = recT (\ _ -> defIdT) id
 
 -- | Return the identifier bound by a recursive definition.
-defIdT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreDef Id
+defIdT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreDef Id
 defIdT = defT idR mempty (\ v () -> v)
 
 -- | Return the variable bound by a lambda expression.

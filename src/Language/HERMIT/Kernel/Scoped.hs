@@ -123,7 +123,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 m <- atomically $ readTMVar store
                                 (ast, base, rel) <- get sAst m
                                 queryK kernel ast (focusT (pathStackToLens base rel) t) env
-                                    >>= runKureM return fail
+                                    >>= liftKureM
             , deleteS     = \ (SAST sAst) -> safeTakeTMVar store $ \ m -> do
                                 (ast,_,_) <- get sAst m
                                 let m' = I.delete sAst m
