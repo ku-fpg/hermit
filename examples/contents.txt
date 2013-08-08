@@ -117,7 +117,7 @@ Last
 
 * A classic simple example.
 
-* Attempting to script Assumption B, stuck due to bug in "fold".
+* Assumption B scripted.
 
 * Main script completed.
 

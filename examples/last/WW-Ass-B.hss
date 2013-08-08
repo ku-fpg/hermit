@@ -23,7 +23,7 @@
 --            a:as -> case as of
 --                      []   -> a
 --                      a:as -> h (a:as)
-                                            { fold 'f } -- TODO: this fold isn't working, HERMIT bug I think
+                                            { fold 'f }
 --          f h xs
                                         }
 --  \ xs -> f h xs
