@@ -3,7 +3,7 @@ Concatenate Vanishes
 
 * A common script for all our Concatenate Vanishes examples.
 
-* Completed.
+* Main script completed.
 
 * Interesting rewrites: push, innermost, unfold-rule
 
@@ -19,7 +19,9 @@ Evaluation
 
 * Convert to CPS to avoid repeated pattern matching.
 
-* Completed.
+* Main script completed.
+
+* Assumption A scripted.
 
 * Interesting rewrites: abstract, fold
 
@@ -29,7 +31,7 @@ Factorial
 
 * The classic boxing/unboxing example.
 
-* Completed.
+* Main script completed.
 
 
 Fibonacci (Tupling)
@@ -37,7 +39,9 @@ Fibonacci (Tupling)
 
 * Example of Tupling transformation.
 
-* Completed and published
+* Main script completed and published.
+
+* Assumption A scripted.
 
 * Interesting rewrites: ww-split tactic, case-split(-inline), fold, remember (and fold/unfold remembered defns), let-tuple
 
@@ -47,7 +51,7 @@ Fibonacci (Stream Memoisation)
 
 * Example of Memoisation.
 
-* Completed.
+* Main script completed.
 
 * Interesting rewrites: ww-split tactic
 
@@ -57,7 +61,7 @@ Flatten
 
 * Another concatenate-vanishes example, based on the Reverse example.
 
-* Completed.
+* Main script completed.
 
 * Main rewrites: any-call
 
@@ -67,31 +71,9 @@ Hanoi
 
 * Another tupling transformation
 
-* Completed.
+* Main script completed.
 
 * Interesting rewrites: ww-split tactic, case-split(-inline), fold, remember (and fold/unfold remembered defns), let-tuple
-
-
-Length
-======
-
-* Another accumulation example, but this time accumulating an Int.
-
-* Taken from: http://www.haskell.org/haskellwiki/Performance/Accumulating_parameter
-
-* Completed
-
-* Interesting rewrites: case-seq
-
-
-Map
-===
-
-* List unrolling.
-
-* Completed.
-
-* Main rewrites: simplify, any-call, unfold, case-split(-inline), remember.
 
 
 Haskell 2012 Paper
@@ -135,7 +117,31 @@ Last
 
 * A classic simple example.
 
-* Completed.
+* Attempting to script Assumption B, stuck due to bug in "fold".
+
+* Main script completed.
+
+
+Length
+======
+
+* Another accumulation example, but this time accumulating an Int.
+
+* Taken from: http://www.haskell.org/haskellwiki/Performance/Accumulating_parameter
+
+* Completed
+
+* Interesting rewrites: case-seq
+
+
+Map
+===
+
+* List unrolling.
+
+* Main script completed.
+
+* Main rewrites: simplify, any-call, unfold, case-split(-inline), remember.
 
 
 Mean
@@ -145,7 +151,7 @@ Mean
 
 * A non-WW tupling example (maybe it can be cast as WW, I'm not sure).
 
-* Completed.
+* Main script completed.
 
 * Interesting rewrites: abstract, remember, fold, let-intro, let-float, let-tuple
 
@@ -156,7 +162,7 @@ Nub
 
 * A new (that is, unpublished) worker/wrapper example.
 
-* There was a bug in Andy's original pen-and-paper derivation.
+* Andy's original pen-and-paper derivation is no longer valid due to a change in the Data.Set module.
 
 * A corrected version is in the files named "Revised".
 
@@ -169,7 +175,7 @@ Quicksort
 
 * Another concatenate-vanishes example.
 
-* Completed.
+* Main script completed.
 
 * Main rewrites: any-call
 
@@ -181,7 +187,7 @@ Reverse and ReverseWW
 
 * The WW version uses the WW-Split Tactic.
 
-* Completed.  Lower-level version has been published.
+* Main script completed.  Lower-level version has been published.
 
 * Main rewrites: any-call
 
@@ -191,7 +197,7 @@ Reverse and ReverseWW
 Talks
 =====
 
-* This directory is for the code that Neil demonstrated at Nottingham, IFL, Haskell and MVD.
+* This directory is for the code that Neil demonstrated at Nottingham (2012), IFL (2012), Haskell (2012), MVD (2012) and TFP (2013).
 
 
 To Do

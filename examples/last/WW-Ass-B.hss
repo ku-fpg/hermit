@@ -1,0 +1,31 @@
+-- Worker/Wrapper Assumption B:  wrap (unwrap (f h)) <=> f h
+
+--  wrap (unwrap (f h))
+                                        { eta-expand 'xs }
+--  \ xs -> wrap (unwrap (f h)) xs
+                                        { lam-body
+--          wrap (unwrap (f h)) xs
+                                            { unfold 'wrap }
+--          case xs of
+--            []   -> undefined
+--            a:as -> unwrap (f h) a as
+                                            { case-alt 1 ; alt-rhs
+--                    unwrap (f h) a as
+                                                { unfold 'unwrap }
+--                    f h (a:as)
+                                                { unfold 'f ; bash }
+--                    case as of
+--                      []   -> a
+--                      a:as -> h (a:as)
+                                            }
+--          case xs of
+--            []   -> undefined
+--            a:as -> case as of
+--                      []   -> a
+--                      a:as -> h (a:as)
+                                            { fold 'f } -- TODO: this fold isn't working, HERMIT bug I think
+--          f h xs
+                                        }
+--  \ xs -> f h xs
+                                        { eta-reduce }
+--  f h
