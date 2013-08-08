@@ -1,0 +1,21 @@
+-- Worker/Wrapper Assumption A:  wrap (unwrap h) <=> h
+
+--  wrap (unwrap h)
+                                    { eta-expand 'x }
+--  \ x -> wrap (unwrap h) x
+                                    { lam-body
+--         wrap (unwrap h) x
+                                       { unfold 'wrap ; bash }
+--         absH (unwrap h x)
+                                       { any-call (unfold 'unwrap) ; bash }
+--         absH (repH (h x))
+                                       { unfold 'absH }
+--         repH (h x) []
+                                       { unfold 'repH }
+--         h x ++ []
+                                       { unfold-rule "++ []" }
+--         h x
+                                    }
+--  \ x -> h x
+                                    { eta-reduce }
+--  h

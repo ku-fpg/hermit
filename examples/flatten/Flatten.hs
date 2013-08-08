@@ -17,4 +17,3 @@ flatten (Node l r) = flatten l ++ flatten r
 
 main :: IO ()
 main = print (flatten (Node (Leaf 'h') (Leaf 'i')))
-

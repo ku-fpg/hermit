@@ -20,4 +20,3 @@ qsort (a:as) = qsort bs ++ [a] ++ qsort cs
 
 main :: IO ()
 main = print (qsort [8,3,5,7,2,9,4,6,3,2])
-

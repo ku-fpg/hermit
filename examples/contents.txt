@@ -5,6 +5,8 @@ Concatenate Vanishes
 
 * Main script completed.
 
+* Assumption A scripted.
+
 * Interesting rewrites: push, innermost, unfold-rule
 
 * It works for all three examples, but I doubt it would work for *any* concat vanishes example.
@@ -63,6 +65,8 @@ Flatten
 
 * Main script completed.
 
+* Assumption A scripted.
+
 * Main rewrites: any-call
 
 
@@ -84,7 +88,7 @@ Fibonacci (Unrolling)
 
 * We unfold fib once to show how things operate overall.
 
-* Main rewrites: any-bu, inline
+* Main rewrites: any-bu, inline (UPDATE: "remember" now required)
 
 
 Reverse
@@ -177,6 +181,8 @@ Quicksort
 
 * Main script completed.
 
+* Assumption A scripted.
+
 * Main rewrites: any-call
 
 
@@ -188,6 +194,8 @@ Reverse and ReverseWW
 * The WW version uses the WW-Split Tactic.
 
 * Main script completed.  Lower-level version has been published.
+
+* Assumption A scripted.
 
 * Main rewrites: any-call
 
