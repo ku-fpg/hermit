@@ -40,11 +40,11 @@ externals = map (.+ Experiment)
          [ external "fix-intro" (promoteDefR fixIntro :: RewriteH Core)
                 [ "rewrite a recursive binding into a non-recursive binding using fix"
                 ] .+ Introduce .+ Context
-         , external "fix-computation" ((promoteExprBiR fixComputationRule) :: BiRewriteH Core)
+         , external "fix-computation" (promoteExprBiR fixComputationRule :: BiRewriteH Core)
                 [ "Fixed-Point Computation Rule",
                   "fix t f  <==>  f (fix t f)"
                 ]
-         , external "rolling-rule" ((promoteExprBiR rollingRule) :: BiRewriteH Core)
+         , external "rolling-rule" (promoteExprBiR rollingRule :: BiRewriteH Core)
                 [ "Rolling Rule",
                   "fix tyA (\\ a -> f (g a))  <==>  f (fix tyB (\\ b -> g (f b))"
                 ]
