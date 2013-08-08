@@ -128,14 +128,14 @@ foldMatch vs as (App e a) (App e' a') = do
     x <- foldMatch vs as e e'
     y <- foldMatch vs as a a'
     return (x ++ y)
-foldMatch vs as (Lam v e) (Lam v' e') = foldMatch (filter (==v) vs) (addAlpha v' v as) e e'
+foldMatch vs as (Lam v e) (Lam v' e') = foldMatch (filter (/=v) vs) (addAlpha v' v as) e e'
 foldMatch vs as (Let (NonRec v rhs) e) (Let (NonRec v' rhs') e') = do
     x <- foldMatch vs as rhs rhs'
-    y <- foldMatch (filter (==v) vs) (addAlpha v' v as) e e'
+    y <- foldMatch (filter (/=v) vs) (addAlpha v' v as) e e'
     return (x ++ y)
 -- TODO: this depends on bindings being in the same order
 foldMatch vs as (Let (Rec bnds) e) (Let (Rec bnds') e') | length bnds == length bnds' = do
-    let vs' = filter (`elem` map fst bnds) vs
+    let vs' = filter (`notElem` map fst bnds) vs
         as' = [ (v',v) | ((v,_),(v',_)) <- zip bnds bnds' ] ++ as
         bmatch (_,rhs) (_,rhs') = foldMatch vs' as' rhs rhs'
     x <- zipWithM bmatch bnds bnds'
