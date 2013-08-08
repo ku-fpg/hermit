@@ -136,7 +136,7 @@ foldMatch vs as (Let (NonRec v rhs) e) (Let (NonRec v' rhs') e') = do
 -- TODO: this depends on bindings being in the same order
 foldMatch vs as (Let (Rec bnds) e) (Let (Rec bnds') e') | length bnds == length bnds' = do
     let vs' = filter (`notElem` map fst bnds) vs
-        as' = [ (v',v) | ((v,_),(v',_)) <- zip bnds bnds' ] ++ as
+        as' = foldr (uncurry addAlpha) as $ zip (map fst bnds) (map fst bnds')
         bmatch (_,rhs) (_,rhs') = foldMatch vs' as' rhs rhs'
     x <- zipWithM bmatch bnds bnds'
     y <- foldMatch vs' as' e e'
@@ -149,7 +149,7 @@ foldMatch vs as (Case s b ty alts) (Case s' b' ty' alts')
     let as' = addAlpha b' b as
         vs' = filter (/=b) vs
         altMatch (ac, is, e) (ac', is', e') | ac == ac' =
-            foldMatch (filter (`notElem` is) vs') (zip is' is ++ as') e e'
+            foldMatch (filter (`notElem` is) vs') (foldr (uncurry addAlpha) as' $ zip is' is) e e'
         altMatch _ _ = Nothing
     y <- zipWithM altMatch alts alts'
     return (x ++ t ++ concat y)
