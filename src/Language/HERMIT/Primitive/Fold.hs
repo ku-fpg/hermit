@@ -143,15 +143,16 @@ foldMatch vs as (Let (Rec bnds) e) (Let (Rec bnds') e') | length bnds == length 
     return (concat x ++ y)
 foldMatch vs as (Tick t e) (Tick t' e') | t == t' = foldMatch vs as e e'
 foldMatch vs as (Case s b ty alts) (Case s' b' ty' alts')
-  | (eqType ty ty') && (length alts == length alts') = do
+  | length alts == length alts' = do
+    t <- foldMatch vs as (Type ty) (Type ty')
+    x <- foldMatch vs as s s'
     let as' = addAlpha b' b as
-    x <- foldMatch vs as' s s'
-    let vs' = filter (/=b) vs
+        vs' = filter (/=b) vs
         altMatch (ac, is, e) (ac', is', e') | ac == ac' =
             foldMatch (filter (`notElem` is) vs') (zip is' is ++ as') e e'
         altMatch _ _ = Nothing
     y <- zipWithM altMatch alts alts'
-    return (x ++ concat y)
+    return (x ++ t ++ concat y)
 foldMatch vs as (Cast e c)   (Cast e' c')  | coreEqCoercion c c' = foldMatch vs as e e'
 -- don't try to alpha type variables for now
 foldMatch vs _  (Type t@(TyVarTy v)) e@(Type t') | v `elem` vs = return [(v,e)]
