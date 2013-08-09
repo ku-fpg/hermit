@@ -75,7 +75,7 @@ main4 file_nm hermit_args module_args ghc_args = do
                     [ "-fplugin-opt=" ++ pluginName ++ ":" ++ m_nm ++ ":" ++ opt
                     | (m_nm, m_opts) <- module_args
                     , opt <- "" : m_opts
-                    ] ++ ghc_args ++ extraGHCArgs hermit_args'
+                    ] ++ extraGHCArgs hermit_args' ++ ghc_args
         putStrLn $ "% ghc " ++ unwords cmds
         (_,_,_,r) <- createProcess $ proc "ghc" cmds
         ex <- waitForProcess r
