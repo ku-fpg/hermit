@@ -88,13 +88,24 @@ foldVarR v md =
 
 ------------------------------------------------------------------------
 
+countBinders :: CoreExpr -> Int
+countBinders e = length vs
+    where (vs,_) = collectBinders e
+
+collectNBinders :: Int -> CoreExpr -> Maybe ([Var], CoreExpr)
+collectNBinders = go []
+  where
+    go bs 0 e         = return (reverse bs, e)
+    go bs i (Lam b e) = go (b:bs) (i-1) e
+    go _ _  _         = Nothing
+
+-- return Nothing if not equal, so sequence will fail below
+checkEqual :: Maybe CoreExpr -> Maybe CoreExpr -> Maybe CoreExpr
+checkEqual m1 m2 = ifM (exprEqual <$> m1 <*> m2) m1 Nothing
+
 fold :: Id -> CoreExpr -> CoreExpr -> Maybe CoreExpr
 fold i lam exp = do
-    let (vs,body) = collectBinders lam
-        -- return Nothing if not equal, so sequence will fail below
-        checkEqual :: Maybe CoreExpr -> Maybe CoreExpr -> Maybe CoreExpr
-        checkEqual m1 m2 = ifM (exprEqual <$> m1 <*> m2) m1 Nothing
-
+    (vs,body) <- collectNBinders (countBinders lam - countBinders exp) lam
     al <- foldMatch vs [] body exp
 
     let m = Map.fromListWith checkEqual [(k,Just v) | (k,v) <- al ]
