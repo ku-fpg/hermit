@@ -58,7 +58,9 @@ import Language.HERMIT.Core
 import Language.HERMIT.Context
 import Language.HERMIT.GHC
 
+#if __GLASGOW_HASKELL__ > 706
 import Language.HERMIT.Primitive.GHC
+#endif
 
 import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH.Syntax (showName)
