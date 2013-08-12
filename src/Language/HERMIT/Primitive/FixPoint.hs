@@ -24,6 +24,8 @@ import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.AlphaConversion
 import Language.HERMIT.Primitive.Common
+import Language.HERMIT.Primitive.Composite
+import Language.HERMIT.Primitive.Function
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Navigation
@@ -301,7 +303,7 @@ workerWrapperSplitParam n = \ wrapS unwrapS -> prefixFailMsg "worker/wrapper spl
                                                                                               unwrap <- parseCoreExprT unwrapS
                                                                                               let ty = Type (TyVarTy t)
                                                                                               workerWrapperSplitR (App wrap ty) (App unwrap ty)
-                                                       staticArg >>> extractR splitAtDefR
+                                                       staticArgR >>> extractR splitAtDefR
 
 --------------------------------------------------------------------------------------------------
 

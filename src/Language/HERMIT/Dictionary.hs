@@ -20,9 +20,11 @@ import Language.HERMIT.Kure
 import Language.HERMIT.External
 
 import qualified Language.HERMIT.Primitive.AlphaConversion as Alpha
+import qualified Language.HERMIT.Primitive.Composite as Composite
 import qualified Language.HERMIT.Primitive.Debug as Debug
 import qualified Language.HERMIT.Primitive.FixPoint as FixPoint
 import qualified Language.HERMIT.Primitive.Fold as Fold
+import qualified Language.HERMIT.Primitive.Function as Function
 import qualified Language.HERMIT.Primitive.GHC as GHC
 import qualified Language.HERMIT.Primitive.Inline as Inline
 import qualified Language.HERMIT.Primitive.Kure as Kure
@@ -30,6 +32,7 @@ import qualified Language.HERMIT.Primitive.Local as Local
 import qualified Language.HERMIT.Primitive.Navigation as Navigation
 import qualified Language.HERMIT.Primitive.New as New
 import qualified Language.HERMIT.Primitive.Unfold as Unfold
+import qualified Language.HERMIT.Primitive.Unsafe as Unsafe
 
 import Language.HERMIT.PrettyPrinter.Common
 import qualified Language.HERMIT.PrettyPrinter.AST as AST
@@ -42,9 +45,11 @@ import qualified Language.HERMIT.PrettyPrinter.GHC as GHCPP
 externals :: [External]
 externals =
        Alpha.externals
+    ++ Composite.externals
     ++ Debug.externals
     ++ FixPoint.externals
     ++ Fold.externals
+    ++ Function.externals
     ++ GHC.externals
     ++ Inline.externals
     ++ Kure.externals
@@ -52,6 +57,7 @@ externals =
     ++ Navigation.externals
     ++ New.externals
     ++ Unfold.externals
+    ++ Unsafe.externals
 
 -- | Create a dictionary from a list of 'External's.
 mkDict :: [External] -> Dictionary

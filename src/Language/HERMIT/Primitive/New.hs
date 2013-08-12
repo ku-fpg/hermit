@@ -1,13 +1,9 @@
-{-# LANGUAGE FlexibleContexts, ScopedTypeVariables, MultiWayIf #-}
-
--- Placeholder for new prims
+{-# LANGUAGE FlexibleContexts, MultiWayIf #-}
 module Language.HERMIT.Primitive.New where
 
 import GhcPlugins as GHC hiding (varName)
 
 import Control.Arrow
-
-import Data.List(transpose)
 
 import Language.HERMIT.Context
 import Language.HERMIT.Core
@@ -17,12 +13,6 @@ import Language.HERMIT.External
 import Language.HERMIT.GHC
 import Language.HERMIT.ParserCore
 
-import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.GHC
-import Language.HERMIT.Primitive.Local
-import Language.HERMIT.Primitive.Unfold
--- import Language.HERMIT.Primitive.Debug
-
 import qualified Language.Haskell.TH as TH
 
 
@@ -31,17 +21,6 @@ externals = map ((.+ Experiment) . (.+ TODO))
          [ external "var" (promoteExprT . isVar :: TH.Name -> TranslateH Core ())
                 [ "var '<v> returns successfully for variable v, and fails otherwise.",
                   "Useful in combination with \"when\", as in: when (var v) r" ] .+ Predicate
-         , external "unfold-basic-combinator" (promoteExprR unfoldBasicCombinatorR :: RewriteH Core)
-                [ "Unfold the current expression if it is one of the basic combinators: ($), (.) or id." ] .+ Bash
-         , external "simplify" (simplifyR :: RewriteH Core)
-                [ "innermost (unfold-basic-combinator <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ let-elim)" ]
-         , external "static-arg" (promoteDefR staticArg :: RewriteH Core)
-                [ "perform the static argument transformation on a recursive function" ]
-         , external "unsafe-replace" (promoteExprR . unsafeReplace :: CoreString -> RewriteH Core)
-                [ "replace the currently focused expression with a new expression" ] .+ Unsafe
-         , external "unsafe-replace" (promoteExprR . unsafeReplaceStash :: String -> RewriteH Core)
-                [ "replace the currently focused expression with an expression from the stash"
-                , "DOES NOT ensure expressions have the same type, or that free variables in the replacement expression are in scope" ] .+ Unsafe
          , external "prog-nonrec-intro" ((\ nm core -> promoteProgR $ progNonRecIntroR (show nm) core) :: TH.Name -> CoreString -> RewriteH Core)
                 [ "Introduce a new top-level definition."
                 , "prog-nonrec-into 'v [| e |]"
@@ -73,75 +52,10 @@ isVar nm = varT (arr $ cmpTHName2Var nm) >>= guardM
 
 ------------------------------------------------------------------------------------------------------
 
--- | Unfold the current expression if it is one of the basic combinators: ($), (.) or id.
---   This is intended to be used as a component of simplification traversals such as 'simplifyR' or 'bashR'.
-unfoldBasicCombinatorR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $
-     unfoldNameR (TH.mkName "$")
-  <+ unfoldNameR (TH.mkName ".")
-  <+ unfoldNameR (TH.mkName "id")
-
-simplifyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
-simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
-    innermostR (promoteExprR (unfoldBasicCombinatorR
-                           <+ betaReducePlus
-                           <+ safeLetSubstR
-                           <+ caseReduce
-                           <+ letElim))
-
-staticArg :: forall c. (ExtendPath c Crumb, AddBindings c) => Rewrite c HermitM CoreDef
-staticArg = prefixFailMsg "static-arg failed: " $ do
-    Def f rhs <- idR
-    let (bnds, body) = collectBinders rhs
-    guardMsg (notNull bnds) "rhs is not a function"
-    contextonlyT $ \ c -> do
-        let bodyContext = foldl (flip addLambdaBinding) c bnds
-
-        callPats <- apply (callsT (var2THName f) (callT >>> arr snd)) bodyContext (ExprCore body)
-        let argExprs = transpose callPats
-            numCalls = length callPats
-            -- ensure argument is present in every call (partial applications boo)
-            (ps,dbnds) = unzip [ (i,b) | (i,b,exprs) <- zip3 [0..] bnds $ argExprs ++ repeat []
-                                       , length exprs /= numCalls || isDynamic b exprs
-                                       ]
-
-            isDynamic _ []                      = False     -- all were static, so static
-            isDynamic b ((Var b'):es)           | b == b' = isDynamic b es
-            isDynamic b ((Type (TyVarTy v)):es) | b == v  = isDynamic b es
-            isDynamic _ _                       = True      -- not a simple repass, so dynamic
-
-        wkr <- newIdH (var2String f ++ "'") (exprType (mkCoreLams dbnds body))
-
-        let replaceCall :: Monad m => Rewrite c m CoreExpr
-            replaceCall = do
-                (_,exprs) <- callT
-                return $ mkApps (Var wkr) [ e | (p,e) <- zip [0..] exprs, (p::Int) `elem` ps ]
-
-        ExprCore body' <- apply (callsR (var2THName f) replaceCall) bodyContext (ExprCore body)
-
-        return $ Def f $ mkCoreLams bnds $ Let (Rec [(wkr, mkCoreLams dbnds body')])
-                                             $ mkApps (Var wkr) (varsToCoreExprs dbnds)
-
-------------------------------------------------------------------------------------------------------
-
 -- The types of these can probably be generalised after the Core Parser is generalised.
 
 parseCoreExprT :: CoreString -> TranslateH a CoreExpr
 parseCoreExprT = contextonlyT . parseCore
-
-unsafeReplace :: CoreString -> RewriteH CoreExpr
-unsafeReplace core =
-    translate $ \ c e -> do
-        e' <- parseCore core c
-        guardMsg (eqType (exprType e) (exprType e')) "expression types differ."
-        return e'
-
-unsafeReplaceStash :: String -> RewriteH CoreExpr
-unsafeReplaceStash label = prefixFailMsg "unsafe-replace failed: " $
-    contextfreeT $ \ e -> do
-        Def _ rhs <- lookupDef label
-        guardMsg (eqType (exprType e) (exprType rhs)) "expression types differ."
-        return rhs
 
 -- | @prog@ ==> @'ProgCons' (v = e) prog@
 progNonRecIntroR :: String -> CoreString -> RewriteH CoreProg

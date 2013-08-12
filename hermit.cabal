@@ -187,9 +187,11 @@ Library
 
        Language.HERMIT.Primitive.AlphaConversion
        Language.HERMIT.Primitive.Common
+       Language.HERMIT.Primitive.Composite
        Language.HERMIT.Primitive.Debug
        Language.HERMIT.Primitive.FixPoint
        Language.HERMIT.Primitive.Fold
+       Language.HERMIT.Primitive.Function
        Language.HERMIT.Primitive.GHC
        Language.HERMIT.Primitive.Inline
        Language.HERMIT.Primitive.Kure
@@ -201,6 +203,7 @@ Library
        Language.HERMIT.Primitive.Navigation.Crumbs
        Language.HERMIT.Primitive.New
        Language.HERMIT.Primitive.Unfold
+       Language.HERMIT.Primitive.Unsafe
 
        Language.HERMIT.PrettyPrinter.AST
        Language.HERMIT.PrettyPrinter.Clean
