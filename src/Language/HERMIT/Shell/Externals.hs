@@ -60,7 +60,7 @@ instance Extern AstEffect where
    unbox i = i
 
 data ShellEffect :: * where
-   SessionStateEffect    :: (CommandLineState -> SessionState -> IO SessionState) -> ShellEffect
+   SessionStateEffect    :: (CommandLineState -> IO CommandLineState) -> ShellEffect
    deriving Typeable
 
 data QueryFun :: * where
@@ -70,7 +70,7 @@ data QueryFun :: * where
    --  (CommandLineState -> IO String)
    Display       ::                                                                                                   QueryFun
    Message       ::                                                String                                          -> QueryFun
-   Inquiry       ::                                                (CommandLineState -> SessionState -> IO String) -> QueryFun
+   Inquiry       ::                                                (CommandLineState -> IO String) -> QueryFun
    deriving Typeable
 
 instance Extern QueryFun where
@@ -163,9 +163,9 @@ shell_externals = map (.+ Shell)
        [ "move to the first child"]
    , external "tag"             Tag
        [ "tag <label> names the current AST with a label" ]
-   , external "navigate"        (SessionStateEffect $ \ _ st -> return $ st { cl_nav = True })
+   , external "navigate"        (SessionStateEffect $ \ st -> return $ st { cl_nav = True })
        [ "switch to navigate mode" ]
-   , external "command-line"    (SessionStateEffect $ \ _ st -> return $ st { cl_nav = False })
+   , external "command-line"    (SessionStateEffect $ \ st -> return $ st { cl_nav = False })
        [ "switch to command line mode" ]
    , external "top"             (Direction T)
        [ "move to root of current scope" ]
@@ -179,19 +179,19 @@ shell_externals = map (.+ Shell)
        [ "goto a specific step in the derivation" ]                             .+ VersionControl
    , external "goto"            (SessionStateEffect . navigation . GotoTag)
        [ "goto a named step in the derivation" ]
-   , external "set-fail-hard" (\ bStr -> SessionStateEffect $ \ _ st ->
+   , external "set-fail-hard" (\ bStr -> SessionStateEffect $ \ st ->
         case reads bStr of
             [(b,"")] -> return $ st { cl_failhard = b }
             _        -> return st )
        [ "set-fail-hard <True|False>; False by default"
        , "any rewrite failure causes compilation to abort" ]
-   , external "set-auto-corelint" (\ bStr -> SessionStateEffect $ \ _ st ->
+   , external "set-auto-corelint" (\ bStr -> SessionStateEffect $ \ st ->
         case reads bStr of
             [(b,"")] -> return $ st { cl_corelint = b }
             _        -> return st )
        [ "set-auto-corelint <True|False>; False by default"
        , "run core lint type-checker after every rewrite, reverting on failure" ]
-   , external "set-pp"           (\ pp -> SessionStateEffect $ \ _ st ->
+   , external "set-pp"           (\ pp -> SessionStateEffect $ \ st ->
        case M.lookup pp pp_dictionary of
          Nothing -> do
             putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
@@ -205,15 +205,15 @@ shell_externals = map (.+ Shell)
        [ "set the output renderer mode"]
    , external "dump"    Dump
        [ "dump <filename> <pretty-printer> <renderer> <width>"]
-   , external "set-pp-width" (\ w -> SessionStateEffect $ \ _ st ->
+   , external "set-pp-width" (\ w -> SessionStateEffect $ \ st ->
         return $ st { cl_pretty_opts = updateWidthOption w (cl_pretty_opts st) })
        ["set the width of the screen"]
-   , external "set-pp-type" (\ str -> SessionStateEffect $ \ _ st ->
+   , external "set-pp-type" (\ str -> SessionStateEffect $ \ st ->
         case reads str :: [(ShowOption,String)] of
             [(opt,"")] -> return $ st { cl_pretty_opts = updateTypeShowOption opt (cl_pretty_opts st) }
             _          -> return st)
        ["set how to show expression-level types (Show|Abstact|Omit)"]
-   , external "set-pp-coercion" (\ str -> SessionStateEffect $ \ _ st ->
+   , external "set-pp-coercion" (\ str -> SessionStateEffect $ \ st ->
         case reads str :: [(ShowOption,String)] of
             [(opt,"")] -> return $ st { cl_pretty_opts = updateCoShowOption opt (cl_pretty_opts st) }
             _          -> return st)
@@ -235,16 +235,16 @@ showRenderers :: QueryFun
 showRenderers = Message $ "set-renderer " ++ show (map fst finalRenders)
 
 changeRenderer :: String -> ShellEffect
-changeRenderer renderer = SessionStateEffect $ \ _ st ->
+changeRenderer renderer = SessionStateEffect $ \ st ->
         case lookup renderer finalRenders of
           Nothing -> return st          -- TODO: should fail with message
           Just r  -> return $ st { cl_render = r }
 
-gc :: CommandLineState -> SessionState -> IO SessionState
-gc clst st = do
-    let k = cl_kernel clst
+gc :: CommandLineState -> IO CommandLineState
+gc st = do
+    let k = cl_kernel st
         cursor = cl_cursor st
-        initSAST = cl_initSAST clst
+        initSAST = cl_initSAST st
     asts <- listS k
     mapM_ (deleteS k) [ sast | sast <- asts, sast `notElem` [cursor, initSAST] ]
     return st
@@ -263,34 +263,34 @@ iokm2clm msg = iokm2clm' msg return
 iokm2clm'' :: MonadIO m => IO (KureM a) -> CLM m a
 iokm2clm'' = iokm2clm ""
 
-data CommandLineState = CommandLineState
-        { cl_graph       :: [(SAST,ExprH,SAST)]
-        , cl_tags        :: [(String,SAST)]
-        -- these three should be in a reader
-        , cl_dict        :: Dictionary
-        , cl_kernel      :: ScopedKernel
-        , cl_initSAST    :: SAST
-        -- and the session state (perhaps in a seperate state?)
-        , cl_session     :: SessionState
-        }
+data VersionStore = VersionStore
+    { vs_graph       :: [(SAST,ExprH,SAST)]
+    , vs_tags        :: [(String,SAST)]
+    }
 
 newSAST :: ExprH -> SAST -> CommandLineState -> CommandLineState
-newSAST expr sast st = st { cl_session = (cl_session st) { cl_cursor = sast }
-                          , cl_graph = (cl_cursor (cl_session st), expr, sast) : cl_graph st
+newSAST expr sast st = st { cl_cursor = sast
+                          , cl_version = (cl_version st) { vs_graph = (cl_cursor st, expr, sast) : vs_graph (cl_version st) }
                           }
 
 -- Session-local issues; things that are never saved.
-data SessionState = SessionState
-        { cl_cursor      :: SAST                                     -- ^ the current AST
-        , cl_pretty      :: String                                   -- ^ which pretty printer to use
-        , cl_pretty_opts :: PrettyOptions                            -- ^ The options for the pretty printer
-        , cl_render      :: Handle -> PrettyOptions -> DocH -> IO () -- ^ the way of outputing to the screen
-        , cl_nav         :: Bool                                     -- ^ keyboard input the the nav panel
-        , cl_loading     :: Bool                                     -- ^ if loading a file
-        , cl_tick        :: TVar (M.Map String Int)                  -- ^ The list of ticked messages
-        , cl_corelint    :: Bool                                     -- ^ if true, run core lint on module after each rewrite
-        , cl_failhard    :: Bool                                     -- ^ if true, abort on *any* failure
-        }
+data CommandLineState = CommandLineState
+    { cl_cursor      :: SAST                                     -- ^ the current AST
+    , cl_pretty      :: String                                   -- ^ which pretty printer to use
+    , cl_pretty_opts :: PrettyOptions                            -- ^ The options for the pretty printer
+    , cl_render      :: Handle -> PrettyOptions -> DocH -> IO () -- ^ the way of outputing to the screen
+    , cl_nav         :: Bool                                     -- ^ keyboard input the the nav panel
+    , cl_loading     :: Bool                                     -- ^ if loading a file
+    , cl_tick        :: TVar (M.Map String Int)                  -- ^ The list of ticked messages
+    , cl_corelint    :: Bool                                     -- ^ if true, run core lint on module after each rewrite
+    , cl_failhard    :: Bool                                     -- ^ if true, abort on *any* failure
+    -- these three should be in a reader
+    , cl_dict        :: Dictionary
+    , cl_kernel      :: ScopedKernel
+    , cl_initSAST    :: SAST
+    -- and the version store
+    , cl_version     :: VersionStore
+    }
 
 -------------------------------------------------------------------------------
 
@@ -335,42 +335,42 @@ instance RenderCode UnicodeTerminal where
 
 --------------------------------------------------------
 
-navigation :: Navigation -> CommandLineState -> SessionState -> IO SessionState
-navigation whereTo st sess_st =
+navigation :: Navigation -> CommandLineState -> IO CommandLineState
+navigation whereTo st =
     case whereTo of
       Goto n -> do
            all_nds <- listS (cl_kernel st)
            if SAST n `elem` all_nds
-              then return $ sess_st { cl_cursor = SAST n }
+              then return $ st { cl_cursor = SAST n }
               else fail $ "Cannot find AST #" ++ show n ++ "."
-      GotoTag tag -> case lookup tag (cl_tags st) of
-                       Just sast -> return $ sess_st { cl_cursor = sast }
+      GotoTag tag -> case lookup tag (vs_tags (cl_version st)) of
+                       Just sast -> return $ st { cl_cursor = sast }
                        Nothing   -> fail $ "Cannot find tag " ++ show tag ++ "."
       Step -> do
-           let ns = [ edge | edge@(s,_,_) <- cl_graph st, s == cl_cursor (cl_session st) ]
+           let ns = [ edge | edge@(s,_,_) <- vs_graph (cl_version st), s == cl_cursor st ]
            case ns of
              [] -> fail "Cannot step forward (no more steps)."
              [(_,cmd,d) ] -> do
                            putStrLn $ "step : " ++ unparseExprH cmd
-                           return $ sess_st { cl_cursor = d }
+                           return $ st { cl_cursor = d }
              _ -> fail "Cannot step forward (multiple choices)"
       Back -> do
-           let ns = [ edge | edge@(_,_,d) <- cl_graph st, d == cl_cursor (cl_session st) ]
+           let ns = [ edge | edge@(_,_,d) <- vs_graph (cl_version st), d == cl_cursor st ]
            case ns of
              []         -> fail "Cannot step backwards (no more steps)."
              [(s,cmd,_) ] -> do
                            putStrLn $ "back, unstepping : " ++ unparseExprH cmd
-                           return $ sess_st { cl_cursor = s }
+                           return $ st { cl_cursor = s }
              _          -> fail "Cannot step backwards (multiple choices, impossible!)."
 
 -------------------------------------------------------------------------------
 
-showDerivationTree :: CommandLineState -> SessionState -> IO String
-showDerivationTree st ss = return $ unlines $ showRefactorTrail graph tags 0 me
+showDerivationTree :: CommandLineState -> IO String
+showDerivationTree st = return $ unlines $ showRefactorTrail graph tags 0 me
   where
-          graph = [ (a,[unparseExprH b],c) | (SAST a,b,SAST c) <- cl_graph st ]
-          tags  = [ (n,nm) | (nm,SAST n) <- cl_tags st ]
-          SAST me = cl_cursor ss
+          graph = [ (a,[unparseExprH b],c) | (SAST a,b,SAST c) <- vs_graph (cl_version st) ]
+          tags  = [ (n,nm) | (nm,SAST n) <- vs_tags (cl_version st) ]
+          SAST me = cl_cursor st
 
 showRefactorTrail :: (Eq a, Show a) => [(a,[String],a)] -> [(a,String)] -> a -> a -> [String]
 showRefactorTrail db tags a me =
