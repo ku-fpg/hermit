@@ -52,21 +52,20 @@ import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns)
 catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
 
-pretty :: SessionState -> PrettyH CoreTC
-pretty ss = case M.lookup (cl_pretty ss) pp_dictionary of
+pretty :: CommandLineState -> PrettyH CoreTC
+pretty st = case M.lookup (cl_pretty st) pp_dictionary of
                 Just pp -> pp
-                Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty ss ++ ">>")
+                Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty st ++ ">>")
 
 showFocus :: MonadIO m => CLM m ()
 showFocus = do
     st <- get
-    let ss = cl_session st
     -- No not show focus while loading
-    ifM (gets (cl_loading . cl_session))
+    ifM (gets cl_loading)
         (return ())
         (iokm2clm' "Rendering error: "
-                   (liftIO . cl_render ss stdout (cl_pretty_opts ss))
-                   (queryS (cl_kernel st) (cl_cursor ss) (liftPrettyH (cl_pretty_opts ss) $ pretty ss) (cl_kernel_env ss))
+                   (liftIO . cl_render st stdout (cl_pretty_opts st))
+                   (queryS (cl_kernel st) (cl_cursor st) (liftPrettyH (cl_pretty_opts st) $ pretty st) (cl_kernel_env st))
         )
 
 -------------------------------------------------------------------------------
@@ -109,12 +108,12 @@ shellComplete mvar rPrev so_far = do
     -- (liftM.liftM) (map simpleCompletion . nub . filter (so_far `isPrefixOf`))
     --     $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
     -- TODO: I expect you want to build a silent version of the kernal_env for this query
-    mcls <- queryS (cl_kernel st) (cl_cursor $ cl_session st) targetQuery (cl_kernel_env $ cl_session st)
+    mcls <- queryS (cl_kernel st) (cl_cursor st) targetQuery (cl_kernel_env st)
     cl <- runKureM return (\ _ -> return []) mcls
     return $ (map simpleCompletion . nub . filter (so_far `isPrefixOf`)) cl
 
 setLoading :: MonadIO m => Bool -> CLM m ()
-setLoading b = modify $ \st -> st { cl_session = (cl_session st) { cl_loading = b } }
+setLoading b = modify $ \st -> st { cl_loading = b }
 
 banner :: String
 banner = unlines
@@ -171,8 +170,8 @@ commandLine opts behavior exts skernel sast = do
     var <- GHC.liftIO $ atomically $ newTVar M.empty
     w <- getTerminalWidth
 
-    let sessionState = SessionState sast "clean" (def { po_width = w}) unicodeConsole False False var False False
-        shellState = CommandLineState [] [] dict skernel sast sessionState
+    let shellState = CommandLineState sast "clean" (def { po_width = w}) unicodeConsole False False var False False dict skernel sast versionStore
+        versionStore = VersionStore [] []
 
     completionMVar <- newMVar shellState
 
@@ -189,8 +188,8 @@ loop completionMVar = loop'
             -- so the completion can get the current state
             liftIO $ modifyMVar_ completionMVar (const $ return st)
             -- liftIO $ print (cl_pretty st, cl_cursor (cl_session st))
-            let SAST n = cl_cursor (cl_session st)
-            maybeLine <- if cl_nav (cl_session st)
+            let SAST n = cl_cursor st
+            maybeLine <- if cl_nav st
                            then liftIO getNavCmd
                            else lift $ lift $ getInputLine $ "hermit<" ++ show n ++ "> "
 
@@ -212,7 +211,7 @@ ourCatch m failure = do
     (res,st') <- liftIO $ runStateT (runErrorT m) st
     put st'
     case res of
-        Left msg -> if cl_failhard (cl_session st')
+        Left msg -> if cl_failhard st'
                     then do
                         performQuery Display
                         liftIO $ putStrLn msg >> abortS (cl_kernel st')
@@ -245,13 +244,13 @@ performAstEffect (Apply rr) expr = do
     st <- get
 
     let sk = cl_kernel st
-        kEnv = cl_kernel_env $ cl_session st
+        kEnv = cl_kernel_env st
 
-    sast' <- iokm2clm "Rewrite failed: " $ applyS sk (cl_cursor $ cl_session st) rr kEnv
+    sast' <- iokm2clm "Rewrite failed: " $ applyS sk (cl_cursor st) rr kEnv
 
     let commit = put (newSAST expr sast' st) >> showFocus
 
-    if cl_corelint (cl_session st)
+    if cl_corelint st
         then do ast' <- iokm2clm'' $ toASTS sk sast'
                 liftIO (queryK (kernelS sk) ast' lintModuleT kEnv)
                 >>= runKureM (\ warns -> putStrToConsole warns >> commit)
@@ -262,38 +261,38 @@ performAstEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
     iokm2clm' "Cannot find path: "
-              (\ p -> do ast <- iokm2clm "Path is invalid: " $ modPathS (cl_kernel st) (cl_cursor (cl_session st)) (<> p) (cl_kernel_env $ cl_session st)
+              (\ p -> do ast <- iokm2clm "Path is invalid: " $ modPathS (cl_kernel st) (cl_cursor st) (<> p) (cl_kernel_env st)
                          put $ newSAST expr ast st
                          showFocus)
-              (queryS (cl_kernel st) (cl_cursor $ cl_session st) t (cl_kernel_env $ cl_session st))
+              (queryS (cl_kernel st) (cl_cursor st) t (cl_kernel_env st))
 
 performAstEffect (Direction dir) expr = do
     st <- get
-    ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor $ cl_session st) (moveLocally dir) (cl_kernel_env $ cl_session st)
+    ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor st) (moveLocally dir) (cl_kernel_env st)
     put $ newSAST expr ast st
     -- something changed, to print
     showFocus
 
 performAstEffect BeginScope expr = do
         st <- get
-        ast <- iokm2clm'' $ beginScopeS (cl_kernel st) (cl_cursor (cl_session st))
+        ast <- iokm2clm'' $ beginScopeS (cl_kernel st) (cl_cursor st)
         put $ newSAST expr ast st
         showFocus
 
 performAstEffect EndScope expr = do
         st <- get
-        ast <- iokm2clm'' $ endScopeS (cl_kernel st) (cl_cursor (cl_session st))
+        ast <- iokm2clm'' $ endScopeS (cl_kernel st) (cl_cursor st)
         put $ newSAST expr ast st
         showFocus
 
 performAstEffect (Tag tag) _ = do
         st <- get
-        put (st { cl_tags = (tag, cl_cursor $ cl_session st) : cl_tags st })
+        put $ st { cl_version = (cl_version st) { vs_tags = (tag, cl_cursor st) : vs_tags (cl_version st) }}
 
 performAstEffect (CorrectnessCritera q) expr = do
         st <- get
         -- TODO: Again, we may want a quiet version of the kernel_env
-        liftIO (queryS (cl_kernel st) (cl_cursor $ cl_session st) q (cl_kernel_env $ cl_session st))
+        liftIO (queryS (cl_kernel st) (cl_cursor st) q (cl_kernel_env st))
           >>= runKureM (\ () -> putStrToConsole $ unparseExprH expr ++ " [correct]")
                        (\ err -> fail $ unparseExprH expr ++ " [exception: " ++ err ++ "]")
 
@@ -302,11 +301,10 @@ performAstEffect (CorrectnessCritera q) expr = do
 performShellEffect :: MonadIO m => ShellEffect -> CLM m ()
 performShellEffect (SessionStateEffect f) = do
         st <- get
-        opt <- liftIO (fmap Right (f st $ cl_session st) `catch` \ str -> return (Left str))
+        opt <- liftIO (fmap Right (f st) `catch` \ str -> return (Left str))
         case opt of
-          Right s_st' -> do put (st { cl_session = s_st' })
-                            showFocus
-          Left err -> throwError err
+          Right st' -> put st' >> showFocus
+          Left err  -> throwError err
 
 -------------------------------------------------------------------------------
 
@@ -315,25 +313,24 @@ performQuery (QueryString q) = do
     st <- get
     iokm2clm' "Query failed: "
               putStrToConsole
-              (queryS (cl_kernel st) (cl_cursor $ cl_session st) q (cl_kernel_env $ cl_session st))
+              (queryS (cl_kernel st) (cl_cursor st) q (cl_kernel_env st))
 
 performQuery (QueryDocH q) = do
     st <- get
-    let ss = cl_session st
     iokm2clm' "Query failed: "
-              (liftIO . cl_render ss stdout (cl_pretty_opts ss))
-              (queryS (cl_kernel st) (cl_cursor ss) (q (initPrettyC $ cl_pretty_opts ss) $ pretty ss) (cl_kernel_env ss))
+              (liftIO . cl_render st stdout (cl_pretty_opts st))
+              (queryS (cl_kernel st) (cl_cursor st) (q (initPrettyC $ cl_pretty_opts st) $ pretty st) (cl_kernel_env st))
 
 performQuery (Inquiry f) = do
     st <- get
-    str <- liftIO $ f st (cl_session st)
+    str <- liftIO $ f st
     putStrToConsole str
 
 -- These two need to use Inquiry
 performQuery (Message msg) = liftIO (putStrLn msg)
 -- Explicit calls to display should work no matter what the loading state is.
 performQuery Display = do
-    load_st <- gets (cl_loading . cl_session)
+    load_st <- gets cl_loading
     setLoading False
     showFocus
     setLoading load_st
@@ -343,22 +340,21 @@ performQuery Display = do
 performMetaCommand :: MonadIO m => MetaCommand -> CLM m ()
 performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
 performMetaCommand Resume = do st <- get
-                               iokm2clm'' $ resumeS (cl_kernel st) (cl_cursor $ cl_session st)
+                               iokm2clm'' $ resumeS (cl_kernel st) (cl_cursor st)
 performMetaCommand (Delete sast) = gets cl_kernel >>= iokm2clm'' . flip deleteS sast
 performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
-    let ss = cl_session st
-    case (M.lookup (cl_pretty (ss)) pp_dictionary,lookup renderer finalRenders) of
+    case (M.lookup (cl_pretty st) pp_dictionary,lookup renderer finalRenders) of
       (Just pp, Just r) -> do doc <- iokm2clm "Bad pretty-printer or renderer option: " $
-                                         queryS (cl_kernel st) (cl_cursor ss) (liftPrettyH (cl_pretty_opts ss) pp) (cl_kernel_env ss)
+                                         queryS (cl_kernel st) (cl_cursor st) (liftPrettyH (cl_pretty_opts st) pp) (cl_kernel_env st)
                               liftIO $ do h <- openFile fileName WriteMode
-                                          r h ((cl_pretty_opts ss) { po_width = width }) doc
+                                          r h ((cl_pretty_opts st) { po_width = width }) doc
                                           hClose h
       _ -> throwError "dump: bad pretty-printer or renderer option"
 
 performMetaCommand (LoadFile fileName) = do
        stmts   <- loadAndParseFile fileName
-       load_st <- gets (cl_loading . cl_session)
+       load_st <- gets cl_loading
        setLoading True
        evalStmts stmts `catchError` (\ err -> setLoading load_st >> throwError err)
        setLoading load_st
@@ -369,7 +365,7 @@ performMetaCommand (SaveFile fileName) = do
         st <- get
         putStrToConsole $ "[saving " ++ fileName ++ "]"
         -- no checks to see if you are clobering; be careful
-        liftIO $ writeFile fileName $ showGraph (cl_graph st) (cl_tags st) (SAST 0)
+        liftIO $ writeFile fileName $ showGraph (vs_graph (cl_version st)) (vs_tags (cl_version st)) (SAST 0)
 
 performMetaCommand (ImportR fileName exName) = do
         stmts <- loadAndParseFile fileName
@@ -392,7 +388,7 @@ loadAndParseFile fileName = do
 -------------------------------------------------------------------------------
 
 putStrToConsole :: MonadIO m => String -> CLM m ()
-putStrToConsole str = ifM (gets (cl_loading . cl_session))
+putStrToConsole str = ifM (gets cl_loading)
                           (return ())
                           (liftIO $ putStrLn str)
 
@@ -440,15 +436,15 @@ getNavCmd = do
 
 ----------------------------------------------------------------------------------------------
 
-cl_kernel_env  :: SessionState -> HermitMEnv
-cl_kernel_env ss = mkHermitMEnv $ \ msg -> case msg of
+cl_kernel_env  :: CommandLineState -> HermitMEnv
+cl_kernel_env st = mkHermitMEnv $ \ msg -> case msg of
                 DebugTick    msg'      -> do
-                        c <- GHC.liftIO $ tick (cl_tick ss) msg'
+                        c <- GHC.liftIO $ tick (cl_tick st) msg'
                         GHC.liftIO $ putStrLn $ "<" ++ show c ++ "> " ++ msg'
                 DebugCore  msg' cxt core -> do
                         GHC.liftIO $ putStrLn $ "[" ++ msg' ++ "]"
-                        doc :: DocH <- apply (pretty ss) (liftPrettyC (cl_pretty_opts ss) cxt) (inject core)
-                        GHC.liftIO $ cl_render ss stdout (cl_pretty_opts ss) doc
+                        doc :: DocH <- apply (pretty st) (liftPrettyC (cl_pretty_opts st) cxt) (inject core)
+                        GHC.liftIO $ cl_render st stdout (cl_pretty_opts st) doc
 
 -- tick counter
 tick :: TVar (M.Map String Int) -> String -> IO Int
