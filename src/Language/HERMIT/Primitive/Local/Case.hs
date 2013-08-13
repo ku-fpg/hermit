@@ -326,9 +326,7 @@ altVarsUnused (_,vs,rhs) = all (`notMember` coreExprFreeVars rhs) vs
 caseFoldWildR :: forall c.  (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFoldWildR = prefixFailMsg "case-fold-wild failed: " $
                 do w <- caseWildIdT
-                   caseAllR idR idR idR $ \ _ -> do depth <- hermitDepth <$> contextT -- The most recent depth is that of the wildcard binding at this point.
-                                                                                      -- This feels a bit fragile.
-                                                                                      -- An alternative is to alpha-rename the wildcard before we start.
+                   caseAllR idR idR idR $ \ _ -> do depth <- varBindingDepthT w
                                                     extractR $ anybuR (promoteExprR (foldVarR w (Just depth)) :: Rewrite c HermitM Core)
 
 -- | A cleverer version of 'mergeCaseAlts' that first attempts to abstract out any occurrences of the alternative pattern using the wildcard binder.

@@ -12,8 +12,6 @@ module Language.HERMIT.Primitive.Local
          -- ** Miscellaneous
        , abstract
        , push
-       , nonrecToRecR
-       , recToNonrecR
        , betaReduce
        , betaReducePlus
        , betaExpand
@@ -37,6 +35,7 @@ import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Common
+import qualified Language.HERMIT.Primitive.Local.Bind as Bind
 import Language.HERMIT.Primitive.Local.Case hiding (externals)
 import qualified Language.HERMIT.Primitive.Local.Case as Case
 import Language.HERMIT.Primitive.Local.Cast hiding (externals)
@@ -56,13 +55,7 @@ import Data.Set (notMember)
 --   (Many taken from Chapter 3 of Andre Santos' dissertation.)
 externals :: [External]
 externals =
-    [ external "nonrec-to-rec" (promoteBindR nonrecToRecR :: RewriteH Core)
-        [ "Convert a non-recursive binding into a recursive binding group with a single definition."
-        , "NonRec v e ==> Rec [Def v e]" ]
-    , external "rec-to-nonrec" (promoteBindR recToNonrecR :: RewriteH Core)
-        [ "Convert a singleton recursive binding into a non-recursive binding group."
-        , "Rec [Def v e] ==> NonRec v e,  (v not free in e)" ]
-    , external "beta-reduce" (promoteExprR betaReduce :: RewriteH Core)
+    [ external "beta-reduce" (promoteExprR betaReduce :: RewriteH Core)
         [ "((\\ v -> E1) E2) ==> let v = E2 in E1"
         , "This form of beta-reduction is safe if E2 is an arbitrary expression"
         , "(won't duplicate work)." ]                                 .+ Eval .+ Shallow
@@ -87,27 +80,10 @@ externals =
         [ "Push a function 'f into a case-expression or let-expression argument."
         , "Unsafe if 'f is not strict." ] .+ Shallow .+ Commute .+ PreCondition
     ]
+    ++ Bind.externals
     ++ Case.externals
     ++ Cast.externals
     ++ Let.externals
-
-------------------------------------------------------------------------------
-
--- | @'NonRec' v e@ ==> @'Rec' [(v,e)]@
-nonrecToRecR :: MonadCatch m => Rewrite c m CoreBind
-nonrecToRecR = prefixFailMsg "Converting non-recursive binding to recursive binding failed: " $
-               withPatFailMsg (wrongExprForm "NonRec v e") $
-  do NonRec v e <- idR
-     guardMsg (isId v) "type variables cannot be defined recursively."
-     return $ Rec [(v,e)]
-
--- | @'Rec' [(v,e)]@ ==> @'NonRec' v e@
-recToNonrecR :: MonadCatch m => Rewrite c m CoreBind
-recToNonrecR = prefixFailMsg "Converting singleton recursive binding to non-recursive binding failed: " $
-               withPatFailMsg (wrongExprForm "Rec [Def v e]") $
-  do Rec [(v,e)] <- idR
-     guardMsg (v `notMember` coreExprFreeIds e) ("'" ++ uqName v ++ " is recursively defined.")
-     return (NonRec v e)
 
 ------------------------------------------------------------------------------
 

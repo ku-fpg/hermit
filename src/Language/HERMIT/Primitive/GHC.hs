@@ -16,9 +16,6 @@ module Language.HERMIT.Primitive.GHC
          -- ** Substitution
        , substR
        , substExprR
-       , letSubstR
-       , safeLetSubstR
-       , safeLetSubstPlusR
          -- ** Equality
        , exprEqual
        , exprsEqual
@@ -30,10 +27,12 @@ module Language.HERMIT.Primitive.GHC
        , rules
        , equivalent
        , dynFlagsT
+       , arityOf
          -- ** Lifted GHC capabilities
        , lintExprT
        , lintModuleT
        , specConstrR
+       , occurAnalyseExprR
        )
 where
 
@@ -49,7 +48,7 @@ import Control.Monad
 
 import Data.Function (on)
 import Data.List (intercalate,mapAccumL,deleteFirstsBy)
-import Data.Monoid (mempty) -- ,Sum(..))
+import Data.Monoid (mempty)
 import Data.Set (Set, fromList, toList, (\\))
 
 import Language.HERMIT.Core
@@ -71,19 +70,6 @@ externals :: [External]
 externals =
          [ external "info" (info :: TranslateH CoreTC String)
                 [ "display information about the current node." ]
-         , external "let-subst" (promoteExprR letSubstR :: RewriteH Core)
-                [ "Let substitution"
-                , "(let x = e1 in e2) ==> (e2[e1/x])"
-                , "x must not be free in e1." ]                           .+ Deep
-         , external "safe-let-subst" (promoteExprR safeLetSubstR :: RewriteH Core)
-                [ "Safe let substitution"
-                , "let x = e1 in e2, safe to inline without duplicating work ==> e2[e1/x],"
-                , "x must not be free in e1." ]                           .+ Deep .+ Eval .+ Bash
-         , external "safe-let-subst-plus" (promoteExprR safeLetSubstPlusR :: RewriteH Core)
-                [ "Safe let substitution"
-                , "let { x = e1, ... } in e2, "
-                , "  where safe to inline without duplicating work ==> e2[e1/x,...],"
-                , "only matches non-recursive lets" ]  .+ Deep .+ Eval
          , external "free-ids" (promoteExprT freeIdsQuery :: TranslateH Core String)
                 [ "List the free identifiers in this expression." ] .+ Query .+ Deep
          , external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH Core)
@@ -148,60 +134,11 @@ substAltR v e = do (_, vs, _) <- idR
                     then fail "variable is shadowed by a case-alternative constructor argument."
                     else altAllR idR (\ _ -> idR) (substExprR v e)
 
--- | (let x = e1 in e2) ==> (e2[e1/x]),
---   x must not be free in e1.
-letSubstR :: MonadCatch m => Rewrite c m CoreExpr
-letSubstR =  prefixFailMsg "Let substition failed: " $
-             rewrite $ \ c expr -> case occurAnalyseExpr expr of
-                                     Let (NonRec v rhs) body -> apply (substExprR v rhs) c body
-                                     _                       -> fail "expression is not a non-recursive Let."
-
-
 -- Neil: Commented this out as it's not (currently) used.
 --  Perform let-substitution the specified number of times.
 -- letSubstNR :: Int -> Rewrite c m Core
 -- letSubstNR 0 = idR
 -- letSubstNR n = childR 1 (letSubstNR (n - 1)) >>> promoteExprR letSubstR
-
--- | This is quite expensive (O(n) for the size of the sub-tree).
-safeLetSubstR :: (ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
-safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
-                 withPatFailMsg "expression is not a non-recursive Let." $
-  do c <- contextT
-     let   -- what about other Expr constructors?
-          safeBind (Var {})   = True
-          safeBind (Lam {})   = True
-          safeBind e@(App {}) =
-                 case collectArgs e of
-                   (Var f,args) -> arityOf c f > length (filter (not . isTyCoArg) args) -- Neil: I've changed this to "not . isTyCoArg" rather than "not . isTypeArg".  This may not be the right thing to do though.
-                   (other,args) -> case collectBinders other of
-                                     (bds,_) -> length bds > length args
-          safeBind _          = False
-
-          safeSubst NoOccInfo = False   -- unknown!
-          safeSubst IAmDead   = True    -- DCE
-          safeSubst (OneOcc inLam oneBr _) = not inLam && oneBr -- do not inline inside a lambda or if in multiple case branches
-          safeSubst _ = False   -- strange case, like a loop breaker
-     Let (NonRec v rhs) body <- arr occurAnalyseExpr
-      -- By (our) definition, types are a trivial bind
-     guardMsg (isTyVar v || (isId v && (safeBind rhs || safeSubst (occInfo $ idInfo v)))) "safety criteria not met."
-     constT $ apply (substExprR v rhs) c body
-
-
-
--- Check that an identifier binding occurs (free) at-most once.
--- affineIdT :: forall c m. (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => Id -> BindingDepth -> Translate c m Core Bool
--- affineIdT i depth = numOccs >>^ getSum >>^ (<2)
---   where
---     numOccs :: Translate c m Core (Sum Int)
---     numOccs =  crushbuT $ promoteExprT $ whenM (varT $ arr (== i))
---                                                (contextonlyT (lookupHermitBindingSite i depth) >>> return (Sum 1))
-
-
--- | 'safeLetSubstPlusR' tries to inline a stack of bindings, stopping when reaches
--- the end of the stack of lets.
-safeLetSubstPlusR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
-safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 
 ------------------------------------------------------------------------
 
@@ -215,7 +152,7 @@ info = do crumbs <- childrenT
                 children = "Children: " ++ showCrumbs crumbs
                 bds      = "Bindings in Scope: " ++ showVars (toList $ boundVars c)
                 extra    = case coreTC of
-                             Core (ExprCore e)      -> let tyK    = exprKindOrType e
+                             Core (ExprCore e)      -> let tyK = exprKindOrType e
                                                         in [(if isKind tyK then "Kind: " else "Type: ") ++ showPpr dynFlags tyK] ++
                                                            ["Free Variables: " ++ showVars (toList $ coreExprFreeVars e)] ++
                                                            case e of

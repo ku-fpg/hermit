@@ -26,8 +26,9 @@ import qualified Language.Haskell.TH as TH
 import Language.HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), PrettyC)
 
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.GHC hiding (externals)
-import Language.HERMIT.Primitive.Inline hiding (externals)
+import Language.HERMIT.Primitive.GHC (rule,inScope,freeVarsT)
+import Language.HERMIT.Primitive.Inline (inline)
+import Language.HERMIT.Primitive.Local.Let (letSubstR)
 
 import Language.HERMIT.Core
 import Language.HERMIT.Context
@@ -70,7 +71,7 @@ externals =
 --  (for example, an inline or rule application)
 -- It is used at the level of the top-redex.
 -- Invariant: will not introduce let bindings
-cleanupUnfoldR :: MonadCatch m => Rewrite c m CoreExpr
+cleanupUnfoldR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr
 cleanupUnfoldR = do
     (f, args) <- callT <+ arr (,[])
     let (vs, body) = collectBinders f

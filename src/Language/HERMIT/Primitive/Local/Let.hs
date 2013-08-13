@@ -3,8 +3,15 @@
 module Language.HERMIT.Primitive.Local.Let
        ( -- * Rewrites on Let Expressions
          externals
+         -- ** Let Elimination
+       , letSubstR
+       , safeLetSubstR
        , letElim
+       , letNonRecElim
+       , letRecElim
+         -- ** Let Introduction
        , letIntro
+         -- ** Let Floating
        , letFloatApp
        , letFloatArg
        , letFloatLet
@@ -13,15 +20,15 @@ module Language.HERMIT.Primitive.Local.Let
        , letFloatCast
        , letFloatExpr
        , letFloatLetTop
-       , letNonRecElim
-       , letRecElim
-       , letToCase
+         -- ** Let Unfloating
        , letUnfloat
        , letUnfloatApp
        , letUnfloatCase
        , letUnfloatLam
+         -- ** Miscallaneous
        , reorderNonRecLets
        , letTupleR
+       , letToCase
        )
 where
 
@@ -46,6 +53,8 @@ import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.AlphaConversion hiding (externals)
 
+import Language.HERMIT.Primitive.Local.Bind hiding (externals)
+
 import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------
@@ -53,7 +62,19 @@ import qualified Language.Haskell.TH as TH
 -- | Externals relating to Let expressions.
 externals :: [External]
 externals =
-    [ external "let-intro" (promoteExprR . letIntro . show :: TH.Name -> RewriteH Core)
+    [ external "let-subst" (promoteExprR letSubstR :: RewriteH Core)
+        [ "Let substitution: (let x = e1 in e2) ==> (e2[e1/x])"
+        , "x must not be free in e1." ]                                         .+ Deep .+ Eval
+    , external "safe-let-subst" (promoteExprR safeLetSubstR :: RewriteH Core)
+        [ "Safe let substitution"
+        , "let x = e1 in e2, safe to inline without duplicating work ==> e2[e1/x],"
+        , "x must not be free in e1." ]                                         .+ Deep .+ Eval .+ Bash
+    -- , external "safe-let-subst-plus" (promoteExprR safeLetSubstPlusR :: RewriteH Core)
+    --     [ "Safe let substitution"
+    --     , "let { x = e1, ... } in e2, "
+    --     , "  where safe to inline without duplicating work ==> e2[e1/x,...],"
+    --     , "only matches non-recursive lets" ]  .+ Deep .+ Eval
+    , external "let-intro" (promoteExprR . letIntro . show :: TH.Name -> RewriteH Core)
         [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
     , external "let-elim" (promoteExprR letElim :: RewriteH Core)
         [ "Remove an unused let binding."
@@ -98,6 +119,74 @@ externals =
         [ "Combine nested non-recursive lets into case of a tuple."
         , "E.g. let {v1 = e1 ; v2 = e2 ; v3 = e3} in body ==> case (e1,e2,e3) of {(v1,v2,v3) -> body}" ] .+ Commute
     ]
+
+-------------------------------------------------------------------------------------------
+
+-- | (let x = e1 in e2) ==> (e2[e1/x]), (x must not be free in e1)
+letSubstR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr
+letSubstR =  prefixFailMsg "Let substition failed: " $
+             withPatFailMsg ("expression is not a non-recursive let binding.") $
+             do Let (NonRec v rhs) body <- letAllR (tryR recToNonrecR) idR
+                contextonlyT $ \ c -> apply (substExprR v rhs) c body
+
+-- | This is quite expensive (O(n) for the size of the sub-tree).
+safeLetSubstR :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
+safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
+                 withPatFailMsg ("expression is not a non-recursive let binding.") $
+                 do e@(Let (NonRec v rhs) body) <- letAllR (tryR recToNonrecR) idR
+
+                    guardMsg (not $ isCoVar v) "We consider it unsafe to substitute let-bound coercions.  I'm not sure why we think this." -- TODO
+
+                    safeSubstId <- letNonRecT mempty safeBindT (occursSafeToLetSubstId v) (\ () -> (||)) <<< return e
+                    when (isId v) (guardMsg safeSubstId "safety criteria not met.")
+
+                    -- By (our) definition, types are a trivial bind.
+
+                    contextonlyT $ \ c -> apply (substExprR v rhs) c body
+
+  where
+    -- what about other Expr constructors?
+    safeBindT :: Translate c m CoreExpr Bool
+    safeBindT =
+      do c <- contextT
+         arr $ \ e ->
+           case e of
+             Var {} -> True
+             Lam {} -> True
+             App {} -> case collectArgs e of
+                         (Var f,args) -> arityOf c f > length (filter (not . isTyCoArg) args) -- Neil: I've changed this to "not . isTyCoArg" rather than "not . isTypeArg".  This may not be the right thing to do though.
+                         (other,args) -> case collectBinders other of
+                                           (bds,_) -> length bds > length args
+             _      -> False
+
+    occursSafeToLetSubstId :: Id -> Translate c m CoreExpr Bool
+    occursSafeToLetSubstId i =
+      do depth <- varBindingDepthT i
+         let occursHereT :: Translate c m Core ()
+             occursHereT = promoteExprT $ whenM (varT $ arr (== i))
+                                                (contextonlyT (lookupHermitBindingSite i depth) >>> return ())
+
+             -- lamOccurrenceT can only fail if the expression is not a Lam
+             -- return either 2 (occurrence) or 0 (no occurrence)
+             lamOccurrenceT :: Translate c m CoreExpr (Sum Int)
+             lamOccurrenceT =  lamT mempty
+                                    (mtryM (Sum 2 <$ extractT (onetdT occursHereT)))
+                                    mappend
+
+             occurrencesT :: Translate c m Core (Sum Int)
+             occurrencesT = prunetdT (promoteExprT lamOccurrenceT <+ (Sum 1 <$ occursHereT))
+
+         extractT occurrencesT >>^ (getSum >>> (< 2))
+
+(<$) :: Monad m => a -> m b -> m a
+a <$ mb = mb >> return a
+
+
+-- This could be simply "repeatR safeLetSubst" I think?
+--  'safeLetSubstPlusR' tries to inline a stack of bindings, stopping when reaches
+-- the end of the stack of lets.
+-- safeLetSubstPlusR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
+-- safeLetSubstPlusR = tryR (letT idR safeLetSubstPlusR Let) >>> safeLetSubstR
 
 -------------------------------------------------------------------------------------------
 

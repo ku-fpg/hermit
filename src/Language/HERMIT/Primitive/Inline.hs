@@ -22,7 +22,6 @@ import TcType (tcSplitDFunTy)
 
 import Control.Arrow
 import Control.Applicative
-import Control.Monad (liftM)
 
 import Data.Set (member)
 
@@ -87,9 +86,7 @@ inlineCaseBinder = configurableInline False True (return True) Nothing
 caseInlineScrutineeR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseInlineScrutineeR = prefixFailMsg "case-inline-scrutinee failed: " $
                        do w <- caseWildIdT
-                          caseAllR idR idR idR $ \ _ -> do depth <- hermitDepth <$> contextT -- The most recent depth is that of the wildcard binding at this point.
-                                                                                             -- This feels a bit fragile.
-                                                                                             -- An alternative is to alpha-rename the wildcard before we start.
+                          caseAllR idR idR idR $ \ _ -> do depth <- varBindingDepthT w
                                                            extractR $ anybuR (promoteExprR (configurableInline True True (arr (== w)) (Just depth)) :: Rewrite c HermitM Core)
 
 
@@ -121,8 +118,9 @@ configurableInline scrutinee caseBinderOnly p md =
 ensureDepth :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => BindingDepth -> Translate c m Core Bool
 ensureDepth d = do
     frees <- promoteT freeVarsT
-    ds <- collectT $ promoteExprT $ varT $ translate $ \ c i -> do guardM (i `member` frees)
-                                                                   fst `liftM` lookupHermitBinding i c
+    ds <- collectT $ promoteExprT $ varT $ do i <- idR
+                                              guardM (i `member` frees)
+                                              varBindingDepthT i
     return $ all (<= d) ds
 
 getUnfoldingT :: ReadBindings c

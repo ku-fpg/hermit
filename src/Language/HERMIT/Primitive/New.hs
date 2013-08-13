@@ -18,7 +18,6 @@ import Language.HERMIT.GHC
 import Language.HERMIT.ParserCore
 
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Local
 import Language.HERMIT.Primitive.Unfold
 -- import Language.HERMIT.Primitive.Debug

@@ -37,6 +37,7 @@ module Language.HERMIT.Primitive.Common
     , findBoundVarT
     , findIdT
     , findId
+    , varBindingDepthT
       -- ** Miscallaneous
     , wrongExprForm
     , nodups
@@ -51,6 +52,7 @@ import Data.List
 import Data.Monoid
 import qualified Data.Set as S
 
+import Control.Arrow ((>>^))
 import Control.Monad(liftM)
 
 import Language.HERMIT.Kure
@@ -198,7 +200,9 @@ altVarsT = altT mempty (\ _ -> idR) mempty (\ () vs () -> vs)
 
 ------------------------------------------------------------------------------
 
--- Need a better error type so that we can factor out the repetition.
+-- | Find the depth of a variable's binding.
+varBindingDepthT :: (ReadBindings c, Monad m) => Var -> Translate c m g BindingDepth
+varBindingDepthT v = (contextT >>= lookupHermitBinding v) >>^ fst
 
 -- | Lifted version of 'boundVars'.
 boundVarsT :: (BoundVars c, Monad m) => Translate c m a (S.Set Var)

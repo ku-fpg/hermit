@@ -176,7 +176,11 @@ boundIn i c = i `member` hermitBindings c
 lookupHermitBinding :: (ReadBindings c, Monad m) => Var -> c -> m HermitBinding
 lookupHermitBinding v = maybe (fail "binding not found in HERMIT context.") return . lookup v . hermitBindings
 
--- | Lookup the binding for a variable in a context, enusring it was bound at the specified depth.
+-- -- | Lookup the depth of a variable's binding in a context.
+-- lookupHermitBindingDepth :: (ReadBindings c, Monad m) => Var -> c -> m BindingDepth
+-- lookupHermitBindingDepth v = liftM fst . lookupHermitBinding v
+
+-- | Lookup the binding for a variable in a context, ensuring it was bound at the specified depth.
 lookupHermitBindingSite :: (ReadBindings c, Monad m) => Var -> BindingDepth -> c -> m HermitBindingSite
 lookupHermitBindingSite v depth c = do (d,bnd) <- lookupHermitBinding v c
                                        guardMsg (d == depth) "lookupHermitBinding succeeded, but depth does not match.  The variable has probably been shadowed."

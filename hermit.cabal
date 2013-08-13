@@ -194,9 +194,10 @@ Library
        Language.HERMIT.Primitive.Inline
        Language.HERMIT.Primitive.Kure
        Language.HERMIT.Primitive.Local
-       Language.HERMIT.Primitive.Local.Let
+       Language.HERMIT.Primitive.Local.Bind
        Language.HERMIT.Primitive.Local.Case
        Language.HERMIT.Primitive.Local.Cast
+       Language.HERMIT.Primitive.Local.Let
        Language.HERMIT.Primitive.Navigation
        Language.HERMIT.Primitive.Navigation.Crumbs
        Language.HERMIT.Primitive.New
