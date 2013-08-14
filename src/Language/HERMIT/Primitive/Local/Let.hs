@@ -59,7 +59,7 @@ import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------
 
--- | Externals relating to Let expressions.
+-- | Externals relating to 'Let' expressions.
 externals :: [External]
 externals =
     [ external "let-subst" (promoteExprR letSubstR :: RewriteH Core)
@@ -302,7 +302,7 @@ letFloatExpr :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c
 letFloatExpr = setFailMsg "Unsuitable expression for Let floating." $
                letFloatArg <+ letFloatApp <+ letFloatLet <+ letFloatLam <+ letFloatCase <+ letFloatCast
 
--- | @ProgCons (NonRec v (Let (NonRec w ew) ev)) p@ ==> @ProgCons (NonRec w ew) (ProgCons (NonRec v ev) p)@
+-- | @'ProgCons' ('NonRec' v ('Let' ('NonRec' w ew) ev)) p@ ==> @'ProgCons' ('NonRec' w ew) ('ProgCons' ('NonRec' v ev) p)@
 letFloatLetTop :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreProg
 letFloatLetTop = prefixFailMsg "Let floating to top level failed: " $
                  withPatFailMsg (wrongExprForm "NonRec v (Let (NonRec w ew) ev) `ProgCons` p") $

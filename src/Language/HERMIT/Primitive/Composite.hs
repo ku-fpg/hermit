@@ -13,7 +13,6 @@ import Language.HERMIT.Monad
 import Language.HERMIT.Kure
 import Language.HERMIT.External
 
-import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Local hiding (externals)
 import Language.HERMIT.Primitive.Unfold hiding (externals)
 
@@ -29,13 +28,17 @@ externals = map ((.+ Experiment) . (.+ TODO))
 
 ------------------------------------------------------------------------------------------------------
 
--- | Unfold the current expression if it is one of the basic combinators: ($), (.) or id.
---   This is intended to be used as a component of simplification traversals such as 'simplifyR' or 'bashR'.
+-- | Unfold the current expression if it is one of the basic combinators: ('$'), ('.'), 'id', 'flip', 'const', 'fst' or 'snd'.
+--   This is intended to be used as a component of simplification traversals such as 'simplifyR' or 'Language.HERMIT.Dictionary.bashR'.
 unfoldBasicCombinatorR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $
      unfoldNameR (TH.mkName "$")
   <+ unfoldNameR (TH.mkName ".")
   <+ unfoldNameR (TH.mkName "id")
+  <+ unfoldNameR (TH.mkName "flip")
+  <+ unfoldNameR (TH.mkName "const")
+  <+ unfoldNameR (TH.mkName "fst")
+  <+ unfoldNameR (TH.mkName "snd")
 
 simplifyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
