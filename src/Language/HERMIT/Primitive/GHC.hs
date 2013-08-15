@@ -33,6 +33,7 @@ module Language.HERMIT.Primitive.GHC
        , lintModuleT
        , specConstrR
        , occurAnalyseExprR
+       , occurAnalyseR
        )
 where
 
@@ -85,9 +86,8 @@ externals =
          , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> TH.Name -> RewriteH Core)
                 ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
                                         .+ Introduce
-         , external "occur-analysis" (promoteExprR occurAnalyseExprR :: RewriteH Core)
-                ["Performs dependency anlaysis on a CoreExpr.",
-                 "This can be useful to simplify a recursive let to a non-recursive let."] .+ Deep
+         , external "occur-analysis" (occurAnalyseR :: RewriteH Core)
+                ["Perform dependency analysis on all sub-expressions."] .+ Deep
          , external "lintExpr" (promoteExprT lintExprT :: TranslateH Core String)
                 ["Runs GHC's Core Lint, which typechecks the current expression."
                 ,"Note: this can miss several things that a whole-module core lint will find."
@@ -405,16 +405,23 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
 
 ----------------------------------------------------------------------
 
--- | Performs dependency anlaysis on an expression.
---   This can be useful to simplify a non-recursive recursive binding group to a non-recursive binding group.
-occurAnalyseExpr :: CoreExpr -> CoreExpr
-occurAnalyseExpr = OccurAnal.occurAnalyseExpr
+--  Performs dependency anlaysis on an expression.
+-- occurAnalyseExpr :: CoreExpr -> CoreExpr
+-- occurAnalyseExpr = OccurAnal.occurAnalyseExpr
 
--- | Lifted version of 'occurAnalyseExpr'
+-- | Lifted version of 'occurAnalyseExpr'.
 occurAnalyseExprR :: Monad m => Rewrite c m CoreExpr
-occurAnalyseExprR = arr occurAnalyseExpr
+occurAnalyseExprR = arr OccurAnal.occurAnalyseExpr
+
+-- | Perform dependency analysis on all sub-expressions.
+occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurAnalyseR = let r  = promoteExprR occurAnalyseExprR
+                    go = r <+ anyR go
+                 in tryR go -- always succeed
 
 
+-- TODO: Ideally, occurAnalyseExprR would fail if nothing changed.
+--       This is tricky though, as it's not just the structure of the expression, but also the meta-data.
 
 
 {- Does not work (no export)
@@ -427,6 +434,7 @@ lookupUsageDetails = lookupVarEnv
 
 -}
 
+---------------------------------------------------------------
 
 exprEqual :: CoreExpr -> CoreExpr -> Bool
 exprEqual e1 e2 = eqExpr (mkInScopeSet $ exprsFreeVars [e1, e2]) e1 e2

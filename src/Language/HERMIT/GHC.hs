@@ -3,6 +3,7 @@ module Language.HERMIT.GHC
     ( -- * GHC Imports
       -- | Things that have been copied from GHC, or imported directly, for various reasons.
       ppIdInfo
+    , zapVarOccInfo
     , var2String
     , thRdrNameGuesses
     , name2THName
@@ -166,6 +167,12 @@ showAttributes stuff
   | otherwise = brackets (sep (punctuate comma docs))
   where
     docs = [d | (True,d) <- stuff]
+
+-- | Erase all 'OccInfo' in a variable if it is is an 'Id', or do nothing if it's a 'TyVar' or 'CoVar' (which have no 'OccInfo').
+zapVarOccInfo :: Var -> Var
+zapVarOccInfo i = if isId i
+                    then zapIdOccInfo i
+                    else i
 
 --------------------------------------------------------------------------
 

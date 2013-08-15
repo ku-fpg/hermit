@@ -42,11 +42,13 @@ unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $
 
 simplifyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
-    innermostR (promoteExprR (unfoldBasicCombinatorR
-                           <+ betaReducePlus
-                           <+ safeLetSubstR
-                           <+ caseReduce
-                           <+ letElim))
+    innermostR (   promoteBindR recToNonrecR
+                <+ promoteExprR ( unfoldBasicCombinatorR
+                               <+ betaReducePlus
+                               <+ safeLetSubstR
+                               <+ caseReduce
+                               <+ letElim )
+               )
 
 ------------------------------------------------------------------------------------------------------
 

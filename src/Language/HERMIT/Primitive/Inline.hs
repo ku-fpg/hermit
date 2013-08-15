@@ -51,8 +51,7 @@ externals =
             , external "inline" (promoteExprR . inlineName :: TH.Name -> RewriteH Core)
                 [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
             , external "inline-case-binder" (promoteExprR inlineCaseBinder :: RewriteH Core)
-                [ "Inline if this variable is a case binder." ].+ Eval .+ Deep {- this causes a Dead Id core list error if in bash .+ Bash -} .+ TODO
-                -- Neil:  I would really like to get inline-case-binder back in "bash".  Maybe when "auto-core-lint" is switched on, we could run the occurence analyser to update id-info?
+                [ "Inline if this variable is a case binder." ].+ Eval .+ Deep {- .+ Bash -} .+ TODO
             , external "inline-all" (inlineAll :: [TH.Name] -> RewriteH Core)
                 [ "Recursively inline all occurrences of the given names, in a bottom-up manner." ] .+ Deep
             ]
@@ -94,7 +93,7 @@ caseInlineScrutineeR = prefixFailMsg "case-inline-scrutinee failed: " $
 -- This *only* works on a Var of the given name. It can trivially
 -- be prompted to more general cases.
 configurableInline :: (ExtendPath c Crumb, AddBindings c, ReadBindings c)
-                   => Bool -- ^ Inline the scrutinee instead of the patten match (for case binders).
+                   => Bool -- ^ Inline the scrutinee instead of the pattern match (for case binders).
                    -> Bool -- ^ Only inline if this variable is a case binder.
                    -> (Translate c HermitM Id Bool) -- ^ Only inline identifiers that satisfy this predicate.
                    -> Maybe BindingDepth -- ^ Ensure the binding has a specific depth (useful if there are multiple (shadowing) occurrences of an identifier).
@@ -164,10 +163,10 @@ getUnfoldingT scrutinee caseBinderOnly md =
 --
 -- The 'Either' denotes whether we picked the default (scrutinee) or built an expression.
 -- This matters for the depth check.
-alt2Exp :: CoreExpr -> [Type] -> (AltCon,[Id]) -> Either CoreExpr CoreExpr
+alt2Exp :: CoreExpr -> [Type] -> (AltCon,[Var]) -> Either CoreExpr CoreExpr
 alt2Exp d _   (DEFAULT   , _ ) = Left d
 alt2Exp _ _   (LitAlt l  , _ ) = Right $ Lit l
-alt2Exp _ tys (DataAlt dc, as) = Right $ mkCoreConApps dc (map Type tys ++ map varToCoreExpr as)
+alt2Exp _ tys (DataAlt dc, vs) = Right $ mkCoreConApps dc (map Type tys ++ map (varToCoreExpr . zapVarOccInfo) vs)
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargets :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Translate c HermitM Core [String]

@@ -3,6 +3,8 @@
 module Language.HERMIT.Primitive.Local
        ( -- * Local Structural Manipulations
          Language.HERMIT.Primitive.Local.externals
+         -- ** Binding Groups
+       , module Language.HERMIT.Primitive.Local.Bind
          -- ** Case Expressions
        , module Language.HERMIT.Primitive.Local.Case
          -- ** Cast Expressions
@@ -35,6 +37,7 @@ import Language.HERMIT.GHC
 
 import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Common
+import Language.HERMIT.Primitive.Local.Bind hiding (externals)
 import qualified Language.HERMIT.Primitive.Local.Bind as Bind
 import Language.HERMIT.Primitive.Local.Case hiding (externals)
 import qualified Language.HERMIT.Primitive.Local.Case as Case
