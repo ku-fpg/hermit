@@ -142,11 +142,14 @@ unshadow = setFailMsg "No shadows to eliminate." $
 
   where
     unshadowExpr :: Rewrite c HermitM CoreExpr
-    unshadowExpr = do vs <- shadowedByT (liftM2 union boundVarsT freeVarsT) (liftM fromList (letVarsT <+ fmap return (caseWildIdT <+ lamVarT)))
+    unshadowExpr = do vs <- shadowedByT (liftM fromList (letVarsT <+ fmap return (caseWildIdT <+ lamVarT)))
+                                        (liftM2 union boundVarsT freeVarsT)
                       alphaLam Nothing <+ alphaLetVars (toList vs) <+ alphaCaseBinder Nothing
 
     unshadowAlt :: Rewrite c HermitM CoreAlt
-    unshadowAlt = shadowedByT (liftM fromList altVarsT) (liftM2 union boundVarsT altFreeVarsT) >>= (alphaAltVars . toList)
+    unshadowAlt = do vs <- shadowedByT (liftM fromList altVarsT)
+                                       (liftM2 union boundVarsT altFreeVarsT)
+                     alphaAltVars (toList vs)
 
 -----------------------------------------------------------------------
 
