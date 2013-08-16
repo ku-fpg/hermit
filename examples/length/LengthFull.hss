@@ -15,7 +15,7 @@ simplify
   { [case-alt 0, alt-rhs]
     unfold 'rep
     unshadow
-    one-td case-inline-scrutinee
+    case-inline-scrutinee
     case-elim
   }
   { case-alt 1
