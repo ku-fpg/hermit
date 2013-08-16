@@ -18,6 +18,7 @@ module Language.HERMIT.Primitive.Local.Case
     , caseReduceLiteral
     , caseSplit
     , caseSplitInline
+    , caseInlineScrutineeR
     , caseMergeAltsR
     , caseMergeAltsWithWildR
     , caseMergeAltsElimR
@@ -89,6 +90,8 @@ externals =
     , external "case-seq" (promoteExprR . caseSeq :: TH.Name -> RewriteH Core)
         [ "Force evaluation of a variable by introducing a case."
         , "case-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow
+    , external "case-inline-scrutinee" (promoteExprR caseInlineScrutineeR :: RewriteH Core)
+        [ "Inline the case wildcard binder as the case scrutinee everywhere in the case alternatives." ] .+ Deep
     , external "case-merge-alts" (promoteExprR caseMergeAltsR :: RewriteH Core)
         [ "Merge all case alternatives into a single default case."
         , "The RHS of each alternative must be the same."
@@ -305,6 +308,14 @@ caseSplitInline :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Nam
 caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineNameR nm)
 
 ------------------------------------------------------------------------------
+
+-- | Inline the case wildcard binder as the case scrutinee everywhere in the case alternatives.
+caseInlineScrutineeR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseInlineScrutineeR = prefixFailMsg "case-inline-scrutinee failed: " $
+                       do w <- caseWildIdT
+                          caseAllR idR idR idR $ \ _ -> do depth <- varBindingDepthT w
+                                                           extractR $ anybuR (promoteExprR (configurableInlineR (CaseBinderOnly Scrutinee) (varIsOccurrenceOfT w depth)) :: Rewrite c HermitM Core)
+
 
 -- | Merge all case alternatives into a single default case.
 --   The RHS of each alternative must be the same.

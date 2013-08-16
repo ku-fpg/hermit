@@ -9,7 +9,7 @@ module Language.HERMIT.Primitive.Inline
          , inlineNameR
          , inlineCaseScrutineeR
          , inlineCaseAlternativeR
-         , caseInlineScrutineeR
+         , configurableInlineR
          , inlineAllR
          , inlineTargetsT
          )
@@ -85,14 +85,6 @@ inlineCaseScrutineeR = configurableInlineR (CaseBinderOnly Scrutinee) (return Tr
 inlineCaseAlternativeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 inlineCaseAlternativeR = configurableInlineR (CaseBinderOnly Alternative) (return True)
 
--- | Inline the case wildcard binder as the case scrutinee everywhere in the case alternatives.
-caseInlineScrutineeR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseInlineScrutineeR = prefixFailMsg "case-inline-scrutinee failed: " $
-                       do w <- caseWildIdT
-                          caseAllR idR idR idR $ \ _ -> do depth <- varBindingDepthT w
-                                                           extractR $ anybuR (promoteExprR (configurableInlineR (CaseBinderOnly Scrutinee) (varIsOccurrenceOfT w depth)) :: Rewrite c HermitM Core)
-
-
 -- | The implementation of inline, an important transformation.
 -- This *only* works if the current expression has the form @Var v@ (it does not traverse the expression).
 -- It can trivially be prompted to more general cases using traversal strategies.
@@ -139,16 +131,19 @@ getUnfoldingT config = translate $ \ c i ->
 #endif
                                          _                               -> fail $ "cannot find unfolding in Env or IdInfo."
       Just (depth,b) -> case b of
-                          CASEWILD s alt -> return $ case config of
-                                                       CaseBinderOnly Scrutinee -> (s, depth)
-                                                       _                        -> let tys = tyConAppArgs (idType i)
-                                                                                    in either (,depth) (,depth+1) (alt2Exp s tys alt)
+                          CASEWILD s alt -> let tys             = tyConAppArgs (idType i)
+                                                altExprDepthM   = (,depth+1) <$> alt2Exp tys alt
+                                                scrutExprDepthM = return (s, depth)
+                                             in case config of
+                                                  CaseBinderOnly Scrutinee   -> scrutExprDepthM
+                                                  CaseBinderOnly Alternative -> altExprDepthM
+                                                  AllBinders                 -> altExprDepthM <+ scrutExprDepthM
                           _              -> case config of
                                               CaseBinderOnly _ -> fail "not a case binder."
                                               AllBinders       -> (,depth) <$> liftKureM (hermitBindingSiteExpr b)
 
 -- | Convert lhs of case alternative to a constructor application expression,
---   or a default expression in the case of the DEFAULT alternative.
+--   failing in the case of the DEFAULT alternative.
 --   Accepts a list of types to apply to the constructor before the value args.
 --
 -- > data T a b = C a b Int
@@ -157,12 +152,10 @@ getUnfoldingT config = translate $ \ c i ->
 --
 -- > alt2Exp (...) [a,b] (C, [x,y,z]) ==> C a b (x::a) (y::b) (z::Int)
 --
--- The 'Either' denotes whether we picked the default (scrutinee) or built an expression.
--- This matters for the depth check.
-alt2Exp :: CoreExpr -> [Type] -> (AltCon,[Var]) -> Either CoreExpr CoreExpr
-alt2Exp d _   (DEFAULT   , _ ) = Left d
-alt2Exp _ _   (LitAlt l  , _ ) = Right $ Lit l
-alt2Exp _ tys (DataAlt dc, vs) = Right $ mkCoreConApps dc (map Type tys ++ map (varToCoreExpr . zapVarOccInfo) vs)
+alt2Exp :: Monad m => [Type] -> (AltCon,[Var]) -> m CoreExpr
+alt2Exp _   (DEFAULT   , _ ) = fail "DEFAULT alternative cannot be converted to an expression."
+alt2Exp _   (LitAlt l  , _ ) = return $ Lit l
+alt2Exp tys (DataAlt dc, vs) = return $ mkCoreConApps dc (map Type tys ++ map (varToCoreExpr . zapVarOccInfo) vs)
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargetsT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Translate c HermitM Core [String]
