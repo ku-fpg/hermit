@@ -82,7 +82,7 @@ data HermitMark
 data Attr = PathAttr AbsolutePathH
           | Color SyntaxForColor
           | SpecialFont
-    deriving Show
+    deriving (Eq, Show)
 
 data SyntaxForColor             -- (suggestion)
         = KeywordColor          -- bold
@@ -92,17 +92,13 @@ data SyntaxForColor             -- (suggestion)
         | TypeColor
         | LitColor
         | WarningColor          -- highlight problems like unbound variables
-    deriving Show
+    deriving (Eq, Show)
 
 attr :: Attr -> DocH -> DocH
 attr a p = mark (PushAttr a) <> p <> mark PopAttr
 
--- Hack, till we get 'PathAttr' working properly
--- The problem is that attributes span over multiple lines,
--- messing up the latex output
-
 attrP :: AbsolutePathH -> DocH -> DocH
-attrP _ doc = doc -- attr . PathAttr
+attrP = attr . PathAttr
 
 idColor :: DocH -> DocH
 idColor = markColor IdColor
@@ -186,7 +182,7 @@ data PrettyOptions = PrettyOptions
         , po_exprTypes       :: ShowOption      -- ^ Do you hide types, and type arguments, as <>?
         , po_coercions       :: ShowOption      -- ^ Do you hide coercions?
         , po_typesForBinders :: ShowOption      -- ^ Do you give the types for all bindings?
-        , po_highlight       :: Maybe PathH     -- ^ This region should be highlighted (for sub-expression)
+        , po_focus           :: Maybe PathH     -- ^ This region should be highlighted (is the current focus)
         , po_depth           :: Maybe Int       -- ^ below this depth are ..., Nothing => infinite
         , po_notes           :: Bool            -- ^ notes might be added to output
         , po_ribbon          :: Float
@@ -212,7 +208,7 @@ instance Default PrettyOptions where
         , po_exprTypes       = Abstract
         , po_coercions       = Abstract
         , po_typesForBinders = Omit
-        , po_highlight       = Nothing
+        , po_focus           = Nothing
         , po_depth           = Nothing
         , po_notes           = False
         , po_ribbon          = 1.2
@@ -332,10 +328,14 @@ specialFontMap = M.fromList
 class (RenderSpecial a, Monoid a) => RenderCode a where
     rStart :: a
     rStart = mempty
+
     rEnd :: a
     rEnd = mempty
 
-    rDoHighlight :: Bool -> [Attr]           -> a
+    rDoHighlight :: Maybe Attr  -- ^ Attr just popped, if any
+                 -> [Attr]      -- ^ Attr stack
+                 -> a
+
     rPutStr      :: String -> a
 
 renderCode :: RenderCode a => PrettyOptions -> DocH -> a
@@ -346,21 +346,21 @@ renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\
           rib = po_ribbon opts
 
           marker :: RenderCode a => PP.TextDetails HermitMark -> ([Attr] -> a) -> ([Attr]-> a)
-          marker m rest cols@(SpecialFont:_) = case m of
-                  PP.Chr ch   -> special [ch] `mappend` rest cols
-                  PP.Str str  -> special str `mappend` rest cols
-                  PP.PStr str -> special str `mappend` rest cols
-                  PP.Mark (PopAttr)    ->
-                        let (_:cols') = cols in rDoHighlight False cols' `mappend` rest cols'
+          marker m rest as@(SpecialFont:_) = case m of
+                  PP.Chr ch   -> special [ch] `mappend` rest as
+                  PP.Str str  -> special str `mappend` rest as
+                  PP.PStr str -> special str `mappend` rest as
+                  PP.Mark PopAttr ->
+                        let (a:as') = as in rDoHighlight (Just a) as' `mappend` rest as'
                   PP.Mark (PushAttr _) -> error "renderCode: can not have marks inside special symbols"
-          marker m rest cols = case m of
-                  PP.Chr ch   -> rPutStr [ch] `mappend` rest cols
-                  PP.Str str  -> rPutStr str `mappend` rest cols
-                  PP.PStr str -> rPutStr str `mappend` rest cols
+          marker m rest as = case m of
+                  PP.Chr ch   -> rPutStr [ch] `mappend` rest as
+                  PP.Str str  -> rPutStr str `mappend` rest as
+                  PP.PStr str -> rPutStr str `mappend` rest as
                   PP.Mark (PushAttr a) ->
-                        let cols' = a : cols in rDoHighlight True cols' `mappend` rest cols'
-                  PP.Mark (PopAttr) -> do
-                        let (_:cols') = cols in rDoHighlight False cols' `mappend` rest cols'
+                        let as' = a : as in rDoHighlight Nothing as' `mappend` rest as'
+                  PP.Mark PopAttr -> do
+                        let (a:as') = as in rDoHighlight (Just a) as' `mappend` rest as'
 
           special txt = mconcat [ code | Just code <- map renderSpecialFont txt ]
 
@@ -400,7 +400,8 @@ latexToString (LaTeX orig) = unlines $ map trunkSpaces $ lines orig where
 instance RenderCode LaTeX where
         rPutStr txt  = LaTeX txt
 
-        rDoHighlight False _ = LaTeX "}"
+        -- Latex throws away PathAttr
+        rDoHighlight (Just _) _ = LaTeX "}"
         rDoHighlight _ [] = LaTeX $ "{"
         rDoHighlight _ (Color col:_) = LaTeX $ "{" ++ case col of
                         KeywordColor  -> "\\color{hermit:keyword}"       -- blue
@@ -425,7 +426,7 @@ instance RenderCode LaTeX where
 instance RenderCode HTML where
         rPutStr txt  = HTML txt
 
-        rDoHighlight False _ = HTML "</span>"
+        rDoHighlight (Just _) _ = HTML "</span>"
         rDoHighlight _ [] = HTML $ "<span>"
         rDoHighlight _ (Color col:_) = HTML $ case col of
                         KeywordColor  -> "<span class=\"hermit-keyword\">"       -- blue
@@ -460,8 +461,8 @@ instance RenderCode DebugPretty where
 
         rPutStr txt  = DebugPretty txt
 
-        rDoHighlight True  stk = DebugPretty $ show (True,stk)
-        rDoHighlight False stk = DebugPretty $ show (False,stk)
+        rDoHighlight Nothing stk = DebugPretty $ show (True,stk)
+        rDoHighlight (Just _) stk = DebugPretty $ show (False,stk)
 
         rEnd = DebugPretty "(END)\n"
 
