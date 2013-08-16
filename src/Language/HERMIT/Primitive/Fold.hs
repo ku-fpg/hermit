@@ -73,7 +73,7 @@ stashFoldAnyR = setFailMsg "Fold failed: no definitions could be folded." $
 foldR :: ReadBindings c => TH.Name -> Rewrite c HermitM CoreExpr
 foldR nm = prefixFailMsg "Fold failed: " $
            do c <- contextT
-              case findBoundVars nm c of
+              case varSetElems (findBoundVars nm c) of
                 []  -> fail "cannot find name."
                 [v] -> foldVarR v Nothing
                 vs  -> fail $ "multiple names match: " ++ intercalate ", " (map var2String vs)

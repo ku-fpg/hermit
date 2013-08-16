@@ -25,8 +25,6 @@ import TcType (tcSplitDFunTy)
 import Control.Arrow
 import Control.Applicative
 
-import Data.Set (member)
-
 import Language.HERMIT.Context
 import Language.HERMIT.Core
 import Language.HERMIT.External
@@ -109,9 +107,9 @@ configurableInlineR config p =
 -- Assumes minimum depth is 0.
 ensureDepthT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => BindingDepth -> Translate c m Core Bool
 ensureDepthT d = do
-    frees <- promoteT freeVarsT
+    frees <- promoteT exprFreeVarsT
     ds <- collectT $ promoteExprT $ varT $ do i <- idR
-                                              guardM (i `member` frees)
+                                              guardM (i `elemVarSet` frees)
                                               varBindingDepthT i
     return $ all (<= d) ds
 

@@ -19,14 +19,13 @@ import Control.Arrow
 import Control.Monad
 
 import qualified Data.Map as Map
-import Data.Set (toList)
 
 import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), PrettyC)
 
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.GHC (rule,inScope,freeVarsT)
+import Language.HERMIT.Primitive.GHC (rule,inScope,exprFreeVarsT)
 import Language.HERMIT.Primitive.Inline (inlineR)
 import Language.HERMIT.Primitive.Local.Let (letSubstR)
 
@@ -137,7 +136,7 @@ unfoldStashR label = setFailMsg "Inlining stashed definition failed: " $
     do (c, Var v) <- exposeT
        constT $ do Def i rhs <- lookupDef label
                    if idName i == idName v -- TODO: Is there a reason we're not just using equality on Id?
-                   then ifM ((all (inScope c) . toList) <$> apply freeVarsT c rhs)
+                   then ifM ((all (inScope c) . varSetElems) <$> apply exprFreeVarsT c rhs)
                             (return rhs)
                             (fail "some free variables in stashed definition are no longer in scope.")
                    else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v

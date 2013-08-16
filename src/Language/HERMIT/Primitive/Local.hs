@@ -35,7 +35,6 @@ import Language.HERMIT.Monad
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 
-import Language.HERMIT.Primitive.GHC
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.Local.Bind hiding (externals)
 import qualified Language.HERMIT.Primitive.Local.Bind as Bind
@@ -49,8 +48,6 @@ import qualified Language.HERMIT.Primitive.Local.Let as Let
 import qualified Language.Haskell.TH as TH
 
 import Control.Arrow
-
-import Data.Set (notMember)
 
 ------------------------------------------------------------------------------
 
@@ -160,7 +157,7 @@ etaReduce = prefixFailMsg "Eta-reduction failed: " $
                                Nothing -> fail "the argument expression is not a type variable."
                                Just v2 -> guardMsg (v1 == v2) "type variables are not equal."
                   _       -> fail "the argument expression is not a variable."
-               guardMsg (v1 `notMember` coreExprFreeIds f) $ var2String v1 ++ " is free in the function being applied."
+               guardMsg (v1 `notElemVarSet` exprFreeIds f) $ var2String v1 ++ " is free in the function being applied."
                return f
 
 -- | e1 ==> (\\ v -> e1 v)

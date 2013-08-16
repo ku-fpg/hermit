@@ -29,8 +29,6 @@ import GhcPlugins
 
 import Data.List
 import Data.Monoid
-import Data.Set (intersection, fromList, toList, member, notMember, unions)
-import qualified Data.Set as S
 import Control.Arrow
 import Control.Applicative
 
@@ -117,8 +115,8 @@ caseElim = prefixFailMsg "Case elimination failed: " $
            withPatFailMsg (wrongExprForm "Case s bnd ty alts") $ do
     Case _ bnd _ alts <- idR
     case alts of
-        [(_, vs, e)] -> do fvs <- applyInContextT freeVarsT e
-                           guardMsg (S.null $ intersection (fromList (bnd:vs)) fvs) "wildcard or pattern binders free in RHS."
+        [(_, vs, e)] -> do fvs <- applyInContextT exprFreeVarsT e
+                           guardMsg (isEmptyVarSet $ intersectVarSet (mkVarSet (bnd:vs)) fvs) "wildcard or pattern binders free in RHS."
                            return e
         _ -> fail "more than one case alternative."
 
@@ -126,10 +124,10 @@ caseElim = prefixFailMsg "Case elimination failed: " $
 caseFloatApp :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
   do
-    captures    <- appT (map fromList <$> caseAltVarsT) freeVarsT (flip (map . intersection))
-    wildCapture <- appT caseWildIdT freeVarsT member
+    captures    <- appT (map mkVarSet <$> caseAltVarsT) exprFreeVarsT (flip (map . intersectVarSet))
+    wildCapture <- appT caseWildIdT exprFreeVarsT elemVarSet
     appT ((if not wildCapture then idR else alphaCaseBinder Nothing)
-          >>> caseAllR idR idR idR (\i -> if S.null (captures !! i) then idR else alphaAlt)
+          >>> caseAllR idR idR idR (\i -> if isEmptyVarSet (captures !! i) then idR else alphaAlt)
          )
           idR
           (\(Case s b _ty alts) v -> let newTy = exprType (App (case head alts of (_,_,f) -> f) v)
@@ -140,11 +138,11 @@ caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
 caseFloatArg :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
   do
-    captures    <- appT freeVarsT (map fromList <$> caseAltVarsT) (map . intersection)
-    wildCapture <- appT freeVarsT caseWildIdT (flip member)
+    captures    <- appT exprFreeVarsT (map mkVarSet <$> caseAltVarsT) (map . intersectVarSet)
+    wildCapture <- appT exprFreeVarsT caseWildIdT (flip elemVarSet)
     appT idR
          ((if not wildCapture then idR else alphaCaseBinder Nothing)
-          >>> caseAllR idR idR idR (\i -> if S.null (captures !! i) then idR else alphaAlt)
+          >>> caseAllR idR idR idR (\i -> if isEmptyVarSet (captures !! i) then idR else alphaAlt)
          )
          (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
                                     in Case s b newTy $ mapAlts (App f) alts)
@@ -157,12 +155,12 @@ caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
 caseFloatCase :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
   do
-    captures <- caseT (map fromList <$> caseAltVarsT) idR mempty (const altFreeVarsExclWildT) (\ vss bndr () fs -> map (intersection (unions $ map ($ bndr) fs)) vss)
+    captures <- caseT (map mkVarSet <$> caseAltVarsT) idR mempty (const altFreeVarsExclWildT) (\ vss bndr () fs -> map (intersectVarSet (unionVarSets $ map ($ bndr) fs)) vss)
     -- does the binder of the inner case, shadow a free variable in any of the outer case alts?
     -- notice, caseBinderVarT returns a singleton list
-    wildCapture <- caseT caseWildIdT idR mempty (const altFreeVarsExclWildT) (\ innerBndr bndr () fvs -> innerBndr `member` unions (map ($ bndr) fvs))
+    wildCapture <- caseT caseWildIdT idR mempty (const altFreeVarsExclWildT) (\ innerBndr bndr () fvs -> innerBndr `elemVarSet` unionVarSets (map ($ bndr) fvs))
     caseT ((if not wildCapture then idR else alphaCaseBinder Nothing)
-           >>> caseAllR idR idR idR (\i -> if S.null (captures !! i) then idR else alphaAlt)
+           >>> caseAllR idR idR idR (\i -> if isEmptyVarSet (captures !! i) then idR else alphaAlt)
           )
           idR
           idR
@@ -207,7 +205,7 @@ caseUnfloatArgs = prefixFailMsg "Case unfloating into arguments failed: " $
        (vss, fs, argss) <- caseT mempty mempty mempty (\ _ -> altT mempty (\ _ -> idR) callT $ \ () vs (fn, args) -> (vs, fn, args))
                                                       (\ () () () alts' -> unzip3 [ (wild:vs, fn, args) | (vs,fn,args) <- alts' ])
        guardMsg (exprsEqual fs) "alternatives are not parallel in function call."
-       let fvs = [ toList $ unions $ map coreExprFreeVars $ f:tyArgs
+       let fvs = [ varSetElems $ unionVarSets $ map exprFreeVars $ f:tyArgs
                  | (f,args) <- zip fs argss
                  , let tyArgs = takeWhile isTyCoArg args ] -- pattern binders can be existential types
        guardMsg (all null $ zipWith intersect fvs vss) "function bound by case binders."
@@ -231,7 +229,7 @@ caseReduceLiteral = prefixFailMsg "Case reduction failed: " $
                     withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $
     do Case s wild _ alts <- idR
 #if __GLASGOW_HASKELL__ > 706
-       let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- S.toList (coreExprFreeVars s) ])
+       let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- S.toList (exprFreeVars s) ])
        case exprIsLiteral_maybe (in_scope, idUnfolding) s of
 #else
        case exprIsLiteral_maybe idUnfolding s of
@@ -251,7 +249,7 @@ caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
     go :: Rewrite c HermitM CoreExpr
     go = do Case e wild _ alts <- idR
 #if __GLASGOW_HASKELL__ > 706
-            let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- S.toList (coreExprFreeVars e) ])
+            let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- S.toList (exprFreeVars e) ])
             case exprIsConApp_maybe (in_scope, idUnfolding) e of
 #else
             case exprIsConApp_maybe idUnfolding e of
@@ -261,9 +259,9 @@ caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
                 Nothing             -> fail "no matching alternative."
                 Just (dc', vs, rhs) -> -- dc' is either DEFAULT or dc
                                        -- NB: It is possible that es contains one or more existentially quantified types.
-                                       let fvss    = map coreExprFreeVars $ map Type univTys ++ es
-                                           shadows = [ v | (v,n) <- zip vs [1..], any (member v) (drop n fvss) ]
-                                       in if | any (member wild) fvss -> alphaCaseBinder Nothing >>> go
+                                       let fvss    = map exprFreeVars $ map Type univTys ++ es
+                                           shadows = [ v | (v,n) <- zip vs [1..], any (elemVarSet v) (drop n fvss) ]
+                                       in if | any (elemVarSet wild) fvss -> alphaCaseBinder Nothing >>> go
                                              | not (null shadows)     -> caseOneR (fail "scrutinee") (fail "binder") (fail "type") (\ _ -> acceptR (\ (dc'',_,_) -> dc'' == dc') >>> alphaAltVars shadows) >>> go
                                              | null shadows           -> return $ flip mkCoreLets rhs $ zipWith NonRec (wild : vs) (e : es)
 -- WARNING: The alpha-renaming to avoid variable capture has not been tested.  We need testing infrastructure!
@@ -297,8 +295,8 @@ caseSeq nm = prefixFailMsg "caseSeq failed: " $
 -- auxillary function for use by caseSplit and caseSeq
 matchingFreeId :: Monad m => TH.Name -> Translate c m CoreExpr Id
 matchingFreeId nm = do
-  fvs <- freeIdsT
-  case filter (cmpTHName2Var nm) (toList fvs) of
+  fvs <- exprFreeIdsT
+  case varSetElems (filterVarSet (cmpTHName2Var nm) fvs) of
     []    -> fail "provided name is not free."
     [i]   -> return i
     vs    -> fail ("provided name matches " ++ show (length vs) ++ " free identifiers.")
@@ -343,7 +341,7 @@ caseMergeAltsR = prefixFailMsg "merge-case-alts failed: " $
                     return $ Case e w ty [(DEFAULT,[],head rhss)]
 
 altVarsUnused :: CoreAlt -> Bool
-altVarsUnused (_,vs,rhs) = all (`notMember` coreExprFreeVars rhs) vs
+altVarsUnused (_,vs,rhs) = all (`notElemVarSet` exprFreeVars rhs) vs
 
 -- | In the case alternatives, fold any occurrences of the case alt patterns to the wildcard binder.
 caseFoldWildR :: forall c.  (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr

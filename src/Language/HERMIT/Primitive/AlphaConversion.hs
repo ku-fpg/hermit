@@ -30,8 +30,6 @@ import Control.Monad (liftM, liftM2)
 import Data.Char (isDigit)
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Monoid
-import Data.Set (Set, union, unions, member, notMember, toList, fromList)
-import qualified Data.Set as S
 
 import Language.HERMIT.Core
 import Language.HERMIT.Context
@@ -96,8 +94,8 @@ externals = map (.+ Deep)
 -- 2.  Any bound variables in context.
 
 -- | List all visible identifiers (in the expression or the context).
-visibleVarsT :: (BoundVars c, Monad m) => Translate c m CoreExpr (Set Var)
-visibleVarsT = liftM2 union boundVarsT freeVarsT
+visibleVarsT :: (BoundVars c, Monad m) => Translate c m CoreExpr VarSet
+visibleVarsT = liftM2 unionVarSet boundVarsT exprFreeVarsT
 
 -- | If a name is provided replace the string with that,
 --   otherwise modify the string making sure to /not/ clash with any visible variables.
@@ -105,18 +103,18 @@ freshNameGenT :: (BoundVars c, Monad m) => Maybe TH.Name -> Translate c m CoreEx
 freshNameGenT mn = freshNameGenAvoiding mn `liftM` visibleVarsT
 
 -- | Use the optional argument if given, otherwise generate a new name avoiding clashes with the list of variables.
-freshNameGenAvoiding :: Maybe TH.Name -> Set Var -> (String -> String)
+freshNameGenAvoiding :: Maybe TH.Name -> VarSet -> (String -> String)
 freshNameGenAvoiding mn vs str = maybe (inventNames vs str) TH.nameBase mn
 
 -- | Invent a new String based on the old one, but avoiding clashing with the given list of identifiers.
-inventNames :: Set Var -> String -> String
+inventNames :: VarSet -> String -> String
 inventNames curr old = head
                      [ nm
                      | nm <- old : [ base ++ show uq | uq <- [start ..] :: [Int] ]
-                     , nm `notMember` names
+                     , nm `notElem` names
                      ]
    where
-           names = S.map uqName curr
+           names = map uqName (varSetElems curr)
            nums = reverse $ takeWhile isDigit (reverse old)
            baseLeng = length $ drop (length nums) old
            base = take baseLeng old
@@ -126,13 +124,14 @@ inventNames curr old = head
 
 
 -- | Remove all variables from the first set that shadow a variable in the second set.
-shadowedBy :: Set Var -> Set Var -> Set Var
-shadowedBy vs fvs = S.filter (\ v -> uqName v `member` S.map uqName fvs) vs
+shadowedBy :: VarSet -> VarSet -> VarSet
+shadowedBy vs fvs = let fvUqNames = map uqName (varSetElems fvs)
+                     in filterVarSet (\ v -> uqName v `elem` fvUqNames) vs
 
 -- | Lifted version of 'shadowedBy'.
 --   Additionally, it fails if no shadows are found.
-shadowedByT :: MonadCatch m => Translate c m a (Set Var) -> Translate c m a (Set Var) -> Translate c m a (Set Var)
-shadowedByT t1 t2 = setFailMsg "No shadows detected." $ (liftM2 shadowedBy t1 t2) >>> acceptR (not . S.null)
+shadowedByT :: MonadCatch m => Translate c m a VarSet -> Translate c m a VarSet -> Translate c m a VarSet
+shadowedByT t1 t2 = setFailMsg "No shadows detected." $ (liftM2 shadowedBy t1 t2) >>> acceptR (not . isEmptyVarSet)
 
 -- | Rename local variables with manifestly unique names (x, x0, x1, ...).
 --   Does not rename top-level definitions.
@@ -142,14 +141,14 @@ unshadow = setFailMsg "No shadows to eliminate." $
 
   where
     unshadowExpr :: Rewrite c HermitM CoreExpr
-    unshadowExpr = do vs <- shadowedByT (liftM fromList (letVarsT <+ fmap return (caseWildIdT <+ lamVarT)))
-                                        (liftM2 union boundVarsT freeVarsT)
-                      alphaLam Nothing <+ alphaLetVars (toList vs) <+ alphaCaseBinder Nothing
+    unshadowExpr = do vs <- shadowedByT (liftM mkVarSet (letVarsT <+ fmap return (caseWildIdT <+ lamVarT)))
+                                        (liftM2 unionVarSet boundVarsT exprFreeVarsT)
+                      alphaLam Nothing <+ alphaLetVars (varSetElems vs) <+ alphaCaseBinder Nothing
 
     unshadowAlt :: Rewrite c HermitM CoreAlt
-    unshadowAlt = do vs <- shadowedByT (liftM fromList altVarsT)
-                                       (liftM2 union boundVarsT altFreeVarsT)
-                     alphaAltVars (toList vs)
+    unshadowAlt = do vs <- shadowedByT (liftM mkVarSet altVarsT)
+                                       (liftM2 unionVarSet boundVarsT altFreeVarsT)
+                     alphaAltVars (varSetElems vs)
 
 -----------------------------------------------------------------------
 
@@ -236,10 +235,8 @@ alphaLetNonRecVars mn vs = whenM ((`elem` vs) `liftM` letNonRecVarT) (alphaLetNo
 -- | Rename the specified identifier bound in a recursive let.  Optionally takes a suggested new name.
 alphaLetRecId :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Maybe TH.Name -> Id -> Rewrite c HermitM CoreExpr
 alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
-                     do usedVars <- liftM2 union boundVarsT
-                                                 $ letRecT (\ _ -> defT idR freeVarsT S.insert) freeVarsT (\ bndfvs vs -> unions (vs:bndfvs))
-                               --     letVarsT  `mappend`
-                              --      letRecDefT (\ _ -> (idR,freeVarsT)) freeVarsT (\ bndfvs vs -> concatMap snd bndfvs ++ vs)
+                     do usedVars <- liftM2 unionVarSet boundVarsT
+                                                 $ letRecT (\ _ -> defT idR exprFreeVarsT (flip extendVarSet)) exprFreeVarsT (\ bndfvs vs -> unionVarSets (vs:bndfvs))
                         v' <- constT (cloneVarH (freshNameGenAvoiding mn usedVars) v)
                         letRecDefAnyR (\ _ -> (arr (replaceVar v v'), replaceVarR v v')) (replaceVarR v v')
 

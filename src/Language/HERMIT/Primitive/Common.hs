@@ -44,6 +44,7 @@ module Language.HERMIT.Primitive.Common
     , wrongExprForm
     , nodups
     , mapAlts
+    , notElemVarSet
     )
 
 where
@@ -52,7 +53,6 @@ import GhcPlugins
 
 import Data.List
 import Data.Monoid
-import qualified Data.Set as S
 
 import Control.Arrow ((>>^))
 import Control.Monad(liftM)
@@ -219,14 +219,14 @@ exprIsOccurrenceOfT :: (ExtendPath c Crumb, ReadBindings c, Monad m) => Var -> B
 exprIsOccurrenceOfT v d = varT $ varIsOccurrenceOfT v d
 
 -- | Lifted version of 'boundVars'.
-boundVarsT :: (BoundVars c, Monad m) => Translate c m a (S.Set Var)
+boundVarsT :: (BoundVars c, Monad m) => Translate c m a VarSet
 boundVarsT = contextonlyT (return . boundVars)
 
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
 findBoundVarT :: (BoundVars c, MonadCatch m) => TH.Name -> Translate c m a Var
 findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ showName nm ++ ", ") $
                         do c <- contextT
-                           case findBoundVars nm c of
+                           case varSetElems (findBoundVars nm c) of
                              []         -> fail "no matching variables in scope."
                              [v]        -> return v
                              _ : _ : _  -> fail "multiple matching variables in scope."
@@ -237,7 +237,7 @@ findIdT nm = prefixFailMsg ("Cannot resolve name " ++ showName nm ++ ", ") $
              contextonlyT (findId nm)
 
 findId :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => TH.Name -> c -> m Id
-findId nm c = case findBoundVars nm c of
+findId nm c = case varSetElems (findBoundVars nm c) of
                 []         -> findIdMG nm c
                 [v]        -> return v
                 _ : _ : _  -> fail "multiple matching variables in scope."
@@ -289,5 +289,11 @@ nodups as = length as == length (nub as)
 
 mapAlts :: (CoreExpr -> CoreExpr) -> [CoreAlt] -> [CoreAlt]
 mapAlts f alts = [ (ac, vs, f e) | (ac, vs, e) <- alts ]
+
+------------------------------------------------------------------------------
+
+-- | Determine if a 'Var' is not an element of a 'VarSet'.
+notElemVarSet :: Var -> VarSet -> Bool
+notElemVarSet v vs = not (v `elemVarSet` vs)
 
 ------------------------------------------------------------------------------

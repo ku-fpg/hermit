@@ -17,7 +17,6 @@ import Control.Arrow hiding ((<+>))
 import Control.Applicative ((<$>))
 
 import Data.Char (isSpace)
-import Data.Set (notMember)
 
 import GhcPlugins (TyCon(..), Coercion(..), Var(..), ModGuts, CoreExpr, CoreAlt, CoreBind, AltCon(..), KindOrType, Outputable, Name, mg_module, showPpr, isLocalId, isTyVar, isCoVar, isDeadBinder, coercionKind, isFunTyCon, listTyCon, isTupleTyCon, getName)
 
@@ -28,6 +27,7 @@ import Language.HERMIT.Kure
 import Language.HERMIT.Monad
 import Language.HERMIT.Syntax
 
+import Language.HERMIT.Primitive.Common (notElemVarSet)
 import Language.HERMIT.Primitive.GHC (dynFlagsT)
 
 import Language.HERMIT.PrettyPrinter.Common
@@ -337,7 +337,7 @@ ppCoreExprR = absPathT >>= ppCoreExprPR
 
            <+ varT (do (c,i) <- exposeT
                        RetAtom <$> if isDeadBinder i ||
-                                      (isLocalId i && (i `notMember` boundVars c))
+                                      (isLocalId i && (i `notElemVarSet` boundVars c))
                                     then varName ^>> ppName WarningColor
                                     else ppVar
                    )

@@ -5,12 +5,9 @@ module Language.HERMIT.Primitive.GHC
          externals
        , anyCallR
          -- ** Free Variables
-       , coreExprFreeIds
-       , coreExprFreeVars
-       , typeFreeVars
-       , freeIdsT
-       , freeVarsT
-       , freeTyVarsT
+       , tyVarsOfTypeT
+       , exprFreeIdsT
+       , exprFreeVarsT
        , altFreeVarsT
        , altFreeVarsExclWildT
          -- ** Substitution
@@ -22,7 +19,7 @@ module Language.HERMIT.Primitive.GHC
        , coreEqual
          -- ** Utilities
        , inScope
-       , showVars
+       , showVarSet
        , rule
        , rules
        , equivalent
@@ -53,7 +50,6 @@ import Control.Monad
 import Data.Function (on)
 import Data.List (intercalate,mapAccumL,deleteFirstsBy)
 import Data.Monoid (mempty)
-import Data.Set (Set, fromList, toList, (\\))
 
 import Language.HERMIT.Core
 import Language.HERMIT.Context
@@ -154,11 +150,11 @@ info = do crumbs <- childrenT
                 node     = "Node: " ++ coreTCNode coreTC
                 con      = "Constructor: " ++ coreTCConstructor coreTC
                 children = "Children: " ++ showCrumbs crumbs
-                bds      = "Bindings in Scope: " ++ showVars (toList $ boundVars c)
+                bds      = "Bindings in Scope: " ++ showVarSet (boundVars c)
                 extra    = case coreTC of
                              Core (ExprCore e)      -> let tyK = exprKindOrType e
                                                         in [(if isKind tyK then "Kind: " else "Type: ") ++ showPpr dynFlags tyK] ++
-                                                           ["Free Variables: " ++ showVars (toList $ coreExprFreeVars e)] ++
+                                                           ["Free Variables: " ++ showVarSet (exprFreeVars e)] ++
                                                            case e of
                                                              Var i -> ["Identifier Arity: " ++ show (arityOf c i)]
                                                              _     -> []
@@ -242,47 +238,39 @@ coercionConstructor = \case
 
 -- | Output a list of all free variables in an expression.
 freeIdsQuery :: Monad m => Translate c m CoreExpr String
-freeIdsQuery = do frees <- freeIdsT
-                  return $ "Free identifiers are: " ++ showVars (toList frees)
+freeIdsQuery = do frees <- exprFreeIdsT
+                  return $ "Free identifiers are: " ++ showVarSet frees
 
 -- | Show a human-readable version of a list of 'Var's.
 showVars :: [Var] -> String
 showVars = show . map var2String
 
--- | Lifted version of 'coreExprFreeIds'.
-freeIdsT :: Monad m => Translate c m CoreExpr (Set Id)
-freeIdsT = arr coreExprFreeIds
+-- | Show a human-readable version of a 'VarSet'.
+showVarSet :: VarSet -> String
+showVarSet = showVars . varSetElems
 
--- | Lifted version of 'coreExprFreeVars'.
-freeVarsT :: Monad m => Translate c m CoreExpr (Set Var)
-freeVarsT = arr coreExprFreeVars
+-- | Lifted version of 'exprFreeIds'.
+exprFreeIdsT :: Monad m => Translate c m CoreExpr IdSet
+exprFreeIdsT = arr exprFreeIds
 
--- | Lifted version of 'typeFreeVars'.
-freeTyVarsT :: Monad m => Translate c m Type (Set Var)
-freeTyVarsT = arr typeFreeVars
+-- | Lifted version of 'exprFreeVars'.
+exprFreeVarsT :: Monad m => Translate c m CoreExpr VarSet
+exprFreeVarsT = arr exprFreeVars
 
--- | List all free variables in a type.
-typeFreeVars :: Type -> Set Var
-typeFreeVars = fromList . uniqSetToList . tyVarsOfType
-
--- | List all free variables (including types) in the expression.
-coreExprFreeVars :: CoreExpr -> Set Var
-coreExprFreeVars  = fromList . uniqSetToList . exprFreeVars
-
--- | List all free identifiers (value-level free variables) in the expression.
-coreExprFreeIds :: CoreExpr -> Set Id
-coreExprFreeIds  = fromList . uniqSetToList . exprFreeIds
+-- | Lifted version of 'tyVarsOfType'.
+tyVarsOfTypeT :: Monad m => Translate c m Type TyVarSet
+tyVarsOfTypeT = arr tyVarsOfType
 
 -- | The free variables in a case alternative, which excludes any identifiers bound in the alternative.
-altFreeVarsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt (Set Var)
-altFreeVarsT = altT mempty (\ _ -> idR) freeVarsT (\ () vs fvs -> fvs \\ fromList vs)
+altFreeVarsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt VarSet
+altFreeVarsT = altT mempty (\ _ -> idR) exprFreeVarsT (\ () vs fvs -> delVarSetList fvs vs)
 
 -- | A variant of 'altFreeVarsT' that returns a function that accepts the case wild-card binder before giving a result.
 --   This is so we can use this with congruence combinators, for example:
 --
 --   caseT id (const altFreeVarsT) $ \ _ wild _ fvs -> [ f wild | f <- fvs ]
-altFreeVarsExclWildT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt (Id -> Set Var)
-altFreeVarsExclWildT = altT mempty (\ _ -> idR) freeVarsT (\ () vs fvs wild -> fvs \\ fromList (wild : vs))
+altFreeVarsExclWildT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt (Id -> VarSet)
+altFreeVarsExclWildT = altT mempty (\ _ -> idR) exprFreeVarsT (\ () vs fvs wild -> delVarSetList fvs (wild : vs))
 
 ------------------------------------------------------------------------
 
@@ -329,7 +317,7 @@ rulesToRewriteH rs = translate $ \ c e -> do
     (Var fn,args) <- return $ collectArgs e
     -- Question: does this include Id's, or Var's (which include type names)
     -- Assumption: Var's.
-    let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- toList (coreExprFreeVars e) ])
+    let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (exprFreeVars e) ])
         -- The rough_args are just an attempt to try eliminate silly things
         -- that will never match
         _rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
@@ -344,7 +332,7 @@ rulesToRewriteH rs = translate $ \ c e -> do
         Nothing         -> fail "rule not matched"
         Just (r, expr)  -> do
             let e' = mkApps expr (drop (ruleArity r) args)
-            ifM (liftM (and . map (inScope c) . toList) $ apply freeVarsT c e')
+            ifM (liftM (and . map (inScope c) . varSetElems) $ apply exprFreeVarsT c e')
                 (return e')
                 (fail $ unlines ["Resulting expression after rule application contains variables that are not in scope."
                                 ,"This can probably be solved by running the flatten-module command at the top level."])
@@ -528,7 +516,7 @@ lintExprT :: (BoundVars c, Monad m, HasDynFlags m) => Translate c m CoreExpr Str
 lintExprT = translate $ \ c e -> do
     dflags <- getDynFlags
     maybe (return "Core Lint Passed") (fail . showSDoc dflags)
-                 $ CoreLint.lintUnfolding noSrcLoc (toList $ boundVars c) e
+                 $ CoreLint.lintUnfolding noSrcLoc (varSetElems $ boundVars c) e
 
 specConstrR :: RewriteH ModGuts
 specConstrR = do

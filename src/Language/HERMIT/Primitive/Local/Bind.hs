@@ -8,15 +8,11 @@ where
 
 import GhcPlugins
 
-import Data.Set (notMember)
-
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 import Language.HERMIT.Kure
 
 import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.GHC hiding (externals)
-
 ------------------------------------------------------------------------------
 
 -- | Externals for manipulating binding groups.
@@ -45,7 +41,7 @@ recToNonrecR :: MonadCatch m => Rewrite c m CoreBind
 recToNonrecR = prefixFailMsg "Converting singleton recursive binding to non-recursive binding failed: " $
                withPatFailMsg (wrongExprForm "Rec [Def v e]") $
   do Rec [(v,e)] <- idR
-     guardMsg (v `notMember` coreExprFreeIds e) ("'" ++ uqName v ++ " is recursively defined.")
+     guardMsg (v `notElemVarSet` exprFreeIds e) ("'" ++ uqName v ++ " is recursively defined.")
      return (NonRec v e)
 
 ------------------------------------------------------------------------------

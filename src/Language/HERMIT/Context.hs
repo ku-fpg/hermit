@@ -42,7 +42,6 @@ import GhcPlugins hiding (empty)
 
 import Data.Monoid (mempty)
 import Data.Map hiding (map, foldr, filter)
-import qualified Data.Set as S
 
 import qualified Language.Haskell.TH as TH
 
@@ -152,15 +151,15 @@ addForallBinding v = addHermitBinding v FORALL
 
 -- | A class of contexts that stores the set of variables in scope that have been bound during the traversal.
 class BoundVars c where
-  boundVars :: c -> S.Set Var
+  boundVars :: c -> VarSet
 
-instance BoundVars (S.Set Var) where
-  boundVars :: S.Set Var -> S.Set Var
+instance BoundVars VarSet where
+  boundVars :: VarSet -> VarSet
   boundVars = id
 
 -- | List all variables bound in the context that match the given name.
-findBoundVars :: BoundVars c => TH.Name -> c -> [Var]
-findBoundVars nm = filter (cmpTHName2Var nm) . S.toList . boundVars
+findBoundVars :: BoundVars c => TH.Name -> c -> VarSet
+findBoundVars nm = filterVarSet (cmpTHName2Var nm) . boundVars
 
 
 -- | A class of contexts from which HERMIT bindings can be retrieved.
@@ -262,8 +261,8 @@ instance AddBindings HermitC where
 ------------------------------------------------------------------------
 
 instance BoundVars HermitC where
-  boundVars :: HermitC -> S.Set Var
-  boundVars =  keysSet . hermitC_bindings
+  boundVars :: HermitC -> VarSet
+  boundVars =  mkVarSet . keys . hermitC_bindings
 
 instance ReadBindings HermitC where
   hermitDepth :: HermitC -> BindingDepth

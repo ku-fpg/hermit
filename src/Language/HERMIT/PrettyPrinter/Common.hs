@@ -47,8 +47,6 @@ import Data.Char
 import Data.Default
 import Data.Monoid hiding ((<>))
 import qualified Data.Map as M
-import Data.Set (Set)
-import qualified Data.Set as S
 import Data.Typeable
 
 import Language.HERMIT.Context
@@ -129,7 +127,7 @@ type PrettyH a = Translate PrettyC HermitM a DocH
 
 -- | Context for PrettyH translations.
 data PrettyC = PrettyC { prettyC_path    :: AbsolutePath Crumb
-                       , prettyC_vars    :: Set Var
+                       , prettyC_vars    :: VarSet
                        , prettyC_options :: PrettyOptions
                        }
 
@@ -147,7 +145,7 @@ instance ExtendPath PrettyC Crumb where
 
 instance AddBindings PrettyC where
   addHermitBindings :: [(Var,HermitBindingSite)] -> PrettyC -> PrettyC
-  addHermitBindings vbs c = c { prettyC_vars = foldr S.insert (prettyC_vars c) (map fst vbs) }
+  addHermitBindings vbs c = c { prettyC_vars = foldr (flip extendVarSet) (prettyC_vars c) (map fst vbs) }
                             -- let vhbs = [ (v, (0,b)) | (v,b) <- vbs ] -- TODO: do we care about depth?
                             --  in c { prettyC_bindings = M.fromList vhbs `M.union` prettyC_bindings c }
   {-# INLINE addHermitBindings #-}
@@ -161,7 +159,7 @@ instance AddBindings PrettyC where
 --   {-# INLINE hermitBindings #-}
 
 instance BoundVars PrettyC where
-  boundVars :: PrettyC -> Set Var
+  boundVars :: PrettyC -> VarSet
   boundVars = prettyC_vars
 
 ------------------------------------------------------------------------
@@ -177,7 +175,7 @@ liftPrettyC opts c = PrettyC { prettyC_path    = absPath c
 initPrettyC :: PrettyOptions -> PrettyC
 initPrettyC opts = PrettyC
                       { prettyC_path    = mempty
-                      , prettyC_vars    = S.empty
+                      , prettyC_vars    = emptyVarSet
                       , prettyC_options = opts
                       }
 
