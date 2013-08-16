@@ -36,6 +36,7 @@ module Language.HERMIT.Primitive.GHC
        , dezombifyR
        , occurAnalyseExprR
        , occurAnalyseR
+       , occurrenceAnalysisR
        )
 where
 

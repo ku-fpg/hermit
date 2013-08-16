@@ -339,8 +339,12 @@ performQuery Display = do
 
 performMetaCommand :: MonadIO m => MetaCommand -> CLM m ()
 performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
-performMetaCommand Resume = do st <- get
-                               iokm2clm'' $ resumeS (cl_kernel st) (cl_cursor st)
+performMetaCommand Resume = do
+    st <- get
+    sast' <- iokm2clm "Final occurrence analysis failed (should never happen!): "
+                    $ applyS (cl_kernel st) (cl_cursor st) occurrenceAnalysisR (cl_kernel_env st)
+    iokm2clm'' $ resumeS (cl_kernel st) sast'
+
 performMetaCommand (Delete sast) = gets cl_kernel >>= iokm2clm'' . flip deleteS sast
 performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
