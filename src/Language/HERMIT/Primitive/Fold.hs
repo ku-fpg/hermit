@@ -25,6 +25,7 @@ import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.GHC
 
+import Language.HERMIT.Primitive.Common (varBindingDepthT)
 import Language.HERMIT.Primitive.GHC hiding (externals)
 import Language.HERMIT.Primitive.Inline hiding (externals)
 
@@ -79,12 +80,13 @@ foldR nm = prefixFailMsg "Fold failed: " $
 
 foldVarR :: ReadBindings c => Var -> Maybe BindingDepth -> Rewrite c HermitM CoreExpr
 foldVarR v md =
-             do e <- idR
-                (rhs,_) <- getUnfoldingT scrutinee caseBinderOnly md <<< return v
+             do case md of
+                  Nothing    -> return ()
+                  Just depth -> do depth' <- varBindingDepthT v
+                                   guardMsg (depth == depth') "Specified binding depth does not match that of variable binding, this is probably a shadowing occurrence."
+                e <- idR
+                (rhs,_) <- getUnfoldingT AllBinders <<< return v
                 maybe (fail "no match.") return (fold v rhs e)
-  where
-    scrutinee      = False
-    caseBinderOnly = False
 
 ------------------------------------------------------------------------
 

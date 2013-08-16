@@ -163,8 +163,7 @@ safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
     occursSafeToLetSubstId i =
       do depth <- varBindingDepthT i
          let occursHereT :: Translate c m Core ()
-             occursHereT = promoteExprT $ whenM (varT $ arr (== i))
-                                                (contextonlyT (lookupHermitBindingSite i depth) >>> return ())
+             occursHereT = promoteExprT (exprIsOccurrenceOfT i depth >>> guardT)
 
              -- lamOccurrenceT can only fail if the expression is not a Lam
              -- return either 2 (occurrence) or 0 (no occurrence)

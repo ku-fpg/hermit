@@ -302,7 +302,7 @@ matchingFreeId nm = do
 --
 -- > caseSplitInline nm = caseSplit nm >>> anybuR (inlineName nm)
 caseSplitInline :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM Core
-caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineName nm)
+caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineNameR nm)
 
 ------------------------------------------------------------------------------
 

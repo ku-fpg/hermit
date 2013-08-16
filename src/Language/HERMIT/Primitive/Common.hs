@@ -38,6 +38,8 @@ module Language.HERMIT.Primitive.Common
     , findIdT
     , findId
     , varBindingDepthT
+    , varIsOccurrenceOfT
+    , exprIsOccurrenceOfT
       -- ** Miscallaneous
     , wrongExprForm
     , nodups
@@ -205,6 +207,16 @@ altVarsT = altT mempty (\ _ -> idR) mempty (\ () vs () -> vs)
 -- | Find the depth of a variable's binding.
 varBindingDepthT :: (ReadBindings c, Monad m) => Var -> Translate c m g BindingDepth
 varBindingDepthT v = (contextT >>= lookupHermitBinding v) >>^ fst
+
+-- | Determine if the current variable matches the given variable, and is bound at the specified depth (helpful to detect shadowing).
+varIsOccurrenceOfT :: (ExtendPath c Crumb, ReadBindings c, Monad m) => Var -> BindingDepth -> Translate c m Var Bool
+varIsOccurrenceOfT v d = readerT $ \ v' -> if v == v'
+                                             then varBindingDepthT v >>^ (== d)
+                                             else return False
+
+-- | Determine if the current expression is an occurrence of the given variable, bound at the specified depth (helpful to detect shadowing).
+exprIsOccurrenceOfT :: (ExtendPath c Crumb, ReadBindings c, Monad m) => Var -> BindingDepth -> Translate c m CoreExpr Bool
+exprIsOccurrenceOfT v d = varT $ varIsOccurrenceOfT v d
 
 -- | Lifted version of 'boundVars'.
 boundVarsT :: (BoundVars c, Monad m) => Translate c m a (S.Set Var)

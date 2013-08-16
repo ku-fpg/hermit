@@ -93,7 +93,7 @@ completionType = go . dropWhile isSpace
 -- TODO: For the moment, we promote the translations on Core to translations on CoreTC.  But we should probably update considerTargets and inlineTargets.
 completionQuery :: CommandLineState -> CompletionType -> IO (TranslateH CoreTC [String])
 completionQuery _ ConsiderC = return $ promoteT considerTargets >>^ ((++ map fst considerables) . map ('\'':))
-completionQuery _ InlineC   = return $ promoteT inlineTargets   >>^ map ('\'':)
+completionQuery _ InlineC   = return $ promoteT inlineTargetsT  >>^ map ('\'':)
 completionQuery s CommandC  = return $ pure (M.keys (cl_dict s))
 -- Need to modify opts in completionType function. No key can be a suffix of another key.
 completionQuery _ (AmbiguousC ts) = do

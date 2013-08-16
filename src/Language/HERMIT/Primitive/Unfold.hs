@@ -27,7 +27,7 @@ import Language.HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), P
 
 import Language.HERMIT.Primitive.Common
 import Language.HERMIT.Primitive.GHC (rule,inScope,freeVarsT)
-import Language.HERMIT.Primitive.Inline (inline)
+import Language.HERMIT.Primitive.Inline (inlineR)
 import Language.HERMIT.Primitive.Local.Let (letSubstR)
 
 import Language.HERMIT.Core
@@ -93,7 +93,7 @@ cleanupUnfoldR = do
 unfoldR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 unfoldR = go >>> cleanupUnfoldR
     where go :: Rewrite c HermitM CoreExpr
-          go = inline <+ appAllR go idR
+          go = inlineR <+ appAllR go idR
 
 unfoldPredR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => (Id -> [CoreExpr] -> Bool) -> Rewrite c HermitM CoreExpr
 unfoldPredR p = callPredT p >> unfoldR
