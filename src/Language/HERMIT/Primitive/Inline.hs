@@ -51,7 +51,7 @@ externals =
             , external "inline" (promoteExprR . inlineName :: TH.Name -> RewriteH Core)
                 [ "Restrict inlining to a given name" ].+ Eval .+ Deep .+ TODO
             , external "inline-case-binder" (promoteExprR inlineCaseBinder :: RewriteH Core)
-                [ "Inline if this variable is a case binder." ].+ Eval .+ Deep {- .+ Bash -} .+ TODO
+                [ "Inline if this variable is a case binder." ].+ Eval .+ Deep .+ Bash
             , external "inline-all" (inlineAll :: [TH.Name] -> RewriteH Core)
                 [ "Recursively inline all occurrences of the given names, in a bottom-up manner." ] .+ Deep
             ]

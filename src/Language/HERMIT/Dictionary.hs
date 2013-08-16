@@ -146,7 +146,7 @@ bashDebugR debug exts =
                                                     | (e,rr) <- matchingExternals bashPredicate exts ]
                                               ) >>> GHC.occurAnalyseR
                                   )
-    -- Occurence Analysis is special because it always succeeds.  It's also expensive (I think) so I don't want to perform it at each node during the innermost traversal.
+    -- Occurrence Analysis is special because it always succeeds.  It's also expensive (I think) so I don't want to perform it at each node during the innermost traversal.
 
     -- It's still possible for some meta-data to be out-of-date after bash, despite the case analysis.  For example, if the focal point is a case-alt rhs, this won't update the identifer info of variables bound in the alternative.
 

@@ -29,9 +29,11 @@ module Language.HERMIT.Primitive.GHC
        , dynFlagsT
        , arityOf
          -- ** Lifted GHC capabilities
+         -- A zombie is an identifer that has 'OccInfo' 'IAmDead', but still has occurrences.
        , lintExprT
        , lintModuleT
        , specConstrR
+       , dezombifyR
        , occurAnalyseExprR
        , occurAnalyseR
        )
@@ -84,10 +86,11 @@ externals =
          , external "compare-values" (compareValues ::  TH.Name -> TH.Name -> TranslateH Core ())
                 ["compare the rhs of two values."] .+ Query .+ Predicate
          , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> TH.Name -> RewriteH Core)
-                ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]
-                                        .+ Introduce
-         , external "occur-analysis" (occurAnalyseR :: RewriteH Core)
-                ["Perform dependency analysis on all sub-expressions."] .+ Deep
+                ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]  .+ Introduce
+         , external "dezombify" (promoteExprR dezombifyR :: RewriteH Core)
+                ["Zap the occurrence information in the current identifer if it is a zombie."] .+ Shallow .+ Bash
+         , external "occurrence-analysis" (occurrenceAnalysisR :: RewriteH Core)
+                ["Perform dependency analysis on all sub-expressions; simplifying and updating identifer info."] .+ Deep
          , external "lintExpr" (promoteExprT lintExprT :: TranslateH Core String)
                 ["Runs GHC's Core Lint, which typechecks the current expression."
                 ,"Note: this can miss several things that a whole-module core lint will find."
@@ -405,23 +408,26 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
 
 ----------------------------------------------------------------------
 
---  Performs dependency anlaysis on an expression.
--- occurAnalyseExpr :: CoreExpr -> CoreExpr
--- occurAnalyseExpr = OccurAnal.occurAnalyseExpr
+-- TODO: Ideally, occurAnalyseExprR would fail if nothing changed.
+--       This is tricky though, as it's not just the structure of the expression, but also the meta-data.
+
+-- | Zap the 'OccInfo' in a zombie identifier.
+dezombifyR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
+dezombifyR = varR (acceptR isDeadBinder >>^ zapVarOccInfo)
+
+-- | Run GHC's occurrence analyser, and also eliminate any zombies.
+occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurrenceAnalysisR = allbuR (tryR $ promoteExprR dezombifyR) >>> occurAnalyseR
 
 -- | Lifted version of 'occurAnalyseExpr'.
 occurAnalyseExprR :: Monad m => Rewrite c m CoreExpr
 occurAnalyseExprR = arr OccurAnal.occurAnalyseExpr
 
--- | Perform dependency analysis on all sub-expressions.
+-- | Apply 'occurAnalyseExprR' to all sub-expressions.
 occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
 occurAnalyseR = let r  = promoteExprR occurAnalyseExprR
                     go = r <+ anyR go
                  in tryR go -- always succeed
-
-
--- TODO: Ideally, occurAnalyseExprR would fail if nothing changed.
---       This is tricky though, as it's not just the structure of the expression, but also the meta-data.
 
 
 {- Does not work (no export)

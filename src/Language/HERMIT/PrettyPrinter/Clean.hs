@@ -19,7 +19,7 @@ import Control.Applicative ((<$>))
 import Data.Char (isSpace)
 import Data.Set (notMember)
 
-import GhcPlugins (TyCon(..), Coercion(..), Var(..), ModGuts, CoreExpr, CoreAlt, CoreBind, AltCon(..), KindOrType, Outputable, Name, mg_module, showPpr, isLocalId, isTyVar, isCoVar, coercionKind, isFunTyCon, listTyCon, isTupleTyCon, getName)
+import GhcPlugins (TyCon(..), Coercion(..), Var(..), ModGuts, CoreExpr, CoreAlt, CoreBind, AltCon(..), KindOrType, Outputable, Name, mg_module, showPpr, isLocalId, isTyVar, isCoVar, isDeadBinder, coercionKind, isFunTyCon, listTyCon, isTupleTyCon, getName)
 
 import Language.HERMIT.Context
 import Language.HERMIT.Core
@@ -221,7 +221,7 @@ ppVar = readerT $ \ v -> varName ^>> ppName (varColor v)
 varColor :: Var -> SyntaxForColor
 varColor var | isTyVar var = TypeColor
              | isCoVar var = CoercionColor
-             | otherwise       = IdColor
+             | otherwise   = IdColor
 
 ppName :: SyntaxForColor -> PrettyH Name
 ppName color = do p    <- absPathT
@@ -336,7 +336,8 @@ ppCoreExprR = absPathT >>= ppCoreExprPR
            <+ caseT ppCoreExpr ppVar (ppTypeModeR >>> parenExpr) (const ppCoreAlt) (\ s w ty alts -> RetExpr ((keyword p "case" <+> s <+> keyword p "of" <+> w <+> ty) $$ nest 2 (vcat alts)))
 
            <+ varT (do (c,i) <- exposeT
-                       RetAtom <$> if (isLocalId i) && (i `notMember` boundVars c)
+                       RetAtom <$> if isDeadBinder i ||
+                                      (isLocalId i && (i `notMember` boundVars c))
                                     then varName ^>> ppName WarningColor
                                     else ppVar
                    )

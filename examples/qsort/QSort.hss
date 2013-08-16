@@ -5,27 +5,22 @@ bash
 {consider lam ; alpha-lam 't}
 any-call (unfold 'wrap)
 any-call (unfold 'unwrap)
-simplify
-{rhs-of 'work
+bash
+{ rhs-of 'work
   alpha-lam 'xs
   lam-body
   any-td case-float-arg
   eta-expand 'acc
-  bash
-  one-td inline-case-binder -- this used to be part of bash
-  bash
   lam-body
+  bash
   {  case-alt 1
-     any-td (push 'repH)
      consider alt
      alpha-alt ['bs,'cs]
      any-td (unfold-rule "repH ++")
-     any-bu case-float-arg
-     simplify
+     bash
      one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work bs |]))
      one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work cs |]))
      any-call (unfold-rule "repH (:)")
-     simplify
   }
   any-call (unfold-rule "repH []")
   bash
