@@ -1,6 +1,6 @@
 ww-split-param 1 [|wrap|] [|unwrap|]
 any-call (unfold 'wrap)
 one-td (unfold 'unwrap)
-innermost (case-float-let >+> bash >+> push 'repH >+> unfold-rule "repH ++" >+> unfold-rule "repH (:)" >+> unfold-rule "repH []" >+> unfold-rule "[] ++" >+> unfold-rule "[] ++" >+> unfold-rule "(:) ++")
+innermost (bash >+> push 'repH >+> unfold-rule "repH ++" >+> unfold-rule "repH (:)" >+> unfold-rule "repH []" >+> unfold-rule "[] ++" >+> unfold-rule "[] ++" >+> unfold-rule "(:) ++")
 any-td (unfold-rule "rep-abs-fusion")
 any-call (unfold 'absH)

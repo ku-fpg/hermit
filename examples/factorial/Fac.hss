@@ -17,6 +17,4 @@ ww-split [| wrap |] [| unwrap |]
   innermost case-float-case
 }
 simplify
-innermost (case-float <+ case-reduce)
-simplify
 { [def-rhs, let-body] ; eta-expand 'n ; any-call (unfold 'wrap) }
