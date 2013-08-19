@@ -17,14 +17,14 @@ import qualified Language.Haskell.TH as TH
 
 import Language.HERMIT.External
 import Language.HERMIT.Parser
-import Language.HERMIT.Kure (KureM, deprecatedIntToPathT,pathToSnocPath)
+import Language.HERMIT.Kure (deprecatedIntToPathT,pathToSnocPath)
 
 -- | Interpret an 'ExprH' by looking up the appropriate 'Dynamic'(s) in the provided 'Dictionary', then interpreting the 'Dynamic'(s) with the provided 'Interp's, returning the first interpretation to succeed (or an error string if none succeed).
-interpExprH :: Dictionary -> [Interp a] -> ExprH -> KureM a
+interpExprH :: Monad m => Dictionary -> [Interp a] -> ExprH -> m a
 interpExprH dict interps e = do dyns <- interpExpr dict e
                                 runInterp dyns interps
 
-runInterp :: [Dynamic] -> [Interp b] -> KureM b
+runInterp :: Monad m => [Dynamic] -> [Interp b] -> m b
 runInterp dyns interps = case [f a | Interp f <- interps, Just a <- map fromDynamic dyns] of
                            []  -> fail "User error, HERMIT command does not type-check."
                            b:_ -> return b
@@ -42,7 +42,7 @@ instance Functor Interp where
   fmap f (Interp g) = Interp (f . g)
 
 
-interpExpr :: Dictionary -> ExprH -> KureM [Dynamic]
+interpExpr :: Monad m => Dictionary -> ExprH -> m [Dynamic]
 interpExpr = interpExpr' False
 
 -- input: list length n, each elem is a variable length list of possible interpretations
@@ -54,7 +54,7 @@ fromDynList (hs:dynss) = [ h:t | h <- hs, t <- fromDynList dynss ]
 toBoxedList :: (Extern a, Typeable b) => [[Dynamic]] -> ([a] -> b) -> [Dynamic]
 toBoxedList dyns boxCon = [ toDyn $ boxCon (map unbox l) | dl <- dyns, Just l <- [mapM fromDynamic dl] ]
 
-interpExpr' :: Bool -> Dictionary -> ExprH -> KureM [Dynamic]
+interpExpr' :: Monad m => Bool -> Dictionary -> ExprH -> m [Dynamic]
 interpExpr' _   _    (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
 interpExpr' _   _    (CoreH str)   = return [ toDyn $ CoreBox (CoreString str) ]
 interpExpr' _   dict (ListH exprs) = do dyns <- liftM fromDynList $ mapM (interpExpr' True dict) exprs
@@ -76,7 +76,7 @@ interpExpr' rhs dict (CmdName str)
   | otherwise                           = fail $ "User error, unrecognised HERMIT command: " ++ show str
 interpExpr' _ env (AppH e1 e2)          = dynAppMsg (interpExpr' False env e1) (interpExpr' True env e2)
 
-dynAppMsg :: KureM [Dynamic] -> KureM [Dynamic] -> KureM [Dynamic]
+dynAppMsg :: Monad m => m [Dynamic] -> m [Dynamic] -> m [Dynamic]
 dynAppMsg = liftM2 dynApply'
    where
            dynApply' :: [Dynamic] -> [Dynamic] -> [Dynamic]

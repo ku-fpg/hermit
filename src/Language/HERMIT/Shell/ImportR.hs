@@ -7,14 +7,13 @@ module Language.HERMIT.Shell.ImportR
 where
 
 import Control.Arrow
-import Control.Applicative
+import Control.Monad (liftM)
 
 import Data.Dynamic
 import Data.Map
 
 import Language.HERMIT.Context(LocalPathH)
 import Language.HERMIT.Kure
-import Language.HERMIT.Parser
 import Language.HERMIT.External
 import Language.HERMIT.Interp
 
@@ -39,10 +38,10 @@ data PrimImportR
 
 
 -- TODO: Hacky parsing, needs cleaning up
-unscopedToScopedImportR :: [UnscopedImportR] -> KureM [ScopedImportR]
+unscopedToScopedImportR :: forall m. Monad m => [UnscopedImportR] -> m [ScopedImportR]
 unscopedToScopedImportR = parse
   where
-    parse :: [UnscopedImportR] -> KureM [ScopedImportR]
+    parse :: [UnscopedImportR] -> m [ScopedImportR]
     parse []     = return []
     parse (y:ys) = case y of
                      ImportUnsupported -> fail "unsupported AST effect."
@@ -51,7 +50,7 @@ unscopedToScopedImportR = parse
                                              (ImportScope rs :) <$> parse zs
                      ImportEndScope    -> fail "unmatched end-of-scope."
 
-    parseUntilEndScope :: [UnscopedImportR] -> KureM ([ScopedImportR], [UnscopedImportR])
+    parseUntilEndScope :: Monad m => [UnscopedImportR] -> m ([ScopedImportR], [UnscopedImportR])
     parseUntilEndScope []     = fail "missing end-of-scope."
     parseUntilEndScope (y:ys) = case y of
                                   ImportEndScope    -> return ([],ys)
@@ -96,7 +95,7 @@ rewriteToExternal nm fp r = external nm r ["This rewrite was imported by the use
 
 -----------------------------------
 
-importToDictionary :: Dictionary -> [ExprH] -> ExternalName -> FilePath -> KureM Dictionary
+importToDictionary :: Monad m => Dictionary -> Script -> ExternalName -> FilePath -> m Dictionary
 importToDictionary dict es nm fp = do unscoped <- mapM (interpExprH dict interpImportR) es
                                       scoped   <- unscopedToScopedImportR unscoped
                                       let ex  = rewriteToExternal nm fp (scopedImportsToRewrite scoped)
@@ -109,5 +108,12 @@ importToDictionary dict es nm fp = do unscoped <- mapM (interpExprH dict interpI
                                           alteration (Just dyns) = Just (dyn:dyns)
 
                                       return $ alter alteration nm dict
+
+-----------------------------------
+
+-- I find it annoying that Functor is not a superclass of Monad.
+(<$>) :: Monad m => (a -> b) -> m a -> m b
+(<$>) = liftM
+{-# INLINE (<$>) #-}
 
 -----------------------------------

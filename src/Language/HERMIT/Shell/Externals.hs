@@ -284,7 +284,7 @@ data CommandLineState = CommandLineState
     , cl_tick        :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
     , cl_corelint    :: Bool                                     -- ^ if true, run Core Lint on module after each rewrite
     , cl_failhard    :: Bool                                     -- ^ if true, abort on *any* failure
-    -- these three should be in a reader
+    -- these four should be in a reader
     , cl_dict        :: Dictionary
     , cl_scripts     :: [(ScriptName,Script)]
     , cl_kernel      :: ScopedKernel
