@@ -62,10 +62,6 @@ import Language.HERMIT.Core
 import Language.HERMIT.Context
 import Language.HERMIT.GHC
 
-#if __GLASGOW_HASKELL__ > 706
-import Language.HERMIT.Primitive.GHC
-#endif
-
 import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH.Syntax (showName)
 
@@ -112,7 +108,7 @@ callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >>= \_ -> const
 callDataConT :: MonadCatch m => Translate c m CoreExpr (DataCon, [Type], [CoreExpr])
 callDataConT = prefixFailMsg "callDataConT failed:" $
 #if __GLASGOW_HASKELL__ > 706
-    do mb <- contextfreeT $ \ e -> let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- S.toList (coreExprFreeVars e) ])
+    do mb <- contextfreeT $ \ e -> let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (exprFreeVars e) ])
                                    in return $ exprIsConApp_maybe (in_scope, idUnfolding) e
        maybe (fail "not a datacon application.") return mb
 #else

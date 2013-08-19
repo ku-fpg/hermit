@@ -229,7 +229,7 @@ caseReduceLiteral = prefixFailMsg "Case reduction failed: " $
                     withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $
     do Case s wild _ alts <- idR
 #if __GLASGOW_HASKELL__ > 706
-       let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- S.toList (exprFreeVars s) ])
+       let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (exprFreeVars s) ])
        case exprIsLiteral_maybe (in_scope, idUnfolding) s of
 #else
        case exprIsLiteral_maybe idUnfolding s of
@@ -249,7 +249,7 @@ caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
     go :: Rewrite c HermitM CoreExpr
     go = do Case e wild _ alts <- idR
 #if __GLASGOW_HASKELL__ > 706
-            let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- S.toList (exprFreeVars e) ])
+            let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (exprFreeVars e) ])
             case exprIsConApp_maybe (in_scope, idUnfolding) e of
 #else
             case exprIsConApp_maybe idUnfolding e of
