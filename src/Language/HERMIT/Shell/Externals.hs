@@ -277,20 +277,24 @@ newSAST expr sast st = st { cl_cursor = sast
 data CommandLineState = CommandLineState
     { cl_cursor      :: SAST                                     -- ^ the current AST
     , cl_pretty      :: String                                   -- ^ which pretty printer to use
-    , cl_pretty_opts :: PrettyOptions                            -- ^ The options for the pretty printer
+    , cl_pretty_opts :: PrettyOptions                            -- ^ the options for the pretty printer
     , cl_render      :: Handle -> PrettyOptions -> DocH -> IO () -- ^ the way of outputing to the screen
-    , cl_nav         :: Bool                                     -- ^ keyboard input the the nav panel
+    , cl_nav         :: Bool                                     -- ^ keyboard input the nav panel
     , cl_loading     :: Bool                                     -- ^ if loading a file
-    , cl_tick        :: TVar (M.Map String Int)                  -- ^ The list of ticked messages
-    , cl_corelint    :: Bool                                     -- ^ if true, run core lint on module after each rewrite
+    , cl_tick        :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
+    , cl_corelint    :: Bool                                     -- ^ if true, run Core Lint on module after each rewrite
     , cl_failhard    :: Bool                                     -- ^ if true, abort on *any* failure
     -- these three should be in a reader
     , cl_dict        :: Dictionary
+    , cl_scripts     :: [(ScriptName,Script)]
     , cl_kernel      :: ScopedKernel
     , cl_initSAST    :: SAST
     -- and the version store
     , cl_version     :: VersionStore
     }
+
+type ScriptName = String
+type Script = [ExprH]
 
 -------------------------------------------------------------------------------
 

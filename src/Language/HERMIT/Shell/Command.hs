@@ -170,8 +170,25 @@ commandLine opts behavior exts skernel sast = do
     var <- GHC.liftIO $ atomically $ newTVar M.empty
     w <- getTerminalWidth
 
-    let shellState = CommandLineState sast "clean" (def { po_width = w}) unicodeConsole False False var False False dict skernel sast versionStore
-        versionStore = VersionStore [] []
+    let shellState = CommandLineState
+                       { cl_cursor      = sast
+                       , cl_pretty      = "clean"
+                       , cl_pretty_opts = def { po_width = w}
+                       , cl_render      = unicodeConsole
+                       , cl_nav         = False
+                       , cl_loading     = False
+                       , cl_tick        = var
+                       , cl_corelint    = False
+                       , cl_failhard    = False
+                       , cl_dict        = dict
+                       , cl_scripts     = []
+                       , cl_kernel      = skernel
+                       , cl_initSAST    = sast
+                       , cl_version     = VersionStore
+                                            { vs_graph = []
+                                            , vs_tags  = []
+                                            }
+                       }
 
     completionMVar <- newMVar shellState
 
