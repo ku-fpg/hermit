@@ -126,12 +126,24 @@ shell_externals = map (.+ Shell)
    , external "}"   EndScope
        ["pop a lens off a stack"]               -- tag as internal
    , external "load"  LoadFile
-       ["load <filename> : load a file of commands into the current derivation."]
+       ["load <script-name> <file-name> : load a HERMIT script from a file and save it under the specified name."]
+   , external "load-and-run"  loadAndRun
+       ["load-and-run <file-name> : load a HERMIT script from a file and run it immediately."]
    , external "save"  SaveFile
        ["save <filename> : save the current complete derivation into a file."]
-   , external "import-rewrite" ImportR
-       ["import-rewrite <filepath> <name-for-rewrite> : create a new rewrite from a file containing a HERMIT script."
+   , external "load-as-rewrite" (\ rewriteName fileName -> SeqMeta [LoadFile rewriteName fileName, ScriptToRewrite rewriteName])
+       ["load-as-rewrite <rewrite-name> <filepath> : load a HERMIT script from a file, and create a rewrite with the same name."
        ,"Note that there are significant limitations on the commands the script may contain."] .+ Experiment .+ TODO
+   , external "script-to-rewrite" ScriptToRewrite
+       ["script-to-rewrite <script-name> : create a new rewrite from a pre-loaded (or manually defined) HERMIT script."
+       ,"Note that there are significant limitations on the commands the script may contain."] .+ Experiment .+ TODO
+   , external "define-script" DefineScript
+       ["Define a new HERMIT script and bind it to a name."
+       ,"Note that any names in the script will not be resolved until the script is *run*."
+       ,"Example usage: define-script \"MyScriptName\" \"let-subst >>> bash\""]
+   , external "run-script" RunScript
+       ["Run a pre-loaded (or manually defined) HERMIT script."
+       ,"Note that any names in the script will not be resolved until the script is *run*." ]
    ]
 
 gc :: CommandLineState -> IO CommandLineState

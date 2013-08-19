@@ -38,7 +38,7 @@ import HERMIT.Primitive.Inline
 import HERMIT.Primitive.Navigation
 
 import HERMIT.Shell.Externals
-import HERMIT.Shell.ImportR
+import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.Renderer
 import HERMIT.Shell.Types
 
@@ -83,7 +83,7 @@ showWindow = do
     let skernel = cl_kernel st
         ppOpts = (cl_pretty_opts st) { po_focus = Just focusPath }
     -- No not show focus while loading
-    ifM (gets cl_loading)
+    ifM (gets cl_running_script)
         (return ())
         (iokm2clm' "Rendering error: "
                    (liftIO . cl_render st stdout ppOpts)
@@ -135,8 +135,8 @@ shellComplete mvar rPrev so_far = do
     cl <- runKureM return (\ _ -> return []) mcls
     return $ (map simpleCompletion . nub . filter (so_far `isPrefixOf`)) cl
 
-setLoading :: MonadIO m => Bool -> CLM m ()
-setLoading b = modify $ \st -> st { cl_loading = b }
+setRunningScript :: MonadIO m => Bool -> CLM m ()
+setRunningScript b = modify $ \st -> st { cl_running_script = b }
 
 banner :: String
 banner = unlines
@@ -182,39 +182,39 @@ commandLine opts behavior exts skernel sast = do
             if any (`elem` ["-v0", "-v1"]) flags
                 then return ()
                 else liftIO $ putStrLn banner
-            setLoading True
+            setRunningScript True
             sequence_ [ performMetaCommand $ case fileName of
                          "abort"  -> Abort
                          "resume" -> Resume
-                         _        -> LoadFile fileName
+                         _        -> loadAndRun fileName
                       | fileName <- reverse filesToLoad
                       , not (null fileName)
                       ] `ourCatch` \ msg -> liftIO . putStrLn $ "Booting Failure: " ++ msg
-            setLoading False
+            setRunningScript False
 
     var <- GHC.liftIO $ atomically $ newTVar M.empty
     (w,h) <- getTermDimensions
 
     let shellState = CommandLineState
-                       { cl_cursor      = sast
-                       , cl_pretty      = "clean"
-                       , cl_pretty_opts = def { po_width = w }
-                       , cl_render      = unicodeConsole
-                       , cl_height      = h
-                       , cl_nav         = False
-                       , cl_loading     = False
-                       , cl_tick        = var
-                       , cl_corelint    = False
-                       , cl_failhard    = False
-                       , cl_window      = mempty
-                       , cl_dict        = dict
-                       , cl_scripts     = []
-                       , cl_kernel      = skernel
-                       , cl_initSAST    = sast
-                       , cl_version     = VersionStore
-                                            { vs_graph = []
-                                            , vs_tags  = []
-                                            }
+                       { cl_cursor         = sast
+                       , cl_pretty         = "clean"
+                       , cl_pretty_opts    = def { po_width = w }
+                       , cl_render         = unicodeConsole
+                       , cl_height         = h
+                       , cl_nav            = False
+                       , cl_running_script = False
+                       , cl_tick          = var
+                       , cl_corelint      = False
+                       , cl_failhard      = False
+                       , cl_window        = mempty
+                       , cl_dict          = dict
+                       , cl_scripts       = []
+                       , cl_kernel        = skernel
+                       , cl_initSAST      = sast
+                       , cl_version       = VersionStore
+                                              { vs_graph = []
+                                              , vs_tags  = []
+                                              }
                        }
 
     completionMVar <- newMVar shellState
@@ -378,14 +378,15 @@ performQuery (Inquiry f) = do
 performQuery (Message msg) = liftIO (putStrLn msg)
 -- Explicit calls to display should work no matter what the loading state is.
 performQuery Display = do
-    load_st <- gets cl_loading
-    setLoading False
+    running_script_st <- gets cl_running_script
+    setRunningScript False
     showWindow
-    setLoading load_st
+    setRunningScript running_script_st
 
 -------------------------------------------------------------------------------
 
 performMetaCommand :: MonadIO m => MetaCommand -> CLM m ()
+performMetaCommand (SeqMeta ms) = mapM_ performMetaCommand ms
 performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
 performMetaCommand Resume = do
     st <- get
@@ -404,43 +405,51 @@ performMetaCommand (Dump fileName _pp renderer width) = do
                                           hClose h
       _ -> throwError "dump: bad pretty-printer or renderer option"
 
-performMetaCommand (LoadFile fileName) = do
-       stmts   <- loadAndParseFile fileName
-       load_st <- gets cl_loading
-       setLoading True
-       evalStmts stmts `catchError` (\ err -> setLoading load_st >> throwError err)
-       setLoading load_st
-       putStrToConsole $ "[done, loaded " ++ show (length stmts) ++  " commands]"
-       showWindow
+performMetaCommand (LoadFile scriptName fileName) =
+  do putStrToConsole $ "Loading \"" ++ fileName ++ "\"..."
+     res <- liftIO $ try (readFile fileName)
+     case res of
+       Left (err :: IOException) -> throwError ("IO error: " ++ show err)
+       Right str -> case parseStmtsH str of
+                      Left  msg    -> throwError ("Parse failure: " ++ msg)
+                      Right script -> do modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
+                                         putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
 
 performMetaCommand (SaveFile fileName) = do
-        st <- get
+        version <- gets cl_version
         putStrToConsole $ "[saving " ++ fileName ++ "]"
         -- no checks to see if you are clobering; be careful
-        liftIO $ writeFile fileName $ showGraph (vs_graph (cl_version st)) (vs_tags (cl_version st)) (SAST 0)
+        liftIO $ writeFile fileName $ showGraph (vs_graph version) (vs_tags version) (SAST 0)
 
-performMetaCommand (ImportR fileName exName) = do
-        stmts <- loadAndParseFile fileName
-        st    <- get
-        dict' <- iokm2clm "import-rewrite failed: " (return $ importToDictionary (cl_dict st) stmts exName fileName)
-        put (st {cl_dict = dict'})
-        putStrToConsole $ "[done, rewrite \"" ++ exName ++ "\" imported successfully]"
+performMetaCommand (ScriptToRewrite scriptName) =
+  do st <- get
+     case lookup scriptName (cl_scripts st) of
+       Nothing     -> throwError ("No script of name " ++ scriptName ++ " is loaded.")
+       Just script -> do dict' <- iokm2clm "define-rewrite failed: " (return $ addScriptToDict scriptName script (cl_dict st))
+                         put (st {cl_dict = dict'})
+                         putStrToConsole ("Rewrite \"" ++ scriptName ++ "\" defined successfully.")
 
--- used by performMetaCommand in the Load and Import clauses
-loadAndParseFile :: MonadIO m => FilePath -> CLM m [ExprH]
-loadAndParseFile fileName = do
-        putStrToConsole $ "[importing " ++ fileName ++ "]"
-        res <- liftIO $ try (readFile fileName)
-        case res of
-          Left (err :: IOException) -> throwError ("IO error: " ++ show err)
-          Right str -> case parseStmtsH str of
-                        Left  msg  -> throwError ("Parse failure: " ++ msg)
-                        Right stmts -> return stmts
+performMetaCommand (DefineScript scriptName str) =
+  case parseStmtsH str of
+    Left  msg    -> throwError ("Parse failure: " ++ msg)
+    Right script -> do modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
+                       putStrToConsole ("Script \"" ++ scriptName ++ "\" defined successfully.")
+
+performMetaCommand (RunScript scriptName) =
+  do st <- get
+     case lookup scriptName (cl_scripts st) of
+       Nothing     -> throwError ("No script of name " ++ scriptName ++ " is loaded.")
+       Just script -> do running_script_st <- gets cl_running_script
+                         setRunningScript True
+                         evalStmts script `catchError` (\ err -> setRunningScript running_script_st >> throwError err)
+                         setRunningScript running_script_st
+                         putStrToConsole ("Script \"" ++ scriptName ++ "\" ran successfully.")
+                         showWindow
 
 -------------------------------------------------------------------------------
 
 putStrToConsole :: MonadIO m => String -> CLM m ()
-putStrToConsole str = ifM (gets cl_loading)
+putStrToConsole str = ifM (gets cl_running_script)
                           (return ())
                           (liftIO $ putStrLn str)
 

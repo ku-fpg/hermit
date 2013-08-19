@@ -2,7 +2,7 @@ set-pp-type Show
 flatten-module
 consider 'fib
 {
-load "WWSplitTactic.hss"
+load-and-run "WWSplitTactic.hss"
 consider 'work
 remember origwork
 0

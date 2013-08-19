@@ -213,7 +213,7 @@ Library
 
        HERMIT.Shell.Command
        HERMIT.Shell.Externals
-       HERMIT.Shell.ImportR
+       HERMIT.Shell.ScriptToRewrite
        HERMIT.Shell.Renderer
        HERMIT.Shell.Types
 

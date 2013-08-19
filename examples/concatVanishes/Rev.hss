@@ -1,4 +1,4 @@
 flatten-module
 consider 'rev
-{ load "ConcatVanishes.hss" }
+{ load-and-run "ConcatVanishes.hss" }
 

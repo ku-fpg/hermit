@@ -77,11 +77,19 @@ data MetaCommand
    = Resume
    | Abort
    | Dump String String String Int
-   | LoadFile FilePath  -- load a file on top of the current node
+   | LoadFile ScriptName FilePath  -- load a file on top of the current node
    | SaveFile FilePath
-   | ImportR FilePath ExternalName
+   | ScriptToRewrite ScriptName
+   | DefineScript ScriptName String
+   | RunScript ScriptName
    | Delete SAST
+   | SeqMeta [MetaCommand]
    deriving Typeable
+
+-- | A composite meta-command for running a loaded script immediately.
+--   The script is given the same name as the filepath.
+loadAndRun :: FilePath -> MetaCommand
+loadAndRun fp = SeqMeta [LoadFile fp fp, RunScript fp]
 
 instance Extern MetaCommand where
     type Box MetaCommand = MetaCommand
@@ -129,24 +137,24 @@ newSAST expr sast st = st { cl_cursor = sast
 
 -- Session-local issues; things that are never saved.
 data CommandLineState = CommandLineState
-    { cl_cursor      :: SAST                                     -- ^ the current AST
-    , cl_pretty      :: String                                   -- ^ which pretty printer to use
-    , cl_pretty_opts :: PrettyOptions                            -- ^ the options for the pretty printer
-    , cl_render      :: Handle -> PrettyOptions -> DocH -> IO () -- ^ the way of outputing to the screen
-    , cl_height      :: Int                                      -- ^ console height, in lines
-    , cl_nav         :: Bool                                     -- ^ keyboard input the nav panel
-    , cl_loading     :: Bool                                     -- ^ if loading a file
-    , cl_tick        :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
-    , cl_corelint    :: Bool                                     -- ^ if true, run Core Lint on module after each rewrite
-    , cl_failhard    :: Bool                                     -- ^ if true, abort on *any* failure
-    , cl_window      :: PathH                                    -- ^ path to beginning of window, always a prefix of focus path in kernel
+    { cl_cursor         :: SAST                                     -- ^ the current AST
+    , cl_pretty         :: String                                   -- ^ which pretty printer to use
+    , cl_pretty_opts    :: PrettyOptions                            -- ^ the options for the pretty printer
+    , cl_render         :: Handle -> PrettyOptions -> DocH -> IO () -- ^ the way of outputing to the screen
+    , cl_height         :: Int                                      -- ^ console height, in lines
+    , cl_nav            :: Bool                                     -- ^ keyboard input the nav panel
+    , cl_running_script :: Bool                                     -- ^ if running a script
+    , cl_tick           :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
+    , cl_corelint       :: Bool                                     -- ^ if true, run Core Lint on module after each rewrite
+    , cl_failhard       :: Bool                                     -- ^ if true, abort on *any* failure
+    , cl_window         :: PathH                                    -- ^ path to beginning of window, always a prefix of focus path in kernel
     -- these four should be in a reader
-    , cl_dict        :: Dictionary
-    , cl_scripts     :: [(ScriptName,Script)]
-    , cl_kernel      :: ScopedKernel
-    , cl_initSAST    :: SAST
+    , cl_dict           :: Dictionary
+    , cl_scripts        :: [(ScriptName,Script)]
+    , cl_kernel         :: ScopedKernel
+    , cl_initSAST       :: SAST
     -- and the version store
-    , cl_version     :: VersionStore
+    , cl_version        :: VersionStore
     }
 
 type ScriptName = String
