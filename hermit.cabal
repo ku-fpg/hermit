@@ -168,57 +168,57 @@ Library
        HERMIT
        HERMIT.Driver
 
-       Language.HERMIT.Context
-       Language.HERMIT.Core
-       Language.HERMIT.Dictionary
-       Language.HERMIT.External
-       Language.HERMIT.GHC
-       Language.HERMIT.Interp
-       Language.HERMIT.Kernel
-       Language.HERMIT.Kernel.Scoped
-       Language.HERMIT.Kure
-       Language.HERMIT.Kure.SumTypes
-       Language.HERMIT.Monad
-       Language.HERMIT.Optimize
-       Language.HERMIT.Parser
-       Language.HERMIT.ParserCore
+       HERMIT.Context
+       HERMIT.Core
+       HERMIT.Dictionary
+       HERMIT.External
+       HERMIT.GHC
+       HERMIT.Interp
+       HERMIT.Kernel
+       HERMIT.Kernel.Scoped
+       HERMIT.Kure
+       HERMIT.Kure.SumTypes
+       HERMIT.Monad
+       HERMIT.Optimize
+       HERMIT.Parser
+       HERMIT.ParserCore
 
-       Language.HERMIT.Plugin
+       HERMIT.Plugin
 
-       Language.HERMIT.Primitive.AlphaConversion
-       Language.HERMIT.Primitive.Common
-       Language.HERMIT.Primitive.Composite
-       Language.HERMIT.Primitive.Debug
-       Language.HERMIT.Primitive.FixPoint
-       Language.HERMIT.Primitive.Fold
-       Language.HERMIT.Primitive.Function
-       Language.HERMIT.Primitive.GHC
-       Language.HERMIT.Primitive.Inline
-       Language.HERMIT.Primitive.Kure
-       Language.HERMIT.Primitive.Local
-       Language.HERMIT.Primitive.Local.Bind
-       Language.HERMIT.Primitive.Local.Case
-       Language.HERMIT.Primitive.Local.Cast
-       Language.HERMIT.Primitive.Local.Let
-       Language.HERMIT.Primitive.Navigation
-       Language.HERMIT.Primitive.Navigation.Crumbs
-       Language.HERMIT.Primitive.New
-       Language.HERMIT.Primitive.Unfold
-       Language.HERMIT.Primitive.Unsafe
+       HERMIT.Primitive.AlphaConversion
+       HERMIT.Primitive.Common
+       HERMIT.Primitive.Composite
+       HERMIT.Primitive.Debug
+       HERMIT.Primitive.FixPoint
+       HERMIT.Primitive.Fold
+       HERMIT.Primitive.Function
+       HERMIT.Primitive.GHC
+       HERMIT.Primitive.Inline
+       HERMIT.Primitive.Kure
+       HERMIT.Primitive.Local
+       HERMIT.Primitive.Local.Bind
+       HERMIT.Primitive.Local.Case
+       HERMIT.Primitive.Local.Cast
+       HERMIT.Primitive.Local.Let
+       HERMIT.Primitive.Navigation
+       HERMIT.Primitive.Navigation.Crumbs
+       HERMIT.Primitive.New
+       HERMIT.Primitive.Unfold
+       HERMIT.Primitive.Unsafe
 
-       Language.HERMIT.PrettyPrinter.AST
-       Language.HERMIT.PrettyPrinter.Clean
-       Language.HERMIT.PrettyPrinter.Common
-       Language.HERMIT.PrettyPrinter.GHC
+       HERMIT.PrettyPrinter.AST
+       HERMIT.PrettyPrinter.Clean
+       HERMIT.PrettyPrinter.Common
+       HERMIT.PrettyPrinter.GHC
 
-       Language.HERMIT.Shell.Command
-       Language.HERMIT.Shell.Externals
-       Language.HERMIT.Shell.ImportR
-       Language.HERMIT.Shell.Renderer
-       Language.HERMIT.Shell.Types
+       HERMIT.Shell.Command
+       HERMIT.Shell.Externals
+       HERMIT.Shell.ImportR
+       HERMIT.Shell.Renderer
+       HERMIT.Shell.Types
 
   Other-modules:
-       Language.HERMIT.Syntax
+       HERMIT.Syntax
 
        Paths_hermit
 
