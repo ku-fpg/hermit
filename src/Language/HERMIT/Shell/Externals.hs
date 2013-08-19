@@ -2,15 +2,10 @@
 
 module Language.HERMIT.Shell.Externals where
 
-import qualified GhcPlugins as GHC
-
-import Control.Concurrent.STM
-import Control.Monad.State
-import Control.Monad.Error
+import Control.Applicative
 
 import Data.Monoid
 import Data.List (intercalate)
-import Data.Dynamic
 import qualified Data.Map as M
 
 import Language.HERMIT.Context
@@ -22,101 +17,14 @@ import Language.HERMIT.Kernel.Scoped
 import Language.HERMIT.Parser
 import Language.HERMIT.PrettyPrinter.Common
 
-import System.Console.ANSI
-import System.IO
-
+import Language.HERMIT.Shell.Renderer
+import Language.HERMIT.Shell.Types
 
 ----------------------------------------------------------------------------------
 
--- There are 4 types of commands, AST effect-ful, Shell effect-ful, Queries, and Meta-commands.
-
-data ShellCommand =  AstEffect   AstEffect
-                  |  ShellEffect ShellEffect
-                  |  QueryFun    QueryFun
-                  |  MetaCommand MetaCommand
-
--- GADTs can't have docs on constructors. See Haddock ticket #43.
--- | AstEffects are things that are recorded in our log and saved files.
---   - Apply a rewrite (giving a whole new lower-level AST).
---   - Change the current location using a computed path.
---   - Change the currect location using directions.
---   - Begin or end a scope.
---   - Add a tag.
---   - Run a precondition or other predicate that must not fail.
-data AstEffect :: * where
-   Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> AstEffect
-   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g LocalPathH -> AstEffect
-   Direction  ::                                                Direction               -> AstEffect
---   PushFocus Path -- This changes the current location using a give path
-   BeginScope ::                                                                           AstEffect
-   EndScope   ::                                                                           AstEffect
-   Tag        :: String                                                                 -> AstEffect
-   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g () -> AstEffect
-   deriving Typeable
-
-instance Extern AstEffect where
-   type Box AstEffect = AstEffect
-   box i = i
-   unbox i = i
-
-data ShellEffect :: * where
-   SessionStateEffect    :: (CommandLineState -> IO CommandLineState) -> ShellEffect
-   deriving Typeable
-
-data QueryFun :: * where
-   QueryString   :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g String                             -> QueryFun
-   QueryDocH     ::                                     (PrettyC -> PrettyH CoreTC -> TranslateH CoreTC DocH)      -> QueryFun
-   -- These two be can generalized into
-   --  (CommandLineState -> IO String)
-   Display       ::                                                                                                   QueryFun
-   Message       ::                                                String                                          -> QueryFun
-   Inquiry       ::                                                (CommandLineState -> IO String) -> QueryFun
-   deriving Typeable
-
-instance Extern QueryFun where
-   type Box QueryFun = QueryFun
-   box i = i
-   unbox i = i
-
-data MetaCommand
-   = Resume
-   | Abort
-   | Dump String String String Int
-   | LoadFile FilePath  -- load a file on top of the current node
-   | SaveFile FilePath
-   | ImportR FilePath ExternalName
-   | Delete SAST
-   deriving Typeable
-
-instance Extern MetaCommand where
-    type Box MetaCommand = MetaCommand
-    box i = i
-    unbox i = i
-
--- TODO: Use another word, Navigation is a more general concept
--- Perhaps VersionNavigation
-data Navigation = Back                  -- back (up) the derivation tree
-                | Step                  -- down one step; assumes only one choice
-                | Goto Int              -- goto a specific node, if possible
-                | GotoTag String        -- goto a specific named tag
-        deriving Show
-
-data ShellCommandBox = ShellCommandBox ShellCommand deriving Typeable
-
-instance Extern ShellEffect where
-    type Box ShellEffect = ShellEffect
-    box i = i
-    unbox i = i
-
-instance Extern ShellCommand where
-    type Box ShellCommand = ShellCommandBox
-    box = ShellCommandBox
-    unbox (ShellCommandBox i) = i
-
 interpShellCommand :: [Interp ShellCommand]
 interpShellCommand =
-  [ interp $ \ (ShellCommandBox cmd)         -> cmd
-  , interp $ \ (RewriteCoreBox rr)           -> AstEffect (Apply rr)
+  [ interp $ \ (RewriteCoreBox rr)           -> AstEffect (Apply rr)
   , interp $ \ (RewriteCoreTCBox rr)         -> AstEffect (Apply rr)
   , interp $ \ (BiRewriteCoreBox br)         -> AstEffect (Apply $ forewardT br)
   , interp $ \ (CrumbBox cr)                 -> AstEffect (Pathfinder (return (mempty @@ cr) :: TranslateH CoreTC LocalPathH))
@@ -132,13 +40,6 @@ interpShellCommand =
   , interp $ \ (query :: QueryFun)           -> QueryFun query
   , interp $ \ (meta :: MetaCommand)         -> MetaCommand meta
   ]
--- TODO: move this into the shell, it is completely specific to the way
--- the shell works. What about list, for example?
-
---interpKernelCommand :: [Interp KernelCommand]
---interpKernelCommand =
---             [ Interp $ \ (KernelCommandBox cmd)      -> cmd
---             ]
 
 shell_externals :: [External]
 shell_externals = map (.+ Shell)
@@ -149,7 +50,7 @@ shell_externals = map (.+ Shell)
        [ "hard UNIX-style exit; does not return to GHC; does not save" ]
    , external "gc"              (Delete . SAST)
        [ "garbage-collect a given AST; does not remove from command log" ]
-   , external "gc"              (SessionStateEffect gc)
+   , external "gc"              (CLSModify gc)
        [ "garbage-collect all ASTs except for the initial and current AST" ]
    , external "display"         Display
        [ "redisplays current state" ]
@@ -163,35 +64,37 @@ shell_externals = map (.+ Shell)
        [ "move to the first child"]
    , external "tag"             Tag
        [ "tag <label> names the current AST with a label" ]
-   , external "navigate"        (SessionStateEffect $ \ st -> return $ st { cl_nav = True })
+   , external "navigate"        (CLSModify $ \ st -> return $ st { cl_nav = True })
        [ "switch to navigate mode" ]
-   , external "command-line"    (SessionStateEffect $ \ st -> return $ st { cl_nav = False })
+   , external "command-line"    (CLSModify $ \ st -> return $ st { cl_nav = False })
        [ "switch to command line mode" ]
+   , external "set-window"      (CLSModify setWindow)
+       [ "fix the window to the current focus" ]
    , external "top"             (Direction T)
        [ "move to root of current scope" ]
-   , external "back"            (SessionStateEffect $ navigation Back)
+   , external "back"            (CLSModify $ navigation Back)
        [ "go back in the derivation" ]                                          .+ VersionControl
    , external "log"             (Inquiry showDerivationTree)
        [ "go back in the derivation" ]                                          .+ VersionControl
-   , external "step"            (SessionStateEffect $ navigation Step)
+   , external "step"            (CLSModify $ navigation Step)
        [ "step forward in the derivation" ]                                     .+ VersionControl
-   , external "goto"            (SessionStateEffect . navigation . Goto)
+   , external "goto"            (CLSModify . navigation . Goto)
        [ "goto a specific step in the derivation" ]                             .+ VersionControl
-   , external "goto"            (SessionStateEffect . navigation . GotoTag)
+   , external "goto"            (CLSModify . navigation . GotoTag)
        [ "goto a named step in the derivation" ]
-   , external "set-fail-hard" (\ bStr -> SessionStateEffect $ \ st ->
+   , external "set-fail-hard" (\ bStr -> CLSModify $ \ st ->
         case reads bStr of
             [(b,"")] -> return $ st { cl_failhard = b }
             _        -> return st )
        [ "set-fail-hard <True|False>; False by default"
        , "any rewrite failure causes compilation to abort" ]
-   , external "set-auto-corelint" (\ bStr -> SessionStateEffect $ \ st ->
+   , external "set-auto-corelint" (\ bStr -> CLSModify $ \ st ->
         case reads bStr of
             [(b,"")] -> return $ st { cl_corelint = b }
             _        -> return st )
        [ "set-auto-corelint <True|False>; False by default"
        , "run core lint type-checker after every rewrite, reverting on failure" ]
-   , external "set-pp"           (\ pp -> SessionStateEffect $ \ st ->
+   , external "set-pp"           (\ pp -> CLSModify $ \ st ->
        case M.lookup pp pp_dictionary of
          Nothing -> do
             putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
@@ -205,15 +108,15 @@ shell_externals = map (.+ Shell)
        [ "set the output renderer mode"]
    , external "dump"    Dump
        [ "dump <filename> <pretty-printer> <renderer> <width>"]
-   , external "set-pp-width" (\ w -> SessionStateEffect $ \ st ->
+   , external "set-pp-width" (\ w -> CLSModify $ \ st ->
         return $ st { cl_pretty_opts = updateWidthOption w (cl_pretty_opts st) })
        ["set the width of the screen"]
-   , external "set-pp-type" (\ str -> SessionStateEffect $ \ st ->
+   , external "set-pp-type" (\ str -> CLSModify $ \ st ->
         case reads str :: [(ShowOption,String)] of
             [(opt,"")] -> return $ st { cl_pretty_opts = updateTypeShowOption opt (cl_pretty_opts st) }
             _          -> return st)
        ["set how to show expression-level types (Show|Abstact|Omit)"]
-   , external "set-pp-coercion" (\ str -> SessionStateEffect $ \ st ->
+   , external "set-pp-coercion" (\ str -> CLSModify $ \ st ->
         case reads str :: [(ShowOption,String)] of
             [(opt,"")] -> return $ st { cl_pretty_opts = updateCoShowOption opt (cl_pretty_opts st) }
             _          -> return st)
@@ -231,15 +134,6 @@ shell_externals = map (.+ Shell)
        ,"Note that there are significant limitations on the commands the script may contain."] .+ Experiment .+ TODO
    ]
 
-showRenderers :: QueryFun
-showRenderers = Message $ "set-renderer " ++ show (map fst finalRenders)
-
-changeRenderer :: String -> ShellEffect
-changeRenderer renderer = SessionStateEffect $ \ st ->
-        case lookup renderer finalRenders of
-          Nothing -> return st          -- TODO: should fail with message
-          Just r  -> return $ st { cl_render = r }
-
 gc :: CommandLineState -> IO CommandLineState
 gc st = do
     let k = cl_kernel st
@@ -251,91 +145,10 @@ gc st = do
 
 ----------------------------------------------------------------------------------
 
-type CLM m a = ErrorT String (StateT CommandLineState m) a
-
--- TODO: Come up with names for these, and/or better characterise these abstractions.
-iokm2clm' :: MonadIO m => String -> (a -> CLM m b) -> IO (KureM a) -> CLM m b
-iokm2clm' msg ret m = liftIO m >>= runKureM ret (throwError . (msg ++))
-
-iokm2clm :: MonadIO m => String -> IO (KureM a) -> CLM m a
-iokm2clm msg = iokm2clm' msg return
-
-iokm2clm'' :: MonadIO m => IO (KureM a) -> CLM m a
-iokm2clm'' = iokm2clm ""
-
-data VersionStore = VersionStore
-    { vs_graph       :: [(SAST,ExprH,SAST)]
-    , vs_tags        :: [(String,SAST)]
-    }
-
-newSAST :: ExprH -> SAST -> CommandLineState -> CommandLineState
-newSAST expr sast st = st { cl_cursor = sast
-                          , cl_version = (cl_version st) { vs_graph = (cl_cursor st, expr, sast) : vs_graph (cl_version st) }
-                          }
-
--- Session-local issues; things that are never saved.
-data CommandLineState = CommandLineState
-    { cl_cursor      :: SAST                                     -- ^ the current AST
-    , cl_pretty      :: String                                   -- ^ which pretty printer to use
-    , cl_pretty_opts :: PrettyOptions                            -- ^ the options for the pretty printer
-    , cl_render      :: Handle -> PrettyOptions -> DocH -> IO () -- ^ the way of outputing to the screen
-    , cl_nav         :: Bool                                     -- ^ keyboard input the nav panel
-    , cl_loading     :: Bool                                     -- ^ if loading a file
-    , cl_tick        :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
-    , cl_corelint    :: Bool                                     -- ^ if true, run Core Lint on module after each rewrite
-    , cl_failhard    :: Bool                                     -- ^ if true, abort on *any* failure
-    -- these four should be in a reader
-    , cl_dict        :: Dictionary
-    , cl_scripts     :: [(ScriptName,Script)]
-    , cl_kernel      :: ScopedKernel
-    , cl_initSAST    :: SAST
-    -- and the version store
-    , cl_version     :: VersionStore
-    }
-
-type ScriptName = String
-type Script = [ExprH]
-
--------------------------------------------------------------------------------
-
-newtype UnicodeTerminal = UnicodeTerminal (Handle -> Maybe PathH -> IO ())
-
-instance RenderSpecial UnicodeTerminal where
-        renderSpecial sym = UnicodeTerminal $ \ h _ -> hPutStr h [ch]
-                where (Unicode ch) = renderSpecial sym
-
-instance Monoid UnicodeTerminal where
-        mempty = UnicodeTerminal $ \ _ _ -> return ()
-        mappend (UnicodeTerminal f1) (UnicodeTerminal f2) = UnicodeTerminal $ \ h p -> f1 h p >> f2 h p
-
-finalRenders :: [(String,Handle -> PrettyOptions -> DocH -> IO ())]
-finalRenders =
-        [ ("unicode-terminal", unicodeConsole)
-        ] ++ coreRenders
-
-unicodeConsole :: Handle -> PrettyOptions -> DocH -> IO ()
-unicodeConsole h opts doc = do
-    let (UnicodeTerminal prty) = renderCode opts doc
-    prty h Nothing
-
-instance RenderCode UnicodeTerminal where
-        rPutStr txt  = UnicodeTerminal $ \ h _ -> hPutStr h txt
-
-        rDoHighlight _ [] = UnicodeTerminal $ \ h _ -> hSetSGR h [Reset]
-        rDoHighlight _ (Color col:_) = UnicodeTerminal $ \ h _ -> do
-                hSetSGR h [ Reset ]
-                hSetSGR h $ case col of
-                        KeywordColor  -> [ SetConsoleIntensity BoldIntensity
-                                         , SetColor Foreground Dull Blue
-                                         ]
-                        SyntaxColor   -> [ SetColor Foreground Dull Red ]
-                        IdColor       -> []   -- as is
-                        CoercionColor -> [ SetColor Foreground Dull Yellow ]
-                        TypeColor     -> [ SetColor Foreground Dull Green ]
-                        LitColor      -> [ SetColor Foreground Dull Cyan ]
-                        WarningColor  -> [ SetSwapForegroundBackground True, SetColor Foreground Vivid Yellow ]
-        rDoHighlight o (_:rest) = rDoHighlight o rest
-        rEnd = UnicodeTerminal $ \ h _ -> hPutStrLn h ""
+setWindow :: CommandLineState -> IO CommandLineState
+setWindow st = do
+    paths <- runKureM concat fail <$> pathS (cl_kernel st) (cl_cursor st)
+    return $ st { cl_window = paths }
 
 --------------------------------------------------------
 

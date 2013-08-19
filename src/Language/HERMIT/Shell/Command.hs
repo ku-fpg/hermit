@@ -39,13 +39,16 @@ import Language.HERMIT.Primitive.Navigation
 
 import Language.HERMIT.Shell.Externals
 import Language.HERMIT.Shell.ImportR
+import Language.HERMIT.Shell.Renderer
+import Language.HERMIT.Shell.Types
 
 import System.IO
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
+-- import System.Console.ANSI
 import System.Console.Haskeline hiding (catch)
-import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns)
+import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, termLines)
 
 ----------------------------------------------------------------------------------
 
@@ -57,15 +60,35 @@ pretty st = case M.lookup (cl_pretty st) pp_dictionary of
                 Just pp -> pp
                 Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty st ++ ">>")
 
-showFocus :: MonadIO m => CLM m ()
-showFocus = do
+fixWindow :: MonadIO m => CLM m ()
+fixWindow = do
     st <- get
+    -- check to make sure new path is still inside window
+    focusPath <- getFocusPath
+    -- move the window in two cases:
+    --  1. window path is not prefix of focus path
+    --  2. window path is empty (since at the top level we only show type sigs)
+    {- when (not (isPrefixOf (cl_window st) focusPath) || null (cl_window st))
+       $ put $ st { cl_window = focusPath } -}
+    put $ st { cl_window = focusPath } -- TODO: temporary until we figure out a better highlight interface
+
+getFocusPath :: MonadIO m => CLM m PathH
+getFocusPath = get >>= \ st -> liftM concat $ iokm2clm "getFocusPath - pathS failed: " $ pathS (cl_kernel st) (cl_cursor st)
+
+showWindow :: MonadIO m => CLM m ()
+showWindow = do
+    fixWindow
+    st <- get
+    focusPath <- getFocusPath
+    let skernel = cl_kernel st
+        ppOpts = (cl_pretty_opts st) { po_focus = Just focusPath }
     -- No not show focus while loading
     ifM (gets cl_loading)
         (return ())
         (iokm2clm' "Rendering error: "
-                   (liftIO . cl_render st stdout (cl_pretty_opts st))
-                   (queryS (cl_kernel st) (cl_cursor st) (liftPrettyH (cl_pretty_opts st) $ pretty st) (cl_kernel_env st))
+                   (liftIO . cl_render st stdout ppOpts)
+                   (toASTS skernel (cl_cursor st) >>= liftKureM >>= \ ast ->
+                        queryK (kernelS skernel) ast (extractT $ pathT (cl_window st) $ liftPrettyH ppOpts $ pretty st) (cl_kernel_env st))
         )
 
 -------------------------------------------------------------------------------
@@ -141,10 +164,12 @@ banner = unlines
     , "=============================================================="
     ]
 
-getTerminalWidth :: IO Int
-getTerminalWidth = do
+getTermDimensions :: IO (Int, Int)
+getTermDimensions = do
     term <- setupTermFromEnv
-    return $ fromMaybe 80 $ getCapability term termColumns
+    let w = fromMaybe 80 $ getCapability term termColumns
+        h = fromMaybe 30 $ getCapability term termLines
+    return (w,h)
 
 -- | The first argument includes a list of files to load.
 commandLine :: [GHC.CommandLineOption] -> Behavior -> [External] -> ScopedKernel -> SAST -> IO ()
@@ -168,18 +193,20 @@ commandLine opts behavior exts skernel sast = do
             setLoading False
 
     var <- GHC.liftIO $ atomically $ newTVar M.empty
-    w <- getTerminalWidth
+    (w,h) <- getTermDimensions
 
     let shellState = CommandLineState
                        { cl_cursor      = sast
                        , cl_pretty      = "clean"
-                       , cl_pretty_opts = def { po_width = w}
+                       , cl_pretty_opts = def { po_width = w }
                        , cl_render      = unicodeConsole
+                       , cl_height      = h
                        , cl_nav         = False
                        , cl_loading     = False
                        , cl_tick        = var
                        , cl_corelint    = False
                        , cl_failhard    = False
+                       , cl_window      = mempty
                        , cl_dict        = dict
                        , cl_scripts     = []
                        , cl_kernel      = skernel
@@ -194,7 +221,7 @@ commandLine opts behavior exts skernel sast = do
 
     _ <- runInputTBehavior behavior
                 (setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings)
-                (evalStateT (runErrorT (startup >> showFocus >> loop completionMVar)) shellState)
+                (evalStateT (runErrorT (startup >> showWindow >> loop completionMVar)) shellState)
 
     return ()
 
@@ -208,7 +235,12 @@ loop completionMVar = loop'
             let SAST n = cl_cursor st
             maybeLine <- if cl_nav st
                            then liftIO getNavCmd
-                           else lift $ lift $ getInputLine $ "hermit<" ++ show n ++ "> "
+                           else do {- TODO: for an inplace CLI...
+                                   liftIO $ do setCursorPosition (cl_height st - 3) 0
+                                               setSGR [ SetSwapForegroundBackground True ]
+                                               putStrLn $ replicate (po_width (cl_pretty_opts st)) ' '
+                                               setSGR [ SetSwapForegroundBackground False ] -}
+                                   lift $ lift $ getInputLine $ "hermit<" ++ show n ++ "> "
 
             case maybeLine of
                 Nothing             -> performMetaCommand Resume
@@ -252,8 +284,8 @@ evalExpr expr = do
 
 -------------------------------------------------------------------------------
 
--- TODO: This can be refactored. We always showFocus. Also, Perhaps return a modifier, not ()
---   UPDATE: Not true.  We don't always showFocus.
+-- TODO: This can be refactored. We always showWindow. Also, Perhaps return a modifier, not ()
+--   UPDATE: Not true.  We don't always showWindow.
 -- TODO: All of these should through an exception if they fail to execute the command as given.
 
 performAstEffect :: MonadIO m => AstEffect -> ExprH -> CLM m ()
@@ -265,7 +297,7 @@ performAstEffect (Apply rr) expr = do
 
     sast' <- iokm2clm "Rewrite failed: " $ applyS sk (cl_cursor st) rr kEnv
 
-    let commit = put (newSAST expr sast' st) >> showFocus
+    let commit = put (newSAST expr sast' st) >> showWindow
 
     if cl_corelint st
         then do ast' <- iokm2clm'' $ toASTS sk sast'
@@ -280,27 +312,26 @@ performAstEffect (Pathfinder t) expr = do
     iokm2clm' "Cannot find path: "
               (\ p -> do ast <- iokm2clm "Path is invalid: " $ modPathS (cl_kernel st) (cl_cursor st) (<> p) (cl_kernel_env st)
                          put $ newSAST expr ast st
-                         showFocus)
+                         showWindow)
               (queryS (cl_kernel st) (cl_cursor st) t (cl_kernel_env st))
 
 performAstEffect (Direction dir) expr = do
     st <- get
     ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor st) (moveLocally dir) (cl_kernel_env st)
     put $ newSAST expr ast st
-    -- something changed, to print
-    showFocus
+    showWindow
 
 performAstEffect BeginScope expr = do
         st <- get
         ast <- iokm2clm'' $ beginScopeS (cl_kernel st) (cl_cursor st)
         put $ newSAST expr ast st
-        showFocus
+        showWindow
 
 performAstEffect EndScope expr = do
         st <- get
         ast <- iokm2clm'' $ endScopeS (cl_kernel st) (cl_cursor st)
         put $ newSAST expr ast st
-        showFocus
+        showWindow
 
 performAstEffect (Tag tag) _ = do
         st <- get
@@ -316,12 +347,12 @@ performAstEffect (CorrectnessCritera q) expr = do
 -------------------------------------------------------------------------------
 
 performShellEffect :: MonadIO m => ShellEffect -> CLM m ()
-performShellEffect (SessionStateEffect f) = do
-        st <- get
-        opt <- liftIO (fmap Right (f st) `catch` \ str -> return (Left str))
-        case opt of
-          Right st' -> put st' >> showFocus
-          Left err  -> throwError err
+performShellEffect (CLSModify f) = do
+    st <- get
+    opt <- liftIO (fmap Right (f st) `catch` \ str -> return (Left str))
+    case opt of
+        Right st' -> put st' >> showWindow
+        Left err  -> throwError err
 
 -------------------------------------------------------------------------------
 
@@ -349,7 +380,7 @@ performQuery (Message msg) = liftIO (putStrLn msg)
 performQuery Display = do
     load_st <- gets cl_loading
     setLoading False
-    showFocus
+    showWindow
     setLoading load_st
 
 -------------------------------------------------------------------------------
@@ -380,7 +411,7 @@ performMetaCommand (LoadFile fileName) = do
        evalStmts stmts `catchError` (\ err -> setLoading load_st >> throwError err)
        setLoading load_st
        putStrToConsole $ "[done, loaded " ++ show (length stmts) ++  " commands]"
-       showFocus
+       showWindow
 
 performMetaCommand (SaveFile fileName) = do
         st <- get

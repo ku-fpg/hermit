@@ -17,7 +17,7 @@ import Language.HERMIT.Kure
 import Language.HERMIT.External
 import Language.HERMIT.Interp
 
-import Language.HERMIT.Shell.Externals
+import Language.HERMIT.Shell.Types
 
 ------------------------------------
 

@@ -214,6 +214,8 @@ Library
        Language.HERMIT.Shell.Command
        Language.HERMIT.Shell.Externals
        Language.HERMIT.Shell.ImportR
+       Language.HERMIT.Shell.Renderer
+       Language.HERMIT.Shell.Types
 
   Other-modules:
        Language.HERMIT.Syntax
