@@ -142,7 +142,11 @@ shell_externals = map (.+ Shell)
    , external "define-script" DefineScript
        ["Define a new HERMIT script and bind it to a name."
        ,"Note that any names in the script will not be resolved until the script is *run*."
-       ,"Example usage: define-script \"MyScriptName\" \"let-subst >>> bash\""]
+       ,"Example usage: define-script \"MyScriptName\" \"any-td beta-reduce ; let-subst ; bash\""]
+   , external "define-rewrite" (\ name str -> SeqMeta [DefineScript name str, ScriptToRewrite name])
+       ["Define a new HERMIT rewrite and bind it to a name."
+       ,"Note that this also saves the input script under the same name."
+       ,"Example usage: define-rewrite \"MyRewriteName\" \"let-subst >>> bash\""]
    , external "run-script" RunScript
        ["Run a pre-loaded (or manually defined) HERMIT script."
        ,"Note that any names in the script will not be resolved until the script is *run*." ]
