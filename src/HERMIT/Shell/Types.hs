@@ -64,9 +64,12 @@ data QueryFun :: * where
    -- These two be can generalized into
    --  (CommandLineState -> IO String)
    Display       ::                                                                                                   QueryFun
-   Message       ::                                                String                                          -> QueryFun
+--   Message       ::                                                String                                          -> QueryFun
    Inquiry       ::                                                (CommandLineState -> IO String) -> QueryFun
    deriving Typeable
+
+message :: String -> QueryFun
+message str = Inquiry (const $ return str)
 
 instance Extern QueryFun where
    type Box QueryFun = QueryFun

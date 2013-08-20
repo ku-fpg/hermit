@@ -13,7 +13,7 @@ import System.IO
 
 
 showRenderers :: QueryFun
-showRenderers = Message $ "set-renderer " ++ show (map fst finalRenders)
+showRenderers = message $ "set-renderer " ++ show (map fst finalRenders)
 
 changeRenderer :: String -> ShellEffect
 changeRenderer renderer = CLSModify $ \ st ->

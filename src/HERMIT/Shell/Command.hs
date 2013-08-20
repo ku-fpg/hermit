@@ -375,7 +375,7 @@ performQuery (Inquiry f) = do
     putStrToConsole str
 
 -- These two need to use Inquiry
-performQuery (Message msg) = liftIO (putStrLn msg)
+-- performQuery (Message msg) = liftIO (putStrLn msg)
 -- Explicit calls to display should work no matter what the loading state is.
 performQuery Display = do
     running_script_st <- gets cl_running_script

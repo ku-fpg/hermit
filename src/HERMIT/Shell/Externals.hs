@@ -30,7 +30,7 @@ interpShellCommand =
   , interp $ \ (CrumbBox cr)                 -> AstEffect (Pathfinder (return (mempty @@ cr) :: TranslateH CoreTC LocalPathH))
   , interp $ \ (PathBox p)                   -> AstEffect (Pathfinder (return p :: TranslateH CoreTC LocalPathH))
   , interp $ \ (TranslateCorePathBox tt)     -> AstEffect (Pathfinder tt)
-  , interp $ \ (StringBox str)               -> QueryFun (Message str)
+  , interp $ \ (StringBox str)               -> QueryFun (message str)
   , interp $ \ (TranslateCoreStringBox tt)   -> QueryFun (QueryString tt)
   , interp $ \ (TranslateCoreTCStringBox tt) -> QueryFun (QueryString tt)
   , interp $ \ (TranslateCoreTCDocHBox tt)   -> QueryFun (QueryDocH $ unTranslateDocH tt)
