@@ -131,6 +131,8 @@ shell_externals = map (.+ Shell)
        ["load-and-run <file-name> : load a HERMIT script from a file and run it immediately."]
    , external "save"  SaveFile
        ["save <filename> : save the current complete derivation into a file."]
+   , external "save-script" SaveScript
+       ["save-script <filename> <script name> : save a loaded or manually defined script to a file." ]
    , external "load-as-rewrite" (\ rewriteName fileName -> SeqMeta [LoadFile rewriteName fileName, ScriptToRewrite rewriteName])
        ["load-as-rewrite <rewrite-name> <filepath> : load a HERMIT script from a file, and create a rewrite with the same name."
        ,"Note that there are significant limitations on the commands the script may contain."] .+ Experiment .+ TODO

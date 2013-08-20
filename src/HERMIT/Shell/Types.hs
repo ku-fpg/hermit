@@ -82,6 +82,7 @@ data MetaCommand
    | ScriptToRewrite ScriptName
    | DefineScript ScriptName String
    | RunScript ScriptName
+   | SaveScript FilePath ScriptName
    | Delete SAST
    | SeqMeta [MetaCommand]
    deriving Typeable

@@ -446,6 +446,14 @@ performMetaCommand (RunScript scriptName) =
                          putStrToConsole ("Script \"" ++ scriptName ++ "\" ran successfully.")
                          showWindow
 
+performMetaCommand (SaveScript fileName scriptName) =
+  do st <- get
+     case lookup scriptName (cl_scripts st) of
+       Nothing     -> throwError ("No script of name " ++ scriptName ++ " is loaded.")
+       Just script -> do putStrToConsole $ "Saving script \"" ++ scriptName ++ "\" to file \"" ++ fileName ++ "\"."
+                         liftIO $ writeFile fileName $ intercalate " ; " $ map unparseExprH script
+                         putStrToConsole $ "Save successful."
+
 -------------------------------------------------------------------------------
 
 putStrToConsole :: MonadIO m => String -> CLM m ()
