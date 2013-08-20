@@ -40,7 +40,6 @@ data KernelEffect :: * where
    Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> KernelEffect
    Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g LocalPathH -> KernelEffect
    Direction  ::                                                Direction               -> KernelEffect
---   PushFocus Path -- This changes the current location using a give path
    BeginScope ::                                                                           KernelEffect
    EndScope   ::                                                                           KernelEffect
    CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g () -> KernelEffect
@@ -56,10 +55,11 @@ data ShellEffect :: * where
    deriving Typeable
 
 data QueryFun :: * where
-   QueryString   :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g String                             -> QueryFun
-   QueryDocH     ::                                     (PrettyC -> PrettyH CoreTC -> TranslateH CoreTC DocH)      -> QueryFun
-   Display       ::                                                                                                   QueryFun
-   Inquiry       ::                                                (CommandLineState -> IO String) -> QueryFun
+   QueryString   :: (Injection GHC.ModGuts g, Walker HermitC g)
+                 => TranslateH g String                                   -> QueryFun
+   QueryDocH     :: (PrettyC -> PrettyH CoreTC -> TranslateH CoreTC DocH) -> QueryFun
+   Display       ::                                                          QueryFun
+   Inquiry       :: (CommandLineState -> IO String)                       -> QueryFun
    deriving Typeable
 
 message :: String -> QueryFun
@@ -73,6 +73,7 @@ instance Extern QueryFun where
 data MetaCommand
    = Resume
    | Abort
+   | Delete SAST
    | Dump String String String Int
    | LoadFile ScriptName FilePath  -- load a file on top of the current node
    | SaveFile FilePath
@@ -80,7 +81,6 @@ data MetaCommand
    | DefineScript ScriptName String
    | RunScript ScriptName
    | SaveScript FilePath ScriptName
-   | Delete SAST
    | SeqMeta [MetaCommand]
    deriving Typeable
 
@@ -100,8 +100,6 @@ data VersionCmd = Back                  -- back (up) the derivation tree
                 | GotoTag String        -- goto a specific named tag
                 | AddTag String         -- add a tag
         deriving Show
-
-data ShellCommandBox = ShellCommandBox ShellCommand deriving Typeable
 
 instance Extern ShellEffect where
     type Box ShellEffect = ShellEffect
