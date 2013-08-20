@@ -23,34 +23,31 @@ import System.IO
 
 ----------------------------------------------------------------------------------
 
--- There are 4 types of commands, AST effect-ful, Shell effect-ful, Queries, and Meta-commands.
-
-data ShellCommand =  AstEffect   AstEffect
-                  |  ShellEffect ShellEffect
-                  |  QueryFun    QueryFun
-                  |  MetaCommand MetaCommand
+-- | There are four types of commands.
+data ShellCommand =  KernelEffect KernelEffect -- ^ Command that modifies the state of the (scoped) kernel.
+                  |  ShellEffect  ShellEffect  -- ^ Command that modifies the state of the shell.
+                  |  QueryFun     QueryFun     -- ^ Command that queries the AST with a Translate (read only).
+                  |  MetaCommand  MetaCommand  -- ^ Command that otherwise controls HERMIT (abort, resume, save, etc).
 
 -- GADTs can't have docs on constructors. See Haddock ticket #43.
--- | AstEffects are things that are recorded in our log and saved files.
+-- | KernelEffects are things that affect the state of the Kernel
 --   - Apply a rewrite (giving a whole new lower-level AST).
 --   - Change the current location using a computed path.
 --   - Change the currect location using directions.
 --   - Begin or end a scope.
---   - Add a tag.
 --   - Run a precondition or other predicate that must not fail.
-data AstEffect :: * where
-   Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> AstEffect
-   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g LocalPathH -> AstEffect
-   Direction  ::                                                Direction               -> AstEffect
+data KernelEffect :: * where
+   Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> KernelEffect
+   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g LocalPathH -> KernelEffect
+   Direction  ::                                                Direction               -> KernelEffect
 --   PushFocus Path -- This changes the current location using a give path
-   BeginScope ::                                                                           AstEffect
-   EndScope   ::                                                                           AstEffect
-   Tag        :: String                                                                 -> AstEffect
-   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g () -> AstEffect
+   BeginScope ::                                                                           KernelEffect
+   EndScope   ::                                                                           KernelEffect
+   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g () -> KernelEffect
    deriving Typeable
 
-instance Extern AstEffect where
-   type Box AstEffect = AstEffect
+instance Extern KernelEffect where
+   type Box KernelEffect = KernelEffect
    box i = i
    unbox i = i
 
@@ -61,10 +58,7 @@ data ShellEffect :: * where
 data QueryFun :: * where
    QueryString   :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g String                             -> QueryFun
    QueryDocH     ::                                     (PrettyC -> PrettyH CoreTC -> TranslateH CoreTC DocH)      -> QueryFun
-   -- These two be can generalized into
-   --  (CommandLineState -> IO String)
    Display       ::                                                                                                   QueryFun
---   Message       ::                                                String                                          -> QueryFun
    Inquiry       ::                                                (CommandLineState -> IO String) -> QueryFun
    deriving Typeable
 
@@ -100,12 +94,11 @@ instance Extern MetaCommand where
     box i = i
     unbox i = i
 
--- TODO: Use another word, Navigation is a more general concept
--- Perhaps VersionNavigation
-data Navigation = Back                  -- back (up) the derivation tree
+data VersionCmd = Back                  -- back (up) the derivation tree
                 | Step                  -- down one step; assumes only one choice
                 | Goto Int              -- goto a specific node, if possible
                 | GotoTag String        -- goto a specific named tag
+                | AddTag String         -- add a tag
         deriving Show
 
 data ShellCommandBox = ShellCommandBox ShellCommand deriving Typeable

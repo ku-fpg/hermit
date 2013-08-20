@@ -22,20 +22,21 @@ import HERMIT.Shell.Types
 
 ----------------------------------------------------------------------------------
 
+-- | Interpret a boxed thing as one of the four possible shell command types.
 interpShellCommand :: [Interp ShellCommand]
 interpShellCommand =
-  [ interp $ \ (RewriteCoreBox rr)           -> AstEffect (Apply rr)
-  , interp $ \ (RewriteCoreTCBox rr)         -> AstEffect (Apply rr)
-  , interp $ \ (BiRewriteCoreBox br)         -> AstEffect (Apply $ forewardT br)
-  , interp $ \ (CrumbBox cr)                 -> AstEffect (Pathfinder (return (mempty @@ cr) :: TranslateH CoreTC LocalPathH))
-  , interp $ \ (PathBox p)                   -> AstEffect (Pathfinder (return p :: TranslateH CoreTC LocalPathH))
-  , interp $ \ (TranslateCorePathBox tt)     -> AstEffect (Pathfinder tt)
+  [ interp $ \ (RewriteCoreBox rr)           -> KernelEffect (Apply rr)
+  , interp $ \ (RewriteCoreTCBox rr)         -> KernelEffect (Apply rr)
+  , interp $ \ (BiRewriteCoreBox br)         -> KernelEffect (Apply $ forewardT br)
+  , interp $ \ (CrumbBox cr)                 -> KernelEffect (Pathfinder (return (mempty @@ cr) :: TranslateH CoreTC LocalPathH))
+  , interp $ \ (PathBox p)                   -> KernelEffect (Pathfinder (return p :: TranslateH CoreTC LocalPathH))
+  , interp $ \ (TranslateCorePathBox tt)     -> KernelEffect (Pathfinder tt)
   , interp $ \ (StringBox str)               -> QueryFun (message str)
   , interp $ \ (TranslateCoreStringBox tt)   -> QueryFun (QueryString tt)
   , interp $ \ (TranslateCoreTCStringBox tt) -> QueryFun (QueryString tt)
   , interp $ \ (TranslateCoreTCDocHBox tt)   -> QueryFun (QueryDocH $ unTranslateDocH tt)
-  , interp $ \ (TranslateCoreCheckBox tt)    -> AstEffect (CorrectnessCritera tt)
-  , interp $ \ (effect :: AstEffect)         -> AstEffect effect
+  , interp $ \ (TranslateCoreCheckBox tt)    -> KernelEffect (CorrectnessCritera tt)
+  , interp $ \ (effect :: KernelEffect)      -> KernelEffect effect
   , interp $ \ (effect :: ShellEffect)       -> ShellEffect effect
   , interp $ \ (query :: QueryFun)           -> QueryFun query
   , interp $ \ (meta :: MetaCommand)         -> MetaCommand meta
@@ -62,8 +63,6 @@ shell_externals = map (.+ Shell)
        [ "move to the parent node"]
    , external "down"            (deprecatedIntToPathT 0 :: TranslateH Core LocalPathH) -- TODO: short-term solution
        [ "move to the first child"]
-   , external "tag"             Tag
-       [ "tag <label> names the current AST with a label" ]
    , external "navigate"        (CLSModify $ \ st -> return $ st { cl_nav = True })
        [ "switch to navigate mode" ]
    , external "command-line"    (CLSModify $ \ st -> return $ st { cl_nav = False })
@@ -72,16 +71,18 @@ shell_externals = map (.+ Shell)
        [ "fix the window to the current focus" ]
    , external "top"             (Direction T)
        [ "move to root of current scope" ]
-   , external "back"            (CLSModify $ navigation Back)
+   , external "back"            (CLSModify $ versionCmd Back)
        [ "go back in the derivation" ]                                          .+ VersionControl
    , external "log"             (Inquiry showDerivationTree)
        [ "go back in the derivation" ]                                          .+ VersionControl
-   , external "step"            (CLSModify $ navigation Step)
+   , external "step"            (CLSModify $ versionCmd Step)
        [ "step forward in the derivation" ]                                     .+ VersionControl
-   , external "goto"            (CLSModify . navigation . Goto)
+   , external "goto"            (CLSModify . versionCmd . Goto)
        [ "goto a specific step in the derivation" ]                             .+ VersionControl
-   , external "goto"            (CLSModify . navigation . GotoTag)
+   , external "goto"            (CLSModify . versionCmd . GotoTag)
        [ "goto a named step in the derivation" ]
+   , external "tag"             (CLSModify . versionCmd . AddTag)
+       [ "tag <label> names the current AST with a label" ]                     .+ VersionControl
    , external "set-fail-hard" (\ bStr -> CLSModify $ \ st ->
         case reads bStr of
             [(b,"")] -> return $ st { cl_failhard = b }
@@ -173,33 +174,35 @@ setWindow st = do
 
 --------------------------------------------------------
 
-navigation :: Navigation -> CommandLineState -> IO CommandLineState
-navigation whereTo st =
+versionCmd :: VersionCmd -> CommandLineState -> IO CommandLineState
+versionCmd whereTo st =
     case whereTo of
-      Goto n -> do
-           all_nds <- listS (cl_kernel st)
-           if SAST n `elem` all_nds
-              then return $ st { cl_cursor = SAST n }
-              else fail $ "Cannot find AST #" ++ show n ++ "."
-      GotoTag tag -> case lookup tag (vs_tags (cl_version st)) of
-                       Just sast -> return $ st { cl_cursor = sast }
-                       Nothing   -> fail $ "Cannot find tag " ++ show tag ++ "."
-      Step -> do
-           let ns = [ edge | edge@(s,_,_) <- vs_graph (cl_version st), s == cl_cursor st ]
-           case ns of
-             [] -> fail "Cannot step forward (no more steps)."
-             [(_,cmd,d) ] -> do
-                           putStrLn $ "step : " ++ unparseExprH cmd
-                           return $ st { cl_cursor = d }
-             _ -> fail "Cannot step forward (multiple choices)"
-      Back -> do
-           let ns = [ edge | edge@(_,_,d) <- vs_graph (cl_version st), d == cl_cursor st ]
-           case ns of
-             []         -> fail "Cannot step backwards (no more steps)."
-             [(s,cmd,_) ] -> do
-                           putStrLn $ "back, unstepping : " ++ unparseExprH cmd
-                           return $ st { cl_cursor = s }
-             _          -> fail "Cannot step backwards (multiple choices, impossible!)."
+        Goto n -> do
+            all_nds <- listS (cl_kernel st)
+            if SAST n `elem` all_nds
+                then return $ st { cl_cursor = SAST n }
+                else fail $ "Cannot find AST #" ++ show n ++ "."
+        GotoTag tag -> case lookup tag (vs_tags (cl_version st)) of
+                        Just sast -> return $ st { cl_cursor = sast }
+                        Nothing   -> fail $ "Cannot find tag " ++ show tag ++ "."
+        Step -> do
+            let ns = [ edge | edge@(s,_,_) <- vs_graph (cl_version st), s == cl_cursor st ]
+            case ns of
+                [] -> fail "Cannot step forward (no more steps)."
+                [(_,cmd,d) ] -> do
+                    putStrLn $ "step : " ++ unparseExprH cmd
+                    return $ st { cl_cursor = d }
+                _ -> fail "Cannot step forward (multiple choices)"
+        Back -> do
+            let ns = [ edge | edge@(_,_,d) <- vs_graph (cl_version st), d == cl_cursor st ]
+            case ns of
+                []         -> fail "Cannot step backwards (no more steps)."
+                [(s,cmd,_) ] -> do
+                    putStrLn $ "back, unstepping : " ++ unparseExprH cmd
+                    return $ st { cl_cursor = s }
+                _          -> fail "Cannot step backwards (multiple choices, impossible!)."
+        AddTag tag -> do
+            return $ st { cl_version = (cl_version st) { vs_tags = (tag, cl_cursor st) : vs_tags (cl_version st) }}
 
 -------------------------------------------------------------------------------
 
