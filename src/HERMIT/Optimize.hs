@@ -18,6 +18,8 @@ module HERMIT.Optimize
     , allPhases
     , firstPhase
     , lastPhase
+      -- ** Types
+    , OM
     ) where
 
 import GhcPlugins hiding (singleton, liftIO, display)
