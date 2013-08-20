@@ -248,7 +248,7 @@ loop completionMVar = loop'
                 Just line           ->
                     if all isSpace line
                     then loop'
-                    else (case parseStmtsH line of
+                    else (case parseScript line of
                                 Left  msg   -> throwError ("Parse failure: " ++ msg)
                                 Right stmts -> evalStmts stmts)
                          `ourCatch` (liftIO . putStrLn)
@@ -410,7 +410,7 @@ performMetaCommand (LoadFile scriptName fileName) =
      res <- liftIO $ try (readFile fileName)
      case res of
        Left (err :: IOException) -> throwError ("IO error: " ++ show err)
-       Right str -> case parseStmtsH str of
+       Right str -> case parseScript str of
                       Left  msg    -> throwError ("Parse failure: " ++ msg)
                       Right script -> do modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
                                          putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
@@ -430,7 +430,7 @@ performMetaCommand (ScriptToRewrite scriptName) =
                          putStrToConsole ("Rewrite \"" ++ scriptName ++ "\" defined successfully.")
 
 performMetaCommand (DefineScript scriptName str) =
-  case parseStmtsH str of
+  case parseScript str of
     Left  msg    -> throwError ("Parse failure: " ++ msg)
     Right script -> do modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
                        putStrToConsole ("Script \"" ++ scriptName ++ "\" defined successfully.")
@@ -451,7 +451,7 @@ performMetaCommand (SaveScript fileName scriptName) =
      case lookup scriptName (cl_scripts st) of
        Nothing     -> throwError ("No script of name " ++ scriptName ++ " is loaded.")
        Just script -> do putStrToConsole $ "Saving script \"" ++ scriptName ++ "\" to file \"" ++ fileName ++ "\"."
-                         liftIO $ writeFile fileName $ intercalate " ; " $ map unparseExprH script
+                         liftIO $ writeFile fileName $ unparseScript script
                          putStrToConsole $ "Save successful."
 
 -------------------------------------------------------------------------------

@@ -150,6 +150,9 @@ shell_externals = map (.+ Shell)
    , external "run-script" RunScript
        ["Run a pre-loaded (or manually defined) HERMIT script."
        ,"Note that any names in the script will not be resolved until the script is *run*." ]
+   , external "display-scripts" displayScripts
+       ["Display all loaded scripts."]
+     -- TODO: maybe add a "list-scripts" as well that just lists the names of loaded scripts?
    ]
 
 gc :: CommandLineState -> IO CommandLineState
@@ -241,5 +244,13 @@ showGraph graph tags this@(SAST n) =
                 ])
   where
           paths = [ (b,c) | (a,b,c) <- graph, a == this ]
+
+-------------------------------------------------------------------------------
+
+displayScripts :: QueryFun
+displayScripts = Inquiry (return . showScripts . cl_scripts)
+
+showScripts :: [(ScriptName,Script)] -> String
+showScripts = concatMap (\ (name,script) -> name ++ ": " ++ unparseScript script ++ "\n\n")
 
 -------------------------------------------------------------------------------

@@ -1,8 +1,9 @@
 {
 module HERMIT.Parser
-    ( parseStmtsH
+    ( Script
+    , parseScript
+    , unparseScript
     , unparseExprH
-    , numStmtsH
     , ExprH(..)
     ) where
 
@@ -149,18 +150,18 @@ test = do
     case ln of
         "quit" -> return ()
         _      -> do print $ lexer ln
-                     print $ parseStmtsH ln
+                     print $ parseScript ln
                      test
 
-parseStmtsH :: String -> Either String [ExprH]
-parseStmtsH s = lexer s >>= parser
+type Script = [ExprH]
 
-numStmtsH :: [ExprH] -> Int
-numStmtsH = length . filter isCounted
-    where isCounted (CmdName "{") = False
-          isCounted (CmdName "}") = False
-          isCounted _             = True
+parseScript :: String -> Either String Script
+parseScript s = lexer s >>= parser
+
 ---------------------------------------------
+
+unparseScript :: Script -> String
+unparseScript = intercalate " ; " . map unparseExprH
 
 unparseExprH :: ExprH -> String
 unparseExprH (SrcName nm)

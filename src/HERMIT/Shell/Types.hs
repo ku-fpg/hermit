@@ -162,4 +162,3 @@ data CommandLineState = CommandLineState
     }
 
 type ScriptName = String
-type Script = [ExprH]
