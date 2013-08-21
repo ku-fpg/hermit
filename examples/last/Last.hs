@@ -22,12 +22,12 @@ main = print (last "hello")
 
 -------------------------------------------------
 
-f :: ([a] -> a) -> [a] -> a
-f h []        = undefined
-f h [a]       = a
-f h (_:a:as)  = h (a:as)
+-- f :: ([a] -> a) -> [a] -> a
+-- f h []        = undefined
+-- f h [a]       = a
+-- f h (_:a:as)  = h (a:as)
 
-proof :: ([a] -> a) -> ([a] -> a)
-proof = \ h -> wrap (unwrap (f h))
+-- proof :: ([a] -> a) -> ([a] -> a)
+-- proof = \ h -> wrap (unwrap (f h))
 
 -------------------------------------------------
