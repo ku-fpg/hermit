@@ -248,9 +248,7 @@ loop completionMVar = loop'
                 Just line           ->
                     if all isSpace line
                     then loop'
-                    else (case parseScript line of
-                                Left  msg   -> throwError ("Parse failure: " ++ msg)
-                                Right stmts -> evalStmts stmts)
+                    else (parseScriptCLM line >>= runScript)
                          `ourCatch` (liftIO . putStrLn)
                            >> loop'
 
@@ -267,11 +265,14 @@ ourCatch m failure = do
                     else failure msg
         Right () -> return ()
 
-evalStmts :: MonadIO m => [ExprH] -> CLM m ()
-evalStmts = mapM_ evalExpr
+parseScriptCLM :: Monad m => String -> CLM m Script
+parseScriptCLM = either throwError return . parseScript
 
-evalExpr :: MonadIO m => ExprH -> CLM m ()
-evalExpr expr = do
+runScript :: MonadIO m => [ExprH] -> CLM m ()
+runScript = mapM_ runExprH
+
+runExprH :: MonadIO m => ExprH -> CLM m ()
+runExprH expr = do
     dict <- gets cl_dict
     runKureM (\case
                  KernelEffect effect -> performKernelEffect effect expr
@@ -406,10 +407,9 @@ performMetaCommand (LoadFile scriptName fileName) =
      res <- liftIO $ try (readFile fileName)
      case res of
        Left (err :: IOException) -> throwError ("IO error: " ++ show err)
-       Right str -> case parseScript str of
-                      Left  msg    -> throwError ("Parse failure: " ++ msg)
-                      Right script -> do modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
-                                         putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
+       Right str -> do script <- parseScriptCLM str
+                       modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
+                       putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
 
 performMetaCommand (SaveFile fileName) =
   do version <- gets cl_version
@@ -425,16 +425,15 @@ performMetaCommand (ScriptToRewrite rewriteName scriptName) =
      putStrToConsole ("Rewrite \"" ++ rewriteName ++ "\" defined successfully.")
 
 performMetaCommand (DefineScript scriptName str) =
-  case parseScript str of
-    Left  msg    -> throwError ("Parse failure: " ++ msg)
-    Right script -> do modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
-                       putStrToConsole ("Script \"" ++ scriptName ++ "\" defined successfully.")
+  do script <- parseScriptCLM str
+     modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
+     putStrToConsole ("Script \"" ++ scriptName ++ "\" defined successfully.")
 
 performMetaCommand (RunScript scriptName) =
   do script <- lookupScript scriptName
      running_script_st <- gets cl_running_script
      setRunningScript True
-     evalStmts script `catchError` (\ err -> setRunningScript running_script_st >> throwError err)
+     runScript script `catchError` (\ err -> setRunningScript running_script_st >> throwError err)
      setRunningScript running_script_st
      putStrToConsole ("Script \"" ++ scriptName ++ "\" ran successfully.")
      showWindow

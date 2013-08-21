@@ -10,6 +10,8 @@ module HERMIT.Parser
 import Data.Char (isSpace)
 import Data.List (intercalate)
 
+import Control.Monad ((>=>))
+
 import HERMIT.Syntax (isScriptInfixIdChar, isScriptIdFirstChar, isScriptIdChar)
 
 }
@@ -77,7 +79,7 @@ exprs : ExprH           { [$1] }
 {
 
 parseError :: [Token] -> Either String a
-parseError ts = Left $ "parse error: " ++ show ts
+parseError ts = Left $ "Parse error: " ++ show ts
 
 -- | A simple expression language AST, for things parsed from 'String' or JSON structures.
 data ExprH
@@ -104,6 +106,9 @@ data Token
     | InfixOp String
     deriving (Eq, Show)
 
+lexError :: String -> Either String a
+lexError msg = Left ("Lexer error: " ++ msg)
+
 lexer :: String -> Either String [Token]
 lexer []           = Right []
 lexer ('\n':cs)    = fmap (StmtEnd:)    $ lexer cs
@@ -126,7 +131,7 @@ lexer s@(c:cs)     | isSpace             c = lexer cs
                                               in fmap (Ident i:) $ lexer s'
                    | isScriptInfixIdChar c = let (op,s') = span isScriptInfixIdChar s
                                               in fmap (InfixOp op:) $ lexer s'
-lexer s            = Left $ "lexer: no match on " ++ s
+lexer s            = lexError $ "no match on " ++ s
 
 lexString :: String -> Either String (String,String)
 lexString ('\"':cs)      = Right ([],cs)
@@ -134,13 +139,13 @@ lexString ('\\':'\"':cs) = do (c',r) <- lexString cs
                               return ('"':c',r)
 lexString (c:cs)         = do (c',r) <- lexString cs
                               return (c:c',r)
-lexString []             = Left "lexer: no matching quote"
+lexString []             = lexError "no matching quote"
 
 lexCore :: String -> Either String (String,String)
 lexCore ('|':']':rest) = Right ([],rest)
 lexCore (c:cs)         = do (c',r) <- lexCore cs
                             return (c:c',r)
-lexCore []             = Left "lexer: no closing |]"
+lexCore []             = lexError "no closing |]"
 
 ---------------------------------------------
 
@@ -156,7 +161,7 @@ test = do
 type Script = [ExprH]
 
 parseScript :: String -> Either String Script
-parseScript s = lexer s >>= parser
+parseScript = lexer >=> parser
 
 ---------------------------------------------
 
