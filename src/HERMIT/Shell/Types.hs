@@ -70,6 +70,8 @@ instance Extern QueryFun where
    box i = i
    unbox i = i
 
+type RewriteName = String
+
 data MetaCommand
    = Resume
    | Abort
@@ -77,7 +79,7 @@ data MetaCommand
    | Dump String String String Int
    | LoadFile ScriptName FilePath  -- load a file on top of the current node
    | SaveFile FilePath
-   | ScriptToRewrite ScriptName
+   | ScriptToRewrite RewriteName ScriptName
    | DefineScript ScriptName String
    | RunScript ScriptName
    | SaveScript FilePath ScriptName

@@ -134,17 +134,17 @@ shell_externals = map (.+ Shell)
        ["save <filename> : save the current complete derivation into a file."]
    , external "save-script" SaveScript
        ["save-script <filename> <script name> : save a loaded or manually defined script to a file." ]
-   , external "load-as-rewrite" (\ rewriteName fileName -> SeqMeta [LoadFile rewriteName fileName, ScriptToRewrite rewriteName])
-       ["load-as-rewrite <rewrite-name> <filepath> : load a HERMIT script from a file, and create a rewrite with the same name."
+   , external "load-as-rewrite" (\ rewriteName fileName -> SeqMeta [LoadFile rewriteName fileName, ScriptToRewrite rewriteName rewriteName])
+       ["load-as-rewrite <rewrite-name> <filepath> : load a HERMIT script from a file, and convert it to a rewrite."
        ,"Note that there are significant limitations on the commands the script may contain."] .+ Experiment .+ TODO
    , external "script-to-rewrite" ScriptToRewrite
-       ["script-to-rewrite <script-name> : create a new rewrite from a pre-loaded (or manually defined) HERMIT script."
+       ["script-to-rewrite <rewrite-name> <script-name> : create a new rewrite from a pre-loaded (or manually defined) HERMIT script."
        ,"Note that there are significant limitations on the commands the script may contain."] .+ Experiment .+ TODO
    , external "define-script" DefineScript
        ["Define a new HERMIT script and bind it to a name."
        ,"Note that any names in the script will not be resolved until the script is *run*."
        ,"Example usage: define-script \"MyScriptName\" \"any-td beta-reduce ; let-subst ; bash\""]
-   , external "define-rewrite" (\ name str -> SeqMeta [DefineScript name str, ScriptToRewrite name])
+   , external "define-rewrite" (\ name str -> SeqMeta [DefineScript name str, ScriptToRewrite name name])
        ["Define a new HERMIT rewrite and bind it to a name."
        ,"Note that this also saves the input script under the same name."
        ,"Example usage: define-rewrite \"MyRewriteName\" \"let-subst >>> bash\""]

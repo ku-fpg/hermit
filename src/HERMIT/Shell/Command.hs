@@ -411,19 +411,18 @@ performMetaCommand (LoadFile scriptName fileName) =
                       Right script -> do modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
                                          putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
 
-performMetaCommand (SaveFile fileName) = do
-        version <- gets cl_version
-        putStrToConsole $ "[saving " ++ fileName ++ "]"
-        -- no checks to see if you are clobering; be careful
-        liftIO $ writeFile fileName $ showGraph (vs_graph version) (vs_tags version) (SAST 0)
+performMetaCommand (SaveFile fileName) =
+  do version <- gets cl_version
+     putStrToConsole $ "[saving " ++ fileName ++ "]"
+     -- no checks to see if you are clobering; be careful
+     liftIO $ writeFile fileName $ showGraph (vs_graph version) (vs_tags version) (SAST 0)
 
-performMetaCommand (ScriptToRewrite scriptName) =
-  do st <- get
-     case lookup scriptName (cl_scripts st) of
-       Nothing     -> throwError ("No script of name " ++ scriptName ++ " is loaded.")
-       Just script -> do dict' <- iokm2clm "define-rewrite failed: " (return $ addScriptToDict scriptName script (cl_dict st))
-                         put (st {cl_dict = dict'})
-                         putStrToConsole ("Rewrite \"" ++ scriptName ++ "\" defined successfully.")
+performMetaCommand (ScriptToRewrite rewriteName scriptName) =
+  do script <- lookupScript scriptName
+     st <- get
+     dict' <- iokm2clm "script-to-rewrite failed: " (return $ addScriptToDict rewriteName script (cl_dict st))
+     put (st {cl_dict = dict'})
+     putStrToConsole ("Rewrite \"" ++ rewriteName ++ "\" defined successfully.")
 
 performMetaCommand (DefineScript scriptName str) =
   case parseScript str of
@@ -432,23 +431,25 @@ performMetaCommand (DefineScript scriptName str) =
                        putStrToConsole ("Script \"" ++ scriptName ++ "\" defined successfully.")
 
 performMetaCommand (RunScript scriptName) =
-  do st <- get
-     case lookup scriptName (cl_scripts st) of
-       Nothing     -> throwError ("No script of name " ++ scriptName ++ " is loaded.")
-       Just script -> do running_script_st <- gets cl_running_script
-                         setRunningScript True
-                         evalStmts script `catchError` (\ err -> setRunningScript running_script_st >> throwError err)
-                         setRunningScript running_script_st
-                         putStrToConsole ("Script \"" ++ scriptName ++ "\" ran successfully.")
-                         showWindow
+  do script <- lookupScript scriptName
+     running_script_st <- gets cl_running_script
+     setRunningScript True
+     evalStmts script `catchError` (\ err -> setRunningScript running_script_st >> throwError err)
+     setRunningScript running_script_st
+     putStrToConsole ("Script \"" ++ scriptName ++ "\" ran successfully.")
+     showWindow
 
 performMetaCommand (SaveScript fileName scriptName) =
-  do st <- get
-     case lookup scriptName (cl_scripts st) of
-       Nothing     -> throwError ("No script of name " ++ scriptName ++ " is loaded.")
-       Just script -> do putStrToConsole $ "Saving script \"" ++ scriptName ++ "\" to file \"" ++ fileName ++ "\"."
-                         liftIO $ writeFile fileName $ unparseScript script
-                         putStrToConsole $ "Save successful."
+  do script <- lookupScript scriptName
+     putStrToConsole $ "Saving script \"" ++ scriptName ++ "\" to file \"" ++ fileName ++ "\"."
+     liftIO $ writeFile fileName $ unparseScript script
+     putStrToConsole $ "Save successful."
+
+lookupScript :: Monad m => ScriptName -> CLM m Script
+lookupScript scriptName = do scripts <- gets cl_scripts
+                             case lookup scriptName scripts of
+                               Nothing     -> throwError ("No script of name " ++ scriptName ++ " is loaded.")
+                               Just script -> return script
 
 -------------------------------------------------------------------------------
 
