@@ -274,10 +274,10 @@ evalExpr :: MonadIO m => ExprH -> CLM m ()
 evalExpr expr = do
     dict <- gets cl_dict
     runKureM (\case
-                 AstEffect effect   -> performAstEffect effect expr
-                 ShellEffect effect -> performShellEffect effect
-                 QueryFun query     -> performQuery query
-                 MetaCommand meta   -> performMetaCommand meta
+                 KernelEffect effect -> performKernelEffect effect expr
+                 ShellEffect effect  -> performShellEffect effect
+                 QueryFun query      -> performQuery query
+                 MetaCommand meta    -> performMetaCommand meta
              )
              throwError
              (interpExprH dict interpShellCommand expr)
@@ -288,8 +288,8 @@ evalExpr expr = do
 --   UPDATE: Not true.  We don't always showWindow.
 -- TODO: All of these should through an exception if they fail to execute the command as given.
 
-performAstEffect :: MonadIO m => AstEffect -> ExprH -> CLM m ()
-performAstEffect (Apply rr) expr = do
+performKernelEffect :: MonadIO m => KernelEffect -> ExprH -> CLM m ()
+performKernelEffect (Apply rr) expr = do
     st <- get
 
     let sk = cl_kernel st
@@ -306,7 +306,7 @@ performAstEffect (Apply rr) expr = do
                              (\ errs  -> liftIO (deleteS sk sast') >> fail errs)
         else commit
 
-performAstEffect (Pathfinder t) expr = do
+performKernelEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
     iokm2clm' "Cannot find path: "
@@ -315,29 +315,25 @@ performAstEffect (Pathfinder t) expr = do
                          showWindow)
               (queryS (cl_kernel st) (cl_cursor st) t (cl_kernel_env st))
 
-performAstEffect (Direction dir) expr = do
+performKernelEffect (Direction dir) expr = do
     st <- get
     ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor st) (moveLocally dir) (cl_kernel_env st)
     put $ newSAST expr ast st
     showWindow
 
-performAstEffect BeginScope expr = do
+performKernelEffect BeginScope expr = do
         st <- get
         ast <- iokm2clm'' $ beginScopeS (cl_kernel st) (cl_cursor st)
         put $ newSAST expr ast st
         showWindow
 
-performAstEffect EndScope expr = do
+performKernelEffect EndScope expr = do
         st <- get
         ast <- iokm2clm'' $ endScopeS (cl_kernel st) (cl_cursor st)
         put $ newSAST expr ast st
         showWindow
 
-performAstEffect (Tag tag) _ = do
-        st <- get
-        put $ st { cl_version = (cl_version st) { vs_tags = (tag, cl_cursor st) : vs_tags (cl_version st) }}
-
-performAstEffect (CorrectnessCritera q) expr = do
+performKernelEffect (CorrectnessCritera q) expr = do
         st <- get
         -- TODO: Again, we may want a quiet version of the kernel_env
         liftIO (queryS (cl_kernel st) (cl_cursor st) q (cl_kernel_env st))

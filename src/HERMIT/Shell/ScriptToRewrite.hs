@@ -71,10 +71,10 @@ interpScriptR =
   , interp (\ (CrumbBox cr)                -> ScriptPrimUn $ ScriptPath [cr])
   , interp (\ (PathBox p)                  -> ScriptPrimUn $ ScriptPath (snocPathToPath p))
   , interp (\ (TranslateCorePathBox t)     -> ScriptPrimUn $ ScriptTranslateHCorePath t)
-  , interp (\ (effect :: AstEffect)        -> case effect of
+  , interp (\ (effect :: KernelEffect)     -> case effect of
                                                 BeginScope -> ScriptBeginScope
                                                 EndScope   -> ScriptEndScope
-                                                _          -> ScriptUnsupported "AST effects" )
+                                                _          -> ScriptUnsupported "Kernel effects" )
   , interp (\ (_ :: MetaCommand)           -> ScriptUnsupported "meta commands")
   , interp (\ (_ :: ShellEffect)           -> ScriptUnsupported "shell effects")
   , interp (\ (_ :: QueryFun)              -> ScriptUnsupported "queries")
