@@ -59,7 +59,7 @@ unscopedToScopedScriptR = parse
                                   ScriptBeginScope      -> do (rs,zs)  <- parseUntilEndScope ys
                                                               first (ScriptScope rs :) <$> parseUntilEndScope zs
                                   ScriptPrimUn pr       -> first (ScriptPrimSc pr :) <$> parseUntilEndScope ys
-                                  ScriptUnsupported msg -> fail ("script contains " ++ msg ++ " which cannot be converted to a rewrite.")
+                                  ScriptUnsupported msg -> fail ("script contains " ++ msg ++ ", which cannot be converted to a rewrite.")
 
 -----------------------------------
 
