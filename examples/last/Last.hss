@@ -1,17 +1,6 @@
 flatten-module
 consider 'last
 ww-split-param 1 [|wrap|] [|unwrap|]
-{rhs-of 'work
-   eta-expand 'b
-   lam-body
-   eta-expand 'bs
-   lam-body
-   unfold 'unwrap
-   unfold 'f
-   bash
-   consider app
-   unfold 'wrap
-   bash
-}
-any-call (unfold 'wrap)
+inline-all [ 'f, 'wrap, 'unwrap ]
 bash
+unshadow
