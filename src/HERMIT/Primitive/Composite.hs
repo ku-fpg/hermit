@@ -46,8 +46,8 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
                 <+ promoteExprR ( unfoldBasicCombinatorR
                                <+ betaReducePlus
                                <+ safeLetSubstR
-                               <+ caseReduce
-                               <+ letElim )
+                               <+ caseReduceR
+                               <+ letElimR )
                )
 
 ------------------------------------------------------------------------------------------------------

@@ -3,26 +3,27 @@
 module HERMIT.Primitive.Local.Case
     ( -- * Rewrites on Case Expressions
       externals
-    , caseElim
-    , caseFloatApp
-    , caseFloatArg
-    , caseFloatCase
-    , caseFloatCast
-    , caseFloatLet
-    , caseFloat
-    , caseUnfloat
-    , caseUnfloatApp
-    , caseUnfloatArgs
-    , caseReduce
-    , caseReduceDatacon
-    , caseReduceLiteral
-    , caseSplit
-    , caseSplitInline
+    , caseFloatAppR
+    , caseFloatArgR
+    , caseFloatCaseR
+    , caseFloatCastR
+    , caseFloatLetR
+    , caseFloatR
+    , caseUnfloatR
+    , caseUnfloatAppR
+    , caseUnfloatArgsR
+    , caseReduceR
+    , caseReduceDataconR
+    , caseReduceLiteralR
+    , caseSplitR
+    , caseSplitInlineR
     , caseInlineScrutineeR
     , caseInlineAlternativeR
     , caseMergeAltsR
     , caseMergeAltsWithWildR
-    , caseMergeAltsElimR
+    , caseElimR
+    , caseElimInlineScrutineeR
+    , caseElimMergeAltsR
     ) where
 
 import GhcPlugins
@@ -53,40 +54,38 @@ import qualified Language.Haskell.TH as TH
 -- | Externals relating to Case expressions.
 externals :: [External]
 externals =
-    [ external "case-elim" (promoteExprR caseElim :: RewriteH Core)
-        [ "case s of w; C vs -> e ==> e if w and vs are not free in e" ]     .+ Shallow
-    , external "case-float-app" (promoteExprR caseFloatApp :: RewriteH Core)
+    [ external "case-float-app" (promoteExprR caseFloatAppR :: RewriteH Core)
         [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow .+ Bash
-    , external "case-float-arg" (promoteExprR caseFloatArg :: RewriteH Core)
+    , external "case-float-arg" (promoteExprR caseFloatArgR :: RewriteH Core)
         [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
-    , external "case-float-case" (promoteExprR caseFloatCase :: RewriteH Core)
+    , external "case-float-case" (promoteExprR caseFloatCaseR :: RewriteH Core)
         [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval .+ Bash
-    , external "case-float-cast" (promoteExprR caseFloatCast :: RewriteH Core)
+    , external "case-float-cast" (promoteExprR caseFloatCastR :: RewriteH Core)
         [ "cast (case s of p -> e) co ==> case s of p -> cast e co" ]        .+ Shallow .+ Commute .+ Bash
-    , external "case-float-let" (promoteExprR caseFloatLet :: RewriteH Core)
+    , external "case-float-let" (promoteExprR caseFloatLetR :: RewriteH Core)
         [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow .+ Bash
-    , external "case-float" (promoteExprR caseFloat :: RewriteH Core)
+    , external "case-float" (promoteExprR caseFloatR :: RewriteH Core)
         [ "Float a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
-    , external "case-unfloat" (promoteExprR caseUnfloat :: RewriteH Core)
+    , external "case-unfloat" (promoteExprR caseUnfloatR :: RewriteH Core)
         [ "Unfloat a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
-    , external "case-unfloat-args" (promoteExprR caseUnfloatArgs :: RewriteH Core)
+    , external "case-unfloat-args" (promoteExprR caseUnfloatArgsR :: RewriteH Core)
         [ "Unfloat a Case whose alternatives are parallel applications of the same function." ] .+ Commute .+ Shallow .+ PreCondition
     -- , external "case-unfloat-app" (promoteExprR caseUnfloatApp :: RewriteH Core)
     --     [ "Unfloat a Case whole alternatives are applications of different functions with the same arguments." ] .+ Commute .+ Shallow .+ PreCondition
-    , external "case-reduce" (promoteExprR caseReduce :: RewriteH Core)
+    , external "case-reduce" (promoteExprR caseReduceR :: RewriteH Core)
         [ "case-reduce-datacon <+ case-reduce-literal" ]                     .+ Shallow .+ Eval .+ Bash
-    , external "case-reduce-datacon" (promoteExprR caseReduceDatacon :: RewriteH Core)
+    , external "case-reduce-datacon" (promoteExprR caseReduceDataconR :: RewriteH Core)
         [ "case-of-known-constructor"
         , "case C v1..vn of C w1..wn -> e ==> let { w1 = v1 ; .. ; wn = vn } in e" ]    .+ Shallow .+ Eval
-    , external "case-reduce-literal" (promoteExprR caseReduceLiteral :: RewriteH Core)
+    , external "case-reduce-literal" (promoteExprR caseReduceLiteralR :: RewriteH Core)
         [ "case L of L -> e ==> e" ]                                         .+ Shallow .+ Eval
-    , external "case-split" (promoteExprR . caseSplit :: TH.Name -> RewriteH Core)
+    , external "case-split" (promoteExprR . caseSplitR :: TH.Name -> RewriteH Core)
         [ "case-split 'x"
         , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ] .+ Shallow
-    , external "case-split-inline" (caseSplitInline :: TH.Name -> RewriteH Core)
+    , external "case-split-inline" (caseSplitInlineR :: TH.Name -> RewriteH Core)
         [ "Like case-split, but additionally inlines the matched constructor "
         , "applications for all occurances of the named variable." ] .+ Deep
-    , external "case-seq" (promoteExprR . caseSeq :: TH.Name -> RewriteH Core)
+    , external "case-seq" (promoteExprR . caseSeqR :: TH.Name -> RewriteH Core)
         [ "Force evaluation of a variable by introducing a case."
         , "case-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow
     , external "case-inline-alternative" (promoteExprR caseInlineAlternativeR :: RewriteH Core)
@@ -100,9 +99,13 @@ externals =
     , external "case-merge-alts-with-wild" (promoteExprR caseMergeAltsWithWildR :: RewriteH Core)
         [ "A cleverer version of 'mergeCaseAlts' that first attempts to"
         , "abstract out any occurrences of the alternative pattern using the wildcard binder." ] .+ Deep
-    , external "case-merge-alts-elim" (promoteExprR caseMergeAltsElimR :: RewriteH Core)
-        [ "Merge the case alternatives into a single default alternative (if possible),"
-        , "and then eliminate the case." ] .+ Deep
+    , external "case-elim" (promoteExprR caseElimR :: RewriteH Core)
+        [ "case s of w; C vs -> e ==> e if w and vs are not free in e" ]     .+ Shallow
+    , external "case-elim-inline-scrutinee" (promoteExprR caseElimInlineScrutineeR :: RewriteH Core)
+        [ "Eliminate a case, inlining any occurrences of the case binder as the scrutinee." ] .+ Deep
+    , external "case-elim-merge-alts" (promoteExprR caseElimMergeAltsR :: RewriteH Core)
+        [ "Eliminate a case, merging the case alternatives into a single default alternative",
+          "and inlining the case binder as the scrutinee (if possible)." ] .+ Deep
     , external "case-fold-wild" (promoteExprR caseFoldWildR :: RewriteH Core)
         [ "In the case alternatives, fold any occurrences of the case alt patterns to the wildcard binder." ]
     ]
@@ -110,19 +113,21 @@ externals =
 ------------------------------------------------------------------------------
 
 -- | case s of w; C vs -> e ==> e if w and vs are not free in e
-caseElim :: Rewrite c HermitM CoreExpr
-caseElim = prefixFailMsg "Case elimination failed: " $
-           withPatFailMsg (wrongExprForm "Case s bnd ty alts") $ do
-    Case _ bnd _ alts <- idR
+caseElimR :: Rewrite c HermitM CoreExpr
+caseElimR = prefixFailMsg "Case elimination failed: " $
+            withPatFailMsg (wrongExprForm "Case s bnd ty alts") $
+ do Case _ bnd _ alts <- idR
     case alts of
         [(_, vs, e)] -> do fvs <- applyInContextT exprFreeVarsT e
                            guardMsg (isEmptyVarSet $ intersectVarSet (mkVarSet (bnd:vs)) fvs) "wildcard or pattern binders free in RHS."
                            return e
         _ -> fail "more than one case alternative."
 
+------------------------------------------------------------------------------
+
 -- | (case s of alt1 -> e1; alt2 -> e2) v ==> case s of alt1 -> e1 v; alt2 -> e2 v
-caseFloatApp :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
+caseFloatAppR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFloatAppR = prefixFailMsg "Case floating from App function failed: " $
   do
     captures    <- appT (map mkVarSet <$> caseAltVarsT) exprFreeVarsT (flip (map . intersectVarSet))
     wildCapture <- appT caseWildIdT exprFreeVarsT elemVarSet
@@ -135,8 +140,8 @@ caseFloatApp = prefixFailMsg "Case floating from App function failed: " $
 
 -- | @f (case s of alt1 -> e1; alt2 -> e2)@ ==> @case s of alt1 -> f e1; alt2 -> f e2@
 --   Only safe if @f@ is strict.
-caseFloatArg :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
+caseFloatArgR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFloatArgR = prefixFailMsg "Case floating from App argument failed: " $
   do
     captures    <- appT exprFreeVarsT (map mkVarSet <$> caseAltVarsT) (map . intersectVarSet)
     wildCapture <- appT exprFreeVarsT caseWildIdT (flip elemVarSet)
@@ -152,8 +157,8 @@ caseFloatArg = prefixFailMsg "Case floating from App argument failed: " $
 --   case s1 of
 --     alt11 -> case e11 of alt21 -> e21; alt22 -> e22
 --     alt12 -> case e12 of alt21 -> e21; alt22 -> e22
-caseFloatCase :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
+caseFloatCaseR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFloatCaseR = prefixFailMsg "Case floating from Case failed: " $
   do
     captures <- caseT (map mkVarSet <$> caseAltVarsT) idR mempty (const altFreeVarsExclWildT) (\ vss bndr () fs -> map (intersectVarSet (unionVarSets $ map ($ bndr) fs)) vss)
     -- does the binder of the inner case, shadow a free variable in any of the outer case alts?
@@ -168,39 +173,39 @@ caseFloatCase = prefixFailMsg "Case floating from Case failed: " $
           (\ (Case s1 b1 _ alts1) b2 ty alts2 -> Case s1 b1 ty $ mapAlts (\s -> Case s b2 ty alts2) alts1)
 
 -- | let v = case s of alt1 -> e1 in e ==> case s of alt1 -> let v = e1 in e
-caseFloatLet :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseFloatLet = prefixFailMsg "Case floating from Let failed: " $
+caseFloatLetR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFloatLetR = prefixFailMsg "Case floating from Let failed: " $
   do vs <- letNonRecT idR caseAltVarsT mempty (\ letVar caseVars () -> letVar `elem` concat caseVars)
      let bdsAction = if not vs then idR else nonRecAllR idR alphaCase
      letT bdsAction idR $ \ (NonRec v (Case s b _ alts)) e -> Case s b (exprType e) $ mapAlts (flip Let e . NonRec v) alts
 
 -- | cast (case s of p -> e) co ==> case s of p -> cast e co
-caseFloatCast :: MonadCatch m => Rewrite c m CoreExpr
-caseFloatCast = prefixFailMsg "Case float from cast failed: " $
+caseFloatCastR :: MonadCatch m => Rewrite c m CoreExpr
+caseFloatCastR = prefixFailMsg "Case float from cast failed: " $
                 withPatFailMsg (wrongExprForm "Cast (Case s bnd ty alts) co") $
     do Cast (Case s bnd _ alts) co <- idR
        let alts' = mapAlts (flip Cast co) alts
        return $ Case s bnd (coreAltsType alts') alts'
 
 -- | Float a Case whatever the context.
-caseFloat :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseFloat = setFailMsg "Unsuitable expression for Case floating." $
-    caseFloatApp <+ caseFloatArg <+ caseFloatCase <+ caseFloatLet <+ caseFloatCast
+caseFloatR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFloatR = setFailMsg "Unsuitable expression for Case floating." $
+    caseFloatAppR <+ caseFloatArgR <+ caseFloatCaseR <+ caseFloatLetR <+ caseFloatCastR
 
 ------------------------------------------------------------------------------
 
 -- | Unfloat a Case whatever the context.
-caseUnfloat :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-caseUnfloat = setFailMsg "Case unfloating failed." $
-    caseUnfloatApp <+ caseUnfloatArgs
+caseUnfloatR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+caseUnfloatR = setFailMsg "Case unfloating failed." $
+    caseUnfloatAppR <+ caseUnfloatArgsR
 
 -- | Unimplemented!
-caseUnfloatApp :: Monad m => Rewrite c m CoreExpr
-caseUnfloatApp = fail "caseUnfloatApp: TODO"
+caseUnfloatAppR :: Monad m => Rewrite c m CoreExpr
+caseUnfloatAppR = fail "caseUnfloatApp: TODO"
 
-caseUnfloatArgs :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-caseUnfloatArgs = prefixFailMsg "Case unfloating into arguments failed: " $
-                  withPatFailMsg (wrongExprForm "Case s v t alts") $
+caseUnfloatArgsR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+caseUnfloatArgsR = prefixFailMsg "Case unfloating into arguments failed: " $
+                   withPatFailMsg (wrongExprForm "Case s v t alts") $
     do Case s wild _ty alts <- idR
        (vss, fs, argss) <- caseT mempty mempty mempty (\ _ -> altT mempty (\ _ -> idR) callT $ \ () vs (fn, args) -> (vs, fn, args))
                                                       (\ () () () alts' -> unzip3 [ (wild:vs, fn, args) | (vs,fn,args) <- alts' ])
@@ -219,14 +224,14 @@ caseUnfloatArgs = prefixFailMsg "Case unfloating into arguments failed: " $
 
 ------------------------------------------------------------------------------
 
-caseReduce :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseReduce = setFailMsg "Unsuitable expression for Case reduction." $
-             caseReduceDatacon <+ caseReduceLiteral
+caseReduceR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseReduceR = setFailMsg "Unsuitable expression for Case reduction." $
+              caseReduceDataconR <+ caseReduceLiteralR
 
 -- NB: LitAlt cases don't do evaluation
-caseReduceLiteral :: MonadCatch m => Rewrite c m CoreExpr
-caseReduceLiteral = prefixFailMsg "Case reduction failed: " $
-                    withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $
+caseReduceLiteralR :: MonadCatch m => Rewrite c m CoreExpr
+caseReduceLiteralR = prefixFailMsg "Case reduction failed: " $
+                     withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $
     do Case s wild _ alts <- idR
 #if __GLASGOW_HASKELL__ > 706
        let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (exprFreeVars s) ])
@@ -241,10 +246,10 @@ caseReduceLiteral = prefixFailMsg "Case reduction failed: " $
                         Just (_, _, rhs) -> return $ mkCoreLet (NonRec wild (Lit l)) rhs
 
 -- | Case-of-known-constructor rewrite.
-caseReduceDatacon :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
-                    withPatFailMsg (wrongExprForm "Case e v t alts")
-                    go
+caseReduceDataconR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseReduceDataconR = prefixFailMsg "Case reduction failed: " $
+                     withPatFailMsg (wrongExprForm "Case e v t alts")
+                     go
   where
     go :: Rewrite c HermitM CoreExpr
     go = do Case e wild _ alts <- idR
@@ -273,9 +278,9 @@ caseReduceDatacon = prefixFailMsg "Case reduction failed: " $
 -- e ==> case i of i
 --         []     -> e
 --         (a:as) -> e
-caseSplit :: TH.Name -> Rewrite c HermitM CoreExpr
-caseSplit nm = prefixFailMsg "caseSplit failed: " $
-               do i <- matchingFreeId nm
+caseSplitR :: TH.Name -> Rewrite c HermitM CoreExpr
+caseSplitR nm = prefixFailMsg "caseSplit failed: " $
+               do i <- matchingFreeIdT nm
                   let (tycon, tys) = splitTyConApp (idType i)
                       aNms         = map (:[]) $ cycle ['a'..'z']
                   contextfreeT $ \ e -> do dcsAndVars <- mapM (\ dc -> (dc,) <$> sequence [ newIdH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ])
@@ -287,14 +292,14 @@ caseSplit nm = prefixFailMsg "caseSplit failed: " $
 --
 -- e -> case v of v
 --        _ -> e
-caseSeq :: TH.Name -> Rewrite c HermitM CoreExpr
-caseSeq nm = prefixFailMsg "caseSeq failed: " $
-             do i <- matchingFreeId nm
+caseSeqR :: TH.Name -> Rewrite c HermitM CoreExpr
+caseSeqR nm = prefixFailMsg "caseSeq failed: " $
+             do i <- matchingFreeIdT nm
                 arr $ \ e -> Case (Var i) i (exprType e) [(DEFAULT, [], e)]
 
 -- auxillary function for use by caseSplit and caseSeq
-matchingFreeId :: Monad m => TH.Name -> Translate c m CoreExpr Id
-matchingFreeId nm = do
+matchingFreeIdT :: Monad m => TH.Name -> Translate c m CoreExpr Id
+matchingFreeIdT nm = do
   fvs <- exprFreeIdsT
   case varSetElems (filterVarSet (cmpTHName2Var nm) fvs) of
     []    -> fail "provided name is not free."
@@ -305,8 +310,8 @@ matchingFreeId nm = do
 -- for each occurance of the named variable.
 --
 -- > caseSplitInline nm = caseSplit nm >>> anybuR (inlineName nm)
-caseSplitInline :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM Core
-caseSplitInline nm = promoteR (caseSplit nm) >>> anybuR (promoteExprR $ inlineNameR nm)
+caseSplitInlineR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM Core
+caseSplitInlineR nm = promoteR (caseSplitR nm) >>> anybuR (promoteExprR $ inlineNameR nm)
 
 ------------------------------------------------------------------------------
 
@@ -327,6 +332,8 @@ caseInlineAlternativeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) =>
 caseInlineAlternativeR = prefixFailMsg "case-inline-alternative failed: " $
                          caseInlineBinderR Alternative
 
+------------------------------------------------------------------------------
+
 -- | Merge all case alternatives into a single default case.
 --   The RHS of each alternative must be the same.
 --   @case s of {pat1 -> e ; pat2 -> e ; ... ; patn -> e}@ ==> @case s of {_ -> e}@
@@ -339,9 +346,6 @@ caseMergeAltsR = prefixFailMsg "merge-case-alts failed: " $
                     guardMsg (exprsEqual rhss) "right-hand sides are not all equal."
                     guardMsg (all altVarsUnused alts) "variables bound in case alt pattern appear free in alt right-hand side."
                     return $ Case e w ty [(DEFAULT,[],head rhss)]
-
-altVarsUnused :: CoreAlt -> Bool
-altVarsUnused (_,vs,rhs) = all (`notElemVarSet` exprFreeVars rhs) vs
 
 -- | In the case alternatives, fold any occurrences of the case alt patterns to the wildcard binder.
 caseFoldWildR :: forall c.  (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
@@ -356,8 +360,17 @@ caseMergeAltsWithWildR = prefixFailMsg "merge-case-alts-with-wild failed: " $
                          withPatFailMsg (wrongExprForm "Case e w ty alts") $
                          tryR caseFoldWildR >>> caseMergeAltsR
 
--- | Merge the case alternatives into a single default alternative (if possible), and then eliminate the case.
-caseMergeAltsElimR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseMergeAltsElimR = tryR caseFoldWildR >>> tryR caseMergeAltsR >>> tryR caseInlineScrutineeR >>> caseElim
+-- | Eliminate a case, inlining any occurrences of the case binder as the scrutinee.
+caseElimInlineScrutineeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseElimInlineScrutineeR = tryR caseInlineScrutineeR >>> caseElimR
+
+-- | Eliminate a case, merging the case alternatives into a single default alternative and inlining the case binder as the scrutinee (if possible).
+caseElimMergeAltsR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseElimMergeAltsR = tryR caseFoldWildR >>> tryR caseMergeAltsR >>> caseElimInlineScrutineeR
+
+------------------------------------------------------------------------------
+
+altVarsUnused :: CoreAlt -> Bool
+altVarsUnused (_,vs,rhs) = all (`notElemVarSet` exprFreeVars rhs) vs
 
 ------------------------------------------------------------------------------

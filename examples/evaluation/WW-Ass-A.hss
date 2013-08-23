@@ -9,7 +9,7 @@
 --         case h e of wild
 --           Nothing -> Nothing
 --           Just n  -> Just n
-                                    { case-merge-alts-elim }
+                                    { case-elim-merge-alts }
 --         h e
                                   }
 --  \ e -> h e

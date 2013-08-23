@@ -254,14 +254,14 @@ workerWrapperSplitR mAss wrap unwrap =
   let work = TH.mkName "work"
       fx   = TH.mkName "fix"
    in
-      fixIntro >>> defAllR idR ( appAllR idR (letIntro "f")
-                                  >>> letFloatArg
+      fixIntro >>> defAllR idR ( appAllR idR (letIntroR "f")
+                                  >>> letFloatArgR
                                   >>> letAllR idR ( forewardT (workerWrapperFacBR mAss wrap unwrap)
-                                                     >>> appAllR idR (letIntro "w")
-                                                     >>> letFloatArg
+                                                     >>> appAllR idR (letIntroR "w")
+                                                     >>> letFloatArgR
                                                      >>> letNonRecAllR idR (unfoldNameR fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
                                                      >>> letSubstR
-                                                     >>> letFloatArg
+                                                     >>> letFloatArgR
                                                   )
                                )
 

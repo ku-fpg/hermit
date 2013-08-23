@@ -217,8 +217,8 @@ push nm = prefixFailMsg "push failed: " $
                   guardMsg (not $ null args) $ "no argument for " ++ show nm
                   guardMsg (all isTypeArg $ init args) $ "initial arguments are not type arguments for " ++ show nm
                   case last args of
-                     Case {} -> caseFloatArg
-                     Let {}  -> letFloatArg
+                     Case {} -> caseFloatArgR
+                     Let {}  -> letFloatArgR
                      _       -> fail "argument is not a Case or Let."
           _ -> fail "no function to match."
 

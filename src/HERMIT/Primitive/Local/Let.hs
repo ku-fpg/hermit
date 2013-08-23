@@ -6,29 +6,29 @@ module HERMIT.Primitive.Local.Let
          -- ** Let Elimination
        , letSubstR
        , safeLetSubstR
-       , letElim
-       , letNonRecElim
-       , letRecElim
+       , letElimR
+       , letNonRecElimR
+       , letRecElimR
          -- ** Let Introduction
-       , letIntro
+       , letIntroR
          -- ** Let Floating
-       , letFloatApp
-       , letFloatArg
-       , letFloatLet
-       , letFloatLam
-       , letFloatCase
-       , letFloatCast
-       , letFloatExpr
-       , letFloatLetTop
+       , letFloatAppR
+       , letFloatArgR
+       , letFloatLetR
+       , letFloatLamR
+       , letFloatCaseR
+       , letFloatCastR
+       , letFloatExprR
+       , letFloatLetTopR
          -- ** Let Unfloating
-       , letUnfloat
-       , letUnfloatApp
-       , letUnfloatCase
-       , letUnfloatLam
+       , letUnfloatR
+       , letUnfloatAppR
+       , letUnfloatCaseR
+       , letUnfloatLamR
          -- ** Miscallaneous
-       , reorderNonRecLets
+       , reorderNonRecLetsR
        , letTupleR
-       , letToCase
+       , letToCaseR
        )
 where
 
@@ -72,45 +72,45 @@ externals =
     --     , "let { x = e1, ... } in e2, "
     --     , "  where safe to inline without duplicating work ==> e2[e1/x,...],"
     --     , "only matches non-recursive lets" ]  .+ Deep .+ Eval
-    , external "let-intro" (promoteExprR . letIntro . show :: TH.Name -> RewriteH Core)
+    , external "let-intro" (promoteExprR . letIntroR . show :: TH.Name -> RewriteH Core)
         [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
-    , external "let-elim" (promoteExprR letElim :: RewriteH Core)
+    , external "let-elim" (promoteExprR letElimR :: RewriteH Core)
         [ "Remove an unused let binding."
         , "(let v = e1 in e2) ==> e2, if v is not free in e1 or e2." ]          .+ Eval .+ Shallow .+ Bash
 --    , external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
 --        [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Eval
-    , external "let-float-app" (promoteExprR letFloatApp :: RewriteH Core)
+    , external "let-float-app" (promoteExprR letFloatAppR :: RewriteH Core)
         [ "(let v = ev in e) x ==> let v = ev in e x" ]                         .+ Commute .+ Shallow .+ Bash
-    , external "let-float-arg" (promoteExprR letFloatArg :: RewriteH Core)
+    , external "let-float-arg" (promoteExprR letFloatArgR :: RewriteH Core)
         [ "f (let v = ev in e) ==> let v = ev in f e" ]                         .+ Commute .+ Shallow .+ Bash
-    , external "let-float-lam" (promoteExprR letFloatLam :: RewriteH Core)
+    , external "let-float-lam" (promoteExprR letFloatLamR :: RewriteH Core)
         [ "(\\ v1 -> let v2 = e1 in e2)  ==>  let v2 = e1 in (\\ v1 -> e2), if v1 is not free in e2."
         , "If v1 = v2 then v1 will be alpha-renamed." ]                         .+ Commute .+ Shallow .+ Bash
-    , external "let-float-let" (promoteExprR letFloatLet :: RewriteH Core)
+    , external "let-float-let" (promoteExprR letFloatLetR :: RewriteH Core)
         [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow .+ Bash
-    , external "let-float-case" (promoteExprR letFloatCase :: RewriteH Core)
+    , external "let-float-case" (promoteExprR letFloatCaseR :: RewriteH Core)
         [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]     .+ Commute .+ Shallow .+ Eval .+ Bash
-    , external "let-float-cast" (promoteExprR letFloatCast :: RewriteH Core)
+    , external "let-float-cast" (promoteExprR letFloatCastR :: RewriteH Core)
         [ "cast (let bnds in e) co ==> let bnds in cast e co" ]                 .+ Commute .+ Shallow .+ Bash
-    , external "let-float-top" (promoteProgR letFloatLetTop :: RewriteH Core)
+    , external "let-float-top" (promoteProgR letFloatLetTopR :: RewriteH Core)
         [ "v = (let w = ew in ev) : bds ==> w = ew : v = ev : bds" ]            .+ Commute .+ Shallow .+ Bash
-    , external "let-float" (promoteProgR letFloatLetTop <+ promoteExprR letFloatExpr :: RewriteH Core)
+    , external "let-float" (promoteProgR letFloatLetTopR <+ promoteExprR letFloatExprR :: RewriteH Core)
         [ "Float a Let whatever the context." ]                                 .+ Commute .+ Shallow  -- Don't include in bash, as each sub-rewrite is tagged "Bash" already.
-    , external "let-to-case" (promoteExprR letToCase :: RewriteH Core)
+    , external "let-to-case" (promoteExprR letToCaseR :: RewriteH Core)
         [ "let v = ev in e ==> case ev of v -> e" ]                             .+ Commute .+ Shallow .+ PreCondition
 --    , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
 --        [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ]
-    , external "let-unfloat" (promoteExprR letUnfloat :: RewriteH Core)
+    , external "let-unfloat" (promoteExprR letUnfloatR :: RewriteH Core)
         [ "Unfloat a let if possible." ]                                        .+ Commute .+ Shallow
-    , external "let-unfloat-app" ((promoteExprR letUnfloatApp >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
+    , external "let-unfloat-app" ((promoteExprR letUnfloatAppR >+> anybuR (promoteExprR letElimR)) :: RewriteH Core)
         [ "let v = ev in f a ==> (let v = ev in f) (let v = ev in a)" ]         .+ Commute .+ Shallow
-    , external "let-unfloat-case" ((promoteExprR letUnfloatCase >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
+    , external "let-unfloat-case" ((promoteExprR letUnfloatCaseR >+> anybuR (promoteExprR letElimR)) :: RewriteH Core)
         [ "let v = ev in case s of p -> e ==> case (let v = ev in s) of p -> let v = ev in e"
         , "if v does not shadow a pattern binder in p" ]                        .+ Commute .+ Shallow
-    , external "let-unfloat-lam" ((promoteExprR letUnfloatLam >+> anybuR (promoteExprR letElim)) :: RewriteH Core)
+    , external "let-unfloat-lam" ((promoteExprR letUnfloatLamR >+> anybuR (promoteExprR letElimR)) :: RewriteH Core)
         [ "let v = ev in \\ x -> e ==> \\ x -> let v = ev in e"
         , "if v does not shadow x" ]                                            .+ Commute .+ Shallow
-    , external "reorder-lets" (promoteExprR . reorderNonRecLets :: [TH.Name] -> RewriteH Core)
+    , external "reorder-lets" (promoteExprR . reorderNonRecLetsR :: [TH.Name] -> RewriteH Core)
         [ "Re-order a sequence of nested non-recursive let bindings."
         , "The argument list should contain the let-bound variables, in the desired order." ]
     , external "let-tuple" (promoteExprR . letTupleR . show :: TH.Name -> RewriteH Core)
@@ -188,32 +188,32 @@ a <$ mb = mb >> return a
 -------------------------------------------------------------------------------------------
 
 -- | @e@ ==> @(let v = e in v)@, name of v is provided
-letIntro :: String -> Rewrite c HermitM CoreExpr
-letIntro nm = prefixFailMsg "Let-introduction failed: " $
+letIntroR :: String -> Rewrite c HermitM CoreExpr
+letIntroR nm = prefixFailMsg "Let-introduction failed: " $
               contextfreeT $ \ e -> do guardMsg (not $ isTypeArg e) "let expressions may not return a type."
                                        v <- newIdH nm (exprKindOrType e)
                                        return $ Let (NonRec v e) (Var v)
 
-letElim :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-letElim = prefixFailMsg "Dead-let-elimination failed: " $
+letElimR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letElimR = prefixFailMsg "Dead-let-elimination failed: " $
           withPatFailMsg (wrongExprForm "Let binds expr") $
           do Let bg _ <- idR
              case bg of
-               NonRec{} -> letNonRecElim
-               Rec{}    -> letRecElim
+               NonRec{} -> letNonRecElimR
+               Rec{}    -> letRecElimR
 
 -- | Remove an unused non-recursive let binding.
 --   @let v = E1 in E2@ ==> @E2@, if @v@ is not free in @E2@
-letNonRecElim :: MonadCatch m => Rewrite c m CoreExpr
-letNonRecElim = withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
+letNonRecElimR :: MonadCatch m => Rewrite c m CoreExpr
+letNonRecElimR = withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
                 do Let (NonRec v _) e <- idR
                    guardMsg (v `notElemVarSet` exprFreeVars e) "let-bound variable appears in the expression."
                    return e
 
 -- TODO: find the GHC way to do this, as this implementation will be defeated by mutual recursion
 -- | Remove all unused recursive let bindings in the current group.
-letRecElim :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-letRecElim = withPatFailMsg (wrongExprForm "Let (Rec v e1) e2") $
+letRecElimR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letRecElimR = withPatFailMsg (wrongExprForm "Let (Rec v e1) e2") $
  do Let (Rec bnds) body <- idR
     (vsAndFrees, bodyFrees) <- letRecDefT (\ _ -> (idR,exprFreeVarsT)) exprFreeVarsT (,)
     -- binder is alive if it is found free anywhere but its own rhs
@@ -228,8 +228,8 @@ letRecElim = withPatFailMsg (wrongExprForm "Let (Rec v e1) e2") $
                 else return $ Let (Rec [ (v,rhs) | (v,rhs) <- bnds, v `elem` living ]) body
 
 -- | @let v = ev in e@ ==> @case ev of v -> e@
-letToCase :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-letToCase = prefixFailMsg "Converting Let to Case failed: " $
+letToCaseR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+letToCaseR = prefixFailMsg "Converting Let to Case failed: " $
             withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
   do Let (NonRec v ev) _ <- idR
      guardMsg (not $ isTyCoArg ev) "cannot case on a type or coercion."
@@ -240,22 +240,22 @@ letToCase = prefixFailMsg "Converting Let to Case failed: " $
 -------------------------------------------------------------------------------------------
 
 -- | @(let v = ev in e) x@ ==> @let v = ev in e x@
-letFloatApp :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-letFloatApp = prefixFailMsg "Let floating from App function failed: " $
+letFloatAppR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+letFloatAppR = prefixFailMsg "Let floating from App function failed: " $
   do vs <- appT (liftM mkVarSet letVarsT) exprFreeVarsT intersectVarSet
      let letAction = if isEmptyVarSet vs then idR else alphaLet
      appT letAction idR $ \ (Let bnds e) x -> Let bnds $ App e x
 
 -- | @f (let v = ev in e)@ ==> @let v = ev in f e@
-letFloatArg :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-letFloatArg = prefixFailMsg "Let floating from App argument failed: " $
+letFloatArgR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+letFloatArgR = prefixFailMsg "Let floating from App argument failed: " $
   do vs <- appT exprFreeVarsT (liftM mkVarSet letVarsT) intersectVarSet
      let letAction = if isEmptyVarSet vs then idR else alphaLet
      appT idR letAction $ \ f (Let bnds e) -> Let bnds $ App f e
 
 -- | @let v = (let w = ew in ev) in e@ ==> @let w = ew in let v = ev in e@
-letFloatLet :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-letFloatLet = prefixFailMsg "Let floating from Let failed: " $
+letFloatLetR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+letFloatLetR = prefixFailMsg "Let floating from Let failed: " $
   do vs <- letNonRecT mempty (liftM mkVarSet letVarsT) exprFreeVarsT (\ () -> intersectVarSet)
      let bdsAction = if isEmptyVarSet vs then idR else nonRecAllR idR alphaLet
      letT bdsAction idR $ \ (NonRec v (Let bds ev)) e -> Let bds $ Let (NonRec v ev) e
@@ -263,19 +263,19 @@ letFloatLet = prefixFailMsg "Let floating from Let failed: " $
 -- | @(\ v1 -> let v2 = e1 in e2)@  ==>  @let v2 = e1 in (\ v1 -> e2)@
 --   Fails if @v1@ occurs in @e1@.
 --   If @v1@ = @v2@ then @v1@ will be alpha-renamed.
-letFloatLam :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-letFloatLam = prefixFailMsg "Let floating from Lam failed: " $
+letFloatLamR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
               withPatFailMsg (wrongExprForm "Lam v1 (Let (NonRec v2 e1) e2)") $
   do Lam v1 (Let (NonRec v2 e1) e2) <- idR
      guardMsg (v1 `notElemVarSet` exprFreeVars e1) $ var2String v1 ++ " occurs in the definition of " ++ var2String v2 ++ "."
      if v1 == v2
-      then alphaLam Nothing >>> letFloatLam
+      then alphaLam Nothing >>> letFloatLamR
       else return (Let (NonRec v2 e1) (Lam v1 e2))
 
 -- | @case (let bnds in e) of wild alts@ ==> @let bnds in (case e of wild alts)@
 --   Fails if any variables bound in @bnds@ occurs in @alts@.
-letFloatCase :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-letFloatCase = prefixFailMsg "Let floating from Case failed: " $
+letFloatCaseR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+letFloatCaseR = prefixFailMsg "Let floating from Case failed: " $
   do captures <- caseT letVarsT
                        idR
                        idR
@@ -288,20 +288,20 @@ letFloatCase = prefixFailMsg "Let floating from Case failed: " $
            (\ (Let bnds e) wild ty alts -> Let bnds (Case e wild ty alts))
 
 -- | @cast (let bnds in e) co@ ==> @let bnds in cast e co@
-letFloatCast :: MonadCatch m => Rewrite c m CoreExpr
-letFloatCast = prefixFailMsg "Let floating from Cast failed: " $
+letFloatCastR :: MonadCatch m => Rewrite c m CoreExpr
+letFloatCastR = prefixFailMsg "Let floating from Cast failed: " $
                withPatFailMsg (wrongExprForm "Cast (Let bnds e) co") $
   do Cast (Let bnds e) co <- idR
      return (Let bnds (Cast e co))
 
 -- | Float a 'Let' through an expression, whatever the context.
-letFloatExpr :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-letFloatExpr = setFailMsg "Unsuitable expression for Let floating." $
-               letFloatArg <+ letFloatApp <+ letFloatLet <+ letFloatLam <+ letFloatCase <+ letFloatCast
+letFloatExprR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+letFloatExprR = setFailMsg "Unsuitable expression for Let floating." $
+               letFloatArgR <+ letFloatAppR <+ letFloatLetR <+ letFloatLamR <+ letFloatCaseR <+ letFloatCastR
 
 -- | @'ProgCons' ('NonRec' v ('Let' ('NonRec' w ew) ev)) p@ ==> @'ProgCons' ('NonRec' w ew) ('ProgCons' ('NonRec' v ev) p)@
-letFloatLetTop :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreProg
-letFloatLetTop = prefixFailMsg "Let floating to top level failed: " $
+letFloatLetTopR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreProg
+letFloatLetTopR = prefixFailMsg "Let floating to top level failed: " $
                  withPatFailMsg (wrongExprForm "NonRec v (Let (NonRec w ew) ev) `ProgCons` p") $
   do NonRec v (Let (NonRec w ew) ev) `ProgCons` p <- idR
      guardMsg (not $ isTyCoArg ew) "type and coercion bindings are not allowed at the top level."
@@ -310,13 +310,13 @@ letFloatLetTop = prefixFailMsg "Let floating to top level failed: " $
 -------------------------------------------------------------------------------------------
 
 -- | Unfloat a 'Let' if possible.
-letUnfloat :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-letUnfloat = letUnfloatCase <+ letUnfloatApp <+ letUnfloatLam
+letUnfloatR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letUnfloatR = letUnfloatCaseR <+ letUnfloatAppR <+ letUnfloatLamR
 
 -- | @let v = ev in case s of p -> e@ ==> @case (let v = ev in s) of p -> let v = ev in e@,
 --   if @v@ does not shadow a pattern binder in @p@
-letUnfloatCase :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $
+letUnfloatCaseR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letUnfloatCaseR = prefixFailMsg "Let unfloating from case failed: " $
                  withPatFailMsg (wrongExprForm "Let bnds (Case s w ty alts)") $
   do Let bnds (Case s w ty alts) <- idR
      captured <- letT bindVarsT caseVarsT intersect
@@ -326,16 +326,16 @@ letUnfloatCase = prefixFailMsg "Let unfloating from case failed: " $
      return $ Case (Let bnds s) w ty $ mapAlts (Let bnds) alts
 
 -- | @let v = ev in f a@ ==> @(let v = ev in f) (let v = ev in a)@
-letUnfloatApp :: MonadCatch m => Rewrite c m CoreExpr
-letUnfloatApp = prefixFailMsg "Let unfloating from app failed: " $
+letUnfloatAppR :: MonadCatch m => Rewrite c m CoreExpr
+letUnfloatAppR = prefixFailMsg "Let unfloating from app failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (App e1 e2)") $
   do Let bnds (App e1 e2) <- idR
      return $ App (Let bnds e1) (Let bnds e2)
 
 -- | @let v = ev in \ x -> e@ ==> @\x -> let v = ev in e@
 --   if @v@ does not shadow @x@
-letUnfloatLam :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-letUnfloatLam = prefixFailMsg "Let unfloating from lambda failed: " $
+letUnfloatLamR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letUnfloatLamR = prefixFailMsg "Let unfloating from lambda failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (Lam v e)") $
   do Let bnds (Lam v e) <- idR
      safe <- letT bindVarsT lamVarT $ flip notElem
@@ -346,8 +346,8 @@ letUnfloatLam = prefixFailMsg "Let unfloating from lambda failed: " $
 
 -- | Re-order a sequence of nested non-recursive let bindings.
 --   The argument list should contain the let-bound variables, in the desired order.
-reorderNonRecLets :: MonadCatch m => [TH.Name] -> Rewrite c m CoreExpr
-reorderNonRecLets nms = prefixFailMsg "Reorder lets failed: " $
+reorderNonRecLetsR :: MonadCatch m => [TH.Name] -> Rewrite c m CoreExpr
+reorderNonRecLetsR nms = prefixFailMsg "Reorder lets failed: " $
                  do guardMsg (not $ null nms) "no names given."
                     guardMsg (nodups nms) "duplicate names given."
                     e <- idR
