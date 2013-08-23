@@ -1,6 +1,7 @@
+load-as-rewrite "WWA" "WW-Ass-A.hss"
 flatten-module
 consider 'eval
-ww-split [| wrap |] [| unwrap |]
+ww-split [| wrap |] [| unwrap |] (ww-AssA-to-AssC WWA)
 {rhs-of 'work
    eta-expand 'e ; lam-body
    eta-expand 's ; lam-body
@@ -13,7 +14,7 @@ ww-split [| wrap |] [| unwrap |]
      consider case ; [case-alt 1, alt-rhs] ; abstract 'n
    }
    any-bu (fold 'unwrap)
-   any-bu (foreward (ww-fusion [| wrap |] [|unwrap|] [|work|]))
+   any-bu (foreward (ww-fusion-unsafe [| wrap |] [|unwrap|] [|work|] WWA))
 }
 simplify
 any-call (unfold 'wrap)

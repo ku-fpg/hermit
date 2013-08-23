@@ -90,7 +90,7 @@ cleanupUnfoldR = do
 --      Var ==> inlines
 --      App ==> inlines the head of the function call for the app tree
 unfoldR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-unfoldR = go >>> cleanupUnfoldR
+unfoldR = prefixFailMsg "unfold failed: " (go >>> cleanupUnfoldR)
     where go :: Rewrite c HermitM CoreExpr
           go = inlineR <+ appAllR go idR
 
@@ -98,7 +98,7 @@ unfoldPredR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => (Id -> [Co
 unfoldPredR p = callPredT p >> unfoldR
 
 unfoldNameR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
-unfoldNameR nm = callNameT nm >> unfoldR
+unfoldNameR nm = prefixFailMsg ("unfold '" ++ show nm ++ " failed: ") (callNameT nm >> unfoldR)
 
 unfoldAnyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
 unfoldAnyR = orR . map unfoldNameR
@@ -118,7 +118,7 @@ rememberR :: Label -> Rewrite c HermitM Core
 rememberR label = sideEffectR $ \ _ -> \case
                                           DefCore def           -> saveDef label def
                                           BindCore (NonRec i e) -> saveDef label (Def i e)
-                                          _                     -> fail "remember: not a binding"
+                                          _                     -> fail "remember failed: not applied to a binding."
 
 -- | Stash a binding with a name for later use.
 -- Allows us to look at past definitions.

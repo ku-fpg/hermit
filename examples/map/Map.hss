@@ -1,6 +1,6 @@
 flatten-module
 consider 'mapPlus1Int
-{load-and-run "../WWSplitTactic.hss"
+{load-and-run "WWSplitTactic.hss"
   consider 'work
 
   remember origwork

@@ -1,6 +1,6 @@
 flatten-module
 consider 'length
-ww-split-param 1 [| wrap |] [|unwrap |]
+ww-split-param-unsafe 1 [| wrap |] [|unwrap |]
 bash
 any-call (unfold 'wrap)
 any-call (unfold 'unwrap)
@@ -18,9 +18,9 @@ simplify
   { case-alt 1
     alpha-alt ['b, 'bs]
     alt-rhs
-    apply-rule "rep-distr"
-    bash  -- temperary while "unfold-rule" gets fixed
-    { app-fun ; ww-fusion [| abs |] [| rep |] [| work bs |] }
+    unfold-rule "rep-distr"
+    bash
+    { app-fun ; ww-fusion-very-unsafe [| abs |] [| rep |] [| work bs |] }
     case-seq 'acc
   }
 }

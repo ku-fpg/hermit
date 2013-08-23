@@ -1,6 +1,7 @@
+load-as-rewrite "WWA" "WW-Ass-A.hss"
 flatten-module
 consider 'qsort
-ww-split-param 1 [|wrap|] [|unwrap|]
+ww-split-param 1 [|wrap|] [|unwrap|] (ww-AssA-to-AssC WWA)
 bash
 {consider lam ; alpha-lam 't}
 any-call (unfold 'wrap)
@@ -18,8 +19,8 @@ bash
      alpha-alt ['bs,'cs]
      any-td (unfold-rule "repH ++")
      bash
-     one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work bs |]))
-     one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work cs |]))
+     one-td (foreward (ww-fusion-very-unsafe [| absH t |] [| repH t |] [| work bs |])) -- cheating
+     one-td (foreward (ww-fusion-very-unsafe [| absH t |] [| repH t |] [| work cs |])) -- cheating
      any-call (unfold-rule "repH (:)")
   }
   any-call (unfold-rule "repH []")

@@ -205,6 +205,7 @@ Library
        HERMIT.Primitive.New
        HERMIT.Primitive.Unfold
        HERMIT.Primitive.Unsafe
+       HERMIT.Primitive.WorkerWrapper
 
        HERMIT.PrettyPrinter.AST
        HERMIT.PrettyPrinter.Clean

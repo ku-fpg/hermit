@@ -2,7 +2,7 @@ flatten-module
 
 -- do the w/w split
 consider 'hanoi
-{ ww-split [| wrap |] [| unwrap |] }
+{ ww-split-unsafe [| wrap |] [| unwrap |] }
 
 { consider 'work
   remember origwork
@@ -18,7 +18,7 @@ consider 'hanoi
   { [case-alt 1, alt-rhs] ; case-split-inline 'a
     { case-alt 0 ; any-call (unfold 'f) ; simplify
       any-call (unfold origwork)
-      any-call (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
+      any-call (foreward (ww-assumption-A-unsafe [| wrap |] [| unwrap |]))
       any-call (unfold 'f)
       simplify
       any-call (unfold-rule "[] ++")
@@ -27,13 +27,13 @@ consider 'hanoi
     { case-alt 1 ; any-call (unfold 'f) ; simplify
 
       any-call (unfold origwork)
-      any-call (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
+      any-call (foreward (ww-assumption-A-unsafe [| wrap |] [| unwrap |]))
       any-call (unfold 'f)
       innermost let-subst ; simplify
 
       -- recursion decrements by two, so must do this again
       any-call (unfold origwork)
-      any-call (foreward (ww-assumption-A [| wrap |] [| unwrap |]))
+      any-call (foreward (ww-assumption-A-unsafe [| wrap |] [| unwrap |]))
 
       -- time to let intro
       -- need a "occurance 'work" like consider

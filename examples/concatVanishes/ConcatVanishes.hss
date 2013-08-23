@@ -1,5 +1,6 @@
-ww-split-param 1 [|wrap|] [|unwrap|]
+load-as-rewrite "WWA" "WW-Ass-A.hss"
+ww-split-param 1 [|wrap|] [|unwrap|] (ww-AssA-to-AssC WWA)
 inline-all [ 'f, 'wrap, 'unwrap ]
 innermost (bash >+> push 'repH >+> unfold-rule "repH ++" >+> unfold-rule "repH (:)" >+> unfold-rule "repH []" >+> unfold-rule "[] ++" >+> unfold-rule "[] ++" >+> unfold-rule "(:) ++")
-any-td (unfold-rule "rep-abs-fusion")
+any-td (unfold-rule "rep-abs-fusion") -- unsafe
 any-call (unfold 'absH)

@@ -1,6 +1,9 @@
 flatten-module
 consider 'last
-ww-split-param 1 [|wrap|] [|unwrap|]
+
+load-as-rewrite "WWB" "WW-Ass-B.hss"
+ww-split-param 1 [|wrap|] [|unwrap|] (ww-AssB-to-AssC WWB)
 inline-all [ 'f, 'wrap, 'unwrap ]
 bash
+
 unshadow

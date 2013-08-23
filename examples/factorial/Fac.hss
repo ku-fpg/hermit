@@ -1,6 +1,6 @@
 flatten-module
 consider 'fac
-ww-split [| wrap |] [| unwrap |]
+ww-split-unsafe [| wrap |] [| unwrap |]
 {rhs-of 'work
   eta-expand 'x
   one-td (unfold 'unwrap)

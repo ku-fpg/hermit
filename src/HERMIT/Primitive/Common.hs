@@ -91,7 +91,7 @@ callPredT p = do
 -- | Succeeds if we are looking at an application of given function
 --   returning zero or more arguments to which it is applied.
 callNameT :: MonadCatch m => TH.Name -> Translate c m CoreExpr (CoreExpr, [CoreExpr])
-callNameT nm = setFailMsg ("callNameT: not a call to " ++ show nm) $
+callNameT nm = setFailMsg ("callNameT failed: not a call to '" ++ show nm ++ ".") $
     callPredT (const . cmpTHName2Var nm)
 
 -- | Succeeds if we are looking at a fully saturated function call.

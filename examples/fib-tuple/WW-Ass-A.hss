@@ -1,13 +1,11 @@
 -- Worker/Wrapper Assumption A:  wrap (unwrap h) <=> h
 
 --  wrap (unwrap h)
-                              { unfold 'wrap }
---  fst . unwrap h
-                              { simplify }
---  \ x -> fst (unwrap h x)
+                              { eta-expand 'n }
+--  \ n -> wrap (unwrap h) n
+                              { any-call (unfold 'wrap) }
+--  \ n -> fst (unwrap h n)
                               { any-call (unfold 'unwrap) }
---  \ x -> fst (h x, h (S x))
-                              { lam-body ; unfold 'fst ; simplify }
---  \ x -> h x
-                              { eta-reduce }
+--  \ x -> fst (h n, h (S n))
+                              { bash }
 --  h

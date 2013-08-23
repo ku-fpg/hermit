@@ -33,7 +33,7 @@ fib (S (S n)) = fib (S n) + fib n
 --                         in (y,x+y)
 
 wrap :: (Nat -> (Nat, Nat)) -> Nat -> Nat
-wrap h = fst . h
+wrap h n = fst (h n)
 
 unwrap :: (Nat -> Nat) -> Nat -> (Nat, Nat)
 unwrap h n = (h n, h (S n))

@@ -1,6 +1,7 @@
+load-as-rewrite "WWA" "WW-Ass-A.hss"
 flatten-module
 consider 'flatten
-ww-split-param 1 [|wrap|] [|unwrap|]
+ww-split-param 1 [|wrap|] [|unwrap|] (ww-AssA-to-AssC WWA)
 bash
 {consider lam ; alpha-lam 't}
 any-call (unfold 'wrap)
@@ -11,8 +12,8 @@ simplify
    eta-expand 'acc
    innermost case-float
    any-call (unfold-rule "repH ++")
-   one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work l |]))
-   one-td (foreward (ww-fusion [| absH t |] [| repH t |] [| work r |]))
+   one-td (foreward (ww-fusion-very-unsafe [| absH t |] [| repH t |] [| work l |])) -- cheating
+   one-td (foreward (ww-fusion-very-unsafe [| absH t |] [| repH t |] [| work r |])) -- cheating
    any-call (unfold-rule "repH (:)")
    any-call (unfold-rule "repH []")
    bash
