@@ -57,7 +57,7 @@ data OInst :: * -> * where
     Query    :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g a              -> OInst a
 
 -- using operational, but would we nice to use Neil's constrained-normal package!
-newtype OM a = OM { om :: ProgramT OInst (StateT InterpState IO) a }
+newtype OM a = OM (ProgramT OInst (StateT InterpState IO) a)
     deriving (Monad, MonadIO, MonadState InterpState)
 
 optimize :: ([CommandLineOption] -> OM ()) -> Plugin
@@ -99,6 +99,7 @@ errorAbort s = gets isKernel >>= \k -> liftIO $ errorAbortIO k s
 omToIO :: InterpState -> OM a -> IO (a, InterpState)
 omToIO initState (OM opt) = runStateT (eval [] opt) initState
 
+-- TODO - use the kernel's pathing instead of our own
 eval :: PathH -> ProgramT OInst (StateT InterpState IO) a -> InterpM a
 eval path comp = do
     let env = mkHermitMEnv $ GHC.liftIO . debug
