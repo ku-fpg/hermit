@@ -35,6 +35,8 @@ Factorial
 
 * Main script completed.
 
+* Assumption A scripted (but it may not be valid, needs thinking about)
+
 
 Fibonacci (Tupling)
 ===================
