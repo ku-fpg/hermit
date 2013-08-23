@@ -1,10 +1,17 @@
 {-# LANGUAGE LambdaCase, ScopedTypeVariables, GADTs #-}
 
 module HERMIT.Shell.Command
-       ( -- * The HERMIT Command-line Shell
-         commandLine
-       , unicodeConsole
-) where
+    ( -- * The HERMIT Command-line Shell
+      commandLine
+    , unicodeConsole
+    , performKernelEffect
+    , performQuery
+    , performShellEffect
+    , performMetaCommand
+    , cl_kernel_env
+    , pretty
+    , getFocusPath
+    ) where
 
 import qualified GhcPlugins as GHC
 
@@ -221,7 +228,7 @@ commandLine opts behavior exts skernel sast = do
 
     _ <- runInputTBehavior behavior
                 (setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings)
-                (evalStateT (runErrorT (startup >> showWindow >> loop completionMVar)) shellState)
+                (evalStateT (runErrorT (runCLM (startup >> showWindow >> loop completionMVar))) shellState)
 
     return ()
 
@@ -240,7 +247,7 @@ loop completionMVar = loop'
                                                setSGR [ SetSwapForegroundBackground True ]
                                                putStrLn $ replicate (po_width (cl_pretty_opts st)) ' '
                                                setSGR [ SetSwapForegroundBackground False ] -}
-                                   lift $ lift $ getInputLine $ "hermit<" ++ show n ++ "> "
+                                   lift $ getInputLine $ "hermit<" ++ show n ++ "> "
 
             case maybeLine of
                 Nothing             -> performMetaCommand Resume
@@ -255,7 +262,7 @@ loop completionMVar = loop'
 ourCatch :: MonadIO m => CLM IO () -> (String -> CLM m ()) -> CLM m ()
 ourCatch m failure = do
     st <- get
-    (res,st') <- liftIO $ runStateT (runErrorT m) st
+    (res,st') <- liftIO $ runStateT (runErrorT (runCLM m)) st
     put st'
     case res of
         Left msg -> if cl_failhard st'

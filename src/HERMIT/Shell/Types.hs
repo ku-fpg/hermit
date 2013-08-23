@@ -1,4 +1,4 @@
-{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, TypeFamilies, DeriveDataTypeable #-}
+{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, TypeFamilies, DeriveDataTypeable, GeneralizedNewtypeDeriving #-}
 
 module HERMIT.Shell.Types where
 
@@ -110,7 +110,11 @@ instance Extern ShellEffect where
 
 ----------------------------------------------------------------------------------
 
-type CLM m a = ErrorT String (StateT CommandLineState m) a
+newtype CLM m a = CLM { runCLM :: ErrorT String (StateT CommandLineState m) a }
+    deriving (Monad, MonadIO, MonadError String, MonadState CommandLineState)
+
+instance MonadTrans CLM where
+    lift = CLM . lift . lift
 
 -- TODO: Come up with names for these, and/or better characterise these abstractions.
 iokm2clm' :: MonadIO m => String -> (a -> CLM m b) -> IO (KureM a) -> CLM m b
