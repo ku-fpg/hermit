@@ -19,8 +19,8 @@ bash
      alpha-alt ['bs,'cs]
      any-td (unfold-rule "repH ++")
      bash
-     one-td (foreward (ww-fusion-very-unsafe [| absH t |] [| repH t |] [| work bs |])) -- cheating
-     one-td (foreward (ww-fusion-very-unsafe [| absH t |] [| repH t |] [| work cs |])) -- cheating
+     one-td (foreward (ww-fusion-unsafe [| absH t |] [| repH t |] [| work bs |])) -- cheating
+     one-td (foreward (ww-fusion-unsafe [| absH t |] [| repH t |] [| work cs |])) -- cheating
      any-call (unfold-rule "repH (:)")
   }
   any-call (unfold-rule "repH []")

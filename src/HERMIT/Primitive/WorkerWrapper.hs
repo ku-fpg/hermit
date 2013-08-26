@@ -62,7 +62,7 @@ externals = map (.+ Experiment)
                   "and a proof of Assumption C (fix tyA (\\ a -> wrap (unwrap (f a))) ==> fix tyA f), then",
                   "unwrap (wrap work)  <==>  work",
                   "Note: you are required to have previously executed the command \"ww-generate-fusion\" on the definition",
-                  "      work == unwrap (f (wrap work))"
+                  "      work = unwrap (f (wrap work))"
                 ] .+ Introduce .+ Context .+ PreCondition .+ TODO
          , external "ww-fusion-unsafe" ((\ wrap unwrap work -> promoteExprBiR $ workerWrapperFusion Nothing wrap unwrap work)
                                  :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)

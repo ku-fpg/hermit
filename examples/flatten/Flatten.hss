@@ -12,8 +12,8 @@ simplify
    eta-expand 'acc
    innermost case-float
    any-call (unfold-rule "repH ++")
-   one-td (foreward (ww-fusion-very-unsafe [| absH t |] [| repH t |] [| work l |])) -- cheating
-   one-td (foreward (ww-fusion-very-unsafe [| absH t |] [| repH t |] [| work r |])) -- cheating
+   one-td (foreward (ww-fusion-unsafe [| absH t |] [| repH t |] [| work l |])) -- cheating
+   one-td (foreward (ww-fusion-unsafe [| absH t |] [| repH t |] [| work r |])) -- cheating
    any-call (unfold-rule "repH (:)")
    any-call (unfold-rule "repH []")
    bash
