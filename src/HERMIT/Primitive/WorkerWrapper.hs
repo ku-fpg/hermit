@@ -256,10 +256,10 @@ workerWrapperSplitR mAss wrap unwrap =
       fixIntro >>> defAllR idR ( appAllR idR (letIntroR "f")
                                   >>> letFloatArgR
                                   >>> letAllR idR ( forewardT (workerWrapperFacBR mAss wrap unwrap)
-                                                     >>> appAllR idR (letIntroR "w")
-                                                     >>> letFloatArgR
-                                                     >>> letNonRecAllR idR (unfoldNameR fx >>> letRecDefAllR (\ _ -> (idR,betaReduceR >>> letSubstR)) idR >>> alphaLetWith [work] {- >>> extractR simplifyR -}) idR
-                                                     >>> letSubstR
+                                                     >>> appAllR idR ( unfoldNameR fx
+                                                                         >>> alphaLetWith [work]
+                                                                         >>> letRecDefAllR (\ _ -> (idR,betaReduceR >>> letSubstR)) idR
+                                                                     )
                                                      >>> letFloatArgR
                                                   )
                                )
