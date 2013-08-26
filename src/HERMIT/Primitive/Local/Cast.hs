@@ -3,10 +3,10 @@
 module HERMIT.Primitive.Local.Cast
     ( -- * Rewrites on Case Expressions
       externals
-    , castElimRefl
-    , castElimSym
-    , castFloatApp
-    , castElimSymPlus -- TODO: revisit
+    , castElimReflR
+    , castElimSymR
+    , castFloatAppR
+    , castElimSymPlusR -- TODO: revisit
     ) where
 
 import GhcPlugins
@@ -28,46 +28,46 @@ import HERMIT.Primitive.Common
 -- | Externals relating to Case expressions.
 externals :: [External]
 externals =
-    [ external "cast-elim" (promoteExprR castElim :: RewriteH Core)
+    [ external "cast-elim" (promoteExprR castElimR :: RewriteH Core)
         [ "cast-elim-refl <+ cast-elim-sym" ] .+ Shallow -- don't include in "Bash", as sub-rewrites are tagged "Bash" already.
-    , external "cast-elim-refl" (promoteExprR castElimRefl :: RewriteH Core)
+    , external "cast-elim-refl" (promoteExprR castElimReflR :: RewriteH Core)
         [ "cast e co ==> e ; if co is a reflexive coercion" ] .+ Shallow .+ Bash
-    , external "cast-elim-sym" (promoteExprR castElimSym :: RewriteH Core)
+    , external "cast-elim-sym" (promoteExprR castElimSymR :: RewriteH Core)
         [ "removes pairs of symmetric casts" ]                .+ Shallow .+ Bash
-    , external "cast-elim-sym-plus" (promoteExprR castElimSymPlus :: RewriteH Core)
+    , external "cast-elim-sym-plus" (promoteExprR castElimSymPlusR :: RewriteH Core)
         [ "removes pairs of symmetric casts possibly separated by let or case forms" ] .+ Deep .+ TODO
-    , external "cast-float-app" (promoteExprR castFloatApp :: RewriteH Core)
+    , external "cast-float-app" (promoteExprR castFloatAppR :: RewriteH Core)
         [ "(cast e (c1 -> c2)) x ==> cast (e (cast x (sym c1))) c2" ] .+ Shallow
-    , external "cast-elim-unsafe" (promoteExprR castElimUnsafe :: RewriteH Core)
+    , external "cast-elim-unsafe" (promoteExprR castElimUnsafeR :: RewriteH Core)
         [ "removes casts regardless of whether it is safe to do so" ] .+ Shallow .+ Experiment .+ Unsafe .+ TODO
     ]
 
 ------------------------------------------------------------------------------
 
-castElim :: MonadCatch m => Rewrite c m CoreExpr
-castElim = setFailMsg "Cast elimination failed: " $
-           castElimRefl <+ castElimSym
+castElimR :: MonadCatch m => Rewrite c m CoreExpr
+castElimR = setFailMsg "Cast elimination failed: " $
+            castElimReflR <+ castElimSymR
 
-castElimRefl :: MonadCatch m => Rewrite c m CoreExpr
-castElimRefl = prefixFailMsg "Reflexive cast elimination failed: " $
-               withPatFailMsg (wrongExprForm "Cast e co") $
+castElimReflR :: MonadCatch m => Rewrite c m CoreExpr
+castElimReflR = prefixFailMsg "Reflexive cast elimination failed: " $
+                withPatFailMsg (wrongExprForm "Cast e co") $
     do Cast e co <- idR
        Pair a b <- return $ coercionKind co
        guardMsg (eqType a b) "not a reflexive coercion."
        return e
 
-castElimSym :: MonadCatch m => Rewrite c m CoreExpr
-castElimSym = prefixFailMsg "Symmetric cast elimination failed: " $
-              withPatFailMsg (wrongExprForm "Cast (Cast e co1) co2") $
+castElimSymR :: MonadCatch m => Rewrite c m CoreExpr
+castElimSymR = prefixFailMsg "Symmetric cast elimination failed: " $
+               withPatFailMsg (wrongExprForm "Cast (Cast e co1) co2") $
     do Cast (Cast e co1) co2 <- idR
        let Pair a b   = coercionKind co1
            Pair b' a' = coercionKind co2
        guardMsg (eqType a a' && eqType b b') "coercions are not symmetric."
        return e
 
-castFloatApp :: MonadCatch m => Rewrite c m CoreExpr
-castFloatApp = prefixFailMsg "Cast float from application failed: " $
-               withPatFailMsg (wrongExprForm "App (Cast e1 co) e2") $
+castFloatAppR :: MonadCatch m => Rewrite c m CoreExpr
+castFloatAppR = prefixFailMsg "Cast float from application failed: " $
+                withPatFailMsg (wrongExprForm "App (Cast e1 co) e2") $
     do App (Cast e1 co) e2 <- idR
        case co of
             TyConAppCo t [c1, c2] -> do
@@ -79,8 +79,8 @@ castFloatApp = prefixFailMsg "Cast float from application failed: " $
             _ -> fail "castFloatApp"
 
 -- TODO: revisit
-castElimSymPlus :: (ExtendPath c Crumb, AddBindings c, Monad m) => Rewrite c m CoreExpr
-castElimSymPlus = castT idR idR (flip go) >>> joinT
+castElimSymPlusR :: (ExtendPath c Crumb, AddBindings c, Monad m) => Rewrite c m CoreExpr
+castElimSymPlusR = castT idR idR (flip go) >>> joinT
   where
       go :: Monad m => Coercion -> CoreExpr -> m CoreExpr
       go _  (Var _) = fail "no symmetric casts found"
@@ -115,6 +115,6 @@ castElimSymPlus = castT idR idR (flip go) >>> joinT
       --sym _ _ = False
 
 
-castElimUnsafe :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
-castElimUnsafe = castT idR idR const
+castElimUnsafeR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
+castElimUnsafeR = castT idR idR const
 

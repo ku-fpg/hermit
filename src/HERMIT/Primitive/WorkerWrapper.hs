@@ -408,9 +408,10 @@ wwAssC :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption C
        -> CoreExpr                  -- ^ unwrap
        -> CoreExpr                  -- ^ f
        -> BiRewriteH CoreExpr
-wwAssC mr wrap unwrap f = beforeBiR (do whenJust (verifyAssC wrap unwrap f) mr
-                                        isFixExpr)
-                                    (\ _ -> bidirectional wwCL wwCR)
+wwAssC mr wrap unwrap f = beforeBiR (do _ <- isFixExpr
+                                        whenJust (verifyAssC wrap unwrap f) mr
+                                    )
+                                    (\ () -> bidirectional wwCL wwCR)
   where
     assB :: BiRewriteH CoreExpr
     assB = wwAssB Nothing wrap unwrap f
