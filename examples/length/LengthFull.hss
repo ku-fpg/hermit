@@ -22,7 +22,7 @@ simplify
     alpha-alt ['b, 'bs]
     alt-rhs
     unfold-rule "rep-distr"
-    one-td (foreward (ww-fusion-very-unsafe [| abs |] [| rep |] [| work bs |]))
+    one-td (foreward (ww-fusion-unsafe [| abs |] [| rep |] [| work bs |]))
   }
 }
 one-td (unfold 'abs)

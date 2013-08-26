@@ -20,7 +20,7 @@ simplify
     alt-rhs
     unfold-rule "rep-distr"
     bash
-    { app-fun ; ww-fusion-very-unsafe [| abs |] [| rep |] [| work bs |] }
+    { app-fun ; ww-fusion-unsafe [| abs |] [| rep |] [| work bs |] }
     case-seq 'acc
   }
 }
