@@ -18,6 +18,7 @@ module HERMIT.Core
           , funArgResTypes
           , funsWithInverseTypes
           , appCount
+          , mapAlts
             -- * Crumbs
           , Crumb(..)
           , showCrumbs
@@ -102,6 +103,12 @@ appCount :: CoreExpr -> Int
 appCount (App e1 _) = appCount e1 + 1
 appCount _          = 0
 -- don't inline, recursive
+
+-----------------------------------------------------------------------
+
+-- | Map a function over the RHS of each case alternative.
+mapAlts :: (CoreExpr -> CoreExpr) -> [CoreAlt] -> [CoreAlt]
+mapAlts f alts = [ (ac, vs, f e) | (ac, vs, e) <- alts ]
 
 -----------------------------------------------------------------------
 

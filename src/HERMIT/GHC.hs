@@ -30,6 +30,7 @@ module HERMIT.GHC
     , CoAxiom.CoAxiom
     , CoAxiom.Branched
 #endif
+    , notElemVarSet
     ) where
 
 import GhcPlugins as GHC
@@ -176,6 +177,8 @@ zapVarOccInfo i = if isId i
 
 --------------------------------------------------------------------------
 
+-- | Determine if a 'Var' is not an element of a 'VarSet'.
+notElemVarSet :: Var -> VarSet -> Bool
+notElemVarSet v vs = not (v `elemVarSet` vs)
 
-
-
+--------------------------------------------------------------------------

@@ -220,6 +220,7 @@ Library
 
   Other-modules:
        HERMIT.Syntax
+       HERMIT.Utilities
 
        Paths_hermit
 

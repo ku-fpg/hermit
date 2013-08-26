@@ -46,6 +46,7 @@ import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Utilities
 
 import HERMIT.Primitive.Common
 import HERMIT.Primitive.GHC hiding (externals)

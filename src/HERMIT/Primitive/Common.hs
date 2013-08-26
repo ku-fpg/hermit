@@ -42,8 +42,6 @@ module HERMIT.Primitive.Common
     , exprIsOccurrenceOfT
       -- ** Miscallaneous
     , wrongExprForm
-    , nodups
-    , mapAlts
     , notElemVarSet
     )
 
@@ -274,22 +272,5 @@ findIdBuiltIn = go . showName
 --   Argument 'String' should be the desired form of the expression.
 wrongExprForm :: String -> String
 wrongExprForm form = "Expression does not have the form: " ++ form
-
-------------------------------------------------------------------------------
-
--- | Determine if a list contains no duplicated elements.
-nodups :: Eq a => [a] -> Bool
-nodups as = length as == length (nub as)
-
-------------------------------------------------------------------------------
-
-mapAlts :: (CoreExpr -> CoreExpr) -> [CoreAlt] -> [CoreAlt]
-mapAlts f alts = [ (ac, vs, f e) | (ac, vs, e) <- alts ]
-
-------------------------------------------------------------------------------
-
--- | Determine if a 'Var' is not an element of a 'VarSet'.
-notElemVarSet :: Var -> VarSet -> Bool
-notElemVarSet v vs = not (v `elemVarSet` vs)
 
 ------------------------------------------------------------------------------

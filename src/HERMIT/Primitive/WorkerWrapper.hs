@@ -22,6 +22,7 @@ import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Utilities
 
 import HERMIT.Primitive.AlphaConversion
 import HERMIT.Primitive.Common
@@ -39,7 +40,7 @@ import qualified Language.Haskell.TH as TH
 
 -- | Externals for manipulating fixed points, and for the worker/wrapper transformation.
 externals ::  [External]
-externals = map (.+ Experiment)
+externals =
          [
            external "ww-factorisation" ((\ wrap unwrap assC -> promoteExprBiR $ workerWrapperFac (mkWWAssC assC) wrap unwrap)
                                           :: CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
@@ -187,7 +188,7 @@ workerWrapperFacBR mAss wrap unwrap = beforeBiR (wrapUnwrapTypes wrap unwrap)
     wwL tyA tyB = prefixFailMsg "worker/wrapper factorisation failed: " $
                   do (tA,f) <- isFixExpr
                      guardMsg (eqType tyA tA) ("wrapper/unwrapper types do not match fix body type.")
-                     fromJustM (verifyWWAss wrap unwrap f) mAss
+                     whenJust (verifyWWAss wrap unwrap f) mAss
                      b <- constT (newIdH "x" tyB)
                      App wrap <$> mkFix (Lam b (App unwrap (App f (App wrap (Var b)))))
 
@@ -201,7 +202,7 @@ workerWrapperFacBR mAss wrap unwrap = beforeBiR (wrapUnwrapTypes wrap unwrap)
                       guardMsg (exprEqual wrap wrap2) "given wrapper does not match applied function."
                       guardMsg (exprEqual wrap wrap1) "given wrapper does not match wrapper in body of fix."
                       guardMsg (exprEqual unwrap unwrap1) "given unwrapper does not match unwrapper in body of fix."
-                      fromJustM (verifyWWAss wrap unwrap f) mAss
+                      whenJust (verifyWWAss wrap unwrap f) mAss
                       mkFix f
 
     wrongFixBody :: String
@@ -345,7 +346,7 @@ wwAssA :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption B
        -> CoreExpr                  -- ^ wrap
        -> CoreExpr                  -- ^ unwrap
        -> BiRewriteH CoreExpr
-wwAssA mr wrap unwrap = beforeBiR (do fromJustM (verifyAssA wrap unwrap) mr
+wwAssA mr wrap unwrap = beforeBiR (do whenJust (verifyAssA wrap unwrap) mr
                                       wrapUnwrapTypes wrap unwrap
                                   )
                                   (\ (tyA,_) -> bidirectional wwAL (wwAR tyA))
@@ -375,7 +376,7 @@ wwAssB :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption B
        -> CoreExpr                  -- ^ unwrap
        -> CoreExpr                  -- ^ f
        -> BiRewriteH CoreExpr
-wwAssB mr wrap unwrap f = beforeBiR (fromJustM (verifyAssB wrap unwrap f) mr)
+wwAssB mr wrap unwrap f = beforeBiR (whenJust (verifyAssB wrap unwrap f) mr)
                                     (\ () -> bidirectional wwBL wwBR)
   where
     assA :: BiRewriteH CoreExpr
@@ -407,7 +408,7 @@ wwAssC :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption C
        -> CoreExpr                  -- ^ unwrap
        -> CoreExpr                  -- ^ f
        -> BiRewriteH CoreExpr
-wwAssC mr wrap unwrap f = beforeBiR (do fromJustM (verifyAssC wrap unwrap f) mr
+wwAssC mr wrap unwrap f = beforeBiR (do whenJust (verifyAssC wrap unwrap f) mr
                                         isFixExpr)
                                     (\ _ -> bidirectional wwCL wwCR)
   where
@@ -499,10 +500,5 @@ parse2beforeBiR f s1 s2 = beforeBiR (parseCoreExprT s1 &&& parseCoreExprT s2) (u
 
 parse3beforeBiR :: (CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH a) -> CoreString -> CoreString -> CoreString -> BiRewriteH a
 parse3beforeBiR f s1 s2 s3 = beforeBiR ((parseCoreExprT s1 &&& parseCoreExprT s2) &&& parseCoreExprT s3) ((uncurry.uncurry) f)
-
---------------------------------------------------------------------------------------------------
-
-fromJustM :: Monad m => (a -> m ()) -> Maybe a -> m ()
-fromJustM f = maybe (return ()) f
 
 --------------------------------------------------------------------------------------------------
