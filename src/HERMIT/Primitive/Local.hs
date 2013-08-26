@@ -12,15 +12,15 @@ module HERMIT.Primitive.Local
          -- ** Let Expressions
        , module HERMIT.Primitive.Local.Let
          -- ** Miscellaneous
-       , abstract
-       , push
-       , betaReduce
-       , betaReducePlus
-       , betaExpand
-       , etaReduce
-       , etaExpand
-       , multiEtaExpand
-       , flattenModule
+       , abstractR
+       , pushR
+       , betaReduceR
+       , betaReducePlusR
+       , betaExpandR
+       , etaReduceR
+       , etaExpandR
+       , multiEtaExpandR
+       , flattenModuleR
        , flattenProgramR
        , flattenProgramT
        )
@@ -55,28 +55,28 @@ import Control.Arrow
 --   (Many taken from Chapter 3 of Andre Santos' dissertation.)
 externals :: [External]
 externals =
-    [ external "beta-reduce" (promoteExprR betaReduce :: RewriteH Core)
+    [ external "beta-reduce" (promoteExprR betaReduceR :: RewriteH Core)
         [ "((\\ v -> E1) E2) ==> let v = E2 in E1"
         , "This form of beta-reduction is safe if E2 is an arbitrary expression"
         , "(won't duplicate work)." ]                                 .+ Eval .+ Shallow
-    , external "beta-reduce-plus" (promoteExprR betaReducePlus :: RewriteH Core)
+    , external "beta-reduce-plus" (promoteExprR betaReducePlusR :: RewriteH Core)
         [ "Perform one or more beta-reductions."]                               .+ Eval .+ Shallow .+ Bash
-    , external "beta-expand" (promoteExprR betaExpand :: RewriteH Core)
+    , external "beta-expand" (promoteExprR betaExpandR :: RewriteH Core)
         [ "(let v = e1 in e2) ==> (\\ v -> e2) e1" ]                            .+ Shallow
-    , external "eta-reduce" (promoteExprR etaReduce :: RewriteH Core)
+    , external "eta-reduce" (promoteExprR etaReduceR :: RewriteH Core)
         [ "(\\ v -> e1 v) ==> e1" ]                                             .+ Eval .+ Shallow .+ Bash
-    , external "eta-expand" (promoteExprR . etaExpand . show :: TH.Name -> RewriteH Core)
+    , external "eta-expand" (promoteExprR . etaExpandR . show :: TH.Name -> RewriteH Core)
         [ "\"eta-expand 'v\" performs e1 ==> (\\ v -> e1 v)" ]                  .+ Shallow .+ Introduce
-    , external "flatten-module" (promoteModGutsR flattenModule :: RewriteH Core)
+    , external "flatten-module" (promoteModGutsR flattenModuleR :: RewriteH Core)
         [ "Flatten all the top-level binding groups in the module to a single recursive binding group."
         , "This can be useful if you intend to appply GHC RULES." ]
     , external "flatten-program" (promoteProgR flattenProgramR :: RewriteH Core)
         [ "Flatten all the top-level binding groups in a program (list of binding groups) to a single"
         , "recursive binding group.  This can be useful if you intend to apply GHC RULES." ]
-    , external "abstract" (promoteExprR . abstract :: TH.Name -> RewriteH Core)
+    , external "abstract" (promoteExprR . abstractR :: TH.Name -> RewriteH Core)
         [ "Abstract over a variable using a lambda."
         , "e  ==>  (\\ x -> e) x" ]                                             .+ Shallow .+ Introduce .+ Context
-    , external "push" (promoteExprR . push :: TH.Name -> RewriteH Core)
+    , external "push" (promoteExprR . pushR :: TH.Name -> RewriteH Core)
         [ "Push a function 'f into a case-expression or let-expression argument."
         , "Unsafe if 'f is not strict." ] .+ Shallow .+ Commute .+ PreCondition
     ]
@@ -90,14 +90,14 @@ externals =
 -- | @((\\ v -> e1) e2)@ ==> @(let v = e2 in e1)@
 --   This form of beta-reduction is safe if e2 is an arbitrary
 --   expression (won't duplicate work).
-betaReduce :: MonadCatch m => Rewrite c m CoreExpr
-betaReduce = setFailMsg ("Beta-reduction failed: " ++ wrongExprForm "App (Lam v e1) e2") $
+betaReduceR :: MonadCatch m => Rewrite c m CoreExpr
+betaReduceR = setFailMsg ("Beta-reduction failed: " ++ wrongExprForm "App (Lam v e1) e2") $
     do App (Lam v e1) e2 <- idR
        return $ Let (NonRec v e2) e1
 
 
-multiBetaReduce :: MonadCatch m =>  (Int -> Bool) -> Rewrite c m CoreExpr
-multiBetaReduce p = prefixFailMsg "Multi-Beta-Reduce failed: " $
+multiBetaReduceR :: MonadCatch m =>  (Int -> Bool) -> Rewrite c m CoreExpr
+multiBetaReduceR p = prefixFailMsg "Multi-Beta-Reduce failed: " $
     do
         e <- idR
         let (f,xs) = collectArgs e
@@ -116,8 +116,8 @@ multiBetaReduce p = prefixFailMsg "Multi-Beta-Reduce failed: " $
 -- TODO: inline this everywhere
 -- Neil: Are we sure we want to inline this?
 -- | Perform one or more beta-reductions.
-betaReducePlus :: MonadCatch m => Rewrite c m CoreExpr
-betaReducePlus = multiBetaReduce (> 0)
+betaReducePlusR :: MonadCatch m => Rewrite c m CoreExpr
+betaReducePlusR = multiBetaReduceR (> 0)
 
 {-
 
@@ -139,16 +139,16 @@ betaReducePlus = multiBetaReduce (> 0)
 -}
 
 -- | (let v = e1 in e2) ==> (\\ v -> e2) e1
-betaExpand :: MonadCatch m => Rewrite c m CoreExpr
-betaExpand = setFailMsg ("Beta-expansion failed: " ++ wrongExprForm "Let (NonRec v e1) e2") $
+betaExpandR :: MonadCatch m => Rewrite c m CoreExpr
+betaExpandR = setFailMsg ("Beta-expansion failed: " ++ wrongExprForm "Let (NonRec v e1) e2") $
     do Let (NonRec v e1) e2 <- idR
        return $ App (Lam v e2) e1
 
 ------------------------------------------------------------------------------
 
 -- | (\\ v -> e1 v) ==> e1
-etaReduce :: MonadCatch m => Rewrite c m CoreExpr
-etaReduce = prefixFailMsg "Eta-reduction failed: " $
+etaReduceR :: MonadCatch m => Rewrite c m CoreExpr
+etaReduceR = prefixFailMsg "Eta-reduction failed: " $
             withPatFailMsg (wrongExprForm "Lam v1 (App f e)") $
             do Lam v1 (App f e) <- idR
                case e of
@@ -161,8 +161,8 @@ etaReduce = prefixFailMsg "Eta-reduction failed: " $
                return f
 
 -- | e1 ==> (\\ v -> e1 v)
-etaExpand :: String -> Rewrite c HermitM CoreExpr
-etaExpand nm = prefixFailMsg "Eta-expansion failed: " $
+etaExpandR :: String -> Rewrite c HermitM CoreExpr
+etaExpandR nm = prefixFailMsg "Eta-expansion failed: " $
                contextfreeT $ \ e -> let ty = exprType e in
         case splitFunTy_maybe ty of
           Just (argTy, _) -> do v <- newIdH nm argTy
@@ -173,15 +173,15 @@ etaExpand nm = prefixFailMsg "Eta-expansion failed: " $
                                Nothing -> fail "type of expression is not a function or a forall."
 
 -- | Perform multiple eta-expansions.
-multiEtaExpand :: (ExtendPath c Crumb, AddBindings c) => [String] -> Rewrite c HermitM CoreExpr
-multiEtaExpand []       = idR
-multiEtaExpand (nm:nms) = etaExpand nm >>> lamAllR idR (multiEtaExpand nms)
+multiEtaExpandR :: (ExtendPath c Crumb, AddBindings c) => [String] -> Rewrite c HermitM CoreExpr
+multiEtaExpandR []       = idR
+multiEtaExpandR (nm:nms) = etaExpandR nm >>> lamAllR idR (multiEtaExpandR nms)
 
 ------------------------------------------------------------------------------
 
 -- | Flatten all the top-level binding groups in the module to a single recursive binding group.
-flattenModule :: (ExtendPath c Crumb, Monad m) => Rewrite c m ModGuts
-flattenModule = modGutsR flattenProgramR
+flattenModuleR :: (ExtendPath c Crumb, Monad m) => Rewrite c m ModGuts
+flattenModuleR = modGutsR flattenProgramR
 
 -- | Flatten all the top-level binding groups in a program to a program containing a single recursive binding group.
 flattenProgramR :: Monad m => Rewrite c m CoreProg
@@ -198,8 +198,8 @@ flattenProgramT = do bds <- arr (concatMap bindToVarExprs . progToBinds)
 
 -- | Abstract over a variable using a lambda.
 --   e  ==>  (\ x. e) x
-abstract :: (ReadBindings c, MonadCatch m) => TH.Name -> Rewrite c m CoreExpr
-abstract nm = prefixFailMsg "abstraction failed: " $
+abstractR :: (ReadBindings c, MonadCatch m) => TH.Name -> Rewrite c m CoreExpr
+abstractR nm = prefixFailMsg "abstraction failed: " $
    do e <- idR
       v <- findBoundVarT nm
       return (App (Lam v e) (varToCoreExpr v))
@@ -208,8 +208,8 @@ abstract nm = prefixFailMsg "abstraction failed: " $
 
 -- | Push a function through a Case or Let expression.
 --   Unsafe if the function is not strict.
-push :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
-push nm = prefixFailMsg "push failed: " $
+pushR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
+pushR nm = prefixFailMsg "push failed: " $
      do e <- idR
         case collectArgs e of
           (Var v,args) -> do

@@ -44,7 +44,7 @@ simplifyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c He
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
     innermostR (   promoteBindR recToNonrecR
                 <+ promoteExprR ( unfoldBasicCombinatorR
-                               <+ betaReducePlus
+                               <+ betaReducePlusR
                                <+ safeLetSubstR
                                <+ caseReduceR
                                <+ letElimR )

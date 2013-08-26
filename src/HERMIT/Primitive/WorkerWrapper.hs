@@ -25,7 +25,6 @@ import HERMIT.GHC
 
 import HERMIT.Primitive.AlphaConversion
 import HERMIT.Primitive.Common
-import HERMIT.Primitive.Composite
 import HERMIT.Primitive.Function
 import HERMIT.Primitive.GHC
 import HERMIT.Primitive.Local
@@ -248,7 +247,7 @@ workerWrapperFusion mr = parse3beforeBiR (workerWrapperFusionBR mr)
 
 --------------------------------------------------------------------------------------------------
 
--- | \\ wrap unwrap ->  (@g = expr@  ==>  @g = let f = \\ g -> expr in let work = unwrap (f (wrap work)) in wrap work)@
+-- | \\ wrap unwrap ->  (@prog = expr@  ==>  @prog = let f = \\ prog -> expr in let work = unwrap (f (wrap work)) in wrap work)@
 workerWrapperSplitR :: Maybe WWAssumption -> CoreExpr -> CoreExpr -> RewriteH CoreDef
 workerWrapperSplitR mAss wrap unwrap =
   let work = TH.mkName "work"
@@ -259,13 +258,13 @@ workerWrapperSplitR mAss wrap unwrap =
                                   >>> letAllR idR ( forewardT (workerWrapperFacBR mAss wrap unwrap)
                                                      >>> appAllR idR (letIntroR "w")
                                                      >>> letFloatArgR
-                                                     >>> letNonRecAllR idR (unfoldNameR fx >>> alphaLetWith [work] >>> extractR simplifyR) idR
+                                                     >>> letNonRecAllR idR (unfoldNameR fx >>> letRecDefAllR (\ _ -> (idR,betaReduceR >>> letSubstR)) idR >>> alphaLetWith [work] {- >>> extractR simplifyR -}) idR
                                                      >>> letSubstR
                                                      >>> letFloatArgR
                                                   )
                                )
 
--- | \\ wrap unwrap ->  (@g = expr@  ==>  @g = let f = \\ g -> expr in let work = unwrap (f (wrap work)) in wrap work)@
+-- | \\ wrap unwrap ->  (@prog = expr@  ==>  @prog = let f = \\ prog -> expr in let work = unwrap (f (wrap work)) in wrap work)@
 workerWrapperSplit :: Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
 workerWrapperSplit mAss wrapS unwrapS = (parseCoreExprT wrapS &&& parseCoreExprT unwrapS) >>= uncurry (workerWrapperSplitR mAss)
 
@@ -295,7 +294,7 @@ wwAssAimpliesAssB = id
 
 -- | Convert a proof of WW Assumption B into a proof of WW Assumption C.
 wwAssBimpliesAssC :: RewriteH CoreExpr -> RewriteH CoreExpr
-wwAssBimpliesAssC assB = appAllR idR (lamAllR idR assB >>> etaReduce)
+wwAssBimpliesAssC assB = appAllR idR (lamAllR idR assB >>> etaReduceR)
 
 -- | Convert a proof of WW Assumption A into a proof of WW Assumption C.
 wwAssAimpliesAssC :: RewriteH CoreExpr -> RewriteH CoreExpr
@@ -378,10 +377,10 @@ wwAssC mr wrap unwrap f = beforeBiR (do fromJustM (verifyAssC wrap unwrap f) mr
     assB = wwAssB Nothing wrap unwrap f
 
     wwCL :: RewriteH CoreExpr
-    wwCL = appAllR idR (lamAllR idR (forewardT assB) >>> etaReduce)
+    wwCL = appAllR idR (lamAllR idR (forewardT assB) >>> etaReduceR)
 
     wwCR :: RewriteH CoreExpr
-    wwCR = appAllR idR (etaExpand "x" >>> lamAllR idR (backwardT assB))
+    wwCR = appAllR idR (etaExpandR "x" >>> lamAllR idR (backwardT assB))
 
 -- | @fix t (\ x -> wrap (unwrap (f x)))@  \<==\>  @fix t f@
 wwC :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption C
