@@ -97,7 +97,7 @@ externals =
                 , "will catch that however."] .+ Deep .+ Debug .+ Query
          , external "lint-module" (promoteModGutsT lintModuleT :: TranslateH Core String)
                 [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
-         , external "specConstr" (promoteModGutsR specConstrR :: RewriteH Core)
+         , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
                 [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
          , external "any-call" (anyCallR :: RewriteH Core -> RewriteH Core)
                 [ "any-call (.. unfold command ..) applies an unfold command to all applications."
