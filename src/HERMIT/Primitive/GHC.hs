@@ -31,10 +31,10 @@ module HERMIT.Primitive.GHC
        , lintExprT
        , lintModuleT
        , specConstrR
-       , dezombifyR
        , occurAnalyseExprR
        , occurAnalyseR
-       , occurrenceAnalysisR
+       , occurAnalyseAndDezombifyR
+       , dezombifyR
        )
 where
 
@@ -70,38 +70,38 @@ import qualified Language.Haskell.TH as TH
 externals :: [External]
 externals =
          [ external "info" (info :: TranslateH CoreTC String)
-                [ "display information about the current node." ]
+                [ "Display information about the current node." ]
          , external "free-ids" (promoteExprT freeIdsQuery :: TranslateH Core String)
                 [ "List the free identifiers in this expression." ] .+ Query .+ Deep
          , external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH Core)
                 [ "Deshadow a program." ] .+ Deep
          , external "apply-rule" (promoteExprR . rule :: String -> RewriteH Core)
-                [ "apply a named GHC rule" ] .+ Shallow
+                [ "Apply a named GHC rule" ] .+ Shallow
          , external "apply-rule" (rules_help :: TranslateH Core String)
-                [ "list rules that can be used" ] .+ Query
+                [ "List rules that can be used" ] .+ Query
          , external "apply-rules" (promoteExprR . rules :: [String] -> RewriteH Core)
-                [ "apply named GHC rules, succeeds if any of the rules succeed" ] .+ Shallow
+                [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
          , external "compare-values" (compareValues ::  TH.Name -> TH.Name -> TranslateH Core ())
-                ["compare the rhs of two values."] .+ Query .+ Predicate
+                [ "Compare the rhs of two values."] .+ Query .+ Predicate
          , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> TH.Name -> RewriteH Core)
-                ["add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]  .+ Introduce
+                [ "add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]  .+ Introduce
          , external "dezombify" (promoteExprR dezombifyR :: RewriteH Core)
-                ["Zap the occurrence information in the current identifer if it is a zombie."] .+ Shallow .+ Bash
+                [ "Zap the occurrence information in the current identifer if it is a zombie."] .+ Shallow .+ Bash
          , external "occurrence-analysis" (occurrenceAnalysisR :: RewriteH Core)
-                ["Perform dependency analysis on all sub-expressions; simplifying and updating identifer info."] .+ Deep
-         , external "lintExpr" (promoteExprT lintExprT :: TranslateH Core String)
-                ["Runs GHC's Core Lint, which typechecks the current expression."
-                ,"Note: this can miss several things that a whole-module core lint will find."
-                ,"For instance, running this on the RHS of a binding, the type of the RHS will"
-                ,"not be checked against the type of the binding. Running on the whole let expression"
-                ,"will catch that however."] .+ Deep .+ Debug .+ Query
-         , external "lintModule" (promoteModGutsT lintModuleT :: TranslateH Core String)
-                ["Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
+                [ "Perform dependency analysis on all sub-expressions; simplifying and updating identifer info."] .+ Deep
+         , external "lint-expr" (promoteExprT lintExprT :: TranslateH Core String)
+                [ "Runs GHC's Core Lint, which typechecks the current expression."
+                , "Note: this can miss several things that a whole-module core lint will find."
+                , "For instance, running this on the RHS of a binding, the type of the RHS will"
+                , "not be checked against the type of the binding. Running on the whole let expression"
+                , "will catch that however."] .+ Deep .+ Debug .+ Query
+         , external "lint-module" (promoteModGutsT lintModuleT :: TranslateH Core String)
+                [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
          , external "specConstr" (promoteModGutsR specConstrR :: RewriteH Core)
-                ["Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
+                [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
          , external "any-call" (anyCallR :: RewriteH Core -> RewriteH Core)
-                [ "any-call (.. unfold command ..) applies an unfold commands to all applications"
-                , "preference is given to applications with more arguments" ] .+ Deep
+                [ "any-call (.. unfold command ..) applies an unfold command to all applications."
+                , "Preference is given to applications with more arguments." ] .+ Deep
          ]
 
 ------------------------------------------------------------------------
@@ -410,10 +410,6 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
 dezombifyR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
 dezombifyR = varR (acceptR isDeadBinder >>^ zapVarOccInfo)
 
--- | Run GHC's occurrence analyser, and also eliminate any zombies.
-occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
-occurrenceAnalysisR = allbuR (tryR $ promoteExprR dezombifyR) >>> occurAnalyseR
-
 -- | Lifted version of 'occurAnalyseExpr'.
 occurAnalyseExprR :: Monad m => Rewrite c m CoreExpr
 occurAnalyseExprR = arr OccurAnal.occurAnalyseExpr
@@ -423,6 +419,14 @@ occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c 
 occurAnalyseR = let r  = promoteExprR occurAnalyseExprR
                     go = r <+ anyR go
                  in tryR go -- always succeed
+
+-- | Run GHC's occurrence analyser, and also eliminate any zombies.
+occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurAnalyseAndDezombifyR = allbuR (tryR $ promoteExprR dezombifyR) >>> occurAnalyseR
+
+occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurrenceAnalysisR = occurAnalyseAndDezombifyR
+
 
 
 {- Does not work (no export)

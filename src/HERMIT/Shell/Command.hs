@@ -165,7 +165,7 @@ banner = unlines
     , "  - type \"set-pp-type Show\" to display full type information;"
     , "  - type \"info\" for more information about the current node;"
     , "  - to descend into a child node, type the name of the child"
-    , "    (\"info\" includes a list of children of the current node\");"
+    , "    (\"info\" includes a list of children of the current node);"
     , "  - to ascend, use the \"up\" command;"
     , "  - type \"log\" to display an activity log."
     , "=============================================================="
@@ -275,7 +275,7 @@ ourCatch m failure = do
 parseScriptCLM :: Monad m => String -> CLM m Script
 parseScriptCLM = either throwError return . parseScript
 
-runScript :: MonadIO m => [ExprH] -> CLM m ()
+runScript :: MonadIO m => Script -> CLM m ()
 runScript = mapM_ runExprH
 
 runExprH :: MonadIO m => ExprH -> CLM m ()
@@ -395,7 +395,7 @@ performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
 performMetaCommand Resume = do
     st <- get
     sast' <- iokm2clm "Final occurrence analysis failed (should never happen!): "
-                    $ applyS (cl_kernel st) (cl_cursor st) occurrenceAnalysisR (cl_kernel_env st)
+                    $ applyS (cl_kernel st) (cl_cursor st) occurAnalyseAndDezombifyR (cl_kernel_env st)
     iokm2clm'' $ resumeS (cl_kernel st) sast'
 
 performMetaCommand (Delete sast) = gets cl_kernel >>= iokm2clm'' . flip deleteS sast
