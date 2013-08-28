@@ -15,6 +15,7 @@ module HERMIT.Core
           , isCoArg
           , exprKindOrType
           , endoFunType
+          , splitFunTypeM
           , funArgResTypes
           , funsWithInverseTypes
           , appCount
@@ -118,9 +119,13 @@ endoFunType f = do (ty1,ty2) <- funArgResTypes f
                    guardMsg (eqType ty1 ty2) ("argument and result types differ.")
                    return ty1
 
+-- | Return the domain and codomain types of a function type, if it is a function type.
+splitFunTypeM :: Monad m => Type -> m (Type,Type)
+splitFunTypeM = maybe (fail "not a function type.") return . splitFunTy_maybe
+
 -- | Return the domain and codomain types of a function expression.
 funArgResTypes :: Monad m => CoreExpr -> m (Type,Type)
-funArgResTypes e = maybe (fail "not a function type.") return (splitFunTy_maybe $ exprType e)
+funArgResTypes = splitFunTypeM . exprType
 
 -- | Check two expressions have types @a -> b@ and @b -> a@, returning @(a,b)@.
 funsWithInverseTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)

@@ -1,6 +1,6 @@
 flatten-module
 consider 'length
-ww-split-param-unsafe 1 [| wrap |] [|unwrap |]
+ww-split-param-unsafe 1 [| wrap |] [| unwrap |]
 bash
 any-call (unfold 'wrap)
 any-call (unfold 'unwrap)
@@ -22,7 +22,7 @@ simplify
     alpha-alt ['b, 'bs]
     alt-rhs
     unfold-rule "rep-distr"
-    one-td (foreward (ww-fusion-unsafe [| abs |] [| rep |] [| work bs |]))
+    one-td (foreward ww-result-fusion)
   }
 }
 one-td (unfold 'abs)

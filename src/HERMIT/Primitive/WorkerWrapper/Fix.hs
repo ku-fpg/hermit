@@ -1,11 +1,12 @@
-module HERMIT.Primitive.WorkerWrapper
+module HERMIT.Primitive.WorkerWrapper.Fix
        ( -- * The Worker/Wrapper Transformation
          -- | Note that many of these operations require 'Data.Function.fix' to be in scope.
-         HERMIT.Primitive.WorkerWrapper.externals
+         HERMIT.Primitive.WorkerWrapper.Fix.externals
        , workerWrapperFacBR
-       , workerWrapperFusionBR
        , workerWrapperSplitR
        , workerWrapperSplitParam
+       , workerWrapperGenerateFusionR
+       , workerWrapperFusionBR
        , wwAssA
        , wwAssB
        , wwAssC
@@ -34,6 +35,8 @@ import HERMIT.Primitive.New -- TODO: Sort out heirarchy
 import HERMIT.Primitive.FixPoint
 import HERMIT.Primitive.Unfold
 
+import HERMIT.Primitive.WorkerWrapper.Common
+
 import qualified Language.Haskell.TH as TH
 
 --------------------------------------------------------------------------------------------------
@@ -45,39 +48,22 @@ externals =
            external "ww-factorisation" ((\ wrap unwrap assC -> promoteExprBiR $ workerWrapperFac (mkWWAssC assC) wrap unwrap)
                                           :: CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
                 [ "Worker/Wrapper Factorisation",
-                  "For any \"f :: a -> a\", and given \"wrap :: b -> a\" and \"unwrap :: a -> b\" as arguments,",
-                  "and a proof of Assumption C (fix tyA (\\ a -> wrap (unwrap (f a))) ==> fix tyA f), then",
-                  "fix tyA f  ==>  wrap (fix tyB (\\ b -> unwrap (f (wrap b))))"
+                  "For any \"f :: A -> A\", and given \"wrap :: B -> A\" and \"unwrap :: A -> B\" as arguments,",
+                  "and a proof of Assumption C (fix A (\\ a -> wrap (unwrap (f a))) ==> fix A f), then",
+                  "fix A f  ==>  wrap (fix B (\\ b -> unwrap (f (wrap b))))"
                 ] .+ Introduce .+ Context
          , external "ww-factorisation-unsafe" ((\ wrap unwrap -> promoteExprBiR $ workerWrapperFac Nothing wrap unwrap)
                                                :: CoreString -> CoreString -> BiRewriteH Core)
                 [ "Unsafe Worker/Wrapper Factorisation",
-                  "For any \"f :: a -> a\", and given \"wrap :: b -> a\" and \"unwrap :: a -> b\" as arguments, then",
-                  "fix tyA f  <==>  wrap (fix tyB (\\ b -> unwrap (f (wrap b))))",
-                  "Note: the pre-condition \"fix tyA (\\ a -> wrap (unwrap (f a))) == fix tyA f\" is expected to hold."
-                ] .+ Introduce .+ Context .+ PreCondition
-         , external "ww-fusion" ((\ wrap unwrap work assC -> promoteExprBiR $ workerWrapperFusion (mkWWAssC assC) wrap unwrap work)
-                                 :: CoreString -> CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
-                [ "Worker/Wrapper Fusion",
-                  "Given \"wrap :: b -> a\", \"unwrap :: a -> b\" and \"work :: b\" as arguments,",
-                  "and a proof of Assumption C (fix tyA (\\ a -> wrap (unwrap (f a))) ==> fix tyA f), then",
-                  "unwrap (wrap work)  <==>  work",
-                  "Note: you are required to have previously executed the command \"ww-generate-fusion\" on the definition",
-                  "      work = unwrap (f (wrap work))"
-                ] .+ Introduce .+ Context .+ PreCondition .+ TODO
-         , external "ww-fusion-unsafe" ((\ wrap unwrap work -> promoteExprBiR $ workerWrapperFusion Nothing wrap unwrap work)
-                                 :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
-                [ "Unsafe Worker/Wrapper Fusion",
-                  "Given \"wrap :: b -> a\", \"unwrap :: a -> b\" and \"work :: b\" as arguments, then",
-                  "unwrap (wrap work)  <==>  work",
-                  "Note: the pre-conditions \"fix tyA (\\ a -> wrap (unwrap (f a))) == fix tyA f\"",
-                  "                     and \"work == fix (\\ b -> unwrap (f (wrap b)))\" are expected to hold."
+                  "For any \"f :: A -> A\", and given \"wrap :: B -> A\" and \"unwrap :: A -> B\" as arguments, then",
+                  "fix A f  <==>  wrap (fix B (\\ b -> unwrap (f (wrap b))))",
+                  "Note: the pre-condition \"fix A (\\ a -> wrap (unwrap (f a))) == fix A f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-split" ((\ wrap unwrap assC -> promoteDefR $ workerWrapperSplit (mkWWAssC assC) wrap unwrap)
                                   :: CoreString -> CoreString -> RewriteH Core -> RewriteH Core)
                 [ "Worker/Wrapper Split",
-                  "For any \"prog :: a\", and given \"wrap :: b -> a\" and \"unwrap :: a -> b\" as arguments,",
-                  "and a proof of Assumption C (fix tyA (\\ a -> wrap (unwrap (f a))) ==> fix tyA f), then",
+                  "For any \"prog :: A\", and given \"wrap :: B -> A\" and \"unwrap :: A -> B\" as arguments,",
+                  "and a proof of Assumption C (fix A (\\ a -> wrap (unwrap (f a))) ==> fix A f), then",
                   "prog = expr  ==>  prog = let f = \\ prog -> expr",
                   "                          in let work = unwrap (f (wrap work))",
                   "                              in wrap work"
@@ -85,18 +71,18 @@ externals =
          , external "ww-split-unsafe" ((\ wrap unwrap -> promoteDefR $ workerWrapperSplit Nothing wrap unwrap)
                                        :: CoreString -> CoreString -> RewriteH Core)
                 [ "Unsafe Worker/Wrapper Split",
-                  "For any \"prog :: a\", and given \"wrap :: b -> a\" and \"unwrap :: a -> b\" as arguments, then",
+                  "For any \"prog :: A\", and given \"wrap :: B -> A\" and \"unwrap :: A -> B\" as arguments, then",
                   "prog = expr  ==>  prog = let f = \\ prog -> expr",
                   "                          in let work = unwrap (f (wrap work))",
                   "                              in wrap work",
-                  "Note: the pre-condition \"fix a (wrap . unwrap . f) == fix a f\" is expected to hold."
+                  "Note: the pre-condition \"fix A (wrap . unwrap . f) == fix A f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-split-param" ((\ n wrap unwrap assC -> promoteDefR $ workerWrapperSplitParam n (mkWWAssC assC) wrap unwrap)
                                       :: Int -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core)
                 [ "Worker/Wrapper Split - Type Paramater Variant",
-                  "For any \"prog :: forall t1 t2 .. tn . a\",",
-                  "and given \"wrap :: forall t1 t2 .. tn . b -> a\" and \"unwrap :: forall t1 t2 .. tn . a -> b\" as arguments,",
-                  "and a proof of Assumption C (forall t1 t2 .. tn . fix a (wrap t1 t2 .. tn . unwrap t1 t2 .. tn . f) ==> fix a f), then",
+                  "For any \"prog :: forall t1 t2 .. tn . A\",",
+                  "and given \"wrap :: forall t1 t2 .. tn . B -> A\" and \"unwrap :: forall t1 t2 .. tn . A -> B\" as arguments,",
+                  "and a proof of Assumption C (forall t1 t2 .. tn . fix A (wrap t1 t2 .. tn . unwrap t1 t2 .. tn . f) ==> fix A f), then",
                   "prog = expr  ==>  prog = \\ t1 t2 .. tn -> let f = \\ prog -> expr t1 t2 .. tn",
                   "                                            in let work = unwrap t1 t2 .. tn (f (wrap t1 t2  ..tn work))",
                   "                                                in wrap t1 t2 .. tn work"
@@ -104,53 +90,53 @@ externals =
          , external "ww-split-param-unsafe" ((\ n wrap unwrap -> promoteDefR $ workerWrapperSplitParam n Nothing wrap unwrap)
                                              :: Int -> CoreString -> CoreString -> RewriteH Core)
                 [ "Unsafe Worker/Wrapper Split - Type Paramater Variant",
-                  "For any \"prog :: forall t1 t2 .. tn . a\",",
-                  "and given \"wrap :: forall t1 t2 .. tn . b -> a\" and \"unwrap :: forall t1 t2 .. tn . a -> b\" as arguments, then",
+                  "For any \"prog :: forall t1 t2 .. tn . A\",",
+                  "and given \"wrap :: forall t1 t2 .. tn . B -> A\" and \"unwrap :: forall t1 t2 .. tn . A -> B\" as arguments, then",
                   "prog = expr  ==>  prog = \\ t1 t2 .. tn -> let f = \\ prog -> expr t1 t2 .. tn",
                   "                                            in let work = unwrap t1 t2 .. tn (f (wrap t1 t2  ..tn work))",
                   "                                                in wrap t1 t2 .. tn work",
-                  "Note: the pre-condition \"forall t1 t2 .. tn . fix a (wrap t1 t2 .. tn . unwrap t1 t2 .. tn . f) == fix a f\" is expected to hold."
+                  "Note: the pre-condition \"forall t1 t2 .. tn . fix A (wrap t1 t2 .. tn . unwrap t1 t2 .. tn . f) == fix A f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition .+ TODO .+ Experiment
          , external "ww-assumption-A" ((\ wrap unwrap assA -> promoteExprBiR $ wwA (Just $ extractR assA) wrap unwrap)
                                        :: CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
                 [ "Worker/Wrapper Assumption A",
-                  "For a \"wrap :: b -> a\" and an \"unwrap :: b -> a\",",
-                  "and given a proof of \"wrap (unwrap x)  ==>  x\", then",
-                  "wrap (unwrap x)  <==>  x"
+                  "For a \"wrap :: B -> A\" and an \"unwrap :: A -> B\",",
+                  "and given a proof of \"wrap (unwrap a) ==> a\", then",
+                  "wrap (unwrap a)  <==>  a"
                 ] .+ Introduce .+ Context
          , external "ww-assumption-B" ((\ wrap unwrap f assB -> promoteExprBiR $ wwB (Just $ extractR assB) wrap unwrap f)
                                        :: CoreString -> CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
                 [ "Worker/Wrapper Assumption B",
-                  "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\",",
-                  "and given a proof of \"wrap (unwrap (f x))  ==>  f x\", then",
-                  "wrap (unwrap (f x))  <==>  f x"
+                  "For a \"wrap :: B -> A\", an \"unwrap :: A -> B\", and an \"f :: A -> A\",",
+                  "and given a proof of \"wrap (unwrap (f a)) ==> f a\", then",
+                  "wrap (unwrap (f a))  <==>  f a"
                 ] .+ Introduce .+ Context
          , external "ww-assumption-C" ((\ wrap unwrap f assC -> promoteExprBiR $ wwC (Just $ extractR assC) wrap unwrap f)
                                        :: CoreString -> CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
                 [ "Worker/Wrapper Assumption C",
-                  "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\",",
-                  "and given a proof of \"fix t (\\ x -> wrap (unwrap (f x)))  ==>  fix t f\", then",
-                  "fix t (\\ x -> wrap (unwrap (f x)))  <==>  fix t f"
+                  "For a \"wrap :: B -> A\", an \"unwrap :: A -> B\", and an \"f :: A -> A\",",
+                  "and given a proof of \"fix A (\\ a -> wrap (unwrap (f a))) ==> fix A f\", then",
+                  "fix A (\\ a -> wrap (unwrap (f a)))  <==>  fix A f"
                 ] .+ Introduce .+ Context
          , external "ww-assumption-A-unsafe" ((\ wrap unwrap -> promoteExprBiR $ wwA Nothing wrap unwrap)
                                               :: CoreString -> CoreString -> BiRewriteH Core)
                 [ "Unsafe Worker/Wrapper Assumption A",
-                  "For a \"wrap :: b -> a\" and an \"unwrap :: b -> a\", then",
-                  "wrap (unwrap x)  <==>  x",
+                  "For a \"wrap :: B -> A\" and an \"unwrap :: A -> B\", then",
+                  "wrap (unwrap a)  <==>  a",
                   "Note: only use this if it's true!"
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-assumption-B-unsafe" ((\ wrap unwrap f -> promoteExprBiR $ wwB Nothing wrap unwrap f)
                                               :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
                 [ "Unsafe Worker/Wrapper Assumption B",
-                  "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\" then",
-                  "wrap (unwrap (f x))  <==>  f x",
+                  "For a \"wrap :: B -> A\", an \"unwrap :: A -> B\", and an \"f :: A -> A\", then",
+                  "wrap (unwrap (f a))  <==>  f a",
                   "Note: only use this if it's true!"
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-assumption-C-unsafe" ((\ wrap unwrap f -> promoteExprBiR $ wwC Nothing wrap unwrap f)
                                               :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
                 [ "Unsafe Worker/Wrapper Assumption C",
-                  "For a \"wrap :: b -> a\", an \"unwrap :: b -> a\", and an \"f :: a -> a\" then",
-                  "fix t (\\ x -> wrap (unwrap (f x)))  <==>  fix t f",
+                  "For a \"wrap :: B -> A\", an \"unwrap :: A -> B\", and an \"f :: A -> A\", then",
+                  "fix A (\\ a -> wrap (unwrap (f a)))  <==>  fix A f",
                   "Note: only use this if it's true!"
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-AssA-to-AssB" (promoteExprR . wwAssAimpliesAssB . extractR :: RewriteH Core -> RewriteH Core)
@@ -162,10 +148,22 @@ externals =
          , external "ww-AssA-to-AssC" (promoteExprR . wwAssAimpliesAssC . extractR :: RewriteH Core -> RewriteH Core)
                    [ "Convert a proof of worker/wrapper Assumption A into a proof of worker/wrapper Assumption C."
                    ]
-         , external "ww-generate-fusion" (wwGenerateFusionR :: RewriteH Core)
-                   [ "Execute this command on \"work = unwrap (f (wrap work))\" to enable the \"ww-fusion\" rule thereafter.",
+         , external "ww-generate-fusion" (workerWrapperGenerateFusionR . mkWWAssC :: RewriteH Core -> RewriteH Core)
+                   [ "Given a proof of Assumption C (fix A (\\ a -> wrap (unwrap (f a))) ==> fix A f), then",
+                     "execute this command on \"work = unwrap (f (wrap work))\" to enable the \"ww-fusion\" rule thereafter.",
                      "Note that this is performed automatically as part of \"ww-split\"."
                    ] .+ Experiment .+ TODO
+         , external "ww-generate-fusion-unsafe" (workerWrapperGenerateFusionR Nothing :: RewriteH Core)
+                   [ "Execute this command on \"work = unwrap (f (wrap work))\" to enable the \"ww-fusion\" rule thereafter.",
+                     "The precondition \"fix A (wrap . unwrap . f) == fix A f\" is expected to hold.",
+                     "Note that this is performed automatically as part of \"ww-split\"."
+                   ] .+ Experiment .+ TODO
+         , external "ww-fusion" (promoteExprBiR workerWrapperFusion :: BiRewriteH Core)
+                [ "Worker/Wrapper Fusion",
+                  "unwrap (wrap work)  <==>  work",
+                  "Note: you are required to have previously executed the command \"ww-generate-fusion\" on the definition",
+                  "      work = unwrap (f (wrap work))"
+                ] .+ Introduce .+ Context .+ PreCondition .+ TODO
          ]
   where
     mkWWAssC :: RewriteH Core -> Maybe WWAssumption
@@ -173,13 +171,8 @@ externals =
 
 --------------------------------------------------------------------------------------------------
 
-data WWAssumptionTag = A | B | C deriving (Eq,Ord,Show,Read)
-data WWAssumption = WWAssumption WWAssumptionTag (RewriteH CoreExpr)
-
---------------------------------------------------------------------------------------------------
-
--- | For any @f :: a -> a@, and given @wrap :: b -> a@ and @unwrap :: a -> b@ as arguments, then
---   @fix tyA f@  \<==\>  @wrap (fix tyB (\\ b -> unwrap (f (wrap b))))@
+-- | For any @f :: A -> A@, and given @wrap :: B -> A@ and @unwrap :: A -> B@ as arguments, then
+--   @fix A f@  \<==\>  @wrap (fix B (\\ b -> unwrap (f (wrap b))))@
 workerWrapperFacBR :: Maybe WWAssumption -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
 workerWrapperFacBR mAss wrap unwrap = beforeBiR (wrapUnwrapTypes wrap unwrap)
                                                 (\ (tyA,tyB) -> bidirectional (wwL tyA tyB) wwR)
@@ -199,86 +192,71 @@ workerWrapperFacBR mAss wrap unwrap = beforeBiR (wrapUnwrapTypes wrap unwrap)
                  withPatFailMsg wrongFixBody $
                    do (_, Lam b (App unwrap1 (App f (App wrap1 (Var b'))))) <- isFixExpr <<< constant fx
                       guardMsg (b == b') wrongFixBody
-                      guardMsg (exprEqual wrap wrap2) "given wrapper does not match applied function."
-                      guardMsg (exprEqual wrap wrap1) "given wrapper does not match wrapper in body of fix."
-                      guardMsg (exprEqual unwrap unwrap1) "given unwrapper does not match unwrapper in body of fix."
+                      guardMsg (exprsEqual [wrap, wrap1, wrap2]) "wrappers do not match."
+                      guardMsg (exprEqual unwrap unwrap1) "unwrappers do not match."
                       whenJust (verifyWWAss wrap unwrap f) mAss
                       mkFix f
 
     wrongFixBody :: String
     wrongFixBody = "body of fix does not have the form Lam b (App unwrap (App f (App wrap (Var b))))"
 
--- | For any @f :: a -> a@, and given @wrap :: b -> a@ and @unwrap :: a -> b@ as arguments, then
---   @fix tyA f@  \<==\>  @wrap (fix tyB (\\ b -> unwrap (f (wrap b))))@
+-- | For any @f :: A -> A@, and given @wrap :: B -> A@ and @unwrap :: A -> B@ as arguments, then
+--   @fix A f@  \<==\>  @wrap (fix B (\\ b -> unwrap (f (wrap b))))@
 workerWrapperFac :: Maybe WWAssumption -> CoreString -> CoreString -> BiRewriteH CoreExpr
 workerWrapperFac mAss = parse2beforeBiR (workerWrapperFacBR mAss)
 
 --------------------------------------------------------------------------------------------------
 
--- | Given @wrap :: b -> a@, @unwrap :: a -> b@ and @work :: b@ as arguments, then
+-- | Given @wrap :: B -> A@, @unwrap :: A -> B@ and @work :: B@ as arguments, then
 --   @unwrap (wrap work)@  \<==\>  @work@
-workerWrapperFusionBR :: Maybe WWAssumption
-                      -> CoreExpr                  -- ^ wrap
-                      -> CoreExpr                  -- ^ unwrap
-                      -> CoreExpr                  -- ^ work
-                      -> BiRewriteH CoreExpr
-workerWrapperFusionBR mAss wrap unwrap work =
+workerWrapperFusionBR :: BiRewriteH CoreExpr
+workerWrapperFusionBR =
     beforeBiR (prefixFailMsg "worker/wrapper fusion failed: " $
-               do (_,tyB) <- wrapUnwrapTypes wrap unwrap
-                  guardMsg (exprType work `eqType` tyB) "type of worker does not match types of wrap/unwrap."
-                  case mAss of
-                    Nothing  -> return ()
-                    Just ass -> do Def v_work (App unwrap' (App f (App wrap' work'))) <- constT (lookupDef workLabel)
-                                   guardMsg (exprEqual wrap wrap') "wrapper does match original definition of worker."
-                                   guardMsg (exprEqual unwrap unwrap') "unwrapper does not match original definition of worker."
-                                   guardMsg (exprsEqual [work, work', Var v_work]) "worker does not match original worker."
-                                   verifyWWAss wrap unwrap f ass
-
+               withPatFailMsg "malformed WW Fusion rule." $
+               do Def w (App unwrap (App _f (App wrap (Var w')))) <- constT (lookupDef workLabel)
+                  guardMsg (w == w') "malformed WW Fusion rule."
+                  return (wrap,unwrap,Var w)
               )
-              (\ () -> bidirectional fusL fusR)
+              (\ (wrap,unwrap,work) -> bidirectional (fusL wrap unwrap work) (fusR wrap unwrap work))
   where
-    fusL :: RewriteH CoreExpr
-    fusL = prefixFailMsg "worker/wrapper fusion failed: " $
-           withPatFailMsg (wrongExprForm "App unwrap (App wrap work)") $
+    fusL :: CoreExpr -> CoreExpr -> CoreExpr -> RewriteH CoreExpr
+    fusL wrap unwrap work =
+           prefixFailMsg "worker/wrapper fusion failed: " $
+           withPatFailMsg (wrongExprForm "unwrap (wrap work)") $
            do App unwrap' (App wrap' work') <- idR
-              guardMsg (exprEqual wrap wrap') "given wrapper does not match wrapper in expression."
-              guardMsg (exprEqual unwrap unwrap') "given unwrapper does not match unwrapper in expression."
-              guardMsg (exprEqual work work') "given worker function does not worker in expression."
+              guardMsg (exprEqual wrap wrap') "wrapper does not match."
+              guardMsg (exprEqual unwrap unwrap') "unwrapper does not match."
+              guardMsg (exprEqual work work') "worker does not match."
               return work
 
-    fusR :: RewriteH CoreExpr
-    fusR = prefixFailMsg "(reverse) worker/wrapper fusion failed: " $
+    fusR :: CoreExpr -> CoreExpr -> CoreExpr -> RewriteH CoreExpr
+    fusR wrap unwrap work =
+           prefixFailMsg "(reverse) worker/wrapper fusion failed: " $
            do work' <- idR
-              guardMsg (exprEqual work work') "given worker function does not match expression."
+              guardMsg (exprEqual work work') "worker does not match."
               return $ App unwrap (App wrap work)
 
 
--- Def work' (App unwrap' (App f (App wrap' work''))) <- constT (lookupDef workLabel)
-
-
--- | Given @wrap :: b -> a@, @unwrap :: a -> b@ and @work :: b@ as arguments, then
+-- | Given @wrap :: B -> A@, @unwrap :: A -> B@ and @work :: B@ as arguments, then
 --   @unwrap (wrap work)@  \<==\>  @work@
-workerWrapperFusion :: Maybe WWAssumption -> CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
-workerWrapperFusion mr = parse3beforeBiR (workerWrapperFusionBR mr)
+workerWrapperFusion :: BiRewriteH CoreExpr
+workerWrapperFusion = workerWrapperFusionBR
 
 --------------------------------------------------------------------------------------------------
 
--- Note: The current approach to WW Fusion is a hack.
--- I'm not sure what the best way to approach this is though.
--- An alternative would be to have a generate command that adds ww-fusion to the dictionary, all preconditions verified in advance.
--- That would have to exist at the Shell level though.
-
--- This isn't entirely safe, as a malicious the user could define a label with this name.
-workLabel :: Label
-workLabel = "recursive-definition-of-work-for-use-by-ww-fusion"
-
--- Save the recursive definition of work in the stash, so that we can later verify uses of WW Fusion.
-wwGenerateFusionR :: RewriteH Core
-wwGenerateFusionR = prefixFailMsg "generate WW fusion failed: " $
-                    withPatFailMsg ("definition does not have the form: work = unwrap (f (wrap work))") $
-                    do Def work (App _unwrap (App _f (App _wrap (Var work')))) <- projectT
-                       guardMsg (work == work') "not a recursive call to worker."
-                       rememberR workLabel
+-- | Save the recursive definition of work in the stash, so that we can later verify uses of 'workerWrapperFusionBR'.
+--   Must be applied to a definition of the form: @work = unwrap (f (wrap work))@
+--   Note that this is performed automatically as part of 'workerWrapperSplitR'.
+workerWrapperGenerateFusionR :: Maybe WWAssumption -> RewriteH Core
+workerWrapperGenerateFusionR mAss =
+    prefixFailMsg "generate WW fusion failed: " $
+    withPatFailMsg wrongForm $
+    do Def w (App unwrap (App f (App wrap (Var w')))) <- projectT
+       guardMsg (w == w') wrongForm
+       whenJust (verifyWWAss wrap unwrap f) mAss
+       rememberR workLabel
+  where
+    wrongForm = "definition does not have the form: work = unwrap (f (wrap work))"
 
 --------------------------------------------------------------------------------------------------
 
@@ -295,7 +273,7 @@ workerWrapperSplitR mAss wrap unwrap =
                                           >>> appAllR idR ( unfoldNameR fx
                                                             >>> alphaLetWith [work]
                                                             >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letSubstR)
-                                                                                   >>> extractR wwGenerateFusionR
+                                                                                   >>> extractR (workerWrapperGenerateFusionR mAss)
                                                                            )
                                                                            idR
                                                           )
@@ -341,8 +319,8 @@ wwAssAimpliesAssC =  wwAssBimpliesAssC . wwAssAimpliesAssB
 
 --------------------------------------------------------------------------------------------------
 
--- | @wrap (unwrap x)@  \<==\>  @x@
-wwAssA :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption B
+-- | @wrap (unwrap a)@  \<==\>  @a@
+wwAssA :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption A
        -> CoreExpr                  -- ^ wrap
        -> CoreExpr                  -- ^ unwrap
        -> BiRewriteH CoreExpr
@@ -363,14 +341,14 @@ wwAssA mr wrap unwrap = beforeBiR (do whenJust (verifyAssA wrap unwrap) mr
                   guardMsg (exprType x `eqType` tyA) "type of expression does not match types of wrap/unwrap."
                   return $ App wrap (App unwrap x)
 
--- | @wrap (unwrap x)@  \<==\>  @x@
+-- | @wrap (unwrap a)@  \<==\>  @a@
 wwA :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption A
     -> CoreString                -- ^ wrap
     -> CoreString                -- ^ unwrap
     -> BiRewriteH CoreExpr
 wwA mr = parse2beforeBiR (wwAssA mr)
 
--- | @wrap (unwrap (f x))@  \<==\>  @f x@
+-- | @wrap (unwrap (f a))@  \<==\>  @f a@
 wwAssB :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption B
        -> CoreExpr                  -- ^ wrap
        -> CoreExpr                  -- ^ unwrap
@@ -383,18 +361,18 @@ wwAssB mr wrap unwrap f = beforeBiR (whenJust (verifyAssB wrap unwrap f) mr)
     assA = wwAssA Nothing wrap unwrap
 
     wwBL :: RewriteH CoreExpr
-    wwBL = withPatFailMsg (wrongExprForm "App wrap (App unwrap (App f x))") $
+    wwBL = withPatFailMsg (wrongExprForm "App wrap (App unwrap (App f a))") $
            do App _ (App _ (App f' _)) <- idR
               guardMsg (exprEqual f f') "given body function does not match expression."
               forewardT assA
 
     wwBR :: RewriteH CoreExpr
-    wwBR = withPatFailMsg (wrongExprForm "App f x") $
+    wwBR = withPatFailMsg (wrongExprForm "App f a") $
            do App f' _ <- idR
               guardMsg (exprEqual f f') "given body function does not match expression."
               backwardT assA
 
--- | @wrap (unwrap (f x))@  \<==\>  @f x@
+-- | @wrap (unwrap (f a))@  \<==\>  @f a@
 wwB :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption B
     -> CoreString                -- ^ wrap
     -> CoreString                -- ^ unwrap
@@ -402,7 +380,7 @@ wwB :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption B
     -> BiRewriteH CoreExpr
 wwB mr = parse3beforeBiR (wwAssB mr)
 
--- | @fix t (\ x -> wrap (unwrap (f x)))@  \<==\>  @fix t f@
+-- | @fix A (\ a -> wrap (unwrap (f a)))@  \<==\>  @fix A f@
 wwAssC :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption C
        -> CoreExpr                  -- ^ wrap
        -> CoreExpr                  -- ^ unwrap
@@ -417,12 +395,12 @@ wwAssC mr wrap unwrap f = beforeBiR (do _ <- isFixExpr
     assB = wwAssB Nothing wrap unwrap f
 
     wwCL :: RewriteH CoreExpr
-    wwCL = appAllR idR (lamAllR idR (forewardT assB) >>> etaReduceR)
+    wwCL = wwAssBimpliesAssC (forewardT assB)
 
     wwCR :: RewriteH CoreExpr
-    wwCR = appAllR idR (etaExpandR "x" >>> lamAllR idR (backwardT assB))
+    wwCR = appAllR idR (etaExpandR "a" >>> lamAllR idR (backwardT assB))
 
--- | @fix t (\ x -> wrap (unwrap (f x)))@  \<==\>  @fix t f@
+-- | @fix A (\ a -> wrap (unwrap (f a)))@  \<==\>  @fix A f@
 wwC :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption C
     -> CoreString                -- ^ wrap
     -> CoreString                -- ^ unwrap
@@ -481,25 +459,10 @@ verifyAssC wrap unwrap f assC =
      lhs     <- mkFix (Lam a (App wrap (App unwrap (App f (Var a)))))
      verifyEqualityProofT lhs rhs assC
 
--- | Given two expressions, and a rewrite from the former to the latter, verify that rewrite.
-verifyEqualityProofT :: CoreExpr -> CoreExpr -> RewriteH CoreExpr -> TranslateH a ()
-verifyEqualityProofT sourceExpr targetExpr r =
-  prefixFailMsg "equality verification failed: " $
-  do resultExpr <- r <<< return sourceExpr
-     guardMsg (exprEqual targetExpr resultExpr) "result of running proof on lhs of equality does not match rhs of equality."
-
 --------------------------------------------------------------------------------------------------
 
 wrapUnwrapTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
 wrapUnwrapTypes wrap unwrap = setFailMsg "given expressions have the wrong types to form a valid wrap/unwrap pair." $
                               funsWithInverseTypes unwrap wrap
-
---------------------------------------------------------------------------------------------------
-
-parse2beforeBiR :: (CoreExpr -> CoreExpr -> BiRewriteH a) -> CoreString -> CoreString -> BiRewriteH a
-parse2beforeBiR f s1 s2 = beforeBiR (parseCoreExprT s1 &&& parseCoreExprT s2) (uncurry f)
-
-parse3beforeBiR :: (CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH a) -> CoreString -> CoreString -> CoreString -> BiRewriteH a
-parse3beforeBiR f s1 s2 s3 = beforeBiR ((parseCoreExprT s1 &&& parseCoreExprT s2) &&& parseCoreExprT s3) ((uncurry.uncurry) f)
 
 --------------------------------------------------------------------------------------------------

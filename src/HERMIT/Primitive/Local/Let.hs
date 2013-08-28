@@ -261,17 +261,23 @@ letFloatLetR = prefixFailMsg "Let floating from Let failed: " $
      let bdsAction = if isEmptyVarSet vs then idR else nonRecAllR idR alphaLet
      letT bdsAction idR $ \ (NonRec v (Let bds ev)) e -> Let bds $ Let (NonRec v ev) e
 
--- | @(\ v1 -> let v2 = e1 in e2)@  ==>  @let v2 = e1 in (\ v1 -> e2)@
---   Fails if @v1@ occurs in @e1@.
---   If @v1@ = @v2@ then @v1@ will be alpha-renamed.
+-- | @(\ v -> let binds in e2)@  ==>  @let binds in (\ v1 -> e2)@
+--   Fails if @v@ occurs in the RHS of @binds@.
+--   If @v@ is shadowed in binds, then @v@ will be alpha-renamed.
 letFloatLamR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
-              withPatFailMsg (wrongExprForm "Lam v1 (Let (NonRec v2 e1) e2)") $
-  do Lam v1 (Let (NonRec v2 e1) e2) <- idR
-     guardMsg (v1 `notElemVarSet` exprFreeVars e1) $ var2String v1 ++ " occurs in the definition of " ++ var2String v2 ++ "."
-     if v1 == v2
+               withPatFailMsg (wrongExprForm "Lam v1 (Let (NonRec v2 e1) e2)") $
+  do Lam v (Let binds body) <- idR
+     (vs,fvs) <- lamT mempty (letT (bindVarsT &&& bindFreeVarsT) idR const) (\ () -> id)
+     guardMsg (v `notElemVarSet` fvs) (var2String v ++ " occurs in the RHS of the let-bindings.")
+     if v `elem` vs
       then alphaLam Nothing >>> letFloatLamR
-      else return (Let (NonRec v2 e1) (Lam v1 e2))
+      else return $ Let binds (Lam v body)
+     -- Lam v1 (Let (NonRec v2 e1) e2) <- idR
+     -- guardMsg (v1 `notElemVarSet` exprFreeVars e1) $ var2String v1 ++ " occurs in the definition of " ++ var2String v2 ++ "."
+     -- if v1 == v2
+     --  then alphaLam Nothing >>> letFloatLamR
+     --  else return $ Let (NonRec v2 e1) (Lam v1 e2)
 
 -- | @case (let bnds in e) of wild alts@ ==> @let bnds in (case e of wild alts)@
 --   Fails if any variables bound in @bnds@ occurs in @alts@.

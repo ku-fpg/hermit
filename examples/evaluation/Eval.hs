@@ -1,6 +1,7 @@
 module Main where
 
-import Data.Function(fix)
+import Prelude hiding (abs)
+import Data.Function (fix)
 
 data Expr = Val Int | Add Expr Expr | Throw | Catch Expr Expr
 
@@ -18,13 +19,13 @@ eval (Add x y)   = case eval x of
                                     Nothing -> Nothing
                                     Just n  -> Just (m + n)
 
-unwrap :: (Expr -> Mint) -> Expr -> (Int -> Mint) -> Mint -> Mint
-unwrap g e s f = case g e of
-                   Nothing -> f
-                   Just n  -> s n
+abs :: ((Int -> Mint) -> Mint -> Mint) -> Mint
+abs h = h Just Nothing
 
-wrap :: (Expr -> (Int -> Mint) -> Mint -> Mint) -> Expr -> Mint
-wrap h e = h e Just Nothing
+rep :: Mint -> (Int -> Mint) -> Mint -> Mint
+rep mn s f = case mn of
+               Nothing -> f
+               Just n  -> s n
 
 main :: IO ()
 main = print (eval $ Val 5)

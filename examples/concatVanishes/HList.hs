@@ -20,9 +20,4 @@ absH f = f []
 {-# RULES "repH (:)" forall x xs .     repH (x:xs) = ((:) x) . repH xs     #-}
 
 -- Should be in the "List" module
-{-# RULES "(:) ++" forall x xs ys .    (x:xs) ++ ys = x : (xs ++ ys)       #-}
-{-# RULES "[] ++"  forall xs .         [] ++ xs     = xs                   #-}
 {-# RULES "++ []"  forall xs .         xs ++ []     = xs                   #-}
-
--- has preconditon
-{-# RULES "rep-abs-fusion" forall h .  repH (absH h) = h                   #-}

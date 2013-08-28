@@ -1,22 +1,23 @@
 load-as-rewrite "WWA" "WW-Ass-A.hss"
-define-rewrite "WWC" "ww-AssA-to-AssC WWA"
-
 flatten-module
 consider 'eval
-ww-split [| wrap |] [| unwrap |] WWC
-{rhs-of 'work
-   eta-expand 'e ; lam-body
-   eta-expand 's ; lam-body
-   eta-expand 'f ; lam-body
-   unfold 'unwrap
-   one-td (unfold 'f)
-   bash
-   {
-     consider case ; [case-alt 1, alt-rhs] ; abstract 'm
-     consider case ; [case-alt 1, alt-rhs] ; abstract 'n
-   }
-   any-bu (fold 'unwrap)
-   any-td (foreward (ww-fusion [| wrap |] [| unwrap |] [| work |] WWC))
+ww-result-split [| abs |] [| rep |] (ww-result-AssA-to-AssC WWA)
+{ def-rhs
+  let-subst
+  { let-body
+    alpha-lam 'e
+    lam-body
+    unfold 'abs
+  }
+  { rhs-of 'work
+    alpha-lam 'e ; lam-body
+    unfold 'rep
+    bash
+    [lam-body, lam-body]
+    { consider case ; [case-alt 1, alt-rhs] ; abstract 'm
+      consider case ; [case-alt 1, alt-rhs] ; abstract 'n
+    }
+    any-bu (fold 'rep)
+    any-td (foreward ww-result-fusion)
+  }
 }
-simplify
-any-call (unfold 'wrap)

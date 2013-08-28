@@ -147,10 +147,10 @@ betaExpandR = setFailMsg ("Beta-expansion failed: " ++ wrongExprForm "Let (NonRe
 
 ------------------------------------------------------------------------------
 
--- | (\\ v -> e1 v) ==> e1
+-- | (\\ v -> f v) ==> f
 etaReduceR :: MonadCatch m => Rewrite c m CoreExpr
 etaReduceR = prefixFailMsg "Eta-reduction failed: " $
-            withPatFailMsg (wrongExprForm "Lam v1 (App f e)") $
+            withPatFailMsg (wrongExprForm "Lam v (App f (Var v))") $
             do Lam v1 (App f e) <- idR
                case e of
                   Var v2  -> guardMsg (v1 == v2) "the expression has the right form, but the variables are not equal."

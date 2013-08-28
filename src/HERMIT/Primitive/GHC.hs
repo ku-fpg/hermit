@@ -8,6 +8,7 @@ module HERMIT.Primitive.GHC
        , tyVarsOfTypeT
        , exprFreeIdsT
        , exprFreeVarsT
+       , bindFreeVarsT
        , altFreeVarsT
        , altFreeVarsExclWildT
          -- ** Substitution
@@ -261,9 +262,14 @@ exprFreeVarsT = arr exprFreeVars
 tyVarsOfTypeT :: Monad m => Translate c m Type TyVarSet
 tyVarsOfTypeT = arr tyVarsOfType
 
--- | The free variables in a case alternative, which excludes any identifiers bound in the alternative.
+-- | The free variables in a case alternative, which excludes any variables bound in the alternative.
 altFreeVarsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt VarSet
 altFreeVarsT = altT mempty (\ _ -> idR) exprFreeVarsT (\ () vs fvs -> delVarSetList fvs vs)
+
+-- | The free variables in a binding group, which excludes any variables bound in the group.
+bindFreeVarsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreBind VarSet
+bindFreeVarsT = nonRecT idR exprFreeVarsT (\ v fvs -> delVarSet fvs v)
+                <+ recDefT (\ _ -> (idR, exprFreeVarsT)) (uncurry (flip delVarSetList) . second unionVarSets . unzip)
 
 -- | A variant of 'altFreeVarsT' that returns a function that accepts the case wild-card binder before giving a result.
 --   This is so we can use this with congruence combinators, for example:

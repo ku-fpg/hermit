@@ -33,7 +33,8 @@ import qualified HERMIT.Primitive.Navigation as Navigation
 import qualified HERMIT.Primitive.New as New
 import qualified HERMIT.Primitive.Unfold as Unfold
 import qualified HERMIT.Primitive.Unsafe as Unsafe
-import qualified HERMIT.Primitive.WorkerWrapper as WorkerWrapper
+import qualified HERMIT.Primitive.WorkerWrapper.Fix as WorkerWrapperFix
+import qualified HERMIT.Primitive.WorkerWrapper.FixResult as WorkerWrapperFixResult
 
 import HERMIT.PrettyPrinter.Common
 import qualified HERMIT.PrettyPrinter.AST as AST
@@ -59,7 +60,8 @@ externals =
     ++ New.externals
     ++ Unfold.externals
     ++ Unsafe.externals
-    ++ WorkerWrapper.externals
+    ++ WorkerWrapperFix.externals
+    ++ WorkerWrapperFixResult.externals
 
 -- | Create a dictionary from a list of 'External's.
 mkDict :: [External] -> Dictionary

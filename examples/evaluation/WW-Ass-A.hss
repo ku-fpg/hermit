@@ -1,17 +1,11 @@
--- Worker/Wrapper Assumption A:  wrap (unwrap h) <=> h
+-- Worker/Wrapper (Result Variant) Assumption A:  abs (rep a) <=> a
 
---  wrap (unwrap h)
-                                  { unfold 'wrap }
---  \ e -> unwrap h e Just Nothing
-                                  { lam-body
---         unwrap h e Just Nothing
-                                    { unfold 'unwrap }
---         case h e of wild
---           Nothing -> Nothing
---           Just n  -> Just n
-                                    { case-elim-merge-alts }
---         h e
-                                  }
---  \ e -> h e
-                                  { eta-reduce  }
---  h
+--  abs (rep a)
+                                       { unfold 'abs }
+--  rep a Just Nothing
+                                       { unfold 'rep }
+--  case a of
+--    Nothing -> Nothing
+--    Just n  -> Just n
+                                       { case-elim-merge-alts }
+--  a
