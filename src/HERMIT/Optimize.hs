@@ -24,7 +24,7 @@ module HERMIT.Optimize
     , omToIO
     ) where
 
-import GhcPlugins hiding (singleton, liftIO, display)
+import GhcPlugins hiding (singleton, liftIO, display, (<>))
 import qualified GhcPlugins as GHC
 
 import Control.Arrow
@@ -32,6 +32,7 @@ import Control.Monad.Operational
 import Control.Monad.State hiding (guard)
 
 import Data.Default
+import Data.Monoid
 
 import HERMIT.Dictionary
 import HERMIT.External hiding (Query, Shell)
@@ -50,11 +51,9 @@ import System.IO (stdout)
 data OInst :: * -> * where
     Shell    :: [External] -> [CommandLineOption] -> OInst ()
     Guard    :: (PhaseInfo -> Bool) -> OM ()      -> OInst ()
-    -- with some refactoring of the interpreter I'm pretty sure
-    -- we can make Focus polymorphic
-    Focus    :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g PathH -> OM () -> OInst ()
-    RR       :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g                  -> OInst ()
-    Query    :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g a              -> OInst a
+    Focus    :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g LocalPathH -> OM a -> OInst a
+    RR       :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g                      -> OInst ()
+    Query    :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g a                  -> OInst a
 
 -- using operational, but would we nice to use Neil's constrained-normal package!
 newtype OM a = OM (ProgramT OInst (StateT InterpState IO) a)
@@ -97,24 +96,23 @@ errorAbort s = gets isKernel >>= \k -> liftIO $ errorAbortIO k s
 
 -- TODO - better name!
 omToIO :: InterpState -> OM a -> IO (a, InterpState)
-omToIO initState (OM opt) = runStateT (eval [] opt) initState
+omToIO initState (OM opt) = runStateT (eval opt) initState
 
--- TODO - use the kernel's pathing instead of our own
-eval :: PathH -> ProgramT OInst (StateT InterpState IO) a -> InterpM a
-eval path comp = do
+eval :: ProgramT OInst (StateT InterpState IO) a -> InterpM a
+eval comp = do
     let env = mkHermitMEnv $ GHC.liftIO . debug
         debug (DebugTick msg) = putStrLn msg
         debug (DebugCore msg _c _e) = putStrLn $ "Core: " ++ msg
 
-    (phaseInfo, (sast, kernel)) <- gets (isPhaseInfo &&& (isAST &&& isKernel))
+    (phaseInfo, kernel) <- gets (isPhaseInfo &&& isKernel)
     v <- viewT comp
     case v of
         Return x            -> return x
-        RR rr       :>>= k  -> liftIO (applyS kernel sast (pathR path rr) env)
-                                >>= runKureM (\sast' -> modify (\s -> s { isAST = sast' }))
-                                             errorAbort >> eval path (k ())
-        Query tr    :>>= k  -> liftIO (queryS kernel sast (pathT path tr) env)
-                                >>= runKureM (eval path . k) errorAbort
+        RR rr       :>>= k  -> do runAndSave $ \ sast -> applyS kernel sast rr env
+                                  eval (k ())
+        Query tr    :>>= k  -> do sast <- gets isAST
+                                  r <- iokm2im (queryS kernel sast tr env)
+                                  eval $ k r
         -- TODO: rework shell so it can return to k
         --       this will significantly simplify this code
         --       as we can just call the shell directly here
@@ -122,9 +120,23 @@ eval path comp = do
                                -- liftIO $ Shell.interactive os defaultBehavior es kernel sast
                                -- calling the shell directly causes indefinite MVar problems
                                -- because the state monad never finishes (I think)
-        Guard p (OM m)  :>>= k  -> when (p phaseInfo) (eval path m) >> eval path (k ())
-        Focus tp (OM m) :>>= k  -> liftIO (queryS kernel sast tp env)
-                                >>= runKureM (flip eval m) errorAbort >> eval path (k ())
+        Guard p (OM m)  :>>= k  -> when (p phaseInfo) (eval m) >> eval (k ())
+        Focus tp (OM m) :>>= k  -> do
+            sast <- gets isAST
+            p <- iokm2im $ queryS kernel sast tp env        -- run the pathfinding translation
+            runAndSave $ beginScopeS kernel                 -- remember the current path
+            runAndSave $ \s -> modPathS kernel s (<> p) env -- modify the current path
+            r <- eval m                                     -- run the focused computation
+            runAndSave $ endScopeS kernel                   -- endscope on it, so we go back to where we started
+            eval $ k r
+
+iokm2im :: IO (KureM a) -> InterpM a
+iokm2im = liftIO >=> runKureM return errorAbort
+
+runAndSave :: (SAST -> IO (KureM SAST)) -> InterpM ()
+runAndSave m = do
+    sast <- gets isAST >>= iokm2im . m
+    modify $ \st -> st { isAST = sast }
 
 interactive :: [External] -> [CommandLineOption] -> OM ()
 interactive es os = OM . singleton $ Shell (externals ++ es) os
@@ -140,7 +152,7 @@ query = OM . singleton . Query
 guard :: (PhaseInfo -> Bool) -> OM () -> OM ()
 guard p = OM . singleton . Guard p
 
-at :: TranslateH Core PathH -> OM () -> OM ()
+at :: TranslateH Core LocalPathH -> OM a -> OM a
 at tp = OM . singleton . Focus tp
 
 phase :: Int -> OM () -> OM ()
