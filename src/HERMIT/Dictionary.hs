@@ -144,15 +144,23 @@ bashR = bashDebugR False
 bashDebugR :: Bool -> [External] -> RewriteH Core
 bashDebugR debug exts =
     setFailMsg "bash failed: nothing to do." $
-    GHC.occurAnalyseR >>> repeatR (innermostR ( orR [ (if debug
-                                                         then rr >>> Debug.observeR (externName e)
-                                                         else rr)
-                                                    | (e,rr) <- matchingExternals bashPredicate exts ]
-                                              ) >>> GHC.occurAnalyseR
-                                  )
-    -- Occurrence Analysis is special because it always succeeds.  It's also expensive (I think) so I don't want to perform it at each node during the innermost traversal.
+    GHC.occurAnalyseChangedR >+> repeatR (innermostR ( orR [ (if debug
+                                                               then rr >>> Debug.observeR (externName e)
+                                                               else rr)
+                                                           | (e,rr) <- matchingExternals bashPredicate exts ]
+                                                      ) >>> GHC.occurAnalyseR
+                                         )
+{-
+Occurrence Analysis updates meta-data, as well as performing some basic simplifications.
+occurAnalyseR always succeeds, whereas occurAnalyseChangedR fails is the result is alpha equivalent.
+The awkwardness is because:
+  - we want bash to fail if nothing changes
+  - we want bash to succeed if the result is not alpha-equivalent (ideally, if any changes are made at all, but that's not the case yet)
+  - we want bash to update the meta-data
+  - after running bash there should be nothing left to do (i.e. an immediately subsequent bash should always fail)
 
-    -- It's still possible for some meta-data to be out-of-date after bash, despite the case analysis.  For example, if the focal point is a case-alt rhs, this won't update the identifer info of variables bound in the alternative.
+Also, it's still possible for some meta-data to be out-of-date after bash, despite the case analysis.  For example, if the focal point is a case-alt rhs, this won't update the identifer info of variables bound in the alternative.
+-}
 
 bashHelp :: [External] -> [String]
 bashHelp exts =

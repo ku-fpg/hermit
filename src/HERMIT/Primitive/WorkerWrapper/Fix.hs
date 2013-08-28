@@ -192,7 +192,7 @@ workerWrapperFacBR mAss wrap unwrap = beforeBiR (wrapUnwrapTypes wrap unwrap)
                  withPatFailMsg wrongFixBody $
                    do (_, Lam b (App unwrap1 (App f (App wrap1 (Var b'))))) <- isFixExpr <<< constant fx
                       guardMsg (b == b') wrongFixBody
-                      guardMsg (exprsEqual [wrap, wrap1, wrap2]) "wrappers do not match."
+                      guardMsg (equivalentBy exprEqual [wrap, wrap1, wrap2]) "wrappers do not match."
                       guardMsg (exprEqual unwrap unwrap1) "unwrappers do not match."
                       whenJust (verifyWWAss wrap unwrap f) mAss
                       mkFix f

@@ -22,6 +22,7 @@ module HERMIT.GHC
     , GhcException(..)
     , throwGhcException
     , exprArity
+    , occurAnalyseExpr
     , isKind
     , isLiftedTypeKindCon
     , HERMIT.GHC.coAxiomName
@@ -42,6 +43,7 @@ import TypeRep (Type(..),TyLit(..))
 import Panic (GhcException(ProgramError), throwGhcException)
 import CoreArity
 import Kind (isKind,isLiftedTypeKindCon)
+import OccurAnal (occurAnalyseExpr)
 
 #if __GLASGOW_HASKELL__ <= 706
 import Data.Maybe (isJust)

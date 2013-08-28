@@ -212,7 +212,7 @@ workerWrapperFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
                                         )
                                   ))) <- isFixExpr <<< constant fx
                  guardMsg (x1 == x1' && x2 == x2' && h == h') wrongForm
-                 guardMsg (exprsEqual [abs, abs1, abs2]) "abs's do not match."
+                 guardMsg (equivalentBy exprEqual [abs, abs1, abs2]) "abs's do not match."
                  guardMsg (exprEqual rep rep1) "rep's do not match."
                  whenJust (verifyWWAss abs rep f) mAss
                  mkFix f
