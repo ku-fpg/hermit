@@ -273,11 +273,6 @@ letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
      if v `elem` vs
       then alphaLam Nothing >>> letFloatLamR
       else return $ Let binds (Lam v body)
-     -- Lam v1 (Let (NonRec v2 e1) e2) <- idR
-     -- guardMsg (v1 `notElemVarSet` exprFreeVars e1) $ var2String v1 ++ " occurs in the definition of " ++ var2String v2 ++ "."
-     -- if v1 == v2
-     --  then alphaLam Nothing >>> letFloatLamR
-     --  else return $ Let (NonRec v2 e1) (Lam v1 e2)
 
 -- | @case (let bnds in e) of wild alts@ ==> @let bnds in (case e of wild alts)@
 --   Fails if any variables bound in @bnds@ occurs in @alts@.
