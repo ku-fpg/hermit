@@ -1,23 +1,45 @@
 {-# LANGUAGE LambdaCase #-}
 module HERMIT.Core
           (
-            -- * Generic Data Type
+          -- * Generic Data Type
             CoreProg(..)
           , CoreDef(..)
           , CoreTickish
-            -- * Equality
+          -- * Equality
+          -- | We define both syntactic equality and alpha equality.
+
+          -- ** Syntactic Equality
+          , progSyntaxEq
+          , bindSyntaxEq
+          , defSyntaxEq
+          , exprSyntaxEq
+          , altSyntaxEq
+          , typeSyntaxEq
+          , coercionSyntaxEq
+
+          -- ** Alpha Equality
           , progAlphaEq
           , bindAlphaEq
           , defAlphaEq
           , exprAlphaEq
           , altAlphaEq
-            -- * Conversions to/from 'Core'
+          , typeAlphaEq
+          , coercionAlphaEq
+
+          -- * Conversions to/from 'Core'
           , defsToRecBind
           , defToIdExpr
           , progToBinds
           , bindsToProg
           , bindToVarExprs
-            -- * Utilities
+
+          -- * Collecting variable bindings
+          , progIds
+          , bindVars
+          , defId
+          , altVars
+
+          -- * Utilities
           , isCoArg
           , exprKindOrType
           , endoFunType
@@ -26,7 +48,8 @@ module HERMIT.Core
           , funsWithInverseTypes
           , appCount
           , mapAlts
-            -- * Crumbs
+
+          -- * Crumbs
           , Crumb(..)
           , showCrumbs
 --          , crumbToDeprecatedInt
@@ -34,10 +57,12 @@ module HERMIT.Core
           , deprecatedRightSibling
 ) where
 
-import GhcPlugins
-
 import Language.KURE.Combinators.Monad
 import Language.KURE.MonadCatch
+
+import GhcPlugins
+
+import HERMIT.GHC
 
 import Data.List (intercalate)
 
@@ -92,10 +117,75 @@ defsToRecBind = Rec . map defToIdExpr
 
 -----------------------------------------------------------------------
 
+-- Syntactic Equality
+
+-- | Syntactic Equality of programs.
+progSyntaxEq :: CoreProg -> CoreProg -> Bool
+progSyntaxEq ProgNil ProgNil                       = True
+progSyntaxEq (ProgCons bnd1 p1) (ProgCons bnd2 p2) = bindSyntaxEq bnd1 bnd2 && progSyntaxEq p1 p2
+progSyntaxEq _ _                                   = False
+
+-- | Syntactic Equality of binding groups.
+bindSyntaxEq :: CoreBind -> CoreBind -> Bool
+bindSyntaxEq (NonRec v1 e1) (NonRec v2 e2) = v1 == v2 && exprSyntaxEq e1 e2
+bindSyntaxEq (Rec ies1)     (Rec ies2)     = all2 (\ (i1,e1) (i2,e2) -> i1 == i2 && exprSyntaxEq e1 e2) ies1 ies2
+bindSyntaxEq _              _              = False
+
+-- | Syntactic Equality of recursive definitions.
+defSyntaxEq :: CoreDef -> CoreDef -> Bool
+defSyntaxEq (Def i1 e1) (Def i2 e2) = i1 == i2 && exprSyntaxEq e1 e2
+
+-- | Syntactic Equality of expressions.
+exprSyntaxEq :: CoreExpr -> CoreExpr -> Bool
+exprSyntaxEq (Var i1)             (Var i2)             = i1 == i2
+exprSyntaxEq (Lit l1)             (Lit l2)             = l1 == l2
+exprSyntaxEq (App f1 e1)          (App f2 e2)          = exprSyntaxEq f1 f2 && exprSyntaxEq e1 e2
+exprSyntaxEq (Lam v1 e1)          (Lam v2 e2)          = v1 == v2 && exprSyntaxEq e1 e2
+exprSyntaxEq (Let b1 e1)          (Let b2 e2)          = bindSyntaxEq b1 b2 && exprSyntaxEq e1 e2
+exprSyntaxEq (Case s1 w1 ty1 as1) (Case s2 w2 ty2 as2) = w1 == w2 && exprSyntaxEq s1 s2 && all2 altSyntaxEq as1 as2 && typeSyntaxEq ty1 ty2
+exprSyntaxEq (Cast e1 co1)        (Cast e2 co2)        = exprSyntaxEq e1 e2 && coercionSyntaxEq co1 co2
+exprSyntaxEq (Tick t1 e1)         (Tick t2 e2)         = t1 == t2 && exprSyntaxEq e1 e2
+exprSyntaxEq (Type ty1)           (Type ty2)           = typeSyntaxEq ty1 ty2
+exprSyntaxEq (Coercion co1)       (Coercion co2)       = coercionSyntaxEq co1 co2
+exprSyntaxEq _                    _                    = False
+
+-- | Syntactic Equality of case alternatives.
+altSyntaxEq :: CoreAlt -> CoreAlt -> Bool
+altSyntaxEq (c1,vs1,e1) (c2,vs2,e2) = c1 == c2 && vs1 == vs2 && exprSyntaxEq e1 e2
+
+-- | Syntactic Equality of 'Type's.
+typeSyntaxEq :: Type -> Type -> Bool
+typeSyntaxEq (TyVarTy v1)      (TyVarTy v2)         = v1 == v2
+typeSyntaxEq (LitTy l1)        (LitTy l2)           = l1 == l2
+typeSyntaxEq (AppTy t1 ty1)    (AppTy t2 ty2)       = typeSyntaxEq t1 t2 && typeSyntaxEq ty1 ty2
+typeSyntaxEq (FunTy t1 ty1)    (FunTy t2 ty2)       = typeSyntaxEq t1 t2 && typeSyntaxEq ty1 ty2
+typeSyntaxEq (ForAllTy v1 ty1) (ForAllTy v2 ty2)    = v1 == v2 && typeSyntaxEq ty1 ty2
+typeSyntaxEq (TyConApp c1 ts1) (TyConApp c2 ts2)    = c1 == c2 && all2 typeSyntaxEq ts1 ts2
+typeSyntaxEq _                 _                    = False
+
+-- | Syntactic Equality of 'Coercion's.
+coercionSyntaxEq :: Coercion -> Coercion -> Bool
+coercionSyntaxEq (Refl ty1)              (Refl ty2)              = typeSyntaxEq ty1 ty2
+coercionSyntaxEq (TyConAppCo tc1 cos1)   (TyConAppCo tc2 cos2)   = tc1 == tc2 && all2 coercionSyntaxEq cos1 cos2
+coercionSyntaxEq (AppCo co11 co12)       (AppCo co21 co22)       = coercionSyntaxEq co11 co21 && coercionSyntaxEq co12 co22
+coercionSyntaxEq (ForAllCo v1 co1)       (ForAllCo v2 co2)       = v1 == v2 && coercionSyntaxEq co1 co2
+coercionSyntaxEq (CoVarCo v1)            (CoVarCo v2)            = v1 == v2
+coercionSyntaxEq (AxiomInstCo con1 cos1) (AxiomInstCo con2 cos2) = con1 == con2 && all2 coercionSyntaxEq cos1 cos2
+coercionSyntaxEq (UnsafeCo ty11 ty12)    (UnsafeCo ty21 ty22)    = typeSyntaxEq ty11 ty21 && typeSyntaxEq ty12 ty22
+coercionSyntaxEq (SymCo co1)             (SymCo co2)             = coercionSyntaxEq co1 co2
+coercionSyntaxEq (TransCo co11 co12)     (TransCo co21 co22)     = coercionSyntaxEq co11 co21 && coercionSyntaxEq co12 co22
+coercionSyntaxEq (NthCo n1 co1)          (NthCo n2 co2)          = n1 == n2 && coercionSyntaxEq co1 co2
+coercionSyntaxEq (InstCo co1 ty1)        (InstCo co2 ty2)        = coercionSyntaxEq co1 co2 && typeSyntaxEq ty1 ty2
+coercionSyntaxEq _                       _                       = False
+
+-----------------------------------------------------------------------
+
+-- Alpha Equality
+
 -- | Alpha equality of programs.
 progAlphaEq :: CoreProg -> CoreProg -> Bool
 progAlphaEq ProgNil ProgNil                       = True
-progAlphaEq (ProgCons bnd1 p1) (ProgCons bnd2 p2) = bindAlphaEq bnd1 bnd2 && progAlphaEq p1 p2
+progAlphaEq (ProgCons bnd1 p1) (ProgCons bnd2 p2) = bindVars bnd1 == bindVars bnd2 && bindAlphaEq bnd1 bnd2 && progAlphaEq p1 p2
 progAlphaEq _ _                                   = False
 
 -- The ideas for this function are directly extracted from
@@ -129,6 +219,36 @@ altAlphaEq (c1,vs1,e1) (c2,vs2,e2) = c1 == c2 && eqExprX id_unf env e1 e2
     id_unf _    = noUnfolding      -- Don't expand
     inScopeSet  = mkInScopeSet $ exprsFreeVars [e1,e2]
     env         = rnBndrs2 (mkRnEnv2 inScopeSet) vs1 vs2
+
+-- | Alpha Equality of 'Type's.
+typeAlphaEq :: Type -> Type -> Bool
+typeAlphaEq = eqType
+
+-- | Alpha Equality of 'Coercion's.
+coercionAlphaEq :: Coercion -> Coercion -> Bool
+coercionAlphaEq = coreEqCoercion
+
+-----------------------------------------------------------------------
+
+-- | List all identifiers bound at the top-level in a program.
+progIds :: CoreProg -> [Id]
+progIds = \case
+             ProgNil        -> []
+             ProgCons bnd p -> bindVars bnd ++ progIds p
+
+-- | List all variables bound in a binding group.
+bindVars :: CoreBind -> [Var]
+bindVars = \case
+              NonRec v _ -> [v]
+              Rec ds     -> map fst ds
+
+-- | Return the identifier bound by a recursive definition.
+defId :: CoreDef -> Id
+defId (Def i _) = i
+
+-- | List the variables bound by a case alternative.
+altVars :: CoreAlt -> [Var]
+altVars (_,vs,_) = vs
 
 -----------------------------------------------------------------------
 

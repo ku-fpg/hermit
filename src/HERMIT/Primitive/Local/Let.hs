@@ -268,7 +268,7 @@ letFloatLamR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c
 letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
                withPatFailMsg (wrongExprForm "Lam v1 (Let (NonRec v2 e1) e2)") $
   do Lam v (Let binds body) <- idR
-     (vs,fvs) <- lamT mempty (letT (bindVarsT &&& bindFreeVarsT) idR const) (\ () -> id)
+     (vs,fvs) <- lamT mempty (letT (arr bindVars &&& bindFreeVarsT) idR const) (\ () -> id)
      guardMsg (v `notElemVarSet` fvs) (var2String v ++ " occurs in the RHS of the let-bindings.")
      if v `elem` vs
       then alphaLam Nothing >>> letFloatLamR
@@ -326,9 +326,9 @@ letUnfloatCaseR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite 
 letUnfloatCaseR = prefixFailMsg "Let unfloating from case failed: " $
                  withPatFailMsg (wrongExprForm "Let bnds (Case s w ty alts)") $
   do Let bnds (Case s w ty alts) <- idR
-     captured <- letT bindVarsT caseVarsT intersect
+     captured <- letT (arr bindVars) caseVarsT intersect
      guardMsg (null captured) "let bindings would capture case pattern bindings."
-     unbound <- letT bindVarsT (caseT mempty mempty tyVarsOfTypeT (const mempty) $ \ () () vs (_::[()]) -> varSetElems vs) intersect
+     unbound <- letT (arr bindVars) (caseT mempty mempty tyVarsOfTypeT (const mempty) $ \ () () vs (_::[()]) -> varSetElems vs) intersect
      guardMsg (null unbound) "type variables in case signature would become unbound."
      return $ Case (Let bnds s) w ty $ mapAlts (Let bnds) alts
 
@@ -345,7 +345,7 @@ letUnfloatLamR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c
 letUnfloatLamR = prefixFailMsg "Let unfloating from lambda failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (Lam v e)") $
   do Let bnds (Lam v e) <- idR
-     safe <- letT bindVarsT lamVarT $ flip notElem
+     safe <- letT (arr bindVars) lamVarT $ flip notElem
      guardMsg safe "let bindings would capture lambda binding."
      return $ Lam v $ Let bnds e
 

@@ -27,7 +27,6 @@ module HERMIT.Primitive.GHC
        , lintModuleT
        , specConstrR
        , occurAnalyseR
-       , occurAnalyseChangedR
        , occurAnalyseAndDezombifyR
        , dezombifyR
        )
@@ -500,10 +499,6 @@ occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c 
 occurAnalyseR = let r  = promoteExprR (arr occurAnalyseExpr)
                     go = r <+ anyR go
                  in tryR go -- always succeed
-
--- | Apply 'occurAnalyseExprR' to all sub-expressions, failing if the result is alpha-equivalent to the original.
-occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
-occurAnalyseChangedR = changedByR coreAlphaEq occurAnalyseR
 
 -- | Run GHC's occurrence analyser, and also eliminate any zombies.
 occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core

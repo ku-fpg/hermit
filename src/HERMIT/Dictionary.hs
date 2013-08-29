@@ -144,18 +144,29 @@ bashR = bashDebugR False
 bashDebugR :: Bool -> [External] -> RewriteH Core
 bashDebugR debug exts =
     setFailMsg "bash failed: nothing to do." $
-    GHC.occurAnalyseChangedR >+> repeatR (innermostR ( orR [ (if debug
-                                                               then rr >>> Debug.observeR (externName e)
-                                                               else rr)
-                                                           | (e,rr) <- matchingExternals bashPredicate exts ]
-                                                      ) >>> GHC.occurAnalyseR
-                                         )
+    readerT $ \ core1 -> GHC.occurAnalyseR >>> readerT (\ core2 -> if core1 `coreSyntaxEq` core2
+                                                                     then bashCoreR      -- equal, no progress yet
+                                                                     else tryR bashCoreR -- unequal, progress has already been made
+                                                       )
+  -- the changedByR combinator doesn't quite do what we need here
+  where
+    bashCoreR :: RewriteH Core
+    bashCoreR = repeatR (terminatingBashR >>> GHC.occurAnalyseR)
+
+    terminatingBashR :: RewriteH Core
+    terminatingBashR = innermostR (orR [ (if debug
+                                            then rr >>> Debug.observeR (externName e)
+                                            else rr)
+                                       | (e,rr) <- matchingExternals bashPredicate exts ]
+                                  )
+    {-# INLINE terminatingBashR #-}
+
 {-
 Occurrence Analysis updates meta-data, as well as performing some basic simplifications.
 occurAnalyseR always succeeds, whereas occurAnalyseChangedR fails is the result is alpha equivalent.
 The awkwardness is because:
   - we want bash to fail if nothing changes
-  - we want bash to succeed if the result is not alpha-equivalent (ideally, if any changes are made at all, but that's not the case yet)
+  - we want bash to succeed if the result is not syntactically-equivalent (ideally, if any changes are made at all, but that's not the case yet)
   - we want bash to update the meta-data
   - after running bash there should be nothing left to do (i.e. an immediately subsequent bash should always fail)
 

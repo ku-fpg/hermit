@@ -6,6 +6,11 @@ module HERMIT.Kure.SumTypes
   , TyCo(..)
   , CoreTC(..)
   -- * Equality
+  -- ** Syntactic Equality
+  , coreSyntaxEq
+  , tyCoSyntaxEq
+  , coreTCSyntaxEq
+  -- ** Alpha Equality
   , coreAlphaEq
   , tyCoAlphaEq
   , coreTCAlphaEq
@@ -63,7 +68,7 @@ data CoreTC = Core Core
 
 -- | Alpha equality of 'Core' fragments.
 coreAlphaEq :: Core -> Core -> Bool
-coreAlphaEq (GutsCore g1) (GutsCore g2) = bindsToProg (mg_binds g1) `progAlphaEq` bindsToProg (mg_binds g2)
+coreAlphaEq (GutsCore g1) (GutsCore g2) = progAlphaEq (bindsToProg $ mg_binds g1) (bindsToProg $ mg_binds g2)
 coreAlphaEq (ProgCore p1) (ProgCore p2) = progAlphaEq p1 p2
 coreAlphaEq (BindCore b1) (BindCore b2) = bindAlphaEq b1 b2
 coreAlphaEq (DefCore d1)  (DefCore d2)  = defAlphaEq d1 d2
@@ -73,8 +78,8 @@ coreAlphaEq _             _             = False
 
 -- | Alpha equality of 'TyCo' fragments.
 tyCoAlphaEq :: TyCo -> TyCo -> Bool
-tyCoAlphaEq (TypeCore ty1)     (TypeCore ty2)     = eqType ty1 ty2
-tyCoAlphaEq (CoercionCore co1) (CoercionCore co2) = coreEqCoercion co1 co2
+tyCoAlphaEq (TypeCore ty1)     (TypeCore ty2)     = typeAlphaEq ty1 ty2
+tyCoAlphaEq (CoercionCore co1) (CoercionCore co2) = coercionAlphaEq co1 co2
 tyCoAlphaEq _                  _                  = False
 
 -- | Alpha equality of 'CoreTC' fragments.
@@ -82,6 +87,30 @@ coreTCAlphaEq :: CoreTC -> CoreTC -> Bool
 coreTCAlphaEq (Core c1)  (Core c2)  = coreAlphaEq c1 c2
 coreTCAlphaEq (TyCo tc1) (TyCo tc2) = tyCoAlphaEq tc1 tc2
 coreTCAlphaEq _          _          = False
+
+---------------------------------------------------------------------
+
+-- | Syntactic equality of 'Core' fragments.
+coreSyntaxEq :: Core -> Core -> Bool
+coreSyntaxEq (GutsCore g1) (GutsCore g2) = all2 bindSyntaxEq (mg_binds g1) (mg_binds g2)
+coreSyntaxEq (ProgCore p1) (ProgCore p2) = progSyntaxEq p1 p2
+coreSyntaxEq (BindCore b1) (BindCore b2) = bindSyntaxEq b1 b2
+coreSyntaxEq (DefCore d1)  (DefCore d2)  = defSyntaxEq d1 d2
+coreSyntaxEq (ExprCore e1) (ExprCore e2) = exprSyntaxEq e1 e2
+coreSyntaxEq (AltCore a1)  (AltCore a2)  = altSyntaxEq a1 a2
+coreSyntaxEq _             _             = False
+
+-- | Syntactic equality of 'TyCo' fragments.
+tyCoSyntaxEq :: TyCo -> TyCo -> Bool
+tyCoSyntaxEq (TypeCore ty1)     (TypeCore ty2)     = typeSyntaxEq ty1 ty2
+tyCoSyntaxEq (CoercionCore co1) (CoercionCore co2) = coercionSyntaxEq co1 co2
+tyCoSyntaxEq _                  _                  = False
+
+-- | Syntactic equality of 'CoreTC' fragments.
+coreTCSyntaxEq :: CoreTC -> CoreTC -> Bool
+coreTCSyntaxEq (Core c1)  (Core c2)  = coreSyntaxEq c1 c2
+coreTCSyntaxEq (TyCo tc1) (TyCo tc2) = tyCoSyntaxEq tc1 tc2
+coreTCSyntaxEq _          _          = False
 
 ---------------------------------------------------------------------
 
