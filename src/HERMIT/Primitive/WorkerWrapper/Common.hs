@@ -4,11 +4,11 @@ import GhcPlugins as GHC hiding (varName)
 
 import Control.Arrow
 
+import HERMIT.Core
 import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 
-import HERMIT.Primitive.GHC
 import HERMIT.Primitive.New -- TODO: Sort out heirarchy
 
 --------------------------------------------------------------------------------------------------
@@ -42,6 +42,6 @@ verifyEqualityProofT :: CoreExpr -> CoreExpr -> RewriteH CoreExpr -> TranslateH 
 verifyEqualityProofT sourceExpr targetExpr r =
   prefixFailMsg "equality verification failed: " $
   do resultExpr <- r <<< return sourceExpr
-     guardMsg (exprEqual targetExpr resultExpr) "result of running proof on lhs of equality does not match rhs of equality."
+     guardMsg (exprAlphaEq targetExpr resultExpr) "result of running proof on lhs of equality does not match rhs of equality."
 
 --------------------------------------------------------------------------------------------------

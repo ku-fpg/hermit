@@ -28,7 +28,6 @@ import HERMIT.Utilities
 import HERMIT.Primitive.AlphaConversion
 import HERMIT.Primitive.Common
 import HERMIT.Primitive.Function
-import HERMIT.Primitive.GHC
 import HERMIT.Primitive.Local
 import HERMIT.Primitive.Navigation
 import HERMIT.Primitive.New -- TODO: Sort out heirarchy
@@ -192,8 +191,8 @@ workerWrapperFacBR mAss wrap unwrap = beforeBiR (wrapUnwrapTypes wrap unwrap)
                  withPatFailMsg wrongFixBody $
                    do (_, Lam b (App unwrap1 (App f (App wrap1 (Var b'))))) <- isFixExpr <<< constant fx
                       guardMsg (b == b') wrongFixBody
-                      guardMsg (equivalentBy exprEqual [wrap, wrap1, wrap2]) "wrappers do not match."
-                      guardMsg (exprEqual unwrap unwrap1) "unwrappers do not match."
+                      guardMsg (equivalentBy exprAlphaEq [wrap, wrap1, wrap2]) "wrappers do not match."
+                      guardMsg (exprAlphaEq unwrap unwrap1) "unwrappers do not match."
                       whenJust (verifyWWAss wrap unwrap f) mAss
                       mkFix f
 
@@ -224,16 +223,16 @@ workerWrapperFusionBR =
            prefixFailMsg "worker/wrapper fusion failed: " $
            withPatFailMsg (wrongExprForm "unwrap (wrap work)") $
            do App unwrap' (App wrap' work') <- idR
-              guardMsg (exprEqual wrap wrap') "wrapper does not match."
-              guardMsg (exprEqual unwrap unwrap') "unwrapper does not match."
-              guardMsg (exprEqual work work') "worker does not match."
+              guardMsg (exprAlphaEq wrap wrap') "wrapper does not match."
+              guardMsg (exprAlphaEq unwrap unwrap') "unwrapper does not match."
+              guardMsg (exprAlphaEq work work') "worker does not match."
               return work
 
     fusR :: CoreExpr -> CoreExpr -> CoreExpr -> RewriteH CoreExpr
     fusR wrap unwrap work =
            prefixFailMsg "(reverse) worker/wrapper fusion failed: " $
            do work' <- idR
-              guardMsg (exprEqual work work') "worker does not match."
+              guardMsg (exprAlphaEq work work') "worker does not match."
               return $ App unwrap (App wrap work)
 
 
@@ -332,8 +331,8 @@ wwAssA mr wrap unwrap = beforeBiR (do whenJust (verifyAssA wrap unwrap) mr
     wwAL :: RewriteH CoreExpr
     wwAL = withPatFailMsg (wrongExprForm "App wrap (App unwrap x)") $
            do App wrap' (App unwrap' x) <- idR
-              guardMsg (exprEqual wrap wrap')     "given wrapper does not match wrapper in expression."
-              guardMsg (exprEqual unwrap unwrap') "given unwrapper does not match unwrapper in expression."
+              guardMsg (exprAlphaEq wrap wrap')     "given wrapper does not match wrapper in expression."
+              guardMsg (exprAlphaEq unwrap unwrap') "given unwrapper does not match unwrapper in expression."
               return x
 
     wwAR :: Type -> RewriteH CoreExpr
@@ -363,13 +362,13 @@ wwAssB mr wrap unwrap f = beforeBiR (whenJust (verifyAssB wrap unwrap f) mr)
     wwBL :: RewriteH CoreExpr
     wwBL = withPatFailMsg (wrongExprForm "App wrap (App unwrap (App f a))") $
            do App _ (App _ (App f' _)) <- idR
-              guardMsg (exprEqual f f') "given body function does not match expression."
+              guardMsg (exprAlphaEq f f') "given body function does not match expression."
               forewardT assA
 
     wwBR :: RewriteH CoreExpr
     wwBR = withPatFailMsg (wrongExprForm "App f a") $
            do App f' _ <- idR
-              guardMsg (exprEqual f f') "given body function does not match expression."
+              guardMsg (exprAlphaEq f f') "given body function does not match expression."
               backwardT assA
 
 -- | @wrap (unwrap (f a))@  \<==\>  @f a@

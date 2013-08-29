@@ -103,7 +103,7 @@ collectNBinders = go []
 
 -- return Nothing if not equal, so sequence will fail below
 checkEqual :: Maybe CoreExpr -> Maybe CoreExpr -> Maybe CoreExpr
-checkEqual m1 m2 = ifM (exprEqual <$> m1 <*> m2) m1 Nothing
+checkEqual m1 m2 = ifM (exprAlphaEq <$> m1 <*> m2) m1 Nothing
 
 fold :: Id -> CoreExpr -> CoreExpr -> Maybe CoreExpr
 fold i lam exp = do

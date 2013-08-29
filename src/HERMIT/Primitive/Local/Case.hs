@@ -210,13 +210,13 @@ caseUnfloatArgsR = prefixFailMsg "Case unfloating into arguments failed: " $
     do Case s wild _ty alts <- idR
        (vss, fs, argss) <- caseT mempty mempty mempty (\ _ -> altT mempty (\ _ -> idR) callT $ \ () vs (fn, args) -> (vs, fn, args))
                                                       (\ () () () alts' -> unzip3 [ (wild:vs, fn, args) | (vs,fn,args) <- alts' ])
-       guardMsg (equivalentBy exprEqual fs) "alternatives are not parallel in function call."
+       guardMsg (equivalentBy exprAlphaEq fs) "alternatives are not parallel in function call."
        let fvs = [ varSetElems $ unionVarSets $ map exprFreeVars $ f:tyArgs
                  | (f,args) <- zip fs argss
                  , let tyArgs = takeWhile isTyCoArg args ] -- pattern binders can be existential types
        guardMsg (all null $ zipWith intersect fvs vss) "function bound by case binders."
        let argss' = transpose argss
-       guardMsg (all (equivalentBy exprEqual) $ filter (isTyCoArg . head) argss') "function applied at different types."
+       guardMsg (all (equivalentBy exprAlphaEq) $ filter (isTyCoArg . head) argss') "function applied at different types."
        return $ mkCoreApps (head fs) [ if isTyCoArg (head args)
                                        then head args
                                        else let alts' = [ (ac, vs, arg) | ((ac,vs,_),arg) <- zip alts args ]
@@ -344,7 +344,7 @@ caseMergeAltsR = prefixFailMsg "merge-case-alts failed: " $
                  do Case e w ty alts <- idR
                     guardMsg (not $ null alts) "zero alternatives cannot be merged."
                     let rhss = [ rhs | (_,_,rhs) <- alts ]
-                    guardMsg (equivalentBy exprEqual rhss) "right-hand sides are not all equal."
+                    guardMsg (equivalentBy exprAlphaEq rhss) "right-hand sides are not all equal."
                     guardMsg (all altVarsUnused alts) "variables bound in case alt pattern appear free in alt right-hand side."
                     return $ Case e w ty [(DEFAULT,[],head rhss)]
 

@@ -5,6 +5,10 @@ module HERMIT.Kure.SumTypes
     Core(..)
   , TyCo(..)
   , CoreTC(..)
+  -- * Equality
+  , coreAlphaEq
+  , tyCoAlphaEq
+  , coreTCAlphaEq
   -- * Promotion Combinators
   -- ** Translate Promotions
   , promoteModGutsT
@@ -54,6 +58,30 @@ data TyCo = TypeCore Type                -- ^ A type.
 -- | CoreTC is a sum type for use by KURE.  CoreTC = Core + TyCo
 data CoreTC = Core Core
             | TyCo TyCo
+
+---------------------------------------------------------------------
+
+-- | Alpha equality of 'Core' fragments.
+coreAlphaEq :: Core -> Core -> Bool
+coreAlphaEq (GutsCore g1) (GutsCore g2) = bindsToProg (mg_binds g1) `progAlphaEq` bindsToProg (mg_binds g2)
+coreAlphaEq (ProgCore p1) (ProgCore p2) = progAlphaEq p1 p2
+coreAlphaEq (BindCore b1) (BindCore b2) = bindAlphaEq b1 b2
+coreAlphaEq (DefCore d1)  (DefCore d2)  = defAlphaEq d1 d2
+coreAlphaEq (ExprCore e1) (ExprCore e2) = exprAlphaEq e1 e2
+coreAlphaEq (AltCore a1)  (AltCore a2)  = altAlphaEq a1 a2
+coreAlphaEq _             _             = False
+
+-- | Alpha equality of 'TyCo' fragments.
+tyCoAlphaEq :: TyCo -> TyCo -> Bool
+tyCoAlphaEq (TypeCore ty1)     (TypeCore ty2)     = eqType ty1 ty2
+tyCoAlphaEq (CoercionCore co1) (CoercionCore co2) = coreEqCoercion co1 co2
+tyCoAlphaEq _                  _                  = False
+
+-- | Alpha equality of 'CoreTC' fragments.
+coreTCAlphaEq :: CoreTC -> CoreTC -> Bool
+coreTCAlphaEq (Core c1)  (Core c2)  = coreAlphaEq c1 c2
+coreTCAlphaEq (TyCo tc1) (TyCo tc2) = tyCoAlphaEq tc1 tc2
+coreTCAlphaEq _          _          = False
 
 ---------------------------------------------------------------------
 

@@ -5,6 +5,12 @@ module HERMIT.Core
             CoreProg(..)
           , CoreDef(..)
           , CoreTickish
+            -- * Equality
+          , progAlphaEq
+          , bindAlphaEq
+          , defAlphaEq
+          , exprAlphaEq
+          , altAlphaEq
             -- * Conversions to/from 'Core'
           , defsToRecBind
           , defToIdExpr
@@ -34,6 +40,11 @@ import Language.KURE.Combinators.Monad
 import Language.KURE.MonadCatch
 
 import Data.List (intercalate)
+
+-----------------------------------------------------------------------
+
+-- | Unlike everything else, there is no synonym for 'Tickish' 'Id' provided by GHC, so we define one.
+type CoreTickish = Tickish Id
 
 ---------------------------------------------------------------------
 
@@ -81,8 +92,43 @@ defsToRecBind = Rec . map defToIdExpr
 
 -----------------------------------------------------------------------
 
--- | Unlike everything else, there is no synonym for 'Tickish' 'Id' provided by GHC, so we define one.
-type CoreTickish = Tickish Id
+-- | Alpha equality of programs.
+progAlphaEq :: CoreProg -> CoreProg -> Bool
+progAlphaEq ProgNil ProgNil                       = True
+progAlphaEq (ProgCons bnd1 p1) (ProgCons bnd2 p2) = bindAlphaEq bnd1 bnd2 && progAlphaEq p1 p2
+progAlphaEq _ _                                   = False
+
+-- The ideas for this function are directly extracted from
+-- the GHC function, CoreUtils.eqExprX
+-- | Alpha equality of binding groups.
+bindAlphaEq :: CoreBind -> CoreBind -> Bool
+bindAlphaEq (NonRec _ e1) (NonRec _ e2) = exprAlphaEq e1 e2
+bindAlphaEq (Rec ps1)     (Rec ps2)     = all2 (eqExprX id_unf env) rs1 rs2
+  where
+    id_unf _   = noUnfolding      -- Don't expand
+    (bs1,rs1)  = unzip ps1
+    (bs2,rs2)  = unzip ps2
+    inScopeSet = mkInScopeSet $ exprsFreeVars (rs1 ++ rs2)
+    env        = rnBndrs2 (mkRnEnv2 inScopeSet) bs1 bs2
+bindAlphaEq _ _ = False
+
+-- | Alpha equality of recursive definitions.
+defAlphaEq :: CoreDef -> CoreDef -> Bool
+defAlphaEq d1 d2 = defsToRecBind [d1] `bindAlphaEq` defsToRecBind [d2]
+
+-- | Alpha equality of expressions.
+exprAlphaEq :: CoreExpr -> CoreExpr -> Bool
+exprAlphaEq e1 e2 = eqExpr (mkInScopeSet $ exprsFreeVars [e1, e2]) e1 e2
+
+-- The ideas for this function are directly extracted from
+-- the GHC function, CoreUtils.eqExprX
+-- | Alpha equality of case alternatives.
+altAlphaEq :: CoreAlt -> CoreAlt -> Bool
+altAlphaEq (c1,vs1,e1) (c2,vs2,e2) = c1 == c2 && eqExprX id_unf env e1 e2
+  where
+    id_unf _    = noUnfolding      -- Don't expand
+    inScopeSet  = mkInScopeSet $ exprsFreeVars [e1,e2]
+    env         = rnBndrs2 (mkRnEnv2 inScopeSet) vs1 vs2
 
 -----------------------------------------------------------------------
 

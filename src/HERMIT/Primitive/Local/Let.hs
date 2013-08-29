@@ -361,7 +361,7 @@ reorderNonRecLetsR nms = prefixFailMsg "Reorder lets failed: " $
                     (ves,x) <- setFailMsg "insufficient non-recursive lets." $ takeNonRecLets (length nms) e
                     guardMsg (noneFreeIn ves) "some of the bound variables appear in the right-hand-sides."
                     e' <- mkNonRecLets `liftM` mapM (lookupName ves) nms `ap` return x
-                    guardMsg (not $ exprEqual e e') "bindings already in specified order."
+                    guardMsg (not $ exprAlphaEq e e') "bindings already in specified order."
                     return e'
 
   where

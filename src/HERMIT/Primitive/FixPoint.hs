@@ -75,7 +75,7 @@ fixComputationRule = bidirectional computationL computationR
     computationR = prefixFailMsg "fix computation rule failed: " $
                    do App f fixf <- idR
                       (_,f') <- isFixExpr <<< constant fixf
-                      guardMsg (exprEqual f f') "external function does not match internal expression"
+                      guardMsg (exprAlphaEq f f') "external function does not match internal expression"
                       return fixf
 
 
@@ -100,7 +100,7 @@ rollingRule = bidirectional rollingRuleL rollingRuleR
                       withPatFailMsg wrongFixBody $
                         do (tyB, Lam b (App g (App f' (Var b')))) <- isFixExpr <<< constant fx
                            guardMsg (b == b') wrongFixBody
-                           guardMsg (exprEqual f f') "external function does not match internal expression"
+                           guardMsg (exprAlphaEq f f') "external function does not match internal expression"
                            (tyA,tyB') <- funsWithInverseTypes g f
                            guardMsg (eqType tyB tyB') "Type mismatch: this shouldn't have happened, report this as a bug."
                            rollingRuleResult tyA f g

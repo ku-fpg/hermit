@@ -14,13 +14,6 @@ module HERMIT.Primitive.GHC
          -- ** Substitution
        , substR
        , substExprR
-         -- ** Equality
-       , coreEqual
-       , progEqual
-       , bindEqual
-       , defEqual
-       , exprEqual
-       , altEqual
          -- ** Utilities
        , inScope
        , showVarSet
@@ -402,65 +395,16 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
                                      }
          _ -> fail $ "found multiple bindings for " ++ show nm
 
----------------------------------------------------------------
-
--- | Alpha equality of programs.
-progEqual :: CoreProg -> CoreProg -> Bool
-progEqual ProgNil ProgNil                       = True
-progEqual (ProgCons bnd1 p1) (ProgCons bnd2 p2) = bindEqual bnd1 bnd2 && progEqual p1 p2
-progEqual _ _                                   = False
-
--- The ideas for this function are directly extracted from
--- the GHC function, CoreUtils.eqExprX
--- | Alpha equality of binding groups.
-bindEqual :: CoreBind -> CoreBind -> Bool
-bindEqual (NonRec _ e1) (NonRec _ e2) = exprEqual e1 e2
-bindEqual (Rec ps1)     (Rec ps2)     = all2 (eqExprX id_unf env) rs1 rs2
-  where
-    id_unf _   = noUnfolding      -- Don't expand
-    (bs1,rs1)  = unzip ps1
-    (bs2,rs2)  = unzip ps2
-    inScopeSet = mkInScopeSet $ exprsFreeVars (rs1 ++ rs2)
-    env        = rnBndrs2 (mkRnEnv2 inScopeSet) bs1 bs2
-bindEqual _ _ = False
-
--- | Alpha equality of recursive definitions.
-defEqual :: CoreDef -> CoreDef -> Bool
-defEqual d1 d2 = defsToRecBind [d1] `bindEqual` defsToRecBind [d2]
-
--- | Alpha equality of expressions.
-exprEqual :: CoreExpr -> CoreExpr -> Bool
-exprEqual e1 e2 = eqExpr (mkInScopeSet $ exprsFreeVars [e1, e2]) e1 e2
-
--- The ideas for this function are directly extracted from
--- the GHC function, CoreUtils.eqExprX
--- | Alpha equality of case alternatives.
-altEqual :: CoreAlt -> CoreAlt -> Bool
-altEqual (c1,vs1,e1) (c2,vs2,e2) = c1 == c2 && eqExprX id_unf env e1 e2
-  where
-    id_unf _    = noUnfolding      -- Don't expand
-    inScopeSet  = mkInScopeSet $ exprsFreeVars [e1,e2]
-    env         = rnBndrs2 (mkRnEnv2 inScopeSet) vs1 vs2
-
--- | Alpha equality of 'Core' fragments.
-coreEqual :: Core -> Core -> Bool
-coreEqual (GutsCore g1) (GutsCore g2) = bindsToProg (mg_binds g1) `progEqual` bindsToProg (mg_binds g2)
-coreEqual (ProgCore p1) (ProgCore p2) = progEqual p1 p2
-coreEqual (BindCore b1) (BindCore b2) = bindEqual b1 b2
-coreEqual (DefCore d1)  (DefCore d2)  = defEqual d1 d2
-coreEqual (ExprCore e1) (ExprCore e2) = exprEqual e1 e2
-coreEqual (AltCore a1) (AltCore a2)   = altEqual a1 a2
-coreEqual _             _             = False
-
 --------------------------------------------------------
 
+-- TODO: This should probably be somewhere else.
 compareValues :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> TH.Name -> Translate c m Core ()
 compareValues n1 n2 = do -- TODO: this can be made more efficient by performing a single traversal.  But I'm not sure of the intent.  What should happen if two things match a name?
         p1 <- onePathToT (arr $ namedBinding n1)
         p2 <- onePathToT (arr $ namedBinding n2)
         e1 <- localPathT p1 idR
         e2 <- localPathT p2 idR
-        guardMsg (e1 `coreEqual` e2) (show n1 ++ " and " ++ show n2 ++ " are not equal.")
+        guardMsg (e1 `coreAlphaEq` e2) (show n1 ++ " and " ++ show n2 ++ " are not equal.")
 
 --------------------------------------------------------
 
@@ -559,7 +503,7 @@ occurAnalyseR = let r  = promoteExprR (arr occurAnalyseExpr)
 
 -- | Apply 'occurAnalyseExprR' to all sub-expressions, failing if the result is alpha-equivalent to the original.
 occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
-occurAnalyseChangedR = changedByR coreEqual occurAnalyseR
+occurAnalyseChangedR = changedByR coreAlphaEq occurAnalyseR
 
 -- | Run GHC's occurrence analyser, and also eliminate any zombies.
 occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
