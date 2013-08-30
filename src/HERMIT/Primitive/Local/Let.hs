@@ -126,23 +126,20 @@ letSubstR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Co
 letSubstR =  prefixFailMsg "Let substition failed: " $
              withPatFailMsg ("expression is not a non-recursive let binding.") $
              do Let (NonRec v rhs) body <- letAllR (tryR recToNonrecR) idR
-                contextonlyT $ \ c -> apply (substExprR v rhs) c body
+                return body >>> substExprR v rhs
 
 -- | This is quite expensive (O(n) for the size of the sub-tree).
+--   Currently we always substitute types and coercions, and use a heuristic to decide whether to substitute expressions.
+--   This may need revisiting.
 safeLetSubstR :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
 safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
                  withPatFailMsg ("expression is not a non-recursive let binding.") $
                  do e@(Let (NonRec v rhs) body) <- letAllR (tryR recToNonrecR) idR
-
-                    guardMsg (not $ isCoVar v) "We consider it unsafe to substitute let-bound coercions.  I'm not sure why we think this." -- TODO
-
-                    safeSubstId <- letNonRecT mempty safeBindT (occursSafeToLetSubstId v) (\ () -> (||)) <<< return e
-                    when (isId v) (guardMsg safeSubstId "safety criteria not met.")
-
-                    -- By (our) definition, types are a trivial bind.
-
-                    contextonlyT $ \ c -> apply (substExprR v rhs) c body
-
+                    when (isId v) (do safeSubstId <- letNonRecT mempty safeBindT (occursSafeToLetSubstId v) (\ () -> (||)) <<< return e
+                                      guardMsg safeSubstId "safety criteria not met.")
+                    return body >>> substExprR v rhs
+                    -- TODO
+                    -- guardMsg (not $ isCoVar v) "We consider it unsafe to substitute let-bound coercions.  I'm not sure why we think this."
   where
     -- what about other Expr constructors?
     safeBindT :: Translate c m CoreExpr Bool
