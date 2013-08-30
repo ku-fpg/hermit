@@ -95,12 +95,12 @@ shell_externals = map (.+ Shell)
             _        -> return st )
        [ "set-auto-corelint <True|False>; False by default"
        , "run core lint type-checker after every rewrite, reverting on failure" ]
-   , external "set-pp"           (\ pp -> CLSModify $ \ st ->
-       case M.lookup pp pp_dictionary of
+   , external "set-pp"           (\ name -> CLSModify $ \ st ->
+       case M.lookup name pp_dictionary of
          Nothing -> do
             putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
             return st
-         Just _ -> return $ st { cl_pretty = pp })
+         Just pp -> return $ st { cl_pretty = pp })
        [ "set the pretty printer"
        , "use 'set-pp ls' to list available pretty printers" ]
    , external "set-pp-renderer"    changeRenderer
@@ -169,7 +169,7 @@ gc st = do
 
 setWindow :: CommandLineState -> IO CommandLineState
 setWindow st = do
-    paths <- runKureM concat fail <$> pathS (cl_kernel st) (cl_cursor st)
+    paths <- concat <$> pathS (cl_kernel st) (cl_cursor st)
     return $ st { cl_window = paths }
 
 --------------------------------------------------------

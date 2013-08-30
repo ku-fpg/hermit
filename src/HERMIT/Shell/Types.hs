@@ -111,10 +111,30 @@ instance Extern ShellEffect where
 ----------------------------------------------------------------------------------
 
 newtype CLM m a = CLM { runCLM :: ErrorT String (StateT CommandLineState m) a }
-    deriving (Monad, MonadIO, MonadError String, MonadState CommandLineState)
+    deriving (MonadIO, MonadError String, MonadState CommandLineState)
+
+-- | Our own custom instance of Monad for CLM m so we don't have to depend on
+-- newtype deriving to do the right thing for fail.
+instance Monad m => Monad (CLM m) where
+    return = CLM . return
+    (CLM m) >>= k = CLM (m >>= runCLM . k)
+    fail = CLM . throwError
 
 instance MonadTrans CLM where
     lift = CLM . lift . lift
+
+instance Monad m => MonadCatch (CLM m) where
+    -- law: fail msg `catchM` f == f msg
+    -- catchM :: m a -> (String -> m a) -> m a
+    catchM m f = do
+        st <- get
+        (r,st') <- lift $ runCLMToIO st m
+        case r of
+            Left msg -> f msg
+            Right v  -> put st' >> return v
+
+runCLMToIO :: CommandLineState -> CLM m a -> m (Either String a, CommandLineState)
+runCLMToIO s = flip runStateT s . runErrorT . runCLM
 
 -- TODO: Come up with names for these, and/or better characterise these abstractions.
 iokm2clm' :: MonadIO m => String -> (a -> CLM m b) -> IO (KureM a) -> CLM m b
@@ -139,7 +159,7 @@ newSAST expr sast st = st { cl_cursor = sast
 -- Session-local issues; things that are never saved.
 data CommandLineState = CommandLineState
     { cl_cursor         :: SAST                                     -- ^ the current AST
-    , cl_pretty         :: String                                   -- ^ which pretty printer to use
+    , cl_pretty         :: PrettyH CoreTC                           -- ^ which pretty printer to use
     , cl_pretty_opts    :: PrettyOptions                            -- ^ the options for the pretty printer
     , cl_render         :: Handle -> PrettyOptions -> DocH -> IO () -- ^ the way of outputing to the screen
     , cl_height         :: Int                                      -- ^ console height, in lines

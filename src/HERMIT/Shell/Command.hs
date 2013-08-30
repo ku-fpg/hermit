@@ -9,7 +9,6 @@ module HERMIT.Shell.Command
     , performShellEffect
     , performMetaCommand
     , cl_kernel_env
-    , pretty
     , getFocusPath
     ) where
 
@@ -39,6 +38,7 @@ import HERMIT.Kernel (queryK)
 import HERMIT.Kernel.Scoped
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
+import qualified HERMIT.PrettyPrinter.Clean as Clean
 
 import HERMIT.Primitive.GHC
 import HERMIT.Primitive.Inline
@@ -51,8 +51,6 @@ import HERMIT.Shell.Types
 
 import System.IO
 
-import qualified Text.PrettyPrint.MarkedHughesPJ as PP
-
 -- import System.Console.ANSI
 import System.Console.Haskeline hiding (catch)
 import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, termLines)
@@ -61,11 +59,6 @@ import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, te
 
 catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
-
-pretty :: CommandLineState -> PrettyH CoreTC
-pretty st = case M.lookup (cl_pretty st) pp_dictionary of
-                Just pp -> pp
-                Nothing -> pure (PP.text $ "<<no pretty printer for " ++ cl_pretty st ++ ">>")
 
 fixWindow :: MonadIO m => CLM m ()
 fixWindow = do
@@ -80,7 +73,7 @@ fixWindow = do
     put $ st { cl_window = focusPath } -- TODO: temporary until we figure out a better highlight interface
 
 getFocusPath :: MonadIO m => CLM m PathH
-getFocusPath = get >>= \ st -> liftM concat $ iokm2clm "getFocusPath - pathS failed: " $ pathS (cl_kernel st) (cl_cursor st)
+getFocusPath = get >>= \ st -> liftM concat $ prefixFailMsg "getFocusPath - pathS failed: " $ pathS (cl_kernel st) (cl_cursor st)
 
 showWindow :: MonadIO m => CLM m ()
 showWindow = do
@@ -94,8 +87,8 @@ showWindow = do
         (return ())
         (iokm2clm' "Rendering error: "
                    (liftIO . cl_render st stdout ppOpts)
-                   (toASTS skernel (cl_cursor st) >>= liftKureM >>= \ ast ->
-                        queryK (kernelS skernel) ast (extractT $ pathT (cl_window st) $ liftPrettyH ppOpts $ pretty st) (cl_kernel_env st))
+                   (toASTS skernel (cl_cursor st) >>= \ ast ->
+                        queryK (kernelS skernel) ast (extractT $ pathT (cl_window st) $ liftPrettyH ppOpts $ cl_pretty st) (cl_kernel_env st))
         )
 
 -------------------------------------------------------------------------------
@@ -138,8 +131,7 @@ shellComplete mvar rPrev so_far = do
     -- (liftM.liftM) (map simpleCompletion . nub . filter (so_far `isPrefixOf`))
     --     $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
     -- TODO: I expect you want to build a silent version of the kernal_env for this query
-    mcls <- queryS (cl_kernel st) (cl_cursor st) targetQuery (cl_kernel_env st)
-    cl <- runKureM return (\ _ -> return []) mcls
+    cl <- catchM (queryS (cl_kernel st) targetQuery (cl_kernel_env st) (cl_cursor st)) (\_ -> return [])
     return $ (map simpleCompletion . nub . filter (so_far `isPrefixOf`)) cl
 
 setRunningScript :: MonadIO m => Bool -> CLM m ()
@@ -204,7 +196,7 @@ commandLine opts behavior exts skernel sast = do
 
     let shellState = CommandLineState
                        { cl_cursor         = sast
-                       , cl_pretty         = "clean"
+                       , cl_pretty         = Clean.ppCoreTC
                        , cl_pretty_opts    = def { po_width = w }
                        , cl_render         = unicodeConsole
                        , cl_height         = h
@@ -303,12 +295,12 @@ performKernelEffect (Apply rr) expr = do
     let sk = cl_kernel st
         kEnv = cl_kernel_env st
 
-    sast' <- iokm2clm "Rewrite failed: " $ applyS sk (cl_cursor st) rr kEnv
+    sast' <- prefixFailMsg "Rewrite failed: " $ applyS sk rr kEnv (cl_cursor st)
 
     let commit = put (newSAST expr sast' st) >> showWindow
 
     if cl_corelint st
-        then do ast' <- iokm2clm'' $ toASTS sk sast'
+        then do ast' <- toASTS sk sast'
                 liftIO (queryK (kernelS sk) ast' lintModuleT kEnv)
                 >>= runKureM (\ warns -> putStrToConsole warns >> commit)
                              (\ errs  -> liftIO (deleteS sk sast') >> fail errs)
@@ -317,36 +309,35 @@ performKernelEffect (Apply rr) expr = do
 performKernelEffect (Pathfinder t) expr = do
     st <- get
     -- An extension to the Path
-    iokm2clm' "Cannot find path: "
-              (\ p -> do ast <- iokm2clm "Path is invalid: " $ modPathS (cl_kernel st) (cl_cursor st) (<> p) (cl_kernel_env st)
-                         put $ newSAST expr ast st
-                         showWindow)
-              (queryS (cl_kernel st) (cl_cursor st) t (cl_kernel_env st))
+    p <- prefixFailMsg "Cannot find path: " $ queryS (cl_kernel st) t (cl_kernel_env st) (cl_cursor st)
+    ast <- prefixFailMsg "Path is invalid: " $ modPathS (cl_kernel st) (<> p) (cl_kernel_env st) (cl_cursor st)
+    put $ newSAST expr ast st
+    showWindow
 
 performKernelEffect (Direction dir) expr = do
     st <- get
-    ast <- iokm2clm "Invalid move: " $ modPathS (cl_kernel st) (cl_cursor st) (moveLocally dir) (cl_kernel_env st)
+    ast <- prefixFailMsg "Invalid move: " $ modPathS (cl_kernel st) (moveLocally dir) (cl_kernel_env st) (cl_cursor st)
     put $ newSAST expr ast st
     showWindow
 
 performKernelEffect BeginScope expr = do
         st <- get
-        ast <- iokm2clm'' $ beginScopeS (cl_kernel st) (cl_cursor st)
+        ast <- beginScopeS (cl_kernel st) (cl_cursor st)
         put $ newSAST expr ast st
         showWindow
 
 performKernelEffect EndScope expr = do
         st <- get
-        ast <- iokm2clm'' $ endScopeS (cl_kernel st) (cl_cursor st)
+        ast <- endScopeS (cl_kernel st) (cl_cursor st)
         put $ newSAST expr ast st
         showWindow
 
 performKernelEffect (CorrectnessCritera q) expr = do
         st <- get
         -- TODO: Again, we may want a quiet version of the kernel_env
-        liftIO (queryS (cl_kernel st) (cl_cursor st) q (cl_kernel_env st))
-          >>= runKureM (\ () -> putStrToConsole $ unparseExprH expr ++ " [correct]")
-                       (\ err -> fail $ unparseExprH expr ++ " [exception: " ++ err ++ "]")
+        modFailMsg (\ err -> unparseExprH expr ++ " [exception: " ++ err ++ "]")
+                 $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
+        putStrToConsole $ unparseExprH expr ++ " [correct]"
 
 -------------------------------------------------------------------------------
 
@@ -363,15 +354,13 @@ performShellEffect (CLSModify f) = do
 performQuery :: MonadIO m => QueryFun -> CLM m ()
 performQuery (QueryString q) = do
     st <- get
-    iokm2clm' "Query failed: "
-              putStrToConsole
-              (queryS (cl_kernel st) (cl_cursor st) q (cl_kernel_env st))
+    str <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
+    putStrToConsole str
 
 performQuery (QueryDocH q) = do
     st <- get
-    iokm2clm' "Query failed: "
-              (liftIO . cl_render st stdout (cl_pretty_opts st))
-              (queryS (cl_kernel st) (cl_cursor st) (q (initPrettyC $ cl_pretty_opts st) $ pretty st) (cl_kernel_env st))
+    doc <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (q (initPrettyC $ cl_pretty_opts st) $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
+    liftIO $ cl_render st stdout (cl_pretty_opts st) doc
 
 performQuery (Inquiry f) = do
     st <- get
@@ -394,19 +383,18 @@ performMetaCommand (SeqMeta ms) = mapM_ performMetaCommand ms
 performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
 performMetaCommand Resume = do
     st <- get
-    sast' <- iokm2clm "Final occurrence analysis failed (should never happen!): "
-                    $ applyS (cl_kernel st) (cl_cursor st) occurAnalyseAndDezombifyR (cl_kernel_env st)
-    iokm2clm'' $ resumeS (cl_kernel st) sast'
+    sast' <- applyS (cl_kernel st) occurAnalyseAndDezombifyR (cl_kernel_env st) (cl_cursor st)
+    resumeS (cl_kernel st) sast'
 
-performMetaCommand (Delete sast) = gets cl_kernel >>= iokm2clm'' . flip deleteS sast
+performMetaCommand (Delete sast) = gets cl_kernel >>= flip deleteS sast
 performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
-    case (M.lookup (cl_pretty st) pp_dictionary,lookup renderer finalRenders) of
-      (Just pp, Just r) -> do doc <- iokm2clm "Bad pretty-printer or renderer option: " $
-                                         queryS (cl_kernel st) (cl_cursor st) (liftPrettyH (cl_pretty_opts st) pp) (cl_kernel_env st)
-                              liftIO $ do h <- openFile fileName WriteMode
-                                          r h ((cl_pretty_opts st) { po_width = width }) doc
-                                          hClose h
+    case lookup renderer finalRenders of
+      Just r -> do doc <- prefixFailMsg "Bad renderer option: " $
+                            queryS (cl_kernel st) (liftPrettyH (cl_pretty_opts st) $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
+                   liftIO $ do h <- openFile fileName WriteMode
+                               r h ((cl_pretty_opts st) { po_width = width }) doc
+                               hClose h
       _ -> throwError "dump: bad pretty-printer or renderer option"
 
 performMetaCommand (LoadFile scriptName fileName) =
@@ -515,7 +503,7 @@ cl_kernel_env st = mkHermitMEnv $ \ msg -> case msg of
                         GHC.liftIO $ putStrLn $ "<" ++ show c ++ "> " ++ msg'
                 DebugCore  msg' cxt core -> do
                         GHC.liftIO $ putStrLn $ "[" ++ msg' ++ "]"
-                        doc :: DocH <- apply (pretty st) (liftPrettyC (cl_pretty_opts st) cxt) (inject core)
+                        doc :: DocH <- apply (cl_pretty st) (liftPrettyC (cl_pretty_opts st) cxt) (inject core)
                         GHC.liftIO $ cl_render st stdout (cl_pretty_opts st) doc
 
 -- tick counter

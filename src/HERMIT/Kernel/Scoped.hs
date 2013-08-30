@@ -13,6 +13,8 @@ module HERMIT.Kernel.Scoped
 import Control.Arrow
 import Control.Concurrent.STM
 import Control.Exception (bracketOnError, catch, SomeException)
+import Control.Monad
+import Control.Monad.IO.Class
 
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
@@ -60,22 +62,23 @@ testPathStackT ps p = testLensT (pathStackToLens ps p :: LensH ModGuts CoreTC)
 
 -- | An alternative HERMIT kernel, that provides scoping.
 data ScopedKernel = ScopedKernel
-  { resumeS      ::            SAST                                              -> IO (KureM ())
-  , abortS       ::                                                                 IO ()
-  , applyS       :: forall g. (Injection ModGuts g, Walker HermitC g) =>
-                               SAST -> RewriteH g                  -> HermitMEnv -> IO (KureM SAST)
-  , queryS       :: forall a g . (Injection ModGuts g, Walker HermitC g) =>
-                               SAST -> TranslateH g a              -> HermitMEnv -> IO (KureM a)
-  , deleteS      ::            SAST                                              -> IO (KureM ())
-  , listS        ::                                                                 IO [SAST]
-  , pathS        ::            SAST                                              -> IO (KureM [PathH])
-  , modPathS     ::            SAST -> (LocalPathH -> LocalPathH)  -> HermitMEnv -> IO (KureM SAST)
-  , beginScopeS  ::            SAST                                              -> IO (KureM SAST)
-  , endScopeS    ::            SAST                                              -> IO (KureM SAST)
-  -- means of accessing the underlying kernel, obviously for unsafe purposes
-  , kernelS      ::                                                                 Kernel
-  , toASTS       ::            SAST                                              -> IO (KureM AST)
-  }
+    { resumeS      :: (MonadIO m, MonadCatch m) =>                SAST -> m ()
+    , abortS       ::  MonadIO m                =>                        m ()
+    , applyS       :: (MonadIO m, MonadCatch m, Injection ModGuts g, Walker HermitC g)
+                   => RewriteH g -> HermitMEnv ->                 SAST -> m SAST
+    , queryS       :: (MonadIO m, MonadCatch m, Injection ModGuts g, Walker HermitC g)
+                   => TranslateH g a -> HermitMEnv ->             SAST -> m a
+    , deleteS      :: (MonadIO m, MonadCatch m) =>                SAST -> m ()
+    , listS        ::  MonadIO m                =>                        m [SAST]
+    , pathS        :: (MonadIO m, MonadCatch m) =>                SAST -> m [PathH]
+    , modPathS     :: (MonadIO m, MonadCatch m)
+                   => (LocalPathH -> LocalPathH) -> HermitMEnv -> SAST -> m SAST
+    , beginScopeS  :: (MonadIO m, MonadCatch m) =>                SAST -> m SAST
+    , endScopeS    :: (MonadIO m, MonadCatch m) =>                SAST -> m SAST
+    -- means of accessing the underlying kernel, obviously for unsafe purposes
+    , kernelS      ::                                                     Kernel
+    , toASTS       :: (MonadIO m, MonadCatch m) =>                SAST -> m AST
+    }
 
 -- | A /handle/ for an 'AST' combined with scoping information.
 newtype SAST = SAST Int deriving (Eq, Ord, Show)
@@ -86,13 +89,17 @@ type SASTStore = I.IntMap (AST, [LocalPathH], LocalPathH)
 get :: Monad m => Int -> SASTStore -> m (AST, [LocalPathH], LocalPathH)
 get sAst m = maybe (fail "scopedKernel: invalid SAST") return (I.lookup sAst m)
 
--- | Ensures that the TMVar is replaced when an error is thrown, and all exceptions are lifted into KureM failures.
-safeTakeTMVar :: TMVar a -> (a -> IO b) -> IO (KureM b)
+-- | Ensures that the TMVar is replaced when an error is thrown, and all exceptions are lifted into MonadCatch failures.
+safeTakeTMVar :: (MonadCatch m, MonadIO m) => TMVar a -> (a -> IO b) -> m b
 safeTakeTMVar mvar = catchFails . bracketOnError (atomically $ takeTMVar mvar) (atomically . putTMVar mvar)
 
--- | Lifts exceptions into KureM failures.
-catchFails :: IO a -> IO (KureM a)
-catchFails io = (io >>= (return.return)) `catch` (\e -> return $ fail $ show (e :: SomeException))
+-- | Lifts exceptions into MonadCatch failures.
+catchFails :: (MonadCatch m, MonadIO m) => IO a -> m a
+catchFails io = liftIO (liftM return io `catch` (\e -> return $ fail $ show (e :: SomeException)))
+                  >>= runKureM return fail
+
+instance MonadCatch IO where
+    catchM io f = io `catch` (\ e -> f $ show (e :: SomeException))
 
 -- | Start a HERMIT client by providing an IO function that takes the initial 'ScopedKernel' and inital 'SAST' handle.
 --   The 'Modguts' to 'CoreM' Modguts' function required by GHC Plugins is returned.
@@ -111,15 +118,15 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 m <- atomically $ readTMVar store
                                 (ast,_,_) <- get sAst m
                                 resumeK kernel ast
-            , abortS      = abortK kernel
-            , applyS      = \ (SAST sAst) rr env -> safeTakeTMVar store $ \ m -> do
+            , abortS      = liftIO $ abortK kernel
+            , applyS      = \ rr env (SAST sAst) -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
                                 applyK kernel ast (focusR (pathStackToLens base rel) rr) env
                                   >>= runKureM (\ ast' -> atomically $ do k <- newKey
                                                                           putTMVar store $ I.insert k (ast', base, rel) m
                                                                           return $ SAST k)
                                                fail
-            , queryS      = \ (SAST sAst) t env -> catchFails $ do
+            , queryS      = \ t env (SAST sAst) -> catchFails $ do
                                 m <- atomically $ readTMVar store
                                 (ast, base, rel) <- get sAst m
                                 queryK kernel ast (focusT (pathStackToLens base rel) t) env
@@ -133,13 +140,13 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                     then return ()
                                     else deleteK kernel ast
                                 atomically $ putTMVar store m'
-            , listS       = do m <- atomically $ readTMVar store
+            , listS       = do m <- liftIO $ atomically $ readTMVar store
                                return [ SAST sAst | sAst <- I.keys m ]
             , pathS       = \ (SAST sAst) -> catchFails $ do
                                 m <- atomically $ readTMVar store
                                 (_, base, rel) <- get sAst m
                                 return $ pathStack2Paths base rel
-            , modPathS    = \ (SAST sAst) f env -> safeTakeTMVar store $ \ m -> do
+            , modPathS    = \ f env (SAST sAst) -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
                                 let rel' = f rel
                                 queryK kernel ast (testPathStackT base rel') env
