@@ -85,7 +85,8 @@ externals =
     , external "let-float-arg" (promoteExprR letFloatArgR :: RewriteH Core)
         [ "f (let v = ev in e) ==> let v = ev in f e" ]                         .+ Commute .+ Shallow .+ Bash
     , external "let-float-lam" (promoteExprR letFloatLamR :: RewriteH Core)
-        [ "(\\ v1 -> let v2 = e1 in e2)  ==>  let v2 = e1 in (\\ v1 -> e2), if v1 is not free in e2."
+        [ "The Full Laziness Transformation"
+        , "(\\ v1 -> let v2 = e1 in e2)  ==>  let v2 = e1 in (\\ v1 -> e2), if v1 is not free in e2."
         , "If v1 = v2 then v1 will be alpha-renamed." ]                         .+ Commute .+ Shallow .+ Bash
     , external "let-float-let" (promoteExprR letFloatLetR :: RewriteH Core)
         [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow .+ Bash
@@ -141,7 +142,7 @@ safeLetSubstR =  prefixFailMsg "Safe let-substition failed: " $
                     -- TODO
                     -- guardMsg (not $ isCoVar v) "We consider it unsafe to substitute let-bound coercions.  I'm not sure why we think this."
   where
-    -- what about other Expr constructors?
+    -- what about other Expr constructors, e.g Cast?
     safeBindT :: Translate c m CoreExpr Bool
     safeBindT =
       do c <- contextT
@@ -353,9 +354,8 @@ reorderNonRecLetsR nms = prefixFailMsg "Reorder lets failed: " $
                     (ves,x) <- setFailMsg "insufficient non-recursive lets." $ takeNonRecLets (length nms) e
                     guardMsg (noneFreeIn ves) "some of the bound variables appear in the right-hand-sides."
                     e' <- mkNonRecLets `liftM` mapM (lookupName ves) nms `ap` return x
-                    guardMsg (not $ exprAlphaEq e e') "bindings already in specified order."
+                    guardMsg (not $ exprSyntaxEq e e') "bindings already in specified order."
                     return e'
-
   where
     takeNonRecLets :: Monad m => Int -> CoreExpr -> m ([(Var,CoreExpr)],CoreExpr)
     takeNonRecLets 0 x                      = return ([],x)
