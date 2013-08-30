@@ -4,18 +4,16 @@ import Control.Arrow
 
 import GhcPlugins
 
-import Language.HERMIT.Core
-import Language.HERMIT.Dictionary -- for bash
-import Language.HERMIT.External
-import Language.HERMIT.Kure
-import Language.HERMIT.Monad
-import Language.HERMIT.Optimize
+import HERMIT.External
+import HERMIT.Kure
+import HERMIT.Monad
+import HERMIT.Optimize
 
-import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.GHC hiding (externals)
-import Language.HERMIT.Primitive.Local hiding (externals)
-import Language.HERMIT.Primitive.New hiding (externals)
-import Language.HERMIT.Primitive.Unfold hiding (externals)
+import HERMIT.Primitive.Common
+import HERMIT.Primitive.Composite hiding (externals)
+import HERMIT.Primitive.GHC hiding (externals)
+import HERMIT.Primitive.Local hiding (externals)
+import HERMIT.Primitive.Unfold hiding (externals)
 
 import Language.Haskell.TH as TH
 
@@ -78,5 +76,5 @@ exposeInnerStreamT =
 exposeStreamConstructor :: RewriteH CoreExpr
 exposeStreamConstructor = tryR $ extractR $ repeatR $
     onetdR (promoteExprR $ rules ["stream/unstream", "unstream/stream"]
-                           <+ letElim <+ letUnfloat <+ caseElim <+ caseUnfloat)
+                           <+ letElimR <+ letUnfloatR <+ caseElimR <+ caseUnfloatR)
      <+ simplifyR <+ promoteExprR unfoldR

@@ -5,21 +5,20 @@ import Control.Arrow
 
 import GhcPlugins
 
-import Language.HERMIT.External
--- import Language.HERMIT.GHC
-import Language.HERMIT.Kure
-import Language.HERMIT.Monad
-import Language.HERMIT.Optimize
+import HERMIT.External
+-- import HERMIT.GHC
+import HERMIT.Kure
+import HERMIT.Monad
+import HERMIT.Optimize
 
-import Language.HERMIT.Primitive.Common
-import Language.HERMIT.Primitive.Debug hiding (externals)
-import Language.HERMIT.Primitive.GHC hiding (externals)
-import Language.HERMIT.Primitive.Local hiding (externals)
-import Language.HERMIT.Primitive.New hiding (externals)
-import Language.HERMIT.Primitive.Unfold hiding (externals)
+import HERMIT.Primitive.Common
+import HERMIT.Primitive.Composite hiding (externals)
+import HERMIT.Primitive.Debug hiding (externals)
+import HERMIT.Primitive.GHC hiding (externals)
+import HERMIT.Primitive.Local hiding (externals)
+import HERMIT.Primitive.Unfold hiding (externals)
 
 import Control.Monad
-import qualified Data.Set as S
 
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as G
@@ -118,7 +117,7 @@ getDCFromBind = go <+ (extractR floatAppOut >>> getDCFromBind)
                          , args, fvs, if x `elem` fvs then (x:xs) else xs)
 
 ensureLam :: RewriteH CoreExpr
-ensureLam = tryR (extractR simplifyR) >>> (lamAllR idR idR <+ etaExpand "x")
+ensureLam = tryR (extractR simplifyR) >>> (lamAllR idR idR <+ etaExpandR "x")
 
 getDCFromReturn :: TranslateH CoreExpr ( CoreExpr -> CoreExpr
                                        , [CoreExpr], [Var], [Var] )
@@ -133,16 +132,16 @@ getDCFromReturn = go <+ (extractR floatAppOut >>> getDCFromReturn)
 getDataConInfo :: TranslateH CoreExpr ([CoreExpr], [Var])
 getDataConInfo = go <+ (extractR floatAppOut >>> getDataConInfo)
     where go = do (_dc, _tys, args) <- callDataConNameT 'M.Stream
-                  fvs <- liftM S.toList freeVarsT
+                  fvs <- liftM varSetElems exprFreeVarsT
                   return (args, fvs)
 
 floatAppOut :: RewriteH Core
 floatAppOut =    simplifyR
               <+ (promoteExprR unfoldR >>> observeR "unfoldR")
-              <+ (onetdR (promoteExprR ((letUnfloat >>> traceR "letUnfloat")
-                                        <+ (bracketR "caseElim" caseElim)
+              <+ (onetdR (promoteExprR ((letUnfloatR >>> traceR "letUnfloatR")
+                                        <+ (bracketR "caseElimR" caseElimR)
                                         <+ (bracketR "elimExistentials" elimExistentials)
-                                        <+ (bracketR "caseUnfloat" (caseUnfloat >>> appAllR idR idR)))))
+                                        <+ (bracketR "caseUnfloatR" (caseUnfloatR >>> appAllR idR idR)))))
 
 sfSimp :: RewriteH Core
 sfSimp = repeatR floatAppOut
@@ -152,4 +151,4 @@ elimExistentials = do
     Case _s _bnd _ty alts <- idR
     guardMsg (notNull [ v | (_,vs,_) <- alts, v <- vs, isTyVar v ])
              "no existential types in patterns"
-    caseAllR (extractR sfSimp) idR idR (const idR) >>> {- observeR "before reduce" >>> -} caseReduce -- >>> observeR "result"
+    caseAllR (extractR sfSimp) idR idR (const idR) >>> {- observeR "before reduce" >>> -} caseReduceR -- >>> observeR "result"
