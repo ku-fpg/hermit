@@ -19,7 +19,7 @@ module HERMIT.Primitive.Local.Let
        , letFloatCaseR
        , letFloatCastR
        , letFloatExprR
-       , letFloatLetTopR
+       , letFloatTopR
          -- ** Let Unfloating
        , letUnfloatR
        , letUnfloatAppR
@@ -67,7 +67,7 @@ externals =
     , external "safe-let-subst" (promoteExprR safeLetSubstR :: RewriteH Core)
         [ "Safe let substitution"
         , "let x = e1 in e2, safe to inline without duplicating work ==> e2[e1/x],"
-        , "x must not be free in e1." ]                                         .+ Deep .+ Eval .+ Bash
+        , "x must not be free in e1." ]                                         .+ Deep .+ Eval
     -- , external "safe-let-subst-plus" (promoteExprR safeLetSubstPlusR :: RewriteH Core)
     --     [ "Safe let substitution"
     --     , "let { x = e1, ... } in e2, "
@@ -77,26 +77,26 @@ externals =
         [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
     , external "let-elim" (promoteExprR letElimR :: RewriteH Core)
         [ "Remove an unused let binding."
-        , "(let v = e1 in e2) ==> e2, if v is not free in e1 or e2." ]          .+ Eval .+ Shallow .+ Bash
+        , "(let v = e1 in e2) ==> e2, if v is not free in e1 or e2." ]          .+ Eval .+ Shallow
 --    , external "let-constructor-reuse" (promoteR $ not_defined "constructor-reuse" :: RewriteH Core)
 --        [ "let v = C v1..vn in ... C v1..vn ... ==> let v = C v1..vn in ... v ..., fails otherwise" ] .+ Eval
     , external "let-float-app" (promoteExprR letFloatAppR :: RewriteH Core)
-        [ "(let v = ev in e) x ==> let v = ev in e x" ]                         .+ Commute .+ Shallow .+ Bash
+        [ "(let v = ev in e) x ==> let v = ev in e x" ]                         .+ Commute .+ Shallow
     , external "let-float-arg" (promoteExprR letFloatArgR :: RewriteH Core)
-        [ "f (let v = ev in e) ==> let v = ev in f e" ]                         .+ Commute .+ Shallow .+ Bash
+        [ "f (let v = ev in e) ==> let v = ev in f e" ]                         .+ Commute .+ Shallow
     , external "let-float-lam" (promoteExprR letFloatLamR :: RewriteH Core)
         [ "The Full Laziness Transformation"
         , "(\\ v1 -> let v2 = e1 in e2)  ==>  let v2 = e1 in (\\ v1 -> e2), if v1 is not free in e2."
-        , "If v1 = v2 then v1 will be alpha-renamed." ]                         .+ Commute .+ Shallow .+ Bash
+        , "If v1 = v2 then v1 will be alpha-renamed." ]                         .+ Commute .+ Shallow
     , external "let-float-let" (promoteExprR letFloatLetR :: RewriteH Core)
-        [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow .+ Bash
+        [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow
     , external "let-float-case" (promoteExprR letFloatCaseR :: RewriteH Core)
-        [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]     .+ Commute .+ Shallow .+ Eval .+ Bash
+        [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]     .+ Commute .+ Shallow .+ Eval
     , external "let-float-cast" (promoteExprR letFloatCastR :: RewriteH Core)
-        [ "cast (let bnds in e) co ==> let bnds in cast e co" ]                 .+ Commute .+ Shallow .+ Bash
-    , external "let-float-top" (promoteProgR letFloatLetTopR :: RewriteH Core)
-        [ "v = (let w = ew in ev) : bds ==> w = ew : v = ev : bds" ]            .+ Commute .+ Shallow .+ Bash
-    , external "let-float" (promoteProgR letFloatLetTopR <+ promoteExprR letFloatExprR :: RewriteH Core)
+        [ "cast (let bnds in e) co ==> let bnds in cast e co" ]                 .+ Commute .+ Shallow
+    , external "let-float-top" (promoteProgR letFloatTopR :: RewriteH Core)
+        [ "v = (let w = ew in ev) : bds ==> w = ew : v = ev : bds" ]            .+ Commute .+ Shallow
+    , external "let-float" (promoteProgR letFloatTopR <+ promoteExprR letFloatExprR :: RewriteH Core)
         [ "Float a Let whatever the context." ]                                 .+ Commute .+ Shallow  -- Don't include in bash, as each sub-rewrite is tagged "Bash" already.
     , external "let-to-case" (promoteExprR letToCaseR :: RewriteH Core)
         [ "let v = ev in e ==> case ev of v -> e" ]                             .+ Commute .+ Shallow .+ PreCondition
@@ -300,9 +300,9 @@ letFloatExprR = setFailMsg "Unsuitable expression for Let floating." $
                letFloatArgR <+ letFloatAppR <+ letFloatLetR <+ letFloatLamR <+ letFloatCaseR <+ letFloatCastR
 
 -- | @'ProgCons' ('NonRec' v ('Let' ('NonRec' w ew) ev)) p@ ==> @'ProgCons' ('NonRec' w ew) ('ProgCons' ('NonRec' v ev) p)@
-letFloatLetTopR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreProg
-letFloatLetTopR = prefixFailMsg "Let floating to top level failed: " $
-                 withPatFailMsg (wrongExprForm "NonRec v (Let (NonRec w ew) ev) `ProgCons` p") $
+letFloatTopR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreProg
+letFloatTopR = prefixFailMsg "Let floating to top level failed: " $
+               withPatFailMsg (wrongExprForm "NonRec v (Let (NonRec w ew) ev) `ProgCons` p") $
   do NonRec v (Let (NonRec w ew) ev) `ProgCons` p <- idR
      guardMsg (not $ isTyCoArg ew) "type and coercion bindings are not allowed at the top level."
      return (NonRec w ew `ProgCons` NonRec v ev `ProgCons` p)

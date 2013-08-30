@@ -7,11 +7,7 @@ module HERMIT.Dictionary
     , externals
     , mkDict
     , pp_dictionary
-    , bashR
-    , bashDebugR
     ) where
-
-import Control.Arrow
 
 import Data.List
 import Data.Map (Map, fromList, toList)
@@ -78,11 +74,6 @@ mkDict externs = toDictionary externs'
                      , ""
                      , "Categories: " ++ head msg
                      ] ++ map ("            " ++) (tail msg))  .+ Query .+ Shell
-                -- Runs every command matching the tag predicate with innermostR (fix point anybuR),
-                -- Only fails if all of them fail the first time.
-                , external "bash" (bashR externs) (bashHelp externs) .+ Eval .+ Deep .+ Loop
-                , external "debug-bash" (bashDebugR True externs)
-                    [ "verbose bash - most useful with set-auto-corelint True" ] .+ Eval .+ Deep .+ Loop
                 ]
 
 --------------------------------------------------------------------------
@@ -132,51 +123,6 @@ layoutTxt :: Int -> [String] -> [String]
 layoutTxt n (w1:w2:ws) | length w1 + length w2 >= n = w1 : layoutTxt n (w2:ws)
                        | otherwise = layoutTxt n ((w1 ++ " " ++ w2) : ws)
 layoutTxt _ other = other
-
---------------------------------------------------------------------------
-
-bashPredicate :: CmdTag
-bashPredicate = Bash
-
-bashR :: [External] -> RewriteH Core
-bashR = bashDebugR False
-
-bashDebugR :: Bool -> [External] -> RewriteH Core
-bashDebugR debug exts =
-    setFailMsg "bash failed: nothing to do." $
-    readerT $ \ core1 -> GHC.occurAnalyseR >>> readerT (\ core2 -> if core1 `coreSyntaxEq` core2
-                                                                     then bashCoreR      -- equal, no progress yet
-                                                                     else tryR bashCoreR -- unequal, progress has already been made
-                                                       )
-  -- the changedByR combinator doesn't quite do what we need here
-  where
-    bashCoreR :: RewriteH Core
-    bashCoreR = repeatR (terminatingBashR >>> GHC.occurAnalyseR)
-
-    terminatingBashR :: RewriteH Core
-    terminatingBashR = innermostR (orR [ (if debug
-                                            then rr >>> Debug.observeR (externName e)
-                                            else rr)
-                                       | (e,rr) <- matchingExternals bashPredicate exts ]
-                                  )
-    {-# INLINE terminatingBashR #-}
-
-{-
-Occurrence Analysis updates meta-data, as well as performing some basic simplifications.
-occurAnalyseR always succeeds, whereas occurAnalyseChangedR fails is the result is alpha equivalent.
-The awkwardness is because:
-  - we want bash to fail if nothing changes
-  - we want bash to succeed if the result is not syntactically-equivalent (ideally, if any changes are made at all, but that's not the case yet)
-  - we want bash to update the meta-data
-  - after running bash there should be nothing left to do (i.e. an immediately subsequent bash should always fail)
-
-Also, it's still possible for some meta-data to be out-of-date after bash, despite the case analysis.  For example, if the focal point is a case-alt rhs, this won't update the identifer info of variables bound in the alternative.
--}
-
-bashHelp :: [External] -> [String]
-bashHelp exts =
-    "Iteratively apply the following rewrites until nothing changes:"
-    : [ externName e | (e,_ :: RewriteH Core) <- matchingExternals bashPredicate exts ]
 
 --------------------------------------------------------------------------
 

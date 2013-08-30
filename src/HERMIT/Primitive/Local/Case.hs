@@ -56,15 +56,15 @@ import qualified Language.Haskell.TH as TH
 externals :: [External]
 externals =
     [ external "case-float-app" (promoteExprR caseFloatAppR :: RewriteH Core)
-        [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow .+ Bash
+        [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow
     , external "case-float-arg" (promoteExprR caseFloatArgR :: RewriteH Core)
         [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
     , external "case-float-case" (promoteExprR caseFloatCaseR :: RewriteH Core)
-        [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval .+ Bash
+        [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval
     , external "case-float-cast" (promoteExprR caseFloatCastR :: RewriteH Core)
-        [ "cast (case s of p -> e) co ==> case s of p -> cast e co" ]        .+ Shallow .+ Commute .+ Bash
+        [ "cast (case s of p -> e) co ==> case s of p -> cast e co" ]        .+ Shallow .+ Commute
     , external "case-float-let" (promoteExprR caseFloatLetR :: RewriteH Core)
-        [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow .+ Bash
+        [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow
     , external "case-float" (promoteExprR caseFloatR :: RewriteH Core)
         [ "Float a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
     , external "case-unfloat" (promoteExprR caseUnfloatR :: RewriteH Core)
@@ -74,7 +74,7 @@ externals =
     -- , external "case-unfloat-app" (promoteExprR caseUnfloatApp :: RewriteH Core)
     --     [ "Unfloat a Case whole alternatives are applications of different functions with the same arguments." ] .+ Commute .+ Shallow .+ PreCondition
     , external "case-reduce" (promoteExprR caseReduceR :: RewriteH Core)
-        [ "case-reduce-datacon <+ case-reduce-literal" ]                     .+ Shallow .+ Eval .+ Bash
+        [ "case-reduce-datacon <+ case-reduce-literal" ]                     .+ Shallow .+ Eval
     , external "case-reduce-datacon" (promoteExprR caseReduceDataconR :: RewriteH Core)
         [ "case-of-known-constructor"
         , "case C v1..vn of C w1..wn -> e ==> let { w1 = v1 ; .. ; wn = vn } in e" ]    .+ Shallow .+ Eval

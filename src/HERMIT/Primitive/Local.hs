@@ -61,11 +61,11 @@ externals =
         , "This form of beta-reduction is safe if E2 is an arbitrary expression"
         , "(won't duplicate work)." ]                                 .+ Eval .+ Shallow
     , external "beta-reduce-plus" (promoteExprR betaReducePlusR :: RewriteH Core)
-        [ "Perform one or more beta-reductions."]                               .+ Eval .+ Shallow .+ Bash
+        [ "Perform one or more beta-reductions."]                               .+ Eval .+ Shallow
     , external "beta-expand" (promoteExprR betaExpandR :: RewriteH Core)
         [ "(let v = e1 in e2) ==> (\\ v -> e2) e1" ]                            .+ Shallow
     , external "eta-reduce" (promoteExprR etaReduceR :: RewriteH Core)
-        [ "(\\ v -> e1 v) ==> e1" ]                                             .+ Eval .+ Shallow .+ Bash
+        [ "(\\ v -> e1 v) ==> e1" ]                                             .+ Eval .+ Shallow
     , external "eta-expand" (promoteExprR . etaExpandR . show :: TH.Name -> RewriteH Core)
         [ "\"eta-expand 'v\" performs e1 ==> (\\ v -> e1 v)" ]                  .+ Shallow .+ Introduce
     , external "flatten-module" (promoteModGutsR flattenModuleR :: RewriteH Core)

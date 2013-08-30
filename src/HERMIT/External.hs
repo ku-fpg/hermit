@@ -83,7 +83,6 @@ data CmdTag = Shell          -- ^ Shell-specific command.
             | PreCondition   -- ^ Operation has a (perhaps undocumented) precondition.
             | Debug          -- ^ Commands specifically to help debugging.
             | VersionControl -- ^ Version control for Core syntax.
-            | Bash           -- ^ Commands that are run by 'HERMIT.Dictionary.bash'.
             | Context        -- ^ A command that uses its context, such as inlining.
             | Unsafe         -- ^ Commands that are not type safe (may cause Core Lint to fail),
                              --   or may otherwise change the semantics of the program.
@@ -133,10 +132,8 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
           , (PreCondition, "Operation has a (perhaps undocumented) precondition.")
           , (Debug,        "A command specifically to help debugging.")
           , (VersionControl,"Version control for Core syntax.")
-          , (Bash,         "A command that runs as part of the \"bash\" command.")
           , (Context,      "A command that uses its context, such as inlining.")
           , (Unsafe,       "Commands that are not type safe (may cause Core Lint to fail), or may otherwise change the semantics of the program.")
-
           , (TODO,         "An incomplete or potentially buggy command.")
           , (Experiment,   "Things we are trying out, use at your own risk.")
           , (Deprecated,   "A command that will be removed in a future release; it has probably been renamed or subsumed by another command.")

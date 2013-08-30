@@ -79,7 +79,7 @@ externals =
          , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> TH.Name -> RewriteH Core)
                 [ "add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]  .+ Introduce
          , external "dezombify" (promoteExprR dezombifyR :: RewriteH Core)
-                [ "Zap the occurrence information in the current identifer if it is a zombie."] .+ Shallow .+ Bash
+                [ "Zap the occurrence information in the current identifer if it is a zombie."] .+ Shallow
          , external "occurrence-analysis" (occurrenceAnalysisR :: RewriteH Core)
                 [ "Perform dependency analysis on all sub-expressions; simplifying and updating identifer info."] .+ Deep
          , external "lint-expr" (promoteExprT lintExprT :: TranslateH Core String)

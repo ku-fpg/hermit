@@ -23,7 +23,7 @@ externals =
         , "NonRec v e ==> Rec [Def v e]" ]                           .+ Shallow
     , external "rec-to-nonrec" (promoteBindR recToNonrecR :: RewriteH Core)
         [ "Convert a singleton recursive binding into a non-recursive binding group."
-        , "Rec [Def v e] ==> NonRec v e,  (v not free in e)" ]       .+ Bash -- This may not need to be in bash, as it's subsumed by occurrence analysis.
+        , "Rec [Def v e] ==> NonRec v e,  (v not free in e)" ]
     ]
 
 ------------------------------------------------------------------------------

@@ -49,7 +49,7 @@ externals =
             , external "inline-case-scrutinee" (promoteExprR inlineCaseScrutineeR :: RewriteH Core)
                 [ "if v is a case binder, replace (Var v) with the bound case scrutinee." ] .+ Eval .+ Deep
             , external "inline-case-alternative" (promoteExprR inlineCaseAlternativeR :: RewriteH Core)
-                [ "if v is a case binder, replace (Var v) with the bound case-alternative pattern." ] .+ Eval .+ Deep .+ Bash
+                [ "if v is a case binder, replace (Var v) with the bound case-alternative pattern." ] .+ Eval .+ Deep .+ Unsafe
             , external "inline-all" (inlineAllR :: [TH.Name] -> RewriteH Core)
                 [ "Recursively inline all occurrences of the given names, in a bottom-up manner." ] .+ Deep
             ]

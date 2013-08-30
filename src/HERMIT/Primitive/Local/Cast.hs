@@ -31,9 +31,9 @@ externals =
     [ external "cast-elim" (promoteExprR castElimR :: RewriteH Core)
         [ "cast-elim-refl <+ cast-elim-sym" ] .+ Shallow -- don't include in "Bash", as sub-rewrites are tagged "Bash" already.
     , external "cast-elim-refl" (promoteExprR castElimReflR :: RewriteH Core)
-        [ "cast e co ==> e ; if co is a reflexive coercion" ] .+ Shallow .+ Bash
+        [ "cast e co ==> e ; if co is a reflexive coercion" ] .+ Shallow
     , external "cast-elim-sym" (promoteExprR castElimSymR :: RewriteH Core)
-        [ "removes pairs of symmetric casts" ]                .+ Shallow .+ Bash
+        [ "removes pairs of symmetric casts" ]                .+ Shallow
     , external "cast-elim-sym-plus" (promoteExprR castElimSymPlusR :: RewriteH Core)
         [ "removes pairs of symmetric casts possibly separated by let or case forms" ] .+ Deep .+ TODO
     , external "cast-float-app" (promoteExprR castFloatAppR :: RewriteH Core)
