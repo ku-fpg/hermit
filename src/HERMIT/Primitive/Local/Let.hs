@@ -95,7 +95,7 @@ externals =
     , external "let-float-cast" (promoteExprR letFloatCastR :: RewriteH Core)
         [ "cast (let bnds in e) co ==> let bnds in cast e co" ]                 .+ Commute .+ Shallow
     , external "let-float-top" (promoteProgR letFloatTopR :: RewriteH Core)
-        [ "v = (let w = ew in ev) : bds ==> w = ew : v = ev : bds" ]            .+ Commute .+ Shallow
+        [ "v = (let bds in e) : prog ==> bds : v = e : prog" ]                  .+ Commute .+ Shallow
     , external "let-float" (promoteProgR letFloatTopR <+ promoteExprR letFloatExprR :: RewriteH Core)
         [ "Float a Let whatever the context." ]                                 .+ Commute .+ Shallow  -- Don't include in bash, as each sub-rewrite is tagged "Bash" already.
     , external "let-to-case" (promoteExprR letToCaseR :: RewriteH Core)
@@ -299,13 +299,15 @@ letFloatExprR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite 
 letFloatExprR = setFailMsg "Unsuitable expression for Let floating." $
                letFloatArgR <+ letFloatAppR <+ letFloatLetR <+ letFloatLamR <+ letFloatCaseR <+ letFloatCastR
 
--- | @'ProgCons' ('NonRec' v ('Let' ('NonRec' w ew) ev)) p@ ==> @'ProgCons' ('NonRec' w ew) ('ProgCons' ('NonRec' v ev) p)@
-letFloatTopR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreProg
+-- | @'ProgCons' ('NonRec' v ('Let' bds e)) p@ ==> @'ProgCons' bds ('ProgCons' ('NonRec' v e) p)@
+letFloatTopR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreProg
 letFloatTopR = prefixFailMsg "Let floating to top level failed: " $
-               withPatFailMsg (wrongExprForm "NonRec v (Let (NonRec w ew) ev) `ProgCons` p") $
-  do NonRec v (Let (NonRec w ew) ev) `ProgCons` p <- idR
-     guardMsg (not $ isTyCoArg ew) "type and coercion bindings are not allowed at the top level."
-     return (NonRec w ew `ProgCons` NonRec v ev `ProgCons` p)
+               withPatFailMsg (wrongExprForm "NonRec v (Let bds e) `ProgCons` p") $
+               do vs <- consNonRecT mempty (liftM mkVarSet letIdsT) progFreeVarsT (\ () -> intersectVarSet)
+                  let bdsAction = if isEmptyVarSet vs then idR else nonRecAllR idR alphaLet
+                  progConsT bdsAction idR $ \ (NonRec v (Let bds ev)) p -> ProgCons bds (ProgCons (NonRec v ev) p)
+  where
+   letIdsT = letVarsT >>> acceptWithFailMsgR (all isId) "type and coercion bindings are not allowed at the top level."
 
 -------------------------------------------------------------------------------------------
 

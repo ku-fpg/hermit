@@ -131,13 +131,13 @@ bashComponents =
   , (promoteExprR castElimReflR, "cast-elim-refl")
   , (promoteExprR castElimSymR, "cast-elim-sym")
   , (promoteExprR safeLetSubstR, "safe-let-subst")
-  , (promoteExprR letElimR, "let-elim")  -- This may not need to be in bash, as it's subsumed by occurrence analysis.
-  , (promoteExprR letFloatAppR, "let-float-app")
-  , (promoteExprR letFloatArgR, "let-float-arg")
-  , (promoteExprR letFloatLamR, "let-float-lam")
-  , (promoteExprR letFloatLetR, "let-float-let")
-  , (promoteExprR letFloatCaseR, "let-float-case")
-  , (promoteExprR letFloatCastR, "let-float-cast")
+--  , (promoteExprR letElimR, "let-elim")  -- This may not need to be in bash, as it's subsumed by occurrence analysis.
+  , (promoteExprR letFloatAppR, "let-float-app")     -- O(n)
+  , (promoteExprR letFloatArgR, "let-float-arg")     -- O(n)
+  , (promoteExprR letFloatLamR, "let-float-lam")     -- O(n)
+  , (promoteExprR letFloatLetR, "let-float-let")     -- O(n)
+  , (promoteExprR letFloatCaseR, "let-float-case")   -- O(n)
+  , (promoteExprR letFloatCastR, "let-float-cast")   -- O(1)
   , (promoteProgR letFloatTopR, "let-float-top")
   ]
 

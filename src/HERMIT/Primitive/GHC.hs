@@ -6,6 +6,7 @@ module HERMIT.Primitive.GHC
        , anyCallR
          -- ** Free Variables
        , tyVarsOfTypeT
+       , progFreeVarsT
        , exprFreeIdsT
        , exprFreeVarsT
        , bindFreeVarsT
@@ -259,17 +260,22 @@ tyVarsOfTypeT = arr tyVarsOfType
 altFreeVarsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt VarSet
 altFreeVarsT = altT mempty (\ _ -> idR) exprFreeVarsT (\ () vs fvs -> delVarSetList fvs vs)
 
--- | The free variables in a binding group, which excludes any variables bound in the group.
-bindFreeVarsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreBind VarSet
-bindFreeVarsT = nonRecT idR exprFreeVarsT (\ v fvs -> delVarSet fvs v)
-                <+ recDefT (\ _ -> (idR, exprFreeVarsT)) (uncurry (flip delVarSetList) . second unionVarSets . unzip)
-
 -- | A variant of 'altFreeVarsT' that returns a function that accepts the case wild-card binder before giving a result.
 --   This is so we can use this with congruence combinators, for example:
 --
 --   caseT id (const altFreeVarsT) $ \ _ wild _ fvs -> [ f wild | f <- fvs ]
 altFreeVarsExclWildT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt (Id -> VarSet)
 altFreeVarsExclWildT = altT mempty (\ _ -> idR) exprFreeVarsT (\ () vs fvs wild -> delVarSetList fvs (wild : vs))
+
+-- | The free variables in a binding group, which excludes any variables bound in the group.
+bindFreeVarsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreBind VarSet
+bindFreeVarsT = nonRecT idR exprFreeVarsT (\ v fvs -> delVarSet fvs v)
+                <+ recDefT (\ _ -> (idR, exprFreeVarsT)) (uncurry (flip delVarSetList) . second unionVarSets . unzip)
+
+-- | The free variables in a program.
+progFreeVarsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreProg VarSet
+progFreeVarsT = progNilT emptyVarSet
+                <+ progConsT (arr bindVars &&& bindFreeVarsT) progFreeVarsT (\ (bs,fvs1) fvs2 -> fvs1 `unionVarSet` delVarSetList fvs2 bs)
 
 ------------------------------------------------------------------------
 
