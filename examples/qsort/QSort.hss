@@ -9,12 +9,6 @@ bash
   any-td case-float-arg
   eta-expand 'acc
   lam-body
-  bash
-  any-td (unfold-rule "repH ++")
-  bash
-  any-td (foreward ww-result-fusion)
-  one-td (unfold-rule "repH (:)")
-  any-td (unfold-rule "repH []")
-  bash
+  bash-extended-with (foreward ww-result-fusion <+ apply-rules ["repH ++", "repH (:)", "repH []"])
 }
 one-td (unfold 'absH)

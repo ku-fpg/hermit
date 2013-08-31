@@ -4,8 +4,9 @@ module HERMIT.Primitive.Composite
     ( externals
     , unfoldBasicCombinatorR
     , simplifyR
-    , bashRewritesR
+    , bashUsingR
     , bashR
+    , bashExtendedWithR
     , bashDebugR
     )
 where
@@ -38,7 +39,11 @@ externals =
         [ "innermost (unfold-basic-combinator <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ let-elim)" ]
     , external "bash" (bashR :: RewriteH Core)
         bashHelp .+ Eval .+ Deep .+ Loop
-    , external "debug-bash" (bashDebugR :: RewriteH Core)
+    , external "bash-extended-with" (bashExtendedWithR :: RewriteH Core -> RewriteH Core)
+        [ "Run \"bash\" extended with an additional rewrite.",
+          "Note: be sure that the new rewrite either fails or makes progress, else this may loop."
+        ] .+ Eval .+ Deep .+ Loop
+    , external "bash-debug" (bashDebugR :: RewriteH Core)
         [ "verbose bash - most useful with set-auto-corelint True" ] .+ Eval .+ Deep .+ Loop
     ]
 
@@ -69,13 +74,16 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
 ------------------------------------------------------------------------------------------------------
 
 bashR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
-bashR = bashRewritesR (map fst bashRewrites)
+bashR = bashUsingR (map fst bashComponents)
+
+bashExtendedWithR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core -> Rewrite c HermitM Core
+bashExtendedWithR r = bashUsingR (r : map fst bashComponents)
 
 bashDebugR :: RewriteH Core
-bashDebugR = bashRewritesR $ map (\ (r,nm) -> r >>> observeR nm) bashRewrites
+bashDebugR = bashUsingR $ map (\ (r,nm) -> r >>> observeR nm) bashComponents
 
-bashRewritesR :: forall c m. (ExtendPath c Crumb, AddBindings c, MonadCatch m) => [Rewrite c m Core] -> Rewrite c m Core
-bashRewritesR rs =
+bashUsingR :: forall c m. (ExtendPath c Crumb, AddBindings c, MonadCatch m) => [Rewrite c m Core] -> Rewrite c m Core
+bashUsingR rs =
     setFailMsg "bash failed: nothing to do." $
     readerT $ \ core1 -> occurAnalyseR >>> readerT (\ core2 -> if core1 `coreSyntaxEq` core2
                                                                  then bashCoreR      -- equal, no progress yet
@@ -99,7 +107,7 @@ Also, it's still possible for some meta-data to be out-of-date after bash, despi
 -}
 
 bashHelp :: [String]
-bashHelp = "Iteratively apply the following rewrites until nothing changes:" : map snd (bashRewrites
+bashHelp = "Iteratively apply the following rewrites until nothing changes:" : map snd (bashComponents
                                                                                          :: [(RewriteH Core,String)] -- to resolve ambiguity
                                                                                        )
 
@@ -107,8 +115,8 @@ bashHelp = "Iteratively apply the following rewrites until nothing changes:" : m
 -- Then we wouldn't need the promote's everywhere, and could just apply promote in bashR.
 -- I don't think it really matters much either way.
 
-bashRewrites :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [(Rewrite c HermitM Core, String)]
-bashRewrites =
+bashComponents :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [(Rewrite c HermitM Core, String)]
+bashComponents =
   [ (promoteExprR unfoldBasicCombinatorR, "unfold-basic-combinator")
   , (promoteExprR dezombifyR, "dezombify")
   , (promoteExprR inlineCaseAlternativeR, "inline-case-alternative")

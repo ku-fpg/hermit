@@ -10,10 +10,6 @@ bash
   lam-body
   one-td (push 'repH)
   case-float-app
-  one-td (unfold-rule "repH ++")
-  one-td (foreward ww-result-fusion)
-  one-td (unfold-rule "repH (:)")
-  any-td (unfold-rule "repH []")
-  bash
+  bash-extended-with (foreward ww-result-fusion <+ apply-rules ["repH ++", "repH (:)", "repH []"])
 }
 one-td (unfold 'absH)

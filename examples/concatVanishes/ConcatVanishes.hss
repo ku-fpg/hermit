@@ -1,6 +1,6 @@
 load-as-rewrite "WWA" "WW-Ass-A.hss"
 ww-result-split-param 1 [| absH |] [| repH |] (ww-result-AssA-to-AssC WWA)
 one-td (inline 'f)
-innermost (bash >+> push 'repH >+> unfold-rule "repH ++" >+> unfold-rule "repH (:)" >+> unfold-rule "repH []" >+> unfold-rule "++ []")
-any-td (foreward ww-result-fusion)
+{ rhs-of 'work ; lam-body ; eta-expand 'acc }
+bash-extended-with (push 'repH <+ foreward ww-result-fusion <+ apply-rules ["repH ++","repH (:)","repH []"])
 one-td (unfold 'absH)
