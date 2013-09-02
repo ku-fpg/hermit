@@ -332,6 +332,8 @@ performKernelEffect EndScope expr = do
         put $ newSAST expr ast st
         showWindow
 
+performKernelEffect (Delete sast) _ = gets cl_kernel >>= flip deleteS sast
+
 performKernelEffect (CorrectnessCritera q) expr = do
         st <- get
         -- TODO: Again, we may want a quiet version of the kernel_env
@@ -386,7 +388,6 @@ performMetaCommand Resume = do
     sast' <- applyS (cl_kernel st) occurAnalyseAndDezombifyR (cl_kernel_env st) (cl_cursor st)
     resumeS (cl_kernel st) sast'
 
-performMetaCommand (Delete sast) = gets cl_kernel >>= flip deleteS sast
 performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
     case lookup renderer finalRenders of

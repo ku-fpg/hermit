@@ -35,6 +35,7 @@ data ShellCommand =  KernelEffect KernelEffect -- ^ Command that modifies the st
 --   - Change the current location using a computed path.
 --   - Change the currect location using directions.
 --   - Begin or end a scope.
+--   - Delete an AST
 --   - Run a precondition or other predicate that must not fail.
 data KernelEffect :: * where
    Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> KernelEffect
@@ -42,6 +43,7 @@ data KernelEffect :: * where
    Direction  ::                                                Direction               -> KernelEffect
    BeginScope ::                                                                           KernelEffect
    EndScope   ::                                                                           KernelEffect
+   Delete     ::                                                SAST                    -> KernelEffect
    CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g () -> KernelEffect
    deriving Typeable
 
@@ -75,7 +77,6 @@ type RewriteName = String
 data MetaCommand
    = Resume
    | Abort
-   | Delete SAST
    | Dump String String String Int
    | LoadFile ScriptName FilePath  -- load a file on top of the current node
    | SaveFile FilePath
