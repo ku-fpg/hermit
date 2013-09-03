@@ -1,3 +1,2 @@
-flatten-module
-consider 'flatten
-{ load-and-run "ConcatVanishes.hss" }
+define-script "consider-target-function" "consider 'flatten"
+load-and-run "ConcatVanishes.hss"

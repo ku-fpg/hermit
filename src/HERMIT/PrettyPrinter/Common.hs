@@ -41,8 +41,6 @@ module HERMIT.PrettyPrinter.Common
     , vlist
     ) where
 
-import GhcPlugins hiding (($$), (<>), (<+>))
-
 import Data.Char
 import Data.Default
 import Data.Monoid hiding ((<>))
@@ -52,6 +50,7 @@ import Data.Typeable
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
+import HERMIT.GHC hiding (($$), (<>), (<+>))
 import HERMIT.Kure
 import HERMIT.Monad
 

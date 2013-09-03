@@ -16,9 +16,9 @@ import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
 
-import qualified GhcPlugins as GHC
 import HERMIT.Kure
 import HERMIT.Core
+import HERMIT.GHC hiding ((<+>), char, text, parens)
 import HERMIT.PrettyPrinter.Common
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
@@ -38,34 +38,34 @@ ppCoreTC =
        <+ promoteCoercionT ppCoercion
 
 -- Use for any GHC structure.
-ppSDoc :: GHC.Outputable a => PrettyH a
-ppSDoc = do dynFlags <- constT GHC.getDynFlags
-            arr (toDoc . GHC.showPpr dynFlags)
+ppSDoc :: Outputable a => PrettyH a
+ppSDoc = do dynFlags <- constT getDynFlags
+            arr (toDoc . showPpr dynFlags)
     where toDoc s | any isSpace s = parens (text s)
                   | otherwise     = text s
 
-ppModGuts :: PrettyH GHC.ModGuts
-ppModGuts = GHC.mg_binds ^>> ppSDoc
+ppModGuts :: PrettyH ModGuts
+ppModGuts = mg_binds ^>> ppSDoc
 
 ppCoreProg :: PrettyH CoreProg
 ppCoreProg = progToBinds ^>> ppSDoc
 
-ppCoreExpr :: PrettyH GHC.CoreExpr
+ppCoreExpr :: PrettyH CoreExpr
 ppCoreExpr = ppSDoc
 
-ppCoreBind :: PrettyH GHC.CoreBind
+ppCoreBind :: PrettyH CoreBind
 ppCoreBind = ppSDoc
 
-ppCoreAlt :: PrettyH GHC.CoreAlt
+ppCoreAlt :: PrettyH CoreAlt
 ppCoreAlt = ppSDoc
 
 ppCoreDef :: PrettyH CoreDef
 ppCoreDef = defT ppSDoc ppCoreExpr $ \ i e -> i <+> char '=' <+> e
 
-ppKindOrType :: PrettyH GHC.Type
+ppKindOrType :: PrettyH Type
 ppKindOrType = ppSDoc
 
-ppCoercion :: PrettyH GHC.Coercion
+ppCoercion :: PrettyH Coercion
 ppCoercion = ppSDoc
 
 ---------------------------------------------------------------------------

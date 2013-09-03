@@ -8,9 +8,10 @@ module HERMIT.Plugin
     , PhaseInfo(..)
     )  where
 
-import GhcPlugins
 import Data.List
 import System.IO
+
+import HERMIT.GHC
 
 -- | Given a list of 'CommandLineOption's, produce the 'ModGuts' to 'ModGuts' function required to build a plugin.
 type HermitPass = PhaseInfo -> [CommandLineOption] -> ModGuts -> CoreM ModGuts

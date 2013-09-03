@@ -13,8 +13,6 @@ module HERMIT.Primitive.WorkerWrapper.Fix
        )
 where
 
-import GhcPlugins as GHC hiding (varName)
-
 import Control.Applicative
 import Control.Arrow
 
@@ -271,7 +269,7 @@ workerWrapperSplitR mAss wrap unwrap =
                         >>> letAllR idR ( forewardT (workerWrapperFacBR mAss wrap unwrap)
                                           >>> appAllR idR ( unfoldNameR fx
                                                             >>> alphaLetWith [work]
-                                                            >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letSubstR)
+                                                            >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
                                                                                    >>> extractR (workerWrapperGenerateFusionR mAss)
                                                                            )
                                                                            idR
@@ -294,13 +292,17 @@ workerWrapperSplitParam n = \ mAss wrapS unwrapS ->
                                withPatFailMsg "right-hand-side of definition does not have the form: Lam t e" $
                                  do Def _ (Lam t _) <- idR
                                     guardMsg (isTyVar t) "first argument is not a type."
+
                                     let splitAtDefR :: RewriteH Core
-                                        splitAtDefR = do p <- considerConstructT Definition
-                                                         localPathR p $ promoteR $ do wrap   <- parseCoreExprT wrapS
-                                                                                      unwrap <- parseCoreExprT unwrapS
-                                                                                      let ty = Type (TyVarTy t)
-                                                                                      workerWrapperSplitR mAss (App wrap ty) (App unwrap ty)
-                                    staticArgR >>> extractR splitAtDefR
+                                        splitAtDefR = pathR [Let_Bind, Rec_Def 0] $ promoteR $
+                                                        do wrap   <- parseCoreExprT wrapS
+                                                           unwrap <- parseCoreExprT unwrapS
+                                                           let ty = Type (TyVarTy t)
+                                                           workerWrapperSplitR mAss (App wrap ty) (App unwrap ty)
+
+                                    staticArgR >>> extractR (do p <- considerConstructT LetExpr
+                                                                localPathR p (splitAtDefR >>> promoteExprR letSubstR)
+                                                            )
 
 --------------------------------------------------------------------------------------------------
 

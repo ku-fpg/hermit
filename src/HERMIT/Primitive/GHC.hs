@@ -4,14 +4,6 @@ module HERMIT.Primitive.GHC
          -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
          externals
        , anyCallR
-         -- ** Free Variables
-       , tyVarsOfTypeT
-       , progFreeVarsT
-       , exprFreeIdsT
-       , exprFreeVarsT
-       , bindFreeVarsT
-       , altFreeVarsT
-       , altFreeVarsExclWildT
          -- ** Substitution
        , substR
        , substExprR
@@ -28,12 +20,13 @@ module HERMIT.Primitive.GHC
        , lintModuleT
        , specConstrR
        , occurAnalyseR
+       , occurAnalyseChangedR
+       , occurAnalyseExprChangedR
        , occurAnalyseAndDezombifyR
        , dezombifyR
        )
 where
 
-import GhcPlugins
 import qualified Bag
 import qualified CoreLint
 import IOEnv
@@ -44,7 +37,6 @@ import Control.Monad
 
 import Data.Function (on)
 import Data.List (intercalate,mapAccumL,deleteFirstsBy)
-import Data.Monoid (mempty)
 
 import HERMIT.Core
 import HERMIT.Context
@@ -65,8 +57,8 @@ externals :: [External]
 externals =
          [ external "info" (info :: TranslateH CoreTC String)
                 [ "Display information about the current node." ]
-         , external "free-ids" (promoteExprT freeIdsQuery :: TranslateH Core String)
-                [ "List the free identifiers in this expression." ] .+ Query .+ Deep
+         -- , external "free-ids" (promoteExprT freeIdsQuery :: TranslateH Core String)
+         --        [ "List the free identifiers in this expression." ] .+ Query .+ Deep
          , external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH Core)
                 [ "Deshadow a program." ] .+ Deep
          , external "apply-rule" (promoteExprR . rule :: String -> RewriteH Core)
@@ -112,7 +104,7 @@ substExprR v e =  contextfreeT $ \ expr -> do
     -- expression to be substituted.  Constructing a NonRec Let expression
     -- to pass on to exprFeeVars takes care of this, but ...
     -- TODO Is there a better way to do this ???
-    let emptySub = mkEmptySubst (mkInScopeSet (exprFreeVars (Let (NonRec v e) expr)))
+    let emptySub = mkEmptySubst (mkInScopeSet (localFreeVarsExpr (Let (NonRec v e) expr)))
     return $ substExpr (text "substR") (extendSubst emptySub v e) expr
 
 -- | Substitute all occurrences of a variable with an expression, in a program.
@@ -137,8 +129,10 @@ substAltR v e = do (_, vs, _) <- idR
 
 ------------------------------------------------------------------------
 
+-- TODO: this should be somewhere else.
 info :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, BoundVars c, HasDynFlags m, MonadCatch m) => Translate c m CoreTC String
 info = do crumbs <- childrenT
+          fvs    <- arr freeVarsCoreTC
           translate $ \ c coreTC -> do
             dynFlags <- getDynFlags
             let pa       = "Path: " ++ showCrumbs (snocPathToPath $ absPath c)
@@ -146,10 +140,10 @@ info = do crumbs <- childrenT
                 con      = "Constructor: " ++ coreTCConstructor coreTC
                 children = "Children: " ++ showCrumbs crumbs
                 bds      = "Bindings in Scope: " ++ showVarSet (boundVars c)
+                freevars = "Free Variables: " ++ showVarSet fvs
                 extra    = case coreTC of
                              Core (ExprCore e)      -> let tyK = exprKindOrType e
                                                         in [(if isKind tyK then "Kind: " else "Type: ") ++ showPpr dynFlags tyK] ++
-                                                           ["Free Variables: " ++ showVarSet (exprFreeVars e)] ++
                                                            case e of
                                                              Var i -> ["Identifier Arity: " ++ show (arityOf c i)]
                                                              _     -> []
@@ -157,7 +151,7 @@ info = do crumbs <- childrenT
                              TyCo (CoercionCore co) -> ["Kind: " ++ showPpr dynFlags (coercionKind co) ]
                              _                      -> []
 
-            return (intercalate "\n" $ [pa,node,con,children,bds] ++ extra)
+            return (intercalate "\n" $ [pa,node,con,children,bds,freevars] ++ extra)
 
 -- showIdInfo :: DynFlags -> Id -> String
 -- showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
@@ -231,10 +225,10 @@ coercionConstructor = \case
 
 ------------------------------------------------------------------------
 
--- | Output a list of all free variables in an expression.
-freeIdsQuery :: Monad m => Translate c m CoreExpr String
-freeIdsQuery = do frees <- exprFreeIdsT
-                  return $ "Free identifiers are: " ++ showVarSet frees
+-- -- | Output a list of all free variables in an expression.
+-- freeIdsQuery :: Monad m => Translate c m CoreExpr String
+-- freeIdsQuery = do frees <- exprFreeIdsT
+--                   return $ "Free identifiers are: " ++ showVarSet frees
 
 -- | Show a human-readable version of a list of 'Var's.
 showVars :: [Var] -> String
@@ -243,39 +237,6 @@ showVars = show . map var2String
 -- | Show a human-readable version of a 'VarSet'.
 showVarSet :: VarSet -> String
 showVarSet = showVars . varSetElems
-
--- | Lifted version of 'exprFreeIds'.
-exprFreeIdsT :: Monad m => Translate c m CoreExpr IdSet
-exprFreeIdsT = arr exprFreeIds
-
--- | Lifted version of 'exprFreeVars'.
-exprFreeVarsT :: Monad m => Translate c m CoreExpr VarSet
-exprFreeVarsT = arr exprFreeVars
-
--- | Lifted version of 'tyVarsOfType'.
-tyVarsOfTypeT :: Monad m => Translate c m Type TyVarSet
-tyVarsOfTypeT = arr tyVarsOfType
-
--- | The free variables in a case alternative, which excludes any variables bound in the alternative.
-altFreeVarsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt VarSet
-altFreeVarsT = altT mempty (\ _ -> idR) exprFreeVarsT (\ () vs fvs -> delVarSetList fvs vs)
-
--- | A variant of 'altFreeVarsT' that returns a function that accepts the case wild-card binder before giving a result.
---   This is so we can use this with congruence combinators, for example:
---
---   caseT id (const altFreeVarsT) $ \ _ wild _ fvs -> [ f wild | f <- fvs ]
-altFreeVarsExclWildT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreAlt (Id -> VarSet)
-altFreeVarsExclWildT = altT mempty (\ _ -> idR) exprFreeVarsT (\ () vs fvs wild -> delVarSetList fvs (wild : vs))
-
--- | The free variables in a binding group, which excludes any variables bound in the group.
-bindFreeVarsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreBind VarSet
-bindFreeVarsT = nonRecT idR exprFreeVarsT (\ v fvs -> delVarSet fvs v)
-                <+ recDefT (\ _ -> (idR, exprFreeVarsT)) (uncurry (flip delVarSetList) . second unionVarSets . unzip)
-
--- | The free variables in a program.
-progFreeVarsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreProg VarSet
-progFreeVarsT = progNilT emptyVarSet
-                <+ progConsT (arr bindVars &&& bindFreeVarsT) progFreeVarsT (\ (bs,fvs1) fvs2 -> fvs1 `unionVarSet` delVarSetList fvs2 bs)
 
 ------------------------------------------------------------------------
 
@@ -322,12 +283,12 @@ rulesToRewriteH rs = translate $ \ c e -> do
     (Var fn,args) <- return $ collectArgs e
     -- Question: does this include Id's, or Var's (which include type names)
     -- Assumption: Var's.
-    let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (exprFreeVars e) ])
+    let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (localFreeVarsExpr e) ])
         -- The rough_args are just an attempt to try eliminate silly things
         -- that will never match
         _rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
     -- Finally, we try match the rules
-    -- trace (showSDoc (ppr fn GhcPlugins.<+> ppr args $$ ppr rs)) $
+    -- trace (showSDoc (ppr fn <+> ppr args $$ ppr rs)) $
 #if __GLASGOW_HASKELL__ > 706
     dflags <- getDynFlags
     case lookupRule dflags (in_scope, const NoUnfolding) (const True) fn args [r | r <- rs, ru_fn r == idName fn] of
@@ -337,10 +298,10 @@ rulesToRewriteH rs = translate $ \ c e -> do
         Nothing         -> fail "rule not matched"
         Just (r, expr)  -> do
             let e' = mkApps expr (drop (ruleArity r) args)
-            ifM (liftM (and . map (inScope c) . varSetElems) $ apply exprFreeVarsT c e')
-                (return e')
-                (fail $ unlines ["Resulting expression after rule application contains variables that are not in scope."
-                                ,"This can probably be solved by running the flatten-module command at the top level."])
+            if all (inScope c) $ varSetElems $ localFreeVarsExpr e'
+              then return e'
+              else fail $ unlines ["Resulting expression after rule application contains variables that are not in scope."
+                                  ,"This can probably be solved by running the flatten-module command at the top level."]
 
 -- | Determine whether an identifier is in scope.
 inScope :: ReadBindings c => c -> Id -> Bool
@@ -505,6 +466,14 @@ occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c 
 occurAnalyseR = let r  = promoteExprR (arr occurAnalyseExpr)
                     go = r <+ anyR go
                  in tryR go -- always succeed
+
+-- | Occurrence analyse an expression, failing if the result is syntactically equal to the initial expression.
+occurAnalyseExprChangedR :: MonadCatch m => Rewrite c m CoreExpr
+occurAnalyseExprChangedR = changedByR exprSyntaxEq (arr occurAnalyseExpr)
+
+-- | Occurrence analyse all sub-expressions, failing if the result is syntactically equal to the initial expression.
+occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurAnalyseChangedR = changedByR coreSyntaxEq occurAnalyseR
 
 -- | Run GHC's occurrence analyser, and also eliminate any zombies.
 occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core

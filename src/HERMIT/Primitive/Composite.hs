@@ -13,10 +13,9 @@ where
 
 import Control.Arrow
 
-import GhcPlugins as GHC hiding (varName)
-
 import HERMIT.Context
 import HERMIT.Core
+import HERMIT.GHC
 import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
@@ -66,7 +65,7 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
     innermostR (   promoteBindR recToNonrecR
                 <+ promoteExprR ( unfoldBasicCombinatorR
                                <+ betaReducePlusR
-                               <+ safeLetSubstR
+                               <+ letNonRecSubstSafeR
                                <+ caseReduceR
                                <+ letElimR )
                )
@@ -82,21 +81,28 @@ bashExtendedWithR r = bashUsingR (r : map fst bashComponents)
 bashDebugR :: RewriteH Core
 bashDebugR = bashUsingR $ map (\ (r,nm) -> r >>> observeR nm) bashComponents
 
-bashUsingR :: forall c m. (ExtendPath c Crumb, AddBindings c, MonadCatch m) => [Rewrite c m Core] -> Rewrite c m Core
+-- bashUsingR :: forall c m. (ExtendPath c Crumb, AddBindings c, MonadCatch m) => [Rewrite c m Core] -> Rewrite c m Core
+-- bashUsingR rs =
+--     setFailMsg "bash failed: nothing to do." $
+--     readerT $ \ core1 -> occurAnalyseR >>> readerT (\ core2 -> if core1 `coreSyntaxEq` core2
+--                                                                  then bashCoreR      -- equal, no progress yet
+--                                                                  else tryR bashCoreR -- unequal, progress has already been made
+--                                                    )
+--   -- the changedByR combinator doesn't quite do what we need here
+--   where
+--     bashCoreR :: Rewrite c m Core
+--     bashCoreR = repeatR (innermostR (catchesT rs) >>> occurAnalyseR)
+
+bashUsingR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => [Rewrite c m Core] -> Rewrite c m Core
 bashUsingR rs =
     setFailMsg "bash failed: nothing to do." $
-    readerT $ \ core1 -> occurAnalyseR >>> readerT (\ core2 -> if core1 `coreSyntaxEq` core2
-                                                                 then bashCoreR      -- equal, no progress yet
-                                                                 else tryR bashCoreR -- unequal, progress has already been made
-                                                   )
-  -- the changedByR combinator doesn't quite do what we need here
-  where
-    bashCoreR :: Rewrite c m Core
-    bashCoreR = repeatR (innermostR (orR rs) >>> occurAnalyseR)
+    repeatR (occurAnalyseR >>> onetdR (catchesT rs)) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
+
+ --   occurAnalyseChangedR >+> (innermostR (catchesT rs) >>> occurAnalyseR)
 
 {-
 Occurrence Analysis updates meta-data, as well as performing some basic simplifications.
-occurAnalyseR always succeeds, whereas occurAnalyseChangedR fails is the result is alpha equivalent.
+occurAnalyseR always succeeds, whereas occurAnalyseChangedR fails is the result is syntactically equivalent.
 The awkwardness is because:
   - we want bash to fail if nothing changes
   - we want bash to succeed if the result is not syntactically-equivalent (ideally, if any changes are made at all, but that's not the case yet)
@@ -111,34 +117,33 @@ bashHelp = "Iteratively apply the following rewrites until nothing changes:" : m
                                                                                          :: [(RewriteH Core,String)] -- to resolve ambiguity
                                                                                        )
 
--- An alternative would be to use the type: Injection a Core => Rewrite c HermitM a
--- Then we wouldn't need the promote's everywhere, and could just apply promote in bashR.
--- I don't think it really matters much either way.
-
+-- TODO: Think about a good order for bash.
 bashComponents :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [(Rewrite c HermitM Core, String)]
 bashComponents =
-  [ (promoteExprR unfoldBasicCombinatorR, "unfold-basic-combinator")
-  , (promoteExprR dezombifyR, "dezombify")
-  , (promoteExprR inlineCaseAlternativeR, "inline-case-alternative")
-  , (promoteExprR betaReducePlusR, "beta-reduce-plus")
-  , (promoteExprR etaReduceR, "eta-reduce")
-  , (promoteBindR recToNonrecR, "rec-to-nonrec")
-  , (promoteExprR caseFloatAppR, "case-float-app")
-  , (promoteExprR caseFloatCaseR, "case-float-case")
-  , (promoteExprR caseFloatCastR, "case-float-cast")
-  , (promoteExprR caseFloatLetR, "case-float-let")
-  , (promoteExprR caseReduceR, "case-reduce")
-  , (promoteExprR castElimReflR, "cast-elim-refl")
-  , (promoteExprR castElimSymR, "cast-elim-sym")
-  , (promoteExprR safeLetSubstR, "safe-let-subst")
---  , (promoteExprR letElimR, "let-elim")  -- This may not need to be in bash, as it's subsumed by occurrence analysis.
-  , (promoteExprR letFloatAppR, "let-float-app")     -- O(n)
-  , (promoteExprR letFloatArgR, "let-float-arg")     -- O(n)
-  , (promoteExprR letFloatLamR, "let-float-lam")     -- O(n)
-  , (promoteExprR letFloatLetR, "let-float-let")     -- O(n)
-  , (promoteExprR letFloatCaseR, "let-float-case")   -- O(n)
-  , (promoteExprR letFloatCastR, "let-float-cast")   -- O(1)
-  , (promoteProgR letFloatTopR, "let-float-top")
+  [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
+    (promoteExprR betaReduceR, "beta-reduce")                        -- O(1)
+  , (promoteExprR caseReduceR, "case-reduce")                        -- O(n)
+  , (promoteExprR caseReduceIdR, "case-reduce-id")                   -- O(n)
+  , (promoteExprR unfoldBasicCombinatorR, "unfold-basic-combinator") -- O(n)
+  , (promoteExprR inlineCaseAlternativeR, "inline-case-alternative") -- O(n)
+  , (promoteExprR etaReduceR, "eta-reduce")                          -- O(n)
+--  , (promoteBindR recToNonrecR, "rec-to-nonrec")                     -- O(n) -- subsumed by occurrence analysis
+  , (promoteExprR letNonRecSubstSafeR, "let-nonrec-subst-safe")      -- O(n)
+  , (promoteExprR caseFloatAppR, "case-float-app")                   -- O(n)
+  , (promoteExprR caseFloatCaseR, "case-float-case")                 -- O(n)
+  , (promoteExprR caseFloatLetR, "case-float-let")                   -- O(n) but usually O(1)
+  , (promoteExprR caseFloatCastR, "case-float-cast")                 -- O(1)
+--  , (promoteExprR letElimR, "let-elim")  -- O(n^2) -- Subsumed by occurrence analysis.
+  , (promoteExprR letFloatAppR, "let-float-app")                     -- O(n)
+  , (promoteExprR letFloatArgR, "let-float-arg")                     -- O(n)
+  , (promoteExprR letFloatLamR, "let-float-lam")                     -- O(n)
+  , (promoteExprR letFloatLetR, "let-float-let")                     -- O(n)
+  , (promoteExprR letFloatCaseR, "let-float-case")                   -- O(n)
+  , (promoteExprR letFloatCastR, "let-float-cast")                   -- O(1)
+  , (promoteProgR letFloatTopR, "let-float-top")                     -- O(n)
+  , (promoteExprR castElimReflR, "cast-elim-refl")                   -- O(1)
+  , (promoteExprR castElimSymR, "cast-elim-sym")                     -- O(1)
+--  , (promoteExprR dezombifyR, "dezombify")                           -- O(1) -- performed at the end
   ]
 
 ------------------------------------------------------------------------------------------------------

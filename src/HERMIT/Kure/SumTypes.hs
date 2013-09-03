@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, InstanceSigs, LambdaCase #-}
 
 module HERMIT.Kure.SumTypes
   ( -- * Sum Types
@@ -14,6 +14,10 @@ module HERMIT.Kure.SumTypes
   , coreAlphaEq
   , tyCoAlphaEq
   , coreTCAlphaEq
+  -- ** Collecting Free Variables
+  , freeVarsCore
+  , freeVarsTyCo
+  , freeVarsCoreTC
   -- * Promotion Combinators
   -- ** Translate Promotions
   , promoteModGutsT
@@ -38,13 +42,12 @@ module HERMIT.Kure.SumTypes
   )
 where
 
-import GhcPlugins
-
 import Language.KURE.Translate
 import Language.KURE.Injection
 import Language.KURE.BiTranslate
 
 import HERMIT.Core
+import HERMIT.GHC
 
 ---------------------------------------------------------------------
 
@@ -111,6 +114,30 @@ coreTCSyntaxEq :: CoreTC -> CoreTC -> Bool
 coreTCSyntaxEq (Core c1)  (Core c2)  = coreSyntaxEq c1 c2
 coreTCSyntaxEq (TyCo tc1) (TyCo tc2) = tyCoSyntaxEq tc1 tc2
 coreTCSyntaxEq _          _          = False
+
+---------------------------------------------------------------------
+
+-- | Find all free variables in a 'Core' node.
+freeVarsCore :: Core -> VarSet
+freeVarsCore = \case
+                  GutsCore g -> freeVarsProg (bindsToProg $ mg_binds g)
+                  ProgCore p -> freeVarsProg p
+                  BindCore b -> freeVarsBind b
+                  DefCore d  -> freeVarsDef d
+                  ExprCore e -> freeVarsExpr e
+                  AltCore a  -> freeVarsAlt a
+
+-- | Find all free variables in a 'TyCo' node.
+freeVarsTyCo :: TyCo -> VarSet
+freeVarsTyCo = \case
+                  TypeCore ty     -> tyVarsOfType ty
+                  CoercionCore co -> tyCoVarsOfCo co
+
+-- | Find all free variables in a 'CoreTC' node.
+freeVarsCoreTC :: CoreTC -> VarSet
+freeVarsCoreTC = \case
+                    TyCo tyco -> freeVarsTyCo tyco
+                    Core core -> freeVarsCore core
 
 ---------------------------------------------------------------------
 

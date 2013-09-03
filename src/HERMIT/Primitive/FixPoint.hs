@@ -12,8 +12,6 @@ module HERMIT.Primitive.FixPoint
        )
 where
 
-import GhcPlugins as GHC hiding (varName)
-
 import Control.Applicative
 import Control.Arrow
 

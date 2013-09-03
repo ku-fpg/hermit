@@ -23,8 +23,7 @@ module HERMIT.Primitive.AlphaConversion
        )
 where
 
-import GhcPlugins hiding (empty)
-
+import Control.Applicative
 import Control.Arrow
 import Control.Monad (liftM, liftM2)
 import Data.Char (isDigit)
@@ -95,7 +94,7 @@ externals = map (.+ Deep)
 
 -- | List all visible identifiers (in the expression or the context).
 visibleVarsT :: (BoundVars c, Monad m) => Translate c m CoreExpr VarSet
-visibleVarsT = liftM2 unionVarSet boundVarsT exprFreeVarsT
+visibleVarsT = liftM2 unionVarSet boundVarsT (arr freeVarsExpr)
 
 -- | If a name is provided replace the string with that,
 --   otherwise modify the string making sure to /not/ clash with any visible variables.
@@ -141,13 +140,13 @@ unshadow = setFailMsg "No shadows to eliminate." $
 
   where
     unshadowExpr :: Rewrite c HermitM CoreExpr
-    unshadowExpr = do vs <- shadowedByT (liftM mkVarSet (letVarsT <+ fmap return (caseWildIdT <+ lamVarT)))
-                                        (liftM2 unionVarSet boundVarsT exprFreeVarsT)
+    unshadowExpr = do vs <- shadowedByT (mkVarSet <$> (letVarsT <+ (return <$> (caseWildIdT <+ lamVarT))))
+                                        (unionVarSet <$> boundVarsT <*> arr freeVarsExpr)
                       alphaLam Nothing <+ alphaLetVars (varSetElems vs) <+ alphaCaseBinder Nothing
 
     unshadowAlt :: Rewrite c HermitM CoreAlt
     unshadowAlt = do vs <- shadowedByT (arr (mkVarSet . altVars))
-                                       (liftM2 unionVarSet boundVarsT altFreeVarsT)
+                                       (unionVarSet <$> boundVarsT <*> arr freeVarsAlt)
                      alphaAltVars (varSetElems vs)
 
 -----------------------------------------------------------------------
@@ -230,13 +229,13 @@ alphaLetNonRec mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
 
 -- | Alpha rename a non-recursive let binder if the variable appears in the argument list.  Optionally takes a suggested new name.
 alphaLetNonRecVars :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Maybe TH.Name -> [Var] -> Rewrite c HermitM CoreExpr
-alphaLetNonRecVars mn vs = whenM ((`elem` vs) `liftM` letNonRecVarT) (alphaLetNonRec mn)
+alphaLetNonRecVars mn vs = whenM ((`elem` vs) <$> letNonRecVarT) (alphaLetNonRec mn)
 
 -- | Rename the specified identifier bound in a recursive let.  Optionally takes a suggested new name.
 alphaLetRecId :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Maybe TH.Name -> Id -> Rewrite c HermitM CoreExpr
 alphaLetRecId mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
-                     do usedVars <- liftM2 unionVarSet boundVarsT
-                                                 $ letRecT (\ _ -> defT idR exprFreeVarsT (flip extendVarSet)) exprFreeVarsT (\ bndfvs vs -> unionVarSets (vs:bndfvs))
+                     do usedVars <- unionVarSet <$> boundVarsT
+                                                <*> letRecT (\ _ -> defT idR (arr freeVarsExpr) (flip extendVarSet)) (arr freeVarsExpr) (\ bndfvs vs -> unionVarSets (vs:bndfvs))
                         v' <- constT (cloneVarH (freshNameGenAvoiding mn usedVars) v)
                         letRecDefAnyR (\ _ -> (arr (replaceVar v v'), replaceVarR v v')) (replaceVarR v v')
 

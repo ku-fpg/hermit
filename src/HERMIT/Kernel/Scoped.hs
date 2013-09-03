@@ -20,11 +20,10 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 import qualified Data.IntMap as I
 
-import GhcPlugins hiding (Direction,L,liftIO)
-
 import HERMIT.Core
 import HERMIT.Context
 import HERMIT.Kure
+import HERMIT.GHC hiding (Direction,L,liftIO)
 import HERMIT.Monad
 import HERMIT.Kernel
 

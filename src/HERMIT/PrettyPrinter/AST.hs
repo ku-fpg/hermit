@@ -18,9 +18,7 @@ import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
 
-import GhcPlugins (ModGuts, CoreExpr, CoreBind, CoreAlt, Coercion(..), Var(..), Outputable, mg_module, showPpr, isTyVar, isCoVar)
-
-import HERMIT.GHC
+import HERMIT.GHC hiding (($$), (<+>), ($+$), cat, nest, parens, text, empty)
 import HERMIT.Kure
 import HERMIT.Core
 

@@ -2,7 +2,8 @@
 module HERMIT.GHC
     ( -- * GHC Imports
       -- | Things that have been copied from GHC, or imported directly, for various reasons.
-      ppIdInfo
+      module GhcPlugins
+    , ppIdInfo
     , zapVarOccInfo
     , var2String
     , thRdrNameGuesses
@@ -25,16 +26,17 @@ module HERMIT.GHC
     , occurAnalyseExpr
     , isKind
     , isLiftedTypeKindCon
-    , HERMIT.GHC.coAxiomName
 #if __GLASGOW_HASKELL__ > 706
+    , coAxiomName
     , CoAxiom.BranchIndex
     , CoAxiom.CoAxiom
     , CoAxiom.Branched
 #endif
     , notElemVarSet
+    , Pair(..)
     ) where
 
-import GhcPlugins as GHC
+import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars) -- we hide these so that they don't get inadvertently used.  See Core.hs
 
 -- hacky direct GHC imports
 import Convert (thRdrNameGuesses)
@@ -44,6 +46,7 @@ import Panic (GhcException(ProgramError), throwGhcException)
 import CoreArity
 import Kind (isKind,isLiftedTypeKindCon)
 import OccurAnal (occurAnalyseExpr)
+import Pair (Pair(..))
 
 #if __GLASGOW_HASKELL__ <= 706
 import Data.Maybe (isJust)
@@ -55,8 +58,8 @@ import qualified Language.Haskell.TH as TH
 --------------------------------------------------------------------------
 
 #if __GLASGOW_HASKELL__ <= 706
-coAxiomName :: CoAxiom -> Name
-coAxiomName = GHC.coAxiomName
+-- coAxiomName :: CoAxiom -> Name
+-- coAxiomName = coAxiomName
 #else
 coAxiomName :: CoAxiom.CoAxiom br -> Name
 coAxiomName = CoAxiom.coAxiomName

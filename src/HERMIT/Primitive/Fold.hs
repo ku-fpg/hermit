@@ -9,8 +9,6 @@ module HERMIT.Primitive.Fold
 
 where
 
-import GhcPlugins hiding (empty)
-
 import Control.Arrow
 import Control.Applicative
 import Control.Monad

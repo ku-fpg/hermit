@@ -23,9 +23,6 @@ module HERMIT.Optimize
     , omToIO
     ) where
 
-import GhcPlugins hiding (singleton, liftIO, display, (<>))
-import qualified GhcPlugins as GHC
-
 import Control.Monad.Operational
 import Control.Monad.State hiding (guard)
 
@@ -37,6 +34,8 @@ import HERMIT.External hiding (Query, Shell)
 import HERMIT.Kernel.Scoped
 import HERMIT.Context
 import HERMIT.Kure
+import HERMIT.GHC hiding (singleton, liftIO, display, (<>))
+import qualified HERMIT.GHC as GHC
 import HERMIT.Monad
 import HERMIT.Plugin
 import HERMIT.PrettyPrinter.Common
@@ -50,9 +49,9 @@ import System.IO (stdout)
 data OInst :: * -> * where
     Shell    :: [External] -> [CommandLineOption] -> OInst ()
     Guard    :: (PhaseInfo -> Bool) -> OM ()      -> OInst ()
-    Focus    :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g LocalPathH -> OM a -> OInst a
-    RR       :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g                      -> OInst ()
-    Query    :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g a                  -> OInst a
+    Focus    :: (Injection ModGuts g, Walker HermitC g) => TranslateH g LocalPathH -> OM a -> OInst a
+    RR       :: (Injection ModGuts g, Walker HermitC g) => RewriteH g                      -> OInst ()
+    Query    :: (Injection ModGuts g, Walker HermitC g) => TranslateH g a                  -> OInst a
 
 newtype OM a = OM (ProgramT OInst (CLM IO) a)
     deriving (Monad, MonadIO)

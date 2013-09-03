@@ -1,8 +1,6 @@
 {-# LANGUAGE FlexibleContexts, MultiWayIf #-}
 module HERMIT.Primitive.New where
 
-import GhcPlugins as GHC hiding (varName)
-
 import Control.Arrow
 
 import HERMIT.Context

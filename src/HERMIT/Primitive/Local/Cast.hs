@@ -7,11 +7,10 @@ module HERMIT.Primitive.Local.Cast
     , castElimSymR
     , castFloatAppR
     , castElimSymPlusR -- TODO: revisit
-    ) where
+    )
+where
 
-import GhcPlugins
 import qualified Coercion (substCo, extendTvSubst)
-import Pair
 
 import Control.Arrow
 import Control.Monad
@@ -20,6 +19,7 @@ import HERMIT.Core
 import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.External
+import HERMIT.GHC
 
 import HERMIT.Primitive.Common
 

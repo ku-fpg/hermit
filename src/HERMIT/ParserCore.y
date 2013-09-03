@@ -5,10 +5,9 @@ module HERMIT.ParserCore (parseCore) where
 import Control.Monad.Reader
 import Data.Char (isSpace, isDigit)
 
-import GhcPlugins
-
 import HERMIT.Context
 import HERMIT.External
+import HERMIT.GHC
 import HERMIT.Monad
 import HERMIT.Primitive.Common
 import HERMIT.Syntax (isCoreInfixIdChar, isCoreIdFirstChar, isCoreIdChar)

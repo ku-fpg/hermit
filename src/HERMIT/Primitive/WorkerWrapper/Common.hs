@@ -1,13 +1,12 @@
 module HERMIT.Primitive.WorkerWrapper.Common where
 
-import GhcPlugins as GHC hiding (varName)
-
 import Control.Arrow
 
 import HERMIT.Core
 import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
+import HERMIT.GHC
 
 import HERMIT.Primitive.New -- TODO: Sort out heirarchy
 

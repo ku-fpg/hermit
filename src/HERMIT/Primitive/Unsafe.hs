@@ -4,11 +4,11 @@ module HERMIT.Primitive.Unsafe
     , unsafeReplaceStashR
     ) where
 
-import GhcPlugins hiding (empty)
 import Control.Monad
 
 import HERMIT.Core
 import HERMIT.Kure
+import HERMIT.GHC
 import HERMIT.Monad
 import HERMIT.External
 import HERMIT.ParserCore
@@ -41,3 +41,5 @@ unsafeReplaceStashR label = prefixFailMsg "unsafe-replace failed: " $
         Def _ rhs <- lookupDef label
         guardMsg (eqType (exprType e) (exprType rhs)) "expression types differ."
         return rhs
+
+------------------------------------------------------------------------

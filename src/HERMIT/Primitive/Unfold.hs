@@ -13,8 +13,6 @@ module HERMIT.Primitive.Unfold
     , specializeR
     ) where
 
-import GhcPlugins hiding (empty)
-import Control.Applicative
 import Control.Arrow
 import Control.Monad
 
@@ -25,9 +23,9 @@ import qualified Language.Haskell.TH as TH
 import HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), PrettyC)
 
 import HERMIT.Primitive.Common
-import HERMIT.Primitive.GHC (rule,inScope,exprFreeVarsT)
+import HERMIT.Primitive.GHC (rule,inScope)
 import HERMIT.Primitive.Inline (inlineR)
-import HERMIT.Primitive.Local.Let (letSubstR)
+import HERMIT.Primitive.Local.Let (letNonRecSubstR)
 
 import HERMIT.Core
 import HERMIT.Context
@@ -81,7 +79,7 @@ cleanupUnfoldR = do
                     LT -> mkCoreLams (drop lenargs vs) body
                     _  -> body
         bnds = zipWith NonRec vs args
-    body'' <- andR (replicate (length bnds) letSubstR) <<< return (mkCoreLets bnds body')
+    body'' <- andR (replicate (length bnds) letNonRecSubstR) <<< return (mkCoreLets bnds body')
     return $ case comp of
                 GT -> mkCoreApps body'' $ drop lenvs args
                 _  -> body''
@@ -136,9 +134,9 @@ unfoldStashR label = setFailMsg "Inlining stashed definition failed: " $
     do (c, Var v) <- exposeT
        constT $ do Def i rhs <- lookupDef label
                    if idName i == idName v -- TODO: Is there a reason we're not just using equality on Id?
-                   then ifM ((all (inScope c) . varSetElems) <$> apply exprFreeVarsT c rhs)
-                            (return rhs)
-                            (fail "some free variables in stashed definition are no longer in scope.")
+                   then if all (inScope c) $ varSetElems $ freeVarsExpr rhs
+                          then return rhs
+                          else fail "some free variables in stashed definition are no longer in scope."
                    else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v
 
 showStashT :: Injection CoreDef a => PrettyC -> PrettyH a -> Translate c HermitM a DocH

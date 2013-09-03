@@ -6,9 +6,8 @@ bash
 { rhs-of 'work
   alpha-lam 'xs
   lam-body
-  any-td case-float-arg
   eta-expand 'acc
   lam-body
-  bash-extended-with (foreward ww-result-fusion <+ apply-rules ["repH ++", "repH (:)", "repH []"])
+  bash-extended-with (push 'repH <+ push 'absH <+ push 'work <+ foreward ww-result-fusion <+ apply-rules ["repH ++", "repH (:)", "repH []"])
 }
 one-td (unfold 'absH)

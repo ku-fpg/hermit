@@ -18,11 +18,9 @@ import Control.Applicative ((<$>))
 
 import Data.Char (isSpace)
 
-import GhcPlugins (TyCon(..), Coercion(..), Var(..), ModGuts, CoreExpr, CoreAlt, CoreBind, AltCon(..), KindOrType, Outputable, Name, mg_module, showPpr, isLocalId, isTyVar, isCoVar, isDeadBinder, coercionKind, isFunTyCon, listTyCon, isTupleTyCon, getName)
-
 import HERMIT.Context
 import HERMIT.Core
-import HERMIT.GHC
+import HERMIT.GHC hiding ((<+>), (<>), ($$), ($+$), sep, hsep, empty, nest, vcat, char, text, keyword, hang)
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Syntax

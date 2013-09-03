@@ -6,13 +6,13 @@ module HERMIT.Primitive.Local.Bind
        )
 where
 
-import GhcPlugins
-
+import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 
 import HERMIT.Primitive.Common
+
 ------------------------------------------------------------------------------
 
 -- | Externals for manipulating binding groups.
@@ -41,7 +41,7 @@ recToNonrecR :: MonadCatch m => Rewrite c m CoreBind
 recToNonrecR = prefixFailMsg "Converting singleton recursive binding to non-recursive binding failed: " $
                withPatFailMsg (wrongExprForm "Rec [Def v e]") $
   do Rec [(v,e)] <- idR
-     guardMsg (v `notElemVarSet` exprFreeIds e) ("'" ++ uqName v ++ " is recursively defined.")
+     guardMsg (v `notElemVarSet` freeIdsExpr e) ("'" ++ uqName v ++ " is recursively defined.")
      return (NonRec v e)
 
 ------------------------------------------------------------------------------

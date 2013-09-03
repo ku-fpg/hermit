@@ -2,9 +2,8 @@
 module HERMIT.Primitive.Function
     ( externals
     , staticArgR
-    ) where
-
-import GhcPlugins as GHC hiding (varName)
+    )
+where
 
 import Control.Arrow
 

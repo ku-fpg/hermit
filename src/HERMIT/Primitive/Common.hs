@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ScopedTypeVariables, FlexibleContexts #-}
+{-# LANGUAGE CPP, ScopedTypeVariables, FlexibleContexts, LambdaCase #-}
 
 -- | Note: this module should NOT export externals. It is for common
 --   transformations needed by the other primitive modules.
@@ -41,8 +41,6 @@ module HERMIT.Primitive.Common
     )
 
 where
-
-import GhcPlugins
 
 import Data.List
 import Data.Monoid
@@ -100,7 +98,7 @@ callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >>= \_ -> const
 callDataConT :: MonadCatch m => Translate c m CoreExpr (DataCon, [Type], [CoreExpr])
 callDataConT = prefixFailMsg "callDataConT failed:" $
 #if __GLASGOW_HASKELL__ > 706
-    do mb <- contextfreeT $ \ e -> let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (exprFreeVars e) ])
+    do mb <- contextfreeT $ \ e -> let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (localFreeVarsExpr e) ])
                                    in return $ exprIsConApp_maybe (in_scope, idUnfolding) e
        maybe (fail "not a datacon application.") return mb
 #else

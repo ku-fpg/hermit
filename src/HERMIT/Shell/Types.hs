@@ -2,8 +2,6 @@
 
 module HERMIT.Shell.Types where
 
-import qualified GhcPlugins as GHC
-
 import Control.Concurrent.STM
 import Control.Monad.State
 import Control.Monad.Error
@@ -15,6 +13,7 @@ import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.Dictionary
 import HERMIT.External
+import qualified HERMIT.GHC as GHC
 import HERMIT.Kernel.Scoped
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common

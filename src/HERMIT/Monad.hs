@@ -27,10 +27,10 @@ import Prelude hiding (lookup)
 
 import Data.Map
 
-import GhcPlugins hiding (empty)
-import MonadUtils       -- from GHC
+import MonadUtils (MonadIO)
 
 import Control.Monad
+import Control.Applicative
 import Control.Arrow
 
 import Language.KURE
@@ -38,7 +38,7 @@ import Language.KURE
 import HERMIT.Core
 import HERMIT.Context
 import HERMIT.Kure.SumTypes
-import HERMIT.GHC (uqName)
+import HERMIT.GHC
 
 ----------------------------------------------------------------------------
 

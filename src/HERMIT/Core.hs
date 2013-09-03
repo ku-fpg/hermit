@@ -39,6 +39,18 @@ module HERMIT.Core
           , defId
           , altVars
 
+          -- * Collecting free variables
+          -- $freeVarsNote
+          , freeVarsProg
+          , freeVarsBind
+          , freeVarsDef
+          , freeVarsExpr
+          , freeVarsAlt
+          , freeVarsType
+          , freeVarsCoercion
+          , localFreeVarsExpr
+          , freeIdsExpr
+
           -- * Utilities
           , isCoArg
           , exprKindOrType
@@ -59,8 +71,6 @@ module HERMIT.Core
 
 import Language.KURE.Combinators.Monad
 import Language.KURE.MonadCatch
-
-import GhcPlugins
 
 import HERMIT.GHC
 
@@ -225,11 +235,11 @@ altAlphaEq (c1,vs1,e1) (c2,vs2,e2) = c1 == c2 && eqExprX id_unf env e1 e2
     inScopeSet  = mkInScopeSet $ exprsFreeVars [e1,e2]
     env         = rnBndrs2 (mkRnEnv2 inScopeSet) vs1 vs2
 
--- | Alpha Equality of 'Type's.
+-- | Alpha equality of types.
 typeAlphaEq :: Type -> Type -> Bool
 typeAlphaEq = eqType
 
--- | Alpha Equality of 'Coercion's.
+-- | Alpha equality of coercions.
 coercionAlphaEq :: Coercion -> Coercion -> Bool
 coercionAlphaEq = coreEqCoercion
 
@@ -254,6 +264,54 @@ defId (Def i _) = i
 -- | List the variables bound by a case alternative.
 altVars :: CoreAlt -> [Var]
 altVars (_,vs,_) = vs
+
+-----------------------------------------------------------------------
+
+-- $freeVarsNote
+-- The GHC Function exprFreeVars defined in "CoreFVs" only returns *locally-defined* free variables.
+-- In HERMIT, this is typically not what we want, so we define our own functions.
+-- We reuse some of the functionality in "CoreFVs", but alas much of it is not exposed, so we have to reimplement some of it.
+
+-- | Find all free variables in an expression.
+freeVarsExpr :: CoreExpr -> VarSet
+freeVarsExpr = exprSomeFreeVars (const True)
+
+-- | Find all free identifiers in an expression.
+freeIdsExpr :: CoreExpr -> IdSet
+freeIdsExpr = exprSomeFreeVars isId
+
+-- | Find all locally defined free variables in an expression.
+localFreeVarsExpr :: CoreExpr -> VarSet
+localFreeVarsExpr = exprSomeFreeVars isLocalVar
+
+-- | Find all free identifiers in a binding group, which excludes any variables bound in the group.
+freeVarsBind :: CoreBind -> VarSet
+freeVarsBind (NonRec v e) = freeVarsExpr e `unionVarSet` varTypeTyVars v
+freeVarsBind (Rec defs)   = let (bs,es) = unzip defs
+                             in delVarSetList (unionVarSets $ map freeVarsExpr es) bs
+                                `unionVarSet`  unionVarSets (map varTypeTyVars bs)
+
+-- | Find all free variables is a recursive definition, which excludes the bound variable.
+freeVarsDef :: CoreDef -> VarSet
+freeVarsDef (Def v e) = delVarSet (freeVarsExpr e) v `unionVarSet` varTypeTyVars v
+
+-- | Find all free variables in a case alternative, which excludes any variables bound in the alternative.
+freeVarsAlt :: CoreAlt -> VarSet
+freeVarsAlt (_,bs,e) = delVarSetList (freeVarsExpr e) bs `unionVarSet`  unionVarSets (map varTypeTyVars bs)
+
+-- | Find all free variables in a program.
+freeVarsProg :: CoreProg -> VarSet
+freeVarsProg = \case
+                  ProgNil        -> emptyVarSet
+                  ProgCons bnd p -> freeVarsBind bnd `unionVarSet` delVarSetList (freeVarsProg p) (bindVars bnd)
+
+-- | Find all free variables in a type.
+freeVarsType :: Type -> TyVarSet
+freeVarsType = tyVarsOfType
+
+-- | Find all free variables in a coercion.
+freeVarsCoercion :: Coercion -> VarSet
+freeVarsCoercion = tyCoVarsOfCo
 
 -----------------------------------------------------------------------
 

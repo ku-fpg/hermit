@@ -15,12 +15,10 @@ module HERMIT.Kernel
 
 import Prelude hiding (lookup)
 
-import GhcPlugins hiding (singleton, empty)
-
 import HERMIT.Context
 import HERMIT.Monad
 import HERMIT.Kure
-import HERMIT.GHC
+import HERMIT.GHC hiding (singleton, empty)
 
 import Data.Map
 import Control.Concurrent

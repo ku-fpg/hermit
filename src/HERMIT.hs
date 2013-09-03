@@ -1,7 +1,6 @@
 module HERMIT (plugin) where
 
-import GhcPlugins
-
+import HERMIT.GHC
 import HERMIT.Optimize
 
 plugin :: Plugin

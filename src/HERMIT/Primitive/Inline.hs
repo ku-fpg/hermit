@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, TupleSections, FlexibleContexts #-}
+{-# LANGUAGE CPP, TupleSections, FlexibleContexts, ScopedTypeVariables #-}
 module HERMIT.Primitive.Inline
          ( -- * Inlining
            externals
@@ -16,7 +16,6 @@ module HERMIT.Primitive.Inline
 
 where
 
-import GhcPlugins
 #if __GLASGOW_HASKELL__ > 706
 #else
 import TcType (tcSplitDFunTy)
@@ -24,6 +23,7 @@ import TcType (tcSplitDFunTy)
 
 import Control.Arrow
 import Control.Applicative
+import Control.Monad
 
 import HERMIT.Context
 import HERMIT.Core
@@ -33,7 +33,6 @@ import HERMIT.Kure
 import HERMIT.Monad
 
 import HERMIT.Primitive.Common
-import HERMIT.Primitive.GHC hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 
@@ -95,8 +94,8 @@ configurableInlineR config p =
    do b <- varT p
       guardMsg b "identifier does not satisfy predicate."
       (e,d) <- varT (getUnfoldingT config)
-      return e >>> (setFailMsg "values in inlined expression have been rebound." $
-                    accepterR (extractT $ ensureDepthT d))
+      setFailMsg "values in inlined expression have been rebound."
+        (return e >>> accepterR (ensureDepthT d))
 
 
 -- TODO: The comment says "above a given depth", but the code checks the depths are <= a given depth.
@@ -105,13 +104,12 @@ configurableInlineR config p =
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
 -- Assumes minimum depth is 0.
-ensureDepthT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => BindingDepth -> Translate c m Core Bool
-ensureDepthT d = do
-    frees <- promoteT exprFreeVarsT
-    ds <- collectT $ promoteExprT $ varT $ do i <- idR
-                                              guardM (i `elemVarSet` frees)
-                                              varBindingDepthT i
-    return $ all (<= d) ds
+ensureDepthT :: forall c m. (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => BindingDepth -> Translate c m CoreExpr Bool
+ensureDepthT d =
+  do frees <- arr localFreeVarsExpr
+     let collectDepthsT :: Translate c m Core [BindingDepth]
+         collectDepthsT = collectT $ promoteExprT $ varT (acceptR (`elemVarSet` frees) >>> readerT varBindingDepthT)
+     all (<= d) `liftM` extractT collectDepthsT
 
 getUnfoldingT :: ReadBindings c
               => InlineConfig

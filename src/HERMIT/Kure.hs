@@ -82,8 +82,6 @@ module HERMIT.Kure
        )
 where
 
-import GhcPlugins hiding (empty)
-
 import Language.KURE
 import Language.KURE.BiTranslate
 import Language.KURE.Lens

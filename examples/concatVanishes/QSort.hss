@@ -1,3 +1,2 @@
-flatten-module
-consider 'qsort
-{ load-and-run "ConcatVanishes.hss" }
+define-script "consider-target-function" "consider 'qsort"
+load-and-run "ConcatVanishes.hss"

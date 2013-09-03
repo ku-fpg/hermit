@@ -21,8 +21,6 @@ import Data.Monoid (mempty)
 
 import Control.Arrow (arr, (>>>))
 
-import GhcPlugins as GHC
-
 import HERMIT.Core
 import HERMIT.Context
 import HERMIT.Kure

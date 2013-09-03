@@ -38,8 +38,6 @@ module HERMIT.Context
 
 import Prelude hiding (lookup)
 
-import GhcPlugins hiding (empty)
-
 import Data.Monoid (mempty)
 import Data.Map hiding (map, foldr, filter)
 
@@ -49,7 +47,7 @@ import Language.KURE
 import Language.KURE.ExtendableContext
 
 import HERMIT.Core
-import HERMIT.GHC
+import HERMIT.GHC hiding (empty)
 
 ------------------------------------------------------------------------
 

@@ -8,8 +8,6 @@ bash
   lam-body
   eta-expand 'acc
   lam-body
-  one-td (push 'repH)
-  case-float-app
-  bash-extended-with (foreward ww-result-fusion <+ apply-rules ["repH ++", "repH (:)", "repH []"])
+  bash-extended-with (push 'repH <+ foreward ww-result-fusion <+ apply-rules ["repH ++", "repH (:)", "repH []"])
 }
 one-td (unfold 'absH)

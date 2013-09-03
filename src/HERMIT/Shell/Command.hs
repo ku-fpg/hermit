@@ -12,8 +12,6 @@ module HERMIT.Shell.Command
     , getFocusPath
     ) where
 
-import qualified GhcPlugins as GHC
-
 import Control.Applicative
 import Control.Arrow hiding (loop)
 import Control.Concurrent
@@ -33,6 +31,7 @@ import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.Dictionary
 import HERMIT.External
+import qualified HERMIT.GHC as GHC
 import HERMIT.Interp
 import HERMIT.Kernel (queryK)
 import HERMIT.Kernel.Scoped
