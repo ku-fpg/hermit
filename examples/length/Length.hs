@@ -1,11 +1,11 @@
-module Main (main,wrap,unwrap) where
+module Main (main,abs,rep) where
 
 import Prelude hiding (length,abs)
 
 import Data.Function (fix)
 
 length :: [a] -> Int
-length []     = 0
+length []     = zero
 length (a:as) = length as + 1
 
 main :: IO ()
@@ -20,53 +20,22 @@ main = print (length [1..1000000])
 
 -- This definition, despite being tail recursive, still stack overflows.
 -- The addition of the "seq" is crucial.
-length' :: [a] -> Int
-length' as = work as 0
-  where
-    work []     acc = acc
-    work (b:bs) acc = work bs (1 + acc)
-
-unwrap :: ([a] -> Int) -> [a] -> Int -> Int
-unwrap l = rep . l
-
-wrap :: ([a] -> Int -> Int) -> [a] -> Int
-wrap l = abs . l
+-- length' :: [a] -> Int
+-- length' as = work as zero
+--   where
+--     work []     acc = acc
+--     work (b:bs) acc = work bs (1 + acc)
 
 rep :: Int -> Int -> Int
-rep n acc = n + acc
+rep n = (n +)
 
 abs :: (Int -> Int) -> Int
-abs f = f 0
+abs f = f zero
 
-{-
-Assumption A
+{-# NOINLINE zero #-}
+zero :: Int
+zero = 0
 
-  abs . rep == id
-<=>
-  abs (rep n) == n
-<=>
-  rep n 0 == n
-<=>
-  n + 0 == n
-<=>
-  n == n
-<=>
-  True
--}
-
-
-{-# RULES "rep-distr" forall m n. rep (m + n) = rep m . rep n #-}
-{-
-  rep (m + n) == rep m . rep n
-<=>
-  rep (m + n) acc == rep m (rep n) acc
-
-
-  rep (m + n) acc
-=
-  m + n + acc
-=
-  rep m (n + acc)
-=
-  rep m (rep n acc)
--}
+{-# RULES "+ zero" forall n. n + zero = n #-}
+{-# RULES "zero +" forall n. zero + n = n #-}
+{-# RULES "assocLtoR" forall l m n. (l + m) + n = l + (m + n) #-}

@@ -1,10 +1,12 @@
+load-as-rewrite "WWA" "WW-Ass-A.hss"
 flatten-module
 consider 'length
-ww-split-param-unsafe 1 [| wrap |] [|unwrap |]
+static-arg
+consider let
+{ [let-bind, rec-def 0]
+   ww-result-split [| abs |] [| rep |] (ww-result-AssA-to-AssC WWA)
+}
 bash
-any-call (unfold 'wrap)
-any-call (unfold 'unwrap)
-simplify
 { rhs-of 'work
   alpha-lam 'as
   lam-body
@@ -12,16 +14,15 @@ simplify
   eta-expand 'acc
   lam-body
   case-float-app
-  { [case-alt 0, alt-rhs]
-    unfold 'rep
-  }
-  { case-alt 1
-    alpha-alt ['b, 'bs]
-    alt-rhs
-    unfold-rule "rep-distr"
-    bash
-    { app-fun ; ww-result-fusion }
+  any-td (unfold 'rep)
+  { [case-alt 0, alt-rhs] ; unfold-rule "zero +"}
+  { [case-alt 1, alt-rhs]
+    unfold-rule "assocLtoR"
+    { app-fun ; fold 'rep ; ww-result-fusion }
     case-seq 'acc
   }
 }
-one-td (unfold 'abs)
+{ let-body
+  unfold 'abs
+  one-td (inline 'zero)
+}
