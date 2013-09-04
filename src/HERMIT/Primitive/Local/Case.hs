@@ -307,7 +307,9 @@ caseSplitR nm = prefixFailMsg "caseSplit failed: " $
 caseSeqR :: TH.Name -> Rewrite c HermitM CoreExpr
 caseSeqR nm = prefixFailMsg "caseSeq failed: " $
              do i <- matchingFreeIdT nm
-                arr $ \ e -> Case (Var i) i (exprType e) [(DEFAULT, [], e)]
+                e <- idR
+                guardMsg (not $ isTyCoArg e) "cannot case on a type or coercion."
+                return $ Case (Var i) i (exprType e) [(DEFAULT, [], e)]
 
 -- auxillary function for use by caseSplit and caseSeq
 matchingFreeIdT :: Monad m => TH.Name -> Translate c m CoreExpr Id

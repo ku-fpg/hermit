@@ -36,7 +36,7 @@ module HERMIT.Primitive.Common
     , varBindingDepthT
     , varIsOccurrenceOfT
     , exprIsOccurrenceOfT
-      -- ** Miscallaneous
+      -- Miscellaneous
     , wrongExprForm
     )
 

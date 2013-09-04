@@ -54,6 +54,7 @@ module HERMIT.Core
           -- * Utilities
           , isCoArg
           , exprKindOrType
+          , exprTypeM
           , endoFunType
           , splitFunTypeM
           , funArgResTypes
@@ -68,6 +69,8 @@ module HERMIT.Core
           , deprecatedLeftSibling
           , deprecatedRightSibling
 ) where
+
+import Control.Monad ((>=>))
 
 import Language.KURE.Combinators.Monad
 import Language.KURE.MonadCatch
@@ -321,6 +324,12 @@ exprKindOrType :: CoreExpr -> KindOrType
 exprKindOrType (Type t)  = typeKind t
 exprKindOrType e         = exprType e
 
+-- | GHC's 'exprType' function throws an error if applied to a 'Type'.
+--   This function catches that case as failure in an arbitrary monad.
+exprTypeM :: Monad m => CoreExpr -> m Type
+exprTypeM (Type _) = fail "exprTypeM failed: expression is a type, so does not have a type."
+exprTypeM e        = return (exprType e)
+
 -- | Returns @True@ iff the expression is a 'Coercion' expression at its top level.
 isCoArg :: CoreExpr -> Bool
 isCoArg (Coercion {}) = True
@@ -354,7 +363,7 @@ splitFunTypeM = maybe (fail "not a function type.") return . splitFunTy_maybe
 
 -- | Return the domain and codomain types of a function expression.
 funArgResTypes :: Monad m => CoreExpr -> m (Type,Type)
-funArgResTypes = splitFunTypeM . exprType
+funArgResTypes = exprTypeM >=> splitFunTypeM
 
 -- | Check two expressions have types @a -> b@ and @b -> a@, returning @(a,b)@.
 funsWithInverseTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)

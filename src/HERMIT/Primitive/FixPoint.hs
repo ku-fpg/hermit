@@ -17,13 +17,14 @@ import Control.Arrow
 
 import Data.Monoid (mempty)
 
+import HERMIT.Context
 import HERMIT.Core
 import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 
-import HERMIT.Primitive.Common
+import HERMIT.Primitive.Common (findIdT,wrongExprForm)
 import HERMIT.Primitive.GHC
 
 import qualified Language.Haskell.TH as TH
@@ -158,7 +159,7 @@ isFixExpr = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a ->
 --------------------------------------------------------------------------------------------------
 
 -- | f  ==>  fix f
-mkFix :: CoreExpr -> TranslateH z CoreExpr
+mkFix :: (BoundVars c, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => CoreExpr -> Translate c m z CoreExpr
 mkFix f = do t <- endoFunType f
              fixId <- findFixId
              return $ mkCoreApps (varToCoreExpr fixId) [Type t, f]
@@ -166,7 +167,8 @@ mkFix f = do t <- endoFunType f
 fixLocation :: String
 fixLocation = "Data.Function.fix"
 
-findFixId :: TranslateH a Id
+-- TODO: will crash if 'undefined' is not used (or explicitly imported) in the source file.
+findFixId :: (BoundVars c, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Translate c m a Id
 findFixId = findIdT (TH.mkName fixLocation)
 
 --------------------------------------------------------------------------------------------------

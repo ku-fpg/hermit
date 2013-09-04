@@ -32,14 +32,14 @@ unsafeReplaceR :: CoreString -> RewriteH CoreExpr
 unsafeReplaceR core =
     translate $ \ c e -> do
         e' <- parseCore core c
-        guardMsg (eqType (exprType e) (exprType e')) "expression types differ."
+        guardMsg (eqType (exprKindOrType e) (exprKindOrType e')) "expression types differ."
         return e'
 
 unsafeReplaceStashR :: String -> RewriteH CoreExpr
 unsafeReplaceStashR label = prefixFailMsg "unsafe-replace failed: " $
     contextfreeT $ \ e -> do
         Def _ rhs <- lookupDef label
-        guardMsg (eqType (exprType e) (exprType rhs)) "expression types differ."
+        guardMsg (eqType (exprKindOrType e) (exprKindOrType rhs)) "expression types differ."
         return rhs
 
 ------------------------------------------------------------------------

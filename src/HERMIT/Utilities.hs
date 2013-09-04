@@ -14,6 +14,8 @@ nodups :: Eq a => [a] -> Bool
 nodups []     = True
 nodups (a:as) = (a `notElem` as) && nodups as
 
+------------------------------------------------------------------------------
+
 -- Drew: surely this exists generally somewhere?
 -- for instance:
 --      equivalentBy ((==) `on` length) :: [[a]] -> Bool
@@ -28,6 +30,8 @@ equivalentBy eq (x:xs) = all (eq x) xs
 -- | Determine if all elements of a list are equal.
 equivalent :: Eq a => [a] -> Bool
 equivalent = equivalentBy (==)
+
+------------------------------------------------------------------------------
 
 -- | Perform the monadic action only in the 'Just' case.
 whenJust :: Monad m => (a -> m ()) -> Maybe a -> m ()

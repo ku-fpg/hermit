@@ -153,7 +153,7 @@ Library
                  data-default >= 0.5.0,
                  ghc >= 7.6,
                  haskeline >= 0.7.0.3,
-                 kure >= 2.11.9,
+                 kure >= 2.11.11,
                  marked-pretty >= 0.1,
                  mtl >= 2.1.2,
                  operational >= 0.2.2.1,
@@ -203,6 +203,7 @@ Library
        HERMIT.Primitive.Navigation
        HERMIT.Primitive.Navigation.Crumbs
        HERMIT.Primitive.New
+       HERMIT.Primitive.Undefined
        HERMIT.Primitive.Unfold
        HERMIT.Primitive.Unsafe
        HERMIT.Primitive.WorkerWrapper.Common

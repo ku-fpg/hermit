@@ -162,7 +162,7 @@ etaReduceR = prefixFailMsg "Eta-reduction failed: " $
 -- | e1 ==> (\\ v -> e1 v)
 etaExpandR :: String -> Rewrite c HermitM CoreExpr
 etaExpandR nm = prefixFailMsg "Eta-expansion failed: " $
-               contextfreeT $ \ e -> let ty = exprType e in
+               contextfreeT $ \ e -> let ty = exprKindOrType e in
         case splitFunTy_maybe ty of
           Just (argTy, _) -> do v <- newIdH nm argTy
                                 return $ Lam v (App e (varToCoreExpr v))

@@ -374,7 +374,7 @@ wwAssA mr abs rep = beforeBiR
 
     wwAR :: Type -> RewriteH CoreExpr
     wwAR tyA = do a <- idR
-                  guardMsg (exprType a `eqType` tyA) "type of expression does not match types of abs/rep."
+                  guardMsg (exprKindOrType a `eqType` tyA) "type of expression does not match types of abs/rep."
                   return $ App abs (App rep a)
 
 -- | @abs (rep a)@  \<==\>  @a@

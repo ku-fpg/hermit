@@ -27,6 +27,7 @@ import qualified HERMIT.Primitive.Kure as Kure
 import qualified HERMIT.Primitive.Local as Local
 import qualified HERMIT.Primitive.Navigation as Navigation
 import qualified HERMIT.Primitive.New as New
+import qualified HERMIT.Primitive.Undefined as Undefined
 import qualified HERMIT.Primitive.Unfold as Unfold
 import qualified HERMIT.Primitive.Unsafe as Unsafe
 import qualified HERMIT.Primitive.WorkerWrapper.Fix as WorkerWrapperFix
@@ -54,6 +55,7 @@ externals =
     ++ Local.externals
     ++ Navigation.externals
     ++ New.externals
+    ++ Undefined.externals
     ++ Unfold.externals
     ++ Unsafe.externals
     ++ WorkerWrapperFix.externals

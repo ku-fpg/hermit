@@ -339,7 +339,7 @@ wwAssA mr wrap unwrap = beforeBiR (do whenJust (verifyAssA wrap unwrap) mr
 
     wwAR :: Type -> RewriteH CoreExpr
     wwAR tyA = do x <- idR
-                  guardMsg (exprType x `eqType` tyA) "type of expression does not match types of wrap/unwrap."
+                  guardMsg (exprKindOrType x `eqType` tyA) "type of expression does not match types of wrap/unwrap."
                   return $ App wrap (App unwrap x)
 
 -- | @wrap (unwrap a)@  \<==\>  @a@
