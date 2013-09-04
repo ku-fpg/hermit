@@ -54,8 +54,6 @@ import HERMIT.GHC hiding (($$), (<>), (<+>))
 import HERMIT.Kure
 import HERMIT.Monad
 
-import System.IO
-
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
 -- A HERMIT document
@@ -371,20 +369,12 @@ renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\
 
 -------------------------------------------------------------------------------
 
-coreRenders :: [(String,Handle -> PrettyOptions -> DocH -> IO ())]
+coreRenders :: [(String, PrettyOptions -> DocH -> String)]
 coreRenders =
-        [ ("latex", \ h opts doc -> do
-                        let pretty = latexToString $ renderCode opts doc
-                        hPutStr h pretty)
-        , ("html", \ h opts doc -> do
-                        let HTML pretty = renderCode opts doc
-                        hPutStr h pretty)
-        , ("ascii", \ h opts doc -> do
-                        let (ASCII pretty) = renderCode opts doc
-                        hPutStrLn h pretty)
-        , ("debug", \ h opts doc -> do
-                        let (DebugPretty pretty) = renderCode opts doc
-                        hPutStrLn h pretty)
+        [ ("latex", \ opts doc -> latexToString $ renderCode opts doc)
+        , ("html", \ opts doc -> let HTML str = renderCode opts doc in str)
+        , ("ascii", \ opts doc -> let ASCII str = renderCode opts doc in str)
+        , ("debug", \ opts doc -> let DebugPretty str = renderCode opts doc in str)
         ]
 
 -- latexVerbatim :: String -> LaTeX -> LaTeX

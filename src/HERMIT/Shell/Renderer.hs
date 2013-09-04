@@ -13,11 +13,11 @@ import System.IO
 
 
 showRenderers :: QueryFun
-showRenderers = message $ "set-renderer " ++ show (map fst finalRenders)
+showRenderers = message $ "set-renderer " ++ show (map fst shellRenderers)
 
 changeRenderer :: String -> ShellEffect
 changeRenderer renderer = CLSModify $ \ st ->
-        case lookup renderer finalRenders of
+        case lookup renderer shellRenderers of
           Nothing -> return st          -- TODO: should fail with message
           Just r  -> return $ st { cl_render = r }
 
@@ -33,10 +33,9 @@ instance Monoid UnicodeTerminal where
         mempty = UnicodeTerminal $ \ _ _ -> return ()
         mappend (UnicodeTerminal f1) (UnicodeTerminal f2) = UnicodeTerminal $ \ h p -> f1 h p >> f2 h p
 
-finalRenders :: [(String,Handle -> PrettyOptions -> DocH -> IO ())]
-finalRenders =
-        [ ("unicode-terminal", unicodeConsole)
-        ] ++ coreRenders
+shellRenderers :: [(String,Handle -> PrettyOptions -> DocH -> IO ())]
+shellRenderers =
+        [ ("unicode-terminal", unicodeConsole) ] ++ [ (nm, \ h opts -> hPutStr h . fn opts) | (nm,fn) <- coreRenders ]
 
 unicodeConsole :: Handle -> PrettyOptions -> DocH -> IO ()
 unicodeConsole h opts doc = do

@@ -54,10 +54,20 @@ import System.IO
 import System.Console.Haskeline hiding (catch)
 import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, termLines)
 
+import qualified Text.PrettyPrint.MarkedHughesPJ as PP
+
 ----------------------------------------------------------------------------------
 
 catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
+
+cl_putStr :: MonadIO m => String -> CLM m ()
+cl_putStr str = do
+    st <- get
+    liftIO $ cl_render st stdout (cl_pretty_opts st) (PP.text str)
+
+cl_putStrLn :: MonadIO m => String -> CLM m ()
+cl_putStrLn = cl_putStr . (++"\n")
 
 fixWindow :: MonadIO m => CLM m ()
 fixWindow = do
@@ -179,7 +189,7 @@ commandLine opts behavior exts skernel sast = do
     let startup = do
             if any (`elem` ["-v0", "-v1"]) flags
                 then return ()
-                else liftIO $ putStrLn banner
+                else cl_putStrLn banner
             setRunningScript True
             sequence_ [ performMetaCommand $ case fileName of
                          "abort"  -> Abort
@@ -187,7 +197,7 @@ commandLine opts behavior exts skernel sast = do
                          _        -> loadAndRun fileName
                       | fileName <- reverse filesToLoad
                       , not (null fileName)
-                      ] `ourCatch` \ msg -> liftIO . putStrLn $ "Booting Failure: " ++ msg
+                      ] `ourCatch` \ msg -> cl_putStrLn $ "Booting Failure: " ++ msg
             setRunningScript False
 
     var <- GHC.liftIO $ atomically $ newTVar M.empty
@@ -247,7 +257,7 @@ loop completionMVar = loop'
                     if all isSpace line
                     then loop'
                     else (parseScriptCLM line >>= runScript)
-                         `ourCatch` (liftIO . putStrLn)
+                         `ourCatch` cl_putStrLn
                            >> loop'
 
 ourCatch :: MonadIO m => CLM IO () -> (String -> CLM m ()) -> CLM m ()
@@ -259,7 +269,7 @@ ourCatch m failure = do
         Left msg -> if cl_failhard st'
                     then do
                         performQuery Display
-                        liftIO $ putStrLn msg >> abortS (cl_kernel st')
+                        cl_putStrLn msg >> abortS (cl_kernel st')
                     else failure msg
         Right () -> return ()
 
@@ -389,7 +399,7 @@ performMetaCommand Resume = do
 
 performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
-    case lookup renderer finalRenders of
+    case lookup renderer shellRenderers of
       Just r -> do doc <- prefixFailMsg "Bad renderer option: " $
                             queryS (cl_kernel st) (liftPrettyH (cl_pretty_opts st) $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
                    liftIO $ do h <- openFile fileName WriteMode
@@ -447,10 +457,11 @@ lookupScript scriptName = do scripts <- gets cl_scripts
 
 -------------------------------------------------------------------------------
 
+-- TODO: merge with cl_putStr defn
 putStrToConsole :: MonadIO m => String -> CLM m ()
 putStrToConsole str = ifM (gets cl_running_script)
                           (return ())
-                          (liftIO $ putStrLn str)
+                          (cl_putStrLn str)
 
 --------------------------------------------------------
 
@@ -497,12 +508,15 @@ getNavCmd = do
 ----------------------------------------------------------------------------------------------
 
 cl_kernel_env  :: CommandLineState -> HermitMEnv
-cl_kernel_env st = mkHermitMEnv $ \ msg -> case msg of
+cl_kernel_env st =
+    let out str = do (r,_) <- GHC.liftIO $ runCLMToIO st $ cl_putStrLn str
+                     either fail return r
+    in  mkHermitMEnv $ \ msg -> case msg of
                 DebugTick    msg'      -> do
                         c <- GHC.liftIO $ tick (cl_tick st) msg'
-                        GHC.liftIO $ putStrLn $ "<" ++ show c ++ "> " ++ msg'
+                        out $ "<" ++ show c ++ "> " ++ msg'
                 DebugCore  msg' cxt core -> do
-                        GHC.liftIO $ putStrLn $ "[" ++ msg' ++ "]"
+                        out $ "[" ++ msg' ++ "]"
                         doc :: DocH <- apply (cl_pretty st) (liftPrettyC (cl_pretty_opts st) cxt) (inject core)
                         GHC.liftIO $ cl_render st stdout (cl_pretty_opts st) doc
 
