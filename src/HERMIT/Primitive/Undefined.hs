@@ -1,11 +1,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 module HERMIT.Primitive.Undefined
     ( externals
+    , verifyStrictT
     , mkUndefinedValT
     , isUndefinedValT
     , replaceWithUndefinedR
-    , propogateUndefinedR
     , errorToUndefinedR
+    , undefinedExprR
     , undefinedAppR
     , undefinedLamR
     , undefinedLetR
@@ -25,7 +26,7 @@ import HERMIT.Kure
 import HERMIT.GHC hiding ((<>))
 import HERMIT.External
 
-import HERMIT.Primitive.Common (findIdT,wrongExprForm)
+import HERMIT.Primitive.Common
 
 import qualified Language.Haskell.TH as TH
 
@@ -33,18 +34,18 @@ import qualified Language.Haskell.TH as TH
 
 externals :: [External]
 externals = map (.+ Unsafe)
-    [ external "propogate-undefined" (propogateUndefinedR :: RewriteH Core)
-        [ "Propogate any undefined values, discarding any unreachable expressions."
-        ] .+ Eval .+ Deep .+ Context
-    , external "replace-with-undefined" (promoteExprR replaceWithUndefinedR :: RewriteH Core)
+    [ external "replace-with-undefined" (promoteExprR replaceWithUndefinedR :: RewriteH Core)
         [ "Set the current expression to \"undefined\"."
         ] .+ Shallow .+ Context .+ Unsafe
     , external "error-to-undefined" (promoteExprR errorToUndefinedR :: RewriteH Core)
-        [ "error ty string ==> undefined ty"
+        [ "error ty string  ==>  undefined ty"
         ] .+ Shallow .+ Context
     , external "is-undefined-val" (promoteExprT isUndefinedValT :: TranslateH Core ())
         [ "Succeed if the current expression is an undefined value."
         ] .+ Shallow .+ Context .+ Predicate
+    , external "undefined-expr" (promoteExprR undefinedExprR :: RewriteH Core)
+        [ "undefined-app <+ undefined-lam <+ undefined-let <+ undefined-cast <+ undefined-tick <+ undefined-case"
+        ] .+ Eval .+ Shallow .+ Context
     , external "undefined-app" (promoteExprR undefinedAppR :: RewriteH Core)
         [ "(undefined ty1) e  ==>  undefined ty2"
         ] .+ Eval .+ Shallow .+ Context
@@ -60,10 +61,10 @@ externals = map (.+ Unsafe)
         , "case e of {pat_1 -> undefined ty ; pat_2 -> undefined ty ; ... ; pat_n -> undefined ty} ==> undefined ty"
         ] .+ Eval .+ Shallow .+ Context
     , external "undefined-cast" (promoteExprR undefinedCastR :: RewriteH Core)
-        [ "Cast (undefined ty1) co ==> undefined ty2"
+        [ "Cast (undefined ty1) co  ==>  undefined ty2"
         ] .+ Eval .+ Shallow .+ Context
     , external "undefined-tick" (promoteExprR undefinedTickR :: RewriteH Core)
-        [ "Tick tick (undefined ty1) ==> undefined ty1"
+        [ "Tick tick (undefined ty1)  ==>  undefined ty1"
         ] .+ Eval .+ Shallow .+ Context
     ]
 
@@ -123,10 +124,10 @@ replaceWithUndefinedR = contextfreeT exprTypeM >>= mkUndefinedValT
 
 ------------------------------------------------------------------------------------------------------
 
--- | Propogate any undefined values, discarding any unreachable expressions.
-propogateUndefinedR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m Core
-propogateUndefinedR = setFailMsg "propogate-undefined failed: nothing to do." $
-                      innermostR $ promoteExprR (undefinedAppR <+ undefinedLamR <+ undefinedLetR <+ undefinedCastR <+ undefinedTickR <+ undefinedCaseR)
+-- | undefinedExprR = undefinedAppR <+ undefinedLamR <+ undefinedLetR <+ undefinedCastR <+ undefinedTickR <+ undefinedCaseR
+undefinedExprR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
+undefinedExprR = setFailMsg "undefined-expr failed."
+                   (undefinedAppR <+ undefinedLamR <+ undefinedLetR <+ undefinedCastR <+ undefinedTickR <+ undefinedCaseR)
 
 ------------------------------------------------------------------------------------------------------
 
@@ -160,7 +161,7 @@ undefinedTickR = prefixFailMsg "undefined-tick failed: " $
                 do tickT successT isUndefinedValT (<>)
                    replaceWithUndefinedR
 
--- | undefinedCaseScrutineeR <+ undefinedCaseAltsR
+-- | undefinedCaseR = undefinedCaseScrutineeR <+ undefinedCaseAltsR
 undefinedCaseR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
 undefinedCaseR = setFailMsg "undefined-case failed" (undefinedCaseScrutineeR <+ undefinedCaseAltsR)
 
@@ -175,5 +176,16 @@ undefinedCaseAltsR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasGlobal
 undefinedCaseAltsR = prefixFailMsg "undefined-case-alts failed: " $
                      do caseAltT successT successT successT (const (successT,const successT,isUndefinedValT)) (\ _ _ _ _ -> ())
                         replaceWithUndefinedR
+
+------------------------------------------------------------------------
+
+-- | Verify that the given rewrite is a proof that the given expression is a strict function.
+verifyStrictT :: (BoundVars c, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => CoreExpr -> Rewrite c m CoreExpr -> Translate c m a ()
+verifyStrictT f r = prefixFailMsg "strictness verification failed: " $
+  do (argTy, resTy) <- constT (funArgResTypes f)
+     undefArg       <- mkUndefinedValT argTy
+     rhs            <- mkUndefinedValT resTy
+     let lhs = App f undefArg
+     verifyEqualityProofT lhs rhs r
 
 ------------------------------------------------------------------------

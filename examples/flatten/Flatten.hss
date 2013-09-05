@@ -1,4 +1,5 @@
 load-as-rewrite "WWA" "WW-Ass-A.hss"
+load-as-rewrite "StrictRepH" "StrictRepH.hss"
 flatten-module
 consider 'flatten
 ww-result-split-param 1 [| absH |] [| repH |] (ww-result-AssA-to-AssC WWA)
@@ -8,6 +9,6 @@ bash
      lam-body
      eta-expand 'acc
      lam-body
-     bash-extended-with (push 'repH <+ foreward ww-result-fusion <+ apply-rules ["repH ++", "repH (:)", "repH []"])
+     bash-extended-with (push 'repH StrictRepH <+ foreward ww-result-fusion <+ apply-rules ["repH ++", "repH (:)", "repH []"])
 }
 one-td (unfold 'absH)

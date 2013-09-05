@@ -75,9 +75,12 @@ externals =
     , external "abstract" (promoteExprR . abstractR :: TH.Name -> RewriteH Core)
         [ "Abstract over a variable using a lambda."
         , "e  ==>  (\\ x -> e) x" ]                                             .+ Shallow .+ Introduce .+ Context
-    , external "push" (promoteExprR . pushR :: TH.Name -> RewriteH Core)
+    , external "push" ((\ nm strictf -> push (Just strictf) (cmpTHName2Var nm)) :: TH.Name -> RewriteH Core -> RewriteH Core)
+        [ "Push a function 'f into a case-expression or let-expression argument,"
+        , "given a proof that f (fully saturated with type arguments) is strict." ] .+ Shallow .+ Commute
+    , external "push-unsafe" (push Nothing . cmpTHName2Var :: TH.Name -> RewriteH Core)
         [ "Push a function 'f into a case-expression or let-expression argument."
-        , "Unsafe if 'f is not strict." ] .+ Shallow .+ Commute .+ PreCondition
+        , "Requires 'f to be strict." ] .+ Shallow .+ Commute .+ PreCondition
     ]
     ++ Bind.externals
     ++ Case.externals
@@ -205,20 +208,28 @@ abstractR nm = prefixFailMsg "abstraction failed: " $
 
 ------------------------------------------------------------------------------------------------------
 
+push :: Maybe (RewriteH Core) -- ^ a proof that the function (after being applied to its type arguments) is strict
+     -> (Id -> Bool)          -- ^ a predicate to identify the function
+     -> RewriteH Core
+push mstrict p = promoteExprR (pushR (extractR `fmap` mstrict) p)
+
 -- | Push a function through a Case or Let expression.
 --   Unsafe if the function is not strict.
-pushR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
-pushR nm = prefixFailMsg "push failed: " $
-     do e <- idR
-        case collectArgs e of
-          (Var v,args) -> do
-                  guardMsg (nm `cmpTHName2Var` v) $ "cannot find name " ++ show nm
-                  guardMsg (not $ null args) $ "no argument for " ++ show nm
-                  guardMsg (all isTypeArg $ init args) $ "initial arguments are not type arguments for " ++ show nm
-                  case last args of
-                     Case {} -> caseFloatArgR
+pushR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, HasGlobalRdrEnv c)
+      => Maybe (Rewrite c HermitM CoreExpr) -- ^ a proof that the function (after being applied to its type arguments) is strict
+      -> (Id -> Bool)                       -- ^ a predicate to identify the function
+      -> Rewrite c HermitM CoreExpr
+pushR strictf p = prefixFailMsg "push failed: " $
+                  withPatFailMsg (wrongExprForm "App f e") $
+     do App f e <- idR
+        case collectArgs f of
+          (Var i,args) -> do
+                  guardMsg (p i) $ "identifier not matched."
+                  guardMsg (all isTypeArg args) $ "initial arguments are not all type arguments."
+                  case e of
+                     Case {} -> caseFloatArgR (Just (f,strictf))
                      Let {}  -> letFloatArgR
                      _       -> fail "argument is not a Case or Let."
-          _ -> fail "no function to match."
+          _ -> fail "no identifier to match."
 
 ------------------------------------------------------------------------------------------------------

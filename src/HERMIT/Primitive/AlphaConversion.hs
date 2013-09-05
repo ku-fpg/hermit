@@ -27,6 +27,7 @@ import Control.Applicative
 import Control.Arrow
 import Control.Monad (liftM, liftM2)
 import Data.Char (isDigit)
+import Data.List (intersect)
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Monoid
 
@@ -206,7 +207,8 @@ alphaAltWith ns = do vs <- arr altVars
 
 -- | Rename the specified variables in a case alternative.
 alphaAltVars :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => [Var] -> Rewrite c HermitM CoreAlt
-alphaAltVars = alphaAltVarsWith . zip (repeat Nothing)
+alphaAltVars vs = do bs <- arr altVars
+                     alphaAltVarsWith (zip (repeat Nothing) (bs `intersect` vs))
 
 -- | Rename all identifiers bound in a case alternative.
 alphaAlt :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreAlt
@@ -250,7 +252,9 @@ alphaLetWith ns = alphaLetNonRec (listToMaybe ns)
 
 -- | Rename the specified variables bound in a let.
 alphaLetVars :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => [Var] -> Rewrite c HermitM CoreExpr
-alphaLetVars vs = alphaLetNonRecVars Nothing vs <+ alphaLetRecIdsWith (zip (repeat Nothing) vs)
+alphaLetVars vs = alphaLetNonRecVars Nothing vs <+ (do bs <- letT (arr bindVars) successT const
+                                                       alphaLetRecIdsWith (zip (repeat Nothing) (bs `intersect` vs))
+                                                   )
 
 -- | Rename all identifiers bound in a Let.
 alphaLet :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr

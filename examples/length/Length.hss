@@ -1,4 +1,5 @@
 load-as-rewrite "WWA" "WW-Ass-A.hss"
+load-as-rewrite "StrictRep" "StrictRep.hss"
 flatten-module
 consider 'length
 static-arg
@@ -10,7 +11,7 @@ bash
 { rhs-of 'work
   alpha-lam 'as
   lam-body
-  push 'rep
+  push 'rep StrictRep
   eta-expand 'acc
   lam-body
   case-float-app

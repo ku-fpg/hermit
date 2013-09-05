@@ -51,9 +51,6 @@ isVar nm = varT (arr $ cmpTHName2Var nm) >>= guardM
 
 -- The types of these can probably be generalised after the Core Parser is generalised.
 
-parseCoreExprT :: CoreString -> TranslateH a CoreExpr
-parseCoreExprT = contextonlyT . parseCore
-
 -- | @prog@ ==> @'ProgCons' (v = e) prog@
 progNonRecIntroR :: String -> CoreString -> RewriteH CoreProg
 progNonRecIntroR nm expr =

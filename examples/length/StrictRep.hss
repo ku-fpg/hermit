@@ -1,0 +1,7 @@
+-- Proof that "rep" is strict
+
+unfold 'rep
+unfold '+
+bash
+unfold
+bash-extended-with undefined-expr

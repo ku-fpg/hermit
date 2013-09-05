@@ -2,5 +2,5 @@
 
 inline-all ['wrap,'unwrap]
 bash
-any-bu (case-elim-merge-alts) -- this might not be valid
+any-bu (case-elim-merge-alts)
 eta-reduce
