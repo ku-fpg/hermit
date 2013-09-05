@@ -1,6 +1,6 @@
 {
 {-# LANGUAGE CPP #-}
-module HERMIT.ParserCore (parseCore) where
+ module HERMIT.ParserCore (parseCore, parseCoreExprT) where
 
 import Control.Monad.Reader
 import Data.Char (isSpace, isDigit)
@@ -8,9 +8,11 @@ import Data.Char (isSpace, isDigit)
 import HERMIT.Context
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Kure
 import HERMIT.Monad
-import HERMIT.Primitive.Common
 import HERMIT.Syntax (isCoreInfixIdChar, isCoreIdFirstChar, isCoreIdChar)
+
+import HERMIT.Primitive.Common
 
 import Language.KURE.MonadCatch (prefixFailMsg)
 
@@ -163,4 +165,9 @@ parseCore (CoreString s) c =
     case lexer s of
         Left msg -> fail msg
         Right tokens -> runReaderT (parser tokens) c
+
+-- | Parse a 'CoreString' to a 'CoreExpr', using the current context.
+parseCoreExprT :: CoreString -> TranslateH a CoreExpr
+parseCoreExprT = contextonlyT . parseCore
+
 }

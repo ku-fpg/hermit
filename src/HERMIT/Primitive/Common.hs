@@ -3,8 +3,10 @@
 -- | Note: this module should NOT export externals. It is for common
 --   transformations needed by the other primitive modules.
 module HERMIT.Primitive.Common
-    ( -- * Utility Transformations
-      applyInContextT
+    ( -- * Equational Reasoning Support
+      verifyEqualityProofT
+      -- * Utility Transformations
+    , applyInContextT
       -- ** Finding function calls.
     , callT
     , callPredT
@@ -248,5 +250,14 @@ findIdBuiltIn = go . showName
 --   Argument 'String' should be the desired form of the expression.
 wrongExprForm :: String -> String
 wrongExprForm form = "Expression does not have the form: " ++ form
+
+------------------------------------------------------------------------------
+
+-- | Given two expressions, and a rewrite from the former to the latter, verify that rewrite.
+verifyEqualityProofT :: MonadCatch m => CoreExpr -> CoreExpr -> Rewrite c m CoreExpr -> Translate c m a ()
+verifyEqualityProofT sourceExpr targetExpr r =
+  prefixFailMsg "equality verification failed: " $
+  do resultExpr <- r <<< return sourceExpr
+     guardMsg (exprAlphaEq targetExpr resultExpr) "result of running proof on lhs of equality does not match rhs of equality."
 
 ------------------------------------------------------------------------------

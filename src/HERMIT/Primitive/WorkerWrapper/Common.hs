@@ -2,13 +2,11 @@ module HERMIT.Primitive.WorkerWrapper.Common where
 
 import Control.Arrow
 
-import HERMIT.Core
 import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
-
-import HERMIT.Primitive.New -- TODO: Sort out heirarchy
+import HERMIT.ParserCore
 
 --------------------------------------------------------------------------------------------------
 
@@ -33,14 +31,5 @@ parse2beforeBiR f s1 s2 = beforeBiR (parseCoreExprT s1 &&& parseCoreExprT s2) (u
 
 parse3beforeBiR :: (CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH a) -> CoreString -> CoreString -> CoreString -> BiRewriteH a
 parse3beforeBiR f s1 s2 s3 = beforeBiR ((parseCoreExprT s1 &&& parseCoreExprT s2) &&& parseCoreExprT s3) ((uncurry.uncurry) f)
-
---------------------------------------------------------------------------------------------------
-
--- | Given two expressions, and a rewrite from the former to the latter, verify that rewrite.
-verifyEqualityProofT :: CoreExpr -> CoreExpr -> RewriteH CoreExpr -> TranslateH a ()
-verifyEqualityProofT sourceExpr targetExpr r =
-  prefixFailMsg "equality verification failed: " $
-  do resultExpr <- r <<< return sourceExpr
-     guardMsg (exprAlphaEq targetExpr resultExpr) "result of running proof on lhs of equality does not match rhs of equality."
 
 --------------------------------------------------------------------------------------------------

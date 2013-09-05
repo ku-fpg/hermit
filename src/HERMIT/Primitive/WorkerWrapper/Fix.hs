@@ -22,13 +22,13 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Utilities
+import HERMIT.ParserCore
 
 import HERMIT.Primitive.AlphaConversion
 import HERMIT.Primitive.Common
 import HERMIT.Primitive.Function
 import HERMIT.Primitive.Local
 import HERMIT.Primitive.Navigation
-import HERMIT.Primitive.New -- TODO: Sort out heirarchy
 import HERMIT.Primitive.FixPoint
 import HERMIT.Primitive.Unfold
 

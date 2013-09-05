@@ -40,11 +40,13 @@ import HERMIT.Kure
 import HERMIT.GHC
 import HERMIT.External
 import HERMIT.Utilities
+import HERMIT.ParserCore
 
 import HERMIT.Primitive.Common
 import HERMIT.Primitive.Inline hiding (externals)
 import HERMIT.Primitive.AlphaConversion hiding (externals)
 import HERMIT.Primitive.Fold (foldVarR)
+import HERMIT.Primitive.Undefined (verifyStrictT)
 
 import qualified Language.Haskell.TH as TH
 
@@ -56,7 +58,13 @@ externals :: [External]
 externals =
     [ external "case-float-app" (promoteExprR caseFloatAppR :: RewriteH Core)
         [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow
-    , external "case-float-arg" (promoteExprR caseFloatArgR :: RewriteH Core)
+    , external "case-float-arg" ((\ f strict -> promoteExprR (caseFloatArg (Just (f, Just strict)))) :: CoreString -> RewriteH Core -> RewriteH Core)
+        [ "For a specific f, given a proof that f is strict, then"
+        , "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow
+    , external "case-float-arg-unsafe" ((\ f -> promoteExprR (caseFloatArg (Just (f, Nothing)))) :: CoreString -> RewriteH Core)
+        [ "For a specific f,"
+        , "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
+    , external "case-float-arg-unsafe" (promoteExprR (caseFloatArg Nothing) :: RewriteH Core)
         [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
     , external "case-float-case" (promoteExprR caseFloatCaseR :: RewriteH Core)
         [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval
@@ -65,7 +73,7 @@ externals =
     , external "case-float-let" (promoteExprR caseFloatLetR :: RewriteH Core)
         [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow
     , external "case-float" (promoteExprR caseFloatR :: RewriteH Core)
-        [ "Float a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
+        [ "case-float = case-float-app <+ case-float-case <+ case-float-let <+ case-float-cast" ]    .+ Commute .+ Shallow
     , external "case-unfloat" (promoteExprR caseUnfloatR :: RewriteH Core)
         [ "Unfloat a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
     , external "case-unfloat-args" (promoteExprR caseUnfloatArgsR :: RewriteH Core)
@@ -142,19 +150,37 @@ caseFloatAppR = prefixFailMsg "Case floating from App function failed: " $
           (\(Case s b _ty alts) v -> let newTy = exprType (App (case head alts of (_,_,f) -> f) v)
                                      in Case s b newTy $ mapAlts (flip App v) alts)
 
+caseFloatArg :: Maybe (CoreString, Maybe (RewriteH Core)) -> RewriteH CoreExpr
+caseFloatArg Nothing                 = caseFloatArgR Nothing
+caseFloatArg (Just (f_str, mstrict)) =
+  do f <- parseCoreExprT f_str
+     caseFloatArgR (Just (f, extractR <$> mstrict))
+
 -- | @f (case s of alt1 -> e1; alt2 -> e2)@ ==> @case s of alt1 -> f e1; alt2 -> f e2@
 --   Only safe if @f@ is strict.
-caseFloatArgR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseFloatArgR = prefixFailMsg "Case floating from App argument failed: " $
-  do
-    captures    <- appT (arr freeVarsExpr) (map mkVarSet <$> caseAltVarsT) (map . intersectVarSet)
-    wildCapture <- appT (arr freeVarsExpr) caseWildIdT (flip elemVarSet)
-    appT idR
-         ((if not wildCapture then idR else alphaCaseBinder Nothing)
-          >>> caseAllR idR idR idR (\i -> if isEmptyVarSet (captures !! i) then idR else alphaAlt)
-         )
-         (\f (Case s b _ty alts) -> let newTy = exprType (App f (case head alts of (_,_,e) -> e))
-                                    in Case s b newTy $ mapAlts (App f) alts)
+caseFloatArgR :: (ExtendPath c Crumb, AddBindings c, BoundVars c, HasGlobalRdrEnv c)
+              => Maybe (CoreExpr, Maybe (Rewrite c HermitM CoreExpr)) -- ^ Maybe the function to float past, and maybe a proof of its strictness.
+              -> Rewrite c HermitM CoreExpr
+caseFloatArgR mfstrict = prefixFailMsg "Case floating from App argument failed: " $
+                         withPatFailMsg "App f (Case s w ty alts)" $
+  do App f (Case s w _ alts) <- idR
+     whenJust (\ (f', mstrict) ->
+                     do guardMsg (exprAlphaEq f f') "given function does not match current application."
+                        whenJust (verifyStrictT f) mstrict
+              )
+              mfstrict
+
+     let fvs         = freeVarsExpr f
+         altCaptures = map (intersectVarSet fvs . mkVarSet . altVars) alts
+         wildCapture = elemVarSet w fvs
+
+     if | wildCapture                   -> appAllR idR (alphaCaseBinder Nothing) >>> caseFloatArgR Nothing
+        | all isEmptyVarSet altCaptures -> let new_alts = mapAlts (App f) alts
+                                            in return $ Case s w (coreAltsType new_alts) new_alts
+        | otherwise                     -> appAllR idR (caseAllR idR idR idR (\ n -> let vs = varSetElems (altCaptures !! n)
+                                                                                      in if null vs then idR else alphaAltVars vs
+                                                                             )
+                                                       ) >>> caseFloatArgR Nothing
 
 -- | case (case s1 of alt11 -> e11; alt12 -> e12) of alt21 -> e21; alt22 -> e22
 --   ==>
@@ -190,10 +216,11 @@ caseFloatCastR = prefixFailMsg "Case float from cast failed: " $
        let alts' = mapAlts (flip Cast co) alts
        return $ Case s bnd (coreAltsType alts') alts'
 
--- | Float a Case whatever the context.
+-- | caseFloatR = caseFloatAppR <+ caseFloatCaseR <+ caseFloatLetR <+ caseFloatCastR
+--   Note: does NOT include caseFloatArg
 caseFloatR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatR = setFailMsg "Unsuitable expression for Case floating." $
-    caseFloatAppR <+ caseFloatArgR <+ caseFloatCaseR <+ caseFloatLetR <+ caseFloatCastR
+    caseFloatAppR <+ caseFloatCaseR <+ caseFloatLetR <+ caseFloatCastR
 
 ------------------------------------------------------------------------------
 

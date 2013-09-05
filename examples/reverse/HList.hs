@@ -16,6 +16,7 @@ absH f = f []
 
 -- Should be in a "List" module
 {-# RULES "++ []"  forall xs .  xs ++ [] = xs #-}
+{-# RULES "++ strict"           (++) undefined = undefined #-}
 
 -- The "Algebra" for repH
 {-# RULES "repH ++" forall xs ys   . repH (xs ++ ys) = repH xs . repH ys #-}
