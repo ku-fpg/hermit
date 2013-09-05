@@ -1,0 +1,33 @@
+rhs-of 'repfabs
+any-call (unfold 'rep)
+lam-body
+arg 3
+any-call (unfold 'f)
+bash
+any-call (unfold 'gmapT)
+lam-body
+{ app-arg
+  inline-all [ '$dData, '"$fData[]" ]
+  bash
+  inline-all [ '$cgmapT, '$fDataInt ]
+  bash
+  any-call (unfold 'abs)
+  bash
+  any-call (unfold 'typeOf)
+  bash
+  inline-all [ '"$fData[]" ]
+  bash
+  inline-all [ '$ctypeOf ]
+  bash
+  any-call (inline 'eqTyRep)
+  bash
+  any-call (inline 'typeOf)
+  bash
+  one-td (unfold 'eqTyRep)
+  bash
+}
+{ consider case ; case-alt 1 ; alt-rhs
+  case-split-inline 't2
+  { case-alt 0 ; alpha-alt ['f1 , 'f2 ] }
+  bash
+}

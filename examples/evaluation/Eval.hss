@@ -14,8 +14,8 @@ ww-result-split [| abs |] [| rep |] (ww-result-AssA-to-AssC WWA)
     unfold 'rep
     bash
     [lam-body, lam-body]
-    { consider case ; [case-alt 1, alt-rhs] ; abstract 'm
-      consider case ; [case-alt 1, alt-rhs] ; abstract 'n
+    { consider case ; [ case-alt 1, alt-rhs ] ; abstract 'm
+      consider case ; [ case-alt 1, alt-rhs ] ; abstract 'n
     }
     any-bu (fold 'rep)
     any-td (foreward ww-result-fusion)
