@@ -23,6 +23,7 @@ module HERMIT.Optimize
     , omToIO
     ) where
 
+import Control.Arrow
 import Control.Monad.Operational
 import Control.Monad.State hiding (guard)
 
@@ -167,8 +168,8 @@ lastPhase = guard (null . phasesLeft)
 
 display :: OM ()
 display = do
-    po <- OM $ gets cl_pretty_opts
-    OM (gets cl_pretty) >>= query . liftPrettyH po >>= liftIO . unicodeConsole stdout po
+    (po,r) <- OM $ gets $ cl_pretty_opts &&& cl_render
+    OM (gets cl_pretty) >>= query . liftPrettyH po >>= liftIO . r stdout po . Right
 
 setPretty :: PrettyH CoreTC -> OM ()
 setPretty pp = OM $ modify $ \s -> s { cl_pretty = pp }

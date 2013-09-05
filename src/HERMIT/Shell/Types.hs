@@ -161,7 +161,7 @@ data CommandLineState = CommandLineState
     { cl_cursor         :: SAST                                     -- ^ the current AST
     , cl_pretty         :: PrettyH CoreTC                           -- ^ which pretty printer to use
     , cl_pretty_opts    :: PrettyOptions                            -- ^ the options for the pretty printer
-    , cl_render         :: Handle -> PrettyOptions -> DocH -> IO () -- ^ the way of outputing to the screen
+    , cl_render         :: Handle -> PrettyOptions -> Either String DocH -> IO () -- ^ the way of outputing to the screen
     , cl_height         :: Int                                      -- ^ console height, in lines
     , cl_nav            :: Bool                                     -- ^ keyboard input the nav panel
     , cl_running_script :: Bool                                     -- ^ if running a script

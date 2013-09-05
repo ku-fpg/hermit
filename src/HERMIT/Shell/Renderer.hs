@@ -33,14 +33,14 @@ instance Monoid UnicodeTerminal where
         mempty = UnicodeTerminal $ \ _ _ -> return ()
         mappend (UnicodeTerminal f1) (UnicodeTerminal f2) = UnicodeTerminal $ \ h p -> f1 h p >> f2 h p
 
-shellRenderers :: [(String,Handle -> PrettyOptions -> DocH -> IO ())]
-shellRenderers =
-        [ ("unicode-terminal", unicodeConsole) ] ++ [ (nm, \ h opts -> hPutStr h . fn opts) | (nm,fn) <- coreRenders ]
+shellRenderers :: [(String,Handle -> PrettyOptions -> Either String DocH -> IO ())]
+shellRenderers = [ ("unicode-terminal", unicodeConsole) ]
+              ++ [ (nm, \ h opts -> either (hPutStr h) (hPutStr h . fn opts)) | (nm,fn) <- coreRenders ]
 
-unicodeConsole :: Handle -> PrettyOptions -> DocH -> IO ()
-unicodeConsole h opts doc = do
-    let (UnicodeTerminal prty) = renderCode opts doc
-    prty h (po_focus opts)
+unicodeConsole :: Handle -> PrettyOptions -> Either String DocH -> IO ()
+unicodeConsole h _    (Left str)  = hPutStr h str
+unicodeConsole h opts (Right doc) = let UnicodeTerminal r = renderCode opts doc
+                                     in r h $ po_focus opts
 
 doSGR :: [SGR] -> UnicodeTerminal
 doSGR cmds = UnicodeTerminal $ \ h _ -> hSetSGR h cmds

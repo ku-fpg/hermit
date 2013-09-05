@@ -54,8 +54,6 @@ import System.IO
 import System.Console.Haskeline hiding (catch)
 import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, termLines)
 
-import qualified Text.PrettyPrint.MarkedHughesPJ as PP
-
 ----------------------------------------------------------------------------------
 
 catch :: IO a -> (String -> IO a) -> IO a
@@ -64,7 +62,7 @@ catch = catchJust (\ (err :: IOException) -> return (show err))
 cl_putStr :: MonadIO m => String -> CLM m ()
 cl_putStr str = do
     st <- get
-    liftIO $ cl_render st stdout (cl_pretty_opts st) (PP.text str)
+    liftIO $ cl_render st stdout (cl_pretty_opts st) (Left str)
 
 cl_putStrLn :: MonadIO m => String -> CLM m ()
 cl_putStrLn = cl_putStr . (++"\n")
@@ -95,7 +93,7 @@ showWindow = do
     ifM (gets cl_running_script)
         (return ())
         (iokm2clm' "Rendering error: "
-                   (liftIO . cl_render st stdout ppOpts)
+                   (liftIO . cl_render st stdout ppOpts . Right)
                    (toASTS skernel (cl_cursor st) >>= \ ast ->
                         queryK (kernelS skernel) ast (extractT $ pathT (cl_window st) $ liftPrettyH ppOpts $ cl_pretty st) (cl_kernel_env st))
         )
@@ -371,7 +369,7 @@ performQuery (QueryString q) = do
 performQuery (QueryDocH q) = do
     st <- get
     doc <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (q (initPrettyC $ cl_pretty_opts st) $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
-    liftIO $ cl_render st stdout (cl_pretty_opts st) doc
+    liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
 performQuery (Inquiry f) = do
     st <- get
@@ -403,7 +401,7 @@ performMetaCommand (Dump fileName _pp renderer width) = do
       Just r -> do doc <- prefixFailMsg "Bad renderer option: " $
                             queryS (cl_kernel st) (liftPrettyH (cl_pretty_opts st) $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
                    liftIO $ do h <- openFile fileName WriteMode
-                               r h ((cl_pretty_opts st) { po_width = width }) doc
+                               r h ((cl_pretty_opts st) { po_width = width }) (Right doc)
                                hClose h
       _ -> throwError "dump: bad pretty-printer or renderer option"
 
@@ -518,7 +516,7 @@ cl_kernel_env st =
                 DebugCore  msg' cxt core -> do
                         out $ "[" ++ msg' ++ "]"
                         doc :: DocH <- apply (cl_pretty st) (liftPrettyC (cl_pretty_opts st) cxt) (inject core)
-                        GHC.liftIO $ cl_render st stdout (cl_pretty_opts st) doc
+                        GHC.liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
 -- tick counter
 tick :: TVar (M.Map String Int) -> String -> IO Int
