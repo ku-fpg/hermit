@@ -405,26 +405,29 @@ ppCoercionR = absPathT >>= ppCoercionPR
   where
     ppCoercionPR :: AbsolutePathH -> Translate PrettyC HermitM Coercion RetExpr
     ppCoercionPR p =
-                   reflT (ppTypeModeR >>^ normalExpr >>^ \ ty -> RetAtom $ if isEmpty ty then coText p "refl" else coChar p '<' <> ty <> coChar p '>')
-                <+ coVarCoT (RetAtom <$> ppVar)
+                   coVarCoT (RetAtom <$> ppVar)
                 <+ symCoT (ppCoercionR >>> parenExpr >>^ \ co -> RetExpr (coKeyword p "sym" <+> co))
                 <+ forAllCoT ppBinderMode ppCoercionR (retForAll p ForAllCo_Body)
                 <+ transCoT (ppCoercionR >>> parenExprExceptApp) (ppCoercionR >>> parenExprExceptApp) (\ co1 co2 -> RetExpr (co1 <+> coChar p ';' <+> co2))
-                <+ unsafeCoT (ppTypeModeR >>> parenExpr) (ppTypeModeR >>> parenExpr) (\ ty1 ty2 -> (if isEmpty ty1 && isEmpty ty2 then RetAtom else RetExpr)
-                                                                                                   (coKeyword p "unsafe" <+> ty1 <+> ty2)
-                                                     )
                 <+ nthCoT (arr show) (ppCoercionR >>> parenExpr) (\ n co -> RetExpr (coKeyword p "nth" <+> coText (p @@ NthCo_Int) n <+> co))
                 <+ instCoT (ppCoercionR >>> parenExpr &&& parenExprExceptApp) (ppTypeModeR >>> parenExprExceptApp) (\ (cop1,cop2) ty -> if isEmpty ty
                                                                                                                                          then RetExpr (coText p "inst" <+> cop1)
                                                                                                                                          else RetExpr (cop2 <+> coChar p '@' <+> ty)
                                                                                                                    )
-                <+ tyConAppCoT ppTyConCo (const ppCoercionR) (retApps p TyConApp_Arg)
                 <+ appCoT ppCoercionR ppCoercionR (retApp p AppCo_Fun AppCo_Arg)
 #if __GLASGOW_HASKELL__ > 706
 -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
+                <+ reflT (ppTypeModeR >>^ normalExpr) (\ r ty -> RetAtom $ if isEmpty ty then coText p "refl" else coChar p '<' <> coText p (showRole r ++ ":") <> ty <> coChar p '>')
+                <+ tyConAppCoT ppTyConCo (const ppCoercionR) (\ r tc -> retApps p TyConApp_Arg $ coText p (showRole r ++ ":") <> tc)
                 <+ axiomInstCoT (coAxiomName ^>> ppName CoercionColor) ppSDoc (\ _ -> ppCoercionR >>> parenExpr) (\ ax idx coes -> RetExpr (coText p "axiomInst" <+> ax <+> idx <+> sep coes))
                 <+ lrCoT ppSDoc (ppCoercionR >>> parenExpr) (\ lr co -> RetExpr (coercionColor lr <+> co))
+                -- TODO: UnivCo and SubCo
 #else
+                <+ reflT (ppTypeModeR >>^ normalExpr >>^ \ ty -> RetAtom $ if isEmpty ty then coText p "refl" else coChar p '<' <> ty <> coChar p '>')
+                <+ tyConAppCoT ppTyConCo (const ppCoercionR) (retApps p TyConApp_Arg)
+                <+ unsafeCoT (ppTypeModeR >>> parenExpr) (ppTypeModeR >>> parenExpr) (\ ty1 ty2 -> (if isEmpty ty1 && isEmpty ty2 then RetAtom else RetExpr)
+                                                                                                   (coKeyword p "unsafe" <+> ty1 <+> ty2)
+                                                     )
                 <+ axiomInstCoT (coAxiomName ^>> ppName CoercionColor) (\ _ -> ppCoercionR >>> parenExpr) (\ ax coes -> RetExpr (coText p "axiomInst" <+> ax <+> sep coes))
 #endif
 

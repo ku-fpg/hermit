@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, TypeFamilies, DeriveDataTypeable, FlexibleContexts, InstanceSigs #-}
+{-# LANGUAGE CPP, MultiParamTypeClasses, FlexibleInstances, TypeFamilies, DeriveDataTypeable, FlexibleContexts, InstanceSigs #-}
 
 module HERMIT.PrettyPrinter.Common
     ( -- * Documents
@@ -39,6 +39,9 @@ module HERMIT.PrettyPrinter.Common
       -- * Utilities
     , hlist
     , vlist
+#if __GLASGOW_HASKELL__ > 706
+    , showRole
+#endif
     ) where
 
 import Data.Char
@@ -55,6 +58,13 @@ import HERMIT.Kure
 import HERMIT.Monad
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
+
+#if __GLASGOW_HASKELL__ > 706
+showRole :: Role -> String
+showRole Nominal          = "Nominal"
+showRole Representational = "Representational"
+showRole Phantom          = "Phantom"
+#endif
 
 -- A HERMIT document
 type DocH = MDoc HermitMark

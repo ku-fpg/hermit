@@ -178,18 +178,24 @@ typeSyntaxEq _                 _                    = False
 
 -- | Syntactic Equality of 'Coercion's.
 coercionSyntaxEq :: Coercion -> Coercion -> Bool
+#if __GLASGOW_HASKELL__ > 706
+coercionSyntaxEq (Refl role1 ty1)        (Refl role2 ty2)        = role1 == role2 && typeSyntaxEq ty1 ty2
+coercionSyntaxEq (TyConAppCo role1 tc1 cos1) (TyConAppCo role2 tc2 cos2) = role1 == role2 && tc1 == tc2 && all2 coercionSyntaxEq cos1 cos2
+#else
 coercionSyntaxEq (Refl ty1)              (Refl ty2)              = typeSyntaxEq ty1 ty2
 coercionSyntaxEq (TyConAppCo tc1 cos1)   (TyConAppCo tc2 cos2)   = tc1 == tc2 && all2 coercionSyntaxEq cos1 cos2
+#endif
 coercionSyntaxEq (AppCo co11 co12)       (AppCo co21 co22)       = coercionSyntaxEq co11 co21 && coercionSyntaxEq co12 co22
 coercionSyntaxEq (ForAllCo v1 co1)       (ForAllCo v2 co2)       = v1 == v2 && coercionSyntaxEq co1 co2
 coercionSyntaxEq (CoVarCo v1)            (CoVarCo v2)            = v1 == v2
 #if __GLASGOW_HASKELL__ > 706
 coercionSyntaxEq (AxiomInstCo con1 ind1 cos1) (AxiomInstCo con2 ind2 cos2) = con1 == con2 && ind1 == ind2 && all2 coercionSyntaxEq cos1 cos2
 coercionSyntaxEq (LRCo lr1 co1)          (LRCo lr2 co2)          = lr1 == lr2 && coercionSyntaxEq co1 co2
+coercionSyntaxEq (UnivCo role1 ty11 ty12) (UnivCo role2 ty21 ty22) = role1 == role2 && typeSyntaxEq ty11 ty21 && typeSyntaxEq ty12 ty22
 #else
 coercionSyntaxEq (AxiomInstCo con1 cos1) (AxiomInstCo con2 cos2) = con1 == con2 && all2 coercionSyntaxEq cos1 cos2
-#endif
 coercionSyntaxEq (UnsafeCo ty11 ty12)    (UnsafeCo ty21 ty22)    = typeSyntaxEq ty11 ty21 && typeSyntaxEq ty12 ty22
+#endif
 coercionSyntaxEq (SymCo co1)             (SymCo co2)             = coercionSyntaxEq co1 co2
 coercionSyntaxEq (TransCo co11 co12)     (TransCo co21 co22)     = coercionSyntaxEq co11 co21 && coercionSyntaxEq co12 co22
 coercionSyntaxEq (NthCo n1 co1)          (NthCo n2 co2)          = n1 == n2 && coercionSyntaxEq co1 co2

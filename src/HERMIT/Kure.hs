@@ -67,7 +67,10 @@ module HERMIT.Kure
        , forAllCoT, forAllCoAllR, forAllCoAnyR, forAllCoOneR
        , coVarCoT, coVarCoR
        , axiomInstCoT, axiomInstCoAllR, axiomInstCoAnyR, axiomInstCoOneR
+#if __GLASGOW_HASKELL__ > 706
+#else
        , unsafeCoT, unsafeCoAllR, unsafeCoAnyR, unsafeCoOneR
+#endif
        , symCoT, symCoR
        , transCoT, transCoAllR, transCoAnyR, transCoOneR
        , nthCoT, nthCoAllR, nthCoAnyR, nthCoOneR
@@ -222,7 +225,10 @@ instance (ExtendPath c Crumb, AddBindings c) => Walker c TyCo where
                               TyConAppCo{}  -> tyConAppCoAllR idR (const $ extractR r) -- we don't descend into the TyCon
                               AppCo{}       -> appCoAllR (extractR r) (extractR r)
                               ForAllCo{}    -> forAllCoAllR idR (extractR r) -- we don't descend into the TyVar
+#if __GLASGOW_HASKELL__ > 706
+#else
                               UnsafeCo{}    -> unsafeCoAllR (extractR r) (extractR r)
+#endif
                               SymCo{}       -> symCoR (extractR r)
                               TransCo{}     -> transCoAllR (extractR r) (extractR r)
                               InstCo{}      -> instCoAllR (extractR r) (extractR r)
@@ -988,25 +994,45 @@ tyConAppOneR r rs = unwrapOneR $ tyConAppAllR (wrapOneR r) (wrapOneR . rs)
 ---------------------------------------------------------------------
 
 -- Coercions
+-- TODO: review and bring all these up-to-date for Coercions w/ Roles in 7.8
 
+#if __GLASGOW_HASKELL__ > 706
+-- | Translate a coercion of the form: @Refl@ 'Role' 'Type'
+reflT :: (ExtendPath c Crumb, Monad m) => Translate c m Type a1 -> (Role -> a1 -> b) -> Translate c m Coercion b
+reflT t f = translate $ \ c -> \case
+                                 Refl r ty -> f r <$> apply t (c @@ Refl_Type) ty
+                                 _         -> fail "not a reflexive coercion."
+
+-- | Rewrite the 'Type' child of a coercion of the form: @Refl@ 'Role' 'Type'
+reflR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Type -> Rewrite c m Coercion
+reflR r = reflT r Refl
+#else
 -- | Translate a coercion of the form: @Refl@ 'Type'
 reflT :: (ExtendPath c Crumb, Monad m) => Translate c m Type b -> Translate c m Coercion b
 reflT t = translate $ \ c -> \case
                                  Refl ty -> apply t (c @@ Refl_Type) ty
                                  _       -> fail "not a reflexive coercion."
-{-# INLINE reflT #-}
 
 -- | Rewrite the 'Type' child of a coercion of the form: @Refl@ 'Type'
 reflR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Type -> Rewrite c m Coercion
 reflR r = reflT (Refl <$> r)
+#endif
+{-# INLINE reflT #-}
 {-# INLINE reflR #-}
 
-
+#if __GLASGOW_HASKELL__ > 706
+-- | Translate a coercion of the form: @TyConAppCo@ 'Role' 'TyCon' ['Coercion']
+tyConAppCoT :: (ExtendPath c Crumb, Monad m) => Translate c m TyCon a1 -> (Int -> Translate c m Coercion a2) -> (Role -> a1 -> [a2] -> b) -> Translate c m Coercion b
+tyConAppCoT t ts f = translate $ \ c -> \case
+                                           TyConAppCo r con coes -> f r <$> apply t (c @@ TyConAppCo_TyCon) con <*> sequence [ apply (ts n) (c @@ TyConAppCo_Arg n) co | (co,n) <- zip coes [0..] ]
+                                           _                     -> fail "not a type-constructor coercion."
+#else
 -- | Translate a coercion of the form: @TyConAppCo@ 'TyCon' ['Coercion']
 tyConAppCoT :: (ExtendPath c Crumb, Monad m) => Translate c m TyCon a1 -> (Int -> Translate c m Coercion a2) -> (a1 -> [a2] -> b) -> Translate c m Coercion b
 tyConAppCoT t ts f = translate $ \ c -> \case
                                            TyConAppCo con coes -> f <$> apply t (c @@ TyConAppCo_TyCon) con <*> sequence [ apply (ts n) (c @@ TyConAppCo_Arg n) co | (co,n) <- zip coes [0..] ]
                                            _                   -> fail "not a type-constructor coercion."
+#endif
 {-# INLINE tyConAppCoT #-}
 
 -- | Rewrite all children of a coercion of the form: @TyConAppCo@ 'TyCon' ['Coercion']
@@ -1131,6 +1157,8 @@ axiomInstCoOneR r rs = unwrapOneR $ axiomInstCoAllR (wrapOneR r) (wrapOneR . rs)
 #endif
 {-# INLINE axiomInstCoOneR #-}
 
+#if __GLASGOW_HASKELL__ > 706
+#else
 -- | Translate a coercion of the form: @UnsafeCo@ 'Type' 'Type'
 unsafeCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Type a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
 unsafeCoT t1 t2 f = translate $ \ c -> \case
@@ -1152,7 +1180,7 @@ unsafeCoAnyR r1 r2 = unwrapAnyR $ unsafeCoAllR (wrapAnyR r1) (wrapAnyR r2)
 unsafeCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Type -> Rewrite c m Type -> Rewrite c m Coercion
 unsafeCoOneR r1 r2 = unwrapOneR $ unsafeCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE unsafeCoOneR #-}
-
+#endif
 
 -- | Translate a coercion of the form: @SymCo@ 'Coercion'
 symCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Coercion b -> Translate c m Coercion b

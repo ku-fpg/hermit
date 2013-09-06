@@ -214,13 +214,16 @@ coercionConstructor = \case
                          ForAllCo{}    -> "ForAllCo"
                          CoVarCo{}     -> "CoVarCo"
                          AxiomInstCo{} -> "AxiomInstCo"
-                         UnsafeCo{}    -> "UnsafeCo"
                          SymCo{}       -> "SymCo"
                          TransCo{}     -> "TransCo"
                          NthCo{}       -> "NthCo"
                          InstCo{}      -> "InstCo"
 #if __GLASGOW_HASKELL__ > 706
                          LRCo{}        -> "LRCo"
+                         SubCo{}       -> "SubCo"
+                         UnivCo{}      -> "UnivCo"
+#else
+                         UnsafeCo{}    -> "UnsafeCo"
 #endif
 
 ------------------------------------------------------------------------
@@ -395,7 +398,11 @@ lintModuleT :: TranslateH ModGuts String
 lintModuleT =
   do dynFlags <- dynFlagsT
      bnds     <- arr mg_binds
+#if __GLASGOW_HASKELL__ > 706
+     let (warns, errs)    = CoreLint.lintCoreBindings [] bnds -- [] are vars to treat as in scope, used by GHCi
+#else
      let (warns, errs)    = CoreLint.lintCoreBindings bnds
+#endif
          dumpSDocs endMsg = Bag.foldBag (\ d r -> d ++ ('\n':r)) (showSDoc dynFlags) endMsg
      if Bag.isEmptyBag errs
        then return $ dumpSDocs "Core Lint Passed" warns
@@ -409,7 +416,11 @@ lintExprT :: (BoundVars c, Monad m, HasDynFlags m) => Translate c m CoreExpr Str
 lintExprT = translate $ \ c e -> do
     dflags <- getDynFlags
     maybe (return "Core Lint Passed") (fail . showSDoc dflags)
+#if __GLASGOW_HASKELL__ > 706
+                 $ CoreLint.lintExpr (varSetElems $ boundVars c) e
+#else
                  $ CoreLint.lintUnfolding noSrcLoc (varSetElems $ boundVars c) e
+#endif
 
 specConstrR :: RewriteH ModGuts
 specConstrR = do
