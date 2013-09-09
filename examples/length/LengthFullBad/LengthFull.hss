@@ -1,0 +1,32 @@
+load-as-rewrite "WWA" "WW-Ass-A-Full.hss"
+load-as-rewrite "StrictRep" "StrictRepFull.hss"
+flatten-module
+consider 'length
+static-arg
+consider let
+{ [let-bind, rec-def 0]
+   ww-result-split [| abs |] [| rep |] (ww-result-AssA-to-AssC WWA)
+}
+bash
+{ rhs-of 'work
+  alpha-lam 'as
+  lam-body
+  push 'rep StrictRep
+  eta-expand 'acc
+  lam-body
+  case-float-app
+  any-td (unfold 'rep)
+  { [case-alt 0, alt-rhs]
+    one-td (unfold-rule "zero +")
+    case-elim-inline-scrutinee
+  }
+  { [case-alt 1, alt-rhs, case-alt 0, alt-rhs]
+    unfold-rule "assocLtoR"
+    -- TODO: doesn't work because in this version, rep needs to fold a "seq" as well
+    -- { app-fun ; fold 'rep ; ww-result-fusion }
+  }
+}
+{ let-body
+  unfold 'abs
+  one-td (inline 'zero)
+}

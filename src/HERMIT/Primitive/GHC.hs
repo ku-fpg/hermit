@@ -277,11 +277,13 @@ lookupRule :: DynFlags -> InScopeEnv
 --         ]
 
 #if __GLASGOW_HASKELL__ > 706
-rulesToRewriteH :: (ReadBindings c, HasDynFlags m, Monad m) => [CoreRule] -> Rewrite c m CoreExpr
+rulesToRewriteH :: (ReadBindings c, HasDynFlags m, MonadCatch m) => [CoreRule] -> Rewrite c m CoreExpr
 #else
-rulesToRewriteH :: (ReadBindings c, Monad m) => [CoreRule] -> Rewrite c m CoreExpr
+rulesToRewriteH :: (ReadBindings c, MonadCatch m) => [CoreRule] -> Rewrite c m CoreExpr
 #endif
-rulesToRewriteH rs = translate $ \ c e -> do
+rulesToRewriteH rs = prefixFailMsg "RulesToRewrite failed: " $
+                     withPatFailMsg "rule not matched." $
+                     translate $ \ c e -> do
     -- First, we normalize the lhs, so we can match it
     (Var fn,args) <- return $ collectArgs e
     -- Question: does this include Id's, or Var's (which include type names)

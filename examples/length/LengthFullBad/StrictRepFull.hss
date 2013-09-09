@@ -1,0 +1,9 @@
+-- Proof that "rep" is strict
+
+unfold 'rep
+{ consider alt ; alt-rhs
+  unfold '+
+  bash
+  unfold
+}
+bash-extended-with undefined-expr

@@ -1,0 +1,11 @@
+-- Worker/Wrapper (Result Variant) Assumption A:  abs (rep n) <=> n
+
+--  abs (rep n)
+                                       { unfold 'abs }
+--  rep n zero
+                                       { unfold 'rep }
+--  case zero of acc {_} -> n + zero
+                                       { case-elim-inline-scrutinee }
+--  n + zero
+                                       { unfold-rule "+ zero" }
+--  n
