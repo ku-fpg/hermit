@@ -25,6 +25,7 @@ module HERMIT.Primitive.Local.Case
     , caseElimR
     , caseElimInlineScrutineeR
     , caseElimMergeAltsR
+    , caseSeqR
     )
 where
 
@@ -147,8 +148,8 @@ caseFloatAppR = prefixFailMsg "Case floating from App function failed: " $
           >>> caseAllR idR idR idR (\i -> if isEmptyVarSet (captures !! i) then idR else alphaAlt)
          )
           idR
-          (\(Case s b _ty alts) v -> let newTy = exprType (App (case head alts of (_,_,f) -> f) v)
-                                     in Case s b newTy $ mapAlts (flip App v) alts)
+          (\(Case s b _ alts) v -> let newAlts = mapAlts (`App` v) alts
+                                    in Case s b (coreAltsType newAlts) newAlts)
 
 caseFloatArg :: Maybe (CoreString, Maybe (RewriteH Core)) -> RewriteH CoreExpr
 caseFloatArg Nothing                 = caseFloatArgR Nothing
@@ -206,7 +207,8 @@ caseFloatLetR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite 
 caseFloatLetR = prefixFailMsg "Case floating from Let failed: " $
   do vs <- letNonRecT idR caseAltVarsT mempty (\ letVar caseVars () -> letVar `elem` concat caseVars)
      let bdsAction = if not vs then idR else nonRecAllR idR alphaCase
-     letT bdsAction idR $ \ (NonRec v (Case s b _ alts)) e -> Case s b (exprType e) $ mapAlts (flip Let e . NonRec v) alts
+     letT bdsAction idR $ \ (NonRec v (Case s b _ alts)) e -> let newAlts = mapAlts (\ rhs -> Let (NonRec v rhs) e) alts
+                                                               in Case s b (coreAltsType newAlts) newAlts
 
 -- | cast (case s of p -> e) co ==> case s of p -> cast e co
 caseFloatCastR :: MonadCatch m => Rewrite c m CoreExpr
@@ -324,7 +326,8 @@ caseSplitR nm = prefixFailMsg "caseSplit failed: " $
                       aNms         = map (:[]) $ cycle ['a'..'z']
                   contextfreeT $ \ e -> do dcsAndVars <- mapM (\ dc -> (dc,) <$> sequence [ newIdH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ])
                                                               (tyConDataCons tycon)
-                                           return $ Case (Var i) i (exprType e) [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
+                                           let alts = [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
+                                           return $ Case (Var i) i (coreAltsType alts) alts
 
 -- | Force evaluation of an identifier by introducing a case.
 --   This is equivalent to adding @(seq v)@ in the source code.
@@ -336,7 +339,8 @@ caseSeqR nm = prefixFailMsg "caseSeq failed: " $
              do i <- matchingFreeIdT nm
                 e <- idR
                 guardMsg (not $ isTyCoArg e) "cannot case on a type or coercion."
-                return $ Case (Var i) i (exprType e) [(DEFAULT, [], e)]
+                let alts = [(DEFAULT, [], e)]
+                return $ Case (Var i) i (coreAltsType alts) alts
 
 -- auxillary function for use by caseSplit and caseSeq
 matchingFreeIdT :: Monad m => TH.Name -> Translate c m CoreExpr Id
