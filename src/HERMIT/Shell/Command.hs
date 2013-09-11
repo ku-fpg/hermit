@@ -4,12 +4,14 @@ module HERMIT.Shell.Command
     ( -- * The HERMIT Command-line Shell
       commandLine
     , unicodeConsole
+      -- ** Exported for hermit-web
     , performKernelEffect
     , performQuery
     , performShellEffect
     , performMetaCommand
     , cl_kernel_env
     , getFocusPath
+    , shellComplete
     ) where
 
 import Control.Applicative
