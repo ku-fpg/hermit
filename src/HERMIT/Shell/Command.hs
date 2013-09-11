@@ -25,7 +25,6 @@ import Control.Monad.Error
 import Data.Char
 import Data.Monoid
 import Data.List (intercalate, isPrefixOf, nub, partition)
-import Data.Default (def)
 import qualified Data.Map as M
 import Data.Maybe
 
@@ -36,10 +35,9 @@ import HERMIT.External
 import qualified HERMIT.GHC as GHC
 import HERMIT.Interp
 import HERMIT.Kernel (queryK)
-import HERMIT.Kernel.Scoped
+import HERMIT.Kernel.Scoped hiding (abortS, resumeS)
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
-import qualified HERMIT.PrettyPrinter.Clean as Clean
 
 import HERMIT.Primitive.GHC
 import HERMIT.Primitive.Inline
@@ -180,62 +178,45 @@ getTermDimensions = do
     return (w,h)
 
 -- | The first argument includes a list of files to load.
-commandLine :: [GHC.CommandLineOption] -> Behavior -> [External] -> ScopedKernel -> SAST -> IO ()
-commandLine opts behavior exts skernel sast = do
+commandLine :: MonadIO m => [GHC.CommandLineOption] -> Behavior -> [External] -> CLM m ()
+commandLine opts behavior exts = do
     let dict = mkDict $ shell_externals ++ exts
-    let ws_complete = " ()"
     let (flags, filesToLoad) = partition (isPrefixOf "-") opts
 
-    let startup = do
-            if any (`elem` ["-v0", "-v1"]) flags
-                then return ()
-                else cl_putStrLn banner
-            setRunningScript True
-            sequence_ [ performMetaCommand $ case fileName of
-                         "abort"  -> Abort
-                         "resume" -> Resume
-                         _        -> loadAndRun fileName
-                      | fileName <- reverse filesToLoad
-                      , not (null fileName)
-                      ] `ourCatch` \ msg -> cl_putStrLn $ "Booting Failure: " ++ msg
-            setRunningScript False
+    var <- liftIO $ atomically $ newTVar M.empty
+    (w,h) <- liftIO getTermDimensions
+    st <- get
 
-    var <- GHC.liftIO $ atomically $ newTVar M.empty
-    (w,h) <- getTermDimensions
+    let st' = st { cl_tick    = var 
+                 , cl_version = VersionStore { vs_graph = [] , vs_tags = [] }
+                 , cl_scripts = []
+                 , cl_dict    = dict
+                 , cl_pretty_opts = (cl_pretty_opts st) { po_width = w }
+                 , cl_height      = h
+                 }
+    put st'
 
-    let shellState = CommandLineState
-                       { cl_cursor         = sast
-                       , cl_pretty         = Clean.ppCoreTC
-                       , cl_pretty_opts    = def { po_width = w }
-                       , cl_render         = unicodeConsole
-                       , cl_height         = h
-                       , cl_nav            = False
-                       , cl_running_script = False
-                       , cl_tick          = var
-                       , cl_corelint      = False
-                       , cl_failhard      = False
-                       , cl_window        = mempty
-                       , cl_dict          = dict
-                       , cl_scripts       = []
-                       , cl_kernel        = skernel
-                       , cl_initSAST      = sast
-                       , cl_version       = VersionStore
-                                              { vs_graph = []
-                                              , vs_tags  = []
-                                              }
-                       }
+    completionMVar <- liftIO $ newMVar st'
 
-    completionMVar <- newMVar shellState
+    if any (`elem` ["-v0", "-v1"]) flags
+        then return ()
+        else cl_putStrLn banner
+    setRunningScript True
+    sequence_ [ performMetaCommand $ case fileName of
+                 "abort"  -> Abort
+                 "resume" -> Resume
+                 _        -> loadAndRun fileName
+              | fileName <- reverse filesToLoad
+              , not (null fileName)
+              ] `ourCatch` \ msg -> cl_putStrLn $ "Booting Failure: " ++ msg
+    setRunningScript False
+    showWindow 
+    loop behavior completionMVar
 
-    _ <- runInputTBehavior behavior
-                (setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings)
-                (evalStateT (runErrorT (runCLM (startup >> showWindow >> loop completionMVar))) shellState)
-
-    return ()
-
-loop :: (MonadIO m, m ~ InputT IO) => MVar CommandLineState -> CLM m ()
-loop completionMVar = loop'
-  where loop' = do
+loop :: (MonadIO m) => Behavior -> MVar CommandLineState -> CLM m ()
+loop behavior completionMVar = loop'
+  where ws_complete = " ()"
+        loop' = do
             st <- get
             -- so the completion can get the current state
             liftIO $ modifyMVar_ completionMVar (const $ return st)
@@ -248,7 +229,9 @@ loop completionMVar = loop'
                                                setSGR [ SetSwapForegroundBackground True ]
                                                putStrLn $ replicate (po_width (cl_pretty_opts st)) ' '
                                                setSGR [ SetSwapForegroundBackground False ] -}
-                                   lift $ getInputLine $ "hermit<" ++ show n ++ "> "
+                                   liftIO $ runInputTBehavior behavior
+                                                (setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings)
+                                                (getInputLine $ "hermit<" ++ show n ++ "> ")
 
             case maybeLine of
                 Nothing             -> performMetaCommand Resume
@@ -256,25 +239,13 @@ loop completionMVar = loop'
                 Just line           ->
                     if all isSpace line
                     then loop'
-                    else (parseScriptCLM line >>= runScript)
-                         `ourCatch` cl_putStrLn
-                           >> loop'
+                    else ((parseScriptCLM line >>= runScript) `ourCatch` cl_putStrLn) >> loop'
 
-ourCatch :: MonadIO m => CLM IO () -> (String -> CLM m ()) -> CLM m ()
-ourCatch m failure = do
-    st <- get
-    (res,st') <- liftIO $ runStateT (runErrorT (runCLM m)) st
-    put st'
-    case res of
-        Left msg -> if cl_failhard st'
-                    then do
-                        performQuery Display
-                        cl_putStrLn msg >> abortS (cl_kernel st')
-                    else failure msg
-        Right () -> return ()
+ourCatch :: MonadIO m => CLM m () -> (String -> CLM m ()) -> CLM m ()
+ourCatch m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display >> cl_putStrLn msg >> abort) (failure msg)
 
 parseScriptCLM :: Monad m => String -> CLM m Script
-parseScriptCLM = either throwError return . parseScript
+parseScriptCLM = either fail return . parseScript
 
 runScript :: MonadIO m => Script -> CLM m ()
 runScript = mapM_ runExprH
@@ -288,7 +259,7 @@ runExprH expr = do
                  QueryFun query      -> performQuery query
                  MetaCommand meta    -> performMetaCommand meta
              )
-             throwError
+             fail
              (interpExprH dict interpShellCommand expr)
 
 -------------------------------------------------------------------------------
@@ -358,7 +329,7 @@ performShellEffect (CLSModify f) = do
     opt <- liftIO (fmap Right (f st) `catch` \ str -> return (Left str))
     case opt of
         Right st' -> put st' >> showWindow
-        Left err  -> throwError err
+        Left err  -> fail err
 
 -------------------------------------------------------------------------------
 
@@ -391,12 +362,13 @@ performQuery Display = do
 
 performMetaCommand :: MonadIO m => MetaCommand -> CLM m ()
 performMetaCommand (SeqMeta ms) = mapM_ performMetaCommand ms
-performMetaCommand Abort  = gets cl_kernel >>= (liftIO . abortS)
+performMetaCommand Abort  = abort
 performMetaCommand Resume = do
     st <- get
     sast' <- applyS (cl_kernel st) occurAnalyseAndDezombifyR (cl_kernel_env st) (cl_cursor st)
-    resumeS (cl_kernel st) sast'
+    resume sast'
 
+performMetaCommand Continue = get >>= continue
 performMetaCommand (Dump fileName _pp renderer width) = do
     st <- get
     case lookup renderer shellRenderers of
@@ -405,13 +377,13 @@ performMetaCommand (Dump fileName _pp renderer width) = do
                    liftIO $ do h <- openFile fileName WriteMode
                                r h ((cl_pretty_opts st) { po_width = width }) (Right doc)
                                hClose h
-      _ -> throwError "dump: bad pretty-printer or renderer option"
+      _ -> fail "dump: bad pretty-printer or renderer option"
 
 performMetaCommand (LoadFile scriptName fileName) =
   do putStrToConsole $ "Loading \"" ++ fileName ++ "\"..."
      res <- liftIO $ try (readFile fileName)
      case res of
-       Left (err :: IOException) -> throwError ("IO error: " ++ show err)
+       Left (err :: IOException) -> fail ("IO error: " ++ show err)
        Right str -> do script <- parseScriptCLM str
                        modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
                        putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
@@ -452,7 +424,7 @@ performMetaCommand (SaveScript fileName scriptName) =
 lookupScript :: Monad m => ScriptName -> CLM m Script
 lookupScript scriptName = do scripts <- gets cl_scripts
                              case lookup scriptName scripts of
-                               Nothing     -> throwError ("No script of name " ++ scriptName ++ " is loaded.")
+                               Nothing     -> fail $ "No script of name " ++ scriptName ++ " is loaded."
                                Just script -> return script
 
 -------------------------------------------------------------------------------
@@ -509,8 +481,11 @@ getNavCmd = do
 
 cl_kernel_env  :: CommandLineState -> HermitMEnv
 cl_kernel_env st =
-    let out str = do (r,_) <- GHC.liftIO $ runCLMToIO st $ cl_putStrLn str
-                     either fail return r
+    let out str = do (r,_) <- GHC.liftIO $ runCLM st $ cl_putStrLn str
+                     either (\case CLError msg -> fail msg
+                                   _           -> fail "resume abort called from cl_putStrLn (impossible!)")
+                            return r
+                        
     in  mkHermitMEnv $ \ msg -> case msg of
                 DebugTick    msg'      -> do
                         c <- GHC.liftIO $ tick (cl_tick st) msg'

@@ -1,4 +1,4 @@
-{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, GeneralizedNewtypeDeriving, LambdaCase #-}
 module HERMIT.Optimize
     ( -- * The HERMIT Plugin
       optimize
@@ -24,6 +24,7 @@ module HERMIT.Optimize
     ) where
 
 import Control.Arrow
+import Control.Monad.Error hiding (guard)
 import Control.Monad.Operational
 import Control.Monad.State hiding (guard)
 
@@ -72,7 +73,7 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST -> do
                        , cl_running_script = False
                        , cl_tick          = error "cl_tick" -- TODO: var
                        , cl_corelint      = True
-                       , cl_failhard      = True
+                       , cl_failhard      = False
                        , cl_window        = mempty
                        , cl_dict          = error "cl_dict" -- TODO
                        , cl_scripts       = []
@@ -85,11 +86,15 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST -> do
                        }
 
     (r,st) <- omToIO initState phaseInfo opt
-    either (\ err -> putStrLn err >> abortS kernel) (\ _ -> resumeS kernel $ cl_cursor st) r
+    either (\case CLAbort         -> abortS kernel
+                  CLResume   sast -> resumeS kernel sast
+                  CLContinue _    -> putStrLn "Uncaught CLContinue! Aborting..." >> abortS kernel
+                  CLError    err  -> putStrLn err >> abortS kernel) 
+           (\ _ -> resumeS kernel $ cl_cursor st) r
 
 -- TODO - better name!
-omToIO :: CommandLineState -> PhaseInfo -> OM a -> IO (Either String a, CommandLineState)
-omToIO initState phaseInfo (OM opt) = runCLMToIO initState (eval phaseInfo opt)
+omToIO :: CommandLineState -> PhaseInfo -> OM a -> IO (Either CLException a, CommandLineState)
+omToIO initState phaseInfo (OM opt) = runCLM initState (eval phaseInfo opt)
 
 eval :: PhaseInfo -> ProgramT OInst (CLM IO) a -> CLM IO a
 eval phaseInfo comp = do
@@ -106,10 +111,7 @@ eval phaseInfo comp = do
         Query tr    :>>= k  -> do sast <- gets cl_cursor
                                   r <- queryS kernel tr env sast
                                   eval phaseInfo $ k r
-        -- TODO: rework shell so it can return to k
-        --       this will significantly simplify this code
-        --       as we can just call the shell directly here
-        Shell es os :>>= _k -> gets cl_cursor >>= liftIO . commandLine os defaultBehavior es kernel >> return undefined
+        Shell es os :>>= k -> catchContinue (commandLine os defaultBehavior es) >>= eval phaseInfo . k
         Guard p (OM m)  :>>= k  -> when (p phaseInfo) (eval phaseInfo m) >> eval phaseInfo (k ())
         Focus tp (OM m) :>>= k  -> do
             sast <- gets cl_cursor
@@ -119,6 +121,10 @@ eval phaseInfo comp = do
             r <- eval phaseInfo m                   -- run the focused computation
             runAndSave $ endScopeS kernel           -- endscope on it, so we go back to where we started
             eval phaseInfo $ k r
+
+catchContinue :: Monad m => CLM m () -> CLM m ()
+catchContinue m = catchError m (\case CLContinue st -> put st
+                                      other -> throwError other)
 
 runAndSave :: (SAST -> CLM IO SAST) -> CLM IO ()
 runAndSave f = do

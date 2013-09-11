@@ -76,6 +76,7 @@ type RewriteName = String
 data MetaCommand
    = Resume
    | Abort
+   | Continue -- exit the shell, but don't abort/resume
    | Dump String String String Int
    | LoadFile ScriptName FilePath  -- load a file on top of the current node
    | SaveFile FilePath
@@ -110,15 +111,32 @@ instance Extern ShellEffect where
 
 ----------------------------------------------------------------------------------
 
-newtype CLM m a = CLM { runCLM :: ErrorT String (StateT CommandLineState m) a }
-    deriving (MonadIO, MonadError String, MonadState CommandLineState)
+data CLException = CLAbort 
+                 | CLResume SAST 
+                 | CLContinue CommandLineState
+                 | CLError String
+
+instance Error CLException where
+    strMsg = CLError
+
+newtype CLM m a = CLM { unCLM :: ErrorT CLException (StateT CommandLineState m) a }
+    deriving (MonadIO, MonadError CLException, MonadState CommandLineState)
 
 -- | Our own custom instance of Monad for CLM m so we don't have to depend on
 -- newtype deriving to do the right thing for fail.
 instance Monad m => Monad (CLM m) where
     return = CLM . return
-    (CLM m) >>= k = CLM (m >>= runCLM . k)
-    fail = CLM . throwError
+    (CLM m) >>= k = CLM (m >>= unCLM . k)
+    fail = CLM . throwError . CLError
+
+abort :: Monad m => CLM m ()
+abort = throwError CLAbort
+
+resume :: Monad m => SAST -> CLM m ()
+resume = throwError . CLResume
+
+continue :: Monad m => CommandLineState -> CLM m ()
+continue = throwError . CLContinue
 
 instance MonadTrans CLM where
     lift = CLM . lift . lift
@@ -128,17 +146,19 @@ instance Monad m => MonadCatch (CLM m) where
     -- catchM :: m a -> (String -> m a) -> m a
     catchM m f = do
         st <- get
-        (r,st') <- lift $ runCLMToIO st m
+        (r,st') <- lift $ runCLM st m
         case r of
-            Left msg -> f msg
+            Left err -> case err of
+                            CLError msg -> f msg
+                            other -> throwError other -- rethrow abort/resume
             Right v  -> put st' >> return v
 
-runCLMToIO :: CommandLineState -> CLM m a -> m (Either String a, CommandLineState)
-runCLMToIO s = flip runStateT s . runErrorT . runCLM
+runCLM :: CommandLineState -> CLM m a -> m (Either CLException a, CommandLineState)
+runCLM s = flip runStateT s . runErrorT . unCLM
 
 -- TODO: Come up with names for these, and/or better characterise these abstractions.
 iokm2clm' :: MonadIO m => String -> (a -> CLM m b) -> IO (KureM a) -> CLM m b
-iokm2clm' msg ret m = liftIO m >>= runKureM ret (throwError . (msg ++))
+iokm2clm' msg ret m = liftIO m >>= runKureM ret (throwError . CLError . (msg ++))
 
 iokm2clm :: MonadIO m => String -> IO (KureM a) -> CLM m a
 iokm2clm msg = iokm2clm' msg return
