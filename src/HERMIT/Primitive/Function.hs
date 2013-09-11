@@ -2,6 +2,8 @@
 module HERMIT.Primitive.Function
     ( externals
     , staticArgR
+    , staticArgPredR
+    , staticArgTypesR
     )
 where
 
@@ -22,12 +24,24 @@ externals ::  [External]
 externals =
     [ external "static-arg" (promoteDefR staticArgR :: RewriteH Core)
         [ "perform the static argument transformation on a recursive function" ]
+    , external "static-arg-types" (promoteDefR staticArgTypesR :: RewriteH Core)
+        [ "perform the static argument transformation on a recursive function, only transforming type arguments" ]
     ]
 
 ------------------------------------------------------------------------------------------------------
 
 staticArgR :: forall c. (ExtendPath c Crumb, AddBindings c) => Rewrite c HermitM CoreDef
-staticArgR = prefixFailMsg "static-arg failed: " $ do
+staticArgR = staticArgPredR (const True)
+
+staticArgTypesR :: forall c. (ExtendPath c Crumb, AddBindings c) => Rewrite c HermitM CoreDef
+staticArgTypesR = staticArgPredR (isTyVar . snd)
+
+staticArgPredR :: forall c. (ExtendPath c Crumb, AddBindings c) 
+           => ((Int, Var) -> Bool) -- ^ if an arg is static, apply predicate to position and binder
+                                   --   True = transform as if it is static
+                                   --   False = consider arg to be dynamic
+           -> Rewrite c HermitM CoreDef
+staticArgPredR pr = prefixFailMsg "static-arg failed: " $ do
     Def f rhs <- idR
     let (bnds, body) = collectBinders rhs
     guardMsg (notNull bnds) "rhs is not a function"
@@ -39,13 +53,13 @@ staticArgR = prefixFailMsg "static-arg failed: " $ do
             numCalls = length callPats
             -- ensure argument is present in every call (partial applications boo)
             (ps,dbnds) = unzip [ (i,b) | (i,b,exprs) <- zip3 [0..] bnds $ argExprs ++ repeat []
-                                       , length exprs /= numCalls || isDynamic b exprs
+                                       , length exprs /= numCalls || isDynamic i b exprs
                                        ]
 
-            isDynamic _ []                      = False     -- all were static, so static
-            isDynamic b ((Var b'):es)           | b == b' = isDynamic b es
-            isDynamic b ((Type (TyVarTy v)):es) | b == v  = isDynamic b es
-            isDynamic _ _                       = True      -- not a simple repass, so dynamic
+            isDynamic i b []                      = not $ pr (i,b) -- all were static, so check predicate
+            isDynamic i b ((Var b'):es)           | b == b' = isDynamic i b es
+            isDynamic i b ((Type (TyVarTy v)):es) | b == v  = isDynamic i b es
+            isDynamic _ _ _                       = True             -- not a simple repass, so dynamic
 
         wkr <- newIdH (var2String f ++ "'") (exprType (mkCoreLams dbnds body))
 
