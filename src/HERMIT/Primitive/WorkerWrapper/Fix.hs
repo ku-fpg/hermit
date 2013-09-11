@@ -26,10 +26,10 @@ import HERMIT.ParserCore
 
 import HERMIT.Primitive.AlphaConversion
 import HERMIT.Primitive.Common
+import HERMIT.Primitive.FixPoint
 import HERMIT.Primitive.Function
 import HERMIT.Primitive.Local
 import HERMIT.Primitive.Navigation
-import HERMIT.Primitive.FixPoint
 import HERMIT.Primitive.Unfold
 
 import HERMIT.Primitive.WorkerWrapper.Common
@@ -282,27 +282,23 @@ workerWrapperSplitR mAss wrap unwrap =
 workerWrapperSplit :: Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
 workerWrapperSplit mAss wrapS unwrapS = (parseCoreExprT wrapS &&& parseCoreExprT unwrapS) >>= uncurry (workerWrapperSplitR mAss)
 
--- | As 'workerWrapperSplit' but performs the static-argument transformation for @n@ type paramaters first, providing these types as arguments to all calls of wrap and unwrap.
---   This is useful if the expression, and wrap and unwrap, all have a @forall@ type.
+-- | As 'workerWrapperSplit' but performs the static-argument transformation for @n@ static arguments first, and provides these static arguments to all calls of wrap and unwrap.
+--   This is useful if, for example, the expression, and wrap and unwrap, all have a @forall@ type.
 workerWrapperSplitParam :: Int -> Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
 workerWrapperSplitParam 0 = workerWrapperSplit
 workerWrapperSplitParam n = \ mAss wrapS unwrapS ->
-                            prefixFailMsg "worker/wrapper split (forall variant) failed: " $
-                            do guardMsg (n == 1) "currently only supports 1 type paramater."
-                               withPatFailMsg "right-hand-side of definition does not have the form: Lam t e" $
-                                 do Def _ (Lam t _) <- idR
-                                    guardMsg (isTyVar t) "first argument is not a type."
+                            prefixFailMsg "worker/wrapper split (static argument variant) failed: " $
+                            do args <- defT successT (arr collectBinders) (\ () -> varsToCoreExprs . take n . fst)
 
-                                    let splitAtDefR :: RewriteH Core
-                                        splitAtDefR = pathR [Let_Bind, Rec_Def 0] $ promoteR $
-                                                        do wrap   <- parseCoreExprT wrapS
-                                                           unwrap <- parseCoreExprT unwrapS
-                                                           let ty = Type (TyVarTy t)
-                                                           workerWrapperSplitR mAss (App wrap ty) (App unwrap ty)
+                               staticArgPosR [0..(n-1)] >>> defAllR idR (let wwSplitArgsR :: RewriteH CoreDef
+                                                                             wwSplitArgsR = do wrap   <- parseCoreExprT wrapS
+                                                                                               unwrap <- parseCoreExprT unwrapS
+                                                                                               workerWrapperSplitR mAss (mkCoreApps wrap args) (mkCoreApps unwrap args)
+                                                                          in
+                                                                             extractR $ do p <- considerConstructT LetExpr
+                                                                                           localPathR p $ promoteExprR (letRecAllR (const wwSplitArgsR) idR >>> letSubstR)
+                                                                        )
 
-                                    staticArgR >>> extractR (do p <- considerConstructT LetExpr
-                                                                localPathR p (splitAtDefR >>> promoteExprR letSubstR)
-                                                            )
 
 --------------------------------------------------------------------------------------------------
 

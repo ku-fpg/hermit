@@ -318,25 +318,21 @@ workerWrapperSplitR mAss abs rep =
 workerWrapperSplit :: Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
 workerWrapperSplit mAss absS repS = (parseCoreExprT absS &&& parseCoreExprT repS) >>= uncurry (workerWrapperSplitR mAss)
 
--- | As 'workerWrapperSplit' but performs the static-argument transformation for @n@ type paramaters first, providing these types as arguments to all calls of abs and rep.
---   This is useful if the expression, and abs and rep, all have a @forall@ type.
+-- | As 'workerWrapperSplit' but performs the static-argument transformation for @n@ static arguments first, and provides these static arguments to all calls of abs and rep.
+--   This is useful if, for example, the expression, and abs and rep, all have a @forall@ type.
 workerWrapperSplitParam :: Int -> Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
 workerWrapperSplitParam 0 = workerWrapperSplit
 workerWrapperSplitParam n = \ mAss absS repS ->
-                            prefixFailMsg "worker/wrapper split (forall variant) failed: " $
-                            do guardMsg (n == 1) "currently only supports 1 type paramater."
-                               withPatFailMsg "right-hand-side of definition does not have the form: Lam t e" $
-                                 do Def _ (Lam t _) <- idR
-                                    guardMsg (isTyVar t) "first argument is not a type."
-                                    let splitAtDefR :: RewriteH Core
-                                        splitAtDefR = pathR [Let_Bind, Rec_Def 0] $ promoteR $
-                                                        do abs  <- parseCoreExprT absS
-                                                           rep  <- parseCoreExprT repS
-                                                           let ty = Type (TyVarTy t)
-                                                           workerWrapperSplitR mAss (App abs ty) (App rep ty)
-                                    staticArgR >>> extractR (do p <- considerConstructT LetExpr
-                                                                localPathR p (splitAtDefR >>> promoteExprR letSubstR)
-                                                            )
+                            prefixFailMsg "worker/wrapper split (static argument variant) failed: " $
+                            do args <- defT successT (arr collectBinders) (\ () -> varsToCoreExprs . take n . fst)
+                               staticArgPosR [0..(n-1)] >>> defAllR idR (let wwSplitArgsR :: RewriteH CoreDef
+                                                                             wwSplitArgsR = do abs  <- parseCoreExprT absS
+                                                                                               rep  <- parseCoreExprT repS
+                                                                                               workerWrapperSplitR mAss (mkCoreApps abs args) (mkCoreApps rep args)
+                                                                          in
+                                                                             extractR $ do p <- considerConstructT LetExpr
+                                                                                           localPathR p $ promoteExprR (letRecAllR (const wwSplitArgsR) idR >>> letSubstR)
+                                                                        )
 
 --------------------------------------------------------------------------------------------------
 

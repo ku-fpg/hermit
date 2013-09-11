@@ -24,9 +24,11 @@ import HERMIT.Primitive.Common
 externals ::  [External]
 externals =
     [ external "static-arg" (promoteDefR staticArgR :: RewriteH Core)
-        [ "perform the static argument transformation on a recursive function" ]
+        [ "perform the static argument transformation on a recursive function." ]
     , external "static-arg-types" (promoteDefR staticArgTypesR :: RewriteH Core)
-        [ "perform the static argument transformation on a recursive function, only transforming type arguments" ]
+        [ "perform the static argument transformation on a recursive function, only transforming type arguments." ]
+    -- , external "static-arg-pos" (promoteDefR . staticArgPosR :: [Int] -> RewriteH Core)
+    --     [ "perform the static argument transformation on a recursive function, only transforming the arguments specified (by index)." ]
     ]
 
 ------------------------------------------------------------------------------------------------------
@@ -69,6 +71,7 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
             isStatic _ []                      = True  -- all were static
             isStatic b ((Var b'):es)           | b == b' = isStatic b es
             isStatic b ((Type (TyVarTy v)):es) | b == v  = isStatic b es
+            -- TODO? (Coercion (CoVarCo v)):es
             isStatic _ _                       = False -- not a simple repass, so dynamic
 
         chosen <- decide staticBinds

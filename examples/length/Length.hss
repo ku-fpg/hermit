@@ -2,7 +2,7 @@ load-as-rewrite "WWA" "WW-Ass-A.hss"
 load-as-rewrite "StrictRep" "StrictRep.hss"
 flatten-module
 consider 'length
-static-arg
+static-arg-types
 consider let
 { [let-bind, rec-def 0]
    ww-result-split [| abs |] [| rep |] (ww-result-AssA-to-AssC WWA)
