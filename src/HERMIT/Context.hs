@@ -29,6 +29,7 @@ module HERMIT.Context
        , findBoundVars
        , ReadBindings(..)
        , lookupHermitBinding
+       , lookupHermitBindingDepth
        , lookupHermitBindingSite
          -- ** Accessing the Global Reader Environment from the context
        , HasGlobalRdrEnv(..)
@@ -37,6 +38,8 @@ module HERMIT.Context
 ) where
 
 import Prelude hiding (lookup)
+
+import Control.Monad (liftM)
 
 import Data.Monoid (mempty)
 import Data.Map hiding (map, foldr, filter)
@@ -173,9 +176,9 @@ boundIn i c = i `member` hermitBindings c
 lookupHermitBinding :: (ReadBindings c, Monad m) => Var -> c -> m HermitBinding
 lookupHermitBinding v = maybe (fail "binding not found in HERMIT context.") return . lookup v . hermitBindings
 
--- -- | Lookup the depth of a variable's binding in a context.
--- lookupHermitBindingDepth :: (ReadBindings c, Monad m) => Var -> c -> m BindingDepth
--- lookupHermitBindingDepth v = liftM fst . lookupHermitBinding v
+-- | Lookup the depth of a variable's binding in a context.
+lookupHermitBindingDepth :: (ReadBindings c, Monad m) => Var -> c -> m BindingDepth
+lookupHermitBindingDepth v = liftM fst . lookupHermitBinding v
 
 -- | Lookup the binding for a variable in a context, ensuring it was bound at the specified depth.
 lookupHermitBindingSite :: (ReadBindings c, Monad m) => Var -> BindingDepth -> c -> m HermitBindingSite

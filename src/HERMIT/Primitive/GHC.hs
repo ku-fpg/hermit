@@ -145,7 +145,8 @@ info = do crumbs <- childrenT
                              Core (ExprCore e)      -> let tyK = exprKindOrType e
                                                         in [(if isKind tyK then "Kind: " else "Type: ") ++ showPpr dynFlags tyK] ++
                                                            case e of
-                                                             Var i -> ["Identifier Arity: " ++ show (arityOf c i)]
+                                                             Var i -> [ "Identifier Arity: " ++ show (arityOf c i)
+                                                                      , "Identifier Binding Depth: " ++ runKureM show id (lookupHermitBindingDepth i c) ]
                                                              _     -> []
                              TyCo (TypeCore ty)     -> ["Kind: " ++ showPpr dynFlags (typeKind ty)]
                              TyCo (CoercionCore co) -> ["Kind: " ++ showPpr dynFlags (coercionKind co) ]

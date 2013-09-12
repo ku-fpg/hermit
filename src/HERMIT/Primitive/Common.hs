@@ -178,7 +178,7 @@ caseAltVarsT = caseT mempty mempty mempty (\ _ -> arr altVars) (\ () () () vss -
 
 -- | Find the depth of a variable's binding.
 varBindingDepthT :: (ReadBindings c, Monad m) => Var -> Translate c m g BindingDepth
-varBindingDepthT v = (contextT >>= lookupHermitBinding v) >>^ fst
+varBindingDepthT v = contextT >>= lookupHermitBindingDepth v
 
 -- | Determine if the current variable matches the given variable, and is bound at the specified depth (helpful to detect shadowing).
 varIsOccurrenceOfT :: (ExtendPath c Crumb, ReadBindings c, Monad m) => Var -> BindingDepth -> Translate c m Var Bool
