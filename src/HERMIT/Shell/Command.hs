@@ -182,26 +182,50 @@ getTermDimensions = do
 commandLine :: MonadIO m => [GHC.CommandLineOption] -> Behavior -> [External] -> CLM m ()
 commandLine opts behavior exts = do
     let dict = mkDict $ shell_externals ++ exts
-    let (flags, filesToLoad) = partition (isPrefixOf "-") opts
+        ws_complete = " ()"
+        (flags, filesToLoad) = partition (isPrefixOf "-") opts
 
     var <- liftIO $ atomically $ newTVar M.empty
     (w,h) <- liftIO getTermDimensions
-    st <- get
 
-    let st' = st { cl_tick    = var 
-                 , cl_version = VersionStore { vs_graph = [] , vs_tags = [] }
-                 , cl_scripts = []
-                 , cl_dict    = dict
-                 , cl_pretty_opts = (cl_pretty_opts st) { po_width = w }
-                 , cl_height      = h
-                 }
-    put st'
+    -- initialize shell-instance specific parts of the state
+    -- TODO: move into another transformer layer?
+    initState <- get
+    let clState = initState { cl_tick        = var 
+                            , cl_version     = VersionStore { vs_graph = [] , vs_tags = [] }
+                            , cl_scripts     = []
+                            , cl_dict        = dict
+                            , cl_pretty_opts = (cl_pretty_opts initState) { po_width = w }
+                            , cl_height      = h
+                            }
+    put clState
 
-    completionMVar <- liftIO $ newMVar st'
+    completionMVar <- liftIO $ newMVar clState
 
+    let loop = do
+            st <- get
+            let SAST n = cl_cursor st
+            mLine <- liftIO $ if cl_nav st
+                              then getNavCmd
+                              else do modifyMVar_ completionMVar (const $ return st) -- so the completion can get the current state
+                                      runInputTBehavior 
+                                        behavior
+                                        (setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings)
+                                        (getInputLine $ "hermit<" ++ show n ++ "> ")
+
+            case mLine of
+                Nothing          -> performMetaCommand Resume
+                Just ('-':'-':_) -> loop
+                Just line        -> if all isSpace line
+                                    then loop
+                                    else (evalScript line `ourCatch` cl_putStrLn) >> loop
+
+    -- Display the banner
     if any (`elem` ["-v0", "-v1"]) flags
         then return ()
         else cl_putStrLn banner
+    
+    -- Load and run any scripts
     setRunningScript True
     sequence_ [ performMetaCommand $ case fileName of
                  "abort"  -> Abort
@@ -211,36 +235,9 @@ commandLine opts behavior exts = do
               , not (null fileName)
               ] `ourCatch` \ msg -> cl_putStrLn $ "Booting Failure: " ++ msg
     setRunningScript False
-    showWindow 
-    loop behavior completionMVar
-
-loop :: (MonadIO m) => Behavior -> MVar CommandLineState -> CLM m ()
-loop behavior completionMVar = loop'
-  where ws_complete = " ()"
-        loop' = do
-            st <- get
-            -- so the completion can get the current state
-            liftIO $ modifyMVar_ completionMVar (const $ return st)
-            -- liftIO $ print (cl_pretty st, cl_cursor (cl_session st))
-            let SAST n = cl_cursor st
-            maybeLine <- if cl_nav st
-                           then liftIO getNavCmd
-                           else do {- TODO: for an inplace CLI...
-                                   liftIO $ do setCursorPosition (cl_height st - 3) 0
-                                               setSGR [ SetSwapForegroundBackground True ]
-                                               putStrLn $ replicate (po_width (cl_pretty_opts st)) ' '
-                                               setSGR [ SetSwapForegroundBackground False ] -}
-                                   liftIO $ runInputTBehavior behavior
-                                                (setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings)
-                                                (getInputLine $ "hermit<" ++ show n ++ "> ")
-
-            case maybeLine of
-                Nothing             -> performMetaCommand Resume
-                Just ('-':'-':_msg) -> loop'
-                Just line           ->
-                    if all isSpace line
-                    then loop'
-                    else (evalScript line `ourCatch` cl_putStrLn) >> loop'
+    
+    -- Start the CLI
+    showWindow >> loop
 
 ourCatch :: MonadIO m => CLM m () -> (String -> CLM m ()) -> CLM m ()
 ourCatch m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display >> cl_putStrLn msg >> abort) (failure msg)
