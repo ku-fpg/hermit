@@ -124,6 +124,7 @@ bashComponents =
     (promoteExprR betaReduceR, "beta-reduce")                        -- O(1)
   , (promoteExprR caseReduceR, "case-reduce")                        -- O(n)
   , (promoteExprR caseReduceIdR, "case-reduce-id")                   -- O(n)
+  , (promoteExprR caseElimSeqR, "case-elim-seq")
   , (promoteExprR unfoldBasicCombinatorR, "unfold-basic-combinator") -- O(n)
   , (promoteExprR inlineCaseAlternativeR, "inline-case-alternative") -- O(n)
   , (promoteExprR etaReduceR, "eta-reduce")                          -- O(n)
