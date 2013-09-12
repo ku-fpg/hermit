@@ -1,12 +1,9 @@
 load-as-rewrite "WWA" "WW-Ass-A.hss"
+define-rewrite "WWC" "ww-result-AssA-to-AssC WWA"
 load-as-rewrite "StrictRep" "StrictRep.hss"
 flatten-module
 consider 'length
-static-arg-types
-consider let
-{ [let-bind, rec-def 0]
-   ww-result-split [| abs |] [| rep |] (ww-result-AssA-to-AssC WWA)
-}
+ww-result-split-static-arg 1 [] [| abs |] [| rep |] WWC
 bash
 { rhs-of 'work
   alpha-lam 'as
@@ -23,7 +20,6 @@ bash
     case-seq 'acc
   }
 }
-{ let-body
-  unfold 'abs
-  one-td (inline 'zero)
-}
+one-td (unfold 'abs)
+one-td (inline 'zero)
+

@@ -27,8 +27,8 @@ externals =
         [ "perform the static argument transformation on a recursive function." ]
     , external "static-arg-types" (promoteDefR staticArgTypesR :: RewriteH Core)
         [ "perform the static argument transformation on a recursive function, only transforming type arguments." ]
-    -- , external "static-arg-pos" (promoteDefR . staticArgPosR :: [Int] -> RewriteH Core)
-    --     [ "perform the static argument transformation on a recursive function, only transforming the arguments specified (by index)." ]
+    , external "static-arg-pos" (promoteDefR . staticArgPosR :: [Int] -> RewriteH Core)
+        [ "perform the static argument transformation on a recursive function, only transforming the arguments specified (by index)." ]
     ]
 
 ------------------------------------------------------------------------------------------------------

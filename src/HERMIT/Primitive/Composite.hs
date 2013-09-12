@@ -38,7 +38,7 @@ externals =
         [ "innermost (unfold-basic-combinator <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ let-elim)" ]
     , external "bash" (bashR :: RewriteH Core)
         bashHelp .+ Eval .+ Deep .+ Loop
-    , external "bash-extended-with" (bashExtendedWithR :: RewriteH Core -> RewriteH Core)
+    , external "bash-extended-with" (bashExtendedWithR :: [RewriteH Core] -> RewriteH Core)
         [ "Run \"bash\" extended with an additional rewrite.",
           "Note: be sure that the new rewrite either fails or makes progress, else this may loop."
         ] .+ Eval .+ Deep .+ Loop
@@ -75,8 +75,8 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
 bashR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
 bashR = bashUsingR (map fst bashComponents)
 
-bashExtendedWithR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core -> Rewrite c HermitM Core
-bashExtendedWithR r = bashUsingR (r : map fst bashComponents)
+bashExtendedWithR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [Rewrite c HermitM Core] -> Rewrite c HermitM Core
+bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 
 bashDebugR :: RewriteH Core
 bashDebugR = bashUsingR $ map (\ (r,nm) -> r >>> observeR nm) bashComponents

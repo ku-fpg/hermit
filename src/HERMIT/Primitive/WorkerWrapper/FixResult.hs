@@ -6,7 +6,7 @@ module HERMIT.Primitive.WorkerWrapper.FixResult
          HERMIT.Primitive.WorkerWrapper.FixResult.externals
        , workerWrapperFacBR
        , workerWrapperSplitR
-       , workerWrapperSplitParam
+       , workerWrapperSplitStaticArg
        , workerWrapperGenerateFusionR
        , workerWrapperFusionBR
        , wwAssA
@@ -77,26 +77,18 @@ externals =
                   "                              in \\ x0 -> abs (work x0)",
                   "Note: the pre-condition \"fix (X->A) (\\ h x -> abs (rep (f h x))) == fix (X->A) f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
-         , external "ww-result-split-param" ((\ n abs rep assC -> promoteDefR $ workerWrapperSplitParam n (mkWWAssC assC) abs rep)
-                                      :: Int -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core)
-                [ "Worker/Wrapper Split - Type Paramater Variant (Result Variant)",
-                  "For any \"prog :: forall t1 t2 .. tn . X -> A\",",
-                  "and given \"abs :: forall t1 t2 .. tn . B -> A\" and \"rep :: forall t1 t2 .. tn . A -> B\" as arguments,",
-                  "and a proof of Assumption C (forall t1 t2 .. tn . fix (X->A) (\\ h x -> abs t1 t2 .. tn (rep t1 t2 .. tn (f h x))) ==> fix (X->A) f), then",
-                  "prog = expr  ==>  prog = \\ t1 t2 .. tn -> let f = \\ prog -> expr t1 t2 .. tn",
-                  "                                            in let work = \\ x1 -> rep t1 t2 .. tn (f (\\ x2 -> abs t1 t2 .. tn (work x2)) x1)",
-                  "                                                in \\ x0 -> abs t1 t2 .. tn (work x0)"
-                ] .+ Introduce .+ Context .+ PreCondition .+ TODO .+ Experiment
-         , external "ww-result-split-param-unsafe" ((\ n abs rep -> promoteDefR $ workerWrapperSplitParam n Nothing abs rep)
-                                             :: Int -> CoreString -> CoreString -> RewriteH Core)
-                [ "Unsafe Worker/Wrapper Split - Type Paramater Variant",
-                  "For any \"prog :: forall t1 t2 .. tn . X -> A\",",
-                  "and given \"abs :: forall t1 t2 .. tn . B -> A\" and \"rep :: forall t1 t2 .. tn . A -> B\" as arguments, then",
-                  "prog = expr  ==>  prog = \\ t1 t2 .. tn -> let f = \\ prog -> expr t1 t2 .. tn",
-                  "                                            in let work = \\ x1 -> rep t1 t2 .. tn (f (\\ x2 -> abs t1 t2 .. tn (work x2)) x1)",
-                  "                                                in \\ x0 -> abs t1 t2 .. tn (work x0)",
-                  "Note: the pre-condition \"forall t1 t2 .. tn . fix (X->A) (\\ h x -> abs t1 t2 .. tn (rep t1 t2 .. tn (f h x))) == fix (X->A) f\" is expected to hold."
-                ] .+ Introduce .+ Context .+ PreCondition .+ TODO .+ Experiment
+         , external "ww-result-split-static-arg" ((\ n is abs rep assC -> promoteDefR $ workerWrapperSplitStaticArg n is (mkWWAssC assC) abs rep)
+                                      :: Int -> [Int] -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core)
+                [ "Worker/Wrapper Split - Static Argument Variant (Result Variant)",
+                  "Perform the static argument transformation on the first n arguments, then perform the worker/wrapper split,",
+                  "applying the given abs and rep functions to the specified (by index) static arguments before use."
+                ] .+ Introduce .+ Context
+         , external "ww-result-split-static-arg-unsafe" ((\ n is abs rep -> promoteDefR $ workerWrapperSplitStaticArg n is Nothing abs rep)
+                                      :: Int -> [Int] -> CoreString -> CoreString -> RewriteH Core)
+                [ "Unsafe Worker/Wrapper Split - Static Argument Variant (Result Variant)",
+                  "Perform the static argument transformation on the first n arguments, then perform the (unsafe) worker/wrapper split,",
+                  "applying the given abs and rep functions to the specified (by index) static arguments before use."
+                ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-result-assumption-A" ((\ abs rep assA -> promoteExprBiR $ wwA (Just $ extractR assA) abs rep)
                                        :: CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
                 [ "Worker/Wrapper Assumption A (Result Variant)",
@@ -318,21 +310,25 @@ workerWrapperSplitR mAss abs rep =
 workerWrapperSplit :: Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
 workerWrapperSplit mAss absS repS = (parseCoreExprT absS &&& parseCoreExprT repS) >>= uncurry (workerWrapperSplitR mAss)
 
--- | As 'workerWrapperSplit' but performs the static-argument transformation for @n@ static arguments first, and provides these static arguments to all calls of abs and rep.
+-- | As 'workerWrapperSplit' but performs the static-argument transformation for @n@ static arguments first, and optionally provides some of those arguments (specified by index) to all calls of abs and rep.
 --   This is useful if, for example, the expression, and abs and rep, all have a @forall@ type.
-workerWrapperSplitParam :: Int -> Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
-workerWrapperSplitParam 0 = workerWrapperSplit
-workerWrapperSplitParam n = \ mAss absS repS ->
+workerWrapperSplitStaticArg :: Int -> [Int] -> Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
+workerWrapperSplitStaticArg 0 _  = workerWrapperSplit
+workerWrapperSplitStaticArg n is = \ mAss absS repS ->
                             prefixFailMsg "worker/wrapper split (static argument variant) failed: " $
-                            do args <- defT successT (arr collectBinders) (\ () -> varsToCoreExprs . take n . fst)
-                               staticArgPosR [0..(n-1)] >>> defAllR idR (let wwSplitArgsR :: RewriteH CoreDef
-                                                                             wwSplitArgsR = do abs  <- parseCoreExprT absS
-                                                                                               rep  <- parseCoreExprT repS
-                                                                                               workerWrapperSplitR mAss (mkCoreApps abs args) (mkCoreApps rep args)
-                                                                          in
-                                                                             extractR $ do p <- considerConstructT LetExpr
-                                                                                           localPathR p $ promoteExprR (letRecAllR (const wwSplitArgsR) idR >>> letSubstR)
-                                                                        )
+                            do guardMsg (all (< n) is) "arguments for abs and rep must be chosen from the statically transformed arguments."
+                               bs <- defT successT (arr collectBinders) (\ () -> take n . fst)
+                               let args = varsToCoreExprs [ b | (i,b) <- zip [0..] bs, i `elem` is ]
+
+                               staticArgPosR [0..(n-1)] >>> defAllR idR
+                                                                    (let wwSplitArgsR :: RewriteH CoreDef
+                                                                         wwSplitArgsR = do abs  <- parseCoreExprT absS
+                                                                                           rep  <- parseCoreExprT repS
+                                                                                           workerWrapperSplitR mAss (mkCoreApps abs args) (mkCoreApps rep args)
+                                                                      in
+                                                                         extractR $ do p <- considerConstructT LetExpr
+                                                                                       localPathR p $ promoteExprR (letRecAllR (const wwSplitArgsR) idR >>> letSubstR)
+                                                                    )
 
 --------------------------------------------------------------------------------------------------
 

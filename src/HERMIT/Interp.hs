@@ -61,6 +61,8 @@ interpExpr' _   dict (ListH exprs) = do dyns <- liftM fromDynList $ mapM (interp
                                         return $    toBoxedList dyns NameListBox
                                                  ++ toBoxedList dyns StringListBox
                                                  ++ toBoxedList dyns (PathBox . pathToSnocPath)
+                                                 ++ toBoxedList dyns IntListBox
+                                                 ++ toBoxedList dyns RewriteCoreListBox
 interpExpr' rhs dict (CmdName str)
                                         -- An Int is either a Path, or will be interpreted specially later.
   | all isDigit str                     = let i = read str in

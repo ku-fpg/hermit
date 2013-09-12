@@ -43,6 +43,8 @@ module HERMIT.External
        , StringBox(..)
        , NameListBox(..)
        , StringListBox(..)
+       , IntListBox(..)
+       , RewriteCoreListBox(..)
 ) where
 
 import Data.Map hiding (map)
@@ -430,5 +432,23 @@ instance Extern [String] where
     type Box [String] = StringListBox
     box = StringListBox
     unbox (StringListBox l) = l
+
+-----------------------------------------------------------------
+
+data IntListBox = IntListBox [Int] deriving Typeable
+
+instance Extern [Int] where
+    type Box [Int] = IntListBox
+    box = IntListBox
+    unbox (IntListBox l) = l
+
+-----------------------------------------------------------------
+
+data RewriteCoreListBox = RewriteCoreListBox [RewriteH Core] deriving Typeable
+
+instance Extern [RewriteH Core] where
+    type Box [RewriteH Core] = RewriteCoreListBox
+    box = RewriteCoreListBox
+    unbox (RewriteCoreListBox l) = l
 
 -----------------------------------------------------------------

@@ -1,15 +1,16 @@
 load-as-rewrite "WWA" "WW-Ass-A.hss"
+define-rewrite "WWC" "ww-result-AssA-to-AssC WWA"
 load-as-rewrite "StrictRepH" "StrictRepH.hss"
 flatten-module
-run-script "consider-target-function"
 
-ww-result-split-param 1 [| absH |] [| repH |] (ww-result-AssA-to-AssC WWA)
+run-script "do-the-ww-split" -- ugly hack because we lack paramaterisable scripts
+
 bash
 { rhs-of 'work
   lam-body
   eta-expand 'acc
   lam-body
-  bash-extended-with (push 'repH StrictRepH <+ foreward ww-result-fusion <+ apply-rules ["repH ++","repH (:)","repH []"])
-  try (bash-extended-with (push-unsafe 'work))
+  bash-extended-with [ push 'repH StrictRepH, foreward ww-result-fusion, apply-rules ["repH ++","repH (:)","repH []"] ]
+  try (bash-extended-with [push-unsafe 'work])
 }
 one-td (unfold 'absH)

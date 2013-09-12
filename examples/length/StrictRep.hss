@@ -4,4 +4,4 @@ unfold 'rep
 unfold '+
 bash
 unfold
-bash-extended-with undefined-expr
+bash-extended-with [undefined-expr]

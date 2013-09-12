@@ -1,2 +1,2 @@
-define-script "consider-target-function" "consider 'qsort"
+define-script "do-the-ww-split" "consider 'qsort ; ww-result-split-static-arg 2 [0] [| absH |] [| repH |] WWC"
 load-and-run "ConcatVanishes.hss"

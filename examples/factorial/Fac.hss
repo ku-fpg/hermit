@@ -4,6 +4,6 @@ consider 'fac
 ww-split [| wrap |] [| unwrap |] (ww-AssA-to-AssC WWA)
 inline-all ['unwrap, 'wrap]
 inline-all ['*, '-]
-bash-extended-with case-elim-inline-scrutinee
+bash-extended-with [case-elim-inline-scrutinee]
 
 { [def-rhs, let-body] ; alpha-lam 'n } -- cosmetic

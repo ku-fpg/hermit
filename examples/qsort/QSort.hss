@@ -1,15 +1,16 @@
 load-as-rewrite "WWA" "WW-Ass-A.hss"
+define-rewrite "WWC" "ww-result-AssA-to-AssC WWA"
 load-as-rewrite "StrictRepH" "StrictRepH.hss"
 flatten-module
 consider 'qsort
-ww-result-split-param 1 [| absH |] [| repH |] (ww-result-AssA-to-AssC WWA)
+ww-result-split-static-arg 2 [0] [| absH |] [| repH |] WWC
 bash
 { rhs-of 'work
   alpha-lam 'xs
   lam-body
   eta-expand 'acc
   lam-body
-  bash-extended-with (push 'repH StrictRepH <+ foreward ww-result-fusion <+ apply-rules ["repH ++", "repH (:)", "repH []"])
-  bash-extended-with (push-unsafe 'work)
+  bash-extended-with [push 'repH StrictRepH, foreward ww-result-fusion, apply-rules ["repH ++", "repH (:)", "repH []"] ]
+  bash-extended-with [push-unsafe 'work]
 }
 one-td (unfold 'absH)

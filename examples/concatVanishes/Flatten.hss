@@ -1,2 +1,2 @@
-define-script "consider-target-function" "consider 'flatten"
+define-script "do-the-ww-split" "consider 'flatten ; ww-result-split-static-arg 1 [0] [| absH |] [| repH |] WWC"
 load-and-run "ConcatVanishes.hss"
