@@ -93,50 +93,72 @@ configurableInlineR config p =
    prefixFailMsg "Inline failed: " $
    do b <- varT p
       guardMsg b "identifier does not satisfy predicate."
-      (e,d) <- varT (getUnfoldingT config)
+      (e,uncaptured) <- varT (getUnfoldingT config)
       setFailMsg "values in inlined expression have been rebound."
-        (return e >>> accepterR (ensureDepthT d))
+        (return e >>> accepterR (ensureDepthT uncaptured))
 
 
--- TODO: The comment says "above a given depth", but the code checks the depths are <= a given depth.
--- Also, I note that the code used to return 0 for free variables not in the HERMIT context.
--- I removed it, as 0 <= d was always true (as we assume non-negative d).  However, if the <= should be >=, it will need reinstating.
+-- NOTE: When inlining, we have to take care to avoid variable capture.
+--       Our approach is to track the binding depth of the inlined identifier.
+--       After inlining, we then resolve all names in the inlined expression, and require that they were all bound prior to (i.e. lower numbered depth) the binding we inlined.
+--       The precise depth check varies between binding types as follows (where d is the depth of the inlined binder):
+--
+--         Binder                Safe to Inline
+--         global-id             (<= 0)
+--         letnonrec             (< d)
+--         letrec                (<= d)
+--         case-wild-scrutinee   (< d)
+--         case-wild-alt         (<= d+1)
+--         self-rec-def          NA
+--         lam                   NA
+--         case-alt              NA
+
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
 -- Assumes minimum depth is 0.
-ensureDepthT :: forall c m. (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => BindingDepth -> Translate c m CoreExpr Bool
-ensureDepthT d =
+ensureDepthT :: forall c m. (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => (BindingDepth -> Bool) -> Translate c m CoreExpr Bool
+ensureDepthT uncaptured =
   do frees <- arr localFreeVarsExpr
      let collectDepthsT :: Translate c m Core [BindingDepth]
          collectDepthsT = collectT $ promoteExprT $ varT (acceptR (`elemVarSet` frees) >>> readerT varBindingDepthT)
-     all (<= d) `liftM` extractT collectDepthsT
+     all uncaptured `liftM` extractT collectDepthsT
 
+-- | Return the unfolding of an identifier, and a predicate over the binding depths of all variables within that unfolding to determine if they have been captured in their new location.
 getUnfoldingT :: ReadBindings c
               => InlineConfig
-              -> Translate c HermitM Id (CoreExpr, BindingDepth)
+              -> Translate c HermitM Id (CoreExpr, BindingDepth -> Bool)
 getUnfoldingT config = translate $ \ c i ->
     case lookupHermitBinding i c of
-      Nothing -> case config of
-                   CaseBinderOnly _ -> fail "not a case binder."
-                   AllBinders       -> case unfoldingInfo (idInfo i) of
-                                         CoreUnfolding { uf_tmpl = uft } -> return (uft, 0)
+      Nothing -> do requireAllBinders config
+                    let uncaptured = (<= 0) -- i.e. is global
+                    case unfoldingInfo (idInfo i) of
+                      CoreUnfolding { uf_tmpl = uft } -> return (uft, uncaptured)
 #if __GLASGOW_HASKELL__ > 706
-                                         dunf@(DFunUnfolding {})         -> (,0) <$> dFunExpr dunf
+                      dunf@(DFunUnfolding {})         -> (,uncaptured) <$> dFunExpr dunf
 #else
-                                         DFunUnfolding _arity dc args    -> (,0) <$> dFunExpr dc args (idType i)
+                      DFunUnfolding _arity dc args    -> (,uncaptured) <$> dFunExpr dc args (idType i)
 #endif
-                                         _                               -> fail $ "cannot find unfolding in Env or IdInfo."
+                      _                               -> fail $ "cannot find unfolding in Env or IdInfo."
       Just (depth,b) -> case b of
                           CASEWILD s alt -> let tys             = tyConAppArgs (idType i)
-                                                altExprDepthM   = (,depth+1) <$> alt2Exp tys alt
-                                                scrutExprDepthM = return (s, depth)
+                                                altExprDepthM   = (, (<= depth+1)) <$> alt2Exp tys alt
+                                                scrutExprDepthM = return (s, (< depth))
                                              in case config of
                                                   CaseBinderOnly Scrutinee   -> scrutExprDepthM
                                                   CaseBinderOnly Alternative -> altExprDepthM
                                                   AllBinders                 -> altExprDepthM <+ scrutExprDepthM
-                          _              -> case config of
-                                              CaseBinderOnly _ -> fail "not a case binder."
-                                              AllBinders       -> (,depth) <$> liftKureM (hermitBindingSiteExpr b)
+
+                          NONREC e       -> do requireAllBinders config
+                                               return (e, (< depth))
+
+                          REC e          -> do requireAllBinders config
+                                               return (e, (<= depth))
+
+                          _              -> fail "variable is not bound to an expression."
+  where
+    requireAllBinders :: Monad m => InlineConfig -> m ()
+    requireAllBinders AllBinders         = return ()
+    requireAllBinders (CaseBinderOnly _) = fail "not a case binder."
 
 -- | Convert lhs of case alternative to a constructor application expression,
 --   failing in the case of the DEFAULT alternative.

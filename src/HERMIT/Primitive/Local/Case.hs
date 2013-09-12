@@ -410,7 +410,7 @@ caseMergeAltsWithWildR = prefixFailMsg "merge-case-alts-with-wild failed: " $
 
 -- | Eliminate a case, inlining any occurrences of the case binder as the scrutinee.
 caseElimInlineScrutineeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseElimInlineScrutineeR = tryR caseInlineScrutineeR >>> caseElimR
+caseElimInlineScrutineeR = alphaCaseBinder Nothing >>> tryR caseInlineScrutineeR >>> caseElimR
 
 -- | Eliminate a case, merging the case alternatives into a single default alternative and inlining the case binder as the scrutinee (if possible).
 caseElimMergeAltsR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
