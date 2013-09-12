@@ -111,8 +111,8 @@ instance Extern ShellEffect where
 
 ----------------------------------------------------------------------------------
 
-data CLException = CLAbort 
-                 | CLResume SAST 
+data CLException = CLAbort
+                 | CLResume SAST
                  | CLContinue CommandLineState
                  | CLError String
 

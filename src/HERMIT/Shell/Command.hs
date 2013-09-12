@@ -191,7 +191,7 @@ commandLine opts behavior exts = do
     -- initialize shell-instance specific parts of the state
     -- TODO: move into another transformer layer?
     initState <- get
-    let clState = initState { cl_tick        = var 
+    let clState = initState { cl_tick        = var
                             , cl_version     = VersionStore { vs_graph = [] , vs_tags = [] }
                             , cl_scripts     = []
                             , cl_dict        = dict
@@ -202,16 +202,14 @@ commandLine opts behavior exts = do
 
     completionMVar <- liftIO $ newMVar clState
 
-    let loop = do
+    let loop :: (MonadIO m, MonadException m) => CLM (InputT m) ()
+        loop = do
             st <- get
             let SAST n = cl_cursor st
-            mLine <- liftIO $ if cl_nav st
-                              then getNavCmd
-                              else do modifyMVar_ completionMVar (const $ return st) -- so the completion can get the current state
-                                      runInputTBehavior 
-                                        behavior
-                                        (setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings)
-                                        (getInputLine $ "hermit<" ++ show n ++ "> ")
+            mLine <- if cl_nav st
+                     then liftIO getNavCmd
+                     else do liftIO $ modifyMVar_ completionMVar (const $ return st) -- so the completion can get the current state
+                             lift $ getInputLine $ "hermit<" ++ show n ++ "> "
 
             case mLine of
                 Nothing          -> performMetaCommand Resume
@@ -224,7 +222,7 @@ commandLine opts behavior exts = do
     if any (`elem` ["-v0", "-v1"]) flags
         then return ()
         else cl_putStrLn banner
-    
+
     -- Load and run any scripts
     setRunningScript True
     sequence_ [ performMetaCommand $ case fileName of
@@ -235,9 +233,12 @@ commandLine opts behavior exts = do
               , not (null fileName)
               ] `ourCatch` \ msg -> cl_putStrLn $ "Booting Failure: " ++ msg
     setRunningScript False
-    
+
     -- Start the CLI
-    showWindow >> loop
+    showWindow
+    let settings = setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings
+    (r,s) <- get >>= liftIO . runInputTBehavior behavior settings . flip runCLM loop
+    either throwError (\v -> put s >> return v) r
 
 ourCatch :: MonadIO m => CLM m () -> (String -> CLM m ()) -> CLM m ()
 ourCatch m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display >> cl_putStrLn msg >> abort) (failure msg)
@@ -486,7 +487,7 @@ cl_kernel_env st =
                      either (\case CLError msg -> fail msg
                                    _           -> fail "resume abort called from cl_putStrLn (impossible!)")
                             return r
-                        
+
     in  mkHermitMEnv $ \ msg -> case msg of
                 DebugTick    msg'      -> do
                         c <- GHC.liftIO $ tick (cl_tick st) msg'
