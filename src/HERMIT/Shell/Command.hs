@@ -12,6 +12,7 @@ module HERMIT.Shell.Command
     , cl_kernel_env
     , getFocusPath
     , shellComplete
+    , evalScript
     ) where
 
 import Control.Applicative
@@ -239,10 +240,13 @@ loop behavior completionMVar = loop'
                 Just line           ->
                     if all isSpace line
                     then loop'
-                    else ((parseScriptCLM line >>= runScript) `ourCatch` cl_putStrLn) >> loop'
+                    else (evalScript line `ourCatch` cl_putStrLn) >> loop'
 
 ourCatch :: MonadIO m => CLM m () -> (String -> CLM m ()) -> CLM m ()
 ourCatch m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display >> cl_putStrLn msg >> abort) (failure msg)
+
+evalScript :: MonadIO m => String -> CLM m ()
+evalScript = parseScriptCLM >=> runScript
 
 parseScriptCLM :: Monad m => String -> CLM m Script
 parseScriptCLM = either fail return . parseScript
