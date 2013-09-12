@@ -17,7 +17,7 @@ bash
   { [case-alt 1, alt-rhs]
     unfold-rule "assocLtoR"
     { app-fun ; fold 'rep ; ww-result-fusion }
-    case-seq 'acc
+    case-intro-seq 'acc
   }
 }
 one-td (unfold 'abs)

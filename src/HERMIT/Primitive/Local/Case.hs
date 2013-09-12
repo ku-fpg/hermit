@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, MultiWayIf, ScopedTypeVariables, FlexibleContexts, TupleSections #-}
+{-# LANGUAGE CPP, MultiWayIf, LambdaCase, ScopedTypeVariables, FlexibleContexts, TupleSections #-}
 
 module HERMIT.Primitive.Local.Case
     ( -- * Rewrites on Case Expressions
@@ -25,7 +25,8 @@ module HERMIT.Primitive.Local.Case
     , caseElimR
     , caseElimInlineScrutineeR
     , caseElimMergeAltsR
-    , caseSeqR
+    , caseIntroSeqR
+    , caseElimSeqR
     )
 where
 
@@ -98,9 +99,11 @@ externals =
     , external "case-split-inline" (caseSplitInlineR :: TH.Name -> RewriteH Core)
         [ "Like case-split, but additionally inlines the matched constructor "
         , "applications for all occurances of the named variable." ] .+ Deep
-    , external "case-seq" (promoteExprR . caseSeqR :: TH.Name -> RewriteH Core)
+    , external "case-intro-seq" (promoteExprR . caseIntroSeqR :: TH.Name -> RewriteH Core)
         [ "Force evaluation of a variable by introducing a case."
-        , "case-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow
+        , "case-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow .+ Introduce
+    , external "case-elim-seq" (promoteExprR caseElimSeqR :: RewriteH Core)
+        [ "Eliminate a case that corresponds to a pointless seq."  ] .+ Deep .+ Eval
     , external "case-inline-alternative" (promoteExprR caseInlineAlternativeR :: RewriteH Core)
         [ "Inline the case wildcard binder as the case-alternative pattern everywhere in the case alternatives." ] .+ Deep
     , external "case-inline-scrutinee" (promoteExprR caseInlineScrutineeR :: RewriteH Core)
@@ -334,8 +337,8 @@ caseSplitR nm = prefixFailMsg "caseSplit failed: " $
 --
 -- e -> case v of v
 --        _ -> e
-caseSeqR :: TH.Name -> Rewrite c HermitM CoreExpr
-caseSeqR nm = prefixFailMsg "caseSeq failed: " $
+caseIntroSeqR :: TH.Name -> Rewrite c HermitM CoreExpr
+caseIntroSeqR nm = prefixFailMsg "case-intro-seq failed: " $
              do i <- matchingFreeIdT nm
                 e <- idR
                 guardMsg (not $ isTyCoArg e) "cannot case on a type or coercion."
@@ -412,6 +415,33 @@ caseElimInlineScrutineeR = tryR caseInlineScrutineeR >>> caseElimR
 -- | Eliminate a case, merging the case alternatives into a single default alternative and inlining the case binder as the scrutinee (if possible).
 caseElimMergeAltsR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseElimMergeAltsR = tryR caseFoldWildR >>> tryR caseMergeAltsR >>> caseElimInlineScrutineeR
+
+------------------------------------------------------------------------------
+
+-- | Eliminate a case that corresponds to a pointless 'seq'.
+caseElimSeqR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseElimSeqR = prefixFailMsg "case-elim-seq failed: " $
+               withPatFailMsg "not a seq case." $
+  do Case s w _ [(DEFAULT,[],rhs)] <- idR
+
+     let is = case s of
+                Var i -> [i,w]
+                _     -> [w]
+
+     if is `isForcedIn` rhs
+       then caseElimInlineScrutineeR
+       else fail "cannot be sure that this seq case is pointless.  Use case-elim-inline-scrutinee if you want to proceed anyway."
+
+-- | Will forcing the expression to WHNF always force one of the given identifiers?
+isForcedIn :: [Id] -> CoreExpr -> Bool
+isForcedIn is = \case
+                   Var i         -> i `elem` is
+                   App f _       -> is `isForcedIn` f
+                   Let _ body    -> is `isForcedIn` body
+                   Case s _ _ _  -> is `isForcedIn` s
+                   Cast e _      -> is `isForcedIn` e
+                   Tick _ e      -> is `isForcedIn` e
+                   _             -> False
 
 ------------------------------------------------------------------------------
 
