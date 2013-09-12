@@ -69,11 +69,11 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
                                   , length exprs == numCalls && isStatic b exprs ]
                                     -- ensure argument is present in every call (partial applications boo)
 
-            isStatic _ []                      = True  -- all were static
-            isStatic b ((Var b'):es)           | b == b' = isStatic b es
-            isStatic b ((Type (TyVarTy v)):es) | b == v  = isStatic b es
-            -- TODO? (Coercion (CoVarCo v)):es
-            isStatic _ _                       = False -- not a simple repass, so dynamic
+            isStatic _ []                          = True  -- all were static
+            isStatic b ((Var b'):es)               | b == b' = isStatic b es
+            isStatic b ((Type (TyVarTy v)):es)     | b == v  = isStatic b es
+            isStatic b ((Coercion (CoVarCo v)):es) | b == v  = isStatic b es
+            isStatic _ _                           = False -- not a simple repass, so dynamic
 
         chosen <- decide staticBinds
         let choices = map fst staticBinds
