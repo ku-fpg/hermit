@@ -10,7 +10,7 @@ where
 
 import Control.Arrow
 
-import Data.List (nub, intersect, transpose)
+import Data.List (nub, intercalate, intersect, partition, transpose)
 
 import HERMIT.Context
 import HERMIT.Core
@@ -47,7 +47,7 @@ staticArgPosR is' = staticArgPredR $ \ss' -> let is = nub is'
                                                  ss = map fst ss'
                                             in if is == (is `intersect` ss)
                                                then return is
-                                               else fail $ "args " ++ show (filter (`notElem` ss) is) ++ " are not static."
+                                               else fail $ "args " ++ commas (filter (`notElem` ss) is) ++ " are not static."
 
 -- | Generalized Static Argument Transformation, which allows static arguments to be filtered.
 staticArgPredR :: (ExtendPath c Crumb, AddBindings c)
@@ -63,10 +63,11 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
         callPats <- apply (callsT (var2THName f) (callT >>> arr snd)) bodyContext (ExprCore body)
         let argExprs = transpose callPats
             numCalls = length callPats
-            -- ensure argument is present in every call (partial applications boo)
             allBinds = zip [0..] bnds
+
             staticBinds = [ (i,b) | ((i,b),exprs) <- zip allBinds $ argExprs ++ repeat []
                                   , length exprs == numCalls && isStatic b exprs ]
+                                    -- ensure argument is present in every call (partial applications boo)
 
             isStatic _ []                      = True  -- all were static
             isStatic b ((Var b'):es)           | b == b' = isStatic b es
@@ -75,11 +76,19 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
             isStatic _ _                       = False -- not a simple repass, so dynamic
 
         chosen <- decide staticBinds
+        let choices = map fst staticBinds
         guardMsg (notNull chosen) "no arguments selected for transformation."
-        guardMsg (all (`elem` (map fst staticBinds)) chosen)
-            $ "args " ++ show (map fst staticBinds) ++ " are static, but " ++ show chosen ++ " were selected."
+        guardMsg (all (`elem` choices) chosen)
+            $ "args " ++ commas choices ++ " are static, but " ++ commas chosen ++ " were selected."
 
-        let (ps,dbnds) = unzip [ (i,b) | (i,b) <- allBinds, i `notElem` chosen ]
+        let (chosenBinds, dynBinds) = partition ((`elem` chosen) . fst) allBinds
+            (ps, dbnds) = unzip dynBinds
+            unboundTys = concat [ [ (i,i') | (i',b') <- dynBinds, i' < i , b' `elem` fvs ]
+                                | (i,b) <- chosenBinds, let fvs = varSetElems (varTypeTyVars b) ]
+
+        guardMsg (null unboundTys)
+            $ "type variables in args " ++ commas (nub $ map fst unboundTys) ++ " would become unbound unless args "
+              ++ commas (nub $ map snd unboundTys) ++ " are included in the transformation."
 
         wkr <- newIdH (var2String f ++ "'") (exprType (mkCoreLams dbnds body))
 
@@ -93,3 +102,5 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
         return $ Def f $ mkCoreLams bnds $ Let (Rec [(wkr, mkCoreLams dbnds body')])
                                              $ mkApps (Var wkr) (varsToCoreExprs dbnds)
 
+commas :: Show a => [a] -> String
+commas = intercalate "," . map show
