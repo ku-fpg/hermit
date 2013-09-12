@@ -253,7 +253,7 @@ letFloatAppR = prefixFailMsg "Let floating from App function failed: " $
      let vs = mkVarSet (bindVars bnds) `intersectVarSet` freeVarsExpr e
      if isEmptyVarSet vs
         then return $ Let bnds (App body e)
-        else appAllR (alphaLetVars $ varSetElems vs) idR >>> letFloatAppR
+        else appAllR (alphaLetVarsR $ varSetElems vs) idR >>> letFloatAppR
 
 -- | @f (let v = ev in e)@ ==> @let v = ev in f e@
 letFloatArgR :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
@@ -263,7 +263,7 @@ letFloatArgR = prefixFailMsg "Let floating from App argument failed: " $
      let vs = mkVarSet (bindVars bnds) `intersectVarSet` freeVarsExpr f
      if isEmptyVarSet vs
         then return $ Let bnds (App f body)
-        else appAllR idR (alphaLetVars $ varSetElems vs) >>> letFloatArgR
+        else appAllR idR (alphaLetVarsR $ varSetElems vs) >>> letFloatArgR
 
 -- | @let v = (let bds in e1) in e2@ ==> @let bds in let v = e1 in e2@
 letFloatLetR :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
@@ -273,7 +273,7 @@ letFloatLetR = prefixFailMsg "Let floating from Let failed: " $
      let vs = mkVarSet (bindVars bds) `intersectVarSet` freeVarsExpr e2
      if isEmptyVarSet vs
        then return $ Let bds (Let (NonRec v e1) e2)
-       else letNonRecAllR idR (alphaLetVars $ varSetElems vs) idR >>> letFloatLetR
+       else letNonRecAllR idR (alphaLetVarsR $ varSetElems vs) idR >>> letFloatLetR
 
 -- | @(\ v -> let binds in e2)@  ==>  @let binds in (\ v1 -> e2)@
 --   Fails if @v@ occurs in the RHS of @binds@.
@@ -286,7 +286,7 @@ letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
          fvs = freeVarsBind binds
      guardMsg (v `notElemVarSet` fvs) (var2String v ++ " occurs in the RHS of the let-bindings.")
      if v `elem` bs
-      then alphaLam Nothing >>> letFloatLamR
+      then alphaLamR Nothing >>> letFloatLamR
       else return $ Let binds (Lam v body)
 
 -- | @case (let bnds in e) of wild alts@ ==> @let bnds in (case e of wild alts)@
@@ -298,7 +298,7 @@ letFloatCaseR = prefixFailMsg "Let floating from Case failed: " $
      let captures = mkVarSet (bindVars bnds) `intersectVarSet` delVarSet (unionVarSets $ map freeVarsAlt alts) w
      if isEmptyVarSet captures
        then return $ Let bnds (Case e w ty alts)
-       else caseAllR (alphaLetVars $ varSetElems captures) idR idR (const idR) >>> letFloatCaseR
+       else caseAllR (alphaLetVarsR $ varSetElems captures) idR idR (const idR) >>> letFloatCaseR
 
 -- | @cast (let bnds in e) co@ ==> @let bnds in cast e co@
 letFloatCastR :: MonadCatch m => Rewrite c m CoreExpr
@@ -322,7 +322,7 @@ letFloatTopR = prefixFailMsg "Let floating to top level failed: " $
                   let vs = intersectVarSet (mkVarSet bs) (freeVarsProg p)
                   if isEmptyVarSet vs
                     then return $ ProgCons bds (ProgCons (NonRec v e) p)
-                    else consNonRecAllR idR (alphaLetVars $ varSetElems vs) idR >>> letFloatTopR
+                    else consNonRecAllR idR (alphaLetVarsR $ varSetElems vs) idR >>> letFloatTopR
 
 -------------------------------------------------------------------------------------------
 

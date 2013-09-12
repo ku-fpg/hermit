@@ -260,7 +260,7 @@ workerWrapperSplitR mAss wrap unwrap =
                         >>> letFloatArgR
                         >>> letAllR idR ( forewardT (workerWrapperFacBR mAss wrap unwrap)
                                           >>> appAllR idR ( unfoldNameR fx
-                                                            >>> alphaLetWith [work]
+                                                            >>> alphaLetWithR [work]
                                                             >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
                                                                                    >>> extractR (workerWrapperGenerateFusionR mAss)
                                                                            )

@@ -291,7 +291,7 @@ workerWrapperSplitR mAss abs rep =
                         >>> letFloatArgR
                         >>> letAllR idR ( forewardT (workerWrapperFacBR mAss abs rep)
                                           >>> lamAllR idR (appAllR idR (appAllR ( unfoldNameR fx
-                                                                                  >>> alphaLetWith [work]
+                                                                                  >>> alphaLetWithR [work]
                                                                                   >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
                                                                                                          >>> extractR (workerWrapperGenerateFusionR mAss)
                                                                                                  )
