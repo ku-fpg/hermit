@@ -20,10 +20,7 @@ Description:
   .
     * RULES have issues with forall types.
   .
-    * Different core comes out depending on whether you ascribe explicit
-      type signatures.
-  .
-    * A number of rewrites don't enforce preconditions. ex: cast elimination
+    * A number of rewrites don't enforce preconditions. eg: cast elimination
       always works, even if the cast is necessary
   .
   Examples can be found in the examples sub-directory.

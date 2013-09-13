@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 module HERMIT.Primitive.Undefined
-    ( externals
+    ( -- * Working with Undefined Values
+      -- | Note that many of these operations require 'GHC.Err.undefined' to be explicitly imported if it is not used in the source file.
+      externals
     , verifyStrictT
     , mkUndefinedValT
     , isUndefinedValT

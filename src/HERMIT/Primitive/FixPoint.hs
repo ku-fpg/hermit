@@ -2,7 +2,7 @@
 
 module HERMIT.Primitive.FixPoint
        ( -- * Operations on the Fixed Point Operator (fix)
-         -- | Note that many of these operations require 'Data.Function.fix' to be in scope.
+         -- | Note that many of these operations require 'Data.Function.fix' to be explicitly imported, if it is not used in the source file.
          HERMIT.Primitive.FixPoint.externals
          -- ** Rewrites and BiRewrites on Fixed Points
        , fixIntroR
