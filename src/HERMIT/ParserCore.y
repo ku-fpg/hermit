@@ -1,7 +1,8 @@
 {
 {-# LANGUAGE CPP #-}
- module HERMIT.ParserCore (parseCore, parseCoreExprT) where
+ module HERMIT.ParserCore (parseCore, parseCoreExprT, parse2beforeBiR, parse3beforeBiR) where
 
+import Control.Arrow
 import Control.Monad.Reader
 import Data.Char (isSpace, isDigit)
 
@@ -166,8 +167,20 @@ parseCore (CoreString s) c =
         Left msg -> fail msg
         Right tokens -> runReaderT (parser tokens) c
 
+---------------------------------------------
+
+-- These three should probably go somewhere else.
+
 -- | Parse a 'CoreString' to a 'CoreExpr', using the current context.
 parseCoreExprT :: CoreString -> TranslateH a CoreExpr
 parseCoreExprT = contextonlyT . parseCore
+
+parse2beforeBiR :: (CoreExpr -> CoreExpr -> BiRewriteH a) -> CoreString -> CoreString -> BiRewriteH a
+parse2beforeBiR f s1 s2 = beforeBiR (parseCoreExprT s1 &&& parseCoreExprT s2) (uncurry f)
+
+parse3beforeBiR :: (CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH a) -> CoreString -> CoreString -> CoreString -> BiRewriteH a
+parse3beforeBiR f s1 s2 s3 = beforeBiR ((parseCoreExprT s1 &&& parseCoreExprT s2) &&& parseCoreExprT s3) ((uncurry.uncurry) f)
+
+---------------------------------------------
 
 }

@@ -172,7 +172,7 @@ workerWrapperFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
   where
     wwL :: Type -> Type -> RewriteH CoreExpr
     wwL tyA tyB = prefixFailMsg "worker/wrapper factorisation failed: " $
-                  do (tyXA,f)  <- isFixExpr
+                  do (tyXA,f)  <- isFixExprT
                      (tyX,tA)  <- constT (splitFunTypeM tyXA)
                      let tyXB  =  FunTy tyX tyB
                      h         <- constT (newIdH "h" tyXB)
@@ -183,11 +183,11 @@ workerWrapperFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
 
                      whenJust (verifyWWAss abs rep f) mAss
 
-                     work <- mkFix (Lam h (Lam x1 (App rep
-                                                       (App (App f (Lam x2 (App abs (App (Var h) (Var x2)))))
-                                                            (Var x1)
-                                                       )
-                                               )))
+                     work <- mkFixT (Lam h (Lam x1 (App rep
+                                                        (App (App f (Lam x2 (App abs (App (Var h) (Var x2)))))
+                                                             (Var x1)
+                                                        )
+                                                   )))
                      return (Lam x0 (App abs (App work (Var x0))))
 
     wwR :: RewriteH CoreExpr
@@ -199,12 +199,12 @@ workerWrapperFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
                                         (App (App f (Lam x2 (App abs1 (App (Var h') (Var x2')))))
                                              (Var x1')
                                         )
-                                  ))) <- isFixExpr <<< constant fx
+                                  ))) <- isFixExprT <<< constant fx
                  guardMsg (x1 == x1' && x2 == x2' && h == h') wrongForm
                  guardMsg (equivalentBy exprAlphaEq [abs, abs1, abs2]) "abs's do not match."
                  guardMsg (exprAlphaEq rep rep1) "rep's do not match."
                  whenJust (verifyWWAss abs rep f) mAss
-                 mkFix f
+                 mkFixT f
 
     wrongForm :: String
     wrongForm = wrongExprForm "\\ x1 -> abs (fix (\\ h x2 -> rep (f (\\ x3 -> abs (h x3)) x2)) x1)"
@@ -286,7 +286,7 @@ workerWrapperSplitR mAss abs rep =
   let work = TH.mkName "work"
       fx   = TH.mkName "fix"
    in
-      fixIntro
+      fixIntroR
       >>> defAllR idR ( appAllR idR (letIntroR "f")
                         >>> letFloatArgR
                         >>> letAllR idR ( forewardT (workerWrapperFacBR mAss abs rep)
@@ -414,7 +414,7 @@ wwAssC :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption C
        -> CoreExpr                  -- ^ rep
        -> CoreExpr                  -- ^ f
        -> BiRewriteH CoreExpr
-wwAssC mr abs rep f = beforeBiR (do _ <- isFixExpr
+wwAssC mr abs rep f = beforeBiR (do _ <- isFixExprT
                                     whenJust (verifyAssC abs rep f) mr
                                 )
                                 (\ () -> bidirectional wwCL wwCR)
@@ -459,7 +459,7 @@ verifyAssA abs rep assA =
      a       <- constT (newIdH "a" tyA)
      let lhs = App abs (App rep (Var a))
          rhs = Var a
-     verifyEqualityProofT lhs rhs assA
+     verifyEqualityLeftToRightT lhs rhs assA
 
 verifyAssB :: CoreExpr          -- ^ abs
            -> CoreExpr          -- ^ rep
@@ -476,7 +476,7 @@ verifyAssB abs rep f assB =
      x        <- constT (newIdH "x" tyX)
      let lhs = App abs (App rep (App (App f (Var h)) (Var x)))
          rhs = App (App f (Var h)) (Var x)
-     verifyEqualityProofT lhs rhs assB
+     verifyEqualityLeftToRightT lhs rhs assB
 
 verifyAssC :: CoreExpr          -- ^ abs
            -> CoreExpr          -- ^ rep
@@ -491,9 +491,9 @@ verifyAssC abs rep f assC =
      guardMsg (eqType tyA tA) "type of program body does not match types of abs/rep."
      h        <- constT (newIdH "h" tyXA)
      x        <- constT (newIdH "x" tyX)
-     rhs      <- mkFix f
-     lhs      <- mkFix (Lam h (Lam x (App abs (App rep (App (App f (Var h)) (Var x))))))
-     verifyEqualityProofT lhs rhs assC
+     rhs      <- mkFixT f
+     lhs      <- mkFixT (Lam h (Lam x (App abs (App rep (App (App f (Var h)) (Var x))))))
+     verifyEqualityLeftToRightT lhs rhs assC
 
 --------------------------------------------------------------------------------------------------
 

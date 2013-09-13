@@ -1,0 +1,2 @@
+unfold 'f
+case-elim

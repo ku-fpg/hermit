@@ -60,6 +60,16 @@ Fibonacci (Stream Memoisation)
 * Interesting rewrites: ww-split tactic
 
 
+Fix-Fusion
+==========
+
+* Example of how to use the Fixed-Point Fusion Rule.
+
+* This is a trivial example to demonstrate how do equational reasoning in HERMIT.
+
+* Interesting rewrites: fix-fusion-rule
+
+
 Flatten
 =======
 

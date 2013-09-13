@@ -168,23 +168,23 @@ workerWrapperFacBR mAss wrap unwrap = beforeBiR (wrapUnwrapTypes wrap unwrap)
   where
     wwL :: Type -> Type -> RewriteH CoreExpr
     wwL tyA tyB = prefixFailMsg "worker/wrapper factorisation failed: " $
-                  do (tA,f) <- isFixExpr
+                  do (tA,f) <- isFixExprT
                      guardMsg (eqType tyA tA) ("wrapper/unwrapper types do not match fix body type.")
                      whenJust (verifyWWAss wrap unwrap f) mAss
                      b <- constT (newIdH "x" tyB)
-                     App wrap <$> mkFix (Lam b (App unwrap (App f (App wrap (Var b)))))
+                     App wrap <$> mkFixT (Lam b (App unwrap (App f (App wrap (Var b)))))
 
     wwR :: RewriteH CoreExpr
     wwR  =    prefixFailMsg "(reverse) worker/wrapper factorisation failed: " $
               withPatFailMsg "not an application." $
               do App wrap2 fx <- idR
                  withPatFailMsg wrongFixBody $
-                   do (_, Lam b (App unwrap1 (App f (App wrap1 (Var b'))))) <- isFixExpr <<< constant fx
+                   do (_, Lam b (App unwrap1 (App f (App wrap1 (Var b'))))) <- isFixExprT <<< constant fx
                       guardMsg (b == b') wrongFixBody
                       guardMsg (equivalentBy exprAlphaEq [wrap, wrap1, wrap2]) "wrappers do not match."
                       guardMsg (exprAlphaEq unwrap unwrap1) "unwrappers do not match."
                       whenJust (verifyWWAss wrap unwrap f) mAss
-                      mkFix f
+                      mkFixT f
 
     wrongFixBody :: String
     wrongFixBody = "body of fix does not have the form Lam b (App unwrap (App f (App wrap (Var b))))"
@@ -255,7 +255,7 @@ workerWrapperSplitR mAss wrap unwrap =
   let work = TH.mkName "work"
       fx   = TH.mkName "fix"
    in
-      fixIntro
+      fixIntroR
       >>> defAllR idR ( appAllR idR (letIntroR "f")
                         >>> letFloatArgR
                         >>> letAllR idR ( forewardT (workerWrapperFacBR mAss wrap unwrap)
@@ -378,7 +378,7 @@ wwAssC :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption C
        -> CoreExpr                  -- ^ unwrap
        -> CoreExpr                  -- ^ f
        -> BiRewriteH CoreExpr
-wwAssC mr wrap unwrap f = beforeBiR (do _ <- isFixExpr
+wwAssC mr wrap unwrap f = beforeBiR (do _ <- isFixExprT
                                         whenJust (verifyAssC wrap unwrap f) mr
                                     )
                                     (\ () -> bidirectional wwCL wwCR)
@@ -423,7 +423,7 @@ verifyAssA wrap unwrap assA =
      a       <- constT (newIdH "a" tyA)
      let lhs = App wrap (App unwrap (Var a))
          rhs = Var a
-     verifyEqualityProofT lhs rhs assA
+     verifyEqualityLeftToRightT lhs rhs assA
 
 verifyAssB :: CoreExpr          -- ^ wrap
            -> CoreExpr          -- ^ unwrap
@@ -436,7 +436,7 @@ verifyAssB wrap unwrap f assB =
      a      <- constT (newIdH "a" tyA)
      let lhs = App wrap (App unwrap (App f (Var a)))
          rhs = App f (Var a)
-     verifyEqualityProofT lhs rhs assB
+     verifyEqualityLeftToRightT lhs rhs assB
 
 verifyAssC :: CoreExpr          -- ^ wrap
            -> CoreExpr          -- ^ unwrap
@@ -447,9 +447,9 @@ verifyAssC wrap unwrap f assC =
   prefixFailMsg ("verification of worker/wrapper assumption C failed: ") $
   do (tyA,_) <- wrapUnwrapTypes wrap unwrap
      a       <- constT (newIdH "a" tyA)
-     rhs     <- mkFix f
-     lhs     <- mkFix (Lam a (App wrap (App unwrap (App f (Var a)))))
-     verifyEqualityProofT lhs rhs assC
+     rhs     <- mkFixT f
+     lhs     <- mkFixT (Lam a (App wrap (App unwrap (App f (Var a)))))
+     verifyEqualityLeftToRightT lhs rhs assC
 
 --------------------------------------------------------------------------------------------------
 

@@ -186,6 +186,6 @@ verifyStrictT f r = prefixFailMsg "strictness verification failed: " $
      undefArg       <- mkUndefinedValT argTy
      rhs            <- mkUndefinedValT resTy
      let lhs = App f undefArg
-     verifyEqualityProofT lhs rhs r
+     verifyEqualityLeftToRightT lhs rhs r
 
 ------------------------------------------------------------------------
