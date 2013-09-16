@@ -58,12 +58,14 @@ verifyEqualityCommonTargetT lhs rhs lhsR rhsR =
 
 ------------------------------------------------------------------------------
 
+-- Note: We use global Ids for verification to avoid out-of-scope errors.
+
 -- | Given f :: X -> Y and g :: Y -> X, verify that f (g y) ==> y and g (f x) ==> x.
 verifyIsomorphismT :: CoreExpr -> CoreExpr -> Rewrite c HermitM CoreExpr -> Rewrite c HermitM CoreExpr -> Translate c HermitM a ()
 verifyIsomorphismT f g fgR gfR = prefixFailMsg "Isomorphism verification failed: " $
    do (tyX, tyY) <- funsWithInverseTypes f g
-      x          <- constT (newIdH "x" tyX)
-      y          <- constT (newIdH "y" tyY)
+      x          <- constT (newGlobalIdH "x" tyX)
+      y          <- constT (newGlobalIdH "y" tyY)
       verifyEqualityLeftToRightT (App f (App g (Var y))) (Var y) fgR
       verifyEqualityLeftToRightT (App g (App f (Var x))) (Var x) gfR
 
@@ -71,7 +73,7 @@ verifyIsomorphismT f g fgR gfR = prefixFailMsg "Isomorphism verification failed:
 verifyRetractionT :: CoreExpr -> CoreExpr -> Rewrite c HermitM CoreExpr -> Translate c HermitM a ()
 verifyRetractionT f g r = prefixFailMsg "Retraction verification failed: " $
    do (_tyX, tyY) <- funsWithInverseTypes f g
-      y           <- constT (newIdH "y" tyY)
+      y           <- constT (newGlobalIdH "y" tyY)
       let lhs = App f (App g (Var y))
           rhs = Var y
       verifyEqualityLeftToRightT lhs rhs r

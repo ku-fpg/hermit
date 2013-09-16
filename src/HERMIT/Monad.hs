@@ -6,6 +6,7 @@ module HERMIT.Monad
             HermitM
           , runHM
           , liftCoreM
+          , newGlobalIdH
           , newIdH
           , newTyVarH
           , newCoVarH
@@ -138,19 +139,23 @@ instance HasDynFlags HermitM where
 newName :: String -> HermitM Name
 newName nm = mkSystemVarName <$> getUniqueM <*> pure (mkFastString nm)
 
--- | Make a unique identifier for a specified type based on a provided name.
+-- | Make a unique global identifier for a specified type, using a provided name.
+newGlobalIdH :: String -> Type -> HermitM Id
+newGlobalIdH nm ty = mkVanillaGlobal <$> newName nm <*> pure ty
+
+-- | Make a unique identifier for a specified type, using a provided name.
 newIdH :: String -> Type -> HermitM Id
 newIdH nm ty = mkLocalId <$> newName nm <*> pure ty
 
--- | Make a unique type variable for a specified kind based on a provided name.
+-- | Make a unique type variable for a specified kind, using a provided name.
 newTyVarH :: String -> Kind -> HermitM TyVar
 newTyVarH nm k = mkTyVar <$> newName nm <*> pure k
 
--- | Make a unique coercion variable for a specified type based on a provided name.
+-- | Make a unique coercion variable for a specified type, using a provided name.
 newCoVarH :: String -> Type -> HermitM TyVar
 newCoVarH nm ty = mkCoVar <$> newName nm <*> pure ty
 
--- | This gives an new version of a 'Var', with the same info, and a modified textual name.
+-- | Make a new variable of the same type, with a modified textual name.
 cloneVarH :: (String -> String) -> Var -> HermitM Var
 cloneVarH nameMod v | isTyVar v = newTyVarH name ty
                     | isCoVar v = newCoVarH name ty

@@ -304,7 +304,7 @@ rulesToRewriteH rs = prefixFailMsg "RulesToRewrite failed: " $
         Nothing         -> fail "rule not matched"
         Just (r, expr)  -> do
             let e' = mkApps expr (drop (ruleArity r) args)
-            if all (inScope c) $ varSetElems $ localFreeVarsExpr e'
+            if all (inScope c) $ varSetElems $ localFreeVarsExpr e' -- TODO: The problem with this check, is that it precludes the case where this is an intermediate transformation.  I can imagine situations where some variables would be out-of-scope at this point, but in scope again after a subsequent transformation.
               then return e'
               else fail $ unlines ["Resulting expression after rule application contains variables that are not in scope."
                                   ,"This can probably be solved by running the flatten-module command at the top level."]

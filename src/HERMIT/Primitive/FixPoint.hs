@@ -151,7 +151,7 @@ fixFusionRuleBR meq mfstrict f g h = beforeBiR
       guardMsg (typeAlphaEq tyA tyA' && typeAlphaEq tyB tyB') "given functions do not have compatible types."
       whenJust (verifyStrictT f) mfstrict
       whenJust (\ (lhsR,rhsR) ->
-                  do a <- constT (newIdH "a" tyA)
+                  do a <- constT (newGlobalIdH "a" tyA)
                      let lhs = App f (App g (Var a))
                          rhs = App h (App f (Var a))
                      verifyEqualityCommonTargetT lhs rhs lhsR rhsR
