@@ -29,6 +29,7 @@ import HERMIT.GHC hiding ((<>))
 import HERMIT.External
 
 import HERMIT.Primitive.Common
+import HERMIT.Primitive.Reasoning hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 

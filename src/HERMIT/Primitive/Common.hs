@@ -3,11 +3,8 @@
 -- | Note: this module should NOT export externals. It is for common
 --   transformations needed by the other primitive modules.
 module HERMIT.Primitive.Common
-    ( -- * Equational Reasoning Support
-      verifyEqualityLeftToRightT
-    , verifyEqualityCommonTargetT
-      -- * Utility Transformations
-    , applyInContextT
+    ( -- * Utility Transformations
+      applyInContextT
       -- ** Finding function calls.
     , callT
     , callPredT
@@ -251,22 +248,5 @@ findIdBuiltIn = go . showName
 --   Argument 'String' should be the desired form of the expression.
 wrongExprForm :: String -> String
 wrongExprForm form = "Expression does not have the form: " ++ form
-
-------------------------------------------------------------------------------
-
--- | Given two expressions, and a rewrite from the former to the latter, verify that rewrite.
-verifyEqualityLeftToRightT :: MonadCatch m => CoreExpr -> CoreExpr -> Rewrite c m CoreExpr -> Translate c m a ()
-verifyEqualityLeftToRightT sourceExpr targetExpr r =
-  prefixFailMsg "equality verification failed: " $
-  do resultExpr <- r <<< return sourceExpr
-     guardMsg (exprAlphaEq targetExpr resultExpr) "result of running proof on lhs of equality does not match rhs of equality."
-
--- | Given two expressions, and a rewrite from the former to the latter, verify that rewrite.
-verifyEqualityCommonTargetT :: MonadCatch m => CoreExpr -> CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Translate c m a ()
-verifyEqualityCommonTargetT lhs rhs lhsR rhsR =
-  prefixFailMsg "equality verification failed: " $
-  do lhsResult <- lhsR <<< return lhs
-     rhsResult <- rhsR <<< return rhs
-     guardMsg (exprAlphaEq lhsResult rhsResult) "results of running proofs on both sides of equality do not match."
 
 ------------------------------------------------------------------------------

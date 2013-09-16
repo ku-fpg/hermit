@@ -31,6 +31,7 @@ import HERMIT.Utilities
 
 import HERMIT.Primitive.Common
 import HERMIT.Primitive.GHC
+import HERMIT.Primitive.Reasoning
 import HERMIT.Primitive.Undefined
 
 import qualified Language.Haskell.TH as TH

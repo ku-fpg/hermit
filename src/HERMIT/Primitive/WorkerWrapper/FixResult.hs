@@ -33,6 +33,7 @@ import HERMIT.Primitive.Function
 import HERMIT.Primitive.Local
 import HERMIT.Primitive.Navigation
 import HERMIT.Primitive.FixPoint
+import HERMIT.Primitive.Reasoning
 import HERMIT.Primitive.Unfold
 
 import HERMIT.Primitive.WorkerWrapper.Common
@@ -455,11 +456,8 @@ verifyAssA :: CoreExpr          -- ^ abs
            -> TranslateH x ()
 verifyAssA abs rep assA =
   prefixFailMsg ("verification of worker/wrapper Assumption A failed: ") $
-  do (tyA,_) <- absRepTypes abs rep
-     a       <- constT (newIdH "a" tyA)
-     let lhs = App abs (App rep (Var a))
-         rhs = Var a
-     verifyEqualityLeftToRightT lhs rhs assA
+  do _ <- absRepTypes abs rep  -- this check is redundant, but will produce a better error message
+     verifyRetractionT abs rep assA
 
 verifyAssB :: CoreExpr          -- ^ abs
            -> CoreExpr          -- ^ rep

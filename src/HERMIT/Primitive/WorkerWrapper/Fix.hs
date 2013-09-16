@@ -30,6 +30,7 @@ import HERMIT.Primitive.FixPoint
 import HERMIT.Primitive.Function
 import HERMIT.Primitive.Local
 import HERMIT.Primitive.Navigation
+import HERMIT.Primitive.Reasoning
 import HERMIT.Primitive.Unfold
 
 import HERMIT.Primitive.WorkerWrapper.Common
@@ -419,11 +420,8 @@ verifyAssA :: CoreExpr          -- ^ wrap
            -> TranslateH x ()
 verifyAssA wrap unwrap assA =
   prefixFailMsg ("verification of worker/wrapper Assumption A failed: ") $
-  do (tyA,_) <- wrapUnwrapTypes wrap unwrap
-     a       <- constT (newIdH "a" tyA)
-     let lhs = App wrap (App unwrap (Var a))
-         rhs = Var a
-     verifyEqualityLeftToRightT lhs rhs assA
+  do _ <- wrapUnwrapTypes wrap unwrap -- this check is redundant, but will produce a better error message
+     verifyRetractionT wrap unwrap assA
 
 verifyAssB :: CoreExpr          -- ^ wrap
            -> CoreExpr          -- ^ unwrap
@@ -433,7 +431,7 @@ verifyAssB :: CoreExpr          -- ^ wrap
 verifyAssB wrap unwrap f assB =
   prefixFailMsg ("verification of worker/wrapper assumption B failed: ") $
   do (tyA,_) <- wrapUnwrapTypes wrap unwrap
-     a      <- constT (newIdH "a" tyA)
+     a       <- constT (newIdH "a" tyA)
      let lhs = App wrap (App unwrap (App f (Var a)))
          rhs = App f (Var a)
      verifyEqualityLeftToRightT lhs rhs assB
