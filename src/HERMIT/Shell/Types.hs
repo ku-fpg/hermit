@@ -77,7 +77,8 @@ data MetaCommand
    = Resume
    | Abort
    | Continue -- exit the shell, but don't abort/resume
-   | Dump String String String Int
+   | Diff SAST SAST
+   | Dump String String Int
    | LoadFile ScriptName FilePath  -- load a file on top of the current node
    | SaveFile FilePath
    | ScriptToRewrite RewriteName ScriptName
@@ -115,7 +116,7 @@ data CLException = CLAbort
                  | CLResume SAST
                  | CLContinue CommandLineState
                  | CLError String
-
+    
 instance Error CLException where
     strMsg = CLError
 

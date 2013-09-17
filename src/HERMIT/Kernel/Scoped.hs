@@ -1,14 +1,13 @@
 {-# LANGUAGE RankNTypes, FlexibleContexts #-}
 module HERMIT.Kernel.Scoped
-       (
-         Direction(..)
-       , LocalPath
-       , moveLocally
-       , ScopedKernel(..)
-       , SAST(..)
-       , scopedKernel
-) where
-
+    ( Direction(..)
+    , LocalPath
+    , moveLocally
+    , ScopedKernel(..)
+    , SAST(..)
+    , scopedKernel
+    , catchFails
+    ) where
 
 import Control.Arrow
 import Control.Concurrent.STM

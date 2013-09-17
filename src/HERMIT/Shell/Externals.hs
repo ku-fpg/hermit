@@ -86,6 +86,8 @@ shell_externals = map (.+ Shell)
        [ "goto a named step in the derivation" ]
    , external "tag"             (CLSModify . versionCmd . AddTag)
        [ "tag <label> names the current AST with a label" ]                     .+ VersionControl
+   , external "diff"            (\ s1 s2 -> Diff (SAST s1) (SAST s2))
+       [ "show diff of two ASTs" ]                                              .+ VersionControl
    , external "set-fail-hard" (\ bStr -> CLSModify $ \ st ->
         case reads bStr of
             [(b,"")] -> return $ st { cl_failhard = b }

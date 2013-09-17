@@ -25,18 +25,19 @@ import Control.Monad.Error
 
 import Data.Char
 import Data.Monoid
-import Data.List (intercalate, isPrefixOf, nub, partition)
+import Data.List (intercalate, isInfixOf, isPrefixOf, isSuffixOf, nub, partition)
 import qualified Data.Map as M
 import Data.Maybe
 
-import HERMIT.Monad
-import HERMIT.Kure
+import HERMIT.Core
 import HERMIT.Dictionary
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
 import HERMIT.Interp
 import HERMIT.Kernel (queryK)
 import HERMIT.Kernel.Scoped hiding (abortS, resumeS)
+import HERMIT.Kure
+import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 
@@ -50,6 +51,8 @@ import HERMIT.Shell.Renderer
 import HERMIT.Shell.Types
 
 import System.IO
+import System.IO.Temp
+import System.Process
 
 -- import System.Console.ANSI
 import System.Console.Haskeline hiding (catch)
@@ -371,7 +374,49 @@ performMetaCommand Resume = do
     resume sast'
 
 performMetaCommand Continue = get >>= continue
-performMetaCommand (Dump fileName _pp renderer width) = do
+performMetaCommand (Diff s1 s2) = do
+    st <- get
+    
+    ast1 <- toASTS (cl_kernel st) s1
+    ast2 <- toASTS (cl_kernel st) s2
+    let getDoc ast = liftIO (queryK (kernelS $ cl_kernel st) 
+                                    ast 
+                                    (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ cl_pretty st) 
+                                    (cl_kernel_env st)) >>= runKureM return fail
+        getCmds sast | sast == s1 = []
+                     | otherwise = case [ (f,c) | (f,c,to) <- vs_graph (cl_version st), to == sast ] of
+                                    [(sast',cmd)] -> unparseExprH cmd : getCmds sast'
+                                    _ -> ["error: history broken!"] -- should be impossible
+
+    cl_putStrLn "Commands:"
+    cl_putStrLn "========="
+    cl_putStrLn $ unlines $ reverse $ getCmds s2
+
+    doc1 <- getDoc ast1
+    doc2 <- getDoc ast2
+
+    r <- catchFails $
+            withSystemTempFile "A.dump" $ \ fp1 h1 ->
+                withSystemTempFile "B.dump" $ \ fp2 h2 ->
+                    withSystemTempFile "AB.diff" $ \ fp3 h3 -> do
+                        unicodeConsole h1 (cl_pretty_opts st) (Right doc1)
+                        hFlush h1
+                        unicodeConsole h2 (cl_pretty_opts st) (Right doc2)
+                        hFlush h2
+                        let cmd = unwords ["diff", "-b", "-U 5", fp1, fp2]
+                            p = (shell cmd) { std_out = UseHandle h3 , std_err = UseHandle h3 }
+                        (_,_,_,h) <- createProcess p
+                        _ <- waitForProcess h
+                        res <- readFile fp3
+                        -- strip out some of the diff lines
+                        return $ unlines [ l | l <- lines res, not (fp1 `isInfixOf` l || fp2 `isInfixOf` l)
+                                                             , not ("@@" `isPrefixOf` l && "@@" `isSuffixOf` l) ]
+
+    cl_putStrLn "Diff:"
+    cl_putStrLn "====="
+    cl_putStr r
+
+performMetaCommand (Dump fileName renderer width) = do
     st <- get
     case lookup renderer shellRenderers of
       Just r -> do doc <- prefixFailMsg "Bad renderer option: " $

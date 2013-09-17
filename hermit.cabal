@@ -154,8 +154,10 @@ Library
                  marked-pretty >= 0.1,
                  mtl >= 2.1.2,
                  operational >= 0.2.2.1,
+                 process >= 1.1.0.2,
                  stm >= 2.4,
                  template-haskell >= 2.8.0.0,
+                 temporary >= 1.1.2.4,
                  terminfo >= 0.3.2.5,
                  transformers
 
