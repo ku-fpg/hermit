@@ -366,7 +366,7 @@ letUnfloatLamR = prefixFailMsg "Let unfloating from lambda failed: " $
 --   The argument list should contain the let-bound variables, in the desired order.
 reorderNonRecLetsR :: MonadCatch m => [TH.Name] -> Rewrite c m CoreExpr
 reorderNonRecLetsR nms = prefixFailMsg "Reorder lets failed: " $
-                 do guardMsg (not $ null nms) "no names given."
+                 do guardMsg (notNull nms) "no names given."
                     guardMsg (nodups nms) "duplicate names given."
                     e <- idR
                     (ves,x) <- setFailMsg "insufficient non-recursive lets." $ takeNonRecLets (length nms) e

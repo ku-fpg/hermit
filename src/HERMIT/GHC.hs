@@ -139,7 +139,7 @@ ppIdInfo v info
     , (has_caf_info,   ptext (sLit "Caf=") <> ppr caf_info)
     , (has_strictness, ptext (sLit "Str=") <> pprStrictness str_info)
     , (has_unf,        ptext (sLit "Unf=") <> ppr unf_info)
-    , (not (null rules), ptext (sLit "RULES:") <+> vcat (map ppr rules))
+    , (notNull rules,  ptext (sLit "RULES:") <+> vcat (map ppr rules))
     ]	-- Inline pragma, occ, demand, lbvar info
 	-- printed out with all binders (when debug is on);
 	-- see PprCore.pprIdBndr

@@ -311,8 +311,8 @@ caseReduceDataconR = prefixFailMsg "Case reduction failed: " $
                                        let fvss    = map freeVarsExpr $ map Type univTys ++ es
                                            shadows = [ v | (v,n) <- zip vs [1..], any (elemVarSet v) (drop n fvss) ]
                                        in if | any (elemVarSet wild) fvss -> alphaCaseBinderR Nothing >>> go
-                                             | not (null shadows)     -> caseOneR (fail "scrutinee") (fail "binder") (fail "type") (\ _ -> acceptR (\ (dc'',_,_) -> dc'' == dc') >>> alphaAltVarsR shadows) >>> go
-                                             | null shadows           -> return $ flip mkCoreLets rhs $ zipWith NonRec (wild : vs) (e : es)
+                                             | null shadows               -> return $ flip mkCoreLets rhs $ zipWith NonRec (wild : vs) (e : es)
+                                             | otherwise                  -> caseOneR (fail "scrutinee") (fail "binder") (fail "type") (\ _ -> acceptR (\ (dc'',_,_) -> dc'' == dc') >>> alphaAltVarsR shadows) >>> go
 -- WARNING: The alpha-renaming to avoid variable capture has not been tested.  We need testing infrastructure!
 
 -- | Case split a free identifier in an expression:
@@ -389,7 +389,7 @@ caseMergeAltsR :: MonadCatch m => Rewrite c m CoreExpr
 caseMergeAltsR = prefixFailMsg "merge-case-alts failed: " $
                  withPatFailMsg (wrongExprForm "Case e w ty alts") $
                  do Case e w ty alts <- idR
-                    guardMsg (not $ null alts) "zero alternatives cannot be merged."
+                    guardMsg (notNull alts) "zero alternatives cannot be merged."
                     let rhss = [ rhs | (_,_,rhs) <- alts ]
                     guardMsg (equivalentBy exprAlphaEq rhss) "right-hand sides are not all equal."
                     guardMsg (all altVarsUnused alts) "variables bound in case alt pattern appear free in alt right-hand side."
