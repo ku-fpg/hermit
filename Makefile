@@ -11,4 +11,4 @@ ghci:
 	ghc --interactive -Wall -package ghc -isrc/ ${FILE}
 
 test:
-	( cd tests ; runghc Test.hs )
+	( cd tests ; runghc Main.hs )

@@ -1,12 +1,11 @@
--- note: need to cabal install temporary to run
-module Test where
+module Main where
 
 import Control.Monad
 
 import System.Directory
 import System.Exit
 import System.FilePath as F
-import System.IO (Handle, hGetContents, hPutStrLn, hClose)
+import System.IO (Handle, hGetContents, hPutStrLn, hClose, openFile, IOMode(WriteMode))
 import System.IO.Temp (withTempFile)
 import System.Process hiding (runCommand)
 
@@ -77,13 +76,17 @@ main = do
                                 [ "-fplugin=HERMIT"
                                 , "-fplugin-opt=HERMIT:Main:" ++ fp -- made by mkTestScript
                                 , "-v0"
-                                , "&> " ++ dfile
                                 , ")" ]
                 diff = unwords [ "diff", "-b", "-U 5", gfile, dfile ]
 
+            -- Adding a &> dfile redirect in cmd causes the call to GHC to not block
+            -- until the compiler is finished (on Linux, not OSX). So we do the Haskell
+            -- equivalent here by opening our own file.
+            fh <- openFile dfile WriteMode
             -- putStrLn cmd
-            (_,_,_,rHermit) <- createProcess $ shell cmd
+            (_,_,_,rHermit) <- createProcess $ (shell cmd) { std_out = UseHandle fh, std_err = UseHandle fh }
             exHermit <- waitForProcess rHermit
+            hClose fh
 
             case exHermit of
                 ExitFailure i -> putStrLn $ "HERMIT failed with code: " ++ show i
