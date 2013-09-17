@@ -33,6 +33,7 @@ module HERMIT.GHC
     , CoAxiom.Branched
 #endif
     , notElemVarSet
+    , showVarSet
     , Pair(..)
     ) where
 
@@ -53,7 +54,18 @@ import Data.Maybe (isJust)
 #else
 import qualified CoAxiom -- for coAxiomName
 #endif
+import Data.List (intercalate)
 import qualified Language.Haskell.TH as TH
+
+--------------------------------------------------------------------------
+
+-- | Show a human-readable version of a list of 'Var's.
+showVars :: [Var] -> String
+showVars = intercalate ", " . map var2String
+
+-- | Show a human-readable version of a 'VarSet'.
+showVarSet :: VarSet -> String
+showVarSet = showVars . varSetElems
 
 --------------------------------------------------------------------------
 

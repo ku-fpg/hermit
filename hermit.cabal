@@ -200,6 +200,7 @@ Library
        HERMIT.Primitive.Navigation
        HERMIT.Primitive.Navigation.Crumbs
        HERMIT.Primitive.New
+       HERMIT.Primitive.Query
        HERMIT.Primitive.Reasoning
        HERMIT.Primitive.Undefined
        HERMIT.Primitive.Unfold

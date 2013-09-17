@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleContexts, ScopedTypeVariables, LambdaCase #-}
+{-# LANGUAGE CPP, FlexibleContexts, ScopedTypeVariables #-}
 module HERMIT.Primitive.GHC
        ( -- * GHC-based Transformations
          -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
@@ -9,7 +9,6 @@ module HERMIT.Primitive.GHC
        , substExprR
          -- ** Utilities
        , inScope
-       , showVarSet
        , rule
        , rules
        , dynFlagsT
@@ -36,7 +35,7 @@ import Control.Arrow
 import Control.Monad
 
 import Data.Function (on)
-import Data.List (intercalate,mapAccumL,deleteFirstsBy)
+import Data.List (mapAccumL,deleteFirstsBy)
 
 import HERMIT.Core
 import HERMIT.Context
@@ -46,7 +45,6 @@ import HERMIT.External
 import HERMIT.GHC
 
 import HERMIT.Primitive.Debug hiding (externals)
-import HERMIT.Primitive.Navigation hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 
@@ -55,11 +53,7 @@ import qualified Language.Haskell.TH as TH
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
 externals :: [External]
 externals =
-         [ external "info" (info :: TranslateH CoreTC String)
-                [ "Display information about the current node." ]
-         -- , external "free-ids" (promoteExprT freeIdsQuery :: TranslateH Core String)
-         --        [ "List the free identifiers in this expression." ] .+ Query .+ Deep
-         , external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH Core)
+         [ external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH Core)
                 [ "Deshadow a program." ] .+ Deep
          , external "apply-rule" (promoteExprR . rule :: String -> RewriteH Core)
                 [ "Apply a named GHC rule" ] .+ Shallow
@@ -67,8 +61,6 @@ externals =
                 [ "List rules that can be used" ] .+ Query
          , external "apply-rules" (promoteExprR . rules :: [String] -> RewriteH Core)
                 [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
-         , external "compare-values" (compareValues ::  TH.Name -> TH.Name -> TranslateH Core ())
-                [ "Compare the rhs of two values."] .+ Query .+ Predicate
          , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> TH.Name -> RewriteH Core)
                 [ "add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]  .+ Introduce
          , external "dezombify" (promoteExprR dezombifyR :: RewriteH Core)
@@ -126,121 +118,6 @@ substAltR v e = do (_, vs, _) <- idR
 -- letSubstNR :: Int -> Rewrite c m Core
 -- letSubstNR 0 = idR
 -- letSubstNR n = childR 1 (letSubstNR (n - 1)) >>> promoteExprR letSubstR
-
-------------------------------------------------------------------------
-
--- TODO: this should be somewhere else.
-info :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, BoundVars c, HasDynFlags m, MonadCatch m) => Translate c m CoreTC String
-info = do crumbs <- childrenT
-          fvs    <- arr freeVarsCoreTC
-          translate $ \ c coreTC -> do
-            dynFlags <- getDynFlags
-            let pa       = "Path: " ++ showCrumbs (snocPathToPath $ absPath c)
-                node     = "Node: " ++ coreTCNode coreTC
-                con      = "Constructor: " ++ coreTCConstructor coreTC
-                children = "Children: " ++ showCrumbs crumbs
-                bds      = "Bindings in Scope: " ++ showVarSet (boundVars c)
-                freevars = "Free Variables: " ++ showVarSet fvs
-                extra    = case coreTC of
-                             Core (ExprCore e)      -> let tyK = exprKindOrType e
-                                                        in [(if isKind tyK then "Kind: " else "Type: ") ++ showPpr dynFlags tyK] ++
-                                                           case e of
-                                                             Var i -> [ "Identifier Arity: " ++ show (arityOf c i)
-                                                                      , "Identifier Binding Depth: " ++ runKureM show id (lookupHermitBindingDepth i c) ]
-                                                             _     -> []
-                             TyCo (TypeCore ty)     -> ["Kind: " ++ showPpr dynFlags (typeKind ty)]
-                             TyCo (CoercionCore co) -> ["Kind: " ++ showPpr dynFlags (coercionKind co) ]
-                             _                      -> []
-
-            return (intercalate "\n" $ [pa,node,con,children,bds,freevars] ++ extra)
-
--- showIdInfo :: DynFlags -> Id -> String
--- showIdInfo dynFlags v = showSDoc dynFlags $ ppIdInfo v $ idInfo v
-
-coreTCNode :: CoreTC -> String
-coreTCNode (Core core)           = coreNode core
-coreTCNode (TyCo TypeCore{})     = "Type"
-coreTCNode (TyCo CoercionCore{}) = "Coercion"
-
-coreNode :: Core -> String
-coreNode (GutsCore _)  = "Module"
-coreNode (ProgCore _)  = "Program"
-coreNode (BindCore _)  = "Binding Group"
-coreNode (DefCore _)   = "Recursive Definition"
-coreNode (ExprCore _)  = "Expression"
-coreNode (AltCore _)   = "Case Alternative"
-
-coreTCConstructor :: CoreTC -> String
-coreTCConstructor = \case
-                       Core core              -> coreConstructor core
-                       TyCo (TypeCore ty)     -> typeConstructor ty
-                       TyCo (CoercionCore co) -> coercionConstructor co
-
-coreConstructor :: Core -> String
-coreConstructor (GutsCore _)     = "ModGuts"
-coreConstructor (ProgCore prog)  = case prog of
-                                     ProgNil      -> "ProgNil"
-                                     ProgCons _ _ -> "ProgCons"
-coreConstructor (BindCore bnd)   = case bnd of
-                                     Rec _      -> "Rec"
-                                     NonRec _ _ -> "NonRec"
-coreConstructor (DefCore _)      = "Def"
-coreConstructor (AltCore _)      = "(,,)"
-coreConstructor (ExprCore expr)  = case expr of
-                                     Var _        -> "Var"
-                                     Type _       -> "Type"
-                                     Lit _        -> "Lit"
-                                     App _ _      -> "App"
-                                     Lam _ _      -> "Lam"
-                                     Let _ _      -> "Let"
-                                     Case _ _ _ _ -> "Case"
-                                     Cast _ _     -> "Cast"
-                                     Tick _ _     -> "Tick"
-                                     Coercion _   -> "Coercion"
-
-typeConstructor :: Type -> String
-typeConstructor = \case
-                     TyVarTy{}    -> "TyVarTy"
-                     AppTy{}      -> "AppTy"
-                     TyConApp{}   -> "TyConApp"
-                     FunTy{}      -> "FunTy"
-                     ForAllTy{}   -> "ForAllTy"
-                     LitTy{}      -> "LitTy"
-
-coercionConstructor :: Coercion -> String
-coercionConstructor = \case
-                         Refl{}        -> "Refl"
-                         TyConAppCo{}  -> "TyConAppCo"
-                         AppCo{}       -> "AppCo"
-                         ForAllCo{}    -> "ForAllCo"
-                         CoVarCo{}     -> "CoVarCo"
-                         AxiomInstCo{} -> "AxiomInstCo"
-                         SymCo{}       -> "SymCo"
-                         TransCo{}     -> "TransCo"
-                         NthCo{}       -> "NthCo"
-                         InstCo{}      -> "InstCo"
-#if __GLASGOW_HASKELL__ > 706
-                         LRCo{}        -> "LRCo"
-                         SubCo{}       -> "SubCo"
-                         UnivCo{}      -> "UnivCo"
-#else
-                         UnsafeCo{}    -> "UnsafeCo"
-#endif
-
-------------------------------------------------------------------------
-
--- -- | Output a list of all free variables in an expression.
--- freeIdsQuery :: Monad m => Translate c m CoreExpr String
--- freeIdsQuery = do frees <- exprFreeIdsT
---                   return $ "Free identifiers are: " ++ showVarSet frees
-
--- | Show a human-readable version of a list of 'Var's.
-showVars :: [Var] -> String
-showVars = show . map var2String
-
--- | Show a human-readable version of a 'VarSet'.
-showVarSet :: VarSet -> String
-showVarSet = showVars . varSetElems
 
 ------------------------------------------------------------------------
 
@@ -366,17 +243,6 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
                                               ++ [makeRule rule_name v e]
                                      }
          _ -> fail $ "found multiple bindings for " ++ show nm
-
---------------------------------------------------------
-
--- TODO: This should probably be somewhere else.
-compareValues :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> TH.Name -> Translate c m Core ()
-compareValues n1 n2 = do -- TODO: this can be made more efficient by performing a single traversal.  But I'm not sure of the intent.  What should happen if two things match a name?
-        p1 <- onePathToT (arr $ namedBinding n1)
-        p2 <- onePathToT (arr $ namedBinding n2)
-        e1 <- localPathT p1 idR
-        e2 <- localPathT p2 idR
-        guardMsg (e1 `coreAlphaEq` e2) (show n1 ++ " and " ++ show n2 ++ " are not equal.")
 
 --------------------------------------------------------
 
