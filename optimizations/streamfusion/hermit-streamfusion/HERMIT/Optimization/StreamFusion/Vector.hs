@@ -3,10 +3,9 @@ module HERMIT.Optimization.StreamFusion.Vector (plugin, fixStep) where
 
 import Control.Arrow
 
-import GhcPlugins
-
+import HERMIT.Core
 import HERMIT.External
--- import HERMIT.GHC
+import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Optimize
@@ -132,7 +131,7 @@ getDCFromReturn = go <+ (extractR floatAppOut >>> getDCFromReturn)
 getDataConInfo :: TranslateH CoreExpr ([CoreExpr], [Var])
 getDataConInfo = go <+ (extractR floatAppOut >>> getDataConInfo)
     where go = do (_dc, _tys, args) <- callDataConNameT 'M.Stream
-                  fvs <- liftM varSetElems exprFreeVarsT
+                  fvs <- liftM varSetElems $ arr freeVarsExpr
                   return (args, fvs)
 
 floatAppOut :: RewriteH Core
