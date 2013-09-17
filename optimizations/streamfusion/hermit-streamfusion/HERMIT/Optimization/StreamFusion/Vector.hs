@@ -17,8 +17,6 @@ import HERMIT.Primitive.GHC hiding (externals)
 import HERMIT.Primitive.Local hiding (externals)
 import HERMIT.Primitive.Unfold hiding (externals)
 
-import Control.Monad
-
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Fusion.Stream as VS
@@ -131,7 +129,7 @@ getDCFromReturn = go <+ (extractR floatAppOut >>> getDCFromReturn)
 getDataConInfo :: TranslateH CoreExpr ([CoreExpr], [Var])
 getDataConInfo = go <+ (extractR floatAppOut >>> getDataConInfo)
     where go = do (_dc, _tys, args) <- callDataConNameT 'M.Stream
-                  fvs <- liftM varSetElems $ arr freeVarsExpr
+                  fvs <- arr $ varSetElems . freeVarsExpr
                   return (args, fvs)
 
 floatAppOut :: RewriteH Core
