@@ -36,6 +36,7 @@ interpShellCommand =
   , interp $ \ (TranslateCoreTCStringBox tt) -> QueryFun (QueryString tt)
   , interp $ \ (TranslateCoreTCDocHBox tt)   -> QueryFun (QueryDocH $ unTranslateDocH tt)
   , interp $ \ (TranslateCoreCheckBox tt)    -> KernelEffect (CorrectnessCritera tt)
+  , interp $ \ (TranslateCoreTCCheckBox tt)  -> KernelEffect (CorrectnessCritera tt)
   , interp $ \ (effect :: KernelEffect)      -> KernelEffect effect
   , interp $ \ (effect :: ShellEffect)       -> ShellEffect effect
   , interp $ \ (query :: QueryFun)           -> QueryFun query

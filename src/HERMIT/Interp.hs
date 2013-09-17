@@ -61,6 +61,7 @@ interpExpr' _   dict (ListH exprs) = do dyns <- liftM fromDynList $ mapM (interp
                                         return $    toBoxedList dyns NameListBox
                                                  ++ toBoxedList dyns StringListBox
                                                  ++ toBoxedList dyns (PathBox . pathToSnocPath)
+                                                 ++ toBoxedList dyns (TranslateCorePathBox . return . pathToSnocPath) -- ugly hack.  The whole dynamic stuff could do with overhauling.
                                                  ++ toBoxedList dyns IntListBox
                                                  ++ toBoxedList dyns RewriteCoreListBox
 interpExpr' rhs dict (CmdName str)

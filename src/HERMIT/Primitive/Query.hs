@@ -4,7 +4,8 @@ module HERMIT.Primitive.Query
   ( -- * Queries and Predicates
     externals
   , infoT
-  , compareValuesT
+  , compareCoreAtT
+  , compareBoundIdsT
   )
 where
 
@@ -17,9 +18,12 @@ import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
+import HERMIT.Monad
 
+import HERMIT.Primitive.AlphaConversion hiding (externals)
+import HERMIT.Primitive.Common
 import HERMIT.Primitive.GHC hiding (externals)
-import HERMIT.Primitive.Navigation hiding (externals)
+import HERMIT.Primitive.Inline hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 
@@ -29,9 +33,11 @@ import qualified Language.Haskell.TH as TH
 externals :: [External]
 externals =
          [ external "info" (infoT :: TranslateH CoreTC String)
-                [ "Display information about the current node." ]
-         , external "compare-values" (compareValuesT ::  TH.Name -> TH.Name -> TranslateH Core ())
-                [ "Compare the rhs of two values."] .+ Query .+ Predicate
+                [ "Display information about the current node." ] .+ Query
+         , external "compare-bound-ids" (compareBoundIds ::  TH.Name -> TH.Name -> TranslateH CoreTC ())
+                [ "Compare the definitions of two in-scope identifiers for alpha equality."] .+ Query .+ Predicate
+         , external "compare-core-at" (compareCoreAtT ::  TranslateH Core LocalPathH -> TranslateH Core LocalPathH -> TranslateH Core ())
+                [ "Compare the core fragments at the end of the given paths for alpha-equality."] .+ Query .+ Predicate
          ]
 
 --------------------------------------------------------
@@ -143,12 +149,30 @@ coercionConstructor = \case
 
 --------------------------------------------------------
 
-compareValuesT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> TH.Name -> Translate c m Core ()
-compareValuesT n1 n2 = do -- TODO: this can be made more efficient by performing a single traversal.  But I'm not sure of the intent.  What should happen if two things match a name?
-        p1 <- onePathToT (arr $ namedBinding n1)
-        p2 <- onePathToT (arr $ namedBinding n2)
-        e1 <- localPathT p1 idR
-        e2 <- localPathT p2 idR
-        guardMsg (e1 `coreAlphaEq` e2) (show n1 ++ " and " ++ show n2 ++ " are not equal.")
+-- | Compare the core fragments at the end of the specified 'LocalPathH's.
+compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, ReadPath c Crumb, MonadCatch m) => Translate c m Core LocalPathH -> Translate c m Core LocalPathH -> Translate c m Core ()
+compareCoreAtT p1T p2T =
+  do p1 <- p1T
+     p2 <- p2T
+     core1 <- localPathT p1 idR
+     core2 <- localPathT p2 idR
+     guardMsg (core1 `coreAlphaEq` core2) "core fragments are not alpha-equivalent."
+
+-- | Compare the definitions of two identifiers for alpha-equality.
+compareBoundIdsT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Id -> Id -> Translate c HermitM x ()
+compareBoundIdsT i1 i2 =
+  do e1 <-                       fst ^<< getUnfoldingT AllBinders <<< return i1
+     e2 <- replaceVarR i2 i1 <<< fst ^<< getUnfoldingT AllBinders <<< return i2
+     -- recursive definitions wouldn't be alpha-equivalent without replacing the identifier
+     guardMsg (e1 `exprAlphaEq` e2) "bindings are not alpha-equivalent."
+
+-- | Compare the definitions of the two named identifiers for alpha-equality.
+compareBoundIds :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, HasGlobalRdrEnv c) => TH.Name -> TH.Name -> Translate c HermitM x ()
+compareBoundIds nm1 nm2 = do i1 <- findIdT nm1
+                             i2 <- findIdT nm2
+                             compareBoundIdsT i1 i2
+
+-- TODO: generalise compareBoundIds to comparBoundVars.
+--       this will require generalising the underlying functions
 
 --------------------------------------------------------

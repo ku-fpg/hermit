@@ -53,7 +53,6 @@ import HERMIT.Context
 import HERMIT.GHC
 
 import qualified Language.Haskell.TH as TH
-import Language.Haskell.TH.Syntax (showName)
 
 ------------------------------------------------------------------------------
 
@@ -194,7 +193,7 @@ boundVarsT = contextonlyT (return . boundVars)
 
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
 findBoundVarT :: (BoundVars c, MonadCatch m) => TH.Name -> Translate c m a Var
-findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ showName nm ++ ", ") $
+findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $
                         do c <- contextT
                            case varSetElems (findBoundVars nm c) of
                              []         -> fail "no matching variables in scope."
@@ -203,7 +202,7 @@ findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ showName nm ++ ", ")
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
 findIdT :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m) => TH.Name -> Translate c m a Id
-findIdT nm = prefixFailMsg ("Cannot resolve name " ++ showName nm ++ ", ") $
+findIdT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $
              contextonlyT (findId nm)
 
 findId :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => TH.Name -> c -> m Id
@@ -221,7 +220,7 @@ findIdMG nm c =
                 fail $ "multiple matches found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
 
 findIdBuiltIn :: forall m. Monad m => TH.Name -> m Id
-findIdBuiltIn = go . showName
+findIdBuiltIn = go . show
     where go ":"     = dataConId consDataCon
           go "[]"    = dataConId nilDataCon
 
