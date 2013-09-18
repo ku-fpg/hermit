@@ -1,9 +1,11 @@
-{-# LANGUAGE LambdaCase, ScopedTypeVariables, GADTs #-}
+{-# LANGUAGE LambdaCase, ScopedTypeVariables, GADTs, FlexibleContexts #-}
 
 module HERMIT.Shell.Command
     ( -- * The HERMIT Command-line Shell
       commandLine
     , unicodeConsole
+    , diffDocH
+    , diffR
       -- ** Exported for hermit-web
     , performKernelEffect
     , performQuery
@@ -40,7 +42,9 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
+import HERMIT.PrettyPrinter.Clean (ppCoreTC)
 
+import HERMIT.Primitive.Debug
 import HERMIT.Primitive.GHC
 import HERMIT.Primitive.Inline
 import HERMIT.Primitive.Navigation
@@ -376,12 +380,12 @@ performMetaCommand Resume = do
 performMetaCommand Continue = get >>= continue
 performMetaCommand (Diff s1 s2) = do
     st <- get
-    
+
     ast1 <- toASTS (cl_kernel st) s1
     ast2 <- toASTS (cl_kernel st) s2
-    let getDoc ast = liftIO (queryK (kernelS $ cl_kernel st) 
-                                    ast 
-                                    (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ cl_pretty st) 
+    let getDoc ast = liftIO (queryK (kernelS $ cl_kernel st)
+                                    ast
+                                    (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ cl_pretty st)
                                     (cl_kernel_env st)) >>= runKureM return fail
         getCmds sast | sast == s1 = []
                      | otherwise = case [ (f,c) | (f,c,to) <- vs_graph (cl_version st), to == sast ] of
@@ -395,22 +399,7 @@ performMetaCommand (Diff s1 s2) = do
     doc1 <- getDoc ast1
     doc2 <- getDoc ast2
 
-    r <- catchFails $
-            withSystemTempFile "A.dump" $ \ fp1 h1 ->
-                withSystemTempFile "B.dump" $ \ fp2 h2 ->
-                    withSystemTempFile "AB.diff" $ \ fp3 h3 -> do
-                        unicodeConsole h1 (cl_pretty_opts st) (Right doc1)
-                        hFlush h1
-                        unicodeConsole h2 (cl_pretty_opts st) (Right doc2)
-                        hFlush h2
-                        let cmd = unwords ["diff", "-b", "-U 5", fp1, fp2]
-                            p = (shell cmd) { std_out = UseHandle h3 , std_err = UseHandle h3 }
-                        (_,_,_,h) <- createProcess p
-                        _ <- waitForProcess h
-                        res <- readFile fp3
-                        -- strip out some of the diff lines
-                        return $ unlines [ l | l <- lines res, not (fp1 `isInfixOf` l || fp2 `isInfixOf` l)
-                                                             , not ("@@" `isPrefixOf` l && "@@" `isSuffixOf` l) ]
+    r <- diffDocH (cl_pretty_opts st) doc1 doc2
 
     cl_putStrLn "Diff:"
     cl_putStrLn "====="
@@ -553,4 +542,40 @@ tick var msg = atomically $ do
         return c
 
 ----------------------------------------------------------------------------------------------
+
+-- TODO: this should be in PrettyPrinter.Common, but is here because it relies on
+--       unicodeConsole to get nice colored diffs. We can either switch to straight unicode
+--       renderer and give up on color, or come up with a clever solution.
+diffDocH :: (MonadCatch m, MonadIO m) => PrettyOptions -> DocH -> DocH -> m String
+diffDocH opts doc1 doc2 =
+    catchFails $
+        withSystemTempFile "A.dump" $ \ fp1 h1 ->
+            withSystemTempFile "B.dump" $ \ fp2 h2 ->
+                withSystemTempFile "AB.diff" $ \ fp3 h3 -> do
+                    unicodeConsole h1 opts (Right doc1)
+                    hFlush h1
+                    unicodeConsole h2 opts (Right doc2)
+                    hFlush h2
+                    let cmd = unwords ["diff", "-b", "-U 5", fp1, fp2]
+                        p = (shell cmd) { std_out = UseHandle h3 , std_err = UseHandle h3 }
+                    (_,_,_,h) <- createProcess p
+                    _ <- waitForProcess h
+                    res <- readFile fp3
+                    -- strip out some of the diff lines
+                    return $ unlines [ l | l <- lines res, not (fp1 `isInfixOf` l || fp2 `isInfixOf` l)
+                                                         , not ("@@" `isPrefixOf` l && "@@" `isSuffixOf` l) ]
+
+-- TODO: again this should be elsewhere, but is here because diffDocH is here.
+diffR :: Injection a CoreTC => PrettyOptions -> String -> RewriteH a -> RewriteH a
+diffR opts msg rr = do
+    let pp = extractT $ liftPrettyH opts ppCoreTC
+        runDiff b a = do
+            doc1 <- return b >>> pp
+            doc2 <- return a >>> pp
+            r <- constT $ diffDocH opts doc1 doc2
+            return a >>> traceR (msg ++ " diff:\n" ++ r)
+
+    -- Be careful to only run the rr once, in case it has side effects.
+    (e,r) <- idR &&& attemptM rr
+    either fail (runDiff e) r
 
