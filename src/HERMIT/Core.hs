@@ -50,6 +50,7 @@ module HERMIT.Core
           , freeVarsCoercion
           , localFreeVarsExpr
           , freeIdsExpr
+          , localFreeIdsExpr
 
           -- * Utilities
           , isCoArg
@@ -292,6 +293,11 @@ freeIdsExpr = exprSomeFreeVars isId
 -- | Find all locally defined free variables in an expression.
 localFreeVarsExpr :: CoreExpr -> VarSet
 localFreeVarsExpr = exprSomeFreeVars isLocalVar
+
+-- | Find all locally defined free identifiers in an expression.
+localFreeIdsExpr :: CoreExpr -> VarSet
+localFreeIdsExpr = exprSomeFreeVars isLocalId
+
 
 -- | Find all free identifiers in a binding group, which excludes any variables bound in the group.
 freeVarsBind :: CoreBind -> VarSet
