@@ -1,27 +1,27 @@
 {-# LANGUAGE TemplateHaskell, RankNTypes #-}
 module HERMIT.Optimization.StreamFusion.Vector (plugin, fixStep) where
 
-import Control.Arrow
-
-import HERMIT.Core
-import HERMIT.External
-import HERMIT.GHC
-import HERMIT.Kure
-import HERMIT.Monad
-import HERMIT.Optimize
-
-import HERMIT.Primitive.Common
-import HERMIT.Primitive.Composite hiding (externals)
-import HERMIT.Primitive.Debug hiding (externals)
-import HERMIT.Primitive.GHC hiding (externals)
-import HERMIT.Primitive.Local hiding (externals)
-import HERMIT.Primitive.Unfold hiding (externals)
+import           Control.Arrow
 
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Fusion.Stream as VS
 import qualified Data.Vector.Fusion.Stream.Monadic as M
 import qualified Data.Vector.Fusion.Stream.Size as Size
+
+import           HERMIT.Core
+import           HERMIT.External
+import           HERMIT.GHC
+import           HERMIT.Kure
+import           HERMIT.Monad
+import           HERMIT.Optimize
+
+import           HERMIT.Primitive.Common
+import           HERMIT.Primitive.Composite hiding (externals)
+import           HERMIT.Primitive.Debug hiding (externals)
+import           HERMIT.Primitive.GHC hiding (externals)
+import           HERMIT.Primitive.Local hiding (externals)
+import           HERMIT.Primitive.Unfold hiding (externals)
 
 -- Fix the ordering of type arguments and avoid dealing with size
 fixStep :: forall a b m s. Monad m => a -> m (VS.Step s b) -> m (VS.Step (a,s) b)
