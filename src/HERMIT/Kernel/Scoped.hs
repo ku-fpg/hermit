@@ -20,7 +20,7 @@ import qualified Data.IntMap as I
 import HERMIT.Core
 import HERMIT.Context
 import HERMIT.Kure
-import HERMIT.GHC hiding (Direction,L,liftIO)
+import HERMIT.GHC hiding (Direction,L)
 import HERMIT.Monad
 import HERMIT.Kernel
 

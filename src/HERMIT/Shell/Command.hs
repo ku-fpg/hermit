@@ -517,19 +517,19 @@ getNavCmd = do
 
 cl_kernel_env  :: CommandLineState -> HermitMEnv
 cl_kernel_env st =
-    let out str = do (r,_) <- GHC.liftIO $ runCLM st $ cl_putStrLn str
+    let out str = do (r,_) <- liftIO $ runCLM st $ cl_putStrLn str
                      either (\case CLError msg -> fail msg
                                    _           -> fail "resume abort called from cl_putStrLn (impossible!)")
                             return r
 
     in  mkHermitMEnv $ \ msg -> case msg of
                 DebugTick    msg'      -> do
-                        c <- GHC.liftIO $ tick (cl_tick st) msg'
+                        c <- liftIO $ tick (cl_tick st) msg'
                         out $ "<" ++ show c ++ "> " ++ msg'
                 DebugCore  msg' cxt core -> do
                         out $ "[" ++ msg' ++ "]"
                         doc :: DocH <- apply (cl_pretty st) (liftPrettyC (cl_pretty_opts st) cxt) (inject core)
-                        GHC.liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
+                        liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
 -- tick counter
 tick :: TVar (M.Map String Int) -> String -> IO Int
@@ -572,7 +572,7 @@ diffR opts msg rr = do
         runDiff b a = do
             doc1 <- return b >>> pp
             doc2 <- return a >>> pp
-            r <- constT $ diffDocH opts doc1 doc2
+            r <- diffDocH opts doc1 doc2
             return a >>> traceR (msg ++ " diff:\n" ++ r)
 
     -- Be careful to only run the rr once, in case it has side effects.

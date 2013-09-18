@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, InstanceSigs #-}
 module HERMIT.GHC
     ( -- * GHC Imports
       -- | Things that have been copied from GHC, or imported directly, for various reasons.
@@ -35,9 +35,18 @@ module HERMIT.GHC
     , notElemVarSet
     , showVarSet
     , Pair(..)
+#if __GLASGOW_HASKELL__ <= 706
+    , Control.Monad.IO.Class.liftIO
+#endif
     ) where
 
+#if __GLASGOW_HASKELL__ <= 706
+import qualified Control.Monad.IO.Class
+import qualified MonadUtils (MonadIO,liftIO)
+import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, liftIO)
+#else
 import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars) -- we hide these so that they don't get inadvertently used.  See Core.hs
+#endif
 
 -- hacky direct GHC imports
 import Convert (thRdrNameGuesses)
@@ -197,5 +206,13 @@ zapVarOccInfo i = if isId i
 -- | Determine if a 'Var' is not an element of a 'VarSet'.
 notElemVarSet :: Var -> VarSet -> Bool
 notElemVarSet v vs = not (v `elemVarSet` vs)
+
+--------------------------------------------------------------------------
+
+#if __GLASGOW_HASKELL__ <= 706
+instance Control.Monad.IO.Class.MonadIO CoreM where
+  liftIO :: IO a -> CoreM a
+  liftIO = MonadUtils.liftIO
+#endif
 
 --------------------------------------------------------------------------

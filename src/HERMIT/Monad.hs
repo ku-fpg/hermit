@@ -1,4 +1,4 @@
-{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE CPP, InstanceSigs #-}
 
 module HERMIT.Monad
           (
@@ -28,9 +28,8 @@ import Prelude hiding (lookup)
 
 import Data.Map
 
-import MonadUtils (MonadIO)
-
 import Control.Monad
+import Control.Monad.IO.Class
 import Control.Applicative
 import Control.Arrow
 

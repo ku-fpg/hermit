@@ -28,7 +28,7 @@ where
 
 import qualified Bag
 import qualified CoreLint
-import IOEnv
+import IOEnv hiding (liftIO)
 import qualified SpecConstr
 
 import Control.Arrow
