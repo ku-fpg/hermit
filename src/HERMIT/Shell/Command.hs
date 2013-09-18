@@ -548,7 +548,7 @@ tick var msg = atomically $ do
 --       renderer and give up on color, or come up with a clever solution.
 diffDocH :: (MonadCatch m, MonadIO m) => PrettyOptions -> DocH -> DocH -> m String
 diffDocH opts doc1 doc2 =
-    catchFails $
+    liftAndCatchIO $
         withSystemTempFile "A.dump" $ \ fp1 h1 ->
             withSystemTempFile "B.dump" $ \ fp2 h2 ->
                 withSystemTempFile "AB.diff" $ \ fp3 h3 -> do

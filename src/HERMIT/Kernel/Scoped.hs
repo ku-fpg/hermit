@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, FlexibleContexts #-}
+{-# LANGUAGE RankNTypes, FlexibleContexts, InstanceSigs #-}
 module HERMIT.Kernel.Scoped
     ( Direction(..)
     , LocalPath
@@ -6,13 +6,11 @@ module HERMIT.Kernel.Scoped
     , ScopedKernel(..)
     , SAST(..)
     , scopedKernel
-    , catchFails
     ) where
 
 import Control.Arrow
 import Control.Concurrent.STM
-import Control.Exception (bracketOnError, catch, SomeException)
-import Control.Monad
+import Control.Exception (bracketOnError)
 import Control.Monad.IO.Class
 
 import Data.Maybe (fromMaybe)
@@ -89,15 +87,7 @@ get sAst m = maybe (fail "scopedKernel: invalid SAST") return (I.lookup sAst m)
 
 -- | Ensures that the TMVar is replaced when an error is thrown, and all exceptions are lifted into MonadCatch failures.
 safeTakeTMVar :: (MonadCatch m, MonadIO m) => TMVar a -> (a -> IO b) -> m b
-safeTakeTMVar mvar = catchFails . bracketOnError (atomically $ takeTMVar mvar) (atomically . putTMVar mvar)
-
--- | Lifts exceptions into MonadCatch failures.
-catchFails :: (MonadCatch m, MonadIO m) => IO a -> m a
-catchFails io = liftIO (liftM return io `catch` (\e -> return $ fail $ show (e :: SomeException)))
-                  >>= runKureM return fail
-
-instance MonadCatch IO where
-    catchM io f = io `catch` (\ e -> f $ show (e :: SomeException))
+safeTakeTMVar mvar = liftAndCatchIO . bracketOnError (atomically $ takeTMVar mvar) (atomically . putTMVar mvar)
 
 -- | Start a HERMIT client by providing an IO function that takes the initial 'ScopedKernel' and inital 'SAST' handle.
 --   The 'Modguts' to 'CoreM' Modguts' function required by GHC Plugins is returned.
@@ -112,7 +102,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
             return k
 
         skernel = ScopedKernel
-            { resumeS     = \ (SAST sAst) -> catchFails $ do
+            { resumeS     = \ (SAST sAst) -> liftAndCatchIO $ do
                                 m <- atomically $ readTMVar store
                                 (ast,_,_) <- get sAst m
                                 resumeK kernel ast
@@ -124,7 +114,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                                                           putTMVar store $ I.insert k (ast', base, rel) m
                                                                           return $ SAST k)
                                                fail
-            , queryS      = \ t env (SAST sAst) -> catchFails $ do
+            , queryS      = \ t env (SAST sAst) -> liftAndCatchIO $ do
                                 m <- atomically $ readTMVar store
                                 (ast, base, rel) <- get sAst m
                                 queryK kernel ast (focusT (pathStackToLens base rel) t) env
@@ -140,7 +130,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 atomically $ putTMVar store m'
             , listS       = do m <- liftIO $ atomically $ readTMVar store
                                return [ SAST sAst | sAst <- I.keys m ]
-            , pathS       = \ (SAST sAst) -> catchFails $ do
+            , pathS       = \ (SAST sAst) -> liftAndCatchIO $ do
                                 m <- atomically $ readTMVar store
                                 (_, base, rel) <- get sAst m
                                 return $ pathStack2Paths base rel
@@ -169,7 +159,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                                                    putTMVar store $ I.insert k (ast, base', rel) m
                                                                    return $ SAST k
             , kernelS     = kernel
-            , toASTS      = \ (SAST sAst) -> catchFails $ do
+            , toASTS      = \ (SAST sAst) -> liftAndCatchIO $ do
                                 m <- atomically $ readTMVar store
                                 (ast, _, _) <- get sAst m
                                 return ast
