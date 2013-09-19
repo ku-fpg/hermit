@@ -7,18 +7,13 @@ bash
 any-call (unfold 'gmapT)
 lam-body
 { app-arg
-  inline-all [ '$dData, '"$fData[]" ]
-  bash
-  inline-all [ '$cgmapT, '$fDataInt ]
+  bash-extended-with [ inline [ '$dData, '"$fData[]", '$fDataInt ] ]
+  one-td (inline '$cgmapT)
   bash
   any-call (unfold 'abs)
   bash
   any-call (unfold 'typeOf)
-  bash
-  inline-all [ '"$fData[]" ]
-  bash
-  inline-all [ '$ctypeOf ]
-  bash
+  bash-extended-with [ inline [ '"$fData[]", '$ctypeOf ] ]
   any-call (inline 'eqTyRep)
   bash
   any-call (inline 'typeOf)
@@ -30,4 +25,4 @@ lam-body
   case-split-inline 't2
   { case-alt 0 ; alpha-alt ['f1 , 'f2 ] }
   bash
-}
+ }

@@ -48,17 +48,14 @@ externals =
 
 ------------------------------------------------------------------------------------------------------
 
+basicCombinators :: [String]
+basicCombinators = ["$",".","id","flip","const","fst","snd"]
+
 -- | Unfold the current expression if it is one of the basic combinators: ('$'), ('.'), 'id', 'flip', 'const', 'fst' or 'snd'.
 --   This is intended to be used as a component of simplification traversals such as 'simplifyR' or 'bashR'.
 unfoldBasicCombinatorR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $
-     unfoldNameR (TH.mkName "$")
-  <+ unfoldNameR (TH.mkName ".")
-  <+ unfoldNameR (TH.mkName "id")
-  <+ unfoldNameR (TH.mkName "flip")
-  <+ unfoldNameR (TH.mkName "const")
-  <+ unfoldNameR (TH.mkName "fst")
-  <+ unfoldNameR (TH.mkName "snd")
+     unfoldNamesR (map TH.mkName basicCombinators)
 
 simplifyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $

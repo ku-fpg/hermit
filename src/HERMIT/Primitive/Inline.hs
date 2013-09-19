@@ -7,10 +7,10 @@ module HERMIT.Primitive.Inline
          , getUnfoldingT
          , inlineR
          , inlineNameR
+         , inlineNamesR
          , inlineCaseScrutineeR
          , inlineCaseAlternativeR
          , configurableInlineR
-         , inlineAllR
          , inlineTargetsT
          )
 
@@ -42,23 +42,16 @@ import qualified Language.Haskell.TH as TH
 externals :: [External]
 externals =
             [ external "inline" (promoteExprR inlineR :: RewriteH Core)
-                [ "(Var v) ==> <defn of v>" ].+ Eval .+ Deep .+ TODO
+                [ "(Var v) ==> <defn of v>" ].+ Eval .+ Deep
             , external "inline" (promoteExprR . inlineNameR :: TH.Name -> RewriteH Core)
-                [ "Given a specific v, (Var v) ==> <defn of v>" ].+ Eval .+ Deep
+                [ "Given a specific v, (Var v) ==> <defn of v>" ] .+ Eval .+ Deep
+            , external "inline" (promoteExprR . inlineNamesR :: [TH.Name] -> RewriteH Core)
+                [ "If the current variable matches any of the given names, then inline it." ] .+ Eval .+ Deep
             , external "inline-case-scrutinee" (promoteExprR inlineCaseScrutineeR :: RewriteH Core)
                 [ "if v is a case binder, replace (Var v) with the bound case scrutinee." ] .+ Eval .+ Deep
             , external "inline-case-alternative" (promoteExprR inlineCaseAlternativeR :: RewriteH Core)
                 [ "if v is a case binder, replace (Var v) with the bound case-alternative pattern." ] .+ Eval .+ Deep .+ Unsafe
-            , external "inline-all" (inlineAllR :: [TH.Name] -> RewriteH Core)
-                [ "Recursively inline all occurrences of the given names, in a bottom-up manner." ] .+ Deep
             ]
-
-------------------------------------------------------------------------
-
--- | Recursively inline all occurrences of the given names.
-inlineAllR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM Core
-inlineAllR []  = fail "inline-all failed: no names given."
-inlineAllR nms = innermostR (promoteExprR $ orR $ map inlineNameR nms)
 
 ------------------------------------------------------------------------
 
@@ -69,6 +62,11 @@ data InlineConfig           = CaseBinderOnly CaseBinderInlineOption | AllBinders
 -- | If the current variable matches the given name, then inline it.
 inlineNameR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
 inlineNameR nm = configurableInlineR AllBinders (arr $ cmpTHName2Var nm)
+
+-- | If the current variable matches any of the given names, then inline it.
+inlineNamesR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
+inlineNamesR []  = fail "inline-names failed: no names given."
+inlineNamesR nms = configurableInlineR AllBinders (arr $ \ v -> any (flip cmpTHName2Var v) nms)
 
 -- | Inline the current variable.
 inlineR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr

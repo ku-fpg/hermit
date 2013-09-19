@@ -1,6 +1,5 @@
 -- Worker/Wrapper Assumption A:  wrap (unwrap h) <=> h
 
-inline-all ['wrap,'unwrap]
-bash
+bash-extended-with [ inline ['wrap,'unwrap] ]
 any-bu (case-elim-merge-alts)
 eta-reduce

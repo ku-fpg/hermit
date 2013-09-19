@@ -2,8 +2,6 @@ load-as-rewrite "WWA" "WW-Ass-A.hss"
 flatten-module
 consider 'fac
 ww-split [| wrap |] [| unwrap |] (ww-AssA-to-AssC WWA)
-inline-all ['unwrap, 'wrap]
-inline-all ['*, '-]
-bash-extended-with [case-elim-inline-scrutinee]
+bash-extended-with [ case-elim-inline-scrutinee , inline [ 'unwrap, 'wrap, '*, '- ] ]
 
 { [def-rhs, let-body] ; alpha-lam 'n } -- cosmetic

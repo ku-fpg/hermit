@@ -7,7 +7,7 @@ module HERMIT.Primitive.Unfold
     , unfoldR
     , unfoldPredR
     , unfoldNameR
-    , unfoldAnyR
+    , unfoldNamesR
     , unfoldSaturatedR
     , unfoldStashR
     , specializeR
@@ -51,9 +51,11 @@ externals =
     , external "unfold" (promoteExprR unfoldR :: RewriteH Core)
         [ "In application f x y z, unfold f." ] .+ Deep .+ Context
     , external "unfold" (promoteExprR . unfoldNameR :: TH.Name -> RewriteH Core)
-        [ "Inline a definition, and apply the arguments; traditional unfold" ] .+ Deep .+ Context
+        [ "Inline a definition, and apply the arguments; traditional unfold." ] .+ Deep .+ Context
+    , external "unfold" (promoteExprR . unfoldNamesR :: [TH.Name] -> RewriteH Core)
+        [ "Unfold a definition if it is named in the list." ] .+ Deep .+ Context
     , external "unfold-saturated" (promoteExprR unfoldSaturatedR :: RewriteH Core)
-        [ "Unfold a definition only if the function is fulled applied." ] .+ Deep .+ Context
+        [ "Unfold a definition only if the function is fully applied." ] .+ Deep .+ Context
     , external "specialize" (promoteExprR specializeR :: RewriteH Core)
         [ "Specialize an application to its type and coercion arguments." ] .+ Deep .+ Context
     , external "unfold-rule" ((\ nm -> promoteExprR (rule nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
@@ -98,8 +100,10 @@ unfoldPredR p = callPredT p >> unfoldR
 unfoldNameR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
 unfoldNameR nm = prefixFailMsg ("unfold '" ++ show nm ++ " failed: ") (callNameT nm >> unfoldR)
 
-unfoldAnyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
-unfoldAnyR = orR . map unfoldNameR
+unfoldNamesR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
+unfoldNamesR []  = fail "unfold-names failed: no names given."
+unfoldNamesR nms = setFailMsg "unfold-names failed." $
+                   orR (map unfoldNameR nms)
 
 unfoldSaturatedR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 unfoldSaturatedR = callSaturatedT >> unfoldR

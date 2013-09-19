@@ -3,6 +3,5 @@ define-rewrite "WWC" "ww-AssB-to-AssC WWB"
 flatten-module
 consider 'last
 ww-split-static-arg 1 [0] [| wrap |] [| unwrap |] WWC
-inline-all [ 'f, 'wrap, 'unwrap ]
-bash
+bash-extended-with [ inline [ 'f, 'wrap, 'unwrap ] ]
 unshadow
