@@ -1,7 +1,6 @@
 load-as-rewrite "WWA" "WW-Ass-A.hss"
 define-rewrite "WWC" "ww-result-AssA-to-AssC WWA"
 load-as-rewrite "StrictRepH" "StrictRepH.hss"
-flatten-module
 consider 'rev
 ww-result-split-static-arg 1 [0] [| absH |] [| repH |] WWC
 bash
