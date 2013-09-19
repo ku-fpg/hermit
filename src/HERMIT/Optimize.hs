@@ -24,12 +24,14 @@ module HERMIT.Optimize
     ) where
 
 import Control.Arrow
+import Control.Concurrent.STM
 import Control.Monad.Error hiding (guard)
 import Control.Monad.Operational
 import Control.Monad.State hiding (guard)
 
 import Data.Default
 import Data.Monoid
+import qualified Data.Map as M
 
 import HERMIT.Dictionary
 import HERMIT.External hiding (Query, Shell)
@@ -38,7 +40,6 @@ import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.GHC hiding (singleton, liftIO, display, (<>))
 import qualified HERMIT.GHC as GHC
-import HERMIT.Monad
 import HERMIT.Plugin
 import HERMIT.PrettyPrinter.Common
 import qualified HERMIT.PrettyPrinter.Clean as Clean
@@ -63,6 +64,7 @@ optimize f = hermitPlugin $ \ phaseInfo -> runOM phaseInfo . f
 
 runOM :: PhaseInfo -> OM () -> ModGuts -> CoreM ModGuts
 runOM phaseInfo opt = scopedKernel $ \ kernel initSAST -> do
+    tick <- liftIO $ atomically $ newTVar M.empty
     let initState = CommandLineState
                        { cl_cursor         = initSAST
                        , cl_pretty         = Clean.ppCoreTC
@@ -71,7 +73,7 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST -> do
                        , cl_height         = 30
                        , cl_nav            = False
                        , cl_running_script = False
-                       , cl_tick          = error "cl_tick" -- TODO: var
+                       , cl_tick          = tick
                        , cl_corelint      = True
                        , cl_failhard      = False
                        , cl_window        = mempty
@@ -89,7 +91,7 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST -> do
     either (\case CLAbort         -> abortS kernel
                   CLResume   sast -> resumeS kernel sast
                   CLContinue _    -> putStrLn "Uncaught CLContinue! Aborting..." >> abortS kernel
-                  CLError    err  -> putStrLn err >> abortS kernel) 
+                  CLError    err  -> putStrLn err >> abortS kernel)
            (\ _ -> resumeS kernel $ cl_cursor st) r
 
 -- TODO - better name!
@@ -98,11 +100,7 @@ omToIO initState phaseInfo (OM opt) = runCLM initState (eval phaseInfo opt)
 
 eval :: PhaseInfo -> ProgramT OInst (CLM IO) a -> CLM IO a
 eval phaseInfo comp = do
-    let env = mkHermitMEnv $ GHC.liftIO . debug
-        debug (DebugTick msg) = putStrLn msg
-        debug (DebugCore msg _c _e) = putStrLn $ "Core: " ++ msg
-
-    kernel <- gets cl_kernel
+    (kernel, env) <- gets $ cl_kernel &&& cl_kernel_env
     v <- viewT comp
     case v of
         Return x            -> return x

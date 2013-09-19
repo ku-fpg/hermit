@@ -192,14 +192,12 @@ commandLine opts behavior exts = do
         ws_complete = " ()"
         (flags, filesToLoad) = partition (isPrefixOf "-") opts
 
-    var <- liftIO $ atomically $ newTVar M.empty
     (w,h) <- liftIO getTermDimensions
 
     -- initialize shell-instance specific parts of the state
     -- TODO: move into another transformer layer?
     initState <- get
-    let clState = initState { cl_tick        = var
-                            , cl_version     = VersionStore { vs_graph = [] , vs_tags = [] }
+    let clState = initState { cl_version     = VersionStore { vs_graph = [] , vs_tags = [] }
                             , cl_scripts     = []
                             , cl_dict        = dict
                             , cl_pretty_opts = (cl_pretty_opts initState) { po_width = w }
@@ -519,7 +517,7 @@ cl_kernel_env  :: CommandLineState -> HermitMEnv
 cl_kernel_env st =
     let out str = do (r,_) <- liftIO $ runCLM st $ cl_putStrLn str
                      either (\case CLError msg -> fail msg
-                                   _           -> fail "resume abort called from cl_putStrLn (impossible!)")
+                                   _           -> fail "resume/abort/continue called from cl_putStrLn (impossible!)")
                             return r
 
     in  mkHermitMEnv $ \ msg -> case msg of
