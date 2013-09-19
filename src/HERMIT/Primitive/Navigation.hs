@@ -3,12 +3,11 @@
 module HERMIT.Primitive.Navigation
        ( -- * Navigation
          externals
-       , bindGroup
-       , namedBinding
-       , bindingGroupOf
-       , considerName
-       , rhsOf
-       , parentOf
+       , occurrenceOfT
+       , bindingOfT
+       , bindingGroupOfT
+       , rhsOfT
+       , parentOfT
        , considerTargets
        , Considerable(..)
        , considerables
@@ -19,7 +18,7 @@ where
 
 import Data.Monoid (mempty)
 
-import Control.Arrow (arr, (>>>))
+import Control.Arrow (arr)
 
 import HERMIT.Core
 import HERMIT.Context
@@ -36,54 +35,131 @@ import qualified Language.Haskell.TH as TH
 -- | 'External's involving navigating to named entities.
 externals :: [External]
 externals = crumbExternals ++ map (.+ Navigation)
-            [
-              external "consider" (considerName :: TH.Name -> TranslateH Core LocalPathH)
-                [ "consider '<v> focuses on the definition of <v>" ]
+            [ external "rhs-of" (rhsOfT . cmpTHName2Var :: TH.Name -> TranslateH Core LocalPathH)
+                [ "Find the path to the RHS of the binding of the named variable." ]
+            , external "binding-group-of" (bindingGroupOfT . cmpTHName2Var :: TH.Name -> TranslateH CoreTC LocalPathH)
+                [ "Find the path to the binding group of the named variable." ]
+            , external "binding-of" (bindingOfT . cmpTHName2Var :: TH.Name -> TranslateH CoreTC LocalPathH)
+                [ "Find the path to the binding of the named variable." ]
+            , external "occurrence-of" (occurrenceOfT . cmpTHName2Var :: TH.Name -> TranslateH CoreTC LocalPathH)
+                [ "Find the path to the first occurrence of the named variable." ]
+
+            , external "consider" (bindingOfT . cmpTHName2Var :: TH.Name -> TranslateH CoreTC LocalPathH)
+                [ "consider '<v> focuses on the definition of <v>" ] .+ Deprecated .+ TODO
+
             , external "consider" (considerConstruct :: String -> TranslateH Core LocalPathH)
                 [ "consider <c> focuses on the first construct <c>.",
                   recognizedConsiderables]
-            , external "rhs-of" (rhsOf :: TH.Name -> TranslateH Core LocalPathH)
-                [ "rhs-of '<v> focuses on the right-hand-side of the definition of <v>" ]
-            , external "binding-group-of" (bindingGroupOf :: TH.Name -> TranslateH Core LocalPathH)
-                [ "binding-group-of '<v> focuses on the binding group that binds the variable <v>" ]
             , external "arg" (promoteExprT . nthArgPath :: Int -> TranslateH Core LocalPathH)
                 [ "arg n focuses on the (n-1)th argument of a nested application." ]
-            , external "parent-of" (parentOf :: TranslateH Core LocalPathH -> TranslateH Core LocalPathH)
-                [ "focus on the parent of another focal point." ]
+
+            , external "parent-of" (parentOfT :: TranslateH Core LocalPathH -> TranslateH Core LocalPathH)
+                [ "Focus on the parent of another focal point." ]
+            , external "parent-of" (parentOfT :: TranslateH CoreTC LocalPathH -> TranslateH CoreTC LocalPathH)
+                [ "Focus on the parent of another focal point." ]
             ]
 
 ---------------------------------------------------------------------------------------
 
 -- | Discard the last crumb of a non-empty 'LocalPathH'.
-parentOf :: MonadCatch m => Translate c m g LocalPathH -> Translate c m g LocalPathH
-parentOf t = withPatFailMsg "Path points to origin, there is no parent." $
-             do SnocPath (_:p) <- t
-                return (SnocPath p)
+parentOfT :: MonadCatch m => Translate c m g LocalPathH -> Translate c m g LocalPathH
+parentOfT t = withPatFailMsg "Path points to origin, there is no parent." $
+              do SnocPath (_:p) <- t
+                 return (SnocPath p)
 
--- | Find the path to the RHS of the binding group of the given name.
-bindingGroupOf :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core LocalPathH
-bindingGroupOf nm = setFailMsg ("Binding group for \"" ++ show nm ++ "\" not found.") $ oneNonEmptyPathToT (arr $ bindGroup nm)
+-----------------------------------------------------------------------
 
--- | Find the path to the definition of the provided name.
-considerName :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core LocalPathH
-considerName nm = setFailMsg ("Definition for \"" ++ show nm ++ "\" not found.") $ oneNonEmptyPathToT (arr $ namedBinding nm)
+-- | Find the path to the RHS of a binding.
+rhsOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => (Var -> Bool) -> Translate c m Core LocalPathH
+rhsOfT p = prefixFailMsg ("rhs-of failed: ") $
+           do lp <- onePathToT (arr $ bindingOfCore p)
+              case lastCrumb lp of
+                Just crumb -> case crumb of
+                                Rec_Def _     -> return (lp @@ Def_RHS)
+                                Let_Bind      -> return (lp @@ NonRec_RHS)
+                                ProgCons_Head -> return (lp @@ NonRec_RHS)
+                                _             -> fail "does not have a RHS."
+                Nothing -> defOrNonRecT successT lastCrumbT (\ () cr -> mempty @@ cr)
 
--- | Find the path to the RHS of the definition of the given name.
-rhsOf :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, MonadCatch m) => TH.Name -> Translate c m Core LocalPathH
-rhsOf nm = setFailMsg ("Definition for \"" ++ show nm ++ "\" not found.") $ withLocalPathT $ onetdT $
-             accepterR (liftContext baseContext (arr $ namedBinding nm)) >>> defOrNonRecT mempty exposeLocalPathT (\ () p -> p)
+-- | Find the path to the binding group of a variable.
+bindingGroupOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => (Var -> Bool) -> Translate c m CoreTC LocalPathH
+bindingGroupOfT p = prefixFailMsg ("binding-group-of failed: ") $
+                    oneNonEmptyPathToT (promoteBindT $ arr $ bindingGroupOf p)
 
--- | Verify that this is a binding group defining the given name.
-bindGroup :: TH.Name -> Core -> Bool
-bindGroup nm (BindCore (NonRec v _))  =  nm `cmpTHName2Var` v
-bindGroup nm (BindCore (Rec bds))     =  any (cmpTHName2Var nm . fst) bds
-bindGroup _  _                        =  False
+-- | Find the path to the binding of a variable.
+bindingOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => (Var -> Bool) -> Translate c m CoreTC LocalPathH
+bindingOfT p = prefixFailMsg ("binding-of failed: ") $
+               oneNonEmptyPathToT (arr $ bindingOf p)
 
--- | Verify that this is the definition of the given name.
-namedBinding :: TH.Name -> Core -> Bool
-namedBinding nm (BindCore (NonRec v _))  =  nm `cmpTHName2Var` v
-namedBinding nm (DefCore (Def v _))      =  nm `cmpTHName2Var` v
-namedBinding _  _                        =  False
+-- | Find the path to the first occurrence occurrence of a variable.
+occurrenceOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => (Var -> Bool) -> Translate c m CoreTC LocalPathH
+occurrenceOfT p = prefixFailMsg ("occurrence-of failed: ") $
+                  oneNonEmptyPathToT (arr $ occurrenceOf p)
+
+-----------------------------------------------------------------------
+
+bindingGroupOf :: (Var -> Bool) -> CoreBind -> Bool
+bindingGroupOf p (NonRec v _) = p v
+bindingGroupOf p (Rec defs)   = any (p . fst) defs
+
+-----------------------------------------------------------------------
+
+bindingOf :: (Var -> Bool) -> CoreTC -> Bool
+bindingOf p (Core core)              = bindingOfCore p core
+bindingOf p (TyCo (TypeCore ty))     = bindingOfType p ty
+bindingOf p (TyCo (CoercionCore co)) = bindingOfCoercion p co
+
+bindingOfCore :: (Var -> Bool) -> Core -> Bool
+bindingOfCore p (BindCore bnd)  = bindingOfBind p bnd
+bindingOfCore p (DefCore def)   = bindingOfDef p def
+bindingOfCore p (ExprCore expr) = bindingOfExpr p expr
+bindingOfCore p (AltCore alt)   = bindingOfAlt p alt
+bindingOfCore _ _               = False
+
+bindingOfBind :: (Var -> Bool) -> CoreBind -> Bool
+bindingOfBind p (NonRec v _) = p v
+bindingOfBind _ _            = False
+
+bindingOfDef :: (Var -> Bool) -> CoreDef -> Bool
+bindingOfDef p (Def v _) = p v
+
+bindingOfExpr :: (Var -> Bool) -> CoreExpr -> Bool
+bindingOfExpr p (Lam v _)      = p v
+bindingOfExpr p (Case _ w _ _) = p w
+bindingOfExpr _ _              = False
+
+bindingOfAlt :: (Var -> Bool) -> CoreAlt -> Bool
+bindingOfAlt p (_,vs,_) = any p vs
+
+bindingOfType :: (TyVar -> Bool) -> Type -> Bool
+bindingOfType p (ForAllTy v _) = p v
+bindingOfType _ _              = False
+
+bindingOfCoercion :: (CoVar -> Bool) -> Coercion -> Bool
+bindingOfCoercion p (ForAllCo v _) = p v
+bindingOfCoercion _ _              = False
+
+-----------------------------------------------------------------------
+
+occurrenceOf :: (Var -> Bool) -> CoreTC -> Bool
+occurrenceOf p (Core (ExprCore e))      = occurrenceOfExpr p e
+occurrenceOf p (TyCo (TypeCore ty))     = occurrenceOfType p ty
+occurrenceOf p (TyCo (CoercionCore co)) = occurrenceOfCoercion p co
+occurrenceOf _ _                        = False
+
+occurrenceOfExpr :: (Var -> Bool) -> CoreExpr -> Bool
+occurrenceOfExpr p (Var v)       = p v
+occurrenceOfExpr _ _             = False
+
+occurrenceOfType :: (TyVar -> Bool) -> Type -> Bool
+occurrenceOfType p (TyVarTy v) = p v
+occurrenceOfType _ _           = False
+
+occurrenceOfCoercion :: (CoVar -> Bool) -> Coercion -> Bool
+occurrenceOfCoercion p (CoVarCo v) = p v
+occurrenceOfCoercion _ _           = False
+
+-----------------------------------------------------------------------
 
 -- | Find the names of all the variables that could be targets of \"consider\".
 considerTargets :: forall c m. (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m Core [String]

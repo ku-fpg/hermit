@@ -35,12 +35,13 @@ module HERMIT.External
        , TranslateCoreTCStringBox(..)
        , TranslateCoreCheckBox(..)
        , TranslateCoreTCCheckBox(..)
+       , TranslateCorePathBox(..)
+       , TranslateCoreTCPathBox(..)
        , NameBox(..)
        , CoreString(..)
        , CoreBox(..)
        , CrumbBox(..)
        , PathBox(..)
-       , TranslateCorePathBox(..)
        , StringBox(..)
        , NameListBox(..)
        , StringListBox(..)
@@ -404,6 +405,15 @@ instance Extern (TranslateH Core LocalPathH) where
     type Box (TranslateH Core LocalPathH) = TranslateCorePathBox
     box = TranslateCorePathBox
     unbox (TranslateCorePathBox t) = t
+
+-----------------------------------------------------------------
+
+data TranslateCoreTCPathBox = TranslateCoreTCPathBox (TranslateH CoreTC LocalPathH) deriving Typeable
+
+instance Extern (TranslateH CoreTC LocalPathH) where
+    type Box (TranslateH CoreTC LocalPathH) = TranslateCoreTCPathBox
+    box = TranslateCoreTCPathBox
+    unbox (TranslateCoreTCPathBox t) = t
 
 -----------------------------------------------------------------
 

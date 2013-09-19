@@ -31,6 +31,7 @@ interpShellCommand =
   , interp $ \ (CrumbBox cr)                 -> KernelEffect (Pathfinder (return (mempty @@ cr) :: TranslateH CoreTC LocalPathH))
   , interp $ \ (PathBox p)                   -> KernelEffect (Pathfinder (return p :: TranslateH CoreTC LocalPathH))
   , interp $ \ (TranslateCorePathBox tt)     -> KernelEffect (Pathfinder tt)
+  , interp $ \ (TranslateCoreTCPathBox tt)   -> KernelEffect (Pathfinder tt)
   , interp $ \ (StringBox str)               -> QueryFun (message str)
   , interp $ \ (TranslateCoreStringBox tt)   -> QueryFun (QueryString tt)
   , interp $ \ (TranslateCoreTCStringBox tt) -> QueryFun (QueryString tt)

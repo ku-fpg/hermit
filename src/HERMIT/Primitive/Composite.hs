@@ -49,7 +49,7 @@ externals =
 ------------------------------------------------------------------------------------------------------
 
 basicCombinators :: [String]
-basicCombinators = ["$",".","id","flip","const","fst","snd"]
+basicCombinators = ["$",".","id","flip","const","fst","snd","curry","uncurry"]
 
 -- | Unfold the current expression if it is one of the basic combinators: ('$'), ('.'), 'id', 'flip', 'const', 'fst' or 'snd'.
 --   This is intended to be used as a component of simplification traversals such as 'simplifyR' or 'bashR'.
