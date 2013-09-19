@@ -28,13 +28,6 @@ plugin = optimize $ \ opts -> phase 0 $ do
 -}
     interactive sfexts opts
 
--- | Apply a 'Rewrite' in a bottom-up manner, succeeding if any succeed.
-myanybuR :: (Walker c g, MonadCatch m, Injection a g) => Rewrite c m a -> Rewrite c m g
-myanybuR r = setFailMsg "anybuR failed" $
-    let go = anyR go >+> promoteR r
-    in go
-{-# INLINE myanybuR #-}
-
 sfexts :: [External]
 sfexts =
     [ external "concatmap" (promoteExprR concatMapSR :: RewriteH Core)
