@@ -4,6 +4,7 @@ module HERMIT.Dictionary
     ( -- * The HERMIT Dictionary
       externals
     , module HERMIT.Dictionary.AlphaConversion
+    , module HERMIT.Dictionary.Common
     , module HERMIT.Dictionary.Composite
     , module HERMIT.Dictionary.Debug
     , module HERMIT.Dictionary.FixPoint
@@ -28,6 +29,7 @@ import HERMIT.External
 -- Since you cannot re-export qualified modules, we import everything *twice*.
 import           HERMIT.Dictionary.AlphaConversion hiding (externals)
 import qualified HERMIT.Dictionary.AlphaConversion as Alpha
+import           HERMIT.Dictionary.Common -- TODO: deal with this module
 import           HERMIT.Dictionary.Composite hiding (externals)
 import qualified HERMIT.Dictionary.Composite as Composite
 import           HERMIT.Dictionary.Debug hiding (externals)
