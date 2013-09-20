@@ -11,7 +11,7 @@ import qualified Data.Vector.Fusion.Stream.Size as Size
 
 import           HERMIT.Core
 import           HERMIT.External
-import           HERMIT.GHC
+import           HERMIT.GHC hiding (display)
 import           HERMIT.Kure
 import           HERMIT.Monad
 import           HERMIT.Optimize
@@ -22,9 +22,6 @@ import           HERMIT.Primitive.Debug hiding (externals)
 import           HERMIT.Primitive.GHC hiding (externals)
 import           HERMIT.Primitive.Local hiding (externals)
 import           HERMIT.Primitive.Unfold hiding (externals)
-
-import Data.Default
-import HERMIT.Shell.Command (diffR)
 
 -- Fix the ordering of type arguments and avoid dealing with size
 fixStep :: forall a b m s. Monad m => a -> m (VS.Step s b) -> m (VS.Step (a,s) b)
@@ -40,7 +37,8 @@ plugin = optimize $ \ opts -> phase 0 $ do
         $ repeatR
         $ anyCallR
         $ promoteExprR
-        $ (bracketR "concatMap -> flatten" concatMapSafe) <+ unfoldAnyR ['VS.concatMap, 'M.concatMap, 'V.concatMap]
+        $ (bracketR "concatMap -> flatten" concatMapSafe) <+ unfoldNamesR ['VS.concatMap, 'M.concatMap, 'V.concatMap]
+    -- interactive sfexts opts
 
 concatMapSafe :: RewriteH CoreExpr
 concatMapSafe = concatMapSR >>> ((lintExprT >>= \_ -> traceR "Success!") <+ traceR "Failed On Lint")

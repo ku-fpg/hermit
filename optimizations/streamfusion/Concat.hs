@@ -25,6 +25,10 @@ import qualified Data.Vector.Unboxed as VU
 
 import HERMIT.Optimization.StreamFusion.Vector
 
+-- | Note: Data.Vector.concatMap = Data.Vector.Generic.concatMap
+--         which is implemented in terms of flatten (with entire
+--         inner vector in state, so not properly fused).
+--         We cannot hope to optimize this.
 concatTestV :: Int -> Int
 concatTestV n = V.sum $ V.concatMap (\(!x) -> V.enumFromN 1 x) $ V.enumFromN 1 n
 {-# NOINLINE concatTestV #-}
@@ -45,7 +49,7 @@ flattenTest !n = VS.foldl' (+) 0 $ VS.flatten mk step Unknown $ VS.enumFromStepN
     {-# INLINE mk #-}
     step (!i,!max)
       | i<=max = VS.Yield i (i+1,max)
---      | max>(0::Int) = VS.Yield i (i+1,max-1)
+--      | max>(0::Int) = VS.Yield i (i+1,max-1) -- 10% faster
       | otherwise = VS.Done
     {-# INLINE step #-}
 {-# NOINLINE flattenTest #-}
