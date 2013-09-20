@@ -82,6 +82,15 @@ castFloatAppR = prefixFailMsg "Cast float from application failed: " $
                 return (Cast (App e1 e2) (Coercion.substCo (Coercion.extendTvSubst emptyCvSubst t x') c2))
             _ -> fail "castFloatApp"
 
+#if __GLASGOW_HASKELL__ > 706
+-- | Attempts to tease a coercion apart into a type constructor and the application
+-- of a number of coercion arguments to that constructor
+splitTyConAppCo_maybe :: Coercion -> Maybe (TyCon, [Coercion])
+splitTyConAppCo_maybe (Refl ro ty)          = (fmap . second . map) (Refl ro) (splitTyConApp_maybe ty)
+splitTyConAppCo_maybe (TyConAppCo _r tc cs) = Just (tc, cs)
+splitTyConAppCo_maybe _                     = Nothing
+#endif
+
 -- TODO: revisit
 castElimSymPlusR :: (ExtendPath c Crumb, AddBindings c, Monad m) => Rewrite c m CoreExpr
 castElimSymPlusR = castT idR idR (flip go) >>> joinT
@@ -91,9 +100,6 @@ castElimSymPlusR = castT idR idR (flip go) >>> joinT
       go _  (Lit _) = fail "no symmetric casts found"
       go _  (App _ _) = fail "app unimplemented" {- focus [0] (go c1 (add arg)) -}
       go c1 (Lam x body)
-#if __GLASGOW_HASKELL__ > 706
-        = fail "lam broken in GHC HEAD due to missing splitTyConAppCo_maybe"
-#else
         | Just (con, [arg, res]) <- splitTyConAppCo_maybe c1
         , con == funTyCon
         , Pair arg1 arg2 <- coercionKind arg
@@ -101,7 +107,6 @@ castElimSymPlusR = castT idR idR (flip go) >>> joinT
             body' <- go res body
             return (Lam x body')
         | otherwise = fail "lam unimplemented" {-focus [0] (go c1 (drop arg))-}
-#endif
       go c1 (Let bs body) = do body' <- go c1 body
                                return (Let bs body')
       go c1 (Case scr x _ alts) = do alts' <- sequence [liftM ((,,) c a) (go c1 b) | (c,a,b) <- alts]
