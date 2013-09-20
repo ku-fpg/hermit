@@ -7,25 +7,25 @@ module HERMIT.Dictionary
 
 import HERMIT.External
 
-import qualified HERMIT.Primitive.AlphaConversion as Alpha
-import qualified HERMIT.Primitive.Composite as Composite
-import qualified HERMIT.Primitive.Debug as Debug
-import qualified HERMIT.Primitive.FixPoint as FixPoint
-import qualified HERMIT.Primitive.Fold as Fold
-import qualified HERMIT.Primitive.Function as Function
-import qualified HERMIT.Primitive.GHC as GHC
-import qualified HERMIT.Primitive.Inline as Inline
-import qualified HERMIT.Primitive.Kure as Kure
-import qualified HERMIT.Primitive.Local as Local
-import qualified HERMIT.Primitive.Navigation as Navigation
-import qualified HERMIT.Primitive.New as New
-import qualified HERMIT.Primitive.Query as Query
-import qualified HERMIT.Primitive.Reasoning as Reasoning
-import qualified HERMIT.Primitive.Undefined as Undefined
-import qualified HERMIT.Primitive.Unfold as Unfold
-import qualified HERMIT.Primitive.Unsafe as Unsafe
-import qualified HERMIT.Primitive.WorkerWrapper.Fix as WorkerWrapperFix
-import qualified HERMIT.Primitive.WorkerWrapper.FixResult as WorkerWrapperFixResult
+import qualified HERMIT.Dictionary.AlphaConversion as Alpha
+import qualified HERMIT.Dictionary.Composite as Composite
+import qualified HERMIT.Dictionary.Debug as Debug
+import qualified HERMIT.Dictionary.FixPoint as FixPoint
+import qualified HERMIT.Dictionary.Fold as Fold
+import qualified HERMIT.Dictionary.Function as Function
+import qualified HERMIT.Dictionary.GHC as GHC
+import qualified HERMIT.Dictionary.Inline as Inline
+import qualified HERMIT.Dictionary.Kure as Kure
+import qualified HERMIT.Dictionary.Local as Local
+import qualified HERMIT.Dictionary.Navigation as Navigation
+import qualified HERMIT.Dictionary.New as New
+import qualified HERMIT.Dictionary.Query as Query
+import qualified HERMIT.Dictionary.Reasoning as Reasoning
+import qualified HERMIT.Dictionary.Undefined as Undefined
+import qualified HERMIT.Dictionary.Unfold as Unfold
+import qualified HERMIT.Dictionary.Unsafe as Unsafe
+import qualified HERMIT.Dictionary.WorkerWrapper.Fix as WorkerWrapperFix
+import qualified HERMIT.Dictionary.WorkerWrapper.FixResult as WorkerWrapperFixResult
 
 --------------------------------------------------------------------------
 

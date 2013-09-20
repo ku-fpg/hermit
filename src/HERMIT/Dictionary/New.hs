@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, MultiWayIf #-}
-module HERMIT.Primitive.New where
+module HERMIT.Dictionary.New where
 
 import Control.Arrow
 

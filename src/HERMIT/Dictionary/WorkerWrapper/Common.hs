@@ -1,4 +1,4 @@
-module HERMIT.Primitive.WorkerWrapper.Common where
+module HERMIT.Dictionary.WorkerWrapper.Common where
 
 import HERMIT.Monad
 import HERMIT.Kure

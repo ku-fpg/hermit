@@ -1,7 +1,7 @@
-module HERMIT.Primitive.WorkerWrapper.Fix
+module HERMIT.Dictionary.WorkerWrapper.Fix
        ( -- * The Worker/Wrapper Transformation
          -- | Note that many of these operations require 'Data.Function.fix' to be in scope.
-         HERMIT.Primitive.WorkerWrapper.Fix.externals
+         HERMIT.Dictionary.WorkerWrapper.Fix.externals
        , workerWrapperFacBR
        , workerWrapperSplitR
        , workerWrapperSplitStaticArg
@@ -24,16 +24,16 @@ import HERMIT.GHC
 import HERMIT.Utilities
 import HERMIT.ParserCore
 
-import HERMIT.Primitive.AlphaConversion
-import HERMIT.Primitive.Common
-import HERMIT.Primitive.FixPoint
-import HERMIT.Primitive.Function
-import HERMIT.Primitive.Local
-import HERMIT.Primitive.Navigation
-import HERMIT.Primitive.Reasoning
-import HERMIT.Primitive.Unfold
+import HERMIT.Dictionary.AlphaConversion
+import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.FixPoint
+import HERMIT.Dictionary.Function
+import HERMIT.Dictionary.Local
+import HERMIT.Dictionary.Navigation
+import HERMIT.Dictionary.Reasoning
+import HERMIT.Dictionary.Unfold
 
-import HERMIT.Primitive.WorkerWrapper.Common
+import HERMIT.Dictionary.WorkerWrapper.Common
 
 import qualified Language.Haskell.TH as TH
 

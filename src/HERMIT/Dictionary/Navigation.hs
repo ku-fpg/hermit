@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
 
-module HERMIT.Primitive.Navigation
+module HERMIT.Dictionary.Navigation
        ( -- * Navigation
          externals
        , occurrenceOfT
@@ -29,7 +29,7 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 
-import HERMIT.Primitive.Navigation.Crumbs
+import HERMIT.Dictionary.Navigation.Crumbs
 
 import qualified Language.Haskell.TH as TH
 

@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
 
-module HERMIT.Primitive.Local.Let
+module HERMIT.Dictionary.Local.Let
        ( -- * Rewrites on Let Expressions
          externals
          -- ** Let Elimination
@@ -48,11 +48,11 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Utilities
 
-import HERMIT.Primitive.Common
-import HERMIT.Primitive.GHC hiding (externals)
-import HERMIT.Primitive.AlphaConversion hiding (externals)
+import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.GHC hiding (externals)
+import HERMIT.Dictionary.AlphaConversion hiding (externals)
 
-import HERMIT.Primitive.Local.Bind hiding (externals)
+import HERMIT.Dictionary.Local.Bind hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 

@@ -43,10 +43,10 @@ import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 import HERMIT.PrettyPrinter.Clean (ppCoreTC)
 
-import HERMIT.Primitive.Debug
-import HERMIT.Primitive.GHC
-import HERMIT.Primitive.Inline
-import HERMIT.Primitive.Navigation
+import HERMIT.Dictionary.Debug
+import HERMIT.Dictionary.GHC
+import HERMIT.Dictionary.Inline
+import HERMIT.Dictionary.Navigation
 
 import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Externals

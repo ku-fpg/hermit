@@ -1,4 +1,4 @@
-module HERMIT.Primitive.Navigation.Crumbs
+module HERMIT.Dictionary.Navigation.Crumbs
        ( -- * Navigating Using Crumbs
          crumbExternals
        )

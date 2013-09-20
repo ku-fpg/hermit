@@ -1,4 +1,4 @@
-module HERMIT.Primitive.Unsafe
+module HERMIT.Dictionary.Unsafe
     ( externals
     , unsafeReplaceR
     , unsafeReplaceStashR

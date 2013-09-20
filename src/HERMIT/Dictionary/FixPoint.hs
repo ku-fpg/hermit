@@ -1,9 +1,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module HERMIT.Primitive.FixPoint
+module HERMIT.Dictionary.FixPoint
        ( -- * Operations on the Fixed Point Operator (fix)
          -- | Note that many of these operations require 'Data.Function.fix' to be explicitly imported, if it is not used in the source file.
-         HERMIT.Primitive.FixPoint.externals
+         HERMIT.Dictionary.FixPoint.externals
          -- ** Rewrites and BiRewrites on Fixed Points
        , fixIntroR
        , fixComputationRuleBR
@@ -29,10 +29,10 @@ import HERMIT.GHC
 import HERMIT.ParserCore
 import HERMIT.Utilities
 
-import HERMIT.Primitive.Common
-import HERMIT.Primitive.GHC
-import HERMIT.Primitive.Reasoning
-import HERMIT.Primitive.Undefined
+import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.GHC
+import HERMIT.Dictionary.Reasoning
+import HERMIT.Dictionary.Undefined
 
 import qualified Language.Haskell.TH as TH
 

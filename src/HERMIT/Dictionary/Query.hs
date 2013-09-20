@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, LambdaCase, FlexibleContexts #-}
 
-module HERMIT.Primitive.Query
+module HERMIT.Dictionary.Query
   ( -- * Queries and Predicates
     externals
   , infoT
@@ -20,10 +20,10 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 
-import HERMIT.Primitive.AlphaConversion hiding (externals)
-import HERMIT.Primitive.Common
-import HERMIT.Primitive.GHC hiding (externals)
-import HERMIT.Primitive.Inline hiding (externals)
+import HERMIT.Dictionary.AlphaConversion hiding (externals)
+import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.GHC hiding (externals)
+import HERMIT.Dictionary.Inline hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 

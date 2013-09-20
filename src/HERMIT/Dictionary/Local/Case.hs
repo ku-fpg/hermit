@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, MultiWayIf, LambdaCase, ScopedTypeVariables, FlexibleContexts, TupleSections #-}
 
-module HERMIT.Primitive.Local.Case
+module HERMIT.Dictionary.Local.Case
     ( -- * Rewrites on Case Expressions
       externals
     , caseFloatAppR
@@ -44,11 +44,11 @@ import HERMIT.External
 import HERMIT.Utilities
 import HERMIT.ParserCore
 
-import HERMIT.Primitive.Common
-import HERMIT.Primitive.Inline hiding (externals)
-import HERMIT.Primitive.AlphaConversion hiding (externals)
-import HERMIT.Primitive.Fold (foldVarR)
-import HERMIT.Primitive.Undefined (verifyStrictT)
+import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.Inline hiding (externals)
+import HERMIT.Dictionary.AlphaConversion hiding (externals)
+import HERMIT.Dictionary.Fold (foldVarR)
+import HERMIT.Dictionary.Undefined (verifyStrictT)
 
 import qualified Language.Haskell.TH as TH
 

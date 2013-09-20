@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables, TupleSections, LambdaCase #-}
-module HERMIT.Primitive.Unfold
+module HERMIT.Dictionary.Unfold
     ( externals
     , cleanupUnfoldR
     , rememberR
@@ -22,10 +22,10 @@ import qualified Language.Haskell.TH as TH
 
 import HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), PrettyC)
 
-import HERMIT.Primitive.Common
-import HERMIT.Primitive.GHC (rule,inScope)
-import HERMIT.Primitive.Inline (inlineR)
-import HERMIT.Primitive.Local.Let (letNonRecSubstR)
+import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.GHC (rule,inScope)
+import HERMIT.Dictionary.Inline (inlineR)
+import HERMIT.Dictionary.Local.Let (letNonRecSubstR)
 
 import HERMIT.Core
 import HERMIT.Context

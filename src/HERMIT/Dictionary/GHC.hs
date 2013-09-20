@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, FlexibleContexts, ScopedTypeVariables #-}
-module HERMIT.Primitive.GHC
+module HERMIT.Dictionary.GHC
        ( -- * GHC-based Transformations
          -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
          externals
@@ -44,7 +44,7 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 
-import HERMIT.Primitive.Debug hiding (externals)
+import HERMIT.Dictionary.Debug hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 

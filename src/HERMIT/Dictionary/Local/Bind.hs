@@ -1,4 +1,4 @@
-module HERMIT.Primitive.Local.Bind
+module HERMIT.Dictionary.Local.Bind
        ( -- * Rewrites on Binding Groups
          externals
        , nonrecToRecR
@@ -11,7 +11,7 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 
-import HERMIT.Primitive.Common
+import HERMIT.Dictionary.Common
 
 ------------------------------------------------------------------------------
 

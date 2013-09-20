@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
-module HERMIT.Primitive.AlphaConversion
+module HERMIT.Dictionary.AlphaConversion
        ( -- * Alpha-Renaming and Shadowing
          externals
          -- ** Alpha-Renaming
@@ -38,8 +38,8 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 
-import HERMIT.Primitive.GHC hiding (externals)
-import HERMIT.Primitive.Common
+import HERMIT.Dictionary.GHC hiding (externals)
+import HERMIT.Dictionary.Common
 
 import qualified Language.Haskell.TH as TH
 

@@ -13,7 +13,7 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Syntax (isCoreInfixIdChar, isCoreIdFirstChar, isCoreIdChar)
 
-import HERMIT.Primitive.Common
+import HERMIT.Dictionary.Common
 
 import Language.KURE.MonadCatch (prefixFailMsg)
 

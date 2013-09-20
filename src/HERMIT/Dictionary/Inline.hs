@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, TupleSections, FlexibleContexts, ScopedTypeVariables #-}
-module HERMIT.Primitive.Inline
+module HERMIT.Dictionary.Inline
          ( -- * Inlining
            externals
          , InlineConfig(..)
@@ -32,7 +32,7 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 
-import HERMIT.Primitive.Common
+import HERMIT.Dictionary.Common
 
 import qualified Language.Haskell.TH as TH
 

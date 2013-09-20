@@ -22,7 +22,7 @@ import HERMIT.GHC hiding (($$), (<+>), ($+$), cat, nest, parens, text, empty)
 import HERMIT.Kure
 import HERMIT.Core
 
-import HERMIT.Primitive.GHC (dynFlagsT)
+import HERMIT.Dictionary.GHC (dynFlagsT)
 
 import HERMIT.PrettyPrinter.Common
 

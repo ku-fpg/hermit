@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module HERMIT.Primitive.Kure
+module HERMIT.Dictionary.Kure
        ( -- * KURE Strategies
          externals
        )

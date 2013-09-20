@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
 
-module HERMIT.Primitive.Composite
+module HERMIT.Dictionary.Composite
     ( externals
     , unfoldBasicCombinatorR
     , simplifyR
@@ -20,11 +20,11 @@ import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 
-import HERMIT.Primitive.Debug hiding (externals)
-import HERMIT.Primitive.GHC hiding (externals)
-import HERMIT.Primitive.Inline hiding (externals)
-import HERMIT.Primitive.Local hiding (externals)
-import HERMIT.Primitive.Unfold hiding (externals)
+import HERMIT.Dictionary.Debug hiding (externals)
+import HERMIT.Dictionary.GHC hiding (externals)
+import HERMIT.Dictionary.Inline hiding (externals)
+import HERMIT.Dictionary.Local hiding (externals)
+import HERMIT.Dictionary.Unfold hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 

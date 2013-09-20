@@ -1,16 +1,16 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module HERMIT.Primitive.Local
+module HERMIT.Dictionary.Local
        ( -- * Local Structural Manipulations
-         HERMIT.Primitive.Local.externals
+         HERMIT.Dictionary.Local.externals
          -- ** Binding Groups
-       , module HERMIT.Primitive.Local.Bind
+       , module HERMIT.Dictionary.Local.Bind
          -- ** Case Expressions
-       , module HERMIT.Primitive.Local.Case
+       , module HERMIT.Dictionary.Local.Case
          -- ** Cast Expressions
-       , module HERMIT.Primitive.Local.Cast
+       , module HERMIT.Dictionary.Local.Cast
          -- ** Let Expressions
-       , module HERMIT.Primitive.Local.Let
+       , module HERMIT.Dictionary.Local.Let
          -- ** Miscellaneous
        , abstractR
        , pushR
@@ -34,15 +34,15 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Utilities
 
-import HERMIT.Primitive.Common
-import HERMIT.Primitive.Local.Bind hiding (externals)
-import qualified HERMIT.Primitive.Local.Bind as Bind
-import HERMIT.Primitive.Local.Case hiding (externals)
-import qualified HERMIT.Primitive.Local.Case as Case
-import HERMIT.Primitive.Local.Cast hiding (externals)
-import qualified HERMIT.Primitive.Local.Cast as Cast
-import HERMIT.Primitive.Local.Let hiding (externals)
-import qualified HERMIT.Primitive.Local.Let as Let
+import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.Local.Bind hiding (externals)
+import qualified HERMIT.Dictionary.Local.Bind as Bind
+import HERMIT.Dictionary.Local.Case hiding (externals)
+import qualified HERMIT.Dictionary.Local.Case as Case
+import HERMIT.Dictionary.Local.Cast hiding (externals)
+import qualified HERMIT.Dictionary.Local.Cast as Cast
+import HERMIT.Dictionary.Local.Let hiding (externals)
+import qualified HERMIT.Dictionary.Local.Let as Let
 
 import qualified Language.Haskell.TH as TH
 

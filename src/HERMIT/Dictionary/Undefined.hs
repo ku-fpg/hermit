@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
-module HERMIT.Primitive.Undefined
+module HERMIT.Dictionary.Undefined
     ( -- * Working with Undefined Values
       -- | Note that many of these operations require 'GHC.Err.undefined' to be explicitly imported if it is not used in the source file.
       externals
@@ -28,8 +28,8 @@ import HERMIT.Kure
 import HERMIT.GHC hiding ((<>))
 import HERMIT.External
 
-import HERMIT.Primitive.Common
-import HERMIT.Primitive.Reasoning hiding (externals)
+import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.Reasoning hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 

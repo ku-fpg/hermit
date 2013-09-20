@@ -165,11 +165,39 @@ Library
 
   Exposed-modules:
        HERMIT
-       HERMIT.Driver
 
        HERMIT.Context
        HERMIT.Core
        HERMIT.Dictionary
+       HERMIT.Driver
+
+       HERMIT.Dictionary.AlphaConversion
+       HERMIT.Dictionary.Common
+       HERMIT.Dictionary.Composite
+       HERMIT.Dictionary.Debug
+       HERMIT.Dictionary.FixPoint
+       HERMIT.Dictionary.Fold
+       HERMIT.Dictionary.Function
+       HERMIT.Dictionary.GHC
+       HERMIT.Dictionary.Inline
+       HERMIT.Dictionary.Kure
+       HERMIT.Dictionary.Local
+       HERMIT.Dictionary.Local.Bind
+       HERMIT.Dictionary.Local.Case
+       HERMIT.Dictionary.Local.Cast
+       HERMIT.Dictionary.Local.Let
+       HERMIT.Dictionary.Navigation
+       HERMIT.Dictionary.Navigation.Crumbs
+       HERMIT.Dictionary.New
+       HERMIT.Dictionary.Query
+       HERMIT.Dictionary.Reasoning
+       HERMIT.Dictionary.Undefined
+       HERMIT.Dictionary.Unfold
+       HERMIT.Dictionary.Unsafe
+       HERMIT.Dictionary.WorkerWrapper.Common
+       HERMIT.Dictionary.WorkerWrapper.Fix
+       HERMIT.Dictionary.WorkerWrapper.FixResult
+
        HERMIT.External
        HERMIT.GHC
        HERMIT.Interp
@@ -181,35 +209,7 @@ Library
        HERMIT.Optimize
        HERMIT.Parser
        HERMIT.ParserCore
-
        HERMIT.Plugin
-
-       HERMIT.Primitive.AlphaConversion
-       HERMIT.Primitive.Common
-       HERMIT.Primitive.Composite
-       HERMIT.Primitive.Debug
-       HERMIT.Primitive.FixPoint
-       HERMIT.Primitive.Fold
-       HERMIT.Primitive.Function
-       HERMIT.Primitive.GHC
-       HERMIT.Primitive.Inline
-       HERMIT.Primitive.Kure
-       HERMIT.Primitive.Local
-       HERMIT.Primitive.Local.Bind
-       HERMIT.Primitive.Local.Case
-       HERMIT.Primitive.Local.Cast
-       HERMIT.Primitive.Local.Let
-       HERMIT.Primitive.Navigation
-       HERMIT.Primitive.Navigation.Crumbs
-       HERMIT.Primitive.New
-       HERMIT.Primitive.Query
-       HERMIT.Primitive.Reasoning
-       HERMIT.Primitive.Undefined
-       HERMIT.Primitive.Unfold
-       HERMIT.Primitive.Unsafe
-       HERMIT.Primitive.WorkerWrapper.Common
-       HERMIT.Primitive.WorkerWrapper.Fix
-       HERMIT.Primitive.WorkerWrapper.FixResult
 
        HERMIT.PrettyPrinter.AST
        HERMIT.PrettyPrinter.Clean

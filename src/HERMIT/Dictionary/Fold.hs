@@ -1,4 +1,4 @@
-module HERMIT.Primitive.Fold
+module HERMIT.Dictionary.Fold
     ( -- * Fold/Unfold Transformation
       externals
     , foldR
@@ -23,9 +23,9 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 
-import HERMIT.Primitive.Common (varBindingDepthT)
-import HERMIT.Primitive.GHC hiding (externals)
-import HERMIT.Primitive.Inline hiding (externals)
+import HERMIT.Dictionary.Common (varBindingDepthT)
+import HERMIT.Dictionary.GHC hiding (externals)
+import HERMIT.Dictionary.Inline hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 

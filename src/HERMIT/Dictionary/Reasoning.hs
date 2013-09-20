@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module HERMIT.Primitive.Reasoning
+module HERMIT.Dictionary.Reasoning
   ( -- * Equational Reasoning
     externals
   , verifyEqualityLeftToRightT
@@ -22,7 +22,7 @@ import HERMIT.Monad
 import HERMIT.ParserCore
 import HERMIT.Utilities
 
-import HERMIT.Primitive.Common
+import HERMIT.Dictionary.Common
 
 ------------------------------------------------------------------------------
 

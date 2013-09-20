@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, FlexibleContexts #-}
 
-module HERMIT.Primitive.Local.Cast
+module HERMIT.Dictionary.Local.Cast
     ( -- * Rewrites on Case Expressions
       externals
     , castElimReflR
@@ -21,7 +21,7 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 
-import HERMIT.Primitive.Common
+import HERMIT.Dictionary.Common
 
 ------------------------------------------------------------------------------
 

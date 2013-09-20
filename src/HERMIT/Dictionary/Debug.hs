@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
-module HERMIT.Primitive.Debug
-       ( -- * Debugging Primitives
+module HERMIT.Dictionary.Debug
+       ( -- * Debugging Dictionarys
          externals
        , bracketR
        , observeR

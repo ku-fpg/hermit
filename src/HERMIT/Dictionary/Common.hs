@@ -2,7 +2,7 @@
 
 -- | Note: this module should NOT export externals. It is for common
 --   transformations needed by the other primitive modules.
-module HERMIT.Primitive.Common
+module HERMIT.Dictionary.Common
     ( -- * Utility Transformations
       applyInContextT
       -- ** Finding function calls.

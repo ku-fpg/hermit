@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts, RankNTypes #-}
-module HERMIT.Primitive.Function
+module HERMIT.Dictionary.Function
     ( externals
     , staticArgR
     , staticArgPosR
@@ -19,7 +19,7 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 
-import HERMIT.Primitive.Common
+import HERMIT.Dictionary.Common
 
 externals ::  [External]
 externals =
