@@ -36,7 +36,7 @@ simplify
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
 
-any-bu (foreward (ww-assumption-A [| wrap |] [| unwrap |] WWA ))
+any-bu (forward (ww-assumption-A [| wrap |] [| unwrap |] WWA ))
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), f (wrap work) (n+1) + f (wrap work) n)

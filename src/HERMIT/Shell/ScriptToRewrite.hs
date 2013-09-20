@@ -67,7 +67,7 @@ interpScriptR :: [Interp UnscopedScriptR]
 interpScriptR =
   [ interp (\ (RewriteCoreBox r)           -> ScriptPrimUn $ ScriptRewriteHCore r)
   , interp (\ (RewriteCoreTCBox _)         -> ScriptUnsupported "rewrites that traverse types and coercions") -- TODO
-  , interp (\ (BiRewriteCoreBox br)        -> ScriptPrimUn $ ScriptRewriteHCore $ forewardT br)
+  , interp (\ (BiRewriteCoreBox br)        -> ScriptPrimUn $ ScriptRewriteHCore $ forwardT br)
   , interp (\ (CrumbBox cr)                -> ScriptPrimUn $ ScriptPath [cr])
   , interp (\ (PathBox p)                  -> ScriptPrimUn $ ScriptPath (snocPathToPath p))
   , interp (\ (TranslateCorePathBox t)     -> ScriptPrimUn $ ScriptTranslateHCorePath t)

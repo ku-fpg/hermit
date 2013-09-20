@@ -447,7 +447,7 @@ promoteCoercionR = promoteWithFailMsgR "This rewrite can only succeed at coercio
 
 -- | Promote a bidirectional rewrite on 'CoreExpr'.
 promoteExprBiR :: (Monad m, Injection CoreExpr g) => BiRewrite c m CoreExpr -> BiRewrite c m g
-promoteExprBiR b = bidirectional (promoteExprR $ forewardT b) (promoteExprR $ backwardT b)
+promoteExprBiR b = bidirectional (promoteExprR $ forwardT b) (promoteExprR $ backwardT b)
 {-# INLINE promoteExprBiR #-}
 
 ---------------------------------------------------------------------

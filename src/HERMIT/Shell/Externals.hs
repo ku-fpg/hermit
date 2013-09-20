@@ -27,7 +27,7 @@ interpShellCommand :: [Interp ShellCommand]
 interpShellCommand =
   [ interp $ \ (RewriteCoreBox rr)           -> KernelEffect (Apply rr)
   , interp $ \ (RewriteCoreTCBox rr)         -> KernelEffect (Apply rr)
-  , interp $ \ (BiRewriteCoreBox br)         -> KernelEffect (Apply $ forewardT br)
+  , interp $ \ (BiRewriteCoreBox br)         -> KernelEffect (Apply $ forwardT br)
   , interp $ \ (CrumbBox cr)                 -> KernelEffect (Pathfinder (return (mempty @@ cr) :: TranslateH CoreTC LocalPathH))
   , interp $ \ (PathBox p)                   -> KernelEffect (Pathfinder (return p :: TranslateH CoreTC LocalPathH))
   , interp $ \ (TranslateCorePathBox tt)     -> KernelEffect (Pathfinder tt)

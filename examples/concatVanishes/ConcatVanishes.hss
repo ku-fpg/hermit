@@ -9,7 +9,7 @@ bash
   lam-body
   eta-expand 'acc
   lam-body
-  bash-extended-with [ push 'repH StrictRepH, foreward ww-result-fusion, apply-rules ["repH ++","repH (:)","repH []"] ]
+  bash-extended-with [ push 'repH StrictRepH, forward ww-result-fusion, apply-rules ["repH ++","repH (:)","repH []"] ]
   try (bash-extended-with [push-unsafe 'work])
 }
 one-td (unfold 'absH)

@@ -18,6 +18,6 @@ ww-result-split [| abs |] [| rep |] (ww-result-AssA-to-AssC WWA)
       consider case ; [ case-alt 1, alt-rhs ] ; abstract 'n
     }
     any-bu (fold 'rep)
-    any-td (foreward ww-result-fusion)
+    any-td (forward ww-result-fusion)
   }
 }

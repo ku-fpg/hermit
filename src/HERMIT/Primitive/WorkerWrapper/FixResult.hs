@@ -290,7 +290,7 @@ workerWrapperSplitR mAss abs rep =
       fixIntroR
       >>> defAllR idR ( appAllR idR (letIntroR "f")
                         >>> letFloatArgR
-                        >>> letAllR idR ( forewardT (workerWrapperFacBR mAss abs rep)
+                        >>> letAllR idR ( forwardT (workerWrapperFacBR mAss abs rep)
                                           >>> lamAllR idR (appAllR idR (appAllR ( unfoldNameR fx
                                                                                   >>> alphaLetWithR [work]
                                                                                   >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
@@ -393,7 +393,7 @@ wwAssB mr abs rep f = beforeBiR (whenJust (verifyAssB abs rep f) mr)
     wwBL = withPatFailMsg (wrongExprForm "abs (rep (f h x))") $
            do App _ (App _ (App (App f' _) _)) <- idR
               guardMsg (exprAlphaEq f f') "given body function does not match expression."
-              forewardT assA
+              forwardT assA
 
     wwBR :: RewriteH CoreExpr
     wwBR = withPatFailMsg (wrongExprForm "f h x") $
@@ -424,7 +424,7 @@ wwAssC mr abs rep f = beforeBiR (do _ <- isFixExprT
     assB = wwAssB Nothing abs rep f
 
     wwCL :: RewriteH CoreExpr
-    wwCL = wwAssAimpliesAssC (forewardT assB)
+    wwCL = wwAssAimpliesAssC (forwardT assB)
 
     wwCR :: RewriteH CoreExpr
     wwCR = appAllR idR (etaExpandR "h" >>> lamAllR idR (etaExpandR "x" >>> lamAllR idR (backwardT assB)))
