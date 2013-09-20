@@ -7,8 +7,27 @@ dist/
 *.DS_Store
 BEFORE.HERMIT.*
 AFTER.HERMIT.*
+# example binaries
+examples/casereduce/Main
+examples/concatVanishes/Flatten
+examples/concatVanishes/QSort
+examples/concatVanishes/Rev
+examples/evaluation/Eval
+examples/factorial/Fac
+examples/fib-tuple/Fib
+examples/flatten/Flatten
+examples/hanoi/Hanoi
+examples/last/Last
+examples/map/Map
+examples/mean/Mean
+examples/qsort/QSort
+examples/reverse/Reverse
 examples/Haskell2012/paper/
+examples/Haskell2012/Append
+examples/Haskell2012/Fib
+examples/Haskell2012/Reverse
 examples/IFL2012/ifl-paper/
+# generated files
 src/HERMIT/Parser.hs
 src/HERMIT/ParserCore.hs
 tests/dump/*.dump
