@@ -108,9 +108,13 @@ showWindow = do
 
 -------------------------------------------------------------------------------
 
-data CompletionType = ConsiderC -- complete with possible arguments to consider
-                    | InlineC   -- complete with names that can be inlined
-                    | CommandC  -- complete using dictionary commands (default)
+data CompletionType = ConsiderC       -- considerable constructs and (deprecated) bindingOfT
+                    | BindingOfC      -- bindingOfT
+                    | BindingGroupOfC -- bindingGroupOfT
+                    | RhsOfC          -- rhsOfT
+                    | OccurrenceOfC   -- occurrenceOfT
+                    | InlineC         -- complete with names that can be inlined
+                    | CommandC        -- complete using dictionary commands (default)
                     | AmbiguousC [CompletionType]  -- completionType function needs to be more specific
     deriving (Show)
 
@@ -123,16 +127,22 @@ completionType = go . dropWhile isSpace
                         []  -> CommandC
                         [t] -> t
                         ts  -> AmbiguousC ts
-          opts = [ ("inline"  , InlineC  )
-                 , ("consider", ConsiderC)
-                 , ("rhs-of"  , ConsiderC)
+          opts = [ ("inline"          , InlineC  )
+                 , ("consider"        , ConsiderC)
+                 , ("binding-of"      , BindingOfC)
+                 , ("binding-group-of", BindingGroupOfC)
+                 , ("rhs-of"          , RhsOfC)
+                 , ("occurrence-of"   , OccurrenceOfC)
                  ]
 
--- TODO: For the moment, we promote the translations on Core to translations on CoreTC.  But we should probably update considerTargets and inlineTargets.
 completionQuery :: CommandLineState -> CompletionType -> IO (TranslateH CoreTC [String])
-completionQuery _ ConsiderC = return $ promoteT considerTargets >>^ ((++ map fst considerables) . map ('\'':))
-completionQuery _ InlineC   = return $ promoteT inlineTargetsT  >>^ map ('\'':)
-completionQuery s CommandC  = return $ pure (M.keys (cl_dict s))
+completionQuery _ ConsiderC       = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':) >>^ (++ map fst considerables) -- the use of bindingOfTargetsT here is deprecated
+completionQuery _ OccurrenceOfC   = return $ occurrenceOfTargetsT    >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery _ BindingOfC      = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery _ BindingGroupOfC = return $ bindingGroupOfTargetsT  >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery _ RhsOfC          = return $ rhsOfTargetsT           >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery _ InlineC         = return $ promoteT inlineTargetsT >>^                         map ('\'':)
+completionQuery s CommandC        = return $ pure (M.keys (cl_dict s))
 -- Need to modify opts in completionType function. No key can be a suffix of another key.
 completionQuery _ (AmbiguousC ts) = do
     putStrLn "\nCannot tab complete: ambiguous completion type."

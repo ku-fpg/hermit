@@ -1,12 +1,12 @@
 load-as-rewrite "WWA" "WW-Ass-A.hss"
 flatten-module
 
-consider 'fib
+binding-of 'fib
 
 {
 
 ww-split [| wrap |] [| unwrap |] (ww-AssA-to-AssC WWA)
-consider 'work ; remember origwork
+binding-of 'work ; remember origwork
 
 -- work = unwrap (f (wrap work))
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, InstanceSigs #-}
+{-# LANGUAGE CPP, InstanceSigs, TypeSynonymInstances, FlexibleInstances #-}
 module HERMIT.GHC
     ( -- * GHC Imports
       -- | Things that have been copied from GHC, or imported directly, for various reasons.
@@ -33,6 +33,7 @@ module HERMIT.GHC
     , CoAxiom.Branched
 #endif
     , notElemVarSet
+    , varSetToStrings
     , showVarSet
     , Pair(..)
 #if __GLASGOW_HASKELL__ <= 706
@@ -64,17 +65,18 @@ import Data.Maybe (isJust)
 import qualified CoAxiom -- for coAxiomName
 #endif
 import Data.List (intercalate)
+import Data.Monoid hiding ((<>))
 import qualified Language.Haskell.TH as TH
 
 --------------------------------------------------------------------------
 
--- | Show a human-readable version of a list of 'Var's.
-showVars :: [Var] -> String
-showVars = intercalate ", " . map var2String
+-- | Convert a 'VarSet' to a list of user-readable strings.
+varSetToStrings :: VarSet -> [String]
+varSetToStrings = map var2String . varSetElems
 
 -- | Show a human-readable version of a 'VarSet'.
 showVarSet :: VarSet -> String
-showVarSet = showVars . varSetElems
+showVarSet = intercalate ", " . varSetToStrings
 
 --------------------------------------------------------------------------
 
@@ -206,6 +208,13 @@ zapVarOccInfo i = if isId i
 -- | Determine if a 'Var' is not an element of a 'VarSet'.
 notElemVarSet :: Var -> VarSet -> Bool
 notElemVarSet v vs = not (v `elemVarSet` vs)
+
+instance Monoid VarSet where
+  mempty :: VarSet
+  mempty = emptyVarSet
+
+  mappend :: VarSet -> VarSet -> VarSet
+  mappend = unionVarSet
 
 --------------------------------------------------------------------------
 

@@ -2,7 +2,7 @@ load-as-rewrite "WWA" "WW-Ass-A.hss"
 define-rewrite "WWC" "ww-result-AssA-to-AssC WWA"
 load-as-rewrite "StrictRep" "StrictRep.hss"
 flatten-module
-consider 'length
+binding-of 'length
 ww-result-split-static-arg 1 [] [| abs |] [| rep |] WWC
 bash
 { rhs-of 'work

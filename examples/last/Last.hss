@@ -1,7 +1,7 @@
 load-as-rewrite "WWB" "WW-Ass-B.hss"
 define-rewrite "WWC" "ww-AssB-to-AssC WWB"
 flatten-module
-consider 'last
+binding-of 'last
 ww-split-static-arg 1 [0] [| wrap |] [| unwrap |] WWC
 bash-extended-with [ inline [ 'f, 'wrap, 'unwrap ] ]
 unshadow

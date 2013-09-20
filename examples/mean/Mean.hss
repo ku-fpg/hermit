@@ -7,9 +7,9 @@
   { case-expr ; abstract 'xs ; app-fun ; let-intro 'sumlength }
 }
 innermost let-float
-consider 'sumlength
+binding-group-of 'sumlength
 nonrec-to-rec           -- since we intend sumlength to be a recursive function
-rec-def 0
+binding-of 'sumlength
 remember sumlen
 { [def-rhs, lam-body]
   case-split-inline 'xs

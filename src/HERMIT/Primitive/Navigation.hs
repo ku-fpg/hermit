@@ -8,7 +8,10 @@ module HERMIT.Primitive.Navigation
        , bindingGroupOfT
        , rhsOfT
        , parentOfT
-       , considerTargets
+       , occurrenceOfTargetsT
+       , bindingOfTargetsT
+       , bindingGroupOfTargetsT
+       , rhsOfTargetsT
        , Considerable(..)
        , considerables
        , considerConstructT
@@ -18,7 +21,7 @@ where
 
 import Data.Monoid (mempty)
 
-import Control.Arrow (arr)
+import Control.Arrow
 
 import HERMIT.Core
 import HERMIT.Context
@@ -72,7 +75,7 @@ parentOfT t = withPatFailMsg "Path points to origin, there is no parent." $
 -- | Find the path to the RHS of a binding.
 rhsOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => (Var -> Bool) -> Translate c m Core LocalPathH
 rhsOfT p = prefixFailMsg ("rhs-of failed: ") $
-           do lp <- onePathToT (arr $ bindingOfCore p)
+           do lp <- onePathToT (arr $ bindingOf p . inject)
               case lastCrumb lp of
                 Just crumb -> case crumb of
                                 Rec_Def _     -> return (lp @@ Def_RHS)
@@ -99,77 +102,87 @@ occurrenceOfT p = prefixFailMsg ("occurrence-of failed: ") $
 -----------------------------------------------------------------------
 
 bindingGroupOf :: (Var -> Bool) -> CoreBind -> Bool
-bindingGroupOf p (NonRec v _) = p v
-bindingGroupOf p (Rec defs)   = any (p . fst) defs
+bindingGroupOf p = any p . bindVars
 
 -----------------------------------------------------------------------
 
 bindingOf :: (Var -> Bool) -> CoreTC -> Bool
-bindingOf p (Core core)              = bindingOfCore p core
-bindingOf p (TyCo (TypeCore ty))     = bindingOfType p ty
-bindingOf p (TyCo (CoercionCore co)) = bindingOfCoercion p co
+bindingOf p = any p . varSetElems . binders
 
-bindingOfCore :: (Var -> Bool) -> Core -> Bool
-bindingOfCore p (BindCore bnd)  = bindingOfBind p bnd
-bindingOfCore p (DefCore def)   = bindingOfDef p def
-bindingOfCore p (ExprCore expr) = bindingOfExpr p expr
-bindingOfCore p (AltCore alt)   = bindingOfAlt p alt
-bindingOfCore _ _               = False
+binders :: CoreTC -> VarSet
+binders (Core core)              = bindersCore core
+binders (TyCo (TypeCore ty))     = binderType ty
+binders (TyCo (CoercionCore co)) = binderCoercion co
 
-bindingOfBind :: (Var -> Bool) -> CoreBind -> Bool
-bindingOfBind p (NonRec v _) = p v
-bindingOfBind _ _            = False
+bindersCore :: Core -> VarSet
+bindersCore (BindCore bnd)  = binderBind bnd
+bindersCore (DefCore def)   = binderDef def
+bindersCore (ExprCore expr) = binderExpr expr
+bindersCore (AltCore alt)   = mkVarSet (altVars alt)
+bindersCore _               = emptyVarSet
 
-bindingOfDef :: (Var -> Bool) -> CoreDef -> Bool
-bindingOfDef p (Def v _) = p v
+binderBind :: CoreBind -> VarSet
+binderBind (NonRec v _) = unitVarSet v
+binderBind _            = emptyVarSet
 
-bindingOfExpr :: (Var -> Bool) -> CoreExpr -> Bool
-bindingOfExpr p (Lam v _)      = p v
-bindingOfExpr p (Case _ w _ _) = p w
-bindingOfExpr _ _              = False
+binderDef :: CoreDef -> VarSet
+binderDef = unitVarSet . defId
 
-bindingOfAlt :: (Var -> Bool) -> CoreAlt -> Bool
-bindingOfAlt p (_,vs,_) = any p vs
+binderExpr :: CoreExpr -> VarSet
+binderExpr (Lam v _)      = unitVarSet v
+binderExpr (Case _ w _ _) = unitVarSet w
+binderExpr _              = emptyVarSet
 
-bindingOfType :: (TyVar -> Bool) -> Type -> Bool
-bindingOfType p (ForAllTy v _) = p v
-bindingOfType _ _              = False
+binderType :: Type -> VarSet
+binderType (ForAllTy v _) = unitVarSet v
+binderType _              = emptyVarSet
 
-bindingOfCoercion :: (CoVar -> Bool) -> Coercion -> Bool
-bindingOfCoercion p (ForAllCo v _) = p v
-bindingOfCoercion _ _              = False
+binderCoercion :: Coercion -> VarSet
+binderCoercion (ForAllCo v _) = unitVarSet v
+binderCoercion _              = emptyVarSet
 
 -----------------------------------------------------------------------
 
 occurrenceOf :: (Var -> Bool) -> CoreTC -> Bool
-occurrenceOf p (Core (ExprCore e))      = occurrenceOfExpr p e
-occurrenceOf p (TyCo (TypeCore ty))     = occurrenceOfType p ty
-occurrenceOf p (TyCo (CoercionCore co)) = occurrenceOfCoercion p co
-occurrenceOf _ _                        = False
+occurrenceOf p = maybe False p . varOccurrence
 
-occurrenceOfExpr :: (Var -> Bool) -> CoreExpr -> Bool
-occurrenceOfExpr p (Var v)       = p v
-occurrenceOfExpr _ _             = False
+varOccurrence :: CoreTC -> Maybe Var
+varOccurrence (Core (ExprCore e))      = varOccurrenceExpr e
+varOccurrence (TyCo (TypeCore ty))     = varOccurrenceType ty
+varOccurrence (TyCo (CoercionCore co)) = varOccurrenceCoercion co
+varOccurrence _                        = Nothing
 
-occurrenceOfType :: (TyVar -> Bool) -> Type -> Bool
-occurrenceOfType p (TyVarTy v) = p v
-occurrenceOfType _ _           = False
+varOccurrenceExpr :: CoreExpr -> Maybe Var
+varOccurrenceExpr (Var v)       = Just v
+varOccurrenceExpr _             = Nothing
 
-occurrenceOfCoercion :: (CoVar -> Bool) -> Coercion -> Bool
-occurrenceOfCoercion p (CoVarCo v) = p v
-occurrenceOfCoercion _ _           = False
+varOccurrenceType :: Type -> Maybe Var
+varOccurrenceType (TyVarTy v) = Just v
+varOccurrenceType _           = Nothing
+
+varOccurrenceCoercion :: Coercion -> Maybe Var
+varOccurrenceCoercion (CoVarCo v) = Just v
+varOccurrenceCoercion _           = Nothing
 
 -----------------------------------------------------------------------
 
--- | Find the names of all the variables that could be targets of \"consider\".
-considerTargets :: forall c m. (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m Core [String]
-considerTargets = allT $ collectT (promoteBindT nonRec <+ promoteDefT def)
-    where
-      nonRec :: Translate c m CoreBind String
-      nonRec = nonRecT (arr var2String) idR const
+-- | Find all possible targets of 'occurrenceOfT'.
+occurrenceOfTargetsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+occurrenceOfTargetsT = allT $ crushbuT (arr varOccurrence >>> projectT >>^ unitVarSet)
 
-      def :: Translate c m CoreDef String
-      def = defT (arr var2String) idR const
+-- | Find all possible targets of 'bindingOfT'.
+bindingOfTargetsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+bindingOfTargetsT = allT $ crushbuT (arr binders)
+
+-- | Find all possible targets of 'bindingGroupOfT'.
+bindingGroupOfTargetsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+bindingGroupOfTargetsT = allT $ crushbuT (promoteBindT $ arr (mkVarSet . bindVars))
+
+-- | Find all possible targets of 'rhsOfT'.
+rhsOfTargetsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+rhsOfTargetsT = crushbuT (promoteBindT (arr binderBind) <+ promoteDefT (arr binderDef))
+
+-----------------------------------------------------------------------
 
 -- | Language constructs that can be zoomed to.
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetExpr | CaseOf | Casty | Ticky | TypeExpr | CoercionExpr

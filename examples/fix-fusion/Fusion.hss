@@ -2,7 +2,7 @@ load-as-rewrite "FStrict" "FStrict.hss"
 load-as-rewrite "PreconditionL" "PreconditionL.hss"
 load-as-rewrite "PreconditionR" "PreconditionR.hss"
 
-consider 'prog
+binding-of 'prog
 { rhs-of 'prog
   fix-fusion-rule [| f |] [| g |] [| h |] PreconditionL PreconditionR FStrict
 }
