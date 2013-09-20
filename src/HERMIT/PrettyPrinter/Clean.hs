@@ -25,7 +25,7 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Syntax
 
-import HERMIT.Dictionary.GHC (dynFlagsT)
+import HERMIT.Dictionary (dynFlagsT)
 
 import HERMIT.PrettyPrinter.Common
 

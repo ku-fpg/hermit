@@ -32,6 +32,7 @@ import qualified Data.Map as M
 import Data.Maybe
 
 import HERMIT.Core
+import HERMIT.Dictionary
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
 import HERMIT.Interp
@@ -43,10 +44,6 @@ import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 import HERMIT.PrettyPrinter.Clean (ppCoreTC)
 
-import HERMIT.Dictionary.Debug
-import HERMIT.Dictionary.GHC
-import HERMIT.Dictionary.Inline
-import HERMIT.Dictionary.Navigation
 
 import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Externals

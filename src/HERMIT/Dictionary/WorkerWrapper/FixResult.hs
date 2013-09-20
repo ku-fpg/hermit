@@ -4,14 +4,14 @@ module HERMIT.Dictionary.WorkerWrapper.FixResult
        ( -- * The Worker/Wrapper Transformation (Result Variant)
          -- | Note that many of these operations require 'Data.Function.fix' to be in scope.
          HERMIT.Dictionary.WorkerWrapper.FixResult.externals
-       , workerWrapperFacBR
-       , workerWrapperSplitR
-       , workerWrapperSplitStaticArg
-       , workerWrapperGenerateFusionR
-       , workerWrapperFusionBR
-       , wwAssA
-       , wwAssB
-       , wwAssC
+       , wwResultFacBR
+       , wwResultSplitR
+       , wwResultSplitStaticArg
+       , wwResultGenerateFusionR
+       , wwResultFusionBR
+       , wwResultAssA
+       , wwResultAssB
+       , wwResultAssC
        )
 where
 
@@ -46,21 +46,21 @@ import qualified Language.Haskell.TH as TH
 externals ::  [External]
 externals =
          [
-           external "ww-result-factorisation" ((\ abs rep assC -> promoteExprBiR $ workerWrapperFac (mkWWAssC assC) abs rep)
+           external "ww-result-factorisation" ((\ abs rep assC -> promoteExprBiR $ wwFac (mkWWAssC assC) abs rep)
                                           :: CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
                 [ "Worker/Wrapper Factorisation (Result Variant)",
                   "For any \"f :: (X -> A) -> (X -> A)\", and given \"abs :: B -> A\" and \"rep :: A -> B\" as arguments,",
                   "and a proof of Assumption C (fix (X -> A) (\\ h x -> abs (rep (f h x))) ==> fix (X->A) f), then",
                   "fix (X->A) f  ==>  \\ x1 -> abs (fix (X->B) (\\ h x2 -> rep (f (\\ x3 -> abs (h x3)) x2)) x1"
                 ] .+ Introduce .+ Context
-         , external "ww-result-factorisation-unsafe" ((\ abs rep -> promoteExprBiR $ workerWrapperFac Nothing abs rep)
+         , external "ww-result-factorisation-unsafe" ((\ abs rep -> promoteExprBiR $ wwFac Nothing abs rep)
                                                :: CoreString -> CoreString -> BiRewriteH Core)
                 [ "Unsafe Worker/Wrapper Factorisation (Result Variant)",
                   "For any \"f :: (X -> A) -> (X -> A)\", and given \"abs :: B -> A\" and \"rep :: A -> B\" as arguments, then",
                   "fix (X->A) f  ==>  \\ x1 -> abs (fix (X->B) (\\ h x2 -> rep (f (\\ x3 -> abs (h x3)) x2)) x1",
                   "Note: the pre-condition \"fix (X -> A) (\\ h x -> abs (rep (f h x))) == fix (X->A) f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
-         , external "ww-result-split" ((\ abs rep assC -> promoteDefR $ workerWrapperSplit (mkWWAssC assC) abs rep)
+         , external "ww-result-split" ((\ abs rep assC -> promoteDefR $ wwSplit (mkWWAssC assC) abs rep)
                                   :: CoreString -> CoreString -> RewriteH Core -> RewriteH Core)
                 [ "Worker/Wrapper Split (Result Variant)",
                   "For any \"prog :: X -> A\", and given \"abs :: B -> A\" and \"rep :: A -> B\" as arguments,",
@@ -69,7 +69,7 @@ externals =
                   "                          in let work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)",
                   "                              in \\ x0 -> abs (work x0)"
                 ] .+ Introduce .+ Context
-         , external "ww-result-split-unsafe" ((\ abs rep -> promoteDefR $ workerWrapperSplit Nothing abs rep)
+         , external "ww-result-split-unsafe" ((\ abs rep -> promoteDefR $ wwSplit Nothing abs rep)
                                        :: CoreString -> CoreString -> RewriteH Core)
                 [ "Unsafe Worker/Wrapper Split (Result Variant)",
                   "For any \"prog :: X -> A\", and given \"abs :: B -> A\" and \"rep :: A -> B\" as arguments, then",
@@ -78,13 +78,13 @@ externals =
                   "                              in \\ x0 -> abs (work x0)",
                   "Note: the pre-condition \"fix (X->A) (\\ h x -> abs (rep (f h x))) == fix (X->A) f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
-         , external "ww-result-split-static-arg" ((\ n is abs rep assC -> promoteDefR $ workerWrapperSplitStaticArg n is (mkWWAssC assC) abs rep)
+         , external "ww-result-split-static-arg" ((\ n is abs rep assC -> promoteDefR $ wwResultSplitStaticArg n is (mkWWAssC assC) abs rep)
                                       :: Int -> [Int] -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core)
                 [ "Worker/Wrapper Split - Static Argument Variant (Result Variant)",
                   "Perform the static argument transformation on the first n arguments, then perform the worker/wrapper split,",
                   "applying the given abs and rep functions to the specified (by index) static arguments before use."
                 ] .+ Introduce .+ Context
-         , external "ww-result-split-static-arg-unsafe" ((\ n is abs rep -> promoteDefR $ workerWrapperSplitStaticArg n is Nothing abs rep)
+         , external "ww-result-split-static-arg-unsafe" ((\ n is abs rep -> promoteDefR $ wwResultSplitStaticArg n is Nothing abs rep)
                                       :: Int -> [Int] -> CoreString -> CoreString -> RewriteH Core)
                 [ "Unsafe Worker/Wrapper Split - Static Argument Variant (Result Variant)",
                   "Perform the static argument transformation on the first n arguments, then perform the (unsafe) worker/wrapper split,",
@@ -132,26 +132,26 @@ externals =
                   "fix (X->A) (\\ h x -> abs (rep (f h x)))  <==>  fix (X->A) f",
                   "Note: only use this if it's true!"
                 ] .+ Introduce .+ Context .+ PreCondition
-         , external "ww-result-AssA-to-AssB" (promoteExprR . wwAssAimpliesAssB . extractR :: RewriteH Core -> RewriteH Core)
+         , external "ww-result-AssA-to-AssB" (promoteExprR . wwResultAssAimpliesAssB . extractR :: RewriteH Core -> RewriteH Core)
                    [ "Convert a proof of worker/wrapper Assumption A into a proof of worker/wrapper Assumption B."
                    ]
-         , external "ww-result-AssB-to-AssC" (promoteExprR . wwAssBimpliesAssC . extractR :: RewriteH Core -> RewriteH Core)
+         , external "ww-result-AssB-to-AssC" (promoteExprR . wwResultAssBimpliesAssC . extractR :: RewriteH Core -> RewriteH Core)
                    [ "Convert a proof of worker/wrapper Assumption B into a proof of worker/wrapper Assumption C."
                    ]
-         , external "ww-result-AssA-to-AssC" (promoteExprR . wwAssAimpliesAssC . extractR :: RewriteH Core -> RewriteH Core)
+         , external "ww-result-AssA-to-AssC" (promoteExprR . wwResultAssAimpliesAssC . extractR :: RewriteH Core -> RewriteH Core)
                    [ "Convert a proof of worker/wrapper Assumption A into a proof of worker/wrapper Assumption C."
                    ]
-         , external "ww-result-generate-fusion" (workerWrapperGenerateFusionR . mkWWAssC :: RewriteH Core -> RewriteH Core)
+         , external "ww-result-generate-fusion" (wwResultGenerateFusionR . mkWWAssC :: RewriteH Core -> RewriteH Core)
                    [ "Given a proof of Assumption C (fix (X->A) (\\ h x -> abs (rep (f h x))) ==> fix (X->A) f), then",
                      "execute this command on \"work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)\" to enable the \"ww-result-fusion\" rule thereafter.",
                      "Note that this is performed automatically as part of \"ww-result-split\"."
                    ] .+ Experiment .+ TODO
-         , external "ww-result-generate-fusion-unsafe" (workerWrapperGenerateFusionR Nothing :: RewriteH Core)
+         , external "ww-result-generate-fusion-unsafe" (wwResultGenerateFusionR Nothing :: RewriteH Core)
                    [ "Execute this command on \"work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)\" to enable the \"ww-fusion\" rule thereafter.",
                      "The precondition \"fix (X->A) (\\ h x -> abs (rep (f h x))) == fix (X->A) f\" is expected to hold.",
                      "Note that this is performed automatically as part of \"ww-result-split\"."
                    ] .+ Experiment .+ TODO
-         , external "ww-result-fusion" (promoteExprBiR workerWrapperFusion :: BiRewriteH Core)
+         , external "ww-result-fusion" (promoteExprBiR wwFusion :: BiRewriteH Core)
                 [ "Worker/Wrapper Fusion (Result Variant)",
                   "rep (abs (work x))  <==>  work x",
                   "Note: you are required to have previously executed the command \"ww-generate-fusion\" on the definition",
@@ -167,8 +167,8 @@ externals =
 
 -- | For any @f :: (X -> A) -> (X -> A)@, and given @abs :: B -> A@ and @rep :: A -> B@ as arguments, then
 --   @fix A f@  \<==\>  @\\ x1 -> abs (fix (X->B) (\\ h x2 -> rep (f (\\ x3 -> abs (h x3)) x2)) x1)@
-workerWrapperFacBR :: Maybe WWAssumption -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
-workerWrapperFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
+wwResultFacBR :: Maybe WWAssumption -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
+wwResultFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
                                   (\ (tyA,tyB) -> bidirectional (wwL tyA tyB) wwR)
   where
     wwL :: Type -> Type -> RewriteH CoreExpr
@@ -212,15 +212,15 @@ workerWrapperFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
 
 -- | For any @f :: (X -> A) -> (X -> A)@, and given @abs :: B -> A@ and @rep :: A -> B@ as arguments, then
 --   @fix A f@  \<==\>  @\\ x1 -> abs (fix (X->B) (\\ h x2 -> rep (f (\\ x3 -> abs (h x3)) x2)) x1)@
-workerWrapperFac :: Maybe WWAssumption -> CoreString -> CoreString -> BiRewriteH CoreExpr
-workerWrapperFac mAss = parse2beforeBiR (workerWrapperFacBR mAss)
+wwFac :: Maybe WWAssumption -> CoreString -> CoreString -> BiRewriteH CoreExpr
+wwFac mAss = parse2beforeBiR (wwResultFacBR mAss)
 
 --------------------------------------------------------------------------------------------------
 
 -- | Given @abs :: B -> A@, @rep :: A -> B@ and @work :: X -> B@ as arguments, then
 --   @rep (abs (work x))@  \<==\>  @work x@
-workerWrapperFusionBR :: BiRewriteH CoreExpr
-workerWrapperFusionBR =
+wwResultFusionBR :: BiRewriteH CoreExpr
+wwResultFusionBR =
     beforeBiR (prefixFailMsg "worker/wrapper fusion failed: " $
                withPatFailMsg "malformed WW Fusion rule." $
                do Def w (Lam x1 (App rep
@@ -254,16 +254,16 @@ workerWrapperFusionBR =
 
 -- | Given @abs :: B -> A@, @rep :: A -> B@ and @work :: X -> B@ as arguments, then
 --   @rep (abs (work x))@  \<==\>  @work x@
-workerWrapperFusion :: BiRewriteH CoreExpr
-workerWrapperFusion = workerWrapperFusionBR
+wwFusion :: BiRewriteH CoreExpr
+wwFusion = wwResultFusionBR
 
 --------------------------------------------------------------------------------------------------
 
--- | Save the recursive definition of work in the stash, so that we can later verify uses of 'workerWrapperFusionBR'.
+-- | Save the recursive definition of work in the stash, so that we can later verify uses of 'wwResultFusionBR'.
 --   Must be applied to a definition of the form: @work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)@
---   Note that this is performed automatically as part of 'workerWrapperSplitR'.
-workerWrapperGenerateFusionR :: Maybe WWAssumption -> RewriteH Core
-workerWrapperGenerateFusionR mAss =
+--   Note that this is performed automatically as part of 'wwResultSplitR'.
+wwResultGenerateFusionR :: Maybe WWAssumption -> RewriteH Core
+wwResultGenerateFusionR mAss =
     prefixFailMsg "generate WW fusion failed: " $
     withPatFailMsg wrongForm $
     do Def w (Lam x1 (App rep
@@ -282,19 +282,19 @@ workerWrapperGenerateFusionR mAss =
 --------------------------------------------------------------------------------------------------
 
 -- | \\ abs rep -> (@prog = expr@  ==>  @prog = let f = \\ prog -> expr in let work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1) in \\ x0 -> abs (work x0)@)
-workerWrapperSplitR :: Maybe WWAssumption -> CoreExpr -> CoreExpr -> RewriteH CoreDef
-workerWrapperSplitR mAss abs rep =
+wwResultSplitR :: Maybe WWAssumption -> CoreExpr -> CoreExpr -> RewriteH CoreDef
+wwResultSplitR mAss abs rep =
   let work = TH.mkName "work"
       fx   = TH.mkName "fix"
    in
       fixIntroR
       >>> defAllR idR ( appAllR idR (letIntroR "f")
                         >>> letFloatArgR
-                        >>> letAllR idR ( forwardT (workerWrapperFacBR mAss abs rep)
+                        >>> letAllR idR ( forwardT (wwResultFacBR mAss abs rep)
                                           >>> lamAllR idR (appAllR idR (appAllR ( unfoldNameR fx
                                                                                   >>> alphaLetWithR [work]
                                                                                   >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
-                                                                                                         >>> extractR (workerWrapperGenerateFusionR mAss)
+                                                                                                         >>> extractR (wwResultGenerateFusionR mAss)
                                                                                                  )
                                                                                                  idR
                                                                                 )
@@ -308,14 +308,14 @@ workerWrapperSplitR mAss abs rep =
                       )
 
 -- | \\ abs rep -> (@prog = expr@  ==>  @prog = let f = \\ prog -> expr in let work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1) in \\ x0 -> abs (work x0))@
-workerWrapperSplit :: Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
-workerWrapperSplit mAss absS repS = (parseCoreExprT absS &&& parseCoreExprT repS) >>= uncurry (workerWrapperSplitR mAss)
+wwSplit :: Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
+wwSplit mAss absS repS = (parseCoreExprT absS &&& parseCoreExprT repS) >>= uncurry (wwResultSplitR mAss)
 
--- | As 'workerWrapperSplit' but performs the static-argument transformation for @n@ static arguments first, and optionally provides some of those arguments (specified by index) to all calls of abs and rep.
+-- | As 'wwSplit' but performs the static-argument transformation for @n@ static arguments first, and optionally provides some of those arguments (specified by index) to all calls of abs and rep.
 --   This is useful if, for example, the expression, and abs and rep, all have a @forall@ type.
-workerWrapperSplitStaticArg :: Int -> [Int] -> Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
-workerWrapperSplitStaticArg 0 _  = workerWrapperSplit
-workerWrapperSplitStaticArg n is = \ mAss absS repS ->
+wwResultSplitStaticArg :: Int -> [Int] -> Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
+wwResultSplitStaticArg 0 _  = wwSplit
+wwResultSplitStaticArg n is = \ mAss absS repS ->
                             prefixFailMsg "worker/wrapper split (static argument variant) failed: " $
                             do guardMsg (all (< n) is) "arguments for abs and rep must be chosen from the statically transformed arguments."
                                bs <- defT successT (arr collectBinders) (\ () -> take n . fst)
@@ -325,7 +325,7 @@ workerWrapperSplitStaticArg n is = \ mAss absS repS ->
                                                                     (let wwSplitArgsR :: RewriteH CoreDef
                                                                          wwSplitArgsR = do abs  <- parseCoreExprT absS
                                                                                            rep  <- parseCoreExprT repS
-                                                                                           workerWrapperSplitR mAss (mkCoreApps abs args) (mkCoreApps rep args)
+                                                                                           wwResultSplitR mAss (mkCoreApps abs args) (mkCoreApps rep args)
                                                                       in
                                                                          extractR $ do p <- considerConstructT LetExpr
                                                                                        localPathR p $ promoteExprR (letRecAllR (const wwSplitArgsR) idR >>> letSubstR)
@@ -334,25 +334,25 @@ workerWrapperSplitStaticArg n is = \ mAss absS repS ->
 --------------------------------------------------------------------------------------------------
 
 -- | Convert a proof of WW Assumption A into a proof of WW Assumption B.
-wwAssAimpliesAssB :: RewriteH CoreExpr -> RewriteH CoreExpr
-wwAssAimpliesAssB = id
+wwResultAssAimpliesAssB :: RewriteH CoreExpr -> RewriteH CoreExpr
+wwResultAssAimpliesAssB = id
 
 -- | Convert a proof of WW Assumption B into a proof of WW Assumption C.
-wwAssBimpliesAssC :: RewriteH CoreExpr -> RewriteH CoreExpr
-wwAssBimpliesAssC assB = appAllR idR (lamAllR idR (lamAllR idR assB >>> etaReduceR) >>> etaReduceR)
+wwResultAssBimpliesAssC :: RewriteH CoreExpr -> RewriteH CoreExpr
+wwResultAssBimpliesAssC assB = appAllR idR (lamAllR idR (lamAllR idR assB >>> etaReduceR) >>> etaReduceR)
 
 -- | Convert a proof of WW Assumption A into a proof of WW Assumption C.
-wwAssAimpliesAssC :: RewriteH CoreExpr -> RewriteH CoreExpr
-wwAssAimpliesAssC =  wwAssBimpliesAssC . wwAssAimpliesAssB
+wwResultAssAimpliesAssC :: RewriteH CoreExpr -> RewriteH CoreExpr
+wwResultAssAimpliesAssC =  wwResultAssBimpliesAssC . wwResultAssAimpliesAssB
 
 --------------------------------------------------------------------------------------------------
 
 -- | @abs (rep a)@  \<==\>  @a@
-wwAssA :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption A
+wwResultAssA :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption A
        -> CoreExpr                  -- ^ abs
        -> CoreExpr                  -- ^ rep
        -> BiRewriteH CoreExpr
-wwAssA mr abs rep = beforeBiR
+wwResultAssA mr abs rep = beforeBiR
                       (do whenJust (verifyAssA abs rep) mr
                           absRepTypes abs rep
                       )
@@ -375,19 +375,19 @@ wwA :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption A
     -> CoreString                -- ^ abs
     -> CoreString                -- ^ rep
     -> BiRewriteH CoreExpr
-wwA mr = parse2beforeBiR (wwAssA mr)
+wwA mr = parse2beforeBiR (wwResultAssA mr)
 
 -- | @abs (rep (f h x))@  \<==\>  @f h x@
-wwAssB :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption B
+wwResultAssB :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption B
        -> CoreExpr                  -- ^ abs
        -> CoreExpr                  -- ^ rep
        -> CoreExpr                  -- ^ f
        -> BiRewriteH CoreExpr
-wwAssB mr abs rep f = beforeBiR (whenJust (verifyAssB abs rep f) mr)
+wwResultAssB mr abs rep f = beforeBiR (whenJust (verifyAssB abs rep f) mr)
                                 (\ () -> bidirectional wwBL wwBR)
   where
     assA :: BiRewriteH CoreExpr
-    assA = wwAssA Nothing abs rep
+    assA = wwResultAssA Nothing abs rep
 
     wwBL :: RewriteH CoreExpr
     wwBL = withPatFailMsg (wrongExprForm "abs (rep (f h x))") $
@@ -407,24 +407,24 @@ wwB :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption B
     -> CoreString                -- ^ rep
     -> CoreString                -- ^ f
     -> BiRewriteH CoreExpr
-wwB mr = parse3beforeBiR (wwAssB mr)
+wwB mr = parse3beforeBiR (wwResultAssB mr)
 
 -- | @fix (X->A) (\ h x -> abs (rep (f h x)))@  \<==\>  @fix (X->A) f@
-wwAssC :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption C
+wwResultAssC :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption C
        -> CoreExpr                  -- ^ abs
        -> CoreExpr                  -- ^ rep
        -> CoreExpr                  -- ^ f
        -> BiRewriteH CoreExpr
-wwAssC mr abs rep f = beforeBiR (do _ <- isFixExprT
-                                    whenJust (verifyAssC abs rep f) mr
-                                )
-                                (\ () -> bidirectional wwCL wwCR)
+wwResultAssC mr abs rep f = beforeBiR (do _ <- isFixExprT
+                                          whenJust (verifyAssC abs rep f) mr
+                                      )
+                                      (\ () -> bidirectional wwCL wwCR)
   where
     assB :: BiRewriteH CoreExpr
-    assB = wwAssB Nothing abs rep f
+    assB = wwResultAssB Nothing abs rep f
 
     wwCL :: RewriteH CoreExpr
-    wwCL = wwAssAimpliesAssC (forwardT assB)
+    wwCL = wwResultAssAimpliesAssC (forwardT assB)
 
     wwCR :: RewriteH CoreExpr
     wwCR = appAllR idR (etaExpandR "h" >>> lamAllR idR (etaExpandR "x" >>> lamAllR idR (backwardT assB)))
@@ -435,7 +435,7 @@ wwC :: Maybe (RewriteH CoreExpr) -- ^ WW Assumption C
     -> CoreString                -- ^ rep
     -> CoreString                -- ^ f
     -> BiRewriteH CoreExpr
-wwC mr = parse3beforeBiR (wwAssC mr)
+wwC mr = parse3beforeBiR (wwResultAssC mr)
 
 --------------------------------------------------------------------------------------------------
 
