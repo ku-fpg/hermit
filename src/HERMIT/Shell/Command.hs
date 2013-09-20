@@ -32,7 +32,6 @@ import qualified Data.Map as M
 import Data.Maybe
 
 import HERMIT.Core
-import HERMIT.Dictionary
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
 import HERMIT.Interp
@@ -49,6 +48,7 @@ import HERMIT.Primitive.GHC
 import HERMIT.Primitive.Inline
 import HERMIT.Primitive.Navigation
 
+import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Externals
 import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.Renderer

@@ -217,6 +217,7 @@ Library
        HERMIT.PrettyPrinter.GHC
 
        HERMIT.Shell.Command
+       HERMIT.Shell.Dictionary
        HERMIT.Shell.Externals
        HERMIT.Shell.ScriptToRewrite
        HERMIT.Shell.Renderer

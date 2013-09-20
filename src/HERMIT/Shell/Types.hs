@@ -11,7 +11,6 @@ import qualified Data.Map as M
 
 import HERMIT.Context
 import HERMIT.Kure
-import HERMIT.Dictionary
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
 import HERMIT.Kernel.Scoped
@@ -116,7 +115,7 @@ data CLException = CLAbort
                  | CLResume SAST
                  | CLContinue CommandLineState
                  | CLError String
-    
+
 instance Error CLException where
     strMsg = CLError
 
