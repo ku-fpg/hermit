@@ -16,12 +16,7 @@ import           HERMIT.Kure
 import           HERMIT.Monad
 import           HERMIT.Optimize
 
-import           HERMIT.Primitive.Common
-import           HERMIT.Primitive.Composite hiding (externals)
-import           HERMIT.Primitive.Debug hiding (externals)
-import           HERMIT.Primitive.GHC hiding (externals)
-import           HERMIT.Primitive.Local hiding (externals)
-import           HERMIT.Primitive.Unfold hiding (externals)
+import           HERMIT.Dictionary
 
 -- Fix the ordering of type arguments and avoid dealing with size
 fixStep :: forall a b m s. Monad m => a -> m (VS.Step s b) -> m (VS.Step (a,s) b)

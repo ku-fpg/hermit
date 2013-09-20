@@ -9,11 +9,7 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Optimize
 
-import HERMIT.Primitive.Common
-import HERMIT.Primitive.Composite hiding (externals)
-import HERMIT.Primitive.GHC hiding (externals)
-import HERMIT.Primitive.Local hiding (externals)
-import HERMIT.Primitive.Unfold hiding (externals)
+import HERMIT.Dictionary
 
 import Language.Haskell.TH as TH
 
