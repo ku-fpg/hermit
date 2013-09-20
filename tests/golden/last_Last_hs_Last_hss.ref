@@ -16,29 +16,30 @@ To get started, you could try the following:
   - type "set-pp-type Show" to display full type information;
   - type "info" for more information about the current node;
   - to descend into a child node, type the name of the child
-    ("info" includes a list of children of the current node");
+    ("info" includes a list of children of the current node);
   - to ascend, use the "up" command;
   - type "log" to display an activity log.
 ==============================================================
 
-[0m[1;34mrec[0m [0m[mlast[0m [0m[32m[0m[32m∷[0m[32m[0m [0m[31m[0m[31m∀[0m[31m[0m [0m[32ma[0m [0m[31m.[0m [0m[32m[[0m[0m[32ma[0m[0m[32m][0m [0m[32m[0m[32m→[0m[32m[0m [0m[32ma[0m
-    [0m[mlast[0m [0m[31m=[0m [0m[31m[0m[31mλ[0m[31m[0m [0m[32ma[0m [0m[mds[0m [0m[31m[0m[31m→[0m[31m[0m
-      [0m[1;34mlet[0m [0m[1;34mrec[0m [0m[mwork[0m [0m[32m[0m[32m∷[0m[32m[0m [0m[32ma[0m [0m[32m[0m[32m→[0m[32m[0m [0m[32m[[0m[0m[32ma[0m[0m[32m][0m [0m[32m[0m[32m→[0m[32m[0m [0m[32ma[0m
-              [0m[mwork[0m [0m[31m=[0m [0m[31m[0m[31mλ[0m[31m[0m [0m[mb[0m [0m[mbs[0m [0m[31m[0m[31m→[0m[31m[0m
-                [0m[1;34mcase[0m [0m[mbs[0m [0m[1;34mof[0m [0m[mwild[0m [0m[32ma[0m
-                  [0m[m[][0m [0m[31m[0m[31m→[0m[31m[0m [0m[mb[0m
-                  [0m[31m([0m[0m[m:[0m[0m[31m)[0m [0m[ma[0m [0m[mas[0m [0m[31m[0m[31m→[0m[31m[0m [0m[mwork[0m [0m[ma[0m [0m[mas[0m
-      [0m[1;34min[0m [0m[1;34mcase[0m [0m[mds[0m [0m[1;34mof[0m [0m[mwild[0m [0m[32ma[0m
-           [0m[m[][0m [0m[31m[0m[31m→[0m[31m[0m [0m[merror[0m [0m[32ma[0m [0m[31m([0m[0m[munpackCString#[0m [0m[31m([0m"wrap _ []"#[0m[31m)[0m[0m[31m)[0m
-           [0m[31m([0m[0m[m:[0m[0m[31m)[0m [0m[ma[0m [0m[mas[0m [0m[31m[0m[31m→[0m[31m[0m [0m[mwork[0m [0m[ma[0m [0m[mas[0m
-    [0m[munwrap[0m [0m[32m[0m[32m∷[0m[32m[0m [0m[31m[0m[31m∀[0m[31m[0m [0m[32ma[0m [0m[31m.[0m [0m[31m([0m[0m[32m[[0m[0m[32ma[0m[0m[32m][0m [0m[32m[0m[32m→[0m[32m[0m [0m[32ma[0m[0m[31m)[0m [0m[32m[0m[32m→[0m[32m[0m [0m[32ma[0m [0m[32m[0m[32m→[0m[32m[0m [0m[32m[[0m[0m[32ma[0m[0m[32m][0m [0m[32m[0m[32m→[0m[32m[0m [0m[32ma[0m
-    [0m[munwrap[0m [0m[31m=[0m [0m[31m[0m[31mλ[0m[31m[0m [0m[32ma[0m [0m[mf[0m [0m[ma[0m [0m[mas[0m [0m[31m[0m[31m→[0m[31m[0m [0m[mf[0m [0m[31m([0m[0m[31m([0m[0m[m:[0m[0m[31m)[0m [0m[32ma[0m [0m[ma[0m [0m[mas[0m[0m[31m)[0m
-    [0m[mwrap[0m [0m[32m[0m[32m∷[0m[32m[0m [0m[31m[0m[31m∀[0m[31m[0m [0m[32ma[0m [0m[31m.[0m [0m[31m([0m[0m[32ma[0m [0m[32m[0m[32m→[0m[32m[0m [0m[32m[[0m[0m[32ma[0m[0m[32m][0m [0m[32m[0m[32m→[0m[32m[0m [0m[32ma[0m[0m[31m)[0m [0m[32m[0m[32m→[0m[32m[0m [0m[32m[[0m[0m[32ma[0m[0m[32m][0m [0m[32m[0m[32m→[0m[32m[0m [0m[32ma[0m
-    [0m[mwrap[0m [0m[31m=[0m [0m[31m[0m[31mλ[0m[31m[0m [0m[32ma[0m [0m[mf[0m [0m[mds[0m [0m[31m[0m[31m→[0m[31m[0m
-      [0m[1;34mcase[0m [0m[mds[0m [0m[1;34mof[0m [0m[mwild[0m [0m[32ma[0m
-        [0m[m[][0m [0m[31m[0m[31m→[0m[31m[0m [0m[merror[0m [0m[32ma[0m [0m[31m([0m[0m[munpackCString#[0m [0m[31m([0m"wrap _ []"#[0m[31m)[0m[0m[31m)[0m
-        [0m[31m([0m[0m[m:[0m[0m[31m)[0m [0m[ma[0m [0m[mas[0m [0m[31m[0m[31m→[0m[31m[0m [0m[mf[0m [0m[ma[0m [0m[mas[0m
-    [0m[mmain[0m [0m[32m[0m[32m∷[0m[32m[0m [0m[32mIO[0m [0m[32m([0m[0m[32m)[0m
-    [0m[mmain[0m [0m[31m=[0m [0m[mprint[0m [0m[32mChar[0m [0m[m$fShowChar[0m [0m[31m([0m[0m[mlast[0m [0m[32mChar[0m [0m[31m([0m[0m[munpackCString#[0m "hello"#[0m[31m)[0m[0m[31m)[0m
-    [0m[mmain[0m [0m[32m[0m[32m∷[0m[32m[0m [0m[32mIO[0m [0m[32m([0m[0m[32m)[0m
-    [0m[mmain[0m [0m[31m=[0m [0m[mrunMainIO[0m [0m[32m([0m[0m[32m)[0m [0m[mmain[0m
+[0m[1;34mrec[22m[0m[0m [0m[mlast[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[31m.[0m[0m [0m[32m[[0m[0m[0m[32ma[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32ma[0m[0m
+    [0m[mlast[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[32ma[0m[0m [0m[31m[31m→[31m[0m[0m
+      [0m[1;34mlet[22m[0m[0m [0m[1;34mrec[22m[0m[0m [0m[mwork[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32ma[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32ma[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32ma[0m[0m
+              [0m[mwork[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[ma0[0m[0m [0m[mas[0m[0m [0m[31m[31m→[31m[0m[0m
+                [0m[1;34mcase[22m[0m[0m [0m[mas[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[32ma[0m[0m
+                  [0m[m[][0m[0m [0m[31m[31m→[31m[0m[0m [0m[ma0[0m[0m
+                  [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[ma1[0m[0m [0m[mas0[0m[0m [0m[31m[31m→[31m[0m[0m [0m[mwork[0m[0m [0m[ma1[0m[0m [0m[mas0[0m[0m
+      [0m[1;34min[22m[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m
+           [0m[1;34mcase[22m[0m[0m [0m[mds[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[32ma[0m[0m
+             [0m[m[][0m[0m [0m[31m[31m→[31m[0m[0m [0m[mundefined[0m[0m [0m[32ma[0m[0m
+             [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[ma0[0m[0m [0m[mas[0m[0m [0m[31m[31m→[31m[0m[0m [0m[mwork[0m[0m [0m[ma0[0m[0m [0m[mas[0m[0m
+    [0m[munwrap[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[31m.[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[32ma[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32ma[0m[0m[0m[31m)[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32ma[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32ma[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32ma[0m[0m
+    [0m[munwrap[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[32ma[0m[0m [0m[mf[0m[0m [0m[ma[0m[0m [0m[mas[0m[0m [0m[31m[31m→[31m[0m[0m [0m[mf[0m[0m [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32ma[0m[0m [0m[ma[0m[0m [0m[mas[0m[0m[0m[31m)[0m[0m
+    [0m[mwrap[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[31m.[0m[0m [0m[31m([0m[0m[0m[32ma[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32ma[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32ma[0m[0m[0m[31m)[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32ma[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32ma[0m[0m
+    [0m[mwrap[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[32ma[0m[0m [0m[mf[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m
+      [0m[1;34mcase[22m[0m[0m [0m[mds[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[32ma[0m[0m
+        [0m[m[][0m[0m [0m[31m[31m→[31m[0m[0m [0m[mundefined[0m[0m [0m[32ma[0m[0m
+        [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[ma[0m[0m [0m[mas[0m[0m [0m[31m[31m→[31m[0m[0m [0m[mf[0m[0m [0m[ma[0m[0m [0m[mas[0m[0m
+    [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
+    [0m[mmain[0m[0m [0m[31m=[0m[0m [0m[mprint[0m[0m [0m[32mChar[0m[0m [0m[m$fShowChar[0m[0m [0m[31m([0m[0m[0m[mlast[0m[0m [0m[32mChar[0m[0m [0m[31m([0m[0m[0m[munpackCString#[0m[0m [0m"hello"#[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
+    [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
+    [0m[mmain[0m[0m [0m[31m=[0m[0m [0m[mrunMainIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m [0m[mmain[0m[0m[0m
