@@ -11,6 +11,7 @@ module HERMIT.Kernel.Scoped
 import Control.Arrow
 import Control.Concurrent.STM
 import Control.Exception (bracketOnError)
+import Control.Monad
 import Control.Monad.IO.Class
 
 import Data.Maybe (fromMaybe)
@@ -124,9 +125,7 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 let m' = I.delete sAst m
                                     fst3 (x,_,_) = x
                                     asts = I.foldr ((:) . fst3) [] m'
-                                if ast `elem` asts
-                                    then return ()
-                                    else deleteK kernel ast
+                                when (ast `notElem` asts) $ deleteK kernel ast
                                 atomically $ putTMVar store m'
             , listS       = do m <- liftIO $ atomically $ readTMVar store
                                return [ SAST sAst | sAst <- I.keys m ]
