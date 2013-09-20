@@ -40,6 +40,7 @@ import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.GHC hiding (singleton, liftIO, display, (<>))
 import qualified HERMIT.GHC as GHC
+import HERMIT.Monad
 import HERMIT.Plugin
 import HERMIT.PrettyPrinter.Common
 import qualified HERMIT.PrettyPrinter.Clean as Clean
@@ -47,7 +48,6 @@ import HERMIT.Shell.Command
 import HERMIT.Shell.Types
 
 import System.Console.Haskeline (defaultBehavior)
-import System.IO (stdout)
 
 data OInst :: * -> * where
     Shell    :: [External] -> [CommandLineOption] -> OInst ()
@@ -104,29 +104,63 @@ eval phaseInfo comp = do
     v <- viewT comp
     case v of
         Return x            -> return x
-        RR rr       :>>= k  -> do runAndSave $ applyS kernel rr env
-                                  eval phaseInfo $ k ()
-        Query tr    :>>= k  -> do sast <- gets cl_cursor
-                                  r <- queryS kernel tr env sast
-                                  eval phaseInfo $ k r
-        Shell es os :>>= k -> catchContinue (commandLine os defaultBehavior es) >>= eval phaseInfo . k
-        Guard p (OM m)  :>>= k  -> when (p phaseInfo) (eval phaseInfo m) >> eval phaseInfo (k ())
+        RR rr       :>>= k  -> runS (applyS kernel rr env) >>= eval phaseInfo . k
+        Query tr    :>>= k  -> runK (queryS kernel tr env) >>= eval phaseInfo . k
+        Shell es os :>>= k -> do
+            -- We want to discard the current focus, open the shell at
+            -- the top level, then restore the current focus.
+            paths <- resetScoping env
+            catchContinue (commandLine os defaultBehavior es)
+            _ <- resetScoping env
+            restoreScoping env paths
+            eval phaseInfo $ k ()
+        Guard p (OM m)  :>>= k  -> when (p phaseInfo) (eval phaseInfo m) >>= eval phaseInfo . k
         Focus tp (OM m) :>>= k  -> do
             sast <- gets cl_cursor
-            p <- queryS kernel tp env sast          -- run the pathfinding translation
-            runAndSave $ beginScopeS kernel         -- remember the current path
-            runAndSave $ modPathS kernel (<> p) env -- modify the current path
-            r <- eval phaseInfo m                   -- run the focused computation
-            runAndSave $ endScopeS kernel           -- endscope on it, so we go back to where we started
+            p <- queryS kernel tp env sast    -- run the pathfinding translation
+            runS $ beginScopeS kernel         -- remember the current path
+            runS $ modPathS kernel (<> p) env -- modify the current path
+            r <- eval phaseInfo m             -- run the focused computation
+            runS $ endScopeS kernel           -- endscope on it, so we go back to where we started
             eval phaseInfo $ k r
+
+------------------------- Shell-related helpers --------------------------------------
 
 catchContinue :: Monad m => CLM m () -> CLM m ()
 catchContinue m = catchError m (\case CLContinue st -> put st
                                       other -> throwError other)
 
-runAndSave :: (SAST -> CLM IO SAST) -> CLM IO ()
-runAndSave f = do
-    sast <- gets cl_cursor >>= f
+resetScoping :: HermitMEnv -> CLM IO [PathH]
+resetScoping env = do
+    kernel <- gets cl_kernel
+    paths <- runK $ pathS kernel
+    replicateM_ (length paths - 1) $ runS $ endScopeS kernel
+    -- modPathS commonly fails here because the path is unchanged, so throw away failures
+    catchM (runS $ modPathS kernel (const mempty) env) (const (return ()))
+    return paths
+
+restoreScoping :: HermitMEnv -> [PathH] -> CLM IO ()
+restoreScoping _   []    = return ()
+restoreScoping env (h:t) = do
+    kernel <- gets cl_kernel
+
+    let go p []      = restore p
+        go p (p':ps) = restore p >> runS (beginScopeS kernel) >> go p' ps
+
+        -- modPathS commonly fails here because the path is unchanged, so throw away failures
+        restore p = catchM (runS $ modPathS kernel (<> pathToSnocPath p) env)
+                           (const (return ()))
+
+    go h t
+
+-- | Run a kernel function on the current SAST
+runK :: (SAST -> CLM IO a) -> CLM IO a
+runK f = gets cl_cursor >>= f
+
+-- | Run a kernel function on the current SAST and update cl_cursor
+runS :: (SAST -> CLM IO SAST) -> CLM IO ()
+runS f = do
+    sast <- runK f
     modify $ \st -> st { cl_cursor = sast }
 
 interactive :: [External] -> [CommandLineOption] -> OM ()
@@ -171,9 +205,7 @@ lastPhase = guard (null . phasesLeft)
 ----------------------------- other ------------------------------
 
 display :: OM ()
-display = do
-    (po,r) <- OM $ gets $ cl_pretty_opts &&& cl_render
-    OM (gets cl_pretty) >>= query . liftPrettyH po >>= liftIO . r stdout po . Right
+display = OM $ lift $ performQuery Display
 
 setPretty :: PrettyH CoreTC -> OM ()
 setPretty pp = OM $ modify $ \s -> s { cl_pretty = pp }
