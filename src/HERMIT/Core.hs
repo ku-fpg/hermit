@@ -312,7 +312,7 @@ freeVarsDef (Def v e) = delVarSet (freeVarsExpr e) v `unionVarSet` varTypeTyVars
 
 -- | Find all free variables in a case alternative, which excludes any variables bound in the alternative.
 freeVarsAlt :: CoreAlt -> VarSet
-freeVarsAlt (_,bs,e) = delVarSetList (freeVarsExpr e) bs `unionVarSet`  unionVarSets (map varTypeTyVars bs)
+freeVarsAlt (_,bs,e) = delVarSetList (freeVarsExpr e `unionVarSet` unionVarSets (map varTypeTyVars bs)) bs
 
 -- | Find all free variables in a program.
 freeVarsProg :: CoreProg -> VarSet
