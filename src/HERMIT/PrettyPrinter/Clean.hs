@@ -422,6 +422,7 @@ ppCoercionR = absPathT >>= ppCoercionPR
                 <+ axiomInstCoT (coAxiomName ^>> ppName CoercionColor) ppSDoc (\ _ -> ppCoercionR >>> parenExpr) (\ ax idx coes -> RetExpr (coText p "axiomInst" <+> ax <+> idx <+> sep coes))
                 <+ lrCoT ppSDoc (ppCoercionR >>> parenExpr) (\ lr co -> RetExpr (coercionColor lr <+> co))
                 -- TODO: UnivCo and SubCo
+                <+ constT (return . RetAtom $ text "Unsupported Coercion Constructor")
 #else
                 <+ reflT (ppTypeModeR >>^ normalExpr >>^ \ ty -> RetAtom $ if isEmpty ty then coText p "refl" else coChar p '<' <> ty <> coChar p '>')
                 <+ tyConAppCoT ppTyConCo (const ppCoercionR) (retApps p TyConApp_Arg)
