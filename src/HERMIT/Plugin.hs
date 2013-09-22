@@ -26,11 +26,12 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
 
             -- This is a bit of a hack; otherwise we lose what we've not seen
             liftIO $ hSetBuffering stdout NoBuffering
-
-            let passes = map getCorePass todos
+            
+            let todos' = flattenTodos todos
+                passes = map getCorePass todos'
                 allPasses = foldr (\ (n,p,seen,notyet) r -> mkPass n seen notyet : p : r)
-                                  [mkPass (length todos) passes []]
-                                  (zip4 [0..] todos (inits passes) (tails passes))
+                                  [mkPass (length todos') passes []]
+                                  (zip4 [0..] todos' (inits passes) (tails passes))
                 mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n) $ modFilter hp (PhaseInfo n ps ps') opts
 
             return allPasses
@@ -119,6 +120,12 @@ getCorePass (CoreDoPasses {})   = Passes -- these should be flattened out in pra
 getCorePass (CoreDoPluginPass nm _) = PluginPass nm
 getCorePass CoreDoNothing       = NoOp
 -- getCorePass _                   = Unknown
+
+flattenTodos :: [CoreToDo] -> [CoreToDo]
+flattenTodos = concatMap f
+    where f (CoreDoPasses ps) = flattenTodos ps
+          f CoreDoNothing     = []
+          f other             = [other]
 
 data PhaseInfo =
     PhaseInfo { phaseNum :: Int
