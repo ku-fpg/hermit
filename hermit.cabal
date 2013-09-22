@@ -103,7 +103,6 @@ build-type:          Simple
 Cabal-Version:       >= 1.14
 
 extra-source-files:
-    examples/WWSplitTactic.hss
     examples/concatVanishes/ConcatVanishes.hss
     examples/concatVanishes/Flatten.hs
     examples/concatVanishes/Flatten.hss
