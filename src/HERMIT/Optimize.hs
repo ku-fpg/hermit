@@ -18,6 +18,9 @@ module HERMIT.Optimize
     , allPhases
     , firstPhase
     , lastPhase
+      -- ** Knobs and Dials
+    , getPhaseInfo
+    , modifyCLS
       -- ** Types
     , OM
     , omToIO
@@ -28,6 +31,7 @@ import Control.Concurrent.STM
 import Control.Monad.Error hiding (guard)
 import Control.Monad.Operational
 import Control.Monad.State hiding (guard)
+import Control.Monad.Reader hiding (guard)
 
 import Data.Default
 import Data.Monoid
@@ -56,7 +60,7 @@ data OInst :: * -> * where
     RR       :: (Injection ModGuts g, Walker HermitC g) => RewriteH g                      -> OInst ()
     Query    :: (Injection ModGuts g, Walker HermitC g) => TranslateH g a                  -> OInst a
 
-newtype OM a = OM (ProgramT OInst (CLM IO) a)
+newtype OM a = OM (ProgramT OInst (ReaderT PhaseInfo (CLM IO)) a)
     deriving (Monad, MonadIO)
 
 optimize :: ([CommandLineOption] -> OM ()) -> Plugin
@@ -96,33 +100,35 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST -> do
 
 -- TODO - better name!
 omToIO :: CommandLineState -> PhaseInfo -> OM a -> IO (Either CLException a, CommandLineState)
-omToIO initState phaseInfo (OM opt) = runCLM initState (eval phaseInfo opt)
+omToIO initState phaseInfo (OM opt) = runCLM initState (runReaderT (eval opt) phaseInfo)
 
-eval :: PhaseInfo -> ProgramT OInst (CLM IO) a -> CLM IO a
-eval phaseInfo comp = do
+eval :: ProgramT OInst (ReaderT PhaseInfo (CLM IO)) a -> ReaderT PhaseInfo (CLM IO) a
+eval comp = do
     (kernel, env) <- gets $ cl_kernel &&& cl_kernel_env
     v <- viewT comp
     case v of
         Return x            -> return x
-        RR rr       :>>= k  -> runS (applyS kernel rr env) >>= eval phaseInfo . k
-        Query tr    :>>= k  -> runK (queryS kernel tr env) >>= eval phaseInfo . k
+        RR rr       :>>= k  -> lift (runS (applyS kernel rr env)) >>= eval . k
+        Query tr    :>>= k  -> lift (runK (queryS kernel tr env)) >>= eval . k
         Shell es os :>>= k -> do
-            -- We want to discard the current focus, open the shell at
-            -- the top level, then restore the current focus.
-            paths <- resetScoping env
-            catchContinue (commandLine os defaultBehavior es)
-            _ <- resetScoping env
-            restoreScoping env paths
-            eval phaseInfo $ k ()
-        Guard p (OM m)  :>>= k  -> when (p phaseInfo) (eval phaseInfo m) >>= eval phaseInfo . k
+            lift $ do
+                -- We want to discard the current focus, open the shell at
+                -- the top level, then restore the current focus.
+                paths <- resetScoping env
+                catchContinue (commandLine os defaultBehavior es)
+                _ <- resetScoping env
+                restoreScoping env paths
+            eval $ k ()
+        Guard p (OM m)  :>>= k  -> ask >>= \ phaseInfo -> when (p phaseInfo) (eval m) >>= eval . k
         Focus tp (OM m) :>>= k  -> do
-            sast <- gets cl_cursor
-            p <- queryS kernel tp env sast    -- run the pathfinding translation
-            runS $ beginScopeS kernel         -- remember the current path
-            runS $ modPathS kernel (<> p) env -- modify the current path
-            r <- eval phaseInfo m             -- run the focused computation
-            runS $ endScopeS kernel           -- endscope on it, so we go back to where we started
-            eval phaseInfo $ k r
+            lift $ do
+                sast <- gets cl_cursor
+                p <- queryS kernel tp env sast    -- run the pathfinding translation
+                runS $ beginScopeS kernel         -- remember the current path
+                runS $ modPathS kernel (<> p) env -- modify the current path
+            r <- eval m             -- run the focused computation
+            lift $ runS $ endScopeS kernel           -- endscope on it, so we go back to where we started
+            eval $ k r
 
 ------------------------- Shell-related helpers --------------------------------------
 
@@ -166,7 +172,7 @@ runS f = do
 interactive :: [External] -> [CommandLineOption] -> OM ()
 interactive es os = OM . singleton $ Shell (externals ++ es) os
 
-run :: RewriteH Core -> OM ()
+run :: RewriteH CoreTC -> OM ()
 run = OM . singleton . RR
 
 query :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g a -> OM a
@@ -177,7 +183,7 @@ query = OM . singleton . Query
 guard :: (PhaseInfo -> Bool) -> OM () -> OM ()
 guard p = OM . singleton . Guard p
 
-at :: TranslateH Core LocalPathH -> OM a -> OM a
+at :: TranslateH CoreTC LocalPathH -> OM a -> OM a
 at tp = OM . singleton . Focus tp
 
 phase :: Int -> OM () -> OM ()
@@ -204,11 +210,17 @@ lastPhase = guard (null . phasesLeft)
 
 ----------------------------- other ------------------------------
 
+getPhaseInfo :: OM PhaseInfo
+getPhaseInfo = OM $ lift ask
+
 display :: OM ()
-display = OM $ lift $ performQuery Display
+display = OM $ lift $ lift $ performQuery Display
+
+modifyCLS :: (CommandLineState -> CommandLineState) -> OM ()
+modifyCLS = OM . modify
 
 setPretty :: PrettyH CoreTC -> OM ()
-setPretty pp = OM $ modify $ \s -> s { cl_pretty = pp }
+setPretty pp = modifyCLS $ \s -> s { cl_pretty = pp }
 
 setPrettyOptions :: PrettyOptions -> OM ()
-setPrettyOptions po = OM $ modify $ \s -> s { cl_pretty_opts = po }
+setPrettyOptions po = modifyCLS $ \s -> s { cl_pretty_opts = po }
