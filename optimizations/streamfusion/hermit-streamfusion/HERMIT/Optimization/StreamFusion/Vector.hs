@@ -28,7 +28,8 @@ fixStep a mr = mr >>= return . go
 
 plugin :: Plugin
 plugin = optimize $ \ opts -> phase 0 $ do
-    run $ tryR
+    run $ promoteR
+        $ tryR
         $ repeatR
         $ anyCallR
         $ promoteExprR
