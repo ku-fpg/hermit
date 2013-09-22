@@ -1,5 +1,7 @@
 module Main where
 
+import Data.List (map)
+
 foo :: [Int] -> Int
 foo = foldl (+) 0 . map (+1)
 
