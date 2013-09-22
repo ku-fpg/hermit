@@ -1,5 +1,5 @@
 Name:                hermit
-Version:             0.2.0.0
+Version:             0.3.0.0
 Synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
 Description:
   HERMIT uses Haskell to express semi-formal models,
@@ -8,15 +8,12 @@ Description:
   these models and implementations. The key transformation
   in the bridging DSL is the worker/wrapper transformation.
   .
-  This is a pre-alpha `please give feedback' release.
+  This is an alpha `please give feedback' release.
   Shortcomings/gotchas include:
   .
     * Command line completion is ad hoc at the moment.
   .
     * log command prints linearly, even if command history is a tree.
-  .
-    * The fold rewrite can only fold syntactically alpha-equivalent (up to
-      parameters of the function you are folding) expressions.
   .
     * RULES have issues with forall types.
   .
@@ -33,12 +30,12 @@ Description:
   .
   @
    $ hermit Reverse.hs Reverse.hss resume
-   [starting HERMIT v0.2.0.0 on Reverse.hs]
+   [starting HERMIT v0.3.0.0 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fexpose-all-unfoldings -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:Main:Reverse.hss -fplugin-opt=HERMIT:Main:resume
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.2.0.0 ... linking ... done.
+   Loading package hermit-0.3.0.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    Linking Reverse ...
    $ ./Reverse
@@ -49,12 +46,12 @@ Description:
   .
   @
    $ hermit Reverse.hs
-   [starting HERMIT v0.2.0.0 on Reverse.hs]
+   [starting HERMIT v0.3.0.0 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fexpose-all-unfoldings -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:Main:
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.2.0.0 ... linking ... done.
+   Loading package hermit-0.3.0.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    ===================== Welcome to HERMIT =====================
    HERMIT is a toolkit for the interactive transformation of GHC
@@ -101,7 +98,7 @@ License:             BSD3
 License-file:        LICENSE
 Author:              Andrew Farmer, Andy Gill, Ed Komp, Neil Sculthorpe
 Maintainer:          Andy Gill <andygill@ku.edu>
-Stability:           pre-alpha
+Stability:           alpha
 build-type:          Simple
 Cabal-Version:       >= 1.14
 
