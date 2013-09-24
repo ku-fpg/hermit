@@ -3,16 +3,21 @@ module SecondDemo (plugin) where
 
 import Control.Monad
 
+import HERMIT.Core
 import HERMIT.GHC hiding (display)
 import HERMIT.Kure
 import HERMIT.Optimize
 import HERMIT.Plugin
 import HERMIT.Dictionary
 
+import HERMIT.PrettyPrinter.Common
+import HERMIT.Shell.Types
+
 import Language.Haskell.TH as TH
 
 plugin = optimize $ \ opts -> do
-    forM_ opts $ \ o -> do
-        at (bindingOfT $ cmpTHName2Var $ TH.mkName o) display
+    modifyCLS $ \ st -> st { cl_pretty_opts = updateTypeShowOption Show (cl_pretty_opts st) }
+    at (return $ pathToSnocPath [ModGuts_Prog]) display
     left <- liftM phasesLeft getPhaseInfo
     when (notNull left) $ liftIO $ putStrLn $ "=========== " ++ show (head left) ++ " ==========="
+    lastPhase $ interactive [] opts
