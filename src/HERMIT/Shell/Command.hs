@@ -209,6 +209,7 @@ commandLine opts behavior exts = do
                             , cl_dict        = dict
                             , cl_pretty_opts = (cl_pretty_opts initState) { po_width = w }
                             , cl_height      = h
+                            , cl_initSAST    = cl_cursor initState
                             }
     put clState
 

@@ -213,11 +213,12 @@ versionCmd whereTo st =
 -------------------------------------------------------------------------------
 
 showDerivationTree :: CommandLineState -> IO String
-showDerivationTree st = return $ unlines $ showRefactorTrail graph tags 0 me
+showDerivationTree st = return $ unlines $ showRefactorTrail graph tags start me
   where
           graph = [ (a,[unparseExprH b],c) | (SAST a,b,SAST c) <- vs_graph (cl_version st) ]
           tags  = [ (n,nm) | (nm,SAST n) <- vs_tags (cl_version st) ]
           SAST me = cl_cursor st
+          SAST start = cl_initSAST st
 
 showRefactorTrail :: (Eq a, Show a) => [(a,[String],a)] -> [(a,String)] -> a -> a -> [String]
 showRefactorTrail db tags a me =
