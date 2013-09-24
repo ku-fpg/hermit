@@ -99,17 +99,18 @@ configurableInlineR config p =
 -- NOTE: When inlining, we have to take care to avoid variable capture.
 --       Our approach is to track the binding depth of the inlined identifier.
 --       After inlining, we then resolve all names in the inlined expression, and require that they were all bound prior to (i.e. lower numbered depth) the binding we inlined.
---       The precise depth check varies between binding types as follows (where d is the depth of the inlined binder):
+--       The precise depth check varies between binding sites as follows (where d is the depth of the inlined binder):
 --
---         Binder                Safe to Inline
+--         Binding Site          Safe to Inline
 --         global-id             (<= 0)
---         letnonrec             (< d)
---         letrec                (<= d)
---         case-wild-scrutinee   (< d)
---         case-wild-alt         (<= d+1)
---         self-rec-def          NA
---         lam                   NA
---         case-alt              NA
+--         NONREC                (< d)
+--         REC                   (<= d)
+--         MUTUALREC             (<= d+1)
+--         CASEWILD-scrutinee    (< d)
+--         CASEWILD-alt          (<= d+1)
+--         SELFREC-def           NA
+--         LAM                   NA
+--         CASEALT               NA
 
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
@@ -151,6 +152,9 @@ getUnfoldingT config = translate $ \ c i ->
 
                           REC e          -> do requireAllBinders config
                                                return (e, (<= depth))
+
+                          MUTUALREC e    -> do requireAllBinders config
+                                               return (e, (<= depth+1))
 
                           _              -> fail "variable is not bound to an expression."
   where
