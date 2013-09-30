@@ -6,6 +6,7 @@ module HERMIT.Plugin
     , getCorePass
     , ghcPasses
     , PhaseInfo(..)
+    , getPhaseFlag
     )  where
 
 import Data.List
@@ -133,3 +134,10 @@ data PhaseInfo =
               , phasesLeft :: [CorePass]
               }
     deriving (Read, Show, Eq)
+
+-- | If HERMIT user specifies the -pN flag, get the N
+-- TODO: as written will discard other flags that start with -p
+getPhaseFlag :: [CommandLineOption] -> Maybe (Int, [CommandLineOption])
+getPhaseFlag opts = case partition ("-p" `isPrefixOf`) opts of
+                        ([],_) -> Nothing
+                        (ps,r) -> Just (read (drop 2 (last ps)), r)
