@@ -1,8 +1,10 @@
 {-# LANGUAGE TemplateHaskell, RankNTypes #-}
-module HERMIT.Optimization.StreamFusion.Vector (plugin, fixStep) where
+module HERMIT.Optimization.StreamFusion.Vector (plugin, fixStep, Size.Size(..)) where
 
 import           Control.Arrow
+import           Control.Monad
 
+import           Data.Maybe (fromMaybe)
 import qualified Data.Vector as V
 -- import qualified Data.Vector.Generic as G
 import qualified Data.Vector.Fusion.Stream as VS
@@ -15,6 +17,7 @@ import           HERMIT.GHC hiding (display)
 import           HERMIT.Kure
 import           HERMIT.Monad
 import           HERMIT.Optimize
+import           HERMIT.Plugin
 
 import           HERMIT.Dictionary
 
@@ -27,14 +30,18 @@ fixStep a mr = mr >>= return . go
 {-# INLINE fixStep #-}
 
 plugin :: Plugin
-plugin = optimize $ \ opts -> phase 0 $ do
-    run $ promoteR
-        $ tryR
-        $ repeatR
-        $ anyCallR
-        $ promoteExprR
-        $ (bracketR "concatMap -> flatten" concatMapSafe) <+ unfoldNamesR ['VS.concatMap, 'M.concatMap, 'V.concatMap]
-    -- interactive sfexts opts
+plugin = optimize $ \ opts -> do
+    let (pn,opts') = fromMaybe (0,opts) (getPhaseFlag opts)
+    done <- liftM phasesDone getPhaseInfo
+    when (notNull done) $ liftIO $ print $ last done
+    phase pn $ do
+        run $ promoteR
+            $ tryR
+            $ repeatR
+            $ anyCallR
+            $ promoteExprR
+            $ (bracketR "concatMap -> flatten" concatMapSafe) <+ unfoldNamesR ['VS.concatMap, 'M.concatMap, 'V.concatMap]
+        interactive sfexts opts'
 
 concatMapSafe :: RewriteH CoreExpr
 concatMapSafe = concatMapSR >>> ((lintExprT >>= \_ -> traceR "Success!") <+ traceR "Failed On Lint")
