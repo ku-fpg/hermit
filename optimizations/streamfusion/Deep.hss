@@ -1,0 +1,4 @@
+any-call (unfold 'deep)
+any-call (unfold '$fDeepPair)
+any-call (unfold '"D:Deep")
+any-call (unfold '$cdeep)
