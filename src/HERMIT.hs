@@ -1,6 +1,5 @@
 module HERMIT (plugin) where
 
-import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
 
 import HERMIT.GHC
