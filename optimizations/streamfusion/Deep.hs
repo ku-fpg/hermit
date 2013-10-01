@@ -24,11 +24,11 @@ class Deep x where
 
 instance Deep Int where
   deep !k = SM.enumFromStepN 1 1 k
-  {-# INLINE deep #-}
+  {-# INLINABLE deep #-}
 
 instance Deep x => Deep (x :!: Int) where
   deep !(x :!: k) = SM.concatMap (SM.enumFromStepN 1 1) $ deep x
-  {-# INLINE deep #-}
+  {-# INLINABLE deep #-}
 
 testDeep :: IO Int
 testDeep = SM.foldl' (+) 0 $ deep (( (10::Int) :!: (12::Int)) :!: (14::Int) :!: (15::Int))
