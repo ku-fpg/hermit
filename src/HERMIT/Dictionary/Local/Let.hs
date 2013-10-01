@@ -239,10 +239,10 @@ letRecElimR = withPatFailMsg (wrongExprForm "Let (Rec v e1) e2") $
                  then fail "no dead binders to eliminate."
                  else return $ Let (Rec $ filter ((`elemVarSet` liveBinders) . fst) bnds) body
 
-progBindElimR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoreProg
+progBindElimR :: MonadCatch m => Rewrite c m CoreProg
 progBindElimR = progBindNonRecElimR <+ progBindRecElimR
 
-progBindNonRecElimR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoreProg
+progBindNonRecElimR :: MonadCatch m => Rewrite c m CoreProg
 progBindNonRecElimR = withPatFailMsg (wrongExprForm "ProgCons (NonRec v e1) e2") $ do
     ProgCons (NonRec v _) p <- idR
     guardMsg (v `notElemVarSet` freeVarsProg p) "variable appears in program body."
@@ -250,10 +250,10 @@ progBindNonRecElimR = withPatFailMsg (wrongExprForm "ProgCons (NonRec v e1) e2")
     return p
 
 -- | Remove all unused bindings at the top level.
-progBindRecElimR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoreProg
+progBindRecElimR :: MonadCatch m => Rewrite c m CoreProg
 progBindRecElimR = withPatFailMsg (wrongExprForm "ProgCons (Rec v e1) e2") $
     do ProgCons (Rec bnds) p <- idR
-       let pFrees   = freeVarsProg p
+       let pFrees      = freeVarsProg p
            bsAndFrees  = map (second freeIdsExpr) bnds
            usedIds     = chaseDependencies pFrees bsAndFrees
            bs          = mkVarSet (map fst bsAndFrees)
