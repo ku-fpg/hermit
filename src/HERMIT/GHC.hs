@@ -36,6 +36,7 @@ module HERMIT.GHC
     , varSetToStrings
     , showVarSet
     , Pair(..)
+    , bndrRuleAndUnfoldingVars
 #if __GLASGOW_HASKELL__ <= 706
     , Control.Monad.IO.Class.liftIO
 #endif
@@ -225,3 +226,10 @@ instance Control.Monad.IO.Class.MonadIO CoreM where
 #endif
 
 --------------------------------------------------------------------------
+
+-- This function is copied from GHC, which defines but doesn't expose it.
+-- A 'let' can bind a type variable, and idRuleVars assumes
+-- it's seeing an Id. This function tests first.
+bndrRuleAndUnfoldingVars :: Var -> VarSet
+bndrRuleAndUnfoldingVars v | isTyVar v = emptyVarSet
+                           | otherwise = idRuleAndUnfoldingVars v
