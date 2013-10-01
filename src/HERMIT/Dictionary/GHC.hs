@@ -308,14 +308,20 @@ specConstrR = prefixFailMsg "spec-constr failed: " $ do
 -- | Run GHC's specialisation pass, and apply any rules generated.
 specialise :: RewriteH ModGuts
 specialise = prefixFailMsg "specialisation failed: " $ do
-    rs <- arr mg_rules
+    gRules <- arr mg_rules
+    lRules <- extractT specRules
+
     dflags <- dynFlagsT
-    g' <- contextfreeT $ liftCoreM . Specialise.specProgram dflags
-    rs' <- return g' >>> arr mg_rules
-    let specRs = deleteFirstsBy ((==) `on` ru_name) rs' rs
+    guts <- contextfreeT $ liftCoreM . Specialise.specProgram dflags
+
+    lRules' <- return guts >>> extractT specRules -- spec rules on bindings in this module
+    let gRules' = mg_rules guts            -- plus spec rules on imported bindings
+        gSpecRs = deleteFirstsBy ((==) `on` ru_name) gRules' gRules
+        lSpecRs = deleteFirstsBy ((==) `on` ru_name) lRules' lRules
+        specRs = gSpecRs ++ lSpecRs
     guardMsg (notNull specRs) "no rules created."
-    liftIO $ putStrLn $ unlines $ map (unpackFS . ru_name) rs'
-    return g' >>> extractR (repeatR (anyCallR (promoteExprR $ rulesToRewriteH specRs)))
+    liftIO $ putStrLn $ unlines $ map (unpackFS . ru_name) specRs
+    return guts >>> extractR (repeatR (anyCallR (promoteExprR $ rulesToRewriteH specRs)))
 
 -- | Get all the specialization rules on a binding.
 --   These are created by SpecConstr and other GHC passes.
