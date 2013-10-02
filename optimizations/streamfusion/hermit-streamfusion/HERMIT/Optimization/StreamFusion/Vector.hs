@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, RankNTypes #-}
+{-# LANGUAGE FlexibleContexts, TemplateHaskell, RankNTypes #-}
 module HERMIT.Optimization.StreamFusion.Vector (plugin, fixStep, Size.Size(..)) where
 
 import           Control.Arrow
@@ -21,6 +21,8 @@ import           HERMIT.Plugin
 
 import           HERMIT.Dictionary
 
+import qualified Language.Haskell.TH as TH
+
 -- Fix the ordering of type arguments and avoid dealing with size
 fixStep :: forall a b m s. Monad m => a -> m (VS.Step s b) -> m (VS.Step (a,s) b)
 fixStep a mr = mr >>= return . go
@@ -41,7 +43,9 @@ plugin = optimize $ \ opts -> do
             $ anyCallR
             $ promoteExprR
             $ (bracketR "concatMap -> flatten" concatMapSafe) <+ unfoldNamesR ['VS.concatMap, 'M.concatMap, 'V.concatMap]
-        interactive sfexts opts'
+        forM_ opts' $ \ nm -> do
+            run $ promoteR $ tryR $ innermostR $ promoteR (inlineFunctionWithTyConArgR (TH.mkName nm)) >+> bashR
+        interactive sfexts []
 
 concatMapSafe :: RewriteH CoreExpr
 concatMapSafe = concatMapSR >>> ((lintExprT >>= \_ -> traceR "Success!") <+ traceR "Failed On Lint")
@@ -54,6 +58,18 @@ sfexts =
         [ "special rule for concatmap lambda" ]
     , external "extract-show" (promoteExprT (constT getDynFlags >>= \ dfs -> callDataConNameT 'M.Stream >>> arr (showPpr dfs)) :: TranslateH Core String) []
     ]
+
+-- collectT
+inlineFunctionWithTyConArgR :: TH.Name -> RewriteH CoreExpr
+inlineFunctionWithTyConArgR nm = bracketR "inline dictionary" $ do
+    -- this will fail if named TyCon is not a dictionary argument
+    varT (arr idType >>> onetdT (funTyT (tyConG nm) successT const))
+    inlineR
+
+tyConG :: TH.Name -> TranslateH Type ()
+tyConG name = do
+    nm <- tyConAppT (arr tyConName) (const successT) const
+    guardMsg (name `cmpTHName2Name` nm) "not a matching Tycon."
 
 concatMapSR :: RewriteH CoreExpr
 concatMapSR = do

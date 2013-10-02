@@ -1,5 +1,10 @@
+.PHONY : deep
+
 install:
 	( cd hermit-streamfusion ; cabal install --force-reinstalls )
+
+deep:
+	hermit Deep.hs -opt=HERMIT.Optimization.StreamFusion.Vector +Main Deep -- -ddump-simpl -ddump-to-file
 
 list:
 	ghc --make -O2 Main.hs -fforce-recomp -ddump-prep -ddump-to-file
