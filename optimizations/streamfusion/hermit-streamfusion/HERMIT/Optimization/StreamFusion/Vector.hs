@@ -44,7 +44,7 @@ plugin = optimize $ \ opts -> do
             $ promoteExprR
             $ (bracketR "concatMap -> flatten" concatMapSafe) <+ unfoldNamesR ['VS.concatMap, 'M.concatMap, 'V.concatMap]
         forM_ opts' $ \ nm -> do
-            run $ promoteR $ tryR $ innermostR $ promoteR (inlineFunctionWithTyConArgR (TH.mkName nm)) >+> bashR
+            run $ promoteR $ tryR $ innermostR (promoteR (inlineFunctionWithTyConArgR (TH.mkName nm))) >+> simplifyR
         interactive sfexts []
 
 concatMapSafe :: RewriteH CoreExpr
@@ -57,9 +57,9 @@ sfexts =
     , external "simp-step" (simpStep :: RewriteH Core)
         [ "special rule for concatmap lambda" ]
     , external "extract-show" (promoteExprT (constT getDynFlags >>= \ dfs -> callDataConNameT 'M.Stream >>> arr (showPpr dfs)) :: TranslateH Core String) []
+    , external "inline-dictionaries" (promoteExprR . inlineFunctionWithTyConArgR :: TH.Name -> RewriteH Core) []
     ]
 
--- collectT
 inlineFunctionWithTyConArgR :: TH.Name -> RewriteH CoreExpr
 inlineFunctionWithTyConArgR nm = bracketR "inline dictionary" $ do
     -- this will fail if named TyCon is not a dictionary argument
