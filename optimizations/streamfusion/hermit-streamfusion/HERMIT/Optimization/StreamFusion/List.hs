@@ -1,4 +1,4 @@
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE ExistentialQuantification, BangPatterns #-}
 module HERMIT.Optimization.StreamFusion.List
     ( Stream(..)
     , Step(..)
@@ -13,46 +13,58 @@ module HERMIT.Optimization.StreamFusion.List
     , enumFromToS
     , filterS
     , zipS
+    , singletonS
     ) where
+
+import GHC.Exts( SpecConstrAnnotation(..) )
 
 data Stream a = forall s. Stream (s -> Step a s) s
 data Step a s = Done | Skip s | Yield a s
 
-{-# NOINLINE stream #-}
+data SPEC = SPEC | SPEC2
+{-# ANN type SPEC ForceSpecConstr #-}
+
+{-# INLINE [0] stream #-}
 stream :: [a] -> Stream a
 stream xs = Stream uncons xs
     where uncons :: [a] -> Step a [a]
           uncons []     = Done
           uncons (x:xs) = Yield x xs
+          {-# INLINE uncons #-}
 
+{-# INLINE [0] unstream #-}
 unstream :: Stream a -> [a]
-unstream (Stream n s) = go s
-    where go s = case n s of
-                    Done       -> []
-                    Skip s'    -> go s'
-                    Yield x s' -> x : go s'
+unstream (Stream n s) = go SPEC s
+    where go !sPEC s = case n s of
+                        Done       -> []
+                        Skip s'    -> go sPEC s'
+                        Yield x s' -> x : go sPEC s'
 
-{-# RULES "unstream/stream" [~] forall xs. unstream (stream xs) = xs #-}
-{-# RULES "stream/unstream" [~] forall s.  stream (unstream s)  = s  #-}
+{-# RULES "unstream/stream" forall xs. unstream (stream xs) = xs #-}
+{-# RULES "stream/unstream" forall s.  stream (unstream s)  = s  #-}
 
+{-# INLINE mapS #-}
 mapS :: (a -> b) -> Stream a -> Stream b
 mapS f (Stream n s) = Stream n' s
     where n' s = case n s of
                     Done       -> Done
                     Skip s'    -> Skip s'
                     Yield x s' -> Yield (f x) s'
+          {-# INLINE n' #-}
 
-{-# RULES "mapS" [~] forall f. map f = unstream . mapS f . stream #-}
+{-# RULES "mapS" forall f. map f = unstream . mapS f . stream #-}
 
+{-# INLINE foldlS #-}
 foldlS :: (b -> a -> b) -> b -> Stream a -> b
-foldlS f z (Stream n s) = go z s
-    where go z s = case n s of
-                    Done       -> z
-                    Skip s'    -> go z s'
-                    Yield x s' -> go (f z x) s'
+foldlS f z (Stream n s) = go SPEC z s
+    where go !sPEC z s = case n s of
+                            Done       -> z
+                            Skip s'    -> go sPEC z s'
+                            Yield x s' -> go sPEC (f z x) s'
 
-{-# RULES "foldlS" [~] forall f z. foldl f z = foldlS f z . stream #-}
+{-# RULES "foldlS" forall f z. foldl f z = foldlS f z . stream #-}
 
+{-# NOINLINE concatMapS #-}
 concatMapS :: (a -> Stream b) -> Stream a -> Stream b
 concatMapS f (Stream n s) = Stream n' (s, Nothing)
     where n' (s, Nothing) = case n s of
@@ -63,10 +75,12 @@ concatMapS f (Stream n s) = Stream n' (s, Nothing)
                                             Done -> Skip (s, Nothing)
                                             Skip s' -> Skip (s, Just (Stream n'' s'))
                                             Yield x s' -> Yield x (s, Just (Stream n'' s'))
+          {-# INLINE n' #-}
 
 flatten :: forall a b s. (a -> s) -> (s -> Step b s) -> [a] -> [b]
 flatten mk gFlatten = unstream . flattenS mk gFlatten . stream
 
+{-# INLINE flattenS #-}
 flattenS :: forall a b s. (a -> s) -> (s -> Step b s) -> Stream a -> Stream b
 flattenS mk gFlatten (Stream n s) = Stream n' sFlatten
     where n' (s, Nothing) = case n s of
@@ -87,18 +101,20 @@ fixStep _ Done        = Done
 fixStep a (Skip s)    = Skip (a,s)
 fixStep a (Yield b s) = Yield b (a,s)
 
-{-# RULES "concatMapS" [~] forall f. concatMap f = unstream . concatMapS (stream . f) . stream #-}
+{-# RULES "concatMapS" forall f. concatMap f = unstream . concatMapS (stream . f) . stream #-}
 
+{-# INLINE enumFromToS #-}
 enumFromToS :: Enum a => a -> a -> Stream a
 enumFromToS l h = Stream gEnum sEnum
     where {-# INLINE gEnum #-}
           gEnum s | s > fromEnum h = Done
-                  | otherwise      = Yield (toEnum s) (succ s)
+                  | otherwise      = Yield (toEnum s) (s+1)
           sEnum = fromEnum l
           {-# INLINE sEnum #-}
 
-{-# RULES "enumFromToS" [~] forall l h. enumFromTo l h = unstream (enumFromToS l h) #-}
+{-# RULES "enumFromToS" forall l h. enumFromTo l h = unstream (enumFromToS l h) #-}
 
+{-# INLINE filterS #-}
 filterS :: (a -> Bool) -> Stream a -> Stream a
 filterS p (Stream n s) = Stream n' s
     where n' s = case n s of
@@ -107,8 +123,9 @@ filterS p (Stream n s) = Stream n' s
                     Yield x s' | p x -> Yield x s'
                                | otherwise -> Skip s'
 
-{-# RULES "filterS" [~] forall p. filter p = unstream . filterS p . stream #-}
+{-# RULES "filterS" forall p. filter p = unstream . filterS p . stream #-}
 
+{-# INLINE zipS #-}
 zipS :: Stream a -> Stream b -> Stream (a,b)
 zipS (Stream na sa) (Stream nb sb) = Stream n (sa, sb, Nothing)
     where n (sa, sb, Nothing) = case na sa of
@@ -119,6 +136,15 @@ zipS (Stream na sa) (Stream nb sb) = Stream n (sa, sb, Nothing)
                                     Done -> Done
                                     Skip sb' -> Skip (sa, sb', Just a)
                                     Yield b sb' -> Yield (a,b) (sa, sb', Nothing)
+          {-# INLINE n #-}
 
-{-# RULES "zipS" [~] forall xs ys. zip xs ys = unstream (zipS (stream xs) (stream ys)) #-}
+{-# RULES "zipS" forall xs ys. zip xs ys = unstream (zipS (stream xs) (stream ys)) #-}
 
+{-# INLINE singletonS #-}
+singletonS :: a -> Stream a
+singletonS x = Stream n (Just x)
+    where n (Just x) = Yield x Nothing
+          n Nothing  = Done
+          {-# INLINE n #-}
+
+{-# RULES "singletonS" forall x. (:) x [] = unstream (singletonS x) #-}

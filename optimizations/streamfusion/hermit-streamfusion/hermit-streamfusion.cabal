@@ -15,7 +15,7 @@ cabal-version:       >=1.14
 library
     exposed-modules:
         HERMIT.Optimization.StreamFusion
---        HERMIT.Optimization.StreamFusion.List
+        HERMIT.Optimization.StreamFusion.List
         HERMIT.Optimization.StreamFusion.Vector
 
 --    other-modules:
