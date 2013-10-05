@@ -2,9 +2,8 @@ module HERMIT.Optimization.StreamFusion (plugin) where
 
 import Control.Arrow
 
-import GhcPlugins
-
 import HERMIT.External
+import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Optimize
