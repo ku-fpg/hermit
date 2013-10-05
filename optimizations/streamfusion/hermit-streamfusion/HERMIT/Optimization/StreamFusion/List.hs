@@ -6,6 +6,7 @@ module HERMIT.Optimization.StreamFusion.List
     , unstream
     , mapS
     , foldlS
+    , foldrS
     , concatMapS
     , flatten
     , flattenS
@@ -63,6 +64,16 @@ foldlS f z (Stream n s) = go SPEC z s
                             Yield x s' -> go sPEC (f z x) s'
 
 {-# RULES "foldlS" forall f z. foldl f z = foldlS f z . stream #-}
+
+{-# INLINE foldrS #-}
+
+foldrS :: (a -> b -> b) -> b -> Stream a -> b
+foldrS f z (Stream n s) = go SPEC s
+    where go !sPEC s = case n s of
+                        Done       -> z
+                        Skip s'    -> go sPEC s'
+                        Yield x s' -> f x (go sPEC s')
+{-# RULES "foldrS" forall f z. foldr f z = foldrS f z . stream #-}
 
 {-# NOINLINE concatMapS #-}
 concatMapS :: (a -> Stream b) -> Stream a -> Stream b
