@@ -1,6 +1,7 @@
 module HERMIT.Optimization.StreamFusion (plugin) where
 
 import Control.Arrow
+import Control.Monad
 
 import HERMIT.External
 import HERMIT.GHC
@@ -14,7 +15,7 @@ import Language.Haskell.TH as TH
 
 plugin :: Plugin
 plugin = optimize $ \ opts -> do
-    phase 0 $ interactive sfexts opts
+    when ("interactive" `elem` opts) $ phase 0 $ interactive sfexts opts
     run $ promoteR
         $ tryR
         $ repeatR
@@ -22,15 +23,15 @@ plugin = optimize $ \ opts -> do
         $ promoteExprR
         $ bracketR "concatmap -> flatten"
         $ concatMapSR
-    lastPhase $ interactive sfexts opts
+    when ("interactive" `elem` opts) $ lastPhase $ interactive sfexts opts
 
 {- -- this tries to manage everything
 plugin :: Plugin
 plugin = optimize $ \ opts -> phase 0 $ do
-    run $ promoteR 
-        $ tryR 
-        $ repeatR 
-        $ anyCallR (promoteExprR $ bracketR "rule" 
+    run $ promoteR
+        $ tryR
+        $ repeatR
+        $ anyCallR (promoteExprR $ bracketR "rule"
                                  $ rules [ "singletonS"
                                          , "foldlS"
                                          , "concatMapS"
