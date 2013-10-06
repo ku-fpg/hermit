@@ -18,7 +18,8 @@ library
         HERMIT.Optimization.StreamFusion.List
         HERMIT.Optimization.StreamFusion.Vector
 
---    other-modules:
+    other-modules:
+        HERMIT.Optimization.StreamFusion.Base
 
     build-depends:
         base,
