@@ -27,7 +27,7 @@ hermitPlugin hp = defaultPlugin { installCoreToDos = install }
 
             -- This is a bit of a hack; otherwise we lose what we've not seen
             liftIO $ hSetBuffering stdout NoBuffering
-            
+
             let todos' = flattenTodos todos
                 passes = map getCorePass todos'
                 allPasses = foldr (\ (n,p,seen,notyet) r -> mkPass n seen notyet : p : r)
@@ -48,7 +48,14 @@ modFilter hp pInfo opts guts
 
 -- | Filter options to those pertaining to this module, stripping module prefix.
 filterOpts :: [CommandLineOption] -> ModGuts -> [CommandLineOption]
-filterOpts opts guts = [ drop len nm | nm <- opts, modName `isPrefixOf` nm ]
+filterOpts opts guts = [ opt | nm <- opts
+                             , let mopt = if modName `isPrefixOf` nm
+                                          then Just (drop len nm)
+                                          else if "*:" `isPrefixOf` nm
+                                               then Just (drop 2 nm)
+                                               else Nothing
+                             , Just opt <- [mopt]
+                             ]
     where modName = moduleNameString $ moduleName $ mg_module guts
           len = length modName + 1 -- for the colon
 
