@@ -2,6 +2,7 @@
 module HERMIT.Optimization.StreamFusion.List
     ( Stream(..)
     , Step(..)
+    , SPEC(..)
     , stream
     , unstream
     , mapS
