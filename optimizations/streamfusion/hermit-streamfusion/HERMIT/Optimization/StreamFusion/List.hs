@@ -75,7 +75,7 @@ foldrS f z (Stream n s) = go SPEC s
                         Yield x s' -> f x (go sPEC s')
 {-# RULES "foldrS" forall f z. foldr f z = foldrS f z . stream #-}
 
-{-# NOINLINE concatMapS #-}
+{-# INLINE [0] concatMapS #-}
 concatMapS :: (a -> Stream b) -> Stream a -> Stream b
 concatMapS f (Stream n s) = Stream n' (s, Nothing)
     where n' (s, Nothing) = case n s of
