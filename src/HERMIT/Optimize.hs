@@ -15,6 +15,7 @@ module HERMIT.Optimize
     , phase
     , after
     , before
+    , until
     , allPhases
     , firstPhase
     , lastPhase
@@ -50,6 +51,8 @@ import HERMIT.PrettyPrinter.Common
 import qualified HERMIT.PrettyPrinter.Clean as Clean
 import HERMIT.Shell.Command
 import HERMIT.Shell.Types
+
+import Prelude hiding (until)
 
 import System.Console.Haskeline (defaultBehavior)
 
@@ -198,6 +201,9 @@ before :: CorePass -> OM () -> OM ()
 before cp = guard (\phaseInfo -> case phasesLeft phaseInfo of
                             (x:_) | cp == x -> True
                             _               -> False)
+
+until :: CorePass -> OM () -> OM ()
+until cp = guard ((cp `elem`) . phasesLeft)
 
 allPhases :: OM () -> OM ()
 allPhases = guard (const True)
