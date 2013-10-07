@@ -20,8 +20,13 @@ import Prelude hiding (until)
 
 plugin :: Plugin
 plugin = optimize $ \ opts -> do
-    let (os,cos) = partition (`elem` ["interactive","inline"]) opts
+    let (os,cos) = partition (`elem` ["interactive","inline","rules"]) opts
     when ("interactive" `elem` os) $ phase 0 $ interactive sfexts cos
+    when ("rules" `elem` os) $ phase 0 $ run
+                                       $ promoteR
+                                       $ tryR
+                                       $ repeatR
+                                       $ anyCallR ( promoteExprR $ bracketR "rule" $ rules allRules) <+ simplifyR
     run $ promoteR
         $ tryR
         $ repeatR
@@ -36,6 +41,29 @@ inlineConstructors :: RewriteH Core
 inlineConstructors = do
     vs <- collectT (promoteT $ nonRecT idR (callDataConT >>= const successT) const)
     innermostR (promoteR $ bracketR "inlining constructor" $ whenM (varT (arr (`elem` vs))) inlineR)
+
+-- TODO: slurp these somehow? Need FastString tables to sync
+allRules :: [String]
+allRules =
+    [ "stream/unstream"
+    , "unstream/stream"
+    , "appendS"
+    , "concatMapS"
+    , "consS"
+    , "enumFromToS"
+    , "filterS"
+    , "foldlS"
+    , "foldrS"
+    , "headS"
+    , "iterateS"
+    , "lengthS"
+    , "mapS"
+    , "nilS"
+    , "singletonS"
+    , "tailS"
+    , "zipS"
+    , "zipWithS"
+    ]
 
 {- -- this tries to manage everything
 plugin :: Plugin
