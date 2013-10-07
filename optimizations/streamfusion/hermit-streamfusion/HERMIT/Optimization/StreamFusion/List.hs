@@ -14,8 +14,8 @@ module HERMIT.Optimization.StreamFusion.List
     , zipWithS
     , headS
     , appendS
---     , nilS
---     , consS
+    , nilS
+    , consS
     , singletonS
     , tailS
     ) where
@@ -152,10 +152,6 @@ appendS (Stream n1 s1) (Stream n2 s2) = Stream n (Left s1)
           {-# INLINE n #-}
 {-# RULES "appendS" forall xs ys. xs ++ ys = unstream (appendS (stream xs) (stream ys)) #-}
 
-{- It's not clear these are actually useful.
--- Note that we had this rule:
--- but the combination of the consS and nilS rules implement it.
--- We give a rule for singletonS anyway.
 {-# INLINE nilS #-}
 nilS :: Stream a
 nilS = Stream (\() -> Done) ()
@@ -172,8 +168,8 @@ consS x (Stream n s) = Stream n' (Left s)
           {-# INLINE n' #-}
 -- Note: this RULE must never run during or after a phase where unstream
 -- is inlinable, or programs will diverge.
-{-# RULES "consS" [~0] forall x xs. (:) x xs = unstream (consS x (stream xs)) #-}
--}
+-- {-# RULES "consS" [~0] forall x xs. (:) x xs = unstream (consS x (stream xs)) #-}
+{-# RULES "consS" forall x xs. stream (x : xs) = consS x (stream xs) #-}
 
 {-# INLINE singletonS #-}
 singletonS :: a -> Stream a
