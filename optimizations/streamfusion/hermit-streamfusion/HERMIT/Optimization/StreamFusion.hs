@@ -8,10 +8,13 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Optimize
+import HERMIT.Plugin
 
 import HERMIT.Dictionary
 
-import Language.Haskell.TH as TH
+import qualified Language.Haskell.TH as TH
+
+import Prelude hiding (until)
 
 plugin :: Plugin
 plugin = optimize $ \ opts -> do
@@ -23,7 +26,13 @@ plugin = optimize $ \ opts -> do
         $ promoteExprR
         $ bracketR "concatmap -> flatten"
         $ concatMapSR
+    until SpecConstr $ run $ promoteR $ tryR $ inlineConstructors
     when ("interactive" `elem` opts) $ lastPhase $ interactive sfexts opts
+
+inlineConstructors :: RewriteH Core
+inlineConstructors = do
+    vs <- collectT (promoteT $ nonRecT idR (callDataConT >>= const successT) const)
+    innermostR (promoteR $ bracketR "inlining constructor" $ whenM (varT (arr (`elem` vs))) inlineR)
 
 {- -- this tries to manage everything
 plugin :: Plugin
