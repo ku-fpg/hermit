@@ -18,6 +18,7 @@ module HERMIT.Optimization.StreamFusion.List
     , consS
     , singletonS
     , tailS
+    , lengthS
     ) where
 
 import HERMIT.Optimization.StreamFusion.Base
@@ -193,3 +194,13 @@ tailS (Stream n s) = Stream n' (Left s)
                             Yield x s' -> Yield x (Right s')
           {-# INLINE n' #-}
 {-# RULES "tailS" tail = unstream . tailS . stream #-}
+
+-- TODO: foldl'
+{-# INLINE lengthS #-}
+lengthS :: Stream a -> Int
+lengthS (Stream n s) = go SPEC 0 s
+    where go !sPEC !acc s = case n s of
+                                Done -> acc
+                                Skip s' -> go sPEC acc s'
+                                Yield _ s' -> go sPEC (acc+1) s'
+{-# RULES "lengthS" length = lengthS . stream #-}
