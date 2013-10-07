@@ -3,6 +3,8 @@ module HERMIT.Optimization.StreamFusion (plugin) where
 import Control.Arrow
 import Control.Monad
 
+import Data.List (partition)
+
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
@@ -18,7 +20,8 @@ import Prelude hiding (until)
 
 plugin :: Plugin
 plugin = optimize $ \ opts -> do
-    when ("interactive" `elem` opts) $ phase 0 $ interactive sfexts opts
+    let (os,cos) = partition (`elem` ["interactive","inline"]) opts
+    when ("interactive" `elem` os) $ phase 0 $ interactive sfexts cos
     run $ promoteR
         $ tryR
         $ repeatR
@@ -26,8 +29,8 @@ plugin = optimize $ \ opts -> do
         $ promoteExprR
         $ bracketR "concatmap -> flatten"
         $ concatMapSR
-    until SpecConstr $ run $ promoteR $ tryR $ inlineConstructors
-    when ("interactive" `elem` opts) $ lastPhase $ interactive sfexts opts
+    when ("inline" `elem` os) $ until SpecConstr $ run $ promoteR $ tryR $ inlineConstructors
+    when ("interactive" `elem` os) $ lastPhase $ interactive sfexts cos
 
 inlineConstructors :: RewriteH Core
 inlineConstructors = do
