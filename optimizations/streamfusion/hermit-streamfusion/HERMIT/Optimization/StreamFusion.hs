@@ -21,12 +21,17 @@ import Prelude hiding (until)
 plugin :: Plugin
 plugin = optimize $ \ opts -> do
     let (os,cos) = partition (`elem` ["interactive","inline","rules"]) opts
-    when ("interactive" `elem` os) $ phase 0 $ interactive sfexts cos
-    when ("rules" `elem` os) $ phase 0 $ run
-                                       $ promoteR
-                                       $ tryR
-                                       $ repeatR
-                                       $ anyCallR ( promoteExprR $ bracketR "rule" $ rules allRules) <+ simplifyR
+    phase 0 $ do
+        when ("interactive" `elem` os) $ phase 0 $ interactive sfexts cos
+        -- We need to run the rules which match on standard list combinators
+        -- before the simplifier tries to use the rules that belong to them.
+        when ("rules" `elem` os) $ run
+                                 $ promoteR
+                                 $ tryR
+                                 $ repeatR
+                                 $ anyCallR ( promoteExprR $ bracketR "rule"
+                                                           $ rules [ r | r <- allRules, r `notElem` ["consS", "nilS", "singletonS"]])
+                                   <+ simplifyR
     run $ promoteR
         $ tryR
         $ repeatR
@@ -39,8 +44,12 @@ plugin = optimize $ \ opts -> do
 
 inlineConstructors :: RewriteH Core
 inlineConstructors = do
+    let nonRecTypeDCT = do
+            (dc,_tys,_args) <- callDataConT
+            guardMsg (not $ any (`eqType` dataConOrigResTy dc) (dataConOrigArgTys dc)) "constructor is recursive"
+            return ()
     -- get all the bindings to constructor RHSs
-    vs <- collectT (promoteT $ nonRecT idR callDataConT const)
+    vs <- collectT (promoteT $ nonRecT idR nonRecTypeDCT const)
     -- transitively get all the bindings to those bindings (rare?)
     let transT vs = tryM vs $ do
             vs' <- collectT (promoteT $ nonRecT (whenM (arr (`notElem` vs)) idR) (varT (arr (`elem` vs))) const)
@@ -101,6 +110,8 @@ sfexts =
         [ "special rule for concatmap" ]
     , external "all-rules" (repeatR (anyCallR $ promoteExprR $ rules allRules) :: RewriteH Core)
         [ "apply all the concatMap rules" ]
+    , external "simp-step" (simpStep :: RewriteH Core)
+        [ "do one step of simplification" ]
     ]
 
 concatMapSR :: RewriteH CoreExpr
@@ -150,14 +161,15 @@ getDataConInfo = go <+ (tryR (caseFloatArgR Nothing >>> extractR (anyCallR (prom
 sfSimp :: RewriteH Core
 sfSimp = repeatR simpStep
 
+-- TODO: don't unfold recursive functions
 simpStep :: RewriteH Core
 simpStep =    simplifyR
-           <+ onetdR (promoteExprR $ rules ["stream/unstream", "unstream/stream"])
-           <+ promoteExprR unfoldR
+           <+ onetdR (promoteExprR $ rules allRules)
            <+ (onetdR (promoteExprR (   letUnfloatR
                                      <+ caseElimR
                                      <+ elimExistentials
                                      <+ (caseUnfloatR >>> appAllR idR idR))))
+           <+ promoteExprR unfoldR -- last resort, as we don't want to unfold 'stream' before the rule can fire
            <+ fail "simpStep failed"
 
 elimExistentials :: RewriteH CoreExpr
