@@ -34,13 +34,21 @@ plugin = optimize $ \ opts -> do
         $ promoteExprR
         $ bracketR "concatmap -> flatten"
         $ concatMapSR
-    when ("inline" `elem` os) $ until SpecConstr $ run $ promoteR $ tryR $ inlineConstructors
+    when ("inline" `elem` os) $ before SpecConstr $ run $ promoteR $ tryR $ inlineConstructors
     when ("interactive" `elem` os) $ lastPhase $ interactive sfexts cos
 
 inlineConstructors :: RewriteH Core
 inlineConstructors = do
-    vs <- collectT (promoteT $ nonRecT idR (callDataConT >>= const successT) const)
-    innermostR (promoteR $ bracketR "inlining constructor" $ whenM (varT (arr (`elem` vs))) inlineR)
+    -- get all the bindings to constructor RHSs
+    vs <- collectT (promoteT $ nonRecT idR callDataConT const)
+    -- transitively get all the bindings to those bindings (rare?)
+    let transT vs = tryM vs $ do
+            vs' <- collectT (promoteT $ nonRecT (whenM (arr (`notElem` vs)) idR) (varT (arr (`elem` vs))) const)
+            guardMsg (notNull vs') "no new bindings"
+            transT vs'
+
+    vs' <- transT vs
+    innermostR (promoteR $ bracketR "inlining constructor" $ whenM (varT (arr (`elem` vs'))) inlineR)
 
 -- TODO: slurp these somehow? Need FastString tables to sync
 allRules :: [String]
@@ -91,6 +99,8 @@ sfexts :: [External]
 sfexts =
     [ external "concatmap" (promoteExprR concatMapSR :: RewriteH Core)
         [ "special rule for concatmap" ]
+    , external "all-rules" (repeatR (anyCallR $ promoteExprR $ rules allRules) :: RewriteH Core)
+        [ "apply all the concatMap rules" ]
     ]
 
 concatMapSR :: RewriteH CoreExpr
