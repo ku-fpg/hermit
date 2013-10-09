@@ -114,7 +114,7 @@ shell_externals = map (.+ Shell)
    , external "set-pp-renderer"    showRenderers
        [ "set the output renderer mode"]
    , external "dump"    Dump
-       [ "dump <filename> <pretty-printer> <renderer> <width>"]
+       [ "dump <filename> <renderer> <width>"]
    , external "set-pp-width" (\ w -> CLSModify $ \ st ->
         return $ st { cl_pretty_opts = updateWidthOption w (cl_pretty_opts st) })
        ["set the width of the screen"]
