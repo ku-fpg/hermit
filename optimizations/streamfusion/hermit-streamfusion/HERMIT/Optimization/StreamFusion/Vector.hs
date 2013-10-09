@@ -23,6 +23,8 @@ import           HERMIT.Dictionary
 
 import qualified Language.Haskell.TH as TH
 
+import HERMIT.Optimization.StreamFusion (inlineConstructors)
+
 -- Fix the ordering of type arguments and avoid dealing with size
 fixStep :: forall a b m s. Monad m => a -> m (VS.Step s b) -> m (VS.Step (a,s) b)
 fixStep a mr = mr >>= return . go
@@ -36,16 +38,17 @@ plugin = optimize $ \ opts -> do
     let (pn,opts') = fromMaybe (0,opts) (getPhaseFlag opts)
     done <- liftM phasesDone getPhaseInfo
     when (notNull done) $ liftIO $ print $ last done
-    phase pn $ do
-        run $ promoteR
-            $ tryR
-            $ repeatR
-            $ anyCallR
-            $ promoteExprR
-            $ (bracketR "concatMap -> flatten" concatMapSafe) <+ unfoldNamesR ['VS.concatMap, 'M.concatMap, 'V.concatMap]
-        forM_ opts' $ \ nm -> do
-            run $ promoteR $ tryR $ innermostR (promoteR (inlineFunctionWithTyConArgR (TH.mkName nm))) >+> simplifyR
-        interactive sfexts []
+    run $ promoteR
+        $ tryR
+        $ repeatR
+        $ anyCallR
+        $ promoteExprR
+        $ (bracketR "concatMap -> flatten" concatMapSafe) <+ unfoldNamesR ['VS.concatMap, 'M.concatMap, 'V.concatMap]
+    forM_ opts' $ \ nm -> do
+        run $ promoteR $ tryR $ innermostR (promoteR (inlineFunctionWithTyConArgR (TH.mkName nm))) >+> simplifyR
+    -- interactive sfexts []
+    before SpecConstr $ run $ promoteR $ tryR $ inlineConstructors
+    lastPhase $ interactive sfexts []
 
 concatMapSafe :: RewriteH CoreExpr
 concatMapSafe = concatMapSR >>> ((lintExprT >>= \_ -> traceR "Success!") <+ traceR "Failed On Lint")
@@ -153,11 +156,11 @@ sfSimp = repeatR simpStep
 
 simpStep :: RewriteH Core
 simpStep =    simplifyR
-           <+ promoteExprR unfoldR
            <+ (onetdR (promoteExprR (   letUnfloatR
                                      <+ caseElimR
                                      <+ elimExistentials
                                      <+ (caseUnfloatR >>> appAllR idR idR))))
+           <+ promoteExprR unfoldR
 
 elimExistentials :: RewriteH CoreExpr
 elimExistentials = do

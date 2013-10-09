@@ -1,4 +1,4 @@
-module HERMIT.Optimization.StreamFusion (plugin) where
+module HERMIT.Optimization.StreamFusion (plugin, inlineConstructors) where
 
 import Control.Arrow
 import Control.Monad
