@@ -70,6 +70,7 @@ allRules =
     , "enumFromToS"
     , "filterS"
     , "foldlS"
+    , "foldlS'"
     , "foldrS"
     , "headS"
     , "iterateS"

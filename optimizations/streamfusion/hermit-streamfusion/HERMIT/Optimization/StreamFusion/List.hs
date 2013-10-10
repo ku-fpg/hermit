@@ -21,6 +21,7 @@ module HERMIT.Optimization.StreamFusion.List
     , lengthS
     ) where
 
+import Data.List
 import HERMIT.Optimization.StreamFusion.Base
 
 {-# INLINE mapS #-}
@@ -42,8 +43,16 @@ foldlS f z (Stream n s) = go SPEC z s
                             Yield x s' -> go sPEC (f z x) s'
 {-# RULES "foldlS" forall f z. foldl f z = foldlS f z . stream #-}
 
-{-# INLINE foldrS #-}
+{-# INLINE foldlS' #-}
+foldlS' :: (b -> a -> b) -> b -> Stream a -> b
+foldlS' f z (Stream n s) = go SPEC z s
+    where go !sPEC !z !s = case n s of
+                            Done       -> z
+                            Skip s'    -> go sPEC z s'
+                            Yield x s' -> go sPEC (f z x) s'
+{-# RULES "foldlS'" forall f z. foldl' f z = foldlS' f z . stream #-}
 
+{-# INLINE foldrS #-}
 foldrS :: (a -> b -> b) -> b -> Stream a -> b
 foldrS f z (Stream n s) = go SPEC s
     where go !sPEC s = case n s of
@@ -66,6 +75,7 @@ concatMapS f (Stream n s) = Stream n' (s, Nothing)
           {-# INLINE n' #-}
 {-# RULES "concatMapS" forall f. concatMap f = unstream . concatMapS (stream . f) . stream #-}
 
+{-# INLINE flatten #-}
 flatten :: forall a b s. (a -> s) -> (s -> Step b s) -> [a] -> [b]
 flatten mk gFlatten = unstream . flattenS mk gFlatten . stream
 
