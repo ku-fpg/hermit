@@ -73,7 +73,11 @@ concatMapS f (Stream n s) = Stream n' (s, Nothing)
                                             Skip s' -> Skip (s, Just (Stream n'' s'))
                                             Yield x s' -> Yield x (s, Just (Stream n'' s'))
           {-# INLINE n' #-}
-{-# RULES "concatMapS" forall f. concatMap f = unstream . concatMapS (stream . f) . stream #-}
+{-# RULES
+"concatMapS" forall f. concatMap f = unstream . concatMapS (stream . f) . stream
+"concat/concatMap" forall f xs. concat (map f xs) = concatMap f xs
+  #-}
+-- "concat/concatMapS" forall f. concat . unstream . mapS f = unstream . concatMapS f
 
 {-# INLINE flatten #-}
 flatten :: forall a b s. (a -> s) -> (s -> Step b s) -> [a] -> [b]

@@ -28,10 +28,9 @@ plugin = optimize $ \ opts -> do
         when ("rules" `elem` os) $ run
                                  $ promoteR
                                  $ tryR
-                                 $ repeatR
-                                 $ anyCallR ( promoteExprR $ bracketR "rule"
-                                                           $ rules [ r | r <- allRules, r `notElem` ["consS", "nilS", "singletonS"]])
-                                   <+ simplifyR
+                                 $ simplifyR
+                                   >+> (repeatR (onetdR $ promoteExprR $ bracketR "rule" $ rules (filter (`notElem` ["consS", "nilS", "singletonS"]) allRules))
+                                        <+ simplifyR)
     run $ promoteR
         $ tryR
         $ repeatR
@@ -62,7 +61,8 @@ inlineConstructors = do
 -- TODO: slurp these somehow? Need FastString tables to sync
 allRules :: [String]
 allRules =
-    [ "stream/unstream"
+    [ "concat/concatMap" -- important this is first
+    , "stream/unstream"
     , "unstream/stream"
     , "appendS"
     , "concatMapS"
@@ -83,33 +83,11 @@ allRules =
     , "zipWithS"
     ]
 
-{- -- this tries to manage everything
-plugin :: Plugin
-plugin = optimize $ \ opts -> phase 0 $ do
-    run $ promoteR
-        $ tryR
-        $ repeatR
-        $ anyCallR (promoteExprR $ bracketR "rule"
-                                 $ rules [ "singletonS"
-                                         , "foldlS"
-                                         , "concatMapS"
-                                         , "mapS"
-                                         , "enumFromToS"
-                                         , "filterS"
-                                         , "zipS"
-                                         , "stream/unstream"
-                                         , "unstream/stream"]) <+ promoteExprR letUnfloatR <+ simplifyR
-    run $ promoteR $ tryR $ repeatR $ anyCallR $ promoteExprR $ bracketR "concatmap -> flatten" concatMapSR
-    run $ promoteR $ tryR $ repeatR $ anyCallR $ promoteExprR $ bracketR "unfolding" . unfoldNamesR $ map TH.mkName ["fixStep", "foldlS", "flattenS", "mapS", "enumFromToS", "filterS", "zipS", "singletonS"]
-    run $ promoteR $ tryR $ repeatR $ bracketR "cleanup" $ bashR <+ anyCallR (promoteExprR (rules ["stream/unstream", "unstream/stream"]))
-    interactive sfexts opts
--}
-
 sfexts :: [External]
 sfexts =
     [ external "concatmap" (promoteExprR concatMapSR :: RewriteH Core)
         [ "special rule for concatmap" ]
-    , external "all-rules" (repeatR (anyCallR $ promoteExprR $ rules allRules) :: RewriteH Core)
+    , external "all-rules" (repeatR (onetdR $ promoteExprR $ rules allRules) :: RewriteH Core)
         [ "apply all the concatMap rules" ]
     , external "simp-step" (simpStep :: RewriteH Core)
         [ "do one step of simplification" ]
