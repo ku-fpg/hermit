@@ -82,6 +82,7 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST -> do
                        , cl_running_script = False
                        , cl_tick          = tick
                        , cl_corelint      = False
+                       , cl_diffonly      = False
                        , cl_failhard      = False
                        , cl_window        = mempty
                        , cl_dict          = error "cl_dict" -- TODO
