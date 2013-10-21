@@ -10,6 +10,7 @@ module HERMIT.External
        , externDyn
        , externHelp
        , externTypeString
+       , externTypeArgResString
        , Dictionary
        , toDictionary
        , toHelp
@@ -53,6 +54,7 @@ module HERMIT.External
 import Data.Map hiding (map)
 import Data.Dynamic
 import Data.List
+import Data.Typeable.Internal (TypeRep(..), funTc)
 
 import qualified Language.Haskell.TH as TH
 
@@ -260,11 +262,30 @@ toHelp = fromListWith (++) . map toH
 
 -- | Get a string representation of the (monomorphic) type of an 'External'
 externTypeString :: External -> String
-externTypeString = fixup . show . dynTypeRep . externDyn
-    where
-        fixup xs | "Box" `isPrefixOf` xs = fixup (drop 3 xs)
-        fixup (x:xs)                     = x : fixup xs
-        fixup []                         = []
+externTypeString = deBoxify . show . dynTypeRep . externDyn
+
+-- | Remove the word 'Box' from a string.
+deBoxify :: String -> String
+deBoxify xs | "Box" `isPrefixOf` xs = deBoxify (drop 3 xs)
+deBoxify (x:xs)                     = x : deBoxify xs
+deBoxify []                         = []
+
+externTypeArgResString :: External -> ([String], String)
+externTypeArgResString e = (map (deBoxify . show) aTys, deBoxify (show rTy))
+    where (aTys, rTy) = splitExternFunType e
+
+splitExternFunType :: External -> ([TypeRep], TypeRep)
+splitExternFunType = splitFunTyArgs . dynTypeRep . externDyn
+
+splitFunTyArgs :: TypeRep -> ([TypeRep], TypeRep)
+splitFunTyArgs tr = case splitFunTyMaybe tr of
+                        Nothing -> ([], tr)
+                        Just (atr, r) -> let (as', r') = splitFunTyArgs atr
+                                         in (as' ++ [r'], r)
+
+splitFunTyMaybe :: TypeRep -> Maybe (TypeRep, TypeRep)
+splitFunTyMaybe (TypeRep _ tc [f,r]) | tc == funTc = Just (f,r)
+splitFunTyMaybe _ = Nothing
 
 -----------------------------------------------------------------
 
