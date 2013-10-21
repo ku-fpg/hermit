@@ -9,6 +9,7 @@ module HERMIT.External
        , externName
        , externDyn
        , externHelp
+       , externTypeString
        , Dictionary
        , toDictionary
        , toHelp
@@ -250,18 +251,20 @@ toHelp :: [External] -> Map ExternalName ExternalHelp
 toHelp = fromListWith (++) . map toH
   where
          toH :: External -> (ExternalName,ExternalHelp)
-         toH e = (externName e, spaceout (externName e ++ " :: " ++ fixup (show (dynTypeRep (externDyn e))))
+         toH e = (externName e, spaceout (externName e ++ " :: " ++ externTypeString e)
                                          (show (externTags e)) : externHelp e)
 
          spaceout xs ys = xs ++ replicate (width - (length xs + length ys)) ' ' ++ ys
 
          width = 78
 
-         fixup :: String -> String
-         fixup xs | "Box" `isPrefixOf` xs = fixup (drop 3 xs)
-         fixup (x:xs)                     = x : fixup xs
-         fixup []                         = []
-
+-- | Get a string representation of the (monomorphic) type of an 'External'
+externTypeString :: External -> String
+externTypeString = fixup . show . dynTypeRep . externDyn
+    where
+        fixup xs | "Box" `isPrefixOf` xs = fixup (drop 3 xs)
+        fixup (x:xs)                     = x : fixup xs
+        fixup []                         = []
 
 -----------------------------------------------------------------
 
