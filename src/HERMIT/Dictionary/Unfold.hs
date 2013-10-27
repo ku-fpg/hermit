@@ -16,6 +16,7 @@ module HERMIT.Dictionary.Unfold
 import Control.Arrow
 import Control.Monad
 
+import Data.List (intercalate)
 import qualified Data.Map as Map
 
 import qualified Language.Haskell.TH as TH
@@ -133,14 +134,16 @@ rememberR label = sideEffectR $ \ _ -> \case
 
 -- | Apply a stashed definition (like inline, but looks in stash instead of context).
 unfoldStashR :: ReadBindings c => String -> Rewrite c HermitM CoreExpr
-unfoldStashR label = setFailMsg "Inlining stashed definition failed: " $
+unfoldStashR label = prefixFailMsg "Inlining stashed definition failed: " $
                      withPatFailMsg (wrongExprForm "Var v") $
     do (c, Var v) <- exposeT
        constT $ do Def i rhs <- lookupDef label
+                   dflags <- getDynFlags
                    if idName i == idName v -- TODO: Is there a reason we're not just using equality on Id?
-                   then if all (inScope c) $ varSetElems $ freeVarsExpr rhs
-                          then return rhs
-                          else fail "some free variables in stashed definition are no longer in scope."
+                   then let fvars = varSetElems $ localFreeVarsExpr rhs
+                        in if all (inScope c) fvars
+                           then return rhs
+                           else fail $ "free variables " ++ intercalate "," (map (showPpr dflags) (filter (not . inScope c) fvars)) ++ " in stashed definition are no longer in scope."
                    else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v
 
 showStashT :: Injection CoreDef a => PrettyC -> PrettyH a -> Translate c HermitM a DocH
