@@ -11,6 +11,9 @@ module HERMIT.Dictionary.Local.Let
        , letElimR
        , letNonRecElimR
        , letRecElimR
+       , progBindElimR
+       , progBindNonRecElimR
+       , progBindRecElimR
          -- ** Let Introduction
        , letIntroR
          -- ** Let Floating
@@ -118,6 +121,16 @@ externals =
     , external "let-tuple" (promoteExprR . letTupleR . show :: TH.Name -> RewriteH Core)
         [ "Combine nested non-recursive lets into case of a tuple."
         , "E.g. let {v1 = e1 ; v2 = e2 ; v3 = e3} in body ==> case (e1,e2,e3) of {(v1,v2,v3) -> body}" ] .+ Commute
+    , external "prog-bind-elim" (promoteProgR progBindElimR :: RewriteH Core)
+        [ "Remove unused top-level binding(s)."
+        , "prog-bind-nonrec-elim <+ prog-bind-rec-elim" ]                       .+ Eval .+ Shallow
+    , external "prog-bind-nonrec-elim" (promoteProgR progBindNonRecElimR :: RewriteH Core)
+        [ "Remove unused top-level binding(s)."
+        , "v = e : prog ==> prog, if v is not free in prog and not exported." ] .+ Eval .+ Shallow
+    , external "prog-bind-rec-elim" (promoteProgR progBindRecElimR :: RewriteH Core)
+        [ "Remove unused top-level binding(s)."
+        , "v+ = e+ : prog ==> v* = e* : prog, where v* is a subset of v+ consisting"
+        , "of vs that are free in prog or e+, or exported." ]                   .+ Eval .+ Shallow
     ]
 
 -------------------------------------------------------------------------------------------
@@ -225,11 +238,36 @@ letRecElimR = withPatFailMsg (wrongExprForm "Let (Rec v e1) e2") $
           else if bs `subVarSet` liveBinders
                  then fail "no dead binders to eliminate."
                  else return $ Let (Rec $ filter ((`elemVarSet` liveBinders) . fst) bnds) body
-  where
-    chaseDependencies :: VarSet -> [(Var,VarSet)] -> VarSet
-    chaseDependencies usedIds bsAndFrees = case partition ((`elemVarSet` usedIds) . fst) bsAndFrees of
-                                              ([],_)        -> usedIds
-                                              (used,unused) -> chaseDependencies (unionVarSets (usedIds : map snd used)) unused
+
+progBindElimR :: MonadCatch m => Rewrite c m CoreProg
+progBindElimR = progBindNonRecElimR <+ progBindRecElimR
+
+progBindNonRecElimR :: MonadCatch m => Rewrite c m CoreProg
+progBindNonRecElimR = withPatFailMsg (wrongExprForm "ProgCons (NonRec v e1) e2") $ do
+    ProgCons (NonRec v _) p <- idR
+    guardMsg (v `notElemVarSet` freeVarsProg p) "variable appears in program body."
+    guardMsg (not (isExportedId v)) "variable is exported."
+    return p
+
+-- | Remove all unused bindings at the top level.
+progBindRecElimR :: MonadCatch m => Rewrite c m CoreProg
+progBindRecElimR = withPatFailMsg (wrongExprForm "ProgCons (Rec v e1) e2") $
+    do ProgCons (Rec bnds) p <- idR
+       let pFrees      = freeVarsProg p
+           bsAndFrees  = map (second freeIdsExpr) bnds
+           usedIds     = chaseDependencies pFrees bsAndFrees
+           bs          = mkVarSet (map fst bsAndFrees)
+           liveBinders = (bs `intersectVarSet` usedIds) `unionVarSet` (filterVarSet isExportedId bs)
+       if isEmptyVarSet liveBinders
+          then return p
+          else if bs `subVarSet` liveBinders
+                 then fail "no dead binders to eliminate."
+                 else return $ ProgCons (Rec $ filter ((`elemVarSet` liveBinders) . fst) bnds) p
+
+chaseDependencies :: VarSet -> [(Var,VarSet)] -> VarSet
+chaseDependencies usedIds bsAndFrees = case partition ((`elemVarSet` usedIds) . fst) bsAndFrees of
+                                          ([],_)        -> usedIds
+                                          (used,unused) -> chaseDependencies (unionVarSets (usedIds : map snd used)) unused
 
 -------------------------------------------------------------------------------------------
 

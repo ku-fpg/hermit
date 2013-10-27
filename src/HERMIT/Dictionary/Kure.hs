@@ -3,6 +3,7 @@
 module HERMIT.Dictionary.Kure
        ( -- * KURE Strategies
          externals
+       , unitT
        )
 where
 
@@ -21,6 +22,8 @@ externals :: [External]
 externals = map (.+ KURE)
    [ external "id"         (idR :: RewriteH Core)
        [ "Perform an identity rewrite."] .+ Shallow
+   , external "unit"       (unitT :: TranslateH Core ())
+       [ "An always succeeding translation to ()." ]
    , external "fail"       (fail :: String -> RewriteH Core)
        [ "A failing rewrite."]
    , external "<+"         ((<+) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
@@ -113,3 +116,7 @@ testQuery r = f `liftM` testM r
 {-# INLINE testQuery #-}
 
 ------------------------------------------------------------------------------------
+
+unitT :: Monad m => Translate c m a ()
+unitT = return ()
+{-# INLINE unitT #-}

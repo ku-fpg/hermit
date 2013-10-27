@@ -301,18 +301,23 @@ localFreeIdsExpr = exprSomeFreeVars isLocalId
 
 -- | Find all free identifiers in a binding group, which excludes any variables bound in the group.
 freeVarsBind :: CoreBind -> VarSet
-freeVarsBind (NonRec v e) = freeVarsExpr e `unionVarSet` varTypeTyVars v
+freeVarsBind (NonRec v e) = freeVarsExpr e `unionVarSet` safeBndrFrees v
 freeVarsBind (Rec defs)   = let (bs,es) = unzip defs
                              in delVarSetList (unionVarSets $ map freeVarsExpr es) bs
-                                `unionVarSet`  unionVarSets (map varTypeTyVars bs)
+                                `unionVarSet`  unionVarSets (map safeBndrFrees bs)
 
--- | Find all free variables is a recursive definition, which excludes the bound variable.
+-- | Find all free variables on a binder.
+-- Equivalent to idFreeVars, but safe to call on type bindings
+safeBndrFrees :: Var -> VarSet
+safeBndrFrees v = varTypeTyVars v `unionVarSet` bndrRuleAndUnfoldingVars v
+
+-- | Find all free variables in a recursive definition, which excludes the bound variable.
 freeVarsDef :: CoreDef -> VarSet
-freeVarsDef (Def v e) = delVarSet (freeVarsExpr e) v `unionVarSet` varTypeTyVars v
+freeVarsDef (Def v e) = delVarSet (freeVarsExpr e) v `unionVarSet` safeBndrFrees v
 
 -- | Find all free variables in a case alternative, which excludes any variables bound in the alternative.
 freeVarsAlt :: CoreAlt -> VarSet
-freeVarsAlt (_,bs,e) = delVarSetList (freeVarsExpr e `unionVarSet` unionVarSets (map varTypeTyVars bs)) bs
+freeVarsAlt (_,bs,e) = delVarSetList (freeVarsExpr e `unionVarSet` unionVarSets (map safeBndrFrees bs)) bs
 
 -- | Find all free variables in a program.
 freeVarsProg :: CoreProg -> VarSet

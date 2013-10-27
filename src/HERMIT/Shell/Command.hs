@@ -36,7 +36,7 @@ import HERMIT.Dictionary
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
 import HERMIT.Interp
-import HERMIT.Kernel (queryK)
+import HERMIT.Kernel (queryK, AST)
 import HERMIT.Kernel.Scoped hiding (abortS, resumeS)
 import HERMIT.Kure
 import HERMIT.Monad
@@ -94,7 +94,7 @@ showWindow = do
     focusPath <- getFocusPath
     let skernel = cl_kernel st
         ppOpts = (cl_pretty_opts st) { po_focus = Just focusPath }
-    -- No not show focus while loading
+    -- Do not show focus while loading
     ifM (gets cl_running_script)
         (return ())
         (iokm2clm' "Rendering error: "
@@ -277,6 +277,14 @@ runExprH expr = do
              fail
              (interpExprH dict interpShellCommand expr)
 
+ppWholeProgram :: MonadIO m => AST -> CLM m DocH
+ppWholeProgram ast = do
+    st <- get
+    liftIO (queryK (kernelS $ cl_kernel st)
+            ast
+            (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ cl_pretty st)
+            (cl_kernel_env st)) >>= runKureM return fail
+
 -------------------------------------------------------------------------------
 
 -- TODO: This can be refactored. We always showWindow. Also, Perhaps return a modifier, not ()
@@ -289,10 +297,16 @@ performKernelEffect (Apply rr) expr = do
 
     let sk = cl_kernel st
         kEnv = cl_kernel_env st
+        sast = cl_cursor st
+        ppOpts = cl_pretty_opts st
 
-    sast' <- prefixFailMsg "Rewrite failed: " $ applyS sk rr kEnv (cl_cursor st)
+    sast' <- prefixFailMsg "Rewrite failed: " $ applyS sk rr kEnv sast
 
-    let commit = put (newSAST expr sast' st) >> showWindow
+    let commit = put (newSAST expr sast' st) >> showResult
+        showResult = if cl_diffonly st then showDiff else showWindow
+        showDiff = do doc1 <- queryS sk (liftPrettyH ppOpts (cl_pretty st)) kEnv sast
+                      doc2 <- queryS sk (liftPrettyH ppOpts (cl_pretty st)) kEnv sast'
+                      diffDocH ppOpts doc1 doc2 >>= cl_putStr
 
     if cl_corelint st
         then do ast' <- toASTS sk sast'
@@ -389,11 +403,7 @@ performMetaCommand (Diff s1 s2) = do
 
     ast1 <- toASTS (cl_kernel st) s1
     ast2 <- toASTS (cl_kernel st) s2
-    let getDoc ast = liftIO (queryK (kernelS $ cl_kernel st)
-                                    ast
-                                    (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ cl_pretty st)
-                                    (cl_kernel_env st)) >>= runKureM return fail
-        getCmds sast | sast == s1 = []
+    let getCmds sast | sast == s1 = []
                      | otherwise = case [ (f,c) | (f,c,to) <- vs_graph (cl_version st), to == sast ] of
                                     [(sast',cmd)] -> unparseExprH cmd : getCmds sast'
                                     _ -> ["error: history broken!"] -- should be impossible
@@ -402,8 +412,8 @@ performMetaCommand (Diff s1 s2) = do
     cl_putStrLn "========="
     cl_putStrLn $ unlines $ reverse $ getCmds s2
 
-    doc1 <- getDoc ast1
-    doc2 <- getDoc ast2
+    doc1 <- ppWholeProgram ast1
+    doc2 <- ppWholeProgram ast2
 
     r <- diffDocH (cl_pretty_opts st) doc1 doc2
 

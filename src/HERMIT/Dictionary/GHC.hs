@@ -30,6 +30,7 @@ import qualified Bag
 import qualified CoreLint
 import IOEnv hiding (liftIO)
 import qualified SpecConstr
+import qualified Specialise
 
 import Control.Arrow
 import Control.Monad
@@ -45,6 +46,7 @@ import HERMIT.External
 import HERMIT.GHC
 
 import HERMIT.Dictionary.Debug hiding (externals)
+import HERMIT.Dictionary.Kure (unitT)
 
 import qualified Language.Haskell.TH as TH
 
@@ -77,6 +79,8 @@ externals =
                 [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
          , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
                 [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
+         , external "specialise" (promoteModGutsR specialise :: RewriteH Core)
+                [ "Run GHC's specialisation pass, which performs type and dictionary specialization."] .+ Deep
          , external "any-call" (anyCallR :: RewriteH Core -> RewriteH Core)
                 [ "any-call (.. unfold command ..) applies an unfold command to all applications."
                 , "Preference is given to applications with more arguments." ] .+ Deep
@@ -291,13 +295,33 @@ lintExprT = translate $ \ c e -> do
                  $ CoreLint.lintUnfolding noSrcLoc (varSetElems $ boundVars c) e
 #endif
 
+-- | Run GHC's specConstr pass, and apply any rules generated.
 specConstrR :: RewriteH ModGuts
-specConstrR = do
+specConstrR = prefixFailMsg "spec-constr failed: " $ do
     rs  <- extractT specRules
     e'  <- contextfreeT $ liftCoreM . SpecConstr.specConstrProgram
     rs' <- return e' >>> extractT specRules
     let specRs = deleteFirstsBy ((==) `on` ru_name) rs' rs
+    guardMsg (notNull specRs) "no rules created."
     return e' >>> extractR (repeatR (anyCallR (promoteExprR $ rulesToRewriteH specRs)))
+
+-- | Run GHC's specialisation pass, and apply any rules generated.
+specialise :: RewriteH ModGuts
+specialise = prefixFailMsg "specialisation failed: " $ do
+    gRules <- arr mg_rules
+    lRules <- extractT specRules
+
+    dflags <- dynFlagsT
+    guts <- contextfreeT $ liftCoreM . Specialise.specProgram dflags
+
+    lRules' <- return guts >>> extractT specRules -- spec rules on bindings in this module
+    let gRules' = mg_rules guts            -- plus spec rules on imported bindings
+        gSpecRs = deleteFirstsBy ((==) `on` ru_name) gRules' gRules
+        lSpecRs = deleteFirstsBy ((==) `on` ru_name) lRules' lRules
+        specRs = gSpecRs ++ lSpecRs
+    guardMsg (notNull specRs) "no rules created."
+    liftIO $ putStrLn $ unlines $ map (unpackFS . ru_name) specRs
+    return guts >>> extractR (repeatR (anyCallR (promoteExprR $ rulesToRewriteH specRs)))
 
 -- | Get all the specialization rules on a binding.
 --   These are created by SpecConstr and other GHC passes.
@@ -306,8 +330,8 @@ idSpecRules = contextfreeT $ \ i -> let SpecInfo rs _ = specInfo (idInfo i) in r
 
 -- | Promote 'idSpecRules' to CoreBind.
 bindSpecRules :: TranslateH CoreBind [CoreRule]
-bindSpecRules =    recT (\_ -> defT idSpecRules (return ()) const) concat
-                <+ nonRecT idSpecRules (return ()) const
+bindSpecRules =    recT (\_ -> defT idSpecRules unitT const) concat
+                <+ nonRecT idSpecRules unitT const
 
 -- | Find all specialization rules in a Core fragment.
 specRules :: TranslateH Core [CoreRule]

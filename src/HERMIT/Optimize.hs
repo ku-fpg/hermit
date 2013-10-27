@@ -15,6 +15,7 @@ module HERMIT.Optimize
     , phase
     , after
     , before
+    , until
     , allPhases
     , firstPhase
     , lastPhase
@@ -51,6 +52,8 @@ import qualified HERMIT.PrettyPrinter.Clean as Clean
 import HERMIT.Shell.Command
 import HERMIT.Shell.Types
 
+import Prelude hiding (until)
+
 import System.Console.Haskeline (defaultBehavior)
 
 data OInst :: * -> * where
@@ -79,6 +82,7 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST -> do
                        , cl_running_script = False
                        , cl_tick          = tick
                        , cl_corelint      = False
+                       , cl_diffonly      = False
                        , cl_failhard      = False
                        , cl_window        = mempty
                        , cl_dict          = error "cl_dict" -- TODO
@@ -198,6 +202,9 @@ before :: CorePass -> OM () -> OM ()
 before cp = guard (\phaseInfo -> case phasesLeft phaseInfo of
                             (x:_) | cp == x -> True
                             _               -> False)
+
+until :: CorePass -> OM () -> OM ()
+until cp = guard ((cp `elem`) . phasesLeft)
 
 allPhases :: OM () -> OM ()
 allPhases = guard (const True)
