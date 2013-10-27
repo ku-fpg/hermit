@@ -12,6 +12,7 @@ where
 import Control.Arrow
 
 import Data.List (intercalate)
+import qualified Data.Map as Map
 
 import HERMIT.Context
 import HERMIT.Core
@@ -52,7 +53,11 @@ infoT =
               con      =   "Constructor: " ++ coreTCConstructor coreTC
               pa       =   "Path:     " ++ showCrumbs (snocPathToPath $ absPath c)
               children =   "Children: " ++ showCrumbs crumbs
-              bds      =   "Local bindings in scope: " ++ showVarSet (boundVars c)
+              bds      =   "Local bindings in scope: " ++ concat
+                                [ "\n  " ++ var2String k ++  " : " ++ hermitBindingSummary hbs
+                                | (k,hbs) <- Map.toList (hermitBindings c)
+                                ]
+--               showVarSet (boundVars c)
               freevars = [ "Free local identifiers:  " ++ showVarSet (filterVarSet isLocalId fvs)
                          , "Free global identifiers: " ++ showVarSet (filterVarSet isGlobalId fvs)
                          , "Free type variables:     " ++ showVarSet (filterVarSet isTyVar fvs)

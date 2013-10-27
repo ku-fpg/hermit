@@ -13,6 +13,7 @@ module HERMIT.Context
        , BindingDepth
        , HermitBinding
        , hermitBindingSiteExpr
+       , hermitBindingSummary
        , hermitBindingExpr
          -- ** Adding bindings to contexts
        , AddBindings(..)
@@ -82,6 +83,17 @@ hermitBindingSiteExpr b = case b of
                             CASEALT      -> fail "variable is bound in a case alternative, not bound to an expression."
                             CASEWILD e _ -> return e
                             FORALL       -> fail "variable is a universally quantified type variable."
+
+hermitBindingSummary :: HermitBinding -> String
+hermitBindingSummary (d,b) = show d ++ "$" ++ case b of
+                            LAM          -> "LAM"
+                            NONREC {}    -> "NONREC"
+                            REC {}       -> "REC"
+                            MUTUALREC {} -> "MUTUALREC"
+                            SELFREC {}   -> "SELFREC"
+                            CASEALT      -> "CASEALT"
+                            CASEWILD {}  -> "CASEWILD"
+                            FORALL       -> "FORALL"
 
 -- | Retrieve the expression in a 'HermitBinding', if there is one.
 hermitBindingExpr :: HermitBinding -> KureM CoreExpr
