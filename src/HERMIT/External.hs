@@ -280,11 +280,11 @@ splitExternFunType = splitFunTyArgs . dynTypeRep . externDyn
 splitFunTyArgs :: TypeRep -> ([TypeRep], TypeRep)
 splitFunTyArgs tr = case splitFunTyMaybe tr of
                         Nothing -> ([], tr)
-                        Just (atr, r) -> let (as', r') = splitFunTyArgs atr
-                                         in (as' ++ [r'], r)
+                        Just (a, r) -> let (as, r') = splitFunTyArgs r
+                                         in (a:as, r')
 
 splitFunTyMaybe :: TypeRep -> Maybe (TypeRep, TypeRep)
-splitFunTyMaybe (TypeRep _ tc [f,r]) | tc == funTc = Just (f,r)
+splitFunTyMaybe (TypeRep _ tc [a,r]) | tc == funTc = Just (a,r)
 splitFunTyMaybe _ = Nothing
 
 -----------------------------------------------------------------
