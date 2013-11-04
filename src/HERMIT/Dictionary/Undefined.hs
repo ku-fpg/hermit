@@ -128,7 +128,7 @@ replaceWithUndefinedR = contextfreeT exprTypeM >>= mkUndefinedValT
 ------------------------------------------------------------------------------------------------------
 
 -- | undefinedExprR = undefinedAppR <+ undefinedLamR <+ undefinedLetR <+ undefinedCastR <+ undefinedTickR <+ undefinedCaseR
-undefinedExprR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
+undefinedExprR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
 undefinedExprR = setFailMsg "undefined-expr failed."
                    (undefinedAppR <+ undefinedLamR <+ undefinedLetR <+ undefinedCastR <+ undefinedTickR <+ undefinedCaseR)
 
@@ -141,13 +141,13 @@ undefinedAppR = prefixFailMsg "undefined-app failed: " $
                    replaceWithUndefinedR
 
 -- | @(\ v -> undefined ty1)@ ==> @undefined ty2@  (where v is not a 'TyVar')
-undefinedLamR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
+undefinedLamR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
 undefinedLamR = prefixFailMsg "undefined-lam failed: " $
                 do lamT successT isUndefinedValT (<>)
                    replaceWithUndefinedR
 
 -- | let bds in (undefined ty) ==> undefined ty
-undefinedLetR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
+undefinedLetR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
 undefinedLetR = prefixFailMsg "undefined-let failed: " $
                 do letT successT isUndefinedValT (<>)
                    replaceWithUndefinedR
@@ -165,17 +165,17 @@ undefinedTickR = prefixFailMsg "undefined-tick failed: " $
                    replaceWithUndefinedR
 
 -- | undefinedCaseR = undefinedCaseScrutineeR <+ undefinedCaseAltsR
-undefinedCaseR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
+undefinedCaseR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
 undefinedCaseR = setFailMsg "undefined-case failed" (undefinedCaseScrutineeR <+ undefinedCaseAltsR)
 
 -- | case (undefined ty) of alts ==> undefined ty
-undefinedCaseScrutineeR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
+undefinedCaseScrutineeR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
 undefinedCaseScrutineeR = prefixFailMsg "undefined-case failed: " $
                  do caseT isUndefinedValT successT successT (const successT) (\ _ _ _ _ -> ())
                     replaceWithUndefinedR
 
 -- | case e of {pat_1 -> undefined ty ; pat_2 -> undefined ty ; ... ; pat_n -> undefined ty} ==> undefined ty
-undefinedCaseAltsR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
+undefinedCaseAltsR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Rewrite c m CoreExpr
 undefinedCaseAltsR = prefixFailMsg "undefined-case-alts failed: " $
                      do caseAltT successT successT successT (const (successT,const successT,isUndefinedValT)) (\ _ _ _ _ -> ())
                         replaceWithUndefinedR

@@ -167,19 +167,19 @@ varOccurrenceCoercion _           = Nothing
 -----------------------------------------------------------------------
 
 -- | Find all possible targets of 'occurrenceOfT'.
-occurrenceOfTargetsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+occurrenceOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
 occurrenceOfTargetsT = allT $ crushbuT (arr varOccurrence >>> projectT >>^ unitVarSet)
 
 -- | Find all possible targets of 'bindingOfT'.
-bindingOfTargetsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+bindingOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
 bindingOfTargetsT = allT $ crushbuT (arr binders)
 
 -- | Find all possible targets of 'bindingGroupOfT'.
-bindingGroupOfTargetsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+bindingGroupOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
 bindingGroupOfTargetsT = allT $ crushbuT (promoteBindT $ arr (mkVarSet . bindVars))
 
 -- | Find all possible targets of 'rhsOfT'.
-rhsOfTargetsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+rhsOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
 rhsOfTargetsT = crushbuT (promoteBindT (arr binderBind) <+ promoteDefT (arr binderDef))
 
 -----------------------------------------------------------------------

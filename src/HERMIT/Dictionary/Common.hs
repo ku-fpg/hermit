@@ -113,26 +113,26 @@ callDataConNameT nm = do
     return res
 
 -- | Apply a rewrite to all applications of a given function in a top-down manner, pruning on success.
-callsR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> Rewrite c m CoreExpr -> Rewrite c m Core
+callsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> Rewrite c m CoreExpr -> Rewrite c m Core
 callsR nm rr = prunetdR (promoteExprR $ callNameG nm >> rr)
 
 -- | Apply a translate to all applications of a given function in a top-down manner,
 --   pruning on success, collecting the results.
-callsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> Translate c m CoreExpr b -> Translate c m Core [b]
+callsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> Translate c m CoreExpr b -> Translate c m Core [b]
 callsT nm t = collectPruneT (promoteExprT $ callNameG nm >> t)
 
 ------------------------------------------------------------------------------
 
 -- | List the identifiers bound by the top-level binding group at the head of the program.
-progConsIdsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreProg [Id]
+progConsIdsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreProg [Id]
 progConsIdsT = progConsT (arr bindVars) mempty (\ vs () -> vs)
 
 -- | List the identifiers bound by a recursive top-level binding group at the head of the program.
-progConsRecIdsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreProg [Id]
+progConsRecIdsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreProg [Id]
 progConsRecIdsT = progConsT recIdsT mempty (\ vs () -> vs)
 
 -- | Return the identifier bound by a non-recursive top-level binding at the head of the program.
-progConsNonRecIdT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreProg Id
+progConsNonRecIdT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreProg Id
 progConsNonRecIdT = progConsT nonRecVarT mempty (\ v () -> v)
 
 -- | Return the variable bound by a non-recursive let expression.
@@ -140,35 +140,35 @@ nonRecVarT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreBind Var
 nonRecVarT = nonRecT idR mempty (\ v () -> v)
 
 -- | List all identifiers bound in a recursive binding group.
-recIdsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreBind [Id]
+recIdsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreBind [Id]
 recIdsT = recT (\ _ -> arr defId) id
 
 -- | Return the variable bound by a lambda expression.
-lamVarT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr Var
+lamVarT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr Var
 lamVarT = lamT idR mempty (\ v () -> v)
 
 -- | List the variables bound by a let expression.
-letVarsT :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreExpr [Var]
+letVarsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreExpr [Var]
 letVarsT = letT (arr bindVars) mempty (\ vs () -> vs)
 
 -- | List the identifiers bound by a recursive let expression.
-letRecIdsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr [Id]
+letRecIdsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr [Id]
 letRecIdsT = letT recIdsT mempty (\ vs () -> vs)
 
 -- | Return the variable bound by a non-recursive let expression.
-letNonRecVarT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr Var
+letNonRecVarT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr Var
 letNonRecVarT = letT nonRecVarT mempty (\ v () -> v)
 
 -- | List all variables bound by a case expression (in the alternatives and the wildcard binder).
-caseVarsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr [Var]
+caseVarsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr [Var]
 caseVarsT = caseT mempty idR mempty (\ _ -> arr altVars) (\ () v () vss -> v : nub (concat vss))
 
 -- | Return the case wildcard binder.
-caseWildIdT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr Id
+caseWildIdT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr Id
 caseWildIdT = caseT mempty idR mempty (\ _ -> idR) (\ () i () _ -> i)
 
 -- | List the variables bound by all alternatives in a case expression.
-caseAltVarsT :: (ExtendPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr [[Var]]
+caseAltVarsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr [[Var]]
 caseAltVarsT = caseT mempty mempty mempty (\ _ -> arr altVars) (\ () () () vss -> vss)
 
 ------------------------------------------------------------------------------

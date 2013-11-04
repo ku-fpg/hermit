@@ -215,6 +215,15 @@ ppSDoc = do dynFlags <- dynFlagsT
 ppVar :: PrettyH Var
 ppVar = readerT $ \ v -> varName ^>> ppName (varColor v)
 
+-- For var occurences (in CoreExpr)
+ppVarOcc :: PrettyH Var
+ppVarOcc = do
+    (c,i) <- exposeT
+    let colFn = if isDeadBinder i || (isLocalId i && (i `notElemVarSet` boundVars c))
+                then const WarningColor
+                else varColor
+    markBindingSite i c <$> (readerT $ \ v -> varName ^>> ppName (colFn v))
+
 varColor :: Var -> SyntaxForColor
 varColor var | isTyVar var = TypeColor
              | isCoVar var = CoercionColor
@@ -331,14 +340,7 @@ ppCoreExprR = absPathT >>= ppCoreExprPR
            <+ letT ppCoreBind ppCoreExprR (retLet p)
            <+ appT ppCoreExprR ppCoreExprR (retApp p App_Fun App_Arg)
            <+ caseT ppCoreExpr ppVar (ppTypeModeR >>> parenExpr) (const ppCoreAlt) (\ s w ty alts -> RetExpr ((keyword p "case" <+> s <+> keyword p "of" <+> w <+> ty) $$ nest 2 (vcat alts)))
-
-           <+ varT (do (c,i) <- exposeT
-                       RetAtom <$> if isDeadBinder i ||
-                                      (isLocalId i && (i `notElemVarSet` boundVars c))
-                                    then varName ^>> ppName WarningColor
-                                    else ppVar
-                   )
-
+           <+ varT (RetAtom <$> ppVarOcc)
            <+ litT (RetAtom <$> ppSDoc)
            <+ typeT ppTypeModeR
            <+ coercionT ppCoercionModeR
@@ -366,7 +368,7 @@ ppKindOrTypeR = absPathT >>= ppKindOrTypePR
   where
     ppKindOrTypePR :: AbsolutePathH -> Translate PrettyC HermitM KindOrType RetExpr
     ppKindOrTypePR p =
-           tyVarT (RetAtom <$> ppVar)
+           tyVarT (RetAtom <$> ppVarOcc)
         <+ litTyT (RetAtom <$> ppLitTy)
         <+ appTyT ppKindOrTypeR ppKindOrTypeR (retApp p AppTy_Fun AppTy_Arg)
         <+ funTyT ppKindOrTypeR ppKindOrTypeR (retArrowType p FunTy_Dom FunTy_CoDom)
@@ -405,7 +407,7 @@ ppCoercionR = absPathT >>= ppCoercionPR
   where
     ppCoercionPR :: AbsolutePathH -> Translate PrettyC HermitM Coercion RetExpr
     ppCoercionPR p =
-                   coVarCoT (RetAtom <$> ppVar)
+                   coVarCoT (RetAtom <$> ppVarOcc)
                 <+ symCoT (ppCoercionR >>> parenExpr >>^ \ co -> RetExpr (coKeyword p "sym" <+> co))
                 <+ forAllCoT ppBinderMode ppCoercionR (retForAll p ForAllCo_Body)
                 <+ transCoT (ppCoercionR >>> parenExprExceptApp) (ppCoercionR >>> parenExprExceptApp) (\ co1 co2 -> RetExpr (co1 <+> coChar p ';' <+> co2))

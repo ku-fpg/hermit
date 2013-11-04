@@ -175,7 +175,7 @@ etaExpandR nm = prefixFailMsg "Eta-expansion failed: " $
                                Nothing -> fail "type of expression is not a function or a forall."
 
 -- | Perform multiple eta-expansions.
-multiEtaExpandR :: (ExtendPath c Crumb, AddBindings c) => [String] -> Rewrite c HermitM CoreExpr
+multiEtaExpandR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => [String] -> Rewrite c HermitM CoreExpr
 multiEtaExpandR []       = idR
 multiEtaExpandR (nm:nms) = etaExpandR nm >>> lamAllR idR (multiEtaExpandR nms)
 
@@ -215,7 +215,7 @@ push mstrict p = promoteExprR (pushR (extractR `fmap` mstrict) p)
 
 -- | Push a function through a Case or Let expression.
 --   Unsafe if the function is not strict.
-pushR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, HasGlobalRdrEnv c)
+pushR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasGlobalRdrEnv c)
       => Maybe (Rewrite c HermitM CoreExpr) -- ^ a proof that the function (after being applied to its type arguments) is strict
       -> (Id -> Bool)                       -- ^ a predicate to identify the function
       -> Rewrite c HermitM CoreExpr

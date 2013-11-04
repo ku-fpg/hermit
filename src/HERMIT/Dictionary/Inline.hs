@@ -60,30 +60,30 @@ data CaseBinderInlineOption = Scrutinee | Alternative deriving (Eq, Show)
 data InlineConfig           = CaseBinderOnly CaseBinderInlineOption | AllBinders deriving (Eq, Show)
 
 -- | If the current variable matches the given name, then inline it.
-inlineNameR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
+inlineNameR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
 inlineNameR nm = configurableInlineR AllBinders (arr $ cmpTHName2Var nm)
 
 -- | If the current variable matches any of the given names, then inline it.
-inlineNamesR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
+inlineNamesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
 inlineNamesR []  = fail "inline-names failed: no names given."
 inlineNamesR nms = configurableInlineR AllBinders (arr $ \ v -> any (flip cmpTHName2Var v) nms)
 
 -- | Inline the current variable.
-inlineR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+inlineR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 inlineR = configurableInlineR AllBinders (return True)
 
 -- | Inline the current identifier if it is a case binder, using the scrutinee rather than the case-alternative pattern.
-inlineCaseScrutineeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+inlineCaseScrutineeR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 inlineCaseScrutineeR = configurableInlineR (CaseBinderOnly Scrutinee) (return True)
 
 -- | Inline the current identifier if is a case binder, using the case-alternative pattern rather than the scrutinee.
-inlineCaseAlternativeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+inlineCaseAlternativeR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 inlineCaseAlternativeR = configurableInlineR (CaseBinderOnly Alternative) (return True)
 
 -- | The implementation of inline, an important transformation.
 -- This *only* works if the current expression has the form @Var v@ (it does not traverse the expression).
 -- It can trivially be prompted to more general cases using traversal strategies.
-configurableInlineR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c)
+configurableInlineR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c)
                     => InlineConfig
                     -> (Translate c HermitM Id Bool) -- ^ Only inline identifiers that satisfy this predicate.
                     -> Rewrite c HermitM CoreExpr
@@ -115,7 +115,7 @@ configurableInlineR config p =
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
 -- Assumes minimum depth is 0.
-ensureDepthT :: forall c m. (ExtendPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => (BindingDepth -> Bool) -> Translate c m CoreExpr Bool
+ensureDepthT :: forall c m. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m) => (BindingDepth -> Bool) -> Translate c m CoreExpr Bool
 ensureDepthT uncaptured =
   do frees <- arr localFreeVarsExpr
      let collectDepthsT :: Translate c m Core [BindingDepth]
@@ -138,7 +138,8 @@ getUnfoldingT config = translate $ \ c i ->
                       DFunUnfolding _arity dc args    -> (,uncaptured) <$> dFunExpr dc args (idType i)
 #endif
                       _                               -> fail $ "cannot find unfolding in Env or IdInfo."
-      Just (depth,b) -> case b of
+      Just b -> let depth = hbDepth b
+                in case hbSite b of
                           CASEWILD s alt -> let tys             = tyConAppArgs (idType i)
                                                 altExprDepthM   = (, (<= depth+1)) <$> alt2Exp tys alt
                                                 scrutExprDepthM = return (s, (< depth))
@@ -178,7 +179,7 @@ alt2Exp _   (LitAlt l  , _ ) = return $ Lit l
 alt2Exp tys (DataAlt dc, vs) = return $ mkCoreConApps dc (map Type tys ++ map (varToCoreExpr . zapVarOccInfo) vs)
 
 -- | Get list of possible inline targets. Used by shell for completion.
-inlineTargetsT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Translate c HermitM Core [String]
+inlineTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Translate c HermitM Core [String]
 inlineTargetsT = collectT $ promoteT $ whenM (testM inlineR) (varT $ arr var2String)
 
 -- | Build a CoreExpr for a DFunUnfolding

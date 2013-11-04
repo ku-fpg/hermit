@@ -10,6 +10,7 @@ module HERMIT.PrettyPrinter.Common
     , coercionColor
     , idColor
     , keywordColor
+    , markBindingSite
     , markColor
     , typeColor
     , ShowOption(..)
@@ -86,8 +87,9 @@ data HermitMark
     deriving Show
 
 -- These are the attributes
-data Attr = PathAttr AbsolutePathH
-          | Color SyntaxForColor
+data Attr = BndrAttr AbsolutePathH -- path to binding of a variable
+          | Color SyntaxForColor   
+          | PathAttr AbsolutePathH -- path to this spot
           | SpecialFont
     deriving (Eq, Show)
 
@@ -129,10 +131,15 @@ type PrettyH a = Translate PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?
 
 -- | Context for PrettyH translations.
-data PrettyC = PrettyC { prettyC_path    :: AbsolutePath Crumb
-                       , prettyC_vars    :: VarSet
+data PrettyC = PrettyC { prettyC_path    :: AbsolutePathH
+                       , prettyC_vars    :: M.Map Var AbsolutePathH
                        , prettyC_options :: PrettyOptions
                        }
+
+markBindingSite :: Var -> PrettyC -> DocH -> DocH
+markBindingSite i c d = case M.lookup i (prettyC_vars c) of
+                            Nothing -> d
+                            Just p -> attr (BndrAttr p) d
 
 ------------------------------------------------------------------------
 
@@ -147,23 +154,13 @@ instance ExtendPath PrettyC Crumb where
   {-# INLINE (@@) #-}
 
 instance AddBindings PrettyC where
-  addHermitBindings :: [(Var,HermitBindingSite)] -> PrettyC -> PrettyC
-  addHermitBindings vbs c = c { prettyC_vars = foldr (flip extendVarSet) (prettyC_vars c) (map fst vbs) }
-                            -- let vhbs = [ (v, (0,b)) | (v,b) <- vbs ] -- TODO: do we care about depth?
-                            --  in c { prettyC_bindings = M.fromList vhbs `M.union` prettyC_bindings c }
+  addHermitBindings :: [(Var,HermitBindingSite,AbsolutePathH)] -> PrettyC -> PrettyC
+  addHermitBindings vbs c = c { prettyC_vars = M.union (prettyC_vars c) (M.fromList [ (i,p) | (i,_,p) <- vbs ]) }
   {-# INLINE addHermitBindings #-}
-
--- instance ReadBindings PrettyC where
---   hermitDepth :: PrettyC -> BindingDepth
---   hermitDepth = prettyC_depth
-
---   hermitBindings :: PrettyC -> M.Map Var HermitBinding
---   hermitBindings = prettyC_bindings
---   {-# INLINE hermitBindings #-}
 
 instance BoundVars PrettyC where
   boundVars :: PrettyC -> VarSet
-  boundVars = prettyC_vars
+  boundVars = mkVarSet . M.keys . prettyC_vars
 
 ------------------------------------------------------------------------
 
@@ -172,13 +169,13 @@ liftPrettyH = liftContext . liftPrettyC
 
 liftPrettyC :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> c -> PrettyC
 liftPrettyC opts c = PrettyC { prettyC_path    = absPath c
-                             , prettyC_vars    = boundVars c
+                             , prettyC_vars    = M.fromList [ (i,hbPath b) | (i,b) <- M.toList (hermitBindings c) ]
                              , prettyC_options = opts}
 
 initPrettyC :: PrettyOptions -> PrettyC
 initPrettyC opts = PrettyC
                       { prettyC_path    = mempty
-                      , prettyC_vars    = emptyVarSet
+                      , prettyC_vars    = M.empty
                       , prettyC_options = opts
                       }
 
