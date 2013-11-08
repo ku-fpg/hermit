@@ -90,7 +90,7 @@ externals =
 
 -- | Substitute all occurrences of a variable with an expression, in either a program or an expression.
 substR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Var -> CoreExpr -> Rewrite c m Core
-substR v e = setFailMsg "Can only perform substitution on expressions or programs." $
+substR v e = setFailMsg "Can only perform substitution on expressions, case alternatives or programs." $
              promoteExprR (substExprR v e) <+ promoteProgR (substTopBindR v e) <+ promoteAltR (substAltR v e)
 
 -- | Substitute all occurrences of a variable with an expression, in an expression.
@@ -116,6 +116,7 @@ substAltR v e = do (_, vs, _) <- idR
                    if v `elem` vs
                     then fail "variable is shadowed by a case-alternative constructor argument."
                     else altAllR idR (\ _ -> idR) (substExprR v e)
+-- TODO: type vars may appear in the alt vars.
 
 -- Neil: Commented this out as it's not (currently) used.
 --  Perform let-substitution the specified number of times.
