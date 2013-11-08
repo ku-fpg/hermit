@@ -142,7 +142,7 @@ caseElimR = prefixFailMsg "Case elimination failed: " $
 ------------------------------------------------------------------------------
 
 -- | (case s of alt1 -> e1; alt2 -> e2) v ==> case s of alt1 -> e1 v; alt2 -> e2 v
-caseFloatAppR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFloatAppR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatAppR = prefixFailMsg "Case floating from App function failed: " $
   do
     captures    <- appT (map mkVarSet <$> caseAltVarsT) (arr freeVarsExpr) (flip (map . intersectVarSet))
@@ -162,7 +162,7 @@ caseFloatArg (Just (f_str, mstrict)) =
 
 -- | @f (case s of alt1 -> e1; alt2 -> e2)@ ==> @case s of alt1 -> f e1; alt2 -> f e2@
 --   Only safe if @f@ is strict.
-caseFloatArgR :: (ExtendPath c Crumb, AddBindings c, BoundVars c, HasGlobalRdrEnv c)
+caseFloatArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasGlobalRdrEnv c)
               => Maybe (CoreExpr, Maybe (Rewrite c HermitM CoreExpr)) -- ^ Maybe the function to float past, and maybe a proof of its strictness.
               -> Rewrite c HermitM CoreExpr
 caseFloatArgR mfstrict = prefixFailMsg "Case floating from App argument failed: " $
@@ -191,7 +191,7 @@ caseFloatArgR mfstrict = prefixFailMsg "Case floating from App argument failed: 
 --   case s1 of
 --     alt11 -> case e11 of alt21 -> e21; alt22 -> e22
 --     alt12 -> case e12 of alt21 -> e21; alt22 -> e22
-caseFloatCaseR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFloatCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatCaseR = prefixFailMsg "Case floating from Case failed: " $
   do
     captures <- caseT (map mkVarSet <$> caseAltVarsT) idR mempty (const $ arr freeVarsAlt) (\ vss w () fvs -> map (intersectVarSet (delVarSet (unionVarSets fvs) w)) vss)
@@ -206,7 +206,7 @@ caseFloatCaseR = prefixFailMsg "Case floating from Case failed: " $
           (\ (Case s1 b1 _ alts1) b2 ty alts2 -> Case s1 b1 ty $ mapAlts (\s -> Case s b2 ty alts2) alts1)
 
 -- | let v = case s of alt1 -> e1 in e ==> case s of alt1 -> let v = e1 in e
-caseFloatLetR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFloatLetR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatLetR = prefixFailMsg "Case floating from Let failed: " $
   do vs <- letNonRecT idR caseAltVarsT mempty (\ letVar caseVars () -> letVar `elem` concat caseVars)
      let bdsAction = if not vs then idR else nonRecAllR idR alphaCaseR
@@ -223,14 +223,14 @@ caseFloatCastR = prefixFailMsg "Case float from cast failed: " $
 
 -- | caseFloatR = caseFloatAppR <+ caseFloatCaseR <+ caseFloatLetR <+ caseFloatCastR
 --   Note: does NOT include caseFloatArg
-caseFloatR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFloatR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFloatR = setFailMsg "Unsuitable expression for Case floating." $
     caseFloatAppR <+ caseFloatCaseR <+ caseFloatLetR <+ caseFloatCastR
 
 ------------------------------------------------------------------------------
 
 -- | Unfloat a Case whatever the context.
-caseUnfloatR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+caseUnfloatR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
 caseUnfloatR = setFailMsg "Case unfloating failed." $
     caseUnfloatAppR <+ caseUnfloatArgsR
 
@@ -238,7 +238,7 @@ caseUnfloatR = setFailMsg "Case unfloating failed." $
 caseUnfloatAppR :: Monad m => Rewrite c m CoreExpr
 caseUnfloatAppR = fail "caseUnfloatApp: TODO"
 
-caseUnfloatArgsR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+caseUnfloatArgsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
 caseUnfloatArgsR = prefixFailMsg "Case unfloating into arguments failed: " $
                    withPatFailMsg (wrongExprForm "Case s v t alts") $
     do Case s wild _ty alts <- idR
@@ -260,12 +260,12 @@ caseUnfloatArgsR = prefixFailMsg "Case unfloating into arguments failed: " $
 ------------------------------------------------------------------------------
 
 -- | Inline the case scrutinee (if it is an identifier), and then perform case reduction.
-caseReduceIdR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseReduceIdR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseReduceIdR = caseAllR inlineR idR idR (const idR) >>> caseReduceR
 
 -- | Case of Known Constructor.
 --   Eliminate a case if the scrutinee is a data constructor or a literal.
-caseReduceR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseReduceR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseReduceR = setFailMsg "Unsuitable expression for Case reduction." $
               caseReduceDataconR <+ caseReduceLiteralR
 
@@ -290,7 +290,7 @@ caseReduceLiteralR = prefixFailMsg "Case reduction failed: " $
 
 -- | Case of Known Constructor.
 --   Eliminate a case if the scrutinee is a data constructor.
-caseReduceDataconR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseReduceDataconR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseReduceDataconR = prefixFailMsg "Case reduction failed: " $
                      withPatFailMsg (wrongExprForm "Case e v t alts")
                      go
@@ -358,12 +358,12 @@ matchingFreeIdT nm = do
 -- for each occurance of the named variable.
 --
 -- > caseSplitInline nm = caseSplit nm >>> anybuR (inlineName nm)
-caseSplitInlineR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM Core
+caseSplitInlineR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM Core
 caseSplitInlineR nm = promoteR (caseSplitR nm) >>> anybuR (promoteExprR $ inlineNameR nm)
 
 ------------------------------------------------------------------------------
 
-caseInlineBinderR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => CaseBinderInlineOption -> Rewrite c HermitM CoreExpr
+caseInlineBinderR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => CaseBinderInlineOption -> Rewrite c HermitM CoreExpr
 caseInlineBinderR opt =
   do w <- caseWildIdT
      caseAllR idR idR idR $ \ _ -> setFailMsg "no inlinable occurrences." $
@@ -371,12 +371,12 @@ caseInlineBinderR opt =
                                       extractR $ anybuR (promoteExprR (configurableInlineR (CaseBinderOnly opt) (varIsOccurrenceOfT w depth)) :: Rewrite c HermitM Core)
 
 -- | Inline the case wildcard binder as the case scrutinee everywhere in the case alternatives.
-caseInlineScrutineeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseInlineScrutineeR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseInlineScrutineeR = prefixFailMsg "case-inline-scrutinee failed: " $
                        caseInlineBinderR Scrutinee
 
 -- | Inline the case wildcard binder as the case-alternative pattern everywhere in the case alternatives.
-caseInlineAlternativeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseInlineAlternativeR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseInlineAlternativeR = prefixFailMsg "case-inline-alternative failed: " $
                          caseInlineBinderR Alternative
 
@@ -396,30 +396,30 @@ caseMergeAltsR = prefixFailMsg "merge-case-alts failed: " $
                     return $ Case e w ty [(DEFAULT,[],head rhss)]
 
 -- | In the case alternatives, fold any occurrences of the case alt patterns to the wildcard binder.
-caseFoldWildR :: forall c.  (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseFoldWildR :: forall c.  (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseFoldWildR = prefixFailMsg "case-fold-wild failed: " $
                 do w <- caseWildIdT
                    caseAllR idR idR idR $ \ _ -> do depth <- varBindingDepthT w
                                                     extractR $ anybuR (promoteExprR (foldVarR w (Just depth)) :: Rewrite c HermitM Core)
 
 -- | A cleverer version of 'mergeCaseAlts' that first attempts to abstract out any occurrences of the alternative pattern using the wildcard binder.
-caseMergeAltsWithWildR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseMergeAltsWithWildR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseMergeAltsWithWildR = prefixFailMsg "merge-case-alts-with-wild failed: " $
                          withPatFailMsg (wrongExprForm "Case e w ty alts") $
                          tryR caseFoldWildR >>> caseMergeAltsR
 
 -- | Eliminate a case, inlining any occurrences of the case binder as the scrutinee.
-caseElimInlineScrutineeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseElimInlineScrutineeR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseElimInlineScrutineeR = alphaCaseBinderR Nothing >>> tryR caseInlineScrutineeR >>> caseElimR
 
 -- | Eliminate a case, merging the case alternatives into a single default alternative and inlining the case binder as the scrutinee (if possible).
-caseElimMergeAltsR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseElimMergeAltsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseElimMergeAltsR = tryR caseFoldWildR >>> tryR caseMergeAltsR >>> caseElimInlineScrutineeR
 
 ------------------------------------------------------------------------------
 
 -- | Eliminate a case that corresponds to a pointless 'seq'.
-caseElimSeqR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+caseElimSeqR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 caseElimSeqR = prefixFailMsg "case-elim-seq failed: " $
                withPatFailMsg "not a seq case." $
   do Case s w _ [(DEFAULT,[],rhs)] <- idR

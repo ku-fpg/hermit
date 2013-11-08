@@ -89,7 +89,7 @@ externals =
 ------------------------------------------------------------------------
 
 -- | Substitute all occurrences of a variable with an expression, in either a program or an expression.
-substR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Var -> CoreExpr -> Rewrite c m Core
+substR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Var -> CoreExpr -> Rewrite c m Core
 substR v e = setFailMsg "Can only perform substitution on expressions, case alternatives or programs." $
              promoteExprR (substExprR v e) <+ promoteProgR (substTopBindR v e) <+ promoteAltR (substAltR v e)
 
@@ -111,7 +111,7 @@ substTopBindR v e =  contextfreeT $ \ p -> do
     return $ bindsToProg $ snd (mapAccumL substBind (extendSubst emptySub v e) (progToBinds p))
 
 -- | Substitute all occurrences of a variable with an expression, in a case alternative.
-substAltR :: (ExtendPath c Crumb, AddBindings c, Monad m) => Var -> CoreExpr -> Rewrite c m CoreAlt
+substAltR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Var -> CoreExpr -> Rewrite c m CoreAlt
 substAltR v e = do (_, vs, _) <- idR
                    if v `elem` vs
                     then fail "variable is shadowed by a case-alternative constructor argument."
@@ -367,7 +367,7 @@ dezombifyR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
 dezombifyR = varR (acceptR isDeadBinder >>^ zapVarOccInfo)
 
 -- | Apply 'occurAnalyseExprR' to all sub-expressions.
-occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m Core
 occurAnalyseR = let r  = promoteExprR (arr occurAnalyseExpr)
                     go = r <+ anyR go
                  in tryR go -- always succeed
@@ -377,14 +377,14 @@ occurAnalyseExprChangedR :: MonadCatch m => Rewrite c m CoreExpr
 occurAnalyseExprChangedR = changedByR exprSyntaxEq (arr occurAnalyseExpr)
 
 -- | Occurrence analyse all sub-expressions, failing if the result is syntactically equal to the initial expression.
-occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m Core
 occurAnalyseChangedR = changedByR coreSyntaxEq occurAnalyseR
 
 -- | Run GHC's occurrence analyser, and also eliminate any zombies.
-occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m Core
 occurAnalyseAndDezombifyR = allbuR (tryR $ promoteExprR dezombifyR) >>> occurAnalyseR
 
-occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m Core
 occurrenceAnalysisR = occurAnalyseAndDezombifyR
 
 {- Does not work (no export)

@@ -89,6 +89,12 @@ shell_externals = map (.+ Shell)
        [ "tag <label> names the current AST with a label" ]                     .+ VersionControl
    , external "diff"            (\ s1 s2 -> Diff (SAST s1) (SAST s2))
        [ "show diff of two ASTs" ]                                              .+ VersionControl
+   , external "set-pp-diffonly" (\ bStr -> CLSModify $ \ st ->
+        case reads bStr of
+            [(b,"")] -> return $ st { cl_diffonly = b }
+            _        -> return st )
+       [ "set-pp-diffonly <True|False>; False by default"
+       , "print diffs rather than full code after a rewrite" ]
    , external "set-fail-hard" (\ bStr -> CLSModify $ \ st ->
         case reads bStr of
             [(b,"")] -> return $ st { cl_failhard = b }
@@ -114,7 +120,7 @@ shell_externals = map (.+ Shell)
    , external "set-pp-renderer"    showRenderers
        [ "set the output renderer mode"]
    , external "dump"    Dump
-       [ "dump <filename> <pretty-printer> <renderer> <width>"]
+       [ "dump <filename> <renderer> <width>"]
    , external "set-pp-width" (\ w -> CLSModify $ \ st ->
         return $ st { cl_pretty_opts = updateWidthOption w (cl_pretty_opts st) })
        ["set the width of the screen"]

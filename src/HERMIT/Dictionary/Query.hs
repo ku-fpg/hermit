@@ -12,6 +12,7 @@ where
 import Control.Arrow
 
 import Data.List (intercalate)
+import qualified Data.Map as Map
 
 import HERMIT.Context
 import HERMIT.Core
@@ -52,7 +53,11 @@ infoT =
               con      =   "Constructor: " ++ coreTCConstructor coreTC
               pa       =   "Path:     " ++ showCrumbs (snocPathToPath $ absPath c)
               children =   "Children: " ++ showCrumbs crumbs
-              bds      =   "Local bindings in scope: " ++ showVarSet (boundVars c)
+              bds      =   "Local bindings in scope: " ++ concat
+                                [ "\n  " ++ var2String k ++  " : " ++ hermitBindingSummary hbs
+                                | (k,hbs) <- Map.toList (hermitBindings c)
+                                ]
+--               showVarSet (boundVars c)
               freevars = [ "Free local identifiers:  " ++ showVarSet (filterVarSet isLocalId fvs)
                          , "Free global identifiers: " ++ showVarSet (filterVarSet isGlobalId fvs)
                          , "Free type variables:     " ++ showVarSet (filterVarSet isTyVar fvs)
@@ -159,7 +164,7 @@ compareCoreAtT p1T p2T =
      guardMsg (core1 `coreAlphaEq` core2) "core fragments are not alpha-equivalent."
 
 -- | Compare the definitions of two identifiers for alpha-equality.
-compareBoundIdsT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Id -> Id -> Translate c HermitM x ()
+compareBoundIdsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Id -> Id -> Translate c HermitM x ()
 compareBoundIdsT i1 i2 =
   do e1 <-                       fst ^<< getUnfoldingT AllBinders <<< return i1
      e2 <- replaceVarR i2 i1 <<< fst ^<< getUnfoldingT AllBinders <<< return i2
@@ -167,7 +172,7 @@ compareBoundIdsT i1 i2 =
      guardMsg (e1 `exprAlphaEq` e2) "bindings are not alpha-equivalent."
 
 -- | Compare the definitions of the two named identifiers for alpha-equality.
-compareBoundIds :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, HasGlobalRdrEnv c) => TH.Name -> TH.Name -> Translate c HermitM x ()
+compareBoundIds :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasGlobalRdrEnv c) => TH.Name -> TH.Name -> Translate c HermitM x ()
 compareBoundIds nm1 nm2 = do i1 <- findIdT nm1
                              i2 <- findIdT nm2
                              compareBoundIdsT i1 i2

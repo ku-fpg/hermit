@@ -136,11 +136,11 @@ externals =
 -------------------------------------------------------------------------------------------
 
 -- | (let x = e1 in e2) ==> (e2[e1/x]), (x must not be free in e1)
-letSubstR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr
+letSubstR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr
 letSubstR = letAllR (tryR recToNonrecR) idR >>> letNonRecSubstR
 
 -- | As 'letNonRecSubstSafeR', but attempting to convert a singleton recursive binding to a non-recursive binding first.
-letSubstSafeR :: (AddBindings c, ExtendPath c Crumb, ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letSubstSafeR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
 letSubstSafeR = letAllR (tryR recToNonrecR) idR >>> letNonRecSubstSafeR
 
 -- | @Let (NonRec v e) body@ ==> @body[e/v]@
@@ -152,7 +152,7 @@ letNonRecSubstR = prefixFailMsg "Let substitution failed: " $
 
 -- | Currently we always substitute types and coercions, and use a heuristic to decide whether to substitute expressions.
 --   This may need revisiting.
-letNonRecSubstSafeR :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letNonRecSubstSafeR :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
 letNonRecSubstSafeR =
     do Let (NonRec v _) _ <- idR
        when (isId v) $ guardMsgM (safeSubstT v) "safety criteria not met."
@@ -272,7 +272,7 @@ chaseDependencies usedIds bsAndFrees = case partition ((`elemVarSet` usedIds) . 
 -------------------------------------------------------------------------------------------
 
 -- | @let v = ev in e@ ==> @case ev of v -> e@
-letToCaseR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+letToCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 letToCaseR = prefixFailMsg "Converting Let to Case failed: " $
             withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
   do Let (NonRec v ev) _ <- idR
@@ -284,7 +284,7 @@ letToCaseR = prefixFailMsg "Converting Let to Case failed: " $
 -------------------------------------------------------------------------------------------
 
 -- | @(let v = ev in e) x@ ==> @let v = ev in e x@
-letFloatAppR :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatAppR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
 letFloatAppR = prefixFailMsg "Let floating from App function failed: " $
                withPatFailMsg (wrongExprForm "App (Let bnds body) e") $
   do App (Let bnds body) e <- idR
@@ -294,7 +294,7 @@ letFloatAppR = prefixFailMsg "Let floating from App function failed: " $
         else appAllR (alphaLetVarsR $ varSetElems vs) idR >>> letFloatAppR
 
 -- | @f (let v = ev in e)@ ==> @let v = ev in f e@
-letFloatArgR :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
 letFloatArgR = prefixFailMsg "Let floating from App argument failed: " $
                withPatFailMsg (wrongExprForm "App f (Let bnds body)") $
   do App f (Let bnds body) <- idR
@@ -304,7 +304,7 @@ letFloatArgR = prefixFailMsg "Let floating from App argument failed: " $
         else appAllR idR (alphaLetVarsR $ varSetElems vs) >>> letFloatArgR
 
 -- | @let v = (let bds in e1) in e2@ ==> @let bds in let v = e1 in e2@
-letFloatLetR :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatLetR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
 letFloatLetR = prefixFailMsg "Let floating from Let failed: " $
                withPatFailMsg (wrongExprForm "Let (NonRec v (Let bds e1)) e2") $
   do Let (NonRec v (Let bds e1)) e2 <- idR
@@ -316,7 +316,7 @@ letFloatLetR = prefixFailMsg "Let floating from Let failed: " $
 -- | @(\ v -> let binds in e2)@  ==>  @let binds in (\ v1 -> e2)@
 --   Fails if @v@ occurs in the RHS of @binds@.
 --   If @v@ is shadowed in binds, then @v@ will be alpha-renamed.
-letFloatLamR :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
 letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
                withPatFailMsg (wrongExprForm "Lam v1 (Let bds body)") $
   do Lam v (Let binds body) <- idR
@@ -329,7 +329,7 @@ letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
 
 -- | @case (let bnds in e) of wild alts@ ==> @let bnds in (case e of wild alts)@
 --   Fails if any variables bound in @bnds@ occurs in @alts@.
-letFloatCaseR :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
 letFloatCaseR = prefixFailMsg "Let floating from Case failed: " $
                 withPatFailMsg (wrongExprForm "Case (Let bnds e) w ty alts") $
   do Case (Let bnds e) w ty alts <- idR
@@ -346,12 +346,12 @@ letFloatCastR = prefixFailMsg "Let floating from Cast failed: " $
      return $ Let bnds (Cast e co)
 
 -- | Float a 'Let' through an expression, whatever the context.
-letFloatExprR :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatExprR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
 letFloatExprR = setFailMsg "Unsuitable expression for Let floating." $
                letFloatArgR <+ letFloatAppR <+ letFloatLetR <+ letFloatLamR <+ letFloatCaseR <+ letFloatCastR
 
 -- | @'ProgCons' ('NonRec' v ('Let' bds e)) p@ ==> @'ProgCons' bds ('ProgCons' ('NonRec' v e) p)@
-letFloatTopR :: (ExtendPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreProg
+letFloatTopR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreProg
 letFloatTopR = prefixFailMsg "Let floating to top level failed: " $
                withPatFailMsg (wrongExprForm "NonRec v (Let bds e) `ProgCons` p") $
                do ProgCons (NonRec v (Let bds e)) p <- idR
@@ -365,7 +365,7 @@ letFloatTopR = prefixFailMsg "Let floating to top level failed: " $
 -------------------------------------------------------------------------------------------
 
 -- | Unfloat a 'Let' if possible.
-letUnfloatR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letUnfloatR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
 letUnfloatR = letUnfloatCaseR <+ letUnfloatAppR <+ letUnfloatLamR
 
 -- | @let v = ev in case s of p -> e@ ==> @case (let v = ev in s) of p -> let v = ev in e@,
@@ -390,7 +390,7 @@ letUnfloatAppR = prefixFailMsg "Let unfloating from app failed: " $
 
 -- | @let v = ev in \ x -> e@ ==> @\x -> let v = ev in e@
 --   if @v@ does not shadow @x@
-letUnfloatLamR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letUnfloatLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
 letUnfloatLamR = prefixFailMsg "Let unfloating from lambda failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (Lam v e)") $
   do Let bnds (Lam v e) <- idR

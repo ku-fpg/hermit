@@ -16,6 +16,7 @@ module HERMIT.Dictionary.Unfold
 import Control.Arrow
 import Control.Monad
 
+import Data.List (intercalate)
 import qualified Data.Map as Map
 
 import qualified Language.Haskell.TH as TH
@@ -89,26 +90,26 @@ cleanupUnfoldR = do
 -- | A more powerful 'inline'. Matches two cases:
 --      Var ==> inlines
 --      App ==> inlines the head of the function call for the app tree
-unfoldR :: forall c. (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+unfoldR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 unfoldR = prefixFailMsg "unfold failed: " (go >>> cleanupUnfoldR)
     where go :: Rewrite c HermitM CoreExpr
           go = inlineR <+ appAllR go idR
 
-unfoldPredR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => (Id -> [CoreExpr] -> Bool) -> Rewrite c HermitM CoreExpr
+unfoldPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => (Id -> [CoreExpr] -> Bool) -> Rewrite c HermitM CoreExpr
 unfoldPredR p = callPredT p >> unfoldR
 
-unfoldNameR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
+unfoldNameR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
 unfoldNameR nm = prefixFailMsg ("unfold '" ++ show nm ++ " failed: ") (callNameT nm >> unfoldR)
 
-unfoldNamesR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
+unfoldNamesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
 unfoldNamesR []  = fail "unfold-names failed: no names given."
 unfoldNamesR nms = setFailMsg "unfold-names failed." $
                    orR (map unfoldNameR nms)
 
-unfoldSaturatedR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+unfoldSaturatedR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 unfoldSaturatedR = callSaturatedT >> unfoldR
 
-specializeR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+specializeR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 specializeR = unfoldPredR (const $ all isTyCoArg)
 
 -- NOTE: Using a Rewrite because of the way the Kernel is set up.
@@ -133,14 +134,16 @@ rememberR label = sideEffectR $ \ _ -> \case
 
 -- | Apply a stashed definition (like inline, but looks in stash instead of context).
 unfoldStashR :: ReadBindings c => String -> Rewrite c HermitM CoreExpr
-unfoldStashR label = setFailMsg "Inlining stashed definition failed: " $
+unfoldStashR label = prefixFailMsg "Inlining stashed definition failed: " $
                      withPatFailMsg (wrongExprForm "Var v") $
     do (c, Var v) <- exposeT
        constT $ do Def i rhs <- lookupDef label
+                   dflags <- getDynFlags
                    if idName i == idName v -- TODO: Is there a reason we're not just using equality on Id?
-                   then if all (inScope c) $ varSetElems $ freeVarsExpr rhs
-                          then return rhs
-                          else fail "some free variables in stashed definition are no longer in scope."
+                   then let fvars = varSetElems $ localFreeVarsExpr rhs
+                        in if all (inScope c) fvars
+                           then return rhs
+                           else fail $ "free variables " ++ intercalate "," (map (showPpr dflags) (filter (not . inScope c) fvars)) ++ " in stashed definition are no longer in scope."
                    else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v
 
 showStashT :: Injection CoreDef a => PrettyC -> PrettyH a -> Translate c HermitM a DocH

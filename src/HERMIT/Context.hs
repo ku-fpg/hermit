@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleContexts, FlexibleInstances, InstanceSigs #-}
 
 module HERMIT.Context
        ( -- * HERMIT Contexts
@@ -12,7 +12,11 @@ module HERMIT.Context
        , HermitBindingSite(..)
        , BindingDepth
        , HermitBinding
+       , hbDepth
+       , hbSite
+       , hbPath
        , hermitBindingSiteExpr
+       , hermitBindingSummary
        , hermitBindingExpr
          -- ** Adding bindings to contexts
        , AddBindings(..)
@@ -69,7 +73,10 @@ data HermitBindingSite = LAM                               -- ^ A lambda-bound v
                        | CASEWILD CoreExpr (AltCon,[Var])  -- ^ A case wildcard binder.  We store both the scrutinised expression, and the case alternative 'AltCon' and variables.
                        | FORALL                            -- ^ A universally quantified type variable.
 
-type HermitBinding = (BindingDepth, HermitBindingSite)
+data HermitBinding = HB { hbDepth :: BindingDepth 
+                        , hbSite :: HermitBindingSite 
+                        , hbPath :: AbsolutePathH
+                        }
 
 -- | Retrieve the expression in a 'HermitBindingSite', if there is one.
 hermitBindingSiteExpr :: HermitBindingSite -> KureM CoreExpr
@@ -83,9 +90,20 @@ hermitBindingSiteExpr b = case b of
                             CASEWILD e _ -> return e
                             FORALL       -> fail "variable is a universally quantified type variable."
 
+hermitBindingSummary :: HermitBinding -> String
+hermitBindingSummary b = show (hbDepth b) ++ "$" ++ case hbSite b of
+                            LAM          -> "LAM"
+                            NONREC {}    -> "NONREC"
+                            REC {}       -> "REC"
+                            MUTUALREC {} -> "MUTUALREC"
+                            SELFREC {}   -> "SELFREC"
+                            CASEALT      -> "CASEALT"
+                            CASEWILD {}  -> "CASEWILD"
+                            FORALL       -> "FORALL"
+
 -- | Retrieve the expression in a 'HermitBinding', if there is one.
 hermitBindingExpr :: HermitBinding -> KureM CoreExpr
-hermitBindingExpr = hermitBindingSiteExpr . snd
+hermitBindingExpr = hermitBindingSiteExpr . hbSite
 
 ------------------------------------------------------------------------
 
@@ -95,16 +113,19 @@ class AddBindings c where
   --   (Parallel bindings occur in recursive let bindings and case alternatives.)
   --   This can also be used for solitary bindings (e.g. lambdas).
   --   Bindings are added in parallel sets to help with shadowing issues.
-  addHermitBindings :: [(Var,HermitBindingSite)] -> c -> c
+  addHermitBindings :: [(Var,HermitBindingSite,AbsolutePathH)] -> c -> c
 
 -- | The bindings are just discarded.
 instance AddBindings (SnocPath crumb) where
-  addHermitBindings :: [(Var,HermitBindingSite)] -> SnocPath crumb -> SnocPath crumb
+  addHermitBindings :: [(Var,HermitBindingSite,AbsolutePathH)] -> SnocPath crumb -> SnocPath crumb
   addHermitBindings _ = id
+
+instance ReadPath c Crumb => ReadPath (ExtendContext c e) Crumb where
+  absPath = absPath . baseContext
 
 -- | The bindings are added to the base context and the extra context.
 instance (AddBindings c, AddBindings e) => AddBindings (ExtendContext c e) where
-  addHermitBindings :: [(Var,HermitBindingSite)] -> ExtendContext c e -> ExtendContext c e
+  addHermitBindings :: [(Var,HermitBindingSite,AbsolutePathH)] -> ExtendContext c e -> ExtendContext c e
   addHermitBindings bnds c = c
                               { baseContext  = addHermitBindings bnds (baseContext c)
                               , extraContext = addHermitBindings bnds (extraContext c)
@@ -112,43 +133,39 @@ instance (AddBindings c, AddBindings e) => AddBindings (ExtendContext c e) where
 
 -------------------------------------------
 
--- | Add a single binding to the context.
-addHermitBinding  :: AddBindings c => Var -> HermitBindingSite -> c -> c
-addHermitBinding v bd = addHermitBindings [(v,bd)]
-
 -- | Add all bindings in a binding group to a context.
-addBindingGroup :: AddBindings c => CoreBind -> c -> c
-addBindingGroup (NonRec v e) = addHermitBinding  v (NONREC e)
-addBindingGroup (Rec ies)    = addHermitBindings [ (i, REC e) | (i,e) <- ies ]
+addBindingGroup :: (AddBindings c, ReadPath c Crumb) => CoreBind -> c -> c
+addBindingGroup (NonRec v e) c = addHermitBindings [(v,NONREC e,absPath c @@ Let_Bind)] c
+addBindingGroup (Rec ies)    c = addHermitBindings [ (i, REC e, absPath c @@ Let_Bind) | (i,e) <- ies ] c
 
 -- | Add the binding for a recursive definition currently under examination.
 --   Note that because the expression may later be modified, the context only records the identifier, not the expression.
-addDefBinding :: AddBindings c => Id -> c -> c
-addDefBinding i = addHermitBinding i SELFREC
+addDefBinding :: (AddBindings c, ReadPath c Crumb) => Id -> c -> c
+addDefBinding i c = addHermitBindings [(i,SELFREC,absPath c @@ Def_Id)] c
 
 -- | Add a list of recursive bindings to the context, except the nth binding in the list.
 --   The idea is to exclude the definition being descended into.
-addDefBindingsExcept :: AddBindings c => Int -> [(Id,CoreExpr)] -> c -> c
-addDefBindingsExcept n ies = addHermitBindings [ (i, MUTUALREC e) | (m,(i,e)) <- zip [0..] ies, m /= n ]
+addDefBindingsExcept :: (AddBindings c, ReadPath c Crumb) => Int -> [(Id,CoreExpr)] -> c -> c
+addDefBindingsExcept n ies c = addHermitBindings [ (i, MUTUALREC e, absPath c @@ Rec_Def m) | (m,(i,e)) <- zip [0..] ies, m /= n ] c
 
 -- | Add a wildcard binding for a specific case alternative.
-addCaseWildBinding :: AddBindings c => (Id,CoreExpr,CoreAlt) -> c -> c
-addCaseWildBinding (i,e,(con,vs,_)) = addHermitBinding i (CASEWILD e (con,vs))
+addCaseWildBinding :: (AddBindings c, ReadPath c Crumb) => (Id,CoreExpr,CoreAlt) -> c -> c
+addCaseWildBinding (i,e,(con,vs,_)) c = addHermitBindings [(i,CASEWILD e (con,vs),absPath c @@ Case_Binder)] c
 
 -- | Add a lambda bound variable to a context.
 --   All that is known is the variable, which may shadow something.
 --   If so, we don't worry about that here, it is instead checked during inlining.
-addLambdaBinding :: AddBindings c => Var -> c -> c
-addLambdaBinding v = addHermitBinding v LAM
+addLambdaBinding :: (AddBindings c, ReadPath c Crumb) => Var -> c -> c
+addLambdaBinding v c = addHermitBindings [(v,LAM,absPath c @@ Lam_Var)] c
 
 -- | Add the variables bound by a 'DataCon' in a case.
 --   They are all bound at the same depth.
-addAltBindings :: AddBindings c => [Var] -> c -> c
-addAltBindings vs = addHermitBindings [ (v, CASEALT) | v <- vs ]
+addAltBindings :: (AddBindings c, ReadPath c Crumb) => [Var] -> c -> c
+addAltBindings vs c = addHermitBindings [ (v, CASEALT, absPath c @@ Alt_Var i) | (v,i) <- zip vs [1..] ] c
 
 -- | Add a universally quantified type variable to a context.
-addForallBinding :: AddBindings c => TyVar -> c -> c
-addForallBinding v = addHermitBinding v FORALL
+addForallBinding :: (AddBindings c, ReadPath c Crumb) => TyVar -> c -> c
+addForallBinding v c = addHermitBindings [(v,FORALL,absPath c @@ ForAllTy_Var)] c
 
 ------------------------------------------------------------------------
 
@@ -180,11 +197,11 @@ lookupHermitBinding v = maybe (fail "binding not found in HERMIT context.") retu
 
 -- | Lookup the depth of a variable's binding in a context.
 lookupHermitBindingDepth :: (ReadBindings c, Monad m) => Var -> c -> m BindingDepth
-lookupHermitBindingDepth v = liftM fst . lookupHermitBinding v
+lookupHermitBindingDepth v = liftM hbDepth . lookupHermitBinding v
 
 -- | Lookup the binding for a variable in a context, ensuring it was bound at the specified depth.
 lookupHermitBindingSite :: (ReadBindings c, Monad m) => Var -> BindingDepth -> c -> m HermitBindingSite
-lookupHermitBindingSite v depth c = do (d,bnd) <- lookupHermitBinding v c
+lookupHermitBindingSite v depth c = do HB d bnd _ <- lookupHermitBinding v c
                                        guardMsg (d == depth) "lookupHermitBinding succeeded, but depth does not match.  The variable has probably been shadowed."
                                        return bnd
 
@@ -254,9 +271,9 @@ instance ExtendPath HermitC Crumb where
 ------------------------------------------------------------------------
 
 instance AddBindings HermitC where
-  addHermitBindings :: [(Var,HermitBindingSite)] -> HermitC -> HermitC
+  addHermitBindings :: [(Var,HermitBindingSite,AbsolutePathH)] -> HermitC -> HermitC
   addHermitBindings vbs c = let nextDepth = succ (hermitC_depth c)
-                                vhbs      = [ (v, (nextDepth,b)) | (v,b) <- vbs ]
+                                vhbs      = [ (v, HB nextDepth b p) | (v,b,p) <- vbs ]
                              in c { hermitC_bindings = fromList vhbs `union` hermitC_bindings c
                                   , hermitC_depth    = nextDepth
                                   }

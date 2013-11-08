@@ -34,15 +34,15 @@ externals =
 ------------------------------------------------------------------------------------------------------
 
 -- | Traditional Static Argument Transformation
-staticArgR :: (ExtendPath c Crumb, AddBindings c) => Rewrite c HermitM CoreDef
+staticArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Rewrite c HermitM CoreDef
 staticArgR = staticArgPredR (return . map fst)
 
 -- | Static Argument Transformation that only considers type arguments to be static.
-staticArgTypesR :: (ExtendPath c Crumb, AddBindings c) => Rewrite c HermitM CoreDef
+staticArgTypesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Rewrite c HermitM CoreDef
 staticArgTypesR = staticArgPredR (return . map fst . filter (isTyVar . snd))
 
 -- | Static Argument Transformations which requires that arguments in the given position are static.
-staticArgPosR :: (ExtendPath c Crumb, AddBindings c) => [Int] -> Rewrite c HermitM CoreDef
+staticArgPosR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => [Int] -> Rewrite c HermitM CoreDef
 staticArgPosR is' = staticArgPredR $ \ss' -> let is = nub is'
                                                  ss = map fst ss'
                                             in if is == (is `intersect` ss)
@@ -50,7 +50,7 @@ staticArgPosR is' = staticArgPredR $ \ss' -> let is = nub is'
                                                else fail $ "args " ++ commas (filter (`notElem` ss) is) ++ " are not static."
 
 -- | Generalized Static Argument Transformation, which allows static arguments to be filtered.
-staticArgPredR :: (ExtendPath c Crumb, AddBindings c)
+staticArgPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c)
                => ([(Int, Var)] -> HermitM [Int]) -- ^ given list of static args and positions, decided which to transform
                -> Rewrite c HermitM CoreDef
 staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do

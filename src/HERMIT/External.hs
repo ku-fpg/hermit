@@ -9,6 +9,8 @@ module HERMIT.External
        , externName
        , externDyn
        , externHelp
+       , externTypeString
+       , externTypeArgResString
        , Dictionary
        , toDictionary
        , toHelp
@@ -52,6 +54,7 @@ module HERMIT.External
 import Data.Map hiding (map)
 import Data.Dynamic
 import Data.List
+import Data.Typeable.Internal (TypeRep(..), funTc)
 
 import qualified Language.Haskell.TH as TH
 
@@ -250,18 +253,39 @@ toHelp :: [External] -> Map ExternalName ExternalHelp
 toHelp = fromListWith (++) . map toH
   where
          toH :: External -> (ExternalName,ExternalHelp)
-         toH e = (externName e, spaceout (externName e ++ " :: " ++ fixup (show (dynTypeRep (externDyn e))))
+         toH e = (externName e, spaceout (externName e ++ " :: " ++ externTypeString e)
                                          (show (externTags e)) : externHelp e)
 
          spaceout xs ys = xs ++ replicate (width - (length xs + length ys)) ' ' ++ ys
 
          width = 78
 
-         fixup :: String -> String
-         fixup xs | "Box" `isPrefixOf` xs = fixup (drop 3 xs)
-         fixup (x:xs)                     = x : fixup xs
-         fixup []                         = []
+-- | Get a string representation of the (monomorphic) type of an 'External'
+externTypeString :: External -> String
+externTypeString = deBoxify . show . dynTypeRep . externDyn
 
+-- | Remove the word 'Box' from a string.
+deBoxify :: String -> String
+deBoxify xs | "Box" `isPrefixOf` xs = deBoxify (drop 3 xs)
+deBoxify (x:xs)                     = x : deBoxify xs
+deBoxify []                         = []
+
+externTypeArgResString :: External -> ([String], String)
+externTypeArgResString e = (map (deBoxify . show) aTys, deBoxify (show rTy))
+    where (aTys, rTy) = splitExternFunType e
+
+splitExternFunType :: External -> ([TypeRep], TypeRep)
+splitExternFunType = splitFunTyArgs . dynTypeRep . externDyn
+
+splitFunTyArgs :: TypeRep -> ([TypeRep], TypeRep)
+splitFunTyArgs tr = case splitFunTyMaybe tr of
+                        Nothing -> ([], tr)
+                        Just (a, r) -> let (as, r') = splitFunTyArgs r
+                                         in (a:as, r')
+
+splitFunTyMaybe :: TypeRep -> Maybe (TypeRep, TypeRep)
+splitFunTyMaybe (TypeRep _ tc [a,r]) | tc == funTc = Just (a,r)
+splitFunTyMaybe _ = Nothing
 
 -----------------------------------------------------------------
 

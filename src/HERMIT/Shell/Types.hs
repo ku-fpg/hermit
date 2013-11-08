@@ -187,6 +187,7 @@ data CommandLineState = CommandLineState
     , cl_running_script :: Bool                                     -- ^ if running a script
     , cl_tick           :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
     , cl_corelint       :: Bool                                     -- ^ if true, run Core Lint on module after each rewrite
+    , cl_diffonly       :: Bool                                     -- ^ if true, show diffs rather than pp full code
     , cl_failhard       :: Bool                                     -- ^ if true, abort on *any* failure
     , cl_window         :: PathH                                    -- ^ path to beginning of window, always a prefix of focus path in kernel
     -- these four should be in a reader

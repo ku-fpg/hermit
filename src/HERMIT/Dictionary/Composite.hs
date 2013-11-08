@@ -53,11 +53,11 @@ basicCombinators = ["$",".","id","flip","const","fst","snd","curry","uncurry"]
 
 -- | Unfold the current expression if it is one of the basic combinators: ('$'), ('.'), 'id', 'flip', 'const', 'fst' or 'snd'.
 --   This is intended to be used as a component of simplification traversals such as 'simplifyR' or 'bashR'.
-unfoldBasicCombinatorR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+unfoldBasicCombinatorR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $
      unfoldNamesR (map TH.mkName basicCombinators)
 
-simplifyR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
+simplifyR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
     innermostR (   promoteBindR recToNonrecR
                 <+ promoteExprR ( unfoldBasicCombinatorR
@@ -69,10 +69,10 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
 
 ------------------------------------------------------------------------------------------------------
 
-bashR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
+bashR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
 bashR = bashUsingR (map fst bashComponents)
 
-bashExtendedWithR :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [Rewrite c HermitM Core] -> Rewrite c HermitM Core
+bashExtendedWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [Rewrite c HermitM Core] -> Rewrite c HermitM Core
 bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 
 bashDebugR :: RewriteH Core
@@ -90,7 +90,7 @@ bashDebugR = bashUsingR $ map (\ (r,nm) -> r >>> observeR nm) bashComponents
 --     bashCoreR :: Rewrite c m Core
 --     bashCoreR = repeatR (innermostR (catchesT rs) >>> occurAnalyseR)
 
-bashUsingR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => [Rewrite c m Core] -> Rewrite c m Core
+bashUsingR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => [Rewrite c m Core] -> Rewrite c m Core
 bashUsingR rs =
     setFailMsg "bash failed: nothing to do." $
     repeatR (occurAnalyseR >>> onetdR (catchesT rs)) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
@@ -115,7 +115,7 @@ bashHelp = "Iteratively apply the following rewrites until nothing changes:" : m
                                                                                        )
 
 -- TODO: Think about a good order for bash.
-bashComponents :: (ExtendPath c Crumb, AddBindings c, ReadBindings c) => [(Rewrite c HermitM Core, String)]
+bashComponents :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [(Rewrite c HermitM Core, String)]
 bashComponents =
   [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
     (promoteExprR betaReduceR, "beta-reduce")                        -- O(1)
