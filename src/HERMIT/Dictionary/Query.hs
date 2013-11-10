@@ -68,6 +68,8 @@ infoT =
                                                         in [(if isKind tyK then "Kind:        " else "Type:        ") ++ showPpr dynFlags tyK] ++
                                                            case e of
                                                              Var i -> [ ""
+                                                                      , "OccName:                  " ++ getOccString i
+                                                                      , "Unique:                   " ++ show (getUnique i)
                                                                       , "Identifier arity:         " ++ show (arityOf c i)
                                                                       , "Identifier binding depth: " ++ runKureM show id (lookupHermitBindingDepth i c) ]
                                                              _     -> []
