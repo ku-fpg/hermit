@@ -132,7 +132,9 @@ foldMatch :: [Var]          -- ^ vars that can unify with anything
 foldMatch vs as (Var i) e | i `elem` vs = return [(i,e)]
                           | otherwise   = case e of
                                             Var i' | maybe False (==i) (lookup i' as) -> return [(i,e)]
-                                                   | i == i' -> return []
+                                                             -- TODO: type comparison here is a total hack,
+                                                             --       see notes in hermit-syb
+                                                   | i == i' && eqType (idType i) (idType i') -> return []
                                             _                -> Nothing
 foldMatch _  _ (Lit l) (Lit l') | l == l' = return []
 foldMatch vs as (App e a) (App e' a') = do
