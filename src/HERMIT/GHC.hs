@@ -26,6 +26,7 @@ module HERMIT.GHC
     , occurAnalyseExpr
     , isKind
     , isLiftedTypeKindCon
+    , exprType -- TODO: remove once we can use GHC's exprType again
 #if __GLASGOW_HASKELL__ > 706
     , coAxiomName
     , CoAxiom.BranchIndex
@@ -45,20 +46,22 @@ module HERMIT.GHC
 #if __GLASGOW_HASKELL__ <= 706
 import qualified Control.Monad.IO.Class
 import qualified MonadUtils (MonadIO,liftIO)
-import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, liftIO)
+import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, liftIO)
 #else
-import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars) -- we hide these so that they don't get inadvertently used.  See Core.hs
+import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType) -- we hide these so that they don't get inadvertently used.  See Core.hs
 #endif
 
 -- hacky direct GHC imports
 import Convert (thRdrNameGuesses)
-import TysPrim (alphaTyVars)
-import TypeRep (Type(..),TyLit(..))
-import Panic (GhcException(ProgramError), throwGhcException)
 import CoreArity
 import Kind (isKind,isLiftedTypeKindCon)
 import OccurAnal (occurAnalyseExpr)
 import Pair (Pair(..))
+import Panic (GhcException(ProgramError), throwGhcException)
+import PprCore (pprCoreExpr)
+import qualified Type (substTy)
+import TypeRep (Type(..),TyLit(..))
+import TysPrim (alphaTy, alphaTyVars)
 
 #if __GLASGOW_HASKELL__ <= 706
 import Data.Maybe (isJust)
@@ -68,6 +71,34 @@ import qualified CoAxiom -- for coAxiomName
 import Data.List (intercalate)
 import Data.Monoid hiding ((<>))
 import qualified Language.Haskell.TH as TH
+
+--------------------------------------------------------------------------
+
+-- Note: we copy this definition here so we can add the first nonrec let
+--       case (below). Once this definition is merged into GHC (Trac 8522),
+--       remove this definition and unhide the original in the imports above.
+exprType :: CoreExpr -> Type
+-- ^ Recover the type of a well-typed Core expression. Fails when
+-- applied to the actual 'CoreSyn.Type' expression as it cannot
+-- really be said to have a type
+exprType (Var var)           = idType var
+exprType (Lit lit)           = literalType lit
+exprType (Coercion co)       = coercionType co
+exprType (Let (NonRec b (Type ty)) body) | isTyVar b
+    = let bodyTy  = exprType body
+          inScope = delVarSet (tyVarsOfType bodyTy) b `unionVarSet` tyVarsOfType ty
+          subst   = mkTvSubst (mkInScopeSet inScope) (unitVarEnv b ty)
+      in Type.substTy subst bodyTy
+exprType (Let _ body)        = exprType body
+exprType (Case _ _ ty _)     = ty
+exprType (Cast _ co)         = pSnd (coercionKind co)
+exprType (Tick _ e)          = exprType e
+exprType (Lam binder expr)   = mkPiType binder (exprType expr)
+exprType e@(App _ _)
+  = case collectArgs e of
+        (fun, args) -> applyTypeToArgs e (exprType fun) args
+
+exprType other = pprTrace "exprType" (pprCoreExpr other) alphaTy
 
 --------------------------------------------------------------------------
 
