@@ -35,6 +35,7 @@ import HERMIT.GHC
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.GHC (substCoreExpr)
 import HERMIT.Dictionary.Local.Bind hiding (externals)
 import qualified HERMIT.Dictionary.Local.Bind as Bind
 import HERMIT.Dictionary.Local.Case hiding (externals)
@@ -200,11 +201,12 @@ flattenProgramT = do bds <- arr (concatMap bindToVarExprs . progToBinds)
 
 -- | Abstract over a variable using a lambda.
 --   e  ==>  (\ x. e) x
-abstractR :: (ReadBindings c, MonadCatch m) => TH.Name -> Rewrite c m CoreExpr
+abstractR :: (ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
 abstractR nm = prefixFailMsg "abstraction failed: " $
-   do e <- idR
-      v <- findBoundVarT nm
-      return (App (Lam v e) (varToCoreExpr v))
+   do v  <- findBoundVarT nm
+      v' <- constT (cloneVarH id v) -- currently uses the same visible name (via "id").  We could do something else here, e.g. add a prime suffix.
+      e  <- arr (substCoreExpr v (varToCoreExpr v'))
+      return $ App (Lam v' e) (varToCoreExpr v)
 
 ------------------------------------------------------------------------------------------------------
 

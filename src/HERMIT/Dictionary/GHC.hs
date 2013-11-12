@@ -6,7 +6,7 @@ module HERMIT.Dictionary.GHC
        , anyCallR
          -- ** Substitution
        , substR
-       , substExprR
+       , substCoreExpr
          -- ** Utilities
        , inScope
        , rule
@@ -91,17 +91,17 @@ externals =
 -- | Substitute all occurrences of a variable with an expression, in either a program or an expression.
 substR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Var -> CoreExpr -> Rewrite c m Core
 substR v e = setFailMsg "Can only perform substitution on expressions, case alternatives or programs." $
-             promoteExprR (substExprR v e) <+ promoteProgR (substTopBindR v e) <+ promoteAltR (substAltR v e)
+             promoteExprR (arr $ substCoreExpr v e) <+ promoteProgR (substTopBindR v e) <+ promoteAltR (substAltR v e)
 
 -- | Substitute all occurrences of a variable with an expression, in an expression.
-substExprR :: Monad m => Var -> CoreExpr -> Rewrite c m CoreExpr
-substExprR v e =  contextfreeT $ \ expr -> do
+substCoreExpr :: Var -> CoreExpr -> (CoreExpr -> CoreExpr)
+substCoreExpr v e expr =
     -- The InScopeSet needs to include any free variables appearing in the
     -- expression to be substituted.  Constructing a NonRec Let expression
     -- to pass on to exprFeeVars takes care of this, but ...
     -- TODO Is there a better way to do this ???
     let emptySub = mkEmptySubst (mkInScopeSet (localFreeVarsExpr (Let (NonRec v e) expr)))
-    return $ substExpr (text "substR") (extendSubst emptySub v e) expr
+     in substExpr (text "substCoreExpr") (extendSubst emptySub v e) expr
 
 -- | Substitute all occurrences of a variable with an expression, in a program.
 substTopBindR :: Monad m => Var -> CoreExpr -> Rewrite c m CoreProg
@@ -115,7 +115,7 @@ substAltR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => V
 substAltR v e = do (_, vs, _) <- idR
                    if v `elem` vs
                     then fail "variable is shadowed by a case-alternative constructor argument."
-                    else altAllR idR (\ _ -> idR) (substExprR v e)
+                    else altAllR idR (\ _ -> idR) (arr $ substCoreExpr v e)
 -- TODO: type vars may appear in the alt vars.
 
 -- Neil: Commented this out as it's not (currently) used.

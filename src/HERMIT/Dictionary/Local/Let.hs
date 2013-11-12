@@ -148,7 +148,7 @@ letNonRecSubstR :: MonadCatch m => Rewrite c m CoreExpr
 letNonRecSubstR = prefixFailMsg "Let substitution failed: " $
                   withPatFailMsg (wrongExprForm "Let (NonRec v rhs) body") $
     do Let (NonRec v rhs) body <- idR
-       return body >>> substExprR v rhs
+       return (substCoreExpr v rhs body)
 
 -- | Currently we always substitute types and coercions, and use a heuristic to decide whether to substitute expressions.
 --   This may need revisiting.
