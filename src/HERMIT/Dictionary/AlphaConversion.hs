@@ -194,14 +194,16 @@ alphaCaseBinderR mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
 
 -- | Rename the specified variable in a case alternative.  Optionally takes a suggested new name.
 alphaAltVarR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe TH.Name -> Var -> Rewrite c HermitM CoreAlt
-alphaAltVarR mn v =
-  do nameModifier <- altT idR (\ _ -> idR) (freshNameGenT mn) (\ _ _ nameGen -> nameGen)
-     v' <- constT (cloneVarH nameModifier v)
-     altAnyR (fail "") (\ _ -> arr (replaceVar v v')) (replaceVarR v v')
+alphaAltVarR mn v = do
+    nameModifier <- liftM (freshNameGenAvoiding mn) $ liftM2 unionVarSet boundVarsT (arr freeVarsAlt)
+    v' <- constT (cloneVarH nameModifier v)
+    -- Must replace the binder first, then substitution will work.
+    altAllR idR (\_ -> arr (replaceVar v v')) idR >>> substAltR v (varToCoreExpr v')
 
 -- | Rename the specified variables in a case alternative, using the suggested names where provided.
+-- Suggested names *must* be provided in left-to-right order matching the order of the alt binders.
 alphaAltVarsWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => [(Maybe TH.Name,Var)] -> Rewrite c HermitM CoreAlt
-alphaAltVarsWithR = andR . map (uncurry alphaAltVarR)
+alphaAltVarsWithR = andR . map (uncurry alphaAltVarR) . reverse -- note: right-to-left so type subst aren't undone
 
 -- | Rename the variables bound in a case alternative with the given list of suggested names.
 alphaAltWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => [TH.Name] -> Rewrite c HermitM CoreAlt

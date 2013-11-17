@@ -6,6 +6,7 @@ module HERMIT.Dictionary.GHC
        , anyCallR
          -- ** Substitution
        , substR
+       , substAltR
        , substCoreExpr
          -- ** Utilities
        , inScope
@@ -112,17 +113,11 @@ substTopBindR v e =  contextfreeT $ \ p -> do
 
 -- | Substitute all occurrences of a variable with an expression, in a case alternative.
 substAltR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Var -> CoreExpr -> Rewrite c m CoreAlt
-substAltR v e = do (_, vs, _) <- idR
-                   if v `elem` vs
-                    then fail "variable is shadowed by a case-alternative constructor argument."
-                    else altAllR idR (\ _ -> idR) (arr $ substCoreExpr v e)
--- TODO: type vars may appear in the alt vars.
-
--- Neil: Commented this out as it's not (currently) used.
---  Perform let-substitution the specified number of times.
--- letSubstNR :: Int -> Rewrite c m Core
--- letSubstNR 0 = idR
--- letSubstNR n = childR 1 (letSubstNR (n - 1)) >>> promoteExprR letSubstR
+substAltR v e = do
+    (inS, (c, vs, rhs)) <- arr localFreeVarsAlt &&& idR
+    let subst = extendSubst (mkEmptySubst (mkInScopeSet inS)) v e
+        (subst', vs') = substBndrs subst vs
+    return (c, vs', substExpr (text "alt-rhs") subst' rhs)
 
 ------------------------------------------------------------------------
 

@@ -46,6 +46,7 @@ module HERMIT.Core
           , freeVarsDef
           , freeVarsExpr
           , freeVarsAlt
+          , localFreeVarsAlt
           , freeVarsType
           , freeVarsCoercion
           , localFreeVarsExpr
@@ -306,8 +307,7 @@ freeVarsBind (Rec defs)   = let (bs,es) = unzip defs
                              in delVarSetList (unionVarSets $ map freeVarsExpr es) bs
                                 `unionVarSet`  unionVarSets (map safeBndrFrees bs)
 
--- | Find all free variables on a binder.
--- Equivalent to idFreeVars, but safe to call on type bindings
+-- | Find all free variables on a binder. Equivalent to idFreeVars, but safe to call on type bindings.
 safeBndrFrees :: Var -> VarSet
 safeBndrFrees v = varTypeTyVars v `unionVarSet` bndrRuleAndUnfoldingVars v
 
@@ -318,6 +318,10 @@ freeVarsDef (Def v e) = delVarSet (freeVarsExpr e) v `unionVarSet` safeBndrFrees
 -- | Find all free variables in a case alternative, which excludes any variables bound in the alternative.
 freeVarsAlt :: CoreAlt -> VarSet
 freeVarsAlt (_,bs,e) = delVarSetList (freeVarsExpr e `unionVarSet` unionVarSets (map safeBndrFrees bs)) bs
+
+-- | Find all free local variables in a case alternative, which excludes any variables bound in the alternative.
+localFreeVarsAlt :: CoreAlt -> VarSet
+localFreeVarsAlt (_,bs,e) = delVarSetList (localFreeVarsExpr e `unionVarSet` unionVarSets (map safeBndrFrees bs)) bs
 
 -- | Find all free variables in a program.
 freeVarsProg :: CoreProg -> VarSet

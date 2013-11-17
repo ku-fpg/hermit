@@ -110,6 +110,7 @@ type LensH a b      = Lens      HermitC HermitM a b
 type PathH          = Path Crumb
 
 -- I find it annoying that Applicative is not a superclass of Monad.
+-- This causes a warning now, and will need to be CPP'd for 7.10
 (<$>) :: Monad m => (a -> b) -> m a -> m b
 (<$>) = liftM
 {-# INLINE (<$>) #-}
