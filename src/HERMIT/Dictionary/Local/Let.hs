@@ -16,7 +16,7 @@ module HERMIT.Dictionary.Local.Let
        , progBindRecElimR
          -- ** Let Introduction
        , letIntroR
-         -- ** Let Floating
+         -- ** Let Floating Out
        , letFloatAppR
        , letFloatArgR
        , letFloatLetR
@@ -25,11 +25,11 @@ module HERMIT.Dictionary.Local.Let
        , letFloatCastR
        , letFloatExprR
        , letFloatTopR
-         -- ** Let Unfloating
-       , letUnfloatR
-       , letUnfloatAppR
-       , letUnfloatCaseR
-       , letUnfloatLamR
+         -- ** Let Floating In
+       , letFloatInR
+       , letFloatInAppR
+       , letFloatInCaseR
+       , letFloatInLamR
          -- ** Miscallaneous
        , reorderNonRecLetsR
        , letTupleR
@@ -105,14 +105,14 @@ externals =
         [ "let v = ev in e ==> case ev of v -> e" ]                             .+ Commute .+ Shallow .+ PreCondition
 --    , external "let-to-case-unbox" (promoteR $ not_defined "let-to-case-unbox" :: RewriteH Core)
 --        [ "let v = ev in e ==> case ev of C v1..vn -> let v = C v1..vn in e" ]
-    , external "let-unfloat" (promoteExprR letUnfloatR :: RewriteH Core)
-        [ "Unfloat a let if possible." ]                                        .+ Commute .+ Shallow
-    , external "let-unfloat-app" ((promoteExprR letUnfloatAppR >+> anybuR (promoteExprR letElimR)) :: RewriteH Core)
+    , external "let-float-in" (promoteExprR letFloatInR :: RewriteH Core)
+        [ "Float-in a let if possible." ]                                        .+ Commute .+ Shallow
+    , external "let-float-in-app" ((promoteExprR letFloatInAppR >+> anybuR (promoteExprR letElimR)) :: RewriteH Core)
         [ "let v = ev in f a ==> (let v = ev in f) (let v = ev in a)" ]         .+ Commute .+ Shallow
-    , external "let-unfloat-case" ((promoteExprR letUnfloatCaseR >+> anybuR (promoteExprR letElimR)) :: RewriteH Core)
+    , external "let-float-in-case" ((promoteExprR letFloatInCaseR >+> anybuR (promoteExprR letElimR)) :: RewriteH Core)
         [ "let v = ev in case s of p -> e ==> case (let v = ev in s) of p -> let v = ev in e"
         , "if v does not shadow a pattern binder in p" ]                        .+ Commute .+ Shallow
-    , external "let-unfloat-lam" ((promoteExprR letUnfloatLamR >+> anybuR (promoteExprR letElimR)) :: RewriteH Core)
+    , external "let-float-in-lam" ((promoteExprR letFloatInLamR >+> anybuR (promoteExprR letElimR)) :: RewriteH Core)
         [ "let v = ev in \\ x -> e ==> \\ x -> let v = ev in e"
         , "if v does not shadow x" ]                                            .+ Commute .+ Shallow
     , external "reorder-lets" (promoteExprR . reorderNonRecLetsR :: [TH.Name] -> RewriteH Core)
@@ -364,14 +364,14 @@ letFloatTopR = prefixFailMsg "Let floating to top level failed: " $
 
 -------------------------------------------------------------------------------------------
 
--- | Unfloat a 'Let' if possible.
-letUnfloatR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-letUnfloatR = letUnfloatCaseR <+ letUnfloatAppR <+ letUnfloatLamR
+-- | Float in a 'Let' if possible.
+letFloatInR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb) => Rewrite c HermitM CoreExpr
+letFloatInR = letFloatInCaseR <+ letFloatInAppR <+ letFloatInLamR
 
 -- | @let v = ev in case s of p -> e@ ==> @case (let v = ev in s) of p -> let v = ev in e@,
 --   if @v@ does not shadow a pattern binder in @p@
-letUnfloatCaseR :: MonadCatch m => Rewrite c m CoreExpr
-letUnfloatCaseR = prefixFailMsg "Let unfloating from case failed: " $
+letFloatInCaseR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb) => Rewrite c HermitM CoreExpr
+letFloatInCaseR = prefixFailMsg "Let floating in to case failed: " $
                   withPatFailMsg (wrongExprForm "Let bnds (Case s w ty alts)") $
   do Let bnds (Case s w ty alts) <- idR
      let bs = bindVars bnds
@@ -379,19 +379,20 @@ letUnfloatCaseR = prefixFailMsg "Let unfloating from case failed: " $
      guardMsg (null captured) "let bindings would capture case pattern bindings."
      let unbound = mkVarSet bs `intersectVarSet` (tyVarsOfType ty `unionVarSet` freeVarsVar w)
      guardMsg (isEmptyVarSet unbound) "type variables in case signature would become unbound."
-     return $ Case (Let bnds s) w ty $ mapAlts (Let bnds) alts
+     return (Case (Let bnds s) w ty alts) >>> caseAllR idR idR idR (\_ -> altAllR idR (\_ -> idR) (arr (Let bnds) >>> alphaLetR))
 
 -- | @let v = ev in f a@ ==> @(let v = ev in f) (let v = ev in a)@
-letUnfloatAppR :: MonadCatch m => Rewrite c m CoreExpr
-letUnfloatAppR = prefixFailMsg "Let unfloating from app failed: " $
+letFloatInAppR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb) => Rewrite c HermitM CoreExpr
+letFloatInAppR = prefixFailMsg "Let floating in to app failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (App e1 e2)") $
   do Let bnds (App e1 e2) <- idR
-     return $ App (Let bnds e1) (Let bnds e2)
+     lhs <- return (Let bnds e1) >>> alphaLetR
+     return $ App lhs (Let bnds e2)
 
 -- | @let v = ev in \ x -> e@ ==> @\x -> let v = ev in e@
 --   if @v@ does not shadow @x@
-letUnfloatLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-letUnfloatLamR = prefixFailMsg "Let unfloating from lambda failed: " $
+letFloatInLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letFloatInLamR = prefixFailMsg "Let floating in to lambda failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (Lam v e)") $
   do Let bnds (Lam v e) <- idR
      safe <- letT (arr bindVars) lamVarT $ flip notElem
