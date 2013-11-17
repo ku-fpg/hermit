@@ -90,7 +90,7 @@ externals =
 ------------------------------------------------------------------------
 
 -- | Substitute all occurrences of a variable with an expression, in either a program or an expression.
-substR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Var -> CoreExpr -> Rewrite c m Core
+substR :: MonadCatch m => Var -> CoreExpr -> Rewrite c m Core
 substR v e = setFailMsg "Can only perform substitution on expressions, case alternatives or programs." $
              promoteExprR (arr $ substCoreExpr v e) <+ promoteProgR (substTopBindR v e) <+ promoteAltR (substAltR v e)
 
@@ -112,7 +112,7 @@ substTopBindR v e =  contextfreeT $ \ p -> do
     return $ bindsToProg $ snd (mapAccumL substBind (extendSubst emptySub v e) (progToBinds p))
 
 -- | Substitute all occurrences of a variable with an expression, in a case alternative.
-substAltR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Var -> CoreExpr -> Rewrite c m CoreAlt
+substAltR :: Monad m => Var -> CoreExpr -> Rewrite c m CoreAlt
 substAltR v e = do
     (inS, (c, vs, rhs)) <- arr localFreeVarsAlt &&& idR
     let subst = extendSubst (mkEmptySubst (mkInScopeSet inS)) v e

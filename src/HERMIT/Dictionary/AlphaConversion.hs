@@ -156,7 +156,7 @@ unshadowR = setFailMsg "No shadows to eliminate." $
 
 -- | Replace all occurrences of a specified variable.
 --   Arguments are the variable to replace and the replacement variable, respectively.
-replaceVarR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Injection a Core, MonadCatch m) => Var -> Var -> Rewrite c m a
+replaceVarR :: (Injection a Core, MonadCatch m) => Var -> Var -> Rewrite c m a
 replaceVarR v v' = extractR $ tryR $ substR v $ varToCoreExpr v'
 
 -- | Given a variable to replace, and a replacement, produce a 'Var' @->@ 'Var' function that
