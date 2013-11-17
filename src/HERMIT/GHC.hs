@@ -44,11 +44,21 @@ module HERMIT.GHC
     ) where
 
 #if __GLASGOW_HASKELL__ <= 706
+-- GHC 7.6
 import qualified Control.Monad.IO.Class
 import qualified MonadUtils (MonadIO,liftIO)
 import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, liftIO)
 #else
+#if __GLASGOW_HASKELL__ < 708
+-- TODO: remove this case once 7.8 comes out, only here because
+-- my HEAD installs are pre-8522 patch, and I don't want to rebuild
+-- on four different machines just yet.
+-- GHC 7.7.XXX
 import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType) -- we hide these so that they don't get inadvertently used.  See Core.hs
+#else
+-- GHC 7.8
+import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars) -- we hide these so that they don't get inadvertently used.  See Core.hs
+#endif
 #endif
 
 -- hacky direct GHC imports
@@ -59,7 +69,6 @@ import OccurAnal (occurAnalyseExpr)
 import Pair (Pair(..))
 import Panic (GhcException(ProgramError), throwGhcException)
 import PprCore (pprCoreExpr)
-import qualified Type (substTy)
 import TypeRep (Type(..),TyLit(..))
 import TysPrim (alphaTy, alphaTyVars)
 
@@ -74,9 +83,8 @@ import qualified Language.Haskell.TH as TH
 
 --------------------------------------------------------------------------
 
--- Note: we copy this definition here so we can add the first nonrec let
---       case (below). Once this definition is merged into GHC (Trac 8522),
---       remove this definition and unhide the original in the imports above.
+#if __GLASGOW_HASKELL < 708
+-- Note: once 7.8 comes out, change condition above to "<= 706"
 exprType :: CoreExpr -> Type
 -- ^ Recover the type of a well-typed Core expression. Fails when
 -- applied to the actual 'CoreSyn.Type' expression as it cannot
@@ -84,12 +92,10 @@ exprType :: CoreExpr -> Type
 exprType (Var var)           = idType var
 exprType (Lit lit)           = literalType lit
 exprType (Coercion co)       = coercionType co
-exprType (Let (NonRec b (Type ty)) body) | isTyVar b
-    = let bodyTy  = exprType body
-          inScope = delVarSet (tyVarsOfType bodyTy) b `unionVarSet` tyVarsOfType ty
-          subst   = mkTvSubst (mkInScopeSet inScope) (unitVarEnv b ty)
-      in Type.substTy subst bodyTy
-exprType (Let _ body)        = exprType body
+exprType (Let bind body)
+  | NonRec tv rhs <- bind
+  , Type ty <- rhs           = substTyWith [tv] [ty] (exprType body)
+  | otherwise                = exprType body
 exprType (Case _ _ ty _)     = ty
 exprType (Cast _ co)         = pSnd (coercionKind co)
 exprType (Tick _ e)          = exprType e
@@ -99,6 +105,7 @@ exprType e@(App _ _)
         (fun, args) -> applyTypeToArgs e (exprType fun) args
 
 exprType other = pprTrace "exprType" (pprCoreExpr other) alphaTy
+#endif
 
 --------------------------------------------------------------------------
 
