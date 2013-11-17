@@ -377,7 +377,7 @@ letUnfloatCaseR = prefixFailMsg "Let unfloating from case failed: " $
      let bs = bindVars bnds
          captured = bs `intersect` (w : concatMap altVars alts)
      guardMsg (null captured) "let bindings would capture case pattern bindings."
-     let unbound = mkVarSet bs `intersectVarSet` tyVarsOfType ty
+     let unbound = mkVarSet bs `intersectVarSet` (tyVarsOfType ty `unionVarSet` freeVarsVar w)
      guardMsg (isEmptyVarSet unbound) "type variables in case signature would become unbound."
      return $ Case (Let bnds s) w ty $ mapAlts (Let bnds) alts
 

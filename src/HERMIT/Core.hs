@@ -46,6 +46,7 @@ module HERMIT.Core
           , freeVarsDef
           , freeVarsExpr
           , freeVarsAlt
+          , freeVarsVar
           , localFreeVarsAlt
           , freeVarsType
           , freeVarsCoercion
@@ -302,26 +303,26 @@ localFreeIdsExpr = exprSomeFreeVars isLocalId
 
 -- | Find all free identifiers in a binding group, which excludes any variables bound in the group.
 freeVarsBind :: CoreBind -> VarSet
-freeVarsBind (NonRec v e) = freeVarsExpr e `unionVarSet` safeBndrFrees v
+freeVarsBind (NonRec v e) = freeVarsExpr e `unionVarSet` freeVarsVar v
 freeVarsBind (Rec defs)   = let (bs,es) = unzip defs
                              in delVarSetList (unionVarSets $ map freeVarsExpr es) bs
-                                `unionVarSet`  unionVarSets (map safeBndrFrees bs)
+                                `unionVarSet`  unionVarSets (map freeVarsVar bs)
 
 -- | Find all free variables on a binder. Equivalent to idFreeVars, but safe to call on type bindings.
-safeBndrFrees :: Var -> VarSet
-safeBndrFrees v = varTypeTyVars v `unionVarSet` bndrRuleAndUnfoldingVars v
+freeVarsVar :: Var -> VarSet
+freeVarsVar v = varTypeTyVars v `unionVarSet` bndrRuleAndUnfoldingVars v
 
 -- | Find all free variables in a recursive definition, which excludes the bound variable.
 freeVarsDef :: CoreDef -> VarSet
-freeVarsDef (Def v e) = delVarSet (freeVarsExpr e) v `unionVarSet` safeBndrFrees v
+freeVarsDef (Def v e) = delVarSet (freeVarsExpr e) v `unionVarSet` freeVarsVar v
 
 -- | Find all free variables in a case alternative, which excludes any variables bound in the alternative.
 freeVarsAlt :: CoreAlt -> VarSet
-freeVarsAlt (_,bs,e) = delVarSetList (freeVarsExpr e `unionVarSet` unionVarSets (map safeBndrFrees bs)) bs
+freeVarsAlt (_,bs,e) = delVarSetList (freeVarsExpr e `unionVarSet` unionVarSets (map freeVarsVar bs)) bs
 
 -- | Find all free local variables in a case alternative, which excludes any variables bound in the alternative.
 localFreeVarsAlt :: CoreAlt -> VarSet
-localFreeVarsAlt (_,bs,e) = delVarSetList (localFreeVarsExpr e `unionVarSet` unionVarSets (map safeBndrFrees bs)) bs
+localFreeVarsAlt (_,bs,e) = delVarSetList (localFreeVarsExpr e `unionVarSet` unionVarSets (map freeVarsVar bs)) bs
 
 -- | Find all free variables in a program.
 freeVarsProg :: CoreProg -> VarSet
