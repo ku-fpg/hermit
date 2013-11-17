@@ -114,7 +114,7 @@ substTopBindR v e =  contextfreeT $ \ p -> do
 -- | Substitute all occurrences of a variable with an expression, in a case alternative.
 substAltR :: Monad m => Var -> CoreExpr -> Rewrite c m CoreAlt
 substAltR v e = do
-    (inS, (c, vs, rhs)) <- arr localFreeVarsAlt &&& idR
+    (inS, (c, vs, rhs)) <- arr (flip delVarSet v . unionVarSet (localFreeVarsExpr e) . localFreeVarsAlt) &&& idR
     let subst = extendSubst (mkEmptySubst (mkInScopeSet inS)) v e
         (subst', vs') = substBndrs subst vs
     return (c, vs', substExpr (text "alt-rhs") subst' rhs)
