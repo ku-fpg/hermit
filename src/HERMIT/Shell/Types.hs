@@ -2,6 +2,7 @@
 
 module HERMIT.Shell.Types where
 
+import Control.Applicative
 import Control.Concurrent.STM
 import Control.Monad.State
 import Control.Monad.Error
@@ -120,7 +121,7 @@ instance Error CLException where
     strMsg = CLError
 
 newtype CLM m a = CLM { unCLM :: ErrorT CLException (StateT CommandLineState m) a }
-    deriving (MonadIO, MonadError CLException, MonadState CommandLineState)
+    deriving (Functor, Applicative, MonadIO, MonadError CLException, MonadState CommandLineState)
 
 -- | Our own custom instance of Monad for CLM m so we don't have to depend on
 -- newtype deriving to do the right thing for fail.

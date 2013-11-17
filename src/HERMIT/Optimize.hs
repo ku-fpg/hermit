@@ -27,6 +27,7 @@ module HERMIT.Optimize
     , omToIO
     ) where
 
+import Control.Applicative
 import Control.Arrow
 import Control.Concurrent.STM
 import Control.Monad.Error hiding (guard)
@@ -64,7 +65,7 @@ data OInst :: * -> * where
     Query    :: (Injection ModGuts g, Walker HermitC g) => TranslateH g a                  -> OInst a
 
 newtype OM a = OM (ProgramT OInst (ReaderT PhaseInfo (CLM IO)) a)
-    deriving (Monad, MonadIO)
+    deriving (Functor, Applicative, Monad, MonadIO)
 
 optimize :: ([CommandLineOption] -> OM ()) -> Plugin
 optimize f = hermitPlugin $ \ phaseInfo -> runOM phaseInfo . f
