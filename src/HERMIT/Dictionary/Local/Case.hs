@@ -9,9 +9,9 @@ module HERMIT.Dictionary.Local.Case
     , caseFloatCastR
     , caseFloatLetR
     , caseFloatR
-    , caseUnfloatR
-    , caseUnfloatAppR
-    , caseUnfloatArgsR
+    , caseFloatInR
+    , caseFloatInAppR
+    , caseFloatInArgsR
     , caseReduceR
     , caseReduceDataconR
     , caseReduceLiteralR
@@ -76,12 +76,12 @@ externals =
         [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow
     , external "case-float" (promoteExprR caseFloatR :: RewriteH Core)
         [ "case-float = case-float-app <+ case-float-case <+ case-float-let <+ case-float-cast" ]    .+ Commute .+ Shallow
-    , external "case-unfloat" (promoteExprR caseUnfloatR :: RewriteH Core)
-        [ "Unfloat a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
-    , external "case-unfloat-args" (promoteExprR caseUnfloatArgsR :: RewriteH Core)
-        [ "Unfloat a Case whose alternatives are parallel applications of the same function." ] .+ Commute .+ Shallow .+ PreCondition
-    -- , external "case-unfloat-app" (promoteExprR caseUnfloatApp :: RewriteH Core)
-    --     [ "Unfloat a Case whole alternatives are applications of different functions with the same arguments." ] .+ Commute .+ Shallow .+ PreCondition
+    , external "case-float-in" (promoteExprR caseFloatInR :: RewriteH Core)
+        [ "Float in a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
+    , external "case-float-in-args" (promoteExprR caseFloatInArgsR :: RewriteH Core)
+        [ "Float in a Case whose alternatives are parallel applications of the same function." ] .+ Commute .+ Shallow .+ PreCondition
+    -- , external "case-float-in-app" (promoteExprR caseFloatInApp :: RewriteH Core)
+    --     [ "Float in a Case whose alternatives are applications of different functions with the same arguments." ] .+ Commute .+ Shallow .+ PreCondition
     , external "case-reduce" (promoteExprR caseReduceR :: RewriteH Core)
         [ "Case of Known Constructor"
         , "case-reduce-datacon <+ case-reduce-literal" ]                     .+ Shallow .+ Eval
@@ -229,17 +229,17 @@ caseFloatR = setFailMsg "Unsuitable expression for Case floating." $
 
 ------------------------------------------------------------------------------
 
--- | Unfloat a Case whatever the context.
-caseUnfloatR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-caseUnfloatR = setFailMsg "Case unfloating failed." $
-    caseUnfloatAppR <+ caseUnfloatArgsR
+-- | Float in a Case whatever the context.
+caseFloatInR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+caseFloatInR = setFailMsg "Case floating in failed." $
+    caseFloatInAppR <+ caseFloatInArgsR
 
 -- | Unimplemented!
-caseUnfloatAppR :: Monad m => Rewrite c m CoreExpr
-caseUnfloatAppR = fail "caseUnfloatApp: TODO"
+caseFloatInAppR :: Monad m => Rewrite c m CoreExpr
+caseFloatInAppR = fail "caseFloatInApp: TODO"
 
-caseUnfloatArgsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
-caseUnfloatArgsR = prefixFailMsg "Case unfloating into arguments failed: " $
+caseFloatInArgsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+caseFloatInArgsR = prefixFailMsg "Case floating into arguments failed: " $
                    withPatFailMsg (wrongExprForm "Case s v t alts") $
     do Case s wild _ty alts <- idR
        (vss, fs, argss) <- caseT mempty mempty mempty (\ _ -> altT mempty (\ _ -> idR) callT $ \ () vs (fn, args) -> (vs, fn, args))
