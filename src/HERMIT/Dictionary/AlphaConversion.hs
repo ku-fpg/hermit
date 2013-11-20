@@ -197,8 +197,16 @@ alphaAltVarR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars 
 alphaAltVarR mn v = do
     nameModifier <- liftM (freshNameGenAvoiding mn) $ liftM2 unionVarSet boundVarsT (arr freeVarsAlt)
     v' <- constT (cloneVarH nameModifier v)
-    -- Must replace the binder first, then substitution will work.
-    altAllR idR (\_ -> arr (replaceVar v v')) idR >>> substAltR v (varToCoreExpr v')
+    (c, vs, rhs) <- idR
+    -- This is a bit of a hack. We include all the binders *after* v in the call to substAltR,
+    -- then put the binders before v, and v', back on the front. The use of substAltR this way,
+    -- handles the case where v is a type binder which substitutes into the types of bs'.
+    -- It's a hack because we depend on substAltR not noticing that the constructor is not applied
+    -- to enough binders.
+    case break (==v) vs of
+        (bs,_:bs') -> do (c',bs'',rhs') <- return (c,bs',rhs) >>> substAltR v (varToCoreExpr v')
+                         return (c',bs ++ (v':bs''),rhs')
+        _ -> fail "pattern binder not present."
 
 -- | Rename the specified variables in a case alternative, using the suggested names where provided.
 -- Suggested names *must* be provided in left-to-right order matching the order of the alt binders.
