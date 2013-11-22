@@ -6,7 +6,7 @@ module HERMIT.Dictionary.GHC
        , anyCallR
          -- ** Substitution
        , substR
-       , substAltR
+       , substCoreAlt
        , substCoreExpr
          -- ** Utilities
        , inScope
@@ -92,7 +92,7 @@ externals =
 -- | Substitute all occurrences of a variable with an expression, in either a program or an expression.
 substR :: MonadCatch m => Var -> CoreExpr -> Rewrite c m Core
 substR v e = setFailMsg "Can only perform substitution on expressions, case alternatives or programs." $
-             promoteExprR (arr $ substCoreExpr v e) <+ promoteProgR (substTopBindR v e) <+ promoteAltR (substAltR v e)
+             promoteExprR (arr $ substCoreExpr v e) <+ promoteProgR (substTopBindR v e) <+ promoteAltR (arr $ substCoreAlt v e)
 
 -- | Substitute all occurrences of a variable with an expression, in an expression.
 substCoreExpr :: Var -> CoreExpr -> (CoreExpr -> CoreExpr)
@@ -112,12 +112,12 @@ substTopBindR v e =  contextfreeT $ \ p -> do
     return $ bindsToProg $ snd (mapAccumL substBind (extendSubst emptySub v e) (progToBinds p))
 
 -- | Substitute all occurrences of a variable with an expression, in a case alternative.
-substAltR :: Monad m => Var -> CoreExpr -> Rewrite c m CoreAlt
-substAltR v e = do
-    (inS, (c, vs, rhs)) <- arr (flip delVarSet v . unionVarSet (localFreeVarsExpr e) . localFreeVarsAlt) &&& idR
-    let subst = extendSubst (mkEmptySubst (mkInScopeSet inS)) v e
-        (subst', vs') = substBndrs subst vs
-    return (c, vs', substExpr (text "alt-rhs") subst' rhs)
+substCoreAlt :: Var -> CoreExpr -> CoreAlt -> CoreAlt
+substCoreAlt v e alt = let (con, vs, rhs) = alt
+                           inS            = (flip delVarSet v . unionVarSet (localFreeVarsExpr e) . localFreeVarsAlt) alt
+                           subst          = extendSubst (mkEmptySubst (mkInScopeSet inS)) v e
+                           (subst', vs')  = substBndrs subst vs
+                        in (con, vs', substExpr (text "alt-rhs") subst' rhs)
 
 ------------------------------------------------------------------------
 

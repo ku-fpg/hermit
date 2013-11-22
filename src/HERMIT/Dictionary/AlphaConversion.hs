@@ -195,17 +195,17 @@ alphaCaseBinderR mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
 -- | Rename the specified variable in a case alternative.  Optionally takes a suggested new name.
 alphaAltVarR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe TH.Name -> Var -> Rewrite c HermitM CoreAlt
 alphaAltVarR mn v = do
-    nameModifier <- liftM (freshNameGenAvoiding mn) $ liftM2 unionVarSet boundVarsT (arr freeVarsAlt)
+    nameModifier <- freshNameGenAvoiding mn <$> liftM2 unionVarSet boundVarsT (arr freeVarsAlt)
     v' <- constT (cloneVarH nameModifier v)
-    (c, vs, rhs) <- idR
+    (con, vs, rhs) <- idR
     -- This is a bit of a hack. We include all the binders *after* v in the call to substAltR,
     -- then put the binders before v, and v', back on the front. The use of substAltR this way,
     -- handles the case where v is a type binder which substitutes into the types of bs'.
     -- It's a hack because we depend on substAltR not noticing that the constructor is not applied
     -- to enough binders.
     case break (==v) vs of
-        (bs,_:bs') -> do (c',bs'',rhs') <- return (c,bs',rhs) >>> substAltR v (varToCoreExpr v')
-                         return (c',bs ++ (v':bs''),rhs')
+        (bs,_:bs') -> let (con',bs'',rhs') = substCoreAlt v (varToCoreExpr v') (con,bs',rhs)
+                       in return (con',bs ++ (v':bs''),rhs')
         _ -> fail "pattern binder not present."
 
 -- | Rename the specified variables in a case alternative, using the suggested names where provided.
