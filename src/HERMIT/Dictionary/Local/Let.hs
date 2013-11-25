@@ -277,7 +277,7 @@ letToCaseR = prefixFailMsg "Converting Let to Case failed: " $
             withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
   do Let (NonRec v ev) _ <- idR
      guardMsg (not $ isTyCoArg ev) "cannot case on a type or coercion."
-     nameModifier <- freshNameGenT Nothing
+     nameModifier <- extractT (freshNameGenT Nothing)
      caseBndr <- constT (cloneVarH nameModifier v)
      letT mempty (replaceVarR v caseBndr) $ \ () e' -> Case ev caseBndr (varType v) [(DEFAULT, [], e')]
 
