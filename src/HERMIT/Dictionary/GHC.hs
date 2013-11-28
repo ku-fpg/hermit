@@ -10,8 +10,8 @@ module HERMIT.Dictionary.GHC
        , substCoreExpr
          -- ** Utilities
        , inScope
-       , rule
-       , rules
+       , ruleR
+       , rulesR
        , dynFlagsT
        , arityOf
          -- ** Lifted GHC capabilities
@@ -37,7 +37,7 @@ import Control.Arrow
 import Control.Monad
 
 import Data.Function (on)
-import Data.List (mapAccumL,deleteFirstsBy)
+import Data.List (mapAccumL,deleteFirstsBy,intercalate)
 
 import HERMIT.Core
 import HERMIT.Context
@@ -58,11 +58,13 @@ externals :: [External]
 externals =
          [ external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH Core)
                 [ "Deshadow a program." ] .+ Deep
-         , external "apply-rule" (promoteExprR . rule :: String -> RewriteH Core)
+         , external "rules-help-list" (rulesHelpListT :: TranslateH CoreTC String)
+                [ "List all the rules in scope." ] .+ Query
+         , external "rule-help" (ruleHelpT :: RuleNameString -> TranslateH CoreTC String)
+                [ "Display details on the named rule." ] .+ Query
+         , external "apply-rule" (promoteExprR . ruleR :: String -> RewriteH Core)
                 [ "Apply a named GHC rule" ] .+ Shallow
-         , external "apply-rule" (rules_help :: TranslateH Core String)
-                [ "List rules that can be used" ] .+ Query
-         , external "apply-rules" (promoteExprR . rules :: [String] -> RewriteH Core)
+         , external "apply-rules" (promoteExprR . rulesR :: [String] -> RewriteH Core)
                 [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
          , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> TH.Name -> RewriteH Core)
                 [ "add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]  .+ Introduce
@@ -154,6 +156,8 @@ lookupRule :: DynFlags -> InScopeEnv
 --         | r <- rs
 --         ]
 
+type RuleNameString = String
+
 #if __GLASGOW_HASKELL__ > 706
 rulesToRewriteH :: (ReadBindings c, HasDynFlags m, MonadCatch m) => [CoreRule] -> Rewrite c m CoreExpr
 #else
@@ -195,18 +199,18 @@ inScope c v = (v `boundIn` c) ||                 -- defined in this module
                 _                -> False
 
 -- | Lookup a rule and attempt to construct a corresponding rewrite.
-rule :: (ReadBindings c, HasCoreRules c) => String -> Rewrite c HermitM CoreExpr
-rule r = do
-    theRules <- getHermitRules
+ruleR :: (ReadBindings c, HasCoreRules c) => RuleNameString -> Rewrite c HermitM CoreExpr
+ruleR r = do
+    theRules <- getHermitRulesT
     case lookup r theRules of
         Nothing -> fail $ "failed to find rule: " ++ show r
         Just rr -> rulesToRewriteH rr
 
-rules :: (ReadBindings c, HasCoreRules c) => [String] -> Rewrite c HermitM CoreExpr
-rules = orR . map rule
+rulesR :: (ReadBindings c, HasCoreRules c) => [RuleNameString] -> Rewrite c HermitM CoreExpr
+rulesR = orR . map ruleR
 
-getHermitRules :: HasCoreRules c => Translate c HermitM a [(String, [CoreRule])]
-getHermitRules = contextonlyT $ \ c -> do
+getHermitRulesT :: HasCoreRules c => Translate c HermitM a [(RuleNameString, [CoreRule])]
+getHermitRulesT = contextonlyT $ \ c -> do
     rb     <- liftCoreM getRuleBase
     hscEnv <- liftCoreM getHscEnv
     rb'    <- liftM eps_rule_base $ liftIO $ runIOEnv () $ readMutVar (hsc_EPS hscEnv)
@@ -214,14 +218,29 @@ getHermitRules = contextonlyT $ \ c -> do
            | r <- hermitCoreRules c ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
            ]
 
-rules_help :: HasCoreRules c => Translate c HermitM Core String
-rules_help = do
-    rulesEnv <- getHermitRules
-    dynFlags <- dynFlagsT
-    return  $ (show (map fst rulesEnv) ++ "\n") ++
-              showSDoc dynFlags (pprRulesForUser $ concatMap snd rulesEnv)
+rulesHelpListT :: HasCoreRules c => Translate c HermitM a String
+rulesHelpListT = do
+    rulesEnv <- getHermitRulesT
+    return (intercalate "\n" $ map fst rulesEnv)
 
-makeRule :: String -> Id -> CoreExpr -> CoreRule
+ruleHelpT :: HasCoreRules c => RuleNameString -> Translate c HermitM a String
+ruleHelpT name = do
+    rulesEnv <- getHermitRulesT
+    dynFlags <- dynFlagsT
+    case filter ((name ==) . fst) rulesEnv of
+      []        -> fail ("Rule \"" ++ name ++ "\" not found.")
+      [(_,rs)]  -> return $ showSDoc dynFlags (pprRulesForUser rs)
+      _         -> fail ("Rule name \"" ++ name ++ "\" is ambiguous.")
+
+-- Too much information.
+-- rulesHelpT :: HasCoreRules c => Translate c HermitM a String
+-- rulesHelpT = do
+--     rulesEnv <- getHermitRulesT
+--     dynFlags <- dynFlagsT
+--     return  $ (show (map fst rulesEnv) ++ "\n") ++
+--               showSDoc dynFlags (pprRulesForUser $ concatMap snd rulesEnv)
+
+makeRule :: RuleNameString -> Id -> CoreExpr -> CoreRule
 makeRule rule_name nm =   mkRule True   -- auto-generated
                                  False  -- local
                                  (mkFastString rule_name)
@@ -231,7 +250,7 @@ makeRule rule_name nm =   mkRule True   -- auto-generated
                                  []
 
 -- TODO: check if a top-level binding
-addCoreBindAsRule :: Monad m => String -> TH.Name -> Rewrite c m ModGuts
+addCoreBindAsRule :: Monad m => RuleNameString -> TH.Name -> Rewrite c m ModGuts
 addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
         case [ (v,e)
              | bnd   <- mg_binds modGuts

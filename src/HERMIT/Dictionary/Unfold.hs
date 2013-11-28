@@ -24,7 +24,7 @@ import qualified Language.Haskell.TH as TH
 import HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), PrettyC)
 
 import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.GHC (rule,inScope)
+import HERMIT.Dictionary.GHC (ruleR,inScope)
 import HERMIT.Dictionary.Inline (inlineR)
 import HERMIT.Dictionary.Local.Let (letNonRecSubstR)
 
@@ -59,7 +59,7 @@ externals =
         [ "Unfold a definition only if the function is fully applied." ] .+ Deep .+ Context
     , external "specialize" (promoteExprR specializeR :: RewriteH Core)
         [ "Specialize an application to its type and coercion arguments." ] .+ Deep .+ Context
-    , external "unfold-rule" ((\ nm -> promoteExprR (rule nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
+    , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
         [ "Unfold a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
     , external "show-remembered" (TranslateDocH showStashT :: TranslateDocH CoreTC)
         [ "Display all remembered definitions." ]
