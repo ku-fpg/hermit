@@ -1,5 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module HERMIT.Dictionary
     ( -- * The HERMIT Dictionary
       externals
@@ -12,11 +10,13 @@ module HERMIT.Dictionary
     , module HERMIT.Dictionary.Function
     , module HERMIT.Dictionary.GHC
     , module HERMIT.Dictionary.Inline
+    , module HERMIT.Dictionary.Kure
     , module HERMIT.Dictionary.Local
     , module HERMIT.Dictionary.Navigation
     , module HERMIT.Dictionary.New
     , module HERMIT.Dictionary.Query
     , module HERMIT.Dictionary.Reasoning
+    , module HERMIT.Dictionary.Rules
     , module HERMIT.Dictionary.Undefined
     , module HERMIT.Dictionary.Unfold
     , module HERMIT.Dictionary.Unsafe
@@ -44,7 +44,8 @@ import           HERMIT.Dictionary.GHC hiding (externals)
 import qualified HERMIT.Dictionary.GHC as GHC
 import           HERMIT.Dictionary.Inline hiding (externals)
 import qualified HERMIT.Dictionary.Inline as Inline
-import qualified HERMIT.Dictionary.Kure as Kure -- This *only* exports externals, so we don't re-export it.
+import           HERMIT.Dictionary.Kure hiding (externals)
+import qualified HERMIT.Dictionary.Kure as Kure
 import           HERMIT.Dictionary.Local hiding (externals)
 import qualified HERMIT.Dictionary.Local as Local
 import           HERMIT.Dictionary.Navigation hiding (externals)
@@ -55,6 +56,8 @@ import           HERMIT.Dictionary.Query hiding (externals)
 import qualified HERMIT.Dictionary.Query as Query
 import           HERMIT.Dictionary.Reasoning hiding (externals)
 import qualified HERMIT.Dictionary.Reasoning as Reasoning
+import           HERMIT.Dictionary.Rules hiding (externals)
+import qualified HERMIT.Dictionary.Rules as Rules
 import           HERMIT.Dictionary.Undefined hiding (externals)
 import qualified HERMIT.Dictionary.Undefined as Undefined
 import           HERMIT.Dictionary.Unfold hiding (externals)
@@ -85,8 +88,11 @@ externals =
     ++ New.externals
     ++ Query.externals
     ++ Reasoning.externals
+    ++ Rules.externals
     ++ Undefined.externals
     ++ Unfold.externals
     ++ Unsafe.externals
     ++ WorkerWrapperFix.externals
     ++ WorkerWrapperFixResult.externals
+
+--------------------------------------------------------------------------

@@ -23,8 +23,7 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 
-import HERMIT.Dictionary.Common (varBindingDepthT)
-import HERMIT.Dictionary.GHC hiding (externals)
+import HERMIT.Dictionary.Common (varBindingDepthT,inScope)
 import HERMIT.Dictionary.Inline hiding (externals)
 
 import qualified Language.Haskell.TH as TH

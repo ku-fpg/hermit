@@ -24,9 +24,9 @@ import qualified Language.Haskell.TH as TH
 import HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), PrettyC)
 
 import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.GHC (ruleR,inScope)
 import HERMIT.Dictionary.Inline (inlineR)
 import HERMIT.Dictionary.Local.Let (letNonRecSubstR)
+import HERMIT.Dictionary.Rules (ruleR)
 
 import HERMIT.Core
 import HERMIT.Context

@@ -187,6 +187,7 @@ Library
        HERMIT.Dictionary.New
        HERMIT.Dictionary.Query
        HERMIT.Dictionary.Reasoning
+       HERMIT.Dictionary.Rules
        HERMIT.Dictionary.Undefined
        HERMIT.Dictionary.Unfold
        HERMIT.Dictionary.Unsafe

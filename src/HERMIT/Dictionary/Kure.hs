@@ -1,9 +1,9 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
 
 module HERMIT.Dictionary.Kure
        ( -- * KURE Strategies
          externals
-       , unitT
+       , anyCallR
        )
 where
 
@@ -12,6 +12,7 @@ import Control.Monad (liftM)
 
 import HERMIT.Core
 import HERMIT.Context
+import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.External
 
@@ -22,8 +23,8 @@ externals :: [External]
 externals = map (.+ KURE)
    [ external "id"         (idR :: RewriteH Core)
        [ "Perform an identity rewrite."] .+ Shallow
-   , external "unit"       (unitT :: TranslateH Core ())
-       [ "An always succeeding translation to ()." ]
+   , external "success"    (successT :: TranslateH Core ())
+       [ "An always succeeding translation." ]
    , external "fail"       (fail :: String -> RewriteH Core)
        [ "A failing rewrite."]
    , external "<+"         ((<+) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
@@ -90,6 +91,9 @@ externals = map (.+ KURE)
        [ "Apply a bidirectional rewrite backwards." ]
    , external "test"       (testQuery :: RewriteH Core -> TranslateH Core String)
        [ "Determine if a rewrite could be successfully applied." ]
+   , external "any-call" (anyCallR :: RewriteH Core -> RewriteH Core)
+       [ "any-call (.. unfold command ..) applies an unfold command to all applications."
+       , "Preference is given to applications with more arguments." ] .+ Deep
    ]
 
 ------------------------------------------------------------------------------------
@@ -117,6 +121,15 @@ testQuery r = f `liftM` testM r
 
 ------------------------------------------------------------------------------------
 
-unitT :: Monad m => Translate c m a ()
-unitT = return ()
-{-# INLINE unitT #-}
+-- | Top-down traversal tuned to matching function calls.
+anyCallR :: forall c m. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m)
+         => Rewrite c m Core -> Rewrite c m Core
+anyCallR rr = prefixFailMsg "any-call failed: " $
+              readerT $ \ e -> case e of
+        ExprCore (App {}) -> childR App_Arg rec >+> (rr <+ childR App_Fun rec)
+        ExprCore (Var {}) -> rr
+        _                 -> anyR rec
+    where rec :: Rewrite c m Core
+          rec = anyCallR rr
+
+------------------------------------------------------------------------------------
