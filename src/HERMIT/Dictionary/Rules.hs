@@ -5,7 +5,9 @@ module HERMIT.Dictionary.Rules
          -- ** Rules
        , ruleR
        , rulesR
-       , ruleToEquality
+       -- , ruleToEqualityT
+       -- , verifyCoreRuleT
+       , verifyRuleT
          -- ** Specialisation
        , specConstrR
        )
@@ -31,6 +33,7 @@ import HERMIT.GHC
 import HERMIT.Dictionary.Common (findIdT,inScope)
 import HERMIT.Dictionary.GHC (dynFlagsT)
 import HERMIT.Dictionary.Kure (anyCallR)
+import HERMIT.Dictionary.Reasoning (CoreExprEquality(..), verifyCoreExprEqualityT)
 
 import qualified Language.Haskell.TH as TH
 
@@ -43,10 +46,12 @@ externals =
                 [ "List all the rules in scope." ] .+ Query
          , external "rule-help" (ruleHelpT :: RuleNameString -> TranslateH CoreTC String)
                 [ "Display details on the named rule." ] .+ Query
-         , external "apply-rule" (promoteExprR . ruleR :: String -> RewriteH Core)
+         , external "apply-rule" (promoteExprR . ruleR :: RuleNameString -> RewriteH Core)
                 [ "Apply a named GHC rule" ] .+ Shallow
-         , external "apply-rules" (promoteExprR . rulesR :: [String] -> RewriteH Core)
+         , external "apply-rules" (promoteExprR . rulesR :: [RuleNameString] -> RewriteH Core)
                 [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
+         , external "verify-rule" (verifyRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> TranslateH Core ())
+                [ "Verify that the named GHC rule holds (in the current context)." ]
          , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> TH.Name -> RewriteH Core)
                 [ "add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]  .+ Introduce
          , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
@@ -134,19 +139,21 @@ getHermitRulesT = contextonlyT $ \ c -> do
            | r <- hermitCoreRules c ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
            ]
 
+getHermitRuleT :: HasCoreRules c => RuleNameString -> Translate c HermitM a [CoreRule]
+getHermitRuleT name =
+  do rulesEnv <- getHermitRulesT
+     case filter ((name ==) . fst) rulesEnv of
+       []         -> fail ("Rule \"" ++ name ++ "\" not found.")
+       [(_,rus)]  -> return rus
+       _          -> fail ("Rule name \"" ++ name ++ "\" is ambiguous.")
+
 rulesHelpListT :: HasCoreRules c => Translate c HermitM a String
 rulesHelpListT = do
     rulesEnv <- getHermitRulesT
     return (intercalate "\n" $ map fst rulesEnv)
 
 ruleHelpT :: HasCoreRules c => RuleNameString -> Translate c HermitM a String
-ruleHelpT name = do
-    rulesEnv <- getHermitRulesT
-    dynFlags <- dynFlagsT
-    case filter ((name ==) . fst) rulesEnv of
-      []        -> fail ("Rule \"" ++ name ++ "\" not found.")
-      [(_,rs)]  -> return $ showSDoc dynFlags (pprRulesForUser rs)
-      _         -> fail ("Rule name \"" ++ name ++ "\" is ambiguous.")
+ruleHelpT name = showSDoc <$> dynFlagsT <*> (pprRulesForUser <$> getHermitRuleT name)
 
 -- Too much information.
 -- rulesHelpT :: HasCoreRules c => Translate c HermitM a String
@@ -181,10 +188,28 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
 
 
 -- | Returns the universally quantified binders, the LHS, and the RHS.
-ruleToEquality :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m) => CoreRule -> Translate c m a ([CoreBndr],CoreExpr,CoreExpr)
-ruleToEquality (r@Rule {})      = do f <- findIdT (name2THName $ ru_fn r) -- TODO: I think we're losing information by using name2THName.  We need to revise our whole aproach to names and name conversion, to avoid losing info whenever possible.
-                                     return (ru_bndrs r, mkCoreApps (Var f) (ru_args r), ru_rhs r)
-ruleToEquality (BuiltinRule {}) = fail "HERMIT cannot handle built-in rules yet."
+ruleToEqualityT :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m) => Translate c m CoreRule CoreExprEquality
+ruleToEqualityT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
+  do r@Rule{} <- idR -- other possibility is "BuiltinRule"
+     f <- findIdT (name2THName $ ru_fn r) -- TODO: I think we're losing information by using name2THName.
+                                          -- We need to revise our whole aproach to names and name conversion, to avoid losing info whenever possible.
+     return $ CoreExprEquality (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
+
+verifyCoreRuleT :: (ReadPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m)
+            => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Translate c m CoreRule ()
+verifyCoreRuleT lhsR rhsR = ruleToEqualityT >>> verifyCoreExprEqualityT lhsR rhsR
+
+verifyRuleT :: (ReadPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
+            => RuleNameString -> Rewrite c HermitM CoreExpr -> Rewrite c HermitM CoreExpr -> Translate c HermitM a ()
+verifyRuleT name lhsR rhsR =
+  do rus <- getHermitRuleT name
+     case rus of
+       []   -> fail "Empty set of rules.  That's odd."
+       [ru] -> return ru >>> verifyCoreRuleT lhsR rhsR
+       _    -> fail "Multiple rules of this name, I don't know which one to verify."
+
+verifyRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> TranslateH Core ()
+verifyRule name lhsR rhsR = verifyRuleT name (extractR lhsR) (extractR rhsR)
 
 ------------------------------------------------------------------------
 
