@@ -38,8 +38,14 @@ externals =
         [ "innermost (unfold-basic-combinator <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ let-elim)" ]
     , external "bash" (bashR :: RewriteH Core)
         bashHelp .+ Eval .+ Deep .+ Loop
+    , external "smash" (smashR :: RewriteH Core)
+        [ "For when bash isn't enough." ] .+ Eval .+ Deep .+ Loop .+ Experiment
     , external "bash-extended-with" (bashExtendedWithR :: [RewriteH Core] -> RewriteH Core)
-        [ "Run \"bash\" extended with an additional rewrite.",
+        [ "Run \"bash\" extended with additional rewrites.",
+          "Note: be sure that the new rewrite either fails or makes progress, else this may loop."
+        ] .+ Eval .+ Deep .+ Loop
+    , external "smash-extended-with" (smashExtendedWithR :: [RewriteH Core] -> RewriteH Core)
+        [ "Run \"smash\" extended with additional rewrites.",
           "Note: be sure that the new rewrite either fails or makes progress, else this may loop."
         ] .+ Eval .+ Deep .+ Loop
     , external "bash-debug" (bashDebugR :: RewriteH Core)
@@ -75,13 +81,21 @@ bashR = bashUsingR (map fst bashComponents)
 bashExtendedWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [Rewrite c HermitM Core] -> Rewrite c HermitM Core
 bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 
+
+smashR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
+smashR = bashUsingR (map fst smashComponents)
+
+smashExtendedWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [Rewrite c HermitM Core] -> Rewrite c HermitM Core
+smashExtendedWithR rs = bashUsingR (rs ++ map fst smashComponents)
+
+
 -- | Like bashR, but outputs name of each successful sub-rewrite, providing a log.
 -- Also performs core lint on the result of a successful sub-rewrite.
 -- If core lint fails, shows core fragment before and after the sub-rewrite which introduced the problem.
 -- Note: core fragment which fails linting is still returned! Otherwise would behave differently than bashR.
 -- Useful for debugging the bash command itself.
 bashDebugR :: RewriteH Core
-bashDebugR = bashUsingR [ idR >>= \e -> r >>> traceR nm >>> promoteT (catchM (lintExprT >> idR)
+bashDebugR = bashUsingR [ idR >>= \e -> r >>> traceR nm >>> promoteR (catchM (lintExprT >> idR)
                                                                              (\s -> do _ <- return e >>> observeR "[before]"
                                                                                        observeR ("[" ++ nm ++ "]\n" ++ s)))
                         | (r,nm) <- bashComponents ]
@@ -135,6 +149,36 @@ bashComponents =
   , (promoteExprR etaReduceR, "eta-reduce")                          -- O(n)
 --  , (promoteBindR recToNonrecR, "rec-to-nonrec")                     -- O(n) -- subsumed by occurrence analysis
   , (promoteExprR letNonRecSubstSafeR, "let-nonrec-subst-safe")      -- O(n)
+  , (promoteExprR caseFloatAppR, "case-float-app")                   -- O(n)
+  , (promoteExprR caseFloatCaseR, "case-float-case")                 -- O(n)
+  , (promoteExprR caseFloatLetR, "case-float-let")                   -- O(n) but usually O(1)
+  , (promoteExprR caseFloatCastR, "case-float-cast")                 -- O(1)
+--  , (promoteExprR letElimR, "let-elim")  -- O(n^2) -- Subsumed by occurrence analysis.
+  , (promoteExprR letFloatAppR, "let-float-app")                     -- O(n)
+  , (promoteExprR letFloatArgR, "let-float-arg")                     -- O(n)
+  , (promoteExprR letFloatLamR, "let-float-lam")                     -- O(n)
+  , (promoteExprR letFloatLetR, "let-float-let")                     -- O(n)
+  , (promoteExprR letFloatCaseR, "let-float-case")                   -- O(n)
+  , (promoteExprR letFloatCastR, "let-float-cast")                   -- O(1)
+  , (promoteProgR letFloatTopR, "let-float-top")                     -- O(n)
+  , (promoteExprR castElimReflR, "cast-elim-refl")                   -- O(1)
+  , (promoteExprR castElimSymR, "cast-elim-sym")                     -- O(1)
+--  , (promoteExprR dezombifyR, "dezombify")                           -- O(1) -- performed at the end
+  ]
+
+-- | As bash, but with "let-nonrec-subst" instead of "let-nonrec-subst-safe".
+smashComponents :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [(Rewrite c HermitM Core, String)]
+smashComponents =
+  [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
+    (promoteExprR betaReduceR, "beta-reduce")                        -- O(1)
+  , (promoteExprR caseReduceR, "case-reduce")                        -- O(n)
+  , (promoteExprR caseReduceIdR, "case-reduce-id")                   -- O(n)
+  , (promoteExprR caseElimSeqR, "case-elim-seq")
+  , (promoteExprR unfoldBasicCombinatorR, "unfold-basic-combinator") -- O(n)
+  , (promoteExprR inlineCaseAlternativeR, "inline-case-alternative") -- O(n)
+  , (promoteExprR etaReduceR, "eta-reduce")                          -- O(n)
+--  , (promoteBindR recToNonrecR, "rec-to-nonrec")                     -- O(n) -- subsumed by occurrence analysis
+  , (promoteExprR letNonRecSubstR, "let-nonrec-subst")               -- O(n)
   , (promoteExprR caseFloatAppR, "case-float-app")                   -- O(n)
   , (promoteExprR caseFloatCaseR, "case-float-case")                 -- O(n)
   , (promoteExprR caseFloatLetR, "case-float-let")                   -- O(n) but usually O(1)
