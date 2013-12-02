@@ -75,8 +75,16 @@ bashR = bashUsingR (map fst bashComponents)
 bashExtendedWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [Rewrite c HermitM Core] -> Rewrite c HermitM Core
 bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 
+-- | Like bashR, but outputs name of each successful sub-rewrite, providing a log.
+-- Also performs core lint on the result of a successful sub-rewrite.
+-- If core lint fails, shows core fragment before and after the sub-rewrite which introduced the problem.
+-- Note: core fragment which fails linting is still returned! Otherwise would behave differently than bashR.
+-- Useful for debugging the bash command itself.
 bashDebugR :: RewriteH Core
-bashDebugR = bashUsingR $ map (\ (r,nm) -> r >>> observeR nm) bashComponents
+bashDebugR = bashUsingR [ idR >>= \e -> r >>> traceR nm >>> promoteT (catchM (lintExprT >> idR)
+                                                                             (\s -> do _ <- return e >>> observeR "[before]"
+                                                                                       observeR ("[" ++ nm ++ "]\n" ++ s)))
+                        | (r,nm) <- bashComponents ]
 
 -- bashUsingR :: forall c m. (ExtendPath c Crumb, AddBindings c, MonadCatch m) => [Rewrite c m Core] -> Rewrite c m Core
 -- bashUsingR rs =
