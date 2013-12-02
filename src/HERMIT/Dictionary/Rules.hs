@@ -33,7 +33,8 @@ import HERMIT.GHC
 import HERMIT.Dictionary.Common (findIdT,inScope)
 import HERMIT.Dictionary.GHC (dynFlagsT)
 import HERMIT.Dictionary.Kure (anyCallR)
-import HERMIT.Dictionary.Reasoning (CoreExprEquality(..), verifyCoreExprEqualityT)
+import HERMIT.Dictionary.Reasoning (CoreExprEquality(..), verifyCoreExprEqualityT, birewrite)
+import HERMIT.Dictionary.Unfold (cleanupUnfoldR)
 
 import qualified Language.Haskell.TH as TH
 
@@ -54,10 +55,16 @@ externals =
                 [ "Verify that the named GHC rule holds (in the current context)." ]
          , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> TH.Name -> RewriteH Core)
                 [ "add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]  .+ Introduce
+         , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
+                [ "Unfold a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
          , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
                 [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
          , external "specialise" (promoteModGutsR specialise :: RewriteH Core)
                 [ "Run GHC's specialisation pass, which performs type and dictionary specialisation."] .+ Deep
+         , external "rule-forwards" ((\nm -> biRuleR nm >>= promoteExprR . forwardT) :: RuleNameString -> RewriteH Core)
+                [ "Run a GHC rule forwards."]
+         , external "rule-backwards" ((\nm -> biRuleR nm >>= promoteExprR . backwardT) :: RuleNameString -> RewriteH Core)
+                [ "Run a GHC rule backwards."]
          ]
 
 ------------------------------------------------------------------------
@@ -210,6 +217,22 @@ verifyRuleT name lhsR rhsR =
 
 verifyRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> TranslateH Core ()
 verifyRule name lhsR rhsR = verifyRuleT name (extractR lhsR) (extractR rhsR)
+
+-- This can probably be refactored...
+biRuleR :: ( BoundVars c
+           , HasCoreRules c
+           , HasGlobalRdrEnv c
+           , AddBindings d
+           , ReadBindings d
+           , ExtendPath d Crumb
+           , ReadPath d Crumb) 
+        => RuleNameString -> Translate c HermitM a (BiRewrite d HermitM CoreExpr)
+biRuleR name = do
+    rules <- getHermitRuleT name
+    case rules of
+        [] -> fail "No rules with that name."
+        [r] -> (return r >>> ruleToEqualityT) >>= return . birewrite
+        _ -> fail "Multiple rules with that name... not sure what to do."
 
 ------------------------------------------------------------------------
 

@@ -5,6 +5,8 @@ module HERMIT.Dictionary.Fold
     , foldVarR
     , stashFoldR
     , stashFoldAnyR
+      -- * Unlifted fold interface
+    , fold
     )
 
 where

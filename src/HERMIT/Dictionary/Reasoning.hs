@@ -1,9 +1,10 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables #-}
 
 module HERMIT.Dictionary.Reasoning
   ( -- * Equational Reasoning
     externals
   , CoreExprEquality(..)
+  , birewrite
   , verifyCoreExprEqualityT
   , verifyEqualityLeftToRightT
   , verifyEqualityCommonTargetT
@@ -16,6 +17,9 @@ where
 import Control.Applicative
 import Control.Arrow
 
+import Data.Monoid
+
+import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
@@ -25,6 +29,8 @@ import HERMIT.ParserCore
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.Fold hiding (externals)
+import HERMIT.Dictionary.Unfold hiding (externals)
 
 ------------------------------------------------------------------------------
 
@@ -45,6 +51,45 @@ externals =
 
 -- | An equality is represented as a set of universally quantified binders, and then the LHS and RHS of the equality.
 data CoreExprEquality = CoreExprEquality [CoreBndr] CoreExpr CoreExpr
+
+-- | Create a 'BiRewrite' from a 'CoreExprEquality'.
+--  
+-- The high level idea: create a temporary function with two definitions.
+-- Fold one of the defintions, then immediately unfold the other.
+birewrite :: (AddBindings c, ReadBindings c, ExtendPath c Crumb, ReadPath c Crumb) => CoreExprEquality -> BiRewrite c HermitM CoreExpr
+birewrite (CoreExprEquality bnds l r) = bidirectional (foldUnfold l r) (foldUnfold r l)
+    where foldUnfold lhs rhs = translate $ \ c e -> do
+            let lhsLam = mkCoreLams bnds lhs
+            -- we use a unique, transitory variable for the 'function' we are folding
+            v <- newIdH "biTemp" (exprType lhsLam)
+            e' <- maybe (fail "folding LHS failed") return (fold v lhsLam e)
+            let rhsLam = mkCoreLams bnds rhs
+                -- create a temporary context with an unfolding for the 
+                -- transitory function so we can reuse unfoldR. 
+                c' = addHermitBindings [(v, NONREC rhsLam, mempty)] c
+            apply unfoldR c' e'
+
+-- Idea: use Haskell's functions to fill the holes automagically
+--
+-- plusId <- findIdT "+"
+-- timesId <- findIdT "*"
+-- mkEquality $ \ x -> ( mkCoreApps (Var plusId)  [x,x]
+--                     , mkCoreApps (Var timesId) [Lit 2, x])
+--
+-- Problem: need to know type of 'x' to generate a variable.
+class BuildEquality a where
+    mkEquality :: a -> HermitM CoreExprEquality
+
+instance BuildEquality (CoreExpr,CoreExpr) where
+    mkEquality :: (CoreExpr,CoreExpr) -> HermitM CoreExprEquality
+    mkEquality (lhs,rhs) = return $ CoreExprEquality [] lhs rhs
+
+instance BuildEquality a => BuildEquality (CoreExpr -> a) where
+    mkEquality :: (CoreExpr -> a) -> HermitM CoreExprEquality
+    mkEquality f = do
+        x <- newIdH "x" (error "need to create a type") 
+        CoreExprEquality bnds lhs rhs <- mkEquality (f (varToCoreExpr x))
+        return $ CoreExprEquality (x:bnds) lhs rhs
 
 -- | Verify that a 'CoreExprEquality' holds, by applying a rewrite to each side, and checking that the results are equal.
 verifyCoreExprEqualityT :: forall c m. (ReadPath c Crumb, MonadCatch m, Walker c Core) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Translate c m CoreExprEquality ()
