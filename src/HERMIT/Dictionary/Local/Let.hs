@@ -71,6 +71,8 @@ externals =
         [ "Safe let substitution"
         , "let x = e1 in e2, safe to inline without duplicating work ==> e2[e1/x],"
         , "x must not be free in e1." ]                                         .+ Deep .+ Eval
+    , external "let-nonrec-subst-safe" (promoteExprR letNonRecSubstSafeR :: RewriteH Core)
+        [ "As let-subst-safe, but does not try to convert a recursive let into a non-recursive let first." ] .+ Deep .+ Eval
     -- , external "safe-let-subst-plus" (promoteExprR safeLetSubstPlusR :: RewriteH Core)
     --     [ "Safe let substitution"
     --     , "let { x = e1, ... } in e2, "
