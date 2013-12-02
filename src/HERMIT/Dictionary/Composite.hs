@@ -95,9 +95,9 @@ smashExtendedWithR rs = bashUsingR (rs ++ map fst smashComponents)
 -- Note: core fragment which fails linting is still returned! Otherwise would behave differently than bashR.
 -- Useful for debugging the bash command itself.
 bashDebugR :: RewriteH Core
-bashDebugR = bashUsingR [ idR >>= \e -> r >>> traceR nm >>> promoteR (catchM (lintExprT >> idR)
-                                                                             (\s -> do _ <- return e >>> observeR "[before]"
-                                                                                       observeR ("[" ++ nm ++ "]\n" ++ s)))
+bashDebugR = bashUsingR [ idR >>= \e -> r >>> traceR nm >>> (catchM (promoteT lintExprT >> idR)
+                                                                    (\s -> do _ <- return e >>> observeR "[before]"
+                                                                              observeR ("[" ++ nm ++ "]\n" ++ s)))
                         | (r,nm) <- bashComponents ]
 
 -- bashUsingR :: forall c m. (ExtendPath c Crumb, AddBindings c, MonadCatch m) => [Rewrite c m Core] -> Rewrite c m Core
