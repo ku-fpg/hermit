@@ -4,6 +4,8 @@ module HERMIT.Dictionary.Reasoning
   ( -- * Equational Reasoning
     externals
   , CoreExprEquality(..)
+  , eqLhsLetIntroR
+  , eqRhsLetIntroR
   , birewrite
   , verifyCoreExprEqualityT
   , verifyEqualityLeftToRightT
@@ -30,6 +32,7 @@ import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Fold hiding (externals)
+import HERMIT.Dictionary.Local.Let (letNonRecIntroR)
 import HERMIT.Dictionary.Unfold hiding (externals)
 
 ------------------------------------------------------------------------------
@@ -52,8 +55,19 @@ externals =
 -- | An equality is represented as a set of universally quantified binders, and then the LHS and RHS of the equality.
 data CoreExprEquality = CoreExprEquality [CoreBndr] CoreExpr CoreExpr
 
+-- | @e@ ==> @let v = lhs in e@
+eqLhsLetIntroR :: CoreExprEquality -> Rewrite c HermitM CoreExpr
+eqLhsLetIntroR (CoreExprEquality bs lhs _) = letNonRecIntroR "lhs" (mkCoreLams bs lhs)
+
+-- | @e@ ==> @let v = rhs in e@
+eqRhsLetIntroR :: CoreExprEquality -> Rewrite c HermitM CoreExpr
+eqRhsLetIntroR (CoreExprEquality bs _ rhs) = letNonRecIntroR "rhs" (mkCoreLams bs rhs)
+
+------------------------------------------------------------------------------
+
+
 -- | Create a 'BiRewrite' from a 'CoreExprEquality'.
---  
+--
 -- The high level idea: create a temporary function with two definitions.
 -- Fold one of the defintions, then immediately unfold the other.
 birewrite :: (AddBindings c, ReadBindings c, ExtendPath c Crumb, ReadPath c Crumb) => CoreExprEquality -> BiRewrite c HermitM CoreExpr
@@ -64,8 +78,8 @@ birewrite (CoreExprEquality bnds l r) = bidirectional (foldUnfold l r) (foldUnfo
             v <- newIdH "biTemp" (exprType lhsLam)
             e' <- maybe (fail "folding LHS failed") return (fold v lhsLam e)
             let rhsLam = mkCoreLams bnds rhs
-                -- create a temporary context with an unfolding for the 
-                -- transitory function so we can reuse unfoldR. 
+                -- create a temporary context with an unfolding for the
+                -- transitory function so we can reuse unfoldR.
                 c' = addHermitBindings [(v, NONREC rhsLam, mempty)] c
             apply unfoldR c' e'
 
@@ -87,7 +101,7 @@ instance BuildEquality (CoreExpr,CoreExpr) where
 instance BuildEquality a => BuildEquality (CoreExpr -> a) where
     mkEquality :: (CoreExpr -> a) -> HermitM CoreExprEquality
     mkEquality f = do
-        x <- newIdH "x" (error "need to create a type") 
+        x <- newIdH "x" (error "need to create a type")
         CoreExprEquality bnds lhs rhs <- mkEquality (f (varToCoreExpr x))
         return $ CoreExprEquality (x:bnds) lhs rhs
 

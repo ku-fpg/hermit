@@ -1,15 +1,16 @@
-{-# LANGUAGE FlexibleContexts, MultiWayIf #-}
+{-# LANGUAGE FlexibleContexts #-}
 module HERMIT.Dictionary.New where
 
 import Control.Arrow
 
 import HERMIT.Context
 import HERMIT.Core
-import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.ParserCore
+
+import HERMIT.Dictionary.Local.Let hiding (externals)
 
 import qualified Language.Haskell.TH as TH
 
@@ -18,11 +19,11 @@ externals = map ((.+ Experiment) . (.+ TODO))
          [ external "var" (promoteExprT . isVar :: TH.Name -> TranslateH Core ())
                 [ "var '<v> returns successfully for variable v, and fails otherwise.",
                   "Useful in combination with \"when\", as in: when (var v) r" ] .+ Predicate
-         , external "prog-nonrec-intro" ((\ nm core -> promoteProgR $ progNonRecIntroR (show nm) core) :: TH.Name -> CoreString -> RewriteH Core)
+         , external "prog-nonrec-intro" ((\ nm core -> promoteProgR $ progNonRecIntro (show nm) core) :: TH.Name -> CoreString -> RewriteH Core)
                 [ "Introduce a new top-level definition."
                 , "prog-nonrec-into 'v [| e |]"
                 , "prog ==> ProgCons (v = e) prog" ] .+ Introduce .+ Shallow
-         , external "let-nonrec-intro" ((\ nm core -> promoteExprR $ letNonRecIntroR (show nm) core) :: TH.Name -> CoreString -> RewriteH Core)
+         , external "let-nonrec-intro" ((\ nm core -> promoteExprR $ letNonRecIntro (show nm) core) :: TH.Name -> CoreString -> RewriteH Core)
                 [ "Introduce a new definition as a non-recursive let binding."
                 , "let-nonrec-intro 'v [| e |]"
                 , "body ==> let v = e in body" ] .+ Introduce .+ Shallow
@@ -52,25 +53,16 @@ isVar nm = varT (arr $ cmpTHName2Var nm) >>= guardM
 -- The types of these can probably be generalised after the Core Parser is generalised.
 
 -- | @prog@ ==> @'ProgCons' (v = e) prog@
-progNonRecIntroR :: String -> CoreString -> RewriteH CoreProg
-progNonRecIntroR nm expr =
-  do e <- parseCoreExprT expr
-     guardMsg (not $ isTyCoArg e) "Top-level type or coercion definitions are prohibited."
+progNonRecIntro :: String -> CoreString -> RewriteH CoreProg
+progNonRecIntro nm expr = parseCoreExprT expr >>= progNonRecIntroR nm
      -- TODO: if e is not type-correct, then exprType will crash.
      --       Proposal: parseCore should check that its result is (locally) well-typed
-     contextfreeT $ \ prog -> do i <- newIdH nm (exprType e)
-                                 return $ ProgCons (NonRec i e) prog
 
 -- | @body@ ==> @let v = e in body@
-letNonRecIntroR :: String -> CoreString -> RewriteH CoreExpr
-letNonRecIntroR nm expr =
-  do e <- parseCoreExprT expr
+letNonRecIntro :: String -> CoreString -> RewriteH CoreExpr
+letNonRecIntro nm expr = parseCoreExprT expr >>= letNonRecIntroR nm
      -- TODO: if e is not type-correct, then exprTypeOrKind will crash.
      --       Proposal: parseCore should check that its result is (locally) well-typed
-     contextfreeT $ \ body -> do let tyk = exprKindOrType e
-                                 v <- if | isTypeArg e  -> newTyVarH nm tyk
-                                         | isCoArg e    -> newCoVarH nm tyk
-                                         | otherwise    -> newIdH nm tyk
-                                 return $ Let (NonRec v e) body
+
 
 ------------------------------------------------------------------------------------------------------

@@ -8,6 +8,8 @@ module HERMIT.Dictionary.Rules
        -- , ruleToEqualityT
        -- , verifyCoreRuleT
        , verifyRuleT
+       , ruleLhsLetIntroR
+       , ruleRhsLetIntroR
          -- ** Specialisation
        , specConstrR
        )
@@ -33,7 +35,7 @@ import HERMIT.GHC
 import HERMIT.Dictionary.Common (findIdT,inScope)
 import HERMIT.Dictionary.GHC (dynFlagsT)
 import HERMIT.Dictionary.Kure (anyCallR)
-import HERMIT.Dictionary.Reasoning (CoreExprEquality(..), verifyCoreExprEqualityT, birewrite)
+import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Unfold (cleanupUnfoldR)
 
 import qualified Language.Haskell.TH as TH
@@ -69,6 +71,12 @@ externals =
                 [ "Run a GHC rule forwards or backwards.",
                   "Takes a proof that the rule holds, in the form of a rewrite to apply to both sides to prove the equality."
                 ]
+         , external "rule-lhs-let-intro" (promoteExprR . ruleLhsLetIntroR :: RuleNameString -> RewriteH Core)
+                [ "Introduce the LHS of a rule as a non-recursive let binding."
+                , "body ==> let v = lhs in body" ] .+ Introduce .+ Shallow
+         , external "rule-rhs-let-intro" (promoteExprR . ruleRhsLetIntroR :: RuleNameString -> RewriteH Core)
+                [ "Introduce the RHS of a rule as a non-recursive let binding."
+                , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
          ]
 
 ------------------------------------------------------------------------
@@ -255,6 +263,16 @@ biRuleR name lhsR rhsR = beforeBiR
 
 biRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> BiRewriteH Core
 biRule name lhsR rhsR = promoteExprBiR $ biRuleR name (extractR lhsR) (extractR rhsR)
+
+------------------------------------------------------------------------
+
+-- | @e@ ==> @let v = lhs in e@
+ruleLhsLetIntroR :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Rewrite c HermitM CoreExpr
+ruleLhsLetIntroR = ruleNameToEqualityT >=> eqLhsLetIntroR
+
+-- | @e@ ==> @let v = rhs in e@
+ruleRhsLetIntroR :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Rewrite c HermitM CoreExpr
+ruleRhsLetIntroR = ruleNameToEqualityT >=> eqRhsLetIntroR
 
 ------------------------------------------------------------------------
 

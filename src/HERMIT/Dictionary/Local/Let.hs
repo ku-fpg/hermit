@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables, MultiWayIf #-}
 
 module HERMIT.Dictionary.Local.Let
        ( -- * Rewrites on Let Expressions
@@ -16,6 +16,8 @@ module HERMIT.Dictionary.Local.Let
        , progBindRecElimR
          -- ** Let Introduction
        , letIntroR
+       , letNonRecIntroR
+       , progNonRecIntroR
          -- ** Let Floating Out
        , letFloatAppR
        , letFloatArgR
@@ -198,15 +200,6 @@ letNonRecSubstSafeR =
 
 (<$) :: Monad m => a -> m b -> m a
 a <$ mb = mb >> return a
-
--------------------------------------------------------------------------------------------
-
--- | @e@ ==> @(let v = e in v)@, name of v is provided
-letIntroR :: String -> Rewrite c HermitM CoreExpr
-letIntroR nm = prefixFailMsg "Let-introduction failed: " $
-              contextfreeT $ \ e -> do guardMsg (not $ isTypeArg e) "let expressions may not return a type."
-                                       v <- newIdH nm (exprKindOrType e)
-                                       return $ Let (NonRec v e) (Var v)
 
 -------------------------------------------------------------------------------------------
 
@@ -463,5 +456,36 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
     collectLets :: CoreExpr -> ([(Id, CoreExpr)],CoreExpr)
     collectLets (Let (NonRec v e) body) | isId v = first ((v,e):) (collectLets body)
     collectLets expr                             = ([],expr)
+
+-------------------------------------------------------------------------------------------
+
+-- TODO: come up with a better naming scheme for these
+
+-- This code could be factored better.
+
+-- | @e@ ==> @let v = e in v@
+letIntroR :: String -> Rewrite c HermitM CoreExpr
+letIntroR nm = do e <- idR
+                  Let (NonRec v e') _ <- letNonRecIntroR nm e
+                  return $ Let (NonRec v e') (varToCoreExpr v)
+
+-- | @body@ ==> @let v = e in body@
+letNonRecIntroR :: String -> CoreExpr -> Rewrite c HermitM CoreExpr
+letNonRecIntroR nm e = prefixFailMsg "Let-introduction failed: " $
+     contextfreeT $ \ body -> do let tyk = exprKindOrType e
+                                 v <- if | isTypeArg e  -> newTyVarH nm tyk
+                                         | isCoArg e    -> newCoVarH nm tyk
+                                         | otherwise    -> newIdH nm tyk
+                                 return $ Let (NonRec v e) body
+
+
+-- This isn't a "Let", but it's serving the same role.  Maybe create a Local/Prog module?
+
+-- | @prog@ ==> @'ProgCons' (v = e) prog@
+progNonRecIntroR :: String -> CoreExpr -> Rewrite c HermitM CoreProg
+progNonRecIntroR nm e = prefixFailMsg "Top-level binding introduction failed: " $
+  do guardMsg (not $ isTyCoArg e) "Top-level type or coercion definitions are prohibited."
+     contextfreeT $ \ prog -> do i <- newIdH nm (exprType e)
+                                 return $ ProgCons (NonRec i e) prog
 
 -------------------------------------------------------------------------------------------
