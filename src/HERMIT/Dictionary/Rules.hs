@@ -61,13 +61,19 @@ externals =
                 [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
          , external "specialise" (promoteModGutsR specialise :: RewriteH Core)
                 [ "Run GHC's specialisation pass, which performs type and dictionary specialisation."] .+ Deep
-         , external "rule-forwards" ((\nm -> biRuleR nm >>= promoteExprR . forwardT) :: RuleNameString -> RewriteH Core)
-                [ "Run a GHC rule forwards."]
-         , external "rule-backwards" ((\nm -> biRuleR nm >>= promoteExprR . backwardT) :: RuleNameString -> RewriteH Core)
-                [ "Run a GHC rule backwards."]
+         , external "rule-unsafe" ((promoteExprBiR . biRuleUnsafeR) :: RuleNameString -> BiRewriteH Core)
+                [ "Run a GHC rule forwards or backwards.",
+                  "Does not verify that the rule is correct."
+                ]
+         , external "rule" (biRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
+                [ "Run a GHC rule forwards or backwards.",
+                  "Takes a proof that the rule holds, in the form of a rewrite to apply to both sides to prove the equality."
+                ]
          ]
 
 ------------------------------------------------------------------------
+
+-- TODO: we have multiple ways of applying RULES as Rewrites now.  We need to clean this up and unify them.
 
 {-
 lookupRule :: (Activation -> Bool)	-- When rule is active
@@ -154,6 +160,15 @@ getHermitRuleT name =
        [(_,rus)]  -> return rus
        _          -> fail ("Rule name \"" ++ name ++ "\" is ambiguous.")
 
+getSingletonHermitRuleT :: HasCoreRules c => RuleNameString -> Translate c HermitM a CoreRule
+getSingletonHermitRuleT name =
+  do rus <- getHermitRuleT name
+     case rus of
+        []    -> fail "No rules with that name."
+        [ru]  -> return ru
+        _     -> fail "Multiple rules with that name."
+
+
 rulesHelpListT :: HasCoreRules c => Translate c HermitM a String
 rulesHelpListT = do
     rulesEnv <- getHermitRulesT
@@ -202,37 +217,44 @@ ruleToEqualityT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
                                           -- We need to revise our whole aproach to names and name conversion, to avoid losing info whenever possible.
      return $ CoreExprEquality (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
 
-verifyCoreRuleT :: (ReadPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m)
-            => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Translate c m CoreRule ()
-verifyCoreRuleT lhsR rhsR = ruleToEqualityT >>> verifyCoreExprEqualityT lhsR rhsR
+ruleNameToEqualityT :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Translate c HermitM a CoreExprEquality
+ruleNameToEqualityT name = getSingletonHermitRuleT name >>> ruleToEqualityT
 
 verifyRuleT :: (ReadPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
             => RuleNameString -> Rewrite c HermitM CoreExpr -> Rewrite c HermitM CoreExpr -> Translate c HermitM a ()
-verifyRuleT name lhsR rhsR =
-  do rus <- getHermitRuleT name
-     case rus of
-       []   -> fail "Empty set of rules.  That's odd."
-       [ru] -> return ru >>> verifyCoreRuleT lhsR rhsR
-       _    -> fail "Multiple rules of this name, I don't know which one to verify."
+verifyRuleT name lhsR rhsR = ruleNameToEqualityT name >>> verifyCoreExprEqualityT lhsR rhsR
 
 verifyRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> TranslateH Core ()
 verifyRule name lhsR rhsR = verifyRuleT name (extractR lhsR) (extractR rhsR)
 
--- This can probably be refactored...
+biRuleUnsafeR ::
+           ( BoundVars c
+           , HasCoreRules c
+           , HasGlobalRdrEnv c
+           , AddBindings c
+           , ReadBindings c
+           , ExtendPath c Crumb
+           , ReadPath c Crumb)
+        => RuleNameString -> BiRewrite c HermitM CoreExpr
+biRuleUnsafeR name = beforeBiR (ruleNameToEqualityT name) birewrite
+
 biRuleR :: ( BoundVars c
            , HasCoreRules c
            , HasGlobalRdrEnv c
-           , AddBindings d
-           , ReadBindings d
-           , ExtendPath d Crumb
-           , ReadPath d Crumb) 
-        => RuleNameString -> Translate c HermitM a (BiRewrite d HermitM CoreExpr)
-biRuleR name = do
-    rules <- getHermitRuleT name
-    case rules of
-        [] -> fail "No rules with that name."
-        [r] -> (return r >>> ruleToEqualityT) >>= return . birewrite
-        _ -> fail "Multiple rules with that name... not sure what to do."
+           , AddBindings c
+           , ReadBindings c
+           , ExtendPath c Crumb
+           , ReadPath c Crumb)
+        => RuleNameString -> Rewrite c HermitM CoreExpr -> Rewrite c HermitM CoreExpr -> BiRewrite c HermitM CoreExpr
+biRuleR name lhsR rhsR = beforeBiR
+                            (do eq <- ruleNameToEqualityT name
+                                verifyCoreExprEqualityT lhsR rhsR <<< return eq
+                                return eq
+                            )
+                            birewrite
+
+biRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> BiRewriteH Core
+biRule name lhsR rhsR = promoteExprBiR $ biRuleR name (extractR lhsR) (extractR rhsR)
 
 ------------------------------------------------------------------------
 
