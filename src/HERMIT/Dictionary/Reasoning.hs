@@ -4,8 +4,8 @@ module HERMIT.Dictionary.Reasoning
   ( -- * Equational Reasoning
     externals
   , CoreExprEquality(..)
-  , eqLhsLetIntroR
-  , eqRhsLetIntroR
+  , eqLhsIntroR
+  , eqRhsIntroR
   , birewrite
   , verifyCoreExprEqualityT
   , verifyEqualityLeftToRightT
@@ -32,7 +32,7 @@ import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Fold hiding (externals)
-import HERMIT.Dictionary.Local.Let (letNonRecIntroR)
+import HERMIT.Dictionary.Local.Let (nonRecIntroR)
 import HERMIT.Dictionary.Unfold hiding (externals)
 
 ------------------------------------------------------------------------------
@@ -56,15 +56,14 @@ externals =
 data CoreExprEquality = CoreExprEquality [CoreBndr] CoreExpr CoreExpr
 
 -- | @e@ ==> @let v = lhs in e@
-eqLhsLetIntroR :: CoreExprEquality -> Rewrite c HermitM CoreExpr
-eqLhsLetIntroR (CoreExprEquality bs lhs _) = letNonRecIntroR "lhs" (mkCoreLams bs lhs)
+eqLhsIntroR :: CoreExprEquality -> Rewrite c HermitM Core
+eqLhsIntroR (CoreExprEquality bs lhs _) = nonRecIntroR "lhs" (mkCoreLams bs lhs)
 
 -- | @e@ ==> @let v = rhs in e@
-eqRhsLetIntroR :: CoreExprEquality -> Rewrite c HermitM CoreExpr
-eqRhsLetIntroR (CoreExprEquality bs _ rhs) = letNonRecIntroR "rhs" (mkCoreLams bs rhs)
+eqRhsIntroR :: CoreExprEquality -> Rewrite c HermitM Core
+eqRhsIntroR (CoreExprEquality bs _ rhs) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
 
 ------------------------------------------------------------------------------
-
 
 -- | Create a 'BiRewrite' from a 'CoreExprEquality'.
 --

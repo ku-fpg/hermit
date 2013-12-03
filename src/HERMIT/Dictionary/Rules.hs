@@ -8,8 +8,8 @@ module HERMIT.Dictionary.Rules
        -- , ruleToEqualityT
        -- , verifyCoreRuleT
        , verifyRuleT
-       , ruleLhsLetIntroR
-       , ruleRhsLetIntroR
+       , ruleLhsIntroR
+       , ruleRhsIntroR
          -- ** Specialisation
        , specConstrR
        )
@@ -71,10 +71,10 @@ externals =
                 [ "Run a GHC rule forwards or backwards.",
                   "Takes a proof that the rule holds, in the form of a rewrite to apply to both sides to prove the equality."
                 ]
-         , external "rule-lhs-let-intro" (promoteExprR . ruleLhsLetIntroR :: RuleNameString -> RewriteH Core)
+         , external "rule-lhs-intro" (ruleLhsIntroR :: RuleNameString -> RewriteH Core)
                 [ "Introduce the LHS of a rule as a non-recursive let binding."
                 , "body ==> let v = lhs in body" ] .+ Introduce .+ Shallow
-         , external "rule-rhs-let-intro" (promoteExprR . ruleRhsLetIntroR :: RuleNameString -> RewriteH Core)
+         , external "rule-rhs-intro" (ruleRhsIntroR :: RuleNameString -> RewriteH Core)
                 [ "Introduce the RHS of a rule as a non-recursive let binding."
                 , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
          ]
@@ -266,13 +266,13 @@ biRule name lhsR rhsR = promoteExprBiR $ biRuleR name (extractR lhsR) (extractR 
 
 ------------------------------------------------------------------------
 
--- | @e@ ==> @let v = lhs in e@
-ruleLhsLetIntroR :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Rewrite c HermitM CoreExpr
-ruleLhsLetIntroR = ruleNameToEqualityT >=> eqLhsLetIntroR
+-- | @e@ ==> @let v = lhs in e@  (also works in a similar manner at Program nodes)
+ruleLhsIntroR :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Rewrite c HermitM Core
+ruleLhsIntroR = ruleNameToEqualityT >=> eqLhsIntroR
 
--- | @e@ ==> @let v = rhs in e@
-ruleRhsLetIntroR :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Rewrite c HermitM CoreExpr
-ruleRhsLetIntroR = ruleNameToEqualityT >=> eqRhsLetIntroR
+-- | @e@ ==> @let v = rhs in e@  (also works in a similar manner at Program nodes)
+ruleRhsIntroR :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Rewrite c HermitM Core
+ruleRhsIntroR = ruleNameToEqualityT >=> eqRhsIntroR
 
 ------------------------------------------------------------------------
 

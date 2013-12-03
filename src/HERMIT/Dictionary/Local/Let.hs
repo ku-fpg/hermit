@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, ScopedTypeVariables, MultiWayIf #-}
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables, MultiWayIf, LambdaCase #-}
 
 module HERMIT.Dictionary.Local.Let
        ( -- * Rewrites on Let Expressions
@@ -18,6 +18,7 @@ module HERMIT.Dictionary.Local.Let
        , letIntroR
        , letNonRecIntroR
        , progNonRecIntroR
+       , nonRecIntroR
          -- ** Let Floating Out
        , letFloatAppR
        , letFloatArgR
@@ -487,5 +488,12 @@ progNonRecIntroR nm e = prefixFailMsg "Top-level binding introduction failed: " 
   do guardMsg (not $ isTyCoArg e) "Top-level type or coercion definitions are prohibited."
      contextfreeT $ \ prog -> do i <- newIdH nm (exprType e)
                                  return $ ProgCons (NonRec i e) prog
+
+-- | nonRecIntroR nm e = 'letNonRecIntroR nm e' <+ 'progNonRecIntroR nm e'
+nonRecIntroR :: String -> CoreExpr -> Rewrite c HermitM Core
+nonRecIntroR nm e = readerT $ \case
+                      ExprCore{} -> promoteExprR (letNonRecIntroR nm e)
+                      ProgCore{} -> promoteProgR (progNonRecIntroR nm e)
+                      _          -> fail "can only introduce non-recursive bindings at Program or Expression nodes."
 
 -------------------------------------------------------------------------------------------
