@@ -69,13 +69,13 @@ listInductionOnT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath
                 -> CoreExprEqualityProof c HermitM -- proof for [] case
                 -> (BiRewrite c HermitM CoreExpr -> CoreExprEqualityProof c HermitM) -- proof for (:) case, given smaller proof
                 -> Translate c HermitM CoreExprEquality ()
-listInductionOnT i nilCaseRs consCaseRs = inductionOnT i $ \ con brs ->
+listInductionOnT i nilCaseProof consCaseProof = inductionOnT i $ \ con brs ->
                                                                 if | con == nilDataCon   -> case brs of
-                                                                                                  [] -> nilCaseRs
+                                                                                                  [] -> nilCaseProof
                                                                                                   _  -> error "Bug!"
                                                                    | con == consDataCon  -> case brs of
-                                                                                                  [r] -> consCaseRs r
-                                                                                                  _   -> error "Bug!"
+                                                                                                  [br] -> consCaseProof br
+                                                                                                  _    -> error "Bug!"
                                                                    | otherwise           -> let msg = "Mystery constructor, this is a bug."
                                                                                              in (fail msg, fail msg)
 
