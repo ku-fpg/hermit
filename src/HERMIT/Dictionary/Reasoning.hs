@@ -21,7 +21,6 @@ where
 import Control.Applicative
 import Control.Arrow
 
-import Data.List (delete)
 import Data.Monoid
 
 import HERMIT.Context
@@ -35,7 +34,6 @@ import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Fold hiding (externals)
-import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Local.Let (nonRecIntroR)
 import HERMIT.Dictionary.Unfold hiding (externals)
 
@@ -191,16 +189,26 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 
 ------------------------------------------------------------------------------
 
--- TODO: I think this needs some trickery to cope with Types in Ids, similarly to substCoreAlt and alphaAltVar
+-- | Instantiate one of the universally quantified variables in a 'CoreExprEquality'.
+-- Note: assumes implicit ordering of variables, such that substitution happens to the right
+-- as it does in case alternatives.
 instantiateCoreExprEqVar :: Var -> CoreExpr -> CoreExprEquality -> CoreExprEquality
-instantiateCoreExprEqVar i e (CoreExprEquality bs lhs rhs) =
-       let bs'  = delete i bs
-           lhs' = substCoreExpr i e lhs
-           rhs' = substCoreExpr i e rhs
-        in CoreExprEquality bs' lhs' rhs'
+instantiateCoreExprEqVar i e c@(CoreExprEquality bs lhs rhs) 
+    | i `notElem` bs = c
+    | otherwise = 
+        let (bs',_:vs)    = break (==i) bs -- this is safe because we know i is in bs
+            inS           = delVarSet (unionVarSets (map localFreeVarsExpr [lhs, rhs, e] ++ map freeVarsVar vs)) i
+            subst         = extendSubst (mkEmptySubst (mkInScopeSet inS)) i e
+            (subst', vs') = substBndrs subst vs
+            lhs'          = substExpr (text "coreExprEquality-lhs") subst' lhs
+            rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
+        in CoreExprEquality (bs'++vs') lhs' rhs'
 
--- TODO: I think this needs some trickery to cope with Types in Ids, similarly to alphaAltVars
+-- | Instantiate a set of universally quantified variables in a 'CoreExprEquality'.
+-- It is important that all type variables appear before any value-level variables in the first argument.
 instantiateCoreExprEq :: [(Var,CoreExpr)] -> CoreExprEquality -> CoreExprEquality
-instantiateCoreExprEq = foldr (.) id . map (uncurry instantiateCoreExprEqVar)
+instantiateCoreExprEq = flip (foldr (uncurry instantiateCoreExprEqVar))
+-- foldr is important here because it effectively does the substitutions in reverse order, 
+-- which is what we want (all value variables should be instantiated before type variables).
 
 ------------------------------------------------------------------------------
