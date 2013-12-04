@@ -40,10 +40,11 @@ module HERMIT.GHC
     , bndrRuleAndUnfoldingVars
 #if __GLASGOW_HASKELL__ <= 706
     , Control.Monad.IO.Class.liftIO
-#endif
+#else
     , runDsMtoCoreM
     , runTcMtoCoreM
     , buildDictionary
+#endif
     ) where
 
 #if __GLASGOW_HASKELL__ <= 706
@@ -65,36 +66,36 @@ import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars) -- we hide th
 #endif
 
 -- hacky direct GHC imports
-import qualified Bag
-import Class (classTyCon)
 import Convert (thRdrNameGuesses)
 import CoreArity
-import DsBinds (dsEvBinds)
-import DsMonad (DsM)
 import Kind (isKind,isLiftedTypeKindCon)
 import OccurAnal (occurAnalyseExpr)
 import Pair (Pair(..))
 import Panic (GhcException(ProgramError), throwGhcException)
 import PprCore (pprCoreExpr)
-import PrelNames (typeableClassName)
-import TcEnv (tcLookupClass)
-import TcMType (newWantedEvVar)
-import TcRnMonad (getCtLoc)
-import TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
-import TcSimplify (solveWantedsTcM)
 import TypeRep (Type(..),TyLit(..))
 import TysPrim (alphaTy, alphaTyVars)
 
 #if __GLASGOW_HASKELL__ <= 706
 import Data.Maybe (isJust)
 #else
+import qualified Bag
+import Class (classTyCon)
 import qualified CoAxiom -- for coAxiomName
+import DsBinds (dsEvBinds)
+import DsMonad (DsM)
+import PrelNames (typeableClassName)
+import TcEnv (tcLookupClass)
+import TcMType (newWantedEvVar)
+import TcRnMonad (getCtLoc)
+import TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
+import TcSimplify (solveWantedsTcM)
+
+import HERMIT.GHC.Typechecker
 #endif
 
 import Data.List (intercalate)
 import Data.Monoid hiding ((<>))
-
-import HERMIT.GHC.Typechecker
 
 import qualified Language.Haskell.TH as TH
 
@@ -291,7 +292,7 @@ bndrRuleAndUnfoldingVars v | isTyVar v = emptyVarSet
   
 --------------------------------------------------------------------------
 
--- TODO: this interface can change however needed
+#if __GLASGOW_HASKELL__ > 706
 runTcMtoCoreM :: ModGuts -> TcM a -> CoreM a
 runTcMtoCoreM guts m = do
     env <- getHscEnv
@@ -326,4 +327,4 @@ buildDictionary guts ty = do
         return bnds
     liftIO $ putStrLn $ showPpr dflags bnds
     runDsMtoCoreM $ dsEvBinds bnds
-
+#endif
