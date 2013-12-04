@@ -18,8 +18,12 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 
+import HERMIT.Dictionary.Common (findIdT)
 import HERMIT.Dictionary.Local.Case (caseSplitInlineR)
 import HERMIT.Dictionary.Reasoning
+import HERMIT.Dictionary.Rules
+
+import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------
 
@@ -75,14 +79,22 @@ listInductionOnT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath
                 -> CoreExprEqualityProof c HermitM -- proof for [] case
                 -> (BiRewrite c HermitM CoreExpr -> CoreExprEqualityProof c HermitM) -- proof for (:) case, given smaller proof
                 -> Translate c HermitM CoreExprEquality ()
-listInductionOnT i nilCaseRs consCaseRs = inductionOnT i $ \ con brs -> let nm = dataConName con in
-                                                                if | cmpString2Name "[]" nm  -> case brs of
+listInductionOnT i nilCaseRs consCaseRs = inductionOnT i $ \ con brs ->
+                                                                if | con == nilDataCon   -> case brs of
                                                                                                   [] -> nilCaseRs
                                                                                                   _  -> error "Bug!"
-                                                                   | cmpString2Name ":" nm   -> case brs of
+                                                                   | con == consDataCon  -> case brs of
                                                                                                   [r] -> consCaseRs r
                                                                                                   _   -> error "Bug!"
-                                                                   | otherwise               -> let msg = "Mystery constructor, this is a bug."
-                                                                                                 in (fail msg, fail msg)
+                                                                   | otherwise           -> let msg = "Mystery constructor, this is a bug."
+                                                                                             in (fail msg, fail msg)
+
+
+
+-- verifyRuleByListInductionT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
+--             => RuleNameString -> TH.Name -> CoreExprEqualityProof c HermitM -> (BiRewrite c HermitM CoreExpr -> CoreExprEqualityProof c HermitM) -> Translate c HermitM a ()
+-- verifyRuleByListInductionT ru_name id_name nilCaseRs consCaseRs =
+--     do i <- findIdT id_name
+--        ruleNameToEqualityT ru_name >>> listInductionOnT i nilCaseRs consCaseRs
 
 ------------------------------------------------------------------------------
