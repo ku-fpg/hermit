@@ -37,18 +37,12 @@ inductionCaseSplit i lhsE rhsE =
     combineAlts (DataAlt con1,vs1,e1) (DataAlt con2,vs2,e2) | con1 == con2 && vs1 == vs2 = return (con1,vs1,e1,e2)
     combineAlts _ _ = fail "Bug in inductionCaseSplit"
 
--- | A general induction principle for any inductive (i.e. finite) data type.
+-- | A general induction principle.  TODO: Is this valid for infinite data types?  Probably not.
 inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
                     => Id -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM) -> Translate c HermitM CoreExprEquality ()
 inductionOnT i genCaseAltProofs =
     do eq@(CoreExprEquality bs lhs rhs) <- idR
        guardMsg (i `elem` bs) ("identifier " ++ var2String i ++ " is not universally quantified in this equality lemma.")
-
-       let bs_minus_i :: [CoreBndr]
-           bs_minus_i = delete i bs
-
-           -- bs_exprs :: [(Var,CoreExpr)]
-           -- bs_exprs = [ (b,varToCoreExpr b) | b <- bs_minus_i ]
 
        cases <- inductionCaseSplit i lhs rhs
 
@@ -59,7 +53,7 @@ inductionOnT i genCaseAltProofs =
                                                          brs = map birewrite eqs -- These eqs now have no universally quantified variables.
                                                                                  -- Thus they can only be used on variables in the induction hypothesis.
                                                                                  -- TODO: consider whether this is unneccassarily restrictive
-                                                         caseEq = CoreExprEquality (bs_minus_i ++ vs) lhsE rhsE
+                                                         caseEq = CoreExprEquality (delete i bs ++ vs) lhsE rhsE
                                                       in return caseEq >>> verifyCoreExprEqualityT (genCaseAltProofs con brs)
 
        mapM_ verifyInductiveCaseT cases
@@ -69,7 +63,7 @@ inductionOnT i genCaseAltProofs =
     discardUniVars (CoreExprEquality _ lhs rhs) = CoreExprEquality [] lhs rhs
 
 
--- | An induction principle for finite lists.
+-- | An induction principle for lists.
 listInductionOnT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
                 => Id -- Id to case split on
                 -> CoreExprEqualityProof c HermitM -- proof for [] case
