@@ -41,6 +41,9 @@ module HERMIT.GHC
 #if __GLASGOW_HASKELL__ <= 706
     , Control.Monad.IO.Class.liftIO
 #endif
+    , runDsMtoCoreM
+    , runTcMtoCoreM
+    , buildDictionary
     ) where
 
 #if __GLASGOW_HASKELL__ <= 706
@@ -62,13 +65,23 @@ import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars) -- we hide th
 #endif
 
 -- hacky direct GHC imports
+import qualified Bag
+import Class (classTyCon)
 import Convert (thRdrNameGuesses)
 import CoreArity
+import DsBinds (dsEvBinds)
+import DsMonad (DsM)
 import Kind (isKind,isLiftedTypeKindCon)
 import OccurAnal (occurAnalyseExpr)
 import Pair (Pair(..))
 import Panic (GhcException(ProgramError), throwGhcException)
 import PprCore (pprCoreExpr)
+import PrelNames (typeableClassName)
+import TcEnv (tcLookupClass)
+import TcMType (newWantedEvVar)
+import TcRnMonad (getCtLoc)
+import TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
+import TcSimplify (solveWantedsTcM)
 import TypeRep (Type(..),TyLit(..))
 import TysPrim (alphaTy, alphaTyVars)
 
@@ -77,8 +90,12 @@ import Data.Maybe (isJust)
 #else
 import qualified CoAxiom -- for coAxiomName
 #endif
+
 import Data.List (intercalate)
 import Data.Monoid hiding ((<>))
+
+import HERMIT.GHC.Typechecker
+
 import qualified Language.Haskell.TH as TH
 
 --------------------------------------------------------------------------
@@ -271,3 +288,42 @@ instance Control.Monad.IO.Class.MonadIO CoreM where
 bndrRuleAndUnfoldingVars :: Var -> VarSet
 bndrRuleAndUnfoldingVars v | isTyVar v = emptyVarSet
                            | otherwise = idRuleAndUnfoldingVars v
+  
+--------------------------------------------------------------------------
+
+-- TODO: this interface can change however needed
+runTcMtoCoreM :: ModGuts -> TcM a -> CoreM a
+runTcMtoCoreM guts m = do
+    env <- getHscEnv
+    -- What is the effect of HsSrcFile (should we be using something else?)
+    -- What should the boolean flag be set to?
+    (msgs, mr) <- liftIO $ initTcFromModGuts env guts HsSrcFile False (mg_module guts) m
+    -- There is probably something better for reporting the errors.
+    let dumpSDocs endMsg = Bag.foldBag (\ d r -> d ++ ('\n':r)) show endMsg
+        showMsgs (warns, errs) = "Errors:\n" ++ dumpSDocs ("Warnings:\n" ++ dumpSDocs "" warns) errs
+    maybe (fail $ showMsgs msgs) return mr
+
+runDsMtoCoreM :: DsM a -> CoreM a
+runDsMtoCoreM _m = fail "runDsMtoCoreM unimplemented"
+
+buildDictionary :: ModGuts -> Type -> CoreM [CoreBind]
+buildDictionary guts ty = do
+    dflags <- getDynFlags
+    bnds <- runTcMtoCoreM guts $ do
+        cls <- tcLookupClass typeableClassName
+        liftIO $ putStrLn $ "class: " ++ (showPpr dflags cls)
+        liftIO $ putStrLn $ "classTyCon: " ++ (showPpr dflags $ classTyCon cls)
+        liftIO $ putStrLn $ "tyConKind: " ++ (showPpr dflags $ tyConKind $ classTyCon cls)
+        let predTy = mkClassPred cls [typeKind ty, ty] -- recall that Typeable is now poly-kinded
+        liftIO $ putStrLn $ "isPredTy: " ++ (show $ isPredTy predTy)
+        liftIO $ putStrLn $ "predTy: " ++ (showPpr dflags $ predTy)
+        liftIO $ putStrLn $ "typeKind: " ++ (showPpr dflags $ typeKind predTy)
+        loc <- getCtLoc $ GivenOrigin UnkSkol
+        evar <- newWantedEvVar predTy
+        let nonC = mkNonCanonical loc $ CtWanted { ctev_pred = predTy, ctev_evar = evar }
+            wCs = mkFlatWC [nonC]
+        (_wCs', bnds) <- solveWantedsTcM wCs
+        return bnds
+    liftIO $ putStrLn $ showPpr dflags bnds
+    runDsMtoCoreM $ dsEvBinds bnds
+

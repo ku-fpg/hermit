@@ -197,6 +197,7 @@ Library
 
        HERMIT.External
        HERMIT.GHC
+       HERMIT.GHC.Typechecker
        HERMIT.Interp
        HERMIT.Kernel
        HERMIT.Kernel.Scoped

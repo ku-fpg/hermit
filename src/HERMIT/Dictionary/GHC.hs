@@ -20,6 +20,7 @@ module HERMIT.Dictionary.GHC
        , occurAnalyseExprChangedR
        , occurAnalyseAndDezombifyR
        , dezombifyR
+       , buildDictionaryT
        )
 where
 
@@ -35,6 +36,7 @@ import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Monad
 
 import HERMIT.Dictionary.Debug hiding (externals)
 
@@ -57,6 +59,8 @@ externals =
                 , "will catch that however."] .+ Deep .+ Debug .+ Query
          , external "lint-module" (promoteModGutsT lintModuleT :: TranslateH Core String)
                 [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
+         , external "build-typeable-int" (promoteModGutsT (buildDictionaryT intTy) :: TranslateH Core ())
+                [ "test building a dictionary" ]
          ]
 
 ------------------------------------------------------------------------
@@ -198,3 +202,10 @@ lookupUsageDetails = lookupVarEnv
 -}
 
 ----------------------------------------------------------------------
+
+buildDictionaryT :: Type -> TranslateH ModGuts () -- [CoreBind]
+buildDictionaryT ty = do
+    bnds <- contextfreeT (liftCoreM . flip buildDictionary ty)
+    dflags <- dynFlagsT
+    return (mkCoreLets bnds (mkIntLitInt dflags 0)) >>> observeR "result"
+    return ()
