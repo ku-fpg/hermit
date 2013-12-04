@@ -179,6 +179,7 @@ var2THName = name2THName . varName
 
 -- | Compare a 'String' to a 'Name' for equality.
 -- Strings containing a period are assumed to be fully qualified names.
+-- TODO: what about composition (.)?
 cmpString2Name :: String -> Name -> Bool
 cmpString2Name str nm | isQualified str = str == fqName nm
                       | otherwise       = str == uqName nm
@@ -289,7 +290,7 @@ instance Control.Monad.IO.Class.MonadIO CoreM where
 bndrRuleAndUnfoldingVars :: Var -> VarSet
 bndrRuleAndUnfoldingVars v | isTyVar v = emptyVarSet
                            | otherwise = idRuleAndUnfoldingVars v
-  
+
 --------------------------------------------------------------------------
 
 #if __GLASGOW_HASKELL__ > 706
