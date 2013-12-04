@@ -13,12 +13,14 @@ module HERMIT.Dictionary.Reasoning
   , verifyIsomorphismT
   , verifyRetractionT
   , retractionBR
+  , instantiateCoreExprEq
   )
 where
 
 import Control.Applicative
 import Control.Arrow
 
+import Data.List (delete)
 import Data.Monoid
 
 import HERMIT.Context
@@ -32,6 +34,7 @@ import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Fold hiding (externals)
+import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Local.Let (nonRecIntroR)
 import HERMIT.Dictionary.Unfold hiding (externals)
 
@@ -182,5 +185,19 @@ retractionBR mr f g = beforeBiR
 -- | Given @f :: X -> Y@ and @g :: Y -> X@, and a proof that @f (g y)@ ==> @y@, then @f (g y)@ <==> @y@.
 retraction :: Maybe (RewriteH Core) -> CoreString -> CoreString -> BiRewriteH CoreExpr
 retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
+
+------------------------------------------------------------------------------
+
+-- TODO: I think this needs some trickery to cope with Types in Ids, similarly to substCoreAlt and alphaAltVar
+instantiateCoreExprEqVar :: Var -> CoreExpr -> CoreExprEquality -> CoreExprEquality
+instantiateCoreExprEqVar i e (CoreExprEquality bs lhs rhs) =
+       let bs'  = delete i bs
+           lhs' = substCoreExpr i e lhs
+           rhs' = substCoreExpr i e rhs
+        in CoreExprEquality bs' lhs' rhs'
+
+-- TODO: I think this needs some trickery to cope with Types in Ids, similarly to alphaAltVars
+instantiateCoreExprEq :: [(Var,CoreExpr)] -> CoreExprEquality -> CoreExprEquality
+instantiateCoreExprEq = foldr (.) id . map (uncurry instantiateCoreExprEqVar)
 
 ------------------------------------------------------------------------------
