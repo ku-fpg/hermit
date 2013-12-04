@@ -142,7 +142,7 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
 -- h :: B -> B
 
 -- | If @f@ is strict, then (@f (g a)@ == @h (f a)@)  ==\>  (@f (fix g)@ == @fix h@)
-fixFusionRuleBR :: Maybe (RewriteH CoreExpr, RewriteH CoreExpr) -> Maybe (RewriteH CoreExpr) -> CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
+fixFusionRuleBR :: Maybe (CoreExprEqualityProof HermitC HermitM) -> Maybe (RewriteH CoreExpr) -> CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
 fixFusionRuleBR meq mfstrict f g h = beforeBiR
   (prefixFailMsg "fixed-point fusion failed: " $
    do (tyA,tyB) <- funArgResTypes f
@@ -150,11 +150,11 @@ fixFusionRuleBR meq mfstrict f g h = beforeBiR
       tyB'      <- endoFunType h
       guardMsg (typeAlphaEq tyA tyA' && typeAlphaEq tyB tyB') "given functions do not have compatible types."
       whenJust (verifyStrictT f) mfstrict
-      whenJust (\ (lhsR,rhsR) ->
+      whenJust (\ eq ->
                   do a <- constT (newGlobalIdH "a" tyA)
                      let lhs = App f (App g (Var a))
                          rhs = App h (App f (Var a))
-                     verifyEqualityCommonTargetT lhs rhs lhsR rhsR
+                     verifyEqualityCommonTargetT lhs rhs eq
                )
                meq
   )

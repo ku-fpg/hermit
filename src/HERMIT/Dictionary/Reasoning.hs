@@ -4,6 +4,7 @@ module HERMIT.Dictionary.Reasoning
   ( -- * Equational Reasoning
     externals
   , CoreExprEquality(..)
+  , CoreExprEqualityProof
   , eqLhsIntroR
   , eqRhsIntroR
   , birewrite
@@ -58,6 +59,8 @@ externals =
 -- | An equality is represented as a set of universally quantified binders, and then the LHS and RHS of the equality.
 data CoreExprEquality = CoreExprEquality [CoreBndr] CoreExpr CoreExpr
 
+type CoreExprEqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
+
 -- | @e@ ==> @let v = lhs in e@
 eqLhsIntroR :: CoreExprEquality -> Rewrite c HermitM Core
 eqLhsIntroR (CoreExprEquality bs lhs _) = nonRecIntroR "lhs" (mkCoreLams bs lhs)
@@ -108,13 +111,13 @@ instance BuildEquality a => BuildEquality (CoreExpr -> a) where
         return $ CoreExprEquality (x:bnds) lhs rhs
 
 -- | Verify that a 'CoreExprEquality' holds, by applying a rewrite to each side, and checking that the results are equal.
-verifyCoreExprEqualityT :: forall c m. (ReadPath c Crumb, MonadCatch m, Walker c Core) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Translate c m CoreExprEquality ()
-verifyCoreExprEqualityT lhsR rhsR =
+verifyCoreExprEqualityT :: forall c m. (ReadPath c Crumb, MonadCatch m, Walker c Core) => CoreExprEqualityProof c m -> Translate c m CoreExprEquality ()
+verifyCoreExprEqualityT (lhsR,rhsR) =
      do CoreExprEquality bs lhs rhs <- idR
         let lhsWithLams = mkCoreLams bs lhs
             rhsWithLams = mkCoreLams bs rhs
             path        = replicate (length bs) Lam_Body
-        verifyEqualityCommonTargetT lhsWithLams rhsWithLams (coreExprPathR path lhsR) (coreExprPathR path rhsR)
+        verifyEqualityCommonTargetT lhsWithLams rhsWithLams (coreExprPathR path lhsR, coreExprPathR path rhsR)
   where
     coreExprPathR :: Path Crumb -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
     coreExprPathR p r = extractR (pathR p (promoteExprR r :: Rewrite c m Core))
@@ -129,8 +132,8 @@ verifyEqualityLeftToRightT sourceExpr targetExpr r =
      guardMsg (exprAlphaEq targetExpr resultExpr) "result of running proof on lhs of equality does not match rhs of equality."
 
 -- | Given two expressions, and a rewrite to apply to each, verify that the resulting expressions are equal.
-verifyEqualityCommonTargetT :: MonadCatch m => CoreExpr -> CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Translate c m a ()
-verifyEqualityCommonTargetT lhs rhs lhsR rhsR =
+verifyEqualityCommonTargetT :: MonadCatch m => CoreExpr -> CoreExpr -> CoreExprEqualityProof c m -> Translate c m a ()
+verifyEqualityCommonTargetT lhs rhs (lhsR,rhsR) =
   prefixFailMsg "equality verification failed: " $
   do lhsResult <- lhsR <<< return lhs
      rhsResult <- rhsR <<< return rhs

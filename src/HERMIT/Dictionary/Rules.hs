@@ -229,11 +229,11 @@ ruleNameToEqualityT :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleN
 ruleNameToEqualityT name = getSingletonHermitRuleT name >>> ruleToEqualityT
 
 verifyRuleT :: (ReadPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
-            => RuleNameString -> Rewrite c HermitM CoreExpr -> Rewrite c HermitM CoreExpr -> Translate c HermitM a ()
-verifyRuleT name lhsR rhsR = ruleNameToEqualityT name >>> verifyCoreExprEqualityT lhsR rhsR
+            => RuleNameString -> CoreExprEqualityProof c HermitM -> Translate c HermitM a ()
+verifyRuleT name proof = ruleNameToEqualityT name >>> verifyCoreExprEqualityT proof
 
 verifyRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> TranslateH Core ()
-verifyRule name lhsR rhsR = verifyRuleT name (extractR lhsR) (extractR rhsR)
+verifyRule name lhsR rhsR = verifyRuleT name (extractR lhsR, extractR rhsR)
 
 biRuleUnsafeR ::
            ( BoundVars c
@@ -253,16 +253,16 @@ biRuleR :: ( BoundVars c
            , ReadBindings c
            , ExtendPath c Crumb
            , ReadPath c Crumb)
-        => RuleNameString -> Rewrite c HermitM CoreExpr -> Rewrite c HermitM CoreExpr -> BiRewrite c HermitM CoreExpr
-biRuleR name lhsR rhsR = beforeBiR
+        => RuleNameString -> CoreExprEqualityProof c HermitM -> BiRewrite c HermitM CoreExpr
+biRuleR name proof = beforeBiR
                             (do eq <- ruleNameToEqualityT name
-                                verifyCoreExprEqualityT lhsR rhsR <<< return eq
+                                verifyCoreExprEqualityT proof <<< return eq
                                 return eq
                             )
                             birewrite
 
 biRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> BiRewriteH Core
-biRule name lhsR rhsR = promoteExprBiR $ biRuleR name (extractR lhsR) (extractR rhsR)
+biRule name lhsR rhsR = promoteExprBiR $ biRuleR name (extractR lhsR, extractR rhsR)
 
 ------------------------------------------------------------------------
 
