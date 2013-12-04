@@ -1,0 +1,13 @@
+rhs-of 'main
+rule-lhs-intro "++ []"
+let-bind
+nonrec-rhs
+lam-body
+lam-body
+case-split-inline 'xs
+{ [case-alt 0, alt-rhs]
+  load-and-run "BaseCase.hss"
+}
+{ [case-alt 1, alt-rhs]
+  load-and-run "InductiveStep.hss"
+}

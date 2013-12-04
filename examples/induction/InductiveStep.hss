@@ -1,0 +1,8 @@
+-- Inductive Step
+--
+-- (y:ys) ++ []  =>  y:ys
+--
+
+rule-unsafe "(:) ++"
+app-arg
+-- Invoke induction hypothesis
