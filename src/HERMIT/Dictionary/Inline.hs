@@ -8,6 +8,7 @@ module HERMIT.Dictionary.Inline
          , inlineR
          , inlineNameR
          , inlineNamesR
+         , inlineMatchingPredR
          , inlineCaseScrutineeR
          , inlineCaseAlternativeR
          , configurableInlineR
@@ -61,12 +62,16 @@ data InlineConfig           = CaseBinderOnly CaseBinderInlineOption | AllBinders
 
 -- | If the current variable matches the given name, then inline it.
 inlineNameR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
-inlineNameR nm = configurableInlineR AllBinders (arr $ cmpTHName2Var nm)
+inlineNameR nm = inlineMatchingPredR (cmpTHName2Var nm)
 
 -- | If the current variable matches any of the given names, then inline it.
 inlineNamesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
 inlineNamesR []  = fail "inline-names failed: no names given."
-inlineNamesR nms = configurableInlineR AllBinders (arr $ \ v -> any (flip cmpTHName2Var v) nms)
+inlineNamesR nms = inlineMatchingPredR (\ v -> any (flip cmpTHName2Var v) nms)
+
+-- | If the current variable satisifies the predicate, then inline it.
+inlineMatchingPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => (Id -> Bool) -> Rewrite c HermitM CoreExpr
+inlineMatchingPredR idPred = configurableInlineR AllBinders (arr $ idPred)
 
 -- | Inline the current variable.
 inlineR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr

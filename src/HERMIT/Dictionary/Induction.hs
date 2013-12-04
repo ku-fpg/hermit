@@ -18,12 +18,8 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 
-import HERMIT.Dictionary.Common (findIdT)
 import HERMIT.Dictionary.Local.Case (caseSplitInlineR)
 import HERMIT.Dictionary.Reasoning
-import HERMIT.Dictionary.Rules
-
-import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------
 
@@ -31,10 +27,10 @@ import qualified Language.Haskell.TH as TH
 
 ------------------------------------------------------------------------------
 
-inductionCaseSplit :: Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(DataCon,[Var],CoreExpr,CoreExpr)]
-inductionCaseSplit i e1 e2 =
-    do Case _ _ _ alts1 <- caseSplitInlineR i <<< return e1
-       Case _ _ _ alts2 <- caseSplitInlineR i <<< return e2
+inductionCaseSplit :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(DataCon,[Var],CoreExpr,CoreExpr)]
+inductionCaseSplit i lhsE rhsE =
+    do Case _ _ _ alts1 <- caseSplitInlineR (==i) <<< return lhsE
+       Case _ _ _ alts2 <- caseSplitInlineR (==i) <<< return rhsE
        constT (zipWithM combineAlts alts1 alts2)
   where
     combineAlts :: CoreAlt -> CoreAlt -> HermitM (DataCon,[Var],CoreExpr,CoreExpr)

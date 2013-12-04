@@ -93,13 +93,13 @@ externals =
         , "case L of L -> e ==> e" ]                                         .+ Shallow .+ Eval
     , external "case-reduce-id" (promoteExprR caseReduceIdR :: RewriteH Core)
         [ "Inline the case scrutinee (if it is an identifier) and then case-reduce." ] .+ Shallow .+ Eval .+ Context
-    , external "case-split" (promoteExprR . caseSplitR :: TH.Name -> RewriteH Core)
+    , external "case-split" (promoteExprR . caseSplitR . cmpTHName2Var :: TH.Name -> RewriteH Core)
         [ "case-split 'x"
         , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ] .+ Shallow
-    , external "case-split-inline" (caseSplitInlineR :: TH.Name -> RewriteH Core)
+    , external "case-split-inline" (promoteExprR . caseSplitInlineR . cmpTHName2Var :: TH.Name -> RewriteH Core)
         [ "Like case-split, but additionally inlines the matched constructor "
         , "applications for all occurances of the named variable." ] .+ Deep
-    , external "case-intro-seq" (promoteExprR . caseIntroSeqR :: TH.Name -> RewriteH Core)
+    , external "case-intro-seq" (promoteExprR . caseIntroSeqR . cmpTHName2Var :: TH.Name -> RewriteH Core)
         [ "Force evaluation of a variable by introducing a case."
         , "case-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow .+ Introduce
     , external "case-elim-seq" (promoteExprR caseElimSeqR :: RewriteH Core)
@@ -322,11 +322,11 @@ caseReduceDataconR = prefixFailMsg "Case reduction failed: " $
 -- e ==> case i of i
 --         []     -> e
 --         (a:as) -> e
-caseSplitR :: TH.Name -> Rewrite c HermitM CoreExpr
-caseSplitR nm = prefixFailMsg "caseSplit failed: " $
-               do i <- matchingFreeIdT nm
-                  let (tycon, tys) = splitTyConApp (idType i)
-                      aNms         = map (:[]) $ cycle ['a'..'z']
+caseSplitR :: (Id -> Bool) -> Rewrite c HermitM CoreExpr
+caseSplitR idPred = prefixFailMsg "caseSplit failed: " $
+               do i            <- matchingFreeIdT idPred
+                  (tycon, tys) <- splitTyConAppM (idType i)
+                  let aNms     = map (:[]) $ cycle ['a'..'z']
                   contextfreeT $ \ e -> do dcsAndVars <- mapM (\ dc -> (dc,) <$> sequence [ newIdH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ])
                                                               (tyConDataCons tycon)
                                            let alts = [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
@@ -337,19 +337,19 @@ caseSplitR nm = prefixFailMsg "caseSplit failed: " $
 --
 -- e -> case v of v
 --        _ -> e
-caseIntroSeqR :: TH.Name -> Rewrite c HermitM CoreExpr
-caseIntroSeqR nm = prefixFailMsg "case-intro-seq failed: " $
-             do i <- matchingFreeIdT nm
+caseIntroSeqR :: (Id -> Bool) -> Rewrite c HermitM CoreExpr
+caseIntroSeqR idPred = prefixFailMsg "case-intro-seq failed: " $
+             do i <- matchingFreeIdT idPred
                 e <- idR
                 guardMsg (not $ isTyCoArg e) "cannot case on a type or coercion."
                 let alts = [(DEFAULT, [], e)]
                 return $ Case (Var i) i (coreAltsType alts) alts
 
 -- auxillary function for use by caseSplit and caseSeq
-matchingFreeIdT :: Monad m => TH.Name -> Translate c m CoreExpr Id
-matchingFreeIdT nm = do
+matchingFreeIdT :: Monad m => (Id -> Bool) -> Translate c m CoreExpr Id
+matchingFreeIdT idPred = do
   fvs <- arr freeVarsExpr
-  case varSetElems (filterVarSet (\ v -> cmpTHName2Var nm v && isId v) fvs) of
+  case varSetElems (filterVarSet (\ v -> idPred v && isId v) fvs) of -- cmpTHName2Var nm v
     []    -> fail "provided name is not a free identifier."
     [i]   -> return i
     is    -> fail ("provided name matches " ++ show (length is) ++ " free identifiers.")
@@ -358,8 +358,8 @@ matchingFreeIdT nm = do
 -- for each occurance of the named variable.
 --
 -- > caseSplitInline nm = caseSplit nm >>> anybuR (inlineName nm)
-caseSplitInlineR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM Core
-caseSplitInlineR nm = promoteR (caseSplitR nm) >>> anybuR (promoteExprR $ inlineNameR nm)
+caseSplitInlineR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => (Id -> Bool) -> Rewrite c HermitM CoreExpr
+caseSplitInlineR idPred = caseSplitR idPred >>> extractR (anybuR (promoteExprR $ inlineMatchingPredR idPred) :: Rewrite c HermitM Core)
 
 ------------------------------------------------------------------------------
 

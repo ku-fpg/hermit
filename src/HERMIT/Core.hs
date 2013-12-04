@@ -59,6 +59,7 @@ module HERMIT.Core
           , exprKindOrType
           , exprTypeM
           , endoFunType
+          , splitTyConAppM
           , splitFunTypeM
           , funArgResTypes
           , funsWithInverseTypes
@@ -79,6 +80,7 @@ import Language.KURE.Combinators.Monad
 import Language.KURE.MonadCatch
 
 import HERMIT.GHC
+import HERMIT.Utilities
 
 import Data.List (intercalate)
 
@@ -373,15 +375,19 @@ mapAlts f alts = [ (ac, vs, f e) | (ac, vs, e) <- alts ]
 
 -----------------------------------------------------------------------
 
+-- | As 'splitTyConApp', catching failure in a monad.
+splitTyConAppM :: Monad m => Type -> m (TyCon, [Type])
+splitTyConAppM = maybeM "splitTyConApp failed." . splitTyConApp_maybe
+
+-- | Return the domain and codomain types of a function type, if it is a function type.
+splitFunTypeM :: Monad m => Type -> m (Type,Type)
+splitFunTypeM = maybeM "not a function type." . splitFunTy_maybe
+
 -- | Return the domain/codomain type of an endofunction expression.
 endoFunType :: Monad m => CoreExpr -> m Type
 endoFunType f = do (ty1,ty2) <- funArgResTypes f
                    guardMsg (eqType ty1 ty2) ("argument and result types differ.")
                    return ty1
-
--- | Return the domain and codomain types of a function type, if it is a function type.
-splitFunTypeM :: Monad m => Type -> m (Type,Type)
-splitFunTypeM = maybe (fail "not a function type.") return . splitFunTy_maybe
 
 -- | Return the domain and codomain types of a function expression.
 funArgResTypes :: Monad m => CoreExpr -> m (Type,Type)

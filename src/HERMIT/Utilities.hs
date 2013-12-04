@@ -4,6 +4,7 @@ module HERMIT.Utilities
   , equivalentBy
   , equivalent
   , whenJust
+  , maybeM
   )
 where
 
@@ -36,5 +37,11 @@ equivalent = equivalentBy (==)
 -- | Perform the monadic action only in the 'Just' case.
 whenJust :: Monad m => (a -> m ()) -> Maybe a -> m ()
 whenJust f = maybe (return ()) f
+
+------------------------------------------------------------------------------
+
+-- | Lift a 'Maybe' into an arbitrary monad, using 'return' or 'fail'.
+maybeM :: Monad m => String -> Maybe a -> m a
+maybeM msg = maybe (fail msg) return
 
 ------------------------------------------------------------------------------
