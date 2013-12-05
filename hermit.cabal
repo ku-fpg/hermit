@@ -175,6 +175,7 @@ Library
        HERMIT.Dictionary.Fold
        HERMIT.Dictionary.Function
        HERMIT.Dictionary.GHC
+       HERMIT.Dictionary.Induction
        HERMIT.Dictionary.Inline
        HERMIT.Dictionary.Kure
        HERMIT.Dictionary.Local

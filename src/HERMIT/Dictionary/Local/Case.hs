@@ -357,7 +357,7 @@ matchingFreeIdT idPred = do
 -- | Like caseSplit, but additionally inlines the constructor applications
 -- for each occurance of the named variable.
 --
--- > caseSplitInline nm = caseSplit nm >>> anybuR (inlineName nm)
+-- > caseSplitInline idPred ~ caseSplit idPred >>> anybuR (inlineMatchingPredR idPred)
 caseSplitInlineR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => (Id -> Bool) -> Rewrite c HermitM CoreExpr
 caseSplitInlineR idPred = caseSplitR idPred >>> extractR (anybuR (promoteExprR $ inlineMatchingPredR idPred) :: Rewrite c HermitM Core)
 

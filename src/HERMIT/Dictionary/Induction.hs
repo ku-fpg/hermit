@@ -18,7 +18,8 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 
-import HERMIT.Dictionary.Local.Case (caseSplitInlineR)
+import HERMIT.Dictionary.Inline (inlineMatchingPredR)
+import HERMIT.Dictionary.Local.Case (caseSplitR)
 import HERMIT.Dictionary.Reasoning
 
 ------------------------------------------------------------------------------
@@ -27,15 +28,31 @@ import HERMIT.Dictionary.Reasoning
 
 ------------------------------------------------------------------------------
 
-inductionCaseSplit :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(DataCon,[Var],CoreExpr,CoreExpr)]
+inductionCaseSplit :: forall c x. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(DataCon,[Var],CoreExpr,CoreExpr)]
 inductionCaseSplit i lhsE rhsE =
-    do Case _ _ _ alts1 <- caseSplitInlineR (==i) <<< return lhsE
-       Case _ _ _ alts2 <- caseSplitInlineR (==i) <<< return rhsE
-       constT (zipWithM combineAlts alts1 alts2)
+    do Case s w ty alts1 <- caseSplitR (== i) <<< return lhsE
+       let alts2 = mapAlts (\ _ -> rhsE) alts1
+       Case _ _ _ alts1' <- anybuInlineScrutineeR <<< return (Case s w ty alts1)
+       Case _ _ _ alts2' <- anybuInlineScrutineeR <<< return (Case s w ty alts2)
+       constT (zipWithM combineAlts alts1' alts2')
   where
+    anybuInlineScrutineeR :: Rewrite c HermitM CoreExpr
+    anybuInlineScrutineeR = extractR (anybuR $ promoteExprR $ inlineMatchingPredR (== i) :: Rewrite c HermitM Core)
+
     combineAlts :: CoreAlt -> CoreAlt -> HermitM (DataCon,[Var],CoreExpr,CoreExpr)
     combineAlts (DataAlt con1,vs1,e1) (DataAlt con2,vs2,e2) | con1 == con2 && vs1 == vs2 = return (con1,vs1,e1,e2)
     combineAlts _ _ = fail "Bug in inductionCaseSplit"
+
+
+-- inductionCaseSplit :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(DataCon,[Var],CoreExpr,CoreExpr)]
+-- inductionCaseSplit i lhsE rhsE =
+--     do Case _ _ _ alts1 <- caseSplitInlineR (==i) <<< return lhsE
+--        Case _ _ _ alts2 <- caseSplitInlineR (==i) <<< return rhsE
+--        constT (zipWithM combineAlts alts1 alts2)
+--   where
+--     combineAlts :: CoreAlt -> CoreAlt -> HermitM (DataCon,[Var],CoreExpr,CoreExpr)
+--     combineAlts (DataAlt con1,vs1,e1) (DataAlt con2,vs2,e2) | con1 == con2 && vs1 == vs2 = return (con1,vs1,e1,e2)
+--     combineAlts _ _ = fail "Bug in inductionCaseSplit"
 
 -- | A general induction principle.  TODO: Is this valid for infinite data types?  Probably not.
 inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)

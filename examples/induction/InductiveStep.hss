@@ -5,4 +5,4 @@
 
 rule-unsafe "(:) ++"
 app-arg
--- Invoke induction hypothesis
+rule-unsafe "++ []"  -- Temporary.  This should actually invoke a provided induction hypothesis.
