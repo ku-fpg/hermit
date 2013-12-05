@@ -19,7 +19,7 @@ module HERMIT.Dictionary.Navigation
        )
 where
 
-import Data.Monoid (mempty)
+import Data.Monoid
 
 import Control.Arrow
 
@@ -27,7 +27,7 @@ import HERMIT.Core
 import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.External
-import HERMIT.GHC
+import HERMIT.GHC hiding ((<>))
 
 import HERMIT.Dictionary.Navigation.Crumbs
 
@@ -53,8 +53,15 @@ externals = crumbExternals ++ map (.+ Navigation)
             , external "consider" (considerConstruct :: String -> TranslateH Core LocalPathH)
                 [ "consider <c> focuses on the first construct <c>.",
                   recognizedConsiderables]
+
             , external "arg" (promoteExprT . nthArgPath :: Int -> TranslateH Core LocalPathH)
                 [ "arg n focuses on the (n-1)th argument of a nested application." ]
+            , external "lams-body" (promoteExprT lamsBodyT :: TranslateH Core LocalPathH)
+                [ "Descend into the body after a sequence of lambdas." ]
+            , external "lets-body" (promoteExprT letsBodyT :: TranslateH Core LocalPathH)
+                [ "Descend into the body after a sequence of let bindings." ]
+            , external "prog-end" (promoteModGutsT gutsProgEndT <+ promoteProgT progEndT :: TranslateH Core LocalPathH)
+                [ "Descend to the end of a program." ]
 
             , external "parent-of" (parentOfT :: TranslateH Core LocalPathH -> TranslateH Core LocalPathH)
                 [ "Focus on the parent of another focal point." ]
@@ -244,5 +251,27 @@ nthArgPath n = contextfreeT $ \ e -> let funCrumbs = appCount e - 1 - n
                                       in if funCrumbs < 0
                                           then fail ("Argument " ++ show n ++ " does not exist.")
                                           else return (SnocPath (replicate funCrumbs App_Fun) @@ App_Arg)
+
+---------------------------------------------------------------------------------------
+
+exhaustRepeatCrumbT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c CoreTC, MonadCatch m) => Crumb -> Translate c m CoreTC LocalPathH
+exhaustRepeatCrumbT cr = let l = exhaustPathL (repeat cr)
+                          in withLocalPathT (focusT l exposeLocalPathT)
+
+-- | Construct a path to the body of a sequence of lambdas.
+lamsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c CoreTC, MonadCatch m) => Translate c m CoreExpr LocalPathH
+lamsBodyT = extractT (exhaustRepeatCrumbT Lam_Body)
+
+-- | Construct a path to the body of a sequence of let bindings.
+letsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c CoreTC, MonadCatch m) => Translate c m CoreExpr LocalPathH
+letsBodyT = extractT (exhaustRepeatCrumbT Let_Body)
+
+-- | Construct a path to end of a program.
+progEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c CoreTC, MonadCatch m) => Translate c m CoreProg LocalPathH
+progEndT = extractT (exhaustRepeatCrumbT ProgCons_Tail)
+
+-- | Construct a path to teh end of a program, starting at the 'ModGuts'.
+gutsProgEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c CoreTC, MonadCatch m) => Translate c m ModGuts LocalPathH
+gutsProgEndT = modGutsT progEndT (\ _ p -> (mempty @@ ModGuts_Prog) <> p)
 
 ---------------------------------------------------------------------------------------
