@@ -1,6 +1,7 @@
 load-as-rewrite "BaseCaseR"      "BaseCase.hss"
 load-as-rewrite "InductiveStepR" "InductiveStep.hss"
 
+{
 rhs-of 'main
 rule-lhs-intro "++ []"
 let-bind
@@ -14,6 +15,9 @@ case-split-inline 'xs
 { [case-alt 1, alt-rhs]
   InductiveStepR
 }
+}
+
+prog-end
 
 verify-rule-by-list-induction "++ []" 'xs BaseCaseR id InductiveStepR id
 

@@ -1,6 +1,7 @@
 module HERMIT.Utilities
   ( -- * Utilities
     nodups
+  , soleElement
   , equivalentBy
   , equivalent
   , whenJust
@@ -14,6 +15,11 @@ where
 nodups :: Eq a => [a] -> Bool
 nodups []     = True
 nodups (a:as) = (a `notElem` as) && nodups as
+
+soleElement :: Monad m => [a] -> m a
+soleElement []  = fail "soleElement: list is empty."
+soleElement [a] = return a
+soleElement _   = fail "soleElement: multiple elements found."
 
 ------------------------------------------------------------------------------
 
@@ -37,8 +43,6 @@ equivalent = equivalentBy (==)
 -- | Perform the monadic action only in the 'Just' case.
 whenJust :: Monad m => (a -> m ()) -> Maybe a -> m ()
 whenJust f = maybe (return ()) f
-
-------------------------------------------------------------------------------
 
 -- | Lift a 'Maybe' into an arbitrary monad, using 'return' or 'fail'.
 maybeM :: Monad m => String -> Maybe a -> m a

@@ -247,9 +247,7 @@ type BiRewritecHermitMCoreExprShouldGoHere = ()
 
 verifyRuleByListInductionT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
             => RuleNameString -> TH.Name -> CoreExprEqualityProof c HermitM -> (BiRewritecHermitMCoreExprShouldGoHere -> CoreExprEqualityProof c HermitM) -> Translate c HermitM a ()
-verifyRuleByListInductionT r_name i_name nilCaseProof consCaseProof =
-    do i <- findIdT i_name
-       ruleNameToEqualityT r_name >>> listInductionOnT i nilCaseProof (\ _ -> consCaseProof ())
+verifyRuleByListInductionT r_name i_name nilCaseProof consCaseProof = ruleNameToEqualityT r_name >>> listInductionOnT (cmpTHName2Var i_name) nilCaseProof (\ _ -> consCaseProof ())
 
 verifyRuleByListInduction  :: RuleNameString    -- Name of Rule to prove
                            -> TH.Name           -- Name if Id to perform induction on
