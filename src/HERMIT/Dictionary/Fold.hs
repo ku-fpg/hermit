@@ -74,7 +74,7 @@ foldR nm = prefixFailMsg "Fold failed: " $ do
     foldVarR v Nothing
 
 foldVarR :: ReadBindings c => Var -> Maybe BindingDepth -> Rewrite c HermitM CoreExpr
-foldVarR v md = do 
+foldVarR v md = do
     case md of
         Nothing    -> return ()
         Just depth -> do depth' <- varBindingDepthT v
@@ -110,16 +110,18 @@ fold i lam exp = do
     es <- sequence [ join (Map.lookup v m) | v <- vs ]
     return $ mkCoreApps (varToCoreExpr i) es
 
--- Note: Id in the concrete instance is first
--- (not the Id found in the definition we are trying to fold).
-addAlpha :: Id -> Id -> [(Id,Id)] -> [(Id,Id)]
+-- Note: Var in the concrete instance is first
+-- (not the Var found in the definition we are trying to fold).
+addAlpha :: Var -> Var -> [(Var,Var)] -> [(Var,Var)]
 addAlpha rId lId alphas | rId == lId = alphas
                         | otherwise  = (rId,lId) : alphas
+
+------------------------------------------------------------------------
 
 -- Note: return list can have duplicate keys, caller is responsible
 -- for checking that dupes refer to same expression
 foldMatch :: [Var]          -- ^ vars that can unify with anything
-          -> [(Id,Id)]      -- ^ alpha equivalences, wherever there is binding
+          -> [(Var,Var)]    -- ^ alpha equivalences, wherever there is binding
                             --   note: we depend on behavior of lookup here, so new entries
                             --         should always be added to the front of the list so
                             --         we don't have to explicity remove them when shadowing occurs
@@ -171,3 +173,27 @@ foldMatch vs _  (Type t@(TyVarTy v)) e@(Type t') | v `elem` vs = return [(v,e)]
 foldMatch _ _   (Type t)     (Type t')     | eqType t t' = return []
 foldMatch _ _   (Coercion c) (Coercion c') | coreEqCoercion c c' = return []
 foldMatch _ _ _ _ = Nothing
+
+
+foldMatchType :: [TyVar]          -- ^ vars that can unify with anything
+          -> [(TyVar,TyVar)]      -- ^ alpha equivalences, wherever there is binding
+                                  --   note: we depend on behavior of lookup here, so new entries
+                                  --         should always be added to the front of the list so
+                                  --         we don't have to explicity remove them when shadowing occurs
+          -> Type                 -- ^ pattern we are matching on
+          -> Type                 -- ^ expression we are checking
+          -> Maybe [(TyVar,Type)] -- ^ mapping of vars to expressions, or failure
+
+foldMatchType vs as (AppTy ty1 ty2) (AppTy ty1' ty2') = do
+    x <- foldMatchType vs as ty1 ty1'
+    y <- foldMatchType vs as ty2 ty2'
+    return (x ++ y)
+
+foldMatchType vs as (FunTy ty1 ty2) (FunTy ty1' ty2') = do
+    x <- foldMatchType vs as ty1 ty1'
+    y <- foldMatchType vs as ty2 ty2'
+    return (x ++ y)
+
+foldMatchType vs as (ForAllTy v ty) (ForAllTy v' ty') = foldMatchType (filter (/=v) vs) (addAlpha v' v as) ty ty'
+
+------------------------------------------------------------------------
