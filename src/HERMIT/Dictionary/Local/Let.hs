@@ -19,6 +19,7 @@ module HERMIT.Dictionary.Local.Let
        , letNonRecIntroR
        , progNonRecIntroR
        , nonRecIntroR
+       , letIntroUnfoldingR
          -- ** Let Floating Out
        , letFloatAppR
        , letFloatArgR
@@ -56,6 +57,7 @@ import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.GHC hiding (externals)
+import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.AlphaConversion hiding (externals)
 
 import HERMIT.Dictionary.Local.Bind hiding (externals)
@@ -83,6 +85,8 @@ externals =
     --     , "only matches non-recursive lets" ]  .+ Deep .+ Eval
     , external "let-intro" (promoteExprR . letIntroR . show :: TH.Name -> RewriteH Core)
         [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
+    , external "let-intro-unfolding" (promoteExprR . letIntroUnfoldingR :: TH.Name -> RewriteH Core)
+        [ "e => let f' = defn[f'/f] in e[f'/f], name of f is provided" ]
     , external "let-elim" (promoteExprR letElimR :: RewriteH Core)
         [ "Remove an unused let binding."
         , "(let v = e1 in e2) ==> e2, if v is not free in e1 or e2." ]          .+ Eval .+ Shallow
@@ -496,4 +500,19 @@ nonRecIntroR nm e = readerT $ \case
                       ProgCore{} -> promoteProgR (progNonRecIntroR nm e)
                       _          -> fail "can only introduce non-recursive bindings at Program or Expression nodes."
 
+-- | Introduce a local definition for a (possibly imported) identifier.
+-- Rewrites occurences of the identifier to point to this new local definiton.
+--
+-- TODO: change away from TH.Name once findIdT et al. do so.
+letIntroUnfoldingR :: (BoundVars c, HasGlobalRdrEnv c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
+letIntroUnfoldingR nm = do
+    i <- findIdT nm
+    (rhs,_) <- getUnfoldingT AllBinders <<< return i
+    contextfreeT $ \ body -> do
+        i' <- cloneVarH id i
+        let subst = substCoreExpr i (varToCoreExpr i')
+            bnd = if i `elemUFM` freeVarsExpr rhs then Rec [(i', subst rhs)]
+                                                  else NonRec i' rhs
+            body' = subst body
+        return $ mkCoreLet bnd body'
 -------------------------------------------------------------------------------------------
