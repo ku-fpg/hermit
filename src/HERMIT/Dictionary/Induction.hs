@@ -8,7 +8,6 @@ module HERMIT.Dictionary.Induction
 where
 
 import Control.Arrow
-import Control.Monad (zipWithM)
 
 import Data.List (delete)
 
@@ -19,8 +18,7 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Utilities (soleElement)
 
-import HERMIT.Dictionary.Inline (inlineMatchingPredR)
-import HERMIT.Dictionary.Local.Case (caseSplitR)
+import HERMIT.Dictionary.Local.Case (caseSplitInlineR)
 import HERMIT.Dictionary.Reasoning
 
 ------------------------------------------------------------------------------
@@ -29,20 +27,30 @@ import HERMIT.Dictionary.Reasoning
 
 ------------------------------------------------------------------------------
 
-inductionCaseSplit :: forall c x. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(DataCon,[Var],CoreExpr,CoreExpr)]
-inductionCaseSplit i lhsE rhsE =
-    do Case s w ty alts1 <- caseSplitR (== i) <<< return lhsE
-       let alts2 = mapAlts (\ _ -> rhsE) alts1
-       Case _ _ _ alts1' <- anybuInlineScrutineeR <<< return (Case s w ty alts1)
-       Case _ _ _ alts2' <- anybuInlineScrutineeR <<< return (Case s w ty alts2)
-       constT (zipWithM combineAlts alts1' alts2')
-  where
-    anybuInlineScrutineeR :: Rewrite c HermitM CoreExpr
-    anybuInlineScrutineeR = extractR (anybuR $ promoteExprR $ inlineMatchingPredR (== i) :: Rewrite c HermitM Core)
+-- TODO: Maybe it would be better to have a way of adding miscallaneous variables to the context.  That would be less hacky.
+withVarsInScope :: forall c m b. (ReadPath c Crumb, ExtendPath c Crumb, AddBindings c, MonadCatch m) => [Var] -> Translate c m CoreExpr b -> Translate c m CoreExpr b
+withVarsInScope vs t = arr (mkCoreLams vs) >>> extractT (pathT (replicate (length vs) Lam_Body) (promoteExprT t :: Translate c m Core b))
 
-    combineAlts :: CoreAlt -> CoreAlt -> HermitM (DataCon,[Var],CoreExpr,CoreExpr)
-    combineAlts (DataAlt con1,vs1,e1) (DataAlt con2,vs2,e2) | con1 == con2 && vs1 == vs2 = return (con1,vs1,e1,e2)
-    combineAlts _ _ = fail "Bug in inductionCaseSplit"
+inductionCaseSplit :: forall c x. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [Var] -> Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(DataCon,[Var],CoreExpr,CoreExpr)]
+inductionCaseSplit vs i lhsE rhsE =
+    do -- first construct an expression containing both the LHS and the RHS
+       il <- constT $ newIdH "dummyL" (exprKindOrType lhsE)
+       ir <- constT $ newIdH "dummyR" (exprKindOrType rhsE)
+       let contrivedExpr = Let (NonRec il lhsE)
+                               (Let (NonRec ir rhsE)
+                                    (Var i)
+                               )
+
+       -- then case split on the identifier, inlining the pattern
+       -- we consider the other universally quantified variables to be in scope while doing so
+       Case _ _ _ alts <- withVarsInScope vs (caseSplitInlineR (==i)) <<< return contrivedExpr
+
+       constT (mapM compressAlts alts)
+
+  where
+    compressAlts :: CoreAlt -> HermitM (DataCon,[Var],CoreExpr,CoreExpr)
+    compressAlts (DataAlt con,bs,Let (NonRec _ lhsE') (Let (NonRec _ rhsE') _)) = return (con,bs,lhsE',rhsE')
+    compressAlts _ = fail "Bug in inductionCaseSplit"
 
 
 -- | A general induction principle.  TODO: Is this valid for infinite data types?  Probably not.
@@ -51,11 +59,9 @@ inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, Exte
 inductionOnT idPred genCaseAltProofs = prefixFailMsg "Induction failed: " $
     do eq@(CoreExprEquality bs lhs rhs) <- idR
 
-       i <- soleElement (filter idPred bs)
+       i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $ soleElement (filter idPred bs)
 
-       guardMsg (i `elem` bs) ("identifier " ++ var2String i ++ " is not universally quantified in this equality lemma.")
-
-       cases <- inductionCaseSplit i lhs rhs
+       cases <- inductionCaseSplit bs i lhs rhs
 
        -- TODO: will this work if vs contains TyVars or CoVars?  Maybe we need to sort the Vars in order: TyVars; CoVars; Ids.
        let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Translate c HermitM x ()
