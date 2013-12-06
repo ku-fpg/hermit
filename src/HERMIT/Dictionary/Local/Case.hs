@@ -48,6 +48,7 @@ import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.AlphaConversion hiding (externals)
 import HERMIT.Dictionary.Fold (foldVarR)
+import HERMIT.Dictionary.GHC (substCoreExpr)
 import HERMIT.Dictionary.Undefined (verifyStrictT)
 
 import qualified Language.Haskell.TH as TH
@@ -329,8 +330,10 @@ caseSplitR idPred = prefixFailMsg "caseSplit failed: " $
                   let aNms     = map (:[]) $ cycle ['a'..'z']
                   contextfreeT $ \ e -> do dcsAndVars <- mapM (\ dc -> (dc,) <$> sequence [ newIdH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ])
                                                               (tyConDataCons tycon)
-                                           let alts = [ (DataAlt dc, as, e) | (dc,as) <- dcsAndVars ]
-                                           return $ Case (Var i) i (coreAltsType alts) alts
+                                           w <- cloneVarH (++ "'") i
+                                           let e' = substCoreExpr i (Var w) e
+                                               alts = [ (DataAlt dc, as, e') | (dc,as) <- dcsAndVars ]
+                                           return $ Case (Var i) w (coreAltsType alts) alts
 
 -- | Force evaluation of an identifier by introducing a case.
 --   This is equivalent to adding @(seq v)@ in the source code.
@@ -340,16 +343,17 @@ caseSplitR idPred = prefixFailMsg "caseSplit failed: " $
 caseIntroSeqR :: (Id -> Bool) -> Rewrite c HermitM CoreExpr
 caseIntroSeqR idPred = prefixFailMsg "case-intro-seq failed: " $
              do i <- matchingFreeIdT idPred
-                e <- idR
-                guardMsg (not $ isTyCoArg e) "cannot case on a type or coercion."
-                let alts = [(DEFAULT, [], e)]
-                return $ Case (Var i) i (coreAltsType alts) alts
+                contextfreeT $ \ e -> do guardMsg (not $ isTyCoArg e) "cannot case on a type or coercion."
+                                         w <- cloneVarH (++ "'") i
+                                         let e' = substCoreExpr i (Var w) e
+                                             alts = [(DEFAULT, [], e')]
+                                         return $ Case (Var i) w (coreAltsType alts) alts
 
 -- auxillary function for use by caseSplit and caseSeq
 matchingFreeIdT :: Monad m => (Id -> Bool) -> Translate c m CoreExpr Id
 matchingFreeIdT idPred = do
   fvs <- arr freeVarsExpr
-  case varSetElems (filterVarSet (\ v -> idPred v && isId v) fvs) of -- cmpTHName2Var nm v
+  case varSetElems (filterVarSet (\ v -> idPred v && isId v) fvs) of
     []    -> fail "provided name is not a free identifier."
     [i]   -> return i
     is    -> fail ("provided name matches " ++ show (length is) ++ " free identifiers.")
@@ -357,9 +361,9 @@ matchingFreeIdT idPred = do
 -- | Like caseSplit, but additionally inlines the constructor applications
 -- for each occurance of the named variable.
 --
--- > caseSplitInline idPred ~ caseSplit idPred >>> anybuR (inlineMatchingPredR idPred)
-caseSplitInlineR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => (Id -> Bool) -> Rewrite c HermitM CoreExpr
-caseSplitInlineR idPred = caseSplitR idPred >>> extractR (anybuR (promoteExprR $ inlineMatchingPredR idPred) :: Rewrite c HermitM Core)
+-- > caseSplitInline idPred = caseSplit idPred >>> caseInlineAlternativeR
+caseSplitInlineR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => (Id -> Bool) -> Rewrite c HermitM CoreExpr
+caseSplitInlineR idPred = caseSplitR idPred >>> caseInlineAlternativeR
 
 ------------------------------------------------------------------------------
 
