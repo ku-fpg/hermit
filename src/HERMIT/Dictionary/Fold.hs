@@ -116,6 +116,14 @@ addAlpha :: Var -> Var -> [(Var,Var)] -> [(Var,Var)]
 addAlpha rId lId alphas | rId == lId = alphas
                         | otherwise  = (rId,lId) : alphas
 
+matchWithTypes :: [Var] -> [(Var,Var)] -> Id -> CoreExpr -> Maybe [(Var,CoreExpr)]
+matchWithTypes vs as i e = do
+    tys <- foldMatchType vs as (idType i) (exprType e)
+    return $ (i,e) : tyMatchesToCoreExpr tys
+
+tyMatchesToCoreExpr :: [(TyVar, Type)] -> [(Var, CoreExpr)]
+tyMatchesToCoreExpr = map (\(v,t) -> (v, Type t))
+
 ------------------------------------------------------------------------
 
 -- Note: return list can have duplicate keys, caller is responsible
@@ -128,23 +136,28 @@ foldMatch :: [Var]          -- ^ vars that can unify with anything
           -> CoreExpr       -- ^ pattern we are matching on
           -> CoreExpr       -- ^ expression we are checking
           -> Maybe [(Var,CoreExpr)] -- ^ mapping of vars to expressions, or failure
-foldMatch vs as (Var i) e | i `elem` vs = return [(i,e)]
+
+foldMatch vs as (Var i) e | i `elem` vs = matchWithTypes vs as i e
                           | otherwise   = case e of
-                                            Var i' | maybe False (==i) (lookup i' as) -> return [(i,e)]
-                                                             -- TODO: type comparison here is a total hack,
-                                                             --       see notes in hermit-syb
-                                                   | i == i' && eqType (idType i) (idType i') -> return []
+                                            Var i' | maybe False (==i) (lookup i' as) -> matchWithTypes vs as i e
+                                                   | i == i' -> liftM tail $ matchWithTypes vs as i e 
+                                                                -- note we depend on (i,e) being at front here
+                                                                -- this is not strictly necessary, but is faster
                                             _                -> Nothing
 foldMatch _  _ (Lit l) (Lit l') | l == l' = return []
+
 foldMatch vs as (App e a) (App e' a') = do
     x <- foldMatch vs as e e'
     y <- foldMatch vs as a a'
     return (x ++ y)
+
 foldMatch vs as (Lam v e) (Lam v' e') = foldMatch (filter (/=v) vs) (addAlpha v' v as) e e'
+
 foldMatch vs as (Let (NonRec v rhs) e) (Let (NonRec v' rhs') e') = do
     x <- foldMatch vs as rhs rhs'
     y <- foldMatch (filter (/=v) vs) (addAlpha v' v as) e e'
     return (x ++ y)
+
 -- TODO: this depends on bindings being in the same order
 foldMatch vs as (Let (Rec bnds) e) (Let (Rec bnds') e') | length bnds == length bnds' = do
     let vs' = filter (`notElem` map fst bnds) vs
@@ -153,10 +166,12 @@ foldMatch vs as (Let (Rec bnds) e) (Let (Rec bnds') e') | length bnds == length 
     x <- zipWithM bmatch bnds bnds'
     y <- foldMatch vs' as' e e'
     return (concat x ++ y)
+
 foldMatch vs as (Tick t e) (Tick t' e') | t == t' = foldMatch vs as e e'
-foldMatch vs as (Case s b ty alts) (Case s' b' ty' alts')
-  | length alts == length alts' = do
-    t <- foldMatch vs as (Type ty) (Type ty')
+
+foldMatch vs as (Case s b ty alts) (Case s' b' ty' alts') = do
+    guard (length alts == length alts')
+    t <- foldMatchType vs as ty ty'
     x <- foldMatch vs as s s'
     let as' = addAlpha b' b as
         vs' = filter (/=b) vs
@@ -164,31 +179,47 @@ foldMatch vs as (Case s b ty alts) (Case s' b' ty' alts')
             foldMatch (filter (`notElem` is) vs') (foldr (uncurry addAlpha) as' $ zip is' is) e e'
         altMatch _ _ = Nothing
     y <- zipWithM altMatch alts alts'
-    return (x ++ t ++ concat y)
-foldMatch vs as (Cast e c)   (Cast e' c')  | coreEqCoercion c c' = foldMatch vs as e e'
--- don't try to alpha type variables for now
-foldMatch vs _  (Type t@(TyVarTy v)) e@(Type t') | v `elem` vs = return [(v,e)]
-                                                 | eqType t t' = return []
-                                                 | otherwise   = Nothing
-foldMatch _ _   (Type t)     (Type t')     | eqType t t' = return []
-foldMatch _ _   (Coercion c) (Coercion c') | coreEqCoercion c c' = return []
+    return (x ++ tyMatchesToCoreExpr t ++ concat y)
+
+foldMatch vs as (Cast e c) (Cast e' c') = do
+    guard (coreEqCoercion c c') 
+    foldMatch vs as e e'
+
+foldMatch vs as (Type t1) (Type t2) = liftM tyMatchesToCoreExpr $ foldMatchType vs as t1 t2
+
+-- TODO: do we want to descend into these? There are Types in here.
+foldMatch _ _ (Coercion c) (Coercion c') | coreEqCoercion c c' = return []
+
 foldMatch _ _ _ _ = Nothing
 
+------------------------------------------------------------------------
 
-foldMatchType :: [TyVar]          -- ^ vars that can unify with anything
-          -> [(TyVar,TyVar)]      -- ^ alpha equivalences, wherever there is binding
-                                  --   note: we depend on behavior of lookup here, so new entries
-                                  --         should always be added to the front of the list so
-                                  --         we don't have to explicity remove them when shadowing occurs
-          -> Type                 -- ^ pattern we are matching on
-          -> Type                 -- ^ expression we are checking
-          -> Maybe [(TyVar,Type)] -- ^ mapping of vars to expressions, or failure
+foldMatchType :: [TyVar]              -- ^ vars that can unify with anything
+              -> [(TyVar,TyVar)]      -- ^ alpha equivalences, wherever there is binding
+                                      --   note: we depend on behavior of lookup here, so new entries
+                                      --         should always be added to the front of the list so
+                                      --         we don't have to explicity remove them when shadowing occurs
+              -> Type                 -- ^ pattern we are matching on
+              -> Type                 -- ^ expression we are checking
+              -> Maybe [(TyVar,Type)] -- ^ mapping of vars to types, or failure
+
+foldMatchType vs as (TyVarTy v) t | v `elem` vs = return [(v,t)]
+                                  | otherwise = case t of
+                                                  TyVarTy v' | maybe False (==v) (lookup v' as) -> return [(v,t)]
+                                                             | v == v' {- compare kinds? -} -> return []
+                                                  _ -> Nothing
 
 foldMatchType vs as (AppTy ty1 ty2) (AppTy ty1' ty2') = do
     x <- foldMatchType vs as ty1 ty1'
     y <- foldMatchType vs as ty2 ty2'
     return (x ++ y)
 
+foldMatchType vs as (TyConApp tc1 kOrTys1) (TyConApp tc2 kOrTys2) = do
+    guard ((tc1 == tc2) && (length kOrTys1 == length kOrTys2))
+    let f ty1 ty2 | isKind ty1 && eqKind ty1 ty2 = return []
+                  | otherwise = foldMatchType vs as ty1 ty2
+    liftM concat $ zipWithM f kOrTys1 kOrTys2
+    
 foldMatchType vs as (FunTy ty1 ty2) (FunTy ty1' ty2') = do
     x <- foldMatchType vs as ty1 ty1'
     y <- foldMatchType vs as ty2 ty2'
@@ -196,4 +227,7 @@ foldMatchType vs as (FunTy ty1 ty2) (FunTy ty1' ty2') = do
 
 foldMatchType vs as (ForAllTy v ty) (ForAllTy v' ty') = foldMatchType (filter (/=v) vs) (addAlpha v' v as) ty ty'
 
-------------------------------------------------------------------------
+foldMatchType _ _ (LitTy l1) (LitTy l2) | l1 == l2 = return []
+
+foldMatchType _ _ _ _ = Nothing
+
