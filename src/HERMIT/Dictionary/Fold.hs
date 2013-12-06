@@ -15,7 +15,6 @@ import Control.Arrow
 import Control.Applicative
 import Control.Monad
 
-import Data.List (intercalate)
 import qualified Data.Map as Map
 
 import HERMIT.Core
@@ -25,7 +24,7 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 
-import HERMIT.Dictionary.Common (varBindingDepthT,inScope)
+import HERMIT.Dictionary.Common (varBindingDepthT,inScope,findIdT)
 import HERMIT.Dictionary.Inline hiding (externals)
 
 import qualified Language.Haskell.TH as TH
@@ -69,23 +68,20 @@ stashFoldAnyR :: ReadBindings c => Rewrite c HermitM CoreExpr
 stashFoldAnyR = setFailMsg "Fold failed: no definitions could be folded." $
                 catchesM =<< map stashFoldR <$> (Map.keys <$> constT getStash)
 
-foldR :: ReadBindings c => TH.Name -> Rewrite c HermitM CoreExpr
-foldR nm = prefixFailMsg "Fold failed: " $
-           do c <- contextT
-              case varSetElems (findBoundVars nm c) of
-                []  -> fail "cannot find name."
-                [v] -> foldVarR v Nothing
-                vs  -> fail $ "multiple names match: " ++ intercalate ", " (map var2String vs)
+foldR :: (HasGlobalRdrEnv c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
+foldR nm = prefixFailMsg "Fold failed: " $ do
+    v <- findIdT nm
+    foldVarR v Nothing
 
 foldVarR :: ReadBindings c => Var -> Maybe BindingDepth -> Rewrite c HermitM CoreExpr
-foldVarR v md =
-             do case md of
-                  Nothing    -> return ()
-                  Just depth -> do depth' <- varBindingDepthT v
-                                   guardMsg (depth == depth') "Specified binding depth does not match that of variable binding, this is probably a shadowing occurrence."
-                e <- idR
-                (rhs,_) <- getUnfoldingT AllBinders <<< return v
-                maybe (fail "no match.") return (fold v rhs e)
+foldVarR v md = do 
+    case md of
+        Nothing    -> return ()
+        Just depth -> do depth' <- varBindingDepthT v
+                         guardMsg (depth == depth') "Specified binding depth does not match that of variable binding, this is probably a shadowing occurrence."
+    e <- idR
+    (rhs,_) <- getUnfoldingT AllBinders <<< return v
+    maybe (fail "no match.") return (fold v rhs e)
 
 ------------------------------------------------------------------------
 
