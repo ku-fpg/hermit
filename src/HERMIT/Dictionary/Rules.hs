@@ -32,7 +32,7 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 
-import HERMIT.Dictionary.Common (findIdT,inScope)
+import HERMIT.Dictionary.Common (findIdT,inScope,callT)
 import HERMIT.Dictionary.GHC (dynFlagsT)
 import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Kure (anyCallR)
@@ -111,37 +111,30 @@ lookupRule :: DynFlags -> InScopeEnv
 
 type RuleNameString = String
 
+-- TODO: deprecate this (and related functions) in favor of 'biRuleUnsafeR'
 #if __GLASGOW_HASKELL__ > 706
 rulesToRewriteH :: (ReadBindings c, HasDynFlags m, MonadCatch m) => [CoreRule] -> Rewrite c m CoreExpr
 #else
 rulesToRewriteH :: (ReadBindings c, MonadCatch m) => [CoreRule] -> Rewrite c m CoreExpr
 #endif
 rulesToRewriteH rs = prefixFailMsg "RulesToRewrite failed: " $
-                     withPatFailMsg "rule not matched." $
-                     translate $ \ c e -> do
-    -- First, we normalize the lhs, so we can match it
-    (Var fn,args) <- return $ collectArgs e
-    -- Question: does this include Id's, or Var's (which include type names)
-    -- Assumption: Var's.
-    let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (localFreeVarsExpr e) ])
-        -- The rough_args are just an attempt to try eliminate silly things
-        -- that will never match
-        _rough_args = map (const Nothing) args   -- rough_args are never used!!! FIX ME!
-    -- Finally, we try match the rules
-    -- trace (showSDoc (ppr fn <+> ppr args $$ ppr rs)) $
+                     withPatFailMsg "rule not matched." $ do
+    (Var fn, args) <- callT
+    translate $ \ c e -> do
+        let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (localFreeVarsExpr e) ])
 #if __GLASGOW_HASKELL__ > 706
-    dflags <- getDynFlags
-    case lookupRule dflags (in_scope, const NoUnfolding) (const True) fn args [r | r <- rs, ru_fn r == idName fn] of
+        dflags <- getDynFlags
+        case lookupRule dflags (in_scope, const NoUnfolding) (const True) fn args [r | r <- rs, ru_fn r == idName fn] of
 #else
-    case lookupRule (const True) (const NoUnfolding) in_scope fn args [r | r <- rs, ru_fn r == idName fn] of
+        case lookupRule (const True) (const NoUnfolding) in_scope fn args [r | r <- rs, ru_fn r == idName fn] of
 #endif
-        Nothing         -> fail "rule not matched"
-        Just (r, expr)  -> do
-            let e' = mkApps expr (drop (ruleArity r) args)
-            if all (inScope c) $ varSetElems $ localFreeVarsExpr e' -- TODO: The problem with this check, is that it precludes the case where this is an intermediate transformation.  I can imagine situations where some variables would be out-of-scope at this point, but in scope again after a subsequent transformation.
-              then return e'
-              else fail $ unlines ["Resulting expression after rule application contains variables that are not in scope."
-                                  ,"This can probably be solved by running the flatten-module command at the top level."]
+            Nothing         -> fail "rule not matched"
+            Just (r, expr)  -> do
+                let e' = mkApps expr (drop (ruleArity r) args)
+                if all (inScope c) $ varSetElems $ localFreeVarsExpr e' -- TODO: The problem with this check, is that it precludes the case where this is an intermediate transformation.  I can imagine situations where some variables would be out-of-scope at this point, but in scope again after a subsequent transformation.
+                  then return e'
+                  else fail $ unlines ["Resulting expression after rule application contains variables that are not in scope."
+                                      ,"This can probably be solved by running the flatten-module command at the top level."]
 
 -- | Lookup a rule and attempt to construct a corresponding rewrite.
 ruleR :: (ReadBindings c, HasCoreRules c) => RuleNameString -> Rewrite c HermitM CoreExpr
