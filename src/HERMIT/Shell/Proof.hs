@@ -38,6 +38,10 @@ proof_externals =
       [ "inductive-proof-both-sides <lemma-name> <id-name> [<data-con-name>] [<script-name>] [<script-name>]",
         "As inductive-proof, but takes scripts to apply to the RHS of each case as well as the LHS."
       ]
+   , external "flip-proof" flipProof
+      [ "Flip the LHS and RHS of a proof."
+      , "Example usage: flip-proof (rewrite-to-proof r)"
+      ]
    ]
 
 --------------------------------------------------------------------------------------------------------
@@ -93,5 +97,11 @@ inductiveProofExt idn dcns sns = inductiveProof (cmpTHName2Var idn) (zip [ cmpTH
 -- TODO: Upgrade the parser so that this can be a list of triples.
 inductiveProofBothSidesExt :: TH.Name -> [TH.Name] -> [ScriptName] -> [ScriptName] -> ProofH
 inductiveProofBothSidesExt idn dcns s1ns s2ns = inductiveProofBothSides (cmpTHName2Var idn) (zip3 [ cmpTHName2Name dcn . dataConName | dcn <- dcns ] s1ns s2ns)
+
+--------------------------------------------------------------------------------------------------------
+
+flipProof :: ProofH -> ProofH
+flipProof (RewritingProof sr1 sr2)   = RewritingProof sr2 sr1
+flipProof (InductiveProof pr cases)  = InductiveProof pr [ (dp,s2,s1) | (dp,s1,s2) <- cases ]
 
 --------------------------------------------------------------------------------------------------------
