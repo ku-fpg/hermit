@@ -42,15 +42,15 @@ usage = putStrLn $ unlines
         ]
 
 main :: IO ()
-main = do
-   args <- getArgs
-   main1 args
+main = getArgs >>= main1
 
 main1 :: [String] -> IO ()
 main1 [] = usage
-main1 args@[file_nm,script_nm] = do
+main1 args@(file_nm:script_nm:rest) = do
     e <- doesFileExist script_nm
-    if e then main4 file_nm [] [("*", [script_nm])] [] else main2 args
+    if e && (not (any (isPrefixOf "+") rest)) 
+        then main4 file_nm [] [("*", script_nm:rest)] [] 
+        else main2 args
 main1 other = main2 other
 
 main2 (file_nm:rest) = case span (/= "--") rest of
