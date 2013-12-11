@@ -51,7 +51,7 @@ import HERMIT.Plugin
 import HERMIT.PrettyPrinter.Common
 import qualified HERMIT.PrettyPrinter.Clean as Clean
 import HERMIT.Shell.Command
-import HERMIT.Shell.Types
+import HERMIT.Shell.Types hiding (tick)
 
 import Prelude hiding (until)
 
@@ -86,8 +86,9 @@ runOM phaseInfo opt = scopedKernel $ \ kernel initSAST -> do
                        , cl_diffonly      = False
                        , cl_failhard      = False
                        , cl_window        = mempty
-                       , cl_dict          = error "cl_dict" -- TODO
                        , cl_scripts       = []
+                       , cl_lemmas        = []
+                       , cl_dict          = error "cl_dict" -- TODO
                        , cl_kernel        = kernel
                        , cl_initSAST      = initSAST
                        , cl_version       = VersionStore

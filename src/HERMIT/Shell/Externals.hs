@@ -17,10 +17,17 @@ import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 
 import HERMIT.Shell.Dictionary
+import HERMIT.Shell.Proof as Proof
 import HERMIT.Shell.Renderer
 import HERMIT.Shell.Types
 
 ----------------------------------------------------------------------------------
+
+-- | There are four types of commands.
+data ShellCommand = KernelEffect KernelEffect -- ^ Command that modifies the state of the (scoped) kernel.
+                  | ShellEffect  ShellEffect  -- ^ Command that modifies the state of the shell.
+                  | QueryFun     QueryFun     -- ^ Command that queries the AST with a Translate (read only).
+                  | ProofCommand ProofCommand -- ^ Command that deals with proofs.
 
 -- | Interpret a boxed thing as one of the four possible shell command types.
 interpShellCommand :: [Interp ShellCommand]
@@ -41,7 +48,7 @@ interpShellCommand =
   , interp $ \ (effect :: KernelEffect)      -> KernelEffect effect
   , interp $ \ (effect :: ShellEffect)       -> ShellEffect effect
   , interp $ \ (query :: QueryFun)           -> QueryFun query
-  , interp $ \ (meta :: MetaCommand)         -> MetaCommand meta
+  , interp $ \ (cmd :: ProofCommand)         -> ProofCommand cmd
   ]
 
 shell_externals :: [External]
@@ -166,7 +173,7 @@ shell_externals = map (.+ Shell)
    , external "display-scripts" displayScripts
        ["Display all loaded scripts."]
      -- TODO: maybe add a "list-scripts" as well that just lists the names of loaded scripts?
-   ]
+   ] ++ Proof.externals
 
 gc :: CommandLineState -> IO CommandLineState
 gc st = do

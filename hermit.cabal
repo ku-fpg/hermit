@@ -219,6 +219,7 @@ Library
        HERMIT.Shell.Dictionary
        HERMIT.Shell.Externals
        HERMIT.Shell.ScriptToRewrite
+       HERMIT.Shell.Proof
        HERMIT.Shell.Renderer
        HERMIT.Shell.Types
 

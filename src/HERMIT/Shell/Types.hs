@@ -1,4 +1,6 @@
-{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, TypeFamilies, DeriveDataTypeable, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, TypeFamilies, 
+             DeriveDataTypeable, GeneralizedNewtypeDeriving, LambdaCase,
+             ScopedTypeVariables #-}
 
 module HERMIT.Shell.Types where
 
@@ -15,18 +17,15 @@ import HERMIT.Kure
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
 import HERMIT.Kernel.Scoped
+import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
+
+import HERMIT.Dictionary.Reasoning (CoreExprEquality)
 
 import System.IO
 
 ----------------------------------------------------------------------------------
-
--- | There are four types of commands.
-data ShellCommand =  KernelEffect KernelEffect -- ^ Command that modifies the state of the (scoped) kernel.
-                  |  ShellEffect  ShellEffect  -- ^ Command that modifies the state of the shell.
-                  |  QueryFun     QueryFun     -- ^ Command that queries the AST with a Translate (read only).
-                  |  MetaCommand  MetaCommand  -- ^ Command that otherwise controls HERMIT (abort, resume, save, etc).
 
 -- GADTs can't have docs on constructors. See Haddock ticket #43.
 -- | KernelEffects are things that affect the state of the Kernel
@@ -51,14 +50,13 @@ instance Extern KernelEffect where
    box i = i
    unbox i = i
 
-data ShellEffect :: * where
-   CLSModify :: (CommandLineState -> IO CommandLineState) -> ShellEffect
-   deriving Typeable
+----------------------------------------------------------------------------------
 
 data QueryFun :: * where
    QueryString   :: (Injection GHC.ModGuts g, Walker HermitC g)
                  => TranslateH g String                                   -> QueryFun
    QueryDocH     :: (PrettyC -> PrettyH CoreTC -> TranslateH CoreTC DocH) -> QueryFun
+   Diff          :: SAST -> SAST                                          -> QueryFun
    Display       ::                                                          QueryFun
    Inquiry       :: (CommandLineState -> IO String)                       -> QueryFun
    deriving Typeable
@@ -71,32 +69,36 @@ instance Extern QueryFun where
    box i = i
    unbox i = i
 
+----------------------------------------------------------------------------------
+
 type RewriteName = String
 
-data MetaCommand
-   = Resume
-   | Abort
-   | Continue -- exit the shell, but don't abort/resume
-   | Diff SAST SAST
-   | Dump String String Int
-   | LoadFile ScriptName FilePath  -- load a file on top of the current node
-   | SaveFile FilePath
-   | ScriptToRewrite RewriteName ScriptName
-   | DefineScript ScriptName String
-   | RunScript ScriptName
-   | SaveScript FilePath ScriptName
-   | SeqMeta [MetaCommand]
-   deriving Typeable
+data ShellEffect
+    = Abort -- ^ Abort GHC
+    | CLSModify (CommandLineState -> IO CommandLineState) -- ^ Modify shell state
+    | Continue -- ^ exit the shell, but don't abort/resume
+    | DefineScript ScriptName String
+    | Dump String String Int
+    | LoadFile ScriptName FilePath  -- load a file on top of the current node
+    | RunScript ScriptName
+    | SaveFile FilePath
+    | SaveScript FilePath ScriptName
+    | ScriptToRewrite RewriteName ScriptName
+    | SeqMeta [ShellEffect]
+    | Resume
+    deriving Typeable
 
 -- | A composite meta-command for running a loaded script immediately.
 --   The script is given the same name as the filepath.
-loadAndRun :: FilePath -> MetaCommand
+loadAndRun :: FilePath -> ShellEffect
 loadAndRun fp = SeqMeta [LoadFile fp fp, RunScript fp]
 
-instance Extern MetaCommand where
-    type Box MetaCommand = MetaCommand
+instance Extern ShellEffect where
+    type Box ShellEffect = ShellEffect
     box i = i
     unbox i = i
+
+----------------------------------------------------------------------------------
 
 data VersionCmd = Back                  -- back (up) the derivation tree
                 | Step                  -- down one step; assumes only one choice
@@ -104,11 +106,6 @@ data VersionCmd = Back                  -- back (up) the derivation tree
                 | GotoTag String        -- goto a specific named tag
                 | AddTag String         -- add a tag
         deriving Show
-
-instance Extern ShellEffect where
-    type Box ShellEffect = ShellEffect
-    box i = i
-    unbox i = i
 
 ----------------------------------------------------------------------------------
 
@@ -167,6 +164,8 @@ iokm2clm msg = iokm2clm' msg return
 iokm2clm'' :: MonadIO m => IO (KureM a) -> CLM m a
 iokm2clm'' = iokm2clm ""
 
+----------------------------------------------------------------------------------
+
 data VersionStore = VersionStore
     { vs_graph       :: [(SAST,ExprH,SAST)]
     , vs_tags        :: [(String,SAST)]
@@ -176,6 +175,8 @@ newSAST :: ExprH -> SAST -> CommandLineState -> CommandLineState
 newSAST expr sast st = st { cl_cursor = sast
                           , cl_version = (cl_version st) { vs_graph = (cl_cursor st, expr, sast) : vs_graph (cl_version st) }
                           }
+
+----------------------------------------------------------------------------------
 
 -- Session-local issues; things that are never saved.
 data CommandLineState = CommandLineState
@@ -191,13 +192,57 @@ data CommandLineState = CommandLineState
     , cl_diffonly       :: Bool                                     -- ^ if true, show diffs rather than pp full code
     , cl_failhard       :: Bool                                     -- ^ if true, abort on *any* failure
     , cl_window         :: PathH                                    -- ^ path to beginning of window, always a prefix of focus path in kernel
-    -- these four should be in a reader
-    , cl_dict           :: Dictionary
     , cl_scripts        :: [(ScriptName,Script)]
+    , cl_lemmas         :: [Lemma]                                  -- ^ list of lemmas, with flag indicating whether proven
+    -- these three should be in a reader
+    , cl_dict           :: Dictionary
     , cl_kernel         :: ScopedKernel
     , cl_initSAST       :: SAST
     -- and the version store
     , cl_version        :: VersionStore
-    }
+    } deriving (Typeable)
+
+newtype CLSBox = CLSBox CommandLineState deriving Typeable
+instance Extern CommandLineState where
+    type Box CommandLineState = CLSBox
+    unbox (CLSBox st) = st
+    box = CLSBox
 
 type ScriptName = String
+type LemmaName = String
+type Lemma = (LemmaName,CoreExprEquality,Bool)
+
+cl_kernel_env  :: CommandLineState -> HermitMEnv
+cl_kernel_env st =
+    let out str = do (r,_) <- liftIO $ runCLM st $ cl_putStrLn str
+                     either (\case CLError msg -> fail msg
+                                   _           -> fail "resume/abort/continue called from cl_putStrLn (impossible!)")
+                            return r
+
+    in  mkHermitMEnv $ \ msg -> case msg of
+                DebugTick    msg'      -> do
+                        c <- liftIO $ tick (cl_tick st) msg'
+                        out $ "<" ++ show c ++ "> " ++ msg'
+                DebugCore  msg' cxt core -> do
+                        out $ "[" ++ msg' ++ "]"
+                        doc :: DocH <- apply (cl_pretty st) (liftPrettyC (cl_pretty_opts st) cxt) (inject core)
+                        liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
+
+-- tick counter
+tick :: TVar (M.Map String Int) -> String -> IO Int
+tick var msg = atomically $ do
+        m <- readTVar var
+        let c = case M.lookup msg m of
+                Nothing -> 1
+                Just x  -> x + 1
+        writeTVar var (M.insert msg c m)
+        return c
+
+cl_putStr :: MonadIO m => String -> CLM m ()
+cl_putStr str = do
+    st <- get
+    liftIO $ cl_render st stdout (cl_pretty_opts st) (Left str)
+
+cl_putStrLn :: MonadIO m => String -> CLM m ()
+cl_putStrLn = cl_putStr . (++"\n")
+

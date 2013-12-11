@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
 
 module HERMIT.Shell.ScriptToRewrite
   ( -- * Converting Scripts to Rewrites
@@ -7,7 +7,7 @@ module HERMIT.Shell.ScriptToRewrite
 where
 
 import Control.Arrow
-import Control.Monad (liftM)
+import Control.Monad.State
 
 import Data.Dynamic
 import Data.Map
@@ -75,7 +75,6 @@ interpScriptR =
                                                 BeginScope -> ScriptBeginScope
                                                 EndScope   -> ScriptEndScope
                                                 _          -> ScriptUnsupported "Kernel effects" )
-  , interp (\ (_ :: MetaCommand)           -> ScriptUnsupported "meta commands")
   , interp (\ (_ :: ShellEffect)           -> ScriptUnsupported "shell effects")
   , interp (\ (_ :: QueryFun)              -> ScriptUnsupported "queries")
   , interp (\ (TranslateCoreStringBox _)   -> ScriptUnsupported "queries")
@@ -103,9 +102,10 @@ scopedScriptsToRewrite (x : xs)  = let rest = scopedScriptsToRewrite xs
 -----------------------------------
 
 -- | Insert a script into the 'Dictionary'.
-addScriptToDict :: Monad m => ScriptName -> Script -> Dictionary -> m Dictionary
-addScriptToDict nm scr dict =
-  do unscoped <- mapM (interpExprH dict interpScriptR) scr
+addScriptToDict :: MonadState CommandLineState m => ScriptName -> Script -> m ()
+addScriptToDict nm scr =
+  do dict <- gets cl_dict
+     unscoped <- mapM (interpExprH interpScriptR) scr
      scoped   <- unscopedToScopedScriptR unscoped
      let
          dyn = toDyn (box $ scopedScriptsToRewrite scoped)
@@ -114,7 +114,7 @@ addScriptToDict nm scr dict =
          alteration Nothing     = Just [dyn]
          alteration (Just dyns) = Just (dyn:dyns)
 
-     return $ alter alteration nm dict
+     modify $ \ st -> st { cl_dict = alter alteration nm dict }
 
 -----------------------------------
 

@@ -10,7 +10,6 @@ module HERMIT.Shell.Command
     , performKernelEffect
     , performQuery
     , performShellEffect
-    , performMetaCommand
     , cl_kernel_env
     , getFocusPath
     , shellComplete
@@ -20,7 +19,6 @@ module HERMIT.Shell.Command
 import Control.Applicative
 import Control.Arrow hiding (loop)
 import Control.Concurrent
-import Control.Concurrent.STM
 import Control.Exception.Base hiding (catch)
 import Control.Monad.State
 import Control.Monad.Error
@@ -39,16 +37,15 @@ import HERMIT.Interp
 import HERMIT.Kernel (queryK, AST)
 import HERMIT.Kernel.Scoped hiding (abortS, resumeS)
 import HERMIT.Kure
-import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 import HERMIT.PrettyPrinter.Clean (ppCoreTC)
 
-
 import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Externals
-import HERMIT.Shell.ScriptToRewrite
+import HERMIT.Shell.Proof
 import HERMIT.Shell.Renderer
+import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.Types
 
 import System.IO
@@ -63,14 +60,6 @@ import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, te
 
 catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
-
-cl_putStr :: MonadIO m => String -> CLM m ()
-cl_putStr str = do
-    st <- get
-    liftIO $ cl_render st stdout (cl_pretty_opts st) (Left str)
-
-cl_putStrLn :: MonadIO m => String -> CLM m ()
-cl_putStrLn = cl_putStr . (++"\n")
 
 fixWindow :: MonadIO m => CLM m ()
 fixWindow = do
@@ -206,6 +195,7 @@ commandLine opts behavior exts = do
     initState <- get
     let clState = initState { cl_version     = VersionStore { vs_graph = [] , vs_tags = [] }
                             , cl_scripts     = []
+                            , cl_lemmas      = []
                             , cl_dict        = dict
                             , cl_pretty_opts = (cl_pretty_opts initState) { po_width = w }
                             , cl_height      = h
@@ -225,7 +215,7 @@ commandLine opts behavior exts = do
                              lift $ getInputLine $ "hermit<" ++ show n ++ "> "
 
             case mLine of
-                Nothing          -> performMetaCommand Resume
+                Nothing          -> performShellEffect Resume
                 Just ('-':'-':_) -> loop
                 Just line        -> if all isSpace line
                                     then loop
@@ -238,7 +228,7 @@ commandLine opts behavior exts = do
 
     -- Load and run any scripts
     setRunningScript True
-    sequence_ [ performMetaCommand $ case fileName of
+    sequence_ [ performShellEffect $ case fileName of
                  "abort"  -> Abort
                  "resume" -> Resume
                  _        -> loadAndRun fileName
@@ -267,15 +257,12 @@ runScript = mapM_ runExprH
 
 runExprH :: MonadIO m => ExprH -> CLM m ()
 runExprH expr = do
-    dict <- gets cl_dict
-    runKureM (\case
-                 KernelEffect effect -> performKernelEffect effect expr
-                 ShellEffect effect  -> performShellEffect effect
-                 QueryFun query      -> performQuery query
-                 MetaCommand meta    -> performMetaCommand meta
-             )
-             fail
-             (interpExprH dict interpShellCommand expr)
+    shellCmd <- interpExprH interpShellCommand expr
+    case shellCmd of
+        KernelEffect effect -> performKernelEffect effect expr
+        ShellEffect effect  -> performShellEffect effect
+        QueryFun query      -> performQuery query
+        ProofCommand cmd    -> performProofCommand cmd
 
 ppWholeProgram :: MonadIO m => AST -> CLM m DocH
 ppWholeProgram ast = do
@@ -352,16 +339,6 @@ performKernelEffect (CorrectnessCritera q) expr = do
 
 -------------------------------------------------------------------------------
 
-performShellEffect :: MonadIO m => ShellEffect -> CLM m ()
-performShellEffect (CLSModify f) = do
-    st <- get
-    opt <- liftIO (fmap Right (f st) `catch` \ str -> return (Left str))
-    case opt of
-        Right st' -> put st' >> showWindow
-        Left err  -> fail err
-
--------------------------------------------------------------------------------
-
 performQuery :: MonadIO m => QueryFun -> CLM m ()
 performQuery (QueryString q) = do
     st <- get
@@ -373,32 +350,9 @@ performQuery (QueryDocH q) = do
     doc <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (q (initPrettyC $ cl_pretty_opts st) $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
-performQuery (Inquiry f) = do
-    st <- get
-    str <- liftIO $ f st
-    putStrToConsole str
+performQuery (Inquiry f) = get >>= liftIO . f >>= putStrToConsole
 
--- These two need to use Inquiry
--- performQuery (Message msg) = liftIO (putStrLn msg)
--- Explicit calls to display should work no matter what the loading state is.
-performQuery Display = do
-    running_script_st <- gets cl_running_script
-    setRunningScript False
-    showWindow
-    setRunningScript running_script_st
-
--------------------------------------------------------------------------------
-
-performMetaCommand :: MonadIO m => MetaCommand -> CLM m ()
-performMetaCommand (SeqMeta ms) = mapM_ performMetaCommand ms
-performMetaCommand Abort  = abort
-performMetaCommand Resume = do
-    st <- get
-    sast' <- applyS (cl_kernel st) occurAnalyseAndDezombifyR (cl_kernel_env st) (cl_cursor st)
-    resume sast'
-
-performMetaCommand Continue = get >>= continue
-performMetaCommand (Diff s1 s2) = do
+performQuery (Diff s1 s2) = do
     st <- get
 
     ast1 <- toASTS (cl_kernel st) s1
@@ -421,7 +375,25 @@ performMetaCommand (Diff s1 s2) = do
     cl_putStrLn "====="
     cl_putStr r
 
-performMetaCommand (Dump fileName renderer width) = do
+-- Explicit calls to display should work no matter what the loading state is.
+performQuery Display = do
+    running_script_st <- gets cl_running_script
+    setRunningScript False
+    showWindow
+    setRunningScript running_script_st
+
+-------------------------------------------------------------------------------
+
+performShellEffect :: MonadIO m => ShellEffect -> CLM m ()
+performShellEffect (SeqMeta ms) = mapM_ performShellEffect ms
+performShellEffect Abort  = abort
+performShellEffect Resume = do
+    st <- get
+    sast' <- applyS (cl_kernel st) occurAnalyseAndDezombifyR (cl_kernel_env st) (cl_cursor st)
+    resume sast'
+
+performShellEffect Continue = get >>= continue
+performShellEffect (Dump fileName renderer width) = do
     st <- get
     case lookup renderer shellRenderers of
       Just r -> do doc <- prefixFailMsg "Bad renderer option: " $
@@ -431,7 +403,7 @@ performMetaCommand (Dump fileName renderer width) = do
                                hClose h
       _ -> fail "dump: bad pretty-printer or renderer option"
 
-performMetaCommand (LoadFile scriptName fileName) =
+performShellEffect (LoadFile scriptName fileName) =
   do putStrToConsole $ "Loading \"" ++ fileName ++ "\"..."
      res <- liftIO $ try (readFile fileName)
      case res of
@@ -440,25 +412,23 @@ performMetaCommand (LoadFile scriptName fileName) =
                        modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
                        putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
 
-performMetaCommand (SaveFile fileName) =
+performShellEffect (SaveFile fileName) =
   do version <- gets cl_version
      putStrToConsole $ "[saving " ++ fileName ++ "]"
      -- no checks to see if you are clobering; be careful
      liftIO $ writeFile fileName $ showGraph (vs_graph version) (vs_tags version) (SAST 0)
 
-performMetaCommand (ScriptToRewrite rewriteName scriptName) =
+performShellEffect (ScriptToRewrite rewriteName scriptName) =
   do script <- lookupScript scriptName
-     st <- get
-     dict' <- iokm2clm "script-to-rewrite failed: " (return $ addScriptToDict rewriteName script (cl_dict st))
-     put (st {cl_dict = dict'})
+     addScriptToDict rewriteName script 
      putStrToConsole ("Rewrite \"" ++ rewriteName ++ "\" defined successfully.")
 
-performMetaCommand (DefineScript scriptName str) =
+performShellEffect (DefineScript scriptName str) =
   do script <- parseScriptCLM str
      modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
      putStrToConsole ("Script \"" ++ scriptName ++ "\" defined successfully.")
 
-performMetaCommand (RunScript scriptName) =
+performShellEffect (RunScript scriptName) =
   do script <- lookupScript scriptName
      running_script_st <- gets cl_running_script
      setRunningScript True
@@ -467,11 +437,18 @@ performMetaCommand (RunScript scriptName) =
      putStrToConsole ("Script \"" ++ scriptName ++ "\" ran successfully.")
      showWindow
 
-performMetaCommand (SaveScript fileName scriptName) =
+performShellEffect (SaveScript fileName scriptName) =
   do script <- lookupScript scriptName
      putStrToConsole $ "Saving script \"" ++ scriptName ++ "\" to file \"" ++ fileName ++ "\"."
      liftIO $ writeFile fileName $ unparseScript script
      putStrToConsole $ "Save successful."
+
+performShellEffect (CLSModify f) = do
+    st <- get
+    opt <- liftIO (fmap Right (f st) `catch` \ str -> return (Left str))
+    case opt of
+        Right st' -> put st' >> showWindow
+        Left err  -> fail err
 
 lookupScript :: Monad m => ScriptName -> CLM m Script
 lookupScript scriptName = do scripts <- gets cl_scripts
@@ -528,34 +505,6 @@ getNavCmd = do
           , ("f",      res "step")
           ] ++
           [ (show n, res (show n)) | n <- [0..9] :: [Int] ]
-
-----------------------------------------------------------------------------------------------
-
-cl_kernel_env  :: CommandLineState -> HermitMEnv
-cl_kernel_env st =
-    let out str = do (r,_) <- liftIO $ runCLM st $ cl_putStrLn str
-                     either (\case CLError msg -> fail msg
-                                   _           -> fail "resume/abort/continue called from cl_putStrLn (impossible!)")
-                            return r
-
-    in  mkHermitMEnv $ \ msg -> case msg of
-                DebugTick    msg'      -> do
-                        c <- liftIO $ tick (cl_tick st) msg'
-                        out $ "<" ++ show c ++ "> " ++ msg'
-                DebugCore  msg' cxt core -> do
-                        out $ "[" ++ msg' ++ "]"
-                        doc :: DocH <- apply (cl_pretty st) (liftPrettyC (cl_pretty_opts st) cxt) (inject core)
-                        liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
-
--- tick counter
-tick :: TVar (M.Map String Int) -> String -> IO Int
-tick var msg = atomically $ do
-        m <- readTVar var
-        let c = case M.lookup msg m of
-                Nothing -> 1
-                Just x  -> x + 1
-        writeTVar var (M.insert msg c m)
-        return c
 
 ----------------------------------------------------------------------------------------------
 

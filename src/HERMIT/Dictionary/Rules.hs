@@ -3,9 +3,11 @@ module HERMIT.Dictionary.Rules
        ( -- * GHC Rewrite Rules and Specialisation
          externals
          -- ** Rules
+       , RuleNameString
        , ruleR
        , rulesR
-       -- , ruleToEqualityT
+       , ruleToEqualityT
+       , getSingletonHermitRuleT
        -- , verifyCoreRuleT
        , verifyRuleT
        , ruleLhsIntroR
