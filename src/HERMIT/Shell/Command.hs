@@ -450,12 +450,6 @@ performShellEffect (CLSModify f) = do
         Right st' -> put st' >> showWindow
         Left err  -> fail err
 
-lookupScript :: Monad m => ScriptName -> CLM m Script
-lookupScript scriptName = do scripts <- gets cl_scripts
-                             case lookup scriptName scripts of
-                               Nothing     -> fail $ "No script of name " ++ scriptName ++ " is loaded."
-                               Just script -> return script
-
 -------------------------------------------------------------------------------
 
 -- TODO: merge with cl_putStr defn

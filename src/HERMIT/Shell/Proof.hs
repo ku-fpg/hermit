@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable #-}
+{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts #-}
 
 module HERMIT.Shell.Proof where
 
@@ -13,12 +13,14 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kernel.Scoped
 import HERMIT.Kure
+import HERMIT.Utilities
 
 import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Rules
 
 import HERMIT.PrettyPrinter.Common
 
+import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.Types
 
 import qualified Language.Haskell.TH as TH
@@ -61,6 +63,8 @@ externals =
         [ "Run an proven lemma as a bi-directional rewrite." ]
     , external "lemma-unsafe" ((\s -> promoteExprBiR . lemma True s) :: CommandLineState -> LemmaName -> BiRewriteH Core)
         [ "Run a lemma as a bi-directional rewrite." ]
+    , external "verify-lemma" VerifyLemma
+        [ "Prove a lemma." ]
     ]
 
 --------------------------------------------------------------------------------------------------------
@@ -157,6 +161,12 @@ performProofCommand (RuleToLemma nm) = do
     equality <- queryS (cl_kernel st) (getSingletonHermitRuleT nm >>> ruleToEqualityT :: TranslateH Core CoreExprEquality) (cl_kernel_env st) (cl_cursor st)
     put $ st { cl_lemmas = (nm,equality,False) : cl_lemmas st }
 
+performProofCommand (VerifyLemma nm proof) = do
+    st <- get
+    (_,equality,_) <- maybeM ("No lemma named: " ++ nm) (getLemmaByName nm st)
+    prove equality proof -- this is like a guard
+    markProven nm
+
 performProofCommand ShowLemmas = do
     st <- get
     let k    = cl_kernel st
@@ -164,14 +174,30 @@ performProofCommand ShowLemmas = do
         sast = cl_cursor st
         pos  = cl_pretty_opts st
         pp   = cl_pretty st
-        pr vs e = queryS k (return (mkCoreLams vs e) >>> extractT (pathT [ Lam_Body | _ <- vs ] (liftPrettyH pos pp)) :: TranslateH CoreTC DocH) env sast
+        pr :: [Var] -> CoreExpr -> TranslateH CoreTC DocH
+        pr vs e = return (mkCoreLams vs e) >>> extractT (pathT (replicate (length vs) Lam_Body) (liftPrettyH pos pp))
     forM_ (cl_lemmas st) $ \ (nm, CoreExprEquality vs lhs rhs, proven) -> do
         cl_putStr nm
         cl_putStrLn $ if proven then " (Proven)" else " (Not Proven)"
-        -- TODO: render vs
         unless (null vs) $ cl_putStrLn $ "forall " ++ unwords (map getOccString vs) ++ ". "
-        lDoc <- pr vs lhs
-        rDoc <- pr vs rhs
+        lDoc <- queryS k (pr vs lhs) env sast
+        rDoc <- queryS k (pr vs rhs) env sast
         liftIO $ cl_render st stdout pos (Right lDoc)
         cl_putStrLn "==>"
         liftIO $ cl_render st stdout pos (Right rDoc)
+
+--------------------------------------------------------------------------------------------------------
+
+-- | Prove a lemma using the given proof in the current kernel context.
+-- Required to fail if proof fails.
+prove :: MonadIO m => CoreExprEquality -> ProofH -> CLM m ()
+prove equality (RewritingProof lp rp) = do
+    lrr <- either (lookupScript >=> liftM extractR . scriptToRewrite) return lp
+    rrr <- either (lookupScript >=> liftM extractR . scriptToRewrite) return rp
+    st <- get
+    queryS (cl_kernel st) (return equality >>> verifyCoreExprEqualityT (lrr, rrr) :: TranslateH CoreTC ()) (cl_kernel_env st) (cl_cursor st)
+    
+prove _ _ = fail "not yet implemented"
+
+markProven :: MonadState CommandLineState m => LemmaName -> m ()
+markProven nm = modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }

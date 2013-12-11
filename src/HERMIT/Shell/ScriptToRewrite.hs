@@ -3,6 +3,8 @@
 module HERMIT.Shell.ScriptToRewrite
   ( -- * Converting Scripts to Rewrites
     addScriptToDict
+  , lookupScript
+  , scriptToRewrite
   )
 where
 
@@ -10,7 +12,7 @@ import Control.Arrow
 import Control.Monad.State
 
 import Data.Dynamic
-import Data.Map
+import Data.Map hiding (lookup)
 
 import HERMIT.Context(LocalPathH)
 import HERMIT.Kure
@@ -20,6 +22,14 @@ import HERMIT.Parser(Script)
 
 import HERMIT.PrettyPrinter.Common(TranslateCoreTCDocHBox(..))
 import HERMIT.Shell.Types
+
+------------------------------------
+
+lookupScript :: MonadState CommandLineState m => ScriptName -> m Script
+lookupScript scriptName = do scripts <- gets cl_scripts
+                             case lookup scriptName scripts of
+                               Nothing     -> fail $ "No script of name " ++ scriptName ++ " is loaded."
+                               Just script -> return script
 
 ------------------------------------
 
@@ -99,22 +109,26 @@ scopedScriptsToRewrite (x : xs)  = let rest = scopedScriptsToRewrite xs
 
 -----------------------------------
 
+scriptToRewrite :: MonadState CommandLineState m => Script -> m (RewriteH Core)
+scriptToRewrite scr = do
+    unscoped <- mapM (interpExprH interpScriptR) scr
+    scoped   <- unscopedToScopedScriptR unscoped
+    return $ scopedScriptsToRewrite scoped
+
 -----------------------------------
 
 -- | Insert a script into the 'Dictionary'.
 addScriptToDict :: MonadState CommandLineState m => ScriptName -> Script -> m ()
-addScriptToDict nm scr =
-  do dict <- gets cl_dict
-     unscoped <- mapM (interpExprH interpScriptR) scr
-     scoped   <- unscopedToScopedScriptR unscoped
-     let
-         dyn = toDyn (box $ scopedScriptsToRewrite scoped)
+addScriptToDict nm scr = do
+    r <- scriptToRewrite scr
 
-         alteration :: Maybe [Dynamic] -> Maybe [Dynamic]
-         alteration Nothing     = Just [dyn]
-         alteration (Just dyns) = Just (dyn:dyns)
+    let dyn = toDyn (box r)
 
-     modify $ \ st -> st { cl_dict = alter alteration nm dict }
+        alteration :: Maybe [Dynamic] -> Maybe [Dynamic]
+        alteration Nothing     = Just [dyn]
+        alteration (Just dyns) = Just (dyn:dyns)
+
+    modify $ \ st -> st { cl_dict = alter alteration nm (cl_dict st) }
 
 -----------------------------------
 
