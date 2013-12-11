@@ -10,6 +10,7 @@ module HERMIT.PrettyPrinter.Clean
   , ppCoreAlt
   , ppKindOrType
   , ppCoercion
+  , ppForallQuantification
   )
 where
 
@@ -17,6 +18,7 @@ import Control.Arrow hiding ((<+>))
 import Control.Applicative ((<$>))
 
 import Data.Char (isSpace)
+import Data.Monoid (mempty)
 
 import HERMIT.Context
 import HERMIT.Core
@@ -387,6 +389,13 @@ ppKindOrTypeR = absPathT >>= ppKindOrTypePR
                                        | isLiftedTypeKindCon tyCon -> RetAtom $ tyChar p '*'
                                        | otherwise                 -> retApps p TyConApp_Arg pCon tys
              )
+
+
+-- A bit hacky, currently only used to pretty-print Lemmas.
+ppForallQuantification :: PrettyH [Var]
+ppForallQuantification =
+  do vs <- mapT ppBinderMode
+     return $ specialSymbol mempty ForallSymbol <+> hsep vs <+> symbol mempty '.'
 
 --------------------------------------------------------------------
 

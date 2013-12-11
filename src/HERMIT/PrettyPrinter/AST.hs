@@ -11,6 +11,7 @@ module HERMIT.PrettyPrinter.AST
   , ppCoreAlt
   , ppKindOrType
   , ppCoercion
+  , ppForallQuantification
   )
 where
 
@@ -18,7 +19,7 @@ import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
 
-import HERMIT.GHC hiding (($$), (<+>), ($+$), cat, nest, parens, text, empty)
+import HERMIT.GHC hiding (($$), (<+>), ($+$), cat, nest, parens, text, empty, hsep)
 import HERMIT.Kure
 import HERMIT.Core
 
@@ -126,5 +127,14 @@ ppVar = readerT $ \ v -> ppSDoc >>^ modCol v
     modCol v | isTyVar v  = typeColor
              | isCoVar v  = coercionColor
              | otherwise  = idColor
+
+-- A bit hacky, currently only used to pretty-print Lemmas.
+ppForallQuantification :: PrettyH [Var]
+ppForallQuantification =
+  do vs <- mapT ppVar
+     return $ keywordText "forall" <+> hsep vs <+> keywordText "."
+
+keywordText :: String -> DocH
+keywordText = keywordColor . text
 
 ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ module HERMIT.PrettyPrinter.GHC
   , ppCoreAlt
   , ppKindOrType
   , ppCoercion
+  , ppForallQuantification
   )
 where
 
@@ -67,5 +68,11 @@ ppKindOrType = ppSDoc
 
 ppCoercion :: PrettyH Coercion
 ppCoercion = ppSDoc
+
+-- A bit hacky, currently only used to pretty-print Lemmas.
+ppForallQuantification :: PrettyH [Var]
+ppForallQuantification =
+  do vs <- mapT ppSDoc
+     return $ text "forall" <+> hsep vs <+> text "."
 
 ---------------------------------------------------------------------------
