@@ -39,7 +39,7 @@ externals =
     , external "bash" (bashR :: RewriteH Core)
         bashHelp .+ Eval .+ Deep .+ Loop
     , external "smash" (smashR :: RewriteH Core)
-        [ "For when bash isn't enough." ] .+ Eval .+ Deep .+ Loop .+ Experiment
+        smashHelp .+ Eval .+ Deep .+ Loop .+ Experiment
     , external "bash-extended-with" (bashExtendedWithR :: [RewriteH Core] -> RewriteH Core)
         [ "Run \"bash\" extended with additional rewrites.",
           "Note: be sure that the new rewrite either fails or makes progress, else this may loop."
@@ -76,17 +76,17 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
 ------------------------------------------------------------------------------------------------------
 
 bashR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
-bashR = bashUsingR (map fst bashComponents)
+bashR = bashExtendedWithR []
 
 bashExtendedWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [Rewrite c HermitM Core] -> Rewrite c HermitM Core
 bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 
 
 smashR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
-smashR = bashUsingR (map fst smashComponents)
+smashR = smashExtendedWithR []
 
 smashExtendedWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [Rewrite c HermitM Core] -> Rewrite c HermitM Core
-smashExtendedWithR rs = bashUsingR (rs ++ map fst smashComponents)
+smashExtendedWithR rs = smashUsingR (rs ++ map fst smashComponents1) (map fst smashComponents2)
 
 
 -- | Like bashR, but outputs name of each successful sub-rewrite, providing a log.
@@ -116,6 +116,12 @@ bashUsingR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m
 bashUsingR rs =
     setFailMsg "bash failed: nothing to do." $
     repeatR (occurAnalyseR >>> onetdR (catchesT rs)) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
+
+smashUsingR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => [Rewrite c m Core] -> [Rewrite c m Core] -> Rewrite c m Core
+smashUsingR rs1 rs2 =
+    setFailMsg "smash failed: nothing to do." $
+    repeatR (occurAnalyseR >>> (onetdR (catchesT rs1) <+ onetdR (catchesT rs2))) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
+
 
  --   occurAnalyseChangedR >+> (innermostR (catchesT rs) >>> occurAnalyseR)
 
@@ -166,9 +172,16 @@ bashComponents =
 --  , (promoteExprR dezombifyR, "dezombify")                           -- O(1) -- performed at the end
   ]
 
+
+smashHelp :: [String]
+smashHelp = "A more powerful but less efficient version of \"bash\", intended for use while proving lemmas.  Iteratively apply the following rewrites until nothing changes:" : map snd (smashComponents1 ++ smashComponents2
+                                                                                           :: [(RewriteH Core,String)] -- to resolve ambiguity
+                                                                                        )
+
+
 -- | As bash, but with "let-nonrec-subst" instead of "let-nonrec-subst-safe".
-smashComponents :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [(Rewrite c HermitM Core, String)]
-smashComponents =
+smashComponents1 :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [(Rewrite c HermitM Core, String)]
+smashComponents1 =
   [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
     (promoteExprR betaReduceR, "beta-reduce")                        -- O(1)
   , (promoteExprR caseReduceR, "case-reduce")                        -- O(n)
@@ -195,6 +208,15 @@ smashComponents =
   , (promoteExprR castElimSymR, "cast-elim-sym")                     -- O(1)
 --  , (promoteExprR dezombifyR, "dezombify")                           -- O(1) -- performed at the end
   ]
+
+smashComponents2 :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [(Rewrite c HermitM Core, String)]
+smashComponents2 =
+  [
+    (promoteExprR caseElimMergeAltsR, "case-elim-merge-alts") -- do this last, lest it prevent other simplifications
+  ]
+
+
+-- (beta-reduce <+ case-reduce <+ case-reduce-id <+ case-elim-seq <+ unfold-basic-combinator <+ inline-case-alternative <+ eta-reduce <+ let-subst <+ case-float-app <+ case-float-case <+ case-float-let <+ case-float-cast <+ let-float-app <+ let-float-arg <+ let-float-lam <+ let-float-let <+ let-float-case <+ let-float-cast <+ let-float-top <+ cast-elim-refl <+ cast-elim-sym
 
 ------------------------------------------------------------------------------------------------------
 
