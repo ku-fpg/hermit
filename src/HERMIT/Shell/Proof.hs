@@ -23,6 +23,7 @@ import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Rules
 
 import HERMIT.PrettyPrinter.Common
+import qualified HERMIT.PrettyPrinter.Clean as Clean
 
 import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.Types
@@ -183,7 +184,9 @@ performProofCommand ShowLemmas = do
     forM_ (cl_lemmas st) $ \ (nm, CoreExprEquality vs lhs rhs, proven) -> do
         cl_putStr nm
         cl_putStrLn $ if proven then " (Proven)" else " (Not Proven)"
-        unless (null vs) $ cl_putStrLn $ "forall " ++ unwords (map getOccString vs) ++ ". "
+        unless (null vs) $ do
+            forallDoc <- queryS k (return vs >>> extractT (liftPrettyH pos Clean.ppForallQuantification) :: TranslateH Core DocH) env sast
+            liftIO $ cl_render st stdout pos (Right forallDoc)
         lDoc <- queryS k (pr vs lhs) env sast
         rDoc <- queryS k (pr vs rhs) env sast
         liftIO $ cl_render st stdout pos (Right lDoc)
