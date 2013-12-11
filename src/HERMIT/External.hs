@@ -13,6 +13,7 @@ module HERMIT.External
        , externTypeArgResString
        , Dictionary
        , toDictionary
+       , addToDictionary
        , toHelp
        , external
        , Extern(..)
@@ -241,12 +242,13 @@ type Dictionary = Map ExternalName [Dynamic]
 
 -- | Build a 'Data.Map' from names to 'Dynamic' values.
 toDictionary :: [External] -> Dictionary
-toDictionary
-        -- TODO: check names are uniquely-prefixed
-              = fromListWith (++) . map toD
-  where
-         toD :: External -> (ExternalName,[Dynamic])
-         toD e = (externName e,[externDyn e])
+toDictionary = fromListWith (++) . map toEntry
+
+toEntry :: External -> (ExternalName, [Dynamic])
+toEntry e = (externName e, [externDyn e])
+
+addToDictionary :: External -> Dictionary -> Dictionary
+addToDictionary ex d = fromListWith (++) $ toEntry ex : toList d
 
 -- | Build a 'Data.Map' from names to help information.
 toHelp :: [External] -> Map ExternalName ExternalHelp

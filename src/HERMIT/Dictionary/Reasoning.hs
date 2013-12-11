@@ -15,6 +15,8 @@ module HERMIT.Dictionary.Reasoning
   , verifyRetractionT
   , retractionBR
   , instantiateCoreExprEq
+  , instantiateCoreExprEqVar
+  , discardUniVars
   )
 where
 
@@ -206,3 +208,6 @@ instantiateCoreExprEq = flip (foldr (uncurry instantiateCoreExprEqVar))
 -- which is what we want (all value variables should be instantiated before type variables).
 
 ------------------------------------------------------------------------------
+
+discardUniVars :: CoreExprEquality -> CoreExprEquality
+discardUniVars (CoreExprEquality _ lhs rhs) = CoreExprEquality [] lhs rhs

@@ -2,7 +2,8 @@
 
 module HERMIT.Dictionary.Induction
   ( -- * Induction
-    inductionOnT
+    inductionCaseSplit
+  , inductionOnT
   , listInductionOnT
   )
 where
@@ -62,20 +63,16 @@ inductionOnT idPred genCaseAltProofs = prefixFailMsg "Induction failed: " $
 
        -- TODO: will this work if vs contains TyVars or CoVars?  Maybe we need to sort the Vars in order: TyVars; CoVars; Ids.
        let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Translate c HermitM x ()
-           verifyInductiveCaseT (con,vs,lhsE,rhsE) = let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
-                                                         eqs = [ discardUniVars (instantiateCoreExprEq [(i,Var i')] eq) | i' <- vs_matching_i_type ]
-                                                         brs = map birewrite eqs -- These eqs now have no universally quantified variables.
-                                                                                 -- Thus they can only be used on variables in the induction hypothesis.
-                                                                                 -- TODO: consider whether this is unneccassarily restrictive
-                                                         caseEq = CoreExprEquality (delete i bs ++ vs) lhsE rhsE
-                                                      in return caseEq >>> verifyCoreExprEqualityT (genCaseAltProofs con brs)
+           verifyInductiveCaseT (con,vs,lhsE,rhsE) = 
+                let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
+                    eqs = [ discardUniVars (instantiateCoreExprEq [(i,Var i')] eq) | i' <- vs_matching_i_type ]
+                    brs = map birewrite eqs -- These eqs now have no universally quantified variables.
+                                            -- Thus they can only be used on variables in the induction hypothesis.
+                                            -- TODO: consider whether this is unneccassarily restrictive
+                    caseEq = CoreExprEquality (delete i bs ++ vs) lhsE rhsE
+                in return caseEq >>> verifyCoreExprEqualityT (genCaseAltProofs con brs)
 
        mapM_ verifyInductiveCaseT cases
-
-  where
-    discardUniVars :: CoreExprEquality -> CoreExprEquality
-    discardUniVars (CoreExprEquality _ lhs rhs) = CoreExprEquality [] lhs rhs
-
 
 -- | An induction principle for lists.
 listInductionOnT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)

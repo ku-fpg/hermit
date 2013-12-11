@@ -1,13 +1,16 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, ScopedTypeVariables #-}
 
 module HERMIT.Shell.Proof where
 
 import Control.Arrow
 import qualified Control.Category as Cat
+import Control.Monad.Error
 import Control.Monad.State
 
 import Data.Dynamic
+import Data.List
 
+import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kernel.Scoped
@@ -15,6 +18,7 @@ import HERMIT.Kure
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Rules
 
@@ -193,17 +197,63 @@ performProofCommand ShowLemmas = do
 -- Required to fail if proof fails.
 prove :: MonadIO m => CoreExprEquality -> ProofH -> CLM m ()
 prove equality (RewritingProof lp rp) = do
-    lrr <- getRewrite lp
-    rrr <- getRewrite rp
+    (lrr, rrr) <- getRewrites (lp, rp)
     st <- get
-    queryS (cl_kernel st) (return equality >>> verifyCoreExprEqualityT (lrr, rrr) :: TranslateH CoreTC ()) (cl_kernel_env st) (cl_cursor st)
+    queryS (cl_kernel st) (return equality >>> verifyCoreExprEqualityT (lrr, rrr) :: TranslateH Core ()) (cl_kernel_env st) (cl_cursor st)
 
 -- InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]
-prove equality (InductiveProof iPred cases) = do
-    fail "blah"
+-- inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
+--              => (Id -> Bool) 
+--              -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM) 
+--              -> Translate c HermitM CoreExprEquality ()
+prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
+    st <- get
 
+    i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $ soleElement (filter idPred bs)
+    cases <- queryS (cl_kernel st) (inductionCaseSplit bs i lhs rhs :: TranslateH Core [(DataCon,[Var],CoreExpr,CoreExpr)]) (cl_kernel_env st) (cl_cursor st)
 
-prove _ _ = fail "not yet implemented"
+    forM_ cases $ \ (dc,vs,lhsE,rhsE) -> do
+
+        (lp,rp) <- getProofsForCase dc caseProofs
+
+        let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
+            -- Generate list of specialized induction hypotheses for the recursive cases.
+            brs = [ birewrite $ discardUniVars $ instantiateCoreExprEqVar i (Var i') eq 
+                  | i' <- vs_matching_i_type ]
+            nms = [ "Ind" ++ show n | n :: Int <- [1..] ]
+
+        catchError (do put $ addToDict (zip nms brs) st
+                       (l,r) <- getRewrites (lp,rp)
+                       prove (CoreExprEquality (delete i bs ++ vs) lhsE rhsE) (rewriteBothSidesToProof l r) -- recursion!
+                   )
+                   (\ err -> put st >> throwError err)
+        put st -- put original state (with original dictionary) back
+
+getProofsForCase :: Monad m => DataCon -> [(DataCon -> Bool, ScriptOrRewrite, ScriptOrRewrite)] -> m (ScriptOrRewrite, ScriptOrRewrite)
+getProofsForCase dc cases = case [ (l,r) | (dcPred, l, r) <- cases, dcPred dc ] of
+                                [] -> fail $ "no case for " ++ getOccString dc
+                                [p] -> return p
+                                _ -> fail $ "more than one case for " ++ getOccString dc
+
+addToDict :: [(String, BiRewriteH CoreExpr)] -> CommandLineState -> CommandLineState
+addToDict rs st = st { cl_dict = foldr (\ (nm,r) -> addToDictionary (external nm (promoteExprBiR r :: BiRewriteH Core) [])) (cl_dict st) rs }
+
+{-
+       let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Translate c HermitM x ()
+           verifyInductiveCaseT (con,vs,lhsE,rhsE) = 
+                let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
+                    eqs = [ discardUniVars (instantiateCoreExprEq [(i,Var i')] eq) | i' <- vs_matching_i_type ]
+                    brs = map birewrite eqs -- These eqs now have no universally quantified variables.
+                                            -- Thus they can only be used on variables in the induction hypothesis.
+                                            -- TODO: consider whether this is unneccassarily restrictive
+                    caseEq = CoreExprEquality (delete i bs ++ vs) lhsE rhsE
+                in return caseEq >>> verifyCoreExprEqualityT (genCaseAltProofs con brs)
+
+       mapM_ verifyInductiveCaseT cases
+-}
+
+getRewrites :: MonadState CommandLineState m => (ScriptOrRewrite, ScriptOrRewrite) -> m (RewriteH CoreExpr, RewriteH CoreExpr)
+getRewrites (l,r) = liftM2 (,) (getRewrite l) (getRewrite r)
 
 getRewrite :: MonadState CommandLineState m => ScriptOrRewrite -> m (RewriteH CoreExpr)
 getRewrite = either (lookupScript >=> liftM extractR . scriptToRewrite) return
