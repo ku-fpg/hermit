@@ -80,7 +80,7 @@ data ProofCommand
     = RuleToLemma RuleNameString
     | VerifyLemma LemmaName ProofH
     | ShowLemmas
---    | Induction LemmaName 
+--    | Induction LemmaName
     deriving (Typeable)
 
 instance Extern ProofCommand where
@@ -142,13 +142,13 @@ flipProof (InductiveProof pr cases)  = InductiveProof pr [ (dp,s2,s1) | (dp,s1,s
 --------------------------------------------------------------------------------------------------------
 
 getLemmaByName :: LemmaName -> CommandLineState -> Maybe Lemma
-getLemmaByName nm st = 
+getLemmaByName nm st =
     case [ lm | lm@(n,_,_) <- cl_lemmas st, n == nm ] of
         [] -> Nothing
         (l:_) -> Just l
 
 lemma :: Bool -> CommandLineState -> LemmaName -> BiRewriteH CoreExpr
-lemma ok st nm = 
+lemma ok st nm =
     case getLemmaByName nm st of
         Nothing -> beforeBiR (fail $ "No lemma named: " ++ nm) (const Cat.id)
         Just (_,equality,proven) -> beforeBiR (guardMsg (proven || ok) $ "Lemma " ++ nm ++ " has not been proven.") (const $ birewrite equality)
@@ -183,8 +183,9 @@ performProofCommand ShowLemmas = do
         lDoc <- queryS k (pr vs lhs) env sast
         rDoc <- queryS k (pr vs rhs) env sast
         liftIO $ cl_render st stdout pos (Right lDoc)
-        cl_putStrLn "==>"
+        cl_putStrLn "=="
         liftIO $ cl_render st stdout pos (Right rDoc)
+        cl_putStrLn ""
 
 --------------------------------------------------------------------------------------------------------
 
@@ -201,11 +202,11 @@ prove equality (RewritingProof lp rp) = do
 prove equality (InductiveProof iPred cases) = do
     fail "blah"
 
-    
+
 prove _ _ = fail "not yet implemented"
 
 getRewrite :: MonadState CommandLineState m => ScriptOrRewrite -> m (RewriteH CoreExpr)
-getRewrite = either (lookupScript >=> liftM extractR . scriptToRewrite) return 
+getRewrite = either (lookupScript >=> liftM extractR . scriptToRewrite) return
 
 markProven :: MonadState CommandLineState m => LemmaName -> m ()
 markProven nm = modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }
