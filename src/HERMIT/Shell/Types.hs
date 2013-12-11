@@ -1,4 +1,4 @@
-{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, TypeFamilies, 
+{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, TypeFamilies,
              DeriveDataTypeable, GeneralizedNewtypeDeriving, LambdaCase,
              ScopedTypeVariables #-}
 
