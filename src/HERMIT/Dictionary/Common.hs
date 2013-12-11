@@ -37,6 +37,7 @@ module HERMIT.Dictionary.Common
     , varIsOccurrenceOfT
     , exprIsOccurrenceOfT
     , inScope
+    , withVarsInScope
       -- Miscellaneous
     , wrongExprForm
     )
@@ -252,6 +253,10 @@ inScope c v = (v `boundIn` c) ||                 -- defined in this module
                 CoreUnfolding {} -> True         -- defined elsewhere
                 DFunUnfolding {} -> True
                 _                -> False
+
+withVarsInScope :: forall c m b. (ReadPath c Crumb, ExtendPath c Crumb, AddBindings c, MonadCatch m) 
+                => [Var] -> Translate c m CoreExpr b -> Translate c m CoreExpr b
+withVarsInScope vs t = arr (mkCoreLams vs) >>> extractT (pathT (replicate (length vs) Lam_Body) (promoteExprT t :: Translate c m Core b))
 
 ------------------------------------------------------------------------------
 

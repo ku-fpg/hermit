@@ -8,13 +8,13 @@ import Control.Monad.State
 
 import Data.Dynamic
 
-import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kernel.Scoped
 import HERMIT.Kure
 import HERMIT.Utilities
 
+import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Rules
 
@@ -174,8 +174,8 @@ performProofCommand ShowLemmas = do
         sast = cl_cursor st
         pos  = cl_pretty_opts st
         pp   = cl_pretty st
-        pr :: [Var] -> CoreExpr -> TranslateH CoreTC DocH
-        pr vs e = return (mkCoreLams vs e) >>> extractT (pathT (replicate (length vs) Lam_Body) (liftPrettyH pos pp))
+        pr :: [Var] -> CoreExpr -> TranslateH Core DocH
+        pr vs e = return e >>> withVarsInScope vs (extractT $ liftPrettyH pos pp)
     forM_ (cl_lemmas st) $ \ (nm, CoreExprEquality vs lhs rhs, proven) -> do
         cl_putStr nm
         cl_putStrLn $ if proven then " (Proven)" else " (Not Proven)"
@@ -192,12 +192,20 @@ performProofCommand ShowLemmas = do
 -- Required to fail if proof fails.
 prove :: MonadIO m => CoreExprEquality -> ProofH -> CLM m ()
 prove equality (RewritingProof lp rp) = do
-    lrr <- either (lookupScript >=> liftM extractR . scriptToRewrite) return lp
-    rrr <- either (lookupScript >=> liftM extractR . scriptToRewrite) return rp
+    lrr <- getRewrite lp
+    rrr <- getRewrite rp
     st <- get
     queryS (cl_kernel st) (return equality >>> verifyCoreExprEqualityT (lrr, rrr) :: TranslateH CoreTC ()) (cl_kernel_env st) (cl_cursor st)
+
+-- InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]
+prove equality (InductiveProof iPred cases) = do
+    fail "blah"
+
     
 prove _ _ = fail "not yet implemented"
+
+getRewrite :: MonadState CommandLineState m => ScriptOrRewrite -> m (RewriteH CoreExpr)
+getRewrite = either (lookupScript >=> liftM extractR . scriptToRewrite) return 
 
 markProven :: MonadState CommandLineState m => LemmaName -> m ()
 markProven nm = modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }

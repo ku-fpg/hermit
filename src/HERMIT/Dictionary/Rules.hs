@@ -226,7 +226,7 @@ ruleToEqualityT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
 ruleNameToEqualityT :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Translate c HermitM a CoreExprEquality
 ruleNameToEqualityT name = getSingletonHermitRuleT name >>> ruleToEqualityT
 
-verifyRuleT :: (ReadPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
+verifyRuleT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
             => RuleNameString -> CoreExprEqualityProof c HermitM -> Translate c HermitM a ()
 verifyRuleT name proof = ruleNameToEqualityT name >>> verifyCoreExprEqualityT proof
 

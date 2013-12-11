@@ -109,16 +109,10 @@ instance BuildEquality a => BuildEquality (CoreExpr -> a) where
         return $ CoreExprEquality (x:bnds) lhs rhs
 
 -- | Verify that a 'CoreExprEquality' holds, by applying a rewrite to each side, and checking that the results are equal.
-verifyCoreExprEqualityT :: forall c m. (ReadPath c Crumb, MonadCatch m, Walker c Core) => CoreExprEqualityProof c m -> Translate c m CoreExprEquality ()
+verifyCoreExprEqualityT :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, Walker c Core) => CoreExprEqualityProof c m -> Translate c m CoreExprEquality ()
 verifyCoreExprEqualityT (lhsR,rhsR) =
      do CoreExprEquality bs lhs rhs <- idR
-        let lhsWithLams = mkCoreLams bs lhs
-            rhsWithLams = mkCoreLams bs rhs
-            path        = replicate (length bs) Lam_Body
-        verifyEqualityCommonTargetT lhsWithLams rhsWithLams (coreExprPathR path lhsR, coreExprPathR path rhsR)
-  where
-    coreExprPathR :: Path Crumb -> Rewrite c m CoreExpr -> Rewrite c m CoreExpr
-    coreExprPathR p r = extractR (pathR p (promoteExprR r :: Rewrite c m Core))
+        verifyEqualityCommonTargetT lhs rhs (withVarsInScope bs lhsR, withVarsInScope bs rhsR)
 
 ------------------------------------------------------------------------------
 

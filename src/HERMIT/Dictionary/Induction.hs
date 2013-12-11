@@ -18,6 +18,7 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Utilities (soleElement)
 
+import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Local.Case (caseSplitInlineR)
 import HERMIT.Dictionary.Reasoning
 
@@ -26,10 +27,6 @@ import HERMIT.Dictionary.Reasoning
 -- TODO: Warning, this is very experimental
 
 ------------------------------------------------------------------------------
-
--- TODO: Maybe it would be better to have a way of adding miscallaneous variables to the context.  That would be less hacky.
-withVarsInScope :: forall c m b. (ReadPath c Crumb, ExtendPath c Crumb, AddBindings c, MonadCatch m) => [Var] -> Translate c m CoreExpr b -> Translate c m CoreExpr b
-withVarsInScope vs t = arr (mkCoreLams vs) >>> extractT (pathT (replicate (length vs) Lam_Body) (promoteExprT t :: Translate c m Core b))
 
 inductionCaseSplit :: forall c x. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [Var] -> Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(DataCon,[Var],CoreExpr,CoreExpr)]
 inductionCaseSplit vs i lhsE rhsE =
