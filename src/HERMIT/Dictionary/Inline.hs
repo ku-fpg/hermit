@@ -5,6 +5,7 @@ module HERMIT.Dictionary.Inline
          , InlineConfig(..)
          , CaseBinderInlineOption(..)
          , getUnfoldingT
+         , ensureBoundT
          , inlineR
          , inlineNameR
          , inlineNamesR
@@ -98,8 +99,11 @@ configurableInlineR config p =
       guardMsg b "identifier does not satisfy predicate."
       (e,uncaptured) <- varT (getUnfoldingT config)
       setFailMsg "values in inlined expression have been rebound."
-        (return e >>> accepterR (ensureDepthT uncaptured))
+        (return e >>> accepterR ensureBoundT >>> accepterR (ensureDepthT uncaptured))
 
+-- | Check that all free variables in an expression are bound.
+ensureBoundT :: (Monad m, ReadBindings c) => Translate c m CoreExpr Bool
+ensureBoundT = translate $ \ c -> return . all (inScope c) . varSetElems . localFreeVarsExpr
 
 -- NOTE: When inlining, we have to take care to avoid variable capture.
 --       Our approach is to track the binding depth of the inlined identifier.
