@@ -90,7 +90,7 @@ cleanupUnfoldR = do
 unfoldR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 unfoldR = prefixFailMsg "unfold failed: " (go >>> cleanupUnfoldR)
     where go :: Rewrite c HermitM CoreExpr
-          go = inlineR <+ appAllR go idR
+          go = appAllR go idR <+ inlineR -- this order gives better error messages
 
 unfoldPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => (Id -> [CoreExpr] -> Bool) -> Rewrite c HermitM CoreExpr
 unfoldPredR p = callPredT p >> unfoldR
