@@ -1,0 +1,32 @@
+--------------------------------------------
+-- Verify left-unit
+--
+--
+-- forall f x.  bind (retur x) f   =   f x
+--
+--------------------------------------------
+
+-- To test this script:
+--   prog-end
+--   load-and-run "verify-left-unit.hec"
+--   show-lemmas
+
+rule-to-lemma "left-unit"
+
+-- first do the proof interactively
+--
+-- { prog-end
+--   rule-lhs-intro "left-unit"  -- TODO: add "lemma-lhs-intro"
+--   { consider lam ; lams-body
+--     -- Now we're focused on the expression that we want the proof to rewrite
+--     any-bu (inline [ 'bind, 'retur ])
+--     smash
+--     -- Now we're done.
+--   }
+-- }
+
+-- then encode the proof as a rewrite or script
+define-script "left-unit-proof" "any-bu (inline [ 'bind, 'retur ]) ; smash"
+
+verify-lemma "left-unit" (script-to-proof left-unit-proof)
+
