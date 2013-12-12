@@ -206,8 +206,8 @@ prove equality (RewritingProof lp rp) = do
 
 -- InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]
 -- inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
---              => (Id -> Bool) 
---              -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM) 
+--              => (Id -> Bool)
+--              -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM)
 --              -> Translate c HermitM CoreExprEquality ()
 prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
     st <- get
@@ -221,9 +221,9 @@ prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
 
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
             -- Generate list of specialized induction hypotheses for the recursive cases.
-            brs = [ birewrite $ discardUniVars $ instantiateCoreExprEqVar i (Var i') eq 
+            brs = [ birewrite $ discardUniVars $ instantiateCoreExprEqVar i (Var i') eq
                   | i' <- vs_matching_i_type ]
-            nms = [ "Ind" ++ show n | n :: Int <- [1..] ]
+            nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
 
         catchError (do put $ addToDict (zip nms brs) st
                        (l,r) <- getRewrites (lp,rp)
@@ -243,7 +243,7 @@ addToDict rs st = st { cl_dict = foldr (\ (nm,r) -> addToDictionary (external nm
 
 {-
        let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Translate c HermitM x ()
-           verifyInductiveCaseT (con,vs,lhsE,rhsE) = 
+           verifyInductiveCaseT (con,vs,lhsE,rhsE) =
                 let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
                     eqs = [ discardUniVars (instantiateCoreExprEq [(i,Var i')] eq) | i' <- vs_matching_i_type ]
                     brs = map birewrite eqs -- These eqs now have no universally quantified variables.
