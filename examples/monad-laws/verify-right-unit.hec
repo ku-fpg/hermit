@@ -1,14 +1,14 @@
 --------------------------------------------
--- Verify left-unit
+-- Verify right-unit
 --
 --
--- forall f x.  bind (retur x) f   =   f x
+-- forall m.  m `bind` retur   =   m
 --
 --------------------------------------------
 
 -- To test this script:
 --   prog-end
---   load-and-run "verify-left-unit.hec"
+--   load-and-run "verify-right-unit.hec"
 --   show-lemmas
 
 -- first do the proof interactively
@@ -16,8 +16,8 @@
 -- { prog-end
 --      Must first goto prog-end before rule-to-lemma
 --      so that all functions are in scope
---   rule-to-lemma "left-unit"
---   rule-lhs-intro "left-unit"  -- TODO: add "lemma-lhs-intro"
+--   rule-to-lemma "right-unit"
+--   rule-lhs-intro "right-unit"  -- TODO: add "lemma-lhs-intro"
 --   { consider lam ; lams-body
 --     -- Now we're focused on the expression that we want the proof to rewrite
 --     any-bu (inline [ 'bind, 'retur ])
@@ -26,10 +26,10 @@
 --   }
 -- }
 
-rule-to-lemma "left-unit"
+rule-to-lemma "right-unit"
 
 -- then encode the proof as a rewrite or script
-define-script "left-unit-proof" "any-bu (inline [ 'bind, 'retur ]) ; smash"
+define-script "right-unit-proof" "any-bu (inline [ 'bind, 'retur ]) ; smash"
 
-verify-lemma "left-unit" (script-to-proof left-unit-proof)
+verify-lemma "right-unit" (script-to-proof right-unit-proof)
 
