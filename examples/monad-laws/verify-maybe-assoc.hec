@@ -1,0 +1,43 @@
+--------------------------------------------
+-- Verify maybe-assoc
+--
+--
+-- forall m f g.  (m `bind` f) `bind` g  =  m `bind` \x -> (f x `bind` g)
+--
+--------------------------------------------
+
+-- To test this script:
+--   prog-end
+--   load-and-run "verify-maybe-assoc.hec"
+--   show-lemmas
+
+-- first do the proof interactively
+--
+-- { prog-end
+--      Must first goto prog-end before rule-to-lemma
+--      so that all functions are in scope
+--   rule-to-lemma "maybe-assoc"
+--   { rule-lhs-intro "maybe-assoc"  -- TODO: add "lemma-lhs-intro"
+--     consider lam ; lams-body
+--     -- Now we're focused on the expression that we want the proof to rewrite
+--     any-bu (inline [ 'bind, 'retur ])
+--     smash
+--   }
+--   Now, do the same for the rhs.
+--   { rule-rhs-intro "maybe-assoc"
+--     consider lam ; lams-body
+--     -- Now we're focused on the expression that we want the proof to rewrite
+--     any-bu (inline [ 'bind, 'retur ])
+--     smash
+--   }
+--  Observe that the lhs and rhs are equivalent.
+-- Now we're done.
+-- }
+
+rule-to-lemma "maybe-assoc"
+
+-- then encode the proof as a rewrite or script
+define-script "maybe-assoc-proof" "any-bu (inline [ 'bind, 'retur ]) ; smash"
+
+verify-lemma "maybe-assoc" (script-both-sides-to-proof maybe-assoc-proof maybe-assoc-proof)
+

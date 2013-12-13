@@ -4,6 +4,8 @@ module MaybeLaws where
 
 {-# RULES "right-unit"  forall m.   m `bind` retur  =  m  #-}
 
+{-# RULES "maybe-assoc" forall m f g.  (m `bind` f) `bind` g  =  m `bind` \x -> (f x `bind` g) #-}
+
 bind :: Maybe a -> (a -> Maybe b) -> Maybe b
 bind Nothing  k = Nothing
 bind (Just a) k = k a
