@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE CPP, FlexibleContexts #-}
 module HERMIT.Dictionary.New where
 
 import Control.Arrow
@@ -8,8 +8,13 @@ import HERMIT.Core
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+#if __GLASGOW_HASKELL__ > 706
+import HERMIT.Monad
+#endif
 import HERMIT.ParserCore
 
+import HERMIT.Dictionary.Composite hiding (externals)
+import HERMIT.Dictionary.Debug hiding (externals)
 import HERMIT.Dictionary.Local.Let hiding (externals)
 
 import qualified Language.Haskell.TH as TH
@@ -33,6 +38,10 @@ externals = map ((.+ Experiment) . (.+ TODO))
          --        [ "Introduce a new definition as a non-recursive let binding."
          --        , "let-nonrec-intro 'v [| e |]"
          --        , "body ==> let v = e in body" ] .+ Introduce .+ Shallow
+#if __GLASGOW_HASKELL__ > 706
+         , external "replace-typeable-int-list" (promoteExprR (return (mkListTy intTy) >>> buildTypeableT) :: RewriteH Core)
+                [ "test building a dictionary" ]
+#endif
          ]
 
 ------------------------------------------------------------------------------------------------------
@@ -79,3 +88,11 @@ nonRecIntro nm expr = parseCoreExprT expr >>= nonRecIntroR nm
 
 
 ------------------------------------------------------------------------------------------------------
+
+#if __GLASGOW_HASKELL__ > 706
+buildTypeableT :: TranslateH Type CoreExpr
+buildTypeableT = do
+    (i, bnds) <- translate $ \ c -> liftCoreM . buildTypeable (hermitC_modguts c)
+    return (mkCoreLets bnds (varToCoreExpr i)) >>> tryR (extractR simplifyR) >>> observeR "buildTypeableT result"
+#endif
+

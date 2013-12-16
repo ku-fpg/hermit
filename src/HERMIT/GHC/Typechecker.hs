@@ -3,6 +3,7 @@ module HERMIT.GHC.Typechecker
     ( 
 #if __GLASGOW_HASKELL__ > 706
       initTcFromModGuts
+    , mk_type_env
 #endif
     ) where
 

@@ -8,6 +8,7 @@ module HERMIT.Context
          -- ** The Standard Context
        , HermitC
        , initHermitC
+       , hermitC_modguts -- TODO: for now
          -- ** Bindings
        , HermitBindingSite(..)
        , BindingDepth
@@ -239,6 +240,7 @@ data HermitC = HermitC
         , hermitC_path           :: AbsolutePathH           -- ^ The 'AbsolutePath' to the current node from the root.
         , hermitC_globalRdrEnv   :: GlobalRdrEnv            -- ^ The top-level lexical environment.
         , hermitC_coreRules      :: [CoreRule]              -- ^ GHC rewrite RULES.
+        , hermitC_modguts        :: ModGuts                 -- ^ Used to run the typechecker/desugarer
         }
 
 ------------------------------------------------------------------------
@@ -251,6 +253,9 @@ initHermitC modGuts = HermitC
                         , hermitC_path          = mempty
                         , hermitC_globalRdrEnv  = mg_rdr_env modGuts
                         , hermitC_coreRules     = mg_rules modGuts ++ other_rules
+                        -- We need this to run the typechecker/desugarer
+                        -- TODO: if this is undesirable, another way?
+                        , hermitC_modguts       = modGuts
                         }
 
     where other_rules :: [CoreRule]

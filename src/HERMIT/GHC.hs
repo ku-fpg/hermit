@@ -43,7 +43,7 @@ module HERMIT.GHC
 #else
     , runDsMtoCoreM
     , runTcMtoCoreM
-    , buildDictionary
+    , buildTypeable
 #endif
     ) where
 
@@ -80,10 +80,9 @@ import TysPrim (alphaTy, alphaTyVars)
 import Data.Maybe (isJust)
 #else
 import qualified Bag
-import Class (classTyCon)
 import qualified CoAxiom -- for coAxiomName
 import DsBinds (dsEvBinds)
-import DsMonad (DsM)
+import DsMonad (DsM, initDs)
 import PrelNames (typeableClassName)
 import TcEnv (tcLookupClass)
 import TcMType (newWantedEvVar)
@@ -305,27 +304,28 @@ runTcMtoCoreM guts m = do
         showMsgs (warns, errs) = "Errors:\n" ++ dumpSDocs ("Warnings:\n" ++ dumpSDocs "" warns) errs
     maybe (fail $ showMsgs msgs) return mr
 
-runDsMtoCoreM :: DsM a -> CoreM a
-runDsMtoCoreM _m = fail "runDsMtoCoreM unimplemented"
+runDsMtoCoreM :: ModGuts -> DsM a -> CoreM a
+runDsMtoCoreM guts m = do
+    hscEnv <- getHscEnv
+    (msgs, mr) <- liftIO $ initDs hscEnv (mg_module guts) (mg_rdr_env guts) (mk_type_env guts) m
+    -- There is probably something better for reporting the errors.
+    let dumpSDocs endMsg = Bag.foldBag (\ d r -> d ++ ('\n':r)) show endMsg
+        showMsgs (warns, errs) = "Errors:\n" ++ dumpSDocs ("Warnings:\n" ++ dumpSDocs "" warns) errs
+    maybe (fail $ showMsgs msgs) return mr
 
-buildDictionary :: ModGuts -> Type -> CoreM [CoreBind]
-buildDictionary guts ty = do
-    dflags <- getDynFlags
-    bnds <- runTcMtoCoreM guts $ do
+-- TODO: 
+buildTypeable :: ModGuts -> Type -> CoreM (Id, [CoreBind])
+buildTypeable guts ty = do
+    (i, bs) <- runTcMtoCoreM guts $ do
         cls <- tcLookupClass typeableClassName
-        liftIO $ putStrLn $ "class: " ++ (showPpr dflags cls)
-        liftIO $ putStrLn $ "classTyCon: " ++ (showPpr dflags $ classTyCon cls)
-        liftIO $ putStrLn $ "tyConKind: " ++ (showPpr dflags $ tyConKind $ classTyCon cls)
         let predTy = mkClassPred cls [typeKind ty, ty] -- recall that Typeable is now poly-kinded
-        liftIO $ putStrLn $ "isPredTy: " ++ (show $ isPredTy predTy)
-        liftIO $ putStrLn $ "predTy: " ++ (showPpr dflags $ predTy)
-        liftIO $ putStrLn $ "typeKind: " ++ (showPpr dflags $ typeKind predTy)
         loc <- getCtLoc $ GivenOrigin UnkSkol
         evar <- newWantedEvVar predTy
         let nonC = mkNonCanonical loc $ CtWanted { ctev_pred = predTy, ctev_evar = evar }
             wCs = mkFlatWC [nonC]
         (_wCs', bnds) <- solveWantedsTcM wCs
-        return bnds
-    liftIO $ putStrLn $ showPpr dflags bnds
-    runDsMtoCoreM $ dsEvBinds bnds
+        -- TODO: check for unsolved constraints?
+        return (evar, bnds)
+    bnds <- runDsMtoCoreM guts $ dsEvBinds bs
+    return (i,bnds)
 #endif

@@ -20,9 +20,6 @@ module HERMIT.Dictionary.GHC
        , occurAnalyseExprChangedR
        , occurAnalyseAndDezombifyR
        , dezombifyR
-#if __GLASGOW_HASKELL__ > 706
-       , buildDictionaryT
-#endif
        )
 where
 
@@ -38,9 +35,6 @@ import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
-#if __GLASGOW_HASKELL__ > 706
-import HERMIT.Monad
-#endif
 
 import HERMIT.Dictionary.Debug hiding (externals)
 
@@ -63,10 +57,6 @@ externals =
                 , "will catch that however."] .+ Deep .+ Debug .+ Query
          , external "lint-module" (promoteModGutsT lintModuleT :: TranslateH Core String)
                 [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
-#if __GLASGOW_HASKELL__ > 706
-         , external "build-typeable-int" (promoteModGutsT (buildDictionaryT intTy) :: TranslateH Core ())
-                [ "test building a dictionary" ]
-#endif
          ]
 
 ------------------------------------------------------------------------
@@ -208,12 +198,3 @@ lookupUsageDetails = lookupVarEnv
 -}
 
 ----------------------------------------------------------------------
-
-#if __GLASGOW_HASKELL__ > 706
-buildDictionaryT :: Type -> TranslateH ModGuts () -- [CoreBind]
-buildDictionaryT ty = do
-    bnds <- contextfreeT (liftCoreM . flip buildDictionary ty)
-    dflags <- dynFlagsT
-    return (mkCoreLets bnds (mkIntLitInt dflags 0)) >>> observeR "result"
-    return ()
-#endif
