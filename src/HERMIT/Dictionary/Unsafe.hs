@@ -20,10 +20,11 @@ import Prelude hiding (exp)
 externals :: [External]
 externals = map (.+ Unsafe)
     [ external "unsafe-replace" (promoteExprR . unsafeReplaceR :: CoreString -> RewriteH Core)
-        [ "replace the currently focused expression with a new expression" ]
+        [ "replace the currently focused expression with a new expression" 
+        , "DOES NOT ensure that free variables in the replacement expression are in scope" ]
     , external "unsafe-replace" (promoteExprR . unsafeReplaceStashR :: String -> RewriteH Core)
         [ "replace the currently focused expression with an expression from the stash"
-        , "DOES NOT ensure expressions have the same type, or that free variables in the replacement expression are in scope" ]
+        , "DOES NOT ensure that free variables in the replacement expression are in scope" ]
     ]
 
 ------------------------------------------------------------------------
