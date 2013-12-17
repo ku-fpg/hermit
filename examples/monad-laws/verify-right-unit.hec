@@ -2,7 +2,7 @@
 -- Verify right-unit
 --
 --
--- forall m.  m `bind` retur   =   m
+-- forall m.   m `bind` retur  =  m
 --
 --------------------------------------------
 
@@ -11,12 +11,10 @@
 --   load-and-run "verify-right-unit.hec"
 --   show-lemmas
 
+rule-to-lemma "right-unit"
+
 -- first do the proof interactively
 --
--- { prog-end
---      Must first goto prog-end before rule-to-lemma
---      so that all functions are in scope
---   rule-to-lemma "right-unit"
 --   rule-lhs-intro "right-unit"  -- TODO: add "lemma-lhs-intro"
 --   { consider lam ; lams-body
 --     -- Now we're focused on the expression that we want the proof to rewrite
@@ -24,9 +22,6 @@
 --     smash
 --     -- Now we're done.
 --   }
--- }
-
-rule-to-lemma "right-unit"
 
 -- then encode the proof as a rewrite or script
 define-script "right-unit-proof" "any-bu (inline [ 'bind, 'retur ]) ; smash"

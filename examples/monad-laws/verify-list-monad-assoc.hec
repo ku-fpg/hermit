@@ -1,0 +1,33 @@
+--------------------------------------------
+-- Verify monad-assoc (for List)
+--
+--
+-- forall m f g.  (m `bind` f) `bind` g  =  m `bind` \x -> (f x `bind` g)
+--
+-- TO BE COMPLETED.
+--
+--
+-- See:  http://mvanier.livejournal.com/4647.html
+-- "Yet Another Monad Tutorial (part 4: The Maybe and List Monads)"
+-- by Mike Vanier
+-- for a clear and detailed proof of this monad law for List.
+--
+-- He factors this problem (in a way convenient for us) with:
+-- "In addition, I'll be using several identities involving map and concat applied to lists.
+--  You should just take these on faith for now, though I'll show how to derive them below._
+--  -- equation 1:
+--  map (f . g)  =  map f . map g
+--  -- equation 2:
+--  map f . concat =  concat . map (map f)
+--  -- equation 3:
+--  concat . concat  =  concat . map concat
+
+--------------------------------------------
+
+-- To test this script:
+--   prog-end
+--   load-and-run "verify-list-monad-assoc.hec"
+--   show-lemmas
+
+rule-to-lemma "monad-assoc"
+

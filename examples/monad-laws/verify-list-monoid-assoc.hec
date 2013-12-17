@@ -1,0 +1,30 @@
+--------------------------------------------
+-- Verify list-monoid-assoc
+--
+-- forall x y z.  x `mappen` (y `mappen` z) = (x `mappen` y) `mappen` z
+--
+--------------------------------------------
+
+-- To test this script:
+--   prog-end
+--   load-and-run "verify-list-monoid-assoc.hec"
+--   show-lemmas
+
+rule-to-lemma "monoid-assoc"
+
+load-and-run "verify-append-assoc.hec"
+
+-- first do the proof interactively
+--
+-- rule-lhs-intro "monoid-assoc"
+-- consider lam ; lams-body
+-- any-bu (inline 'mappen) ; smash
+-- any-bu (forward (lemma append-assoc))
+
+-- then encode the proof as a rewrite or script
+define-script "list-monoid-assoc-left-proof" "any-bu (inline 'mappen) ; smash ;
+                                         any-bu (forward (lemma append-assoc))"
+define-script "list-monoid-assoc-right-proof" "any-bu (inline 'mappen) ; smash"
+
+verify-lemma "monoid-assoc" (script-both-sides-to-proof list-monoid-assoc-left-proof list-monoid-assoc-right-proof)
+

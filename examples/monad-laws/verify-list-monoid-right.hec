@@ -1,0 +1,29 @@
+--------------------------------------------
+-- Verify list-monoid-right
+--
+-- forall x.  x `mappen` mempt  = x
+--
+--------------------------------------------
+
+-- To test this script:
+--   prog-end
+--   load-and-run "verify-list-monoid-right.hec"
+--   show-lemmas
+
+rule-to-lemma "monoid-right"
+
+load-and-run "verify-append-nil.hec"
+
+-- first do the proof interactively
+--
+-- rule-lhs-intro "monoid-right"
+-- consider lam ; lams-body
+-- any-bu (inline [ 'mempt, 'mappen ]) ; smash
+-- any-bu (forward (lemma "append-nil"))
+
+-- then encode the proof as a rewrite or script
+define-script "list-monoid-right-proof" "any-bu (inline [ 'mempt, 'mappen ]) ; smash ;
+                                        any-bu (forward (lemma append-nil))"
+
+verify-lemma "monoid-right" (script-to-proof list-monoid-right-proof)
+

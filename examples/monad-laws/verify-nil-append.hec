@@ -1,0 +1,24 @@
+--------------------------------------------
+-- Verify nil-append
+--
+-- forall xs.  [] ++ xs  = xs
+--
+--------------------------------------------
+
+-- To test this script:
+--   prog-end
+--   load-and-run "verify-nil-append.hec"
+--   show-lemmas
+
+rule-to-lemma "nil-append"
+
+-- first do the proof interactively
+--
+-- rule-lhs-intro "nil-append"
+-- consider lam ; lams-body
+-- any-bu (inline '++) ; smash
+
+-- then encode the proof as a rewrite or script
+define-script "nil-append-proof" "any-bu (inline '++); smash"
+
+verify-lemma "nil-append" (script-to-proof nil-append-proof)

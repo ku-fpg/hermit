@@ -1,0 +1,30 @@
+--------------------------------------------
+-- Verify concat-unit
+--
+--  forall x. concat [x] = x
+--
+--------------------------------------------
+
+-- To test this script:
+--   prog-end
+--   load-and-run "verify-concat-unit.hec"
+--   show-lemmas
+
+rule-to-lemma "concat-unit"
+
+load-and-run "verify-append-nil.hec"
+
+-- first do the proof interactively
+--
+-- rule-lhs-intro "concat-unit"
+-- consider lam ; lams-body
+
+-- one-bu (inline 'concat); smash
+-- one-bu (inline 'concat); smash
+-- one-bu (forward (lemma append-nil))
+
+define-script "concat-unit-proof"   "one-bu (inline 'concat); smash;
+                                     one-bu (inline 'concat); smash;
+                                     one-bu (forward (lemma append-nil))"
+
+verify-lemma "concat-unit" (script-to-proof concat-unit-proof)

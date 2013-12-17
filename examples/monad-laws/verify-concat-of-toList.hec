@@ -1,0 +1,32 @@
+--------------------------------------------
+-- Verify concat-of-toList
+--
+-- forall xs. concat (map toList xs) = xs
+--
+--------------------------------------------
+
+-- To test this script:
+--   prog-end
+--   load-and-run "verify-concat-of-toList.hec"
+--   show-lemmas
+
+rule-to-lemma "concat-of-toList"
+
+-- first do the proof interactively
+--
+-- rule-lhs-intro "concat-of-toList"
+-- consider lam ; lams-body
+-- case-split-inline 'xs
+-- {case-alt 0
+--     any-bu (inline 'map);  smash
+--     any-bu (inline 'concat);  smash
+-- }
+-- {case-alt 1
+--    any-bu (forward (lemma-unsafe "concat-of-toList"))
+-- }
+
+-- then encode the proof as a rewrite or script
+define-script "concat-of-toList-nil" "any-bu (inline 'map); smash ; any-bu (inline 'concat); smash"
+define-script "concat-of-toList-cons" "any-bu (forward (lemma-unsafe concat-of-toList))"
+
+verify-lemma "concat-of-toList" (inductive-proof 'xs [ '"[]" , ': ] [ concat-of-toList-nil , concat-of-toList-cons ] )

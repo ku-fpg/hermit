@@ -1,0 +1,38 @@
+--------------------------------------------
+-- Verify list-left-unit
+--
+--
+-- forall f x.  bind (retur x) f   =   f x
+--
+--------------------------------------------
+
+-- To test this script:
+--   prog-end
+--   load-and-run "verify-list-left-unit.hec"
+--   show-lemmas
+
+rule-to-lemma "left-unit"
+
+load-and-run "verify-concat-unit.hec"
+
+-- first do the proof interactively
+--
+-- rule-lhs-intro "left-unit"
+-- consider lam ; lams-body
+
+-- any-bu (inline [ 'bind, 'retur ]) ; smash
+-- any-bu (inline 'toList) ; smash
+-- any-bu (inline 'map) ; smash
+-- any-bu (inline 'map) ; smash
+
+-- forward (lemma concat-unit)
+
+-- then encode the proof as a rewrite or script
+define-script "list-left-unit-proof" "any-bu (inline [ 'bind, 'retur ]) ; smash ;
+                                         any-bu (inline 'toList) ; smash ;
+                                         any-bu (inline 'map) ; smash ;
+                                         any-bu (inline 'map) ; smash ;
+                                         forward (lemma concat-unit)"
+
+verify-lemma "left-unit" (script-to-proof list-left-unit-proof)
+

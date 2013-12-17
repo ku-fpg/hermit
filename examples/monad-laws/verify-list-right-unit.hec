@@ -1,0 +1,40 @@
+--------------------------------------------
+-- Verify list-right-unit
+--
+--
+-- forall m.   m `bind` retur  =  m
+--
+--------------------------------------------
+
+-- To test this script:
+--   prog-end
+--   load-and-run "verify-list-right-unit.hec"
+--   show-lemmas
+
+rule-to-lemma "right-unit"
+
+load-and-run "verify-concat-of-toList.hec"
+
+-- first do the proof interactively
+--
+-- rule-lhs-intro "right-unit"
+-- consider lam ; lams-body
+
+-- case-split-inline 'm
+-- { case-alt 0
+--    any-bu (inline [ 'bind, 'retur ]) ; smash
+-- }
+-- {case-alt 1
+--   any-bu (inline [ 'bind, 'retur ]) ; smash
+--   any-bu (forward (lemma concat-of-toList))
+-- }
+
+-- then encode the proof as a rewrite or script
+define-script "list-right-unit-nil"  "any-bu (inline ['bind, 'retur]) ; smash"
+define-script "list-right-unit-cons" "any-bu (inline ['bind, 'retur]) ; smash ; any-bu (forward (lemma  concat-of-toList))"
+
+verify-lemma "right-unit" (inductive-proof 'm [ '"[]" , ': ] [ list-right-unit-nil , list-right-unit-cons ] )
+
+
+
+
