@@ -132,7 +132,7 @@ ppVar = readerT $ \ v -> ppSDoc >>^ modCol v
 ppForallQuantification :: PrettyH [Var]
 ppForallQuantification =
   do vs <- mapT ppVar
-     return $ keywordText "forall" <+> hsep vs <+> keywordText "."
+     return $ keywordText "forall" <+> hsep vs <> keywordText "."
 
 keywordText :: String -> DocH
 keywordText = keywordColor . text

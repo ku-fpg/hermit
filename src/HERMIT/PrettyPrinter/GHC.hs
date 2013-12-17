@@ -73,6 +73,6 @@ ppCoercion = ppSDoc
 ppForallQuantification :: PrettyH [Var]
 ppForallQuantification =
   do vs <- mapT ppSDoc
-     return $ text "forall" <+> hsep vs <+> text "."
+     return $ text "forall" <+> hsep vs <> text "."
 
 ---------------------------------------------------------------------------

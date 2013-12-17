@@ -395,7 +395,7 @@ ppKindOrTypeR = absPathT >>= ppKindOrTypePR
 ppForallQuantification :: PrettyH [Var]
 ppForallQuantification =
   do vs <- mapT ppBinderMode
-     return $ specialSymbol mempty ForallSymbol <+> hsep vs <+> symbol mempty '.'
+     return $ specialSymbol mempty ForallSymbol <+> hsep vs <> symbol mempty '.'
 
 --------------------------------------------------------------------
 
