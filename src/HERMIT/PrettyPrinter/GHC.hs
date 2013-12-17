@@ -19,7 +19,7 @@ import Data.Char (isSpace)
 
 import HERMIT.Kure
 import HERMIT.Core
-import HERMIT.GHC hiding ((<+>), char, text, parens, hsep)
+import HERMIT.GHC hiding ((<+>), (<>), char, text, parens, hsep)
 import HERMIT.PrettyPrinter.Common
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
