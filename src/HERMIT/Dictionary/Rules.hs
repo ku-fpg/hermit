@@ -36,7 +36,7 @@ import HERMIT.GHC
 
 import HERMIT.Dictionary.Common (findIdT,inScope,callT)
 import HERMIT.Dictionary.GHC (dynFlagsT)
-import HERMIT.Dictionary.Induction
+-- import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Kure (anyCallR)
 import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Unfold (cleanupUnfoldR)
@@ -58,8 +58,8 @@ externals =
                 [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
          , external "verify-rule" (verifyRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> TranslateH Core ())
                 [ "Verify that the named GHC rule holds (in the current context)." ]
-         , external "verify-rule-by-list-induction" (verifyRuleByListInduction  :: RuleNameString -> TH.Name -> RewriteH Core -> RewriteH Core -> RewriteH Core -> RewriteH Core -> TranslateH Core ())
-                [ "Verify that the named GHC rule holds, using induction on the named identifier." ] .+ TODO .+ Experiment
+         -- , external "verify-rule-by-list-induction" (verifyRuleByListInduction  :: RuleNameString -> TH.Name -> RewriteH Core -> RewriteH Core -> RewriteH Core -> RewriteH Core -> TranslateH Core ())
+         --        [ "Verify that the named GHC rule holds, using induction on the named identifier." ] .+ TODO .+ Experiment
          , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> TH.Name -> RewriteH Core)
                 [ "add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]  .+ Introduce
          , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
@@ -238,20 +238,20 @@ verifyRule name lhsR rhsR = verifyRuleT name (extractR lhsR, extractR rhsR)
 
 -- Experimental Test
 
-type BiRewritecHermitMCoreExprShouldGoHere = ()
+-- type BiRewritecHermitMCoreExprShouldGoHere = ()
 
-verifyRuleByListInductionT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
-            => RuleNameString -> TH.Name -> CoreExprEqualityProof c HermitM -> (BiRewritecHermitMCoreExprShouldGoHere -> CoreExprEqualityProof c HermitM) -> Translate c HermitM a ()
-verifyRuleByListInductionT r_name i_name nilCaseProof consCaseProof = ruleNameToEqualityT r_name >>> listInductionOnT (cmpTHName2Var i_name) nilCaseProof (\ _ -> consCaseProof ())
+-- verifyRuleByListInductionT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
+--             => RuleNameString -> TH.Name -> CoreExprEqualityProof c HermitM -> (BiRewritecHermitMCoreExprShouldGoHere -> CoreExprEqualityProof c HermitM) -> Translate c HermitM a ()
+-- verifyRuleByListInductionT r_name i_name nilCaseProof consCaseProof = ruleNameToEqualityT r_name >>> listInductionOnT (cmpTHName2Var i_name) nilCaseProof (\ _ -> consCaseProof ())
 
-verifyRuleByListInduction  :: RuleNameString    -- Name of Rule to prove
-                           -> TH.Name           -- Name if Id to perform induction on
-                           -> RewriteH Core     -- [] case, LHS
-                           -> RewriteH Core     -- [] case, RHS
-                           -> RewriteH Core     -- (:) case, LHS
-                           -> RewriteH Core     -- (:) case, RHS
-                           -> TranslateH Core ()
-verifyRuleByListInduction r_name i_name nilLhsR nilRhsR consLhsR consRhsR = verifyRuleByListInductionT r_name i_name (extractR nilLhsR, extractR nilRhsR) (\ () -> (extractR consLhsR, extractR consRhsR))
+-- verifyRuleByListInduction  :: RuleNameString    -- Name of Rule to prove
+--                            -> TH.Name           -- Name if Id to perform induction on
+--                            -> RewriteH Core     -- [] case, LHS
+--                            -> RewriteH Core     -- [] case, RHS
+--                            -> RewriteH Core     -- (:) case, LHS
+--                            -> RewriteH Core     -- (:) case, RHS
+--                            -> TranslateH Core ()
+-- verifyRuleByListInduction r_name i_name nilLhsR nilRhsR consLhsR consRhsR = verifyRuleByListInductionT r_name i_name (extractR nilLhsR, extractR nilRhsR) (\ () -> (extractR consLhsR, extractR consRhsR))
 
 --------------------------------------------------------
 

@@ -1,5 +1,5 @@
-load-as-rewrite "BaseCaseR"      "BaseCase.hss"
-load-as-rewrite "InductiveStepR" "InductiveStep.hss"
+load "BaseCase" "BaseCase.hss"
+load "InductiveStep" "InductiveStep.hss"
 
 {
 rhs-of 'main
@@ -19,5 +19,7 @@ case-split-inline 'xs
 
 prog-end
 
-verify-rule-by-list-induction "++ []" 'xs BaseCaseR id InductiveStepR id
+rule-to-lemma "++ []"
+
+verify-lemma "++ []" (inductive-proof 'xs [ '"[]" , ': ] [ BaseCase , InductiveStep ])
 

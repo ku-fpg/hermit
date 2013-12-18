@@ -45,15 +45,15 @@ externals =
     , external "rewrite-both-sides-to-proof" ((\ r1 r2 -> rewriteBothSidesToProof (extractR r1) (extractR r2)) :: RewriteH Core -> RewriteH Core -> ProofH)
         [ "Convert a pair of rewrites to a proof, by applying the first rewrite to the LHS and the second rewrite to the RHS." ]
     , external "inductive-proof" (inductiveProofExt :: TH.Name -> [TH.Name] -> [ScriptName] -> ProofH)
-        [ "inductive-proof <lemma-name> <id-name> [<data-con-name>] [<script-name>]"
-        , "Prove a lemma by induction on the named identifier."
+        [ "inductive-proof <id-name> [<data-con-name>] [<script-name>]"
+        , "Build an equality proof by induction on the named identifier."
         , "Takes a list of proofs (in the form of scripts converting the LHS to the RHS) for each data constructor case,"
         , "in the same order as the given list of data constructor names."
-        , "For example: inductive-proof \"LemmaAppendNil\" 'xs [ '[] , ': ] \"NilCaseScript\" \"ConsCaseScript\""
-        , "The induction hypotheses are available for use under the names TODO"
+        , "For example: inductive-proof 'xs [ '[] , ': ] [ \"NilCaseScript\" , \"ConsCaseScript\" ]"
+        , "The induction hypotheses are available for use under the names ind-hyp0, ind-hyp1, etc..."
         ]
     , external "inductive-proof-both-sides" (inductiveProofBothSidesExt :: TH.Name -> [TH.Name] -> [ScriptName] -> [ScriptName] -> ProofH)
-        [ "inductive-proof-both-sides <lemma-name> <id-name> [<data-con-name>] [<script-name>] [<script-name>]"
+        [ "inductive-proof-both-sides <id-name> [<data-con-name>] [<script-name>] [<script-name>]"
         , "As inductive-proof, but takes scripts to apply to the RHS of each case as well as the LHS."
         ]
     , external "flip-proof" flipProof

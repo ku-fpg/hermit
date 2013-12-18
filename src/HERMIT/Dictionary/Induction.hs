@@ -4,7 +4,7 @@ module HERMIT.Dictionary.Induction
   ( -- * Induction
     inductionCaseSplit
   , inductionOnT
-  , listInductionOnT
+--  , listInductionOnT
   )
 where
 
@@ -29,7 +29,7 @@ import HERMIT.Dictionary.Reasoning
 
 ------------------------------------------------------------------------------
 
-inductionCaseSplit :: forall c x. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [Var] -> Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(DataCon,[Var],CoreExpr,CoreExpr)]
+inductionCaseSplit :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [Var] -> Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(DataCon,[Var],CoreExpr,CoreExpr)]
 inductionCaseSplit vs i lhsE rhsE =
     do -- first construct an expression containing both the LHS and the RHS
        il <- constT $ newIdH "dummyL" (exprKindOrType lhsE)
@@ -63,7 +63,7 @@ inductionOnT idPred genCaseAltProofs = prefixFailMsg "Induction failed: " $
 
        -- TODO: will this work if vs contains TyVars or CoVars?  Maybe we need to sort the Vars in order: TyVars; CoVars; Ids.
        let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Translate c HermitM x ()
-           verifyInductiveCaseT (con,vs,lhsE,rhsE) = 
+           verifyInductiveCaseT (con,vs,lhsE,rhsE) =
                 let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
                     eqs = [ discardUniVars (instantiateCoreExprEq [(i,Var i')] eq) | i' <- vs_matching_i_type ]
                     brs = map birewrite eqs -- These eqs now have no universally quantified variables.
@@ -74,20 +74,20 @@ inductionOnT idPred genCaseAltProofs = prefixFailMsg "Induction failed: " $
 
        mapM_ verifyInductiveCaseT cases
 
--- | An induction principle for lists.
-listInductionOnT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
-                => (Id -> Bool) -- Id to case split on
-                -> CoreExprEqualityProof c HermitM -- proof for [] case
-                -> (BiRewrite c HermitM CoreExpr -> CoreExprEqualityProof c HermitM) -- proof for (:) case, given smaller proof
-                -> Translate c HermitM CoreExprEquality ()
-listInductionOnT idPred nilCaseProof consCaseProof = inductionOnT idPred $ \ con brs ->
-                                                                if | con == nilDataCon   -> case brs of
-                                                                                                  [] -> nilCaseProof
-                                                                                                  _  -> error "Bug!"
-                                                                   | con == consDataCon  -> case brs of
-                                                                                                  [br] -> consCaseProof br
-                                                                                                  _    -> error "Bug!"
-                                                                   | otherwise           -> let msg = "Mystery constructor, this is a bug."
-                                                                                             in (fail msg, fail msg)
+-- -- | An induction principle for lists.
+-- listInductionOnT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
+--                 => (Id -> Bool) -- Id to case split on
+--                 -> CoreExprEqualityProof c HermitM -- proof for [] case
+--                 -> (BiRewrite c HermitM CoreExpr -> CoreExprEqualityProof c HermitM) -- proof for (:) case, given smaller proof
+--                 -> Translate c HermitM CoreExprEquality ()
+-- listInductionOnT idPred nilCaseProof consCaseProof = inductionOnT idPred $ \ con brs ->
+--                                                                 if | con == nilDataCon   -> case brs of
+--                                                                                                   [] -> nilCaseProof
+--                                                                                                   _  -> error "Bug!"
+--                                                                    | con == consDataCon  -> case brs of
+--                                                                                                   [br] -> consCaseProof br
+--                                                                                                   _    -> error "Bug!"
+--                                                                    | otherwise           -> let msg = "Mystery constructor, this is a bug."
+--                                                                                              in (fail msg, fail msg)
 
 ------------------------------------------------------------------------------
