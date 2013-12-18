@@ -50,7 +50,7 @@ externals =
         , "Takes a list of proofs (in the form of scripts converting the LHS to the RHS) for each data constructor case,"
         , "in the same order as the given list of data constructor names."
         , "For example: inductive-proof 'xs [ '[] , ': ] [ \"NilCaseScript\" , \"ConsCaseScript\" ]"
-        , "The induction hypotheses are available for use under the names ind-hyp0, ind-hyp1, etc..."
+        , "The induction hypotheses are available for use under the names ind-hyp-0, ind-hyp-1, etc..."
         ]
     , external "inductive-proof-both-sides" (inductiveProofBothSidesExt :: TH.Name -> [TH.Name] -> [ScriptName] -> [ScriptName] -> ProofH)
         [ "inductive-proof-both-sides <id-name> [<data-con-name>] [<script-name>] [<script-name>]"

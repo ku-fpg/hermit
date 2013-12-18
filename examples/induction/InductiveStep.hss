@@ -1,8 +1,0 @@
--- Inductive Step
---
--- (y:ys) ++ []  =>  y:ys
---
-
-rule-unsafe "(:) ++"
-app-arg
-rule-unsafe "++ []"  -- Temporary.  This should actually invoke a provided induction hypothesis.

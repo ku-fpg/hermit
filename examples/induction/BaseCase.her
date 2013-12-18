@@ -2,4 +2,5 @@
 --
 -- [] ++ []  =>  []
 
-rule-unsafe "[] ++"
+one-bu (unfold '++)
+smash

@@ -1,0 +1,7 @@
+load "BaseCase" "BaseCase.her"
+load "InductiveStep" "InductiveStep.her"
+
+{ prog-end
+  rule-to-lemma "++ []"
+  verify-lemma "++ []" (inductive-proof 'xs [ '"[]" , ': ] [ BaseCase , InductiveStep ])
+}

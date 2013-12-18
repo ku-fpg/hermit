@@ -1,0 +1,9 @@
+-- Inductive Step
+--
+-- (y:ys) ++ []  =>  y:ys
+--
+
+unfold '++
+smash
+app-arg
+ind-hyp-0

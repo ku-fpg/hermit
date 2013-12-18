@@ -1,10 +1,12 @@
 module Main where
 
--- We shouldn't need these two, but their definitions are not in scope to inline.
-{-# RULES "[] ++"  forall xs.      []     ++ xs = xs             #-}
-{-# RULES "(:) ++" forall a as xs. (a:as) ++ xs = a : (as ++ xs) #-}
+import Prelude hiding ((++))
 
 {-# RULES "++ []" forall xs.  xs ++ [] = xs #-}
+
+(++) :: [a] -> [a] -> [a]
+[]     ++ bs = bs
+(a:as) ++ bs = a : (as ++ bs)
 
 main :: IO ()
 main = print (replicate 5 True ++ [])
