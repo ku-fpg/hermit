@@ -25,12 +25,12 @@ import HERMIT.Shell.Types
 interpExprH :: MonadState CommandLineState m => [Interp a] -> ExprH -> m a
 interpExprH interps e = do 
     dyns <- interpExpr e
-    runInterp dyns interps
+    runInterp e dyns interps
 
-runInterp :: Monad m => [Dynamic] -> [Interp b] -> m b
-runInterp dyns interps = case [f a | Interp f <- interps, Just a <- map fromDynamic dyns] of
-                           []  -> fail "User error, HERMIT command does not type-check."
-                           b:_ -> return b
+runInterp :: Monad m => ExprH -> [Dynamic] -> [Interp b] -> m b
+runInterp e dyns interps = case [f a | Interp f <- interps, Just a <- map fromDynamic dyns] of
+                            []  -> fail $ "Does not type-check: " ++ unparseExprH e ++ "\n"
+                            b:_ -> return b
 
 -- | An 'Interp' @a@ is a /possible/ means of converting a 'Typeable' value to a value of type @a@.
 data Interp :: * -> * where

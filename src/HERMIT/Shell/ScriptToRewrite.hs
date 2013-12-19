@@ -18,7 +18,7 @@ import HERMIT.Context(LocalPathH)
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.Interp
-import HERMIT.Parser(Script)
+import HERMIT.Parser(Script, ExprH, unparseExprH)
 
 import HERMIT.PrettyPrinter.Common(TranslateCoreTCDocHBox(..))
 import HERMIT.Shell.Types
@@ -41,7 +41,7 @@ data UnscopedScriptR
 
 data ScopedScriptR
               = ScriptScope [ScopedScriptR]
-              | ScriptPrimSc PrimScriptR
+              | ScriptPrimSc ExprH PrimScriptR
 
 data PrimScriptR
        = ScriptRewriteHCore (RewriteH Core)
@@ -50,33 +50,36 @@ data PrimScriptR
 
 
 -- TODO: Hacky parsing, needs cleaning up
-unscopedToScopedScriptR :: forall m. Monad m => [UnscopedScriptR] -> m [ScopedScriptR]
+unscopedToScopedScriptR :: forall m. Monad m => [(ExprH, UnscopedScriptR)] -> m [ScopedScriptR]
 unscopedToScopedScriptR = parse
   where
-    parse :: [UnscopedScriptR] -> m [ScopedScriptR]
+    parse :: [(ExprH, UnscopedScriptR)] -> m [ScopedScriptR]
     parse []     = return []
     parse (y:ys) = case y of
-                     ScriptUnsupported msg -> fail ("script contains " ++ msg ++ " which cannot be converted to a rewrite.")
-                     ScriptPrimUn pr       -> (ScriptPrimSc pr :) <$> parse ys
-                     ScriptBeginScope      -> do (rs,zs) <- parseUntilEndScope ys
-                                                 (ScriptScope rs :) <$> parse zs
-                     ScriptEndScope        -> fail "unmatched end-of-scope."
+                     (e, ScriptUnsupported msg) -> fail $ mkMsg e msg
+                     (e, ScriptPrimUn pr)       -> (ScriptPrimSc e pr :) <$> parse ys
+                     (_, ScriptBeginScope)      -> do (rs,zs) <- parseUntilEndScope ys
+                                                      (ScriptScope rs :) <$> parse zs
+                     (_, ScriptEndScope)        -> fail "unmatched end-of-scope."
 
-    parseUntilEndScope :: Monad m => [UnscopedScriptR] -> m ([ScopedScriptR], [UnscopedScriptR])
+    parseUntilEndScope :: Monad m => [(ExprH, UnscopedScriptR)] -> m ([ScopedScriptR], [(ExprH, UnscopedScriptR)])
     parseUntilEndScope []     = fail "missing end-of-scope."
     parseUntilEndScope (y:ys) = case y of
-                                  ScriptEndScope        -> return ([],ys)
-                                  ScriptBeginScope      -> do (rs,zs)  <- parseUntilEndScope ys
-                                                              first (ScriptScope rs :) <$> parseUntilEndScope zs
-                                  ScriptPrimUn pr       -> first (ScriptPrimSc pr :) <$> parseUntilEndScope ys
-                                  ScriptUnsupported msg -> fail ("script contains " ++ msg ++ ", which cannot be converted to a rewrite.")
+                                  (_, ScriptEndScope)        -> return ([],ys)
+                                  (_, ScriptBeginScope)      -> do (rs,zs)  <- parseUntilEndScope ys
+                                                                   first (ScriptScope rs :) <$> parseUntilEndScope zs
+                                  (e, ScriptPrimUn pr)       -> first (ScriptPrimSc e pr :) <$> parseUntilEndScope ys
+                                  (e, ScriptUnsupported msg) -> fail $ mkMsg e msg
+
+    mkMsg :: ExprH -> String -> String
+    mkMsg e msg = "script cannot be converted to a rewrite because it contains the following " ++ msg ++ ": " ++ unparseExprH e
 
 -----------------------------------
 
 interpScriptR :: [Interp UnscopedScriptR]
 interpScriptR =
   [ interp (\ (RewriteCoreBox r)           -> ScriptPrimUn $ ScriptRewriteHCore r)
-  , interp (\ (RewriteCoreTCBox _)         -> ScriptUnsupported "rewrites that traverse types and coercions") -- TODO
+  , interp (\ (RewriteCoreTCBox _)         -> ScriptUnsupported "rewrite that traverses types and coercions") -- TODO
   , interp (\ (BiRewriteCoreBox br)        -> ScriptPrimUn $ ScriptRewriteHCore $ forwardT br)
   , interp (\ (CrumbBox cr)                -> ScriptPrimUn $ ScriptPath [cr])
   , interp (\ (PathBox p)                  -> ScriptPrimUn $ ScriptPath (snocPathToPath p))
@@ -84,14 +87,14 @@ interpScriptR =
   , interp (\ (effect :: KernelEffect)     -> case effect of
                                                 BeginScope -> ScriptBeginScope
                                                 EndScope   -> ScriptEndScope
-                                                _          -> ScriptUnsupported "Kernel effects" )
-  , interp (\ (_ :: ShellEffect)           -> ScriptUnsupported "shell effects")
-  , interp (\ (_ :: QueryFun)              -> ScriptUnsupported "queries")
-  , interp (\ (TranslateCoreStringBox _)   -> ScriptUnsupported "queries")
-  , interp (\ (TranslateCoreTCStringBox _) -> ScriptUnsupported "queries")
-  , interp (\ (TranslateCoreTCDocHBox _)   -> ScriptUnsupported "queries")
-  , interp (\ (TranslateCoreCheckBox _)    -> ScriptUnsupported "predicates")
-  , interp (\ (StringBox _)                -> ScriptUnsupported "messages")
+                                                _          -> ScriptUnsupported "Kernel effect" )
+  , interp (\ (_ :: ShellEffect)           -> ScriptUnsupported "shell effect")
+  , interp (\ (_ :: QueryFun)              -> ScriptUnsupported "query")
+  , interp (\ (TranslateCoreStringBox _)   -> ScriptUnsupported "query")
+  , interp (\ (TranslateCoreTCStringBox _) -> ScriptUnsupported "query")
+  , interp (\ (TranslateCoreTCDocHBox _)   -> ScriptUnsupported "query")
+  , interp (\ (TranslateCoreCheckBox _)    -> ScriptUnsupported "predicate")
+  , interp (\ (StringBox _)                -> ScriptUnsupported "message")
   ]
 
 -----------------------------------
@@ -99,12 +102,13 @@ interpScriptR =
 scopedScriptsToRewrite :: [ScopedScriptR] -> RewriteH Core
 scopedScriptsToRewrite []        = idR
 scopedScriptsToRewrite (x : xs)  = let rest = scopedScriptsToRewrite xs
+                                       failWith e = prefixFailMsg ("Error in script expression: " ++ unparseExprH e ++ "\n") 
                                    in case x of
-                                        ScriptScope ys   -> scopedScriptsToRewrite ys >>> rest
-                                        ScriptPrimSc pr  -> case pr of
-                                                              ScriptRewriteHCore r       -> r >>> rest
-                                                              ScriptPath p               -> pathR p rest
-                                                              ScriptTranslateHCorePath t -> do p <- t
+                                        ScriptScope ys    -> scopedScriptsToRewrite ys >>> rest
+                                        ScriptPrimSc e pr -> case pr of
+                                                              ScriptRewriteHCore r       -> failWith e r >>> rest
+                                                              ScriptPath p               -> failWith e $ pathR p rest
+                                                              ScriptTranslateHCorePath t -> do p <- failWith e t
                                                                                                localPathR p rest
 
 -----------------------------------
@@ -112,7 +116,7 @@ scopedScriptsToRewrite (x : xs)  = let rest = scopedScriptsToRewrite xs
 scriptToRewrite :: MonadState CommandLineState m => Script -> m (RewriteH Core)
 scriptToRewrite scr = do
     unscoped <- mapM (interpExprH interpScriptR) scr
-    scoped   <- unscopedToScopedScriptR unscoped
+    scoped   <- unscopedToScopedScriptR $ zip scr unscoped
     return $ scopedScriptsToRewrite scoped
 
 -----------------------------------

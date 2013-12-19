@@ -256,7 +256,7 @@ runScript :: MonadIO m => Script -> CLM m ()
 runScript = mapM_ runExprH
 
 runExprH :: MonadIO m => ExprH -> CLM m ()
-runExprH expr = do
+runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
     shellCmd <- interpExprH interpShellCommand expr
     case shellCmd of
         KernelEffect effect -> performKernelEffect effect expr
