@@ -172,7 +172,10 @@ performProofCommand (VerifyLemma nm proof) = do
     prove equality proof -- this is like a guard
     markProven nm
 
-performProofCommand ShowLemmas = do
+performProofCommand ShowLemmas = gets cl_lemmas >>= \ ls -> forM_ (reverse ls) printLemma
+
+printLemma :: MonadIO m => Lemma -> CLM m ()
+printLemma (nm, CoreExprEquality bs lhs rhs, proven) = do
     st <- get
     let k    = cl_kernel st
         env  = cl_kernel_env st
@@ -181,18 +184,17 @@ performProofCommand ShowLemmas = do
         pp   = cl_pretty st
         pr :: [Var] -> CoreExpr -> TranslateH Core DocH
         pr vs e = return e >>> withVarsInScope vs (extractT $ liftPrettyH pos pp)
-    forM_ (reverse $ cl_lemmas st) $ \ (nm, CoreExprEquality vs lhs rhs, proven) -> do
-        cl_putStr nm
-        cl_putStrLn $ if proven then " (Proven)" else " (Not Proven)"
-        unless (null vs) $ do
-            forallDoc <- queryS k (return vs >>> extractT (liftPrettyH pos Clean.ppForallQuantification) :: TranslateH Core DocH) env sast -- TODO: rather than hardwiring the Clean PP here, we should store a pretty printer in the shell state, which should match the main PP, and be updated correspondingly.
-            liftIO $ cl_render st stdout pos (Right forallDoc)
-        lDoc <- queryS k (pr vs lhs) env sast
-        rDoc <- queryS k (pr vs rhs) env sast
-        liftIO $ cl_render st stdout pos (Right lDoc)
-        cl_putStrLn "=="
-        liftIO $ cl_render st stdout pos (Right rDoc)
-        cl_putStrLn ""
+    cl_putStr nm
+    cl_putStrLn $ if proven then " (Proven)" else " (Not Proven)"
+    unless (null bs) $ do
+        forallDoc <- queryS k (return bs >>> extractT (liftPrettyH pos Clean.ppForallQuantification) :: TranslateH Core DocH) env sast -- TODO: rather than hardwiring the Clean PP here, we should store a pretty printer in the shell state, which should match the main PP, and be updated correspondingly.
+        liftIO $ cl_render st stdout pos (Right forallDoc)
+    lDoc <- queryS k (pr bs lhs) env sast
+    rDoc <- queryS k (pr bs rhs) env sast
+    liftIO $ cl_render st stdout pos (Right lDoc)
+    cl_putStrLn "=="
+    liftIO $ cl_render st stdout pos (Right rDoc)
+    cl_putStrLn ""
 
 --------------------------------------------------------------------------------------------------------
 
@@ -221,10 +223,12 @@ prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
 
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
             -- Generate list of specialized induction hypotheses for the recursive cases.
-            brs = [ birewrite $ discardUniVars $ instantiateCoreExprEqVar i (Var i') eq
+            eqs = [ discardUniVars $ instantiateCoreExprEqVar i (Var i') eq
                   | i' <- vs_matching_i_type ]
+            brs = map birewrite eqs
             nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
 
+        forM_ [ (nm, e, True) | (nm,e) <- zip nms eqs ] printLemma
         catchError (do put $ addToDict (zip nms brs) st
                        (l,r) <- getRewrites (lp,rp)
                        prove (CoreExprEquality (delete i bs ++ vs) lhsE rhsE) (rewriteBothSidesToProof l r) -- recursion!
