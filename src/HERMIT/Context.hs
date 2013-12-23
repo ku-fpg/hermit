@@ -26,7 +26,7 @@ module HERMIT.Context
        , addDefBindingsExcept
        , addLambdaBinding
        , addAltBindings
-       , addCaseWildBinding
+       , addCaseBinderBinding
        , addForallBinding
          -- ** Reading bindings from the context
        , BoundVars(..)
@@ -65,14 +65,14 @@ type BindingDepth = Int
 
 -- | HERMIT\'s representation of variable bindings.
 --   Bound expressions cannot be inlined without checking for shadowing issues (using the depth information).
-data HermitBindingSite = LAM                               -- ^ A lambda-bound variable.
-                       | NONREC CoreExpr                   -- ^ A non-recursive binding of an expression.
-                       | REC CoreExpr                      -- ^ A recursive binding that does not depend on the current expression (i.e. we're not in the binding group of that binding).
-                       | SELFREC                           -- ^ A recursive binding of a superexpression of the current node (i.e. we're in the RHS of that binding).
-                       | MUTUALREC CoreExpr                -- ^ A recursive binding that is mutually recursive with the binding under consideration (i.e. we're in another definition in the same recursive binding group.).
-                       | CASEALT                           -- ^ A variable bound in a case alternative.
-                       | CASEWILD CoreExpr (AltCon,[Var])  -- ^ A case wildcard binder.  We store both the scrutinised expression, and the case alternative 'AltCon' and variables.
-                       | FORALL                            -- ^ A universally quantified type variable.
+data HermitBindingSite = LAM                                -- ^ A lambda-bound variable.
+                       | NONREC CoreExpr                    -- ^ A non-recursive binding of an expression.
+                       | REC CoreExpr                       -- ^ A recursive binding that does not depend on the current expression (i.e. we're not in the binding group of that binding).
+                       | SELFREC                            -- ^ A recursive binding of a superexpression of the current node (i.e. we're in the RHS of that binding).
+                       | MUTUALREC CoreExpr                 -- ^ A recursive binding that is mutually recursive with the binding under consideration (i.e. we're in another definition in the same recursive binding group.).
+                       | CASEALT                            -- ^ A variable bound in a case alternative.
+                       | CASEBINDER CoreExpr (AltCon,[Var]) -- ^ A case binder.  We store both the scrutinised expression, and the case alternative 'AltCon' and variables.
+                       | FORALL                             -- ^ A universally quantified type variable.
 
 data HermitBinding = HB { hbDepth :: BindingDepth 
                         , hbSite :: HermitBindingSite 
@@ -82,25 +82,25 @@ data HermitBinding = HB { hbDepth :: BindingDepth
 -- | Retrieve the expression in a 'HermitBindingSite', if there is one.
 hermitBindingSiteExpr :: HermitBindingSite -> KureM CoreExpr
 hermitBindingSiteExpr b = case b of
-                            LAM          -> fail "variable is lambda-bound, not bound to an expression."
-                            NONREC e     -> return e
-                            REC e        -> return e
-                            MUTUALREC e  -> return e
-                            SELFREC      -> fail "identifier recursively refers to the expression under consideration."
-                            CASEALT      -> fail "variable is bound in a case alternative, not bound to an expression."
-                            CASEWILD e _ -> return e
-                            FORALL       -> fail "variable is a universally quantified type variable."
+                            LAM            -> fail "variable is lambda-bound, not bound to an expression."
+                            NONREC e       -> return e
+                            REC e          -> return e
+                            MUTUALREC e    -> return e
+                            SELFREC        -> fail "identifier recursively refers to the expression under consideration."
+                            CASEALT        -> fail "variable is bound in a case alternative, not bound to an expression."
+                            CASEBINDER e _ -> return e
+                            FORALL         -> fail "variable is a universally quantified type variable."
 
 hermitBindingSummary :: HermitBinding -> String
 hermitBindingSummary b = show (hbDepth b) ++ "$" ++ case hbSite b of
-                            LAM          -> "LAM"
-                            NONREC {}    -> "NONREC"
-                            REC {}       -> "REC"
-                            MUTUALREC {} -> "MUTUALREC"
-                            SELFREC {}   -> "SELFREC"
-                            CASEALT      -> "CASEALT"
-                            CASEWILD {}  -> "CASEWILD"
-                            FORALL       -> "FORALL"
+                            LAM            -> "LAM"
+                            NONREC {}      -> "NONREC"
+                            REC {}         -> "REC"
+                            MUTUALREC {}   -> "MUTUALREC"
+                            SELFREC {}     -> "SELFREC"
+                            CASEALT        -> "CASEALT"
+                            CASEBINDER {}  -> "CASEBINDER"
+                            FORALL         -> "FORALL"
 
 -- | Retrieve the expression in a 'HermitBinding', if there is one.
 hermitBindingExpr :: HermitBinding -> KureM CoreExpr
@@ -149,9 +149,9 @@ addDefBinding i c = addHermitBindings [(i,SELFREC,absPath c @@ Def_Id)] c
 addDefBindingsExcept :: (AddBindings c, ReadPath c Crumb) => Int -> [(Id,CoreExpr)] -> c -> c
 addDefBindingsExcept n ies c = addHermitBindings [ (i, MUTUALREC e, absPath c @@ Rec_Def m) | (m,(i,e)) <- zip [0..] ies, m /= n ] c
 
--- | Add a wildcard binding for a specific case alternative.
-addCaseWildBinding :: (AddBindings c, ReadPath c Crumb) => (Id,CoreExpr,CoreAlt) -> c -> c
-addCaseWildBinding (i,e,(con,vs,_)) c = addHermitBindings [(i,CASEWILD e (con,vs),absPath c @@ Case_Binder)] c
+-- | Add the case binder for a specific case alternative.
+addCaseBinderBinding :: (AddBindings c, ReadPath c Crumb) => (Id,CoreExpr,CoreAlt) -> c -> c
+addCaseBinderBinding (i,e,(con,vs,_)) c = addHermitBindings [(i,CASEBINDER e (con,vs),absPath c @@ Case_Binder)] c
 
 -- | Add a lambda bound variable to a context.
 --   All that is known is the variable, which may shadow something.

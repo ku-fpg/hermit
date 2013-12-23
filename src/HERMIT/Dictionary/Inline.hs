@@ -115,8 +115,8 @@ ensureBoundT = translate $ \ c -> return . all (inScope c) . varSetElems . local
 --         NONREC                (< d)
 --         REC                   (<= d)
 --         MUTUALREC             (<= d+1)
---         CASEWILD-scrutinee    (< d)
---         CASEWILD-alt          (<= d+1)
+--         CASEBINDER-scrutinee  (< d)
+--         CASEBINDER-alt        (<= d+1)
 --         SELFREC-def           NA
 --         LAM                   NA
 --         CASEALT               NA
@@ -149,24 +149,24 @@ getUnfoldingT config = translate $ \ c i ->
                       _                               -> fail $ "cannot find unfolding in Env or IdInfo."
       Just b -> let depth = hbDepth b
                 in case hbSite b of
-                          CASEWILD s alt -> let tys             = tyConAppArgs (idType i)
-                                                altExprDepthM   = (, (<= depth+1)) <$> alt2Exp tys alt
-                                                scrutExprDepthM = return (s, (< depth))
-                                             in case config of
-                                                  CaseBinderOnly Scrutinee   -> scrutExprDepthM
-                                                  CaseBinderOnly Alternative -> altExprDepthM
-                                                  AllBinders                 -> altExprDepthM <+ scrutExprDepthM
+                          CASEBINDER s alt -> let tys             = tyConAppArgs (idType i)
+                                                  altExprDepthM   = (, (<= depth+1)) <$> alt2Exp tys alt
+                                                  scrutExprDepthM = return (s, (< depth))
+                                               in case config of
+                                                    CaseBinderOnly Scrutinee   -> scrutExprDepthM
+                                                    CaseBinderOnly Alternative -> altExprDepthM
+                                                    AllBinders                 -> altExprDepthM <+ scrutExprDepthM
 
-                          NONREC e       -> do requireAllBinders config
-                                               return (e, (< depth))
+                          NONREC e         -> do requireAllBinders config
+                                                 return (e, (< depth))
 
-                          REC e          -> do requireAllBinders config
-                                               return (e, (<= depth))
+                          REC e            -> do requireAllBinders config
+                                                 return (e, (<= depth))
 
-                          MUTUALREC e    -> do requireAllBinders config
-                                               return (e, (<= depth+1))
+                          MUTUALREC e      -> do requireAllBinders config
+                                                 return (e, (<= depth+1))
 
-                          _              -> fail "variable is not bound to an expression."
+                          _                -> fail "variable is not bound to an expression."
   where
     requireAllBinders :: Monad m => InlineConfig -> m ()
     requireAllBinders AllBinders         = return ()

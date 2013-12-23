@@ -69,7 +69,7 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
                 <+ promoteExprR ( unfoldBasicCombinatorR
                                <+ betaReducePlusR
                                <+ letNonRecSubstSafeR
-                               <+ caseReduceR
+                               <+ caseReduceR False
                                <+ letElimR )
                )
 
@@ -147,8 +147,8 @@ bashComponents :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBind
 bashComponents =
   [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
     (promoteExprR betaReduceR, "beta-reduce")                        -- O(1)
-  , (promoteExprR caseReduceR, "case-reduce")                        -- O(n)
-  , (promoteExprR caseReduceIdR, "case-reduce-id")                   -- O(n)
+  , (promoteExprR (caseReduceR True), "case-reduce")                 -- O(n)
+  , (promoteExprR (caseReduceIdR True), "case-reduce-id")            -- O(n)
   , (promoteExprR caseElimSeqR, "case-elim-seq")
   , (promoteExprR unfoldBasicCombinatorR, "unfold-basic-combinator") -- O(n)
   , (promoteExprR inlineCaseAlternativeR, "inline-case-alternative") -- O(n)
@@ -184,8 +184,8 @@ smashComponents1 :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBi
 smashComponents1 =
   [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
     (promoteExprR betaReduceR, "beta-reduce")                        -- O(1)
-  , (promoteExprR caseReduceR, "case-reduce")                        -- O(n)
-  , (promoteExprR caseReduceIdR, "case-reduce-id")                   -- O(n)
+  , (promoteExprR (caseReduceR True), "case-reduce")                 -- O(n)
+  , (promoteExprR (caseReduceIdR True), "case-reduce-id")            -- O(n)
   , (promoteExprR caseElimSeqR, "case-elim-seq")
   , (promoteExprR unfoldBasicCombinatorR, "unfold-basic-combinator") -- O(n)
   , (promoteExprR inlineCaseAlternativeR, "inline-case-alternative") -- O(n)

@@ -547,7 +547,7 @@ caseT te tw tty talts f = translate $ \ c -> \case
          Case e w ty alts -> f <$> apply te (c @@ Case_Scrutinee) e
                                <*> apply tw (c @@ Case_Binder) w
                                <*> apply tty (c @@ Case_Type) ty
-                               <*> sequence [ apply (talts n) (addCaseWildBinding (w,e,alt) c @@ Case_Alt n) alt
+                               <*> sequence [ apply (talts n) (addCaseBinderBinding (w,e,alt) c @@ Case_Alt n) alt
                                             | (alt,n) <- zip alts [0..]
                                             ]
          _                -> fail "not a case."

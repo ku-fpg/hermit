@@ -327,7 +327,7 @@ letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
       then alphaLamR Nothing >>> letFloatLamR
       else return $ Let binds (Lam v body)
 
--- | @case (let bnds in e) of wild alts@ ==> @let bnds in (case e of wild alts)@
+-- | @case (let bnds in e) of bndr alts@ ==> @let bnds in (case e of bndr alts)@
 --   Fails if any variables bound in @bnds@ occurs in @alts@.
 letFloatCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
 letFloatCaseR = prefixFailMsg "Let floating from Case failed: " $
@@ -451,8 +451,8 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
              used   = unionVarSets $ zipWith intersectVarSet (map (mkVarSet . (`take` vs)) [1..]) frees
          if isEmptyVarSet used
            then let rhs = mkCoreTup rhss
-                in constT $ do wild <- newIdH nm (exprType rhs)
-                               return $ mkSmallTupleCase vs body wild rhs
+                in constT $ do bndr <- newIdH nm (exprType rhs)
+                               return $ mkSmallTupleCase vs body bndr rhs
 
            else fail $ "the following bound variables are used in subsequent bindings: " ++ showVarSet used
 

@@ -26,7 +26,7 @@ module HERMIT.Dictionary.Common
     , letRecIdsT
     , letNonRecVarT
     , caseVarsT
-    , caseWildIdT
+    , caseBinderIdT
     , caseAltVarsT
       -- ** Finding variables bound in the Context
     , boundVarsT
@@ -161,13 +161,13 @@ letRecIdsT = letT recIdsT mempty (\ vs () -> vs)
 letNonRecVarT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr Var
 letNonRecVarT = letT nonRecVarT mempty (\ v () -> v)
 
--- | List all variables bound by a case expression (in the alternatives and the wildcard binder).
+-- | List all variables bound by a case expression (in the alternatives and the case binder).
 caseVarsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr [Var]
 caseVarsT = caseT mempty idR mempty (\ _ -> arr altVars) (\ () v () vss -> v : nub (concat vss))
 
--- | Return the case wildcard binder.
-caseWildIdT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr Id
-caseWildIdT = caseT mempty idR mempty (\ _ -> idR) (\ () i () _ -> i)
+-- | Return the case binder.
+caseBinderIdT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr Id
+caseBinderIdT = caseT mempty idR mempty (\ _ -> idR) (\ () i () _ -> i)
 
 -- | List the variables bound by all alternatives in a case expression.
 caseAltVarsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreExpr [[Var]]
