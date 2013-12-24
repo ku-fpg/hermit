@@ -54,8 +54,6 @@ import HERMIT.Core
 import HERMIT.Context
 import HERMIT.GHC
 
-import qualified Language.Haskell.TH as TH
-
 ------------------------------------------------------------------------------
 
 -- | Apply a transformation to a value in the current context.
@@ -81,9 +79,9 @@ callPredT p = do
 
 -- | Succeeds if we are looking at an application of given function
 --   returning zero or more arguments to which it is applied.
-callNameT :: MonadCatch m => TH.Name -> Translate c m CoreExpr (CoreExpr, [CoreExpr])
-callNameT nm = setFailMsg ("callNameT failed: not a call to '" ++ show nm ++ ".") $
-    callPredT (const . cmpTHName2Var nm)
+callNameT :: MonadCatch m => String -> Translate c m CoreExpr (CoreExpr, [CoreExpr])
+callNameT nm = setFailMsg ("callNameT failed: not a call to '" ++ nm ++ ".") $
+    callPredT (const . cmpString2Var nm)
 
 -- | Succeeds if we are looking at a fully saturated function call.
 callSaturatedT :: Monad m => Translate c m CoreExpr (CoreExpr, [CoreExpr])
@@ -92,7 +90,7 @@ callSaturatedT = callPredT (\ i args -> idArity i == length args)
 --       idArity is conservatively set to zero by default.
 
 -- | Succeeds if we are looking at an application of given function
-callNameG :: MonadCatch m => TH.Name -> Translate c m CoreExpr ()
+callNameG :: MonadCatch m => String -> Translate c m CoreExpr ()
 callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >>= \_ -> constT (return ())
 
 -- | Succeeds if we are looking at an application of a data constructor.
@@ -108,19 +106,20 @@ callDataConT = prefixFailMsg "callDataConT failed:" $
 #endif
 
 -- | Succeeds if we are looking at an application of a named data constructor.
-callDataConNameT :: MonadCatch m => TH.Name -> Translate c m CoreExpr (DataCon, [Type], [CoreExpr])
+callDataConNameT :: MonadCatch m => String -> Translate c m CoreExpr (DataCon, [Type], [CoreExpr])
 callDataConNameT nm = do
     res@(dc,_,_) <- callDataConT
-    guardMsg (cmpTHName2Name nm (dataConName dc)) "wrong datacon."
+    guardMsg (cmpString2Name nm (dataConName dc)) "wrong datacon."
     return res
 
+-- TODO: Both callsR and callsT should be eliminated, now that we have callNameT
 -- | Apply a rewrite to all applications of a given function in a top-down manner, pruning on success.
-callsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> Rewrite c m CoreExpr -> Rewrite c m Core
+callsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => String -> Rewrite c m CoreExpr -> Rewrite c m Core
 callsR nm rr = prunetdR (promoteExprR $ callNameG nm >> rr)
 
 -- | Apply a translate to all applications of a given function in a top-down manner,
 --   pruning on success, collecting the results.
-callsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => TH.Name -> Translate c m CoreExpr b -> Translate c m Core [b]
+callsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => String -> Translate c m CoreExpr b -> Translate c m Core [b]
 callsT nm t = collectPruneT (promoteExprT $ callNameG nm >> t)
 
 ------------------------------------------------------------------------------
@@ -194,8 +193,8 @@ boundVarsT :: (BoundVars c, Monad m) => Translate c m a VarSet
 boundVarsT = contextonlyT (return . boundVars)
 
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
-findBoundVarT :: (BoundVars c, MonadCatch m) => TH.Name -> Translate c m a Var
-findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $
+findBoundVarT :: (BoundVars c, MonadCatch m) => String -> Translate c m a Var
+findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
                         do c <- contextT
                            case varSetElems (findBoundVars nm c) of
                              []         -> fail "no matching variables in scope."
@@ -203,26 +202,26 @@ findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $
                              _ : _ : _  -> fail "multiple matching variables in scope."
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findIdT :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m) => TH.Name -> Translate c m a Id
-findIdT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $
+findIdT :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m) => String -> Translate c m a Id
+findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
              contextonlyT (findId nm)
 
-findId :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => TH.Name -> c -> m Id
+findId :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => String -> c -> m Id
 findId nm c = case varSetElems (findBoundVars nm c) of
                 []         -> findIdMG nm c
                 [v]        -> return v
                 _ : _ : _  -> fail "multiple matching variables in scope."
 
-findIdMG :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => TH.Name -> c -> m Id
+findIdMG :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => String -> c -> m Id
 findIdMG nm c =
-    case filter isValName $ findNamesFromTH (hermitGlobalRdrEnv c) nm of
+    case filter isValName $ findNamesFromString (hermitGlobalRdrEnv c) nm of
       []  -> findIdBuiltIn nm
       [n] -> lookupId n
       ns  -> do dynFlags <- getDynFlags
                 fail $ "multiple matches found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
 
-findIdBuiltIn :: forall m. Monad m => TH.Name -> m Id
-findIdBuiltIn = go . show
+findIdBuiltIn :: forall m. Monad m => String -> m Id
+findIdBuiltIn = go 
     where go ":"     = dataConId consDataCon
           go "[]"    = dataConId nilDataCon
 

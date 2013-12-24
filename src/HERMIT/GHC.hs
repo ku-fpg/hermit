@@ -7,16 +7,11 @@ module HERMIT.GHC
     , zapVarOccInfo
     , var2String
     , thRdrNameGuesses
-    , name2THName
-    , var2THName
-    , cmpTHName2Name
     , cmpString2Name
-    , cmpTHName2Var
     , cmpString2Var
     , fqName
     , uqName
     , findNamesFromString
-    , findNamesFromTH
     , alphaTyVars
     , Type(..)
     , TyLit(..)
@@ -96,8 +91,6 @@ import HERMIT.GHC.Typechecker
 import Data.List (intercalate)
 import Data.Monoid hiding ((<>))
 
-import qualified Language.Haskell.TH as TH
-
 --------------------------------------------------------------------------
 
 #if __GLASGOW_HASKELL < 708
@@ -151,10 +144,6 @@ coAxiomName = CoAxiom.coAxiomName
 -- getName :: NamedThing a => a -> Name
 -- getOccString :: NamedThing a => a -> String
 
--- TH.nameBase :: TH.Name -> String
--- showName :: TH.Name -> String
--- TH.mkName :: String -> TH.Name
-
 -- | Get the unqualified name from a 'NamedThing'.
 uqName :: NamedThing nm => nm -> String
 uqName = getOccString
@@ -168,36 +157,20 @@ fqName nm = modStr ++ uqName nm
 var2String :: Var -> String
 var2String = uqName . varName
 
--- | Converts a GHC 'Name' to a Template Haskell 'TH.Name', going via a 'String'.
-name2THName :: Name -> TH.Name
-name2THName = TH.mkName . uqName
-
--- | Converts an 'Var' to a Template Haskell 'TH.Name', going via a 'String'.
-var2THName :: Var -> TH.Name
-var2THName = name2THName . varName
-
 -- | Compare a 'String' to a 'Name' for equality.
 -- Strings containing a period are assumed to be fully qualified names.
--- TODO: what about composition (.)?
+-- (Except for ".", which is an unqualified reference to composition.)
 cmpString2Name :: String -> Name -> Bool
 cmpString2Name str nm | isQualified str = str == fqName nm
                       | otherwise       = str == uqName nm
 
 isQualified :: String -> Bool
 isQualified [] = False
-isQualified xs = '.' `elem` init xs -- pathological case is compose
+isQualified xs = '.' `elem` init xs -- pathological case is compose (hence the 'init')
 
 -- | Compare a 'String' to a 'Var' for equality. See 'cmpString2Name'.
 cmpString2Var :: String -> Var -> Bool
 cmpString2Var str = cmpString2Name str . varName
-
--- | Compare a 'TH.Name' to a 'Name' for equality. See 'cmpString2Name'.
-cmpTHName2Name :: TH.Name -> Name -> Bool
-cmpTHName2Name th_nm = cmpString2Name (show th_nm)
-
--- | Compare a 'TH.Name' to a 'Var' for equality. See 'cmpString2Name'.
-cmpTHName2Var :: TH.Name -> Var -> Bool
-cmpTHName2Var nm = cmpTHName2Name nm . varName
 
 -- | Find 'Name's matching a given fully qualified or unqualified name.
 -- If given name is fully qualified, will only return first result, which is assumed unique.
@@ -205,10 +178,6 @@ findNamesFromString :: GlobalRdrEnv -> String -> [Name]
 findNamesFromString rdrEnv str | isQualified str = take 1 res
                                | otherwise       = res
     where res = [ nm | elt <- globalRdrEnvElts rdrEnv, let nm = gre_name elt, cmpString2Name str nm ]
-
--- | Find 'Name's matching a 'TH.Name'. See 'findNamesFromString'.
-findNamesFromTH :: GlobalRdrEnv -> TH.Name -> [Name]
-findNamesFromTH rdrEnv = findNamesFromString rdrEnv . show
 
 -- | Pretty-print an identifier.
 ppIdInfo :: Id -> IdInfo -> SDoc

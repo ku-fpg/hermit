@@ -40,13 +40,11 @@ module HERMIT.External
        , TranslateCoreTCCheckBox(..)
        , TranslateCorePathBox(..)
        , TranslateCoreTCPathBox(..)
-       , NameBox(..)
        , CoreString(..)
        , CoreBox(..)
        , CrumbBox(..)
        , PathBox(..)
        , StringBox(..)
-       , NameListBox(..)
        , StringListBox(..)
        , IntListBox(..)
        , RewriteCoreListBox(..)
@@ -56,8 +54,6 @@ import Data.Map hiding (map)
 import Data.Dynamic
 import Data.List
 import Data.Typeable.Internal (TypeRep(..), funTc)
-
-import qualified Language.Haskell.TH as TH
 
 import HERMIT.Core
 import HERMIT.Context (LocalPathH)
@@ -397,15 +393,6 @@ instance Extern (TranslateH Core ()) where
 
 -----------------------------------------------------------------
 
-data NameBox = NameBox (TH.Name) deriving Typeable
-
-instance Extern TH.Name where
-    type Box TH.Name = NameBox
-    box = NameBox
-    unbox (NameBox n) = n
-
------------------------------------------------------------------
-
 -- TODO: We now have CrumbBoc, PathBox and TranslateCorePathBox.
 --       Ints are interpreted as a TranslateCorePathBox.
 --       This all needs cleaning up.
@@ -463,15 +450,6 @@ instance Extern String where
     type Box String = StringBox
     box = StringBox
     unbox (StringBox s) = s
-
------------------------------------------------------------------
-
-data NameListBox = NameListBox [TH.Name] deriving Typeable
-
-instance Extern [TH.Name] where
-    type Box [TH.Name] = NameListBox
-    box = NameListBox
-    unbox (NameListBox l) = l
 
 -----------------------------------------------------------------
 

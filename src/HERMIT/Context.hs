@@ -49,8 +49,6 @@ import Control.Monad (liftM)
 import Data.Monoid (mempty)
 import Data.Map hiding (map, foldr, filter)
 
-import qualified Language.Haskell.TH as TH
-
 import Language.KURE
 import Language.KURE.ExtendableContext
 
@@ -179,9 +177,8 @@ instance BoundVars VarSet where
   boundVars = id
 
 -- | List all variables bound in the context that match the given name.
-findBoundVars :: BoundVars c => TH.Name -> c -> VarSet
-findBoundVars nm = filterVarSet (cmpTHName2Var nm) . boundVars
-
+findBoundVars :: BoundVars c => String -> c -> VarSet
+findBoundVars nm = filterVarSet (cmpString2Var nm) . boundVars
 
 -- | A class of contexts from which HERMIT bindings can be retrieved.
 class BoundVars c => ReadBindings c where

@@ -62,8 +62,6 @@ import HERMIT.Dictionary.AlphaConversion hiding (externals)
 
 import HERMIT.Dictionary.Local.Bind hiding (externals)
 
-import qualified Language.Haskell.TH as TH
-
 ------------------------------------------------------------------------------
 
 -- | Externals relating to 'Let' expressions.
@@ -83,9 +81,9 @@ externals =
     --     , "let { x = e1, ... } in e2, "
     --     , "  where safe to inline without duplicating work ==> e2[e1/x,...],"
     --     , "only matches non-recursive lets" ]  .+ Deep .+ Eval
-    , external "let-intro" (promoteExprR . letIntroR . show :: TH.Name -> RewriteH Core)
+    , external "let-intro" (promoteExprR . letIntroR :: String -> RewriteH Core)
         [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
-    , external "let-intro-unfolding" (promoteExprR . letIntroUnfoldingR :: TH.Name -> RewriteH Core)
+    , external "let-intro-unfolding" (promoteExprR . letIntroUnfoldingR :: String -> RewriteH Core)
         [ "e => let f' = defn[f'/f] in e[f'/f], name of f is provided" ]
     , external "let-elim" (promoteExprR letElimR :: RewriteH Core)
         [ "Remove an unused let binding."
@@ -124,10 +122,10 @@ externals =
     , external "let-float-in-lam" ((promoteExprR letFloatInLamR >+> anybuR (promoteExprR letElimR)) :: RewriteH Core)
         [ "let v = ev in \\ x -> e ==> \\ x -> let v = ev in e"
         , "if v does not shadow x" ]                                            .+ Commute .+ Shallow
-    , external "reorder-lets" (promoteExprR . reorderNonRecLetsR :: [TH.Name] -> RewriteH Core)
+    , external "reorder-lets" (promoteExprR . reorderNonRecLetsR :: [String] -> RewriteH Core)
         [ "Re-order a sequence of nested non-recursive let bindings."
         , "The argument list should contain the let-bound variables, in the desired order." ]
-    , external "let-tuple" (promoteExprR . letTupleR . show :: TH.Name -> RewriteH Core)
+    , external "let-tuple" (promoteExprR . letTupleR :: String -> RewriteH Core)
         [ "Combine nested non-recursive lets into case of a tuple."
         , "E.g. let {v1 = e1 ; v2 = e2 ; v3 = e3} in body ==> case (e1,e2,e3) of {(v1,v2,v3) -> body}" ] .+ Commute
     , external "prog-bind-elim" (promoteProgR progBindElimR :: RewriteH Core)
@@ -403,7 +401,7 @@ letFloatInLamR = prefixFailMsg "Let floating in to lambda failed: " $
 
 -- | Re-order a sequence of nested non-recursive let bindings.
 --   The argument list should contain the let-bound variables, in the desired order.
-reorderNonRecLetsR :: MonadCatch m => [TH.Name] -> Rewrite c m CoreExpr
+reorderNonRecLetsR :: MonadCatch m => [String] -> Rewrite c m CoreExpr
 reorderNonRecLetsR nms = prefixFailMsg "Reorder lets failed: " $
                  do guardMsg (notNull nms) "no names given."
                     guardMsg (nodups nms) "duplicate names given."
@@ -423,12 +421,11 @@ reorderNonRecLetsR nms = prefixFailMsg "Reorder lets failed: " $
     noneFreeIn ves = let (vs,es) = unzip ves
                       in all (`notElemVarSet` unionVarSets (map freeVarsExpr es)) vs
 
-    lookupName :: Monad m => [(Var,CoreExpr)] -> TH.Name -> m (Var,CoreExpr)
-    lookupName ves nm = let n = show nm
-                         in case filter (cmpString2Var n . fst) ves of
-                              []   -> fail $ "name " ++ n ++ " not matched."
-                              [ve] -> return ve
-                              _    -> fail $ "multiple matches for " ++ n ++ "."
+    lookupName :: Monad m => [(Var,CoreExpr)] -> String -> m (Var,CoreExpr)
+    lookupName ves nm = case filter (cmpString2Var nm . fst) ves of
+                            []   -> fail $ "name " ++ nm ++ " not matched."
+                            [ve] -> return ve
+                            _    -> fail $ "multiple matches for " ++ nm ++ "."
 
     mkNonRecLets :: [(Var,CoreExpr)] -> CoreExpr -> CoreExpr
     mkNonRecLets []          x  = x
@@ -502,9 +499,7 @@ nonRecIntroR nm e = readerT $ \case
 
 -- | Introduce a local definition for a (possibly imported) identifier.
 -- Rewrites occurences of the identifier to point to this new local definiton.
---
--- TODO: change away from TH.Name once findIdT et al. do so.
-letIntroUnfoldingR :: (BoundVars c, HasGlobalRdrEnv c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
+letIntroUnfoldingR :: (BoundVars c, HasGlobalRdrEnv c, ReadBindings c) => String -> Rewrite c HermitM CoreExpr
 letIntroUnfoldingR nm = do
     i <- findIdT nm
     (rhs,_) <- getUnfoldingT AllBinders <<< return i

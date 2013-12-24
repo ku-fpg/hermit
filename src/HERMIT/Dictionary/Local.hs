@@ -45,8 +45,6 @@ import qualified HERMIT.Dictionary.Local.Cast as Cast
 import HERMIT.Dictionary.Local.Let hiding (externals)
 import qualified HERMIT.Dictionary.Local.Let as Let
 
-import qualified Language.Haskell.TH as TH
-
 import Control.Arrow
 
 ------------------------------------------------------------------------------
@@ -65,7 +63,7 @@ externals =
         [ "(let v = e1 in e2) ==> (\\ v -> e2) e1" ]                            .+ Shallow
     , external "eta-reduce" (promoteExprR etaReduceR :: RewriteH Core)
         [ "(\\ v -> e1 v) ==> e1" ]                                             .+ Eval .+ Shallow
-    , external "eta-expand" (promoteExprR . etaExpandR . show :: TH.Name -> RewriteH Core)
+    , external "eta-expand" (promoteExprR . etaExpandR :: String -> RewriteH Core)
         [ "\"eta-expand 'v\" performs e1 ==> (\\ v -> e1 v)" ]                  .+ Shallow .+ Introduce
     , external "flatten-module" (promoteModGutsR flattenModuleR :: RewriteH Core)
         [ "Flatten all the top-level binding groups in the module to a single recursive binding group."
@@ -73,13 +71,13 @@ externals =
     , external "flatten-program" (promoteProgR flattenProgramR :: RewriteH Core)
         [ "Flatten all the top-level binding groups in a program (list of binding groups) to a single"
         , "recursive binding group.  This can be useful if you intend to apply GHC RULES." ]
-    , external "abstract" (promoteExprR . abstractR :: TH.Name -> RewriteH Core)
+    , external "abstract" (promoteExprR . abstractR :: String -> RewriteH Core)
         [ "Abstract over a variable using a lambda."
         , "e  ==>  (\\ x -> e) x" ]                                             .+ Shallow .+ Introduce .+ Context
-    , external "push" ((\ nm strictf -> push (Just strictf) (cmpTHName2Var nm)) :: TH.Name -> RewriteH Core -> RewriteH Core)
+    , external "push" ((\ nm strictf -> push (Just strictf) (cmpString2Var nm)) :: String -> RewriteH Core -> RewriteH Core)
         [ "Push a function 'f into a case-expression or let-expression argument,"
         , "given a proof that f (fully saturated with type arguments) is strict." ] .+ Shallow .+ Commute
-    , external "push-unsafe" (push Nothing . cmpTHName2Var :: TH.Name -> RewriteH Core)
+    , external "push-unsafe" (push Nothing . cmpString2Var :: String -> RewriteH Core)
         [ "Push a function 'f into a case-expression or let-expression argument."
         , "Requires 'f to be strict." ] .+ Shallow .+ Commute .+ PreCondition
     ]
@@ -201,7 +199,7 @@ flattenProgramT = do bds <- arr (concatMap bindToVarExprs . progToBinds)
 
 -- | Abstract over a variable using a lambda.
 --   e  ==>  (\ x. e) x
-abstractR :: (ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
+abstractR :: (ReadBindings c) => String -> Rewrite c HermitM CoreExpr
 abstractR nm = prefixFailMsg "abstraction failed: " $
    do v  <- findBoundVarT nm
       v' <- constT (cloneVarH id v) -- currently uses the same visible name (via "id").  We could do something else here, e.g. add a prime suffix.

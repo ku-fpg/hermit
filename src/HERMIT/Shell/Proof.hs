@@ -28,8 +28,6 @@ import qualified HERMIT.PrettyPrinter.Clean as Clean
 import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.Types
 
-import qualified Language.Haskell.TH as TH
-
 import System.IO
 
 --------------------------------------------------------------------------------------------------------
@@ -44,7 +42,7 @@ externals =
         [ "Convert a rewrite to an equality proof, by applying it to the LHS." ]
     , external "rewrite-both-sides-to-proof" ((\ r1 r2 -> rewriteBothSidesToProof (extractR r1) (extractR r2)) :: RewriteH Core -> RewriteH Core -> ProofH)
         [ "Convert a pair of rewrites to a proof, by applying the first rewrite to the LHS and the second rewrite to the RHS." ]
-    , external "inductive-proof" (inductiveProofExt :: TH.Name -> [TH.Name] -> [ScriptName] -> ProofH)
+    , external "inductive-proof" (inductiveProofExt :: String -> [String] -> [ScriptName] -> ProofH)
         [ "inductive-proof <id-name> [<data-con-name>] [<script-name>]"
         , "Build an equality proof by induction on the named identifier."
         , "Takes a list of proofs (in the form of scripts converting the LHS to the RHS) for each data constructor case,"
@@ -52,7 +50,7 @@ externals =
         , "For example: inductive-proof 'xs [ '[] , ': ] [ \"NilCaseScript\" , \"ConsCaseScript\" ]"
         , "The induction hypotheses are available for use under the names ind-hyp-0, ind-hyp-1, etc..."
         ]
-    , external "inductive-proof-both-sides" (inductiveProofBothSidesExt :: TH.Name -> [TH.Name] -> [ScriptName] -> [ScriptName] -> ProofH)
+    , external "inductive-proof-both-sides" (inductiveProofBothSidesExt :: String -> [String] -> [ScriptName] -> [ScriptName] -> ProofH)
         [ "inductive-proof-both-sides <id-name> [<data-con-name>] [<script-name>] [<script-name>]"
         , "As inductive-proof, but takes scripts to apply to the RHS of each case as well as the LHS."
         ]
@@ -124,19 +122,19 @@ inductiveProofBothSides p cases = InductiveProof p (map (\ (dp,s1,s2) -> (dp, Le
 
 --------------------------------------------------------------------------------------------------------
 
--- inductiveProofExt :: TH.Name -> [(TH.Name, ScriptName)] -> ProofH
--- inductiveProofExt idn cases = inductiveProof (cmpTHName2Var idn) [ ((cmpTHName2Name dcn . dataConName), sn) | (dcn,sn) <- cases ]
+-- inductiveProofExt :: String -> [(String, ScriptName)] -> ProofH
+-- inductiveProofExt idn cases = inductiveProof (cmpString2Var idn) [ ((cmpString2Name dcn . dataConName), sn) | (dcn,sn) <- cases ]
 
 -- TODO: Upgrade the parser so that this can be a list of pairs.
-inductiveProofExt :: TH.Name -> [TH.Name] -> [ScriptName] -> ProofH
-inductiveProofExt idn dcns sns = inductiveProof (cmpTHName2Var idn) (zip [ cmpTHName2Name dcn . dataConName | dcn <- dcns ] sns)
+inductiveProofExt :: String -> [String] -> [ScriptName] -> ProofH
+inductiveProofExt idn dcns sns = inductiveProof (cmpString2Var idn) (zip [ cmpString2Name dcn . dataConName | dcn <- dcns ] sns)
 
--- inductiveProofBothSidesExt :: TH.Name -> [(TH.Name, ScriptName, ScriptName)] -> ProofH
--- inductiveProofBothSidesExt idn cases = inductiveProofBothSides (cmpTHName2Var idn) [ ((cmpTHName2Name dcn . dataConName), sln, srn) | (dcn,sln,srn) <- cases ]
+-- inductiveProofBothSidesExt :: String -> [(String, ScriptName, ScriptName)] -> ProofH
+-- inductiveProofBothSidesExt idn cases = inductiveProofBothSides (cmpString2Var idn) [ ((cmpString2Name dcn . dataConName), sln, srn) | (dcn,sln,srn) <- cases ]
 
 -- TODO: Upgrade the parser so that this can be a list of triples.
-inductiveProofBothSidesExt :: TH.Name -> [TH.Name] -> [ScriptName] -> [ScriptName] -> ProofH
-inductiveProofBothSidesExt idn dcns s1ns s2ns = inductiveProofBothSides (cmpTHName2Var idn) (zip3 [ cmpTHName2Name dcn . dataConName | dcn <- dcns ] s1ns s2ns)
+inductiveProofBothSidesExt :: String -> [String] -> [ScriptName] -> [ScriptName] -> ProofH
+inductiveProofBothSidesExt idn dcns s1ns s2ns = inductiveProofBothSides (cmpString2Var idn) (zip3 [ cmpString2Name dcn . dataConName | dcn <- dcns ] s1ns s2ns)
 
 --------------------------------------------------------------------------------------------------------
 

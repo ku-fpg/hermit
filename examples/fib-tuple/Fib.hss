@@ -31,7 +31,7 @@ simplify
 -- work (n+1) = (f (wrap work) (n+1), wrap work (n+1) + wrap work n)
 
 [ case-alt 1, alt-rhs ]
-{ app-arg ; any-call (unfold origwork) }
+{ app-arg ; any-call (unfold-remembered origwork) }
 
 -- work 0     = (0, 1)
 -- work (n+1) = (f (wrap work) (n+1), wrap (unwrap (f (wrap work))) (n+1) + wrap (unwrap (f (wrap work))) n)
@@ -56,7 +56,7 @@ one-td (fold 'unwrap)
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = unwrap (f (wrap work)) n in (y,x+y)
 
-one-td (fold origwork)
+one-td (fold-remembered origwork)
 
 -- work 0     = (0, 1)
 -- work (n+1) = let (x,y) = work n in (y,x+y)

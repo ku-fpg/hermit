@@ -27,15 +27,13 @@ import HERMIT.GHC
 import HERMIT.Dictionary.Common (varBindingDepthT,inScope,findIdT)
 import HERMIT.Dictionary.Inline hiding (externals)
 
-import qualified Language.Haskell.TH as TH
-
 import Prelude hiding (exp)
 
 ------------------------------------------------------------------------
 
 externals :: [External]
 externals =
-    [ external "fold" (promoteExprR . foldR :: TH.Name -> RewriteH Core)
+    [ external "fold" (promoteExprR . foldR :: String -> RewriteH Core)
         [ "fold a definition"
         , ""
         , "double :: Int -> Int"
@@ -47,7 +45,7 @@ externals =
         , ""
         , "Note: due to associativity, if you wanted to fold 5 + 6 + 6, "
         , "you first need to apply an associativity rewrite." ]  .+ Context .+ Deep
-    , external "fold" (promoteExprR . stashFoldR :: Label -> RewriteH Core)
+    , external "fold-remembered" (promoteExprR . stashFoldR :: Label -> RewriteH Core)
         [ "Fold a remembered definition." ]                      .+ Context .+ Deep
     , external "fold-any" (promoteExprR stashFoldAnyR :: RewriteH Core)
         [ "Attempt to fold any of the remembered definitions." ] .+ Context .+ Deep
@@ -68,7 +66,7 @@ stashFoldAnyR :: ReadBindings c => Rewrite c HermitM CoreExpr
 stashFoldAnyR = setFailMsg "Fold failed: no definitions could be folded." $
                 catchesM =<< map stashFoldR <$> (Map.keys <$> constT getStash)
 
-foldR :: (HasGlobalRdrEnv c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
+foldR :: (HasGlobalRdrEnv c, ReadBindings c) => String -> Rewrite c HermitM CoreExpr
 foldR nm = prefixFailMsg "Fold failed: " $ do
     v <- findIdT nm
     foldVarR v Nothing

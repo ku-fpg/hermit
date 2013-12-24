@@ -31,23 +31,21 @@ import HERMIT.GHC hiding ((<>))
 
 import HERMIT.Dictionary.Navigation.Crumbs
 
-import qualified Language.Haskell.TH as TH
-
 ---------------------------------------------------------------------------------------
 
 -- | 'External's involving navigating to named entities.
 externals :: [External]
 externals = crumbExternals ++ map (.+ Navigation)
-            [ external "rhs-of" (rhsOfT . cmpTHName2Var :: TH.Name -> TranslateH Core LocalPathH)
+            [ external "rhs-of" (rhsOfT . cmpString2Var :: String -> TranslateH Core LocalPathH)
                 [ "Find the path to the RHS of the binding of the named variable." ]
-            , external "binding-group-of" (bindingGroupOfT . cmpTHName2Var :: TH.Name -> TranslateH CoreTC LocalPathH)
+            , external "binding-group-of" (bindingGroupOfT . cmpString2Var :: String -> TranslateH CoreTC LocalPathH)
                 [ "Find the path to the binding group of the named variable." ]
-            , external "binding-of" (bindingOfT . cmpTHName2Var :: TH.Name -> TranslateH CoreTC LocalPathH)
+            , external "binding-of" (bindingOfT . cmpString2Var :: String -> TranslateH CoreTC LocalPathH)
                 [ "Find the path to the binding of the named variable." ]
-            , external "occurrence-of" (occurrenceOfT . cmpTHName2Var :: TH.Name -> TranslateH CoreTC LocalPathH)
+            , external "occurrence-of" (occurrenceOfT . cmpString2Var :: String -> TranslateH CoreTC LocalPathH)
                 [ "Find the path to the first occurrence of the named variable." ]
 
-            , external "consider" (bindingOfT . cmpTHName2Var :: TH.Name -> TranslateH CoreTC LocalPathH)
+            , external "consider" (bindingOfT . cmpString2Var :: String -> TranslateH CoreTC LocalPathH)
                 [ "consider '<v> focuses on the definition of <v>" ] .+ Deprecated .+ TODO
 
             , external "consider" (considerConstruct :: String -> TranslateH Core LocalPathH)

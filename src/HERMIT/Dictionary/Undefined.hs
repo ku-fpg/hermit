@@ -31,8 +31,6 @@ import HERMIT.External
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Reasoning hiding (externals)
 
-import qualified Language.Haskell.TH as TH
-
 ------------------------------------------------------------------------
 
 externals :: [External]
@@ -78,7 +76,7 @@ undefinedLocation = "GHC.Err.undefined"
 
 -- TODO: will crash if 'undefined' is not used (or explicitly imported) in the source file.
 findUndefinedIdT :: (BoundVars c, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Translate c m a Id
-findUndefinedIdT = findIdT (TH.mkName undefinedLocation)
+findUndefinedIdT = findIdT undefinedLocation
 
 -- | Check if the current expression is an undefined value.
 isUndefinedValT :: (BoundVars c, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Translate c m CoreExpr ()
@@ -95,7 +93,7 @@ errorLocation = "GHC.Err.error"
 
 -- TODO: will crash if 'error' is not used (or explicitly imported) in the source file.
 findErrorIdT :: (BoundVars c, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Translate c m a Id
-findErrorIdT = findIdT (TH.mkName errorLocation)
+findErrorIdT = findIdT errorLocation
 
 -- | Check if the current expression is an undefined value.
 isErrorValT :: (BoundVars c, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Translate c m CoreExpr ()

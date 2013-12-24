@@ -36,8 +36,6 @@ import HERMIT.Monad
 
 import HERMIT.Dictionary.Common
 
-import qualified Language.Haskell.TH as TH
-
 ------------------------------------------------------------------------
 
 -- | 'External's for inlining variables.
@@ -45,9 +43,9 @@ externals :: [External]
 externals =
             [ external "inline" (promoteExprR inlineR :: RewriteH Core)
                 [ "(Var v) ==> <defn of v>" ].+ Eval .+ Deep
-            , external "inline" (promoteExprR . inlineNameR :: TH.Name -> RewriteH Core)
+            , external "inline" (promoteExprR . inlineNameR :: String -> RewriteH Core)
                 [ "Given a specific v, (Var v) ==> <defn of v>" ] .+ Eval .+ Deep
-            , external "inline" (promoteExprR . inlineNamesR :: [TH.Name] -> RewriteH Core)
+            , external "inline" (promoteExprR . inlineNamesR :: [String] -> RewriteH Core)
                 [ "If the current variable matches any of the given names, then inline it." ] .+ Eval .+ Deep
             , external "inline-case-scrutinee" (promoteExprR inlineCaseScrutineeR :: RewriteH Core)
                 [ "if v is a case binder, replace (Var v) with the bound case scrutinee." ] .+ Eval .+ Deep
@@ -62,13 +60,13 @@ data CaseBinderInlineOption = Scrutinee | Alternative deriving (Eq, Show)
 data InlineConfig           = CaseBinderOnly CaseBinderInlineOption | AllBinders deriving (Eq, Show)
 
 -- | If the current variable matches the given name, then inline it.
-inlineNameR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
-inlineNameR nm = inlineMatchingPredR (cmpTHName2Var nm)
+inlineNameR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => String -> Rewrite c HermitM CoreExpr
+inlineNameR nm = inlineMatchingPredR (cmpString2Var nm)
 
 -- | If the current variable matches any of the given names, then inline it.
-inlineNamesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
+inlineNamesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [String] -> Rewrite c HermitM CoreExpr
 inlineNamesR []  = fail "inline-names failed: no names given."
-inlineNamesR nms = inlineMatchingPredR (\ v -> any (flip cmpTHName2Var v) nms)
+inlineNamesR nms = inlineMatchingPredR (\ v -> any (flip cmpString2Var v) nms)
 
 -- | If the current variable satisifies the predicate, then inline it.
 inlineMatchingPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => (Id -> Bool) -> Rewrite c HermitM CoreExpr

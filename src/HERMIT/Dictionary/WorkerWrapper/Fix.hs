@@ -35,8 +35,6 @@ import HERMIT.Dictionary.Unfold
 
 import HERMIT.Dictionary.WorkerWrapper.Common
 
-import qualified Language.Haskell.TH as TH
-
 --------------------------------------------------------------------------------------------------
 
 -- | Externals for manipulating fixed points, and for the worker/wrapper transformation.
@@ -253,15 +251,12 @@ wwGenerateFusionR mAss =
 -- | \\ wrap unwrap ->  (@prog = expr@  ==>  @prog = let f = \\ prog -> expr in let work = unwrap (f (wrap work)) in wrap work)@
 wwSplitR :: Maybe WWAssumption -> CoreExpr -> CoreExpr -> RewriteH CoreDef
 wwSplitR mAss wrap unwrap =
-  let work = TH.mkName "work"
-      fx   = TH.mkName "fix"
-   in
       fixIntroR
       >>> defAllR idR ( appAllR idR (letIntroR "f")
                         >>> letFloatArgR
                         >>> letAllR idR ( forwardT (wwFacBR mAss wrap unwrap)
-                                          >>> appAllR idR ( unfoldNameR fx
-                                                            >>> alphaLetWithR [work]
+                                          >>> appAllR idR ( unfoldNameR "fix"
+                                                            >>> alphaLetWithR ["work"]
                                                             >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
                                                                                    >>> extractR (wwGenerateFusionR mAss)
                                                                            )

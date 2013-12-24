@@ -51,8 +51,6 @@ import HERMIT.Dictionary.Fold (foldVarR)
 import HERMIT.Dictionary.GHC (substCoreExpr)
 import HERMIT.Dictionary.Undefined (verifyStrictT)
 
-import qualified Language.Haskell.TH as TH
-
 -- NOTE: these are hard to test in small examples, as GHC does them for us, so use with caution
 ------------------------------------------------------------------------------
 
@@ -94,13 +92,13 @@ externals =
         , "case L of L -> e ==> e" ]                                         .+ Shallow .+ Eval
     , external "case-reduce-id" (promoteExprR (caseReduceIdR True) :: RewriteH Core)
         [ "Inline the case scrutinee (if it is an identifier) and then case-reduce." ] .+ Shallow .+ Eval .+ Context
-    , external "case-split" (promoteExprR . caseSplitR . cmpTHName2Var :: TH.Name -> RewriteH Core)
+    , external "case-split" (promoteExprR . caseSplitR . cmpString2Var :: String -> RewriteH Core)
         [ "case-split 'x"
         , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ] .+ Shallow
-    , external "case-split-inline" (promoteExprR . caseSplitInlineR . cmpTHName2Var :: TH.Name -> RewriteH Core)
+    , external "case-split-inline" (promoteExprR . caseSplitInlineR . cmpString2Var :: String -> RewriteH Core)
         [ "Like case-split, but additionally inlines the matched constructor "
         , "applications for all occurances of the named variable." ] .+ Deep
-    , external "case-intro-seq" (promoteExprR . caseIntroSeqR . cmpTHName2Var :: TH.Name -> RewriteH Core)
+    , external "case-intro-seq" (promoteExprR . caseIntroSeqR . cmpString2Var :: String -> RewriteH Core)
         [ "Force evaluation of a variable by introducing a case."
         , "case-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow .+ Introduce
     , external "case-elim-seq" (promoteExprR caseElimSeqR :: RewriteH Core)

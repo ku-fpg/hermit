@@ -34,8 +34,6 @@ import HERMIT.Dictionary.GHC
 import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Undefined
 
-import qualified Language.Haskell.TH as TH
-
 --------------------------------------------------------------------------------------------------
 
 -- | Externals for manipulating fixed points.
@@ -203,6 +201,6 @@ fixLocation = "Data.Function.fix"
 
 -- TODO: will crash if 'fix' is not used (or explicitly imported) in the source file.
 findFixId :: (BoundVars c, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => Translate c m a Id
-findFixId = findIdT (TH.mkName fixLocation)
+findFixId = findIdT fixLocation
 
 --------------------------------------------------------------------------------------------------

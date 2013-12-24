@@ -26,8 +26,6 @@ import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Inline hiding (externals)
 
-import qualified Language.Haskell.TH as TH
-
 --------------------------------------------------------
 
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
@@ -35,7 +33,7 @@ externals :: [External]
 externals =
          [ external "info" (infoT :: TranslateH CoreTC String)
                 [ "Display information about the current node." ] .+ Query
-         , external "compare-bound-ids" (compareBoundIds ::  TH.Name -> TH.Name -> TranslateH CoreTC ())
+         , external "compare-bound-ids" (compareBoundIds :: String -> String -> TranslateH CoreTC ())
                 [ "Compare the definitions of two in-scope identifiers for alpha equality."] .+ Query .+ Predicate
          , external "compare-core-at" (compareCoreAtT ::  TranslateH Core LocalPathH -> TranslateH Core LocalPathH -> TranslateH Core ())
                 [ "Compare the core fragments at the end of the given paths for alpha-equality."] .+ Query .+ Predicate
@@ -174,7 +172,7 @@ compareBoundIdsT i1 i2 =
      guardMsg (e1 `exprAlphaEq` e2) "bindings are not alpha-equivalent."
 
 -- | Compare the definitions of the two named identifiers for alpha-equality.
-compareBoundIds :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasGlobalRdrEnv c) => TH.Name -> TH.Name -> Translate c HermitM x ()
+compareBoundIds :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasGlobalRdrEnv c) => String -> String -> Translate c HermitM x ()
 compareBoundIds nm1 nm2 = do i1 <- findIdT nm1
                              i2 <- findIdT nm2
                              compareBoundIdsT i1 i2

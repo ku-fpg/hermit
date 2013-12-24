@@ -19,8 +19,6 @@ import Control.Monad
 import Data.List (intercalate)
 import qualified Data.Map as Map
 
-import qualified Language.Haskell.TH as TH
-
 import HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), PrettyC)
 
 import HERMIT.Dictionary.Common
@@ -46,13 +44,13 @@ externals =
         [ "Clean up immediately nested fully-applied lambdas, from the bottom up" ] .+ Deep
     , external "remember" (rememberR :: Label -> RewriteH Core)
         [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
-    , external "unfold" (promoteExprR . unfoldStashR :: String -> RewriteH Core)
+    , external "unfold-remembered" (promoteExprR . unfoldStashR :: String -> RewriteH Core)
         [ "Unfold a remembered definition." ] .+ Deep .+ Context
     , external "unfold" (promoteExprR unfoldR :: RewriteH Core)
         [ "In application f x y z, unfold f." ] .+ Deep .+ Context
-    , external "unfold" (promoteExprR . unfoldNameR :: TH.Name -> RewriteH Core)
+    , external "unfold" (promoteExprR . unfoldNameR :: String -> RewriteH Core)
         [ "Inline a definition, and apply the arguments; traditional unfold." ] .+ Deep .+ Context
-    , external "unfold" (promoteExprR . unfoldNamesR :: [TH.Name] -> RewriteH Core)
+    , external "unfold" (promoteExprR . unfoldNamesR :: [String] -> RewriteH Core)
         [ "Unfold a definition if it is named in the list." ] .+ Deep .+ Context
     , external "unfold-saturated" (promoteExprR unfoldSaturatedR :: RewriteH Core)
         [ "Unfold a definition only if the function is fully applied." ] .+ Deep .+ Context
@@ -95,10 +93,10 @@ unfoldR = prefixFailMsg "unfold failed: " (go >>> cleanupUnfoldR)
 unfoldPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => (Id -> [CoreExpr] -> Bool) -> Rewrite c HermitM CoreExpr
 unfoldPredR p = callPredT p >> unfoldR
 
-unfoldNameR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => TH.Name -> Rewrite c HermitM CoreExpr
-unfoldNameR nm = prefixFailMsg ("unfold '" ++ show nm ++ " failed: ") (callNameT nm >> unfoldR)
+unfoldNameR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => String -> Rewrite c HermitM CoreExpr
+unfoldNameR nm = prefixFailMsg ("unfold '" ++ nm ++ " failed: ") (callNameT nm >> unfoldR)
 
-unfoldNamesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [TH.Name] -> Rewrite c HermitM CoreExpr
+unfoldNamesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [String] -> Rewrite c HermitM CoreExpr
 unfoldNamesR []  = fail "unfold-names failed: no names given."
 unfoldNamesR nms = setFailMsg "unfold-names failed." $
                    orR (map unfoldNameR nms)

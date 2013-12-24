@@ -13,8 +13,6 @@ import Data.Char
 import Data.Dynamic
 import qualified Data.Map as M
 
-import qualified Language.Haskell.TH as TH
-
 import HERMIT.External
 import HERMIT.Parser
 import HERMIT.Kure (deprecatedIntToPathT,pathToSnocPath)
@@ -58,12 +56,11 @@ toBoxedList :: (Extern a, Typeable b) => [[Dynamic]] -> ([a] -> b) -> [Dynamic]
 toBoxedList dyns boxCon = [ toDyn $ boxCon (map unbox l) | dl <- dyns, Just l <- [mapM fromDynamic dl] ]
 
 interpExpr' :: MonadState CommandLineState m => Bool -> ExprH -> m [Dynamic]
-interpExpr' _   (SrcName str) = return [ toDyn $ NameBox $ TH.mkName str ]
+interpExpr' _   (SrcName str) = return [ toDyn $ StringBox str ]
 interpExpr' _   (CoreH str)   = return [ toDyn $ CoreBox (CoreString str) ]
 interpExpr' _   (ListH exprs) = do 
     dyns <- liftM fromDynList $ mapM (interpExpr' True) exprs
-    return $    toBoxedList dyns NameListBox
-             ++ toBoxedList dyns StringListBox
+    return $    toBoxedList dyns StringListBox
              ++ toBoxedList dyns (PathBox . pathToSnocPath)
                 -- ugly hack.  The whole dynamic stuff could do with overhauling.
              ++ toBoxedList dyns (TranslateCorePathBox . return . pathToSnocPath) 

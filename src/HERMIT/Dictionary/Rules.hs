@@ -41,8 +41,6 @@ import HERMIT.Dictionary.Kure (anyCallR)
 import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Unfold (cleanupUnfoldR)
 
-import qualified Language.Haskell.TH as TH
-
 ------------------------------------------------------------------------
 
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
@@ -58,9 +56,9 @@ externals =
                 [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
          , external "verify-rule" (verifyRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> TranslateH Core ())
                 [ "Verify that the named GHC rule holds (in the current context)." ]
-         -- , external "verify-rule-by-list-induction" (verifyRuleByListInduction  :: RuleNameString -> TH.Name -> RewriteH Core -> RewriteH Core -> RewriteH Core -> RewriteH Core -> TranslateH Core ())
+         -- , external "verify-rule-by-list-induction" (verifyRuleByListInduction  :: RuleNameString -> String -> RewriteH Core -> RewriteH Core -> RewriteH Core -> RewriteH Core -> TranslateH Core ())
          --        [ "Verify that the named GHC rule holds, using induction on the named identifier." ] .+ TODO .+ Experiment
-         , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> TH.Name -> RewriteH Core)
+         , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> String -> RewriteH Core)
                 [ "add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]  .+ Introduce
          , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
                 [ "Unfold a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
@@ -201,26 +199,24 @@ makeRule rule_name nm =   mkRule True   -- auto-generated
                                  []
 
 -- TODO: check if a top-level binding
-addCoreBindAsRule :: Monad m => RuleNameString -> TH.Name -> Rewrite c m ModGuts
+addCoreBindAsRule :: Monad m => RuleNameString -> String -> Rewrite c m ModGuts
 addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
         case [ (v,e)
              | bnd   <- mg_binds modGuts
              , (v,e) <- bindToVarExprs bnd
-             ,  nm `cmpTHName2Var` v
+             ,  nm `cmpString2Var` v
              ] of
-         [] -> fail $ "cannot find binding " ++ show nm
+         [] -> fail $ "cannot find binding " ++ nm
          [(v,e)] -> return $ modGuts { mg_rules = mg_rules modGuts
                                               ++ [makeRule rule_name v e]
                                      }
-         _ -> fail $ "found multiple bindings for " ++ show nm
-
+         _ -> fail $ "found multiple bindings for " ++ nm
 
 -- | Returns the universally quantified binders, the LHS, and the RHS.
 ruleToEqualityT :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m) => Translate c m CoreRule CoreExprEquality
 ruleToEqualityT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
   do r@Rule{} <- idR -- other possibility is "BuiltinRule"
-     f <- findIdT (name2THName $ ru_fn r) -- TODO: I think we're losing information by using name2THName.
-                                          -- We need to revise our whole aproach to names and name conversion, to avoid losing info whenever possible.
+     f <- findIdT (getOccString $ ru_fn r) -- TODO: refactor name lookup functions (like findIdT) to avoid intermediate String here
      return $ CoreExprEquality (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
 
 ruleNameToEqualityT :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Translate c HermitM a CoreExprEquality
@@ -241,11 +237,11 @@ verifyRule name lhsR rhsR = verifyRuleT name (extractR lhsR, extractR rhsR)
 -- type BiRewritecHermitMCoreExprShouldGoHere = ()
 
 -- verifyRuleByListInductionT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
---             => RuleNameString -> TH.Name -> CoreExprEqualityProof c HermitM -> (BiRewritecHermitMCoreExprShouldGoHere -> CoreExprEqualityProof c HermitM) -> Translate c HermitM a ()
--- verifyRuleByListInductionT r_name i_name nilCaseProof consCaseProof = ruleNameToEqualityT r_name >>> listInductionOnT (cmpTHName2Var i_name) nilCaseProof (\ _ -> consCaseProof ())
+--             => RuleNameString -> String -> CoreExprEqualityProof c HermitM -> (BiRewritecHermitMCoreExprShouldGoHere -> CoreExprEqualityProof c HermitM) -> Translate c HermitM a ()
+-- verifyRuleByListInductionT r_name i_name nilCaseProof consCaseProof = ruleNameToEqualityT r_name >>> listInductionOnT (cmpString2Var i_name) nilCaseProof (\ _ -> consCaseProof ())
 
 -- verifyRuleByListInduction  :: RuleNameString    -- Name of Rule to prove
---                            -> TH.Name           -- Name if Id to perform induction on
+--                            -> String            -- Name if Id to perform induction on
 --                            -> RewriteH Core     -- [] case, LHS
 --                            -> RewriteH Core     -- [] case, RHS
 --                            -> RewriteH Core     -- (:) case, LHS

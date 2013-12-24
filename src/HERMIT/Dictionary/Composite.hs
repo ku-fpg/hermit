@@ -26,8 +26,6 @@ import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.Local hiding (externals)
 import HERMIT.Dictionary.Unfold hiding (externals)
 
-import qualified Language.Haskell.TH as TH
-
 ------------------------------------------------------------------------------------------------------
 
 externals ::  [External]
@@ -61,7 +59,7 @@ basicCombinators = ["$",".","id","flip","const","fst","snd","curry","uncurry"]
 --   This is intended to be used as a component of simplification traversals such as 'simplifyR' or 'bashR'.
 unfoldBasicCombinatorR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
 unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $
-     unfoldNamesR (map TH.mkName basicCombinators)
+     unfoldNamesR basicCombinators
 
 simplifyR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $

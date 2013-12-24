@@ -16,8 +16,6 @@ import HERMIT.Syntax (isCoreInfixIdChar, isCoreIdFirstChar, isCoreIdChar)
 import HERMIT.Dictionary.Common
 
 import Language.KURE.MonadCatch (prefixFailMsg)
-
-import Language.Haskell.TH as TH
 }
 
 %name parser
@@ -93,7 +91,7 @@ mkIntExpr' i = return $ mkIntExpr i
 lookupName :: String -> (Id -> CoreExpr) -> CoreParseM CoreExpr
 lookupName nm k = do
     c <- ask
-    v <- lift $ prefixFailMsg (nm ++ " lookup: ") $ findId (TH.mkName nm) c
+    v <- lift $ prefixFailMsg (nm ++ " lookup: ") $ findId nm c
     return (k v)
 
 type CoreParseM a = ReaderT HermitC HermitM a
