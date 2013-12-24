@@ -44,14 +44,9 @@ externals = crumbExternals ++ map (.+ Navigation)
                 [ "Find the path to the binding of the named variable." ]
             , external "occurrence-of" (occurrenceOfT . cmpString2Var :: String -> TranslateH CoreTC LocalPathH)
                 [ "Find the path to the first occurrence of the named variable." ]
-
-            , external "consider" (bindingOfT . cmpString2Var :: String -> TranslateH CoreTC LocalPathH)
-                [ "consider '<v> focuses on the definition of <v>" ] .+ Deprecated .+ TODO
-
             , external "consider" (considerConstruct :: String -> TranslateH Core LocalPathH)
                 [ "consider <c> focuses on the first construct <c>.",
                   recognizedConsiderables]
-
             , external "arg" (promoteExprT . nthArgPath :: Int -> TranslateH Core LocalPathH)
                 [ "arg n focuses on the (n-1)th argument of a nested application." ]
             , external "lams-body" (promoteExprT lamsBodyT :: TranslateH Core LocalPathH)
@@ -214,7 +209,8 @@ considerables =   [ ("bind",Binding)
 
 considerConstruct :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => String -> Translate c m Core LocalPathH
 considerConstruct str = case string2considerable str of
-                          Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". " ++ recognizedConsiderables ++ ".  Or did you mean \"consider '" ++ str ++ "\"?"
+                          Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". Perhaps you meant \"binding-of '" ++ str ++ "\"? " 
+                                            ++ recognizedConsiderables ++ "."
                           Just c  -> considerConstructT c
 
 -- | Find the path to the first matching construct.
