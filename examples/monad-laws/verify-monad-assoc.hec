@@ -15,24 +15,10 @@ rule-to-lemma "monad-assoc"
 
 -- first do the proof interactively
 --
---   { rule-lhs-intro "monad-assoc"
---     consider lam ; lams-body
---     -- Now we're focused on the expression that we want the proof to rewrite
---     any-bu (inline [ 'bind, 'retur ])
---     smash
---   }
---   Now, do the same for the rhs.
---   { rule-rhs-intro "monad-assoc"
---     consider lam ; lams-body
---     -- Now we're focused on the expression that we want the proof to rewrite
---     any-bu (inline [ 'bind, 'retur ])
---     smash
---   }
---  Observe that the lhs and rhs are equivalent.
--- Now we're done.
+TBD
 
 -- then encode the proof as a rewrite or script
-define-script "monad-assoc-proof" "any-bu (inline [ 'bind, 'retur ]) ; smash"
+-- define-script "monad-assoc-proof" "any-bu (inline [ 'bind, 'retur ]) ; smash"
 
-verify-lemma "monad-assoc" (script-both-sides-to-proof monad-assoc-proof monad-assoc-proof)
+-- verify-lemma "monad-assoc" (script-both-sides-to-proof monad-assoc-proof monad-assoc-proof)
 

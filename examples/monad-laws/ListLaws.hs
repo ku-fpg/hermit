@@ -16,13 +16,23 @@ import Prelude hiding (map,id, concat, (++))
 
 {-# RULES "nil-append"  forall xs.  [] ++ xs = xs #-}
 {-# RULES "append-nil"  forall xs.  xs ++ [] = xs #-}
-{-# RULES "cons-append" forall a as xs. (a:as) ++ xs = a : (as ++ xs) #-}
 {-# RULES "append-assoc" forall x y z. x ++ (y ++ z) = (x++y) ++ z #-}
-
 
 {-# RULES "concat-unit"  forall x. concat [x] = x  #-}
 {-# RULES "concat-of-toList"  forall xs. concat (map toList xs) = xs  #-}
 
+-- I'm using a slightly different specification for this rule,
+-- so that I can case-split on 'xs
+-- {-# RULES  "map-compose" forall f g xs.  map (f . g) xs  =  (map f . map g) xs #-}
+{-# RULES  "map-compose" forall f g xs.  map (f . g) xs  =  map f (map g xs) #-}
+{-# RULES  "map-append"  forall f x y.  map f (x ++ y) = map f x ++ map f y #-}
+{-# RULES  "map-concat"    forall f.    map f . concat =  concat . map (map f) #-}
+{-# RULES  "concat-concat" forall x.    concat (concat x)  =  concat (map concat x)  #-}
+{-# RULES  "concat-append" forall x y.  concat (x ++ y) = concat x ++ concat y #-}
+{-# RULES #-}
+
+-- Equation 5:
+-- Equation 6:
 
 bind :: [a] -> (a -> [b]) -> [b]
 bind [] k = []
@@ -51,3 +61,4 @@ mempt = []
 
 mappen :: [a] -> [a] -> [a]
 mappen xs ys = xs ++ ys
+
