@@ -18,6 +18,7 @@ import HERMIT.Kure
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.Debug
 import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Rules
@@ -241,7 +242,7 @@ getProofsForCase dc cases = case [ (l,r) | (dcPred, l, r) <- cases, dcPred dc ] 
                                 _ -> fail $ "more than one case for " ++ getOccString dc
 
 addToDict :: [(String, BiRewriteH CoreExpr)] -> CommandLineState -> CommandLineState
-addToDict rs st = st { cl_dict = foldr (\ (nm,r) -> addToDictionary (external nm (promoteExprBiR r :: BiRewriteH Core) [])) (cl_dict st) rs }
+addToDict rs st = st { cl_dict = foldr (\ (nm,r) -> addToDictionary (external nm (promoteExprBiR (beforeBiR (observeR ("Applying " ++ nm ++ " to: ")) (const r)) :: BiRewriteH Core) [])) (cl_dict st) rs }
 
 {-
        let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Translate c HermitM x ()
