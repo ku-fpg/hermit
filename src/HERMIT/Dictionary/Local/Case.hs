@@ -59,13 +59,16 @@ externals :: [External]
 externals =
     [ external "case-float-app" (promoteExprR caseFloatAppR :: RewriteH Core)
         [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow
-    , external "case-float-arg" ((\ f strict -> promoteExprR (caseFloatArg (Just (f, Just strict)))) :: CoreString -> RewriteH Core -> RewriteH Core)
-        [ "For a specific f, given a proof that f is strict, then"
+    , external "case-float-arg" ((\ strict -> promoteExprR (caseFloatArg Nothing (Just strict))) :: RewriteH Core -> RewriteH Core)
+        [ "Given a proof that f is strict, then"
         , "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow
-    , external "case-float-arg-unsafe" ((\ f -> promoteExprR (caseFloatArg (Just (f, Nothing)))) :: CoreString -> RewriteH Core)
-        [ "For a specific f,"
+    , external "case-float-arg" ((\ f strict -> promoteExprR (caseFloatArg (Just f) (Just strict))) :: CoreString -> RewriteH Core -> RewriteH Core)
+        [ "For a specified f, given a proof that f is strict, then"
+        , "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow
+    , external "case-float-arg-unsafe" ((\ f -> promoteExprR (caseFloatArg (Just f) Nothing)) :: CoreString -> RewriteH Core)
+        [ "For a specified f,"
         , "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
-    , external "case-float-arg-unsafe" (promoteExprR (caseFloatArg Nothing) :: RewriteH Core)
+    , external "case-float-arg-unsafe" (promoteExprR (caseFloatArg Nothing Nothing) :: RewriteH Core)
         [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
     , external "case-float-case" (promoteExprR caseFloatCaseR :: RewriteH Core)
         [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval
@@ -153,37 +156,60 @@ caseFloatAppR = prefixFailMsg "Case floating from App function failed: " $
           (\(Case s b _ alts) v -> let newAlts = mapAlts (`App` v) alts
                                     in Case s b (coreAltsType newAlts) newAlts)
 
-caseFloatArg :: Maybe (CoreString, Maybe (RewriteH Core)) -> RewriteH CoreExpr
-caseFloatArg Nothing                 = caseFloatArgR Nothing
-caseFloatArg (Just (f_str, mstrict)) =
-  do f <- parseCoreExprT f_str
-     caseFloatArgR (Just (f, extractR <$> mstrict))
+caseFloatArg :: Maybe CoreString -> Maybe (RewriteH Core) -> RewriteH CoreExpr
+caseFloatArg mfstr mstrictCore = let mstrict = extractR <$> mstrictCore
+                                  in case mfstr of
+                                       Nothing    -> caseFloatArgR Nothing mstrict
+                                       Just f_str -> do f <- parseCoreExprT f_str
+                                                        caseFloatArgR (Just f) mstrict
 
 -- | @f (case s of alt1 -> e1; alt2 -> e2)@ ==> @case s of alt1 -> f e1; alt2 -> f e2@
 --   Only safe if @f@ is strict.
 caseFloatArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasGlobalRdrEnv c)
-              => Maybe (CoreExpr, Maybe (Rewrite c HermitM CoreExpr)) -- ^ Maybe the function to float past, and maybe a proof of its strictness.
+              => Maybe CoreExpr -> Maybe (Rewrite c HermitM CoreExpr) -- ^ Maybe the function to float past, and maybe a proof of its strictness.
               -> Rewrite c HermitM CoreExpr
-caseFloatArgR mfstrict = prefixFailMsg "Case floating from App argument failed: " $
-                         withPatFailMsg "App f (Case s w ty alts)" $
+caseFloatArgR mf mstrict = prefixFailMsg "Case floating from App argument failed: " $
+                           withPatFailMsg "App f (Case s w ty alts)" $
   do App f (Case s w _ alts) <- idR
-     whenJust (\ (f', mstrict) ->
-                     do guardMsg (exprAlphaEq f f') "given function does not match current application."
-                        whenJust (verifyStrictT f) mstrict
-              )
-              mfstrict
+
+     whenJust (\ f' -> guardMsg (exprAlphaEq f f') "given function does not match current application.") mf
+     whenJust (verifyStrictT f) mstrict
 
      let fvs         = freeVarsExpr f
          altCaptures = map (intersectVarSet fvs . mkVarSet . altVars) alts
          bndrCapture = elemVarSet w fvs
 
-     if | bndrCapture                   -> appAllR idR (alphaCaseBinderR Nothing) >>> caseFloatArgR Nothing
+     if | bndrCapture                   -> appAllR idR (alphaCaseBinderR Nothing) >>> caseFloatArgR Nothing Nothing
         | all isEmptyVarSet altCaptures -> let new_alts = mapAlts (App f) alts
                                             in return $ Case s w (coreAltsType new_alts) new_alts
         | otherwise                     -> appAllR idR (caseAllR idR idR idR (\ n -> let vs = varSetElems (altCaptures !! n)
                                                                                       in if null vs then idR else alphaAltVarsR vs
                                                                              )
-                                                       ) >>> caseFloatArgR Nothing
+                                                       ) >>> caseFloatArgR Nothing Nothing
+
+-- caseFloatArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasGlobalRdrEnv c)
+--               => Maybe (CoreExpr, Maybe (Rewrite c HermitM CoreExpr)) -- ^ Maybe the function to float past, and maybe a proof of its strictness.
+--               -> Rewrite c HermitM CoreExpr
+-- caseFloatArgR mfstrict = prefixFailMsg "Case floating from App argument failed: " $
+--                          withPatFailMsg "App f (Case s w ty alts)" $
+--   do App f (Case s w _ alts) <- idR
+--      whenJust (\ (f', mstrict) ->
+--                      do guardMsg (exprAlphaEq f f') "given function does not match current application."
+--                         whenJust (verifyStrictT f) mstrict
+--               )
+--               mfstrict
+
+--      let fvs         = freeVarsExpr f
+--          altCaptures = map (intersectVarSet fvs . mkVarSet . altVars) alts
+--          bndrCapture = elemVarSet w fvs
+
+--      if | bndrCapture                   -> appAllR idR (alphaCaseBinderR Nothing) >>> caseFloatArgR Nothing
+--         | all isEmptyVarSet altCaptures -> let new_alts = mapAlts (App f) alts
+--                                             in return $ Case s w (coreAltsType new_alts) new_alts
+--         | otherwise                     -> appAllR idR (caseAllR idR idR idR (\ n -> let vs = varSetElems (altCaptures !! n)
+--                                                                                       in if null vs then idR else alphaAltVarsR vs
+--                                                                              )
+--                                                        ) >>> caseFloatArgR Nothing
 
 -- | case (case s1 of alt11 -> e11; alt12 -> e12) of alt21 -> e21; alt22 -> e22
 --   ==>
@@ -267,7 +293,7 @@ caseReduceIdR subst = caseAllR inlineR idR idR (const idR) >>> caseReduceR subst
 --   Eliminate a case if the scrutinee is a data constructor or a literal.
 --   If first argument is True, perform substitution in RHS, if False, build let expressions.
 caseReduceR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Bool -> Rewrite c HermitM CoreExpr
-caseReduceR subst = 
+caseReduceR subst =
     setFailMsg "Unsuitable expression for Case reduction." $
     caseReduceDataconR subst <+ caseReduceLiteralR subst
 
@@ -276,9 +302,9 @@ caseReduceR subst =
 --   If first argument is True, perform substitution in RHS, if False, build let expressions.
 -- NB: LitAlt cases don't do evaluation
 caseReduceLiteralR :: MonadCatch m => Bool -> Rewrite c m CoreExpr
-caseReduceLiteralR subst = 
+caseReduceLiteralR subst =
     prefixFailMsg "Case reduction failed: " $
-    withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $ do 
+    withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $ do
         Case s bndr _ alts <- idR
 #if __GLASGOW_HASKELL__ > 706
         let in_scope = mkInScopeSet (localFreeVarsExpr s)
@@ -302,7 +328,7 @@ caseReduceDataconR subst = prefixFailMsg "Case reduction failed: " $
                            withPatFailMsg (wrongExprForm "Case e v t alts") go
     where
         go :: Rewrite c HermitM CoreExpr
-        go = do 
+        go = do
             Case e bndr _ alts <- idR
 #if __GLASGOW_HASKELL__ > 706
             let in_scope = mkInScopeSet (localFreeVarsExpr e)
@@ -410,14 +436,14 @@ caseMergeAltsR = prefixFailMsg "merge-case-alts failed: " $
 
 -- | In the case alternatives, fold any occurrences of the case alt patterns to the case binder.
 caseFoldBinderR :: forall c.  (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseFoldBinderR = prefixFailMsg "case-fold-binder failed: " $ do 
+caseFoldBinderR = prefixFailMsg "case-fold-binder failed: " $ do
     w <- caseBinderIdT
     caseAllR idR idR idR $ \ _ -> do depth <- varBindingDepthT w
                                      extractR $ anybuR (promoteExprR (foldVarR w (Just depth)) :: Rewrite c HermitM Core)
 
 -- | A cleverer version of 'mergeCaseAlts' that first attempts to abstract out any occurrences of the alternative pattern using the case binder.
 caseMergeAltsWithBinderR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
-caseMergeAltsWithBinderR = 
+caseMergeAltsWithBinderR =
     prefixFailMsg "merge-case-alts-with-binder failed: " $
     withPatFailMsg (wrongExprForm "Case e w ty alts") $
     tryR caseFoldBinderR >>> caseMergeAltsR

@@ -219,15 +219,15 @@ pushR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, H
       => Maybe (Rewrite c HermitM CoreExpr) -- ^ a proof that the function (after being applied to its type arguments) is strict
       -> (Id -> Bool)                       -- ^ a predicate to identify the function
       -> Rewrite c HermitM CoreExpr
-pushR strictf p = prefixFailMsg "push failed: " $
-                  withPatFailMsg (wrongExprForm "App f e") $
+pushR mstrictf p = prefixFailMsg "push failed: " $
+                   withPatFailMsg (wrongExprForm "App f e") $
      do App f e <- idR
         case collectArgs f of
           (Var i,args) -> do
                   guardMsg (p i) $ "identifier not matched."
                   guardMsg (all isTypeArg args) $ "initial arguments are not all type arguments."
                   case e of
-                     Case {} -> caseFloatArgR (Just (f,strictf))
+                     Case {} -> caseFloatArgR (Just f) mstrictf
                      Let {}  -> letFloatArgR
                      _       -> fail "argument is not a Case or Let."
           _ -> fail "no identifier to match."
