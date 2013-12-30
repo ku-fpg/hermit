@@ -18,14 +18,15 @@ rule-to-lemma "append-nil"
 -- consider lam ; lams-body
 -- case-split-inline 'xs
 -- {case-alt 0
---     any-bu (inline '++);  smash
+--    one-bu (inline '++);  smash
 -- }
 -- {case-alt 1
---    any-bu (forward (lemma-unsafe append-nil))
+--    one-bu (inline '++);  smash
+--    one-bu (forward ind-hyp-0)
 -- }
 
 -- then encode the proof as a rewrite or script
-define-script "append-nil-nil" "any-bu (inline '++); smash"
-define-script "append-nil-cons" "any-bu (forward (lemma-unsafe append-nil))"
+define-script "append-nil-nil" "one-bu (inline '++); smash"
+define-script "append-nil-cons" "one-bu (inline '++); smash; one-bu (forward ind-hyp-0)"
 
 verify-lemma "append-nil" (inductive-proof 'xs [ '"[]" , ': ] [ append-nil-nil , append-nil-cons ] )

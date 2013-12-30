@@ -51,9 +51,7 @@ load-and-run "verify-nil-append.hec"
 --
 ---- then encode the proof as a rewrite or script
 define-script "append-assoc-nil"  "any-bu (forward (lemma nil-append))"
--- define-script "append-assoc-cons-left"  "one-bu (inline '++) ; smash ; one-bu (forward (lemma-unsafe append-assoc))"
 define-script "append-assoc-cons-left"  "one-bu (inline '++) ; smash ; one-bu  (forward ind-hyp-0)"
--- define-script "append-assoc-cons-left"  "one-bu (inline '++) ; smash ; app-arg ;  (forward ind-hyp-0) "
 
 define-script "append-assoc-cons-right" "one-bu (inline '++) ; smash ; one-bu (inline '++) ; smash "
 

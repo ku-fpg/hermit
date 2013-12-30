@@ -18,11 +18,16 @@ rule-to-lemma "concat-of-toList"
 -- consider lam ; lams-body
 -- case-split-inline 'xs
 -- {case-alt 0
---     any-bu (inline 'map);  smash
---     any-bu (inline 'concat);  smash
+--     one-bu (inline 'map);  smash
+--     one-bu (inline 'concat);  smash
 -- }
 -- {case-alt 1
---    any-bu (forward (lemma-unsafe "concat-of-toList"))
+--     one-bu (inline 'map);  smash
+--     one-bu (inline 'concat);  smash
+--     one-bu (inline 'toList);  smash
+--     one-bu (inline '++);  smash
+--     one-bu (inline '++);  smash
+--     one-bu (forward ind-hyp-0)
 -- }
 
 -- then encode the proof as a rewrite or script

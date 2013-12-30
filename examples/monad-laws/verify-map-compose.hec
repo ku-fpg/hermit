@@ -1,0 +1,15 @@
+--------------------------------------------
+-- Verify map-compose
+--
+-- forall f g xs.  map (f . g) xs  =  map f (map g xs)
+--
+--------------------------------------------
+
+rule-to-lemma "map-compose"
+
+define-script "map-compose-left"  "one-bu (inline 'map) ; smash"
+
+define-script "map-compose-nil-right"  "{app-arg ; one-bu (inline 'map) ; smash } one-bu (inline 'map) ; smash"
+define-script "map-compose-cons-right" "{app-arg ; one-bu (inline 'map) ; smash } one-bu (inline 'map) ; smash ; one-bu (backward ind-hyp-0) ; one-bu (inline '.) ; smash"
+
+verify-lemma "map-compose" (inductive-proof-both-sides 'xs [ '"[]" , ': ] [ map-compose-left , map-compose-left ] [map-compose-nil-right , map-compose-cons-right])
