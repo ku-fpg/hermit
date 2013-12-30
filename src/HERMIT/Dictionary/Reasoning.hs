@@ -193,7 +193,7 @@ instantiateCoreExprEqVar i e c@(CoreExprEquality bs lhs rhs)
     | i `notElem` bs = c
     | otherwise = 
         let (bs',_:vs)    = break (==i) bs -- this is safe because we know i is in bs
-            inS           = delVarSet (unionVarSets (map localFreeVarsExpr [lhs, rhs, e] ++ map freeVarsVar vs)) i
+            inS           = delVarSetList (unionVarSets (map localFreeVarsExpr [lhs, rhs, e] ++ map freeVarsVar vs)) (i:vs)
             subst         = extendSubst (mkEmptySubst (mkInScopeSet inS)) i e
             (subst', vs') = substBndrs subst vs
             lhs'          = substExpr (text "coreExprEquality-lhs") subst' lhs
