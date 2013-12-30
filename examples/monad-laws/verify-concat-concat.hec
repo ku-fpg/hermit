@@ -1,0 +1,18 @@
+--------------------------------------------
+-- Verify concat-concat
+--
+-- forall x.    concat (concat x)  =  concat (map concat x)
+--
+--------------------------------------------
+
+rule-to-lemma "concat-concat"
+
+load-and-run "verify-concat-append.hec"
+
+define-script "concat-concat-nil-left"   "any-call (unfold 'concat) ; smash"
+define-script "concat-concat-cons-left"  "{app-arg ; one-bu (inline 'concat) ; smash}"
+-- Yields:  concat ((++) a (concat b))
+define-script "concat-concat-nil-right"  "any-call (unfold 'map) ; smash ; one-bu (inline 'concat) ; smash"
+define-script "concat-concat-cons-right" "any-call (unfold 'map) ; smash ; one-bu (inline 'concat) ; smash ; one-bu (backward ind-hyp-0); one-bu (backward (lemma 'concat-append))"
+
+verify-lemma "concat-concat" (inductive-proof-both-sides 'x [ '"[]" , ': ] [ concat-concat-nil-left , concat-concat-cons-left ] [ concat-concat-nil-right , concat-concat-cons-right ] )

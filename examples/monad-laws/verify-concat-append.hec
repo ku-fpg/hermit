@@ -1,0 +1,21 @@
+--------------------------------------------
+-- Verify concat-append
+--
+-- forall x y.  concat (x ++ y) = concat x ++ concat y
+--
+--------------------------------------------
+
+rule-to-lemma "concat-append"
+
+load-and-run "verify-append-assoc.hec"
+
+-- set-auto-corelint True; set-pp-type Omit;  prog-end
+-- rule-to-lemma "concat-append" ; rule-lhs-intro "concat-append"; consider lam ; lams-body
+
+define-script "concat-append-nil-left"   "any-call (unfold '++ ); smash"
+define-script "concat-append-cons-left"  "any-call (unfold '++ ); smash ; any-call (unfold 'concat) ; smash; one-bu (forward ind-hyp-0)"
+-- Yields: (++) a ((++) (concat b) (concat y))
+define-script "concat-append-nil-right"  "one-bu (unfold 'concat) ; smash ; any-call (unfold '++) ; smash"
+define-script "concat-append-cons-right" "one-bu (unfold 'concat) ; smash; one-bu (backward (lemma 'append-assoc))"
+
+verify-lemma "concat-append" (inductive-proof-both-sides 'x [ '"[]" , ': ] [ concat-append-nil-left , concat-append-cons-left ] [ concat-append-nil-right , concat-append-cons-right ] )
