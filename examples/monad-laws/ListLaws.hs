@@ -7,7 +7,6 @@ import Prelude hiding (map,id, concat, (++))
 {-# RULES "right-unit"  forall m.   m `bind` retur  =  m  #-}
 
 {-# RULES "monad-assoc" forall m f g.  (m `bind` f) `bind` g  =  m `bind` \x -> (f x `bind` g) #-}
-
 {-# RULES "monoid-left" forall x.  mempt `mappen` x = x  #-}
 
 {-# RULES "monoid-right" forall x.  x `mappen` mempt = x  #-}
@@ -25,8 +24,9 @@ import Prelude hiding (map,id, concat, (++))
 -- so that I can case-split on 'xs
 -- {-# RULES  "map-compose" forall f g xs.  map (f . g) xs  =  (map f . map g) xs #-}
 {-# RULES  "map-compose" forall f g xs.  map (f . g) xs  =  map f (map g xs) #-}
+-- {-# RULES  "map-compose" forall f g xs.  map (\y -> f (g y)) xs  =  map f (map g xs) #-}
 {-# RULES  "map-append"  forall f x y.  map f (x ++ y) = map f x ++ map f y #-}
-{-# RULES  "map-concat"    forall f.    map f . concat =  concat . map (map f) #-}
+{-# RULES  "map-concat"    forall f xs. map f (concat xs) =  concat (map (map f) xs) #-}
 {-# RULES  "concat-concat" forall x.    concat (concat x)  =  concat (map concat x)  #-}
 {-# RULES  "concat-append" forall x y.  concat (x ++ y) = concat x ++ concat y #-}
 {-# RULES #-}
@@ -35,8 +35,7 @@ import Prelude hiding (map,id, concat, (++))
 -- Equation 6:
 
 bind :: [a] -> (a -> [b]) -> [b]
-bind [] k = []
-bind as@(a1:arest) k = concat (map k as)
+bind as k = concat (map k as)
 
 retur :: a -> [a]
 retur = toList
@@ -61,4 +60,3 @@ mempt = []
 
 mappen :: [a] -> [a] -> [a]
 mappen xs ys = xs ++ ys
-

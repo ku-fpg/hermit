@@ -3,6 +3,14 @@
 --
 --
 -- forall m f g.  (m `bind` f) `bind` g  =  m `bind` \x -> (f x `bind` g)
+
+-- OR, using Kleisli composition
+-- (>=>) :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
+-- (m >=> n) x = m x >>= n
+--
+-- Associativity: (f >=> g) >=> h ≡ f >=> (g >=> h)
+--
+--
 --
 -- TO BE COMPLETED.
 --
@@ -19,8 +27,10 @@
 --  map (f . g)  =  map f . map g
 --  -- equation 2:
 --  map f . concat =  concat . map (map f)
+--  \f x -> map f (concat x) == \f x -> concat (map (map f) x)
 --  -- equation 3:
---  concat . concat  =  concat . map concat
+--  concat . concat  =  concat . map concato
+-- \x -> concat (concat x) == \x -> concat (map concat x)
 
 --------------------------------------------
 
@@ -29,5 +39,9 @@
 --   load-and-run "verify-list-monad-assoc.hec"
 --   show-lemmas
 
-rule-to-lemma "monad-assoc"
+rule-to-lemma "monad-assoc" ; rule-to-lemma "map-concat" ; load-and-run verify-map-compose.hec ; load-and-run verify-concat-concat.hec
 
+load "list-monad-assoc-left-proof" "list-monad-assoc-lhs.her"
+load "list-monad-assoc-right-proof" "list-monad-assoc-rhs.her"
+
+verify-lemma "monad-assoc" (script-both-sides-to-proof list-monad-assoc-left-proof list-monad-assoc-right-proof)

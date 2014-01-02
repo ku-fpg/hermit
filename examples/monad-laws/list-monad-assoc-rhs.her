@@ -1,0 +1,24 @@
+any-call (unfold 'bind)
+{
+consider lam
+lams-body
+   {
+   app-arg
+   abstract x
+   }
+fold '.
+ }
+{
+consider lam
+eta-reduce
+ }
+one-bu (forward (lemma map-compose))
+{
+consider lam
+   {
+   lams-body
+   fold '.
+   }
+eta-reduce
+ }
+one-bu (forward (lemma map-compose))
