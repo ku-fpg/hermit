@@ -1,0 +1,27 @@
+--------------------------------------------
+-- Verify map-concat
+--
+-- forall f xs.  map f (concat xs) =  concat (map (map f) xs)
+-- forall f.    map f . concat =  concat . map (map f)
+
+--
+--------------------------------------------
+
+rule-to-lemma "map-concat"
+
+load-and-run "verify-map-append.hec"
+
+-- rule-to-lemma "map-concat" ; rule-lhs-intro "map-concat" ; consider lam ; lams-body
+-- case-split-inline 'xs
+
+define-script "map-concat-nil-left"  "any-call (unfold ['concat, 'map]) ; smash"
+
+define-script "map-concat-cons-left" "any-call (unfold 'concat); smash; forward (lemma map-append); one-bu (forward ind-hyp-0)"
+-- Yields: (++) (map f a) (concat (map (map f) b))
+
+define-script "map-concat-nil-right"  "{app-arg ; one-bu (unfold 'map) ; smash } unfold 'concat; smash"
+
+define-script "map-concat-cons-right" "{app-arg ; unfold 'map ; smash } ; forward (lemma concat-nonempty)"
+-- Yields: (++) (map f a) (concat (map (map f) b))
+
+verify-lemma "map-concat" (inductive-proof-both-sides 'xs [ '"[]" , ': ] [ map-concat-nil-left , map-concat-cons-left ] [map-concat-nil-right , map-concat-cons-right])

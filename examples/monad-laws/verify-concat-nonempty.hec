@@ -1,0 +1,12 @@
+--------------------------------------------
+-- Verify concat-nonempty
+--
+-- forall x1 xs. concat (x:xs) =  x ++ (concat xs)
+--
+--------------------------------------------
+
+rule-to-lemma "concat-nonempty"
+
+define-script "concat-nonempty-rhs" "unfold 'concat ; smash"
+
+verify-lemma "concat-nonempty" (script-to-proof concat-nonempty-rhs)

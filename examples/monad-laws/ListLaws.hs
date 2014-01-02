@@ -32,10 +32,8 @@ import Prelude hiding (map,id, concat, (++))
 {-# RULES  "map-concat"    forall f xs. map f (concat xs) =  concat (map (map f) xs) #-}
 {-# RULES  "concat-concat" forall x.    concat (concat x)  =  concat (map concat x)  #-}
 {-# RULES  "concat-append" forall x y.  concat (x ++ y) = concat x ++ concat y #-}
+{-# RULES  "concat-nonempty" forall x xs. concat (x:xs) =  x ++ (concat xs) #-}
 {-# RULES #-}
-
--- Equation 5:
--- Equation 6:
 
 bind :: [a] -> (a -> [b]) -> [b]
 bind as k = concat (map k as)

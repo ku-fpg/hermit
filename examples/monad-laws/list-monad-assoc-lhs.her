@@ -1,4 +1,4 @@
 any-call (unfold 'bind)
 any-call (unfold 'bind)
-any-bu (forward (lemma-unsafe map-concat))
+any-bu (forward (lemma map-concat))
 any-bu (forward (lemma concat-concat))

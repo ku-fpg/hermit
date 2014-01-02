@@ -39,7 +39,11 @@
 --   load-and-run "verify-list-monad-assoc.hec"
 --   show-lemmas
 
-rule-to-lemma "monad-assoc" ; rule-to-lemma "map-concat" ; load-and-run verify-map-compose.hec ; load-and-run verify-concat-concat.hec
+rule-to-lemma "monad-assoc"
+load-and-run verify-map-compose.hec
+load-and-run verify-concat-nonempty.hec
+load-and-run verify-concat-concat.hec
+load-and-run verify-map-concat.hec
 
 load "list-monad-assoc-left-proof" "list-monad-assoc-lhs.her"
 load "list-monad-assoc-right-proof" "list-monad-assoc-rhs.her"
