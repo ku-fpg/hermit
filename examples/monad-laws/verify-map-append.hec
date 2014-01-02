@@ -1,0 +1,25 @@
+--------------------------------------------
+-- Verify map-append
+--
+-- forall f x y.  map f (x ++ y) = map f x ++ map f y
+--
+--------------------------------------------
+
+rule-to-lemma "map-append"
+
+load-and-run "verify-append-nonempty.hec"
+load-and-run "verify-map-nonempty.hec"
+
+-- rule-to-lemma "map-append" ; rule-lhs-intro "map-append" ; consider lam ; lams-body
+-- case-split-inline 'x
+
+define-script "map-append-nil-left" "any-call (unfold '++) ; smash"
+
+define-script "map-append-nil-right"  "{app-fun ; app-arg ; unfold 'map ; smash } unfold '++; smash"
+
+define-script "map-append-cons-left" "one-bu (inline '++) ; smash ; one-bu (inline 'map) ; smash ; one-bu (forward ind-hyp-0) ; forward (lemma append-nonempty) ; one-bu (backward (lemma map-nonempty))"
+-- Yields:  (++) (map f ((:) a b)) (map f y)
+
+define-script "map-append-cons-right" "id"
+
+verify-lemma "map-append" (inductive-proof-both-sides 'x [ '"[]" , ': ] [ map-append-nil-left , map-append-cons-left ] [map-append-nil-right , map-append-cons-right])

@@ -15,10 +15,13 @@ import Prelude hiding (map,id, concat, (++))
 
 {-# RULES "nil-append"  forall xs.  [] ++ xs = xs #-}
 {-# RULES "append-nil"  forall xs.  xs ++ [] = xs #-}
+{-# RULES "append-nonempty" forall x1 xs ys. x1 : (xs ++ ys)  = (x1:xs) ++ ys #-}
 {-# RULES "append-assoc" forall x y z. x ++ (y ++ z) = (x++y) ++ z #-}
 
 {-# RULES "concat-unit"  forall x. concat [x] = x  #-}
 {-# RULES "concat-of-toList"  forall xs. concat (map toList xs) = xs  #-}
+
+{-# RULES "map-nonempty" forall f a as. map f (a:as) = f a : map f as #-}
 
 -- I'm using a slightly different specification for this rule,
 -- so that I can case-split on 'xs

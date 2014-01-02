@@ -1,0 +1,12 @@
+--------------------------------------------
+-- Verify append-nonempty
+--
+-- forall x1 xs ys. x1 : (xs ++ ys)  = (x1:xs) ++ ys
+--
+--------------------------------------------
+
+rule-to-lemma "append-nonempty"
+
+define-script "append-nonempty-rhs" "unfold '++ ; smash"
+
+verify-lemma "append-nonempty" (flip-proof (script-to-proof append-nonempty-rhs))
