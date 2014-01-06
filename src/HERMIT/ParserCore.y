@@ -1,6 +1,6 @@
 {
 {-# LANGUAGE CPP #-}
- module HERMIT.ParserCore (parseCore, parseCoreExprT, parse2beforeBiR, parse3beforeBiR) where
+ module HERMIT.ParserCore (parseCore, parseCoreExprT, parse2beforeBiR, parse3beforeBiR, parse4beforeBiR, parse5beforeBiR) where
 
 import Control.Arrow
 import Control.Monad.Reader
@@ -167,17 +167,27 @@ parseCore (CoreString s) c =
 
 ---------------------------------------------
 
--- These three should probably go somewhere else.
+-- These should probably go somewhere else.
 
 -- | Parse a 'CoreString' to a 'CoreExpr', using the current context.
 parseCoreExprT :: CoreString -> TranslateH a CoreExpr
 parseCoreExprT = contextonlyT . parseCore
 
-parse2beforeBiR :: (CoreExpr -> CoreExpr -> BiRewriteH a) -> CoreString -> CoreString -> BiRewriteH a
+parse2beforeBiR :: (CoreExpr -> CoreExpr -> BiRewriteH a)
+                -> CoreString -> CoreString -> BiRewriteH a
 parse2beforeBiR f s1 s2 = beforeBiR (parseCoreExprT s1 &&& parseCoreExprT s2) (uncurry f)
 
-parse3beforeBiR :: (CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH a) -> CoreString -> CoreString -> CoreString -> BiRewriteH a
+parse3beforeBiR :: (CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH a)
+                -> CoreString -> CoreString -> CoreString -> BiRewriteH a
 parse3beforeBiR f s1 s2 s3 = beforeBiR ((parseCoreExprT s1 &&& parseCoreExprT s2) &&& parseCoreExprT s3) ((uncurry.uncurry) f)
+
+parse4beforeBiR :: (CoreExpr -> CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH a)
+                -> CoreString -> CoreString -> CoreString -> CoreString -> BiRewriteH a
+parse4beforeBiR f s1 s2 s3 s4 = beforeBiR (((parseCoreExprT s1 &&& parseCoreExprT s2) &&& parseCoreExprT s3) &&& parseCoreExprT s4) ((uncurry.uncurry.uncurry) f)
+
+parse5beforeBiR :: (CoreExpr -> CoreExpr -> CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH a)
+                -> CoreString -> CoreString -> CoreString -> CoreString -> CoreString -> BiRewriteH a
+parse5beforeBiR f s1 s2 s3 s4 s5 = beforeBiR ((((parseCoreExprT s1 &&& parseCoreExprT s2) &&& parseCoreExprT s3) &&& parseCoreExprT s4) &&& parseCoreExprT s5) ((uncurry.uncurry.uncurry.uncurry) f)
 
 ---------------------------------------------
 
