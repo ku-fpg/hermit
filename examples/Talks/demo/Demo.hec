@@ -1,0 +1,21 @@
+binding-of 'f
+
+{ consider case
+
+  { case-alt 0 ; alt-rhs
+    one-td (inline 'wild)
+    unfold '&&
+    case-reduce
+  }
+
+  -- case-elim-merge-alts
+
+}
+
+{ consider app
+  -- case-float-arg-unsafe
+  rule-to-lemma "strict-ga"
+  load-and-run "verify-strict-ga.hec"
+  case-float-arg (forward (lemma "strict-ga"))
+
+}

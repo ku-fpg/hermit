@@ -1,0 +1,7 @@
+define-script "strict-ga-proof" "unfold 'g ; undefined-case"
+
+verify-lemma "strict-ga" (script-to-proof "strict-ga-proof")
+
+
+
+-- verify-lemma "strict-ga" (rewrite-to-proof (unfold 'g >>> undefined-case))
