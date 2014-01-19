@@ -39,6 +39,7 @@ module HERMIT.GHC
     , runDsMtoCoreM
     , runTcMtoCoreM
     , buildTypeable
+    , eqExprX
 #endif
     ) where
 
@@ -77,7 +78,7 @@ import Data.Maybe (isJust)
 import qualified Bag
 import qualified CoAxiom -- for coAxiomName
 import DsBinds (dsEvBinds)
-import DsMonad (DsM, initDs)
+import DsMonad (DsM, initDsTc)
 import PrelNames (typeableClassName)
 import TcEnv (tcLookupClass)
 import TcMType (newWantedEvVar)
@@ -274,13 +275,7 @@ runTcMtoCoreM guts m = do
     maybe (fail $ showMsgs msgs) return mr
 
 runDsMtoCoreM :: ModGuts -> DsM a -> CoreM a
-runDsMtoCoreM guts m = do
-    hscEnv <- getHscEnv
-    (msgs, mr) <- liftIO $ initDs hscEnv (mg_module guts) (mg_rdr_env guts) (mk_type_env guts) m
-    -- There is probably something better for reporting the errors.
-    let dumpSDocs endMsg = Bag.foldBag (\ d r -> d ++ ('\n':r)) show endMsg
-        showMsgs (warns, errs) = "Errors:\n" ++ dumpSDocs ("Warnings:\n" ++ dumpSDocs "" warns) errs
-    maybe (fail $ showMsgs msgs) return mr
+runDsMtoCoreM guts = runTcMtoCoreM guts . initDsTc
 
 -- TODO: 
 buildTypeable :: ModGuts -> Type -> CoreM (Id, [CoreBind])
@@ -290,11 +285,77 @@ buildTypeable guts ty = do
         let predTy = mkClassPred cls [typeKind ty, ty] -- recall that Typeable is now poly-kinded
         loc <- getCtLoc $ GivenOrigin UnkSkol
         evar <- newWantedEvVar predTy
-        let nonC = mkNonCanonical loc $ CtWanted { ctev_pred = predTy, ctev_evar = evar }
+        let nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
             wCs = mkFlatWC [nonC]
         (_wCs', bnds) <- solveWantedsTcM wCs
         -- TODO: check for unsolved constraints?
         return (evar, bnds)
     bnds <- runDsMtoCoreM guts $ dsEvBinds bs
     return (i,bnds)
+
+-- This function used to be in GHC itself, but was removed.
+-- It compares core for equality modulo alpha.
+eqExprX :: IdUnfoldingFun -> RnEnv2 -> CoreExpr -> CoreExpr -> Bool
+eqExprX id_unfolding_fun env e1 e2
+  = go env e1 e2
+  where
+    go env (Var v1) (Var v2)
+      | rnOccL env v1 == rnOccR env v2
+      = True
+
+    -- The next two rules expand non-local variables
+    -- C.f. Note [Expanding variables] in Rules.lhs
+    -- and  Note [Do not expand locally-bound variables] in Rules.lhs
+    go env (Var v1) e2
+      | not (locallyBoundL env v1)
+      , Just e1' <- expandUnfolding_maybe (id_unfolding_fun (lookupRnInScope env v1))
+      = go (nukeRnEnvL env) e1' e2
+
+    go env e1 (Var v2)
+      | not (locallyBoundR env v2)
+      , Just e2' <- expandUnfolding_maybe (id_unfolding_fun (lookupRnInScope env v2))
+      = go (nukeRnEnvR env) e1 e2'
+
+    go _   (Lit lit1)    (Lit lit2)      = lit1 == lit2
+    go env (Type t1)    (Type t2)        = eqTypeX env t1 t2
+    go env (Coercion co1) (Coercion co2) = coreEqCoercion2 env co1 co2
+    go env (Cast e1 co1) (Cast e2 co2) = coreEqCoercion2 env co1 co2 && go env e1 e2
+    go env (App f1 a1)   (App f2 a2)   = go env f1 f2 && go env a1 a2
+    go env (Tick n1 e1)  (Tick n2 e2)  = go_tickish n1 n2 && go env e1 e2
+
+    go env (Lam b1 e1)  (Lam b2 e2)
+      =  eqTypeX env (varType b1) (varType b2)   -- False for Id/TyVar combination
+      && go (rnBndr2 env b1 b2) e1 e2
+
+    go env (Let (NonRec v1 r1) e1) (Let (NonRec v2 r2) e2)
+      =  go env r1 r2  -- No need to check binder types, since RHSs match
+      && go (rnBndr2 env v1 v2) e1 e2
+
+    go env (Let (Rec ps1) e1) (Let (Rec ps2) e2)
+      = all2 (go env') rs1 rs2 && go env' e1 e2
+      where
+        (bs1,rs1) = unzip ps1
+        (bs2,rs2) = unzip ps2
+        env' = rnBndrs2 env bs1 bs2
+
+    go env (Case e1 b1 t1 a1) (Case e2 b2 t2 a2)
+      | null a1   -- See Note [Empty case alternatives] in TrieMap
+      = null a2 && go env e1 e2 && eqTypeX env t1 t2
+      | otherwise
+      =  go env e1 e2 && all2 (go_alt (rnBndr2 env b1 b2)) a1 a2
+
+    go _ _ _ = False
+
+    -----------
+    go_alt env (c1, bs1, e1) (c2, bs2, e2)
+      = c1 == c2 && go (rnBndrs2 env bs1 bs2) e1 e2
+
+    -----------
+    go_tickish (Breakpoint lid lids) (Breakpoint rid rids)
+      = lid == rid  &&  map (rnOccL env) lids == map (rnOccR env) rids
+    go_tickish l r = l == r
+
+locallyBoundL, locallyBoundR :: RnEnv2 -> Var -> Bool
+locallyBoundL rn_env v = inRnEnvL rn_env v
+locallyBoundR rn_env v = inRnEnvR rn_env v
 #endif
