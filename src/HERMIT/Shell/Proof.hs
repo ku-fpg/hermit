@@ -73,8 +73,8 @@ externals =
 
 --------------------------------------------------------------------------------------------------------
 
-data ProofH = RewritingProof ScriptOrRewrite ScriptOrRewrite                                       -- | Prove by rewriting both sides to a common intermediate expression.
-            | InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]  -- | Prove by induction.
+data ProofH = RewritingProof ScriptOrRewrite ScriptOrRewrite                                       -- ^ Prove by rewriting both sides to a common intermediate expression.
+            | InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]  -- ^ Prove by induction.
 
 type ScriptOrRewrite = Either ScriptName (RewriteH CoreExpr) -- The named script should be convertible to a Rewrite.
 
