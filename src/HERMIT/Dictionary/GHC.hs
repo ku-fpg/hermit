@@ -61,7 +61,7 @@ externals =
 
 ------------------------------------------------------------------------
 
--- | Substitute all occurrences of a variable with an expression, in either a program or an expression.
+-- | Substitute all occurrences of a variable with an expression, in either a program, an expression, or a case alternative.
 substR :: MonadCatch m => Var -> CoreExpr -> Rewrite c m Core
 substR v e = setFailMsg "Can only perform substitution on expressions, case alternatives or programs." $
              promoteExprR (arr $ substCoreExpr v e) <+ promoteProgR (substTopBindR v e) <+ promoteAltR (arr $ substCoreAlt v e)
