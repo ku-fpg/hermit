@@ -9,6 +9,7 @@ import Control.Monad.State
 
 import Data.Dynamic
 import Data.List
+import Data.Maybe (isNothing)
 
 import HERMIT.Core
 import HERMIT.External
@@ -73,8 +74,8 @@ externals =
 
 --------------------------------------------------------------------------------------------------------
 
-data ProofH = RewritingProof ScriptOrRewrite ScriptOrRewrite                                       -- ^ Prove by rewriting both sides to a common intermediate expression.
-            | InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]  -- ^ Prove by induction.
+data ProofH = RewritingProof ScriptOrRewrite ScriptOrRewrite                                             -- ^ Prove by rewriting both sides to a common intermediate expression.
+            | InductiveProof (Id -> Bool) [((Maybe DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]  -- ^ Prove by induction.  'Nothing' is the 'undefined' case.
 
 type ScriptOrRewrite = Either ScriptName (RewriteH CoreExpr) -- The named script should be convertible to a Rewrite.
 
@@ -115,10 +116,10 @@ rewriteBothSidesToProof r1 r2 = RewritingProof (Right r1) (Right r2)
 
 --------------------------------------------------------------------------------------------------------
 
-inductiveProof :: (Id -> Bool) -> [((DataCon -> Bool), ScriptName)] -> ProofH
+inductiveProof :: (Id -> Bool) -> [((Maybe DataCon -> Bool), ScriptName)] -> ProofH
 inductiveProof p cases = InductiveProof p (map (\ (dp,s) -> (dp, Left s, Right idR)) cases)
 
-inductiveProofBothSides :: (Id -> Bool) -> [((DataCon -> Bool), ScriptName, ScriptName)] -> ProofH
+inductiveProofBothSides :: (Id -> Bool) -> [((Maybe DataCon -> Bool), ScriptName, ScriptName)] -> ProofH
 inductiveProofBothSides p cases = InductiveProof p (map (\ (dp,s1,s2) -> (dp, Left s1, Left s2)) cases)
 
 --------------------------------------------------------------------------------------------------------
@@ -128,14 +129,18 @@ inductiveProofBothSides p cases = InductiveProof p (map (\ (dp,s1,s2) -> (dp, Le
 
 -- TODO: Upgrade the parser so that this can be a list of pairs.
 inductiveProofExt :: String -> [String] -> [ScriptName] -> ProofH
-inductiveProofExt idn dcns sns = inductiveProof (cmpString2Var idn) (zip [ cmpString2Name dcn . dataConName | dcn <- dcns ] sns)
+inductiveProofExt idn dcns sns = inductiveProof (cmpString2Var idn) (zip (caseNamePreds dcns) sns)
 
 -- inductiveProofBothSidesExt :: String -> [(String, ScriptName, ScriptName)] -> ProofH
 -- inductiveProofBothSidesExt idn cases = inductiveProofBothSides (cmpString2Var idn) [ ((cmpString2Name dcn . dataConName), sln, srn) | (dcn,sln,srn) <- cases ]
 
 -- TODO: Upgrade the parser so that this can be a list of triples.
 inductiveProofBothSidesExt :: String -> [String] -> [ScriptName] -> [ScriptName] -> ProofH
-inductiveProofBothSidesExt idn dcns s1ns s2ns = inductiveProofBothSides (cmpString2Var idn) (zip3 [ cmpString2Name dcn . dataConName | dcn <- dcns ] s1ns s2ns)
+inductiveProofBothSidesExt idn dcns s1ns s2ns = inductiveProofBothSides (cmpString2Var idn) (zip3 (caseNamePreds dcns) s1ns s2ns)
+
+-- isNothing for the undefined case
+caseNamePreds :: [String] -> [Maybe DataCon -> Bool]
+caseNamePreds dcns = isNothing : [ maybe False (cmpString2Name dcn . dataConName) | dcn <- dcns ]
 
 --------------------------------------------------------------------------------------------------------
 
@@ -214,11 +219,11 @@ prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
     st <- get
 
     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $ soleElement (filter idPred bs)
-    cases <- queryS (cl_kernel st) (inductionCaseSplit bs i lhs rhs :: TranslateH Core [(DataCon,[Var],CoreExpr,CoreExpr)]) (cl_kernel_env st) (cl_cursor st)
+    cases <- queryS (cl_kernel st) (inductionCaseSplit bs i lhs rhs :: TranslateH Core [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]) (cl_kernel_env st) (cl_cursor st)
 
-    forM_ cases $ \ (dc,vs,lhsE,rhsE) -> do
+    forM_ cases $ \ (mdc,vs,lhsE,rhsE) -> do
 
-        (lp,rp) <- getProofsForCase dc caseProofs
+        (lp,rp) <- getProofsForCase mdc caseProofs
 
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
             -- Generate list of specialized induction hypotheses for the recursive cases.
@@ -235,11 +240,13 @@ prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
                    (\ err -> put st >> throwError err)
         put st -- put original state (with original dictionary) back
 
-getProofsForCase :: Monad m => DataCon -> [(DataCon -> Bool, ScriptOrRewrite, ScriptOrRewrite)] -> m (ScriptOrRewrite, ScriptOrRewrite)
-getProofsForCase dc cases = case [ (l,r) | (dcPred, l, r) <- cases, dcPred dc ] of
-                                [] -> fail $ "no case for " ++ getOccString dc
-                                [p] -> return p
-                                _ -> fail $ "more than one case for " ++ getOccString dc
+getProofsForCase :: Monad m => Maybe DataCon -> [(Maybe DataCon -> Bool, ScriptOrRewrite, ScriptOrRewrite)] -> m (ScriptOrRewrite, ScriptOrRewrite)
+getProofsForCase mdc cases =
+  let dcnm = maybe "undefined" getOccString mdc
+   in case [ (l,r) | (dcPred, l, r) <- cases, dcPred mdc ] of
+        []  -> fail $ "no case for " ++ dcnm
+        [p] -> return p
+        _   -> fail $ "more than one case for " ++ dcnm
 
 addToDict :: [(String, BiRewriteH CoreExpr)] -> CommandLineState -> CommandLineState
 addToDict rs st = st { cl_dict = foldr (\ (nm,r) -> addToDictionary (external nm (promoteExprBiR (beforeBiR (observeR ("Applying " ++ nm ++ " to: ")) (const r)) :: BiRewriteH Core) [])) (cl_dict st) rs }
