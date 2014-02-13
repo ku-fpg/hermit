@@ -163,7 +163,7 @@ banner = unlines
     , "available HERMIT commands."
     , ""
     , "To get started, you could try the following:"
-    , "  - type \"consider 'foo\", where \"foo\" is a function"
+    , "  - type \"binding-of 'foo\", where \"foo\" is a function"
     , "    defined in the module;"
     , "  - type \"set-pp-type Show\" to display full type information;"
     , "  - type \"info\" for more information about the current node;"
