@@ -222,9 +222,10 @@ Library
        HERMIT.Shell.Renderer
        HERMIT.Shell.Types
 
+       HERMIT.Utilities
+
   Other-modules:
        HERMIT.Syntax
-       HERMIT.Utilities
 
        Paths_hermit
 
