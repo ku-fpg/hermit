@@ -109,7 +109,7 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
                    withPatFailMsg wrongFixBody $
                    do (tyA, Lam a (App f (App g (Var a')))) <- isFixExprT
                       guardMsg (a == a') wrongFixBody
-                      (tyA',tyB) <- funsWithInverseTypes g f
+                      (tyA',tyB) <- funExprsWithInverseTypes g f
                       guardMsg (eqType tyA tyA') "Type mismatch: this shouldn't have happened, report this as a bug."
                       res <- rollingRuleResult tyB g f
                       return (App f res)
@@ -122,7 +122,7 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
                         do (tyB, Lam b (App g (App f' (Var b')))) <- isFixExprT <<< constant fx
                            guardMsg (b == b') wrongFixBody
                            guardMsg (exprAlphaEq f f') "external function does not match internal expression"
-                           (tyA,tyB') <- funsWithInverseTypes g f
+                           (tyA,tyB') <- funExprsWithInverseTypes g f
                            guardMsg (eqType tyB tyB') "Type mismatch: this shouldn't have happened, report this as a bug."
                            rollingRuleResult tyA f g
 
@@ -143,9 +143,9 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
 fixFusionRuleBR :: Maybe (CoreExprEqualityProof HermitC HermitM) -> Maybe (RewriteH CoreExpr) -> CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
 fixFusionRuleBR meq mfstrict f g h = beforeBiR
   (prefixFailMsg "fixed-point fusion failed: " $
-   do (tyA,tyB) <- funArgResTypes f
-      tyA'      <- endoFunType g
-      tyB'      <- endoFunType h
+   do (tyA,tyB) <- funExprArgResTypes f
+      tyA'      <- endoFunExprType g
+      tyB'      <- endoFunExprType h
       guardMsg (typeAlphaEq tyA tyA' && typeAlphaEq tyB tyB') "given functions do not have compatible types."
       whenJust (verifyStrictT f) mfstrict
       whenJust (\ eq ->
@@ -192,7 +192,7 @@ isFixExprT = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -
 
 -- | f  ==>  fix f
 mkFixT :: (BoundVars c, HasGlobalRdrEnv c, MonadCatch m, HasDynFlags m, MonadThings m) => CoreExpr -> Translate c m z CoreExpr
-mkFixT f = do t <- endoFunType f
+mkFixT f = do t <- endoFunExprType f
               fixId <- findFixId
               return $ mkCoreApps (varToCoreExpr fixId) [Type t, f]
 

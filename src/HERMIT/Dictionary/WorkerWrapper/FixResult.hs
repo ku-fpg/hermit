@@ -462,7 +462,7 @@ verifyAssB :: CoreExpr          -- ^ abs
 verifyAssB abs rep f assB =
   prefixFailMsg ("verification of worker/wrapper assumption B failed: ") $
   do (tyA,_) <- absRepTypes abs rep
-     tyXA     <- constT (endoFunType f)
+     tyXA     <- constT (endoFunExprType f)
      (tyX,tA) <- constT (splitFunTypeM tyXA)
      guardMsg (eqType tyA tA) "type of program body does not match types of abs/rep."
      h        <- constT (newIdH "h" tyXA)
@@ -479,7 +479,7 @@ verifyAssC :: CoreExpr          -- ^ abs
 verifyAssC abs rep f assC =
   prefixFailMsg ("verification of worker/wrapper assumption C failed: ") $
   do (tyA,_)  <- absRepTypes abs rep
-     tyXA     <- constT (endoFunType f)
+     tyXA     <- constT (endoFunExprType f)
      (tyX,tA) <- constT (splitFunTypeM tyXA)
      guardMsg (eqType tyA tA) "type of program body does not match types of abs/rep."
      h        <- constT (newIdH "h" tyXA)
@@ -492,6 +492,6 @@ verifyAssC abs rep f assC =
 
 absRepTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
 absRepTypes abs rep = setFailMsg "given expressions have the wrong types to form a valid abs/rep pair." $
-                      funsWithInverseTypes rep abs
+                      funExprsWithInverseTypes rep abs
 
 --------------------------------------------------------------------------------------------------

@@ -61,8 +61,9 @@ module HERMIT.Core
           , endoFunType
           , splitTyConAppM
           , splitFunTypeM
-          , funArgResTypes
-          , funsWithInverseTypes
+          , endoFunExprType
+          , funExprArgResTypes
+          , funExprsWithInverseTypes
           , appCount
           , mapAlts
 
@@ -383,24 +384,30 @@ splitTyConAppM = maybeM "splitTyConApp failed." . splitTyConApp_maybe
 splitFunTypeM :: Monad m => Type -> m (Type,Type)
 splitFunTypeM = maybeM "not a function type." . splitFunTy_maybe
 
+-- | Return the domain/codomain type of an endofunction type.
+endoFunType :: Monad m => Type -> m Type
+endoFunType ty =
+  do (ty1,ty2) <- splitFunTypeM ty
+     guardMsg (eqType ty1 ty2) ("argument and result types differ.")
+     return ty1
+
 -- | Return the domain/codomain type of an endofunction expression.
-endoFunType :: Monad m => CoreExpr -> m Type
-endoFunType f = do (ty1,ty2) <- funArgResTypes f
-                   guardMsg (eqType ty1 ty2) ("argument and result types differ.")
-                   return ty1
+endoFunExprType :: Monad m => CoreExpr -> m Type
+endoFunExprType = exprTypeM >=> endoFunType
 
 -- | Return the domain and codomain types of a function expression.
-funArgResTypes :: Monad m => CoreExpr -> m (Type,Type)
-funArgResTypes = exprTypeM >=> splitFunTypeM
+funExprArgResTypes :: Monad m => CoreExpr -> m (Type,Type)
+funExprArgResTypes = exprTypeM >=> splitFunTypeM
 
 -- | Check two expressions have types @a -> b@ and @b -> a@, returning @(a,b)@.
-funsWithInverseTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
-funsWithInverseTypes f g = do (fdom,fcod) <- funArgResTypes f
-                              (gdom,gcod) <- funArgResTypes g
-                              setFailMsg "functions do not have inverse types." $
-                                do guardM (eqType fdom gcod)
-                                   guardM (eqType gdom fcod)
-                                   return (fdom,fcod)
+funExprsWithInverseTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
+funExprsWithInverseTypes f g =
+  do (fdom,fcod) <- funExprArgResTypes f
+     (gdom,gcod) <- funExprArgResTypes g
+     setFailMsg "functions do not have inverse types." $
+       do guardM (eqType fdom gcod)
+          guardM (eqType gdom fcod)
+          return (fdom,fcod)
 
 -----------------------------------------------------------------------
 

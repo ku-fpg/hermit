@@ -140,7 +140,7 @@ verifyEqualityCommonTargetT lhs rhs (lhsR,rhsR) =
 -- | Given f :: X -> Y and g :: Y -> X, verify that f (g y) ==> y and g (f x) ==> x.
 verifyIsomorphismT :: CoreExpr -> CoreExpr -> Rewrite c HermitM CoreExpr -> Rewrite c HermitM CoreExpr -> Translate c HermitM a ()
 verifyIsomorphismT f g fgR gfR = prefixFailMsg "Isomorphism verification failed: " $
-   do (tyX, tyY) <- funsWithInverseTypes f g
+   do (tyX, tyY) <- funExprsWithInverseTypes f g
       x          <- constT (newGlobalIdH "x" tyX)
       y          <- constT (newGlobalIdH "y" tyY)
       verifyEqualityLeftToRightT (App f (App g (Var y))) (Var y) fgR
@@ -149,7 +149,7 @@ verifyIsomorphismT f g fgR gfR = prefixFailMsg "Isomorphism verification failed:
 -- | Given f :: X -> Y and g :: Y -> X, verify that f (g y) ==> y.
 verifyRetractionT :: CoreExpr -> CoreExpr -> Rewrite c HermitM CoreExpr -> Translate c HermitM a ()
 verifyRetractionT f g r = prefixFailMsg "Retraction verification failed: " $
-   do (_tyX, tyY) <- funsWithInverseTypes f g
+   do (_tyX, tyY) <- funExprsWithInverseTypes f g
       y           <- constT (newGlobalIdH "y" tyY)
       let lhs = App f (App g (Var y))
           rhs = Var y
@@ -163,7 +163,7 @@ retractionBR mr f g = beforeBiR
                          (prefixFailMsg "Retraction failed: " $
                           do whenJust (verifyRetractionT f g) mr
                              y        <- idR
-                             (_, tyY) <- funsWithInverseTypes f g
+                             (_, tyY) <- funExprsWithInverseTypes f g
                              guardMsg (exprKindOrType y `typeAlphaEq` tyY) "type of expression does not match given retraction components."
                              return y
                          )
@@ -189,9 +189,9 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 -- Note: assumes implicit ordering of variables, such that substitution happens to the right
 -- as it does in case alternatives.
 instantiateCoreExprEqVar :: Var -> CoreExpr -> CoreExprEquality -> CoreExprEquality
-instantiateCoreExprEqVar i e c@(CoreExprEquality bs lhs rhs) 
+instantiateCoreExprEqVar i e c@(CoreExprEquality bs lhs rhs)
     | i `notElem` bs = c
-    | otherwise = 
+    | otherwise =
         let (bs',_:vs)    = break (==i) bs -- this is safe because we know i is in bs
             inS           = delVarSetList (unionVarSets (map localFreeVarsExpr [lhs, rhs, e] ++ map freeVarsVar vs)) (i:vs)
             subst         = extendSubst (mkEmptySubst (mkInScopeSet inS)) i e
@@ -204,7 +204,7 @@ instantiateCoreExprEqVar i e c@(CoreExprEquality bs lhs rhs)
 -- It is important that all type variables appear before any value-level variables in the first argument.
 instantiateCoreExprEq :: [(Var,CoreExpr)] -> CoreExprEquality -> CoreExprEquality
 instantiateCoreExprEq = flip (foldr (uncurry instantiateCoreExprEqVar))
--- foldr is important here because it effectively does the substitutions in reverse order, 
+-- foldr is important here because it effectively does the substitutions in reverse order,
 -- which is what we want (all value variables should be instantiated before type variables).
 
 ------------------------------------------------------------------------------

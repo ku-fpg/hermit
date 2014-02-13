@@ -448,6 +448,6 @@ verifyAssC wrap unwrap f assC =
 
 wrapUnwrapTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
 wrapUnwrapTypes wrap unwrap = setFailMsg "given expressions have the wrong types to form a valid wrap/unwrap pair." $
-                              funsWithInverseTypes unwrap wrap
+                              funExprsWithInverseTypes unwrap wrap
 
 --------------------------------------------------------------------------------------------------
