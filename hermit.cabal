@@ -198,7 +198,6 @@ Library
        HERMIT.External
        HERMIT.GHC
        HERMIT.GHC.Typechecker
-       HERMIT.Interp
        HERMIT.Kernel
        HERMIT.Kernel.Scoped
        HERMIT.Kure
@@ -216,6 +215,7 @@ Library
 
        HERMIT.Shell.Command
        HERMIT.Shell.Dictionary
+       HERMIT.Shell.Interpreter
        HERMIT.Shell.Externals
        HERMIT.Shell.ScriptToRewrite
        HERMIT.Shell.Proof

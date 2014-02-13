@@ -11,12 +11,12 @@ import qualified Data.Map as M
 import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.External
-import HERMIT.Interp
 import HERMIT.Kernel.Scoped
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 
 import HERMIT.Shell.Dictionary
+import HERMIT.Shell.Interpreter
 import HERMIT.Shell.Proof as Proof
 import HERMIT.Shell.Renderer
 import HERMIT.Shell.Types

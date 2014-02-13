@@ -1,6 +1,6 @@
 {-# LANGUAGE KindSignatures, GADTs, InstanceSigs, FlexibleContexts, ScopedTypeVariables #-}
 
-module HERMIT.Interp -- TODO: move this module into Shell
+module HERMIT.Shell.Interpreter
         ( -- * The HERMIT Interpreter
           Interp
         , interp

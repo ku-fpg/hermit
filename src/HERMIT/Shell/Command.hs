@@ -33,7 +33,6 @@ import HERMIT.Core
 import HERMIT.Dictionary
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Interp
 import HERMIT.Kernel (queryK, AST)
 import HERMIT.Kernel.Scoped hiding (abortS, resumeS)
 import HERMIT.Kure
@@ -43,6 +42,7 @@ import HERMIT.PrettyPrinter.Clean (ppCoreTC)
 
 import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Externals
+import HERMIT.Shell.Interpreter
 import HERMIT.Shell.Proof
 import HERMIT.Shell.Renderer
 import HERMIT.Shell.ScriptToRewrite

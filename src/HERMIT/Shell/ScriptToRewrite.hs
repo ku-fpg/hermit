@@ -17,10 +17,11 @@ import Data.Map hiding (lookup)
 import HERMIT.Context(LocalPathH)
 import HERMIT.Kure
 import HERMIT.External
-import HERMIT.Interp
 import HERMIT.Parser(Script, ExprH, unparseExprH)
 
 import HERMIT.PrettyPrinter.Common(TranslateCoreTCDocHBox(..))
+
+import HERMIT.Shell.Interpreter
 import HERMIT.Shell.Types
 
 ------------------------------------
