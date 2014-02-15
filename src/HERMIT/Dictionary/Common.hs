@@ -207,7 +207,7 @@ findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
              contextonlyT (findId nm)
 
 findId :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => String -> c -> m Id
-findId nm c = case varSetElems (findBoundVars nm c) of
+findId nm c = case {- filter (isValName . idName) $ -} varSetElems (findBoundVars nm c) of
                 []         -> findIdMG nm c
                 [v]        -> return v
                 _ : _ : _  -> fail "multiple matching variables in scope."

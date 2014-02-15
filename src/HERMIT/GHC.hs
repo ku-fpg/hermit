@@ -174,9 +174,8 @@ cmpString2Var :: String -> Var -> Bool
 cmpString2Var str = cmpString2Name str . varName
 
 -- | Find 'Name's matching a given fully qualified or unqualified name.
--- If given name is fully qualified, will only return first result, which is assumed unique.
 findNamesFromString :: GlobalRdrEnv -> String -> [Name]
-findNamesFromString rdrEnv str | isQualified str = take 1 res
+findNamesFromString rdrEnv str | isQualified str = res
                                | otherwise       = res
     where res = [ nm | elt <- globalRdrEnvElts rdrEnv, let nm = gre_name elt, cmpString2Name str nm ]
 
