@@ -24,6 +24,7 @@ import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Rules
 
+import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
 import qualified HERMIT.PrettyPrinter.Clean as Clean
 
@@ -164,11 +165,11 @@ lemma ok st nm =
 
 --------------------------------------------------------------------------------------------------------
 
-performProofCommand :: MonadIO m => ProofCommand -> CLM m ()
+performProofCommand :: MonadIO m => ProofCommand -> CLT m ()
 performProofCommand (RuleToLemma nm) = do
-    st <- get
-    equality <- queryS (cl_kernel st) (getSingletonHermitRuleT nm >>> ruleToEqualityT :: TranslateH Core CoreExprEquality) (cl_kernel_env st) (cl_cursor st)
-    put $ st { cl_lemmas = (nm,equality,False) : cl_lemmas st }
+    st <- gets cl_pstate
+    equality <- queryS (ps_kernel st) (getSingletonHermitRuleT nm >>> ruleToEqualityT :: TranslateH Core CoreExprEquality) (mkKernelEnv st) (ps_cursor st)
+    modify $ \ s -> s { cl_lemmas = (nm,equality,False) : cl_lemmas s }
 
 performProofCommand (VerifyLemma nm proof) = do
     st <- get
@@ -178,37 +179,37 @@ performProofCommand (VerifyLemma nm proof) = do
 
 performProofCommand ShowLemmas = gets cl_lemmas >>= \ ls -> forM_ (reverse ls) printLemma
 
-printLemma :: MonadIO m => Lemma -> CLM m ()
+printLemma :: MonadIO m => Lemma -> CLT m ()
 printLemma (nm, CoreExprEquality bs lhs rhs, proven) = do
-    st <- get
-    let k    = cl_kernel st
-        env  = cl_kernel_env st
-        sast = cl_cursor st
-        pos  = cl_pretty_opts st
-        pp   = cl_pretty st
+    st <- gets cl_pstate
+    let k    = ps_kernel st
+        env  = mkKernelEnv st
+        sast = ps_cursor st
+        pos  = ps_pretty_opts st
+        pp   = ps_pretty st
         pr :: [Var] -> CoreExpr -> TranslateH Core DocH
         pr vs e = return e >>> withVarsInScope vs (extractT $ liftPrettyH pos pp)
     cl_putStr nm
     cl_putStrLn $ if proven then " (Proven)" else " (Not Proven)"
     unless (null bs) $ do
         forallDoc <- queryS k (return bs >>> extractT (liftPrettyH pos Clean.ppForallQuantification) :: TranslateH Core DocH) env sast -- TODO: rather than hardwiring the Clean PP here, we should store a pretty printer in the shell state, which should match the main PP, and be updated correspondingly.
-        liftIO $ cl_render st stdout pos (Right forallDoc)
+        liftIO $ ps_render st stdout pos (Right forallDoc)
     lDoc <- queryS k (pr bs lhs) env sast
     rDoc <- queryS k (pr bs rhs) env sast
-    liftIO $ cl_render st stdout pos (Right lDoc)
+    liftIO $ ps_render st stdout pos (Right lDoc)
     cl_putStrLn "=="
-    liftIO $ cl_render st stdout pos (Right rDoc)
+    liftIO $ ps_render st stdout pos (Right rDoc)
     cl_putStrLn ""
 
 --------------------------------------------------------------------------------------------------------
 
 -- | Prove a lemma using the given proof in the current kernel context.
 -- Required to fail if proof fails.
-prove :: MonadIO m => CoreExprEquality -> ProofH -> CLM m ()
+prove :: MonadIO m => CoreExprEquality -> ProofH -> CLT m ()
 prove equality (RewritingProof lp rp) = do
     (lrr, rrr) <- getRewrites (lp, rp)
-    st <- get
-    queryS (cl_kernel st) (return equality >>> verifyCoreExprEqualityT (lrr, rrr) :: TranslateH Core ()) (cl_kernel_env st) (cl_cursor st)
+    st <- gets cl_pstate
+    queryS (ps_kernel st) (return equality >>> verifyCoreExprEqualityT (lrr, rrr) :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
 
 -- InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]
 -- inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
@@ -216,10 +217,11 @@ prove equality (RewritingProof lp rp) = do
 --              -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM)
 --              -> Translate c HermitM CoreExprEquality ()
 prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
-    st <- get
+    st <- get 
+    let ps = cl_pstate st
 
     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $ soleElement (filter idPred bs)
-    cases <- queryS (cl_kernel st) (inductionCaseSplit bs i lhs rhs :: TranslateH Core [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]) (cl_kernel_env st) (cl_cursor st)
+    cases <- queryS (ps_kernel ps) (inductionCaseSplit bs i lhs rhs :: TranslateH Core [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]) (mkKernelEnv ps) (ps_cursor ps)
 
     forM_ cases $ \ (mdc,vs,lhsE,rhsE) -> do
 

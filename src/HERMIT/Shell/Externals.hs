@@ -98,28 +98,28 @@ shell_externals = map (.+ Shell)
        [ "show diff of two ASTs" ]                                              .+ VersionControl
    , external "set-pp-diffonly" (\ bStr -> CLSModify $ \ st ->
         case reads bStr of
-            [(b,"")] -> return $ st { cl_diffonly = b }
-            _        -> return st )
+            [(b,"")] -> return $ setDiffOnly st b
+            _        -> return st)
        [ "set-pp-diffonly <True|False>; False by default"
        , "print diffs rather than full code after a rewrite" ]
-   , external "set-fail-hard" (\ bStr -> CLSModify $ \ st ->
+   , external "set-fail-hard"   (\ bStr -> CLSModify $ \ st ->
         case reads bStr of
-            [(b,"")] -> return $ st { cl_failhard = b }
-            _        -> return st )
+            [(b,"")] -> return $ setFailHard st b
+            _        -> return st)
        [ "set-fail-hard <True|False>; False by default"
        , "any rewrite failure causes compilation to abort" ]
    , external "set-auto-corelint" (\ bStr -> CLSModify $ \ st ->
         case reads bStr of
-            [(b,"")] -> return $ st { cl_corelint = b }
+            [(b,"")] -> return $ setCoreLint st b
             _        -> return st )
        [ "set-auto-corelint <True|False>; False by default"
        , "run core lint type-checker after every rewrite, reverting on failure" ]
-   , external "set-pp"           (\ name -> CLSModify $ \ st ->
+   , external "set-pp"          (\ name -> CLSModify $ \ st ->
        case M.lookup name pp_dictionary of
          Nothing -> do
             putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
             return st
-         Just pp -> return $ st { cl_pretty = pp })
+         Just pp -> return $ setPretty st pp)
        [ "set the pretty printer"
        , "use 'set-pp ls' to list available pretty printers" ]
    , external "set-pp-renderer"    changeRenderer
@@ -129,16 +129,16 @@ shell_externals = map (.+ Shell)
    , external "dump"    Dump
        [ "dump <filename> <renderer> <width>"]
    , external "set-pp-width" (\ w -> CLSModify $ \ st ->
-        return $ st { cl_pretty_opts = updateWidthOption w (cl_pretty_opts st) })
+        return $ setPrettyOpts st (updateWidthOption w (cl_pretty_opts st)))
        ["set the width of the screen"]
    , external "set-pp-type" (\ str -> CLSModify $ \ st ->
         case reads str :: [(ShowOption,String)] of
-            [(opt,"")] -> return $ st { cl_pretty_opts = updateTypeShowOption opt (cl_pretty_opts st) }
+            [(opt,"")] -> return $ setPrettyOpts st (updateTypeShowOption opt (cl_pretty_opts st))
             _          -> return st)
        ["set how to show expression-level types (Show|Abstact|Omit)"]
    , external "set-pp-coercion" (\ str -> CLSModify $ \ st ->
         case reads str :: [(ShowOption,String)] of
-            [(opt,"")] -> return $ st { cl_pretty_opts = updateCoShowOption opt (cl_pretty_opts st) }
+            [(opt,"")] -> return $ setPrettyOpts st (updateCoShowOption opt (cl_pretty_opts st))
             _          -> return st)
        ["set how to show coercions (Show|Abstact|Omit)"]
    , external "{"   BeginScope
@@ -199,10 +199,10 @@ versionCmd whereTo st =
         Goto n -> do
             all_nds <- listS (cl_kernel st)
             if SAST n `elem` all_nds
-                then return $ st { cl_cursor = SAST n }
+                then return $ setCursor st (SAST n)
                 else fail $ "Cannot find AST #" ++ show n ++ "."
         GotoTag tag -> case lookup tag (vs_tags (cl_version st)) of
-                        Just sast -> return $ st { cl_cursor = sast }
+                        Just sast -> return $ setCursor st sast
                         Nothing   -> fail $ "Cannot find tag " ++ show tag ++ "."
         Step -> do
             let ns = [ edge | edge@(s,_,_) <- vs_graph (cl_version st), s == cl_cursor st ]
@@ -210,7 +210,7 @@ versionCmd whereTo st =
                 [] -> fail "Cannot step forward (no more steps)."
                 [(_,cmd,d) ] -> do
                     putStrLn $ "step : " ++ unparseExprH cmd
-                    return $ st { cl_cursor = d }
+                    return $ setCursor st d 
                 _ -> fail "Cannot step forward (multiple choices)"
         Back -> do
             let ns = [ edge | edge@(_,_,d) <- vs_graph (cl_version st), d == cl_cursor st ]
@@ -218,7 +218,7 @@ versionCmd whereTo st =
                 []         -> fail "Cannot step backwards (no more steps)."
                 [(s,cmd,_) ] -> do
                     putStrLn $ "back, unstepping : " ++ unparseExprH cmd
-                    return $ st { cl_cursor = s }
+                    return $ setCursor st s
                 _          -> fail "Cannot step backwards (multiple choices, impossible!)."
         AddTag tag -> do
             return $ st { cl_version = (cl_version st) { vs_tags = (tag, cl_cursor st) : vs_tags (cl_version st) }}

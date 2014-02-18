@@ -1,150 +1,220 @@
+{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, GeneralizedNewtypeDeriving, LambdaCase #-}
 module HERMIT.Plugin
     ( -- * The HERMIT Plugin
-      HermitPass
-    , hermitPlugin
-    , CorePass(..)
-    , getCorePass
-    , ghcPasses
-    , PhaseInfo(..)
-    , getPhaseFlag
-    )  where
+      hermitPlugin
+      -- ** Running translations
+    , query
+    , run
+      -- ** Using the shell
+    , interactive
+    , display
+    , setPretty
+    , setPrettyOptions
+      -- ** Active modifiers
+    , at
+    , phase
+    , after
+    , before
+    , until
+    , allPhases
+    , firstPhase
+    , lastPhase
+      -- ** Knobs and Dials
+    , getPhaseInfo
+    , modifyCLS
+      -- ** Types
+    , HPM
+    , hpmToIO
+    ) where
 
-import Data.List
-import System.IO
+import Control.Applicative
+import Control.Arrow
+import Control.Concurrent.STM
+import Control.Monad.Error hiding (guard)
+import Control.Monad.Operational
+import Control.Monad.State hiding (guard)
 
-import HERMIT.GHC
+import Data.Default
+import Data.Monoid
+import qualified Data.Map as M
 
--- | Given a list of 'CommandLineOption's, produce the 'ModGuts' to 'ModGuts' function required to build a plugin.
-type HermitPass = PhaseInfo -> [CommandLineOption] -> ModGuts -> CoreM ModGuts
+import HERMIT.Dictionary
+import HERMIT.External hiding (Query, Shell)
+import HERMIT.Kernel.Scoped
+import HERMIT.Context
+import HERMIT.Kure
+import HERMIT.GHC hiding (singleton, liftIO, display, (<>))
+import qualified HERMIT.GHC as GHC
+import HERMIT.Monad
 
--- | Build a hermit plugin. This mainly handles the per-module options.
-hermitPlugin :: HermitPass -> Plugin
-hermitPlugin hp = defaultPlugin { installCoreToDos = install }
-    where
-        install :: [CommandLineOption] -> [CoreToDo] -> CoreM [CoreToDo]
-        install opts todos = do
-            reinitializeGlobals
+import HERMIT.Plugin.Builder
+import qualified HERMIT.Plugin.Display as Display
+import HERMIT.Plugin.Types
 
-            -- This is a bit of a hack; otherwise we lose what we've not seen
-            liftIO $ hSetBuffering stdout NoBuffering
+import HERMIT.PrettyPrinter.Common
+import qualified HERMIT.PrettyPrinter.Clean as Clean
+import HERMIT.Shell.Command
+import HERMIT.Shell.Types (clm)
 
-            let todos' = flattenTodos todos
-                passes = map getCorePass todos'
-                allPasses = foldr (\ (n,p,seen,notyet) r -> mkPass n seen notyet : p : r)
-                                  [mkPass (length todos') passes []]
-                                  (zip4 [0..] todos' (inits passes) (tails passes))
-                mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n) $ modFilter hp (PhaseInfo n ps ps') opts
+import Prelude hiding (until)
 
-            return allPasses
+import System.Console.Haskeline (defaultBehavior)
 
--- | Determine whether to act on this module, choose plugin pass.
--- NB: we have the ability to stick module info in the phase info here
-modFilter :: HermitPass -> HermitPass
-modFilter hp pInfo opts guts
-    | null modOpts && notNull opts = return guts -- don't process this module
-    | otherwise                    = hp pInfo (h_opts ++ filter notNull modOpts) guts
-    where modOpts = filterOpts m_opts guts
-          (m_opts, h_opts) = partition (isInfixOf ":") opts
+hermitPlugin :: ([CommandLineOption] -> HPM ()) -> Plugin
+hermitPlugin f = buildPlugin $ \ phaseInfo -> runHPM phaseInfo . f
 
--- | Filter options to those pertaining to this module, stripping module prefix.
-filterOpts :: [CommandLineOption] -> ModGuts -> [CommandLineOption]
-filterOpts opts guts = [ opt | nm <- opts
-                             , let mopt = if modName `isPrefixOf` nm
-                                          then Just (drop len nm)
-                                          else if "*:" `isPrefixOf` nm
-                                               then Just (drop 2 nm)
-                                               else Nothing
-                             , Just opt <- [mopt]
-                             ]
-    where modName = moduleNameString $ moduleName $ mg_module guts
-          len = length modName + 1 -- for the colon
+data HPMInst :: * -> * where
+    Shell    :: [External] -> [CommandLineOption] -> HPMInst ()
+    Guard    :: (PhaseInfo -> Bool) -> HPM ()     -> HPMInst ()
+    Focus    :: (Injection ModGuts g, Walker HermitC g) => TranslateH g LocalPathH -> HPM a -> HPMInst a
+    RR       :: (Injection ModGuts g, Walker HermitC g) => RewriteH g                       -> HPMInst ()
+    Query    :: (Injection ModGuts g, Walker HermitC g) => TranslateH g a                   -> HPMInst a
 
-data CorePass = FloatInwards
-              | LiberateCase
-              | PrintCore
-              | StaticArgs
-              | Strictness
-              | WorkerWrapper
-              | Specialising
-              | SpecConstr
-              | CSE
-              | Vectorisation
-              | Desugar
-              | DesugarOpt
-              | Tidy
-              | Prep
-              | Simplify
-              | FloatOutwards
-              | RuleCheck
-              | Passes -- these should be flattened out in practice
-              | PluginPass String
-              | NoOp
-              | Unknown
-    deriving (Read, Show, Eq)
+newtype HPM a = HPM { unHPM :: ProgramT HPMInst PluginM a }
+    deriving (Functor, Applicative, Monad, MonadIO)
 
-ghcPasses :: [(CorePass, CoreToDo)]
-ghcPasses = [ (FloatInwards , CoreDoFloatInwards)
-            , (LiberateCase , CoreLiberateCase)
-            , (PrintCore    , CoreDoPrintCore)
-            , (StaticArgs   , CoreDoStaticArgs)
-            , (Strictness   , CoreDoStrictness)
-            , (WorkerWrapper, CoreDoWorkerWrapper)
-            , (Specialising , CoreDoSpecialising)
-            , (SpecConstr   , CoreDoSpecConstr)
-            , (CSE          , CoreCSE)
-            , (Vectorisation, CoreDoVectorisation)
-            , (Desugar      , CoreDesugar)    -- Right after desugaring, no simple optimisation yet!
-            , (DesugarOpt   , CoreDesugarOpt) -- CoreDesugarXXX: Not strictly a core-to-core pass, but produces
-            , (Tidy         , CoreTidy)
-            , (Prep         , CorePrep)
-            , (NoOp         , CoreDoNothing)
-            ]
+runHPM :: PhaseInfo -> HPM () -> ModGuts -> CoreM ModGuts
+runHPM phaseInfo pass = scopedKernel $ \ kernel initSAST -> do
+    tick <- liftIO $ atomically $ newTVar M.empty
+    let initState = PluginState
+                       { ps_cursor         = initSAST
+                       , ps_pretty         = Clean.ppCoreTC
+                       , ps_pretty_opts    = def { po_width = 80 }
+                       , ps_render         = unicodeConsole
+                       , ps_running_script = False
+                       , ps_tick           = tick
+                       , ps_corelint       = False
+                       , ps_diffonly       = False
+                       , ps_failhard       = False
+                       , ps_kernel         = kernel
+                       , ps_phase          = phaseInfo
+                       }
 
--- The following are not allowed yet because they required options.
--- CoreDoSimplify {- The core-to-core simplifier. -} Int {- Max iterations -} SimplifierMode
--- CoreDoFloatOutwards FloatOutSwitches
--- CoreDoRuleCheck CompilerPhase String   -- Check for non-application of rules matching this string
--- CoreDoPasses [CoreToDo]                -- lists of these things
+    (r,st) <- hpmToIO initState pass
+    either (\case PAbort       -> abortS kernel
+                  PResume sast -> resumeS kernel sast
+                  PError  err  -> putStrLn err >> abortS kernel)
+           (\ _ -> resumeS kernel $ ps_cursor st) r
 
-getCorePass :: CoreToDo -> CorePass
-getCorePass CoreDoFloatInwards  = FloatInwards
-getCorePass CoreLiberateCase    = LiberateCase
-getCorePass CoreDoPrintCore     = PrintCore
-getCorePass CoreDoStaticArgs    = StaticArgs
-getCorePass CoreDoStrictness    = Strictness
-getCorePass CoreDoWorkerWrapper = WorkerWrapper
-getCorePass CoreDoSpecialising  = Specialising
-getCorePass CoreDoSpecConstr    = SpecConstr
-getCorePass CoreCSE             = CSE
-getCorePass CoreDoVectorisation = Vectorisation
-getCorePass CoreDesugar         = Desugar
-getCorePass CoreDesugarOpt      = DesugarOpt
-getCorePass CoreTidy            = Tidy
-getCorePass CorePrep            = Prep
-getCorePass (CoreDoSimplify {}) = Simplify
-getCorePass (CoreDoFloatOutwards {}) = FloatOutwards
-getCorePass (CoreDoRuleCheck {}) = RuleCheck
-getCorePass (CoreDoPasses {})   = Passes -- these should be flattened out in practice
-getCorePass (CoreDoPluginPass nm _) = PluginPass nm
-getCorePass CoreDoNothing       = NoOp
--- getCorePass _                   = Unknown
+hpmToIO :: PluginState -> HPM a -> IO (Either PException a, PluginState)
+hpmToIO initState = runPluginT initState . eval . unHPM
 
-flattenTodos :: [CoreToDo] -> [CoreToDo]
-flattenTodos = concatMap f
-    where f (CoreDoPasses ps) = flattenTodos ps
-          f CoreDoNothing     = []
-          f other             = [other]
+eval :: ProgramT HPMInst PluginM a -> PluginM a
+eval comp = do
+    (kernel, env) <- gets $ ps_kernel &&& mkKernelEnv
+    v <- viewT comp
+    case v of
+        Return x            -> return x
+        RR rr       :>>= k  -> runS (applyS kernel rr env) >>= eval . k
+        Query tr    :>>= k  -> runK (queryS kernel tr env) >>= eval . k
+        Shell es os :>>= k -> do
+            -- We want to discard the current focus, open the shell at
+            -- the top level, then restore the current focus.
+            paths <- resetScoping env
+            clm (commandLine os defaultBehavior es)
+            _ <- resetScoping env
+            restoreScoping env paths
+            eval $ k ()
+        Guard p (HPM m)  :>>= k  -> gets (p . ps_phase) >>= \ b -> when b (eval m) >>= eval . k
+        Focus tp (HPM m) :>>= k  -> do
+            sast <- gets ps_cursor
+            p <- queryS kernel tp env sast    -- run the pathfinding translation
+            runS $ beginScopeS kernel         -- remember the current path
+            runS $ modPathS kernel (<> p) env -- modify the current path
+            r <- eval m             -- run the focused computation
+            runS $ endScopeS kernel           -- endscope on it, so we go back to where we started
+            eval $ k r
 
-data PhaseInfo =
-    PhaseInfo { phaseNum :: Int
-              , phasesDone :: [CorePass]
-              , phasesLeft :: [CorePass]
-              }
-    deriving (Read, Show, Eq)
+------------------------- Shell-related helpers --------------------------------------
 
--- | If HERMIT user specifies the -pN flag, get the N
--- TODO: as written will discard other flags that start with -p
-getPhaseFlag :: [CommandLineOption] -> Maybe (Int, [CommandLineOption])
-getPhaseFlag opts = case partition ("-p" `isPrefixOf`) opts of
-                        ([],_) -> Nothing
-                        (ps,r) -> Just (read (drop 2 (last ps)), r)
+resetScoping :: HermitMEnv -> PluginM [PathH]
+resetScoping env = do
+    kernel <- gets ps_kernel
+    paths <- runK $ pathS kernel
+    replicateM_ (length paths - 1) $ runS $ endScopeS kernel
+    -- modPathS commonly fails here because the path is unchanged, so throw away failures
+    catchM (runS $ modPathS kernel (const mempty) env) (const (return ()))
+    return paths
+
+restoreScoping :: HermitMEnv -> [PathH] -> PluginM ()
+restoreScoping _   []    = return ()
+restoreScoping env (h:t) = do
+    kernel <- gets ps_kernel
+
+    let go p []      = restore p
+        go p (p':ps) = restore p >> runS (beginScopeS kernel) >> go p' ps
+
+        -- modPathS commonly fails here because the path is unchanged, so throw away failures
+        restore p = catchM (runS $ modPathS kernel (<> pathToSnocPath p) env)
+                           (const (return ()))
+
+    go h t
+
+-- | Run a kernel function on the current SAST
+runK :: (SAST -> PluginM a) -> PluginM a
+runK f = gets ps_cursor >>= f
+
+-- | Run a kernel function on the current SAST and update ps_cursor
+runS :: (SAST -> PluginM SAST) -> PluginM ()
+runS f = do
+    sast <- runK f
+    modify $ \st -> st { ps_cursor = sast }
+
+interactive :: [External] -> [CommandLineOption] -> HPM ()
+interactive es os = HPM . singleton $ Shell (externals ++ es) os
+
+run :: RewriteH CoreTC -> HPM ()
+run = HPM . singleton . RR
+
+query :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g a -> HPM a
+query = HPM . singleton . Query
+
+----------------------------- guards ------------------------------
+
+guard :: (PhaseInfo -> Bool) -> HPM () -> HPM ()
+guard p = HPM . singleton . Guard p
+
+at :: TranslateH CoreTC LocalPathH -> HPM a -> HPM a
+at tp = HPM . singleton . Focus tp
+
+phase :: Int -> HPM () -> HPM ()
+phase n = guard ((n ==) . phaseNum)
+
+after :: CorePass -> HPM () -> HPM ()
+after cp = guard (\phaseInfo -> case phasesDone phaseInfo of
+                            [] -> False
+                            xs -> last xs == cp)
+
+before :: CorePass -> HPM () -> HPM ()
+before cp = guard (\phaseInfo -> case phasesLeft phaseInfo of
+                            (x:_) | cp == x -> True
+                            _               -> False)
+
+until :: CorePass -> HPM () -> HPM ()
+until cp = guard ((cp `elem`) . phasesLeft)
+
+allPhases :: HPM () -> HPM ()
+allPhases = guard (const True)
+
+firstPhase :: HPM () -> HPM ()
+firstPhase = guard (null . phasesDone)
+
+lastPhase :: HPM () -> HPM ()
+lastPhase = guard (null . phasesLeft)
+
+----------------------------- other ------------------------------
+
+getPhaseInfo :: HPM PhaseInfo
+getPhaseInfo = HPM $ lift $ gets ps_phase
+
+display :: HPM ()
+display = HPM $ lift $ Display.display Nothing
+
+modifyCLS :: (PluginState -> PluginState) -> HPM ()
+modifyCLS = HPM . modify
+
+setPretty :: PrettyH CoreTC -> HPM ()
+setPretty pp = modifyCLS $ \s -> s { ps_pretty = pp }
+
+setPrettyOptions :: PrettyOptions -> HPM ()
+setPrettyOptions po = modifyCLS $ \s -> s { ps_pretty_opts = po }

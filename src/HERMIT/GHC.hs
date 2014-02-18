@@ -47,17 +47,17 @@ module HERMIT.GHC
 -- GHC 7.6
 import qualified Control.Monad.IO.Class
 import qualified MonadUtils (MonadIO,liftIO)
-import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, liftIO)
+import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, liftIO, PluginPass)
 #else
 #if __GLASGOW_HASKELL__ < 708
 -- TODO: remove this case once 7.8 comes out, only here because
 -- my HEAD installs are pre-8522 patch, and I don't want to rebuild
 -- on four different machines just yet.
 -- GHC 7.7.XXX
-import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType) -- we hide these so that they don't get inadvertently used.  See Core.hs
+import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, PluginPass) -- we hide these so that they don't get inadvertently used.  See Core.hs
 #else
 -- GHC 7.8
-import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars) -- we hide these so that they don't get inadvertently used.  See Core.hs
+import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass) -- we hide these so that they don't get inadvertently used.  See Core.hs
 #endif
 #endif
 

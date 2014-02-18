@@ -37,6 +37,10 @@ import HERMIT.Kernel (queryK, AST)
 import HERMIT.Kernel.Scoped hiding (abortS, resumeS)
 import HERMIT.Kure
 import HERMIT.Parser
+
+import HERMIT.Plugin.Display
+import HERMIT.Plugin.Types
+
 import HERMIT.PrettyPrinter.Common
 import HERMIT.PrettyPrinter.Clean (ppCoreTC)
 
@@ -53,19 +57,18 @@ import System.IO.Temp
 import System.Process
 
 -- import System.Console.ANSI
-import System.Console.Haskeline hiding (catch)
-import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, termLines)
+import System.Console.Haskeline hiding (catch, display)
 
 ----------------------------------------------------------------------------------
 
 catch :: IO a -> (String -> IO a) -> IO a
 catch = catchJust (\ (err :: IOException) -> return (show err))
 
-fixWindow :: MonadIO m => CLM m ()
+fixWindow :: MonadIO m => CLT m ()
 fixWindow = do
     st <- get
     -- check to make sure new path is still inside window
-    focusPath <- getFocusPath
+    focusPath <- pluginM getFocusPath
     -- move the window in two cases:
     --  1. window path is not prefix of focus path
     --  2. window path is empty (since at the top level we only show type sigs)
@@ -73,24 +76,8 @@ fixWindow = do
        $ put $ st { cl_window = focusPath } -}
     put $ st { cl_window = focusPath } -- TODO: temporary until we figure out a better highlight interface
 
-getFocusPath :: MonadIO m => CLM m PathH
-getFocusPath = get >>= \ st -> liftM concat $ prefixFailMsg "getFocusPath - pathS failed: " $ pathS (cl_kernel st) (cl_cursor st)
-
-showWindow :: MonadIO m => CLM m ()
-showWindow = do
-    fixWindow
-    st <- get
-    focusPath <- getFocusPath
-    let skernel = cl_kernel st
-        ppOpts = (cl_pretty_opts st) { po_focus = Just focusPath }
-    -- Do not show focus while loading
-    ifM (gets cl_running_script)
-        (return ())
-        (iokm2clm' "Rendering error: "
-                   (liftIO . cl_render st stdout ppOpts . Right)
-                   (toASTS skernel (cl_cursor st) >>= \ ast ->
-                        queryK (kernelS skernel) ast (extractT $ pathT (cl_window st) $ liftPrettyH ppOpts $ cl_pretty st) (cl_kernel_env st))
-        )
+showWindow :: MonadIO m => CLT m ()
+showWindow = fixWindow >> gets cl_window >>= pluginM . display . Just
 
 -------------------------------------------------------------------------------
 
@@ -145,8 +132,8 @@ shellComplete mvar rPrev so_far = do
     cl <- catchM (queryS (cl_kernel st) targetQuery (cl_kernel_env st) (cl_cursor st)) (\_ -> return [])
     return $ (map simpleCompletion . nub . filter (so_far `isPrefixOf`)) cl
 
-setRunningScript :: MonadIO m => Bool -> CLM m ()
-setRunningScript b = modify $ \st -> st { cl_running_script = b }
+setRunningScript :: MonadIO m => Bool -> CLT m ()
+setRunningScript b = modify $ \st -> st { cl_pstate = (cl_pstate st) { ps_running_script = b } }
 
 banner :: String
 banner = unlines
@@ -174,38 +161,18 @@ banner = unlines
     , "=============================================================="
     ]
 
-getTermDimensions :: IO (Int, Int)
-getTermDimensions = do
-    term <- setupTermFromEnv
-    let w = fromMaybe 80 $ getCapability term termColumns
-        h = fromMaybe 30 $ getCapability term termLines
-    return (w,h)
-
 -- | The first argument includes a list of files to load.
-commandLine :: MonadIO m => [GHC.CommandLineOption] -> Behavior -> [External] -> CLM m ()
+commandLine :: [GHC.CommandLineOption] -> Behavior -> [External] -> CLT IO ()
 commandLine opts behavior exts = do
-    let dict = mkDict $ shell_externals ++ exts
+    let (flags, filesToLoad) = partition (isPrefixOf "-") opts
         ws_complete = " ()"
-        (flags, filesToLoad) = partition (isPrefixOf "-") opts
 
-    (w,h) <- liftIO getTermDimensions
+    modify $ \ st -> st { cl_dict = mkDict (shell_externals ++ exts) }
 
-    -- initialize shell-instance specific parts of the state
-    -- TODO: move into another transformer layer?
-    initState <- get
-    let clState = initState { cl_version     = VersionStore { vs_graph = [] , vs_tags = [] }
-                            , cl_scripts     = []
-                            , cl_lemmas      = []
-                            , cl_dict        = dict
-                            , cl_pretty_opts = (cl_pretty_opts initState) { po_width = w }
-                            , cl_height      = h
-                            , cl_initSAST    = cl_cursor initState
-                            }
-    put clState
-
+    clState <- get
     completionMVar <- liftIO $ newMVar clState
 
-    let loop :: (MonadIO m, MonadException m) => CLM (InputT m) ()
+    let loop :: CLT (InputT IO) ()
         loop = do
             st <- get
             let SAST n = cl_cursor st
@@ -240,22 +207,22 @@ commandLine opts behavior exts = do
     -- Start the CLI
     showWindow
     let settings = setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings
-    (r,s) <- get >>= liftIO . runInputTBehavior behavior settings . flip runCLM loop
+    (r,s) <- get >>= liftIO . runInputTBehavior behavior settings . flip runCLT loop
     either throwError (\v -> put s >> return v) r
 
-ourCatch :: MonadIO m => CLM m () -> (String -> CLM m ()) -> CLM m ()
+ourCatch :: MonadIO m => CLT m () -> (String -> CLT m ()) -> CLT m ()
 ourCatch m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display >> cl_putStrLn msg >> abort) (failure msg)
 
-evalScript :: MonadIO m => String -> CLM m ()
-evalScript = parseScriptCLM >=> runScript
+evalScript :: MonadIO m => String -> CLT m ()
+evalScript = parseScriptCLT >=> runScript
 
-parseScriptCLM :: Monad m => String -> CLM m Script
-parseScriptCLM = either fail return . parseScript
+parseScriptCLT :: Monad m => String -> CLT m Script
+parseScriptCLT = either fail return . parseScript
 
-runScript :: MonadIO m => Script -> CLM m ()
+runScript :: MonadIO m => Script -> CLT m ()
 runScript = mapM_ runExprH
 
-runExprH :: MonadIO m => ExprH -> CLM m ()
+runExprH :: MonadIO m => ExprH -> CLT m ()
 runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
     shellCmd <- interpExprH interpShellCommand expr
     case shellCmd of
@@ -264,7 +231,7 @@ runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "
         QueryFun query      -> performQuery query
         ProofCommand cmd    -> performProofCommand cmd
 
-ppWholeProgram :: MonadIO m => AST -> CLM m DocH
+ppWholeProgram :: MonadIO m => AST -> CLT m DocH
 ppWholeProgram ast = do
     st <- get
     liftIO (queryK (kernelS $ cl_kernel st)
@@ -278,7 +245,7 @@ ppWholeProgram ast = do
 --   UPDATE: Not true.  We don't always showWindow.
 -- TODO: All of these should through an exception if they fail to execute the command as given.
 
-performKernelEffect :: MonadIO m => KernelEffect -> ExprH -> CLM m ()
+performKernelEffect :: MonadIO m => KernelEffect -> ExprH -> CLT m ()
 performKernelEffect (Apply rr) expr = do
     st <- get
 
@@ -339,7 +306,7 @@ performKernelEffect (CorrectnessCritera q) expr = do
 
 -------------------------------------------------------------------------------
 
-performQuery :: MonadIO m => QueryFun -> CLM m ()
+performQuery :: MonadIO m => QueryFun -> CLT m ()
 performQuery (QueryString q) = do
     st <- get
     str <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
@@ -384,7 +351,7 @@ performQuery Display = do
 
 -------------------------------------------------------------------------------
 
-performShellEffect :: MonadIO m => ShellEffect -> CLM m ()
+performShellEffect :: MonadIO m => ShellEffect -> CLT m ()
 performShellEffect (SeqMeta ms) = mapM_ performShellEffect ms
 performShellEffect Abort  = abort
 performShellEffect Resume = do
@@ -408,7 +375,7 @@ performShellEffect (LoadFile scriptName fileName) =
      res <- liftIO $ try (readFile fileName)
      case res of
        Left (err :: IOException) -> fail ("IO error: " ++ show err)
-       Right str -> do script <- parseScriptCLM str
+       Right str -> do script <- parseScriptCLT str
                        modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
                        putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
 
@@ -424,7 +391,7 @@ performShellEffect (ScriptToRewrite rewriteName scriptName) =
      putStrToConsole ("Rewrite \"" ++ rewriteName ++ "\" defined successfully.")
 
 performShellEffect (DefineScript scriptName str) =
-  do script <- parseScriptCLM str
+  do script <- parseScriptCLT str
      modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
      putStrToConsole ("Script \"" ++ scriptName ++ "\" defined successfully.")
 
@@ -453,7 +420,7 @@ performShellEffect (CLSModify f) = do
 -------------------------------------------------------------------------------
 
 -- TODO: merge with cl_putStr defn
-putStrToConsole :: MonadIO m => String -> CLM m ()
+putStrToConsole :: MonadIO m => String -> CLT m ()
 putStrToConsole str = ifM (gets cl_running_script)
                           (return ())
                           (cl_putStrLn str)

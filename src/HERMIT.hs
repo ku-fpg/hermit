@@ -3,9 +3,9 @@ module HERMIT (plugin) where
 import Data.Maybe (fromMaybe)
 
 import HERMIT.GHC
-import HERMIT.Optimize
-import HERMIT.Plugin (getPhaseFlag)
+import HERMIT.Plugin.Builder (getPhaseFlag)
+import HERMIT.Plugin
 
 plugin :: Plugin
-plugin = optimize $ \ options -> let (pn,opts) = fromMaybe (0,options) (getPhaseFlag options)
-                                 in phase pn $ interactive [] opts
+plugin = hermitPlugin $ \ options -> let (pn,opts) = fromMaybe (0,options) (getPhaseFlag options)
+                                     in phase pn $ interactive [] opts

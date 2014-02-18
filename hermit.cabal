@@ -203,10 +203,13 @@ Library
        HERMIT.Kure
        HERMIT.Kure.SumTypes
        HERMIT.Monad
-       HERMIT.Optimize
        HERMIT.Parser
        HERMIT.ParserCore
+
        HERMIT.Plugin
+       HERMIT.Plugin.Builder
+       HERMIT.Plugin.Display
+       HERMIT.Plugin.Types
 
        HERMIT.PrettyPrinter.AST
        HERMIT.PrettyPrinter.Clean

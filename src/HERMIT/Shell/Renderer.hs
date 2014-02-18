@@ -4,6 +4,7 @@ import Data.List (isPrefixOf)
 import Data.Monoid
 
 import HERMIT.Kure
+import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
 
 import HERMIT.Shell.Types
@@ -19,7 +20,7 @@ changeRenderer :: String -> ShellEffect
 changeRenderer renderer = CLSModify $ \ st ->
         case lookup renderer shellRenderers of
           Nothing -> return st          -- TODO: should fail with message
-          Just r  -> return $ st { cl_render = r }
+          Just r  -> return $ st { cl_pstate = (cl_pstate st) { ps_render = r } }
 
 -------------------------------------------------------------------------------
 
