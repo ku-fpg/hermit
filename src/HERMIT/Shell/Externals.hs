@@ -13,12 +13,12 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.Kernel.Scoped
 import HERMIT.Parser
+import HERMIT.Plugin.Renderer
 import HERMIT.PrettyPrinter.Common
 
 import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.Proof as Proof
-import HERMIT.Shell.Renderer
 import HERMIT.Shell.Types
 
 ----------------------------------------------------------------------------------
@@ -122,7 +122,7 @@ shell_externals = map (.+ Shell)
          Just pp -> return $ setPretty st pp)
        [ "set the pretty printer"
        , "use 'set-pp ls' to list available pretty printers" ]
-   , external "set-pp-renderer"    changeRenderer
+   , external "set-pp-renderer"    (PluginComp . changeRenderer)
        [ "set the output renderer mode"]
    , external "set-pp-renderer"    showRenderers
        [ "set the output renderer mode"]
@@ -190,6 +190,9 @@ setWindow :: CommandLineState -> IO CommandLineState
 setWindow st = do
     paths <- concat <$> pathS (cl_kernel st) (cl_cursor st)
     return $ st { cl_window = paths }
+
+showRenderers :: QueryFun
+showRenderers = message $ "set-renderer " ++ show (map fst shellRenderers)
 
 --------------------------------------------------------
 

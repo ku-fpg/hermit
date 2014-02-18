@@ -1,4 +1,6 @@
-module HERMIT.Shell.Renderer where
+module HERMIT.Plugin.Renderer where
+
+import Control.Monad.State
 
 import Data.List (isPrefixOf)
 import Data.Monoid
@@ -7,20 +9,16 @@ import HERMIT.Kure
 import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
 
-import HERMIT.Shell.Types
+-- import HERMIT.Shell.Types
 
 import System.Console.ANSI
 import System.IO
 
-
-showRenderers :: QueryFun
-showRenderers = message $ "set-renderer " ++ show (map fst shellRenderers)
-
-changeRenderer :: String -> ShellEffect
-changeRenderer renderer = CLSModify $ \ st ->
+changeRenderer :: String -> PluginM ()
+changeRenderer renderer = modify $ \ st ->
         case lookup renderer shellRenderers of
-          Nothing -> return st          -- TODO: should fail with message
-          Just r  -> return $ st { cl_pstate = (cl_pstate st) { ps_render = r } }
+          Nothing -> st          -- TODO: should fail with message
+          Just r  -> st { ps_render = r }
 
 -------------------------------------------------------------------------------
 

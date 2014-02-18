@@ -82,6 +82,7 @@ type RewriteName = String
 data ShellEffect
     = Abort -- ^ Abort GHC
     | CLSModify (CommandLineState -> IO CommandLineState) -- ^ Modify shell state
+    | PluginComp (PluginM ())
     | Continue -- ^ exit the shell, but don't abort/resume
     | DefineScript ScriptName String
     | Dump String String Int

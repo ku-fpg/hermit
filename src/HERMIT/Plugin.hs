@@ -23,6 +23,7 @@ module HERMIT.Plugin
     , getPhaseInfo
     , modifyCLS
       -- ** Types
+    , defPS
     , HPM
     , hpmToIO
     ) where
@@ -49,6 +50,7 @@ import HERMIT.Monad
 
 import HERMIT.Plugin.Builder
 import qualified HERMIT.Plugin.Display as Display
+import HERMIT.Plugin.Renderer
 import HERMIT.Plugin.Types
 
 import HERMIT.PrettyPrinter.Common
@@ -63,6 +65,23 @@ import System.Console.Haskeline (defaultBehavior)
 hermitPlugin :: ([CommandLineOption] -> HPM ()) -> Plugin
 hermitPlugin f = buildPlugin $ \ phaseInfo -> runHPM phaseInfo . f
 
+defPS :: SAST -> ScopedKernel -> PhaseInfo -> IO PluginState
+defPS initSAST kernel phaseInfo = do
+    emptyTick <- liftIO $ atomically $ newTVar M.empty
+    return $ PluginState
+                { ps_cursor         = initSAST
+                , ps_pretty         = Clean.ppCoreTC
+                , ps_pretty_opts    = def { po_width = 80 }
+                , ps_render         = unicodeConsole
+                , ps_running_script = False
+                , ps_tick           = emptyTick
+                , ps_corelint       = False
+                , ps_diffonly       = False
+                , ps_failhard       = False
+                , ps_kernel         = kernel
+                , ps_phase          = phaseInfo
+                }
+
 data HPMInst :: * -> * where
     Shell    :: [External] -> [CommandLineOption] -> HPMInst ()
     Guard    :: (PhaseInfo -> Bool) -> HPM ()     -> HPMInst ()
@@ -75,22 +94,8 @@ newtype HPM a = HPM { unHPM :: ProgramT HPMInst PluginM a }
 
 runHPM :: PhaseInfo -> HPM () -> ModGuts -> CoreM ModGuts
 runHPM phaseInfo pass = scopedKernel $ \ kernel initSAST -> do
-    tick <- liftIO $ atomically $ newTVar M.empty
-    let initState = PluginState
-                       { ps_cursor         = initSAST
-                       , ps_pretty         = Clean.ppCoreTC
-                       , ps_pretty_opts    = def { po_width = 80 }
-                       , ps_render         = unicodeConsole
-                       , ps_running_script = False
-                       , ps_tick           = tick
-                       , ps_corelint       = False
-                       , ps_diffonly       = False
-                       , ps_failhard       = False
-                       , ps_kernel         = kernel
-                       , ps_phase          = phaseInfo
-                       }
-
-    (r,st) <- hpmToIO initState pass
+    ps <- defPS initSAST kernel phaseInfo
+    (r,st) <- hpmToIO ps pass
     either (\case PAbort       -> abortS kernel
                   PResume sast -> resumeS kernel sast
                   PError  err  -> putStrLn err >> abortS kernel)

@@ -39,6 +39,7 @@ import HERMIT.Kure
 import HERMIT.Parser
 
 import HERMIT.Plugin.Display
+import HERMIT.Plugin.Renderer
 import HERMIT.Plugin.Types
 
 import HERMIT.PrettyPrinter.Common
@@ -48,7 +49,6 @@ import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Externals
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.Proof
-import HERMIT.Shell.Renderer
 import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.Types
 
@@ -416,6 +416,8 @@ performShellEffect (CLSModify f) = do
     case opt of
         Right st' -> put st' >> showWindow
         Left err  -> fail err
+
+performShellEffect (PluginComp m) = pluginM m
 
 -------------------------------------------------------------------------------
 

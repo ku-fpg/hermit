@@ -209,6 +209,7 @@ Library
        HERMIT.Plugin
        HERMIT.Plugin.Builder
        HERMIT.Plugin.Display
+       HERMIT.Plugin.Renderer
        HERMIT.Plugin.Types
 
        HERMIT.PrettyPrinter.AST
@@ -222,7 +223,6 @@ Library
        HERMIT.Shell.Externals
        HERMIT.Shell.ScriptToRewrite
        HERMIT.Shell.Proof
-       HERMIT.Shell.Renderer
        HERMIT.Shell.Types
 
        HERMIT.Utilities
