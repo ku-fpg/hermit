@@ -48,6 +48,7 @@ import Data.List
 import Data.Monoid
 
 import Control.Arrow
+import Control.Monad
 
 import HERMIT.Kure
 import HERMIT.Core
@@ -216,7 +217,8 @@ findIdMG :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => St
 findIdMG nm c =
     case filter isValName $ findNamesFromString (hermitGlobalRdrEnv c) nm of
       []  -> findIdBuiltIn nm
-      [n] -> lookupId n
+      [n] | isVarName n     -> lookupId n 
+          | isDataConName n ->  liftM dataConWrapId $ lookupDataCon n
       ns  -> do dynFlags <- getDynFlags
                 fail $ "multiple matches found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
 
