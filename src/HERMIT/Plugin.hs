@@ -122,11 +122,10 @@ eval comp = do
             eval $ k ()
         Guard p (HPM m)  :>>= k  -> gets (p . ps_phase) >>= \ b -> when b (eval m) >>= eval . k
         Focus tp (HPM m) :>>= k  -> do
-            sast <- gets ps_cursor
-            p <- queryS kernel tp env sast    -- run the pathfinding translation
+            p <- runK (queryS kernel tp env)  -- run the pathfinding translation
             runS $ beginScopeS kernel         -- remember the current path
             runS $ modPathS kernel (<> p) env -- modify the current path
-            r <- eval m             -- run the focused computation
+            r <- eval m             	      -- run the focused computation
             runS $ endScopeS kernel           -- endscope on it, so we go back to where we started
             eval $ k r
 
