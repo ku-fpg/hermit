@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, ScopedTypeVariables, RankNTypes #-}
 
 module HERMIT.Shell.Proof where
 
@@ -82,13 +82,6 @@ externals =
 
 --------------------------------------------------------------------------------------------------------
 
-data ProofH = RewritingProof ScriptOrRewrite ScriptOrRewrite                                             -- ^ Prove by rewriting both sides to a common intermediate expression.
-            | InductiveProof (Id -> Bool) [((Maybe DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]  -- ^ Prove by induction.  'Nothing' is the 'undefined' case.
-
-type ScriptOrRewrite = Either ScriptName (RewriteH CoreExpr) -- The named script should be convertible to a Rewrite.
-
---------------------------------------------------------------------------------------------------------
-
 data ProofCommand
     = RuleToLemma RuleNameString
     | VerifyLemma LemmaName ProofH
@@ -109,30 +102,132 @@ instance Extern ProofH where
 
 --------------------------------------------------------------------------------------------------------
 
-scriptToProof :: ScriptName -> ProofH
-scriptToProof s = RewritingProof (Left s) (Right idR)
+data ProofH = ProofH { unProofH :: CoreExprEquality -> CLT IO () }
 
-scriptBothSidesToProof :: ScriptName -> ScriptName -> ProofH
-scriptBothSidesToProof s1 s2 = RewritingProof (Left s1) (Left s2)
+-- | Prove a lemma using the given proof in the current kernel context.
+-- Required to fail if proof fails.
+prove :: MonadIO m => CoreExprEquality -> ProofH -> CLT m ()
+prove eq (ProofH p) = clm2clt (p eq)
 
-rewriteToProof :: RewriteH CoreExpr -> ProofH
-rewriteToProof r = RewritingProof (Right r) (Right idR)
+clm2clt :: MonadIO m => CLT IO a -> CLT m a
+clm2clt m =
+  do st <- get
+     liftIO (runCLT st m)
 
-rewriteBothSidesToProof :: RewriteH CoreExpr -> RewriteH CoreExpr -> ProofH
-rewriteBothSidesToProof r1 r2 = RewritingProof (Right r1) (Right r2)
+-- data ProofH = RewritingProof ScriptOrRewrite ScriptOrRewrite                                             -- ^ Prove by rewriting both sides to a common intermediate expression.
+--             | InductiveProof (Id -> Bool) [((Maybe DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]  -- ^ Prove by induction.  'Nothing' is the 'undefined' case.
+
+-- type ScriptOrRewrite = Either ScriptName (RewriteH CoreExpr) -- The named script should be convertible to a Rewrite.
 
 --------------------------------------------------------------------------------------------------------
 
+flipProof :: ProofH -> ProofH
+flipProof (ProofH p) = ProofH (p . flipCoreExprEquality)
+
+beforeProof :: CLT IO a -> (a -> ProofH) -> ProofH
+beforeProof ma f = ProofH $ \ eq ->
+  do a <- ma
+     unProofH (f a) eq
+
+--------------------------------------------------------------------------------------------------------
+
+rewriteToProof :: RewriteH CoreExpr -> ProofH
+rewriteToProof r = rewriteBothSidesToProof r idR
+
+rewriteBothSidesToProof :: RewriteH CoreExpr -> RewriteH CoreExpr -> ProofH
+rewriteBothSidesToProof r1 r2 = ProofH $ \ eq ->
+  do st <- gets cl_pstate
+     queryS (ps_kernel st) (return eq >>> verifyCoreExprEqualityT (r1, r2) :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
+
+scriptToProof :: ScriptName -> ProofH
+scriptToProof s = beforeProof (scriptNameToRewrite s) rewriteToProof
+
+scriptBothSidesToProof :: ScriptName -> ScriptName -> ProofH
+scriptBothSidesToProof s1 s2 = beforeProof (scriptNamesToRewrites s1 (Just s2)) (uncurry rewriteBothSidesToProof)
+
+scriptNamesToRewrites :: MonadState CommandLineState m => ScriptName -> Maybe ScriptName -> m (RewriteH CoreExpr, RewriteH CoreExpr)
+scriptNamesToRewrites s1 ms2 =
+  do r1 <- scriptNameToRewrite s1
+     r2 <- case ms2 of
+             Nothing   -> return idR
+             Just ms2  -> scriptNameToRewrite ms2
+     return (r1,r2)
+
+scriptNameToRewrite :: MonadState CommandLineState m => ScriptName -> m (RewriteH CoreExpr)
+scriptNameToRewrite = lookupScript >=> liftM extractR . scriptToRewrite
+
+--------------------------------------------------------------------------------------------------------
+
+-- scriptToProof :: ScriptName -> ProofH
+-- scriptToProof s = RewritingProof (Left s) (Right idR)
+
+-- scriptBothSidesToProof :: ScriptName -> ScriptName -> ProofH
+-- scriptBothSidesToProof s1 s2 = RewritingProof (Left s1) (Left s2)
+
+-- rewriteToProof :: RewriteH CoreExpr -> ProofH
+-- rewriteToProof r = RewritingProof (Right r) (Right idR)
+
+-- rewriteBothSidesToProof :: RewriteH CoreExpr -> RewriteH CoreExpr -> ProofH
+-- rewriteBothSidesToProof r1 r2 = RewritingProof (Right r1) (Right r2)
+
 inductiveProof :: (Id -> Bool) -> [((Maybe DataCon -> Bool), ScriptName)] -> ProofH
-inductiveProof p cases = InductiveProof p (map (\ (dp,s) -> (dp, Left s, Right idR)) cases)
+inductiveProof idPred caseProofs = inductiveProofAux idPred (map (\(dp,s) -> (dp,s,Nothing)) caseProofs)
 
 inductiveProofBothSides :: (Id -> Bool) -> [((Maybe DataCon -> Bool), ScriptName, ScriptName)] -> ProofH
-inductiveProofBothSides p cases = InductiveProof p (map (\ (dp,s1,s2) -> (dp, Left s1, Left s2)) cases)
+inductiveProofBothSides idPred caseProofs = inductiveProofAux idPred (map (\(dp,s1,s2) -> (dp,s1,Just s2)) caseProofs)
+
+inductiveProofAux :: (Id -> Bool) -> [((Maybe DataCon -> Bool), ScriptName, Maybe ScriptName)] -> ProofH
+inductiveProofAux idPred caseProofs = ProofH $ \ eq@(CoreExprEquality bs lhs rhs) ->
+  do st <- get
+     let ps = cl_pstate st
+
+     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $ soleElement (filter idPred bs)
+     cases <- queryS (ps_kernel ps) (inductionCaseSplit bs i lhs rhs :: TranslateH Core [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]) (mkKernelEnv ps) (ps_cursor ps)
+
+     forM_ cases $ \ (mdc,vs,lhsE,rhsE) -> do
+
+         (lp,mrp) <- getProofsForCase mdc caseProofs
+
+         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
+             -- Generate list of specialized induction hypotheses for the recursive cases.
+             eqs = [ discardUniVars $ instantiateCoreExprEqVar i (Var i') eq
+                   | i' <- vs_matching_i_type ]
+             brs = map birewrite eqs
+             nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
+
+         forM_ [ (nm, e, True) | (nm,e) <- zip nms eqs ] printLemma
+         catchError (do put $ addToDict (zip nms brs) st
+                        (l,r) <- scriptNamesToRewrites lp mrp
+                        prove (CoreExprEquality (delete i bs ++ vs) lhsE rhsE) (rewriteBothSidesToProof l r) -- recursion!
+                    )
+                    (\ err -> put st >> throwError err)
+         put st -- put original state (with original dictionary) back
+
+getProofsForCase :: Monad m => Maybe DataCon -> [(Maybe DataCon -> Bool, ScriptName, Maybe ScriptName)] -> m (ScriptName, Maybe ScriptName)
+getProofsForCase mdc cases =
+  let dcnm = maybe "undefined" getOccString mdc
+   in case [ (l,r) | (dcPred, l, r) <- cases, dcPred mdc ] of
+        []  -> fail $ "no case for " ++ dcnm
+        [p] -> return p
+        _   -> fail $ "more than one case for " ++ dcnm
+
+addToDict :: [(String, BiRewriteH CoreExpr)] -> CommandLineState -> CommandLineState
+addToDict rs st = st { cl_dict = foldr (\ (nm,r) -> addToDictionary (external nm (promoteExprBiR (beforeBiR (observeR ("Applying " ++ nm ++ " to: ")) (const r)) :: BiRewriteH Core) [])) (cl_dict st) rs }
+
+--------------------------------------------------------------------------------------------------------
+
+-- inductiveProof :: (Id -> Bool) -> [((Maybe DataCon -> Bool), ScriptName)] -> ProofH
+-- inductiveProof p cases = InductiveProof p (map (\ (dp,s) -> (dp, Left s, Right idR)) cases)
+
+-- inductiveProofBothSides :: (Id -> Bool) -> [((Maybe DataCon -> Bool), ScriptName, ScriptName)] -> ProofH
+-- inductiveProofBothSides p cases = InductiveProof p (map (\ (dp,s1,s2) -> (dp, Left s1, Left s2)) cases)
 
 --------------------------------------------------------------------------------------------------------
 
 -- inductiveProofExt :: String -> [(String, ScriptName)] -> ProofH
 -- inductiveProofExt idn cases = inductiveProof (cmpString2Var idn) [ ((cmpString2Name dcn . dataConName), sn) | (dcn,sn) <- cases ]
+
+-- TODO: Note, now that we've added the undefined base case, there's one more Script than Data Constructor.  Hence a list of pairs and/or triples won't quite work.  It'll need to be 1 script + a list of pairs/triples of constructors and scripts.
 
 -- TODO: Upgrade the parser so that this can be a list of pairs.
 inductiveProofExt :: String -> [String] -> [ScriptName] -> ProofH
@@ -151,9 +246,9 @@ caseNamePreds dcns = isNothing : [ maybe False (cmpString2Name dcn . dataConName
 
 --------------------------------------------------------------------------------------------------------
 
-flipProof :: ProofH -> ProofH
-flipProof (RewritingProof sr1 sr2)   = RewritingProof sr2 sr1
-flipProof (InductiveProof pr cases)  = InductiveProof pr [ (dp,s2,s1) | (dp,s1,s2) <- cases ]
+-- flipProof :: ProofH -> ProofH
+-- flipProof (RewritingProof sr1 sr2)   = RewritingProof sr2 sr1
+-- flipProof (InductiveProof pr cases)  = InductiveProof pr [ (dp,s2,s1) | (dp,s1,s2) <- cases ]
 
 --------------------------------------------------------------------------------------------------------
 
@@ -229,55 +324,55 @@ printLemma (nm, CoreExprEquality bs lhs rhs, proven) = do
 
 --------------------------------------------------------------------------------------------------------
 
--- | Prove a lemma using the given proof in the current kernel context.
+--  Prove a lemma using the given proof in the current kernel context.
 -- Required to fail if proof fails.
-prove :: MonadIO m => CoreExprEquality -> ProofH -> CLT m ()
-prove equality (RewritingProof lp rp) = do
-    (lrr, rrr) <- getRewrites (lp, rp)
-    st <- gets cl_pstate
-    queryS (ps_kernel st) (return equality >>> verifyCoreExprEqualityT (lrr, rrr) :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
+-- prove :: MonadIO m => CoreExprEquality -> ProofH -> CLT m ()
+-- prove equality (RewritingProof lp rp) = do
+--     (lrr, rrr) <- getRewrites (lp, rp)
+--     st <- gets cl_pstate
+--     queryS (ps_kernel st) (return equality >>> verifyCoreExprEqualityT (lrr, rrr) :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
 
--- InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]
--- inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
---              => (Id -> Bool)
---              -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM)
---              -> Translate c HermitM CoreExprEquality ()
-prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
-    st <- get
-    let ps = cl_pstate st
+-- -- InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]
+-- -- inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
+-- --              => (Id -> Bool)
+-- --              -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM)
+-- --              -> Translate c HermitM CoreExprEquality ()
+-- prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
+--     st <- get
+--     let ps = cl_pstate st
 
-    i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $ soleElement (filter idPred bs)
-    cases <- queryS (ps_kernel ps) (inductionCaseSplit bs i lhs rhs :: TranslateH Core [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]) (mkKernelEnv ps) (ps_cursor ps)
+--     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $ soleElement (filter idPred bs)
+--     cases <- queryS (ps_kernel ps) (inductionCaseSplit bs i lhs rhs :: TranslateH Core [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]) (mkKernelEnv ps) (ps_cursor ps)
 
-    forM_ cases $ \ (mdc,vs,lhsE,rhsE) -> do
+--     forM_ cases $ \ (mdc,vs,lhsE,rhsE) -> do
 
-        (lp,rp) <- getProofsForCase mdc caseProofs
+--         (lp,rp) <- getProofsForCase mdc caseProofs
 
-        let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
-            -- Generate list of specialized induction hypotheses for the recursive cases.
-            eqs = [ discardUniVars $ instantiateCoreExprEqVar i (Var i') eq
-                  | i' <- vs_matching_i_type ]
-            brs = map birewrite eqs
-            nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
+--         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
+--             -- Generate list of specialized induction hypotheses for the recursive cases.
+--             eqs = [ discardUniVars $ instantiateCoreExprEqVar i (Var i') eq
+--                   | i' <- vs_matching_i_type ]
+--             brs = map birewrite eqs
+--             nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
 
-        forM_ [ (nm, e, True) | (nm,e) <- zip nms eqs ] printLemma
-        catchError (do put $ addToDict (zip nms brs) st
-                       (l,r) <- getRewrites (lp,rp)
-                       prove (CoreExprEquality (delete i bs ++ vs) lhsE rhsE) (rewriteBothSidesToProof l r) -- recursion!
-                   )
-                   (\ err -> put st >> throwError err)
-        put st -- put original state (with original dictionary) back
+--         forM_ [ (nm, e, True) | (nm,e) <- zip nms eqs ] printLemma
+--         catchError (do put $ addToDict (zip nms brs) st
+--                        (l,r) <- getRewrites (lp,rp)
+--                        prove (CoreExprEquality (delete i bs ++ vs) lhsE rhsE) (rewriteBothSidesToProof l r) -- recursion!
+--                    )
+--                    (\ err -> put st >> throwError err)
+--         put st -- put original state (with original dictionary) back
 
-getProofsForCase :: Monad m => Maybe DataCon -> [(Maybe DataCon -> Bool, ScriptOrRewrite, ScriptOrRewrite)] -> m (ScriptOrRewrite, ScriptOrRewrite)
-getProofsForCase mdc cases =
-  let dcnm = maybe "undefined" getOccString mdc
-   in case [ (l,r) | (dcPred, l, r) <- cases, dcPred mdc ] of
-        []  -> fail $ "no case for " ++ dcnm
-        [p] -> return p
-        _   -> fail $ "more than one case for " ++ dcnm
+-- getProofsForCase :: Monad m => Maybe DataCon -> [(Maybe DataCon -> Bool, ScriptOrRewrite, ScriptOrRewrite)] -> m (ScriptOrRewrite, ScriptOrRewrite)
+-- getProofsForCase mdc cases =
+--   let dcnm = maybe "undefined" getOccString mdc
+--    in case [ (l,r) | (dcPred, l, r) <- cases, dcPred mdc ] of
+--         []  -> fail $ "no case for " ++ dcnm
+--         [p] -> return p
+--         _   -> fail $ "more than one case for " ++ dcnm
 
-addToDict :: [(String, BiRewriteH CoreExpr)] -> CommandLineState -> CommandLineState
-addToDict rs st = st { cl_dict = foldr (\ (nm,r) -> addToDictionary (external nm (promoteExprBiR (beforeBiR (observeR ("Applying " ++ nm ++ " to: ")) (const r)) :: BiRewriteH Core) [])) (cl_dict st) rs }
+-- addToDict :: [(String, BiRewriteH CoreExpr)] -> CommandLineState -> CommandLineState
+-- addToDict rs st = st { cl_dict = foldr (\ (nm,r) -> addToDictionary (external nm (promoteExprBiR (beforeBiR (observeR ("Applying " ++ nm ++ " to: ")) (const r)) :: BiRewriteH Core) [])) (cl_dict st) rs }
 
 {-
        let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Translate c HermitM x ()
@@ -293,11 +388,11 @@ addToDict rs st = st { cl_dict = foldr (\ (nm,r) -> addToDictionary (external nm
        mapM_ verifyInductiveCaseT cases
 -}
 
-getRewrites :: MonadState CommandLineState m => (ScriptOrRewrite, ScriptOrRewrite) -> m (RewriteH CoreExpr, RewriteH CoreExpr)
-getRewrites (l,r) = liftM2 (,) (getRewrite l) (getRewrite r)
+-- getRewrites :: MonadState CommandLineState m => (ScriptOrRewrite, ScriptOrRewrite) -> m (RewriteH CoreExpr, RewriteH CoreExpr)
+-- getRewrites (l,r) = liftM2 (,) (getRewrite l) (getRewrite r)
 
-getRewrite :: MonadState CommandLineState m => ScriptOrRewrite -> m (RewriteH CoreExpr)
-getRewrite = either (lookupScript >=> liftM extractR . scriptToRewrite) return
+-- getRewrite :: MonadState CommandLineState m => ScriptOrRewrite -> m (RewriteH CoreExpr)
+-- getRewrite = either (lookupScript >=> liftM extractR . scriptToRewrite) return
 
 markProven :: MonadState CommandLineState m => LemmaName -> m ()
 markProven nm = modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }

@@ -5,6 +5,7 @@ module HERMIT.Dictionary.Reasoning
     externals
   , CoreExprEquality(..)
   , CoreExprEqualityProof
+  , flipCoreExprEquality
   , eqLhsIntroR
   , eqRhsIntroR
   , birewrite
@@ -60,6 +61,12 @@ externals =
 data CoreExprEquality = CoreExprEquality [CoreBndr] CoreExpr CoreExpr
 
 type CoreExprEqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
+
+-- | Flip the LHS and RHS of a 'CoreExprEquality'.
+flipCoreExprEquality :: CoreExprEquality -> CoreExprEquality
+flipCoreExprEquality (CoreExprEquality xs lhs rhs) = CoreExprEquality xs rhs lhs
+
+------------------------------------------------------------------------------
 
 -- | @e@ ==> @let v = lhs in e@
 eqLhsIntroR :: CoreExprEquality -> Rewrite c HermitM Core
