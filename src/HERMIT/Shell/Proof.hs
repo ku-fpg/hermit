@@ -3,7 +3,6 @@
 module HERMIT.Shell.Proof where
 
 import Control.Arrow
-import qualified Control.Category as Cat
 import Control.Monad.Error
 import Control.Monad.State
 
@@ -45,6 +44,8 @@ externals =
         [ "Convert a rewrite to an equality proof, by applying it to the LHS." ]
     , external "rewrite-both-sides-to-proof" ((\ r1 r2 -> rewriteBothSidesToProof (extractR r1) (extractR r2)) :: RewriteH Core -> RewriteH Core -> ProofH)
         [ "Convert a pair of rewrites to a proof, by applying the first rewrite to the LHS and the second rewrite to the RHS." ]
+    , external "lemma-to-proof" lemmaToProof
+        [ "Convert a (proven) lemma to an equality proof." ]
     , external "inductive-proof" (inductiveProofExt :: String -> [String] -> [ScriptName] -> ProofH)
         [ "inductive-proof <id-name> [<data-con-name>] [<script-name>]"
         , "Build an equality proof by induction on the named identifier."
@@ -66,11 +67,17 @@ externals =
     , external "show-lemmas" ShowLemmas
         [ "List lemmas." ]
     , external "lemma" ((\s -> promoteExprBiR . lemma False s) :: CommandLineState -> LemmaName -> BiRewriteH Core)
-        [ "Run an proven lemma as a bi-directional rewrite." ]
+        [ "Generate a bi-directional rewrite from a proven lemma." ]
     , external "lemma-unsafe" ((\s -> promoteExprBiR . lemma True s) :: CommandLineState -> LemmaName -> BiRewriteH Core)
-        [ "Run a lemma as a bi-directional rewrite." ]
+        [ "Generate a bi-directional rewrite from a lemma, even if it is unproven." ]
     , external "verify-lemma" VerifyLemma
         [ "Prove a lemma." ]
+    , external "lemma-lhs-intro" (lemmaLhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core)
+        [ "Introduce the LHS of a lemma as a non-recursive binding, in either an expression or a program."
+        , "body ==> let v = lhs in body" ] .+ Introduce .+ Shallow
+    , external "lemma-rhs-intro" (lemmaRhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core)
+        [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
+        , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
     ]
 
 --------------------------------------------------------------------------------------------------------
@@ -86,7 +93,6 @@ data ProofCommand
     = RuleToLemma RuleNameString
     | VerifyLemma LemmaName ProofH
     | ShowLemmas
---    | Induction LemmaName
     deriving (Typeable)
 
 instance Extern ProofCommand where
@@ -151,29 +157,49 @@ flipProof (InductiveProof pr cases)  = InductiveProof pr [ (dp,s2,s1) | (dp,s1,s
 
 --------------------------------------------------------------------------------------------------------
 
-getLemmaByName :: LemmaName -> CommandLineState -> Maybe Lemma
-getLemmaByName nm st =
+getLemmaByName :: Monad m => CommandLineState -> LemmaName -> m Lemma
+getLemmaByName st nm =
     case [ lm | lm@(n,_,_) <- cl_lemmas st, n == nm ] of
-        [] -> Nothing
-        (l:_) -> Just l
+        []    -> fail ("No lemma named: " ++ nm)
+        (l:_) -> return l
 
 lemma :: Bool -> CommandLineState -> LemmaName -> BiRewriteH CoreExpr
-lemma ok st nm =
-    case getLemmaByName nm st of
-        Nothing -> beforeBiR (fail $ "No lemma named: " ++ nm) (const Cat.id)
-        Just (_,equality,proven) -> beforeBiR (guardMsg (proven || ok) $ "Lemma " ++ nm ++ " has not been proven.") (const $ birewrite equality)
+lemma ok st nm = beforeBiR
+                   (do (_,equality,proven) <- getLemmaByName st nm
+                       guardMsg (proven || ok) ("Lemma " ++ nm ++ " has not been proven.")
+                       return equality
+                   )
+                   birewrite
+
+lemmaToProof :: CommandLineState -> LemmaName -> ProofH
+lemmaToProof st nm = rewriteToProof (forwardT (lemma False st nm))
+
+--------------------------------------------------------------------------------------------------------
+
+lemmaNameToEqualityT :: Monad m => CommandLineState -> LemmaName -> m CoreExprEquality
+lemmaNameToEqualityT st nm =
+  do (_,eq,_) <- getLemmaByName st nm
+     return eq
+
+-- | @e@ ==> @let v = lhs in e@  (also works in a similar manner at Program nodes)
+lemmaLhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core
+lemmaLhsIntroR st = lemmaNameToEqualityT st >=> eqLhsIntroR
+
+-- | @e@ ==> @let v = rhs in e@  (also works in a similar manner at Program nodes)
+lemmaRhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core
+lemmaRhsIntroR st = lemmaNameToEqualityT st >=> eqRhsIntroR
 
 --------------------------------------------------------------------------------------------------------
 
 performProofCommand :: MonadIO m => ProofCommand -> CLT m ()
 performProofCommand (RuleToLemma nm) = do
     st <- gets cl_pstate
-    equality <- queryS (ps_kernel st) (getSingletonHermitRuleT nm >>> ruleToEqualityT :: TranslateH Core CoreExprEquality) (mkKernelEnv st) (ps_cursor st)
+    equality <- queryS (ps_kernel st) (ruleNameToEqualityT nm :: TranslateH Core CoreExprEquality) (mkKernelEnv st) (ps_cursor st)
     modify $ \ s -> s { cl_lemmas = (nm,equality,False) : cl_lemmas s }
 
 performProofCommand (VerifyLemma nm proof) = do
     st <- get
-    (_,equality,_) <- maybeM ("No lemma named: " ++ nm) (getLemmaByName nm st)
+    (_,equality,_) <- getLemmaByName st nm
     prove equality proof -- this is like a guard
     markProven nm
 
@@ -217,7 +243,7 @@ prove equality (RewritingProof lp rp) = do
 --              -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM)
 --              -> Translate c HermitM CoreExprEquality ()
 prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
-    st <- get 
+    st <- get
     let ps = cl_pstate st
 
     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $ soleElement (filter idPred bs)

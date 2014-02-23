@@ -7,11 +7,12 @@ module HERMIT.Dictionary.Rules
        , ruleR
        , rulesR
        , ruleToEqualityT
+       , ruleNameToEqualityT
        , getSingletonHermitRuleT
        -- , verifyCoreRuleT
-       , verifyRuleT
-       , ruleLhsIntroR
-       , ruleRhsIntroR
+       -- , verifyRuleT
+       -- , ruleLhsIntroR
+       -- , ruleRhsIntroR
          -- ** Specialisation
        , specConstrR
        )
@@ -54,10 +55,6 @@ externals =
                 [ "Apply a named GHC rule" ] .+ Shallow
          , external "apply-rules" (promoteExprR . rulesR :: [RuleNameString] -> RewriteH Core)
                 [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
-         , external "verify-rule" (verifyRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> TranslateH Core ())
-                [ "Verify that the named GHC rule holds (in the current context)." ]
-         -- , external "verify-rule-by-list-induction" (verifyRuleByListInduction  :: RuleNameString -> String -> RewriteH Core -> RewriteH Core -> RewriteH Core -> RewriteH Core -> TranslateH Core ())
-         --        [ "Verify that the named GHC rule holds, using induction on the named identifier." ] .+ TODO .+ Experiment
          , external "add-rule" ((\ rule_name id_name -> promoteModGutsR (addCoreBindAsRule rule_name id_name)) :: String -> String -> RewriteH Core)
                 [ "add-rule \"rule-name\" <id> -- adds a new rule that freezes the right hand side of the <id>"]  .+ Introduce
          , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
@@ -66,25 +63,9 @@ externals =
                 [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
          , external "specialise" (promoteModGutsR specialise :: RewriteH Core)
                 [ "Run GHC's specialisation pass, which performs type and dictionary specialisation."] .+ Deep
-         , external "rule-unsafe" ((promoteExprBiR . biRuleUnsafeR) :: RuleNameString -> BiRewriteH Core)
-                [ "Run a GHC rule forwards or backwards.",
-                  "Does not verify that the rule is correct."
-                ]
-         , external "rule" (biRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
-                [ "Run a GHC rule forwards or backwards.",
-                  "Takes a proof that the rule holds, in the form of a rewrite to apply to both sides to prove the equality."
-                ]
-         , external "rule-lhs-intro" (ruleLhsIntroR :: RuleNameString -> RewriteH Core)
-                [ "Introduce the LHS of a rule as a non-recursive let binding."
-                , "body ==> let v = lhs in body" ] .+ Introduce .+ Shallow
-         , external "rule-rhs-intro" (ruleRhsIntroR :: RuleNameString -> RewriteH Core)
-                [ "Introduce the RHS of a rule as a non-recursive let binding."
-                , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
          ]
 
 ------------------------------------------------------------------------
-
--- TODO: we have multiple ways of applying RULES as Rewrites now.  We need to clean this up and unify them.
 
 {-
 lookupRule :: (Activation -> Bool)	-- When rule is active
@@ -221,75 +202,6 @@ ruleToEqualityT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
 
 ruleNameToEqualityT :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Translate c HermitM a CoreExprEquality
 ruleNameToEqualityT name = getSingletonHermitRuleT name >>> ruleToEqualityT
-
-verifyRuleT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
-            => RuleNameString -> CoreExprEqualityProof c HermitM -> Translate c HermitM a ()
-verifyRuleT name proof = ruleNameToEqualityT name >>> verifyCoreExprEqualityT proof
-
-verifyRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> TranslateH Core ()
-verifyRule name lhsR rhsR = verifyRuleT name (extractR lhsR, extractR rhsR)
-
-
---------------------------------------------------------
-
--- Experimental Test
-
--- type BiRewritecHermitMCoreExprShouldGoHere = ()
-
--- verifyRuleByListInductionT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core, BoundVars c, HasGlobalRdrEnv c, HasCoreRules c)
---             => RuleNameString -> String -> CoreExprEqualityProof c HermitM -> (BiRewritecHermitMCoreExprShouldGoHere -> CoreExprEqualityProof c HermitM) -> Translate c HermitM a ()
--- verifyRuleByListInductionT r_name i_name nilCaseProof consCaseProof = ruleNameToEqualityT r_name >>> listInductionOnT (cmpString2Var i_name) nilCaseProof (\ _ -> consCaseProof ())
-
--- verifyRuleByListInduction  :: RuleNameString    -- Name of Rule to prove
---                            -> String            -- Name if Id to perform induction on
---                            -> RewriteH Core     -- [] case, LHS
---                            -> RewriteH Core     -- [] case, RHS
---                            -> RewriteH Core     -- (:) case, LHS
---                            -> RewriteH Core     -- (:) case, RHS
---                            -> TranslateH Core ()
--- verifyRuleByListInduction r_name i_name nilLhsR nilRhsR consLhsR consRhsR = verifyRuleByListInductionT r_name i_name (extractR nilLhsR, extractR nilRhsR) (\ () -> (extractR consLhsR, extractR consRhsR))
-
---------------------------------------------------------
-
-
-biRuleUnsafeR ::
-           ( BoundVars c
-           , HasCoreRules c
-           , HasGlobalRdrEnv c
-           , AddBindings c
-           , ReadBindings c
-           , ExtendPath c Crumb
-           , ReadPath c Crumb)
-        => RuleNameString -> BiRewrite c HermitM CoreExpr
-biRuleUnsafeR name = beforeBiR (ruleNameToEqualityT name) birewrite
-
-biRuleR :: ( BoundVars c
-           , HasCoreRules c
-           , HasGlobalRdrEnv c
-           , AddBindings c
-           , ReadBindings c
-           , ExtendPath c Crumb
-           , ReadPath c Crumb)
-        => RuleNameString -> CoreExprEqualityProof c HermitM -> BiRewrite c HermitM CoreExpr
-biRuleR name proof = beforeBiR
-                            (do eq <- ruleNameToEqualityT name
-                                verifyCoreExprEqualityT proof <<< return eq
-                                return eq
-                            )
-                            birewrite
-
-biRule :: RuleNameString -> RewriteH Core -> RewriteH Core -> BiRewriteH Core
-biRule name lhsR rhsR = promoteExprBiR $ biRuleR name (extractR lhsR, extractR rhsR)
-
-------------------------------------------------------------------------
-
--- | @e@ ==> @let v = lhs in e@  (also works in a similar manner at Program nodes)
-ruleLhsIntroR :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Rewrite c HermitM Core
-ruleLhsIntroR = ruleNameToEqualityT >=> eqLhsIntroR
-
--- | @e@ ==> @let v = rhs in e@  (also works in a similar manner at Program nodes)
-ruleRhsIntroR :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Rewrite c HermitM Core
-ruleRhsIntroR = ruleNameToEqualityT >=> eqRhsIntroR
 
 ------------------------------------------------------------------------
 
