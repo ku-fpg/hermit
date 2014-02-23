@@ -84,6 +84,7 @@ externals =
 
 data ProofH = RewritingProof ScriptOrRewrite ScriptOrRewrite                                             -- ^ Prove by rewriting both sides to a common intermediate expression.
             | InductiveProof (Id -> Bool) [((Maybe DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]  -- ^ Prove by induction.  'Nothing' is the 'undefined' case.
+            | UserProof (TranslateH CoreExprEquality ())                                                 -- ^ A user-defined proof technique.
 
 type ScriptOrRewrite = Either ScriptName (RewriteH CoreExpr) -- The named script should be convertible to a Rewrite.
 
@@ -106,6 +107,13 @@ instance Extern ProofH where
     type Box ProofH = ProofBox
     box = ProofBox
     unbox (ProofBox p) = p
+
+--------------------------------------------------------------------------------------------------------
+
+-- | Verify an equality by applying a user-supplied predicate.
+--   If the predicate holds, HERMIT accepts the equality as proven.
+userProofTechnique :: TranslateH CoreExprEquality () -> ProofH
+userProofTechnique = UserProof
 
 --------------------------------------------------------------------------------------------------------
 
@@ -154,6 +162,7 @@ caseNamePreds dcns = isNothing : [ maybe False (cmpString2Name dcn . dataConName
 flipProof :: ProofH -> ProofH
 flipProof (RewritingProof sr1 sr2)   = RewritingProof sr2 sr1
 flipProof (InductiveProof pr cases)  = InductiveProof pr [ (dp,s2,s1) | (dp,s1,s2) <- cases ]
+flipProof (UserProof t)              = UserProof (arr flipCoreExprEquality >>> t)
 
 --------------------------------------------------------------------------------------------------------
 
@@ -232,10 +241,10 @@ printLemma (nm, CoreExprEquality bs lhs rhs, proven) = do
 -- | Prove a lemma using the given proof in the current kernel context.
 -- Required to fail if proof fails.
 prove :: MonadIO m => CoreExprEquality -> ProofH -> CLT m ()
-prove equality (RewritingProof lp rp) = do
+prove eq (RewritingProof lp rp) = do
     (lrr, rrr) <- getRewrites (lp, rp)
     st <- gets cl_pstate
-    queryS (ps_kernel st) (return equality >>> verifyCoreExprEqualityT (lrr, rrr) :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
+    queryS (ps_kernel st) (return eq >>> verifyCoreExprEqualityT (lrr, rrr) :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
 
 -- InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]
 -- inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
@@ -267,6 +276,10 @@ prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
                    )
                    (\ err -> put st >> throwError err)
         put st -- put original state (with original dictionary) back
+
+prove eq (UserProof t) =
+  do st <- gets cl_pstate
+     queryS (ps_kernel st) (return eq >>> t :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
 
 getProofsForCase :: Monad m => Maybe DataCon -> [(Maybe DataCon -> Bool, ScriptOrRewrite, ScriptOrRewrite)] -> m (ScriptOrRewrite, ScriptOrRewrite)
 getProofsForCase mdc cases =
