@@ -1,4 +1,4 @@
-{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, TypeFamilies,
+{-# LANGUAGE CPP, KindSignatures, GADTs, FlexibleContexts, TypeFamilies,
              DeriveDataTypeable, GeneralizedNewtypeDeriving, LambdaCase,
              ScopedTypeVariables #-}
 
@@ -11,7 +11,6 @@ import Control.Monad.Error
 
 import Data.Dynamic
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 
 import HERMIT.Context
@@ -29,7 +28,11 @@ import HERMIT.Plugin.Types
 import HERMIT.Dictionary.Reasoning (CoreExprEquality)
 
 import System.IO (Handle)
+
+#if !defined(WINDOWS)
+import Data.Maybe (fromMaybe)
 import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, termLines)
+#endif
 
 ----------------------------------------------------------------------------------
 
@@ -310,10 +313,14 @@ mkCLS = do
 
 getTermDimensions :: IO (Int, Int)
 getTermDimensions = do
+#if defined(WINDOWS)
+    return (80,25) -- these are the standard windows CLI dimensions
+#else
     term <- setupTermFromEnv
     let w = fromMaybe 80 $ getCapability term termColumns
-        h = fromMaybe 30 $ getCapability term termLines
+        h = fromMaybe 25 $ getCapability term termLines
     return (w,h)
+#endif
 
 newtype CLSBox = CLSBox CommandLineState deriving Typeable
 instance Extern CommandLineState where
