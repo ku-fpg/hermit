@@ -85,6 +85,7 @@ externals =
 data ProofH = RewritingProof ScriptOrRewrite ScriptOrRewrite                                             -- ^ Prove by rewriting both sides to a common intermediate expression.
             | InductiveProof (Id -> Bool) [((Maybe DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]  -- ^ Prove by induction.  'Nothing' is the 'undefined' case.
             | UserProof (TranslateH CoreExprEquality ())                                                 -- ^ A user-defined proof technique.
+            | ProofH (CoreExprEquality -> CLT IO ())                                                     -- ^ User-defined proof with full access to shell monad stack.
 
 type ScriptOrRewrite = Either ScriptName (RewriteH CoreExpr) -- The named script should be convertible to a Rewrite.
 
@@ -163,6 +164,7 @@ flipProof :: ProofH -> ProofH
 flipProof (RewritingProof sr1 sr2)   = RewritingProof sr2 sr1
 flipProof (InductiveProof pr cases)  = InductiveProof pr [ (dp,s2,s1) | (dp,s1,s2) <- cases ]
 flipProof (UserProof t)              = UserProof (arr flipCoreExprEquality >>> t)
+flipProof (ProofH p)                 = ProofH (p . flipCoreExprEquality)
 
 --------------------------------------------------------------------------------------------------------
 
@@ -280,6 +282,8 @@ prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
 prove eq (UserProof t) =
   do st <- gets cl_pstate
      queryS (ps_kernel st) (return eq >>> t :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
+
+prove eq (ProofH p) = clm2clt (p eq)
 
 getProofsForCase :: Monad m => Maybe DataCon -> [(Maybe DataCon -> Bool, ScriptOrRewrite, ScriptOrRewrite)] -> m (ScriptOrRewrite, ScriptOrRewrite)
 getProofsForCase mdc cases =

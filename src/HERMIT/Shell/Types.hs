@@ -173,6 +173,13 @@ instance Monad m => Monad (CLT m) where
 runCLT :: CommandLineState -> CLT m a -> m (Either CLException a, CommandLineState)
 runCLT s = flip runStateT s . runErrorT . unCLT
 
+-- | Lift a CLT IO computation into a CLT computation over an arbitrary MonadIO.
+clm2clt :: MonadIO m => CLT IO a -> CLT m a
+clm2clt m = do
+    st <- get
+    (ea, st') <- liftIO (runCLT st m)
+    either throwError (\r -> put st' >> return r) ea
+
 -- | Lift a CLM computation into the PluginM monad.
 clm :: CLT IO a -> PluginM a
 clm m = do
