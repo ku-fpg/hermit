@@ -29,7 +29,7 @@ import HERMIT.Dictionary.Reasoning (CoreExprEquality)
 
 import System.IO (Handle)
 
-#if !defined(WINDOWS)
+#ifndef mingw32_HOST_OS
 import Data.Maybe (fromMaybe)
 import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, termLines)
 #endif
@@ -313,7 +313,7 @@ mkCLS = do
 
 getTermDimensions :: IO (Int, Int)
 getTermDimensions = do
-#if defined(WINDOWS)
+#ifdef mingw32_HOST_OS
     return (80,25) -- these are the standard windows CLI dimensions
 #else
     term <- setupTermFromEnv
