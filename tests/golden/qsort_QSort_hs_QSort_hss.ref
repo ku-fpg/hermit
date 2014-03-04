@@ -1,15 +1,15 @@
 
 HList.hs:22:11: Warning:
-    Rule "repH ++" may never fire because ‛repH’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‛repH’
+    Rule "repH ++" may never fire because ‘repH’ might inline first
+    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘repH’
 
 HList.hs:23:11: Warning:
-    Rule "repH []" may never fire because ‛repH’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‛repH’
+    Rule "repH []" may never fire because ‘repH’ might inline first
+    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘repH’
 
 HList.hs:24:11: Warning:
-    Rule "repH (:)" may never fire because ‛repH’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‛repH’
+    Rule "repH (:)" may never fire because ‘repH’ might inline first
+    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘repH’
 ===================== Welcome to HERMIT ======================
 HERMIT is a toolkit for the interactive transformation of GHC
 core language programs. Documentation on HERMIT can be found
