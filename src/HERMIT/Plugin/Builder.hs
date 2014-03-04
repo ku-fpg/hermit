@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module HERMIT.Plugin.Builder
     ( -- * The HERMIT Plugin
       PluginPass
@@ -27,6 +29,9 @@ buildPlugin hp = defaultPlugin { installCoreToDos = install }
 
             -- This is a bit of a hack; otherwise we lose what we've not seen
             liftIO $ hSetBuffering stdout NoBuffering
+#ifdef mingw32_HOST_OS
+            liftIO $ hSetEncoding stdout utf8
+#endif
 
             let todos' = flattenTodos todos
                 passes = map getCorePass todos'
