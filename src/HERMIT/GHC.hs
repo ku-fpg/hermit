@@ -21,7 +21,6 @@ module HERMIT.GHC
     , occurAnalyseExpr
     , isKind
     , isLiftedTypeKindCon
-    , exprType -- TODO: remove once we can use GHC's exprType again
 #if __GLASGOW_HASKELL__ > 706
     , coAxiomName
     , CoAxiom.BranchIndex
@@ -34,6 +33,7 @@ module HERMIT.GHC
     , Pair(..)
     , bndrRuleAndUnfoldingVars
 #if __GLASGOW_HASKELL__ <= 706
+    , exprType 
     , Control.Monad.IO.Class.liftIO
 #else
     , runDsMtoCoreM
@@ -49,16 +49,9 @@ import qualified Control.Monad.IO.Class
 import qualified MonadUtils (MonadIO,liftIO)
 import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, liftIO, PluginPass)
 #else
-#if __GLASGOW_HASKELL__ < 708
--- TODO: remove this case once 7.8 comes out, only here because
--- my HEAD installs are pre-8522 patch, and I don't want to rebuild
--- on four different machines just yet.
--- GHC 7.7.XXX
-import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, PluginPass) -- we hide these so that they don't get inadvertently used.  See Core.hs
-#else
 -- GHC 7.8
-import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass) -- we hide these so that they don't get inadvertently used.  See Core.hs
-#endif
+-- we hide these so that they don't get inadvertently used.  See Core.hs
+import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass) 
 #endif
 
 -- hacky direct GHC imports
@@ -94,8 +87,8 @@ import Data.Monoid hiding ((<>))
 
 --------------------------------------------------------------------------
 
-#if __GLASGOW_HASKELL < 708
--- Note: once 7.8 comes out, change condition above to "<= 706"
+#if __GLASGOW_HASKELL__ <= 706
+-- Note: prior to 7.8, the Let case is buggy for type bindings
 exprType :: CoreExpr -> Type
 -- ^ Recover the type of a well-typed Core expression. Fails when
 -- applied to the actual 'CoreSyn.Type' expression as it cannot
@@ -235,6 +228,7 @@ zapVarOccInfo i = if isId i
 notElemVarSet :: Var -> VarSet -> Bool
 notElemVarSet v vs = not (v `elemVarSet` vs)
 
+#if __GLASGOW_HASKELL__ <= 706
 instance Monoid VarSet where
   mempty :: VarSet
   mempty = emptyVarSet
@@ -244,7 +238,6 @@ instance Monoid VarSet where
 
 --------------------------------------------------------------------------
 
-#if __GLASGOW_HASKELL__ <= 706
 instance Control.Monad.IO.Class.MonadIO CoreM where
   liftIO :: IO a -> CoreM a
   liftIO = MonadUtils.liftIO

@@ -221,8 +221,12 @@ specialise = prefixFailMsg "specialisation failed: " $ do
     gRules <- arr mg_rules
     lRules <- extractT specRules
 
+#if __GLASGOW_HASKELL__ <= 706
     dflags <- dynFlagsT
     guts <- contextfreeT $ liftCoreM . Specialise.specProgram dflags
+#else
+    guts <- contextfreeT $ liftCoreM . Specialise.specProgram
+#endif
 
     lRules' <- return guts >>> extractT specRules -- spec rules on bindings in this module
     let gRules' = mg_rules guts            -- plus spec rules on imported bindings

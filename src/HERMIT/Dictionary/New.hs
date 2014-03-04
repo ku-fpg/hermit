@@ -13,8 +13,10 @@ import HERMIT.Monad
 #endif
 import HERMIT.ParserCore
 
+#if __GLASGOW_HASKELL__ > 706
 import HERMIT.Dictionary.Composite hiding (externals)
 import HERMIT.Dictionary.Debug hiding (externals)
+#endif
 import HERMIT.Dictionary.Local.Let hiding (externals)
 
 externals ::  [External]
