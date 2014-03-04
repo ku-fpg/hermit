@@ -88,7 +88,8 @@ import Data.Monoid hiding ((<>))
 --------------------------------------------------------------------------
 
 #if __GLASGOW_HASKELL__ <= 706
--- Note: prior to 7.8, the Let case is buggy for type bindings
+-- Note: prior to 7.8, the Let case was buggy for type 
+-- bindings, so we provide a fixed definition here.
 exprType :: CoreExpr -> Type
 -- ^ Recover the type of a well-typed Core expression. Fails when
 -- applied to the actual 'CoreSyn.Type' expression as it cannot
