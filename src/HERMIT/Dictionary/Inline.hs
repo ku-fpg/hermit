@@ -137,6 +137,10 @@ getUnfoldingT config = translate $ \ c i ->
     case lookupHermitBinding i c of
       Nothing -> do requireAllBinders config
                     let uncaptured = (<= 0) -- i.e. is global
+		    -- this check is necessary because idInfo panics on TyVars, though it
+		    -- should never be the case that a type variable is NOT in the context,
+		    -- at least this will give a reasonable error message, instead of a GHC panic.
+		    guardMsg (isId i) "type variable is not in Env (this should not happen)."
                     case unfoldingInfo (idInfo i) of
                       CoreUnfolding { uf_tmpl = uft } -> return (uft, uncaptured)
 #if __GLASGOW_HASKELL__ > 706

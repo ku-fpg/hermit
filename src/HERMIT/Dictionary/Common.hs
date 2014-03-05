@@ -247,13 +247,14 @@ findIdBuiltIn = go
 
 -- TODO: "inScope" was defined elsewhere, but I've moved it here.  Should it be combined with the above functions?
 
--- | Determine whether an identifier is in scope.
-inScope :: ReadBindings c => c -> Id -> Bool
+-- | Determine whether a variable is in scope.
+inScope :: ReadBindings c => c -> Var -> Bool
 inScope c v = (v `boundIn` c) ||                 -- defined in this module
-              case unfoldingInfo (idInfo v) of
+              (isId v &&                         -- idInfo panics on TyVars
+               case unfoldingInfo (idInfo v) of
                 CoreUnfolding {} -> True         -- defined elsewhere
                 DFunUnfolding {} -> True
-                _                -> False
+                _                -> False)
 
 withVarsInScope :: forall c m b. (ReadPath c Crumb, ExtendPath c Crumb, AddBindings c, MonadCatch m) 
                 => [Var] -> Translate c m CoreExpr b -> Translate c m CoreExpr b

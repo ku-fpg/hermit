@@ -240,7 +240,9 @@ specialise = prefixFailMsg "specialisation failed: " $ do
 -- | Get all the specialization rules on a binding.
 --   These are created by SpecConstr and other GHC passes.
 idSpecRules :: TranslateH Id [CoreRule]
-idSpecRules = contextfreeT $ \ i -> let SpecInfo rs _ = specInfo (idInfo i) in return rs
+idSpecRules = do
+    guardMsgM (arr isId) "idSpecRules called on TyVar." -- idInfo panics on TyVars
+    contextfreeT $ \ i -> let SpecInfo rs _ = specInfo (idInfo i) in return rs
 
 -- | Promote 'idSpecRules' to CoreBind.
 bindSpecRules :: TranslateH CoreBind [CoreRule]
