@@ -9,6 +9,7 @@ module HERMIT.GHC.Typechecker
 
 #if __GLASGOW_HASKELL__ > 706
 
+import Annotations (emptyAnnEnv)
 import HsSyn
 import RdrName
 import TcRnMonad
@@ -30,6 +31,7 @@ import FastString
 import Bag
 
 import qualified Data.Set as Set
+import qualified Data.Map as Map
 
 import Prelude hiding (mod)
 import VarSet (emptyVarSet)
@@ -60,6 +62,12 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax mod do_this
         type_env_var <- newIORef type_env ;
 
         dependent_files_var <- newIORef [] ;
+
+        th_topdecls_var      <- newIORef [] ;
+        th_topnames_var      <- newIORef emptyNameSet ;
+        th_modfinalizers_var <- newIORef [] ;
+        th_state_var         <- newIORef Map.empty ;
+
         let {
              maybe_rn_syntax :: forall a. a -> Maybe a ;
              maybe_rn_syntax empty_val
@@ -67,6 +75,12 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax mod do_this
                 | otherwise      = Nothing ;
 
              gbl_env = TcGblEnv {
+                -- these first four are CPP'd in GHC itself, but we include them here
+                tcg_th_topdecls      = th_topdecls_var,
+                tcg_th_topnames      = th_topnames_var,
+                tcg_th_modfinalizers = th_modfinalizers_var,
+                tcg_th_state         = th_state_var,
+
                 -- queried during tcrnif
                 tcg_mod            = mod,
                 tcg_src            = hsc_src,
@@ -78,6 +92,7 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax mod do_this
                 tcg_type_env_var   = type_env_var,
                 tcg_inst_env       = mg_inst_env guts,
                 tcg_fam_inst_env   = mg_fam_inst_env guts,
+                tcg_ann_env        = emptyAnnEnv,
                 tcg_dfun_n         = dfun_n_var,
 
                 -- accumulated, not queried, during tcrnif
@@ -95,6 +110,7 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax mod do_this
                 tcg_ev_binds       = emptyBag,
                 tcg_fords          = [],
                 tcg_vects          = [],
+                tcg_patsyns        = [],
                 tcg_doc_hdr        = Nothing,
                 tcg_hpc            = False,
                 tcg_main           = Nothing,
@@ -115,6 +131,7 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax mod do_this
                 tcl_ctxt       = [],
                 tcl_rdr        = emptyLocalRdrEnv,
                 tcl_th_ctxt    = topStage,
+                tcl_th_bndrs   = emptyNameEnv,
                 tcl_arrow_ctxt = NoArrowCtxt,
                 tcl_env        = emptyNameEnv,
                 tcl_bndrs      = [],

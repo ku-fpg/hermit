@@ -1,4 +1,8 @@
 {-# LANGUAGE CPP, InstanceSigs, TypeSynonymInstances, FlexibleInstances #-}
+#if __GLASGOW_HASKELL__ > 706
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+#endif
+-- Above shadowing disabled because the eqExprX function has lots of shadowing
 module HERMIT.GHC
     ( -- * GHC Imports
       -- | Things that have been copied from GHC, or imported directly, for various reasons.
@@ -48,10 +52,14 @@ module HERMIT.GHC
 import qualified Control.Monad.IO.Class
 import qualified MonadUtils (MonadIO,liftIO)
 import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, liftIO, PluginPass)
+import TysPrim (alphaTy, alphaTyVars)
+import PprCore (pprCoreExpr)
+import Data.Monoid hiding ((<>))
 #else
 -- GHC 7.8
 -- we hide these so that they don't get inadvertently used.  See Core.hs
 import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass) 
+import TysPrim (alphaTyVars)
 #endif
 
 -- hacky direct GHC imports
@@ -61,9 +69,7 @@ import Kind (isKind,isLiftedTypeKindCon)
 import OccurAnal (occurAnalyseExpr)
 import Pair (Pair(..))
 import Panic (GhcException(ProgramError), throwGhcException)
-import PprCore (pprCoreExpr)
 import TypeRep (Type(..),TyLit(..))
-import TysPrim (alphaTy, alphaTyVars)
 
 #if __GLASGOW_HASKELL__ <= 706
 import Data.Maybe (isJust)
@@ -83,7 +89,6 @@ import HERMIT.GHC.Typechecker
 #endif
 
 import Data.List (intercalate)
-import Data.Monoid hiding ((<>))
 
 --------------------------------------------------------------------------
 
