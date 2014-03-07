@@ -63,6 +63,6 @@ one-td (fold-remembered origwork)
 
 }
 
-any-call (unfold 'wrap)
-simplify
+{ def-rhs ; let-elim }
 
+any-call (unfold 'wrap)

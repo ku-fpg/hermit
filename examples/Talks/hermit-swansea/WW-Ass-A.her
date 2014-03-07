@@ -1,4 +1,4 @@
--- Worker/Wrapper Assumption A:  wrap (unwrap h) <=> h
+-- Worker/Wrapper Assumption A:  wrap (unwrap h) => h
 
 --  wrap (unwrap h)
                               { eta-expand 'n }

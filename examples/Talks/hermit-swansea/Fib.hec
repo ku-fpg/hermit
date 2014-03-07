@@ -1,0 +1,45 @@
+-- "hermit Fib.hs +Main Fib.hec"
+
+flatten-module
+
+binding-of 'fib
+{
+
+load-as-rewrite "WWA" "WW-Ass-A.her"
+ww-split [| wrap |] [| unwrap |] (ww-AssA-to-AssC WWA)
+
+binding-of 'work ; remember origwork
+
+def-rhs ; eta-expand 'n
+
+any-call (unfold 'unwrap)
+
+lam-body ; case-split-inline 'n
+
+{ case-alt 0 ; any-call (unfold 'f) }
+{ [ case-alt 1, alt-rhs, app-arg] ; any-call (unfold 'f) }
+simplify
+
+[ case-alt 1, alt-rhs ]
+{ app-arg ; any-call (unfold-remembered origwork) }
+
+any-bu (forward (ww-assumption-A [| wrap |] [| unwrap |] WWA ))
+
+{ arg 3 ; arg 1 ; let-intro 'x }
+{ arg 2 ; let-intro 'y }
+innermost let-float
+try (reorder-lets ['x,'y])
+one-td (fold 'y)
+let-tuple 'xy
+
+one-td (fold 'unwrap)
+
+one-td (fold-remembered origwork)
+
+}
+
+{ def-rhs ; let-elim }
+
+any-call (unfold 'wrap)
+
+
