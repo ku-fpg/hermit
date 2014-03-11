@@ -53,6 +53,8 @@ module HERMIT.Kure
        , consRecT, consRecAllR, consRecAnyR, consRecOneR
        , consRecDefT, consRecDefAllR, consRecDefAnyR, consRecDefOneR
        , caseAltT, caseAltAllR, caseAltAnyR, caseAltOneR
+       -- ** Recursive Composite Congruence Combinators
+       , progBindsT, progBindsAllR, progBindsAnyR, progBindsOneR
        -- ** Types
        , tyVarT, tyVarR
        , litTyT, litTyR
@@ -868,6 +870,33 @@ caseAltOneR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch 
             -> Rewrite c m CoreExpr
 caseAltOneR rsc rw rty ralts = caseOneR rsc rw rty (\ n -> let (rcon,rvs,re) = ralts n in altOneR rcon rvs re)
 {-# INLINE caseAltOneR #-}
+
+---------------------------------------------------------------------
+
+-- Recursive composite congruence combinators.
+
+-- | Translate all top-level binding groups in a program.
+progBindsT :: forall c m a b. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => (Int -> Translate c m CoreBind a) -> ([a] -> b) -> Translate c m CoreProg b
+progBindsT ts f = f <$> progBindsTaux 0
+  where
+    progBindsTaux :: Int -> Translate c m CoreProg [a]
+    progBindsTaux n = progNilT [] <+ progConsT (ts n) (progBindsTaux (succ n)) (:)
+{-# INLINE progBindsT #-}
+
+-- | Rewrite all top-level binding groups in a program.
+progBindsAllR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => (Int -> Rewrite c m CoreBind) -> Rewrite c m CoreProg
+progBindsAllR rs = progBindsT rs bindsToProg
+{-# INLINE progBindsAllR #-}
+
+-- | Rewrite any top-level binding groups in a program.
+progBindsAnyR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => (Int -> Rewrite c m CoreBind) -> Rewrite c m CoreProg
+progBindsAnyR rs = unwrapAnyR $ progBindsAllR (wrapAnyR . rs)
+{-# INLINE progBindsAnyR #-}
+
+-- | Rewrite any top-level binding groups in a program.
+progBindsOneR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => (Int -> Rewrite c m CoreBind) -> Rewrite c m CoreProg
+progBindsOneR rs = unwrapOneR $ progBindsAllR (wrapOneR . rs)
+{-# INLINE progBindsOneR #-}
 
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
