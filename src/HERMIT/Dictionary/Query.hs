@@ -145,6 +145,7 @@ coercionConstructor = \case
                          NthCo{}       -> "NthCo"
                          InstCo{}      -> "InstCo"
 #if __GLASGOW_HASKELL__ > 706
+                         AxiomRuleCo{} -> "AxiomRuleCo"
                          LRCo{}        -> "LRCo"
                          SubCo{}       -> "SubCo"
                          UnivCo{}      -> "UnivCo"
