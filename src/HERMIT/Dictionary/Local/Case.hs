@@ -165,7 +165,7 @@ caseFloatArg mfstr mstrictCore = let mstrict = extractR <$> mstrictCore
 
 -- | @f (case s of alt1 -> e1; alt2 -> e2)@ ==> @case s of alt1 -> f e1; alt2 -> f e2@
 --   Only safe if @f@ is strict.
-caseFloatArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasGlobalRdrEnv c)
+caseFloatArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c)
               => Maybe CoreExpr -> Maybe (Rewrite c HermitM CoreExpr) -- ^ Maybe the function to float past, and maybe a proof of its strictness.
               -> Rewrite c HermitM CoreExpr
 caseFloatArgR mf mstrict = prefixFailMsg "Case floating from App argument failed: " $

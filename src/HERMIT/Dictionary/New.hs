@@ -92,7 +92,7 @@ nonRecIntro nm expr = parseCoreExprT expr >>= nonRecIntroR nm
 #if __GLASGOW_HASKELL__ > 706
 buildTypeableT :: TranslateH Type CoreExpr
 buildTypeableT = do
-    (i, bnds) <- translate $ \ c -> liftCoreM . buildTypeable (hermitC_modguts c)
+    (i, bnds) <- contextfreeT $ \ t -> getModGuts >>= liftCoreM . flip buildTypeable t
     return (mkCoreLets bnds (varToCoreExpr i)) >>> tryR (extractR simplifyR) >>> observeR "buildTypeableT result"
 #endif
 

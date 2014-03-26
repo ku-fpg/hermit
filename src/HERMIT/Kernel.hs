@@ -78,18 +78,18 @@ hermitKernel callback modGuts = do
 
                 , abortK  = sendDone $ \ _ -> throwGhcException (ProgramError "Exiting HERMIT and aborting GHC compilation.")
 
-                , applyK = \ name r hm_env -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, guts) -> runHM hm_env
+                , applyK = \ name r hm_env -> sendReq $ \ st -> findWithErrMsg name st fail $ \ (defs, guts) -> runHM (guts,hm_env)
                                                                                                                defs
                                                                                                                (\ defs' guts' -> do ast <- liftIO $ takeMVar nextASTname
                                                                                                                                     return $ return (ast, insert ast (defs',guts') st))
                                                                                                                (return . fail)
-                                                                                                               (apply r (initHermitC guts) guts)
+                                                                                                               (apply r initHermitC guts)
 
-                , queryK = \ name t hm_env -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM hm_env
+                , queryK = \ name t hm_env -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM (core,hm_env)
                                                                                                                       defs
                                                                                                                       (\ _ -> return.return)
                                                                                                                       (return . fail)
-                                                                                                                      (apply t (initHermitC core) core)
+                                                                                                                      (apply t initHermitC core)
 
                 , deleteK = \ name -> sendReqWrite (return . delete name)
 

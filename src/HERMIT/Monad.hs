@@ -17,6 +17,9 @@ module HERMIT.Monad
           , saveDef
           , lookupDef
           , getStash
+            -- * Reader Information
+          , HasHermitMEnv(..)
+          , HasModGuts(..)
             -- * Messages
           , HermitMEnv(..)
           , DebugMessage(..)
@@ -52,13 +55,13 @@ type DefStash = Map Label CoreDef
 newtype HermitMEnv = HermitMEnv { hs_debugChan :: DebugMessage -> HermitM () }
 
 -- | The HERMIT monad is kept abstract.
-newtype HermitM a = HermitM (HermitMEnv -> DefStash -> CoreM (KureM (DefStash, a)))
+newtype HermitM a = HermitM ((ModGuts,HermitMEnv) -> DefStash -> CoreM (KureM (DefStash, a)))
 
-runHermitM :: HermitM a -> HermitMEnv -> DefStash -> CoreM (KureM (DefStash, a))
+runHermitM :: HermitM a -> (ModGuts,HermitMEnv) -> DefStash -> CoreM (KureM (DefStash, a))
 runHermitM (HermitM f) = f
 
 -- | Eliminator for 'HermitM'.
-runHM :: HermitMEnv -> DefStash -> (DefStash -> a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b
+runHM :: (ModGuts,HermitMEnv) -> DefStash -> (DefStash -> a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b
 runHM env s success failure ma = runHermitM ma env s >>= runKureM (\ (a,b) -> success a b) failure
 
 ----------------------------------------------------------------------------
@@ -71,8 +74,22 @@ getStash = HermitM (\ _ s -> return $ return (s, s))
 putStash :: DefStash -> HermitM ()
 putStash s = HermitM (\ _ _ -> return $ return (s, ()))
 
+class HasHermitMEnv m where
+    -- | Get the HermitMEnv
+    getHermitMEnv :: m HermitMEnv
+
+instance HasHermitMEnv HermitM where
+    getHermitMEnv = HermitM (\ rdr s -> return $ return (s, snd rdr))
+
+class HasModGuts m where
+    -- | Get the ModGuts (Note: this is a snapshot of the ModGuts from before the current transformation.)
+    getModGuts :: m ModGuts
+
+instance HasModGuts HermitM where
+    getModGuts = HermitM (\ rdr s -> return $ return (s, fst rdr))
+
 sendDebugMessage :: DebugMessage -> HermitM ()
-sendDebugMessage msg = do env <- HermitM $ \ ch s -> return $ return (s, ch)
+sendDebugMessage msg = do env <- getHermitMEnv
                           hs_debugChan env msg
 
 -- | Save a definition for future use.

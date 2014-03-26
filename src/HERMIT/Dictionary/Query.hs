@@ -173,7 +173,7 @@ compareBoundIdsT i1 i2 =
      guardMsg (e1 `exprAlphaEq` e2) "bindings are not alpha-equivalent."
 
 -- | Compare the definitions of the two named identifiers for alpha-equality.
-compareBoundIds :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasGlobalRdrEnv c) => String -> String -> Translate c HermitM x ()
+compareBoundIds :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => String -> String -> Translate c HermitM x ()
 compareBoundIds nm1 nm2 = do i1 <- findIdT nm1
                              i2 <- findIdT nm2
                              compareBoundIdsT i1 i2

@@ -8,7 +8,8 @@ module HERMIT.Dictionary.Rules
        , rulesR
        , ruleToEqualityT
        , ruleNameToEqualityT
-       , getSingletonHermitRuleT
+       , getHermitRuleT
+       , getHermitRulesT
        -- , verifyCoreRuleT
        -- , verifyRuleT
        -- , ruleLhsIntroR
@@ -122,37 +123,30 @@ ruleR :: (ReadBindings c, HasCoreRules c) => RuleNameString -> Rewrite c HermitM
 ruleR r = do
     theRules <- getHermitRulesT
     case lookup r theRules of
-        Nothing -> fail $ "failed to find rule: " ++ show r
-        Just rr -> rulesToRewriteH rr
+        Nothing -> fail $ "failed to find rule: " ++ show r ++ ". If you think the rule exists, try running the flatten-module command at the top level."
+        Just rr -> rulesToRewriteH [rr]
 
 rulesR :: (ReadBindings c, HasCoreRules c) => [RuleNameString] -> Rewrite c HermitM CoreExpr
 rulesR = orR . map ruleR
 
-getHermitRulesT :: HasCoreRules c => Translate c HermitM a [(RuleNameString, [CoreRule])]
+-- | Return all the RULES (including specialization RULES on binders) currently in scope.
+getHermitRulesT :: HasCoreRules c => Translate c HermitM a [(RuleNameString, CoreRule)]
 getHermitRulesT = contextonlyT $ \ c -> do
-    rb     <- liftCoreM getRuleBase
-    hscEnv <- liftCoreM getHscEnv
-    rb'    <- liftM eps_rule_base $ liftIO $ runIOEnv () $ readMutVar (hsc_EPS hscEnv)
-    return [ ( unpackFS (ruleName r), [r] )
-           | r <- hermitCoreRules c ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
+    rb      <- liftCoreM getRuleBase
+    mgRules <- liftM mg_rules getModGuts
+    hscEnv  <- liftCoreM getHscEnv
+    rb'     <- liftM eps_rule_base $ liftIO $ runIOEnv () $ readMutVar (hsc_EPS hscEnv)
+    return [ (unpackFS (ruleName r), r)
+           | r <- hermitCoreRules c ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb') ++ mgRules
            ]
 
-getHermitRuleT :: HasCoreRules c => RuleNameString -> Translate c HermitM a [CoreRule]
+getHermitRuleT :: HasCoreRules c => RuleNameString -> Translate c HermitM a CoreRule
 getHermitRuleT name =
   do rulesEnv <- getHermitRulesT
      case filter ((name ==) . fst) rulesEnv of
-       []         -> fail ("Rule \"" ++ name ++ "\" not found.")
-       [(_,rus)]  -> return rus
-       _          -> fail ("Rule name \"" ++ name ++ "\" is ambiguous.")
-
-getSingletonHermitRuleT :: HasCoreRules c => RuleNameString -> Translate c HermitM a CoreRule
-getSingletonHermitRuleT name =
-  do rus <- getHermitRuleT name
-     case rus of
-        []    -> fail "No rules with that name."
-        [ru]  -> return ru
-        _     -> fail "Multiple rules with that name."
-
+       []      -> fail ("Rule \"" ++ name ++ "\" not found.")
+       [(_,r)] -> return r
+       _       -> fail ("Rule name \"" ++ name ++ "\" is ambiguous.")
 
 rulesHelpListT :: HasCoreRules c => Translate c HermitM a String
 rulesHelpListT = do
@@ -160,7 +154,7 @@ rulesHelpListT = do
     return (intercalate "\n" $ map fst rulesEnv)
 
 ruleHelpT :: HasCoreRules c => RuleNameString -> Translate c HermitM a String
-ruleHelpT name = showSDoc <$> dynFlagsT <*> (pprRulesForUser <$> getHermitRuleT name)
+ruleHelpT name = showSDoc <$> dynFlagsT <*> ((pprRulesForUser . (:[])) <$> getHermitRuleT name)
 
 -- Too much information.
 -- rulesHelpT :: HasCoreRules c => Translate c HermitM a String
@@ -194,14 +188,14 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
          _ -> fail $ "found multiple bindings for " ++ nm
 
 -- | Returns the universally quantified binders, the LHS, and the RHS.
-ruleToEqualityT :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m) => Translate c m CoreRule CoreExprEquality
+ruleToEqualityT :: (BoundVars c, HasDynFlags m, HasModGuts m, MonadThings m, MonadCatch m) => Translate c m CoreRule CoreExprEquality
 ruleToEqualityT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
   do r@Rule{} <- idR -- other possibility is "BuiltinRule"
      f <- findIdT (getOccString $ ru_fn r) -- TODO: refactor name lookup functions (like findIdT) to avoid intermediate String here
      return $ CoreExprEquality (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
 
-ruleNameToEqualityT :: (BoundVars c, HasGlobalRdrEnv c, HasCoreRules c) => RuleNameString -> Translate c HermitM a CoreExprEquality
-ruleNameToEqualityT name = getSingletonHermitRuleT name >>> ruleToEqualityT
+ruleNameToEqualityT :: (BoundVars c, HasCoreRules c) => RuleNameString -> Translate c HermitM a CoreExprEquality
+ruleNameToEqualityT name = getHermitRuleT name >>> ruleToEqualityT
 
 ------------------------------------------------------------------------
 

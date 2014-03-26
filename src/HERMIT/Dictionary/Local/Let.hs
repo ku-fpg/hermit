@@ -499,7 +499,7 @@ nonRecIntroR nm e = readerT $ \case
 
 -- | Introduce a local definition for a (possibly imported) identifier.
 -- Rewrites occurences of the identifier to point to this new local definiton.
-letIntroUnfoldingR :: (BoundVars c, HasGlobalRdrEnv c, ReadBindings c) => String -> Rewrite c HermitM CoreExpr
+letIntroUnfoldingR :: (BoundVars c, ReadBindings c) => String -> Rewrite c HermitM CoreExpr
 letIntroUnfoldingR nm = do
     i <- findIdT nm
     (rhs,_) <- getUnfoldingT AllBinders <<< return i

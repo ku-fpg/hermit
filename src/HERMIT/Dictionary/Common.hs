@@ -50,10 +50,11 @@ import Data.Monoid
 import Control.Arrow
 import Control.Monad
 
-import HERMIT.Kure
-import HERMIT.Core
 import HERMIT.Context
+import HERMIT.Core
 import HERMIT.GHC
+import HERMIT.Kure
+import HERMIT.Monad
 
 ------------------------------------------------------------------------------
 
@@ -203,19 +204,20 @@ findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
                              _ : _ : _  -> fail "multiple matching variables in scope."
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findIdT :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m, MonadCatch m) => String -> Translate c m a Id
+findIdT :: (BoundVars c, HasModGuts m, HasDynFlags m, MonadThings m, MonadCatch m) => String -> Translate c m a Id
 findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
              contextonlyT (findId nm)
 
-findId :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => String -> c -> m Id
+findId :: (BoundVars c, HasModGuts m, HasDynFlags m, MonadThings m) => String -> c -> m Id
 findId nm c = case {- filter (isValName . idName) $ -} varSetElems (findBoundVars nm c) of
-                []         -> findIdMG nm c
+                []         -> findIdMG nm 
                 [v]        -> return v
                 _ : _ : _  -> fail "multiple matching variables in scope."
 
-findIdMG :: (BoundVars c, HasGlobalRdrEnv c, HasDynFlags m, MonadThings m) => String -> c -> m Id
-findIdMG nm c =
-    case filter isValName $ findNamesFromString (hermitGlobalRdrEnv c) nm of
+findIdMG :: (HasModGuts m, HasDynFlags m, MonadThings m) => String -> m Id
+findIdMG nm = do
+    rdrEnv <- liftM mg_rdr_env getModGuts
+    case filter isValName $ findNamesFromString rdrEnv nm of
       []  -> findIdBuiltIn nm
       [n] | isVarName n     -> lookupId n 
           | isDataConName n ->  liftM dataConWrapId $ lookupDataCon n

@@ -66,7 +66,7 @@ stashFoldAnyR :: ReadBindings c => Rewrite c HermitM CoreExpr
 stashFoldAnyR = setFailMsg "Fold failed: no definitions could be folded." $
                 catchesM =<< map stashFoldR <$> (Map.keys <$> constT getStash)
 
-foldR :: (HasGlobalRdrEnv c, ReadBindings c) => String -> Rewrite c HermitM CoreExpr
+foldR :: ReadBindings c => String -> Rewrite c HermitM CoreExpr
 foldR nm = prefixFailMsg "Fold failed: " $ do
     v <- findIdT nm
     foldVarR v Nothing

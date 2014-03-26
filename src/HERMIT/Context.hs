@@ -8,7 +8,6 @@ module HERMIT.Context
          -- ** The Standard Context
        , HermitC
        , initHermitC
-       , hermitC_modguts -- TODO: for now
          -- ** Bindings
        , HermitBindingSite(..)
        , BindingDepth
@@ -36,8 +35,6 @@ module HERMIT.Context
        , lookupHermitBinding
        , lookupHermitBindingDepth
        , lookupHermitBindingSite
-         -- ** Accessing the Global Reader Environment from the context
-       , HasGlobalRdrEnv(..)
          -- ** Accessing GHC rewrite rules from the context
        , HasCoreRules(..)
 ) where
@@ -215,16 +212,6 @@ instance HasCoreRules [CoreRule] where
 
 ------------------------------------------------------------------------
 
--- | A class of contexts that store the Global Reader Environment.
-class HasGlobalRdrEnv c where
-  hermitGlobalRdrEnv :: c -> GlobalRdrEnv
-
-instance HasGlobalRdrEnv GlobalRdrEnv where
-  hermitGlobalRdrEnv :: GlobalRdrEnv -> GlobalRdrEnv
-  hermitGlobalRdrEnv = id
-
-------------------------------------------------------------------------
-
 type AbsolutePathH = AbsolutePath Crumb
 type LocalPathH = LocalPath Crumb
 
@@ -235,28 +222,18 @@ data HermitC = HermitC
         { hermitC_bindings       :: Map Var HermitBinding   -- ^ All (important) bindings in scope.
         , hermitC_depth          :: BindingDepth            -- ^ The depth of the most recent bindings.
         , hermitC_path           :: AbsolutePathH           -- ^ The 'AbsolutePath' to the current node from the root.
-        , hermitC_globalRdrEnv   :: GlobalRdrEnv            -- ^ The top-level lexical environment.
-        , hermitC_coreRules      :: [CoreRule]              -- ^ GHC rewrite RULES.
-        , hermitC_modguts        :: ModGuts                 -- ^ Used to run the typechecker/desugarer
+        , hermitC_specRules      :: [CoreRule]              -- ^ In-scope GHC RULES found in IdInfos.
         }
 
 ------------------------------------------------------------------------
 
 -- | Create the initial HERMIT 'HermitC' by providing a 'ModGuts'.
-initHermitC :: ModGuts -> HermitC
-initHermitC modGuts = HermitC
-                        { hermitC_bindings      = empty
-                        , hermitC_depth         = 0
-                        , hermitC_path          = mempty
-                        , hermitC_globalRdrEnv  = mg_rdr_env modGuts
-                        , hermitC_coreRules     = mg_rules modGuts ++ other_rules
-                        -- We need this to run the typechecker/desugarer
-                        -- TODO: if this is undesirable, another way?
-                        , hermitC_modguts       = modGuts
-                        }
-
-    where other_rules :: [CoreRule]
-          other_rules = mg_binds modGuts >>= bindToVarExprs >>= (idCoreRules . fst)
+initHermitC :: HermitC
+initHermitC = HermitC { hermitC_bindings      = empty
+                      , hermitC_depth         = 0
+                      , hermitC_path          = mempty
+                      , hermitC_specRules     = []
+                      }
 
 ------------------------------------------------------------------------
 
@@ -274,11 +251,13 @@ instance ExtendPath HermitC Crumb where
 
 instance AddBindings HermitC where
   addHermitBindings :: [(Var,HermitBindingSite,AbsolutePathH)] -> HermitC -> HermitC
-  addHermitBindings vbs c = let nextDepth = succ (hermitC_depth c)
-                                vhbs      = [ (v, HB nextDepth b p) | (v,b,p) <- vbs ]
-                             in c { hermitC_bindings = fromList vhbs `union` hermitC_bindings c
-                                  , hermitC_depth    = nextDepth
-                                  }
+  addHermitBindings vbs c = 
+    let nextDepth = succ (hermitC_depth c)
+        vhbs      = [ (v, HB nextDepth b p) | (v,b,p) <- vbs ]
+    in c { hermitC_bindings  = fromList vhbs `union` hermitC_bindings c
+         , hermitC_depth     = nextDepth
+         , hermitC_specRules = hermitC_specRules c ++ concat [ idCoreRules i | (i,_,_) <- vbs, isId i ]
+         }
 
 ------------------------------------------------------------------------
 
@@ -297,12 +276,6 @@ instance ReadBindings HermitC where
 
 instance HasCoreRules HermitC where
   hermitCoreRules :: HermitC -> [CoreRule]
-  hermitCoreRules = hermitC_coreRules
-
-------------------------------------------------------------------------
-
-instance HasGlobalRdrEnv HermitC where
-  hermitGlobalRdrEnv :: HermitC -> GlobalRdrEnv
-  hermitGlobalRdrEnv = hermitC_globalRdrEnv
+  hermitCoreRules = hermitC_specRules
 
 ------------------------------------------------------------------------
