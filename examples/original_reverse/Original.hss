@@ -5,8 +5,8 @@
 flatten-module
 
 -- This is the outer rev, with the big lambda
-binding-of 'rev
-   binding-of 'rev
+consider 'rev
+   consider 'rev
    fix-intro
    any-call (unfold-rule "ww")
    any-call (unfold '.)
@@ -14,7 +14,7 @@ binding-of 'rev
    any-call (unfold 'unwrap)
    any-call (unfold '.)
    unshadow ; bash
-   any-bu case-float-arg-unsafe
+   any-bu case-float-arg
    any-bu (apply-rule "repH ++") ; bash
    any-bu (apply-rule "repH []") ; bash
    any-bu (unfold-rule "rep-abs-fusion")
@@ -22,9 +22,9 @@ binding-of 'rev
    -- This is just a setup to all completion
    { consider case ; eta-expand 'ys ; any-bu case-float-app }
    any-call (unfold 'repH)
+   any-call (unfold '.)
    any-call (unfold-rule "(:) ++")
    any-call (unfold-rule "[] ++")
    any-call (unfold 'fix) ; bash
    unshadow
    any-call (unfold 'absH)
-   { consider let ; alpha-let ["rev'"] }
