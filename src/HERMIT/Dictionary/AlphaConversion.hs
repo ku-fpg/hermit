@@ -20,16 +20,18 @@ module HERMIT.Dictionary.AlphaConversion
          -- ** Shadow Detection and Unshadowing
        , unshadowR
        , visibleVarsT
-       , freshNameGenT
-       , freshNameGenAvoiding
+       , cloneVarAvoidingT
+--       , freshNameGenAvoidingT
+--       , freshNameGenAvoiding
        , replaceVarR
        )
 where
 
 import Control.Applicative
 import Control.Arrow
-import Control.Monad (liftM, liftM2)
+import Control.Monad (liftM2)
 import Data.Char (isDigit)
+import Data.Function (on)
 import Data.List (intersect)
 import Data.Maybe (fromMaybe, listToMaybe)
 
@@ -39,6 +41,7 @@ import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Utilities(dupsBy)
 
 import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Common
@@ -97,12 +100,15 @@ externals = map (.+ Deep)
 visibleVarsT :: (BoundVars c, Monad m) => Translate c m CoreTC VarSet
 visibleVarsT = liftM2 unionVarSet boundVarsT (arr freeVarsCoreTC)
 
--- | If a name is provided replace the string with that,
---   otherwise modify the string making sure to /not/ clash with any visible variables.
-freshNameGenT :: (BoundVars c, Monad m) => Maybe String -> Translate c m CoreTC (String -> String)
-freshNameGenT mn = freshNameGenAvoiding mn `liftM` visibleVarsT
+-- | If a name is provided, use that as the name of the new variable.
+--   Otherwise modify the variable name making sure to /not/ clash with the given variables or any visible variables.
+cloneVarAvoidingT :: BoundVars c => Var -> Maybe String -> [Var] -> Translate c HermitM CoreTC Var
+cloneVarAvoidingT v mn vs =
+  do vvs <- visibleVarsT
+     let nameModifier = freshNameGenAvoiding mn (extendVarSetList vvs vs)
+     constT (cloneVarH nameModifier v)
 
--- | Use the optional argument if given, otherwise generate a new name avoiding clashes with the list of variables.
+-- | Use the optional argument if given, otherwise generate a new name avoiding clashes with the set of variables.
 freshNameGenAvoiding :: Maybe String -> VarSet -> (String -> String)
 freshNameGenAvoiding mn vs str = maybe (inventNames vs str) ((\(c:cs) -> reverse (c:(takeWhile (/='.') cs))) . reverse) mn
 -- The 'Just' case above gives the unqualified portion of the name (properly handling the compose operator '.')
@@ -124,15 +130,16 @@ inventNames curr old = head
                      _       -> 0
 
 
--- | Remove all variables from the first set that shadow a variable in the second set.
+-- | Discard variables from the first set that do not shadow a variable in the second set.
 shadowedBy :: VarSet -> VarSet -> VarSet
 shadowedBy vs fvs = let fvUqNames = map uqName (varSetElems fvs)
                      in filterVarSet (\ v -> uqName v `elem` fvUqNames) vs
 
--- | Lifted version of 'shadowedBy'.
---   Additionally, it fails if no shadows are found.
-shadowedByT :: MonadCatch m => Translate c m a VarSet -> Translate c m a VarSet -> Translate c m a VarSet
-shadowedByT t1 t2 = setFailMsg "No shadows detected." $ (liftM2 shadowedBy t1 t2) >>> acceptR (not . isEmptyVarSet)
+-- | Shadows are any duplicates in the list, or any occurrences of the list elements in the set.
+detectShadowsM :: Monad m => [Var] -> VarSet -> m VarSet
+detectShadowsM bs fvs = let ss = shadowedBy (mkVarSet bs) fvs `extendVarSetList` dupVars bs
+                         in do guardMsg (not $ isEmptyVarSet ss) "No shadows detected."
+                               return ss
 
 -- | Rename local variables with manifestly unique names (x, x0, x1, ...).
 --   Does not rename top-level definitions.
@@ -142,19 +149,25 @@ unshadowR = setFailMsg "No shadows to eliminate." $
 
   where
     unshadowExpr :: Rewrite c HermitM CoreExpr
-    unshadowExpr = do vs <- shadowedByT (mkVarSet <$> (letVarsT <+ (return <$> (caseBinderIdT <+ lamVarT))))
-                                        (unionVarSet <$> boundVarsT <*> arr freeVarsExpr)
-                      alphaLamR Nothing <+ alphaLetVarsR (varSetElems vs) <+ alphaCaseBinderR Nothing
+    unshadowExpr = do bs  <- letVarsT <+ (return <$> (caseBinderIdT <+ lamVarT))
+                      fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsExpr
+                      ss  <- detectShadowsM bs fvs
+                      alphaLamR Nothing <+ alphaLetVarsR (varSetElems ss) <+ alphaCaseBinderR Nothing
 
     unshadowAlt :: Rewrite c HermitM CoreAlt
-    unshadowAlt = do vs <- shadowedByT (arr (mkVarSet . altVars))
-                                       (unionVarSet <$> boundVarsT <*> arr freeVarsAlt)
-                     alphaAltVarsR (varSetElems vs)
+    unshadowAlt = do bs  <- arr altVars
+                     fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsAlt
+                     ss  <- detectShadowsM bs fvs
+                     alphaAltVarsR (varSetElems ss)
 
     unshadowProg :: Rewrite c HermitM CoreProg
-    unshadowProg = do is <- shadowedByT (mkVarSet <$> progConsIdsT)
-                                        (unionVarSet <$> boundVarsT <*> arr freeVarsProg)
-                      alphaProgConsIdsR (varSetElems is)
+    unshadowProg = do bs  <- progConsIdsT
+                      fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsProg
+                      ss  <- detectShadowsM bs fvs
+                      alphaProgConsIdsR (varSetElems ss)
+
+dupVars :: [Var] -> [Var]
+dupVars = dupsBy ((==) `on` uqName)
 
 -----------------------------------------------------------------------
 
@@ -182,28 +195,27 @@ replaceVars kvs v = fromMaybe v (lookup v kvs)
 -- | Alpha rename a lambda binder.  Optionally takes a suggested new name.
 alphaLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> Rewrite c HermitM CoreExpr
 alphaLamR mn = setFailMsg (wrongFormForAlpha "Lam v e") $
-              do (v, nameModifier) <- lamT idR (extractT $ freshNameGenT mn) (,)
-                 v' <- constT (cloneVarH nameModifier v)
+              do v  <- lamVarT
+                 v' <- extractT (cloneVarAvoidingT v mn [v])
                  lamAnyR (arr $ replaceVar v v') (replaceVarR v v')
 
 -----------------------------------------------------------------------
 
 -- | Alpha rename a case binder.  Optionally takes a suggested new name.
 alphaCaseBinderR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> Rewrite c HermitM CoreExpr
-alphaCaseBinderR mn = setFailMsg (wrongFormForAlpha "Case e v ty alts") $
-                     do Case _ v _ _ <- idR
-                        nameModifier <- extractT (freshNameGenT mn)
-                        v' <- constT (cloneVarH nameModifier v)
-                        caseAnyR idR (return v') idR (\ _ -> replaceVarR v v')
+alphaCaseBinderR mn = setFailMsg (wrongFormForAlpha "Case e i ty alts") $
+                     do i  <- caseBinderIdT
+                        i' <- extractT (cloneVarAvoidingT i mn [i])
+                        caseAnyR idR (return i') idR (\ _ -> replaceVarR i i')
 
 -----------------------------------------------------------------------
 
 -- | Rename the specified variable in a case alternative.  Optionally takes a suggested new name.
 alphaAltVarR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> Var -> Rewrite c HermitM CoreAlt
 alphaAltVarR mn v = do
-    nameModifier <- freshNameGenAvoiding mn <$> liftM2 unionVarSet boundVarsT (arr freeVarsAlt)
-    v' <- constT (cloneVarH nameModifier v)
     (con, vs, rhs) <- idR
+    v' <- extractT (cloneVarAvoidingT v mn vs)
+
     -- This is a bit of a hack. We include all the binders *after* v in the call to substAltR,
     -- then put the binders before v, and v', back on the front. The use of substAltR this way,
     -- handles the case where v is a type binder which substitutes into the types of bs'.
@@ -246,8 +258,8 @@ alphaCaseR = alphaCaseBinderR Nothing >+> caseAllR idR idR idR (const alphaAltR)
 -- | Alpha rename a non-recursive let binder.  Optionally takes a suggested new name.
 alphaLetNonRecR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> Rewrite c HermitM CoreExpr
 alphaLetNonRecR mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
-                    do (v, nameModifier) <- letNonRecT idR successT (extractT $ freshNameGenT mn) (\ v () nameMod -> (v, nameMod))
-                       v' <- constT (cloneVarH nameModifier v)
+                    do v  <- letNonRecVarT
+                       v' <- extractT (cloneVarAvoidingT v mn [v])
                        letNonRecAnyR (return v') idR (replaceVarR v v')
 
 -- | Alpha rename a non-recursive let binder if the variable appears in the argument list.  Optionally takes a suggested new name.
@@ -263,11 +275,10 @@ alphaLetRecIdsWithR = andR . map (uncurry alphaLetRecIdR)
   where
     -- | Rename the specified identifier bound in a recursive let.  Optionally takes a suggested new name.
     alphaLetRecIdR :: Maybe String -> Id -> Rewrite c HermitM CoreExpr
-    alphaLetRecIdR mn v = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
-                     do usedVars <- unionVarSet <$> boundVarsT
-                                                <*> letRecT (\ _ -> defT idR (arr freeVarsExpr) (flip extendVarSet)) (arr freeVarsExpr) (\ bndfvs vs -> unionVarSets (vs:bndfvs))
-                        v' <- constT (cloneVarH (freshNameGenAvoiding mn usedVars) v)
-                        letRecDefAnyR (\ _ -> (arr (replaceVar v v'), replaceVarR v v')) (replaceVarR v v')
+    alphaLetRecIdR mn i = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
+                     do is <- letRecIdsT
+                        i' <- extractT (cloneVarAvoidingT i mn is)
+                        letRecDefAnyR (\ _ -> (arr (replaceVar i i'), replaceVarR i i')) (replaceVarR i i')
 
 
 -- | Rename the identifiers bound in a Let with the given list of suggested names.
@@ -291,9 +302,9 @@ alphaLetR = letVarsT >>= alphaLetVarsR
 -- | Alpha rename a non-recursive top-level binder.  Optionally takes a suggested new name.
 alphaProgConsNonRecR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> Rewrite c HermitM CoreProg
 alphaProgConsNonRecR mn = setFailMsg (wrongFormForAlpha "ProgCons (NonRec v e) p") $
-                    do (i, nameModifier) <- consNonRecT idR successT (extractT $ freshNameGenT mn) (\ i () nameMod -> (i, nameMod))
+                    do i <- progConsNonRecIdT
                        guardMsg (not $ isExportedId i) ("Identifier " ++ var2String i ++ " is exported, and thus cannot be alpha-renamed.")
-                       i' <- constT (cloneVarH nameModifier i)
+                       i' <- extractT (cloneVarAvoidingT i mn [i])
                        consNonRecAnyR (return i') idR (replaceVarR i i')
 
 -- | Alpha rename a non-recursive top-level binder if the identifier appears in the argument list.  Optionally takes a suggested new name.
@@ -309,9 +320,8 @@ alphaProgConsRecIdsWithR = andR . map (uncurry alphaProgConsRecIdR) . filter (no
     -- | Rename the specified identifier bound in a recursive top-level binder.  Optionally takes a suggested new name.
     alphaProgConsRecIdR :: Maybe String -> Id -> Rewrite c HermitM CoreProg
     alphaProgConsRecIdR mn i =  setFailMsg (wrongFormForAlpha "ProgCons (Rec bs) p") $
-                      do usedVars <- unionVarSet <$> boundVarsT
-                                                 <*> consRecT (\ _ -> defT idR (arr freeVarsExpr) (flip extendVarSet)) (arr freeVarsProg) (\ bndfvs vs -> unionVarSets (vs:bndfvs))
-                         i' <- constT (cloneVarH (freshNameGenAvoiding mn usedVars) i)
+                      do is <- progConsRecIdsT
+                         i' <- extractT (cloneVarAvoidingT i mn is)
                          consRecDefAnyR (\ _ -> (arr (replaceVar i i'), replaceVarR i i')) (replaceVarR i i')
 
 
@@ -348,6 +358,8 @@ alphaR = setFailMsg "Cannot alpha-rename here." $
 
 -- TODO: Alpha rewrites need better error messages.  Currently the use of (<+) leads to incorrect error reporting.
 --       Though really, we first need to improve KURE to have a version of (<+) that maintains the existing error message in the case of non-matching constructors henceforth.
+
+-- TODO 2: Also, we should be able to rename inside types and coercions.
 
 -----------------------------------------------------------------------
 

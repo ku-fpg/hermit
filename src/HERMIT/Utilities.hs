@@ -1,6 +1,8 @@
 module HERMIT.Utilities
   ( -- * Utilities
     nodups
+  , dups
+  , dupsBy
   , soleElement
   , equivalentBy
   , equivalent
@@ -15,6 +17,18 @@ where
 nodups :: Eq a => [a] -> Bool
 nodups []     = True
 nodups (a:as) = (a `notElem` as) && nodups as
+
+-- | Generalisation of 'dups' to an arbitrary equality predicate.
+dupsBy :: (a -> a -> Bool) -> [a] -> [a]
+dupsBy _ []     = []
+dupsBy p (a:as) = let ds = dupsBy p as
+                   in if any (p a) as
+                        then a : ds
+                        else ds
+
+-- | Discard the last occurrence of each element in the list.  Thus the returned list contains only the duplicated elements.
+dups :: Eq a => [a] -> [a]
+dups = dupsBy (==)
 
 soleElement :: Monad m => [a] -> m a
 soleElement []  = fail "soleElement: list is empty."
