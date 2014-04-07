@@ -10,8 +10,8 @@ binding-of 'rev
    fix-intro
    any-call (unfold-rule "ww")
    any-call (unfold '.)
-   any-call (unfold 'wrap)
-   any-call (unfold 'unwrap)
+   any-call (unfold 'absR)
+   any-call (unfold 'repR)
    any-call (unfold '.)
    unshadow ; bash
    any-bu case-float-arg-unsafe
