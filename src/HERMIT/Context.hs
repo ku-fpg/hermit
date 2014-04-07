@@ -204,11 +204,11 @@ lookupHermitBindingSite v depth c = do HB d bnd _ <- lookupHermitBinding v c
 
 -- | A class of contexts that store GHC rewrite rules.
 class HasCoreRules c where
-  hermitCoreRules :: c -> [CoreRule]
+    hermitCoreRules :: c -> [CoreRule]
 
 instance HasCoreRules [CoreRule] where
-  hermitCoreRules :: [CoreRule] -> [CoreRule]
-  hermitCoreRules = id
+    hermitCoreRules :: [CoreRule] -> [CoreRule]
+    hermitCoreRules = id
 
 ------------------------------------------------------------------------
 
@@ -219,11 +219,11 @@ type LocalPathH = LocalPath Crumb
 --   The bindings here are lazy by choice, so that we can avoid the cost
 --   of building the context if we never use it.
 data HermitC = HermitC
-        { hermitC_bindings       :: Map Var HermitBinding   -- ^ All (important) bindings in scope.
-        , hermitC_depth          :: BindingDepth            -- ^ The depth of the most recent bindings.
-        , hermitC_path           :: AbsolutePathH           -- ^ The 'AbsolutePath' to the current node from the root.
-        , hermitC_specRules      :: [CoreRule]              -- ^ In-scope GHC RULES found in IdInfos.
-        }
+    { hermitC_bindings  :: Map Var HermitBinding -- ^ All (local to this module) bindings in scope.
+    , hermitC_depth     :: BindingDepth          -- ^ The depth of the most recent bindings.
+    , hermitC_path      :: AbsolutePathH         -- ^ The 'AbsolutePath' to the current node from the root.
+    , hermitC_specRules :: [CoreRule]            -- ^ In-scope GHC RULES found in IdInfos.
+    }
 
 ------------------------------------------------------------------------
 
