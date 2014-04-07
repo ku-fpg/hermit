@@ -147,7 +147,7 @@ letSubstR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m)
 letSubstR = letAllR (tryR recToNonrecR) idR >>> letNonRecSubstR
 
 -- | As 'letNonRecSubstSafeR', but attempting to convert a singleton recursive binding to a non-recursive binding first.
-letSubstSafeR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letSubstSafeR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, ReadBindings c, HasEmptyContext c, MonadCatch m) => Rewrite c m CoreExpr
 letSubstSafeR = letAllR (tryR recToNonrecR) idR >>> letNonRecSubstSafeR
 
 -- | @Let (NonRec v e) body@ ==> @body[e/v]@
@@ -159,7 +159,7 @@ letNonRecSubstR = prefixFailMsg "Let substitution failed: " $
 
 -- | Currently we always substitute types and coercions, and use a heuristic to decide whether to substitute expressions.
 --   This may need revisiting.
-letNonRecSubstSafeR :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, ReadBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letNonRecSubstSafeR :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, ReadBindings c, HasEmptyContext c, MonadCatch m) => Rewrite c m CoreExpr
 letNonRecSubstSafeR =
     do Let (NonRec v _) _ <- idR
        when (isId v) $ guardMsgM (safeSubstT v) "safety criteria not met."

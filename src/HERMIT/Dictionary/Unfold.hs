@@ -85,26 +85,26 @@ cleanupUnfoldR = do
 -- | A more powerful 'inline'. Matches two cases:
 --      Var ==> inlines
 --      App ==> inlines the head of the function call for the app tree
-unfoldR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+unfoldR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Rewrite c HermitM CoreExpr
 unfoldR = prefixFailMsg "unfold failed: " (go >>> cleanupUnfoldR)
     where go :: Rewrite c HermitM CoreExpr
           go = appAllR go idR <+ inlineR -- this order gives better error messages
 
-unfoldPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => (Id -> [CoreExpr] -> Bool) -> Rewrite c HermitM CoreExpr
+unfoldPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => (Id -> [CoreExpr] -> Bool) -> Rewrite c HermitM CoreExpr
 unfoldPredR p = callPredT p >> unfoldR
 
-unfoldNameR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => String -> Rewrite c HermitM CoreExpr
+unfoldNameR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => String -> Rewrite c HermitM CoreExpr
 unfoldNameR nm = prefixFailMsg ("unfold '" ++ nm ++ " failed: ") (callNameT nm >> unfoldR)
 
-unfoldNamesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [String] -> Rewrite c HermitM CoreExpr
+unfoldNamesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => [String] -> Rewrite c HermitM CoreExpr
 unfoldNamesR []  = fail "unfold-names failed: no names given."
 unfoldNamesR nms = setFailMsg "unfold-names failed." $
                    orR (map unfoldNameR nms)
 
-unfoldSaturatedR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+unfoldSaturatedR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Rewrite c HermitM CoreExpr
 unfoldSaturatedR = callSaturatedT >> unfoldR
 
-specializeR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+specializeR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Rewrite c HermitM CoreExpr
 specializeR = unfoldPredR (const $ all isTyCoArg)
 
 -- NOTE: Using a Rewrite because of the way the Kernel is set up.

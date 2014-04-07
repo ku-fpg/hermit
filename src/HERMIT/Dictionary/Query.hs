@@ -41,7 +41,7 @@ externals =
 
 --------------------------------------------------------
 
-infoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, BoundVars c, HasDynFlags m, MonadCatch m) => Translate c m CoreTC String
+infoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, BoundVars c, HasEmptyContext c, HasDynFlags m, MonadCatch m) => Translate c m CoreTC String
 infoT =
   do crumbs <- childrenT
      fvs    <- arr freeVarsCoreTC
@@ -156,7 +156,7 @@ coercionConstructor = \case
 --------------------------------------------------------
 
 -- | Compare the core fragments at the end of the specified 'LocalPathH's.
-compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, ReadPath c Crumb, MonadCatch m) => Translate c m Core LocalPathH -> Translate c m Core LocalPathH -> Translate c m Core ()
+compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Translate c m Core LocalPathH -> Translate c m Core LocalPathH -> Translate c m Core ()
 compareCoreAtT p1T p2T =
   do p1 <- p1T
      p2 <- p2T

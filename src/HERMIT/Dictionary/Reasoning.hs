@@ -82,7 +82,7 @@ eqRhsIntroR (CoreExprEquality bs _ rhs) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
 --
 -- The high level idea: create a temporary function with two definitions.
 -- Fold one of the defintions, then immediately unfold the other.
-birewrite :: (AddBindings c, ReadBindings c, ExtendPath c Crumb, ReadPath c Crumb) => CoreExprEquality -> BiRewrite c HermitM CoreExpr
+birewrite :: (AddBindings c, ReadBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c) => CoreExprEquality -> BiRewrite c HermitM CoreExpr
 birewrite (CoreExprEquality bnds l r) = bidirectional (foldUnfold l r) (foldUnfold r l)
     where foldUnfold lhs rhs = translate $ \ c e -> do
             let lhsLam = mkCoreLams bnds lhs
@@ -118,7 +118,7 @@ instance BuildEquality a => BuildEquality (CoreExpr -> a) where
         return $ CoreExprEquality (x:bnds) lhs rhs
 
 -- | Verify that a 'CoreExprEquality' holds, by applying a rewrite to each side, and checking that the results are equal.
-verifyCoreExprEqualityT :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, Walker c Core) => CoreExprEqualityProof c m -> Translate c m CoreExprEquality ()
+verifyCoreExprEqualityT :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c Core) => CoreExprEqualityProof c m -> Translate c m CoreExprEquality ()
 verifyCoreExprEqualityT (lhsR,rhsR) =
      do CoreExprEquality bs lhs rhs <- idR
         verifyEqualityCommonTargetT lhs rhs (withVarsInScope bs lhsR, withVarsInScope bs rhsR)

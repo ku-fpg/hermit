@@ -98,12 +98,12 @@ externals = map (.+ KURE)
 
 ------------------------------------------------------------------------------------
 
-hfocusR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m Core LocalPathH -> Rewrite c m Core -> Rewrite c m Core
+hfocusR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Translate c m Core LocalPathH -> Rewrite c m Core -> Rewrite c m Core
 hfocusR tp r = do lp <- tp
                   localPathR lp r
 {-# INLINE hfocusR #-}
 
-hfocusT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m Core LocalPathH -> Translate c m Core String -> Translate c m Core String
+hfocusT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Translate c m Core LocalPathH -> Translate c m Core String -> Translate c m Core String
 hfocusT tp t = do lp <- tp
                   localPathT lp t
 {-# INLINE hfocusT #-}
@@ -122,7 +122,7 @@ testQuery r = f `liftM` testM r
 ------------------------------------------------------------------------------------
 
 -- | Top-down traversal tuned to matching function calls.
-anyCallR :: forall c m. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m)
+anyCallR :: forall c m. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m)
          => Rewrite c m Core -> Rewrite c m Core
 anyCallR rr = prefixFailMsg "any-call failed: " $
               readerT $ \ e -> case e of

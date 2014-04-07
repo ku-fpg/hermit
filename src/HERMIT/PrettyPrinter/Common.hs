@@ -88,7 +88,7 @@ data HermitMark
 
 -- These are the attributes
 data Attr = BndrAttr AbsolutePathH -- path to binding of a variable
-          | Color SyntaxForColor   
+          | Color SyntaxForColor
           | PathAttr AbsolutePathH -- path to this spot
           | SpecialFont
     deriving (Eq, Show)
@@ -161,6 +161,11 @@ instance AddBindings PrettyC where
 instance BoundVars PrettyC where
   boundVars :: PrettyC -> VarSet
   boundVars = mkVarSet . M.keys . prettyC_vars
+
+instance HasEmptyContext PrettyC where
+  setEmptyContext :: PrettyC -> PrettyC
+  setEmptyContext c = c { prettyC_path = mempty
+                        , prettyC_vars = M.empty}
 
 ------------------------------------------------------------------------
 

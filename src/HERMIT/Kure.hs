@@ -124,7 +124,7 @@ type PathH          = Path Crumb
 ---------------------------------------------------------------------
 
 -- | Walking over modules, programs, binding groups, definitions, expressions and case alternatives.
-instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c Core where
+instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c) => Walker c Core where
 
   allR :: forall m. MonadCatch m => Rewrite c m Core -> Rewrite c m Core
   allR r = prefixFailMsg "allR failed: " $
@@ -248,7 +248,7 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c TyCo 
 ---------------------------------------------------------------------
 
 -- | Walking over modules, programs, binding groups, definitions, expressions and case alternatives.
-instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c CoreTC where
+instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c) => Walker c CoreTC where
 
   allR :: forall m. MonadCatch m => Rewrite c m CoreTC -> Rewrite c m CoreTC
   allR r = prefixFailMsg "allR failed: " $
@@ -300,14 +300,18 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c CoreT
 
 ---------------------------------------------------------------------
 
+-- Note that we deliberately set the context to empty when descending into a ModGuts.
+-- This is to hide the top-level definitions that we include in the context when focusses on ModGuts.
+-- This is slightly awkward, but pragmatically useful.
+
 -- | Translate a module.
 --   Slightly different to the other congruence combinators: it passes in /all/ of the original to the reconstruction function.
-modGutsT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreProg a -> (ModGuts -> a -> b) -> Translate c m ModGuts b
-modGutsT t f = translate $ \ c guts -> f guts <$> apply t (c @@ ModGuts_Prog) (bindsToProg $ mg_binds guts)
+modGutsT :: (ExtendPath c Crumb, HasEmptyContext c, Monad m) => Translate c m CoreProg a -> (ModGuts -> a -> b) -> Translate c m ModGuts b
+modGutsT t f = translate $ \ c guts -> f guts <$> apply t (setEmptyContext c @@ ModGuts_Prog) (bindsToProg $ mg_binds guts)
 {-# INLINE modGutsT #-}
 
 -- | Rewrite the 'CoreProg' child of a module.
-modGutsR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreProg -> Rewrite c m ModGuts
+modGutsR :: (ExtendPath c Crumb, HasEmptyContext c, Monad m) => Rewrite c m CoreProg -> Rewrite c m ModGuts
 modGutsR r = modGutsT r (\ guts p -> guts {mg_binds = progToBinds p})
 {-# INLINE modGutsR #-}
 

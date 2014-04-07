@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleContexts, FlexibleInstances, InstanceSigs #-}
 
 module HERMIT.Dictionary.Navigation
        ( -- * Navigation
@@ -73,7 +73,7 @@ parentOfT t = withPatFailMsg "Path points to origin, there is no parent." $
 -----------------------------------------------------------------------
 
 -- | Find the path to the RHS of a binding.
-rhsOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => (Var -> Bool) -> Translate c m Core LocalPathH
+rhsOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => (Var -> Bool) -> Translate c m Core LocalPathH
 rhsOfT p = prefixFailMsg ("rhs-of failed: ") $
            do lp <- onePathToT (arr $ bindingOf p . inject)
               case lastCrumb lp of
@@ -85,17 +85,17 @@ rhsOfT p = prefixFailMsg ("rhs-of failed: ") $
                 Nothing -> defOrNonRecT successT lastCrumbT (\ () cr -> mempty @@ cr)
 
 -- | Find the path to the binding group of a variable.
-bindingGroupOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => (Var -> Bool) -> Translate c m CoreTC LocalPathH
+bindingGroupOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => (Var -> Bool) -> Translate c m CoreTC LocalPathH
 bindingGroupOfT p = prefixFailMsg ("binding-group-of failed: ") $
                     oneNonEmptyPathToT (promoteBindT $ arr $ bindingGroupOf p)
 
 -- | Find the path to the binding of a variable.
-bindingOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => (Var -> Bool) -> Translate c m CoreTC LocalPathH
+bindingOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => (Var -> Bool) -> Translate c m CoreTC LocalPathH
 bindingOfT p = prefixFailMsg ("binding-of failed: ") $
                oneNonEmptyPathToT (arr $ bindingOf p)
 
 -- | Find the path to the first occurrence occurrence of a variable.
-occurrenceOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => (Var -> Bool) -> Translate c m CoreTC LocalPathH
+occurrenceOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => (Var -> Bool) -> Translate c m CoreTC LocalPathH
 occurrenceOfT p = prefixFailMsg ("occurrence-of failed: ") $
                   oneNonEmptyPathToT (arr $ occurrenceOf p)
 
@@ -167,19 +167,19 @@ varOccurrenceCoercion _           = Nothing
 -----------------------------------------------------------------------
 
 -- | Find all possible targets of 'occurrenceOfT'.
-occurrenceOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+occurrenceOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Translate c m CoreTC VarSet
 occurrenceOfTargetsT = allT $ crushbuT (arr varOccurrence >>> projectT >>^ unitVarSet)
 
 -- | Find all possible targets of 'bindingOfT'.
-bindingOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+bindingOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Translate c m CoreTC VarSet
 bindingOfTargetsT = allT $ crushbuT (arr binders)
 
 -- | Find all possible targets of 'bindingGroupOfT'.
-bindingGroupOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+bindingGroupOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Translate c m CoreTC VarSet
 bindingGroupOfTargetsT = allT $ crushbuT (promoteBindT $ arr (mkVarSet . bindVars))
 
 -- | Find all possible targets of 'rhsOfT'.
-rhsOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m CoreTC VarSet
+rhsOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Translate c m CoreTC VarSet
 rhsOfTargetsT = crushbuT (promoteBindT (arr binderBind) <+ promoteDefT (arr binderDef))
 
 -----------------------------------------------------------------------
@@ -207,14 +207,14 @@ considerables =   [ ("bind",Binding)
                   , ("coerce",CoercionExpr)
                   ]
 
-considerConstruct :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => String -> Translate c m Core LocalPathH
+considerConstruct :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => String -> Translate c m Core LocalPathH
 considerConstruct str = case string2considerable str of
-                          Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". Perhaps you meant \"binding-of '" ++ str ++ "\"? " 
+                          Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". Perhaps you meant \"binding-of '" ++ str ++ "\"? "
                                             ++ recognizedConsiderables ++ "."
                           Just c  -> considerConstructT c
 
 -- | Find the path to the first matching construct.
-considerConstructT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Considerable -> Translate c m Core LocalPathH
+considerConstructT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Considerable -> Translate c m Core LocalPathH
 considerConstructT con = oneNonEmptyPathToT (arr $ underConsideration con)
 
 string2considerable :: String -> Maybe Considerable
@@ -248,24 +248,29 @@ nthArgPath n = contextfreeT $ \ e -> let funCrumbs = appCount e - 1 - n
 
 ---------------------------------------------------------------------------------------
 
-exhaustRepeatCrumbT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c CoreTC, MonadCatch m) => Crumb -> Translate c m CoreTC LocalPathH
+instance HasEmptyContext c => HasEmptyContext (ExtendContext c (LocalPath Crumb)) where
+  setEmptyContext :: ExtendContext c (LocalPath Crumb) -> ExtendContext c (LocalPath Crumb)
+  setEmptyContext ec = ec { baseContext = setEmptyContext (baseContext ec)
+                          , extraContext = mempty }
+
+exhaustRepeatCrumbT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, Walker c CoreTC, MonadCatch m) => Crumb -> Translate c m CoreTC LocalPathH
 exhaustRepeatCrumbT cr = let l = exhaustPathL (repeat cr)
                           in withLocalPathT (focusT l exposeLocalPathT)
 
 -- | Construct a path to the body of a sequence of lambdas.
-lamsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c CoreTC, MonadCatch m) => Translate c m CoreExpr LocalPathH
+lamsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, Walker c CoreTC, MonadCatch m) => Translate c m CoreExpr LocalPathH
 lamsBodyT = extractT (exhaustRepeatCrumbT Lam_Body)
 
 -- | Construct a path to the body of a sequence of let bindings.
-letsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c CoreTC, MonadCatch m) => Translate c m CoreExpr LocalPathH
+letsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, Walker c CoreTC, MonadCatch m) => Translate c m CoreExpr LocalPathH
 letsBodyT = extractT (exhaustRepeatCrumbT Let_Body)
 
 -- | Construct a path to end of a program.
-progEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c CoreTC, MonadCatch m) => Translate c m CoreProg LocalPathH
+progEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, Walker c CoreTC, MonadCatch m) => Translate c m CoreProg LocalPathH
 progEndT = extractT (exhaustRepeatCrumbT ProgCons_Tail)
 
 -- | Construct a path to teh end of a program, starting at the 'ModGuts'.
-gutsProgEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c CoreTC, MonadCatch m) => Translate c m ModGuts LocalPathH
+gutsProgEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, Walker c CoreTC, MonadCatch m) => Translate c m ModGuts LocalPathH
 gutsProgEndT = modGutsT progEndT (\ _ p -> (mempty @@ ModGuts_Prog) <> p)
 
 ---------------------------------------------------------------------------------------

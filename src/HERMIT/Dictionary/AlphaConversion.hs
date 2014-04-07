@@ -143,7 +143,7 @@ detectShadowsM bs fvs = let ss = shadowedBy (mkVarSet bs) fvs `extendVarSetList`
 
 -- | Rename local variables with manifestly unique names (x, x0, x1, ...).
 --   Does not rename top-level definitions.
-unshadowR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM Core
+unshadowR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasEmptyContext c) => Rewrite c HermitM Core
 unshadowR = setFailMsg "No shadows to eliminate." $
            anytdR (promoteExprR unshadowExpr <+ promoteAltR unshadowAlt <+ promoteProgR unshadowProg)
 

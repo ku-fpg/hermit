@@ -30,7 +30,7 @@ import HERMIT.Dictionary.Undefined
 
 ------------------------------------------------------------------------------
 
-inductionCaseSplit :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => [Var] -> Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]
+inductionCaseSplit :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => [Var] -> Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]
 inductionCaseSplit vs i lhsE rhsE =
     do -- first construct an expression containing both the LHS and the RHS
        il <- constT $ newIdH "dummyL" (exprKindOrType lhsE)

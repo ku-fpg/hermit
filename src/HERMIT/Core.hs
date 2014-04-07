@@ -113,7 +113,7 @@ bindsToProg :: [CoreBind] -> CoreProg
 bindsToProg = foldr ProgCons ProgNil
 {-# INLINE bindsToProg #-}
 
--- | Extract the list of identifier/expression pairs from a binding group.
+-- | Extract the list of variable/expression pairs from a binding group.
 bindToVarExprs :: CoreBind -> [(Var,CoreExpr)]
 bindToVarExprs (NonRec v e) = [(v,e)]
 bindToVarExprs (Rec bds)    = bds

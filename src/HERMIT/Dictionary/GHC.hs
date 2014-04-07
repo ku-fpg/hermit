@@ -167,7 +167,7 @@ dezombifyR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
 dezombifyR = varR (acceptR isDeadBinder >>^ zapVarOccInfo)
 
 -- | Apply 'occurAnalyseExprR' to all sub-expressions.
-occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m Core
 occurAnalyseR = let r  = promoteExprR (arr occurAnalyseExpr)
                     go = r <+ anyR go
                  in tryR go -- always succeed
@@ -177,14 +177,14 @@ occurAnalyseExprChangedR :: MonadCatch m => Rewrite c m CoreExpr
 occurAnalyseExprChangedR = changedByR exprSyntaxEq (arr occurAnalyseExpr)
 
 -- | Occurrence analyse all sub-expressions, failing if the result is syntactically equal to the initial expression.
-occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m Core
 occurAnalyseChangedR = changedByR coreSyntaxEq occurAnalyseR
 
 -- | Run GHC's occurrence analyser, and also eliminate any zombies.
-occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m Core
 occurAnalyseAndDezombifyR = allbuR (tryR $ promoteExprR dezombifyR) >>> occurAnalyseR
 
-occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m Core
+occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m Core
 occurrenceAnalysisR = occurAnalyseAndDezombifyR
 
 {- Does not work (no export)

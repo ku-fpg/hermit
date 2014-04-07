@@ -7,7 +7,7 @@ module HERMIT.Context
        , LocalPathH
          -- ** The Standard Context
        , HermitC
-       , initHermitC
+       , topLevelHermitC
          -- ** Bindings
        , HermitBindingSite(..)
        , BindingDepth
@@ -37,6 +37,8 @@ module HERMIT.Context
        , lookupHermitBindingSite
          -- ** Accessing GHC rewrite rules from the context
        , HasCoreRules(..)
+         -- ** An empty Context
+       , HasEmptyContext(..)
 ) where
 
 import Prelude hiding (lookup)
@@ -68,9 +70,10 @@ data HermitBindingSite = LAM                                -- ^ A lambda-bound 
                        | CASEALT                            -- ^ A variable bound in a case alternative.
                        | CASEBINDER CoreExpr (AltCon,[Var]) -- ^ A case binder.  We store both the scrutinised expression, and the case alternative 'AltCon' and variables.
                        | FORALL                             -- ^ A universally quantified type variable.
+                       | TOPLEVEL CoreExpr                  -- ^ A special case.  When we're focussed on ModGuts, we treat all top-level bindings as being in scope at depth 0.
 
-data HermitBinding = HB { hbDepth :: BindingDepth 
-                        , hbSite :: HermitBindingSite 
+data HermitBinding = HB { hbDepth :: BindingDepth
+                        , hbSite :: HermitBindingSite
                         , hbPath :: AbsolutePathH
                         }
 
@@ -85,6 +88,7 @@ hermitBindingSiteExpr b = case b of
                             CASEALT        -> fail "variable is bound in a case alternative, not bound to an expression."
                             CASEBINDER e _ -> return e
                             FORALL         -> fail "variable is a universally quantified type variable."
+                            TOPLEVEL e     -> return e
 
 hermitBindingSummary :: HermitBinding -> String
 hermitBindingSummary b = show (hbDepth b) ++ "$" ++ case hbSite b of
@@ -96,6 +100,7 @@ hermitBindingSummary b = show (hbDepth b) ++ "$" ++ case hbSite b of
                             CASEALT        -> "CASEALT"
                             CASEBINDER {}  -> "CASEBINDER"
                             FORALL         -> "FORALL"
+                            TOPLEVEL {}    -> "TOPLEVEL"
 
 -- | Retrieve the expression in a 'HermitBinding', if there is one.
 hermitBindingExpr :: HermitBinding -> KureM CoreExpr
@@ -212,6 +217,12 @@ instance HasCoreRules [CoreRule] where
 
 ------------------------------------------------------------------------
 
+-- | A class of contexts that provide an empty context.
+class HasEmptyContext c where
+  setEmptyContext :: c -> c
+
+------------------------------------------------------------------------
+
 type AbsolutePathH = AbsolutePath Crumb
 type LocalPathH = LocalPath Crumb
 
@@ -227,13 +238,26 @@ data HermitC = HermitC
 
 ------------------------------------------------------------------------
 
--- | Create the initial HERMIT 'HermitC' by providing a 'ModGuts'.
-initHermitC :: HermitC
-initHermitC = HermitC { hermitC_bindings      = empty
-                      , hermitC_depth         = 0
-                      , hermitC_path          = mempty
-                      , hermitC_specRules     = []
-                      }
+-- | The |HermitC| empty context has an initial depth of 0, an empty path, and no bindings nor rules.
+instance HasEmptyContext HermitC where
+  setEmptyContext :: HermitC -> HermitC
+  setEmptyContext c = c
+                 { hermitC_bindings      = empty
+                 , hermitC_depth         = 0
+                 , hermitC_path          = mempty
+                 , hermitC_specRules     = []
+                 }
+
+-- | A special HERMIT context intended for use only when focussed on ModGuts.
+--   All top-level bindings are considered to be in scope at depth 0.
+topLevelHermitC :: ModGuts -> HermitC
+topLevelHermitC mg = let ies = concatMap bindToVarExprs (mg_binds mg)
+                      in HermitC
+                       { hermitC_bindings      = fromList [ (i , HB 0 (TOPLEVEL e) mempty) | (i,e) <- ies ]
+                       , hermitC_depth         = 0
+                       , hermitC_path          = mempty
+                       , hermitC_specRules     = concatMap (idCoreRules . fst) ies
+                       }
 
 ------------------------------------------------------------------------
 
@@ -251,12 +275,12 @@ instance ExtendPath HermitC Crumb where
 
 instance AddBindings HermitC where
   addHermitBindings :: [(Var,HermitBindingSite,AbsolutePathH)] -> HermitC -> HermitC
-  addHermitBindings vbs c = 
+  addHermitBindings vbs c =
     let nextDepth = succ (hermitC_depth c)
         vhbs      = [ (v, HB nextDepth b p) | (v,b,p) <- vbs ]
     in c { hermitC_bindings  = fromList vhbs `union` hermitC_bindings c
          , hermitC_depth     = nextDepth
-         , hermitC_specRules = hermitC_specRules c ++ concat [ idCoreRules i | (i,_,_) <- vbs, isId i ]
+         , hermitC_specRules = concat [ idCoreRules i | (i,_,_) <- vbs, isId i ] ++ hermitC_specRules c
          }
 
 ------------------------------------------------------------------------

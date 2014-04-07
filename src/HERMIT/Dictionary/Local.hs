@@ -181,7 +181,7 @@ multiEtaExpandR (nm:nms) = etaExpandR nm >>> lamAllR idR (multiEtaExpandR nms)
 ------------------------------------------------------------------------------
 
 -- | Flatten all the top-level binding groups in the module to a single recursive binding group.
-flattenModuleR :: (ExtendPath c Crumb, Monad m) => Rewrite c m ModGuts
+flattenModuleR :: (ExtendPath c Crumb, HasEmptyContext c, Monad m) => Rewrite c m ModGuts
 flattenModuleR = modGutsR flattenProgramR
 
 -- | Flatten all the top-level binding groups in a program to a program containing a single recursive binding group.

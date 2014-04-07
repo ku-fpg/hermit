@@ -83,13 +83,13 @@ hermitKernel callback modGuts = do
                                                                                                                (\ defs' guts' -> do ast <- liftIO $ takeMVar nextASTname
                                                                                                                                     return $ return (ast, insert ast (defs',guts') st))
                                                                                                                (return . fail)
-                                                                                                               (apply r initHermitC guts)
+                                                                                                               (apply r (topLevelHermitC guts) guts)
 
-                , queryK = \ name t hm_env -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, core) -> runHM (core,hm_env)
+                , queryK = \ name t hm_env -> sendReqRead $ \ st -> findWithErrMsg name st fail $ \ (defs, guts) -> runHM (guts,hm_env)
                                                                                                                       defs
                                                                                                                       (\ _ -> return.return)
                                                                                                                       (return . fail)
-                                                                                                                      (apply t initHermitC core)
+                                                                                                                      (apply t (topLevelHermitC guts) guts)
 
                 , deleteK = \ name -> sendReqWrite (return . delete name)
 

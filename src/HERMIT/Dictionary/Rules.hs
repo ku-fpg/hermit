@@ -137,7 +137,7 @@ getHermitRulesT = contextonlyT $ \ c -> do
     hscEnv  <- liftCoreM getHscEnv
     rb'     <- liftM eps_rule_base $ liftIO $ runIOEnv () $ readMutVar (hsc_EPS hscEnv)
     return [ (unpackFS (ruleName r), r)
-           | r <- hermitCoreRules c ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb') ++ mgRules
+           | r <- hermitCoreRules c ++ mgRules ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
            ]
 
 getHermitRuleT :: HasCoreRules c => RuleNameString -> Translate c HermitM a CoreRule
@@ -151,7 +151,7 @@ getHermitRuleT name =
 rulesHelpListT :: HasCoreRules c => Translate c HermitM a String
 rulesHelpListT = do
     rulesEnv <- getHermitRulesT
-    return (intercalate "\n" $ map fst rulesEnv)
+    return (intercalate "\n" $ reverse $ map fst rulesEnv)
 
 ruleHelpT :: HasCoreRules c => RuleNameString -> Translate c HermitM a String
 ruleHelpT name = showSDoc <$> dynFlagsT <*> ((pprRulesForUser . (:[])) <$> getHermitRuleT name)

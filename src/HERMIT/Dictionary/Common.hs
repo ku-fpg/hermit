@@ -116,12 +116,12 @@ callDataConNameT nm = do
 
 -- TODO: Both callsR and callsT should be eliminated, now that we have callNameT
 -- | Apply a rewrite to all applications of a given function in a top-down manner, pruning on success.
-callsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => String -> Rewrite c m CoreExpr -> Rewrite c m Core
+callsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => String -> Rewrite c m CoreExpr -> Rewrite c m Core
 callsR nm rr = prunetdR (promoteExprR $ callNameG nm >> rr)
 
 -- | Apply a translate to all applications of a given function in a top-down manner,
 --   pruning on success, collecting the results.
-callsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => String -> Translate c m CoreExpr b -> Translate c m Core [b]
+callsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => String -> Translate c m CoreExpr b -> Translate c m Core [b]
 callsT nm t = collectPruneT (promoteExprT $ callNameG nm >> t)
 
 ------------------------------------------------------------------------------
@@ -210,7 +210,7 @@ findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
 
 findId :: (BoundVars c, HasModGuts m, HasDynFlags m, MonadThings m) => String -> c -> m Id
 findId nm c = case {- filter (isValName . idName) $ -} varSetElems (findBoundVars nm c) of
-                []         -> findIdMG nm 
+                []         -> findIdMG nm
                 [v]        -> return v
                 _ : _ : _  -> fail "multiple matching variables in scope."
 
@@ -219,13 +219,13 @@ findIdMG nm = do
     rdrEnv <- liftM mg_rdr_env getModGuts
     case filter isValName $ findNamesFromString rdrEnv nm of
       []  -> findIdBuiltIn nm
-      [n] | isVarName n     -> lookupId n 
+      [n] | isVarName n     -> lookupId n
           | isDataConName n ->  liftM dataConWrapId $ lookupDataCon n
       ns  -> do dynFlags <- getDynFlags
                 fail $ "multiple matches found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
 
 findIdBuiltIn :: forall m. Monad m => String -> m Id
-findIdBuiltIn = go 
+findIdBuiltIn = go
     where go ":"     = dataConId consDataCon
           go "[]"    = dataConId nilDataCon
 
@@ -258,7 +258,7 @@ inScope c v = (v `boundIn` c) ||                 -- defined in this module
                 DFunUnfolding {} -> True
                 _                -> False)
 
-withVarsInScope :: forall c m b. (ReadPath c Crumb, ExtendPath c Crumb, AddBindings c, MonadCatch m) 
+withVarsInScope :: forall c m b. (ReadPath c Crumb, ExtendPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m)
                 => [Var] -> Translate c m CoreExpr b -> Translate c m CoreExpr b
 withVarsInScope vs t = arr (mkCoreLams vs) >>> extractT (pathT (replicate (length vs) Lam_Body) (promoteExprT t :: Translate c m Core b))
 
