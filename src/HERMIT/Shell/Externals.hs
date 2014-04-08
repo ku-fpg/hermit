@@ -34,7 +34,7 @@ interpShellCommand :: [Interp ShellCommand]
 interpShellCommand =
   [ interp $ \ (RewriteCoreBox rr)           -> KernelEffect (Apply rr)
   , interp $ \ (RewriteCoreTCBox rr)         -> KernelEffect (Apply rr)
-  , interp $ \ (BiRewriteCoreBox br)         -> KernelEffect (Apply $ forwardT br)
+  , interp $ \ (BiRewriteCoreBox br)         -> KernelEffect (Apply $ whicheverR br)
   , interp $ \ (CrumbBox cr)                 -> KernelEffect (Pathfinder (return (mempty @@ cr) :: TranslateH CoreTC LocalPathH))
   , interp $ \ (PathBox p)                   -> KernelEffect (Pathfinder (return p :: TranslateH CoreTC LocalPathH))
   , interp $ \ (TranslateCorePathBox tt)     -> KernelEffect (Pathfinder tt)
@@ -213,7 +213,7 @@ versionCmd whereTo st =
                 [] -> fail "Cannot step forward (no more steps)."
                 [(_,cmd,d) ] -> do
                     putStrLn $ "step : " ++ unparseExprH cmd
-                    return $ setCursor st d 
+                    return $ setCursor st d
                 _ -> fail "Cannot step forward (multiple choices)"
         Back -> do
             let ns = [ edge | edge@(_,_,d) <- vs_graph (cl_version st), d == cl_cursor st ]

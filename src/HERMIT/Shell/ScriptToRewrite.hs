@@ -81,7 +81,7 @@ interpScriptR :: [Interp UnscopedScriptR]
 interpScriptR =
   [ interp (\ (RewriteCoreBox r)           -> ScriptPrimUn $ ScriptRewriteHCore r)
   , interp (\ (RewriteCoreTCBox _)         -> ScriptUnsupported "rewrite that traverses types and coercions") -- TODO
-  , interp (\ (BiRewriteCoreBox br)        -> ScriptPrimUn $ ScriptRewriteHCore $ forwardT br)
+  , interp (\ (BiRewriteCoreBox br)        -> ScriptPrimUn $ ScriptRewriteHCore $ whicheverR br)
   , interp (\ (CrumbBox cr)                -> ScriptPrimUn $ ScriptPath [cr])
   , interp (\ (PathBox p)                  -> ScriptPrimUn $ ScriptPath (snocPathToPath p))
   , interp (\ (TranslateCorePathBox t)     -> ScriptPrimUn $ ScriptTranslateHCorePath t)
@@ -103,7 +103,7 @@ interpScriptR =
 scopedScriptsToRewrite :: [ScopedScriptR] -> RewriteH Core
 scopedScriptsToRewrite []        = idR
 scopedScriptsToRewrite (x : xs)  = let rest = scopedScriptsToRewrite xs
-                                       failWith e = prefixFailMsg ("Error in script expression: " ++ unparseExprH e ++ "\n") 
+                                       failWith e = prefixFailMsg ("Error in script expression: " ++ unparseExprH e ++ "\n")
                                    in case x of
                                         ScriptScope ys    -> scopedScriptsToRewrite ys >>> rest
                                         ScriptPrimSc e pr -> case pr of
