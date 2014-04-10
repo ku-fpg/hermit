@@ -1,12 +1,12 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
 
 module HERMIT.Shell.ScriptToRewrite
-  ( -- * Converting Scripts to Rewrites
-    addScriptToDict
-  , lookupScript
-  , scriptToRewrite
-  )
-where
+    ( -- * Converting Scripts to Rewrites
+      addScriptToDict
+    , lookupScript
+    , parseScriptCLT
+    , scriptToRewrite
+    ) where
 
 import Control.Arrow
 import Control.Monad.State
@@ -17,7 +17,7 @@ import Data.Map hiding (lookup)
 import HERMIT.Context(LocalPathH)
 import HERMIT.Kure
 import HERMIT.External
-import HERMIT.Parser(Script, ExprH, unparseExprH)
+import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript)
 
 import HERMIT.PrettyPrinter.Common(TranslateCoreTCDocHBox(..))
 
@@ -31,6 +31,9 @@ lookupScript scriptName = do scripts <- gets cl_scripts
                              case lookup scriptName scripts of
                                Nothing     -> fail $ "No script of name " ++ scriptName ++ " is loaded."
                                Just script -> return script
+
+parseScriptCLT :: Monad m => String -> CLT m Script
+parseScriptCLT = either fail return . parseScript
 
 ------------------------------------
 

@@ -246,7 +246,7 @@ prove :: MonadIO m => CoreExprEquality -> ProofH -> CLT m ()
 prove eq (RewritingProof lp rp) = do
     (lrr, rrr) <- getRewrites (lp, rp)
     st <- gets cl_pstate
-    queryS (ps_kernel st) (return eq >>> verifyCoreExprEqualityT (lrr, rrr) :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
+    queryS (ps_kernel st) (return eq >>> proveCoreExprEqualityT (lrr, rrr) :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
 
 -- InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]
 -- inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
