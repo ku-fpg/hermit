@@ -186,7 +186,7 @@ commandLine opts behavior exts = do
                 Just ('-':'-':_) -> loop
                 Just line        -> if all isSpace line
                                     then loop
-                                    else (evalScript line `ourCatch` cl_putStrLn) >> loop
+                                    else (evalScript line `catchFailHard` cl_putStrLn) >> loop
 
     -- Display the banner
     if any (`elem` ["-v0", "-v1"]) flags
@@ -201,7 +201,7 @@ commandLine opts behavior exts = do
                  _        -> loadAndRun fileName
               | fileName <- reverse filesToLoad
               , not (null fileName)
-              ] `ourCatch` \ msg -> cl_putStrLn $ "Booting Failure: " ++ msg
+              ] `catchFailHard` \ msg -> cl_putStrLn $ "Booting Failure: " ++ msg
     setRunningScript False
 
     -- Start the CLI
@@ -210,8 +210,9 @@ commandLine opts behavior exts = do
     (r,s) <- get >>= liftIO . runInputTBehavior behavior settings . flip runCLT loop
     either throwError (\v -> put s >> return v) r
 
-ourCatch :: MonadIO m => CLT m () -> (String -> CLT m ()) -> CLT m ()
-ourCatch m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display >> cl_putStrLn msg >> abort) (failure msg)
+-- | Like 'catchM', but checks the 'cl_failhard' setting and does so if needed.
+catchFailHard :: MonadIO m => CLT m () -> (String -> CLT m ()) -> CLT m ()
+catchFailHard m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display >> cl_putStrLn msg >> abort) (failure msg)
 
 evalScript :: MonadIO m => String -> CLT m ()
 evalScript = parseScriptCLT >=> runScript
