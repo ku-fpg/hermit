@@ -9,6 +9,14 @@ module HERMIT.Dictionary.Reasoning
   , eqLhsIntroR
   , eqRhsIntroR
   , birewrite
+    -- ** Lifting transformations over 'CoreExprEquality'
+  , lhsT
+  , rhsT
+  , bothT
+  , lhsR
+  , rhsR
+  , bothR
+  , proveCoreExprEqualityT
   , verifyCoreExprEqualityT
   , verifyEqualityLeftToRightT
   , verifyEqualityCommonTargetT
@@ -23,6 +31,7 @@ where
 
 import Control.Applicative
 import Control.Arrow
+import Control.Monad
 
 import Data.Monoid
 
@@ -95,6 +104,38 @@ birewrite (CoreExprEquality bnds l r) = bidirectional (foldUnfold l r) (foldUnfo
                 c' = addHermitBindings [(v, NONREC rhsLam, mempty)] c
             apply unfoldR c' e'
 
+-- | Lift a transformation over 'CoreExpr' into a transformation over the left-hand side of a 'CoreExprEquality'.
+lhsT :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Translate c m CoreExpr b -> Translate c m CoreExprEquality b
+lhsT t = idR >>= \ (CoreExprEquality vs lhs _) -> return lhs >>> withVarsInScope vs t
+
+-- | Lift a transformation over 'CoreExpr' into a transformation over the right-hand side of a 'CoreExprEquality'.
+rhsT :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Translate c m CoreExpr b -> Translate c m CoreExprEquality b
+rhsT t = idR >>= \ (CoreExprEquality vs _ rhs) -> return rhs >>> withVarsInScope vs t
+
+-- | Lift a transformation over 'CoreExpr' into a transformation over both sides of a 'CoreExprEquality'.
+bothT :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Translate c m CoreExpr b -> Translate c m CoreExprEquality (b,b)
+bothT t = liftM2 (,) (lhsT t) (rhsT t) -- Can't wait for Applicative to be a superclass of Monad
+
+-- | Lift a rewrite over 'CoreExpr' into a rewrite over the left-hand side of a 'CoreExprEquality'.
+lhsR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
+lhsR r = do
+    CoreExprEquality vs lhs rhs <- idR
+    lhs' <- withVarsInScope vs r <<< return lhs
+    return $ CoreExprEquality vs lhs' rhs
+
+-- | Lift a rewrite over 'CoreExpr' into a rewrite over the right-hand side of a 'CoreExprEquality'.
+rhsR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
+rhsR r = do
+    CoreExprEquality vs lhs rhs <- idR
+    rhs' <- withVarsInScope vs r <<< return rhs
+    return $ CoreExprEquality vs lhs rhs'
+
+-- | Lift a rewrite over 'CoreExpr' into a rewrite over both sides of a 'CoreExprEquality'.
+bothR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
+bothR r = lhsR r >>> rhsR r
+
+------------------------------------------------------------------------------
+
 -- Idea: use Haskell's functions to fill the holes automagically
 --
 -- plusId <- findIdT "+"
@@ -102,7 +143,7 @@ birewrite (CoreExprEquality bnds l r) = bidirectional (foldUnfold l r) (foldUnfo
 -- mkEquality $ \ x -> ( mkCoreApps (Var plusId)  [x,x]
 --                     , mkCoreApps (Var timesId) [Lit 2, x])
 --
--- Problem: need to know type of 'x' to generate a variable.
+-- TODO: need to know type of 'x' to generate a variable.
 class BuildEquality a where
     mkEquality :: a -> HermitM CoreExprEquality
 
@@ -117,13 +158,22 @@ instance BuildEquality a => BuildEquality (CoreExpr -> a) where
         CoreExprEquality bnds lhs rhs <- mkEquality (f (varToCoreExpr x))
         return $ CoreExprEquality (x:bnds) lhs rhs
 
+------------------------------------------------------------------------------
+
 -- | Verify that a 'CoreExprEquality' holds, by applying a rewrite to each side, and checking that the results are equal.
-verifyCoreExprEqualityT :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c Core) => CoreExprEqualityProof c m -> Translate c m CoreExprEquality ()
-verifyCoreExprEqualityT (lhsR,rhsR) =
-     do CoreExprEquality bs lhs rhs <- idR
-        verifyEqualityCommonTargetT lhs rhs (withVarsInScope bs lhsR, withVarsInScope bs rhsR)
+proveCoreExprEqualityT :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c Core) 
+                        => CoreExprEqualityProof c m -> Translate c m CoreExprEquality ()
+proveCoreExprEqualityT (l,r) = lhsR l >>> rhsR r >>> verifyCoreExprEqualityT
+
+-- | Verify that the left- and right-hand sides of a 'CoreExprEquality' are alpha equivalent.
+verifyCoreExprEqualityT :: Monad m => Translate c m CoreExprEquality ()
+verifyCoreExprEqualityT = do
+    CoreExprEquality _ lhs rhs <- idR
+    guardMsg (exprAlphaEq lhs rhs) "the two sides of the equality do not match."
 
 ------------------------------------------------------------------------------
+
+-- TODO: are these other functions used? If so, can they be rewritten in terms of lhsR and rhsR as above?
 
 -- | Given two expressions, and a rewrite from the former to the latter, verify that rewrite.
 verifyEqualityLeftToRightT :: MonadCatch m => CoreExpr -> CoreExpr -> Rewrite c m CoreExpr -> Translate c m a ()
@@ -134,10 +184,10 @@ verifyEqualityLeftToRightT sourceExpr targetExpr r =
 
 -- | Given two expressions, and a rewrite to apply to each, verify that the resulting expressions are equal.
 verifyEqualityCommonTargetT :: MonadCatch m => CoreExpr -> CoreExpr -> CoreExprEqualityProof c m -> Translate c m a ()
-verifyEqualityCommonTargetT lhs rhs (lhsR,rhsR) =
+verifyEqualityCommonTargetT lhs rhs (l,r) =
   prefixFailMsg "equality verification failed: " $
-  do lhsResult <- lhsR <<< return lhs
-     rhsResult <- rhsR <<< return rhs
+  do lhsResult <- l <<< return lhs
+     rhsResult <- r <<< return rhs
      guardMsg (exprAlphaEq lhsResult rhsResult) "results of running proofs on both sides of equality do not match."
 
 ------------------------------------------------------------------------------
