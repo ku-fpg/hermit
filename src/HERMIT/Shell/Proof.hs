@@ -2,19 +2,22 @@
 
 module HERMIT.Shell.Proof where
 
-import Control.Arrow
+import Control.Arrow hiding (loop)
+import Control.Concurrent
 import Control.Monad.Error
 import Control.Monad.State
 
+import Data.Char (isSpace)
 import Data.Dynamic
 import Data.List
 import Data.Maybe (isNothing)
 
 import HERMIT.Core
 import HERMIT.External
-import HERMIT.GHC
+import HERMIT.GHC hiding (settings)
 import HERMIT.Kernel.Scoped
 import HERMIT.Kure
+import HERMIT.Parser
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
@@ -27,8 +30,11 @@ import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
 import qualified HERMIT.PrettyPrinter.Clean as Clean
 
+import HERMIT.Shell.Interpreter
 import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.Types
+
+import System.Console.Haskeline hiding (catch, display)
 
 import System.IO
 
@@ -78,6 +84,10 @@ externals =
     , external "lemma-rhs-intro" (lemmaRhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core)
         [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
+    , external "interactive-proof" InteractiveProof
+        [ "Proof a lemma interactively." ]
+    , external "abandon" PCAbort
+        [ "Abandon interactive proof attempt." ]
     ]
 
 --------------------------------------------------------------------------------------------------------
@@ -94,6 +104,7 @@ type ScriptOrRewrite = Either ScriptName (RewriteH CoreExpr) -- The named script
 data ProofCommand
     = RuleToLemma RuleNameString
     | VerifyLemma LemmaName ProofH
+    | InteractiveProof LemmaName
     | ShowLemmas
     deriving (Typeable)
 
@@ -214,6 +225,8 @@ performProofCommand (VerifyLemma nm proof) = do
     prove equality proof -- this is like a guard
     markProven nm
 
+performProofCommand (InteractiveProof nm) = get >>= flip getLemmaByName nm >>= interactiveProof >> markProven nm
+
 performProofCommand ShowLemmas = gets cl_lemmas >>= \ ls -> forM_ (reverse ls) printLemma
 
 printLemma :: MonadIO m => Lemma -> CLT m ()
@@ -318,3 +331,89 @@ getRewrite = either (lookupScript >=> liftM extractR . scriptToRewrite) return
 
 markProven :: MonadState CommandLineState m => LemmaName -> m ()
 markProven nm = modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }
+
+interactiveProof :: MonadIO m => Lemma -> CLT m ()
+interactiveProof lem = do
+    -- TODO: add any interactive-proof-specific commands to the dictionary?
+    -- modify $ \ st -> st { cl_dict = mkDict (shell_externals ++ exts) }
+    clState <- get
+    completionMVar <- liftIO $ newMVar clState
+
+    let ws_complete = " ()"
+        loop :: Lemma -> CLT (InputT IO) ()
+        loop l = do
+            printLemma l
+            st <- get
+            liftIO $ modifyMVar_ completionMVar (const $ return st) -- so the completion can get the current state
+            mLine <- lift $ getInputLine $ "proof> "
+
+            case mLine of
+                Nothing          -> fail "proof aborted (input: Nothing)"
+                Just ('-':'-':_) -> loop l
+                Just line        -> if all isSpace line
+                                    then loop l
+                                    else do (er, st') <- runCLT st (evalProofScript l line `catchM` (\msg -> cl_putStrLn msg >> return l)) 
+                                            case er of
+                                                Right l' -> put st' >> loop l'
+                                                Left CLAbort -> return ()
+                                                Left _ -> fail "unsupported exception in interactive prover"
+
+    -- Display a proof banner?
+
+    -- Start the CLI
+    let settings = setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings
+    (r,s) <- get >>= liftIO . runInputTBehavior defaultBehavior settings . flip runCLT (loop lem)
+    either throwError (\v -> put s >> return v) r
+
+evalProofScript :: MonadIO m => Lemma -> String -> CLT m Lemma
+evalProofScript lem = parseScriptCLT >=> foldM runProofExprH lem
+
+runProofExprH :: MonadIO m => Lemma -> ExprH -> CLT m Lemma
+runProofExprH lem@(nm, eq, b) expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
+    cmd <- interpExprH interpProof expr
+    st <- get
+    case cmd of
+        PCApply rr -> do
+            let sk = cl_kernel st
+                kEnv = cl_kernel_env st
+                sast = cl_cursor st
+
+            -- Why do a query? We want to do our proof in the current context
+            -- of the shell, whatever that is.
+            eq' <- queryS sk (return eq >>> rr :: TranslateH Core CoreExprEquality) kEnv sast
+            return (nm, eq', b)
+        PCAbort -> throwError CLAbort -- we'll catch this specially
+        PCUnsupported s -> cl_putStrLn s >> return lem
+
+data ProofCmd = PCApply (RewriteH CoreExprEquality)
+              | PCAbort
+              | PCUnsupported String
+    deriving Typeable
+
+instance Extern ProofCmd where
+    type Box ProofCmd = ProofCmd
+    box i = i
+    unbox i = i
+
+interpProof :: [Interp ProofCmd]
+interpProof =
+  [ interp $ \ (RewriteCoreBox rr)            -> PCApply $ lhsR $ extractR rr
+  , interp $ \ (RewriteCoreTCBox rr)          -> PCApply $ lhsR $ extractR rr
+  , interp $ \ (BiRewriteCoreBox br)          -> PCApply $ lhsR $ extractR $ whicheverR br
+  , interp $ \ (CrumbBox _cr)                 -> PCUnsupported "CrumbBox"
+  , interp $ \ (PathBox _p)                   -> PCUnsupported "PathBox"
+  , interp $ \ (TranslateCorePathBox _tt)     -> PCUnsupported "TranslateCorePathBox"
+  , interp $ \ (TranslateCoreTCPathBox _tt)   -> PCUnsupported "TranslateCoreTCPathBox"
+  , interp $ \ (StringBox _str)               -> PCUnsupported "StringBox"
+  , interp $ \ (TranslateCoreStringBox _tt)   -> PCUnsupported "TranslateCoreStringBox"
+  , interp $ \ (TranslateCoreTCStringBox _tt) -> PCUnsupported "TranslateCoreTCStringBox"
+  , interp $ \ (TranslateCoreTCDocHBox _tt)   -> PCUnsupported "TranslateCoreTCDocHBox"
+  , interp $ \ (TranslateCoreCheckBox _tt)    -> PCUnsupported "TranslateCoreCheckBox"
+  , interp $ \ (TranslateCoreTCCheckBox _tt)  -> PCUnsupported "TranslateCoreTCCheckBox"
+  , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"
+  , interp $ \ (_effect :: ShellEffect)       -> PCUnsupported "ShellEffect"
+  , interp $ \ (_query :: QueryFun)           -> PCUnsupported "QueryFun"
+  , interp $ \ (_cmd :: ProofCommand)         -> PCUnsupported "ProofCommand Inception!"
+  , interp $ \ (cmd :: ProofCmd)              -> cmd
+  ]
+
