@@ -94,7 +94,7 @@ bindingOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyCont
 bindingOfT p = prefixFailMsg ("binding-of failed: ") $
                oneNonEmptyPathToT (arr $ bindingOf p)
 
--- | Find the path to the first occurrence occurrence of a variable.
+-- | Find the path to the first occurrence of a variable.
 occurrenceOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => (Var -> Bool) -> Translate c m CoreTC LocalPathH
 occurrenceOfT p = prefixFailMsg ("occurrence-of failed: ") $
                   oneNonEmptyPathToT (arr $ occurrenceOf p)
