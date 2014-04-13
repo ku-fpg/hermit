@@ -176,9 +176,8 @@ newCoVarH nm ty = mkCoVar <$> newName nm <*> pure ty
 -- | Experimental, use at your own risk.
 newVarH :: String -> KindOrType -> HermitM Var
 newVarH name tk | isCoVarType tk = newCoVarH name tk
-                | isKindTy tk    = newTyVarH name tk
+                | isKind tk      = newTyVarH name tk
                 | otherwise      = newIdH name tk
-
 
 -- | Make a new variable of the same type, with a modified textual name.
 cloneVarH :: (String -> String) -> Var -> HermitM Var
