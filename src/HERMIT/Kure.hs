@@ -6,7 +6,7 @@ module HERMIT.Kure
 
        -- | All the required functionality of KURE is exported here, so other modules do not need to import KURE directly.
          module Language.KURE
-       , module Language.KURE.BiTranslate
+       , module Language.KURE.BiTransform
        , module Language.KURE.Lens
        , module Language.KURE.ExtendableContext
        , module Language.KURE.Pathfinder
@@ -88,7 +88,7 @@ module HERMIT.Kure
 where
 
 import Language.KURE
-import Language.KURE.BiTranslate
+import Language.KURE.BiTransform
 import Language.KURE.Lens
 import Language.KURE.ExtendableContext
 import Language.KURE.Pathfinder

@@ -42,9 +42,9 @@ module HERMIT.Kure.SumTypes
   )
 where
 
-import Language.KURE.Translate
+import Language.KURE.Transform
 import Language.KURE.Injection
-import Language.KURE.BiTranslate
+import Language.KURE.BiTransform
 
 import HERMIT.Core
 import HERMIT.GHC
