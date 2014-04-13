@@ -88,6 +88,17 @@ externals =
         [ "Proof a lemma interactively." ]
     , external "abandon" PCAbort
         [ "Abandon interactive proof attempt." ]
+    , external "extensionality" (PCApply . extensionalityR . Just :: String -> ProofCmd)
+        [ "Given a name 'x, then"
+        , "f == g  ==>  forall x.  f x == g x" ]
+    , external "extensionality" (PCApply $ extensionalityR Nothing :: ProofCmd)
+        [ "f == g  ==>  forall x.  f x == g x" ]
+    , external "lhs" (PCApply . lhsR . extractR :: RewriteH Core -> ProofCmd)
+        [ "Apply a rewrite to the LHS of an equality." ]
+    , external "rhs" (PCApply . rhsR . extractR :: RewriteH Core -> ProofCmd)
+        [ "Apply a rewrite to the RHS of an equality." ]
+    , external "both" (PCApply . bothR . extractR :: RewriteH Core -> ProofCmd)
+        [ "Apply a rewrite to both sides of an equality." ]
     ]
 
 --------------------------------------------------------------------------------------------------------
@@ -352,7 +363,7 @@ interactiveProof lem = do
                 Just ('-':'-':_) -> loop l
                 Just line        -> if all isSpace line
                                     then loop l
-                                    else do (er, st') <- runCLT st (evalProofScript l line `catchM` (\msg -> cl_putStrLn msg >> return l)) 
+                                    else do (er, st') <- runCLT st (evalProofScript l line `catchM` (\msg -> cl_putStrLn msg >> return l))
                                             case er of
                                                 Right l' -> put st' >> loop l'
                                                 Left CLAbort -> return ()
@@ -395,11 +406,13 @@ instance Extern ProofCmd where
     box i = i
     unbox i = i
 
+
+
 interpProof :: [Interp ProofCmd]
 interpProof =
-  [ interp $ \ (RewriteCoreBox rr)            -> PCApply $ lhsR $ extractR rr
-  , interp $ \ (RewriteCoreTCBox rr)          -> PCApply $ lhsR $ extractR rr
-  , interp $ \ (BiRewriteCoreBox br)          -> PCApply $ lhsR $ extractR $ whicheverR br
+  [ interp $ \ (RewriteCoreBox rr)            -> PCApply $ bothR $ extractR rr
+  , interp $ \ (RewriteCoreTCBox rr)          -> PCApply $ bothR $ extractR rr
+  , interp $ \ (BiRewriteCoreBox br)          -> PCApply $ bothR $ (extractR (forwardT br) <+ extractR (backwardT br))
   , interp $ \ (CrumbBox _cr)                 -> PCUnsupported "CrumbBox"
   , interp $ \ (PathBox _p)                   -> PCUnsupported "PathBox"
   , interp $ \ (TranslateCorePathBox _tt)     -> PCUnsupported "TranslateCorePathBox"

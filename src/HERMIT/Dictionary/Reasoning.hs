@@ -9,6 +9,7 @@ module HERMIT.Dictionary.Reasoning
   , eqLhsIntroR
   , eqRhsIntroR
   , birewrite
+  , extensionalityR
     -- ** Lifting transformations over 'CoreExprEquality'
   , lhsT
   , rhsT
@@ -33,6 +34,7 @@ import Control.Applicative
 import Control.Arrow
 import Control.Monad
 
+import Data.Maybe (fromMaybe)
 import Data.Monoid
 
 import HERMIT.Context
@@ -74,6 +76,24 @@ type CoreExprEqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
 -- | Flip the LHS and RHS of a 'CoreExprEquality'.
 flipCoreExprEquality :: CoreExprEquality -> CoreExprEquality
 flipCoreExprEquality (CoreExprEquality xs lhs rhs) = CoreExprEquality xs rhs lhs
+
+-- | f == g  ==>  forall x.  f x == g x
+extensionalityR :: Maybe String -> Rewrite c HermitM CoreExprEquality
+extensionalityR mn = prefixFailMsg "extensionality failed: " $
+  do CoreExprEquality vs lhs rhs <- idR
+
+     let tyL = exprKindOrType lhs
+         tyR = exprKindOrType rhs
+     guardMsg (tyL `typeAlphaEq` tyR) "type mismatch between sides of equality.  This shouldn't happen, so is probably a bug."
+
+     -- TODO: use the fresh-name-generator in AlphaConversion to avoid shadowing.
+     v <- constT $ newVarH (fromMaybe "x" mn) tyL
+
+     let x = varToCoreExpr v
+
+     return $ CoreExprEquality (vs ++ [v])
+                               (mkCoreApp lhs x)
+                               (mkCoreApp rhs x)
 
 ------------------------------------------------------------------------------
 
@@ -161,7 +181,7 @@ instance BuildEquality a => BuildEquality (CoreExpr -> a) where
 ------------------------------------------------------------------------------
 
 -- | Verify that a 'CoreExprEquality' holds, by applying a rewrite to each side, and checking that the results are equal.
-proveCoreExprEqualityT :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c Core) 
+proveCoreExprEqualityT :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c Core)
                         => CoreExprEqualityProof c m -> Translate c m CoreExprEquality ()
 proveCoreExprEqualityT (l,r) = lhsR l >>> rhsR r >>> verifyCoreExprEqualityT
 

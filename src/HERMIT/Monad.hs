@@ -10,6 +10,7 @@ module HERMIT.Monad
           , newIdH
           , newTyVarH
           , newCoVarH
+          , newVarH
           , cloneVarH
             -- * Saving Definitions
           , Label
@@ -170,6 +171,14 @@ newTyVarH nm k = mkTyVar <$> newName nm <*> pure k
 -- | Make a unique coercion variable for a specified type, using a provided name.
 newCoVarH :: String -> Type -> HermitM TyVar
 newCoVarH nm ty = mkCoVar <$> newName nm <*> pure ty
+
+-- TODO: not sure if the predicates are correct.
+-- | Experimental, use at your own risk.
+newVarH :: String -> KindOrType -> HermitM Var
+newVarH name tk | isCoVarType tk = newCoVarH name tk
+                | isKindTy tk    = newTyVarH name tk
+                | otherwise      = newIdH name tk
+
 
 -- | Make a new variable of the same type, with a modified textual name.
 cloneVarH :: (String -> String) -> Var -> HermitM Var
