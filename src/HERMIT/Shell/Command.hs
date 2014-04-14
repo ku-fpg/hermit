@@ -362,7 +362,7 @@ performShellEffect (CLSModify f) = do
         Right st' -> put st' >> showWindow
         Left err  -> fail err
 
-performShellEffect (PluginComp m) = pluginM m
+performShellEffect (PluginComp m) = pluginM m >> showWindow
 
 -------------------------------------------------------------------------------
 
