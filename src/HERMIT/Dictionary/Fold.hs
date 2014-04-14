@@ -55,7 +55,7 @@ externals =
 
 stashFoldR :: ReadBindings c => Label -> Rewrite c HermitM CoreExpr
 stashFoldR label = prefixFailMsg "Fold failed: " $
-    translate $ \ c e -> do
+    transform $ \ c e -> do
         Def i rhs <- lookupDef label
         guardMsg (inScope c i) $ var2String i ++ " is not in scope.\n(A common cause of this error is trying to fold a recursive call while being in the body of a non-recursive definition.  This can be resolved by calling \"nonrec-to-rec\" on the non-recursive binding group.)"
         maybe (fail "no match.")

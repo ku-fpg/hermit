@@ -34,12 +34,12 @@ module HERMIT.External
        , RewriteCoreBox(..)
        , RewriteCoreTCBox(..)
        , BiRewriteCoreBox(..)
-       , TranslateCoreStringBox(..)
-       , TranslateCoreTCStringBox(..)
-       , TranslateCoreCheckBox(..)
-       , TranslateCoreTCCheckBox(..)
-       , TranslateCorePathBox(..)
-       , TranslateCoreTCPathBox(..)
+       , TransformCoreStringBox(..)
+       , TransformCoreTCStringBox(..)
+       , TransformCoreCheckBox(..)
+       , TransformCoreTCCheckBox(..)
+       , TransformCorePathBox(..)
+       , TransformCoreTCPathBox(..)
        , CoreString(..)
        , CoreBox(..)
        , CrumbBox(..)
@@ -227,7 +227,7 @@ external nm fn help = External
         }
 
 -- | Get all the 'External's which match a given tag predicate
--- and box a Translate of the appropriate type.
+-- and box a Transform of the appropriate type.
 matchingExternals :: (Extern tr, Tag t) => t -> [External] -> [(External, tr)]
 matchingExternals tag exts = [ (e,tr) | e <- exts, tagMatch tag e
                                       , Just tr <- [fmap unbox $ fromDynamic $ externDyn e] ]
@@ -357,44 +357,44 @@ instance Extern (BiRewriteH Core) where
 
 -----------------------------------------------------------------
 
-data TranslateCoreTCStringBox = TranslateCoreTCStringBox (TranslateH CoreTC String) deriving Typeable
+data TransformCoreTCStringBox = TransformCoreTCStringBox (TransformH CoreTC String) deriving Typeable
 
-instance Extern (TranslateH CoreTC String) where
-    type Box (TranslateH CoreTC String) = TranslateCoreTCStringBox
-    box = TranslateCoreTCStringBox
-    unbox (TranslateCoreTCStringBox t) = t
-
------------------------------------------------------------------
-
-data TranslateCoreStringBox = TranslateCoreStringBox (TranslateH Core String) deriving Typeable
-
-instance Extern (TranslateH Core String) where
-    type Box (TranslateH Core String) = TranslateCoreStringBox
-    box = TranslateCoreStringBox
-    unbox (TranslateCoreStringBox t) = t
+instance Extern (TransformH CoreTC String) where
+    type Box (TransformH CoreTC String) = TransformCoreTCStringBox
+    box = TransformCoreTCStringBox
+    unbox (TransformCoreTCStringBox t) = t
 
 -----------------------------------------------------------------
 
-data TranslateCoreTCCheckBox = TranslateCoreTCCheckBox (TranslateH CoreTC ()) deriving Typeable
+data TransformCoreStringBox = TransformCoreStringBox (TransformH Core String) deriving Typeable
 
-instance Extern (TranslateH CoreTC ()) where
-    type Box (TranslateH CoreTC ()) = TranslateCoreTCCheckBox
-    box = TranslateCoreTCCheckBox
-    unbox (TranslateCoreTCCheckBox t) = t
-
------------------------------------------------------------------
-
-data TranslateCoreCheckBox = TranslateCoreCheckBox (TranslateH Core ()) deriving Typeable
-
-instance Extern (TranslateH Core ()) where
-    type Box (TranslateH Core ()) = TranslateCoreCheckBox
-    box = TranslateCoreCheckBox
-    unbox (TranslateCoreCheckBox t) = t
+instance Extern (TransformH Core String) where
+    type Box (TransformH Core String) = TransformCoreStringBox
+    box = TransformCoreStringBox
+    unbox (TransformCoreStringBox t) = t
 
 -----------------------------------------------------------------
 
--- TODO: We now have CrumbBoc, PathBox and TranslateCorePathBox.
---       Ints are interpreted as a TranslateCorePathBox.
+data TransformCoreTCCheckBox = TransformCoreTCCheckBox (TransformH CoreTC ()) deriving Typeable
+
+instance Extern (TransformH CoreTC ()) where
+    type Box (TransformH CoreTC ()) = TransformCoreTCCheckBox
+    box = TransformCoreTCCheckBox
+    unbox (TransformCoreTCCheckBox t) = t
+
+-----------------------------------------------------------------
+
+data TransformCoreCheckBox = TransformCoreCheckBox (TransformH Core ()) deriving Typeable
+
+instance Extern (TransformH Core ()) where
+    type Box (TransformH Core ()) = TransformCoreCheckBox
+    box = TransformCoreCheckBox
+    unbox (TransformCoreCheckBox t) = t
+
+-----------------------------------------------------------------
+
+-- TODO: We now have CrumbBoc, PathBox and TransformCorePathBox.
+--       Ints are interpreted as a TransformCorePathBox.
 --       This all needs cleaning up.
 
 data CrumbBox = CrumbBox Crumb deriving Typeable
@@ -415,21 +415,21 @@ instance Extern LocalPathH where
 
 -----------------------------------------------------------------
 
-data TranslateCorePathBox = TranslateCorePathBox (TranslateH Core LocalPathH) deriving Typeable
+data TransformCorePathBox = TransformCorePathBox (TransformH Core LocalPathH) deriving Typeable
 
-instance Extern (TranslateH Core LocalPathH) where
-    type Box (TranslateH Core LocalPathH) = TranslateCorePathBox
-    box = TranslateCorePathBox
-    unbox (TranslateCorePathBox t) = t
+instance Extern (TransformH Core LocalPathH) where
+    type Box (TransformH Core LocalPathH) = TransformCorePathBox
+    box = TransformCorePathBox
+    unbox (TransformCorePathBox t) = t
 
 -----------------------------------------------------------------
 
-data TranslateCoreTCPathBox = TranslateCoreTCPathBox (TranslateH CoreTC LocalPathH) deriving Typeable
+data TransformCoreTCPathBox = TransformCoreTCPathBox (TransformH CoreTC LocalPathH) deriving Typeable
 
-instance Extern (TranslateH CoreTC LocalPathH) where
-    type Box (TranslateH CoreTC LocalPathH) = TranslateCoreTCPathBox
-    box = TranslateCoreTCPathBox
-    unbox (TranslateCoreTCPathBox t) = t
+instance Extern (TransformH CoreTC LocalPathH) where
+    type Box (TransformH CoreTC LocalPathH) = TransformCoreTCPathBox
+    box = TransformCoreTCPathBox
+    unbox (TransformCoreTCPathBox t) = t
 
 -----------------------------------------------------------------
 

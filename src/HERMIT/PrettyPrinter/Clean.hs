@@ -333,10 +333,10 @@ ppDef cr = do p          <- absPathT
 ppCoreExpr :: PrettyH CoreExpr
 ppCoreExpr = ppCoreExprR >>^ normalExpr
 
-ppCoreExprR :: Translate PrettyC HermitM CoreExpr RetExpr
+ppCoreExprR :: Transform PrettyC HermitM CoreExpr RetExpr
 ppCoreExprR = absPathT >>= ppCoreExprPR
   where
-    ppCoreExprPR :: AbsolutePathH -> Translate PrettyC HermitM CoreExpr RetExpr
+    ppCoreExprPR :: AbsolutePathH -> Transform PrettyC HermitM CoreExpr RetExpr
     ppCoreExprPR p =
               lamT ppBinderMode ppCoreExprR (retLam p)
            <+ letT ppCoreBind ppCoreExprR (retLet p)
@@ -357,7 +357,7 @@ ppCoreExprR = absPathT >>= ppCoreExprPR
 ppKindOrType :: PrettyH KindOrType
 ppKindOrType = ppKindOrTypeR >>^ normalExpr
 
-ppTypeModeR :: Translate PrettyC HermitM KindOrType RetExpr
+ppTypeModeR :: Transform PrettyC HermitM KindOrType RetExpr
 ppTypeModeR =
   do opts <- prettyC_options ^<< contextT
      case po_exprTypes opts of
@@ -365,10 +365,10 @@ ppTypeModeR =
        Abstract -> RetAtom <$> typeSymbol
        _        -> ppKindOrTypeR
 
-ppKindOrTypeR :: Translate PrettyC HermitM KindOrType RetExpr
+ppKindOrTypeR :: Transform PrettyC HermitM KindOrType RetExpr
 ppKindOrTypeR = absPathT >>= ppKindOrTypePR
   where
-    ppKindOrTypePR :: AbsolutePathH -> Translate PrettyC HermitM KindOrType RetExpr
+    ppKindOrTypePR :: AbsolutePathH -> Transform PrettyC HermitM KindOrType RetExpr
     ppKindOrTypePR p =
            tyVarT (RetAtom <$> ppVarOcc)
         <+ litTyT (RetAtom <$> ppLitTy)
@@ -402,7 +402,7 @@ ppForallQuantification =
 ppCoercion :: PrettyH Coercion
 ppCoercion = ppCoercionR >>^ normalExpr
 
-ppCoercionModeR :: Translate PrettyC HermitM Coercion RetExpr
+ppCoercionModeR :: Transform PrettyC HermitM Coercion RetExpr
 ppCoercionModeR = do p    <- absPathT
                      opts <- prettyC_options ^<< contextT
                      case po_coercions opts of
@@ -411,10 +411,10 @@ ppCoercionModeR = do p    <- absPathT
                        Show     -> ppCoercionR
                        Kind     -> ppCoKind >>^ (\ k -> RetExpr (coercionSymbol p <+> typeOfSymbol p <+> k))
 
-ppCoercionR :: Translate PrettyC HermitM Coercion RetExpr
+ppCoercionR :: Transform PrettyC HermitM Coercion RetExpr
 ppCoercionR = absPathT >>= ppCoercionPR
   where
-    ppCoercionPR :: AbsolutePathH -> Translate PrettyC HermitM Coercion RetExpr
+    ppCoercionPR :: AbsolutePathH -> Transform PrettyC HermitM Coercion RetExpr
     ppCoercionPR p =
                    coVarCoT (RetAtom <$> ppVarOcc)
                 <+ symCoT (ppCoercionR >>> parenExpr >>^ \ co -> RetExpr (coKeyword p "sym" <+> co))

@@ -85,9 +85,9 @@ defPS initSAST kernel phaseInfo = do
 data HPMInst :: * -> * where
     Shell    :: [External] -> [CommandLineOption] -> HPMInst ()
     Guard    :: (PhaseInfo -> Bool) -> HPM ()     -> HPMInst ()
-    Focus    :: (Injection ModGuts g, Walker HermitC g) => TranslateH g LocalPathH -> HPM a -> HPMInst a
+    Focus    :: (Injection ModGuts g, Walker HermitC g) => TransformH g LocalPathH -> HPM a -> HPMInst a
     RR       :: (Injection ModGuts g, Walker HermitC g) => RewriteH g                       -> HPMInst ()
-    Query    :: (Injection ModGuts g, Walker HermitC g) => TranslateH g a                   -> HPMInst a
+    Query    :: (Injection ModGuts g, Walker HermitC g) => TransformH g a                   -> HPMInst a
 
 newtype HPM a = HPM { unHPM :: ProgramT HPMInst PluginM a }
     deriving (Functor, Applicative, Monad, MonadIO)
@@ -170,7 +170,7 @@ interactive es os = HPM . singleton $ Shell (externals ++ es) os
 run :: RewriteH CoreTC -> HPM ()
 run = HPM . singleton . RR
 
-query :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g a -> HPM a
+query :: (Injection GHC.ModGuts g, Walker HermitC g) => TransformH g a -> HPM a
 query = HPM . singleton . Query
 
 ----------------------------- guards ------------------------------
@@ -178,7 +178,7 @@ query = HPM . singleton . Query
 guard :: (PhaseInfo -> Bool) -> HPM () -> HPM ()
 guard p = HPM . singleton . Guard p
 
-at :: TranslateH CoreTC LocalPathH -> HPM a -> HPM a
+at :: TransformH CoreTC LocalPathH -> HPM a -> HPM a
 at tp = HPM . singleton . Focus tp
 
 phase :: Int -> HPM () -> HPM ()

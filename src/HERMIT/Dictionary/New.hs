@@ -21,7 +21,7 @@ import HERMIT.Dictionary.Local.Let hiding (externals)
 
 externals ::  [External]
 externals = map ((.+ Experiment) . (.+ TODO))
-         [ external "var" (promoteExprT . isVar :: String -> TranslateH Core ())
+         [ external "var" (promoteExprT . isVar :: String -> TransformH Core ())
                 [ "var '<v> returns successfully for variable v, and fails otherwise."
                 , "Useful in combination with \"when\", as in: when (var v) r"
                 ] .+ Predicate
@@ -50,17 +50,17 @@ externals = map ((.+ Experiment) . (.+ TODO))
 -- Probably better to have another predicate that operates on CoreTC, that way it can reach TyVars buried within types.
 -- But given the current setup (using Core for most things), changing "var" to operate on CoreTC would make it incompatible with other combinators.
 -- I'm not sure how to fix the current setup though.
--- isVar :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => String -> Translate c m CoreExpr ()
+-- isVar :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => String -> Transform c m CoreExpr ()
 -- isVar nm = (varT matchName <+ typeT (tyVarT matchName) <+ coercionT (coVarCoT matchName))
 --                  >>= guardM
 --   where
---     matchName :: Monad m => Translate c m Var Bool
+--     matchName :: Monad m => Transform c m Var Bool
 --     matchName = arr (cmpString2Var nm)
 
 -- TODO: there might be a better module for this
 
 -- | Test if the current expression is an identifier matching the given name.
-isVar :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => String -> Translate c m CoreExpr ()
+isVar :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => String -> Transform c m CoreExpr ()
 isVar nm = varT (arr $ cmpString2Var nm) >>= guardM
 
 ------------------------------------------------------------------------------------------------------
@@ -90,7 +90,7 @@ nonRecIntro nm expr = parseCoreExprT expr >>= nonRecIntroR nm
 ------------------------------------------------------------------------------------------------------
 
 #if __GLASGOW_HASKELL__ > 706
-buildTypeableT :: TranslateH Type CoreExpr
+buildTypeableT :: TransformH Type CoreExpr
 buildTypeableT = do
     (i, bnds) <- contextfreeT $ \ t -> getModGuts >>= liftCoreM . flip buildTypeable t
     return (mkCoreLets bnds (varToCoreExpr i)) >>> tryR (extractR simplifyR) >>> observeR "buildTypeableT result"

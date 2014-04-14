@@ -13,7 +13,7 @@ module HERMIT.Kure
        -- * Sub-Modules
        , module HERMIT.Kure.SumTypes
        -- * Synonyms
-       , TranslateH
+       , TransformH
        , RewriteH
        , BiRewriteH
        , LensH
@@ -105,7 +105,7 @@ import Data.Monoid (mempty)
 
 ---------------------------------------------------------------------
 
-type TranslateH a b = Translate HermitC HermitM a b
+type TransformH a b = Transform HermitC HermitM a b
 type RewriteH a     = Rewrite   HermitC HermitM a
 type BiRewriteH a   = BiRewrite HermitC HermitM a
 type LensH a b      = Lens      HermitC HermitM a b
@@ -304,10 +304,10 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c
 -- This is to hide the top-level definitions that we include in the context when focusses on ModGuts.
 -- This is slightly awkward, but pragmatically useful.
 
--- | Translate a module.
+-- | Transform a module.
 --   Slightly different to the other congruence combinators: it passes in /all/ of the original to the reconstruction function.
-modGutsT :: (ExtendPath c Crumb, HasEmptyContext c, Monad m) => Translate c m CoreProg a -> (ModGuts -> a -> b) -> Translate c m ModGuts b
-modGutsT t f = translate $ \ c guts -> f guts <$> apply t (setEmptyContext c @@ ModGuts_Prog) (bindsToProg $ mg_binds guts)
+modGutsT :: (ExtendPath c Crumb, HasEmptyContext c, Monad m) => Transform c m CoreProg a -> (ModGuts -> a -> b) -> Transform c m ModGuts b
+modGutsT t f = transform $ \ c guts -> f guts <$> apply t (setEmptyContext c @@ ModGuts_Prog) (bindsToProg $ mg_binds guts)
 {-# INLINE modGutsT #-}
 
 -- | Rewrite the 'CoreProg' child of a module.
@@ -317,16 +317,16 @@ modGutsR r = modGutsT r (\ guts p -> guts {mg_binds = progToBinds p})
 
 ---------------------------------------------------------------------
 
--- | Translate an empty list.
-progNilT :: Monad m => b -> Translate c m CoreProg b
+-- | Transform an empty list.
+progNilT :: Monad m => b -> Transform c m CoreProg b
 progNilT b = contextfreeT $ \case
                                ProgNil       -> return b
                                ProgCons _ _  -> fail "not an empty program."
 {-# INLINE progNilT #-}
 
--- | Translate a program of the form: ('CoreBind' @:@ 'CoreProg')
-progConsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreBind a1 -> Translate c m CoreProg a2 -> (a1 -> a2 -> b) -> Translate c m CoreProg b
-progConsT t1 t2 f = translate $ \ c -> \case
+-- | Transform a program of the form: ('CoreBind' @:@ 'CoreProg')
+progConsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m CoreBind a1 -> Transform c m CoreProg a2 -> (a1 -> a2 -> b) -> Transform c m CoreProg b
+progConsT t1 t2 f = transform $ \ c -> \case
                                           ProgCons bd p -> f <$> apply t1 (c @@ ProgCons_Head) bd <*> apply t2 (addBindingGroup bd c @@ ProgCons_Tail) p
                                           _             -> fail "not a non-empty program."
 {-# INLINE progConsT #-}
@@ -348,9 +348,9 @@ progConsOneR r1 r2 = unwrapOneR $  progConsAllR (wrapOneR r1) (wrapOneR r2)
 
 ---------------------------------------------------------------------
 
--- | Translate a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
-nonRecT :: (ExtendPath c Crumb, Monad m) => Translate c m Var a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreBind b
-nonRecT t1 t2 f = translate $ \ c -> \case
+-- | Transform a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
+nonRecT :: (ExtendPath c Crumb, Monad m) => Transform c m Var a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m CoreBind b
+nonRecT t1 t2 f = transform $ \ c -> \case
                                         NonRec v e -> f <$> apply t1 (c @@ NonRec_Var) v <*> apply t2 (c @@ NonRec_RHS) e
                                         _          -> fail "not a non-recursive binding group."
 {-# INLINE nonRecT #-}
@@ -371,9 +371,9 @@ nonRecOneR r1 r2 = unwrapOneR (nonRecAllR (wrapOneR r1) (wrapOneR r2))
 {-# INLINE nonRecOneR #-}
 
 
--- | Translate a binding group of the form: @Rec@ ['CoreDef']
-recT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> Translate c m CoreDef a) -> ([a] -> b) -> Translate c m CoreBind b
-recT t f = translate $ \ c -> \case
+-- | Transform a binding group of the form: @Rec@ ['CoreDef']
+recT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> Transform c m CoreDef a) -> ([a] -> b) -> Transform c m CoreBind b
+recT t f = transform $ \ c -> \case
          Rec bds -> -- The group is recursive, so we add all other bindings in the group to the context (excluding the one under consideration).
                     f <$> sequence [ apply (t n) (addDefBindingsExcept n bds c @@ Rec_Def n) (Def i e) -- here we convert from (Id,CoreExpr) to CoreDef
                                    | ((i,e),n) <- zip bds [0..]
@@ -398,9 +398,9 @@ recOneR rs = unwrapOneR $ recAllR (wrapOneR . rs)
 
 ---------------------------------------------------------------------
 
--- | Translate a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
-defT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m Id a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreDef b
-defT t1 t2 f = translate $ \ c (Def i e) -> f <$> apply t1 (c @@ Def_Id) i <*> apply t2 (addDefBinding i c @@ Def_RHS) e
+-- | Transform a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
+defT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m Id a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m CoreDef b
+defT t1 t2 f = transform $ \ c (Def i e) -> f <$> apply t1 (c @@ Def_Id) i <*> apply t2 (addDefBinding i c @@ Def_RHS) e
 {-# INLINE defT #-}
 
 -- | Rewrite all children of a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
@@ -420,9 +420,9 @@ defOneR r1 r2 = unwrapOneR (defAllR (wrapOneR r1) (wrapOneR r2))
 
 ---------------------------------------------------------------------
 
--- | Translate a case alternative of the form: ('AltCon', ['Var'], 'CoreExpr')
-altT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m AltCon a1 -> (Int -> Translate c m Var a2) -> Translate c m CoreExpr a3 -> (a1 -> [a2] -> a3 -> b) -> Translate c m CoreAlt b
-altT t1 ts t2 f = translate $ \ c (con,vs,e) -> f <$> apply t1 (c @@ Alt_Con) con
+-- | Transform a case alternative of the form: ('AltCon', ['Var'], 'CoreExpr')
+altT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m AltCon a1 -> (Int -> Transform c m Var a2) -> Transform c m CoreExpr a3 -> (a1 -> [a2] -> a3 -> b) -> Transform c m CoreAlt b
+altT t1 ts t2 f = transform $ \ c (con,vs,e) -> f <$> apply t1 (c @@ Alt_Con) con
                                                   <*> sequence [ apply (ts n) (c @@ Alt_Var n) v | (v,n) <- zip vs [1..] ]
                                                   <*> apply t2 (addAltBindings vs c @@ Alt_RHS) e
 {-# INLINE altT #-}
@@ -444,9 +444,9 @@ altOneR r1 rs r2 = unwrapOneR (altAllR (wrapOneR r1) (wrapOneR . rs) (wrapOneR r
 
 ---------------------------------------------------------------------
 
--- | Translate an expression of the form: @Var@ 'Id'
-varT :: (ExtendPath c Crumb, Monad m) => Translate c m Id b -> Translate c m CoreExpr b
-varT t = translate $ \ c -> \case
+-- | Transform an expression of the form: @Var@ 'Id'
+varT :: (ExtendPath c Crumb, Monad m) => Transform c m Id b -> Transform c m CoreExpr b
+varT t = transform $ \ c -> \case
                                Var v -> apply t (c @@ Var_Id) v
                                _     -> fail "not a variable."
 {-# INLINE varT #-}
@@ -457,9 +457,9 @@ varR r = varT (Var <$> r)
 {-# INLINE varR #-}
 
 
--- | Translate an expression of the form: @Lit@ 'Literal'
-litT :: (ExtendPath c Crumb, Monad m) => Translate c m Literal b -> Translate c m CoreExpr b
-litT t = translate $ \ c -> \case
+-- | Transform an expression of the form: @Lit@ 'Literal'
+litT :: (ExtendPath c Crumb, Monad m) => Transform c m Literal b -> Transform c m CoreExpr b
+litT t = transform $ \ c -> \case
                                Lit x -> apply t (c @@ Lit_Lit) x
                                _     -> fail "not a literal."
 {-# INLINE litT #-}
@@ -470,9 +470,9 @@ litR r = litT (Lit <$> r)
 {-# INLINE litR #-}
 
 
--- | Translate an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
-appT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreExpr a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
-appT t1 t2 f = translate $ \ c -> \case
+-- | Transform an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
+appT :: (ExtendPath c Crumb, Monad m) => Transform c m CoreExpr a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m CoreExpr b
+appT t1 t2 f = transform $ \ c -> \case
                                      App e1 e2 -> f <$> apply t1 (c @@ App_Fun) e1 <*> apply t2 (c @@ App_Arg) e2
                                      _         -> fail "not an application."
 {-# INLINE appT #-}
@@ -493,9 +493,9 @@ appOneR r1 r2 = unwrapOneR $ appAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE appOneR #-}
 
 
--- | Translate an expression of the form: @Lam@ 'Var' 'CoreExpr'
-lamT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m Var a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
-lamT t1 t2 f = translate $ \ c -> \case
+-- | Transform an expression of the form: @Lam@ 'Var' 'CoreExpr'
+lamT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m Var a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m CoreExpr b
+lamT t1 t2 f = transform $ \ c -> \case
                                      Lam v e -> f <$> apply t1 (c @@ Lam_Var) v <*> apply t2 (addLambdaBinding v c @@ Lam_Body) e
                                      _       -> fail "not a lambda."
 {-# INLINE lamT #-}
@@ -516,9 +516,9 @@ lamOneR r1 r2 = unwrapOneR $ lamAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE lamOneR #-}
 
 
--- | Translate an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
-letT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m CoreBind a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
-letT t1 t2 f = translate $ \ c -> \case
+-- | Transform an expression of the form: @Let@ 'CoreBind' 'CoreExpr'
+letT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m CoreBind a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m CoreExpr b
+letT t1 t2 f = transform $ \ c -> \case
         Let bds e -> -- Note we use the *original* context for the binding group.
                      -- If the bindings are recursive, they will be added to the context by recT.
                      f <$> apply t1 (c @@ Let_Bind) bds <*> apply t2 (addBindingGroup bds c @@ Let_Body) e
@@ -541,15 +541,15 @@ letOneR r1 r2 = unwrapOneR $ letAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE letOneR #-}
 
 
--- | Translate an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
+-- | Transform an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
 caseT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m)
-      => Translate c m CoreExpr e
-      -> Translate c m Id w
-      -> Translate c m Type ty
-      -> (Int -> Translate c m CoreAlt alt)
+      => Transform c m CoreExpr e
+      -> Transform c m Id w
+      -> Transform c m Type ty
+      -> (Int -> Transform c m CoreAlt alt)
       -> (e -> w -> ty -> [alt] -> b)
-      -> Translate c m CoreExpr b
-caseT te tw tty talts f = translate $ \ c -> \case
+      -> Transform c m CoreExpr b
+caseT te tw tty talts f = transform $ \ c -> \case
          Case e w ty alts -> f <$> apply te (c @@ Case_Scrutinee) e
                                <*> apply tw (c @@ Case_Binder) w
                                <*> apply tty (c @@ Case_Type) ty
@@ -590,9 +590,9 @@ caseOneR re rw rty ralts = unwrapOneR $ caseAllR (wrapOneR re) (wrapOneR rw) (wr
 {-# INLINE caseOneR #-}
 
 
--- | Translate an expression of the form: @Cast@ 'CoreExpr' 'Coercion'
-castT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreExpr a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
-castT t1 t2 f = translate $ \ c -> \case
+-- | Transform an expression of the form: @Cast@ 'CoreExpr' 'Coercion'
+castT :: (ExtendPath c Crumb, Monad m) => Transform c m CoreExpr a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m CoreExpr b
+castT t1 t2 f = transform $ \ c -> \case
                                       Cast e co -> f <$> apply t1 (c @@ Cast_Expr) e <*> apply t2 (c @@ Cast_Co) co
                                       _         -> fail "not a cast."
 {-# INLINE castT #-}
@@ -613,9 +613,9 @@ castOneR r1 r2 = unwrapOneR $ castAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE castOneR #-}
 
 
--- | Translate an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
-tickT :: (ExtendPath c Crumb, Monad m) => Translate c m CoreTickish a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m CoreExpr b
-tickT t1 t2 f = translate $ \ c -> \case
+-- | Transform an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
+tickT :: (ExtendPath c Crumb, Monad m) => Transform c m CoreTickish a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m CoreExpr b
+tickT t1 t2 f = transform $ \ c -> \case
                                       Tick tk e -> f <$> apply t1 (c @@ Tick_Tick) tk <*> apply t2 (c @@ Tick_Expr) e
                                       _         -> fail "not a tick."
 {-# INLINE tickT #-}
@@ -636,9 +636,9 @@ tickOneR r1 r2 = unwrapOneR $ tickAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE tickOneR #-}
 
 
--- | Translate an expression of the form: @Type@ 'Type'
-typeT :: (ExtendPath c Crumb, Monad m) => Translate c m Type b -> Translate c m CoreExpr b
-typeT t = translate $ \ c -> \case
+-- | Transform an expression of the form: @Type@ 'Type'
+typeT :: (ExtendPath c Crumb, Monad m) => Transform c m Type b -> Transform c m CoreExpr b
+typeT t = transform $ \ c -> \case
                                 Type ty -> apply t (c @@ Type_Type) ty
                                 _       -> fail "not a type."
 {-# INLINE typeT #-}
@@ -649,9 +649,9 @@ typeR r = typeT (Type <$> r)
 {-# INLINE typeR #-}
 
 
--- | Translate an expression of the form: @Coercion@ 'Coercion'
-coercionT :: (ExtendPath c Crumb, Monad m) => Translate c m Coercion b -> Translate c m CoreExpr b
-coercionT t = translate $ \ c -> \case
+-- | Transform an expression of the form: @Coercion@ 'Coercion'
+coercionT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion b -> Transform c m CoreExpr b
+coercionT t = transform $ \ c -> \case
                                     Coercion co -> apply t (c @@ Co_Co) co
                                     _           -> fail "not a coercion."
 {-# INLINE coercionT #-}
@@ -665,8 +665,8 @@ coercionR r = coercionT (Coercion <$> r)
 
 -- Some composite congruence combinators to export.
 
--- | Translate a definition of the form @NonRec 'Var' 'CoreExpr'@ or @Def 'Id' 'CoreExpr'@
-defOrNonRecT :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Translate c m Var a1 -> Translate c m CoreExpr a2 -> (a1 -> a2 -> b) -> Translate c m g b
+-- | Transform a definition of the form @NonRec 'Var' 'CoreExpr'@ or @Def 'Id' 'CoreExpr'@
+defOrNonRecT :: (Injection CoreBind g, Injection CoreDef g, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Transform c m Var a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m g b
 defOrNonRecT t1 t2 f = promoteBindT (nonRecT t1 t2 f)
                     <+ promoteDefT  (defT    t1 t2 f)
 {-# INLINE defOrNonRecT #-}
@@ -688,8 +688,8 @@ defOrNonRecOneR r1 r2 = unwrapAnyR $ defOrNonRecOneR (wrapAnyR r1) (wrapAnyR r2)
 {-# INLINE defOrNonRecOneR #-}
 
 
--- | Translate a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
-recDefT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> (Translate c m Id a1, Translate c m CoreExpr a2)) -> ([(a1,a2)] -> b) -> Translate c m CoreBind b
+-- | Transform a binding group of the form: @Rec@ [('Id', 'CoreExpr')]
+recDefT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> (Transform c m Id a1, Transform c m CoreExpr a2)) -> ([(a1,a2)] -> b) -> Transform c m CoreBind b
 recDefT ts = recT (\ n -> uncurry defT (ts n) (,))
 {-# INLINE recDefT #-}
 
@@ -709,8 +709,8 @@ recDefOneR rs = recOneR (\ n -> uncurry defOneR (rs n))
 {-# INLINE recDefOneR #-}
 
 
--- | Translate a program of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
-consNonRecT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m Var a1 -> Translate c m CoreExpr a2 -> Translate c m CoreProg a3 -> (a1 -> a2 -> a3 -> b) -> Translate c m CoreProg b
+-- | Transform a program of the form: (@NonRec@ 'Var' 'CoreExpr') @:@ 'CoreProg'
+consNonRecT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m Var a1 -> Transform c m CoreExpr a2 -> Transform c m CoreProg a3 -> (a1 -> a2 -> a3 -> b) -> Transform c m CoreProg b
 consNonRecT t1 t2 t3 f = progConsT (nonRecT t1 t2 (,)) t3 (uncurry f)
 {-# INLINE consNonRecT #-}
 
@@ -730,8 +730,8 @@ consNonRecOneR r1 r2 r3 = progConsAllR (nonRecOneR r1 r2) r3
 {-# INLINE consNonRecOneR #-}
 
 
--- | Translate an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
-consRecT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> Translate c m CoreDef a1) -> Translate c m CoreProg a2 -> ([a1] -> a2 -> b) -> Translate c m CoreProg b
+-- | Transform an expression of the form: (@Rec@ ['CoreDef']) @:@ 'CoreProg'
+consRecT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> Transform c m CoreDef a1) -> Transform c m CoreProg a2 -> ([a1] -> a2 -> b) -> Transform c m CoreProg b
 consRecT ts t = progConsT (recT ts id) t
 {-# INLINE consRecT #-}
 
@@ -751,8 +751,8 @@ consRecOneR rs r = progConsOneR (recOneR rs) r
 {-# INLINE consRecOneR #-}
 
 
--- | Translate an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
-consRecDefT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> (Translate c m Id a1, Translate c m CoreExpr a2)) -> Translate c m CoreProg a3 -> ([(a1,a2)] -> a3 -> b) -> Translate c m CoreProg b
+-- | Transform an expression of the form: (@Rec@ [('Id', 'CoreExpr')]) @:@ 'CoreProg'
+consRecDefT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> (Transform c m Id a1, Transform c m CoreExpr a2)) -> Transform c m CoreProg a3 -> ([(a1,a2)] -> a3 -> b) -> Transform c m CoreProg b
 consRecDefT ts t = consRecT (\ n -> uncurry defT (ts n) (,)) t
 {-# INLINE consRecDefT #-}
 
@@ -772,8 +772,8 @@ consRecDefOneR rs r = consRecOneR (\ n -> uncurry defOneR (rs n)) r
 {-# INLINE consRecDefOneR #-}
 
 
--- | Translate an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
-letNonRecT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m Var a1 -> Translate c m CoreExpr a2 -> Translate c m CoreExpr a3 -> (a1 -> a2 -> a3 -> b) -> Translate c m CoreExpr b
+-- | Transform an expression of the form: @Let@ (@NonRec@ 'Var' 'CoreExpr') 'CoreExpr'
+letNonRecT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m Var a1 -> Transform c m CoreExpr a2 -> Transform c m CoreExpr a3 -> (a1 -> a2 -> a3 -> b) -> Transform c m CoreExpr b
 letNonRecT t1 t2 t3 f = letT (nonRecT t1 t2 (,)) t3 (uncurry f)
 {-# INLINE letNonRecT #-}
 
@@ -793,8 +793,8 @@ letNonRecOneR r1 r2 r3 = letOneR (nonRecOneR r1 r2) r3
 {-# INLINE letNonRecOneR #-}
 
 
--- | Translate an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
-letRecT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> Translate c m CoreDef a1) -> Translate c m CoreExpr a2 -> ([a1] -> a2 -> b) -> Translate c m CoreExpr b
+-- | Transform an expression of the form: @Let@ (@Rec@ ['CoreDef']) 'CoreExpr'
+letRecT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> Transform c m CoreDef a1) -> Transform c m CoreExpr a2 -> ([a1] -> a2 -> b) -> Transform c m CoreExpr b
 letRecT ts t = letT (recT ts id) t
 {-# INLINE letRecT #-}
 
@@ -814,8 +814,8 @@ letRecOneR rs r = letOneR (recOneR rs) r
 {-# INLINE letRecOneR #-}
 
 
--- | Translate an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
-letRecDefT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> (Translate c m Id a1, Translate c m CoreExpr a2)) -> Translate c m CoreExpr a3 -> ([(a1,a2)] -> a3 -> b) -> Translate c m CoreExpr b
+-- | Transform an expression of the form: @Let@ (@Rec@ [('Id', 'CoreExpr')]) 'CoreExpr'
+letRecDefT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> (Transform c m Id a1, Transform c m CoreExpr a2)) -> Transform c m CoreExpr a3 -> ([(a1,a2)] -> a3 -> b) -> Transform c m CoreExpr b
 letRecDefT ts t = letRecT (\ n -> uncurry defT (ts n) (,)) t
 {-# INLINE letRecDefT #-}
 
@@ -835,13 +835,13 @@ letRecDefOneR rs r = letRecOneR (\ n -> uncurry defOneR (rs n)) r
 {-# INLINE letRecDefOneR #-}
 
 
--- | Translate an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
+-- | Transform an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' [('AltCon', ['Var'], 'CoreExpr')]
 caseAltT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m)
-         => Translate c m CoreExpr sc
-         -> Translate c m Id w
-         -> Translate c m Type ty
-         -> (Int -> (Translate c m AltCon con, (Int -> Translate c m Var v), Translate c m CoreExpr rhs)) -> (sc -> w -> ty -> [(con,[v],rhs)] -> b)
-         -> Translate c m CoreExpr b
+         => Transform c m CoreExpr sc
+         -> Transform c m Id w
+         -> Transform c m Type ty
+         -> (Int -> (Transform c m AltCon con, (Int -> Transform c m Var v), Transform c m CoreExpr rhs)) -> (sc -> w -> ty -> [(con,[v],rhs)] -> b)
+         -> Transform c m CoreExpr b
 caseAltT tsc tw tty talts = caseT tsc tw tty (\ n -> let (tcon,tvs,te) = talts n in altT tcon tvs te (,,))
 {-# INLINE caseAltT #-}
 
@@ -879,11 +879,11 @@ caseAltOneR rsc rw rty ralts = caseOneR rsc rw rty (\ n -> let (rcon,rvs,re) = r
 
 -- Recursive composite congruence combinators.
 
--- | Translate all top-level binding groups in a program.
-progBindsT :: forall c m a b. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => (Int -> Translate c m CoreBind a) -> ([a] -> b) -> Translate c m CoreProg b
+-- | Transform all top-level binding groups in a program.
+progBindsT :: forall c m a b. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => (Int -> Transform c m CoreBind a) -> ([a] -> b) -> Transform c m CoreProg b
 progBindsT ts f = f <$> progBindsTaux 0
   where
-    progBindsTaux :: Int -> Translate c m CoreProg [a]
+    progBindsTaux :: Int -> Transform c m CoreProg [a]
     progBindsTaux n = progNilT [] <+ progConsT (ts n) (progBindsTaux (succ n)) (:)
 {-# INLINE progBindsT #-}
 
@@ -907,9 +907,9 @@ progBindsOneR rs = unwrapOneR $ progBindsAllR (wrapOneR . rs)
 
 -- Types
 
--- | Translate a type of the form: @TyVarTy@ 'TyVar'
-tyVarT :: (ExtendPath c Crumb, Monad m) => Translate c m TyVar b -> Translate c m Type b
-tyVarT t = translate $ \ c -> \case
+-- | Transform a type of the form: @TyVarTy@ 'TyVar'
+tyVarT :: (ExtendPath c Crumb, Monad m) => Transform c m TyVar b -> Transform c m Type b
+tyVarT t = transform $ \ c -> \case
                                  TyVarTy v -> apply t (c @@ TyVarTy_TyVar) v
                                  _         -> fail "not a type variable."
 {-# INLINE tyVarT #-}
@@ -920,9 +920,9 @@ tyVarR r = tyVarT (TyVarTy <$> r)
 {-# INLINE tyVarR #-}
 
 
--- | Translate a type of the form: @LitTy@ 'TyLit'
-litTyT :: (ExtendPath c Crumb, Monad m) => Translate c m TyLit b -> Translate c m Type b
-litTyT t = translate $ \ c -> \case
+-- | Transform a type of the form: @LitTy@ 'TyLit'
+litTyT :: (ExtendPath c Crumb, Monad m) => Transform c m TyLit b -> Transform c m Type b
+litTyT t = transform $ \ c -> \case
                                  LitTy x -> apply t (c @@ LitTy_TyLit) x
                                  _       -> fail "not a type literal."
 {-# INLINE litTyT #-}
@@ -933,9 +933,9 @@ litTyR r = litTyT (LitTy <$> r)
 {-# INLINE litTyR #-}
 
 
--- | Translate a type of the form: @AppTy@ 'Type' 'Type'
-appTyT :: (ExtendPath c Crumb, Monad m) => Translate c m Type a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Type b
-appTyT t1 t2 f = translate $ \ c -> \case
+-- | Transform a type of the form: @AppTy@ 'Type' 'Type'
+appTyT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Type b
+appTyT t1 t2 f = transform $ \ c -> \case
                                      AppTy ty1 ty2 -> f <$> apply t1 (c @@ AppTy_Fun) ty1 <*> apply t2 (c @@ AppTy_Arg) ty2
                                      _             -> fail "not a type application."
 {-# INLINE appTyT #-}
@@ -956,9 +956,9 @@ appTyOneR r1 r2 = unwrapOneR $ appTyAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE appTyOneR #-}
 
 
--- | Translate a type of the form: @FunTy@ 'Type' 'Type'
-funTyT :: (ExtendPath c Crumb, Monad m) => Translate c m Type a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Type b
-funTyT t1 t2 f = translate $ \ c -> \case
+-- | Transform a type of the form: @FunTy@ 'Type' 'Type'
+funTyT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Type b
+funTyT t1 t2 f = transform $ \ c -> \case
                                      FunTy ty1 ty2 -> f <$> apply t1 (c @@ FunTy_Dom) ty1 <*> apply t2 (c @@ FunTy_CoDom) ty2
                                      _             -> fail "not a function type."
 {-# INLINE funTyT #-}
@@ -979,9 +979,9 @@ funTyOneR r1 r2 = unwrapOneR $ funTyAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE funTyOneR #-}
 
 
--- | Translate a type of the form: @ForAllTy@ 'Var' 'Type'
-forAllTyT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m Var a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Type b
-forAllTyT t1 t2 f = translate $ \ c -> \case
+-- | Transform a type of the form: @ForAllTy@ 'Var' 'Type'
+forAllTyT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m Var a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Type b
+forAllTyT t1 t2 f = transform $ \ c -> \case
                                           ForAllTy v ty -> f <$> apply t1 (c @@ ForAllTy_Var) v <*> apply t2 (addForallBinding v c @@ ForAllTy_Body) ty
                                           _             -> fail "not a forall type."
 {-# INLINE forAllTyT #-}
@@ -1002,9 +1002,9 @@ forAllTyOneR r1 r2 = unwrapOneR $ forAllTyAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE forAllTyOneR #-}
 
 
--- | Translate a type of the form: @TyConApp@ 'TyCon' ['KindOrType']
-tyConAppT :: (ExtendPath c Crumb, Monad m) => Translate c m TyCon a1 -> (Int -> Translate c m KindOrType a2) -> (a1 -> [a2] -> b) -> Translate c m Type b
-tyConAppT t ts f = translate $ \ c -> \case
+-- | Transform a type of the form: @TyConApp@ 'TyCon' ['KindOrType']
+tyConAppT :: (ExtendPath c Crumb, Monad m) => Transform c m TyCon a1 -> (Int -> Transform c m KindOrType a2) -> (a1 -> [a2] -> b) -> Transform c m Type b
+tyConAppT t ts f = transform $ \ c -> \case
                                          TyConApp con tys -> f <$> apply t (c @@ TyConApp_TyCon) con <*> sequence [ apply (ts n) (c @@ TyConApp_Arg n) ty | (ty,n) <- zip tys [0..] ]
                                          _                -> fail "not a type-constructor application."
 {-# INLINE tyConAppT #-}
@@ -1031,9 +1031,9 @@ tyConAppOneR r rs = unwrapOneR $ tyConAppAllR (wrapOneR r) (wrapOneR . rs)
 -- TODO: review and bring all these up-to-date for Coercions w/ Roles in 7.8
 
 #if __GLASGOW_HASKELL__ > 706
--- | Translate a coercion of the form: @Refl@ 'Role' 'Type'
-reflT :: (ExtendPath c Crumb, Monad m) => Translate c m Type a1 -> (Role -> a1 -> b) -> Translate c m Coercion b
-reflT t f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @Refl@ 'Role' 'Type'
+reflT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> (Role -> a1 -> b) -> Transform c m Coercion b
+reflT t f = transform $ \ c -> \case
                                  Refl r ty -> f r <$> apply t (c @@ Refl_Type) ty
                                  _         -> fail "not a reflexive coercion."
 
@@ -1041,9 +1041,9 @@ reflT t f = translate $ \ c -> \case
 reflR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Type -> Rewrite c m Coercion
 reflR r = reflT r Refl
 #else
--- | Translate a coercion of the form: @Refl@ 'Type'
-reflT :: (ExtendPath c Crumb, Monad m) => Translate c m Type b -> Translate c m Coercion b
-reflT t = translate $ \ c -> \case
+-- | Transform a coercion of the form: @Refl@ 'Type'
+reflT :: (ExtendPath c Crumb, Monad m) => Transform c m Type b -> Transform c m Coercion b
+reflT t = transform $ \ c -> \case
                                  Refl ty -> apply t (c @@ Refl_Type) ty
                                  _       -> fail "not a reflexive coercion."
 
@@ -1055,15 +1055,15 @@ reflR r = reflT (Refl <$> r)
 {-# INLINE reflR #-}
 
 #if __GLASGOW_HASKELL__ > 706
--- | Translate a coercion of the form: @TyConAppCo@ 'Role' 'TyCon' ['Coercion']
-tyConAppCoT :: (ExtendPath c Crumb, Monad m) => Translate c m TyCon a1 -> (Int -> Translate c m Coercion a2) -> (Role -> a1 -> [a2] -> b) -> Translate c m Coercion b
-tyConAppCoT t ts f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @TyConAppCo@ 'Role' 'TyCon' ['Coercion']
+tyConAppCoT :: (ExtendPath c Crumb, Monad m) => Transform c m TyCon a1 -> (Int -> Transform c m Coercion a2) -> (Role -> a1 -> [a2] -> b) -> Transform c m Coercion b
+tyConAppCoT t ts f = transform $ \ c -> \case
                                            TyConAppCo r con coes -> f r <$> apply t (c @@ TyConAppCo_TyCon) con <*> sequence [ apply (ts n) (c @@ TyConAppCo_Arg n) co | (co,n) <- zip coes [0..] ]
                                            _                     -> fail "not a type-constructor coercion."
 #else
--- | Translate a coercion of the form: @TyConAppCo@ 'TyCon' ['Coercion']
-tyConAppCoT :: (ExtendPath c Crumb, Monad m) => Translate c m TyCon a1 -> (Int -> Translate c m Coercion a2) -> (a1 -> [a2] -> b) -> Translate c m Coercion b
-tyConAppCoT t ts f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @TyConAppCo@ 'TyCon' ['Coercion']
+tyConAppCoT :: (ExtendPath c Crumb, Monad m) => Transform c m TyCon a1 -> (Int -> Transform c m Coercion a2) -> (a1 -> [a2] -> b) -> Transform c m Coercion b
+tyConAppCoT t ts f = transform $ \ c -> \case
                                            TyConAppCo con coes -> f <$> apply t (c @@ TyConAppCo_TyCon) con <*> sequence [ apply (ts n) (c @@ TyConAppCo_Arg n) co | (co,n) <- zip coes [0..] ]
                                            _                   -> fail "not a type-constructor coercion."
 #endif
@@ -1085,9 +1085,9 @@ tyConAppCoOneR r rs = unwrapOneR $ tyConAppCoAllR (wrapOneR r) (wrapOneR . rs)
 {-# INLINE tyConAppCoOneR #-}
 
 
--- | Translate a coercion of the form: @AppCo@ 'Coercion' 'Coercion'
-appCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Coercion a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
-appCoT t1 t2 f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @AppCo@ 'Coercion' 'Coercion'
+appCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
+appCoT t1 t2 f = transform $ \ c -> \case
                                      AppCo co1 co2 -> f <$> apply t1 (c @@ AppCo_Fun) co1 <*> apply t2 (c @@ AppCo_Arg) co2
                                      _             -> fail "not a coercion application."
 {-# INLINE appCoT #-}
@@ -1108,9 +1108,9 @@ appCoOneR r1 r2 = unwrapOneR $ appCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE appCoOneR #-}
 
 
--- | Translate a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion'
-forAllCoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Translate c m TyVar a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
-forAllCoT t1 t2 f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion'
+forAllCoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m TyVar a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
+forAllCoT t1 t2 f = transform $ \ c -> \case
                                           ForAllCo v co -> f <$> apply t1 (c @@ ForAllCo_TyVar) v <*> apply t2 (addForallBinding v c @@ ForAllCo_Body) co
                                           _             -> fail "not a forall coercion."
 {-# INLINE forAllCoT #-}
@@ -1131,9 +1131,9 @@ forAllCoOneR r1 r2 = unwrapOneR $ forAllCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE forAllCoOneR #-}
 
 
--- | Translate a coercion of the form: @CoVarCo@ 'CoVar'
-coVarCoT :: (ExtendPath c Crumb, Monad m) => Translate c m CoVar b -> Translate c m Coercion b
-coVarCoT t = translate $ \ c -> \case
+-- | Transform a coercion of the form: @CoVarCo@ 'CoVar'
+coVarCoT :: (ExtendPath c Crumb, Monad m) => Transform c m CoVar b -> Transform c m Coercion b
+coVarCoT t = transform $ \ c -> \case
                                    CoVarCo v -> apply t (c @@ CoVarCo_CoVar) v
                                    _         -> fail "not a coercion variable."
 {-# INLINE coVarCoT #-}
@@ -1144,15 +1144,15 @@ coVarCoR r = coVarCoT (CoVarCo <$> r)
 {-# INLINE coVarCoR #-}
 
 #if __GLASGOW_HASKELL__ > 706
--- | Translate a coercion of the form: @AxiomInstCo@ ('CoAxiom' 'Branched') 'BranchIndex' ['Coercion']
-axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Translate c m (CoAxiom Branched) a1 -> Translate c m BranchIndex a2 -> (Int -> Translate c m Coercion a3) -> (a1 -> a2 -> [a3] -> b) -> Translate c m Coercion b
-axiomInstCoT t1 t2 ts f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @AxiomInstCo@ ('CoAxiom' 'Branched') 'BranchIndex' ['Coercion']
+axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Transform c m (CoAxiom Branched) a1 -> Transform c m BranchIndex a2 -> (Int -> Transform c m Coercion a3) -> (a1 -> a2 -> [a3] -> b) -> Transform c m Coercion b
+axiomInstCoT t1 t2 ts f = transform $ \ c -> \case
                                                 AxiomInstCo ax idx coes -> f <$> apply t1 (c @@ AxiomInstCo_Axiom) ax <*> apply t2 (c @@ AxiomInstCo_Index) idx <*> sequence [ apply (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
                                                 _                       -> fail "not a coercion axiom instantiation."
 #else
--- | Translate a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
-axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Translate c m CoAxiom a1 -> (Int -> Translate c m Coercion a2) -> (a1 -> [a2] -> b) -> Translate c m Coercion b
-axiomInstCoT t ts f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
+axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Transform c m CoAxiom a1 -> (Int -> Transform c m Coercion a2) -> (a1 -> [a2] -> b) -> Transform c m Coercion b
+axiomInstCoT t ts f = transform $ \ c -> \case
                                             AxiomInstCo ax coes -> f <$> apply t (c @@ AxiomInstCo_Axiom) ax <*> sequence [ apply (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
                                             _                   -> fail "not a coercion axiom instantiation."
 #endif
@@ -1193,9 +1193,9 @@ axiomInstCoOneR r rs = unwrapOneR $ axiomInstCoAllR (wrapOneR r) (wrapOneR . rs)
 
 #if __GLASGOW_HASKELL__ > 706
 #else
--- | Translate a coercion of the form: @UnsafeCo@ 'Type' 'Type'
-unsafeCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Type a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
-unsafeCoT t1 t2 f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @UnsafeCo@ 'Type' 'Type'
+unsafeCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
+unsafeCoT t1 t2 f = transform $ \ c -> \case
                                           UnsafeCo ty1 ty2 -> f <$> apply t1 (c @@ UnsafeCo_Left) ty1 <*> apply t2 (c @@ UnsafeCo_Right) ty2
                                           _                -> fail "not an unsafe coercion."
 {-# INLINE unsafeCoT #-}
@@ -1216,9 +1216,9 @@ unsafeCoOneR r1 r2 = unwrapOneR $ unsafeCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE unsafeCoOneR #-}
 #endif
 
--- | Translate a coercion of the form: @SymCo@ 'Coercion'
-symCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Coercion b -> Translate c m Coercion b
-symCoT t = translate $ \ c -> \case
+-- | Transform a coercion of the form: @SymCo@ 'Coercion'
+symCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion b -> Transform c m Coercion b
+symCoT t = transform $ \ c -> \case
                                    SymCo co -> apply t (c @@ SymCo_Co) co
                                    _        -> fail "not a symmetric coercion."
 {-# INLINE symCoT #-}
@@ -1229,9 +1229,9 @@ symCoR r = symCoT (SymCo <$> r)
 {-# INLINE symCoR #-}
 
 
--- | Translate a coercion of the form: @TransCo@ 'Coercion' 'Coercion'
-transCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Coercion a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
-transCoT t1 t2 f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @TransCo@ 'Coercion' 'Coercion'
+transCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
+transCoT t1 t2 f = transform $ \ c -> \case
                                           TransCo co1 co2 -> f <$> apply t1 (c @@ TransCo_Left) co1 <*> apply t2 (c @@ TransCo_Right) co2
                                           _               -> fail "not a transitive coercion."
 {-# INLINE transCoT #-}
@@ -1252,9 +1252,9 @@ transCoOneR r1 r2 = unwrapOneR $ transCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE transCoOneR #-}
 
 
--- | Translate a coercion of the form: @NthCo@ 'Int' 'Coercion'
-nthCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Int a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
-nthCoT t1 t2 f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @NthCo@ 'Int' 'Coercion'
+nthCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Int a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
+nthCoT t1 t2 f = transform $ \ c -> \case
                                           NthCo n co -> f <$> apply t1 (c @@ NthCo_Int) n <*> apply t2 (c @@ NthCo_Co) co
                                           _          -> fail "not an Nth coercion."
 {-# INLINE nthCoT #-}
@@ -1276,24 +1276,24 @@ nthCoOneR r1 r2 = unwrapOneR $ nthCoAllR (wrapOneR r1) (wrapOneR r2)
 
 
 #if __GLASGOW_HASKELL__ > 706
--- | Translate a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
-lrCoT :: (ExtendPath c Crumb, Monad m) => Translate c m LeftOrRight a1 -> Translate c m Coercion a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
-lrCoT t1 t2 f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
+lrCoT :: (ExtendPath c Crumb, Monad m) => Transform c m LeftOrRight a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
+lrCoT t1 t2 f = transform $ \ c -> \case
                                       LRCo lr co -> f <$> apply t1 (c @@ LRCo_LR) lr <*> apply t2 (c @@ LRCo_Co) co
                                       _          -> fail "not a left/right coercion."
 {-# INLINE lrCoT #-}
 
--- | Translate all children of a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
+-- | Transform all children of a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
 lrCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m LeftOrRight -> Rewrite c m Coercion -> Rewrite c m Coercion
 lrCoAllR r1 r2 = lrCoT r1 r2 LRCo
 {-# INLINE lrCoAllR #-}
 
--- | Translate any children of a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
+-- | Transform any children of a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
 lrCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m LeftOrRight -> Rewrite c m Coercion -> Rewrite c m Coercion
 lrCoAnyR r1 r2 = unwrapAnyR $ lrCoAllR (wrapAnyR r1) (wrapAnyR r2)
 {-# INLINE lrCoAnyR #-}
 
--- | Translate one child of a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
+-- | Transform one child of a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
 lrCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m LeftOrRight -> Rewrite c m Coercion -> Rewrite c m Coercion
 lrCoOneR r1 r2 = unwrapOneR $ lrCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE lrCoOneR #-}
@@ -1301,9 +1301,9 @@ lrCoOneR r1 r2 = unwrapOneR $ lrCoAllR (wrapOneR r1) (wrapOneR r2)
 #endif
 
 
--- | Translate a coercion of the form: @InstCo@ 'Coercion' 'Type'
-instCoT :: (ExtendPath c Crumb, Monad m) => Translate c m Coercion a1 -> Translate c m Type a2 -> (a1 -> a2 -> b) -> Translate c m Coercion b
-instCoT t1 t2 f = translate $ \ c -> \case
+-- | Transform a coercion of the form: @InstCo@ 'Coercion' 'Type'
+instCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
+instCoT t1 t2 f = transform $ \ c -> \case
                                           InstCo co ty -> f <$> apply t1 (c @@ InstCo_Co) co <*> apply t2 (c @@ InstCo_Type) ty
                                           _            -> fail "not a coercion instantiation."
 {-# INLINE instCoT #-}
@@ -1328,7 +1328,7 @@ instCoOneR r1 r2 = unwrapOneR $ instCoAllR (wrapOneR r1) (wrapOneR r2)
 
 -- | Earlier versions of HERMIT used 'Int' as the crumb type.
 --   This translation maps an 'Int' to the corresponding 'Crumb', for backwards compatibility purposes.
-deprecatedIntToCrumbT :: Monad m => Int -> Translate c m Core Crumb
+deprecatedIntToCrumbT :: Monad m => Int -> Transform c m Core Crumb
 deprecatedIntToCrumbT n = contextfreeT $ \case
                                             GutsCore _                 | n == 0                        -> return ModGuts_Prog
                                             AltCore _                  | n == 0                        -> return Alt_RHS
@@ -1350,7 +1350,7 @@ deprecatedIntToCrumbT n = contextfreeT $ \case
 {-# INLINE deprecatedIntToCrumbT #-}
 
 -- | Builds a path to the first child, based on the old numbering system.
-deprecatedIntToPathT :: Monad m => Int -> Translate c m Core LocalPathH
+deprecatedIntToPathT :: Monad m => Int -> Transform c m Core LocalPathH
 deprecatedIntToPathT =  liftM (mempty @@) . deprecatedIntToCrumbT
 {-# INLINE deprecatedIntToPathT #-}
 

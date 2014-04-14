@@ -190,7 +190,7 @@ flattenProgramR = do bnd <- flattenProgramT
                      return (bindsToProg [bnd])
 
 -- | Flatten all the top-level binding groups in a program to a single recursive binding group.
-flattenProgramT :: Monad m => Translate c m CoreProg CoreBind
+flattenProgramT :: Monad m => Transform c m CoreProg CoreBind
 flattenProgramT = do bds <- arr (concatMap bindToVarExprs . progToBinds)
                      guardMsg (nodups $ map fst bds) "Top-level bindings contain multiple occurrences of a name."
                      return (Rec bds)

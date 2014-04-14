@@ -63,7 +63,7 @@ interpExpr' _   (ListH exprs) = do
     return $    toBoxedList dyns StringListBox
              ++ toBoxedList dyns (PathBox . pathToSnocPath)
                 -- ugly hack.  The whole dynamic stuff could do with overhauling.
-             ++ toBoxedList dyns (TranslateCorePathBox . return . pathToSnocPath) 
+             ++ toBoxedList dyns (TransformCorePathBox . return . pathToSnocPath) 
              ++ toBoxedList dyns IntListBox
              ++ toBoxedList dyns RewriteCoreListBox
 
@@ -73,7 +73,7 @@ interpExpr' rhs (CmdName str)
         return [ -- An Int is either a Path, or will be interpreted specially later.
                  toDyn $ IntBox i
                  -- TODO: Find a better long-term solution.
-               , toDyn $ TranslateCorePathBox (deprecatedIntToPathT i) 
+               , toDyn $ TransformCorePathBox (deprecatedIntToPathT i) 
                ]
     | otherwise = do
         dict <- gets cl_dict

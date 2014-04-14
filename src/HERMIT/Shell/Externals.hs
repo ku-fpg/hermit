@@ -26,7 +26,7 @@ import HERMIT.Shell.Types
 -- | There are four types of commands.
 data ShellCommand = KernelEffect KernelEffect -- ^ Command that modifies the state of the (scoped) kernel.
                   | ShellEffect  ShellEffect  -- ^ Command that modifies the state of the shell.
-                  | QueryFun     QueryFun     -- ^ Command that queries the AST with a Translate (read only).
+                  | QueryFun     QueryFun     -- ^ Command that queries the AST with a Transform (read only).
                   | ProofCommand ProofCommand -- ^ Command that deals with proofs.
 
 -- | Interpret a boxed thing as one of the four possible shell command types.
@@ -35,16 +35,16 @@ interpShellCommand =
   [ interp $ \ (RewriteCoreBox rr)           -> KernelEffect (Apply rr)
   , interp $ \ (RewriteCoreTCBox rr)         -> KernelEffect (Apply rr)
   , interp $ \ (BiRewriteCoreBox br)         -> KernelEffect (Apply $ whicheverR br)
-  , interp $ \ (CrumbBox cr)                 -> KernelEffect (Pathfinder (return (mempty @@ cr) :: TranslateH CoreTC LocalPathH))
-  , interp $ \ (PathBox p)                   -> KernelEffect (Pathfinder (return p :: TranslateH CoreTC LocalPathH))
-  , interp $ \ (TranslateCorePathBox tt)     -> KernelEffect (Pathfinder tt)
-  , interp $ \ (TranslateCoreTCPathBox tt)   -> KernelEffect (Pathfinder tt)
+  , interp $ \ (CrumbBox cr)                 -> KernelEffect (Pathfinder (return (mempty @@ cr) :: TransformH CoreTC LocalPathH))
+  , interp $ \ (PathBox p)                   -> KernelEffect (Pathfinder (return p :: TransformH CoreTC LocalPathH))
+  , interp $ \ (TransformCorePathBox tt)     -> KernelEffect (Pathfinder tt)
+  , interp $ \ (TransformCoreTCPathBox tt)   -> KernelEffect (Pathfinder tt)
   , interp $ \ (StringBox str)               -> QueryFun (message str)
-  , interp $ \ (TranslateCoreStringBox tt)   -> QueryFun (QueryString tt)
-  , interp $ \ (TranslateCoreTCStringBox tt) -> QueryFun (QueryString tt)
-  , interp $ \ (TranslateCoreTCDocHBox tt)   -> QueryFun (QueryDocH $ unTranslateDocH tt)
-  , interp $ \ (TranslateCoreCheckBox tt)    -> KernelEffect (CorrectnessCritera tt)
-  , interp $ \ (TranslateCoreTCCheckBox tt)  -> KernelEffect (CorrectnessCritera tt)
+  , interp $ \ (TransformCoreStringBox tt)   -> QueryFun (QueryString tt)
+  , interp $ \ (TransformCoreTCStringBox tt) -> QueryFun (QueryString tt)
+  , interp $ \ (TransformCoreTCDocHBox tt)   -> QueryFun (QueryDocH $ unTransformDocH tt)
+  , interp $ \ (TransformCoreCheckBox tt)    -> KernelEffect (CorrectnessCritera tt)
+  , interp $ \ (TransformCoreTCCheckBox tt)  -> KernelEffect (CorrectnessCritera tt)
   , interp $ \ (effect :: KernelEffect)      -> KernelEffect effect
   , interp $ \ (effect :: ShellEffect)       -> ShellEffect effect
   , interp $ \ (query :: QueryFun)           -> QueryFun query
@@ -72,7 +72,7 @@ shell_externals = map (.+ Shell)
        [ "move to the previous child"]
    , external "up"              (Direction U)
        [ "move to the parent node"]
-   , external "down"            (deprecatedIntToPathT 0 :: TranslateH Core LocalPathH) -- TODO: short-term solution
+   , external "down"            (deprecatedIntToPathT 0 :: TransformH Core LocalPathH) -- TODO: short-term solution
        [ "move to the first child"]
    , external "navigate"        (CLSModify $ \ st -> return $ st { cl_nav = True })
        [ "switch to navigate mode" ]

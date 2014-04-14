@@ -126,7 +126,7 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
                            guardMsg (eqType tyB tyB') "Type mismatch: this shouldn't have happened, report this as a bug."
                            rollingRuleResult tyA f g
 
-    rollingRuleResult :: Type -> CoreExpr -> CoreExpr -> TranslateH z CoreExpr
+    rollingRuleResult :: Type -> CoreExpr -> CoreExpr -> TransformH z CoreExpr
     rollingRuleResult ty f g = do x <- constT (newIdH "x" ty)
                                   mkFixT (Lam x (App f (App g (Var x))))
 
@@ -181,7 +181,7 @@ fixFusionRule meq mfstrict = parse3beforeBiR $ fixFusionRuleBR ((extractR *** ex
 --------------------------------------------------------------------------------------------------
 
 -- | Check that the expression has the form "fix t (f :: t -> t)", returning "t" and "f".
-isFixExprT :: TranslateH CoreExpr (Type,CoreExpr)
+isFixExprT :: TransformH CoreExpr (Type,CoreExpr)
 isFixExprT = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
   do App (App (Var fixId) (Type ty)) f <- idR
      fixId' <- findFixId
@@ -191,7 +191,7 @@ isFixExprT = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -
 --------------------------------------------------------------------------------------------------
 
 -- | f  ==>  fix f
-mkFixT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => CoreExpr -> Translate c m z CoreExpr
+mkFixT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => CoreExpr -> Transform c m z CoreExpr
 mkFixT f = do t <- endoFunExprType f
               fixId <- findFixId
               return $ mkCoreApps (varToCoreExpr fixId) [Type t, f]
@@ -200,7 +200,7 @@ fixLocation :: String
 fixLocation = "Data.Function.fix"
 
 -- TODO: will crash if 'fix' is not used (or explicitly imported) in the source file.
-findFixId :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Translate c m a Id
+findFixId :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Transform c m a Id
 findFixId = findIdT fixLocation
 
 --------------------------------------------------------------------------------------------------

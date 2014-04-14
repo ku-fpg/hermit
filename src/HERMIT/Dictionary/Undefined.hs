@@ -48,7 +48,7 @@ externals = map (.+ Unsafe)
     , external "error-to-undefined" (promoteExprR errorToUndefinedR :: RewriteH Core)
         [ "error ty string  ==>  undefined ty"
         ] .+ Shallow .+ Context
-    , external "is-undefined-val" (promoteExprT isUndefinedValT :: TranslateH Core ())
+    , external "is-undefined-val" (promoteExprT isUndefinedValT :: TransformH Core ())
         [ "Succeed if the current expression is an undefined value."
         ] .+ Shallow .+ Context .+ Predicate
     , external "undefined-expr" (promoteExprR undefinedExprR :: RewriteH Core)
@@ -82,11 +82,11 @@ undefinedLocation :: String
 undefinedLocation = "GHC.Err.undefined"
 
 -- TODO: will crash if 'undefined' is not used (or explicitly imported) in the source file.
-findUndefinedIdT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Translate c m a Id
+findUndefinedIdT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Transform c m a Id
 findUndefinedIdT = findIdT undefinedLocation
 
 -- | Check if the current expression is an undefined value.
-isUndefinedValT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Translate c m CoreExpr ()
+isUndefinedValT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Transform c m CoreExpr ()
 isUndefinedValT = prefixFailMsg "not an undefined value: " $
                   withPatFailMsg (wrongExprForm "App (Var undefined) (Type ty)") $
                   do App (Var un) (Type _) <- idR
@@ -99,11 +99,11 @@ errorLocation :: String
 errorLocation = "GHC.Err.error"
 
 -- TODO: will crash if 'error' is not used (or explicitly imported) in the source file.
-findErrorIdT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Translate c m a Id
+findErrorIdT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Transform c m a Id
 findErrorIdT = findIdT errorLocation
 
 -- | Check if the current expression is an undefined value.
-isErrorValT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Translate c m CoreExpr ()
+isErrorValT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Transform c m CoreExpr ()
 isErrorValT = prefixFailMsg "not an error value: " $
               withPatFailMsg (wrongExprForm "App (App (Var error) (Type ty)) string") $
               do App (App (Var er) (Type _)) _ <- idR
@@ -119,7 +119,7 @@ errorToUndefinedR = prefixFailMsg "error-to-undefined failed: " (isErrorValT >> 
 ------------------------------------------------------------------------
 
 -- | Make an undefined value of the given type.
-mkUndefinedValT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Type -> Translate c m a CoreExpr
+mkUndefinedValT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Type -> Transform c m a CoreExpr
 mkUndefinedValT ty =
   do un <- findUndefinedIdT
      return $ App (varToCoreExpr un) (Type ty)
@@ -195,7 +195,7 @@ undefinedCaseAltsR = prefixFailMsg "undefined-case-alts failed: " $
 ------------------------------------------------------------------------
 
 -- | Verify that the given rewrite is a proof that the given expression is a strict function.
-verifyStrictT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => CoreExpr -> Rewrite c m CoreExpr -> Translate c m a ()
+verifyStrictT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => CoreExpr -> Rewrite c m CoreExpr -> Transform c m a ()
 verifyStrictT f r = prefixFailMsg "strictness verification failed: " $
   do (argTy, resTy) <- constT (funExprArgResTypes f)
      undefArg       <- mkUndefinedValT argTy

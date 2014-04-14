@@ -30,7 +30,7 @@ data Kernel = Kernel
   { resumeK ::            AST                                        -> IO ()           -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
   , abortK  ::                                                          IO ()           -- ^ Halt the 'Kernel' and abort GHC without compiling.
   , applyK  ::            AST -> RewriteH ModGuts     -> HermitMEnv  -> IO (KureM AST)  -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
-  , queryK  :: forall a . AST -> TranslateH ModGuts a -> HermitMEnv  -> IO (KureM a)    -- ^ Apply a 'TranslateH' to the 'AST' and return the resulting value.
+  , queryK  :: forall a . AST -> TransformH ModGuts a -> HermitMEnv  -> IO (KureM a)    -- ^ Apply a 'TransformH' to the 'AST' and return the resulting value.
   , deleteK ::            AST                                        -> IO ()           -- ^ Delete the internal record of the specified 'AST'.
   , listK   ::                                                          IO [AST]        -- ^ List all the 'AST's tracked by the 'Kernel'.
   }

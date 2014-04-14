@@ -31,21 +31,21 @@ import HERMIT.Dictionary.Inline hiding (externals)
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
 externals :: [External]
 externals =
-         [ external "info" (infoT :: TranslateH CoreTC String)
+         [ external "info" (infoT :: TransformH CoreTC String)
                 [ "Display information about the current node." ] .+ Query
-         , external "compare-bound-ids" (compareBoundIds :: String -> String -> TranslateH CoreTC ())
+         , external "compare-bound-ids" (compareBoundIds :: String -> String -> TransformH CoreTC ())
                 [ "Compare the definitions of two in-scope identifiers for alpha equality."] .+ Query .+ Predicate
-         , external "compare-core-at" (compareCoreAtT ::  TranslateH Core LocalPathH -> TranslateH Core LocalPathH -> TranslateH Core ())
+         , external "compare-core-at" (compareCoreAtT ::  TransformH Core LocalPathH -> TransformH Core LocalPathH -> TransformH Core ())
                 [ "Compare the core fragments at the end of the given paths for alpha-equality."] .+ Query .+ Predicate
          ]
 
 --------------------------------------------------------
 
-infoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, BoundVars c, HasEmptyContext c, HasDynFlags m, MonadCatch m) => Translate c m CoreTC String
+infoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, BoundVars c, HasEmptyContext c, HasDynFlags m, MonadCatch m) => Transform c m CoreTC String
 infoT =
   do crumbs <- childrenT
      fvs    <- arr freeVarsCoreTC
-     translate $ \ c coreTC ->
+     transform $ \ c coreTC ->
        do dynFlags <- getDynFlags
           let node     =   "Node:        " ++ coreTCNode coreTC
               con      =   "Constructor: " ++ coreTCConstructor coreTC
@@ -156,7 +156,7 @@ coercionConstructor = \case
 --------------------------------------------------------
 
 -- | Compare the core fragments at the end of the specified 'LocalPathH's.
-compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Translate c m Core LocalPathH -> Translate c m Core LocalPathH -> Translate c m Core ()
+compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Transform c m Core LocalPathH -> Transform c m Core LocalPathH -> Transform c m Core ()
 compareCoreAtT p1T p2T =
   do p1 <- p1T
      p2 <- p2T
@@ -165,7 +165,7 @@ compareCoreAtT p1T p2T =
      guardMsg (core1 `coreAlphaEq` core2) "core fragments are not alpha-equivalent."
 
 -- | Compare the definitions of two identifiers for alpha-equality.
-compareBoundIdsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Id -> Id -> Translate c HermitM x ()
+compareBoundIdsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Id -> Id -> Transform c HermitM x ()
 compareBoundIdsT i1 i2 =
   do e1 <-                       fst ^<< getUnfoldingT AllBinders <<< return i1
      e2 <- replaceVarR i2 i1 <<< fst ^<< getUnfoldingT AllBinders <<< return i2
@@ -173,7 +173,7 @@ compareBoundIdsT i1 i2 =
      guardMsg (e1 `exprAlphaEq` e2) "bindings are not alpha-equivalent."
 
 -- | Compare the definitions of the two named identifiers for alpha-equality.
-compareBoundIds :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => String -> String -> Translate c HermitM x ()
+compareBoundIds :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => String -> String -> Transform c HermitM x ()
 compareBoundIds nm1 nm2 = do i1 <- findIdT nm1
                              i2 <- findIdT nm2
                              compareBoundIdsT i1 i2

@@ -53,12 +53,12 @@ import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, te
 --   - Run a precondition or other predicate that must not fail.
 data KernelEffect :: * where
    Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> KernelEffect
-   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g LocalPathH -> KernelEffect
+   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TransformH g LocalPathH -> KernelEffect
    Direction  ::                                                Direction               -> KernelEffect
    BeginScope ::                                                                           KernelEffect
    EndScope   ::                                                                           KernelEffect
    Delete     ::                                                SAST                    -> KernelEffect
-   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TranslateH g () -> KernelEffect
+   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TransformH g () -> KernelEffect
    deriving Typeable
 
 instance Extern KernelEffect where
@@ -70,8 +70,8 @@ instance Extern KernelEffect where
 
 data QueryFun :: * where
    QueryString   :: (Injection GHC.ModGuts g, Walker HermitC g)
-                 => TranslateH g String                                   -> QueryFun
-   QueryDocH     :: (PrettyC -> PrettyH CoreTC -> TranslateH CoreTC DocH) -> QueryFun
+                 => TransformH g String                                   -> QueryFun
+   QueryDocH     :: (PrettyC -> PrettyH CoreTC -> TransformH CoreTC DocH) -> QueryFun
    Diff          :: SAST -> SAST                                          -> QueryFun
    Display       ::                                                          QueryFun
    Inquiry       :: (CommandLineState -> IO String)                       -> QueryFun
@@ -394,7 +394,7 @@ completionType = go . dropWhile isSpace
                  , ("occurrence-of"   , OccurrenceOfC)
                  ]
 
-completionQuery :: CommandLineState -> CompletionType -> IO (TranslateH CoreTC [String])
+completionQuery :: CommandLineState -> CompletionType -> IO (TransformH CoreTC [String])
 completionQuery _ ConsiderC       = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':) >>^ (++ map fst considerables) -- the use of bindingOfTargetsT here is deprecated
 completionQuery _ OccurrenceOfC   = return $ occurrenceOfTargetsT    >>^ GHC.varSetToStrings >>^ map ('\'':)
 completionQuery _ BindingOfC      = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':)

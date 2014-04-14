@@ -402,7 +402,7 @@ verifyWWAss :: CoreExpr        -- ^ wrap
             -> CoreExpr        -- ^ unwrap
             -> CoreExpr        -- ^ f
             -> WWAssumption
-            -> TranslateH x ()
+            -> TransformH x ()
 verifyWWAss wrap unwrap f (WWAssumption tag ass) =
     case tag of
       A -> verifyAssA wrap unwrap ass
@@ -412,7 +412,7 @@ verifyWWAss wrap unwrap f (WWAssumption tag ass) =
 verifyAssA :: CoreExpr          -- ^ wrap
            -> CoreExpr          -- ^ unwrap
            -> RewriteH CoreExpr -- ^ WW Assumption A
-           -> TranslateH x ()
+           -> TransformH x ()
 verifyAssA wrap unwrap assA =
   prefixFailMsg ("verification of worker/wrapper Assumption A failed: ") $
   do _ <- wrapUnwrapTypes wrap unwrap -- this check is redundant, but will produce a better error message
@@ -422,7 +422,7 @@ verifyAssB :: CoreExpr          -- ^ wrap
            -> CoreExpr          -- ^ unwrap
            -> CoreExpr          -- ^ f
            -> RewriteH CoreExpr -- ^ WW Assumption B
-           -> TranslateH x ()
+           -> TransformH x ()
 verifyAssB wrap unwrap f assB =
   prefixFailMsg ("verification of worker/wrapper assumption B failed: ") $
   do (tyA,_) <- wrapUnwrapTypes wrap unwrap
@@ -435,7 +435,7 @@ verifyAssC :: CoreExpr          -- ^ wrap
            -> CoreExpr          -- ^ unwrap
            -> CoreExpr          -- ^ f
            -> RewriteH CoreExpr -- ^ WW Assumption C
-           -> TranslateH a ()
+           -> TransformH a ()
 verifyAssC wrap unwrap f assC =
   prefixFailMsg ("verification of worker/wrapper assumption C failed: ") $
   do (tyA,_) <- wrapUnwrapTypes wrap unwrap

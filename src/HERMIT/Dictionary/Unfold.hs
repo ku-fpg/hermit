@@ -19,7 +19,7 @@ import Control.Monad
 import Data.List (intercalate)
 import qualified Data.Map as Map
 
-import HERMIT.PrettyPrinter.Common (DocH, PrettyH, TranslateDocH(..), PrettyC)
+import HERMIT.PrettyPrinter.Common (DocH, PrettyH, TransformDocH(..), PrettyC)
 
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Inline (inlineR)
@@ -56,7 +56,7 @@ externals =
         [ "Unfold a definition only if the function is fully applied." ] .+ Deep .+ Context
     , external "specialize" (promoteExprR specializeR :: RewriteH Core)
         [ "Specialize an application to its type and coercion arguments." ] .+ Deep .+ Context
-    , external "show-remembered" (TranslateDocH showStashT :: TranslateDocH CoreTC)
+    , external "show-remembered" (TransformDocH showStashT :: TransformDocH CoreTC)
         [ "Display all remembered definitions." ]
     ]
 
@@ -120,7 +120,7 @@ rememberR label = sideEffectR $ \ _ -> \case
 
 -- | Stash a binding with a name for later use.
 -- Allows us to look at past definitions.
--- rememberR :: String -> Translate c m Core ()
+-- rememberR :: String -> Transform c m Core ()
 -- rememberR label = contextfreeT $ \ core ->
 --     case core of
 --         DefCore def -> saveDef label def
@@ -141,7 +141,7 @@ unfoldStashR label = prefixFailMsg "Inlining stashed definition failed: " $
                            else fail $ "free variables " ++ intercalate "," (map (showPpr dflags) (filter (not . inScope c) fvars)) ++ " in stashed definition are no longer in scope."
                    else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v
 
-showStashT :: Injection CoreDef a => PrettyC -> PrettyH a -> Translate c HermitM a DocH
+showStashT :: Injection CoreDef a => PrettyC -> PrettyH a -> Transform c HermitM a DocH
 showStashT pctx pp = do
     stash <- constT getStash
     docs <- forM (Map.toList stash) $ \ (l,d) -> do

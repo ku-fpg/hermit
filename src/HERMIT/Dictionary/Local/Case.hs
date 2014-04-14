@@ -385,7 +385,7 @@ caseIntroSeqR idPred = prefixFailMsg "case-intro-seq failed: " $
                                          return $ Case (Var i) w (coreAltsType alts) alts
 
 -- auxillary function for use by caseSplit and caseSeq
-matchingFreeIdT :: Monad m => (Id -> Bool) -> Translate c m CoreExpr Id
+matchingFreeIdT :: Monad m => (Id -> Bool) -> Transform c m CoreExpr Id
 matchingFreeIdT idPred = do
   fvs <- arr freeVarsExpr
   case varSetElems (filterVarSet (\ v -> idPred v && isId v) fvs) of

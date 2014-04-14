@@ -48,9 +48,9 @@ import HERMIT.Dictionary.Unfold (cleanupUnfoldR)
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
 externals :: [External]
 externals =
-         [ external "rules-help-list" (rulesHelpListT :: TranslateH CoreTC String)
+         [ external "rules-help-list" (rulesHelpListT :: TransformH CoreTC String)
                 [ "List all the rules in scope." ] .+ Query
-         , external "rule-help" (ruleHelpT :: RuleNameString -> TranslateH CoreTC String)
+         , external "rule-help" (ruleHelpT :: RuleNameString -> TransformH CoreTC String)
                 [ "Display details on the named rule." ] .+ Query
          , external "apply-rule" (promoteExprR . ruleR :: RuleNameString -> RewriteH Core)
                 [ "Apply a named GHC rule" ] .+ Shallow
@@ -102,7 +102,7 @@ rulesToRewriteH :: (ReadBindings c, MonadCatch m) => [CoreRule] -> Rewrite c m C
 rulesToRewriteH rs = prefixFailMsg "RulesToRewrite failed: " $
                      withPatFailMsg "rule not matched." $ do
     (Var fn, args) <- callT
-    translate $ \ c e -> do
+    transform $ \ c e -> do
         let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (localFreeVarsExpr e) ])
 #if __GLASGOW_HASKELL__ > 706
         dflags <- getDynFlags
@@ -130,7 +130,7 @@ rulesR :: (ReadBindings c, HasCoreRules c) => [RuleNameString] -> Rewrite c Herm
 rulesR = orR . map ruleR
 
 -- | Return all the RULES (including specialization RULES on binders) currently in scope.
-getHermitRulesT :: HasCoreRules c => Translate c HermitM a [(RuleNameString, CoreRule)]
+getHermitRulesT :: HasCoreRules c => Transform c HermitM a [(RuleNameString, CoreRule)]
 getHermitRulesT = contextonlyT $ \ c -> do
     rb      <- liftCoreM getRuleBase
     mgRules <- liftM mg_rules getModGuts
@@ -140,7 +140,7 @@ getHermitRulesT = contextonlyT $ \ c -> do
            | r <- hermitCoreRules c ++ mgRules ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
            ]
 
-getHermitRuleT :: HasCoreRules c => RuleNameString -> Translate c HermitM a CoreRule
+getHermitRuleT :: HasCoreRules c => RuleNameString -> Transform c HermitM a CoreRule
 getHermitRuleT name =
   do rulesEnv <- getHermitRulesT
      case filter ((name ==) . fst) rulesEnv of
@@ -148,16 +148,16 @@ getHermitRuleT name =
        [(_,r)] -> return r
        _       -> fail ("Rule name \"" ++ name ++ "\" is ambiguous.")
 
-rulesHelpListT :: HasCoreRules c => Translate c HermitM a String
+rulesHelpListT :: HasCoreRules c => Transform c HermitM a String
 rulesHelpListT = do
     rulesEnv <- getHermitRulesT
     return (intercalate "\n" $ reverse $ map fst rulesEnv)
 
-ruleHelpT :: HasCoreRules c => RuleNameString -> Translate c HermitM a String
+ruleHelpT :: HasCoreRules c => RuleNameString -> Transform c HermitM a String
 ruleHelpT name = showSDoc <$> dynFlagsT <*> ((pprRulesForUser . (:[])) <$> getHermitRuleT name)
 
 -- Too much information.
--- rulesHelpT :: HasCoreRules c => Translate c HermitM a String
+-- rulesHelpT :: HasCoreRules c => Transform c HermitM a String
 -- rulesHelpT = do
 --     rulesEnv <- getHermitRulesT
 --     dynFlags <- dynFlagsT
@@ -188,13 +188,13 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
          _ -> fail $ "found multiple bindings for " ++ nm
 
 -- | Returns the universally quantified binders, the LHS, and the RHS.
-ruleToEqualityT :: (BoundVars c, HasDynFlags m, HasModGuts m, MonadThings m, MonadCatch m) => Translate c m CoreRule CoreExprEquality
+ruleToEqualityT :: (BoundVars c, HasDynFlags m, HasModGuts m, MonadThings m, MonadCatch m) => Transform c m CoreRule CoreExprEquality
 ruleToEqualityT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
   do r@Rule{} <- idR -- other possibility is "BuiltinRule"
      f <- findIdT (getOccString $ ru_fn r) -- TODO: refactor name lookup functions (like findIdT) to avoid intermediate String here
      return $ CoreExprEquality (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
 
-ruleNameToEqualityT :: (BoundVars c, HasCoreRules c) => RuleNameString -> Translate c HermitM a CoreExprEquality
+ruleNameToEqualityT :: (BoundVars c, HasCoreRules c) => RuleNameString -> Transform c HermitM a CoreExprEquality
 ruleNameToEqualityT name = getHermitRuleT name >>> ruleToEqualityT
 
 ------------------------------------------------------------------------
@@ -233,18 +233,18 @@ specialise = prefixFailMsg "specialisation failed: " $ do
 
 -- | Get all the specialization rules on a binding.
 --   These are created by SpecConstr and other GHC passes.
-idSpecRules :: TranslateH Id [CoreRule]
+idSpecRules :: TransformH Id [CoreRule]
 idSpecRules = do
     guardMsgM (arr isId) "idSpecRules called on TyVar." -- idInfo panics on TyVars
     contextfreeT $ \ i -> let SpecInfo rs _ = specInfo (idInfo i) in return rs
 
 -- | Promote 'idSpecRules' to CoreBind.
-bindSpecRules :: TranslateH CoreBind [CoreRule]
+bindSpecRules :: TransformH CoreBind [CoreRule]
 bindSpecRules =    recT (\_ -> defT idSpecRules successT const) concat
                 <+ nonRecT idSpecRules successT const
 
 -- | Find all specialization rules in a Core fragment.
-specRules :: TranslateH Core [CoreRule]
+specRules :: TransformH Core [CoreRule]
 specRules = crushtdT $ promoteBindT bindSpecRules
 
 ------------------------------------------------------------------------

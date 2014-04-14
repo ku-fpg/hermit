@@ -30,8 +30,8 @@ module HERMIT.PrettyPrinter.Common
     , PrettyC(..)
     , initPrettyC
     , liftPrettyC
-    , TranslateDocH(..)
-    , TranslateCoreTCDocHBox(..)
+    , TransformDocH(..)
+    , TransformCoreTCDocHBox(..)
       -- * Pretty Printer Options
     , PrettyOptions(..)
     , updateCoShowOption
@@ -71,14 +71,14 @@ showRole Phantom          = "Phantom"
 type DocH = MDoc HermitMark
 
 -- newtype wrapper for proper instance selection
-newtype TranslateDocH a = TranslateDocH { unTranslateDocH :: PrettyC -> PrettyH a -> TranslateH a DocH }
+newtype TransformDocH a = TransformDocH { unTransformDocH :: PrettyC -> PrettyH a -> TransformH a DocH }
 
-data TranslateCoreTCDocHBox = TranslateCoreTCDocHBox (TranslateDocH CoreTC) deriving Typeable
+data TransformCoreTCDocHBox = TransformCoreTCDocHBox (TransformDocH CoreTC) deriving Typeable
 
-instance Extern (TranslateDocH CoreTC) where
-    type Box (TranslateDocH CoreTC) = TranslateCoreTCDocHBox
-    box = TranslateCoreTCDocHBox
-    unbox (TranslateCoreTCDocHBox i) = i
+instance Extern (TransformDocH CoreTC) where
+    type Box (TransformDocH CoreTC) = TransformCoreTCDocHBox
+    box = TransformCoreTCDocHBox
+    unbox (TransformCoreTCDocHBox i) = i
 
 -- These are the zero-width marks on the document
 data HermitMark
@@ -127,7 +127,7 @@ markColor = attr . Color
 specialFont :: DocH -> DocH
 specialFont = attr SpecialFont
 
-type PrettyH a = Translate PrettyC HermitM a DocH
+type PrettyH a = Transform PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?
 
 -- | Context for PrettyH translations.
@@ -169,7 +169,7 @@ instance HasEmptyContext PrettyC where
 
 ------------------------------------------------------------------------
 
-liftPrettyH :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> PrettyH a -> Translate c HermitM a DocH
+liftPrettyH :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> PrettyH a -> Transform c HermitM a DocH
 liftPrettyH = liftContext . liftPrettyC
 
 liftPrettyC :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> c -> PrettyC

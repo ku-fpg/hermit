@@ -23,13 +23,13 @@ externals :: [External]
 externals = map (.+ KURE)
    [ external "id"         (idR :: RewriteH Core)
        [ "Perform an identity rewrite."] .+ Shallow
-   , external "success"    (successT :: TranslateH Core ())
+   , external "success"    (successT :: TransformH Core ())
        [ "An always succeeding translation." ]
    , external "fail"       (fail :: String -> RewriteH Core)
        [ "A failing rewrite."]
    , external "<+"         ((<+) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "Perform the first rewrite, and then, if it fails, perform the second rewrite." ]
-   , external "<+"         ((<+) :: TranslateH Core () -> TranslateH Core () -> TranslateH Core ())
+   , external "<+"         ((<+) :: TransformH Core () -> TransformH Core () -> TransformH Core ())
        [ "Perform the first check, and then, if it fails, perform the second check." ]
    , external ">>>"        ((>>>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "Compose rewrites, requiring both to succeed." ]
@@ -71,17 +71,17 @@ externals = map (.+ KURE)
        [ "Attempt to apply a rewrite in a top-down manner, prunning at successful rewrites." ] .+ Deep
    , external "innermost"  (innermostR :: RewriteH Core -> RewriteH Core)
        [ "A fixed-point traveral, starting with the innermost term." ] .+ Deep .+ Loop
-   , external "focus"      (hfocusR :: TranslateH Core LocalPathH -> RewriteH Core -> RewriteH Core)
+   , external "focus"      (hfocusR :: TransformH Core LocalPathH -> RewriteH Core -> RewriteH Core)
        [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
-   , external "focus"      (hfocusT :: TranslateH Core LocalPathH -> TranslateH Core String -> TranslateH Core String)
+   , external "focus"      (hfocusT :: TransformH Core LocalPathH -> TransformH Core String -> TransformH Core String)
        [ "Apply a query at a focal point."] .+ Navigation .+ Deep
    , external "focus"      (hfocusR . return :: LocalPathH -> RewriteH Core -> RewriteH Core)
        [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
-   , external "focus"      (hfocusT . return :: LocalPathH -> TranslateH Core String -> TranslateH Core String)
+   , external "focus"      (hfocusT . return :: LocalPathH -> TransformH Core String -> TransformH Core String)
        [ "Apply a query at a focal point."] .+ Navigation .+ Deep
-   , external "when"       ((>>) :: TranslateH Core () -> RewriteH Core -> RewriteH Core)
+   , external "when"       ((>>) :: TransformH Core () -> RewriteH Core -> RewriteH Core)
        [ "Apply a rewrite only if the check succeeds." ] .+ Predicate
-   , external "not"        (notM :: TranslateH Core () -> TranslateH Core ())
+   , external "not"        (notM :: TransformH Core () -> TransformH Core ())
        [ "Cause a failing check to succeed, a succeeding check to fail." ] .+ Predicate
    , external "invert"     (invertBiT :: BiRewriteH Core -> BiRewriteH Core)
        [ "Reverse a bidirectional rewrite." ]
@@ -89,7 +89,7 @@ externals = map (.+ KURE)
        [ "Apply a bidirectional rewrite forewards." ]
    , external "backward"   (backwardT :: BiRewriteH Core -> RewriteH Core)
        [ "Apply a bidirectional rewrite backwards." ]
-   , external "test"       (testQuery :: RewriteH Core -> TranslateH Core String)
+   , external "test"       (testQuery :: RewriteH Core -> TransformH Core String)
        [ "Determine if a rewrite could be successfully applied." ]
    , external "any-call" (anyCallR :: RewriteH Core -> RewriteH Core)
        [ "any-call (.. unfold command ..) applies an unfold command to all applications."
@@ -98,12 +98,12 @@ externals = map (.+ KURE)
 
 ------------------------------------------------------------------------------------
 
-hfocusR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Translate c m Core LocalPathH -> Rewrite c m Core -> Rewrite c m Core
+hfocusR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Transform c m Core LocalPathH -> Rewrite c m Core -> Rewrite c m Core
 hfocusR tp r = do lp <- tp
                   localPathR lp r
 {-# INLINE hfocusR #-}
 
-hfocusT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Translate c m Core LocalPathH -> Translate c m Core String -> Translate c m Core String
+hfocusT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Transform c m Core LocalPathH -> Transform c m Core String -> Transform c m Core String
 hfocusT tp t = do lp <- tp
                   localPathT lp t
 {-# INLINE hfocusT #-}
@@ -111,7 +111,7 @@ hfocusT tp t = do lp <- tp
 ------------------------------------------------------------------------------------
 
 -- | Test if a rewrite would succeed, producing a string describing the result.
-testQuery :: MonadCatch m => Rewrite c m g -> Translate c m g String
+testQuery :: MonadCatch m => Rewrite c m g -> Transform c m g String
 testQuery r = f `liftM` testM r
   where
     f :: Bool -> String

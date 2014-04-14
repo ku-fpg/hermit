@@ -30,7 +30,7 @@ import HERMIT.Dictionary.Undefined
 
 ------------------------------------------------------------------------------
 
-inductionCaseSplit :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => [Var] -> Id -> CoreExpr -> CoreExpr -> Translate c HermitM x [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]
+inductionCaseSplit :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => [Var] -> Id -> CoreExpr -> CoreExpr -> Transform c HermitM x [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]
 inductionCaseSplit vs i lhsE rhsE =
     do -- first construct an expression containing both the LHS and the RHS
        il <- constT $ newIdH "dummyL" (exprKindOrType lhsE)
@@ -63,7 +63,7 @@ inductionCaseSplit vs i lhsE rhsE =
 
 -- -- | A general induction principle.  TODO: Is this valid for infinite data types?  Probably not.
 -- inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
---                     => (Id -> Bool) -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM) -> Translate c HermitM CoreExprEquality ()
+--                     => (Id -> Bool) -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM) -> Transform c HermitM CoreExprEquality ()
 -- inductionOnT idPred genCaseAltProofs = prefixFailMsg "Induction failed: " $
 --     do eq@(CoreExprEquality bs lhs rhs) <- idR
 
@@ -72,7 +72,7 @@ inductionCaseSplit vs i lhsE rhsE =
 --        cases <- inductionCaseSplit bs i lhs rhs
 
 --        -- TODO: will this work if vs contains TyVars or CoVars?  Maybe we need to sort the Vars in order: TyVars; CoVars; Ids.
---        let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Translate c HermitM x ()
+--        let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Transform c HermitM x ()
 --            verifyInductiveCaseT (con,vs,lhsE,rhsE) =
 --                 let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
 --                     eqs = [ discardUniVars (instantiateCoreExprEq [(i,Var i')] eq) | i' <- vs_matching_i_type ]
@@ -89,7 +89,7 @@ inductionCaseSplit vs i lhsE rhsE =
 --                 => (Id -> Bool) -- Id to case split on
 --                 -> CoreExprEqualityProof c HermitM -- proof for [] case
 --                 -> (BiRewrite c HermitM CoreExpr -> CoreExprEqualityProof c HermitM) -- proof for (:) case, given smaller proof
---                 -> Translate c HermitM CoreExprEquality ()
+--                 -> Transform c HermitM CoreExprEquality ()
 -- listInductionOnT idPred nilCaseProof consCaseProof = inductionOnT idPred $ \ con brs ->
 --                                                                 if | con == nilDataCon   -> case brs of
 --                                                                                                   [] -> nilCaseProof

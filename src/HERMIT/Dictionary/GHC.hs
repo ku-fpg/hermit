@@ -49,13 +49,13 @@ externals =
                 [ "Zap the occurrence information in the current identifer if it is a zombie."] .+ Shallow
          , external "occurrence-analysis" (occurrenceAnalysisR :: RewriteH Core)
                 [ "Perform dependency analysis on all sub-expressions; simplifying and updating identifer info."] .+ Deep
-         , external "lint-expr" (promoteExprT lintExprT :: TranslateH Core String)
+         , external "lint-expr" (promoteExprT lintExprT :: TransformH Core String)
                 [ "Runs GHC's Core Lint, which typechecks the current expression."
                 , "Note: this can miss several things that a whole-module core lint will find."
                 , "For instance, running this on the RHS of a binding, the type of the RHS will"
                 , "not be checked against the type of the binding. Running on the whole let expression"
                 , "will catch that however."] .+ Deep .+ Debug .+ Query
-         , external "lint-module" (promoteModGutsT lintModuleT :: TranslateH Core String)
+         , external "lint-module" (promoteModGutsT lintModuleT :: TransformH Core String)
                 [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
          ]
 
@@ -121,7 +121,7 @@ arityOf c i =
 -- | Run the Core Lint typechecker.
 -- Fails on errors, with error messages.
 -- Succeeds returning warnings.
-lintModuleT :: TranslateH ModGuts String
+lintModuleT :: TransformH ModGuts String
 lintModuleT =
   do dynFlags <- dynFlagsT
      bnds     <- arr mg_binds
@@ -139,8 +139,8 @@ lintModuleT =
 -- For instance, running this on the RHS of a binding, the type of the RHS will
 -- not be checked against the type of the binding. Running on the whole let expression
 -- will catch that however.
-lintExprT :: (BoundVars c, Monad m, HasDynFlags m) => Translate c m CoreExpr String
-lintExprT = translate $ \ c e -> do
+lintExprT :: (BoundVars c, Monad m, HasDynFlags m) => Transform c m CoreExpr String
+lintExprT = transform $ \ c e -> do
     dflags <- getDynFlags
     maybe (return "Core Lint Passed") (fail . showSDoc dflags)
 #if __GLASGOW_HASKELL__ > 706
@@ -152,7 +152,7 @@ lintExprT = translate $ \ c e -> do
 -------------------------------------------
 
 -- | Lifted version of 'getDynFlags'.
-dynFlagsT :: HasDynFlags m => Translate c m a DynFlags
+dynFlagsT :: HasDynFlags m => Transform c m a DynFlags
 dynFlagsT = constT getDynFlags
 
 -------------------------------------------

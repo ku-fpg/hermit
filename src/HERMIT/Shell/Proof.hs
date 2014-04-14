@@ -105,7 +105,7 @@ externals =
 
 data ProofH = RewritingProof ScriptOrRewrite ScriptOrRewrite                                             -- ^ Prove by rewriting both sides to a common intermediate expression.
             | InductiveProof (Id -> Bool) [((Maybe DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]  -- ^ Prove by induction.  'Nothing' is the 'undefined' case.
-            | UserProof (TranslateH CoreExprEquality ())                                                 -- ^ A user-defined proof technique.
+            | UserProof (TransformH CoreExprEquality ())                                                 -- ^ A user-defined proof technique.
             | ProofH (CoreExprEquality -> CLT IO ())                                                     -- ^ User-defined proof with full access to shell monad stack.
 
 type ScriptOrRewrite = Either ScriptName (RewriteH CoreExpr) -- The named script should be convertible to a Rewrite.
@@ -135,7 +135,7 @@ instance Extern ProofH where
 
 -- | Verify an equality by applying a user-supplied predicate.
 --   If the predicate holds, HERMIT accepts the equality as proven.
-userProofTechnique :: TranslateH CoreExprEquality () -> ProofH
+userProofTechnique :: TransformH CoreExprEquality () -> ProofH
 userProofTechnique = UserProof
 
 --------------------------------------------------------------------------------------------------------
@@ -227,7 +227,7 @@ lemmaRhsIntroR st = lemmaNameToEqualityT st >=> eqRhsIntroR
 performProofCommand :: MonadIO m => ProofCommand -> CLT m ()
 performProofCommand (RuleToLemma nm) = do
     st <- gets cl_pstate
-    equality <- queryS (ps_kernel st) (ruleNameToEqualityT nm :: TranslateH Core CoreExprEquality) (mkKernelEnv st) (ps_cursor st)
+    equality <- queryS (ps_kernel st) (ruleNameToEqualityT nm :: TransformH Core CoreExprEquality) (mkKernelEnv st) (ps_cursor st)
     modify $ \ s -> s { cl_lemmas = (nm,equality,False) : cl_lemmas s }
 
 performProofCommand (VerifyLemma nm proof) = do
@@ -248,12 +248,12 @@ printLemma (nm, CoreExprEquality bs lhs rhs, proven) = do
         sast = ps_cursor st
         pos  = ps_pretty_opts st
         pp   = ps_pretty st
-        pr :: [Var] -> CoreExpr -> TranslateH Core DocH
+        pr :: [Var] -> CoreExpr -> TransformH Core DocH
         pr vs e = return e >>> withVarsInScope vs (extractT $ liftPrettyH pos pp)
     cl_putStr nm
     cl_putStrLn $ if proven then " (Proven)" else " (Not Proven)"
     unless (null bs) $ do
-        forallDoc <- queryS k (return bs >>> extractT (liftPrettyH pos Clean.ppForallQuantification) :: TranslateH Core DocH) env sast -- TODO: rather than hardwiring the Clean PP here, we should store a pretty printer in the shell state, which should match the main PP, and be updated correspondingly.
+        forallDoc <- queryS k (return bs >>> extractT (liftPrettyH pos Clean.ppForallQuantification) :: TransformH Core DocH) env sast -- TODO: rather than hardwiring the Clean PP here, we should store a pretty printer in the shell state, which should match the main PP, and be updated correspondingly.
         liftIO $ ps_render st stdout pos (Right forallDoc)
     lDoc <- queryS k (pr bs lhs) env sast
     rDoc <- queryS k (pr bs rhs) env sast
@@ -270,19 +270,19 @@ prove :: MonadIO m => CoreExprEquality -> ProofH -> CLT m ()
 prove eq (RewritingProof lp rp) = do
     (lrr, rrr) <- getRewrites (lp, rp)
     st <- gets cl_pstate
-    queryS (ps_kernel st) (return eq >>> proveCoreExprEqualityT (lrr, rrr) :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
+    queryS (ps_kernel st) (return eq >>> proveCoreExprEqualityT (lrr, rrr) :: TransformH Core ()) (mkKernelEnv st) (ps_cursor st)
 
 -- InductiveProof (Id -> Bool) [((DataCon -> Bool), ScriptOrRewrite, ScriptOrRewrite)]
 -- inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
 --              => (Id -> Bool)
 --              -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM)
---              -> Translate c HermitM CoreExprEquality ()
+--              -> Transform c HermitM CoreExprEquality ()
 prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
     st <- get
     let ps = cl_pstate st
 
     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $ soleElement (filter idPred bs)
-    cases <- queryS (ps_kernel ps) (inductionCaseSplit bs i lhs rhs :: TranslateH Core [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]) (mkKernelEnv ps) (ps_cursor ps)
+    cases <- queryS (ps_kernel ps) (inductionCaseSplit bs i lhs rhs :: TransformH Core [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]) (mkKernelEnv ps) (ps_cursor ps)
 
     forM_ cases $ \ (mdc,vs,lhsE,rhsE) -> do
 
@@ -305,7 +305,7 @@ prove eq@(CoreExprEquality bs lhs rhs) (InductiveProof idPred caseProofs) = do
 
 prove eq (UserProof t) =
   do st <- gets cl_pstate
-     queryS (ps_kernel st) (return eq >>> t :: TranslateH Core ()) (mkKernelEnv st) (ps_cursor st)
+     queryS (ps_kernel st) (return eq >>> t :: TransformH Core ()) (mkKernelEnv st) (ps_cursor st)
 
 prove eq (ProofH p) = clm2clt (p eq)
 
@@ -321,7 +321,7 @@ addToDict :: [(String, BiRewriteH CoreExpr)] -> CommandLineState -> CommandLineS
 addToDict rs st = st { cl_dict = foldr (\ (nm,r) -> addToDictionary (external nm (promoteExprBiR (beforeBiR (observeR ("Applying " ++ nm ++ " to: ")) (const r)) :: BiRewriteH Core) [])) (cl_dict st) rs }
 
 {-
-       let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Translate c HermitM x ()
+       let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Transform c HermitM x ()
            verifyInductiveCaseT (con,vs,lhsE,rhsE) =
                 let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
                     eqs = [ discardUniVars (instantiateCoreExprEq [(i,Var i')] eq) | i' <- vs_matching_i_type ]
@@ -391,7 +391,7 @@ runProofExprH lem@(nm, eq, b) expr = prefixFailMsg ("Error in expression: " ++ u
 
             -- Why do a query? We want to do our proof in the current context
             -- of the shell, whatever that is.
-            eq' <- queryS sk (return eq >>> rr :: TranslateH Core CoreExprEquality) kEnv sast
+            eq' <- queryS sk (return eq >>> rr :: TransformH Core CoreExprEquality) kEnv sast
             return (nm, eq', b)
         PCAbort -> throwError CLAbort -- we'll catch this specially
         PCUnsupported s -> cl_putStrLn s >> return lem
@@ -415,14 +415,14 @@ interpProof =
   , interp $ \ (BiRewriteCoreBox br)          -> PCApply $ bothR $ (extractR (forwardT br) <+ extractR (backwardT br))
   , interp $ \ (CrumbBox _cr)                 -> PCUnsupported "CrumbBox"
   , interp $ \ (PathBox _p)                   -> PCUnsupported "PathBox"
-  , interp $ \ (TranslateCorePathBox _tt)     -> PCUnsupported "TranslateCorePathBox"
-  , interp $ \ (TranslateCoreTCPathBox _tt)   -> PCUnsupported "TranslateCoreTCPathBox"
+  , interp $ \ (TransformCorePathBox _tt)     -> PCUnsupported "TransformCorePathBox"
+  , interp $ \ (TransformCoreTCPathBox _tt)   -> PCUnsupported "TransformCoreTCPathBox"
   , interp $ \ (StringBox _str)               -> PCUnsupported "StringBox"
-  , interp $ \ (TranslateCoreStringBox _tt)   -> PCUnsupported "TranslateCoreStringBox"
-  , interp $ \ (TranslateCoreTCStringBox _tt) -> PCUnsupported "TranslateCoreTCStringBox"
-  , interp $ \ (TranslateCoreTCDocHBox _tt)   -> PCUnsupported "TranslateCoreTCDocHBox"
-  , interp $ \ (TranslateCoreCheckBox _tt)    -> PCUnsupported "TranslateCoreCheckBox"
-  , interp $ \ (TranslateCoreTCCheckBox _tt)  -> PCUnsupported "TranslateCoreTCCheckBox"
+  , interp $ \ (TransformCoreStringBox _tt)   -> PCUnsupported "TransformCoreStringBox"
+  , interp $ \ (TransformCoreTCStringBox _tt) -> PCUnsupported "TransformCoreTCStringBox"
+  , interp $ \ (TransformCoreTCDocHBox _tt)   -> PCUnsupported "TransformCoreTCDocHBox"
+  , interp $ \ (TransformCoreCheckBox _tt)    -> PCUnsupported "TransformCoreCheckBox"
+  , interp $ \ (TransformCoreTCCheckBox _tt)  -> PCUnsupported "TransformCoreTCCheckBox"
   , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"
   , interp $ \ (_effect :: ShellEffect)       -> PCUnsupported "ShellEffect"
   , interp $ \ (_query :: QueryFun)           -> PCUnsupported "QueryFun"

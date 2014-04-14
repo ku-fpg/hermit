@@ -97,12 +97,12 @@ externals = map (.+ Deep)
 -- 2.  Any bound variables in context.
 
 -- | Collect all visible variables (in the expression or the context).
-visibleVarsT :: (BoundVars c, Monad m) => Translate c m CoreTC VarSet
+visibleVarsT :: (BoundVars c, Monad m) => Transform c m CoreTC VarSet
 visibleVarsT = liftM2 unionVarSet boundVarsT (arr freeVarsCoreTC)
 
 -- | If a name is provided, use that as the name of the new variable.
 --   Otherwise modify the variable name making sure to /not/ clash with the given variables or any visible variables.
-cloneVarAvoidingT :: BoundVars c => Var -> Maybe String -> [Var] -> Translate c HermitM CoreTC Var
+cloneVarAvoidingT :: BoundVars c => Var -> Maybe String -> [Var] -> Transform c HermitM CoreTC Var
 cloneVarAvoidingT v mn vs =
   do vvs <- visibleVarsT
      let nameModifier = freshNameGenAvoiding mn (extendVarSetList vvs vs)

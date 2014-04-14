@@ -89,7 +89,7 @@ inlineCaseAlternativeR = configurableInlineR (CaseBinderOnly Alternative) (retur
 -- It can trivially be prompted to more general cases using traversal strategies.
 configurableInlineR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c)
                     => InlineConfig
-                    -> (Translate c HermitM Id Bool) -- ^ Only inline identifiers that satisfy this predicate.
+                    -> (Transform c HermitM Id Bool) -- ^ Only inline identifiers that satisfy this predicate.
                     -> Rewrite c HermitM CoreExpr
 configurableInlineR config p =
    prefixFailMsg "Inline failed: " $
@@ -100,8 +100,8 @@ configurableInlineR config p =
         (return e >>> accepterR ensureBoundT >>> accepterR (ensureDepthT uncaptured))
 
 -- | Check that all free variables in an expression are bound.
-ensureBoundT :: (Monad m, ReadBindings c) => Translate c m CoreExpr Bool
-ensureBoundT = translate $ \ c -> return . all (inScope c) . varSetElems . localFreeVarsExpr
+ensureBoundT :: (Monad m, ReadBindings c) => Transform c m CoreExpr Bool
+ensureBoundT = transform $ \ c -> return . all (inScope c) . varSetElems . localFreeVarsExpr
 
 -- NOTE: When inlining, we have to take care to avoid variable capture.
 --       Our approach is to track the binding depth of the inlined identifier.
@@ -122,18 +122,18 @@ ensureBoundT = translate $ \ c -> return . all (inScope c) . varSetElems . local
 
 -- | Ensure all the free variables in an expression were bound above a given depth.
 -- Assumes minimum depth is 0.
-ensureDepthT :: forall c m. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c, MonadCatch m) => (BindingDepth -> Bool) -> Translate c m CoreExpr Bool
+ensureDepthT :: forall c m. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c, MonadCatch m) => (BindingDepth -> Bool) -> Transform c m CoreExpr Bool
 ensureDepthT uncaptured =
   do frees <- arr localFreeVarsExpr
-     let collectDepthsT :: Translate c m Core [BindingDepth]
+     let collectDepthsT :: Transform c m Core [BindingDepth]
          collectDepthsT = collectT $ promoteExprT $ varT (acceptR (`elemVarSet` frees) >>> readerT varBindingDepthT)
      all uncaptured `liftM` extractT collectDepthsT
 
 -- | Return the unfolding of an identifier, and a predicate over the binding depths of all variables within that unfolding to determine if they have been captured in their new location.
 getUnfoldingT :: ReadBindings c
               => InlineConfig
-              -> Translate c HermitM Id (CoreExpr, BindingDepth -> Bool)
-getUnfoldingT config = translate $ \ c i ->
+              -> Transform c HermitM Id (CoreExpr, BindingDepth -> Bool)
+getUnfoldingT config = transform $ \ c i ->
     case lookupHermitBinding i c of
       Nothing -> do requireAllBinders config
                     let uncaptured = (<= 0) -- i.e. is global
@@ -194,7 +194,7 @@ alt2Exp _   (LitAlt l  , _ ) = return $ Lit l
 alt2Exp tys (DataAlt dc, vs) = return $ mkCoreConApps dc (map Type tys ++ map (varToCoreExpr . zapVarOccInfo) vs)
 
 -- | Get list of possible inline targets. Used by shell for completion.
-inlineTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Translate c HermitM Core [String]
+inlineTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Transform c HermitM Core [String]
 inlineTargetsT = collectT $ promoteT $ whenM (testM inlineR) (varT $ arr var2String)
 
 -- | Build a CoreExpr for a DFunUnfolding

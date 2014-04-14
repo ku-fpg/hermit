@@ -170,7 +170,7 @@ parseCore (CoreString s) c =
 -- These should probably go somewhere else.
 
 -- | Parse a 'CoreString' to a 'CoreExpr', using the current context.
-parseCoreExprT :: CoreString -> TranslateH a CoreExpr
+parseCoreExprT :: CoreString -> TransformH a CoreExpr
 parseCoreExprT = contextonlyT . parseCore
 
 parse2beforeBiR :: (CoreExpr -> CoreExpr -> BiRewriteH a)

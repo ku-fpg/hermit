@@ -19,7 +19,7 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript)
 
-import HERMIT.PrettyPrinter.Common(TranslateCoreTCDocHBox(..))
+import HERMIT.PrettyPrinter.Common(TransformCoreTCDocHBox(..))
 
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.Types
@@ -50,7 +50,7 @@ data ScopedScriptR
 data PrimScriptR
        = ScriptRewriteHCore (RewriteH Core)
        | ScriptPath PathH
-       | ScriptTranslateHCorePath (TranslateH Core LocalPathH)
+       | ScriptTransformHCorePath (TransformH Core LocalPathH)
 
 
 -- TODO: Hacky parsing, needs cleaning up
@@ -87,17 +87,17 @@ interpScriptR =
   , interp (\ (BiRewriteCoreBox br)        -> ScriptPrimUn $ ScriptRewriteHCore $ whicheverR br)
   , interp (\ (CrumbBox cr)                -> ScriptPrimUn $ ScriptPath [cr])
   , interp (\ (PathBox p)                  -> ScriptPrimUn $ ScriptPath (snocPathToPath p))
-  , interp (\ (TranslateCorePathBox t)     -> ScriptPrimUn $ ScriptTranslateHCorePath t)
+  , interp (\ (TransformCorePathBox t)     -> ScriptPrimUn $ ScriptTransformHCorePath t)
   , interp (\ (effect :: KernelEffect)     -> case effect of
                                                 BeginScope -> ScriptBeginScope
                                                 EndScope   -> ScriptEndScope
                                                 _          -> ScriptUnsupported "Kernel effect" )
   , interp (\ (_ :: ShellEffect)           -> ScriptUnsupported "shell effect")
   , interp (\ (_ :: QueryFun)              -> ScriptUnsupported "query")
-  , interp (\ (TranslateCoreStringBox _)   -> ScriptUnsupported "query")
-  , interp (\ (TranslateCoreTCStringBox _) -> ScriptUnsupported "query")
-  , interp (\ (TranslateCoreTCDocHBox _)   -> ScriptUnsupported "query")
-  , interp (\ (TranslateCoreCheckBox _)    -> ScriptUnsupported "predicate")
+  , interp (\ (TransformCoreStringBox _)   -> ScriptUnsupported "query")
+  , interp (\ (TransformCoreTCStringBox _) -> ScriptUnsupported "query")
+  , interp (\ (TransformCoreTCDocHBox _)   -> ScriptUnsupported "query")
+  , interp (\ (TransformCoreCheckBox _)    -> ScriptUnsupported "predicate")
   , interp (\ (StringBox _)                -> ScriptUnsupported "message")
   ]
 
@@ -112,7 +112,7 @@ scopedScriptsToRewrite (x : xs)  = let rest = scopedScriptsToRewrite xs
                                         ScriptPrimSc e pr -> case pr of
                                                               ScriptRewriteHCore r       -> failWith e r >>> rest
                                                               ScriptPath p               -> failWith e $ pathR p rest
-                                                              ScriptTranslateHCorePath t -> do p <- failWith e t
+                                                              ScriptTransformHCorePath t -> do p <- failWith e t
                                                                                                localPathR p rest
 
 -----------------------------------

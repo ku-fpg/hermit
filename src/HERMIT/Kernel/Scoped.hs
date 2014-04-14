@@ -52,7 +52,7 @@ pathStackToLens :: (Injection ModGuts g, Walker HermitC g) => [LocalPathH] -> Lo
 pathStackToLens ps p = injectL >>> pathL (concat $ pathStack2Paths ps p)
 
 -- This function is used to check the validity of paths, so which sum type we use is important.
-testPathStackT :: [LocalPathH] -> LocalPathH -> TranslateH ModGuts Bool
+testPathStackT :: [LocalPathH] -> LocalPathH -> TransformH ModGuts Bool
 testPathStackT ps p = testLensT (pathStackToLens ps p :: LensH ModGuts CoreTC)
 
 ----------------------------------------------------------------------------
@@ -64,7 +64,7 @@ data ScopedKernel = ScopedKernel
     , applyS       :: (MonadIO m, MonadCatch m, Injection ModGuts g, Walker HermitC g)
                    => RewriteH g -> HermitMEnv ->                 SAST -> m SAST
     , queryS       :: (MonadIO m, MonadCatch m, Injection ModGuts g, Walker HermitC g)
-                   => TranslateH g a -> HermitMEnv ->             SAST -> m a
+                   => TransformH g a -> HermitMEnv ->             SAST -> m a
     , deleteS      :: (MonadIO m, MonadCatch m) =>                SAST -> m ()
     , listS        ::  MonadIO m                =>                        m [SAST]
     , pathS        :: (MonadIO m, MonadCatch m) =>                SAST -> m [PathH]

@@ -31,7 +31,7 @@ externals = map (.+ Unsafe)
 
 unsafeReplaceR :: CoreString -> RewriteH CoreExpr
 unsafeReplaceR core =
-    translate $ \ c e -> do
+    transform $ \ c e -> do
         e' <- parseCore core c
         guardMsg (eqType (exprKindOrType e) (exprKindOrType e')) "expression types differ."
         return e'

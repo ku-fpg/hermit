@@ -165,11 +165,11 @@ letNonRecSubstSafeR =
        when (isId v) $ guardMsgM (safeSubstT v) "safety criteria not met."
        letNonRecSubstR
   where
-    safeSubstT :: Id -> Translate c m CoreExpr Bool
+    safeSubstT :: Id -> Transform c m CoreExpr Bool
     safeSubstT i = letNonRecT mempty safeBindT (safeOccursT i) (\ () -> (||))
 
     -- what about other Expr constructors, e.g Cast?
-    safeBindT :: Translate c m CoreExpr Bool
+    safeBindT :: Transform c m CoreExpr Bool
     safeBindT =
       do c <- contextT
          arr $ \ e ->
@@ -183,20 +183,20 @@ letNonRecSubstSafeR =
                                            (bds,_) -> length bds > length args
              _      -> False
 
-    safeOccursT :: Id -> Translate c m CoreExpr Bool
+    safeOccursT :: Id -> Transform c m CoreExpr Bool
     safeOccursT i =
       do depth <- varBindingDepthT i
-         let occursHereT :: Translate c m Core ()
+         let occursHereT :: Transform c m Core ()
              occursHereT = promoteExprT (exprIsOccurrenceOfT i depth >>> guardT)
 
              -- lamOccurrenceT can only fail if the expression is not a Lam
              -- return either 2 (occurrence) or 0 (no occurrence)
-             lamOccurrenceT :: Translate c m CoreExpr (Sum Int)
+             lamOccurrenceT :: Transform c m CoreExpr (Sum Int)
              lamOccurrenceT =  lamT mempty
                                     (mtryM (Sum 2 <$ extractT (onetdT occursHereT)))
                                     mappend
 
-             occurrencesT :: Translate c m Core (Sum Int)
+             occurrencesT :: Transform c m Core (Sum Int)
              occurrencesT = prunetdT (promoteExprT lamOccurrenceT <+ (Sum 1 <$ occursHereT))
 
          extractT occurrencesT >>^ (getSum >>> (< 2))

@@ -19,7 +19,7 @@ module HERMIT.Kure.SumTypes
   , freeVarsTyCo
   , freeVarsCoreTC
   -- * Promotion Combinators
-  -- ** Translate Promotions
+  -- ** Transform Promotions
   , promoteModGutsT
   , promoteProgT
   , promoteBindT
@@ -362,42 +362,42 @@ instance Injection Coercion CoreTC where
 ---------------------------------------------------------------------
 
 -- | Promote a translate on 'ModGuts'.
-promoteModGutsT :: (Monad m, Injection ModGuts g) => Translate c m ModGuts b -> Translate c m g b
+promoteModGutsT :: (Monad m, Injection ModGuts g) => Transform c m ModGuts b -> Transform c m g b
 promoteModGutsT = promoteWithFailMsgT "This translate can only succeed at the module level."
 {-# INLINE promoteModGutsT #-}
 
 -- | Promote a translate on 'CoreProg'.
-promoteProgT :: (Monad m, Injection CoreProg g) => Translate c m CoreProg b -> Translate c m g b
+promoteProgT :: (Monad m, Injection CoreProg g) => Transform c m CoreProg b -> Transform c m g b
 promoteProgT = promoteWithFailMsgT "This translate can only succeed at program nodes (the top-level)."
 {-# INLINE promoteProgT #-}
 
 -- | Promote a translate on 'CoreBind'.
-promoteBindT :: (Monad m, Injection CoreBind g) => Translate c m CoreBind b -> Translate c m g b
+promoteBindT :: (Monad m, Injection CoreBind g) => Transform c m CoreBind b -> Transform c m g b
 promoteBindT = promoteWithFailMsgT "This translate can only succeed at binding group nodes."
 {-# INLINE promoteBindT #-}
 
 -- | Promote a translate on 'CoreDef'.
-promoteDefT :: (Monad m, Injection CoreDef g) => Translate c m CoreDef b -> Translate c m g b
+promoteDefT :: (Monad m, Injection CoreDef g) => Transform c m CoreDef b -> Transform c m g b
 promoteDefT = promoteWithFailMsgT "This translate can only succeed at recursive definition nodes."
 {-# INLINE promoteDefT #-}
 
 -- | Promote a translate on 'CoreAlt'.
-promoteAltT :: (Monad m, Injection CoreAlt g) => Translate c m CoreAlt b -> Translate c m g b
+promoteAltT :: (Monad m, Injection CoreAlt g) => Transform c m CoreAlt b -> Transform c m g b
 promoteAltT = promoteWithFailMsgT "This translate can only succeed at case alternative nodes."
 {-# INLINE promoteAltT #-}
 
 -- | Promote a translate on 'CoreExpr'.
-promoteExprT :: (Monad m, Injection CoreExpr g) => Translate c m CoreExpr b -> Translate c m g b
+promoteExprT :: (Monad m, Injection CoreExpr g) => Transform c m CoreExpr b -> Transform c m g b
 promoteExprT = promoteWithFailMsgT "This translate can only succeed at expression nodes."
 {-# INLINE promoteExprT #-}
 
 -- | Promote a translate on 'Type'.
-promoteTypeT :: (Monad m, Injection Type g) => Translate c m Type b -> Translate c m g b
+promoteTypeT :: (Monad m, Injection Type g) => Transform c m Type b -> Transform c m g b
 promoteTypeT = promoteWithFailMsgT "This translate can only succeed at type nodes."
 {-# INLINE promoteTypeT #-}
 
 -- | Promote a translate on 'Coercion'.
-promoteCoercionT :: (Monad m, Injection Coercion g) => Translate c m Coercion b -> Translate c m g b
+promoteCoercionT :: (Monad m, Injection Coercion g) => Transform c m Coercion b -> Transform c m g b
 promoteCoercionT = promoteWithFailMsgT "This translate can only succeed at coercion nodes."
 {-# INLINE promoteCoercionT #-}
 
