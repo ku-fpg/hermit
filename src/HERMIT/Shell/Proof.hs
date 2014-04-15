@@ -236,7 +236,7 @@ performProofCommand (VerifyLemma nm proof) = do
     prove equality proof -- this is like a guard
     markProven nm
 
-performProofCommand (InteractiveProof nm) = get >>= flip getLemmaByName nm >>= interactiveProof >> markProven nm
+performProofCommand (InteractiveProof nm) = get >>= flip getLemmaByName nm >>= interactiveProof 
 
 performProofCommand ShowLemmas = gets cl_lemmas >>= \ ls -> forM_ (reverse ls) printLemma
 
@@ -341,7 +341,9 @@ getRewrite :: MonadState CommandLineState m => ScriptOrRewrite -> m (RewriteH Co
 getRewrite = either (lookupScript >=> liftM extractR . scriptToRewrite) return
 
 markProven :: MonadState CommandLineState m => LemmaName -> m ()
-markProven nm = modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }
+markProven nm = do
+    cl_putStrLn $ "Successfully proven: " ++ nm
+    modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }
 
 interactiveProof :: MonadIO m => Lemma -> CLT m ()
 interactiveProof lem = do
@@ -351,6 +353,22 @@ interactiveProof lem = do
     completionMVar <- liftIO $ newMVar clState
 
     let ws_complete = " ()"
+
+        -- To decide whether to continue the proof or not.
+        loopUnproven :: Lemma -> CLT (InputT IO) ()
+        loopUnproven l@(nm, eq, _) = do
+            st <- get
+
+            let sk = cl_kernel st
+                kEnv = cl_kernel_env st
+                sast = cl_cursor st
+
+            -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
+            ifM (queryS sk (return eq >>> testM verifyCoreExprEqualityT :: TransformH Core Bool) kEnv sast)
+                (markProven nm)
+                (loop l)
+
+        -- Main proof input loop
         loop :: Lemma -> CLT (InputT IO) ()
         loop l = do
             printLemma l
@@ -365,7 +383,7 @@ interactiveProof lem = do
                                     then loop l
                                     else do (er, st') <- runCLT st (evalProofScript l line `catchM` (\msg -> cl_putStrLn msg >> return l))
                                             case er of
-                                                Right l' -> put st' >> loop l'
+                                                Right l' -> put st' >> loopUnproven l'
                                                 Left CLAbort -> return ()
                                                 Left _ -> fail "unsupported exception in interactive prover"
 
@@ -389,8 +407,7 @@ runProofExprH lem@(nm, eq, b) expr = prefixFailMsg ("Error in expression: " ++ u
                 kEnv = cl_kernel_env st
                 sast = cl_cursor st
 
-            -- Why do a query? We want to do our proof in the current context
-            -- of the shell, whatever that is.
+            -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
             eq' <- queryS sk (return eq >>> rr :: TransformH Core CoreExprEquality) kEnv sast
             return (nm, eq', b)
         PCAbort -> throwError CLAbort -- we'll catch this specially
