@@ -167,7 +167,7 @@ runS f = do
 interactive :: [External] -> [CommandLineOption] -> HPM ()
 interactive es os = HPM . singleton $ Shell (externals ++ es) os
 
-run :: RewriteH CoreTC -> HPM ()
+run :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g -> HPM ()
 run = HPM . singleton . RR
 
 query :: (Injection GHC.ModGuts g, Walker HermitC g) => TransformH g a -> HPM a
