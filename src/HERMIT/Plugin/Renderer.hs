@@ -1,24 +1,32 @@
+{-# LANGUAGE FlexibleContexts #-}
 module HERMIT.Plugin.Renderer where
 
+import Control.Arrow
 import Control.Monad.State
 
-import Data.List (isPrefixOf)
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
 import Data.Monoid
 
+import HERMIT.Dictionary (traceR)
 import HERMIT.Kure
 import HERMIT.Plugin.Types
+import HERMIT.PrettyPrinter.Clean
 import HERMIT.PrettyPrinter.Common
-
--- import HERMIT.Shell.Types
 
 import System.Console.ANSI
 import System.IO
+import System.IO.Temp
+import System.Process
 
 changeRenderer :: String -> PluginM ()
 changeRenderer renderer = modify $ \ st ->
         case lookup renderer shellRenderers of
           Nothing -> st          -- TODO: should fail with message
           Just r  -> st { ps_render = r }
+
+shellRenderers :: [(String,Handle -> PrettyOptions -> Either String DocH -> IO ())]
+shellRenderers = [ ("unicode-terminal", unicodeConsole) ]
+              ++ [ (nm, \ h opts -> either (hPutStr h) (hPutStr h . fn opts)) | (nm,fn) <- coreRenders ]
 
 -------------------------------------------------------------------------------
 
@@ -31,10 +39,6 @@ instance RenderSpecial UnicodeTerminal where
 instance Monoid UnicodeTerminal where
         mempty = UnicodeTerminal $ \ _ _ -> return ()
         mappend (UnicodeTerminal f1) (UnicodeTerminal f2) = UnicodeTerminal $ \ h p -> f1 h p >> f2 h p
-
-shellRenderers :: [(String,Handle -> PrettyOptions -> Either String DocH -> IO ())]
-shellRenderers = [ ("unicode-terminal", unicodeConsole) ]
-              ++ [ (nm, \ h opts -> either (hPutStr h) (hPutStr h . fn opts)) | (nm,fn) <- coreRenders ]
 
 unicodeConsole :: Handle -> PrettyOptions -> Either String DocH -> IO ()
 unicodeConsole h _    (Left str)  = hPutStr h str
@@ -74,4 +78,43 @@ instance RenderCode UnicodeTerminal where
                         WarningColor  -> [ SetSwapForegroundBackground True, SetColor Foreground Vivid Yellow ]
 -- TODO: enable        rDoHighlight _ (PathAttr p:_) = UnicodeTerminal $ setHighlight $ snocPathToPath p
         rDoHighlight o (_:rest) = rDoHighlight o rest
+
+----------------------------------------------------------------------------------------------
+
+-- TODO: this should be in PrettyPrinter.Common, but is here because it relies on
+--       unicodeConsole to get nice colored diffs. We can either switch to straight unicode
+--       renderer and give up on color, or come up with a clever solution.
+diffDocH :: (MonadCatch m, MonadIO m) => PrettyOptions -> DocH -> DocH -> m String
+diffDocH opts doc1 doc2 =
+    liftAndCatchIO $
+        withSystemTempFile "A.dump" $ \ fp1 h1 ->
+            withSystemTempFile "B.dump" $ \ fp2 h2 ->
+                withSystemTempFile "AB.diff" $ \ fp3 h3 -> do
+                    unicodeConsole h1 opts (Right doc1)
+                    hFlush h1
+                    unicodeConsole h2 opts (Right doc2)
+                    hFlush h2
+                    let cmd = unwords ["diff", "-b", "-U 5", fp1, fp2]
+                        p = (shell cmd) { std_out = UseHandle h3 , std_err = UseHandle h3 }
+                    (_,_,_,h) <- createProcess p
+                    _ <- waitForProcess h
+                    res <- readFile fp3
+                    -- strip out some of the diff lines
+                    return $ unlines [ l | l <- lines res, not (fp1 `isInfixOf` l || fp2 `isInfixOf` l)
+                                                         , not ("@@" `isPrefixOf` l && "@@" `isSuffixOf` l) ]
+
+-- TODO: again this should be elsewhere, but is here because diffDocH is here.
+diffR :: Injection a CoreTC => PrettyOptions -> String -> RewriteH a -> RewriteH a
+diffR opts msg rr = do
+    let pp = extractT $ liftPrettyH opts ppCoreTC
+        runDiff b a = do
+            doc1 <- return b >>> pp
+            doc2 <- return a >>> pp
+            r <- diffDocH opts doc1 doc2
+            return a >>> traceR (msg ++ " diff:\n" ++ r)
+
+    -- Be careful to only run the rr once, in case it has side effects.
+    (e,r) <- idR &&& attemptM rr
+    either fail (runDiff e) r
+
 

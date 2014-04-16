@@ -1,30 +1,132 @@
-{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies #-}
 
 module HERMIT.Shell.ScriptToRewrite
     ( -- * Converting Scripts to Rewrites
       addScriptToDict
+--    , evalScript
+    , loadAndRun
     , lookupScript
     , parseScriptCLT
+    , performScriptEffect
+--    , runScript
     , scriptToRewrite
+    , setRunningScript
+    , ScriptEffect(..)
     ) where
 
 import Control.Arrow
+import Control.Monad.Error
 import Control.Monad.State
+import Control.Exception hiding (catch)
 
 import Data.Dynamic
 import Data.Map hiding (lookup)
 
 import HERMIT.Context(LocalPathH)
+import HERMIT.Kernel.Scoped
 import HERMIT.Kure
 import HERMIT.External
-import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript)
+import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript, unparseScript)
+
+import HERMIT.Plugin.Types
 
 import HERMIT.PrettyPrinter.Common(TransformCoreTCDocHBox(..))
 
+import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.Interpreter
+import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
 ------------------------------------
+
+{-
+evalScript :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
+evalScript = parseScriptCLT >=> runScript
+
+runScript :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Script -> m ()
+runScript = mapM_ undefined
+
+runExprH :: forall m c a r. (ShellCommandSet c a r, MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => ExprH -> a -> m r
+runExprH e arg = do
+    cis <- gets cl_interps
+    case cis of
+        CmdInterps is -> do
+            cmd <- interpExprH is e
+            performCommand cmd arg
+-}
+
+------------------------------------
+
+type RewriteName = String
+
+data ScriptEffect
+    = DefineScript ScriptName String
+    | LoadFile ScriptName FilePath  -- load a file on top of the current node
+    | RunScript ScriptName
+    | SaveFile FilePath
+    | SaveScript FilePath ScriptName
+    | ScriptToRewrite RewriteName ScriptName
+    | SeqMeta [ScriptEffect]
+    deriving Typeable
+
+instance Extern ScriptEffect where
+    type Box ScriptEffect = ScriptEffect
+    box i = i
+    unbox i = i
+
+{-
+instance ShellCommandSet ScriptEffect () () where
+    performCommand c () = performScriptEffect c
+-}
+
+-- | A composite meta-command for running a loaded script immediately.
+--   The script is given the same name as the filepath.
+loadAndRun :: FilePath -> ScriptEffect
+loadAndRun fp = SeqMeta [LoadFile fp fp, RunScript fp]
+
+performScriptEffect :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => (Script -> m ()) -> ScriptEffect -> m ()
+performScriptEffect runner = go
+    where go (SeqMeta ms) = mapM_ go ms
+          go (LoadFile scriptName fileName) = do
+            putStrToConsole $ "Loading \"" ++ fileName ++ "\"..."
+            res <- liftIO $ try (readFile fileName)
+            case res of
+                Left (err :: IOException) -> fail ("IO error: " ++ show err)
+                Right str -> do 
+                    script <- parseScriptCLT str
+                    modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
+                    putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
+
+          go (SaveFile fileName) = do
+            version <- gets cl_version
+            putStrToConsole $ "[saving " ++ fileName ++ "]"
+            -- no checks to see if you are clobering; be careful
+            liftIO $ writeFile fileName $ showGraph (vs_graph version) (vs_tags version) (SAST 0)
+
+          go (ScriptToRewrite rewriteName scriptName) = do
+            script <- lookupScript scriptName
+            addScriptToDict rewriteName script
+            putStrToConsole ("Rewrite \"" ++ rewriteName ++ "\" defined successfully.")
+
+          go (DefineScript scriptName str) = do
+            script <- parseScriptCLT str
+            modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
+            putStrToConsole ("Script \"" ++ scriptName ++ "\" defined successfully.")
+
+          go (RunScript scriptName) = do
+            script <- lookupScript scriptName
+            running_script_st <- gets cl_running_script
+            setRunningScript True
+            runner script `catchError` (\ err -> setRunningScript running_script_st >> throwError err)
+            setRunningScript running_script_st
+            putStrToConsole ("Script \"" ++ scriptName ++ "\" ran successfully.")
+            showWindow
+
+          go (SaveScript fileName scriptName) = do 
+            script <- lookupScript scriptName
+            putStrToConsole $ "Saving script \"" ++ scriptName ++ "\" to file \"" ++ fileName ++ "\"."
+            liftIO $ writeFile fileName $ unparseScript script
+            putStrToConsole $ "Save successful."
 
 lookupScript :: MonadState CommandLineState m => ScriptName -> m Script
 lookupScript scriptName = do scripts <- gets cl_scripts
@@ -32,8 +134,11 @@ lookupScript scriptName = do scripts <- gets cl_scripts
                                Nothing     -> fail $ "No script of name " ++ scriptName ++ " is loaded."
                                Just script -> return script
 
-parseScriptCLT :: Monad m => String -> CLT m Script
+parseScriptCLT :: Monad m => String -> m Script
 parseScriptCLT = either fail return . parseScript
+
+setRunningScript :: MonadState CommandLineState m => Bool -> m ()
+setRunningScript b = modify $ \st -> st { cl_pstate = (cl_pstate st) { ps_running_script = b } }
 
 ------------------------------------
 

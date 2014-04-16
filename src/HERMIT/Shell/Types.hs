@@ -1,6 +1,6 @@
-{-# LANGUAGE CPP, KindSignatures, GADTs, FlexibleContexts, TypeFamilies,
-             DeriveDataTypeable, GeneralizedNewtypeDeriving, LambdaCase,
-             ScopedTypeVariables #-}
+{-# LANGUAGE CPP, KindSignatures, GADTs, FlexibleContexts, DeriveDataTypeable, 
+             FunctionalDependencies, GeneralizedNewtypeDeriving, InstanceSigs,
+             LambdaCase, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
 
 module HERMIT.Shell.Types where
 
@@ -43,28 +43,18 @@ import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, te
 
 ----------------------------------------------------------------------------------
 
--- GADTs can't have docs on constructors. See Haddock ticket #43.
--- | KernelEffects are things that affect the state of the Kernel
---   - Apply a rewrite (giving a whole new lower-level AST).
---   - Change the current location using a computed path.
---   - Change the currect location using directions.
---   - Begin or end a scope.
---   - Delete an AST
---   - Run a precondition or other predicate that must not fail.
-data KernelEffect :: * where
-   Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> KernelEffect
-   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TransformH g LocalPathH -> KernelEffect
-   Direction  ::                                                Direction               -> KernelEffect
-   BeginScope ::                                                                           KernelEffect
-   EndScope   ::                                                                           KernelEffect
-   Delete     ::                                                SAST                    -> KernelEffect
-   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TransformH g () -> KernelEffect
-   deriving Typeable
-
-instance Extern KernelEffect where
-   type Box KernelEffect = KernelEffect
-   box i = i
-   unbox i = i
+{-
+-- | How to perform a given set of commands.
+--
+-- Mnemonic:
+-- c = command type
+-- a = extra arguments type (use tuple for more than one)
+-- r = result type
+--
+-- Often, a and r are (), but sometimes we need more clever things.
+class ShellCommandSet c a r | c -> a r where
+    performCommand :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => c -> a -> m r
+-}
 
 ----------------------------------------------------------------------------------
 
@@ -87,36 +77,6 @@ instance Extern QueryFun where
 
 ----------------------------------------------------------------------------------
 
-type RewriteName = String
-
-data ShellEffect
-    = Abort -- ^ Abort GHC
-    | CLSModify (CommandLineState -> IO CommandLineState) -- ^ Modify shell state
-    | PluginComp (PluginM ())
-    | Continue -- ^ exit the shell, but don't abort/resume
-    | DefineScript ScriptName String
-    | Dump String String Int
-    | LoadFile ScriptName FilePath  -- load a file on top of the current node
-    | RunScript ScriptName
-    | SaveFile FilePath
-    | SaveScript FilePath ScriptName
-    | ScriptToRewrite RewriteName ScriptName
-    | SeqMeta [ShellEffect]
-    | Resume
-    deriving Typeable
-
--- | A composite meta-command for running a loaded script immediately.
---   The script is given the same name as the filepath.
-loadAndRun :: FilePath -> ShellEffect
-loadAndRun fp = SeqMeta [LoadFile fp fp, RunScript fp]
-
-instance Extern ShellEffect where
-    type Box ShellEffect = ShellEffect
-    box i = i
-    unbox i = i
-
-----------------------------------------------------------------------------------
-
 data VersionCmd = Back                  -- back (up) the derivation tree
                 | Step                  -- down one step; assumes only one choice
                 | Goto Int              -- goto a specific node, if possible
@@ -133,13 +93,13 @@ data CLException = CLAbort
 
 instance Error CLException where strMsg = CLError
 
-abort :: Monad m => CLT m ()
+abort :: MonadError CLException m => m ()
 abort = throwError CLAbort
 
-resume :: Monad m => SAST -> CLT m ()
+resume :: MonadError CLException m => SAST -> m ()
 resume = throwError . CLResume
 
-continue :: Monad m => CommandLineState -> CLT m ()
+continue :: MonadError CLException m => CommandLineState -> m ()
 continue = throwError . CLContinue
 
 rethrowCLE :: CLException -> PluginM a
@@ -148,7 +108,7 @@ rethrowCLE (CLResume sast) = throwError (PResume sast)
 rethrowCLE (CLContinue s)  = put (cl_pstate s) >> return (error "CLContinue cannot return a value")
 rethrowCLE (CLError msg)   = throwError (PError msg)
 
-rethrowPE :: Monad m => PException -> CLT m a
+rethrowPE :: MonadError CLException m => PException -> m a
 rethrowPE PAbort         = throwError CLAbort
 rethrowPE (PResume sast) = throwError (CLResume sast)
 rethrowPE (PError msg)   = throwError (CLError msg)
@@ -200,7 +160,7 @@ clm m = do
         Right r' -> put (cl_pstate s') >> return r'
 
 -- | Lift a PluginM computation into the CLM monad.
-pluginM :: MonadIO m => PluginM a -> CLT m a
+pluginM :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => PluginM a -> m a
 pluginM m = do
     s <- get
     (r,ps) <- liftIO $ runPluginT (cl_pstate s) m
@@ -349,11 +309,17 @@ tick var msg = atomically $ do
         writeTVar var (M.insert msg c m)
         return c
 
-cl_putStr :: MonadIO m => String -> CLT m ()
+cl_putStr :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
 cl_putStr = pluginM . ps_putStr
 
-cl_putStrLn :: MonadIO m => String -> CLT m ()
+cl_putStrLn :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
 cl_putStrLn = pluginM . ps_putStrLn
+
+-- TODO: rename?
+putStrToConsole :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
+putStrToConsole str = ifM (gets cl_running_script)
+                          (return ())
+                          (cl_putStrLn str)
 
 ------------------------------------------------------------------------------
 
@@ -408,3 +374,42 @@ completionQuery _ (AmbiguousC ts) = do
     putStrLn $ "Possibilities: " ++ intercalate ", " (map show ts)
     return (pure [])
 
+------------------------------------------------------------------------------
+
+fixWindow :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => m ()
+fixWindow = do
+    st <- get
+    -- check to make sure new path is still inside window
+    focusPath <- pluginM getFocusPath
+    -- move the window in two cases:
+    --  1. window path is not prefix of focus path
+    --  2. window path is empty (since at the top level we only show type sigs)
+    {- when (not (isPrefixOf (cl_window st) focusPath) || null (cl_window st))
+       $ put $ st { cl_window = focusPath } -}
+    put $ st { cl_window = focusPath } -- TODO: temporary until we figure out a better highlight interface
+
+showWindow :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => m ()
+showWindow = fixWindow >> gets cl_window >>= pluginM . display . Just
+
+------------------------------------------------------------------------------
+
+showGraph :: [(SAST,ExprH,SAST)] -> [(String,SAST)] -> SAST -> String
+showGraph graph tags this@(SAST n) =
+        (if length paths > 1 then "tag " ++ show n ++ "\n" else "") ++
+        concat (intercalate
+                ["goto " ++ show n ++ "\n"]
+                [ [ unparseExprH b ++ "\n" ++ showGraph graph tags c ]
+                | (b,c) <- paths
+                ])
+  where  
+          paths = [ (b,c) | (a,b,c) <- graph, a == this ]
+
+------------------------------------------------------------------------------
+
+{-
+data CmdInterps :: * where
+    CmdInterps :: forall c a r. ShellCommandSet c a r => [Interp c] -> CmdInterps
+
+instance ShellCommandSet () () () where
+    performCommand = const return
+-}

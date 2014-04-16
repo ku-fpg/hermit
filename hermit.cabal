@@ -228,7 +228,9 @@ Library
        HERMIT.Shell.Dictionary
        HERMIT.Shell.Interpreter
        HERMIT.Shell.Externals
+       HERMIT.Shell.KernelEffect
        HERMIT.Shell.ScriptToRewrite
+       HERMIT.Shell.ShellEffect
        HERMIT.Shell.Proof
        HERMIT.Shell.Types
 

@@ -1,6 +1,10 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, MultiParamTypeClasses, ScopedTypeVariables #-}
 
-module HERMIT.Shell.Proof where
+module HERMIT.Shell.Proof 
+    ( externals
+    , ProofCommand(..)
+    , performProofCommand
+    ) where
 
 import Control.Arrow hiding (loop)
 import Control.Concurrent
@@ -9,29 +13,28 @@ import Control.Monad.State
 
 import Data.Char (isSpace)
 import Data.Dynamic
-import Data.List
 import Data.Maybe (isNothing)
 
-import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC hiding (settings)
 import HERMIT.Kernel.Scoped
 import HERMIT.Kure
 import HERMIT.Parser
-import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.Debug
+import HERMIT.Dictionary.Debug hiding (externals)
 import HERMIT.Dictionary.Induction
-import HERMIT.Dictionary.Reasoning
-import HERMIT.Dictionary.Rules
+import HERMIT.Dictionary.Reasoning hiding (externals)
+import HERMIT.Dictionary.Rules hiding (externals)
 
 import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
 import qualified HERMIT.PrettyPrinter.Clean as Clean
 
 import HERMIT.Shell.Interpreter
+import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.ScriptToRewrite
+import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
 import System.Console.Haskeline hiding (catch, display)
@@ -76,8 +79,6 @@ externals =
         [ "Generate a bi-directional rewrite from a proven lemma." ]
     , external "lemma-unsafe" ((\s -> promoteExprBiR . lemma True s) :: CommandLineState -> LemmaName -> BiRewriteH Core)
         [ "Generate a bi-directional rewrite from a lemma, even if it is unproven." ]
-    , external "verify-lemma" VerifyLemma
-        [ "Prove a lemma." ]
     , external "lemma-lhs-intro" (lemmaLhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core)
         [ "Introduce the LHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = lhs in body" ] .+ Introduce .+ Shallow
@@ -86,18 +87,16 @@ externals =
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
     , external "interactive-proof" InteractiveProof
         [ "Proof a lemma interactively." ]
-    , external "abandon" PCAbort
-        [ "Abandon interactive proof attempt." ]
-    , external "extensionality" (PCApply . extensionalityR . Just :: String -> ProofCmd)
+    , external "extensionality" (PCApply . extensionalityR . Just :: String -> ProofShellCommand)
         [ "Given a name 'x, then"
         , "f == g  ==>  forall x.  f x == g x" ]
-    , external "extensionality" (PCApply $ extensionalityR Nothing :: ProofCmd)
+    , external "extensionality" (PCApply $ extensionalityR Nothing :: ProofShellCommand)
         [ "f == g  ==>  forall x.  f x == g x" ]
-    , external "lhs" (PCApply . lhsR . extractR :: RewriteH Core -> ProofCmd)
+    , external "lhs" (PCApply . lhsR . extractR :: RewriteH Core -> ProofShellCommand)
         [ "Apply a rewrite to the LHS of an equality." ]
-    , external "rhs" (PCApply . rhsR . extractR :: RewriteH Core -> ProofCmd)
+    , external "rhs" (PCApply . rhsR . extractR :: RewriteH Core -> ProofShellCommand)
         [ "Apply a rewrite to the RHS of an equality." ]
-    , external "both" (PCApply . bothR . extractR :: RewriteH Core -> ProofCmd)
+    , external "both" (PCApply . bothR . extractR :: RewriteH Core -> ProofShellCommand)
         [ "Apply a rewrite to both sides of an equality." ]
     ]
 
@@ -114,7 +113,6 @@ type ScriptOrRewrite = Either ScriptName (RewriteH CoreExpr) -- The named script
 
 data ProofCommand
     = RuleToLemma RuleNameString
-    | VerifyLemma LemmaName ProofH
     | InteractiveProof LemmaName
     | ShowLemmas
     deriving (Typeable)
@@ -130,6 +128,11 @@ instance Extern ProofH where
     type Box ProofH = ProofBox
     box = ProofBox
     unbox (ProofBox p) = p
+
+{-
+instance ShellCommandSet ProofCommand () where
+    performCommand = performProofCommand
+-}
 
 --------------------------------------------------------------------------------------------------------
 
@@ -224,23 +227,25 @@ lemmaRhsIntroR st = lemmaNameToEqualityT st >=> eqRhsIntroR
 
 --------------------------------------------------------------------------------------------------------
 
-performProofCommand :: MonadIO m => ProofCommand -> CLT m ()
+performProofCommand :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => ProofCommand -> m ()
 performProofCommand (RuleToLemma nm) = do
     st <- gets cl_pstate
     equality <- queryS (ps_kernel st) (ruleNameToEqualityT nm :: TransformH Core CoreExprEquality) (mkKernelEnv st) (ps_cursor st)
     modify $ \ s -> s { cl_lemmas = (nm,equality,False) : cl_lemmas s }
 
+{-
 performProofCommand (VerifyLemma nm proof) = do
     st <- get
     (_,equality,_) <- getLemmaByName st nm
     prove equality proof -- this is like a guard
     markProven nm
+-}
 
 performProofCommand (InteractiveProof nm) = get >>= flip getLemmaByName nm >>= interactiveProof 
 
 performProofCommand ShowLemmas = gets cl_lemmas >>= \ ls -> forM_ (reverse ls) printLemma
 
-printLemma :: MonadIO m => Lemma -> CLT m ()
+printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
 printLemma (nm, CoreExprEquality bs lhs rhs, proven) = do
     st <- gets cl_pstate
     let k    = ps_kernel st
@@ -264,9 +269,10 @@ printLemma (nm, CoreExprEquality bs lhs rhs, proven) = do
 
 --------------------------------------------------------------------------------------------------------
 
+{-
 -- | Prove a lemma using the given proof in the current kernel context.
 -- Required to fail if proof fails.
-prove :: MonadIO m => CoreExprEquality -> ProofH -> CLT m ()
+prove :: (MonadIO m, MonadState CommandLineState m) => CoreExprEquality -> ProofH -> m ()
 prove eq (RewritingProof lp rp) = do
     (lrr, rrr) <- getRewrites (lp, rp)
     st <- gets cl_pstate
@@ -308,6 +314,7 @@ prove eq (UserProof t) =
      queryS (ps_kernel st) (return eq >>> t :: TransformH Core ()) (mkKernelEnv st) (ps_cursor st)
 
 prove eq (ProofH p) = clm2clt (p eq)
+-}
 
 getProofsForCase :: Monad m => Maybe DataCon -> [(Maybe DataCon -> Bool, ScriptOrRewrite, ScriptOrRewrite)] -> m (ScriptOrRewrite, ScriptOrRewrite)
 getProofsForCase mdc cases =
@@ -340,12 +347,12 @@ getRewrites (l,r) = liftM2 (,) (getRewrite l) (getRewrite r)
 getRewrite :: MonadState CommandLineState m => ScriptOrRewrite -> m (RewriteH CoreExpr)
 getRewrite = either (lookupScript >=> liftM extractR . scriptToRewrite) return
 
-markProven :: MonadState CommandLineState m => LemmaName -> m ()
+markProven :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => LemmaName -> m ()
 markProven nm = do
     cl_putStrLn $ "Successfully proven: " ++ nm
     modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }
 
-interactiveProof :: MonadIO m => Lemma -> CLT m ()
+interactiveProof :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
 interactiveProof lem = do
     -- TODO: add any interactive-proof-specific commands to the dictionary?
     -- modify $ \ st -> st { cl_dict = mkDict (shell_externals ++ exts) }
@@ -391,45 +398,63 @@ interactiveProof lem = do
 
     -- Start the CLI
     let settings = setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings
+        cleanup s r = put s >> return r
     (r,s) <- get >>= liftIO . runInputTBehavior defaultBehavior settings . flip runCLT (loop lem)
-    either throwError (\v -> put s >> return v) r
+    either throwError (cleanup s) r
 
 evalProofScript :: MonadIO m => Lemma -> String -> CLT m Lemma
-evalProofScript lem = parseScriptCLT >=> foldM runProofExprH lem
+evalProofScript lem = parseScriptCLT >=> foldM runExprH lem
 
-runProofExprH :: MonadIO m => Lemma -> ExprH -> CLT m Lemma
-runProofExprH lem@(nm, eq, b) expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
-    cmd <- interpExprH interpProof expr
-    st <- get
-    case cmd of
-        PCApply rr -> do
-            let sk = cl_kernel st
-                kEnv = cl_kernel_env st
-                sast = cl_cursor st
+runExprH :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> ExprH -> m Lemma
+runExprH lem expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
+    proofCmd <- interpExprH interpProof expr
+    performProofShellCommand lem proofCmd
 
-            -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-            eq' <- queryS sk (return eq >>> rr :: TransformH Core CoreExprEquality) kEnv sast
-            return (nm, eq', b)
-        PCAbort -> throwError CLAbort -- we'll catch this specially
-        PCUnsupported s -> cl_putStrLn s >> return lem
+performProofShellCommand :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> ProofShellCommand -> m Lemma
+performProofShellCommand lem@(nm, eq, b) = go
+    where go (PCApply rr) = do
+                st <- get
+                let sk = cl_kernel st
+                    kEnv = cl_kernel_env st
+                    sast = cl_cursor st
 
-data ProofCmd = PCApply (RewriteH CoreExprEquality)
-              | PCAbort
-              | PCUnsupported String
+                -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
+                eq' <- queryS sk (return eq >>> rr :: TransformH Core CoreExprEquality) kEnv sast
+                return (nm, eq', b)
+          go (PCShell effect) = performShellEffect effect >> return lem
+          go (PCScript effect) = do
+            lemVar <- liftIO $ newMVar lem -- couldn't resist that name
+            let lemHack [] = return ()
+                lemHack (e:r) = liftIO (takeMVar lemVar) >>= flip runExprH e >>= liftIO . putMVar lemVar >> lemHack r
+            performScriptEffect lemHack effect
+            liftIO $ takeMVar lemVar
+          go (PCUnsupported s) = cl_putStrLn s >> return lem
+
+data ProofShellCommand
+    = PCApply (RewriteH CoreExprEquality)
+    | PCShell ShellEffect
+    | PCScript ScriptEffect
+    | PCUnsupported String
     deriving Typeable
 
-instance Extern ProofCmd where
-    type Box ProofCmd = ProofCmd
+instance Extern ProofShellCommand where
+    type Box ProofShellCommand = ProofShellCommand
     box i = i
     unbox i = i
 
+{-
+instance ShellCommandSet ProofShellCommand Lemma Lemma where
+    -- performCommand :: (..) => Lemma -> ProofShellCommand -> m Lemma
+    performCommand = performProofShellCommand
+-}
 
-
-interpProof :: [Interp ProofCmd]
+interpProof :: [Interp ProofShellCommand]
 interpProof =
   [ interp $ \ (RewriteCoreBox rr)            -> PCApply $ bothR $ extractR rr
   , interp $ \ (RewriteCoreTCBox rr)          -> PCApply $ bothR $ extractR rr
   , interp $ \ (BiRewriteCoreBox br)          -> PCApply $ bothR $ (extractR (forwardT br) <+ extractR (backwardT br))
+  , interp $ \ (effect :: ShellEffect)        -> PCShell effect
+  , interp $ \ (effect :: ScriptEffect)       -> PCScript effect
   , interp $ \ (CrumbBox _cr)                 -> PCUnsupported "CrumbBox"
   , interp $ \ (PathBox _p)                   -> PCUnsupported "PathBox"
   , interp $ \ (TransformCorePathBox _tt)     -> PCUnsupported "TransformCorePathBox"
@@ -441,9 +466,8 @@ interpProof =
   , interp $ \ (TransformCoreCheckBox _tt)    -> PCUnsupported "TransformCoreCheckBox"
   , interp $ \ (TransformCoreTCCheckBox _tt)  -> PCUnsupported "TransformCoreTCCheckBox"
   , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"
-  , interp $ \ (_effect :: ShellEffect)       -> PCUnsupported "ShellEffect"
   , interp $ \ (_query :: QueryFun)           -> PCUnsupported "QueryFun"
   , interp $ \ (_cmd :: ProofCommand)         -> PCUnsupported "ProofCommand Inception!"
-  , interp $ \ (cmd :: ProofCmd)              -> cmd
+  , interp $ \ (cmd :: ProofShellCommand)     -> cmd
   ]
 

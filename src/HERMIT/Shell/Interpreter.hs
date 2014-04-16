@@ -5,8 +5,10 @@ module HERMIT.Shell.Interpreter
           Interp
         , interp
         , interpExprH
+--        , runExprH
         ) where
 
+import Control.Monad.Error
 import Control.Monad.State
 
 import Data.Char
@@ -15,33 +17,42 @@ import qualified Data.Map as M
 
 import HERMIT.External
 import HERMIT.Parser
-import HERMIT.Kure (deprecatedIntToPathT,pathToSnocPath)
+import HERMIT.Kure 
 
 import HERMIT.Shell.Types
 
--- | Interpret an 'ExprH' by looking up the appropriate 'Dynamic'(s) in the provided 'Dictionary', then interpreting the 'Dynamic'(s) with the provided 'Interp's, returning the first interpretation to succeed (or an error string if none succeed).
-interpExprH :: MonadState CommandLineState m => [Interp a] -> ExprH -> m a
-interpExprH interps e = do 
-    dyns <- interpExpr e
-    runInterp e dyns interps
-
-runInterp :: Monad m => ExprH -> [Dynamic] -> [Interp b] -> m b
-runInterp e dyns interps = case [f a | Interp f <- interps, Just a <- map fromDynamic dyns] of
-                            []  -> fail $ "Does not type-check: " ++ unparseExprH e ++ "\n"
-                            b:_ -> return b
-
--- | An 'Interp' @a@ is a /possible/ means of converting a 'Typeable' value to a value of type @a@.
+-- | An 'Interp' @cmd@ is a /possible/ means of converting a 'Typeable' value to a value of type @cmd@.
 data Interp :: * -> * where
-   Interp :: Typeable a => (a -> b) -> Interp b
+   Interp :: Typeable a => (a -> cmd) -> Interp cmd
 
 -- | The primitive way of building an 'Interp'.
-interp :: Typeable a => (a -> b) -> Interp b
+interp :: Typeable a => (a -> cmd) -> Interp cmd
 interp = Interp
 
 instance Functor Interp where
   fmap :: (a -> b) -> Interp a -> Interp b
   fmap f (Interp g) = Interp (f . g)
 
+{-
+runExprH :: forall m r. (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => ExprH -> m r
+runExprH e = do
+    dyns <- interpExpr e
+    CmdInterps interps <- gets cl_interps
+    case [ performCommand $ f a | Interp f <- interps, Just a <- map fromDynamic dyns] of
+        []  -> fail $ "Does not type-check: " ++ unparseExprH e ++ "\n"
+        b:_ -> b :: m r
+-}
+
+-- | Interpret an 'ExprH' by looking up the appropriate 'Dynamic'(s) in the provided 'Dictionary', 
+-- then interpreting the 'Dynamic'(s) with the provided 'Interp's, returning the first 
+-- interpretation to succeed (or an error string if none succeed).
+interpExprH :: MonadState CommandLineState m => [Interp b] -> ExprH -> m b
+interpExprH interps e = interpExpr e >>= runInterp e interps
+
+runInterp :: Monad m => ExprH -> [Interp b] -> [Dynamic] -> m b
+runInterp e interps dyns = case [f a | Interp f <- interps, Just a <- map fromDynamic dyns] of
+                            []  -> fail $ "Does not type-check: " ++ unparseExprH e ++ "\n"
+                            b:_ -> return b
 
 interpExpr :: MonadState CommandLineState m => ExprH -> m [Dynamic]
 interpExpr = interpExpr' False

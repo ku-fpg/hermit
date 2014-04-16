@@ -1,16 +1,20 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
 
 module HERMIT.Shell.Externals where
 
 import Control.Applicative
+import Control.Monad.Error
+import Control.Monad.State
 
 import Data.Monoid
 import Data.List (intercalate)
 import qualified Data.Map as M
 
 import HERMIT.Context
+import HERMIT.Core
 import HERMIT.Kure
 import HERMIT.External
+import HERMIT.Kernel (queryK, AST)
 import HERMIT.Kernel.Scoped
 import HERMIT.Parser
 import HERMIT.Plugin.Renderer
@@ -18,16 +22,31 @@ import HERMIT.PrettyPrinter.Common
 
 import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Interpreter
+import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.Proof as Proof
+import HERMIT.Shell.ScriptToRewrite
+import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
+
+import System.IO
 
 ----------------------------------------------------------------------------------
 
--- | There are four types of commands.
+-- | There are five types of commands.
 data ShellCommand = KernelEffect KernelEffect -- ^ Command that modifies the state of the (scoped) kernel.
+                  | ScriptEffect ScriptEffect -- ^ Command that deals with script files.
                   | ShellEffect  ShellEffect  -- ^ Command that modifies the state of the shell.
                   | QueryFun     QueryFun     -- ^ Command that queries the AST with a Transform (read only).
                   | ProofCommand ProofCommand -- ^ Command that deals with proofs.
+
+{-
+instance ShellCommandSet ShellCommand where
+    performCommand (KernelEffect ke) = performCommand ke
+    performCommand (ScriptEffect sc) = performCommand sc
+    performCommand (ShellEffect se)  = performCommand se
+    performCommand (QueryFun qf)     = performCommand qf
+    performCommand (ProofCommand pc) = performCommand pc
+-}
 
 -- | Interpret a boxed thing as one of the four possible shell command types.
 interpShellCommand :: [Interp ShellCommand]
@@ -47,6 +66,7 @@ interpShellCommand =
   , interp $ \ (TransformCoreTCCheckBox tt)  -> KernelEffect (CorrectnessCritera tt)
   , interp $ \ (effect :: KernelEffect)      -> KernelEffect effect
   , interp $ \ (effect :: ShellEffect)       -> ShellEffect effect
+  , interp $ \ (effect :: ScriptEffect)      -> ScriptEffect effect
   , interp $ \ (query :: QueryFun)           -> QueryFun query
   , interp $ \ (cmd :: ProofCommand)         -> ProofCommand cmd
   ]
@@ -184,6 +204,64 @@ gc st = do
     mapM_ (deleteS k) [ sast | sast <- asts, sast `notElem` [cursor, initSAST] ]
     return st
 
+-------------------------------------------------------------------------------
+
+{-
+instance ShellCommandSet QueryFun where
+    performCommand = performQuery
+-}
+
+performQuery :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => QueryFun -> m ()
+performQuery (QueryString q) = do
+    st <- get
+    str <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
+    putStrToConsole str
+
+performQuery (QueryDocH q) = do
+    st <- get
+    doc <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (q (initPrettyC $ cl_pretty_opts st) $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
+    liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
+
+performQuery (Inquiry f) = get >>= liftIO . f >>= putStrToConsole
+
+performQuery (Diff s1 s2) = do
+    st <- get
+
+    ast1 <- toASTS (cl_kernel st) s1
+    ast2 <- toASTS (cl_kernel st) s2
+    let getCmds sast | sast == s1 = []
+                     | otherwise = case [ (f,c) | (f,c,to) <- vs_graph (cl_version st), to == sast ] of
+                                    [(sast',cmd)] -> unparseExprH cmd : getCmds sast'
+                                    _ -> ["error: history broken!"] -- should be impossible
+
+    cl_putStrLn "Commands:"
+    cl_putStrLn "========="
+    cl_putStrLn $ unlines $ reverse $ getCmds s2
+
+    doc1 <- ppWholeProgram ast1
+    doc2 <- ppWholeProgram ast2
+
+    r <- diffDocH (cl_pretty_opts st) doc1 doc2
+
+    cl_putStrLn "Diff:"
+    cl_putStrLn "====="
+    cl_putStr r
+
+-- Explicit calls to display should work no matter what the loading state is.
+performQuery Display = do
+    running_script_st <- gets cl_running_script
+    setRunningScript False
+    showWindow
+    setRunningScript running_script_st
+
+ppWholeProgram :: (MonadIO m, MonadState CommandLineState m) => AST -> m DocH
+ppWholeProgram ast = do
+    st <- get
+    liftIO (queryK (kernelS $ cl_kernel st)
+            ast
+            (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ cl_pretty st)
+            (cl_kernel_env st)) >>= runKureM return fail
+
 ----------------------------------------------------------------------------------
 
 setWindow :: CommandLineState -> IO CommandLineState
@@ -259,17 +337,6 @@ showRefactorTrail db tags a me =
                             , n == a
                             ]
 
-
-showGraph :: [(SAST,ExprH,SAST)] -> [(String,SAST)] -> SAST -> String
-showGraph graph tags this@(SAST n) =
-        (if length paths > 1 then "tag " ++ show n ++ "\n" else "") ++
-        concat (intercalate
-                ["goto " ++ show n ++ "\n"]
-                [ [ unparseExprH b ++ "\n" ++ showGraph graph tags c ]
-                | (b,c) <- paths
-                ])
-  where
-          paths = [ (b,c) | (a,b,c) <- graph, a == this ]
 
 -------------------------------------------------------------------------------
 
