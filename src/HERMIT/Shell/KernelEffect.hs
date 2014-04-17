@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, InstanceSigs, LambdaCase, MultiParamTypeClasses, ScopedTypeVariables, GADTs, FlexibleContexts, TypeFamilies #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, GADTs, TypeFamilies #-}
 
 module HERMIT.Shell.KernelEffect 
     ( KernelEffect(..)
@@ -24,7 +24,6 @@ import HERMIT.Plugin.Renderer
 
 import HERMIT.PrettyPrinter.Common
 
-import HERMIT.Shell.Interpreter
 import HERMIT.Shell.Types
 
 -------------------------------------------------------------------------------
@@ -44,7 +43,6 @@ data KernelEffect :: * where
    BeginScope ::                                                                           KernelEffect
    EndScope   ::                                                                           KernelEffect
    Delete     ::                                                SAST                    -> KernelEffect
-   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TransformH g () -> KernelEffect
    deriving Typeable
 
 instance Extern KernelEffect where
@@ -52,14 +50,11 @@ instance Extern KernelEffect where
    box i = i
    unbox i = i
 
-{-
-instance ShellCommandSet KernelEffect ExprH () where
-    performCommand = performKernelEffect 
--}
-
 -------------------------------------------------------------------------------
 
-performKernelEffect :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => KernelEffect -> ExprH -> m ()
+performKernelEffect :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) 
+                    => KernelEffect -> ExprH -> m ()
+
 performKernelEffect (Apply rr) expr = do
     st <- get
 
@@ -98,35 +93,17 @@ performKernelEffect (Direction dir) expr = do
     showWindow
 
 performKernelEffect BeginScope expr = do
-        st <- get
-        ast <- beginScopeS (cl_kernel st) (cl_cursor st)
-        put $ newSAST expr ast st
-        showWindow
+    st <- get
+    ast <- beginScopeS (cl_kernel st) (cl_cursor st)
+    put $ newSAST expr ast st
+    showWindow
 
 performKernelEffect EndScope expr = do
-        st <- get
-        ast <- endScopeS (cl_kernel st) (cl_cursor st)
-        put $ newSAST expr ast st
-        showWindow
+    st <- get
+    ast <- endScopeS (cl_kernel st) (cl_cursor st)
+    put $ newSAST expr ast st
+    showWindow
 
 performKernelEffect (Delete sast) _ = gets cl_kernel >>= flip deleteS sast
 
-performKernelEffect (CorrectnessCritera q) expr = do
-        st <- get
-        -- TODO: Again, we may want a quiet version of the kernel_env
-        modFailMsg (\ err -> unparseExprH expr ++ " [exception: " ++ err ++ "]")
-                 $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
-        putStrToConsole $ unparseExprH expr ++ " [correct]"
-
 -------------------------------------------------------------------------------
-
-kernelEffectInterp :: [Interp KernelEffect]
-kernelEffectInterp =
-    [ interp $ \ (RewriteCoreBox rr)           -> Apply rr
-    , interp $ \ (RewriteCoreTCBox rr)         -> Apply rr
-    , interp $ \ (BiRewriteCoreBox br)         -> Apply $ whicheverR br
-    , interp $ \ (CrumbBox cr)                 -> Pathfinder (return (mempty @@ cr) :: TransformH CoreTC LocalPathH)
-    , interp $ \ (PathBox p)                   -> Pathfinder (return p :: TransformH CoreTC LocalPathH)
-    , interp $ \ (TransformCorePathBox tt)     -> Pathfinder tt
-    , interp $ \ (TransformCoreTCPathBox tt)   -> Pathfinder tt
-    ]

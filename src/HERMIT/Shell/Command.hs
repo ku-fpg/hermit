@@ -124,7 +124,7 @@ commandLine opts behavior exts = do
 
 -- | Like 'catchM', but checks the 'cl_failhard' setting and does so if needed.
 catchFailHard :: MonadIO m => CLT m () -> (String -> CLT m ()) -> CLT m ()
-catchFailHard m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display >> cl_putStrLn msg >> abort) (failure msg)
+catchFailHard m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display (CmdName "display") >> cl_putStrLn msg >> abort) (failure msg)
 
 evalScript :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
 evalScript = parseScriptCLT >=> runScript
@@ -139,7 +139,7 @@ runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "
         KernelEffect effect -> performKernelEffect effect expr
         ScriptEffect effect -> performScriptEffect runScript effect
         ShellEffect effect  -> performShellEffect effect
-        QueryFun query      -> performQuery query
+        QueryFun query      -> performQuery query expr
         ProofCommand cmd    -> performProofCommand cmd
 
 -------------------------------------------------------------------------------

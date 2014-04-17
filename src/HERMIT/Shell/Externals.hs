@@ -62,8 +62,8 @@ interpShellCommand =
   , interp $ \ (TransformCoreStringBox tt)   -> QueryFun (QueryString tt)
   , interp $ \ (TransformCoreTCStringBox tt) -> QueryFun (QueryString tt)
   , interp $ \ (TransformCoreTCDocHBox tt)   -> QueryFun (QueryDocH $ unTransformDocH tt)
-  , interp $ \ (TransformCoreCheckBox tt)    -> KernelEffect (CorrectnessCritera tt)
-  , interp $ \ (TransformCoreTCCheckBox tt)  -> KernelEffect (CorrectnessCritera tt)
+  , interp $ \ (TransformCoreCheckBox tt)    -> QueryFun (CorrectnessCritera tt)
+  , interp $ \ (TransformCoreTCCheckBox tt)  -> QueryFun (CorrectnessCritera tt)
   , interp $ \ (effect :: KernelEffect)      -> KernelEffect effect
   , interp $ \ (effect :: ShellEffect)       -> ShellEffect effect
   , interp $ \ (effect :: ScriptEffect)      -> ScriptEffect effect
@@ -211,20 +211,22 @@ instance ShellCommandSet QueryFun where
     performCommand = performQuery
 -}
 
-performQuery :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => QueryFun -> m ()
-performQuery (QueryString q) = do
+performQuery :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) 
+             => QueryFun -> ExprH -> m ()
+
+performQuery (QueryString q) _ = do
     st <- get
     str <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
     putStrToConsole str
 
-performQuery (QueryDocH q) = do
+performQuery (QueryDocH q) _ = do
     st <- get
     doc <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (q (initPrettyC $ cl_pretty_opts st) $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
-performQuery (Inquiry f) = get >>= liftIO . f >>= putStrToConsole
+performQuery (Inquiry f) _ = get >>= liftIO . f >>= putStrToConsole
 
-performQuery (Diff s1 s2) = do
+performQuery (Diff s1 s2) _ = do
     st <- get
 
     ast1 <- toASTS (cl_kernel st) s1
@@ -248,11 +250,19 @@ performQuery (Diff s1 s2) = do
     cl_putStr r
 
 -- Explicit calls to display should work no matter what the loading state is.
-performQuery Display = do
+performQuery Display _ = do
     running_script_st <- gets cl_running_script
     setRunningScript False
     showWindow
     setRunningScript running_script_st
+
+performQuery (CorrectnessCritera q) expr = do
+    st <- get
+    -- TODO: Again, we may want a quiet version of the kernel_env
+    modFailMsg (\ err -> unparseExprH expr ++ " [exception: " ++ err ++ "]")
+        $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
+    putStrToConsole $ unparseExprH expr ++ " [correct]"
+
 
 ppWholeProgram :: (MonadIO m, MonadState CommandLineState m) => AST -> m DocH
 ppWholeProgram ast = do

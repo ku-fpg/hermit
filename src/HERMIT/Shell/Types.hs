@@ -65,6 +65,7 @@ data QueryFun :: * where
    Diff          :: SAST -> SAST                                          -> QueryFun
    Display       ::                                                          QueryFun
    Inquiry       :: (CommandLineState -> IO String)                       -> QueryFun
+   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TransformH g () -> QueryFun
    deriving Typeable
 
 message :: String -> QueryFun
