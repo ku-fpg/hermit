@@ -4,6 +4,7 @@ module HERMIT.GHC.Typechecker
 #if __GLASGOW_HASKELL__ > 706
       initTcFromModGuts
     , mk_type_env
+    , tcLookupGlobal
 #endif
     ) where
 
@@ -25,6 +26,7 @@ import HscTypes
 import Outputable
 import Data.IORef ( newIORef, readIORef )
 
+import TcEnv ( tcLookupGlobal )
 import TcType   ( noUntouchables )
 
 import FastString

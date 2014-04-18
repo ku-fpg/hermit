@@ -194,6 +194,13 @@ exprIsOccurrenceOfT v d = varT $ varIsOccurrenceOfT v d
 boundVarsT :: (BoundVars c, Monad m) => Transform c m a VarSet
 boundVarsT = contextonlyT (return . boundVars)
 
+-- | An instance of 'MonadThings' for 'Transform', which looks in the context first.
+instance (MonadThings m, BoundVars c) => MonadThings (Transform c m a) where -- TODO: where to put this instance?
+    lookupThing nm = contextonlyT $ \ c ->
+                        case varSetElems $ filterVarSet ((== nm) . varName) (boundVars c) of
+                            (i:_) -> return $ AnId i
+                            []    -> lookupThing nm
+
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
 findBoundVarT :: (BoundVars c, MonadCatch m) => String -> Transform c m a Var
 findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
@@ -209,7 +216,7 @@ findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
              contextonlyT (findId nm)
 
 findId :: (BoundVars c, HasModGuts m, HasDynFlags m, MonadThings m) => String -> c -> m Id
-findId nm c = case {- filter (isValName . idName) $ -} varSetElems (findBoundVars nm c) of
+findId nm c = case varSetElems (findBoundVars nm c) of
                 []         -> findIdMG nm
                 [v]        -> return v
                 _ : _ : _  -> fail "multiple matching variables in scope."

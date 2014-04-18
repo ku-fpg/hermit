@@ -43,6 +43,7 @@ import HERMIT.Core
 import HERMIT.Context
 import HERMIT.Kure.SumTypes
 import HERMIT.GHC
+import HERMIT.GHC.Typechecker
 
 ----------------------------------------------------------------------------
 
@@ -144,8 +145,27 @@ instance MonadUnique HermitM where
   getUniqueSupplyM = liftCoreM getUniqueSupplyM
 
 instance MonadThings HermitM where
-  lookupThing :: Name -> HermitM TyThing
-  lookupThing = liftCoreM . lookupThing
+    lookupThing :: Name -> HermitM TyThing
+    -- We do not simply do:
+    --
+    --     lookupThing = liftCoreM . lookupThing
+    --
+    -- because we can do better. HermitM has access
+    -- to the ModGuts, so we can find TyThings defined
+    -- in the current module, not just imported ones.
+    -- Usually we look in the context first, which has
+    -- *most* things from the current module. However,
+    -- some Ids, such as class method selectors, are not
+    -- explicitly bound in the core, so will not be in
+    -- the context. These are instead kept in the 
+    -- ModGuts' list of instances. Which this will find.
+    lookupThing nm = do
+#if __GLASGOW_HASKELL__ < 708
+        liftCoreM (lookupThing nm)
+#else
+        guts <- getModGuts
+        liftCoreM $ runTcMtoCoreM guts $ tcLookupGlobal nm
+#endif
 
 instance HasDynFlags HermitM where
   getDynFlags :: HermitM DynFlags

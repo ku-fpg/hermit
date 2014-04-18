@@ -36,7 +36,7 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
 
-import HERMIT.Dictionary.Common (findIdT,inScope,callT)
+import HERMIT.Dictionary.Common (inScope,callT)
 import HERMIT.Dictionary.GHC (dynFlagsT)
 -- import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Kure (anyCallR)
@@ -191,7 +191,7 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
 ruleToEqualityT :: (BoundVars c, HasDynFlags m, HasModGuts m, MonadThings m, MonadCatch m) => Transform c m CoreRule CoreExprEquality
 ruleToEqualityT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
   do r@Rule{} <- idR -- other possibility is "BuiltinRule"
-     f <- findIdT (getOccString $ ru_fn r) -- TODO: refactor name lookup functions (like findIdT) to avoid intermediate String here
+     f <- lookupId $ ru_fn r 
      return $ CoreExprEquality (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
 
 ruleNameToEqualityT :: (BoundVars c, HasCoreRules c) => RuleNameString -> Transform c HermitM a CoreExprEquality
