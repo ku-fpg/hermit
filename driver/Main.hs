@@ -84,7 +84,7 @@ main4 file_nm hermit_args module_args ghc_args = do
 
 getPlugin :: [String] -> (String, [String])
 getPlugin = go "HERMIT" []
-    where go plug flags [] = (plug, flags)
+    where go plug flags [] = (plug, reverse flags) -- flag ordering is important here
           go plug flags (f:fs) | "-opt=" `isPrefixOf` f = go (drop 5 f) flags fs
                                | otherwise              = go plug (f:flags) fs
 
