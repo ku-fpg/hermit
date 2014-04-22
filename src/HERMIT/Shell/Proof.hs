@@ -25,7 +25,6 @@ import HERMIT.Parser
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.Debug hiding (externals)
 import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Rules hiding (externals)
@@ -64,7 +63,7 @@ externals =
     , external "lemma-rhs-intro" (lemmaRhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core)
         [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
-    , external "interactive-proof" InteractiveProof
+    , external "prove" InteractiveProof
         [ "Proof a lemma interactively." ]
     ]
 
@@ -81,7 +80,7 @@ proof_externals =
     , external "rhs" (PCApply . rhsR . extractR :: RewriteH Core -> ProofShellCommand)
         [ "Apply a rewrite to the RHS of an equality." ]
     , external "both" (PCApply . bothR . extractR :: RewriteH Core -> ProofShellCommand)
-        [ "Apply a rewrite to both sides of an equality." ]
+        [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
     , external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
         [ "Perform induction on given universally quantified variable." 
         , "Each constructor case will generate a new CoreExprEquality to be proven."
@@ -168,9 +167,6 @@ printLemma (nm, CoreExprEquality bs lhs rhs, proven) = do
 
 --------------------------------------------------------------------------------------------------------
 
-addToDict :: [(String, BiRewriteH CoreExpr)] -> CommandLineState -> CommandLineState
-addToDict rs st = st { cl_dict = foldr (\ (nm,r) -> addToDictionary (external nm (promoteExprBiR (beforeBiR (observeR ("Applying " ++ nm ++ " to: ")) (const r)) :: BiRewriteH Core) [])) (cl_dict st) rs }
-
 markProven :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => LemmaName -> m ()
 markProven nm = do
     cl_putStrLn $ "Successfully proven: " ++ nm
@@ -178,9 +174,6 @@ markProven nm = do
 
 interactiveProof :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Bool -> Lemma -> m ()
 interactiveProof topLevel lem = do
-    -- TODO: add any interactive-proof-specific commands to the dictionary?
-    -- modify $ \ st -> st { cl_dict = mkDict (shell_externals ++ exts) }
-
     origDict <- addProofDict
     origSt <- get
     completionMVar <- liftIO $ newMVar origSt
@@ -281,24 +274,31 @@ performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
     -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
     cases <- queryS sk (inductionCaseSplit bs i lhs rhs :: TransformH Core [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]) kEnv sast
 
-    forM_ cases $ \ (_mdc,vs,lhsE,rhsE) -> do
+    forM_ cases $ \ (mdc,vs,lhsE,rhsE) -> do
 
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
             -- Generate list of specialized induction hypotheses for the recursive cases.
             eqs = [ discardUniVars $ instantiateCoreExprEqVar i (Var i') eq
                   | i' <- vs_matching_i_type ]
-            brs = map birewrite eqs
             nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
+            hypLemmas = zip3 nms eqs (repeat True)
+            caseLemma = ( nm ++ "-induction-on-" ++ getOccString i ++ "-case-" ++ maybe "undefined" getOccString mdc
+                        , CoreExprEquality (delete i bs ++ vs) lhsE rhsE
+                        , False ) 
 
-        forM_ [ (n, e, True) | (n,e) <- zip nms eqs ] printLemma
         origSt <- get
-        put $ addToDict (zip nms brs) origSt
-        interactiveProof False (nm ++ "-induction-on-" ++ getOccString i, CoreExprEquality (delete i bs ++ vs) lhsE rhsE, False) -- recursion!
-        put origSt -- put original state (with original dictionary) back
+        addLemmas hypLemmas
+        interactiveProof False caseLemma -- recursion!
+        put origSt -- put original state (with original lemmas) back
 
     markProven nm 
     get >>= continue
     return lem -- this is never reached, but the type says we need it.
+
+addLemmas :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => [Lemma] -> m ()
+addLemmas lems = do
+    forM_ lems printLemma
+    modify $ \ st -> st { cl_lemmas = cl_lemmas st ++ lems }
 
 data ProofShellCommand
     = PCApply (RewriteH CoreExprEquality)

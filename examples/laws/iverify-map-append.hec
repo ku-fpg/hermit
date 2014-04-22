@@ -1,0 +1,23 @@
+-- This doesn't actually work to load all at once yet,
+-- so type these in interactively to do the proof. (bug)
+rule-to-lemma map-append
+set-pp-type Show
+prove map-append
+induction x
+-- undefined case
+both unfold
+both (one-td unfold)
+both smash
+both undefined-expr
+-- nil case
+both unfold
+both (one-td unfold)
+both smash
+rhs unfold
+-- inductive case
+both unfold
+both (one-td unfold)
+both smash
+lhs (one-td (forward (lemma ind-hyp-0)))
+-- done
+show-lemmas

@@ -152,7 +152,7 @@ rhsR r = do
 
 -- | Lift a rewrite over 'CoreExpr' into a rewrite over both sides of a 'CoreExprEquality'.
 bothR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
-bothR r = lhsR r >>> rhsR r
+bothR r = lhsR r >+> rhsR r
 
 ------------------------------------------------------------------------------
 
