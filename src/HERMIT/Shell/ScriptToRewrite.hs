@@ -120,9 +120,6 @@ lookupScript scriptName = do scripts <- gets cl_scripts
 parseScriptCLT :: Monad m => String -> m Script
 parseScriptCLT = either fail return . parseScript
 
-setRunningScript :: MonadState CommandLineState m => Maybe Script -> m ()
-setRunningScript ms = modify $ \st -> st { cl_running_script = ms }
-
 ------------------------------------
 
 data UnscopedScriptR

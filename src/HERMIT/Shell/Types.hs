@@ -19,15 +19,18 @@ import Data.Maybe (isJust)
 import Data.Monoid (mempty)
 
 import HERMIT.Context
+import HERMIT.Core
 import HERMIT.Kure
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
+import HERMIT.Kernel (AST, queryK)
 import HERMIT.Kernel.Scoped
 import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 
 import HERMIT.Plugin.Display
+import HERMIT.Plugin.Renderer
 import HERMIT.Plugin.Types
 
 import HERMIT.Dictionary.Inline
@@ -35,7 +38,7 @@ import HERMIT.Dictionary.Navigation
 import HERMIT.Dictionary.Reasoning (CoreExprEquality)
 
 import System.Console.Haskeline hiding (catch, display)
-import System.IO (Handle)
+import System.IO (Handle, stdout)
 
 #ifndef mingw32_HOST_OS
 import Data.Maybe (fromMaybe)
@@ -76,6 +79,66 @@ instance Extern QueryFun where
    type Box QueryFun = QueryFun
    box i = i
    unbox i = i
+
+performQuery :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
+             => QueryFun -> ExprH -> m ()
+
+performQuery (QueryString q) _ = do
+    st <- get
+    str <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
+    putStrToConsole str
+
+performQuery (QueryDocH q) _ = do
+    st <- get
+    doc <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (q (initPrettyC $ cl_pretty_opts st) $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
+    liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
+
+performQuery (Inquiry f) _ = get >>= liftIO . f >>= putStrToConsole
+
+performQuery (Diff s1 s2) _ = do
+    st <- get
+
+    ast1 <- toASTS (cl_kernel st) s1
+    ast2 <- toASTS (cl_kernel st) s2
+    let getCmds sast | sast == s1 = []
+                     | otherwise = case [ (f,c) | (f,c,to) <- vs_graph (cl_version st), to == sast ] of
+                                    [(sast',cmd)] -> unparseExprH cmd : getCmds sast'
+                                    _ -> ["error: history broken!"] -- should be impossible
+
+    cl_putStrLn "Commands:"
+    cl_putStrLn "========="
+    cl_putStrLn $ unlines $ reverse $ getCmds s2
+
+    doc1 <- ppWholeProgram ast1
+    doc2 <- ppWholeProgram ast2
+
+    r <- diffDocH (cl_pretty_opts st) doc1 doc2
+
+    cl_putStrLn "Diff:"
+    cl_putStrLn "====="
+    cl_putStr r
+
+-- Explicit calls to display should work no matter what the loading state is.
+performQuery Display _ = do
+    running_script_st <- gets cl_running_script
+    setRunningScript Nothing
+    showWindow
+    setRunningScript running_script_st
+
+performQuery (CorrectnessCritera q) expr = do
+    st <- get
+    -- TODO: Again, we may want a quiet version of the kernel_env
+    modFailMsg (\ err -> unparseExprH expr ++ " [exception: " ++ err ++ "]")
+        $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
+    putStrToConsole $ unparseExprH expr ++ " [correct]"
+
+ppWholeProgram :: (MonadIO m, MonadState CommandLineState m) => AST -> m DocH
+ppWholeProgram ast = do
+    st <- get
+    liftIO (queryK (kernelS $ cl_kernel st)
+            ast
+            (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ cl_pretty st)
+            (cl_kernel_env st)) >>= runKureM return fail
 
 ----------------------------------------------------------------------------------
 
@@ -318,6 +381,9 @@ cl_putStrLn = pluginM . ps_putStrLn
 
 isRunningScript :: MonadState CommandLineState m => m Bool
 isRunningScript = liftM isJust $ gets cl_running_script
+
+setRunningScript :: MonadState CommandLineState m => Maybe Script -> m ()
+setRunningScript ms = modify $ \st -> st { cl_running_script = ms }
 
 -- TODO: rename?
 putStrToConsole :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
