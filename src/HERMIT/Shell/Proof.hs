@@ -14,9 +14,10 @@ import Control.Monad.State
 import Data.Char (isSpace)
 import Data.Dynamic
 import Data.Maybe (isNothing)
+import Data.Monoid
 
 import HERMIT.External
-import HERMIT.GHC hiding (settings)
+import HERMIT.GHC hiding (settings, (<>))
 import HERMIT.Kernel.Scoped
 import HERMIT.Kure
 import HERMIT.Parser
@@ -31,6 +32,7 @@ import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
 import qualified HERMIT.PrettyPrinter.Clean as Clean
 
+import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.ScriptToRewrite
@@ -43,6 +45,7 @@ import System.IO
 
 --------------------------------------------------------------------------------------------------------
 
+-- | Externals that get us into the prover shell, or otherwise deal with lemmas.
 externals :: [External]
 externals =
     [ external "script-to-proof" scriptToProof
@@ -87,7 +90,12 @@ externals =
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
     , external "interactive-proof" InteractiveProof
         [ "Proof a lemma interactively." ]
-    , external "extensionality" (PCApply . extensionalityR . Just :: String -> ProofShellCommand)
+    ]
+
+-- | Externals that are added to the dictionary only when in interactive proof mode.
+proof_externals :: [External]
+proof_externals =
+    [ external "extensionality" (PCApply . extensionalityR . Just :: String -> ProofShellCommand)
         [ "Given a name 'x, then"
         , "f == g  ==>  forall x.  f x == g x" ]
     , external "extensionality" (PCApply $ extensionalityR Nothing :: ProofShellCommand)
@@ -128,11 +136,6 @@ instance Extern ProofH where
     type Box ProofH = ProofBox
     box = ProofBox
     unbox (ProofBox p) = p
-
-{-
-instance ShellCommandSet ProofCommand () where
-    performCommand = performProofCommand
--}
 
 --------------------------------------------------------------------------------------------------------
 
@@ -357,8 +360,9 @@ interactiveProof lem = do
     -- TODO: add any interactive-proof-specific commands to the dictionary?
     -- modify $ \ st -> st { cl_dict = mkDict (shell_externals ++ exts) }
 
-    clState <- get
-    completionMVar <- liftIO $ newMVar clState
+    origDict <- addProofDict
+    origSt <- get
+    completionMVar <- liftIO $ newMVar origSt
 
     let ws_complete = " ()"
 
@@ -386,13 +390,20 @@ interactiveProof lem = do
 
     -- Start the CLI
     let settings = setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings
-        cleanup s r = put s >> return r
+        cleanup s r = put (s { cl_dict = origDict }) >> return r
     (r,s) <- get >>= liftIO . runInputTBehavior defaultBehavior settings . flip runCLT (startup lem >>= loop)
     case r of
-        Right _ -> return ()             -- this case isn't possible, loop never returns
-        Left CLAbort -> return ()        -- abandon proof attempt
-        Left (CLContinue st') -> put st' -- successfully proven
+        Right _ -> return () -- this case isn't possible, loop never returns
+        Left CLAbort          -> cleanup origSt () -- abandon proof attempt
+        Left (CLContinue st') -> cleanup st' ()    -- successfully proven
         Left _ -> fail "unsupported exception in interactive prover"
+
+addProofDict :: MonadState CommandLineState m => m Dictionary
+addProofDict = do
+    st <- get
+    let d = cl_dict st
+    modify $ \ st -> st { cl_dict = d <> mkDict proof_externals }
+    return d
 
 evalProofScript :: MonadIO m => Lemma -> String -> CLT m Lemma
 evalProofScript lem = parseScriptCLT >=> foldM runExprH lem
@@ -445,12 +456,6 @@ instance Extern ProofShellCommand where
     type Box ProofShellCommand = ProofShellCommand
     box i = i
     unbox i = i
-
-{-
-instance ShellCommandSet ProofShellCommand Lemma Lemma where
-    -- performCommand :: (..) => Lemma -> ProofShellCommand -> m Lemma
-    performCommand = performProofShellCommand
--}
 
 interpProof :: [Interp ProofShellCommand]
 interpProof =
