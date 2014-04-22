@@ -14,6 +14,7 @@ import Control.Monad.State
 import Data.Char (isSpace)
 import Data.Dynamic
 import Data.List (delete)
+import Data.Monoid
 
 import HERMIT.Core
 import HERMIT.External
@@ -222,7 +223,7 @@ addProofDict :: MonadState CommandLineState m => m Dictionary
 addProofDict = do
     st <- get
     let d = cl_dict st
-    modify $ \ s -> s { cl_dict = mkDict (externals ++ proof_externals) }
+    modify $ \ s -> s { cl_dict = mkDict proof_externals <> d }
     return d
 
 evalProofScript :: MonadIO m => Lemma -> String -> CLT m Lemma
