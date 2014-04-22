@@ -2,7 +2,6 @@
 
 import Prelude hiding (abs)
 import Data.Set hiding (filter)
-import Data.Function (fix)
 
 type ℤ = Int
 type List = []

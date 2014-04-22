@@ -2,9 +2,6 @@ module Main where
 
 import Prelude hiding (length,abs)
 
-import Data.Function (fix)
-import GHC.Err (undefined)
-
 length :: [a] -> Int
 length []     = zero
 length (a:as) = length as + 1

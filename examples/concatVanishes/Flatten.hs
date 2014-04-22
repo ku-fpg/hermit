@@ -1,7 +1,6 @@
 module Main where
 
 import HList
-import Data.Function (fix)
 
 data Tree a = Node (Tree a) (Tree a) | Leaf a
 

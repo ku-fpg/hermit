@@ -17,6 +17,7 @@ where
 
 import Control.Applicative
 import Control.Arrow
+import Control.Monad.IO.Class
 
 import Data.Monoid (mempty)
 
@@ -191,7 +192,7 @@ isFixExprT = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -
 --------------------------------------------------------------------------------------------------
 
 -- | f  ==>  fix f
-mkFixT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => CoreExpr -> Transform c m z CoreExpr
+mkFixT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m) => CoreExpr -> Transform c m z CoreExpr
 mkFixT f = do t <- endoFunExprType f
               fixId <- findFixId
               return $ mkCoreApps (varToCoreExpr fixId) [Type t, f]
@@ -200,7 +201,7 @@ fixLocation :: String
 fixLocation = "Data.Function.fix"
 
 -- TODO: will crash if 'fix' is not used (or explicitly imported) in the source file.
-findFixId :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, MonadThings m) => Transform c m a Id
+findFixId :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m) => Transform c m a Id
 findFixId = findIdT fixLocation
 
 --------------------------------------------------------------------------------------------------

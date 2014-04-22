@@ -1,7 +1,6 @@
 module Main where
 
 import HList
-import Data.Function (fix)
 
 rev :: [a] -> [a]
 rev []     = []

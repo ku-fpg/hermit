@@ -21,6 +21,7 @@ module HERMIT.Monad
             -- * Reader Information
           , HasHermitMEnv(..)
           , HasModGuts(..)
+          , HasHscEnv(..)
             -- * Messages
           , HermitMEnv(..)
           , DebugMessage(..)
@@ -89,6 +90,15 @@ class HasModGuts m where
 
 instance HasModGuts HermitM where
     getModGuts = HermitM (\ rdr s -> return $ return (s, fst rdr))
+
+class HasHscEnv m where
+    getHscEnv :: m HscEnv
+
+instance HasHscEnv CoreM where
+    getHscEnv = getHscEnvCoreM
+
+instance HasHscEnv HermitM where
+    getHscEnv = liftCoreM getHscEnv
 
 sendDebugMessage :: DebugMessage -> HermitM ()
 sendDebugMessage msg = do env <- getHermitMEnv

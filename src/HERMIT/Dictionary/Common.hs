@@ -49,12 +49,14 @@ import Data.Monoid
 
 import Control.Arrow
 import Control.Monad
+import Control.Monad.IO.Class
 
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
+import HERMIT.Name
 
 ------------------------------------------------------------------------------
 
@@ -211,25 +213,39 @@ findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
                              _ : _ : _  -> fail "multiple matching variables in scope."
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findIdT :: (BoundVars c, HasModGuts m, HasDynFlags m, MonadThings m, MonadCatch m) => String -> Transform c m a Id
+findIdT :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Id
 findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
              contextonlyT (findId nm)
 
-findId :: (BoundVars c, HasModGuts m, HasDynFlags m, MonadThings m) => String -> c -> m Id
+-- | Looks for Id with given name in the context. If it is not present, calls 'findIdMG'.
+findId :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> c -> m Id
 findId nm c = case varSetElems (findBoundVars nm c) of
-                []         -> findIdMG nm
+                []         -> setFailMsg "variable not in scope." $ catchesM [ findIdMG (parseName ns nm) | ns <- [varNS, dataConNS] ] 
                 [v]        -> return v
                 _ : _ : _  -> fail "multiple matching variables in scope."
 
-findIdMG :: (HasModGuts m, HasDynFlags m, MonadThings m) => String -> m Id
+-- | Looks for Id in current GlobalRdrEnv. If not present, calls 'findIdPackageDB'.
+findIdMG :: (HasHscEnv m, HasModGuts m, MonadIO m, MonadThings m) => HermitName -> m Id
 findIdMG nm = do
     rdrEnv <- liftM mg_rdr_env getModGuts
-    case filter isValName $ findNamesFromString rdrEnv nm of
-      []  -> findIdBuiltIn nm
-      [n] | isVarName n     -> lookupId n
-          | isDataConName n ->  liftM dataConWrapId $ lookupDataCon n
-      ns  -> do dynFlags <- getDynFlags
-                fail $ "multiple matches found:\n" ++ intercalate ", " (map (showPpr dynFlags) ns)
+    case lookupGRE_RdrName (toRdrName nm) rdrEnv of
+        [gre] -> nameToId $ gre_name gre
+        []    -> findIdPackageDB nm
+        _     -> fail "findIdMG: multiple names returned"
+
+-- | Looks for Id in package database, or built-in packages.
+findIdPackageDB :: (HasHscEnv m, HasModGuts m, MonadIO m, MonadThings m) => HermitName -> m Id
+findIdPackageDB nm = do
+    mnm <- lookupName nm
+    case mnm of
+        Nothing -> findIdBuiltIn (toUnqualified nm)
+        Just n  -> nameToId n
+
+-- | We have a name, find the corresponding Id.
+nameToId :: MonadThings m => Name -> m Id
+nameToId n | isVarName n     = lookupId n
+           | isDataConName n = liftM dataConWrapId $ lookupDataCon n
+           | otherwise       = fail "nameToId: unknown name type"
 
 findIdBuiltIn :: forall m. Monad m => String -> m Id
 findIdBuiltIn = go

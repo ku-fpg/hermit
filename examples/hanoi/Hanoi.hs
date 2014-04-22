@@ -4,8 +4,6 @@ module Main where
 
 import Control.Monad (forM_)
 
-import Data.Function (fix)
-
 data Nat = Z | S Nat
 
 toInt :: Nat -> Int

@@ -4,8 +4,6 @@ import Prelude hiding ((+),map,(!!))
 import Nat
 import Stream
 
-import Data.Function(fix)
-
 fib :: Nat -> Nat
 fib Zero             = Zero
 fib (Succ Zero)      = Succ Zero

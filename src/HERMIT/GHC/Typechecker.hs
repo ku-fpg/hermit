@@ -17,7 +17,6 @@ import TcRnMonad
 import CoreSyn
 import ErrUtils
 import VarEnv
-import Module
 import Name
 import NameEnv
 import NameSet
@@ -35,7 +34,7 @@ import Bag
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
-import Prelude hiding (mod)
+import Prelude 
 import VarSet (emptyVarSet)
 
 -- Note: the contents of this module should eventually be folded into GHC proper.
@@ -46,11 +45,10 @@ initTcFromModGuts
     -> ModGuts
     -> HscSource
     -> Bool          -- True <=> retain renamed syntax trees
-    -> Module
     -> TcM r
     -> IO (Messages, Maybe r) -- Nothing => error thrown by the thing inside
                               -- (error messages should have been printed already)
-initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax mod do_this
+initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
  = do { let { type_env = mk_type_env guts } ;
         errs_var     <- newIORef (emptyBag, emptyBag) ;
         tvs_var      <- newIORef emptyVarSet ;
@@ -84,7 +82,7 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax mod do_this
                 tcg_th_state         = th_state_var,
 
                 -- queried during tcrnif
-                tcg_mod            = mod,
+                tcg_mod            = mg_module guts,
                 tcg_src            = hsc_src,
                 tcg_rdr_env        = mg_rdr_env guts,
                 tcg_default        = Nothing,

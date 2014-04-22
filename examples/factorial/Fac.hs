@@ -4,7 +4,6 @@ module Main where
 
 import Prelude hiding ((*),(-))
 import GHC.Exts
-import Data.Function(fix)
 
 ------------------------------------
 

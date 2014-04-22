@@ -1,8 +1,5 @@
 module Main where
 
--- so we can fix-intro
-import Data.Function (fix)
-
 import Prelude hiding ((+))
 
 data Nat = Z | S Nat

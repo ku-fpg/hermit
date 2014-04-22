@@ -1,6 +1,5 @@
 module Main where
 
-import Data.Function(fix)
 import Prelude hiding (last)
 
 -------------------------------------------------

@@ -1,7 +1,6 @@
 module Main where
 
 import Prelude hiding (abs)
-import Data.Function (fix)
 
 data Expr = Val Int | Add Expr Expr | Throw | Catch Expr Expr
 

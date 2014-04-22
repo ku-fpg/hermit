@@ -11,6 +11,8 @@ module HERMIT.GHC
     , zapVarOccInfo
     , var2String
     , thRdrNameGuesses
+    , varNameNS
+    , isQualified
     , cmpString2Name
     , cmpString2Var
     , fqName
@@ -45,30 +47,37 @@ module HERMIT.GHC
     , buildTypeable
     , eqExprX
 #endif
+    , getHscEnvCoreM
+    , lookupRdrNameInModuleForPlugins
     ) where
 
 #if __GLASGOW_HASKELL__ <= 706
 -- GHC 7.6
 import qualified Control.Monad.IO.Class
 import qualified MonadUtils (MonadIO,liftIO)
-import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, liftIO, PluginPass)
+import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, liftIO, PluginPass, getHscEnv)
 import TysPrim (alphaTy, alphaTyVars)
 import PprCore (pprCoreExpr)
 import Data.Monoid hiding ((<>))
 #else
 -- GHC 7.8
 -- we hide these so that they don't get inadvertently used.  See Core.hs
-import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass) 
+import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass, getHscEnv)
 import TysPrim (alphaTyVars)
 #endif
 
 -- hacky direct GHC imports
 import Convert (thRdrNameGuesses)
 import CoreArity
+import qualified CoreMonad -- for getHscEnv
+import Finder (findImportedModule, cannotFindModule)
 import Kind (isKind,isLiftedTypeKindCon)
+import LoadIface (loadPluginInterface)
+import qualified OccName -- for varName
 import OccurAnal (occurAnalyseExpr)
 import Pair (Pair(..))
-import Panic (GhcException(ProgramError), throwGhcException)
+import Panic (GhcException(ProgramError), throwGhcException, throwGhcExceptionIO, GhcException(..))
+import TcRnMonad (initIfaceTcRn)
 import TypeRep (Type(..),TyLit(..))
 
 #if __GLASGOW_HASKELL__ <= 706
@@ -91,6 +100,13 @@ import HERMIT.GHC.Typechecker
 import Data.List (intercalate)
 
 --------------------------------------------------------------------------
+
+-- | Rename this namespace, as 'varName' is already a function in Var.
+varNameNS :: NameSpace
+varNameNS = OccName.varName
+
+getHscEnvCoreM :: CoreM HscEnv
+getHscEnvCoreM = CoreMonad.getHscEnv
 
 #if __GLASGOW_HASKELL__ <= 706
 -- Note: prior to 7.8, the Let case was buggy for type 
@@ -263,10 +279,10 @@ bndrRuleAndUnfoldingVars v | isTyVar v = emptyVarSet
 #if __GLASGOW_HASKELL__ > 706
 runTcMtoCoreM :: ModGuts -> TcM a -> CoreM a
 runTcMtoCoreM guts m = do
-    env <- getHscEnv
+    env <- CoreMonad.getHscEnv
     -- What is the effect of HsSrcFile (should we be using something else?)
     -- What should the boolean flag be set to?
-    (msgs, mr) <- liftIO $ initTcFromModGuts env guts HsSrcFile False (mg_module guts) m
+    (msgs, mr) <- liftIO $ initTcFromModGuts env guts HsSrcFile False m
     -- There is probably something better for reporting the errors.
     let dumpSDocs endMsg = Bag.foldBag (\ d r -> d ++ ('\n':r)) show endMsg
         showMsgs (warns, errs) = "Errors:\n" ++ dumpSDocs ("Warnings:\n" ++ dumpSDocs "" warns) errs
@@ -357,3 +373,46 @@ locallyBoundL, locallyBoundR :: RnEnv2 -> Var -> Bool
 locallyBoundL rn_env v = inRnEnvL rn_env v
 locallyBoundR rn_env v = inRnEnvR rn_env v
 #endif
+
+-- | Finds the 'Name' corresponding to the given 'RdrName' in the context of the 'ModuleName'. Returns @Nothing@ if no
+-- such 'Name' could be found. Any other condition results in an exception:
+--
+-- * If the module could not be found
+-- * If we could not determine the imports of the module
+--
+-- This is adapted from GHC's function of the same name, but using
+-- initTcFromModGuts instead of initTcInteractive.
+lookupRdrNameInModuleForPlugins :: HscEnv -> ModGuts -> ModuleName -> RdrName -> IO (Maybe Name)
+lookupRdrNameInModuleForPlugins hsc_env guts mod_name rdr_name = do
+    -- First find the package the module resides in by searching exposed packages and home modules
+    found_module <- findImportedModule hsc_env mod_name Nothing
+    case found_module of
+        Found _ mod -> do
+            -- Find the exports of the module
+            (_, mb_iface) <- initTcFromModGuts hsc_env guts HsSrcFile False $
+                             initIfaceTcRn $
+                             loadPluginInterface doc mod
+            case mb_iface of
+                Just iface -> do
+                    -- Try and find the required name in the exports
+                    let decl_spec = ImpDeclSpec { is_mod = mod_name, is_as = mod_name
+                                                , is_qual = False, is_dloc = noSrcSpan }
+                        provenance = Imported [ImpSpec decl_spec ImpAll]
+                        env = mkGlobalRdrEnv (gresFromAvails provenance (mi_exports iface))
+                    case lookupGRE_RdrName rdr_name env of
+                        [gre] -> return (Just (gre_name gre))
+                        []    -> return Nothing
+                        _     -> panic "lookupRdrNameInModule"
+
+                Nothing -> throwCmdLineErrorS dflags $ hsep [ptext (sLit "Could not determine the exports of the module"), ppr mod_name]
+        err -> throwCmdLineErrorS dflags $ cannotFindModule dflags mod_name err
+  where
+    dflags = hsc_dflags hsc_env
+    doc = ptext (sLit "contains a name used in an invocation of lookupRdrNameInModule")
+
+-- | Also copied from GHC because it is not exposed.
+throwCmdLineErrorS :: DynFlags -> SDoc -> IO a
+throwCmdLineErrorS dflags = throwCmdLineError . showSDoc dflags
+
+throwCmdLineError :: String -> IO a
+throwCmdLineError = throwGhcExceptionIO . CmdLineError
