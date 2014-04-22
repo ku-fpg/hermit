@@ -15,6 +15,7 @@ import Data.Char (isSpace)
 import Data.Dynamic
 import Data.List (intercalate, isPrefixOf, nub)
 import qualified Data.Map as M
+import Data.Maybe (isJust)
 import Data.Monoid (mempty)
 
 import HERMIT.Context
@@ -199,16 +200,17 @@ newSAST expr sast st = st { cl_pstate  = pstate  { ps_cursor = sast }
 
 -- Session-local issues; things that are never saved (except the PluginState).
 data CommandLineState = CommandLineState
-    { cl_pstate         :: PluginState           -- ^ Access to the enclosing plugin state. This is propagated back
-                                                 --   to the plugin after the CLT computation ends. We do it this way
-                                                 --   because nested StateT is a pain.
-    , cl_height         :: Int                   -- ^ console height, in lines
+    { cl_pstate         :: PluginState            -- ^ Access to the enclosing plugin state. This is propagated back
+                                                  --   to the plugin after the CLT computation ends. We do it this way
+                                                  --   because nested StateT is a pain.
+    , cl_height         :: Int                    -- ^ console height, in lines
     , cl_scripts        :: [(ScriptName,Script)]
-    , cl_lemmas         :: [Lemma]               -- ^ list of lemmas, with flag indicating whether proven
-    , cl_nav            :: Bool                  -- ^ keyboard input the nav panel
+    , cl_lemmas         :: [Lemma]                -- ^ list of lemmas, with flag indicating whether proven
+    , cl_nav            :: Bool                   -- ^ keyboard input the nav panel
     , cl_version        :: VersionStore
-    , cl_window         :: PathH                 -- ^ path to beginning of window, always a prefix of focus path in kernel
+    , cl_window         :: PathH                  -- ^ path to beginning of window, always a prefix of focus path in kernel
     , cl_dict           :: Dictionary
+    , cl_running_script :: Maybe Script           -- ^ Nothing = no script running, otherwise the remaining script commands
     -- this should be in a reader
     , cl_initSAST       :: SAST
     } deriving (Typeable)
@@ -259,24 +261,22 @@ setPrettyOpts st po = st { cl_pstate = (cl_pstate st) { ps_pretty_opts = po } }
 cl_render :: CommandLineState -> (Handle -> PrettyOptions -> Either String DocH -> IO ())
 cl_render = ps_render . cl_pstate
 
-cl_running_script :: CommandLineState -> Bool
-cl_running_script = ps_running_script . cl_pstate
-
 -- | Create default CommandLineState from PluginState. 
 -- Note: the dictionary (cl_dict) will be empty, and should be populated if needed.
 mkCLS :: PluginM CommandLineState
 mkCLS = do
     ps <- get
     (w,h) <- liftIO getTermDimensions    
-    return $ CommandLineState { cl_pstate   = (ps { ps_pretty_opts = (ps_pretty_opts ps) { po_width = w } })
-                              , cl_height   = h
-                              , cl_scripts  = []
-                              , cl_lemmas   = []
-                              , cl_nav      = False
-                              , cl_version  = VersionStore { vs_graph = [] , vs_tags = [] }
-                              , cl_window   = mempty
-                              , cl_dict     = M.empty -- Note, empty dictionary.
-                              , cl_initSAST = ps_cursor ps
+    return $ CommandLineState { cl_pstate         = (ps { ps_pretty_opts = (ps_pretty_opts ps) { po_width = w } })
+                              , cl_height         = h
+                              , cl_scripts        = []
+                              , cl_lemmas         = []
+                              , cl_nav            = False
+                              , cl_version        = VersionStore { vs_graph = [] , vs_tags = [] }
+                              , cl_window         = mempty
+                              , cl_dict           = M.empty -- Note, empty dictionary.
+                              , cl_running_script = Nothing
+                              , cl_initSAST       = ps_cursor ps
                               }
 
 getTermDimensions :: IO (Int, Int)
@@ -316,11 +316,12 @@ cl_putStr = pluginM . ps_putStr
 cl_putStrLn :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
 cl_putStrLn = pluginM . ps_putStrLn
 
+isRunningScript :: MonadState CommandLineState m => m Bool
+isRunningScript = liftM isJust $ gets cl_running_script
+
 -- TODO: rename?
 putStrToConsole :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
-putStrToConsole str = ifM (gets cl_running_script)
-                          (return ())
-                          (cl_putStrLn str)
+putStrToConsole str = ifM isRunningScript (return ()) (cl_putStrLn str)
 
 ------------------------------------------------------------------------------
 
@@ -390,7 +391,7 @@ fixWindow = do
     put $ st { cl_window = focusPath } -- TODO: temporary until we figure out a better highlight interface
 
 showWindow :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => m ()
-showWindow = fixWindow >> gets cl_window >>= pluginM . display . Just
+showWindow = ifM isRunningScript (return ()) $ fixWindow >> gets cl_window >>= pluginM . display . Just
 
 ------------------------------------------------------------------------------
 

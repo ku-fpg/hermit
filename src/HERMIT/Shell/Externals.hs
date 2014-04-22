@@ -252,7 +252,7 @@ performQuery (Diff s1 s2) _ = do
 -- Explicit calls to display should work no matter what the loading state is.
 performQuery Display _ = do
     running_script_st <- gets cl_running_script
-    setRunningScript False
+    setRunningScript Nothing
     showWindow
     setRunningScript running_script_st
 

@@ -1,14 +1,14 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, LambdaCase, MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies #-}
 
 module HERMIT.Shell.ScriptToRewrite
     ( -- * Converting Scripts to Rewrites
       addScriptToDict
---    , evalScript
     , loadAndRun
     , lookupScript
     , parseScriptCLT
     , performScriptEffect
---    , runScript
+    , popScriptLine
+    , runScript
     , scriptToRewrite
     , setRunningScript
     , ScriptEffect(..)
@@ -28,32 +28,12 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript, unparseScript)
 
-import HERMIT.Plugin.Types
-
 import HERMIT.PrettyPrinter.Common(TransformCoreTCDocHBox(..))
 
 import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
-
-------------------------------------
-
-{-
-evalScript :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
-evalScript = parseScriptCLT >=> runScript
-
-runScript :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Script -> m ()
-runScript = mapM_ undefined
-
-runExprH :: forall m c a r. (ShellCommandSet c a r, MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => ExprH -> a -> m r
-runExprH e arg = do
-    cis <- gets cl_interps
-    case cis of
-        CmdInterps is -> do
-            cmd <- interpExprH is e
-            performCommand cmd arg
--}
 
 ------------------------------------
 
@@ -74,17 +54,20 @@ instance Extern ScriptEffect where
     box i = i
     unbox i = i
 
-{-
-instance ShellCommandSet ScriptEffect () () where
-    performCommand c () = performScriptEffect c
--}
-
 -- | A composite meta-command for running a loaded script immediately.
 --   The script is given the same name as the filepath.
 loadAndRun :: FilePath -> ScriptEffect
 loadAndRun fp = SeqMeta [LoadFile fp fp, RunScript fp]
 
-performScriptEffect :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => (Script -> m ()) -> ScriptEffect -> m ()
+runScript :: MonadState CommandLineState m => (ExprH -> m ()) -> m ()
+runScript run = go
+    where go = popScriptLine >>= maybe (return ()) (\e -> run e >> go)
+
+popScriptLine :: MonadState CommandLineState m => m (Maybe ExprH)
+popScriptLine = gets cl_running_script >>= maybe (return Nothing) (\case []     -> setRunningScript Nothing >> return Nothing
+                                                                         (e:es) -> setRunningScript (Just es) >> return (Just e))
+
+performScriptEffect :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => (ExprH -> m ()) -> ScriptEffect -> m ()
 performScriptEffect runner = go
     where go (SeqMeta ms) = mapM_ go ms
           go (LoadFile scriptName fileName) = do
@@ -116,8 +99,8 @@ performScriptEffect runner = go
           go (RunScript scriptName) = do
             script <- lookupScript scriptName
             running_script_st <- gets cl_running_script
-            setRunningScript True
-            runner script `catchError` (\ err -> setRunningScript running_script_st >> throwError err)
+            setRunningScript $ Just script
+            runScript runner `catchError` (\ err -> setRunningScript running_script_st >> throwError err)
             setRunningScript running_script_st
             putStrToConsole ("Script \"" ++ scriptName ++ "\" ran successfully.")
             showWindow
@@ -137,8 +120,8 @@ lookupScript scriptName = do scripts <- gets cl_scripts
 parseScriptCLT :: Monad m => String -> m Script
 parseScriptCLT = either fail return . parseScript
 
-setRunningScript :: MonadState CommandLineState m => Bool -> m ()
-setRunningScript b = modify $ \st -> st { cl_pstate = (cl_pstate st) { ps_running_script = b } }
+setRunningScript :: MonadState CommandLineState m => Maybe Script -> m ()
+setRunningScript ms = modify $ \st -> st { cl_running_script = ms }
 
 ------------------------------------
 

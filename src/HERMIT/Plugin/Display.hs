@@ -28,13 +28,10 @@ display window = do
     let skernel = ps_kernel st
         ppOpts = (ps_pretty_opts st) { po_focus = Just focusPath }
     -- Do not show focus while loading
-    ifM (gets ps_running_script)
-        (return ())
-        (iokm' "Rendering error: "
-               (liftIO . ps_render st stdout ppOpts . Right)
-               (toASTS skernel (ps_cursor st) >>= \ ast ->
-                    queryK (kernelS skernel) ast (extractT $ pathT (fromMaybe focusPath window) $ liftPrettyH ppOpts $ ps_pretty st) (mkKernelEnv st))
-        )
+    iokm' "Rendering error: "
+        (liftIO . ps_render st stdout ppOpts . Right)
+        (toASTS skernel (ps_cursor st) >>= \ ast ->
+            queryK (kernelS skernel) ast (extractT $ pathT (fromMaybe focusPath window) $ liftPrettyH ppOpts $ ps_pretty st) (mkKernelEnv st))
 
 ps_putStr :: (MonadIO m, MonadState PluginState m) => String -> m ()
 ps_putStr str = do

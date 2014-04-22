@@ -352,28 +352,20 @@ markProven nm = do
     cl_putStrLn $ "Successfully proven: " ++ nm
     modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }
 
-interactiveProof :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
+interactiveProof :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
 interactiveProof lem = do
     -- TODO: add any interactive-proof-specific commands to the dictionary?
     -- modify $ \ st -> st { cl_dict = mkDict (shell_externals ++ exts) }
+
     clState <- get
     completionMVar <- liftIO $ newMVar clState
 
     let ws_complete = " ()"
 
-        -- To decide whether to continue the proof or not.
-        loopUnproven :: Lemma -> CLT (InputT IO) ()
-        loopUnproven l@(nm, eq, _) = do
-            st <- get
-
-            let sk = cl_kernel st
-                kEnv = cl_kernel_env st
-                sast = cl_cursor st
-
-            -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-            ifM (queryS sk (return eq >>> testM verifyCoreExprEqualityT :: TransformH Core Bool) kEnv sast)
-                (markProven nm)
-                (loop l)
+        -- If we are mid-script, then we just hit a call to interactive-proof,
+        -- so treat the rest of the script as if it were a proof script.
+        startup :: Lemma -> CLT (InputT IO) Lemma
+        startup l = popScriptLine >>= maybe (return l) (runExprH l >=> startup)
 
         -- Main proof input loop
         loop :: Lemma -> CLT (InputT IO) ()
@@ -388,27 +380,40 @@ interactiveProof lem = do
                 Just ('-':'-':_) -> loop l
                 Just line        -> if all isSpace line
                                     then loop l
-                                    else do (er, st') <- runCLT st (evalProofScript l line `catchM` (\msg -> cl_putStrLn msg >> return l))
-                                            case er of
-                                                Right l' -> put st' >> loopUnproven l'
-                                                Left CLAbort -> return ()
-                                                Left _ -> fail "unsupported exception in interactive prover"
+                                    else (evalProofScript l line `catchM` (\msg -> cl_putStrLn msg >> return l)) >>= loop
 
     -- Display a proof banner?
 
     -- Start the CLI
     let settings = setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings
         cleanup s r = put s >> return r
-    (r,s) <- get >>= liftIO . runInputTBehavior defaultBehavior settings . flip runCLT (loop lem)
-    either throwError (cleanup s) r
+    (r,s) <- get >>= liftIO . runInputTBehavior defaultBehavior settings . flip runCLT (startup lem >>= loop)
+    case r of
+        Right _ -> return ()             -- this case isn't possible, loop never returns
+        Left CLAbort -> return ()        -- abandon proof attempt
+        Left (CLContinue st') -> put st' -- successfully proven
+        Left _ -> fail "unsupported exception in interactive prover"
 
 evalProofScript :: MonadIO m => Lemma -> String -> CLT m Lemma
 evalProofScript lem = parseScriptCLT >=> foldM runExprH lem
 
 runExprH :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> ExprH -> m Lemma
-runExprH lem expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
-    proofCmd <- interpExprH interpProof expr
-    performProofShellCommand lem proofCmd
+runExprH lem expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") 
+                  $ interpExprH interpProof expr >>= performProofShellCommand lem >>= checkProven
+
+-- To decide whether to continue the proof or not.
+checkProven :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m Lemma
+checkProven l@(nm, eq, _) = do
+    st <- get
+
+    let sk = cl_kernel st
+        kEnv = cl_kernel_env st
+        sast = cl_cursor st
+
+    -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
+    ifM (queryS sk (return eq >>> testM verifyCoreExprEqualityT :: TransformH Core Bool) kEnv sast)
+        (markProven nm >> get >>= continue >> return l) -- last return never happens
+        (return l)
 
 performProofShellCommand :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> ProofShellCommand -> m Lemma
 performProofShellCommand lem@(nm, eq, b) = go
@@ -424,8 +429,7 @@ performProofShellCommand lem@(nm, eq, b) = go
           go (PCShell effect) = performShellEffect effect >> return lem
           go (PCScript effect) = do
             lemVar <- liftIO $ newMVar lem -- couldn't resist that name
-            let lemHack [] = return ()
-                lemHack (e:r) = liftIO (takeMVar lemVar) >>= flip runExprH e >>= liftIO . putMVar lemVar >> lemHack r
+            let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= liftIO . putMVar lemVar 
             performScriptEffect lemHack effect
             liftIO $ takeMVar lemVar
           go (PCUnsupported s) = cl_putStrLn s >> return lem

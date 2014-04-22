@@ -73,7 +73,6 @@ defPS initSAST kernel phaseInfo = do
                 , ps_pretty         = Clean.ppCoreTC
                 , ps_pretty_opts    = def { po_width = 80 }
                 , ps_render         = unicodeConsole
-                , ps_running_script = False
                 , ps_tick           = emptyTick
                 , ps_corelint       = False
                 , ps_diffonly       = False

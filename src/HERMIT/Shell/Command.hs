@@ -106,15 +106,15 @@ commandLine opts behavior exts = do
         else cl_putStrLn banner
 
     -- Load and run any scripts
-    setRunningScript True
+    setRunningScript $ Just []
     sequence_ [ case fileName of
                  "abort"  -> performShellEffect Abort
                  "resume" -> performShellEffect Resume
-                 _        -> performScriptEffect runScript $ loadAndRun fileName
+                 _        -> performScriptEffect runExprH $ loadAndRun fileName
               | fileName <- reverse filesToLoad
               , not (null fileName)
               ] `catchFailHard` \ msg -> cl_putStrLn $ "Booting Failure: " ++ msg
-    setRunningScript False
+    setRunningScript Nothing
 
     -- Start the CLI
     showWindow
@@ -127,17 +127,14 @@ catchFailHard :: MonadIO m => CLT m () -> (String -> CLT m ()) -> CLT m ()
 catchFailHard m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display (CmdName "display") >> cl_putStrLn msg >> abort) (failure msg)
 
 evalScript :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
-evalScript = parseScriptCLT >=> runScript
-
-runScript :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Script -> m ()
-runScript = mapM_ runExprH
+evalScript = parseScriptCLT >=> mapM_ runExprH
 
 runExprH :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => ExprH -> m ()
 runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
     shellCmd <- interpExprH interpShellCommand expr
     case shellCmd of
         KernelEffect effect -> performKernelEffect effect expr
-        ScriptEffect effect -> performScriptEffect runScript effect
+        ScriptEffect effect -> performScriptEffect runExprH effect
         ShellEffect effect  -> performShellEffect effect
         QueryFun query      -> performQuery query expr
         ProofCommand cmd    -> performProofCommand cmd

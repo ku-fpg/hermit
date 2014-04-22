@@ -48,7 +48,6 @@ data PluginState = PluginState
     , ps_pretty         :: PrettyH CoreTC                           -- ^ which pretty printer to use
     , ps_pretty_opts    :: PrettyOptions                            -- ^ the options for the pretty printer
     , ps_render         :: Handle -> PrettyOptions -> Either String DocH -> IO () -- ^ the way of outputing to the screen
-    , ps_running_script :: Bool                                     -- ^ if running a script
     , ps_tick           :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
     , ps_corelint       :: Bool                                     -- ^ if true, run Core Lint on module after each rewrite
     , ps_diffonly       :: Bool                                     -- ^ if true, show diffs rather than pp full code (TODO: move into pretty opts)
