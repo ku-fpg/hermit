@@ -16,6 +16,7 @@ module HERMIT.Dictionary.Local.Case
     , caseReduceDataconR
     , caseReduceLiteralR
     , caseReduceIdR
+    , caseReduceUnfoldR
     , caseSplitR
     , caseSplitInlineR
     , caseInlineScrutineeR
@@ -50,6 +51,7 @@ import HERMIT.Dictionary.AlphaConversion hiding (externals)
 import HERMIT.Dictionary.Fold (foldVarR)
 import HERMIT.Dictionary.GHC (substCoreExpr)
 import HERMIT.Dictionary.Undefined (verifyStrictT)
+import HERMIT.Dictionary.Unfold (unfoldR)
 
 -- NOTE: these are hard to test in small examples, as GHC does them for us, so use with caution
 ------------------------------------------------------------------------------
@@ -95,6 +97,8 @@ externals =
         , "case L of L -> e ==> e" ]                                         .+ Shallow .+ Eval
     , external "case-reduce-id" (promoteExprR (caseReduceIdR True) :: RewriteH Core)
         [ "Inline the case scrutinee (if it is an identifier) and then case-reduce." ] .+ Shallow .+ Eval .+ Context
+    , external "case-reduce-unfold" (promoteExprR (caseReduceUnfoldR True) :: RewriteH Core)
+        [ "Unfold the case scrutinee (if it is a function application) and then case-reduce." ] .+ Shallow .+ Eval .+ Context
     , external "case-split" (promoteExprR . caseSplitR . cmpString2Var :: String -> RewriteH Core)
         [ "case-split 'x"
         , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ] .+ Shallow
@@ -288,6 +292,11 @@ caseFloatInArgsR = prefixFailMsg "Case floating into arguments failed: " $
 --   If first argument is True, perform substitution in RHS, if False, build let expressions.
 caseReduceIdR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Bool -> Rewrite c HermitM CoreExpr
 caseReduceIdR subst = caseAllR inlineR idR idR (const idR) >>> caseReduceR subst
+
+-- | Inline the case scrutinee (if it is an identifier), and then perform case reduction.
+--   If first argument is True, perform substitution in RHS, if False, build let expressions.
+caseReduceUnfoldR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Bool -> Rewrite c HermitM CoreExpr
+caseReduceUnfoldR subst = caseAllR unfoldR idR idR (const idR) >>> caseReduceR subst
 
 -- | Case of Known Constructor.
 --   Eliminate a case if the scrutinee is a data constructor or a literal.
