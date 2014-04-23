@@ -1,4 +1,5 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, MultiParamTypeClasses, ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, 
+             ScopedTypeVariables, TypeFamilies, TypeSynonymInstances #-}
 
 module HERMIT.Shell.Proof 
     ( externals
@@ -63,23 +64,23 @@ externals =
     , external "lemma-rhs-intro" (lemmaRhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core)
         [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
-    , external "prove" InteractiveProof
+    , external "prove-lemma" InteractiveProof
         [ "Proof a lemma interactively." ]
     ]
 
 -- | Externals that are added to the dictionary only when in interactive proof mode.
 proof_externals :: [External]
 proof_externals =
-    [ external "extensionality" (PCApply . extensionalityR . Just :: String -> ProofShellCommand)
+    [ external "extensionality" (extensionalityR . Just :: String -> RewriteH CoreExprEquality)
         [ "Given a name 'x, then"
         , "f == g  ==>  forall x.  f x == g x" ]
-    , external "extensionality" (PCApply $ extensionalityR Nothing :: ProofShellCommand)
+    , external "extensionality" (extensionalityR Nothing :: RewriteH CoreExprEquality)
         [ "f == g  ==>  forall x.  f x == g x" ]
-    , external "lhs" (PCApply . lhsR . extractR :: RewriteH Core -> ProofShellCommand)
+    , external "lhs" (lhsR . extractR :: RewriteH Core -> RewriteH CoreExprEquality)
         [ "Apply a rewrite to the LHS of an equality." ]
-    , external "rhs" (PCApply . rhsR . extractR :: RewriteH Core -> ProofShellCommand)
+    , external "rhs" (rhsR . extractR :: RewriteH Core -> RewriteH CoreExprEquality)
         [ "Apply a rewrite to the RHS of an equality." ]
-    , external "both" (PCApply . bothR . extractR :: RewriteH Core -> ProofShellCommand)
+    , external "both" (bothR . extractR :: RewriteH Core -> RewriteH CoreExprEquality)
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
     , external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
         [ "Perform induction on given universally quantified variable." 
@@ -167,10 +168,11 @@ printLemma (nm, CoreExprEquality bs lhs rhs, proven) = do
 
 --------------------------------------------------------------------------------------------------------
 
-markProven :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => LemmaName -> m ()
-markProven nm = do
+completeProof :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => LemmaName -> m ()
+completeProof nm = do
     cl_putStrLn $ "Successfully proven: " ++ nm
     modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }
+    get >>= continue
 
 interactiveProof :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Bool -> Lemma -> m ()
 interactiveProof topLevel lem = do
@@ -237,7 +239,7 @@ checkProven (nm, eq, _) = do
 
     -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
     b <- (queryS sk (return eq >>> testM verifyCoreExprEqualityT :: TransformH Core Bool) kEnv sast)
-    when b $ markProven nm >> get >>= continue
+    when b $ completeProof nm 
 
 performProofShellCommand :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> ProofShellCommand -> m Lemma
 performProofShellCommand lem@(nm, eq, b) = go
@@ -255,12 +257,18 @@ performProofShellCommand lem@(nm, eq, b) = go
           go (PCInduction idPred) = performInduction lem idPred
           go (PCShell effect)     = performShellEffect effect >> return lem
           go (PCScript effect)    = do
-            lemVar <- liftIO $ newMVar lem -- couldn't resist that name
-            let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= \l -> liftIO (putMVar lemVar l) >> checkProven l
-            performScriptEffect lemHack effect
-            liftIO $ takeMVar lemVar
+                lemVar <- liftIO $ newMVar lem -- couldn't resist that name
+                let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= \l -> liftIO (putMVar lemVar l) >> checkProven l
+                performScriptEffect lemHack effect
+                liftIO $ takeMVar lemVar
           go (PCQuery query)      = performQuery query (error "PCQuery ExprH") >> return lem
           go (PCProofCommand cmd) = performProofCommand cmd >> return lem
+          go (PCUser t)           = do
+                st <- get
+                -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
+                queryS (cl_kernel st) (return eq >>> t :: TransformH Core ()) (cl_kernel_env st) (cl_cursor st)
+                completeProof nm -- note: we assume that if 't' completes without failing, the lemma is proved, we don't actually check
+                return lem       -- never reached
           go (PCUnsupported s)    = cl_putStrLn s >> return lem
 
 performInduction :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> (Id -> Bool) -> m Lemma
@@ -291,8 +299,7 @@ performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
         interactiveProof False caseLemma -- recursion!
         put origSt -- put original state (with original lemmas) back
 
-    markProven nm 
-    get >>= continue
+    completeProof nm 
     return lem -- this is never reached, but the type says we need it.
 
 addLemmas :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => [Lemma] -> m ()
@@ -307,6 +314,7 @@ data ProofShellCommand
     | PCScript ScriptEffect
     | PCQuery QueryFun
     | PCProofCommand ProofCommand
+    | PCUser (TransformH CoreExprEquality ())
     | PCUnsupported String
     deriving Typeable
 
@@ -315,26 +323,40 @@ instance Extern ProofShellCommand where
     box i = i
     unbox i = i
 
+data RewriteCoreExprEqualityBox = RewriteCoreExprEqualityBox (RewriteH CoreExprEquality) deriving Typeable
+instance Extern (RewriteH CoreExprEquality) where
+    type Box (RewriteH CoreExprEquality) = RewriteCoreExprEqualityBox
+    box = RewriteCoreExprEqualityBox
+    unbox (RewriteCoreExprEqualityBox r) = r
+
+data TransformCoreExprEqualityProofBox = TransformCoreExprEqualityProofBox (TransformH CoreExprEquality ()) deriving Typeable
+instance Extern (TransformH CoreExprEquality ()) where
+    type Box (TransformH CoreExprEquality ()) = TransformCoreExprEqualityProofBox
+    box = TransformCoreExprEqualityProofBox
+    unbox (TransformCoreExprEqualityProofBox t) = t
+
 interpProof :: [Interp ProofShellCommand]
 interpProof =
-  [ interp $ \ (RewriteCoreBox rr)            -> PCApply $ bothR $ extractR rr
-  , interp $ \ (RewriteCoreTCBox rr)          -> PCApply $ bothR $ extractR rr
-  , interp $ \ (BiRewriteCoreBox br)          -> PCApply $ bothR $ (extractR (forwardT br) <+ extractR (backwardT br))
-  , interp $ \ (effect :: ShellEffect)        -> PCShell effect
-  , interp $ \ (effect :: ScriptEffect)       -> PCScript effect
-  , interp $ \ (StringBox str)                -> PCQuery (message str)
-  , interp $ \ (query :: QueryFun)            -> PCQuery query
-  , interp $ \ (cmd :: ProofCommand)          -> PCProofCommand cmd
-  , interp $ \ (cmd :: ProofShellCommand)     -> cmd
-  , interp $ \ (CrumbBox _cr)                 -> PCUnsupported "CrumbBox"
-  , interp $ \ (PathBox _p)                   -> PCUnsupported "PathBox"
-  , interp $ \ (TransformCorePathBox _tt)     -> PCUnsupported "TransformCorePathBox"
-  , interp $ \ (TransformCoreTCPathBox _tt)   -> PCUnsupported "TransformCoreTCPathBox"
-  , interp $ \ (TransformCoreStringBox _tt)   -> PCUnsupported "TransformCoreStringBox"
-  , interp $ \ (TransformCoreTCStringBox _tt) -> PCUnsupported "TransformCoreTCStringBox"
-  , interp $ \ (TransformCoreTCDocHBox _tt)   -> PCUnsupported "TransformCoreTCDocHBox"
-  , interp $ \ (TransformCoreCheckBox _tt)    -> PCUnsupported "TransformCoreCheckBox"
-  , interp $ \ (TransformCoreTCCheckBox _tt)  -> PCUnsupported "TransformCoreTCCheckBox"
-  , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"
+  [ interp $ \ (RewriteCoreBox rr)                   -> PCApply $ bothR $ extractR rr
+  , interp $ \ (RewriteCoreTCBox rr)                 -> PCApply $ bothR $ extractR rr
+  , interp $ \ (BiRewriteCoreBox br)                 -> PCApply $ bothR $ (extractR (forwardT br) <+ extractR (backwardT br))
+  , interp $ \ (effect :: ShellEffect)               -> PCShell effect
+  , interp $ \ (effect :: ScriptEffect)              -> PCScript effect
+  , interp $ \ (StringBox str)                       -> PCQuery (message str)
+  , interp $ \ (query :: QueryFun)                   -> PCQuery query
+  , interp $ \ (cmd :: ProofCommand)                 -> PCProofCommand cmd
+  , interp $ \ (RewriteCoreExprEqualityBox r)        -> PCApply r
+  , interp $ \ (TransformCoreExprEqualityProofBox t) -> PCUser t
+  , interp $ \ (cmd :: ProofShellCommand)            -> cmd
+  , interp $ \ (CrumbBox _cr)                        -> PCUnsupported "CrumbBox"
+  , interp $ \ (PathBox _p)                          -> PCUnsupported "PathBox"
+  , interp $ \ (TransformCorePathBox _tt)            -> PCUnsupported "TransformCorePathBox"
+  , interp $ \ (TransformCoreTCPathBox _tt)          -> PCUnsupported "TransformCoreTCPathBox"
+  , interp $ \ (TransformCoreStringBox _tt)          -> PCUnsupported "TransformCoreStringBox"
+  , interp $ \ (TransformCoreTCStringBox _tt)        -> PCUnsupported "TransformCoreTCStringBox"
+  , interp $ \ (TransformCoreTCDocHBox _tt)          -> PCUnsupported "TransformCoreTCDocHBox"
+  , interp $ \ (TransformCoreCheckBox _tt)           -> PCUnsupported "TransformCoreCheckBox"
+  , interp $ \ (TransformCoreTCCheckBox _tt)         -> PCUnsupported "TransformCoreTCCheckBox"
+  , interp $ \ (_effect :: KernelEffect)             -> PCUnsupported "KernelEffect"
   ]
 
