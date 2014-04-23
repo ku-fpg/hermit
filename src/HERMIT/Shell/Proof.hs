@@ -1,10 +1,12 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, 
+{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
              ScopedTypeVariables, TypeFamilies, TypeSynonymInstances #-}
 
-module HERMIT.Shell.Proof 
+module HERMIT.Shell.Proof
     ( externals
     , ProofCommand(..)
     , performProofCommand
+    , UserProofTechnique
+    , userProofTechnique
     ) where
 
 import Control.Arrow hiding (loop)
@@ -83,7 +85,7 @@ proof_externals =
     , external "both" (bothR . extractR :: RewriteH Core -> RewriteH CoreExprEquality)
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
     , external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
-        [ "Perform induction on given universally quantified variable." 
+        [ "Perform induction on given universally quantified variable."
         , "Each constructor case will generate a new CoreExprEquality to be proven."
         ]
     ]
@@ -206,7 +208,7 @@ interactiveProof topLevel lem = do
 
     -- Start the CLI
     let settings = setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings
-        cleanup s = put (s { cl_dict = origDict }) 
+        cleanup s = put (s { cl_dict = origDict })
     (r,_s) <- get >>= liftIO . runInputTBehavior defaultBehavior settings . flip runCLT (startup lem >>= loop)
     case r of
         Right _               -> return ()      -- this case isn't possible, loop never returns
@@ -225,8 +227,8 @@ evalProofScript :: MonadIO m => Lemma -> String -> CLT m Lemma
 evalProofScript lem = parseScriptCLT >=> foldM runExprH lem
 
 runExprH :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> ExprH -> m Lemma
-runExprH lem expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") 
-                  $ interpExprH interpProof expr >>= performProofShellCommand lem 
+runExprH lem expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n")
+                  $ interpExprH interpProof expr >>= performProofShellCommand lem
 
 -- To decide whether to continue the proof or not.
 checkProven :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
@@ -239,7 +241,7 @@ checkProven (nm, eq, _) = do
 
     -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
     b <- (queryS sk (return eq >>> testM verifyCoreExprEqualityT :: TransformH Core Bool) kEnv sast)
-    when b $ completeProof nm 
+    when b $ completeProof nm
 
 performProofShellCommand :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> ProofShellCommand -> m Lemma
 performProofShellCommand lem@(nm, eq, b) = go
@@ -263,7 +265,8 @@ performProofShellCommand lem@(nm, eq, b) = go
                 liftIO $ takeMVar lemVar
           go (PCQuery query)      = performQuery query (error "PCQuery ExprH") >> return lem
           go (PCProofCommand cmd) = performProofCommand cmd >> return lem
-          go (PCUser t)           = do
+          go (PCUser prf)         = let UserProofTechnique t = prf in -- may add more constructors later
+             do
                 st <- get
                 -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
                 queryS (cl_kernel st) (return eq >>> t :: TransformH Core ()) (cl_kernel_env st) (cl_cursor st)
@@ -292,14 +295,14 @@ performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
             hypLemmas = zip3 nms eqs (repeat True)
             caseLemma = ( nm ++ "-induction-on-" ++ getOccString i ++ "-case-" ++ maybe "undefined" getOccString mdc
                         , CoreExprEquality (delete i bs ++ vs) lhsE rhsE
-                        , False ) 
+                        , False )
 
         origSt <- get
         addLemmas hypLemmas
         interactiveProof False caseLemma -- recursion!
         put origSt -- put original state (with original lemmas) back
 
-    completeProof nm 
+    completeProof nm
     return lem -- this is never reached, but the type says we need it.
 
 addLemmas :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => [Lemma] -> m ()
@@ -314,9 +317,15 @@ data ProofShellCommand
     | PCScript ScriptEffect
     | PCQuery QueryFun
     | PCProofCommand ProofCommand
-    | PCUser (TransformH CoreExprEquality ())
+    | PCUser UserProofTechnique
     | PCUnsupported String
     deriving Typeable
+
+-- keep abstract to avoid breaking things if we modify this later
+newtype UserProofTechnique = UserProofTechnique (TransformH CoreExprEquality ())
+
+userProofTechnique :: TransformH CoreExprEquality () -> UserProofTechnique
+userProofTechnique = UserProofTechnique
 
 instance Extern ProofShellCommand where
     type Box ProofShellCommand = ProofShellCommand
@@ -329,11 +338,11 @@ instance Extern (RewriteH CoreExprEquality) where
     box = RewriteCoreExprEqualityBox
     unbox (RewriteCoreExprEqualityBox r) = r
 
-data TransformCoreExprEqualityProofBox = TransformCoreExprEqualityProofBox (TransformH CoreExprEquality ()) deriving Typeable
-instance Extern (TransformH CoreExprEquality ()) where
-    type Box (TransformH CoreExprEquality ()) = TransformCoreExprEqualityProofBox
-    box = TransformCoreExprEqualityProofBox
-    unbox (TransformCoreExprEqualityProofBox t) = t
+data UserProofTechniqueBox = UserProofTechniqueBox UserProofTechnique deriving Typeable
+instance Extern UserProofTechnique where
+    type Box UserProofTechnique = UserProofTechniqueBox
+    box = UserProofTechniqueBox
+    unbox (UserProofTechniqueBox t) = t
 
 interpProof :: [Interp ProofShellCommand]
 interpProof =
@@ -346,7 +355,7 @@ interpProof =
   , interp $ \ (query :: QueryFun)                   -> PCQuery query
   , interp $ \ (cmd :: ProofCommand)                 -> PCProofCommand cmd
   , interp $ \ (RewriteCoreExprEqualityBox r)        -> PCApply r
-  , interp $ \ (TransformCoreExprEqualityProofBox t) -> PCUser t
+  , interp $ \ (UserProofTechniqueBox t)             -> PCUser t
   , interp $ \ (cmd :: ProofShellCommand)            -> cmd
   , interp $ \ (CrumbBox _cr)                        -> PCUnsupported "CrumbBox"
   , interp $ \ (PathBox _p)                          -> PCUnsupported "PathBox"
