@@ -1,7 +1,11 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE UnicodeSyntax #-}
 
 import Prelude hiding (abs)
 import Data.Set hiding (filter)
+#if __GLASGOW_HASKELL__ < 708
+import Data.Function (fix)
+#endif
 
 type ℤ = Int
 type List = []

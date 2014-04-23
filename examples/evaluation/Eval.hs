@@ -1,6 +1,11 @@
+{-# LANGUAGE CPP #-}
 module Main where
 
 import Prelude hiding (abs)
+
+#if __GLASGOW_HASKELL__ < 708
+import Data.Function (fix)
+#endif
 
 data Expr = Val Int | Add Expr Expr | Throw | Catch Expr Expr
 

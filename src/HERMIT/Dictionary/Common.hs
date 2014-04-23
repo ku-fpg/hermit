@@ -220,26 +220,39 @@ findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
 -- | Looks for Id with given name in the context. If it is not present, calls 'findIdMG'.
 findId :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> c -> m Id
 findId nm c = case varSetElems (findBoundVars nm c) of
-                []         -> setFailMsg "variable not in scope." $ catchesM [ findIdMG (parseName ns nm) | ns <- [varNS, dataConNS] ] 
+                []         -> findIdMG (parseName nm) 
                 [v]        -> return v
                 _ : _ : _  -> fail "multiple matching variables in scope."
 
+#if __GLASGOW_HASKELL__ > 706
 -- | Looks for Id in current GlobalRdrEnv. If not present, calls 'findIdPackageDB'.
-findIdMG :: (HasHscEnv m, HasModGuts m, MonadIO m, MonadThings m) => HermitName -> m Id
-findIdMG nm = do
+findIdMG :: (HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m) => HermitName -> m Id
+findIdMG nm = setFailMsg "variable not in scope." $ do
     rdrEnv <- liftM mg_rdr_env getModGuts
-    case lookupGRE_RdrName (toRdrName nm) rdrEnv of
-        [gre] -> nameToId $ gre_name gre
-        []    -> findIdPackageDB nm
-        _     -> fail "findIdMG: multiple names returned"
+    catchesM [ case lookupGRE_RdrName (toRdrName ns nm) rdrEnv of
+                [gre] -> nameToId $ gre_name gre
+                []    -> findIdPackageDB ns nm
+                _     -> fail "findIdMG: multiple names returned"
+             | ns <- [varNS, dataConNS]
+             ]
 
 -- | Looks for Id in package database, or built-in packages.
-findIdPackageDB :: (HasHscEnv m, HasModGuts m, MonadIO m, MonadThings m) => HermitName -> m Id
-findIdPackageDB nm = do
-    mnm <- lookupName nm
+findIdPackageDB :: (HasHscEnv m, HasModGuts m, MonadIO m, MonadThings m) => NameSpace -> HermitName -> m Id
+findIdPackageDB ns nm = do
+    mnm <- lookupName ns nm
     case mnm of
-        Nothing -> findIdBuiltIn (toUnqualified nm)
+        Nothing -> findIdBuiltIn (hnUnqualified nm)
         Just n  -> nameToId n
+#else
+findIdMG :: (HasModGuts m, MonadThings m) => HermitName -> m Id
+findIdMG hnm = do
+    let nm = hnUnqualified hnm
+    rdrEnv <- liftM mg_rdr_env getModGuts
+    case filter isValName $ findNamesFromString rdrEnv nm of
+        []  -> findIdBuiltIn nm
+        [n] -> nameToId n
+        ns  -> fail $ "multiple matches found:\n" ++ intercalate ", " (map getOccString ns)
+#endif
 
 -- | We have a name, find the corresponding Id.
 nameToId :: MonadThings m => Name -> m Id

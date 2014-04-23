@@ -44,7 +44,10 @@ import HERMIT.Core
 import HERMIT.Context
 import HERMIT.Kure.SumTypes
 import HERMIT.GHC
+
+#if __GLASGOW_HASKELL__ > 706
 import HERMIT.GHC.Typechecker
+#endif
 
 ----------------------------------------------------------------------------
 

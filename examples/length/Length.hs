@@ -1,6 +1,13 @@
+{-# LANGUAGE CPP #-}
 module Main where
 
 import Prelude hiding (length,abs)
+
+#if __GLASGOW_HASKELL__ < 708
+import Data.Function (fix)
+#endif
+
+import GHC.Err (undefined)
 
 length :: [a] -> Int
 length []     = zero

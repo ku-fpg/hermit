@@ -1,7 +1,12 @@
+{-# LANGUAGE CPP #-}
 module Main where
 
 import HList
 import Data.List
+
+#if __GLASGOW_HASKELL__ < 708
+import Data.Function (fix)
+#endif
 
 data Tree a = Node (Tree a) (Tree a) | Leaf a
 

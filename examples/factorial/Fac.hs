@@ -1,9 +1,14 @@
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE CPP #-}
 
 module Main where
 
 import Prelude hiding ((*),(-))
 import GHC.Exts
+
+#if __GLASGOW_HASKELL__ < 708
+import Data.Function (fix)
+#endif
 
 ------------------------------------
 

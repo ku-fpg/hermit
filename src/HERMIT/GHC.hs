@@ -46,9 +46,9 @@ module HERMIT.GHC
     , runTcMtoCoreM
     , buildTypeable
     , eqExprX
+    , lookupRdrNameInModuleForPlugins
 #endif
     , getHscEnvCoreM
-    , lookupRdrNameInModuleForPlugins
     ) where
 
 #if __GLASGOW_HASKELL__ <= 706
@@ -57,12 +57,17 @@ import qualified Control.Monad.IO.Class
 import qualified MonadUtils (MonadIO,liftIO)
 import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, liftIO, PluginPass, getHscEnv)
 import TysPrim (alphaTy, alphaTyVars)
+import Panic (throwGhcException, GhcException(..))
 import PprCore (pprCoreExpr)
 import Data.Monoid hiding ((<>))
 #else
 -- GHC 7.8
+import Finder (findImportedModule, cannotFindModule)
 -- we hide these so that they don't get inadvertently used.  See Core.hs
 import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass, getHscEnv)
+import LoadIface (loadPluginInterface)
+import Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
+import TcRnMonad (initIfaceTcRn)
 import TysPrim (alphaTyVars)
 #endif
 
@@ -70,14 +75,10 @@ import TysPrim (alphaTyVars)
 import Convert (thRdrNameGuesses)
 import CoreArity
 import qualified CoreMonad -- for getHscEnv
-import Finder (findImportedModule, cannotFindModule)
 import Kind (isKind,isLiftedTypeKindCon)
-import LoadIface (loadPluginInterface)
 import qualified OccName -- for varName
 import OccurAnal (occurAnalyseExpr)
 import Pair (Pair(..))
-import Panic (GhcException(ProgramError), throwGhcException, throwGhcExceptionIO, GhcException(..))
-import TcRnMonad (initIfaceTcRn)
 import TypeRep (Type(..),TyLit(..))
 
 #if __GLASGOW_HASKELL__ <= 706
@@ -372,7 +373,6 @@ eqExprX id_unfolding_fun env e1 e2
 locallyBoundL, locallyBoundR :: RnEnv2 -> Var -> Bool
 locallyBoundL rn_env v = inRnEnvL rn_env v
 locallyBoundR rn_env v = inRnEnvR rn_env v
-#endif
 
 -- | Finds the 'Name' corresponding to the given 'RdrName' in the context of the 'ModuleName'. Returns @Nothing@ if no
 -- such 'Name' could be found. Any other condition results in an exception:
@@ -416,3 +416,4 @@ throwCmdLineErrorS dflags = throwCmdLineError . showSDoc dflags
 
 throwCmdLineError :: String -> IO a
 throwCmdLineError = throwGhcExceptionIO . CmdLineError
+#endif

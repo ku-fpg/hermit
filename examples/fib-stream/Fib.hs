@@ -1,8 +1,13 @@
+{-# LANGUAGE CPP #-}
 module Main where
 
 import Prelude hiding ((+),map,(!!))
 import Nat
 import Stream
+
+#if __GLASGOW_HASKELL__ < 708
+import Data.Function (fix)
+#endif
 
 fib :: Nat -> Nat
 fib Zero             = Zero
