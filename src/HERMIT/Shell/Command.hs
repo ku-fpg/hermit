@@ -31,7 +31,6 @@ import HERMIT.Parser
 import HERMIT.Plugin.Display
 import HERMIT.Plugin.Renderer
 
-import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Externals
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.KernelEffect
@@ -79,7 +78,7 @@ commandLine opts behavior exts = do
     let (flags, filesToLoad) = partition (isPrefixOf "-") opts
         ws_complete = " ()"
 
-    modify $ \ st -> st { cl_dict = mkDict (shell_externals ++ exts) }
+    modify $ \ st -> st { cl_externals = shell_externals ++ exts }
 
     clState <- get
     completionMVar <- liftIO $ newMVar clState

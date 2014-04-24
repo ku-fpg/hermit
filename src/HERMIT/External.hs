@@ -90,6 +90,7 @@ data CmdTag = Shell          -- ^ Shell-specific command.
             | Context        -- ^ A command that uses its context, such as inlining.
             | Unsafe         -- ^ Commands that are not type safe (may cause Core Lint to fail),
                              --   or may otherwise change the semantics of the program.
+            | Proof          -- ^ Commands related to proving lemmas.
 
             | TODO           -- ^ An incomplete or potentially buggy command.
             | Experiment     -- ^ Things we are trying out.
@@ -138,6 +139,7 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
           , (VersionControl,"Version control for Core syntax.")
           , (Context,      "A command that uses its context, such as inlining.")
           , (Unsafe,       "Commands that are not type safe (may cause Core Lint to fail), or may otherwise change the semantics of the program.")
+          , (Proof,        "Commands related to proving lemmas.")
           , (TODO,         "An incomplete or potentially buggy command.")
           , (Experiment,   "Things we are trying out, use at your own risk.")
           , (Deprecated,   "A command that will be removed in a future release; it has probably been renamed or subsumed by another command.")

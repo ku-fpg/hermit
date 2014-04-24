@@ -20,7 +20,6 @@ import Control.Monad.State
 import Control.Exception hiding (catch)
 
 import Data.Dynamic
-import Data.Map hiding (lookup)
 
 import HERMIT.Context(LocalPathH)
 import HERMIT.Kernel.Scoped
@@ -215,13 +214,9 @@ addScriptToDict :: MonadState CommandLineState m => ScriptName -> Script -> m ()
 addScriptToDict nm scr = do
     r <- scriptToRewrite scr
 
-    let dyn = toDyn (box r)
+    let ext = external nm r [ "User-loaded script." ]
 
-        alteration :: Maybe [Dynamic] -> Maybe [Dynamic]
-        alteration Nothing     = Just [dyn]
-        alteration (Just dyns) = Just (dyn:dyns)
-
-    modify $ \ st -> st { cl_dict = alter alteration nm (cl_dict st) }
+    modify $ \ st -> st { cl_externals = ext : cl_externals st } 
 
 -----------------------------------
 

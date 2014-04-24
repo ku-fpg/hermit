@@ -272,7 +272,7 @@ data CommandLineState = CommandLineState
     , cl_nav            :: Bool                   -- ^ keyboard input the nav panel
     , cl_version        :: VersionStore
     , cl_window         :: PathH                  -- ^ path to beginning of window, always a prefix of focus path in kernel
-    , cl_dict           :: Dictionary
+    , cl_externals      :: [External]             -- ^ Currently visible externals
     , cl_running_script :: Maybe Script           -- ^ Nothing = no script running, otherwise the remaining script commands
     -- this should be in a reader
     , cl_initSAST       :: SAST
@@ -337,7 +337,7 @@ mkCLS = do
                               , cl_nav            = False
                               , cl_version        = VersionStore { vs_graph = [] , vs_tags = [] }
                               , cl_window         = mempty
-                              , cl_dict           = M.empty -- Note, empty dictionary.
+                              , cl_externals      = [] -- Note, empty dictionary.
                               , cl_running_script = Nothing
                               , cl_initSAST       = ps_cursor ps
                               }
@@ -435,7 +435,7 @@ completionQuery _ BindingOfC      = return $ bindingOfTargetsT       >>^ GHC.var
 completionQuery _ BindingGroupOfC = return $ bindingGroupOfTargetsT  >>^ GHC.varSetToStrings >>^ map ('\'':)
 completionQuery _ RhsOfC          = return $ rhsOfTargetsT           >>^ GHC.varSetToStrings >>^ map ('\'':)
 completionQuery _ InlineC         = return $ promoteT inlineTargetsT >>^                         map ('\'':)
-completionQuery s CommandC        = return $ pure (M.keys (cl_dict s))
+completionQuery s CommandC        = return $ pure (map externName (cl_externals s))
 -- Need to modify opts in completionType function. No key can be a suffix of another key.
 completionQuery _ (AmbiguousC ts) = do
     putStrLn "\nCannot tab complete: ambiguous completion type."

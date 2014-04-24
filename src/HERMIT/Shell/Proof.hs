@@ -17,7 +17,6 @@ import Control.Monad.State
 import Data.Char (isSpace)
 import Data.Dynamic
 import Data.List (delete)
-import Data.Monoid
 
 import HERMIT.Core
 import HERMIT.External
@@ -36,7 +35,6 @@ import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
 import qualified HERMIT.PrettyPrinter.Clean as Clean
 
-import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.ScriptToRewrite
@@ -51,7 +49,7 @@ import System.IO
 
 -- | Externals that get us into the prover shell, or otherwise deal with lemmas.
 externals :: [External]
-externals =
+externals = map (.+ Proof)
     [ external "rule-to-lemma" RuleToLemma
         [ "Create a lemma from a GHC RULE." ]
     , external "show-lemmas" ShowLemmas
@@ -72,7 +70,7 @@ externals =
 
 -- | Externals that are added to the dictionary only when in interactive proof mode.
 proof_externals :: [External]
-proof_externals =
+proof_externals = map (.+ Proof)
     [ external "extensionality" (extensionalityR . Just :: String -> RewriteH CoreExprEquality)
         [ "Given a name 'x, then"
         , "f == g  ==>  forall x.  f x == g x" ]
@@ -178,7 +176,7 @@ completeProof nm = do
 
 interactiveProof :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Bool -> Lemma -> m ()
 interactiveProof topLevel lem = do
-    origDict <- addProofDict
+    origEs <- addProofExternals topLevel
     origSt <- get
     completionMVar <- liftIO $ newMVar origSt
 
@@ -208,7 +206,7 @@ interactiveProof topLevel lem = do
 
     -- Start the CLI
     let settings = setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings
-        cleanup s = put (s { cl_dict = origDict })
+        cleanup s = put (s { cl_externals = origEs }) 
     (r,_s) <- get >>= liftIO . runInputTBehavior defaultBehavior settings . flip runCLT (startup lem >>= loop)
     case r of
         Right _               -> return ()      -- this case isn't possible, loop never returns
@@ -216,12 +214,12 @@ interactiveProof topLevel lem = do
         Left (CLContinue st') -> cleanup st'    -- successfully proven
         Left _                -> fail "unsupported exception in interactive prover"
 
-addProofDict :: MonadState CommandLineState m => m Dictionary
-addProofDict = do
+addProofExternals :: MonadState CommandLineState m => Bool -> m [External]
+addProofExternals topLevel = do
     st <- get
-    let d = cl_dict st
-    modify $ \ s -> s { cl_dict = mkDict proof_externals <> d }
-    return d
+    let es = cl_externals st
+    when topLevel $ modify $ \ s -> s { cl_externals = proof_externals ++ es } 
+    return es
 
 evalProofScript :: MonadIO m => Lemma -> String -> CLT m Lemma
 evalProofScript lem = parseScriptCLT >=> foldM runExprH lem

@@ -19,6 +19,7 @@ import HERMIT.External
 import HERMIT.Parser
 import HERMIT.Kure 
 
+import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Types
 
 -- | An 'Interp' @cmd@ is a /possible/ means of converting a 'Typeable' value to a value of type @cmd@.
@@ -87,7 +88,7 @@ interpExpr' rhs (CmdName str)
                , toDyn $ TransformCorePathBox (deprecatedIntToPathT i) 
                ]
     | otherwise = do
-        dict <- gets cl_dict
+        dict <- gets (mkDict . cl_externals)
         case M.lookup str dict of
             Just dyns           -> do
                 dyns' <- mapM provideState dyns
