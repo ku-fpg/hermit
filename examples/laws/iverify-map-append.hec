@@ -1,8 +1,6 @@
--- This doesn't actually work to load all at once yet,
--- so type these in interactively to do the proof. (bug)
 rule-to-lemma map-append
 set-pp-type Show
-prove map-append
+prove-lemma map-append
 induction x
 -- undefined case
 both unfold

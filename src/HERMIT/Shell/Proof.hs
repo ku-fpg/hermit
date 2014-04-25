@@ -295,18 +295,19 @@ performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
                         , CoreExprEquality (delete i bs ++ vs) lhsE rhsE
                         , False )
 
-        origSt <- get
-        addLemmas hypLemmas
+        origLemmas <- addLemmas hypLemmas
         interactiveProof False caseLemma -- recursion!
-        put origSt -- put original state (with original lemmas) back
+        modify $ \ s -> s { cl_lemmas = origLemmas } -- put original lemmas back
 
     completeProof nm
     return lem -- this is never reached, but the type says we need it.
 
-addLemmas :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => [Lemma] -> m ()
+addLemmas :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => [Lemma] -> m [Lemma]
 addLemmas lems = do
     forM_ lems printLemma
-    modify $ \ st -> st { cl_lemmas = cl_lemmas st ++ lems }
+    st <- get
+    put $ st { cl_lemmas = cl_lemmas st ++ lems }
+    return $ cl_lemmas st
 
 data ProofShellCommand
     = PCApply (RewriteH CoreExprEquality)
