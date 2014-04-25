@@ -87,7 +87,8 @@ extensionalityR mn = prefixFailMsg "extensionality failed: " $
      guardMsg (tyL `typeAlphaEq` tyR) "type mismatch between sides of equality.  This shouldn't happen, so is probably a bug."
 
      -- TODO: use the fresh-name-generator in AlphaConversion to avoid shadowing.
-     v <- constT $ newVarH (fromMaybe "x" mn) tyL
+     (argTy,_) <- splitFunTypeM tyL
+     v <- constT $ newVarH (fromMaybe "x" mn) argTy
 
      let x = varToCoreExpr v
 
