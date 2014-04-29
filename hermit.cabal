@@ -213,6 +213,7 @@ Library
        HERMIT.Name
        HERMIT.Parser
        HERMIT.ParserCore
+       HERMIT.ParserType
 
        HERMIT.Plugin
        HERMIT.Plugin.Builder

@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, ScopedTypeVariables, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables #-}
 
 module HERMIT.Dictionary.Reasoning
   ( -- * Equational Reasoning
@@ -45,6 +45,9 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.ParserCore
+#if __GLASGOW_HASKELL__ >= 708
+import HERMIT.ParserType
+#endif
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
@@ -264,6 +267,19 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 
 ------------------------------------------------------------------------------
 
+instantiateEqualityVarR :: (Var -> Bool) -> CoreString -> RewriteH CoreExprEquality
+instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
+    CoreExprEquality bs _ _ <- idR
+    e <- case filter p bs of
+            [] -> fail "no universally quantified variables match predicate."
+            (b:_) | isId b    -> parseCoreExprT cs
+#if __GLASGOW_HASKELL__ >= 708
+                  | otherwise -> liftM Type $ parseTypeT cs
+#else
+                  | otherwise -> fail "cannot instantiate type binders in GHC 7.6"
+#endif
+    arr (instantiateEqualityVar p e)
+
 -- | Instantiate one of the universally quantified variables in a 'CoreExprEquality'.
 -- Note: assumes implicit ordering of variables, such that substitution happens to the right
 -- as it does in case alternatives. Only first variable that matches predicate is
@@ -279,9 +295,6 @@ instantiateEqualityVar p e c@(CoreExprEquality bs lhs rhs)
             lhs'          = substExpr (text "coreExprEquality-lhs") subst' lhs
             rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
         in CoreExprEquality (bs'++vs') lhs' rhs'
-
-instantiateEqualityVarR :: (Var -> Bool) -> CoreString -> RewriteH CoreExprEquality
-instantiateEqualityVarR p = parseCoreExprT >=> arr . instantiateEqualityVar p
 
 -- | Instantiate a set of universally quantified variables in a 'CoreExprEquality'.
 -- It is important that all type variables appear before any value-level variables in the first argument.

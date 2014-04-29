@@ -32,7 +32,11 @@ module HERMIT.Dictionary.Common
     , boundVarsT
     , findBoundVarT
     , findIdT
-    , findId
+#if __GLASGOW_HASKELL__ > 706
+    , findVarT
+    , findTyConT
+    , findTypeT
+#endif
     , varBindingDepthT
     , varIsOccurrenceOfT
     , exprIsOccurrenceOfT
@@ -48,7 +52,6 @@ import Data.List
 import Data.Monoid
 
 import Control.Arrow
-import Control.Monad
 import Control.Monad.IO.Class
 
 import HERMIT.Context
@@ -196,13 +199,6 @@ exprIsOccurrenceOfT v d = varT $ varIsOccurrenceOfT v d
 boundVarsT :: (BoundVars c, Monad m) => Transform c m a VarSet
 boundVarsT = contextonlyT (return . boundVars)
 
--- | An instance of 'MonadThings' for 'Transform', which looks in the context first.
-instance (MonadThings m, BoundVars c) => MonadThings (Transform c m a) where -- TODO: where to put this instance?
-    lookupThing nm = contextonlyT $ \ c ->
-                        case varSetElems $ filterVarSet ((== nm) . varName) (boundVars c) of
-                            (i:_) -> return $ AnId i
-                            []    -> lookupThing nm
-
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
 findBoundVarT :: (BoundVars c, MonadCatch m) => String -> Transform c m a Var
 findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
@@ -212,76 +208,25 @@ findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
                              [v]        -> return v
                              _ : _ : _  -> fail "multiple matching variables in scope."
 
+--------------------------------------------------------------------------------------------------
+
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
 findIdT :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Id
-findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
-             contextonlyT (findId nm)
-
--- | Looks for Id with given name in the context. If it is not present, calls 'findIdMG'.
-findId :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> c -> m Id
-findId nm c = case varSetElems (findBoundVars nm c) of
-                []         -> findIdMG (parseName nm) 
-                [v]        -> return v
-                _ : _ : _  -> fail "multiple matching variables in scope."
+findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findId nm)
 
 #if __GLASGOW_HASKELL__ > 706
--- | Looks for Id in current GlobalRdrEnv. If not present, calls 'findIdPackageDB'.
-findIdMG :: (HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m) => HermitName -> m Id
-findIdMG nm = setFailMsg "variable not in scope." $ do
-    rdrEnv <- liftM mg_rdr_env getModGuts
-    catchesM [ case lookupGRE_RdrName (toRdrName ns nm) rdrEnv of
-                [gre] -> nameToId $ gre_name gre
-                []    -> findIdPackageDB ns nm
-                _     -> fail "findIdMG: multiple names returned"
-             | ns <- [varNS, dataConNS]
-             ]
+-- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
+findVarT :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Var
+findVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findVar nm)
 
--- | Looks for Id in package database, or built-in packages.
-findIdPackageDB :: (HasHscEnv m, HasModGuts m, MonadIO m, MonadThings m) => NameSpace -> HermitName -> m Id
-findIdPackageDB ns nm = do
-    mnm <- lookupName ns nm
-    case mnm of
-        Nothing -> findIdBuiltIn (hnUnqualified nm)
-        Just n  -> nameToId n
-#else
-findIdMG :: (HasModGuts m, MonadThings m) => HermitName -> m Id
-findIdMG hnm = do
-    let nm = hnUnqualified hnm
-    rdrEnv <- liftM mg_rdr_env getModGuts
-    case filter isValName $ findNamesFromString rdrEnv nm of
-        []  -> findIdBuiltIn nm
-        [n] -> nameToId n
-        ns  -> fail $ "multiple matches found:\n" ++ intercalate ", " (map getOccString ns)
+-- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
+findTyConT :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a TyCon
+findTyConT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findTyCon nm)
+
+-- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
+findTypeT :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Type
+findTypeT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findType nm)
 #endif
-
--- | We have a name, find the corresponding Id.
-nameToId :: MonadThings m => Name -> m Id
-nameToId n | isVarName n     = lookupId n
-           | isDataConName n = liftM dataConWrapId $ lookupDataCon n
-           | otherwise       = fail "nameToId: unknown name type"
-
-findIdBuiltIn :: forall m. Monad m => String -> m Id
-findIdBuiltIn = go
-    where go ":"     = dataConId consDataCon
-          go "[]"    = dataConId nilDataCon
-
-          go "True"  = return trueDataConId
-          go "False" = return falseDataConId
-
-          go "<"     = return ltDataConId
-          go "=="    = return eqDataConId
-          go ">"     = return gtDataConId
-
-          go "I#"    = dataConId intDataCon
-
-          go "()"    = return unitDataConId
-          -- TODO: add more as needed
-          --       http://www.haskell.org/ghc/docs/latest/html/libraries/ghc/TysWiredIn.html
-          go _   = fail "variable not in scope."
-
-          dataConId :: DataCon -> m Id
-          dataConId = return . dataConWorkId
-
 
 -- TODO: "inScope" was defined elsewhere, but I've moved it here.  Should it be combined with the above functions?
 

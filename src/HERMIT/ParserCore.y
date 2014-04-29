@@ -1,6 +1,16 @@
 {
 {-# LANGUAGE CPP #-}
- module HERMIT.ParserCore (parseCore, parseCoreExprT, parse2beforeBiR, parse3beforeBiR, parse4beforeBiR, parse5beforeBiR) where
+module HERMIT.ParserCore 
+    ( parseCore
+    , parseCoreExprT
+    , parse2beforeBiR
+    , parse3beforeBiR
+    , parse4beforeBiR
+    , parse5beforeBiR
+    , Token(..)
+    , parseError
+    , lexer
+    ) where
 
 import Control.Arrow
 import Control.Monad.Reader
@@ -11,9 +21,8 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
+import HERMIT.Name
 import HERMIT.Syntax (isCoreInfixIdChar, isCoreIdFirstChar, isCoreIdChar)
-
-import HERMIT.Dictionary.Common
 
 import Language.KURE.MonadCatch (prefixFailMsg)
 }
@@ -67,7 +76,7 @@ app : app arg          { App $1 $2 }
     | arg              { $1 }
 
 arg : '(' expr ')'     { $2 }
-    | '(' ')'          {% lookupName "()" Var }
+    | '(' ')'          {% lookupName "()" }
     | var              { $1 }
     | intlit           { $1 }
     | strlit           { $1 }
@@ -76,7 +85,7 @@ intlit : INTEGER       {% mkIntExpr' $1 } -- mkIntLit makes a primitive Int#
 
 strlit : STRING        {% lift $ mkStringExpr $1 }
 
-var : NAME             {% lookupName $1 varToCoreExpr }
+var : NAME             {% lookupName $1 }
 {
 
 mkIntExpr' :: Integer -> CoreParseM CoreExpr
@@ -88,11 +97,11 @@ mkIntExpr' i = do
 mkIntExpr' i = return $ mkIntExpr i
 #endif
 
-lookupName :: String -> (Id -> CoreExpr) -> CoreParseM CoreExpr
-lookupName nm k = do
+lookupName :: String -> CoreParseM CoreExpr
+lookupName nm = do
     c <- ask
     v <- lift $ prefixFailMsg (nm ++ " lookup: ") $ findId nm c
-    return (k v)
+    return $ varToCoreExpr v
 
 type CoreParseM a = ReaderT HermitC HermitM a
 

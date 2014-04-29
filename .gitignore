@@ -30,6 +30,7 @@ examples/IFL2012/ifl-paper/
 # generated files
 src/HERMIT/Parser.hs
 src/HERMIT/ParserCore.hs
+src/HERMIT/ParserType.hs
 tests/dump/*.dump
 *.dump-simpl
 *.dump-prep
