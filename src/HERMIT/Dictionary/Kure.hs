@@ -71,13 +71,13 @@ externals = map (.+ KURE)
        [ "Attempt to apply a rewrite in a top-down manner, prunning at successful rewrites." ] .+ Deep
    , external "innermost"  (innermostR :: RewriteH Core -> RewriteH Core)
        [ "A fixed-point traveral, starting with the innermost term." ] .+ Deep .+ Loop
-   , external "focus"      (hfocusR :: TransformH Core LocalPathH -> RewriteH Core -> RewriteH Core)
+   , external "focus"      (hfocusR :: TransformH CoreTC LocalPathH -> RewriteH CoreTC -> RewriteH CoreTC)
        [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
-   , external "focus"      (hfocusT :: TransformH Core LocalPathH -> TransformH Core String -> TransformH Core String)
+   , external "focus"      (hfocusT :: TransformH CoreTC LocalPathH -> TransformH CoreTC String -> TransformH CoreTC String)
        [ "Apply a query at a focal point."] .+ Navigation .+ Deep
-   , external "focus"      (hfocusR . return :: LocalPathH -> RewriteH Core -> RewriteH Core)
+   , external "focus"      (hfocusR . return :: LocalPathH -> RewriteH CoreTC -> RewriteH CoreTC)
        [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
-   , external "focus"      (hfocusT . return :: LocalPathH -> TransformH Core String -> TransformH Core String)
+   , external "focus"      (hfocusT . return :: LocalPathH -> TransformH CoreTC String -> TransformH CoreTC String)
        [ "Apply a query at a focal point."] .+ Navigation .+ Deep
    , external "when"       ((>>) :: TransformH Core () -> RewriteH Core -> RewriteH Core)
        [ "Apply a rewrite only if the check succeeds." ] .+ Predicate
@@ -98,12 +98,12 @@ externals = map (.+ KURE)
 
 ------------------------------------------------------------------------------------
 
-hfocusR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Transform c m Core LocalPathH -> Rewrite c m Core -> Rewrite c m Core
+hfocusR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Transform c m CoreTC LocalPathH -> Rewrite c m CoreTC -> Rewrite c m CoreTC
 hfocusR tp r = do lp <- tp
                   localPathR lp r
 {-# INLINE hfocusR #-}
 
-hfocusT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Transform c m Core LocalPathH -> Transform c m Core String -> Transform c m Core String
+hfocusT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Transform c m CoreTC LocalPathH -> Transform c m CoreTC String -> Transform c m CoreTC String
 hfocusT tp t = do lp <- tp
                   localPathT lp t
 {-# INLINE hfocusT #-}
