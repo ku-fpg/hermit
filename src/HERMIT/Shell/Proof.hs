@@ -66,6 +66,10 @@ externals = map (.+ Proof)
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
     , external "prove-lemma" InteractiveProof
         [ "Proof a lemma interactively." ]
+    , external "instantiate-lemma" InstantiateLemma
+        [ "Instantiate one of the universally quantified variables of the given lemma,"
+        , "with the given Core expression, creating a new lemma. Instantiating an" 
+        , "already proven lemma will result in the new lemma being considered proven." ]
     ]
 
 -- | Externals that are added to the dictionary only when in interactive proof mode.
@@ -99,6 +103,7 @@ proof_externals = map (.+ Proof)
 data ProofCommand
     = RuleToLemma RuleNameString
     | InteractiveProof LemmaName
+    | InstantiateLemma LemmaName String CoreString
     | ShowLemmas
     deriving (Typeable)
 
@@ -144,9 +149,18 @@ performProofCommand :: (MonadCatch m, MonadError CLException m, MonadIO m, Monad
 performProofCommand (RuleToLemma nm) = do
     st <- gets cl_pstate
     equality <- queryS (ps_kernel st) (ruleNameToEqualityT nm :: TransformH Core CoreExprEquality) (mkKernelEnv st) (ps_cursor st)
-    modify $ \ s -> s { cl_lemmas = (nm,equality,False) : cl_lemmas s }
+    _ <- addLemmas [(nm,equality,False)]
+    return ()
 
 performProofCommand (InteractiveProof nm) = get >>= flip getLemmaByName nm >>= interactiveProof True
+
+performProofCommand (InstantiateLemma nm vs cs) = do
+    st <- get
+    (_,eq,p) <- getLemmaByName st nm
+    
+    eq' <- queryS (cl_kernel st) (return eq >>> instantiateEqualityVarR (cmpString2Var vs) cs :: TransformH Core CoreExprEquality) (cl_kernel_env st) (cl_cursor st)
+    _ <- addLemmas [(nm++"-instantiated-"++vs,eq',p)]
+    return ()
 
 performProofCommand ShowLemmas = gets cl_lemmas >>= \ ls -> forM_ (reverse ls) printLemma
 
@@ -303,7 +317,7 @@ performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
 
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
             -- Generate list of specialized induction hypotheses for the recursive cases.
-            eqs = [ discardUniVars $ instantiateCoreExprEqVar i (Var i') eq
+            eqs = [ discardUniVars $ instantiateEqualityVar (==i) (Var i') eq
                   | i' <- vs_matching_i_type ]
             nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
             hypLemmas = zip3 nms eqs (repeat True)

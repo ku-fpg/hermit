@@ -24,8 +24,9 @@ module HERMIT.Dictionary.Reasoning
   , verifyIsomorphismT
   , verifyRetractionT
   , retractionBR
-  , instantiateCoreExprEq
-  , instantiateCoreExprEqVar
+  , instantiateEquality
+  , instantiateEqualityVar
+  , instantiateEqualityVarR
   , discardUniVars
   )
 where
@@ -265,12 +266,13 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 
 -- | Instantiate one of the universally quantified variables in a 'CoreExprEquality'.
 -- Note: assumes implicit ordering of variables, such that substitution happens to the right
--- as it does in case alternatives.
-instantiateCoreExprEqVar :: Var -> CoreExpr -> CoreExprEquality -> CoreExprEquality
-instantiateCoreExprEqVar i e c@(CoreExprEquality bs lhs rhs)
-    | i `notElem` bs = c
+-- as it does in case alternatives. Only first variable that matches predicate is
+-- instantiated.
+instantiateEqualityVar :: (Var -> Bool) -> CoreExpr -> CoreExprEquality -> CoreExprEquality
+instantiateEqualityVar p e c@(CoreExprEquality bs lhs rhs)
+    | not (any p bs) = c
     | otherwise =
-        let (bs',_:vs)    = break (==i) bs -- this is safe because we know i is in bs
+        let (bs',i:vs)    = break p bs -- this is safe because we know i is in bs
             inS           = delVarSetList (unionVarSets (map localFreeVarsExpr [lhs, rhs, e] ++ map freeVarsVar vs)) (i:vs)
             subst         = extendSubst (mkEmptySubst (mkInScopeSet inS)) i e
             (subst', vs') = substBndrs subst vs
@@ -278,10 +280,13 @@ instantiateCoreExprEqVar i e c@(CoreExprEquality bs lhs rhs)
             rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
         in CoreExprEquality (bs'++vs') lhs' rhs'
 
+instantiateEqualityVarR :: (Var -> Bool) -> CoreString -> RewriteH CoreExprEquality
+instantiateEqualityVarR p = parseCoreExprT >=> arr . instantiateEqualityVar p
+
 -- | Instantiate a set of universally quantified variables in a 'CoreExprEquality'.
 -- It is important that all type variables appear before any value-level variables in the first argument.
-instantiateCoreExprEq :: [(Var,CoreExpr)] -> CoreExprEquality -> CoreExprEquality
-instantiateCoreExprEq = flip (foldr (uncurry instantiateCoreExprEqVar))
+instantiateEquality :: [(Var,CoreExpr)] -> CoreExprEquality -> CoreExprEquality
+instantiateEquality = flip (foldr (\(v,e) -> instantiateEqualityVar (==v) e))
 -- foldr is important here because it effectively does the substitutions in reverse order,
 -- which is what we want (all value variables should be instantiated before type variables).
 
