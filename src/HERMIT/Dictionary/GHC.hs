@@ -49,13 +49,13 @@ externals =
                 [ "Zap the occurrence information in the current identifer if it is a zombie."] .+ Shallow
          , external "occurrence-analysis" (occurrenceAnalysisR :: RewriteH Core)
                 [ "Perform dependency analysis on all sub-expressions; simplifying and updating identifer info."] .+ Deep
-         , external "lint-expr" (promoteExprT lintExprT :: TransformH Core String)
+         , external "lint-expr" (promoteExprT lintExprT :: TransformH CoreTC String)
                 [ "Runs GHC's Core Lint, which typechecks the current expression."
                 , "Note: this can miss several things that a whole-module core lint will find."
                 , "For instance, running this on the RHS of a binding, the type of the RHS will"
                 , "not be checked against the type of the binding. Running on the whole let expression"
                 , "will catch that however."] .+ Deep .+ Debug .+ Query
-         , external "lint-module" (promoteModGutsT lintModuleT :: TransformH Core String)
+         , external "lint-module" (promoteModGutsT lintModuleT :: TransformH CoreTC String)
                 [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
          ]
 

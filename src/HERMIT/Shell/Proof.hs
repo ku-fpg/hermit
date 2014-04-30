@@ -27,6 +27,7 @@ import HERMIT.Parser
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Rules hiding (externals)
@@ -77,6 +78,8 @@ externals = map (.+ Proof)
         [ "Copy a given lemma, with a new name." ]
     , external "modify-lemma" (\ nm rr -> ModifyLemma nm id rr (const False))
         [ "Modify a given lemma. Resets the proven status to Not Proven." ]
+    , external "query-lemma" QueryLemma
+        [ "Apply a transformation to a lemma, returning the result." ]
     , external "extensionality" (extensionalityR . Just :: String -> RewriteH CoreExprEquality)
         [ "Given a name 'x, then"
         , "f == g  ==>  forall x.  f x == g x" ]
@@ -111,6 +114,7 @@ data ProofCommand
     = RuleToLemma RuleNameString
     | InteractiveProof LemmaName
     | ModifyLemma LemmaName (String -> String) (RewriteH CoreExprEquality) (Bool -> Bool)
+    | QueryLemma LemmaName (TransformH CoreExprEquality String)
     | ShowLemmas
     deriving (Typeable)
 
@@ -169,10 +173,18 @@ performProofCommand (ModifyLemma nm nFn rr pFn) = do
     (_,eq,p) <- getLemmaByName st nm
     
     -- query so lemma is transformed in current context
-    eq' <- queryS (cl_kernel st) (return eq >>> rr :: TransformH Core CoreExprEquality) (cl_kernel_env st) (cl_cursor st)
+    eq' <- queryS (cl_kernel st) (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core CoreExprEquality) (cl_kernel_env st) (cl_cursor st)
     when (nFn nm == nm) $ deleteLemmaByName nm
     _ <- addLemmas [(nFn nm, eq', pFn p)]
     return ()
+
+performProofCommand (QueryLemma nm t) = do
+    st <- get
+    (_,eq,_) <- getLemmaByName st nm
+    
+    -- query so lemma is transformed in current context
+    res <- queryS (cl_kernel st) (return eq >>> t :: TransformH Core String) (cl_kernel_env st) (cl_cursor st)
+    cl_putStrLn res
 
 performProofCommand ShowLemmas = gets cl_lemmas >>= \ ls -> forM_ (reverse ls) printLemma
 
@@ -284,7 +296,7 @@ performProofShellCommand lem@(nm, eq, b) = go
                     sast = cl_cursor st
 
                 -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-                eq' <- queryS sk (return eq >>> rr :: TransformH Core CoreExprEquality) kEnv sast
+                eq' <- queryS sk (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core CoreExprEquality) kEnv sast
                 let lem' = (nm, eq', b)
                 checkProven lem'
                 return lem'
