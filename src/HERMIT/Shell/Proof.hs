@@ -77,12 +77,7 @@ externals = map (.+ Proof)
         [ "Copy a given lemma, with a new name." ]
     , external "modify-lemma" (\ nm rr -> ModifyLemma nm id rr (const False))
         [ "Modify a given lemma. Resets the proven status to Not Proven." ]
-    ]
-
--- | Externals that are added to the dictionary only when in interactive proof mode.
-proof_externals :: [External]
-proof_externals = map (.+ Proof)
-    [ external "extensionality" (extensionalityR . Just :: String -> RewriteH CoreExprEquality)
+    , external "extensionality" (extensionalityR . Just :: String -> RewriteH CoreExprEquality)
         [ "Given a name 'x, then"
         , "f == g  ==>  forall x.  f x == g x" ]
     , external "extensionality" (extensionalityR Nothing :: RewriteH CoreExprEquality)
@@ -99,7 +94,12 @@ proof_externals = map (.+ Proof)
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
     , external "both" ((\t -> liftM (\(r,s) -> unlines [r,s]) (bothT (extractT t))) :: TransformH CoreTC String -> TransformH CoreExprEquality String)
         [ "Apply a transformation to the RHS of an equality." ]
-    , external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
+    ]
+
+-- | Externals that are added to the dictionary only when in interactive proof mode.
+proof_externals :: [External]
+proof_externals = map (.+ Proof)
+    [ external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
         [ "Perform induction on given universally quantified variable."
         , "Each constructor case will generate a new CoreExprEquality to be proven."
         ]
@@ -126,6 +126,9 @@ getLemmaByName st nm =
     case [ lm | lm@(n,_,_) <- cl_lemmas st, n == nm ] of
         []    -> fail ("No lemma named: " ++ nm)
         (l:_) -> return l
+
+deleteLemmaByName :: MonadState CommandLineState m => LemmaName -> m ()
+deleteLemmaByName nm = modify $ \ st -> st { cl_lemmas = [ l | l@(n,_,_) <- cl_lemmas st, nm /= n ] }
 
 lemma :: Bool -> CommandLineState -> LemmaName -> BiRewriteH CoreExpr
 lemma ok st nm = beforeBiR
@@ -167,6 +170,7 @@ performProofCommand (ModifyLemma nm nFn rr pFn) = do
     
     -- query so lemma is transformed in current context
     eq' <- queryS (cl_kernel st) (return eq >>> rr :: TransformH Core CoreExprEquality) (cl_kernel_env st) (cl_cursor st)
+    when (nFn nm == nm) $ deleteLemmaByName nm
     _ <- addLemmas [(nFn nm, eq', pFn p)]
     return ()
 
