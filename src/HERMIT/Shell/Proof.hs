@@ -66,10 +66,13 @@ externals = map (.+ Proof)
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
     , external "prove-lemma" InteractiveProof
         [ "Proof a lemma interactively." ]
-    , external "instantiate-lemma" InstantiateLemma
+    , external "instantiate-lemma" (\ nm v cs -> ModifyLemma nm (++"-inst") (instantiateEqualityVarR (cmpString2Var v) cs >>> tryR instantiateDictsR) id)
         [ "Instantiate one of the universally quantified variables of the given lemma,"
         , "with the given Core expression, creating a new lemma. Instantiating an" 
         , "already proven lemma will result in the new lemma being considered proven." ]
+    , external "instantiate-lemma-dictionaries" (\ nm -> ModifyLemma nm (++"-nodicts") instantiateDictsR id)
+        [ "Instantiate all of the universally quantified dictionaries of the given lemma."
+        , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
     ]
 
 -- | Externals that are added to the dictionary only when in interactive proof mode.
@@ -103,7 +106,7 @@ proof_externals = map (.+ Proof)
 data ProofCommand
     = RuleToLemma RuleNameString
     | InteractiveProof LemmaName
-    | InstantiateLemma LemmaName String CoreString
+    | ModifyLemma LemmaName (String -> String) (RewriteH CoreExprEquality) (Bool -> Bool)
     | ShowLemmas
     deriving (Typeable)
 
@@ -154,15 +157,18 @@ performProofCommand (RuleToLemma nm) = do
 
 performProofCommand (InteractiveProof nm) = get >>= flip getLemmaByName nm >>= interactiveProof True
 
-performProofCommand (InstantiateLemma nm vs cs) = do
+performProofCommand (ModifyLemma nm nFn rr pFn) = do
     st <- get
     (_,eq,p) <- getLemmaByName st nm
     
-    eq' <- queryS (cl_kernel st) (return eq >>> instantiateEqualityVarR (cmpString2Var vs) cs :: TransformH Core CoreExprEquality) (cl_kernel_env st) (cl_cursor st)
-    _ <- addLemmas [(nm++"-instantiated-"++vs,eq',p)]
+    -- query so lemma is transformed in current context
+    eq' <- queryS (cl_kernel st) (return eq >>> rr :: TransformH Core CoreExprEquality) (cl_kernel_env st) (cl_cursor st)
+    _ <- addLemmas [(nFn nm, eq', pFn p)]
     return ()
 
 performProofCommand ShowLemmas = gets cl_lemmas >>= \ ls -> forM_ (reverse ls) printLemma
+
+--------------------------------------------------------------------------------------------------------
 
 printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
 printLemma (nm, CoreExprEquality bs lhs rhs, proven) = do

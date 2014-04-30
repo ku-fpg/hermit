@@ -1,35 +1,35 @@
 {-# LANGUAGE CPP, ScopedTypeVariables, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables #-}
 
 module HERMIT.Dictionary.Reasoning
-  ( -- * Equational Reasoning
+    ( -- * Equational Reasoning
     externals
-  , CoreExprEquality(..)
-  , CoreExprEqualityProof
-  , flipCoreExprEquality
-  , eqLhsIntroR
-  , eqRhsIntroR
-  , birewrite
-  , extensionalityR
+    , CoreExprEquality(..)
+    , CoreExprEqualityProof
+    , flipCoreExprEquality
+    , eqLhsIntroR
+    , eqRhsIntroR
+    , birewrite
+    , extensionalityR
     -- ** Lifting transformations over 'CoreExprEquality'
-  , lhsT
-  , rhsT
-  , bothT
-  , lhsR
-  , rhsR
-  , bothR
-  , proveCoreExprEqualityT
-  , verifyCoreExprEqualityT
-  , verifyEqualityLeftToRightT
-  , verifyEqualityCommonTargetT
-  , verifyIsomorphismT
-  , verifyRetractionT
-  , retractionBR
-  , instantiateEquality
-  , instantiateEqualityVar
-  , instantiateEqualityVarR
-  , discardUniVars
-  )
-where
+    , lhsT
+    , rhsT
+    , bothT
+    , lhsR
+    , rhsR
+    , bothR
+    , proveCoreExprEqualityT
+    , verifyCoreExprEqualityT
+    , verifyEqualityLeftToRightT
+    , verifyEqualityCommonTargetT
+    , verifyIsomorphismT
+    , verifyRetractionT
+    , retractionBR
+    , instantiateDictsR
+    , instantiateEquality
+    , instantiateEqualityVar
+    , instantiateEqualityVarR
+    , discardUniVars
+    ) where
 
 import Control.Applicative
 import Control.Arrow
@@ -264,6 +264,22 @@ retractionBR mr f g = beforeBiR
 -- | Given @f :: X -> Y@ and @g :: Y -> X@, and a proof that @f (g y)@ ==> @y@, then @f (g y)@ <==> @y@.
 retraction :: Maybe (RewriteH Core) -> CoreString -> CoreString -> BiRewriteH CoreExpr
 retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
+
+------------------------------------------------------------------------------
+
+instantiateDictsR :: RewriteH CoreExprEquality
+instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
+    CoreExprEquality bs _ _ <- idR
+    let dArgs = [ b | b <- bs, isId b, let ty = varType b, isDictTy ty, null (varSetElems (freeVarsType ty)) ]
+    guardMsg (not (null dArgs)) "no universally quantified dictionaries can be instantiated."
+    ds <- forM dArgs $ \ b -> constT $ do
+            guts <- getModGuts
+            (i,bnds) <- liftCoreM $ buildDictionary guts b
+            let dExpr = case bnds of
+                            [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
+                            _ -> mkCoreLets bnds (varToCoreExpr i)
+            return (b,dExpr)
+    arr $ instantiateEquality ds
 
 ------------------------------------------------------------------------------
 

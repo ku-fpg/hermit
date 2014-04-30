@@ -45,6 +45,7 @@ module HERMIT.GHC
     , runDsMtoCoreM
     , runTcMtoCoreM
     , buildTypeable
+    , buildDictionary
     , eqExprX
     , lookupRdrNameInModuleForPlugins
 #endif
@@ -292,15 +293,22 @@ runTcMtoCoreM guts m = do
 runDsMtoCoreM :: ModGuts -> DsM a -> CoreM a
 runDsMtoCoreM guts = runTcMtoCoreM guts . initDsTc
 
--- TODO: 
+-- TODO: this is mostly an example, move somewhere?
 buildTypeable :: ModGuts -> Type -> CoreM (Id, [CoreBind])
 buildTypeable guts ty = do
-    (i, bs) <- runTcMtoCoreM guts $ do
+    evar <- runTcMtoCoreM guts $ do
         cls <- tcLookupClass typeableClassName
         let predTy = mkClassPred cls [typeKind ty, ty] -- recall that Typeable is now poly-kinded
+        newWantedEvVar predTy
+    buildDictionary guts evar
+
+-- | Build a dictionary for the given 
+buildDictionary :: ModGuts -> Id -> CoreM (Id, [CoreBind])
+buildDictionary guts evar = do
+    (i, bs) <- runTcMtoCoreM guts $ do
         loc <- getCtLoc $ GivenOrigin UnkSkol
-        evar <- newWantedEvVar predTy
-        let nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
+        let predTy = varType evar
+            nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
             wCs = mkFlatWC [nonC]
         (_wCs', bnds) <- solveWantedsTcM wCs
         -- TODO: check for unsolved constraints?
