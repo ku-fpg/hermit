@@ -73,6 +73,10 @@ externals = map (.+ Proof)
     , external "instantiate-lemma-dictionaries" (\ nm -> ModifyLemma nm (++"-nodicts") instantiateDictsR id)
         [ "Instantiate all of the universally quantified dictionaries of the given lemma."
         , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
+    , external "copy-lemma" (\ nm newName -> ModifyLemma nm (const newName) idR id)
+        [ "Copy a given lemma, with a new name." ]
+    , external "modify-lemma" (\ nm rr -> ModifyLemma nm id rr (const False))
+        [ "Modify a given lemma. Resets the proven status to Not Proven." ]
     ]
 
 -- | Externals that are added to the dictionary only when in interactive proof mode.
