@@ -67,11 +67,11 @@ externals = map (.+ Proof)
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
     , external "prove-lemma" InteractiveProof
         [ "Proof a lemma interactively." ]
-    , external "instantiate-lemma" (\ nm v cs -> ModifyLemma nm (++"-inst") (instantiateEqualityVarR (cmpString2Var v) cs >>> tryR instantiateDictsR) id)
+    , external "instantiate-lemma" (\ nm v cs -> ModifyLemma nm id (instantiateEqualityVarR (cmpString2Var v) cs >>> tryR instantiateDictsR) id)
         [ "Instantiate one of the universally quantified variables of the given lemma,"
         , "with the given Core expression, creating a new lemma. Instantiating an" 
         , "already proven lemma will result in the new lemma being considered proven." ]
-    , external "instantiate-lemma-dictionaries" (\ nm -> ModifyLemma nm (++"-nodicts") instantiateDictsR id)
+    , external "instantiate-lemma-dictionaries" (\ nm -> ModifyLemma nm id instantiateDictsR id)
         [ "Instantiate all of the universally quantified dictionaries of the given lemma."
         , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
     , external "copy-lemma" (\ nm newName -> ModifyLemma nm (const newName) idR id)
