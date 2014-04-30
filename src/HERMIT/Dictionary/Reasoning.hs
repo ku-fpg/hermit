@@ -268,6 +268,7 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 ------------------------------------------------------------------------------
 
 instantiateDictsR :: RewriteH CoreExprEquality
+#if __GLASGOW_HASKELL__ >= 708
 instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
     CoreExprEquality bs _ _ <- idR
     let dArgs = [ b | b <- bs, isId b, let ty = varType b, isDictTy ty, null (varSetElems (freeVarsType ty)) ]
@@ -280,6 +281,9 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
                             _ -> mkCoreLets bnds (varToCoreExpr i)
             return (b,dExpr)
     arr $ instantiateEquality ds
+#else
+instantiateDictsR = fail "Dictionaries cannot be instantiated in GHC 7.6"
+#endif
 
 ------------------------------------------------------------------------------
 
