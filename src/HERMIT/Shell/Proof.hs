@@ -105,6 +105,8 @@ proof_externals = map (.+ Proof)
         [ "Perform induction on given universally quantified variable."
         , "Each constructor case will generate a new CoreExprEquality to be proven."
         ]
+    , external "dump" PCDump
+        [ "dump <filename> <renderer> <width>" ]
     ]
 
 --------------------------------------------------------------------------------------------------------
@@ -322,6 +324,7 @@ performProofShellCommand lem@(nm, eq, b) = go
                 queryS (cl_kernel st) (return eq >>> t :: TransformH Core ()) (cl_kernel_env st) (cl_cursor st)
                 completeProof nm -- note: we assume that if 't' completes without failing, the lemma is proved, we don't actually check
                 return lem       -- never reached
+          go (PCDump fName r w)   = dump (\ st -> return eq >>> ppLemmaT st) fName r w >> return lem
           go (PCUnsupported s)    = cl_putStrLn s >> return lem
 
 performInduction :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> (Id -> Bool) -> m Lemma
@@ -370,6 +373,7 @@ data ProofShellCommand
     | PCQuery QueryFun
     | PCProofCommand ProofCommand
     | PCUser UserProofTechnique
+    | PCDump String String Int
     | PCUnsupported String
     deriving Typeable
 
