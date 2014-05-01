@@ -7,9 +7,10 @@ module HERMIT.Shell.Proof
     , performProofCommand
     , UserProofTechnique
     , userProofTechnique
+    , ppLemmaT
     ) where
 
-import Control.Arrow hiding (loop)
+import Control.Arrow hiding (loop, (<+>))
 import Control.Concurrent
 import Control.Monad.Error
 import Control.Monad.State
@@ -20,7 +21,7 @@ import Data.List (delete)
 
 import HERMIT.Core
 import HERMIT.External
-import HERMIT.GHC hiding (settings, (<>), text, sep)
+import HERMIT.GHC hiding (settings, (<>), text, sep, (<+>), ($+$), nest)
 import HERMIT.Kernel.Scoped
 import HERMIT.Kure
 import HERMIT.Parser
@@ -79,6 +80,9 @@ externals = map (.+ Proof)
         [ "Modify a given lemma. Resets the proven status to Not Proven." ]
     , external "query-lemma" QueryLemma
         [ "Apply a transformation to a lemma, returning the result." ]
+    , external "dump-lemma" DumpLemma
+        [ "Dump named lemma to a file."
+        , "dump-lemma <lemma-name> <filename> <renderer> <width>" ]
     , external "extensionality" (extensionalityR . Just :: String -> RewriteH CoreExprEquality)
         [ "Given a name 'x, then"
         , "f == g  ==>  forall x.  f x == g x" ]
@@ -117,6 +121,7 @@ data ProofCommand
     | ModifyLemma LemmaName (String -> String) (RewriteH CoreExprEquality) (Bool -> Bool)
     | QueryLemma LemmaName (TransformH CoreExprEquality String)
     | ShowLemmas
+    | DumpLemma LemmaName String String Int
     deriving (Typeable)
 
 instance Extern ProofCommand where
@@ -187,26 +192,24 @@ performProofCommand (QueryLemma nm t) = do
     res <- queryS (cl_kernel st) (return eq >>> t :: TransformH Core String) (cl_kernel_env st) (cl_cursor st)
     cl_putStrLn res
 
+performProofCommand (DumpLemma nm fn r w) = dump (\ st -> getLemmaByName st nm >>> ppLemmaT (cl_pretty st)) fn r w
+
 performProofCommand ShowLemmas = gets cl_lemmas >>= \ ls -> forM_ (reverse ls) printLemma
 
 --------------------------------------------------------------------------------------------------------
 
 printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
-printLemma (nm, eq, proven) = do
+printLemma lem = do
     st <- get
-    doc <- queryS (cl_kernel st) (return eq >>> ppLemmaT st :: TransformH Core DocH) (cl_kernel_env st) (cl_cursor st)
-    cl_putStr nm
-    cl_putStrLn $ if proven then " (Proven)" else " (Not Proven)"
+    doc <- queryS (cl_kernel st) (return lem >>> ppLemmaT (cl_pretty st) :: TransformH Core DocH) (cl_kernel_env st) (cl_cursor st)
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
-    cl_putStrLn ""
 
-ppLemmaT :: CommandLineState -> TransformH CoreExprEquality DocH
-ppLemmaT st = do
-    let pp = cl_pretty st
-        pos = cl_pretty_opts st
-    d1 <- forallVarsT (liftPrettyH pos $ pForall pp)
-    (d2,d3) <- bothT (liftPrettyH pos $ extractT $ pCoreTC pp)
-    return $ PP.sep [d1,d2,PP.text "===",d3]
+ppLemmaT :: PrettyPrinter -> TransformH Lemma DocH
+ppLemmaT pp = do
+    (nm, eq, p) <- idR
+    eqDoc <- return eq >>> ppCoreExprEqualityT pp
+    let hDoc = text nm <+> text (if p then "(Proven)" else "(Not Proven)")
+    return $ hDoc $+$ nest 2 eqDoc
 
 --------------------------------------------------------------------------------------------------------
 
@@ -324,7 +327,7 @@ performProofShellCommand lem@(nm, eq, b) = go
                 queryS (cl_kernel st) (return eq >>> t :: TransformH Core ()) (cl_kernel_env st) (cl_cursor st)
                 completeProof nm -- note: we assume that if 't' completes without failing, the lemma is proved, we don't actually check
                 return lem       -- never reached
-          go (PCDump fName r w)   = dump (\ st -> return eq >>> ppLemmaT st) fName r w >> return lem
+          go (PCDump fName r w)   = dump (\ st -> return lem >>> ppLemmaT (cl_pretty st)) fName r w >> return lem
           go (PCUnsupported s)    = cl_putStrLn s >> return lem
 
 performInduction :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> (Id -> Bool) -> m Lemma

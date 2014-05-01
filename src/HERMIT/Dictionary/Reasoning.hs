@@ -18,6 +18,7 @@ module HERMIT.Dictionary.Reasoning
     , lhsR
     , rhsR
     , bothR
+    , ppCoreExprEqualityT
     , proveCoreExprEqualityT
     , verifyCoreExprEqualityT
     , verifyEqualityLeftToRightT
@@ -55,6 +56,10 @@ import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Fold hiding (externals)
 import HERMIT.Dictionary.Local.Let (nonRecIntroR)
 import HERMIT.Dictionary.Unfold hiding (externals)
+
+import HERMIT.PrettyPrinter.Common
+
+import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 ------------------------------------------------------------------------------
 
@@ -163,6 +168,15 @@ rhsR r = do
 -- | Lift a rewrite over 'CoreExpr' into a rewrite over both sides of a 'CoreExprEquality'.
 bothR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
 bothR r = lhsR r >+> rhsR r
+
+------------------------------------------------------------------------------
+
+ppCoreExprEqualityT :: PrettyPrinter -> TransformH CoreExprEquality DocH
+ppCoreExprEqualityT pp = do
+    let pos = pOptions pp
+    d1 <- forallVarsT (liftPrettyH pos $ pForall pp)
+    (d2,d3) <- bothT (liftPrettyH pos $ extractT $ pCoreTC pp)
+    return $ PP.sep [d1,d2,PP.text "<=>",d3]
 
 ------------------------------------------------------------------------------
 
