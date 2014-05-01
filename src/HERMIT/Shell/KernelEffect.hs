@@ -62,14 +62,15 @@ performKernelEffect (Apply rr) expr = do
         kEnv = cl_kernel_env st
         sast = cl_cursor st
         ppOpts = cl_pretty_opts st
+        pp = pCoreTC $ cl_pretty st
 
     sast' <- prefixFailMsg "Rewrite failed: " $ applyS sk rr kEnv sast
 
     let commit = put (newSAST expr sast' st) >> showResult
         showResult = if cl_diffonly st then showDiff else showWindow
-        showDiff = do doc1 <- queryS sk (liftPrettyH ppOpts (cl_pretty st)) kEnv sast
-                      doc2 <- queryS sk (liftPrettyH ppOpts (cl_pretty st)) kEnv sast'
-                      diffDocH ppOpts doc1 doc2 >>= cl_putStr
+        showDiff = do doc1 <- queryS sk (liftPrettyH ppOpts pp) kEnv sast
+                      doc2 <- queryS sk (liftPrettyH ppOpts pp) kEnv sast'
+                      diffDocH (cl_pretty st) doc1 doc2 >>= cl_putStr
 
     if cl_corelint st
         then do ast' <- toASTS sk sast'

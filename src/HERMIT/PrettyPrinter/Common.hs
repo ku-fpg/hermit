@@ -25,6 +25,7 @@ module HERMIT.PrettyPrinter.Common
     , RenderSpecial
     , Unicode(..)
       -- * Pretty Printer Traversals
+    , PrettyPrinter(..)
     , PrettyH
     , liftPrettyH
     , PrettyC(..)
@@ -126,6 +127,11 @@ markColor = attr . Color
 
 specialFont :: DocH -> DocH
 specialFont = attr SpecialFont
+
+data PrettyPrinter = PP { pForall  :: PrettyH [Var]
+                        , pCoreTC  :: PrettyH CoreTC
+                        , pOptions :: PrettyOptions
+                        }
 
 type PrettyH a = Transform PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?

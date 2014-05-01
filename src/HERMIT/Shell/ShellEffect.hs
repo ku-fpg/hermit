@@ -32,7 +32,7 @@ data ShellEffect
     | CLSModify (CommandLineState -> IO CommandLineState) -- ^ Modify shell state
     | PluginComp (PluginM ())
     | Continue -- ^ exit the shell, but don't abort/resume
-    | Dump String String Int
+    | Dump String String Int (CommandLineState -> TransformH CoreTC DocH)
     | Resume
     deriving Typeable
 
@@ -56,11 +56,10 @@ performShellEffect Resume = do
     resume sast'
 
 performShellEffect Continue = get >>= continue
-performShellEffect (Dump fileName renderer width) = do
+performShellEffect (Dump fileName renderer width pp) = do
     st <- get
     case lookup renderer shellRenderers of
-      Just r -> do doc <- prefixFailMsg "Bad renderer option: " $
-                            queryS (cl_kernel st) (liftPrettyH (cl_pretty_opts st) $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
+      Just r -> do doc <- prefixFailMsg "Bad renderer option: " $ queryS (cl_kernel st) (pp st) (cl_kernel_env st) (cl_cursor st)
                    liftIO $ do h <- openFile fileName WriteMode
                                r h ((cl_pretty_opts st) { po_width = width }) (Right doc)
                                hClose h

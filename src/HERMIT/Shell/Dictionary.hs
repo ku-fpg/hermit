@@ -7,7 +7,6 @@ module HERMIT.Shell.Dictionary
 import Data.List
 import Data.Map (Map, fromList, toList)
 
-import HERMIT.Kure
 import HERMIT.External
 
 import HERMIT.PrettyPrinter.Common
@@ -37,12 +36,12 @@ mkDict externs = toDictionary externs'
 --------------------------------------------------------------------------
 
 -- | The pretty-printing dictionaries.
-pp_dictionary :: Map String (PrettyH CoreTC)
+pp_dictionary :: Map String PrettyPrinter
 pp_dictionary = fromList
-        [ ("clean",  Clean.ppCoreTC)
-        , ("ast",    AST.ppCoreTC)
-        , ("ghc",    GHCPP.ppCoreTC)
-        ]
+    [ ("clean", Clean.pretty)
+    , ("ast",   AST.pretty)
+    , ("ghc",   GHCPP.pretty)
+    ]
 
 --------------------------------------------------------------------------
 

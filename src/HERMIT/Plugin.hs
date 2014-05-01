@@ -35,7 +35,6 @@ import Control.Monad.Error hiding (guard)
 import Control.Monad.Operational
 import Control.Monad.State hiding (guard)
 
-import Data.Default
 import Data.Monoid
 import qualified Data.Map as M
 
@@ -70,8 +69,7 @@ defPS initSAST kernel phaseInfo = do
     emptyTick <- liftIO $ atomically $ newTVar M.empty
     return $ PluginState
                 { ps_cursor         = initSAST
-                , ps_pretty         = Clean.ppCoreTC
-                , ps_pretty_opts    = def { po_width = 80 }
+                , ps_pretty         = Clean.pretty
                 , ps_render         = unicodeConsole
                 , ps_tick           = emptyTick
                 , ps_corelint       = False
@@ -216,8 +214,8 @@ display = HPM $ lift $ Display.display Nothing
 modifyCLS :: (PluginState -> PluginState) -> HPM ()
 modifyCLS = HPM . modify
 
-setPretty :: PrettyH CoreTC -> HPM ()
+setPretty :: PrettyPrinter -> HPM ()
 setPretty pp = modifyCLS $ \s -> s { ps_pretty = pp }
 
 setPrettyOptions :: PrettyOptions -> HPM ()
-setPrettyOptions po = modifyCLS $ \s -> s { ps_pretty_opts = po }
+setPrettyOptions po = modifyCLS $ \s -> s { ps_pretty = (ps_pretty s) { pOptions = po } }

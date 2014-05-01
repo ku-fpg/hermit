@@ -20,13 +20,12 @@ import Data.List (delete)
 
 import HERMIT.Core
 import HERMIT.External
-import HERMIT.GHC hiding (settings, (<>))
+import HERMIT.GHC hiding (settings, (<>), text, sep)
 import HERMIT.Kernel.Scoped
 import HERMIT.Kure
 import HERMIT.Parser
 import HERMIT.Utilities
 
-import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Reasoning hiding (externals)
@@ -34,7 +33,6 @@ import HERMIT.Dictionary.Rules hiding (externals)
 
 import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
-import qualified HERMIT.PrettyPrinter.Clean as Clean
 
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.KernelEffect
@@ -43,8 +41,9 @@ import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
 import System.Console.Haskeline hiding (catch, display)
-
 import System.IO
+
+import Text.PrettyPrint.MarkedHughesPJ as PP
 
 --------------------------------------------------------------------------------------------------------
 
@@ -191,26 +190,21 @@ performProofCommand ShowLemmas = gets cl_lemmas >>= \ ls -> forM_ (reverse ls) p
 --------------------------------------------------------------------------------------------------------
 
 printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
-printLemma (nm, CoreExprEquality bs lhs rhs, proven) = do
-    st <- gets cl_pstate
-    let k    = ps_kernel st
-        env  = mkKernelEnv st
-        sast = ps_cursor st
-        pos  = ps_pretty_opts st
-        pp   = ps_pretty st
-        pr :: [Var] -> CoreExpr -> TransformH Core DocH
-        pr vs e = return e >>> withVarsInScope vs (extractT $ liftPrettyH pos pp)
+printLemma (nm, eq, proven) = do
+    st <- get
+    doc <- queryS (cl_kernel st) (return eq >>> ppLemmaT st :: TransformH Core DocH) (cl_kernel_env st) (cl_cursor st)
     cl_putStr nm
     cl_putStrLn $ if proven then " (Proven)" else " (Not Proven)"
-    unless (null bs) $ do
-        forallDoc <- queryS k (return bs >>> extractT (liftPrettyH pos Clean.ppForallQuantification) :: TransformH Core DocH) env sast -- TODO: rather than hardwiring the Clean PP here, we should store a pretty printer in the shell state, which should match the main PP, and be updated correspondingly.
-        liftIO $ ps_render st stdout pos (Right forallDoc)
-    lDoc <- queryS k (pr bs lhs) env sast
-    rDoc <- queryS k (pr bs rhs) env sast
-    liftIO $ ps_render st stdout pos (Right lDoc)
-    cl_putStrLn "=="
-    liftIO $ ps_render st stdout pos (Right rDoc)
+    liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
     cl_putStrLn ""
+
+ppLemmaT :: CommandLineState -> TransformH CoreExprEquality DocH
+ppLemmaT st = do
+    let pp = cl_pretty st
+        pos = cl_pretty_opts st
+    d1 <- forallVarsT (liftPrettyH pos $ pForall pp)
+    (d2,d3) <- bothT (liftPrettyH pos $ extractT $ pCoreTC pp)
+    return $ PP.sep [d1,d2,PP.text "===",d3]
 
 --------------------------------------------------------------------------------------------------------
 
@@ -264,7 +258,9 @@ addProofExternals :: MonadState CommandLineState m => Bool -> m [External]
 addProofExternals topLevel = do
     st <- get
     let es = cl_externals st
-    when topLevel $ modify $ \ s -> s { cl_externals = proof_externals ++ es } 
+        -- commands with same same in proof_externals will override those in normal externals
+        newEs = proof_externals ++ filter ((`notElem` (map externName proof_externals)) . externName) es
+    when topLevel $ modify $ \ s -> s { cl_externals = newEs } 
     return es
 
 evalProofScript :: MonadIO m => Lemma -> String -> CLT m Lemma

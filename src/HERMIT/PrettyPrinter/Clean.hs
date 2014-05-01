@@ -2,7 +2,8 @@
 
 module HERMIT.PrettyPrinter.Clean
   ( -- * HERMIT's Clean Pretty-Printer for GHC Core
-    ppCoreTC
+    pretty
+  , ppCoreTC
   , ppModGuts
   , ppCoreProg
   , ppCoreBind
@@ -18,6 +19,7 @@ import Control.Arrow hiding ((<+>))
 import Control.Applicative ((<$>))
 
 import Data.Char (isSpace)
+import Data.Default
 import Data.Monoid (mempty)
 
 import HERMIT.Context
@@ -36,6 +38,12 @@ import Pair
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
 ------------------------------------------------------------------------------------------------
+
+pretty :: PrettyPrinter
+pretty = PP { pForall = ppForallQuantification
+            , pCoreTC = ppCoreTC
+            , pOptions = def
+            }
 
 data RetExpr
         = RetLam AbsolutePathH [DocH] AbsolutePathH DocH
@@ -395,7 +403,9 @@ ppKindOrTypeR = absPathT >>= ppKindOrTypePR
 ppForallQuantification :: PrettyH [Var]
 ppForallQuantification =
   do vs <- mapT ppBinderMode
-     return $ specialSymbol mempty ForallSymbol <+> hsep vs <> symbol mempty '.'
+     if null vs
+     then return empty
+     else return $ specialSymbol mempty ForallSymbol <+> hsep vs <> symbol mempty '.'
 
 --------------------------------------------------------------------
 

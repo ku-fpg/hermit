@@ -45,8 +45,7 @@ instance Monad m => MonadCatch (PluginT m) where
 -- Session-local issues; things that are never saved.
 data PluginState = PluginState
     { ps_cursor         :: SAST                                     -- ^ the current AST
-    , ps_pretty         :: PrettyH CoreTC                           -- ^ which pretty printer to use
-    , ps_pretty_opts    :: PrettyOptions                            -- ^ the options for the pretty printer
+    , ps_pretty         :: PrettyPrinter                            -- ^ which pretty printer to use
     , ps_render         :: Handle -> PrettyOptions -> Either String DocH -> IO () -- ^ the way of outputing to the screen
     , ps_tick           :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
     , ps_corelint       :: Bool                                     -- ^ if true, run Core Lint on module after each rewrite
@@ -79,7 +78,8 @@ tick var msg = atomically $ do
 
 mkKernelEnv :: PluginState -> HermitMEnv
 mkKernelEnv st =
-    let out str = liftIO $ ps_render st stdout (ps_pretty_opts st) (Left $ str ++ "\n")
+    let pp = ps_pretty st
+        out str = liftIO $ ps_render st stdout (pOptions pp) (Left $ str ++ "\n")
 
     in  mkHermitMEnv $ \ msg -> case msg of
                 DebugTick    msg'      -> do
@@ -87,8 +87,8 @@ mkKernelEnv st =
                         out $ "<" ++ show c ++ "> " ++ msg'
                 DebugCore  msg' cxt core -> do
                         out $ "[" ++ msg' ++ "]"
-                        doc :: DocH <- apply (ps_pretty st) (liftPrettyC (ps_pretty_opts st) cxt) (inject core)
-                        liftIO $ ps_render st stdout (ps_pretty_opts st) (Right doc)
+                        doc :: DocH <- apply (pCoreTC pp) (liftPrettyC (pOptions pp) cxt) (inject core)
+                        liftIO $ ps_render st stdout (pOptions pp) (Right doc)
 
 iokm' :: (MonadIO m, MonadCatch m) => String -> (a -> m b) -> IO (KureM a) -> m b
 iokm' msg ret m = liftIO m >>= runKureM ret (fail . (msg ++))

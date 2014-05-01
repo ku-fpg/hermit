@@ -90,7 +90,7 @@ performQuery (QueryString q) _ = do
 
 performQuery (QueryDocH q) _ = do
     st <- get
-    doc <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (q (initPrettyC $ cl_pretty_opts st) $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
+    doc <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (q (initPrettyC $ cl_pretty_opts st) $ pCoreTC $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
 performQuery (Inquiry f) _ = get >>= liftIO . f >>= putStrToConsole
@@ -112,7 +112,7 @@ performQuery (Diff s1 s2) _ = do
     doc1 <- ppWholeProgram ast1
     doc2 <- ppWholeProgram ast2
 
-    r <- diffDocH (cl_pretty_opts st) doc1 doc2
+    r <- diffDocH (cl_pretty st) doc1 doc2
 
     cl_putStrLn "Diff:"
     cl_putStrLn "====="
@@ -137,7 +137,7 @@ ppWholeProgram ast = do
     st <- get
     liftIO (queryK (kernelS $ cl_kernel st)
             ast
-            (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ cl_pretty st)
+            (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ pCoreTC $ cl_pretty st)
             (cl_kernel_env st)) >>= runKureM return fail
 
 ----------------------------------------------------------------------------------
@@ -309,17 +309,17 @@ cl_kernel = ps_kernel . cl_pstate
 cl_kernel_env :: CommandLineState -> HermitMEnv
 cl_kernel_env = mkKernelEnv . cl_pstate
 
-cl_pretty :: CommandLineState -> PrettyH CoreTC
+cl_pretty :: CommandLineState -> PrettyPrinter
 cl_pretty = ps_pretty . cl_pstate
 
-setPretty :: CommandLineState -> PrettyH CoreTC -> CommandLineState
+setPretty :: CommandLineState -> PrettyPrinter -> CommandLineState
 setPretty st pp = st { cl_pstate = (cl_pstate st) { ps_pretty = pp } }
 
 cl_pretty_opts :: CommandLineState -> PrettyOptions
-cl_pretty_opts = ps_pretty_opts . cl_pstate
+cl_pretty_opts = pOptions . cl_pretty
 
 setPrettyOpts :: CommandLineState -> PrettyOptions -> CommandLineState
-setPrettyOpts st po = st { cl_pstate = (cl_pstate st) { ps_pretty_opts = po } }
+setPrettyOpts st po = setPretty st $ (cl_pretty st) { pOptions = po }
 
 cl_render :: CommandLineState -> (Handle -> PrettyOptions -> Either String DocH -> IO ())
 cl_render = ps_render . cl_pstate
@@ -330,7 +330,7 @@ mkCLS :: PluginM CommandLineState
 mkCLS = do
     ps <- get
     (w,h) <- liftIO getTermDimensions    
-    return $ CommandLineState { cl_pstate         = (ps { ps_pretty_opts = (ps_pretty_opts ps) { po_width = w } })
+    let st = CommandLineState { cl_pstate         = ps
                               , cl_height         = h
                               , cl_scripts        = []
                               , cl_lemmas         = []
@@ -341,6 +341,7 @@ mkCLS = do
                               , cl_running_script = Nothing
                               , cl_initSAST       = ps_cursor ps
                               }
+    return $ setPrettyOpts st $ (cl_pretty_opts st) { po_width = w }
 
 getTermDimensions :: IO (Int, Int)
 getTermDimensions = do
@@ -473,11 +474,3 @@ showGraph graph tags this@(SAST n) =
           paths = [ (b,c) | (a,b,c) <- graph, a == this ]
 
 ------------------------------------------------------------------------------
-
-{-
-data CmdInterps :: * where
-    CmdInterps :: forall c a r. ShellCommandSet c a r => [Interp c] -> CmdInterps
-
-instance ShellCommandSet () () () where
-    performCommand = const return
--}

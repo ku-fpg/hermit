@@ -14,6 +14,7 @@ module HERMIT.Dictionary.Reasoning
     , lhsT
     , rhsT
     , bothT
+    , forallVarsT
     , lhsR
     , rhsR
     , bothR
@@ -140,6 +141,10 @@ rhsT t = idR >>= \ (CoreExprEquality vs _ rhs) -> return rhs >>> withVarsInScope
 -- | Lift a transformation over 'CoreExpr' into a transformation over both sides of a 'CoreExprEquality'.
 bothT :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Transform c m CoreExpr b -> Transform c m CoreExprEquality (b,b)
 bothT t = liftM2 (,) (lhsT t) (rhsT t) -- Can't wait for Applicative to be a superclass of Monad
+
+-- | Lift a transformation over '[Var]' into a transformation over the universally quantified variables of a 'CoreExprEquality'.
+forallVarsT :: Monad m => Transform c m [Var] b -> Transform c m CoreExprEquality b
+forallVarsT t = idR >>= \ (CoreExprEquality vs _ _) -> return vs >>> t
 
 -- | Lift a rewrite over 'CoreExpr' into a rewrite over the left-hand side of a 'CoreExprEquality'.
 lhsR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality

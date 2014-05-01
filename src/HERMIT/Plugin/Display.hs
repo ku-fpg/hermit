@@ -26,17 +26,17 @@ display window = do
     st <- get
     focusPath <- getFocusPath
     let skernel = ps_kernel st
-        ppOpts = (ps_pretty_opts st) { po_focus = Just focusPath }
+        ppOpts = (pOptions $ ps_pretty st) { po_focus = Just focusPath }
     -- Do not show focus while loading
     iokm' "Rendering error: "
         (liftIO . ps_render st stdout ppOpts . Right)
         (toASTS skernel (ps_cursor st) >>= \ ast ->
-            queryK (kernelS skernel) ast (extractT $ pathT (fromMaybe focusPath window) $ liftPrettyH ppOpts $ ps_pretty st) (mkKernelEnv st))
+            queryK (kernelS skernel) ast (extractT $ pathT (fromMaybe focusPath window) $ liftPrettyH ppOpts $ pCoreTC $ ps_pretty st) (mkKernelEnv st))
 
 ps_putStr :: (MonadIO m, MonadState PluginState m) => String -> m ()
 ps_putStr str = do
     st <- get
-    liftIO $ ps_render st stdout (ps_pretty_opts st) (Left str)
+    liftIO $ ps_render st stdout (pOptions $ ps_pretty st) (Left str)
 
 ps_putStrLn :: (MonadIO m, MonadState PluginState m) => String -> m ()
 ps_putStrLn = ps_putStr . (++"\n")

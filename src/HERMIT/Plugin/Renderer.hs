@@ -10,7 +10,6 @@ import Data.Monoid
 import HERMIT.Dictionary (traceR)
 import HERMIT.Kure
 import HERMIT.Plugin.Types
-import HERMIT.PrettyPrinter.Clean
 import HERMIT.PrettyPrinter.Common
 
 import System.Console.ANSI
@@ -84,12 +83,13 @@ instance RenderCode UnicodeTerminal where
 -- TODO: this should be in PrettyPrinter.Common, but is here because it relies on
 --       unicodeConsole to get nice colored diffs. We can either switch to straight unicode
 --       renderer and give up on color, or come up with a clever solution.
-diffDocH :: (MonadCatch m, MonadIO m) => PrettyOptions -> DocH -> DocH -> m String
-diffDocH opts doc1 doc2 =
+diffDocH :: (MonadCatch m, MonadIO m) => PrettyPrinter -> DocH -> DocH -> m String
+diffDocH pp doc1 doc2 =
     liftAndCatchIO $
         withSystemTempFile "A.dump" $ \ fp1 h1 ->
             withSystemTempFile "B.dump" $ \ fp2 h2 ->
                 withSystemTempFile "AB.diff" $ \ fp3 h3 -> do
+                    let opts = pOptions pp
                     unicodeConsole h1 opts (Right doc1)
                     hFlush h1
                     unicodeConsole h2 opts (Right doc2)
@@ -104,13 +104,13 @@ diffDocH opts doc1 doc2 =
                                                          , not ("@@" `isPrefixOf` l && "@@" `isSuffixOf` l) ]
 
 -- TODO: again this should be elsewhere, but is here because diffDocH is here.
-diffR :: Injection a CoreTC => PrettyOptions -> String -> RewriteH a -> RewriteH a
-diffR opts msg rr = do
-    let pp = extractT $ liftPrettyH opts ppCoreTC
+diffR :: Injection a CoreTC => PrettyPrinter -> String -> RewriteH a -> RewriteH a
+diffR pp msg rr = do
+    let ppT = extractT $ liftPrettyH (pOptions pp) (pCoreTC pp)
         runDiff b a = do
-            doc1 <- return b >>> pp
-            doc2 <- return a >>> pp
-            r <- diffDocH opts doc1 doc2
+            doc1 <- return b >>> ppT
+            doc2 <- return a >>> ppT
+            r <- diffDocH pp doc1 doc2
             return a >>> traceR (msg ++ " diff:\n" ++ r)
 
     -- Be careful to only run the rr once, in case it has side effects.

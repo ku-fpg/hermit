@@ -3,7 +3,8 @@
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
 module HERMIT.PrettyPrinter.AST
   ( -- * HERMIT's AST Pretty-Printer for GHC Core
-    ppCoreTC
+    pretty
+  , ppCoreTC
   , ppModGuts
   , ppCoreProg
   , ppCoreBind
@@ -18,6 +19,7 @@ where
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
+import Data.Default
 
 import HERMIT.GHC hiding (($$), (<+>), (<>), ($+$), cat, nest, parens, text, empty, hsep)
 import HERMIT.Kure
@@ -38,6 +40,12 @@ tyText :: String -> DocH
 tyText = typeColor . text
 
 ---------------------------------------------------------------------------
+
+pretty :: PrettyPrinter
+pretty = PP { pForall = ppForallQuantification
+            , pCoreTC = ppCoreTC
+            , pOptions = def
+            } 
 
 -- | Pretty print a fragment of GHC Core using HERMIT's \"AST\" pretty printer.
 --   This displays the tree of constructors using nested indentation.
@@ -132,7 +140,9 @@ ppVar = readerT $ \ v -> ppSDoc >>^ modCol v
 ppForallQuantification :: PrettyH [Var]
 ppForallQuantification =
   do vs <- mapT ppVar
-     return $ keywordText "forall" <+> hsep vs <> keywordText "."
+     if null vs
+     then return empty
+     else return $ keywordText "forall" <+> hsep vs <> keywordText "."
 
 keywordText :: String -> DocH
 keywordText = keywordColor . text

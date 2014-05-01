@@ -131,7 +131,7 @@ shell_externals = map (.+ Shell)
        [ "set the output renderer mode"]
    , external "set-pp-renderer"    showRenderers
        [ "set the output renderer mode"]
-   , external "dump"    Dump
+   , external "dump" (\ fName rend w -> Dump fName rend w (\st -> liftPrettyH (cl_pretty_opts st) $ pCoreTC $ cl_pretty st))
        [ "dump <filename> <renderer> <width>"]
    , external "set-pp-width" (\ w -> CLSModify $ \ st ->
         return $ setPrettyOpts st (updateWidthOption w (cl_pretty_opts st)))
