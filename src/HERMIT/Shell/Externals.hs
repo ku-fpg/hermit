@@ -281,10 +281,9 @@ showScripts = concatMap (\ (name,script) -> name ++ ": " ++ unparseScript script
 testAllT:: CommandLineState-> TransformH Core String
 testAllT st = do
                 let es  = cl_externals st
-                    mbs = map (\d-> fromDynamic (externDyn d):: Maybe RewriteCoreBox) es
-                    names = map externName es
-                    rrs = [unbox boxedR | Just boxedR <- mbs]
-                testRewrites False (zip names rrs)
+                    mbs = map (\d-> (externName d, fromDynamic (externDyn d):: Maybe RewriteCoreBox)) es
+                    namedRewrites = [(name ,unbox boxedR) | (name, Just boxedR) <- mbs]
+                testRewrites False namedRewrites
 
 testRewrites :: Bool-> [(ExternalName, RewriteH Core)] -> TransformH Core String
 testRewrites debug rewrites = case debug of 
