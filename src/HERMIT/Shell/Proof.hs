@@ -111,6 +111,10 @@ proof_externals = map (.+ Proof)
         ]
     , external "dump" PCDump
         [ "dump <filename> <renderer> <width>" ]
+    , external "end-proof" PCEnd
+        [ "check for alpha-equality, marking the lemma as proven" ]
+    , external "end-case" PCEnd
+        [ "check for alpha-equality, marking the proof case as proven" ]
     ]
 
 --------------------------------------------------------------------------------------------------------
@@ -227,36 +231,35 @@ interactiveProof topLevel lem = do
 
     let ws_complete = " ()"
 
-        -- If we are mid-script, then we just hit a call to interactive-proof,
-        -- so treat the rest of the script as if it were a proof script.
-        startup :: Lemma -> CLT (InputT IO) Lemma
-        startup l = popScriptLine >>= maybe (return l) (runExprH l >=> startup)
-
         -- Main proof input loop
         loop :: Lemma -> CLT (InputT IO) ()
         loop l = do
-            printLemma l
-            st <- get
-            liftIO $ modifyMVar_ completionMVar (const $ return st) -- so the completion can get the current state
-            mLine <- lift $ getInputLine $ "proof> "
-
-            case mLine of
-                Nothing          -> fail "proof aborted (input: Nothing)"
-                Just ('-':'-':_) -> loop l
-                Just line        -> if all isSpace line
-                                    then loop l
-                                    else (evalProofScript l line `catchM` (\msg -> cl_putStrLn msg >> return l)) >>= loop
+            mExpr <- popScriptLine
+            case mExpr of
+                Nothing -> do
+                    printLemma l
+                    st <- get
+                    liftIO $ modifyMVar_ completionMVar (const $ return st) -- so the completion can get the current state
+                    mLine <- lift $ getInputLine $ "proof> "
+                    case mLine of
+                        Nothing          -> fail "proof aborted (input: Nothing)"
+                        Just ('-':'-':_) -> loop l
+                        Just line        -> if all isSpace line
+                                            then loop l
+                                            else (evalProofScript l line `catchM` (\msg -> cl_putStrLn msg >> return l)) >>= loop
+                Just e -> (runExprH l e `catchM` (\msg -> setRunningScript Nothing >> cl_putStrLn msg >> return l)) >>= loop
 
     -- Display a proof banner?
 
     -- Start the CLI
     let settings = setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings
         cleanup s = put (s { cl_externals = origEs }) 
-    (r,_s) <- get >>= liftIO . runInputTBehavior defaultBehavior settings . flip runCLT (startup lem >>= loop)
+    (r,_s) <- get >>= liftIO . runInputTBehavior defaultBehavior settings . flip runCLT (loop lem)
     case r of
         Right _               -> return ()      -- this case isn't possible, loop never returns
         Left CLAbort          -> cleanup origSt >> unless topLevel abort -- abandon proof attempt, bubble out to regular shell
         Left (CLContinue st') -> cleanup st'    -- successfully proven
+        Left (CLError msg)    -> fail $ "Prover error: " ++ msg
         Left _                -> fail "unsupported exception in interactive prover"
 
 addProofExternals :: MonadState CommandLineState m => Bool -> m [External]
@@ -275,9 +278,9 @@ runExprH :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState Comma
 runExprH lem expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n")
                   $ interpExprH interpProof expr >>= performProofShellCommand lem
 
--- To decide whether to continue the proof or not.
-checkProven :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
-checkProven (nm, eq, _) = do
+-- | Verify that the lemma has been proven. Throws an exception if it has not.
+endProof :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
+endProof (nm, eq, _) = do
     st <- get
 
     let sk = cl_kernel st
@@ -286,7 +289,7 @@ checkProven (nm, eq, _) = do
 
     -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
     b <- (queryS sk (return eq >>> testM verifyCoreExprEqualityT :: TransformH Core Bool) kEnv sast)
-    when b $ completeProof nm
+    if b then completeProof nm else fail $ "The two sides of " ++ nm ++ " are not alpha-equivalent."
 
 performProofShellCommand :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> ProofShellCommand -> m Lemma
 performProofShellCommand lem@(nm, eq, b) = go
@@ -298,9 +301,7 @@ performProofShellCommand lem@(nm, eq, b) = go
 
                 -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
                 eq' <- queryS sk (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core CoreExprEquality) kEnv sast
-                let lem' = (nm, eq', b)
-                checkProven lem'
-                return lem'
+                return (nm, eq', b)
           go (PCTransform t)      = do
                 st <- get
                 let sk = cl_kernel st
@@ -315,7 +316,7 @@ performProofShellCommand lem@(nm, eq, b) = go
           go (PCShell effect)     = performShellEffect effect >> return lem
           go (PCScript effect)    = do
                 lemVar <- liftIO $ newMVar lem -- couldn't resist that name
-                let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= \l -> liftIO (putMVar lemVar l) >> checkProven l
+                let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= \l -> liftIO (putMVar lemVar l) 
                 performScriptEffect lemHack effect
                 liftIO $ takeMVar lemVar
           go (PCQuery query)      = performQuery query (error "PCQuery ExprH") >> return lem
@@ -328,6 +329,7 @@ performProofShellCommand lem@(nm, eq, b) = go
                 completeProof nm -- note: we assume that if 't' completes without failing, the lemma is proved, we don't actually check
                 return lem       -- never reached
           go (PCDump fName r w)   = dump (\ st -> return lem >>> ppLemmaT (cl_pretty st)) fName r w >> return lem
+          go PCEnd                = endProof lem >> return lem
           go (PCUnsupported s)    = cl_putStrLn s >> return lem
 
 performInduction :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> (Id -> Bool) -> m Lemma
@@ -377,6 +379,7 @@ data ProofShellCommand
     | PCProofCommand ProofCommand
     | PCUser UserProofTechnique
     | PCDump String String Int
+    | PCEnd
     | PCUnsupported String
     deriving Typeable
 
