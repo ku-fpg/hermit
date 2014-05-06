@@ -126,7 +126,7 @@ shell_externals = map (.+ Shell)
          Nothing -> do
             putStrLn $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
             return st
-         Just pp -> return $ setPretty st pp)
+         Just pp -> return $ flip setPrettyOpts (cl_pretty_opts st) $ setPretty st pp) -- careful to preserve the current options
        [ "set the pretty printer"
        , "use 'set-pp ls' to list available pretty printers" ]
    , external "set-pp-renderer"    (PluginComp . changeRenderer)
