@@ -137,15 +137,15 @@ birewrite (CoreExprEquality bnds l r) = bidirectional (foldUnfold l r) (foldUnfo
             apply unfoldR c' e'
 
 -- | Lift a transformation over 'CoreExpr' into a transformation over the left-hand side of a 'CoreExprEquality'.
-lhsT :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Transform c m CoreExpr b -> Transform c m CoreExprEquality b
+lhsT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m CoreExprEquality b
 lhsT t = idR >>= \ (CoreExprEquality vs lhs _) -> return lhs >>> withVarsInScope vs t
 
 -- | Lift a transformation over 'CoreExpr' into a transformation over the right-hand side of a 'CoreExprEquality'.
-rhsT :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Transform c m CoreExpr b -> Transform c m CoreExprEquality b
+rhsT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m CoreExprEquality b
 rhsT t = idR >>= \ (CoreExprEquality vs _ rhs) -> return rhs >>> withVarsInScope vs t
 
 -- | Lift a transformation over 'CoreExpr' into a transformation over both sides of a 'CoreExprEquality'.
-bothT :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Transform c m CoreExpr b -> Transform c m CoreExprEquality (b,b)
+bothT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m CoreExprEquality (b,b)
 bothT t = liftM2 (,) (lhsT t) (rhsT t) -- Can't wait for Applicative to be a superclass of Monad
 
 -- | Lift a transformation over '[Var]' into a transformation over the universally quantified variables of a 'CoreExprEquality'.
@@ -153,21 +153,21 @@ forallVarsT :: Monad m => Transform c m [Var] b -> Transform c m CoreExprEqualit
 forallVarsT t = idR >>= \ (CoreExprEquality vs _ _) -> return vs >>> t
 
 -- | Lift a rewrite over 'CoreExpr' into a rewrite over the left-hand side of a 'CoreExprEquality'.
-lhsR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
+lhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
 lhsR r = do
     CoreExprEquality vs lhs rhs <- idR
     lhs' <- withVarsInScope vs r <<< return lhs
     return $ CoreExprEquality vs lhs' rhs
 
 -- | Lift a rewrite over 'CoreExpr' into a rewrite over the right-hand side of a 'CoreExprEquality'.
-rhsR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
+rhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
 rhsR r = do
     CoreExprEquality vs lhs rhs <- idR
     rhs' <- withVarsInScope vs r <<< return rhs
     return $ CoreExprEquality vs lhs rhs'
 
 -- | Lift a rewrite over 'CoreExpr' into a rewrite over both sides of a 'CoreExprEquality'.
-bothR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
+bothR :: (AddBindings c, MonadCatch m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
 bothR r = lhsR r >+> rhsR r
 
 ------------------------------------------------------------------------------
@@ -206,7 +206,7 @@ instance BuildEquality a => BuildEquality (CoreExpr -> a) where
 ------------------------------------------------------------------------------
 
 -- | Verify that a 'CoreExprEquality' holds, by applying a rewrite to each side, and checking that the results are equal.
-proveCoreExprEqualityT :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c Core)
+proveCoreExprEqualityT :: forall c m. (AddBindings c, Monad m, ReadPath c Crumb)
                         => CoreExprEqualityProof c m -> Transform c m CoreExprEquality ()
 proveCoreExprEqualityT (l,r) = lhsR l >>> rhsR r >>> verifyCoreExprEqualityT
 
@@ -312,11 +312,12 @@ instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
     CoreExprEquality bs lhs rhs <- idR
     (e,bs') <- case filter p bs of
                 [] -> fail "no universally quantified variables match predicate."
-                (b:_) | isId b    -> liftM (,bs) $ parseCoreExprT cs
+                (b:_) | isId b    -> let (before,_) = break (==b) bs
+                                     in liftM (,bs) $ withVarsInScope before $ parseCoreExprT cs
 #if __GLASGOW_HASKELL__ >= 708
-                      | otherwise -> do (ty, tvs) <- parseTypeWithHolesT cs
-                                        let (before,including) = break (==b) bs
-                                            bs' = before ++ tvs ++ including
+                      | otherwise -> do let (before,including) = break (==b) bs
+                                        (ty, tvs) <- withVarsInScope before $ parseTypeWithHolesT cs
+                                        let bs' = before ++ tvs ++ including
                                         return (Type ty, bs')
 #else
                       | otherwise -> fail "cannot instantiate type binders in GHC 7.6"

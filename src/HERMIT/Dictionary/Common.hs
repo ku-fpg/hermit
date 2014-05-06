@@ -240,9 +240,8 @@ inScope c v = (v `boundIn` c) ||                 -- defined in this module
                 _                -> False)
 
 -- | Modify transformation to apply to current expression as if it were the body of a lambda binding the given variables.
-withVarsInScope :: forall c m b. (ReadPath c Crumb, ExtendPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m)
-                => [Var] -> Transform c m CoreExpr b -> Transform c m CoreExpr b
-withVarsInScope vs t = arr (mkCoreLams vs) >>> extractT (pathT (replicate (length vs) Lam_Body) (promoteExprT t :: Transform c m Core b))
+withVarsInScope :: (AddBindings c, ReadPath c Crumb) => [Var] -> Transform c m a b -> Transform c m a b
+withVarsInScope vs t = transform $ apply t . flip (foldl (flip addLambdaBinding)) vs -- careful to add left-to-right
 
 ------------------------------------------------------------------------------
 
