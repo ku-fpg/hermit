@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ScopedTypeVariables, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables, TupleSections #-}
 
 module HERMIT.Dictionary.Reasoning
     ( -- * Equational Reasoning
@@ -54,6 +54,7 @@ import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Fold hiding (externals)
+import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Local.Let (nonRecIntroR)
 import HERMIT.Dictionary.Unfold hiding (externals)
 
@@ -290,7 +291,7 @@ instantiateDictsR :: RewriteH CoreExprEquality
 #if __GLASGOW_HASKELL__ >= 708
 instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
     CoreExprEquality bs _ _ <- idR
-    let dArgs = [ b | b <- bs, isId b, let ty = varType b, isDictTy ty, null (varSetElems (freeVarsType ty)) ]
+    let dArgs = [ b | b <- bs, isId b, let ty = varType b, isDictTy ty ] 
     guardMsg (not (null dArgs)) "no universally quantified dictionaries can be instantiated."
     ds <- forM dArgs $ \ b -> constT $ do
             guts <- getModGuts
@@ -308,16 +309,21 @@ instantiateDictsR = fail "Dictionaries cannot be instantiated in GHC 7.6"
 
 instantiateEqualityVarR :: (Var -> Bool) -> CoreString -> RewriteH CoreExprEquality
 instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
-    CoreExprEquality bs _ _ <- idR
-    e <- case filter p bs of
-            [] -> fail "no universally quantified variables match predicate."
-            (b:_) | isId b    -> parseCoreExprT cs
+    CoreExprEquality bs lhs rhs <- idR
+    (e,bs') <- case filter p bs of
+                [] -> fail "no universally quantified variables match predicate."
+                (b:_) | isId b    -> liftM (,bs) $ parseCoreExprT cs
 #if __GLASGOW_HASKELL__ >= 708
-                  | otherwise -> liftM Type $ parseTypeT cs
+                      | otherwise -> do (ty, tvs) <- parseTypeWithHolesT cs
+                                        let (before,including) = break (==b) bs
+                                            bs' = before ++ tvs ++ including
+                                        return (Type ty, bs')
 #else
-                  | otherwise -> fail "cannot instantiate type binders in GHC 7.6"
+                      | otherwise -> fail "cannot instantiate type binders in GHC 7.6"
 #endif
-    arr (instantiateEqualityVar p e)
+    let eq = instantiateEqualityVar p e (CoreExprEquality bs' lhs rhs)
+    (_,_) <- return eq >>> bothT lintExprT -- sanity check
+    return eq
 
 -- | Instantiate one of the universally quantified variables in a 'CoreExprEquality'.
 -- Note: assumes implicit ordering of variables, such that substitution happens to the right
