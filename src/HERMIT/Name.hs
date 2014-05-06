@@ -55,6 +55,12 @@ data Named = NamedId Id
            | NamedTyCon TyCon
            | NamedTyVar Var
 
+instance Show Named where
+    show (NamedId _) = "NamedId"
+    show (NamedDataCon _) = "NamedDataCon"
+    show (NamedTyCon _) = "NamedTyCon"
+    show (NamedTyVar _) = "NamedTyVar"
+
 varToNamed :: Var -> Named
 varToNamed v | isVarOcc onm = NamedId v
              | isTvOcc onm  = NamedTyVar v
@@ -142,7 +148,7 @@ findId nm c = do
     case nmd of
         NamedId i -> return i
         NamedDataCon dc -> return $ dataConWrapId dc
-        _ -> fail "findId: impossible Named returned."
+        other -> fail $ "findId: impossible Named returned: " ++ show other
 
 findVar :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m) 
        => String -> c -> m Var
@@ -152,7 +158,7 @@ findVar nm c = do
         NamedId i -> return i
         NamedTyVar v -> return v
         NamedDataCon dc -> return $ dataConWrapId dc
-        _ -> fail "findVar: impossible Named returned."
+        other -> fail $ "findVar: impossible Named returned: " ++ show other
 
 findTyCon :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m) 
           => String -> c -> m TyCon
@@ -160,7 +166,7 @@ findTyCon nm c = do
     nmd <- findInNameSpace tyConClassNS nm c
     case nmd of
         NamedTyCon tc -> return tc
-        _ -> fail "findTyCon: impossible Named returned."
+        other -> fail $ "findTyCon: impossible Named returned: " ++ show other
 
 findType :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m) 
          => String -> c -> m Type
@@ -169,7 +175,7 @@ findType nm c = do
     case nmd of
         NamedTyVar v -> return $ mkTyVarTy v
         NamedTyCon tc -> return $ mkTyConTy tc
-        _ -> fail "findType: impossible Named returned."
+        other -> fail $ "findType: impossible Named returned: " ++ show other
 
 --------------------------------------------------------------------------------------------------
 
@@ -202,7 +208,7 @@ findInNSPackageDB :: (HasHscEnv m, HasModGuts m, MonadIO m, MonadThings m)
 findInNSPackageDB ns nm = do
     mnm <- lookupName ns nm
     case mnm of
-        Nothing -> findNamedBuiltIn (hnUnqualified nm)
+        Nothing -> findNamedBuiltIn ns (hnUnqualified nm)
         Just n  -> nameToNamed n
 
 -- | Helper to call GHC's lookupRdrNameInModuleForPlugins
@@ -215,26 +221,20 @@ lookupName ns nm = case isQual_maybe rdrName of
                         liftIO $ lookupRdrNameInModuleForPlugins hscEnv guts m rdrName
     where rdrName = toRdrName ns nm
 
--- | Looks for Named amongst GHC's built-in datacons. 
--- TODO: with findInNSPackageDB, this may never be reached. Delete?
-findNamedBuiltIn :: Monad m => String -> m Named
-findNamedBuiltIn = liftM NamedDataCon . go
-    where go ":"     = return consDataCon
-          go "[]"    = return nilDataCon
-
-          go "True"  = return trueDataCon
-          go "False" = return falseDataCon
-
-          go "<"     = return ltDataCon
-          go "=="    = return eqDataCon
-          go ">"     = return gtDataCon
-
-          go "I#"    = return intDataCon
-
-          go "()"    = return unitDataCon
-          -- TODO: add more as needed
-          --       http://www.haskell.org/ghc/docs/latest/html/libraries/ghc/TysWiredIn.html
-          go _       = fail "variable not in scope."
+-- | Looks for Named amongst GHC's built-in DataCons/TyCons.
+findNamedBuiltIn :: Monad m => NameSpace -> String -> m Named
+findNamedBuiltIn ns str
+    | isValNameSpace ns = 
+        case [ dc | tc <- wiredInTyCons, dc <- tyConDataCons tc, str == getOccString dc ] of
+            [] -> fail "name not in scope."
+            [dc] -> return $ NamedDataCon dc
+            dcs -> fail $ "multiple DataCons match: " ++ show (map getOccString dcs)
+    | isTcClsNameSpace ns = 
+        case [ tc | tc <- wiredInTyCons, str == getOccString tc ] of
+            [] -> fail "type name not in scope."
+            [tc] -> return $ NamedTyCon tc
+            tcs -> fail $ "multiple TyCons match: " ++ show (map getOccString tcs)
+    | otherwise = fail "findNameBuiltIn: unusable NameSpace"
 
 -- | We have a name, find the corresponding Named.
 nameToNamed :: MonadThings m => Name -> m Named
