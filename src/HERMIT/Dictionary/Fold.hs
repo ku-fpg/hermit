@@ -7,6 +7,7 @@ module HERMIT.Dictionary.Fold
     , stashFoldAnyR
       -- * Unlifted fold interface
     , fold
+    , unifyType
     )
 
 where
@@ -94,18 +95,26 @@ collectNBinders = go []
     go bs i (Lam b e) = go (b:bs) (i-1) e
     go _ _  _         = Nothing
 
--- return Nothing if not equal, so sequence will fail below
-checkEqual :: Maybe CoreExpr -> Maybe CoreExpr -> Maybe CoreExpr
-checkEqual m1 m2 = ifM (exprAlphaEq <$> m1 <*> m2) m1 Nothing
+unifyHoles :: Ord k
+           => [k]              -- keys we care about (TODO: figure out what else is getting in there)
+           -> (a -> a -> Bool) -- notion of equality
+           -> [(k,a)]          -- list of key/values
+           -> Maybe [(k,a)]    -- list of unified key/values, or failure
+unifyHoles vs eq kvs = do
+    -- return Nothing if not equal, so sequence will fail below
+    let checkEqual m1 m2 = ifM (eq <$> m1 <*> m2) m1 Nothing
+        m = Map.fromListWith checkEqual [(k,Just v) | (k,v) <- kvs ]
+
+    es <- sequence [ join (Map.lookup v m) | v <- vs ]
+    return $ zip vs es
 
 fold :: Id -> CoreExpr -> CoreExpr -> Maybe CoreExpr
 fold i lam exp = do
     (vs,body) <- collectNBinders (countBinders lam - countBinders exp) lam
     al <- foldMatch vs [] body exp
 
-    let m = Map.fromListWith checkEqual [(k,Just v) | (k,v) <- al ]
+    es <- liftM (map snd) $ unifyHoles vs exprAlphaEq al
 
-    es <- sequence [ join (Map.lookup v m) | v <- vs ]
     return $ mkCoreApps (varToCoreExpr i) es
 
 -- Note: Var in the concrete instance is first
@@ -191,6 +200,11 @@ foldMatch _ _ (Coercion c) (Coercion c') | coreEqCoercion c c' = return []
 foldMatch _ _ _ _ = Nothing
 
 ------------------------------------------------------------------------
+
+unifyType :: [TyVar] -> Type -> Type -> Maybe [(TyVar, Type)]
+unifyType holes pat ty = do
+    al <- foldMatchType holes [] pat ty
+    unifyHoles holes typeAlphaEq al
 
 foldMatchType :: [TyVar]              -- ^ vars that can unify with anything
               -> [(TyVar,TyVar)]      -- ^ alpha equivalences, wherever there is binding

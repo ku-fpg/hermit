@@ -291,7 +291,7 @@ instantiateDictsR :: RewriteH CoreExprEquality
 #if __GLASGOW_HASKELL__ >= 708
 instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
     CoreExprEquality bs _ _ <- idR
-    let dArgs = [ b | b <- bs, isId b, let ty = varType b, isDictTy ty ] 
+    let dArgs = filter (\b -> isId b && isDictTy (varType b)) bs
     guardMsg (not (null dArgs)) "no universally quantified dictionaries can be instantiated."
     ds <- forM dArgs $ \ b -> constT $ do
             guts <- getModGuts
