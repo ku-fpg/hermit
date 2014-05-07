@@ -55,21 +55,28 @@ infoT =
                                 [ "\n  " ++ var2String k ++  " : " ++ hermitBindingSummary hbs
                                 | (k,hbs) <- Map.toList (hermitBindings c)
                                 ]
---               showVarSet (boundVars c)
               freevars = [ "Free local identifiers:  " ++ showVarSet (filterVarSet isLocalId fvs)
                          , "Free global identifiers: " ++ showVarSet (filterVarSet isGlobalId fvs)
                          , "Free type variables:     " ++ showVarSet (filterVarSet isTyVar fvs)
                          , "Free coercion variables: " ++ showVarSet (filterVarSet isCoVar fvs)
                          ]
+
               typeId   = case coreTC of
                              Core (ExprCore e)      -> let tyK = exprKindOrType e
                                                         in [(if isKind tyK then "Kind:        " else "Type:        ") ++ showPpr dynFlags tyK] ++
                                                            case e of
                                                              Var i -> [ ""
                                                                       , "OccName:                  " ++ getOccString i
+                                                                      , if isLocalVar i then "Local" else "Global"
                                                                       , "Unique:                   " ++ show (getUnique i)
                                                                       , "Identifier arity:         " ++ show (arityOf c i)
-                                                                      , "Identifier binding depth: " ++ runKureM show id (lookupHermitBindingDepth i c) ]
+                                                                      , "Identifier binding depth: " ++ runKureM show id (lookupHermitBindingDepth i c)
+                                                                      ] ++ if isId i then let inf = idInfo i
+                                                                                          in [ "Unfolding:                " ++ showPpr dynFlags (unfoldingInfo inf)
+                                                                                             , "Occurrence Info:          " ++ showPpr dynFlags (occInfo inf)
+                                                                                             , "Inline Pragmas:           " ++ showPpr dynFlags (inlinePragInfo inf)
+                                                                                             ]
+                                                                                     else []
                                                              _     -> []
                              TyCo (TypeCore ty)     -> ["Kind: " ++ showPpr dynFlags (typeKind ty)]
                              TyCo (CoercionCore co) -> ["Kind: " ++ showPpr dynFlags (coercionKind co) ]
