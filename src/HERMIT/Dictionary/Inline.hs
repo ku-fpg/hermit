@@ -27,6 +27,8 @@ import Control.Arrow
 import Control.Applicative
 import Control.Monad
 
+import Data.List (intercalate)
+
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
@@ -96,12 +98,16 @@ configurableInlineR config p =
    do b <- varT p
       guardMsg b "identifier does not satisfy predicate."
       (e,uncaptured) <- varT (getUnfoldingT config)
+      return e >>> ensureBoundT -- fails if not all bound
       setFailMsg "values in inlined expression have been rebound."
-        (return e >>> accepterR ensureBoundT >>> accepterR (ensureDepthT uncaptured))
+        (return e >>> accepterR (ensureDepthT uncaptured))
 
 -- | Check that all free variables in an expression are bound.
-ensureBoundT :: (Monad m, ReadBindings c) => Transform c m CoreExpr Bool
-ensureBoundT = transform $ \ c -> return . all (inScope c) . varSetElems . localFreeVarsExpr
+-- Fails, listing unbound variables if not.
+ensureBoundT :: (Monad m, ReadBindings c) => Transform c m CoreExpr ()
+ensureBoundT = do
+    unbound <- transform $ \ c -> return . filter (not . inScope c) . varSetElems . localFreeVarsExpr
+    guardMsg (null unbound) $ "the following variables are unbound: " ++ intercalate ", " (map getOccString unbound)
 
 -- NOTE: When inlining, we have to take care to avoid variable capture.
 --       Our approach is to track the binding depth of the inlined identifier.
