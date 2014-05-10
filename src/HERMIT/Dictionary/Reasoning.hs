@@ -2,7 +2,7 @@
 
 module HERMIT.Dictionary.Reasoning
     ( -- * Equational Reasoning
-    externals
+      externals
     , CoreExprEquality(..)
     , CoreExprEqualityProof
     , flipCoreExprEquality
@@ -36,6 +36,7 @@ module HERMIT.Dictionary.Reasoning
 import Control.Applicative
 import Control.Arrow
 import Control.Monad
+import Control.Monad.IO.Class
 
 import Data.Maybe (fromMaybe)
 import Data.Monoid
@@ -290,8 +291,7 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 instantiateDictsR :: RewriteH CoreExprEquality
 #if __GLASGOW_HASKELL__ >= 708
 instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
-    CoreExprEquality bs _ _ <- idR
-    let dArgs = filter (\b -> isId b && isDictTy (varType b)) bs
+    dArgs <- forallVarsT $ arr $ filter (\b -> isId b && isDictTy (varType b))
     guardMsg (not (null dArgs)) "no universally quantified dictionaries can be instantiated."
     ds <- forM dArgs $ \ b -> constT $ do
             guts <- getModGuts
@@ -300,7 +300,7 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
                             [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
                             _ -> mkCoreLets bnds (varToCoreExpr i)
             return (b,dExpr)
-    arr $ instantiateEquality ds
+    contextfreeT $ instantiateEquality ds
 #else
 instantiateDictsR = fail "Dictionaries cannot be instantiated in GHC 7.6"
 #endif
@@ -322,7 +322,7 @@ instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
 #else
                       | otherwise -> fail "cannot instantiate type binders in GHC 7.6"
 #endif
-    let eq = instantiateEqualityVar p e (CoreExprEquality bs' lhs rhs)
+    eq <- instantiateEqualityVar p e (CoreExprEquality bs' lhs rhs)
     (_,_) <- return eq >>> bothT lintExprT -- sanity check
     return eq
 
@@ -330,23 +330,28 @@ instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
 -- Note: assumes implicit ordering of variables, such that substitution happens to the right
 -- as it does in case alternatives. Only first variable that matches predicate is
 -- instantiated.
-instantiateEqualityVar :: (Var -> Bool) -> CoreExpr -> CoreExprEquality -> CoreExprEquality
+instantiateEqualityVar :: MonadIO m => (Var -> Bool) -> CoreExpr -> CoreExprEquality -> m CoreExprEquality
 instantiateEqualityVar p e c@(CoreExprEquality bs lhs rhs)
-    | not (any p bs) = c
-    | otherwise =
-        let (bs',i:vs)    = break p bs -- this is safe because we know i is in bs
-            inS           = delVarSetList (unionVarSets (map localFreeVarsExpr [lhs, rhs, e] ++ map freeVarsVar vs)) (i:vs)
+    | not (any p bs) = return c
+    | otherwise = do
+        let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
+            tyVars    = filter isTyVar bs'
+            failMsg   = fail "type of provided expression differs from selected binder."
+        tvs <- maybe failMsg (return . tyMatchesToCoreExpr) 
+                $ unifyTypes tyVars (varType i) (exprKindOrType e)
+
+        let inS           = delVarSetList (unionVarSets (map localFreeVarsExpr [lhs, rhs, e] ++ map freeVarsVar vs)) (i:vs)
             subst         = extendSubst (mkEmptySubst (mkInScopeSet inS)) i e
             (subst', vs') = substBndrs subst vs
             lhs'          = substExpr (text "coreExprEquality-lhs") subst' lhs
             rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
-        in CoreExprEquality (bs'++vs') lhs' rhs'
+        instantiateEquality tvs $ CoreExprEquality (bs'++vs') lhs' rhs'
 
 -- | Instantiate a set of universally quantified variables in a 'CoreExprEquality'.
 -- It is important that all type variables appear before any value-level variables in the first argument.
-instantiateEquality :: [(Var,CoreExpr)] -> CoreExprEquality -> CoreExprEquality
-instantiateEquality = flip (foldr (\(v,e) -> instantiateEqualityVar (==v) e))
--- foldr is important here because it effectively does the substitutions in reverse order,
+instantiateEquality :: MonadIO m => [(Var,CoreExpr)] -> CoreExprEquality -> m CoreExprEquality
+instantiateEquality = flip (foldM (\ eq (v,e) -> instantiateEqualityVar (==v) e eq)) . reverse
+-- foldM is a left-to-right fold, so the reverse is important to do substitutions in reverse order
 -- which is what we want (all value variables should be instantiated before type variables).
 
 ------------------------------------------------------------------------------

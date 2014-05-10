@@ -346,10 +346,12 @@ performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
     forM_ cases $ \ (mdc,vs,lhsE,rhsE) -> do
 
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
-            -- Generate list of specialized induction hypotheses for the recursive cases.
-            eqs = [ discardUniVars $ instantiateEqualityVar (==i) (Var i') eq
-                  | i' <- vs_matching_i_type ]
-            nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
+
+        -- Generate list of specialized induction hypotheses for the recursive cases.
+        eqs <- forM vs_matching_i_type $ \ i' -> 
+                    liftM discardUniVars $ instantiateEqualityVar (==i) (Var i') eq
+
+        let nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
             hypLemmas = zip3 nms eqs (repeat True)
             caseLemma = ( nm ++ "-induction-on-" ++ getOccString i ++ "-case-" ++ maybe "undefined" getOccString mdc
                         , CoreExprEquality (delete i bs ++ vs) lhsE rhsE

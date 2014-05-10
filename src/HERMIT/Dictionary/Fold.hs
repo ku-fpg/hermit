@@ -7,7 +7,8 @@ module HERMIT.Dictionary.Fold
     , stashFoldAnyR
       -- * Unlifted fold interface
     , fold
-    , unifyType
+    , unifyTypes
+    , tyMatchesToCoreExpr
     )
 
 where
@@ -201,10 +202,15 @@ foldMatch _ _ _ _ = Nothing
 
 ------------------------------------------------------------------------
 
-unifyType :: [TyVar] -> Type -> Type -> Maybe [(TyVar, Type)]
-unifyType holes pat ty = do
+-- | Given list of TyVars which can match any type (the holes),
+-- a pattern, and a concrete type, return mapping from hole to type
+-- for successful unification.
+unifyTypes :: [TyVar] -> Type -> Type -> Maybe [(TyVar, Type)]
+unifyTypes holes pat ty = do
     al <- foldMatchType holes [] pat ty
-    unifyHoles holes typeAlphaEq al
+    -- unlike folding itself, we don't care that every hole is assigned
+    let found = [ v | (v,_) <- al, v `elem` holes ]
+    unifyHoles found typeAlphaEq al
 
 foldMatchType :: [TyVar]              -- ^ vars that can unify with anything
               -> [(TyVar,TyVar)]      -- ^ alpha equivalences, wherever there is binding
