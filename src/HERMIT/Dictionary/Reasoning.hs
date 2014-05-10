@@ -337,7 +337,15 @@ instantiateEqualityVar p e c@(CoreExprEquality bs lhs rhs)
         let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
             tyVars    = filter isTyVar bs'
             failMsg   = fail "type of provided expression differs from selected binder."
-        tvs <- maybe failMsg (return . tyMatchesToCoreExpr) 
+
+            -- unifyTypes will give back mappings from a TyVar to itself
+            -- we don't want to do these instantiations, or else variables
+            -- become unbound
+            dropSelfSubst :: [(TyVar, Type)] -> [(TyVar,Type)]
+            dropSelfSubst ps = [ (v,t) | (v,t) <- ps, case t of
+                                                        TyVarTy v' | v' == v -> False
+                                                        _ -> True ]
+        tvs <- maybe failMsg (return . tyMatchesToCoreExpr . dropSelfSubst)
                 $ unifyTypes tyVars (varType i) (exprKindOrType e)
 
         let inS           = delVarSetList (unionVarSets (map localFreeVarsExpr [lhs, rhs, e] ++ map freeVarsVar vs)) (i:vs)
