@@ -184,7 +184,7 @@ performProofCommand (ModifyLemma nm nFn rr pFn) = do
     
     -- query so lemma is transformed in current context
     eq' <- queryS (cl_kernel st) (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core CoreExprEquality) (cl_kernel_env st) (cl_cursor st)
-    when (nFn nm == nm) $ deleteLemmaByName nm
+    deleteLemmaByName (nFn nm)
     _ <- addLemmas [(nFn nm, eq', pFn p)]
     return ()
 
