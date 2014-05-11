@@ -17,7 +17,7 @@ import Control.Monad.State
 
 import Data.Char (isSpace)
 import Data.Dynamic
-import Data.List (delete)
+import Data.List (delete, isInfixOf)
 
 import HERMIT.Core
 import HERMIT.External
@@ -53,7 +53,9 @@ externals :: [External]
 externals = map (.+ Proof)
     [ external "rule-to-lemma" RuleToLemma
         [ "Create a lemma from a GHC RULE." ]
-    , external "show-lemmas" ShowLemmas
+    , external "show-lemma" (ShowLemmas . Just)
+        [ "List lemmas whose names match search string." ]
+    , external "show-lemmas" (ShowLemmas Nothing)
         [ "List lemmas." ]
     , external "lemma" ((\s -> promoteExprBiR . lemma False s) :: CommandLineState -> LemmaName -> BiRewriteH Core)
         [ "Generate a bi-directional rewrite from a proven lemma." ]
@@ -69,7 +71,7 @@ externals = map (.+ Proof)
         [ "Proof a lemma interactively." ]
     , external "inst-lemma" (\ nm v cs -> ModifyLemma nm id (instantiateEqualityVarR (cmpString2Var v) cs) id)
         [ "Instantiate one of the universally quantified variables of the given lemma,"
-        , "with the given Core expression, creating a new lemma. Instantiating an" 
+        , "with the given Core expression, creating a new lemma. Instantiating an"
         , "already proven lemma will result in the new lemma being considered proven." ]
     , external "inst-lemma-dictionaries" (\ nm -> ModifyLemma nm id instantiateDictsR id)
         [ "Instantiate all of the universally quantified dictionaries of the given lemma."
@@ -124,7 +126,7 @@ data ProofCommand
     | InteractiveProof LemmaName
     | ModifyLemma LemmaName (String -> String) (RewriteH CoreExprEquality) (Bool -> Bool)
     | QueryLemma LemmaName (TransformH CoreExprEquality String)
-    | ShowLemmas
+    | ShowLemmas (Maybe LemmaName)
     | DumpLemma LemmaName String String Int
     deriving (Typeable)
 
@@ -181,7 +183,7 @@ performProofCommand (InteractiveProof nm) = get >>= flip getLemmaByName nm >>= i
 performProofCommand (ModifyLemma nm nFn rr pFn) = do
     st <- get
     (_,eq,p) <- getLemmaByName st nm
-    
+
     -- query so lemma is transformed in current context
     eq' <- queryS (cl_kernel st) (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core CoreExprEquality) (cl_kernel_env st) (cl_cursor st)
     deleteLemmaByName (nFn nm)
@@ -191,14 +193,16 @@ performProofCommand (ModifyLemma nm nFn rr pFn) = do
 performProofCommand (QueryLemma nm t) = do
     st <- get
     (_,eq,_) <- getLemmaByName st nm
-    
+
     -- query so lemma is transformed in current context
     res <- queryS (cl_kernel st) (return eq >>> t :: TransformH Core String) (cl_kernel_env st) (cl_cursor st)
     cl_putStrLn res
 
 performProofCommand (DumpLemma nm fn r w) = dump (\ st -> getLemmaByName st nm >>> ppLemmaT (cl_pretty st)) fn r w
 
-performProofCommand ShowLemmas = gets cl_lemmas >>= \ ls -> forM_ (reverse ls) printLemma
+performProofCommand (ShowLemmas mnm) = do
+    ls <- gets $ filter (maybe (const True) (\ nm (n,_,_) -> nm `isInfixOf` n) mnm) . cl_lemmas
+    forM_ ls printLemma
 
 --------------------------------------------------------------------------------------------------------
 
@@ -253,7 +257,7 @@ interactiveProof topLevel lem = do
 
     -- Start the CLI
     let settings = setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings
-        cleanup s = put (s { cl_externals = origEs }) 
+        cleanup s = put (s { cl_externals = origEs })
     (r,_s) <- get >>= liftIO . runInputTBehavior defaultBehavior settings . flip runCLT (loop lem)
     case r of
         Right _               -> return ()      -- this case isn't possible, loop never returns
@@ -268,7 +272,7 @@ addProofExternals topLevel = do
     let es = cl_externals st
         -- commands with same same in proof_externals will override those in normal externals
         newEs = proof_externals ++ filter ((`notElem` (map externName proof_externals)) . externName) es
-    when topLevel $ modify $ \ s -> s { cl_externals = newEs } 
+    when topLevel $ modify $ \ s -> s { cl_externals = newEs }
     return es
 
 evalProofScript :: MonadIO m => Lemma -> String -> CLT m Lemma
@@ -316,7 +320,7 @@ performProofShellCommand lem@(nm, eq, b) = go
           go (PCShell effect)     = performShellEffect effect >> return lem
           go (PCScript effect)    = do
                 lemVar <- liftIO $ newMVar lem -- couldn't resist that name
-                let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= \l -> liftIO (putMVar lemVar l) 
+                let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= \l -> liftIO (putMVar lemVar l)
                 performScriptEffect lemHack effect
                 liftIO $ takeMVar lemVar
           go (PCQuery query)      = performQuery query (error "PCQuery ExprH") >> return lem
@@ -348,7 +352,7 @@ performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
 
         -- Generate list of specialized induction hypotheses for the recursive cases.
-        eqs <- forM vs_matching_i_type $ \ i' -> 
+        eqs <- forM vs_matching_i_type $ \ i' ->
                     liftM discardUniVars $ instantiateEqualityVar (==i) (Var i') eq
 
         let nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
@@ -396,7 +400,7 @@ instance Extern ProofShellCommand where
     box i = i
     unbox i = i
 
-data RewriteCoreExprEqualityBox = 
+data RewriteCoreExprEqualityBox =
         RewriteCoreExprEqualityBox (RewriteH CoreExprEquality) deriving Typeable
 
 instance Extern (RewriteH CoreExprEquality) where
@@ -404,12 +408,12 @@ instance Extern (RewriteH CoreExprEquality) where
     box = RewriteCoreExprEqualityBox
     unbox (RewriteCoreExprEqualityBox r) = r
 
-data TransformCoreExprEqualityStringBox = 
+data TransformCoreExprEqualityStringBox =
         TransformCoreExprEqualityStringBox (TransformH CoreExprEquality String) deriving Typeable
 
 instance Extern (TransformH CoreExprEquality String) where
-    type Box (TransformH CoreExprEquality String) = TransformCoreExprEqualityStringBox 
-    box = TransformCoreExprEqualityStringBox 
+    type Box (TransformH CoreExprEquality String) = TransformCoreExprEqualityStringBox
+    box = TransformCoreExprEqualityStringBox
     unbox (TransformCoreExprEqualityStringBox t) = t
 
 data UserProofTechniqueBox = UserProofTechniqueBox UserProofTechnique deriving Typeable
