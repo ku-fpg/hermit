@@ -179,6 +179,8 @@ shell_externals = map (.+ Shell)
        ,"Note that any names in the script will not be resolved until the script is *run*." ]
    , external "display-scripts" displayScripts
        ["Display all loaded scripts."]
+   , external "stop-script" (CLSModify $ \st -> return $ st { cl_running_script = Nothing })
+       [ "Stop running the current script." ]
    --, external "test-rewrites" (testRewrites :: [(ExternalName,RewriteH Core)] -> TransformH Core String) ["Test a given set of rewrites to see if they succeed"] .+ Experiment
    , external "possible-rewrites" (testAllT:: CommandLineState-> TransformH Core String) ["Test all given set of rewrites to see if they succeed"] .+ Experiment
      -- TODO: maybe add a "list-scripts" as well that just lists the names of loaded scripts?
@@ -278,17 +280,17 @@ showScripts :: [(ScriptName,Script)] -> String
 showScripts = concatMap (\ (name,script) -> name ++ ": " ++ unparseScript script ++ "\n\n")
 
 -------------------------------------------------------------------------------
-testAllT:: CommandLineState-> TransformH Core String
+testAllT :: CommandLineState -> TransformH Core String
 testAllT st = do
                 let es  = cl_externals st
-                    mbs = map (\d-> (externName d, fromDynamic (externDyn d):: Maybe RewriteCoreBox)) es
+                    mbs = map (\d -> (externName d, fromDynamic (externDyn d) :: Maybe RewriteCoreBox)) es
                     namedRewrites = [(name ,unbox boxedR) | (name, Just boxedR) <- mbs]
                 testRewrites False namedRewrites
 
 testRewrites :: Bool-> [(ExternalName, RewriteH Core)] -> TransformH Core String
-testRewrites debug rewrites = case debug of 
+testRewrites debug rewrites = case debug of
                        True -> let list =  mapM (\ (n,r) -> liftM (f n) (testM r)) rewrites
-                               in  liftM unlines list  
+                               in  liftM unlines list
                        False -> let list = mapM (\ (n,r) -> liftM (g n) (testM r)) rewrites
                                     filtered = liftM (filter(\x -> snd x)) list
                                     res = liftM (map (\ (n,b) -> f n b )) filtered
@@ -296,8 +298,8 @@ testRewrites debug rewrites = case debug of
 {-testRewrites rewrites = let list =  mapM (\ (n,r) -> liftM (g n) (testM r)) rewrites
                             filtered = liftM (filter (\ x -> snd x))  list
                             res =  liftM (map (\ (n, b) -> f n b)) filtered
-                        in  liftM unlines res  
--}                        
+                        in  liftM unlines res
+-}
   where
    f :: ExternalName -> Bool -> String
    f x True  = x++" would succeed."
