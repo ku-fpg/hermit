@@ -153,7 +153,7 @@ Library
                  operational >= 0.2.2.1,
                  process >= 1.1.0.2,
                  stm >= 2.4,
-                 temporary >= 1.1.2.4,
+                 temporary >= 1.2.0.3,
                  transformers
 
   if !os(windows)
