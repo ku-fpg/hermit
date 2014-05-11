@@ -366,7 +366,7 @@ performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
 
 addLemmas :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => [Lemma] -> m [Lemma]
 addLemmas lems = do
-    forM_ lems printLemma
+    ifM isRunningScript (return ()) $ forM_ lems printLemma
     st <- get
     put $ st { cl_lemmas = cl_lemmas st ++ lems }
     return $ cl_lemmas st

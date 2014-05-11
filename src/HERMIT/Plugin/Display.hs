@@ -27,7 +27,6 @@ display window = do
     focusPath <- getFocusPath
     let skernel = ps_kernel st
         ppOpts = (pOptions $ ps_pretty st) { po_focus = Just focusPath }
-    -- Do not show focus while loading
     iokm' "Rendering error: "
         (liftIO . ps_render st stdout ppOpts . Right)
         (toASTS skernel (ps_cursor st) >>= \ ast ->
