@@ -19,10 +19,14 @@ module HERMIT.Dictionary.AlphaConversion
        , alphaProgR
          -- ** Shadow Detection and Unshadowing
        , unshadowR
+       , unshadowExprR
+       , unshadowAltR
+       , unshadowProgR
        , visibleVarsT
        , cloneVarAvoidingT
 --       , freshNameGenAvoidingT
---       , freshNameGenAvoiding
+       , freshNameGenAvoiding
+       , detectShadowsM
        , replaceVarR
        )
 where
@@ -143,28 +147,34 @@ detectShadowsM bs fvs = let ss = shadowedBy (mkVarSet bs) fvs `extendVarSetList`
 
 -- | Rename local variables with manifestly unique names (x, x0, x1, ...).
 --   Does not rename top-level definitions.
-unshadowR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasEmptyContext c) => Rewrite c HermitM Core
+unshadowR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb)
+          => Rewrite c HermitM Core
 unshadowR = setFailMsg "No shadows to eliminate." $
-           anytdR (promoteExprR unshadowExpr <+ promoteAltR unshadowAlt <+ promoteProgR unshadowProg)
+    anytdR (promoteExprR unshadowExprR <+ promoteAltR unshadowAltR <+ promoteProgR unshadowProgR)
 
-  where
-    unshadowExpr :: Rewrite c HermitM CoreExpr
-    unshadowExpr = do bs  <- letVarsT <+ (return <$> (caseBinderIdT <+ lamVarT))
-                      fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsExpr
-                      ss  <- detectShadowsM bs fvs
-                      alphaLamR Nothing <+ alphaLetVarsR (varSetElems ss) <+ alphaCaseBinderR Nothing
+unshadowExprR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb)
+              => Rewrite c HermitM CoreExpr
+unshadowExprR = do
+    bs  <- letVarsT <+ (return <$> (caseBinderIdT <+ lamVarT))
+    fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsExpr
+    ss  <- detectShadowsM bs fvs
+    alphaLamR Nothing <+ alphaLetVarsR (varSetElems ss) <+ alphaCaseBinderR Nothing
 
-    unshadowAlt :: Rewrite c HermitM CoreAlt
-    unshadowAlt = do bs  <- arr altVars
-                     fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsAlt
-                     ss  <- detectShadowsM bs fvs
-                     alphaAltVarsR (varSetElems ss)
+unshadowAltR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb)
+             => Rewrite c HermitM CoreAlt
+unshadowAltR = do
+    bs  <- arr altVars
+    fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsAlt
+    ss  <- detectShadowsM bs fvs
+    alphaAltVarsR (varSetElems ss)
 
-    unshadowProg :: Rewrite c HermitM CoreProg
-    unshadowProg = do bs  <- progConsIdsT
-                      fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsProg
-                      ss  <- detectShadowsM bs fvs
-                      alphaProgConsIdsR (varSetElems ss)
+unshadowProgR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb)
+              => Rewrite c HermitM CoreProg
+unshadowProgR = do
+    bs  <- progConsIdsT
+    fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsProg
+    ss  <- detectShadowsM bs fvs
+    alphaProgConsIdsR (varSetElems ss)
 
 dupVars :: [Var] -> [Var]
 dupVars = dupsBy ((==) `on` uqName)

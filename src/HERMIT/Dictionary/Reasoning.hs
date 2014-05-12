@@ -30,6 +30,7 @@ module HERMIT.Dictionary.Reasoning
     , verifyRetractionT
     , retractionBR
     , alphaEqualityR
+    , unshadowEqualityR
     , instantiateDictsR
     , instantiateEquality
     , instantiateEqualityVar
@@ -58,6 +59,7 @@ import HERMIT.ParserType
 #endif
 import HERMIT.Utilities
 
+import HERMIT.Dictionary.AlphaConversion hiding (externals)
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Fold hiding (externals)
 import HERMIT.Dictionary.GHC hiding (externals)
@@ -83,6 +85,8 @@ externals =
         ] .+ Shallow .+ PreCondition
     , external "alpha-equality" ((\ nm newName -> alphaEqualityR (cmpString2Var nm) (const newName)))
         [ "Alpha-rename a universally quantified variable." ]
+    , external "unshadow-equality" unshadowEqualityR
+        [ "Unshadow an equality." ]
     ]
 
 ------------------------------------------------------------------------------
@@ -331,7 +335,7 @@ instantiateDictsR = fail "Dictionaries cannot be instantiated in GHC 7.6"
 ------------------------------------------------------------------------------
 
 alphaEqualityR :: (Var -> Bool) -> (String -> String) -> RewriteH CoreExprEquality
-alphaEqualityR p f = do
+alphaEqualityR p f = prefixFailMsg "Alpha-renaming binder in equality failed: " $ do
     CoreExprEquality bs lhs rhs <- idR
     guardMsg (any p bs) "specified variable is not universally quantified."
 
@@ -344,6 +348,22 @@ alphaEqualityR p f = do
         lhs'          = substExpr (text "coreExprEquality-lhs") subst' lhs
         rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
     return $ CoreExprEquality (bs'++(i':vs')) lhs' rhs'
+
+unshadowEqualityR :: RewriteH CoreExprEquality
+unshadowEqualityR = prefixFailMsg "Unshadowing equality failed: " $ do
+    c@(CoreExprEquality bs _ _) <- idR
+    bvs <- boundVarsT
+    let visible = unionVarSets [bvs , freeVarsEquality c]
+    ss <- varSetElems <$> detectShadowsM bs visible
+    guardMsg (not (null ss)) "no shadows to eliminate."
+    let f = freshNameGenAvoiding Nothing . extendVarSet visible
+    andR [ alphaEqualityR (==s) (f s) | s <- reverse ss ] >>> bothR (tryR unshadowExprR)
+
+freeVarsEquality :: CoreExprEquality -> VarSet
+freeVarsEquality (CoreExprEquality bs lhs rhs) =
+    delVarSetList (unionVarSets (map freeVarsExpr [lhs,rhs])) bs
+
+------------------------------------------------------------------------------
 
 instantiateEqualityVarR :: (Var -> Bool) -> CoreString -> RewriteH CoreExprEquality
 instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
