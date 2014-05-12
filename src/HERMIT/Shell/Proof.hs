@@ -353,7 +353,7 @@ performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
 
         -- Generate list of specialized induction hypotheses for the recursive cases.
         eqs <- forM vs_matching_i_type $ \ i' ->
-                    liftM discardUniVars $ instantiateEqualityVar (==i) (Var i') eq
+                    liftM discardUniVars $ instantiateEqualityVar (==i) (Var i') [] eq
 
         let nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
             hypLemmas = zip3 nms eqs (repeat True)

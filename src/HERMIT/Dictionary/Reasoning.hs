@@ -318,7 +318,8 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 instantiateDictsR :: RewriteH CoreExprEquality
 #if __GLASGOW_HASKELL__ >= 708
 instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
-    dArgs <- forallVarsT $ arr $ filter (\b -> isId b && isDictTy (varType b))
+    bs <- forallVarsT idR
+    let dArgs = filter (\b -> isId b && isDictTy (varType b)) bs
     guardMsg (not (null dArgs)) "no universally quantified dictionaries can be instantiated."
     ds <- forM dArgs $ \ b -> constT $ do
             guts <- getModGuts
@@ -326,7 +327,8 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
             let dExpr = case bnds of
                             [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
                             _ -> mkCoreLets bnds (varToCoreExpr i)
-            return (b,dExpr)
+                new = varSetElems $ delVarSetList (localFreeVarsExpr dExpr) bs
+            return (b,dExpr,new)
     contextfreeT $ instantiateEquality ds
 #else
 instantiateDictsR = fail "Dictionaries cannot be instantiated in GHC 7.6"
@@ -367,20 +369,19 @@ freeVarsEquality (CoreExprEquality bs lhs rhs) =
 
 instantiateEqualityVarR :: (Var -> Bool) -> CoreString -> RewriteH CoreExprEquality
 instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
-    CoreExprEquality bs lhs rhs <- idR
-    (e,bs') <- case filter p bs of
+    bs <- forallVarsT idR
+    (e,new) <- case filter p bs of
                 [] -> fail "no universally quantified variables match predicate."
                 (b:_) | isId b    -> let (before,_) = break (==b) bs
-                                     in liftM (,bs) $ withVarsInScope before $ parseCoreExprT cs
+                                     in liftM (,[]) $ withVarsInScope before $ parseCoreExprT cs
 #if __GLASGOW_HASKELL__ >= 708
-                      | otherwise -> do let (before,including) = break (==b) bs
+                      | otherwise -> do let (before,_) = break (==b) bs
                                         (ty, tvs) <- withVarsInScope before $ parseTypeWithHolesT cs
-                                        let bs' = before ++ tvs ++ including
-                                        return (Type ty, bs')
+                                        return (Type ty, tvs)
 #else
                       | otherwise -> fail "cannot instantiate type binders in GHC 7.6"
 #endif
-    eq <- instantiateEqualityVar p e (CoreExprEquality bs' lhs rhs)
+    eq <- contextfreeT $ instantiateEqualityVar p e new
     (_,_) <- return eq >>> bothT lintExprT -- sanity check
     return eq
 
@@ -388,8 +389,11 @@ instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
 -- Note: assumes implicit ordering of variables, such that substitution happens to the right
 -- as it does in case alternatives. Only first variable that matches predicate is
 -- instantiated.
-instantiateEqualityVar :: MonadIO m => (Var -> Bool) -> CoreExpr -> CoreExprEquality -> m CoreExprEquality
-instantiateEqualityVar p e (CoreExprEquality bs lhs rhs)
+instantiateEqualityVar :: MonadIO m => (Var -> Bool) -- predicate to select var
+                                    -> CoreExpr      -- expression to instantiate with
+                                    -> [Var]         -- new binders to add in place of var
+                                    -> CoreExprEquality -> m CoreExprEquality
+instantiateEqualityVar p e new (CoreExprEquality bs lhs rhs)
     | not (any p bs) = fail "specified variable is not universally quantified."
     | otherwise = do
         let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
@@ -411,12 +415,15 @@ instantiateEqualityVar p e (CoreExprEquality bs lhs rhs)
             (subst', vs') = substBndrs subst vs
             lhs'          = substExpr (text "coreExprEquality-lhs") subst' lhs
             rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
-        instantiateEquality tvs $ CoreExprEquality (bs'++vs') lhs' rhs'
+        instantiateEquality (noAdds tvs) $ CoreExprEquality (bs'++new++vs') lhs' rhs'
+
+noAdds :: [(Var,CoreExpr)] -> [(Var,CoreExpr,[Var])]
+noAdds ps = [ (v,e,[]) | (v,e) <- ps ]
 
 -- | Instantiate a set of universally quantified variables in a 'CoreExprEquality'.
 -- It is important that all type variables appear before any value-level variables in the first argument.
-instantiateEquality :: MonadIO m => [(Var,CoreExpr)] -> CoreExprEquality -> m CoreExprEquality
-instantiateEquality = flip (foldM (\ eq (v,e) -> instantiateEqualityVar (==v) e eq)) . reverse
+instantiateEquality :: MonadIO m => [(Var,CoreExpr,[Var])] -> CoreExprEquality -> m CoreExprEquality
+instantiateEquality = flip (foldM (\ eq (v,e,vs) -> instantiateEqualityVar (==v) e vs eq)) . reverse
 -- foldM is a left-to-right fold, so the reverse is important to do substitutions in reverse order
 -- which is what we want (all value variables should be instantiated before type variables).
 
