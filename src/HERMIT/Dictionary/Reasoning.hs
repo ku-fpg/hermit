@@ -1,9 +1,12 @@
-{-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables, TupleSections #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleContexts, FlexibleInstances, InstanceSigs,
+             ScopedTypeVariables, TupleSections, TypeFamilies #-}
 
 module HERMIT.Dictionary.Reasoning
     ( -- * Equational Reasoning
       externals
     , CoreExprEquality(..)
+    , RewriteCoreExprEqualityBox(..)
+    , TransformCoreExprEqualityStringBox(..)
     , CoreExprEqualityProof
     , flipCoreExprEquality
     , eqLhsIntroR
@@ -26,6 +29,7 @@ module HERMIT.Dictionary.Reasoning
     , verifyIsomorphismT
     , verifyRetractionT
     , retractionBR
+    , alphaEqualityR
     , instantiateDictsR
     , instantiateEquality
     , instantiateEqualityVar
@@ -40,6 +44,7 @@ import Control.Monad.IO.Class
 
 import Data.Maybe (fromMaybe)
 import Data.Monoid
+import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.Core
@@ -67,21 +72,39 @@ import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 externals :: [External]
 externals =
-  [ external "retraction" ((\ f g r -> promoteExprBiR $ retraction (Just r) f g) :: CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
+    [ external "retraction" ((\ f g r -> promoteExprBiR $ retraction (Just r) f g) :: CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
         [ "Given f :: X -> Y and g :: Y -> X, and a proof that f (g y) ==> y, then"
         , "f (g y) <==> y."
         ] .+ Shallow
-  , external "retraction-unsafe" ((\ f g -> promoteExprBiR $ retraction Nothing f g) :: CoreString -> CoreString -> BiRewriteH Core)
+    , external "retraction-unsafe" ((\ f g -> promoteExprBiR $ retraction Nothing f g) :: CoreString -> CoreString -> BiRewriteH Core)
         [ "Given f :: X -> Y and g :: Y -> X, then"
         , "f (g y) <==> y."
         , "Note that the precondition (f (g y) == y) is expected to hold."
         ] .+ Shallow .+ PreCondition
-  ]
+    , external "alpha-equality" ((\ nm newName -> alphaEqualityR (cmpString2Var nm) (const newName)))
+        [ "Alpha-rename a universally quantified variable." ]
+    ]
 
 ------------------------------------------------------------------------------
 
 -- | An equality is represented as a set of universally quantified binders, and then the LHS and RHS of the equality.
 data CoreExprEquality = CoreExprEquality [CoreBndr] CoreExpr CoreExpr
+
+data RewriteCoreExprEqualityBox =
+        RewriteCoreExprEqualityBox (RewriteH CoreExprEquality) deriving Typeable
+
+instance Extern (RewriteH CoreExprEquality) where
+    type Box (RewriteH CoreExprEquality) = RewriteCoreExprEqualityBox
+    box = RewriteCoreExprEqualityBox
+    unbox (RewriteCoreExprEqualityBox r) = r
+
+data TransformCoreExprEqualityStringBox =
+        TransformCoreExprEqualityStringBox (TransformH CoreExprEquality String) deriving Typeable
+
+instance Extern (TransformH CoreExprEquality String) where
+    type Box (TransformH CoreExprEquality String) = TransformCoreExprEqualityStringBox
+    box = TransformCoreExprEqualityStringBox
+    unbox (TransformCoreExprEqualityStringBox t) = t
 
 type CoreExprEqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
 
@@ -307,6 +330,21 @@ instantiateDictsR = fail "Dictionaries cannot be instantiated in GHC 7.6"
 
 ------------------------------------------------------------------------------
 
+alphaEqualityR :: (Var -> Bool) -> (String -> String) -> RewriteH CoreExprEquality
+alphaEqualityR p f = do
+    CoreExprEquality bs lhs rhs <- idR
+    guardMsg (any p bs) "specified variable is not universally quantified."
+
+    let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
+    i' <- constT $ cloneVarH f i
+
+    let inS           = delVarSetList (unionVarSets (map localFreeVarsExpr [lhs, rhs] ++ map freeVarsVar vs)) (i:i':vs)
+        subst         = extendSubst (mkEmptySubst (mkInScopeSet inS)) i (varToCoreExpr i')
+        (subst', vs') = substBndrs subst vs
+        lhs'          = substExpr (text "coreExprEquality-lhs") subst' lhs
+        rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
+    return $ CoreExprEquality (bs'++(i':vs')) lhs' rhs'
+
 instantiateEqualityVarR :: (Var -> Bool) -> CoreString -> RewriteH CoreExprEquality
 instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
     CoreExprEquality bs lhs rhs <- idR
@@ -331,8 +369,8 @@ instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
 -- as it does in case alternatives. Only first variable that matches predicate is
 -- instantiated.
 instantiateEqualityVar :: MonadIO m => (Var -> Bool) -> CoreExpr -> CoreExprEquality -> m CoreExprEquality
-instantiateEqualityVar p e c@(CoreExprEquality bs lhs rhs)
-    | not (any p bs) = return c
+instantiateEqualityVar p e (CoreExprEquality bs lhs rhs)
+    | not (any p bs) = fail "specified variable is not universally quantified."
     | otherwise = do
         let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
             tyVars    = filter isTyVar bs'

@@ -400,22 +400,6 @@ instance Extern ProofShellCommand where
     box i = i
     unbox i = i
 
-data RewriteCoreExprEqualityBox =
-        RewriteCoreExprEqualityBox (RewriteH CoreExprEquality) deriving Typeable
-
-instance Extern (RewriteH CoreExprEquality) where
-    type Box (RewriteH CoreExprEquality) = RewriteCoreExprEqualityBox
-    box = RewriteCoreExprEqualityBox
-    unbox (RewriteCoreExprEqualityBox r) = r
-
-data TransformCoreExprEqualityStringBox =
-        TransformCoreExprEqualityStringBox (TransformH CoreExprEquality String) deriving Typeable
-
-instance Extern (TransformH CoreExprEquality String) where
-    type Box (TransformH CoreExprEquality String) = TransformCoreExprEqualityStringBox
-    box = TransformCoreExprEqualityStringBox
-    unbox (TransformCoreExprEqualityStringBox t) = t
-
 data UserProofTechniqueBox = UserProofTechniqueBox UserProofTechnique deriving Typeable
 
 instance Extern UserProofTechnique where
