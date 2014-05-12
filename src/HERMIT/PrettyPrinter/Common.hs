@@ -10,6 +10,7 @@ module HERMIT.PrettyPrinter.Common
     , coercionColor
     , idColor
     , keywordColor
+    , syntaxColor
     , markBindingSite
     , markColor
     , typeColor
@@ -121,6 +122,9 @@ coercionColor = markColor CoercionColor
 
 keywordColor :: DocH -> DocH
 keywordColor = markColor KeywordColor
+
+syntaxColor :: DocH -> DocH
+syntaxColor = markColor SyntaxColor
 
 markColor :: SyntaxForColor -> DocH -> DocH
 markColor = attr . Color

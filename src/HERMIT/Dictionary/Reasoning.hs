@@ -205,7 +205,7 @@ ppCoreExprEqualityT pp = do
     let pos = pOptions pp
     d1 <- forallVarsT (liftPrettyH pos $ pForall pp)
     (d2,d3) <- bothT (liftPrettyH pos $ extractT $ pCoreTC pp)
-    return $ PP.sep [d1,d2,PP.text "<=>",d3]
+    return $ PP.sep [d1,d2,syntaxColor (PP.text "="),d3]
 
 ------------------------------------------------------------------------------
 
