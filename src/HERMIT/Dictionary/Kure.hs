@@ -91,9 +91,13 @@ externals = map (.+ KURE)
        [ "Apply a bidirectional rewrite backwards." ]
    , external "test"       (testQuery :: RewriteH Core -> TransformH Core String)
        [ "Determine if a rewrite could be successfully applied." ]
-   , external "any-call" (anyCallR :: RewriteH Core -> RewriteH Core)
+   , external "any-call"   (anyCallR :: RewriteH Core -> RewriteH Core)
        [ "any-call (.. unfold command ..) applies an unfold command to all applications."
        , "Preference is given to applications with more arguments." ] .+ Deep
+   , external "promote"    (promoteR :: RewriteH Core -> RewriteH CoreTC)
+       [ "Promote a RewriteCore to a RewriteCoreTC" ]
+   , external "extract"    (extractR :: RewriteH CoreTC -> RewriteH Core)
+       [ "Extract a RewriteCore from a RewriteCoreTC" ]
    ]
 
 ------------------------------------------------------------------------------------
