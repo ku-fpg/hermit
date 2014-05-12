@@ -334,7 +334,7 @@ performProofShellCommand lem@(nm, eq, b) = go
                 return lem       -- never reached
           go (PCDump fName r w)   = dump (\ st -> return lem >>> ppLemmaT (cl_pretty st)) fName r w >> return lem
           go PCEnd                = endProof lem >> return lem
-          go (PCUnsupported s)    = cl_putStrLn s >> return lem
+          go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.") >> return lem
 
 performInduction :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> (Id -> Bool) -> m Lemma
 performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
