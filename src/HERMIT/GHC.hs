@@ -39,9 +39,11 @@ module HERMIT.GHC
     , Pair(..)
     , bndrRuleAndUnfoldingVars
 #if __GLASGOW_HASKELL__ <= 706
-    , exprType 
+    , exprType
     , Control.Monad.IO.Class.liftIO
 #else
+    , mkPhiTy
+    , mkSigmaTy
     , runDsMtoCoreM
     , runTcMtoCoreM
     , buildTypeable
@@ -69,6 +71,7 @@ import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass, g
 import LoadIface (loadPluginInterface)
 import Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
 import TcRnMonad (initIfaceTcRn)
+import TcType (mkPhiTy, mkSigmaTy)
 import TysPrim (alphaTyVars)
 #endif
 
@@ -111,7 +114,7 @@ getHscEnvCoreM :: CoreM HscEnv
 getHscEnvCoreM = CoreMonad.getHscEnv
 
 #if __GLASGOW_HASKELL__ <= 706
--- Note: prior to 7.8, the Let case was buggy for type 
+-- Note: prior to 7.8, the Let case was buggy for type
 -- bindings, so we provide a fixed definition here.
 exprType :: CoreExpr -> Type
 -- ^ Recover the type of a well-typed Core expression. Fails when
@@ -302,7 +305,7 @@ buildTypeable guts ty = do
         newWantedEvVar predTy
     buildDictionary guts evar
 
--- | Build a dictionary for the given 
+-- | Build a dictionary for the given
 buildDictionary :: ModGuts -> Id -> CoreM (Id, [CoreBind])
 buildDictionary guts evar = do
     (i, bs) <- runTcMtoCoreM guts $ do

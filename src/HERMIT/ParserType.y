@@ -16,6 +16,7 @@ import Control.Monad.State
 import Data.Char (isSpace, isDigit)
 
 import HERMIT.Context
+import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
@@ -33,7 +34,7 @@ import Language.KURE.MonadCatch (prefixFailMsg)
 %monad { TypeParseM } { >>= } { return }
 
 %token
-    '%forall'  { Tforall }
+    'forall'   { Tforall }
     '%rec'     { Trec }
     '%let'     { Tlet }
     '%in'      { Tin }
@@ -41,7 +42,7 @@ import Language.KURE.MonadCatch (prefixFailMsg)
     '%of'      { Tof }
     '%cast'    { Tcast }
     '%note'    { Tnote }
-    '%external'    { Texternal }
+    '%external' { Texternal }
     '%local'   { Tlocal }
     '%_'       { Twild }
     '('        { Toparen }
@@ -55,11 +56,12 @@ import Language.KURE.MonadCatch (prefixFailMsg)
     ':=:'      { Tcoloneqcolon }
     '*'        { Tstar }
     '->'       { Tarrow }
+    '=>'       { Tdoublearrow }
     '\\'       { Tlambda}
     '@'        { Tat }
     '.'        { Tdot }
     '?'        { Tquestion}
-    ';'            { Tsemicolon }
+    ';'        { Tsemicolon }
     NAME       { Tname $$ }
     CNAME      { Tcname $$ }
     INTEGER    { Tinteger $$ }
@@ -70,16 +72,19 @@ import Language.KURE.MonadCatch (prefixFailMsg)
 %%
 
 -- | Top level type term.
-expr : app             { $1 }
+type : tytheta '=>' tyapp  { mkPhiTy $1 $3 } -- { uncurry mkSigmaTy $1 $3 }
+     | tyapp               { $1 }
 
-app : app arg          { mkAppTy $1 $2 }
-    | arg              { $1 }
+tytheta : tyapp            { [$1] } -- {% liftM (\(tvs,ty) -> (tvs,[ty])) $ catchFrees $1 }
 
-arg : '(' expr ')'     { $2 }
-    | '(' ')'          {% lookupName "()" }
-    | var              { $1 }
+tyapp : tyapp tyarg        { mkAppTy $1 $2 }
+      | tyarg                { $1 }
 
-var : NAME             {% lookupName $1 }
+tyarg : '(' tyapp ')'      { $2 }
+    | '(' ')'              {% lookupName "()" }
+    | tyvar                { $1 }
+
+tyvar : NAME               {% lookupName $1 }
 {
 
 #if __GLASGOW_HASKELL__ <= 706
@@ -91,6 +96,14 @@ lookupName nm = do
     c <- getContext
     et <- lift $ attemptM $ findType nm c
     either (const (addTyVar nm)) return et
+
+catchFrees :: Type -> TypeParseM ([TyVar], Type)
+catchFrees ty = do
+    used <- gets tpUsed
+    let frees = varSetElems $ freeVarsType ty
+        quants = filter (`elem` used) frees
+    modify $ \ st -> st { tpUsed = filter (`notElem` frees) (tpUsed st) }
+    return (quants, ty)
 
 data TPState = TPState { tpContext :: HermitC
                        , tpUsed :: [TyVar]

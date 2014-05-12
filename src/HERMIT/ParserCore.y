@@ -1,6 +1,6 @@
 {
 {-# LANGUAGE CPP #-}
-module HERMIT.ParserCore 
+module HERMIT.ParserCore
     ( parseCore
     , parseCoreExprT
     , parse2beforeBiR
@@ -131,6 +131,7 @@ data Token
     | Tcoloneqcolon
     | Tstar
     | Tarrow
+    | Tdoublearrow
     | Tlambda --
     | Tat
     | Tdot
@@ -146,13 +147,14 @@ data Token
 
 lexer :: String -> Either String [Token]
 lexer []           = Right []
-lexer ('_' :cs)    = fmap (Twild:)       $ lexer cs
-lexer ('(' :cs)    = fmap (Toparen:)     $ lexer cs
-lexer (')' :cs)    = fmap (Tcparen:)     $ lexer cs
-lexer (':':':':cs) = fmap (Tcoloncolon:) $ lexer cs
--- lexer (':' :cs)    = fmap (Tcolon:)      $ lexer cs
-lexer ('\\':cs)    = fmap (Tlambda:)     $ lexer cs
-lexer ('-':'>':cs) = fmap (Tarrow:)      $ lexer cs
+lexer ('_' :cs)    = fmap (Twild:)        $ lexer cs
+lexer ('(' :cs)    = fmap (Toparen:)      $ lexer cs
+lexer (')' :cs)    = fmap (Tcparen:)      $ lexer cs
+lexer (':':':':cs) = fmap (Tcoloncolon:)  $ lexer cs
+-- lexer (':' :cs)    = fmap (Tcolon:)       $ lexer cs
+lexer ('\\':cs)    = fmap (Tlambda:)      $ lexer cs
+lexer ('-':'>':cs) = fmap (Tarrow:)       $ lexer cs
+lexer ('=':'>':cs) = fmap (Tdoublearrow:) $ lexer cs
 lexer ('\"':cs)    = let (str,rest) = span (/='\"') cs
                      in case rest of
                            ('\"':cs') -> fmap (Tstring str:) $ lexer cs'
