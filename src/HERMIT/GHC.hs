@@ -42,8 +42,6 @@ module HERMIT.GHC
     , exprType
     , Control.Monad.IO.Class.liftIO
 #else
-    , mkPhiTy
-    , mkSigmaTy
     , runDsMtoCoreM
     , runTcMtoCoreM
     , buildTypeable
@@ -51,6 +49,8 @@ module HERMIT.GHC
     , eqExprX
     , lookupRdrNameInModuleForPlugins
 #endif
+    , mkPhiTy
+    , mkSigmaTy
     , getHscEnvCoreM
     ) where
 
@@ -71,7 +71,6 @@ import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass, g
 import LoadIface (loadPluginInterface)
 import Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
 import TcRnMonad (initIfaceTcRn)
-import TcType (mkPhiTy, mkSigmaTy)
 import TysPrim (alphaTyVars)
 #endif
 
@@ -83,6 +82,7 @@ import Kind (isKind,isLiftedTypeKindCon)
 import qualified OccName -- for varName
 import OccurAnal (occurAnalyseExpr)
 import Pair (Pair(..))
+import TcType (mkPhiTy, mkSigmaTy)
 import TypeRep (Type(..),TyLit(..))
 
 #if __GLASGOW_HASKELL__ <= 706
