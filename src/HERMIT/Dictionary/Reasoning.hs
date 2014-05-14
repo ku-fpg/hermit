@@ -43,6 +43,7 @@ import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class
 
+import Data.List (nubBy)
 import Data.Maybe (fromMaybe)
 import Data.Monoid
 import Data.Typeable
@@ -315,13 +316,15 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 
 ------------------------------------------------------------------------------
 
+-- TODO: revisit this for binder re-ordering issue
 instantiateDictsR :: RewriteH CoreExprEquality
 #if __GLASGOW_HASKELL__ >= 708
 instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
     bs <- forallVarsT idR
     let dArgs = filter (\b -> isId b && isDictTy (varType b)) bs
-    guardMsg (not (null dArgs)) "no universally quantified dictionaries can be instantiated."
-    ds <- forM dArgs $ \ b -> constT $ do
+        uniqDs = nubBy (\ b1 b2 -> eqType (varType b1) (varType b2)) dArgs
+    guardMsg (not (null uniqDs)) "no universally quantified dictionaries can be instantiated."
+    ds <- forM uniqDs $ \ b -> constT $ do
             guts <- getModGuts
             (i,bnds) <- liftCoreM $ buildDictionary guts b
             let dExpr = case bnds of
@@ -329,7 +332,18 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
                             _ -> mkCoreLets bnds (varToCoreExpr i)
                 new = varSetElems $ delVarSetList (localFreeVarsExpr dExpr) bs
             return (b,dExpr,new)
-    contextfreeT $ instantiateEquality ds
+    let buildSubst :: Monad m => Var -> m (Var, CoreExpr, [Var])
+        buildSubst b = case [ (b,e,[]) | (b',e,_) <- ds, eqType (varType b) (varType b') ] of
+                        [] -> fail "cannot find equivalent dictionary expression (impossible!)"
+                        [t] -> return t
+                        _   -> fail "multiple dictionary expressions found (impossible!)"
+        lookup3 :: Var -> [(Var,CoreExpr,[Var])] -> (Var,CoreExpr,[Var])
+        lookup3 v l = head [ t | t@(v',_,_) <- l, v == v' ]
+    allDs <- forM dArgs $ \ b -> constT $ do
+                if b `elem` uniqDs
+                then return $ lookup3 b ds
+                else buildSubst b
+    contextfreeT $ instantiateEquality allDs
 #else
 instantiateDictsR = fail "Dictionaries cannot be instantiated in GHC 7.6"
 #endif
