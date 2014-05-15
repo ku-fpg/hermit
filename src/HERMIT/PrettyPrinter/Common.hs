@@ -64,9 +64,9 @@ import Text.PrettyPrint.MarkedHughesPJ as PP
 
 #if __GLASGOW_HASKELL__ > 706
 showRole :: Role -> String
-showRole Nominal          = "Nominal"
-showRole Representational = "Representational"
-showRole Phantom          = "Phantom"
+showRole Nominal          = "N"
+showRole Representational = "R"
+showRole Phantom          = "P"
 #endif
 
 -- A HERMIT document

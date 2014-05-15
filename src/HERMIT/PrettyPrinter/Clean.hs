@@ -50,10 +50,12 @@ data RetExpr
         | RetLet AbsolutePathH [DocH] AbsolutePathH DocH
         | RetApp DocH [(AbsolutePathH,RetExpr)]
         | RetForAll AbsolutePathH [DocH] AbsolutePathH DocH
-        | RetArrowType DocH [(AbsolutePathH,DocH)] -- f -> (a -> (b -> c))  The path is for each arrow, starting from the left.
+        | RetArrowType ArrowType DocH [(AbsolutePathH,DocH)] -- f -> (a -> (b -> c))  The path is for each arrow, starting from the left.
         | RetExpr DocH
         | RetAtom DocH         -- parens not needed
         | RetEmpty
+
+data ArrowType = ATType | ATCoercion deriving (Eq, Show)
 
 retApp :: AbsolutePathH -> Crumb -> Crumb -> RetExpr -> RetExpr -> RetExpr
 retApp _ _   _   f              RetEmpty = f
@@ -87,10 +89,11 @@ retForAll p cr v = if isEmpty v
                             ty                    -> RetForAll p [v] (p @@ cr) (normalExpr ty)
 
 -- This is very hacky.  There must be a better way of handling arrow types.
-retArrowType :: AbsolutePathH -> Crumb -> Crumb -> RetExpr -> RetExpr -> RetExpr
-retArrowType p cr1 cr2 ty1 = \case
-                                RetArrowType ty2 ptys  -> RetArrowType (normalParensExceptApp (p @@ cr1) ty1) ((p,ty2) : ptys)
-                                ty2                    -> RetArrowType (normalParensExceptApp (p @@ cr1) ty1) [(p , normalParensExceptApp (p @@ cr2) ty2)]
+retArrowType :: ArrowType -> AbsolutePathH -> Crumb -> Crumb -> RetExpr -> RetExpr -> RetExpr
+retArrowType at@ATType p cr1 _cr2 ty1 (RetArrowType _ ty2 ptys)
+    = RetArrowType at (normalParensExceptApp (p @@ cr1) ty1) ((p,ty2) : ptys)
+retArrowType at        p cr1 cr2  ty1 ty2
+    = RetArrowType at (normalParensExceptApp (p @@ cr1) ty1) [(p , normalParensExceptApp (p @@ cr2) ty2)]
 
 ------------------------------------------------------------------------------------------------
 
@@ -110,7 +113,10 @@ normalExpr (RetApp f pes)      = let (pAtoms,pExprs) = span (isAtom.snd) pes
                                   in sep [ hsep (f : map (normalExpr.snd) pAtoms)
                                          , nest 2 (sep $ map (uncurry normalParens) pExprs) ]
 normalExpr (RetForAll p vs pb ty) = specialSymbol p ForallSymbol <+> hsep vs <+> symbol pb '.' <+> ty
-normalExpr (RetArrowType ty ptys) = foldl (\ ty1 (p,ty2) -> ty1 <+> typeArrow p <+> ty2) ty ptys
+normalExpr (RetArrowType at ty ptys) = let a = case at of
+                                                ATType -> typeArrow
+                                                ATCoercion -> coArrow
+                                       in foldl (\ ty1 (p,ty2) -> ty1 <+> a p <+> ty2) ty ptys
 
 ------------------------------------------------------------------------------------------------
 
@@ -175,6 +181,10 @@ coercionBindSymbol p = coSymbol p CoercionBindSymbol
 coKeyword :: AbsolutePathH -> String -> DocH
 coKeyword = coText -- An alternative would be keyword.
 
+coArrow :: AbsolutePathH -> DocH
+coArrow p = coSymbol p RightArrowSymbol
+
+------------------------------------------------------------------------------------------------
 
 tyChar :: AbsolutePathH -> Char -> DocH
 tyChar p = attrP p . typeColor . char
@@ -381,10 +391,10 @@ ppKindOrTypeR = absPathT >>= ppKindOrTypePR
            tyVarT (RetAtom <$> ppVarOcc)
         <+ litTyT (RetAtom <$> ppLitTy)
         <+ appTyT ppKindOrTypeR ppKindOrTypeR (retApp p AppTy_Fun AppTy_Arg)
-        <+ funTyT ppKindOrTypeR ppKindOrTypeR (retArrowType p FunTy_Dom FunTy_CoDom)
+        <+ funTyT ppKindOrTypeR ppKindOrTypeR (retArrowType ATType p FunTy_Dom FunTy_CoDom)
         <+ forAllTyT ppVar ppKindOrTypeR (retForAll p ForAllTy_Body)
         <+ tyConAppT (forkFirst ppTyCon) (\ _ -> ppKindOrTypeR)
-             (\ (pCon,tyCon) tys -> if | isFunTyCon tyCon && length tys == 2 -> let [ty1,ty2] = tys in retArrowType p (TyConApp_Arg 0) (TyConApp_Arg 1) ty1 ty2
+             (\ (pCon,tyCon) tys -> if | isFunTyCon tyCon && length tys == 2 -> let [ty1,ty2] = tys in retArrowType ATType p (TyConApp_Arg 0) (TyConApp_Arg 1) ty1 ty2
                                        | tyCon == listTyCon -> RetAtom $ tyChar p '[' <> (case tys of
                                                                                                 []  -> empty
                                                                                                 t:_ -> normalExpr t)
@@ -439,7 +449,11 @@ ppCoercionR = absPathT >>= ppCoercionPR
 #if __GLASGOW_HASKELL__ > 706
 -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
                 <+ reflT (ppTypeModeR >>^ normalExpr) (\ r ty -> RetAtom $ if isEmpty ty then coText p "refl" else coChar p '<' <> coText p (showRole r ++ ":") <> ty <> coChar p '>')
-                <+ tyConAppCoT ppTyConCo (const ppCoercionR) (\ r tc -> retApps p TyConApp_Arg $ coText p (showRole r ++ ":") <> tc)
+                <+ tyConAppCoT (forkFirst ppTyConCo) (const ppCoercionR)
+                               (\ r (ptc, tc) cs -> if isFunTyCon tc && (length cs == 2)
+                                                    then let [c1,c2] = cs
+                                                         in retArrowType ATCoercion p (TyConApp_Arg 0) (TyConApp_Arg 1) c1 c2
+                                                    else retApps p TyConApp_Arg (coText p (showRole r ++ ":") <> ptc) cs)
                 <+ axiomInstCoT (coAxiomName ^>> ppName CoercionColor) ppSDoc (\ _ -> ppCoercionR >>> parenExpr) (\ ax idx coes -> RetExpr (coText p "axiomInst" <+> ax <+> idx <+> sep coes))
                 <+ lrCoT ppSDoc (ppCoercionR >>> parenExpr) (\ lr co -> RetExpr (coercionColor lr <+> co))
                 -- TODO: UnivCo and SubCo
