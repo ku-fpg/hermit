@@ -225,7 +225,7 @@ instance Default PrettyOptions where
   def = PrettyOptions
         { po_fullyQualified  = False
         , po_exprTypes       = Abstract
-        , po_coercions       = Abstract
+        , po_coercions       = Kind
         , po_typesForBinders = Omit
         , po_focus           = Nothing
         , po_depth           = Nothing

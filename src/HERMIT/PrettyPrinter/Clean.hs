@@ -33,8 +33,6 @@ import HERMIT.Dictionary (dynFlagsT)
 
 import HERMIT.PrettyPrinter.Common
 
-import Pair
-
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
 ------------------------------------------------------------------------------------------------
@@ -468,8 +466,12 @@ ppCoercionR = absPathT >>= ppCoercionPR
 #endif
 
 ppCoKind :: PrettyH Coercion
-ppCoKind = do p <- absPathT
-              (coercionKind >>> unPair) ^>> ((ppTypeModeR >>> parenExprExceptApp) *** (ppTypeModeR >>> parenExprExceptApp)) >>^ ( \(ty1,ty2) -> ty1 <+> coText p "~#" <+> ty2)
+ppCoKind = do
+    p <- absPathT
+    (r, Pair co1 co2) <- arr (coercionRole &&& coercionKind)
+    ty1 <- return co1 >>> ppTypeModeR >>> parenExprExceptApp
+    ty2 <- return co2 >>> ppTypeModeR >>> parenExprExceptApp
+    return $ ty1 <+> coText p ("~" ++ showRole r) <+> ty2
 
 --------------------------------------------------------------------
 
