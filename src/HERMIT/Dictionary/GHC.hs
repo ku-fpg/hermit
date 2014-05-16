@@ -1,40 +1,42 @@
 {-# LANGUAGE CPP, FlexibleContexts #-}
 module HERMIT.Dictionary.GHC
-       ( -- * GHC-based Transformations
-         -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
-         externals
-         -- ** Substitution
-       , substR
-       , substCoreAlt
-       , substCoreExpr
-         -- ** Utilities
- --      , inScope
-       , dynFlagsT
-       , arityOf
-         -- ** Lifted GHC capabilities
-         -- A zombie is an identifer that has 'OccInfo' 'IAmDead', but still has occurrences.
-       , lintExprT
-       , lintModuleT
-       , occurAnalyseR
-       , occurAnalyseChangedR
-       , occurAnalyseExprChangedR
-       , occurAnalyseAndDezombifyR
-       , dezombifyR
-       )
-where
+    ( -- * GHC-based Transformations
+     -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
+     externals
+     -- ** Substitution
+    , substR
+    , substCoreAlt
+    , substCoreExpr
+     -- ** Utilities
+    --      , inScope
+    , dynFlagsT
+    , arityOf
+     -- ** Lifted GHC capabilities
+     -- A zombie is an identifer that has 'OccInfo' 'IAmDead', but still has occurrences.
+    , lintExprT
+    , lintModuleT
+    , occurAnalyseR
+    , occurAnalyseChangedR
+    , occurAnalyseExprChangedR
+    , occurAnalyseAndDezombifyR
+    , dezombifyR
+    , buildDictionaryT
+    ) where
 
 import qualified Bag
 import qualified CoreLint
 
 import Control.Arrow
 
+import Data.Char (isSpace)
 import Data.List (mapAccumL)
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Kure
+import HERMIT.Monad
 
 import HERMIT.Dictionary.Debug hiding (externals)
 
@@ -198,3 +200,13 @@ lookupUsageDetails = lookupVarEnv
 -}
 
 ----------------------------------------------------------------------
+
+buildDictionaryT :: TransformH PredType CoreExpr
+buildDictionaryT = contextfreeT $ \ ty -> do
+    dflags <- getDynFlags
+    binder <- newIdH ("$d" ++ filter (not . isSpace) (showPpr dflags ty)) ty
+    guts <- getModGuts
+    (i,bnds) <- liftCoreM $ buildDictionary guts binder
+    return $ case bnds of
+                [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
+                _ -> mkCoreLets bnds (varToCoreExpr i)
