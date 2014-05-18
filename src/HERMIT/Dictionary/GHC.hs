@@ -20,7 +20,9 @@ module HERMIT.Dictionary.GHC
     , occurAnalyseExprChangedR
     , occurAnalyseAndDezombifyR
     , dezombifyR
+#if __GLASGOW_HASKELL__ > 706
     , buildDictionaryT
+#endif
     ) where
 
 import qualified Bag
@@ -201,6 +203,7 @@ lookupUsageDetails = lookupVarEnv
 
 ----------------------------------------------------------------------
 
+#if __GLASGOW_HASKELL__ > 706
 buildDictionaryT :: TransformH PredType CoreExpr
 buildDictionaryT = contextfreeT $ \ ty -> do
     dflags <- getDynFlags
@@ -210,3 +213,4 @@ buildDictionaryT = contextfreeT $ \ ty -> do
     return $ case bnds of
                 [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
                 _ -> mkCoreLets bnds (varToCoreExpr i)
+#endif
