@@ -15,7 +15,7 @@ import Data.Char (isSpace)
 import Data.Dynamic
 import Data.List (intercalate, isPrefixOf, nub)
 import qualified Data.Map as M
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Monoid (mempty)
 
 import HERMIT.Context
@@ -40,8 +40,9 @@ import HERMIT.Dictionary.Reasoning (CoreExprEquality)
 import System.Console.Haskeline hiding (catch, display)
 import System.IO (Handle, stdout)
 
-#ifndef mingw32_HOST_OS
-import Data.Maybe (fromMaybe)
+#ifdef mingw32_HOST_OS
+import HERMIT.Win32.Console
+#else
 import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, termLines)
 #endif
 
@@ -346,7 +347,8 @@ mkCLS = do
 getTermDimensions :: IO (Int, Int)
 getTermDimensions = do
 #ifdef mingw32_HOST_OS
-    return (80,25) -- these are the standard windows CLI dimensions
+    consoleSz <- getConsoleWindowSize
+    return $ fromMaybe (80,25) consoleSz
 #else
     term <- setupTermFromEnv
     let w = fromMaybe 80 $ getCapability term termColumns
