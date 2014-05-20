@@ -59,8 +59,6 @@ import HERMIT.Shell.Types (clm)
 
 import Prelude hiding (until)
 
-import System.Console.Haskeline (defaultBehavior)
-
 hermitPlugin :: ([CommandLineOption] -> HPM ()) -> Plugin
 hermitPlugin f = buildPlugin $ \ phaseInfo -> runHPM phaseInfo . f
 
@@ -113,7 +111,7 @@ eval comp = do
             -- We want to discard the current focus, open the shell at
             -- the top level, then restore the current focus.
             paths <- resetScoping env
-            clm (commandLine os defaultBehavior es)
+            clm (commandLine interpShellCommand os es)
             _ <- resetScoping env
             restoreScoping env paths
             eval $ k ()

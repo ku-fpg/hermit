@@ -1,5 +1,5 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses,
-             ScopedTypeVariables, TypeFamilies, TypeSynonymInstances #-}
+{-# LANGUAGE ConstraintKinds, DeriveDataTypeable, FlexibleContexts, FlexibleInstances, LambdaCase,
+             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances #-}
 
 module HERMIT.Shell.Proof
     ( externals
@@ -171,7 +171,7 @@ lemmaRhsIntroR st = lemmaNameToEqualityT st >=> eqRhsIntroR
 
 --------------------------------------------------------------------------------------------------------
 
-performProofCommand :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => ProofCommand -> m ()
+performProofCommand :: (MonadCatch m, MonadException m, CLMonad m) => ProofCommand -> m ()
 performProofCommand (RuleToLemma nm) = do
     st <- gets cl_pstate
     equality <- queryS (ps_kernel st) (ruleNameToEqualityT nm :: TransformH Core CoreExprEquality) (mkKernelEnv st) (ps_cursor st)
@@ -227,44 +227,40 @@ completeProof nm = do
     modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }
     get >>= continue
 
-interactiveProof :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Bool -> Lemma -> m ()
+interactiveProof :: forall m. (MonadCatch m, MonadException m, CLMonad m) => Bool -> Lemma -> m ()
 interactiveProof topLevel lem = do
-    origEs <- addProofExternals topLevel
     origSt <- get
-    completionMVar <- liftIO $ newMVar origSt
+    origEs <- addProofExternals topLevel
 
     let ws_complete = " ()"
 
         -- Main proof input loop
-        loop :: Lemma -> CLT (InputT IO) ()
+        loop :: Lemma -> InputT m ()
         loop l = do
-            mExpr <- popScriptLine
+            mExpr <- lift popScriptLine
             case mExpr of
                 Nothing -> do
-                    printLemma l
-                    st <- get
-                    liftIO $ modifyMVar_ completionMVar (const $ return st) -- so the completion can get the current state
-                    mLine <- lift $ getInputLine $ "proof> "
+                    lift $ printLemma l
+                    mLine <- getInputLine $ "proof> "
                     case mLine of
                         Nothing          -> fail "proof aborted (input: Nothing)"
                         Just ('-':'-':_) -> loop l
                         Just line        -> if all isSpace line
                                             then loop l
-                                            else (evalProofScript l line `catchM` (\msg -> cl_putStrLn msg >> return l)) >>= loop
-                Just e -> (runExprH l e `catchM` (\msg -> setRunningScript Nothing >> cl_putStrLn msg >> return l)) >>= loop
+                                            else lift (evalProofScript l line `catchM` (\msg -> cl_putStrLn msg >> return l)) >>= loop
+                Just e -> lift (runExprH l e `catchM` (\msg -> setRunningScript Nothing >> cl_putStrLn msg >> return l)) >>= loop
 
     -- Display a proof banner?
 
     -- Start the CLI
-    let settings = setComplete (completeWordWithPrev Nothing ws_complete (shellComplete completionMVar)) defaultSettings
+    let settings = setComplete (completeWordWithPrev Nothing ws_complete shellComplete) defaultSettings
         cleanup s = put (s { cl_externals = origEs })
-    (r,_s) <- get >>= liftIO . runInputTBehavior defaultBehavior settings . flip runCLT (loop lem)
-    case r of
-        Right _               -> return ()      -- this case isn't possible, loop never returns
-        Left CLAbort          -> cleanup origSt >> unless topLevel abort -- abandon proof attempt, bubble out to regular shell
-        Left (CLContinue st') -> cleanup st'    -- successfully proven
-        Left (CLError msg)    -> fail $ "Prover error: " ++ msg
-        Left _                -> fail "unsupported exception in interactive prover"
+    catchError (runInputT settings (loop lem))
+               (\case
+                    CLAbort        -> cleanup origSt >> unless topLevel abort -- abandon proof attempt, bubble out to regular shell
+                    CLContinue st' -> cleanup st'    -- successfully proven
+                    CLError msg    -> fail $ "Prover error: " ++ msg
+                    _              -> fail "unsupported exception in interactive prover")
 
 addProofExternals :: MonadState CommandLineState m => Bool -> m [External]
 addProofExternals topLevel = do
@@ -275,10 +271,10 @@ addProofExternals topLevel = do
     when topLevel $ modify $ \ s -> s { cl_externals = newEs }
     return es
 
-evalProofScript :: MonadIO m => Lemma -> String -> CLT m Lemma
+evalProofScript :: (MonadCatch m, MonadException m, CLMonad m) => Lemma -> String -> m Lemma
 evalProofScript lem = parseScriptCLT >=> foldM runExprH lem
 
-runExprH :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> ExprH -> m Lemma
+runExprH :: (MonadCatch m, MonadException m, CLMonad m) => Lemma -> ExprH -> m Lemma
 runExprH lem expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n")
                   $ interpExprH interpProof expr >>= performProofShellCommand lem
 
@@ -295,7 +291,7 @@ endProof (nm, eq, _) = do
     b <- (queryS sk (return eq >>> testM verifyCoreExprEqualityT :: TransformH Core Bool) kEnv sast)
     if b then completeProof nm else fail $ "The two sides of " ++ nm ++ " are not alpha-equivalent."
 
-performProofShellCommand :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> ProofShellCommand -> m Lemma
+performProofShellCommand :: (MonadCatch m, MonadException m, CLMonad m) => Lemma -> ProofShellCommand -> m Lemma
 performProofShellCommand lem@(nm, eq, b) = go
     where go (PCRewrite rr)         = do
                 st <- get
@@ -336,7 +332,7 @@ performProofShellCommand lem@(nm, eq, b) = go
           go PCEnd                = endProof lem >> return lem
           go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.") >> return lem
 
-performInduction :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> (Id -> Bool) -> m Lemma
+performInduction :: (MonadCatch m, MonadException m, CLMonad m) => Lemma -> (Id -> Bool) -> m Lemma
 performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
     st <- get
     let sk = cl_kernel st
@@ -407,7 +403,7 @@ instance Extern UserProofTechnique where
     box = UserProofTechniqueBox
     unbox (UserProofTechniqueBox t) = t
 
-interpProof :: [Interp ProofShellCommand]
+interpProof :: Monad m => [Interp m ProofShellCommand]
 interpProof =
   [ interp $ \ (RewriteCoreBox rr)                    -> PCRewrite $ bothR $ extractR rr
   , interp $ \ (RewriteCoreTCBox rr)                  -> PCRewrite $ bothR $ extractR rr

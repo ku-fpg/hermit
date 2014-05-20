@@ -4,7 +4,6 @@ module HERMIT.Shell.Externals where
 
 import Control.Applicative
 
-import Data.Monoid
 import Data.List (intercalate)
 import qualified Data.Map as M
 import Control.Monad (liftM)
@@ -19,7 +18,6 @@ import HERMIT.Plugin.Renderer
 import HERMIT.PrettyPrinter.Common
 
 import HERMIT.Shell.Dictionary
-import HERMIT.Shell.Interpreter
 import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.Proof as Proof
 import HERMIT.Shell.ScriptToRewrite
@@ -27,36 +25,6 @@ import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
 ----------------------------------------------------------------------------------
-
--- | There are five types of commands.
-data ShellCommand = KernelEffect KernelEffect -- ^ Command that modifies the state of the (scoped) kernel.
-                  | ScriptEffect ScriptEffect -- ^ Command that deals with script files.
-                  | ShellEffect  ShellEffect  -- ^ Command that modifies the state of the shell.
-                  | QueryFun     QueryFun     -- ^ Command that queries the AST with a Transform (read only).
-                  | ProofCommand ProofCommand -- ^ Command that deals with proofs.
-
--- | Interpret a boxed thing as one of the four possible shell command types.
-interpShellCommand :: [Interp ShellCommand]
-interpShellCommand =
-  [ interp $ \ (RewriteCoreBox rr)           -> KernelEffect (Apply rr)
-  , interp $ \ (RewriteCoreTCBox rr)         -> KernelEffect (Apply rr)
-  , interp $ \ (BiRewriteCoreBox br)         -> KernelEffect (Apply $ whicheverR br)
-  , interp $ \ (CrumbBox cr)                 -> KernelEffect (Pathfinder (return (mempty @@ cr) :: TransformH CoreTC LocalPathH))
-  , interp $ \ (PathBox p)                   -> KernelEffect (Pathfinder (return p :: TransformH CoreTC LocalPathH))
-  , interp $ \ (TransformCorePathBox tt)     -> KernelEffect (Pathfinder tt)
-  , interp $ \ (TransformCoreTCPathBox tt)   -> KernelEffect (Pathfinder tt)
-  , interp $ \ (StringBox str)               -> QueryFun (message str)
-  , interp $ \ (TransformCoreStringBox tt)   -> QueryFun (QueryString tt)
-  , interp $ \ (TransformCoreTCStringBox tt) -> QueryFun (QueryString tt)
-  , interp $ \ (TransformCoreTCDocHBox tt)   -> QueryFun (QueryDocH $ unTransformDocH tt)
-  , interp $ \ (TransformCoreCheckBox tt)    -> QueryFun (CorrectnessCritera tt)
-  , interp $ \ (TransformCoreTCCheckBox tt)  -> QueryFun (CorrectnessCritera tt)
-  , interp $ \ (effect :: KernelEffect)      -> KernelEffect effect
-  , interp $ \ (effect :: ShellEffect)       -> ShellEffect effect
-  , interp $ \ (effect :: ScriptEffect)      -> ScriptEffect effect
-  , interp $ \ (query :: QueryFun)           -> QueryFun query
-  , interp $ \ (cmd :: ProofCommand)         -> ProofCommand cmd
-  ]
 
 shell_externals :: [External]
 shell_externals = map (.+ Shell)

@@ -1,12 +1,17 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, GADTs, TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds, DeriveDataTypeable, FlexibleContexts, LambdaCase, TypeFamilies #-}
 
-module HERMIT.Shell.KernelEffect 
+module HERMIT.Shell.KernelEffect
     ( KernelEffect(..)
     , performKernelEffect
+    , applyRewrite
+    , setPath
+    , goDirection
+    , beginScope
+    , endScope
+    , deleteSAST
     ) where
 
 import Control.Monad.State
-import Control.Monad.Error
 
 import Data.Monoid
 import Data.Typeable
@@ -28,21 +33,11 @@ import HERMIT.Shell.Types
 
 -------------------------------------------------------------------------------
 
--- GADTs can't have docs on constructors. See Haddock ticket #43.
 -- | KernelEffects are things that affect the state of the Kernel
---   - Apply a rewrite (giving a whole new lower-level AST).
---   - Change the current location using a computed path.
---   - Change the currect location using directions.
---   - Begin or end a scope.
---   - Delete an AST
---   - Run a precondition or other predicate that must not fail.
-data KernelEffect :: * where
-   Apply      :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g              -> KernelEffect
-   Pathfinder :: (Injection GHC.ModGuts g, Walker HermitC g) => TransformH g LocalPathH -> KernelEffect
-   Direction  ::                                                Direction               -> KernelEffect
-   BeginScope ::                                                                           KernelEffect
-   EndScope   ::                                                                           KernelEffect
-   Delete     ::                                                SAST                    -> KernelEffect
+data KernelEffect = Direction  Direction -- Change the currect location using directions.
+                  | BeginScope           -- Begin scope.
+                  | EndScope             -- End scope.
+                  | Delete     SAST      -- Delete an AST
    deriving Typeable
 
 instance Extern KernelEffect where
@@ -50,12 +45,18 @@ instance Extern KernelEffect where
    box i = i
    unbox i = i
 
+performKernelEffect :: (MonadCatch m, CLMonad m) => ExprH -> KernelEffect -> m ()
+performKernelEffect e = \case
+                            Direction dir -> goDirection dir e
+                            BeginScope    -> beginScope e
+                            EndScope      -> endScope e
+                            Delete sast   -> deleteSAST sast
+
 -------------------------------------------------------------------------------
 
-performKernelEffect :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) 
-                    => KernelEffect -> ExprH -> m ()
-
-performKernelEffect (Apply rr) expr = do
+applyRewrite :: (Injection GHC.ModGuts g, Walker HermitC g, MonadCatch m, CLMonad m)
+             => RewriteH g -> ExprH -> m ()
+applyRewrite rr expr = do
     st <- get
 
     let sk = cl_kernel st
@@ -79,7 +80,9 @@ performKernelEffect (Apply rr) expr = do
                              (\ errs  -> liftIO (deleteS sk sast') >> fail errs)
         else commit
 
-performKernelEffect (Pathfinder t) expr = do
+setPath :: (Injection GHC.ModGuts g, Walker HermitC g, MonadCatch m, CLMonad m)
+        => TransformH g LocalPathH -> ExprH -> m ()
+setPath t expr = do
     st <- get
     -- An extension to the Path
     p <- prefixFailMsg "Cannot find path: " $ queryS (cl_kernel st) t (cl_kernel_env st) (cl_cursor st)
@@ -87,24 +90,28 @@ performKernelEffect (Pathfinder t) expr = do
     put $ newSAST expr ast st
     showWindow
 
-performKernelEffect (Direction dir) expr = do
+goDirection :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
+goDirection dir expr = do
     st <- get
     ast <- prefixFailMsg "Invalid move: " $ modPathS (cl_kernel st) (moveLocally dir) (cl_kernel_env st) (cl_cursor st)
     put $ newSAST expr ast st
     showWindow
 
-performKernelEffect BeginScope expr = do
+beginScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
+beginScope expr = do
     st <- get
     ast <- beginScopeS (cl_kernel st) (cl_cursor st)
     put $ newSAST expr ast st
     showWindow
 
-performKernelEffect EndScope expr = do
+endScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
+endScope expr = do
     st <- get
     ast <- endScopeS (cl_kernel st) (cl_cursor st)
     put $ newSAST expr ast st
     showWindow
 
-performKernelEffect (Delete sast) _ = gets cl_kernel >>= flip deleteS sast
+deleteSAST :: (MonadCatch m, CLMonad m) => SAST -> m ()
+deleteSAST sast = gets cl_kernel >>= flip deleteS sast
 
 -------------------------------------------------------------------------------

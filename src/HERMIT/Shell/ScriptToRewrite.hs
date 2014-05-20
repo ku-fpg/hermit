@@ -1,4 +1,5 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, LambdaCase, MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds, DeriveDataTypeable, FlexibleContexts, LambdaCase,
+             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies #-}
 
 module HERMIT.Shell.ScriptToRewrite
     ( -- * Converting Scripts to Rewrites
@@ -66,7 +67,7 @@ popScriptLine :: MonadState CommandLineState m => m (Maybe ExprH)
 popScriptLine = gets cl_running_script >>= maybe (return Nothing) (\case []     -> setRunningScript Nothing >> return Nothing
                                                                          (e:es) -> setRunningScript (Just es) >> return (Just e))
 
-performScriptEffect :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => (ExprH -> m ()) -> ScriptEffect -> m ()
+performScriptEffect :: (MonadCatch m, CLMonad m) => (ExprH -> m ()) -> ScriptEffect -> m ()
 performScriptEffect runner = go
     where go (SeqMeta ms) = mapM_ go ms
           go (LoadFile scriptName fileName) = do
@@ -74,7 +75,7 @@ performScriptEffect runner = go
             res <- liftIO $ try (readFile fileName)
             case res of
                 Left (err :: IOException) -> fail ("IO error: " ++ show err)
-                Right str -> do 
+                Right str -> do
                     script <- parseScriptCLT str
                     modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
                     putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
@@ -104,7 +105,7 @@ performScriptEffect runner = go
             putStrToConsole ("Script \"" ++ scriptName ++ "\" ran successfully.")
             showWindow
 
-          go (SaveScript fileName scriptName) = do 
+          go (SaveScript fileName scriptName) = do
             script <- lookupScript scriptName
             putStrToConsole $ "Saving script \"" ++ scriptName ++ "\" to file \"" ++ fileName ++ "\"."
             liftIO $ writeFile fileName $ unparseScript script
@@ -164,7 +165,7 @@ unscopedToScopedScriptR = parse
 
 -----------------------------------
 
-interpScriptR :: [Interp UnscopedScriptR]
+interpScriptR :: Monad m => [Interp m UnscopedScriptR]
 interpScriptR =
   [ interp (\ (RewriteCoreBox r)           -> ScriptPrimUn $ ScriptRewriteHCore r)
   , interp (\ (RewriteCoreTCBox _)         -> ScriptUnsupported "rewrite that traverses types and coercions") -- TODO
@@ -201,7 +202,7 @@ scopedScriptsToRewrite (x : xs)  = let rest = scopedScriptsToRewrite xs
 
 -----------------------------------
 
-scriptToRewrite :: MonadState CommandLineState m => Script -> m (RewriteH Core)
+scriptToRewrite :: CLMonad m => Script -> m (RewriteH Core)
 scriptToRewrite scr = do
     unscoped <- mapM (interpExprH interpScriptR) scr
     scoped   <- unscopedToScopedScriptR $ zip scr unscoped
@@ -210,13 +211,13 @@ scriptToRewrite scr = do
 -----------------------------------
 
 -- | Insert a script into the 'Dictionary'.
-addScriptToDict :: MonadState CommandLineState m => ScriptName -> Script -> m ()
+addScriptToDict :: CLMonad m => ScriptName -> Script -> m ()
 addScriptToDict nm scr = do
     r <- scriptToRewrite scr
 
     let ext = external nm r [ "User-loaded script." ]
 
-    modify $ \ st -> st { cl_externals = ext : cl_externals st } 
+    modify $ \ st -> st { cl_externals = ext : cl_externals st }
 
 -----------------------------------
 

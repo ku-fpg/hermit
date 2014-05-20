@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, KindSignatures, GADTs, FlexibleContexts, DeriveDataTypeable, 
+{-# LANGUAGE ConstraintKinds, CPP, KindSignatures, GADTs, FlexibleContexts, DeriveDataTypeable,
              FunctionalDependencies, GeneralizedNewtypeDeriving, InstanceSigs,
              LambdaCase, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
 
@@ -6,7 +6,6 @@ module HERMIT.Shell.Types where
 
 import Control.Applicative
 import Control.Arrow
-import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad.State
 import Control.Monad.Error
@@ -48,21 +47,6 @@ import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, te
 
 ----------------------------------------------------------------------------------
 
-{-
--- | How to perform a given set of commands.
---
--- Mnemonic:
--- c = command type
--- a = extra arguments type (use tuple for more than one)
--- r = result type
---
--- Often, a and r are (), but sometimes we need more clever things.
-class ShellCommandSet c a r | c -> a r where
-    performCommand :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => c -> a -> m r
--}
-
-----------------------------------------------------------------------------------
-
 data QueryFun :: * where
    QueryString   :: (Injection GHC.ModGuts g, Walker HermitC g)
                  => TransformH g String                                   -> QueryFun
@@ -81,8 +65,7 @@ instance Extern QueryFun where
    box i = i
    unbox i = i
 
-performQuery :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
-             => QueryFun -> ExprH -> m ()
+performQuery :: (MonadCatch m, CLMonad m) => QueryFun -> ExprH -> m ()
 
 performQuery (QueryString q) _ = do
     st <- get
@@ -182,15 +165,27 @@ rethrowPE (PError msg)   = throwError (CLError msg)
 ----------------------------------------------------------------------------------
 
 -- | This type is similiar to PluginM, except that its exception and state types are
--- supersets of those for PluginM, and it is a transformer. There are two functions: 
--- `clm` and `pluginM` for converting between the two. The reason we do this is to obtain 
--- a clean separation of plugin state from commandline state without nesting state 
--- transformers. Nesting StateT leads to a lot of awkward lifting and manual state 
+-- supersets of those for PluginM, and it is a transformer. There are two functions:
+-- `clm` and `pluginM` for converting between the two. The reason we do this is to obtain
+-- a clean separation of plugin state from commandline state without nesting state
+-- transformers. Nesting StateT leads to a lot of awkward lifting and manual state
 -- management in the command line code.
 --
 -- NB: an alternative to monad transformers, like Oleg's Extensible Effects, might be useful here.
 newtype CLT m a = CLT { unCLT :: ErrorT CLException (StateT CommandLineState m) a }
     deriving (Functor, Applicative, MonadIO, MonadError CLException, MonadState CommandLineState)
+
+instance MonadException m => MonadException (CLT m) where
+    controlIO f = CLT $ controlIO $ \(RunIO run) -> let run' = RunIO (fmap CLT . run . unCLT)
+                                                    in fmap unCLT $ f run'
+
+-- This is copied verbatim from haskeline, yet HERMIT won't compile without it. What?
+instance MonadException m => MonadException (StateT s m) where
+    controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
+                    run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
+                    in fmap (flip runStateT s) $ f run'
+
+type CLMonad m = (MonadIO m, MonadState CommandLineState m, MonadError CLException m)
 
 instance MonadTrans CLT where
     -- lift :: Monad m => m a -> CLT m a
@@ -226,7 +221,7 @@ clm m = do
         Right r' -> put (cl_pstate s') >> return r'
 
 -- | Lift a PluginM computation into the CLM monad.
-pluginM :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => PluginM a -> m a
+pluginM :: CLMonad m => PluginM a -> m a
 pluginM m = do
     s <- get
     (r,ps) <- liftIO $ runPluginT (cl_pstate s) m
@@ -325,12 +320,12 @@ setPrettyOpts st po = setPretty st $ (cl_pretty st) { pOptions = po }
 cl_render :: CommandLineState -> (Handle -> PrettyOptions -> Either String DocH -> IO ())
 cl_render = ps_render . cl_pstate
 
--- | Create default CommandLineState from PluginState. 
+-- | Create default CommandLineState from PluginState.
 -- Note: the dictionary (cl_dict) will be empty, and should be populated if needed.
 mkCLS :: PluginM CommandLineState
 mkCLS = do
     ps <- get
-    (w,h) <- liftIO getTermDimensions    
+    (w,h) <- liftIO getTermDimensions
     let st = CommandLineState { cl_pstate         = ps
                               , cl_height         = h
                               , cl_scripts        = []
@@ -376,10 +371,10 @@ tick var msg = atomically $ do
         writeTVar var (M.insert msg c m)
         return c
 
-cl_putStr :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
+cl_putStr :: CLMonad m => String -> m ()
 cl_putStr = pluginM . ps_putStr
 
-cl_putStrLn :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
+cl_putStrLn :: CLMonad m => String -> m ()
 cl_putStrLn = pluginM . ps_putStrLn
 
 isRunningScript :: MonadState CommandLineState m => m Bool
@@ -389,18 +384,18 @@ setRunningScript :: MonadState CommandLineState m => Maybe Script -> m ()
 setRunningScript ms = modify $ \st -> st { cl_running_script = ms }
 
 -- TODO: rename?
-putStrToConsole :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => String -> m ()
+putStrToConsole :: CLMonad m => String -> m ()
 putStrToConsole str = ifM isRunningScript (return ()) (cl_putStrLn str)
 
 ------------------------------------------------------------------------------
 
-shellComplete :: MVar CommandLineState -> String -> String -> IO [Completion]
-shellComplete mvar rPrev so_far = do
-    st <- readMVar mvar
-    targetQuery <- completionQuery st (completionType rPrev)
+shellComplete :: (MonadCatch m, MonadIO m, MonadState CommandLineState m) => String -> String -> m [Completion]
+shellComplete rPrev so_far = do
+    targetQuery <- completionQuery (completionType rPrev)
     -- (liftM.liftM) (map simpleCompletion . nub . filter (so_far `isPrefixOf`))
     --     $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
     -- TODO: I expect you want to build a silent version of the kernal_env for this query
+    st <- get
     cl <- catchM (queryS (cl_kernel st) targetQuery (cl_kernel_env st) (cl_cursor st)) (\_ -> return [])
     return $ (map simpleCompletion . nub . filter (so_far `isPrefixOf`)) cl
 
@@ -431,23 +426,23 @@ completionType = go . dropWhile isSpace
                  , ("occurrence-of"   , OccurrenceOfC)
                  ]
 
-completionQuery :: CommandLineState -> CompletionType -> IO (TransformH CoreTC [String])
-completionQuery _ ConsiderC       = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':) >>^ (++ map fst considerables) -- the use of bindingOfTargetsT here is deprecated
-completionQuery _ OccurrenceOfC   = return $ occurrenceOfTargetsT    >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery _ BindingOfC      = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery _ BindingGroupOfC = return $ bindingGroupOfTargetsT  >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery _ RhsOfC          = return $ rhsOfTargetsT           >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery _ InlineC         = return $ promoteT inlineTargetsT >>^                         map ('\'':)
-completionQuery s CommandC        = return $ pure (map externName (cl_externals s))
+completionQuery :: (MonadIO m, MonadState CommandLineState m) => CompletionType -> m (TransformH CoreTC [String])
+completionQuery ConsiderC       = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':) >>^ (++ map fst considerables) -- the use of bindingOfTargetsT here is deprecated
+completionQuery OccurrenceOfC   = return $ occurrenceOfTargetsT    >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery BindingOfC      = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery BindingGroupOfC = return $ bindingGroupOfTargetsT  >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery RhsOfC          = return $ rhsOfTargetsT           >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery InlineC         = return $ promoteT inlineTargetsT >>^                         map ('\'':)
+completionQuery CommandC        = get >>= \s -> return $ pure (map externName (cl_externals s))
 -- Need to modify opts in completionType function. No key can be a suffix of another key.
-completionQuery _ (AmbiguousC ts) = do
-    putStrLn "\nCannot tab complete: ambiguous completion type."
-    putStrLn $ "Possibilities: " ++ intercalate ", " (map show ts)
+completionQuery (AmbiguousC ts) = do
+    liftIO $ putStrLn "\nCannot tab complete: ambiguous completion type."
+    liftIO $ putStrLn $ "Possibilities: " ++ intercalate ", " (map show ts)
     return (pure [])
 
 ------------------------------------------------------------------------------
 
-fixWindow :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => m ()
+fixWindow :: CLMonad m => m ()
 fixWindow = do
     st <- get
     -- check to make sure new path is still inside window
@@ -459,7 +454,7 @@ fixWindow = do
        $ put $ st { cl_window = focusPath } -}
     put $ st { cl_window = focusPath } -- TODO: temporary until we figure out a better highlight interface
 
-showWindow :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => m ()
+showWindow :: CLMonad m => m ()
 showWindow = ifM isRunningScript (return ()) $ fixWindow >> gets cl_window >>= pluginM . display . Just
 
 ------------------------------------------------------------------------------
@@ -472,7 +467,7 @@ showGraph graph tags this@(SAST n) =
                 [ [ unparseExprH b ++ "\n" ++ showGraph graph tags c ]
                 | (b,c) <- paths
                 ])
-  where  
+  where
           paths = [ (b,c) | (a,b,c) <- graph, a == this ]
 
 ------------------------------------------------------------------------------
