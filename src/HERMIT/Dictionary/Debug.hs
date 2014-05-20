@@ -11,8 +11,10 @@ where
 
 import Control.Arrow
 
-import HERMIT.Kure
+import HERMIT.Context
+import HERMIT.Core
 import HERMIT.External
+import HERMIT.Kure
 import HERMIT.Monad
 
 -- | Exposed debugging 'External's.
@@ -29,20 +31,23 @@ externals = map (.+ Debug)
          ]
 
 -- | If the 'Rewrite' fails, print out the 'Core', with a message.
-observeFailureR :: Injection a CoreTC => String -> RewriteH a -> RewriteH a
+observeFailureR :: (Injection a CoreTC, ReadBindings c, ReadPath c Crumb)
+                => String -> Rewrite c HermitM a -> Rewrite c HermitM a
 observeFailureR str m = m <+ observeR str
 
 -- | Print out the 'Core', with a message.
-observeR :: Injection a CoreTC => String -> RewriteH a
+observeR :: (Injection a CoreTC, ReadBindings c, ReadPath c Crumb)
+         => String -> Rewrite c HermitM a
 observeR msg = extractR $ sideEffectR $ \ cxt core ->
         sendDebugMessage $ DebugCore msg cxt core
 
 -- | Just say something, every time the rewrite is done.
-traceR :: String -> RewriteH a
+traceR :: String -> Rewrite c HermitM a
 traceR msg = sideEffectR $ \ _ _ -> sendDebugMessage $ DebugTick msg
 
 -- | Show before and after a rewrite.
-bracketR :: Injection a CoreTC => String -> RewriteH a -> RewriteH a
+bracketR :: (Injection a CoreTC, ReadBindings c, ReadPath c Crumb)
+         => String -> Rewrite c HermitM a -> Rewrite c HermitM a
 bracketR msg rr = do
     -- Be careful to only run the rr once, in case it has side effects.
     (e,r) <- idR &&& attemptM rr

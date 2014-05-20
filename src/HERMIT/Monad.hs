@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, InstanceSigs #-}
+{-# LANGUAGE CPP, FlexibleContexts, GADTs, InstanceSigs, KindSignatures #-}
 
 module HERMIT.Monad
           (
@@ -170,7 +170,7 @@ instance MonadThings HermitM where
     -- *most* things from the current module. However,
     -- some Ids, such as class method selectors, are not
     -- explicitly bound in the core, so will not be in
-    -- the context. These are instead kept in the 
+    -- the context. These are instead kept in the
     -- ModGuts' list of instances. Which this will find.
     lookupThing nm = do
 #if __GLASGOW_HASKELL__ < 708
@@ -225,8 +225,9 @@ cloneVarH nameMod v | isTyVar v = newTyVarH name ty
 ----------------------------------------------------------------------------
 
 -- | A message packet.
-data DebugMessage = DebugTick String
-                  | DebugCore String HermitC CoreTC
+data DebugMessage :: * where
+    DebugTick ::                                       String                -> DebugMessage
+    DebugCore :: (ReadBindings c, ReadPath c Crumb) => String -> c -> CoreTC -> DebugMessage
 
 mkHermitMEnv :: (DebugMessage -> HermitM ()) -> HermitMEnv
 mkHermitMEnv debugger = HermitMEnv { hs_debugChan = debugger }
