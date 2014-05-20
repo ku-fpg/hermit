@@ -1,20 +1,33 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 -- | Taken from <https://github.com/batterseapower/ansi-terminal/blob/master/System/Console/ANSI/Windows/Foreign.hs> in the ansi-terminal package by batterseapower, licensed under BSD3
-module HERMIT.Win32.Console (getConsoleWindowSize) where
+module HERMIT.Win32.Console
+    (
+      getConsoleWindowSize
+    , isCygwinConsole
+    ) where
 
 import Control.Applicative
+import Control.Exception (try)
 
 import Foreign.C.Types
 import Foreign.Marshal
 import Foreign.Ptr
 import Foreign.Storable
 
+import System.Environment
 import System.Win32.Types
 
 #include <windows.h>
 #let alignment t = "%lu", (unsigned long)offsetof(struct {char x__; t (y__); }, y__)
 
 type SHORT = CShort
+
+isCygwinConsole :: IO Bool
+isCygwinConsole = do
+    result <- try $ getEnv "_" -- Cygwin defines this, Windows Cmd does not
+    return $ case (result :: Either IOError String) of
+                  Left _ -> False
+                  Right _ -> True
 
 getConsoleWindowSize :: IO (Maybe (Int, Int))
 getConsoleWindowSize = do

@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase, ScopedTypeVariables, GADTs, FlexibleContexts, TypeFamilies #-}
+{-# LANGUAGE LambdaCase, ScopedTypeVariables, GADTs, FlexibleContexts, TypeFamilies, CPP #-}
 
 module HERMIT.Shell.Command
     ( -- * The HERMIT Command-line Shell
@@ -39,6 +39,10 @@ import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
+#ifdef mingw32_HOST_OS
+import HERMIT.Win32.Console
+#endif
+
 import System.IO
 
 -- import System.Console.ANSI
@@ -72,6 +76,16 @@ banner = unlines
     , "=============================================================="
     ]
 
+#ifdef mingw32_HOST_OS
+cygwinWarning :: String
+cygwinWarning = unlines
+    [ "WARNING: HERMIT invoked in a Unix-like shell such as Cygwin."
+    , "Cygwin does not handle Ctrl-C or tab completion well in some"
+    , "Haskell executables. It is recommended that you use a native"
+    , "Windows console (such as cmd.exe or PowerShell) instead."
+    ]
+#endif
+
 -- | The first argument includes a list of files to load.
 commandLine :: [GHC.CommandLineOption] -> Behavior -> [External] -> CLT IO ()
 commandLine opts behavior exts = do
@@ -103,6 +117,13 @@ commandLine opts behavior exts = do
     if any (`elem` ["-v0", "-v1"]) flags
         then return ()
         else cl_putStrLn banner
+
+#ifdef mingw32_HOST_OS
+    isCyg <- liftIO isCygwinConsole
+    if isCyg
+        then cl_putStrLn cygwinWarning
+        else return ()
+#endif
 
     -- Load and run any scripts
     setRunningScript $ Just []
