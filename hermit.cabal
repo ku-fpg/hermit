@@ -247,6 +247,7 @@ Library
   if os(windows)
     Other-modules:
         HERMIT.Win32.Console
+        HERMIT.Win32.IO
 
   Hs-Source-Dirs: src
 

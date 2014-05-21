@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE CPP, FlexibleContexts #-}
 module HERMIT.Plugin.Renderer where
 
 import Control.Arrow
@@ -11,9 +11,16 @@ import HERMIT.Dictionary (traceR)
 import HERMIT.Kure
 import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
+#ifdef mingw32_HOST_OS
+import HERMIT.Win32.IO (hPutStr, hPutStrLn)
+#endif
 
 import System.Console.ANSI
+#ifdef mingw32_HOST_OS
+import System.IO hiding (hPutStr, hPutStrLn)
+#else
 import System.IO
+#endif
 import System.IO.Temp
 import System.Process
 

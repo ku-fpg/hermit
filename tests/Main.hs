@@ -2,14 +2,21 @@ module Main where
 
 import Control.Monad
 
+import HERMIT.Driver
+#ifdef mingw32_HOST_OS
+import HERMIT.Win32.IO (hPutStrLn)
+#endif
+
 import System.Directory
 import System.Exit
 import System.FilePath as F
+#ifdef mingw32_HOST_OS
+import System.IO (Handle, hGetContents, hClose, openFile, IOMode(WriteMode))
+#else
 import System.IO (Handle, hGetContents, hPutStrLn, hClose, openFile, IOMode(WriteMode))
+#endif
 import System.IO.Temp (withTempFile)
 import System.Process hiding (runCommand)
-
-import HERMIT.Driver
 
 type Test = (FilePath, FilePath, FilePath)
 
