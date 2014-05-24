@@ -204,7 +204,7 @@ lookupUsageDetails = lookupVarEnv
 ----------------------------------------------------------------------
 
 #if __GLASGOW_HASKELL__ > 706
-buildDictionaryT :: TransformH PredType CoreExpr
+buildDictionaryT :: Transform c HermitM Type CoreExpr
 buildDictionaryT = contextfreeT $ \ ty -> do
     dflags <- getDynFlags
     binder <- newIdH ("$d" ++ filter (not . isSpace) (showPpr dflags ty)) ty
