@@ -220,7 +220,7 @@ data Unfolding
 -}
 dFunExpr :: Unfolding -> HermitM CoreExpr
 -- TODO: is this correct?
-dFunExpr dunf@(DFunUnfolding {}) = return $ mkCoreConApps (df_con dunf) (df_args dunf)
+dFunExpr dunf@(DFunUnfolding {}) = return $ mkCoreLams (df_bndrs dunf) $ mkCoreConApps (df_con dunf) (df_args dunf)
 dFunExpr _ = fail "dFunExpr: not a DFunUnfolding"
 #else
 dFunExpr :: DataCon -> [DFunArg CoreExpr] -> Type -> HermitM CoreExpr
