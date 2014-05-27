@@ -36,8 +36,8 @@ import Control.Arrow
 import Control.Monad (liftM2)
 import Data.Char (isDigit)
 import Data.Function (on)
-import Data.List (intersect)
-import Data.Maybe (fromMaybe, listToMaybe)
+import Data.List (intersect, delete, elemIndex)
+import Data.Maybe (listToMaybe)
 
 import HERMIT.Core
 import HERMIT.Context
@@ -181,24 +181,35 @@ dupVars = dupsBy ((==) `on` uqName)
 
 -----------------------------------------------------------------------
 
--- Maybe this should be defined elsewhere.
+-- Maybe this should be defined in Dictionary.GHC.
 
 -- | Replace all occurrences of a specified variable.
 --   Arguments are the variable to replace and the replacement variable, respectively.
 replaceVarR :: (Injection a Core, MonadCatch m) => Var -> Var -> Rewrite c m a
 replaceVarR v v' = extractR $ tryR $ substR v $ varToCoreExpr v'
 
--- | Given a variable to replace, and a replacement, produce a 'Var' @->@ 'Var' function that
---   acts as an identity for all 'Var's except the one to replace, for which it returns the replacment.
---   Don't export this, it'll likely just cause confusion.
-replaceVar :: Var -> Var -> (Var -> Var)
-replaceVar v v' = replaceVars [(v,v')]
+-- TODO: Experimental
+replaceRecBindVarR :: Monad m => Id -> Id -> Rewrite c m CoreBind
+replaceRecBindVarR v v' =
+   do Rec ies <- idR
+      let (is,es) = unzip ies
+      case elemIndex v is of
+        Nothing -> fail "Specified identifier does not occur in the current recursive binding group."
+        Just n  -> let is0       = delete v is
+                       (is1,is2) = splitAt n is0
+                       is'       = is1 ++ v' : is2
+                       es'       = map (substCoreExpr v (Var v')) es
+                       -- TODO.  Do we need to initialize the emptySubst with bindFreeVars?
+                       sub       = extendSubst emptySubst v (Var v')
+                   in return $ snd $ substBind sub (Rec (zip is' es'))
 
--- | Given a lists of variables to replace, and their replacements, produce a 'Var' @->@ 'Var' function that
---   acts as in identity for all 'Var's except the ones to replace, for which it returns the replacment.
---   Don't export this, it'll likely just cause confusion.
-replaceVars :: [(Var,Var)] -> (Var -> Var)
-replaceVars kvs v = fromMaybe v (lookup v kvs)
+                   -- let is0       = delete v is
+                   --     emptySub  = mkEmptySubst $ mkInScopeSet $ unionVarSets (map (localFreeVarsExpr . Var) is0)
+                   --     sub       = extendSubst emptySub v (Var v')
+                   --     (is1,is2) = splitAt n (snd $ substRecBndrs sub is0)
+                   --     is'       = is1 ++ v' : is2
+                   --     es'       = map (substCoreExpr v (Var v')) es
+                   -- in return $ Rec (zip is' es')
 
 -----------------------------------------------------------------------
 
@@ -207,7 +218,7 @@ alphaLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) 
 alphaLamR mn = setFailMsg (wrongFormForAlpha "Lam v e") $
               do v  <- lamVarT
                  v' <- extractT (cloneVarAvoidingT v mn [v])
-                 lamAnyR (arr $ replaceVar v v') (replaceVarR v v')
+                 lamAnyR (return v') (replaceVarR v v')
 
 -----------------------------------------------------------------------
 
@@ -288,7 +299,7 @@ alphaLetRecIdsWithR = andR . map (uncurry alphaLetRecIdR)
     alphaLetRecIdR mn i = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
                      do is <- letRecIdsT
                         i' <- extractT (cloneVarAvoidingT i mn is)
-                        letRecDefAnyR (\ _ -> (arr (replaceVar i i'), replaceVarR i i')) (replaceVarR i i')
+                        letAnyR (replaceRecBindVarR i i') (replaceVarR i i')
 
 
 -- | Rename the identifiers bound in a Let with the given list of suggested names.
@@ -332,7 +343,7 @@ alphaProgConsRecIdsWithR = andR . map (uncurry alphaProgConsRecIdR) . filter (no
     alphaProgConsRecIdR mn i =  setFailMsg (wrongFormForAlpha "ProgCons (Rec bs) p") $
                       do is <- progConsRecIdsT
                          i' <- extractT (cloneVarAvoidingT i mn is)
-                         consRecDefAnyR (\ _ -> (arr (replaceVar i i'), replaceVarR i i')) (replaceVarR i i')
+                         progConsAnyR (replaceRecBindVarR i i') (replaceVarR i i')
 
 
 -- | Rename the identifiers bound in the top-level binding at the head of the program with the given list of suggested names.
