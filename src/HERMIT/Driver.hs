@@ -4,6 +4,7 @@ module HERMIT.Driver
     , ghcFlags
     , hermitDriver
     , usage
+    , usageOutput
     ) where
 
 import Data.List (isPrefixOf, partition)
@@ -26,11 +27,9 @@ ghcFlags = [ "-fforce-recomp"
 --           , "-v0"
            ]
 
-usage :: IO ()
-usage = putStrLn $ unlines
-        [hermitVersion
-        ,""
-        ,"usage: hermit File.hs SCRIPTNAME"
+usageOutput :: String
+usageOutput = unlines
+        ["usage: hermit File.hs SCRIPTNAME"
         ,"       - OR -"
         ,"       hermit File.hs [HERMIT_ARGS] [+module_name [MOD_ARGS]]* [-- [ghc-args]]"
         ,""
@@ -55,6 +54,9 @@ usage = putStrLn $ unlines
         ,"  SCRIPTNAME : name of script file to run for this module"
         ,"  resume     : skip interactive mode and resume compilation after any scripts"
         ]
+
+usage :: IO ()
+usage = mapM_ putStrLn [hermitVersion, "", usageOutput]
 
 -- | Entry point for HERMIT driver executable. 
 -- First String in list is expected to be target file name.
