@@ -308,8 +308,7 @@ localFreeIdsExpr = exprSomeFreeVars isLocalId
 freeVarsBind :: CoreBind -> VarSet
 freeVarsBind (NonRec v e) = freeVarsExpr e `unionVarSet` freeVarsVar v
 freeVarsBind (Rec defs)   = let (bs,es) = unzip defs
-                             in delVarSetList (unionVarSets $ map freeVarsExpr es) bs
-                                `unionVarSet`  unionVarSets (map freeVarsVar bs)
+                             in delVarSetList (unionVarSets (map freeVarsVar bs ++ map freeVarsExpr es)) bs
 
 -- | Find all free variables on a binder. Equivalent to idFreeVars, but safe to call on type bindings.
 freeVarsVar :: Var -> VarSet
