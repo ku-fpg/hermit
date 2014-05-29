@@ -205,21 +205,7 @@ inlineTargetsT = collectT $ promoteT $ whenM (testM inlineR) (varT $ arr var2Str
 
 -- | Build a CoreExpr for a DFunUnfolding
 #if __GLASGOW_HASKELL__ > 706
-{-
-data Unfolding
-  = ...
-  | DFunUnfolding {     -- The Unfolding of a DFunId
-                -- See Note [DFun unfoldings]
-                --     df = /\a1..am. \d1..dn. MkD t1 .. tk
-                        --                                 (op1 a1..am d1..dn)
-                    --                                 (op2 a1..am d1..dn)
-        df_bndrs :: [Var],      -- The bound variables [a1..m],[d1..dn]
-        df_con   :: DataCon,    -- The dictionary data constructor (never a newtype datacon)
-        df_args  :: [CoreExpr]  -- Args of the data con: types, superclasses and methods,
-    }                           -- in positional order
--}
 dFunExpr :: Unfolding -> HermitM CoreExpr
--- TODO: is this correct?
 dFunExpr dunf@(DFunUnfolding {}) = return $ mkCoreLams (df_bndrs dunf) $ mkCoreConApps (df_con dunf) (df_args dunf)
 dFunExpr _ = fail "dFunExpr: not a DFunUnfolding"
 #else
