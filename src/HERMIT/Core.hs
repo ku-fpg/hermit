@@ -198,6 +198,7 @@ coercionSyntaxEq (CoVarCo v1)            (CoVarCo v2)            = v1 == v2
 coercionSyntaxEq (AxiomInstCo con1 ind1 cos1) (AxiomInstCo con2 ind2 cos2) = con1 == con2 && ind1 == ind2 && all2 coercionSyntaxEq cos1 cos2
 coercionSyntaxEq (LRCo lr1 co1)          (LRCo lr2 co2)          = lr1 == lr2 && coercionSyntaxEq co1 co2
 coercionSyntaxEq (UnivCo role1 ty11 ty12) (UnivCo role2 ty21 ty22) = role1 == role2 && typeSyntaxEq ty11 ty21 && typeSyntaxEq ty12 ty22
+coercionSyntaxEq (SubCo co1)             (SubCo co2)             = coercionSyntaxEq co1 co2
 #else
 coercionSyntaxEq (AxiomInstCo con1 cos1) (AxiomInstCo con2 cos2) = con1 == con2 && all2 coercionSyntaxEq cos1 cos2
 coercionSyntaxEq (UnsafeCo ty11 ty12)    (UnsafeCo ty21 ty22)    = typeSyntaxEq ty11 ty21 && typeSyntaxEq ty12 ty22
