@@ -15,7 +15,7 @@ module HERMIT.Dictionary.Local.Case
     , caseReduceR
     , caseReduceDataconR
     , caseReduceLiteralR
-    , caseReduceIdR
+    -- , caseReduceIdR
     , caseReduceUnfoldR
     , caseSplitR
     , caseSplitInlineR
@@ -95,8 +95,8 @@ externals =
     , external "case-reduce-literal" (promoteExprR (caseReduceLiteralR True) :: RewriteH Core)
         [ "Case of Known Constructor"
         , "case L of L -> e ==> e" ]                                         .+ Shallow .+ Eval
-    , external "case-reduce-id" (promoteExprR (caseReduceIdR True) :: RewriteH Core)
-        [ "Inline the case scrutinee (if it is an identifier) and then case-reduce." ] .+ Shallow .+ Eval .+ Context
+    -- , external "case-reduce-id" (promoteExprR (caseReduceIdR True) :: RewriteH Core)
+    --     [ "Inline the case scrutinee (if it is an identifier) and then case-reduce." ] .+ Shallow .+ Eval .+ Context
     , external "case-reduce-unfold" (promoteExprR (caseReduceUnfoldR True) :: RewriteH Core)
         [ "Unfold the case scrutinee (if it is a function application) and then case-reduce." ] .+ Shallow .+ Eval .+ Context
     , external "case-split" (promoteExprR . caseSplitR . cmpString2Var :: String -> RewriteH Core)
@@ -288,10 +288,10 @@ caseFloatInArgsR = prefixFailMsg "Case floating into arguments failed: " $
 
 ------------------------------------------------------------------------------
 
--- | Inline the case scrutinee (if it is an identifier), and then perform case reduction.
+--  Inline the case scrutinee (if it is an identifier), and then perform case reduction.
 --   If first argument is True, perform substitution in RHS, if False, build let expressions.
-caseReduceIdR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Bool -> Rewrite c HermitM CoreExpr
-caseReduceIdR subst = caseAllR inlineR idR idR (const idR) >>> caseReduceR subst
+-- caseReduceIdR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Bool -> Rewrite c HermitM CoreExpr
+-- caseReduceIdR subst = caseAllR inlineR idR idR (const idR) >>> caseReduceR subst
 
 -- | Inline the case scrutinee (if it is an identifier), and then perform case reduction.
 --   If first argument is True, perform substitution in RHS, if False, build let expressions.

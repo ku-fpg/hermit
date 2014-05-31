@@ -146,7 +146,7 @@ bashComponents =
   [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
     (promoteExprR betaReduceR, "beta-reduce")                        -- O(1)
   , (promoteExprR (caseReduceR True), "case-reduce")                 -- O(n)
-  , (promoteExprR (caseReduceIdR True), "case-reduce-id")            -- O(n)
+  , (promoteExprR (caseReduceUnfoldR True), "case-reduce-unfold")    -- O(n)
   , (promoteExprR caseElimSeqR, "case-elim-seq")
   , (promoteExprR unfoldBasicCombinatorR, "unfold-basic-combinator") -- O(n)
   , (promoteExprR inlineCaseAlternativeR, "inline-case-alternative") -- O(n)
@@ -183,7 +183,7 @@ smashComponents1 =
   [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
     (promoteExprR betaReduceR, "beta-reduce")                        -- O(1)
   , (promoteExprR (caseReduceR True), "case-reduce")                 -- O(n)
-  , (promoteExprR (caseReduceIdR True), "case-reduce-id")            -- O(n)
+  , (promoteExprR (caseReduceUnfoldR True), "case-reduce-unfold")    -- O(n)
   , (promoteExprR caseElimSeqR, "case-elim-seq")
   , (promoteExprR unfoldBasicCombinatorR, "unfold-basic-combinator") -- O(n)
   , (promoteExprR inlineCaseAlternativeR, "inline-case-alternative") -- O(n)
@@ -214,7 +214,6 @@ smashComponents2 =
   ]
 
 
--- (beta-reduce <+ case-reduce <+ case-reduce-id <+ case-elim-seq <+ unfold-basic-combinator <+ inline-case-alternative <+ eta-reduce <+ let-subst <+ case-float-app <+ case-float-case <+ case-float-let <+ case-float-cast <+ let-float-app <+ let-float-arg <+ let-float-lam <+ let-float-let <+ let-float-case <+ let-float-cast <+ let-float-top <+ cast-elim-refl <+ cast-elim-sym
+-- (beta-reduce <+ case-reduce <+ case-reduce-unfold <+ case-elim-seq <+ unfold-basic-combinator <+ inline-case-alternative <+ eta-reduce <+ let-subst <+ case-float-app <+ case-float-case <+ case-float-let <+ case-float-cast <+ let-float-app <+ let-float-arg <+ let-float-lam <+ let-float-let <+ let-float-case <+ let-float-cast <+ let-float-top <+ cast-elim-refl <+ cast-elim-sym
 
 ------------------------------------------------------------------------------------------------------
-
