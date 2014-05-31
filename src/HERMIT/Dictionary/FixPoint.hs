@@ -51,13 +51,13 @@ externals =
                 [ "Rolling Rule",
                   "fix tyA (\\ a -> f (g a))  <==>  f (fix tyB (\\ b -> g (f b))"
                 ] .+ Context
-         , external "fix-fusion-rule" ((\ f g h lhsR rhsR strictf -> promoteExprBiR (fixFusionRule (Just (lhsR,rhsR)) (Just strictf) f g h)) :: CoreString -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
+         , external "fix-fusion-rule" ((\ f g h r1 r2 strictf -> promoteExprBiR (fixFusionRule (Just (r1,r2)) (Just strictf) f g h)) :: CoreString -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
                 [ "Fixed-point Fusion Rule"
                 , "Given f :: A -> B, g :: A -> A, h :: B -> B, and"
                 , "proofs that, for some x, (f (g a) ==> x) and (h (f a) ==> x) and that f is strict, then"
                 , "f (fix g) <==> fix h"
                 ] .+ Context
-         , external "fix-fusion-rule-unsafe" ((\ f g h lhsR rhsR -> promoteExprBiR (fixFusionRule (Just (lhsR,rhsR)) Nothing f g h)) :: CoreString -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
+         , external "fix-fusion-rule-unsafe" ((\ f g h r1 r2 -> promoteExprBiR (fixFusionRule (Just (r1,r2)) Nothing f g h)) :: CoreString -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
                 [ "(Unsafe) Fixed-point Fusion Rule"
                 , "Given f :: A -> B, g :: A -> A, h :: B -> B, and"
                 , "a proof that, for some x, (f (g a) ==> x) and (h (f a) ==> x), then"
