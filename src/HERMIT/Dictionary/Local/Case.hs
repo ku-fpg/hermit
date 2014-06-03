@@ -60,30 +60,30 @@ import HERMIT.Dictionary.Unfold (unfoldR)
 externals :: [External]
 externals =
     [ external "case-float-app" (promoteExprR caseFloatAppR :: RewriteH Core)
-        [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ]              .+ Commute .+ Shallow
+        [ "(case ec of alt -> e) v ==> case ec of alt -> e v" ] .+ Commute .+ Shallow
     , external "case-float-arg" ((\ strict -> promoteExprR (caseFloatArg Nothing (Just strict))) :: RewriteH Core -> RewriteH Core)
         [ "Given a proof that f is strict, then"
-        , "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow
+        , "f (case s of alt -> e) ==> case s of alt -> f e" ]   .+ Commute .+ Shallow
     , external "case-float-arg" ((\ f strict -> promoteExprR (caseFloatArg (Just f) (Just strict))) :: CoreString -> RewriteH Core -> RewriteH Core)
         [ "For a specified f, given a proof that f is strict, then"
-        , "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow
+        , "f (case s of alt -> e) ==> case s of alt -> f e" ]   .+ Commute .+ Shallow
     , external "case-float-arg-unsafe" ((\ f -> promoteExprR (caseFloatArg (Just f) Nothing)) :: CoreString -> RewriteH Core)
         [ "For a specified f,"
-        , "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
+        , "f (case s of alt -> e) ==> case s of alt -> f e" ]   .+ Commute .+ Shallow .+ PreCondition .+ Strictness
     , external "case-float-arg-unsafe" (promoteExprR (caseFloatArg Nothing Nothing) :: RewriteH Core)
-        [ "f (case s of alt -> e) ==> case s of alt -> f e" ]                .+ Commute .+ Shallow .+ PreCondition
+        [ "f (case s of alt -> e) ==> case s of alt -> f e" ]   .+ Commute .+ Shallow .+ PreCondition .+ Strictness
     , external "case-float-case" (promoteExprR caseFloatCaseR :: RewriteH Core)
         [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval
     , external "case-float-cast" (promoteExprR caseFloatCastR :: RewriteH Core)
         [ "cast (case s of p -> e) co ==> case s of p -> cast e co" ]        .+ Shallow .+ Commute
     , external "case-float-let" (promoteExprR caseFloatLetR :: RewriteH Core)
-        [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow
+        [ "let v = case ec of alt1 -> e1 in e ==> case ec of alt1 -> let v = e1 in e" ] .+ Commute .+ Shallow .+ Strictness
     , external "case-float" (promoteExprR caseFloatR :: RewriteH Core)
-        [ "case-float = case-float-app <+ case-float-case <+ case-float-let <+ case-float-cast" ]    .+ Commute .+ Shallow
+        [ "case-float = case-float-app <+ case-float-case <+ case-float-let <+ case-float-cast" ] .+ Commute .+ Shallow .+ Strictness
     , external "case-float-in" (promoteExprR caseFloatInR :: RewriteH Core)
         [ "Float in a Case whatever the context." ]                             .+ Commute .+ Shallow .+ PreCondition
     , external "case-float-in-args" (promoteExprR caseFloatInArgsR :: RewriteH Core)
-        [ "Float in a Case whose alternatives are parallel applications of the same function." ] .+ Commute .+ Shallow .+ PreCondition
+        [ "Float in a Case whose alternatives are parallel applications of the same function." ] .+ Commute .+ Shallow .+ PreCondition .+ Strictness
     -- , external "case-float-in-app" (promoteExprR caseFloatInApp :: RewriteH Core)
     --     [ "Float in a Case whose alternatives are applications of different functions with the same arguments." ] .+ Commute .+ Shallow .+ PreCondition
     , external "case-reduce" (promoteExprR (caseReduceR True) :: RewriteH Core)
@@ -95,21 +95,19 @@ externals =
     , external "case-reduce-literal" (promoteExprR (caseReduceLiteralR True) :: RewriteH Core)
         [ "Case of Known Constructor"
         , "case L of L -> e ==> e" ]                                         .+ Shallow .+ Eval
-    -- , external "case-reduce-id" (promoteExprR (caseReduceIdR True) :: RewriteH Core)
-    --     [ "Inline the case scrutinee (if it is an identifier) and then case-reduce." ] .+ Shallow .+ Eval .+ Context
     , external "case-reduce-unfold" (promoteExprR (caseReduceUnfoldR True) :: RewriteH Core)
-        [ "Unfold the case scrutinee (if it is a function application) and then case-reduce." ] .+ Shallow .+ Eval .+ Context
+        [ "Unfold the case scrutinee and then case-reduce." ] .+ Shallow .+ Eval .+ Context
     , external "case-split" (promoteExprR . caseSplitR . cmpString2Var :: String -> RewriteH Core)
         [ "case-split 'x"
-        , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ] .+ Shallow
+        , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ] .+ Shallow .+ Strictness
     , external "case-split-inline" (promoteExprR . caseSplitInlineR . cmpString2Var :: String -> RewriteH Core)
         [ "Like case-split, but additionally inlines the matched constructor "
-        , "applications for all occurances of the named variable." ] .+ Deep
+        , "applications for all occurances of the named variable." ] .+ Deep .+ Strictness
     , external "case-intro-seq" (promoteExprR . caseIntroSeqR . cmpString2Var :: String -> RewriteH Core)
         [ "Force evaluation of a variable by introducing a case."
-        , "case-intro-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow .+ Introduce
+        , "case-intro-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow .+ Introduce .+ Strictness
     , external "case-elim-seq" (promoteExprR caseElimSeqR :: RewriteH Core)
-        [ "Eliminate a case that corresponds to a pointless seq."  ] .+ Deep .+ Eval
+        [ "Eliminate a case that corresponds to a pointless seq."  ] .+ Deep .+ Eval .+ Strictness
     , external "case-inline-alternative" (promoteExprR caseInlineAlternativeR :: RewriteH Core)
         [ "Inline the case binder as the case-alternative pattern everywhere in the case alternatives." ] .+ Deep
     , external "case-inline-scrutinee" (promoteExprR caseInlineScrutineeR :: RewriteH Core)
@@ -122,7 +120,7 @@ externals =
         [ "A cleverer version of 'mergeCaseAlts' that first attempts to"
         , "abstract out any occurrences of the alternative pattern using the case binder." ] .+ Deep
     , external "case-elim" (promoteExprR caseElimR :: RewriteH Core)
-        [ "case s of w; C vs -> e ==> e if w and vs are not free in e" ]     .+ Shallow
+        [ "case s of w; C vs -> e ==> e if w and vs are not free in e" ]     .+ Shallow .+ Strictness
     , external "case-elim-inline-scrutinee" (promoteExprR caseElimInlineScrutineeR :: RewriteH Core)
         [ "Eliminate a case, inlining any occurrences of the case binder as the scrutinee." ] .+ Deep
     , external "case-elim-merge-alts" (promoteExprR caseElimMergeAltsR :: RewriteH Core)
@@ -190,30 +188,6 @@ caseFloatArgR mf mstrict = prefixFailMsg "Case floating from App argument failed
                                                                                       in if null vs then idR else alphaAltVarsR vs
                                                                              )
                                                        ) >>> caseFloatArgR Nothing Nothing
-
--- caseFloatArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, HasGlobalRdrEnv c)
---               => Maybe (CoreExpr, Maybe (Rewrite c HermitM CoreExpr)) -- ^ Maybe the function to float past, and maybe a proof of its strictness.
---               -> Rewrite c HermitM CoreExpr
--- caseFloatArgR mfstrict = prefixFailMsg "Case floating from App argument failed: " $
---                          withPatFailMsg "App f (Case s w ty alts)" $
---   do App f (Case s w _ alts) <- idR
---      whenJust (\ (f', mstrict) ->
---                      do guardMsg (exprAlphaEq f f') "given function does not match current application."
---                         whenJust (verifyStrictT f) mstrict
---               )
---               mfstrict
-
---      let fvs         = freeVarsExpr f
---          altCaptures = map (intersectVarSet fvs . mkVarSet . altVars) alts
---          bndrCapture = elemVarSet w fvs
-
---      if | bndrCapture                   -> appAllR idR (alphaCaseBinderR Nothing) >>> caseFloatArgR Nothing
---         | all isEmptyVarSet altCaptures -> let new_alts = mapAlts (App f) alts
---                                             in return $ Case s w (coreAltsType new_alts) new_alts
---         | otherwise                     -> appAllR idR (caseAllR idR idR idR (\ n -> let vs = varSetElems (altCaptures !! n)
---                                                                                       in if null vs then idR else alphaAltVarsR vs
---                                                                              )
---                                                        ) >>> caseFloatArgR Nothing
 
 -- | case (case s1 of alt11 -> e11; alt12 -> e12) of alt21 -> e21; alt22 -> e22
 --   ==>
@@ -288,12 +262,7 @@ caseFloatInArgsR = prefixFailMsg "Case floating into arguments failed: " $
 
 ------------------------------------------------------------------------------
 
---  Inline the case scrutinee (if it is an identifier), and then perform case reduction.
---   If first argument is True, perform substitution in RHS, if False, build let expressions.
--- caseReduceIdR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Bool -> Rewrite c HermitM CoreExpr
--- caseReduceIdR subst = caseAllR inlineR idR idR (const idR) >>> caseReduceR subst
-
--- | Inline the case scrutinee (if it is an identifier), and then perform case reduction.
+-- | Unfold the case scrutinee and then perform case reduction.
 --   If first argument is True, perform substitution in RHS, if False, build let expressions.
 caseReduceUnfoldR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Bool -> Rewrite c HermitM CoreExpr
 caseReduceUnfoldR subst = caseAllR unfoldR idR idR (const idR) >>> caseReduceR subst
