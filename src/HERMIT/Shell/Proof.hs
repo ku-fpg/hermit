@@ -31,6 +31,7 @@ import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Rules hiding (externals)
+import HERMIT.Dictionary.WorkerWrapper.Common
 
 import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
@@ -51,8 +52,11 @@ import Text.PrettyPrint.MarkedHughesPJ as PP
 -- | Externals that get us into the prover shell, or otherwise deal with lemmas.
 externals :: [External]
 externals = map (.+ Proof)
-    [ external "rule-to-lemma" RuleToLemma
+    [ external "rule-to-lemma" (\nm -> IntroLemma nm (ruleNameToEqualityT nm))
         [ "Create a lemma from a GHC RULE." ]
+    , external "intro-ww-assumption-lemma" (\nm wS absC repC -> IntroLemma nm (assumptionEqualityT (read wS) absC repC))
+        [ "Introduce a lemma for desired worker/wrapper assumption"
+        , "using given abs and rep functions." ]
     , external "show-lemma" (ShowLemmas . Just)
         [ "List lemmas whose names match search string." ]
     , external "show-lemmas" (ShowLemmas Nothing)
@@ -122,7 +126,7 @@ proof_externals = map (.+ Proof)
 --------------------------------------------------------------------------------------------------------
 
 data ProofCommand
-    = RuleToLemma RuleNameString
+    = IntroLemma LemmaName (TransformH Core CoreExprEquality)
     | InteractiveProof LemmaName
     | ModifyLemma LemmaName (String -> String) (RewriteH CoreExprEquality) (Bool -> Bool)
     | QueryLemma LemmaName (TransformH CoreExprEquality String)
@@ -172,9 +176,9 @@ lemmaRhsIntroR st = lemmaNameToEqualityT st >=> eqRhsIntroR
 --------------------------------------------------------------------------------------------------------
 
 performProofCommand :: (MonadCatch m, MonadException m, CLMonad m) => ProofCommand -> m ()
-performProofCommand (RuleToLemma nm) = do
+performProofCommand (IntroLemma nm t) = do
     st <- gets cl_pstate
-    equality <- queryS (ps_kernel st) (ruleNameToEqualityT nm :: TransformH Core CoreExprEquality) (mkKernelEnv st) (ps_cursor st)
+    equality <- queryS (ps_kernel st) t (mkKernelEnv st) (ps_cursor st)
     _ <- addLemmas [(nm,equality,False)]
     return ()
 

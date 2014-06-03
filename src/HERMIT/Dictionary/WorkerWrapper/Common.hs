@@ -1,12 +1,35 @@
-module HERMIT.Dictionary.WorkerWrapper.Common where
+{-# LANGUAGE DeriveDataTypeable, TypeFamilies #-}
+module HERMIT.Dictionary.WorkerWrapper.Common
+    ( WWAssumptionTag(..)
+    , WWAssumption(..)
+    , assumptionEqualityT
+    , assumptionAEqualityT
+    , assumptionBEqualityT
+    , assumptionCEqualityT
+    , workLabel
+    ) where
 
-import HERMIT.Monad
-import HERMIT.Kure
+import Data.Typeable
+
+import HERMIT.Core
+import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Kure
+import HERMIT.Monad
+import HERMIT.ParserCore
+
+import HERMIT.Dictionary.Fold
+import HERMIT.Dictionary.Reasoning
 
 --------------------------------------------------------------------------------------------------
 
-data WWAssumptionTag = A | B | C deriving (Eq,Ord,Show,Read)
+data WWAssumptionTag = A | B | C deriving (Eq,Ord,Show,Read,Typeable)
+
+instance Extern WWAssumptionTag where
+    type Box WWAssumptionTag = WWAssumptionTag
+    box i = i
+    unbox i = i
+
 data WWAssumption = WWAssumption WWAssumptionTag (RewriteH CoreExpr)
 
 --------------------------------------------------------------------------------------------------
@@ -21,3 +44,42 @@ workLabel :: Label
 workLabel = "recursive-definition-of-work-for-use-by-ww-fusion"
 
 --------------------------------------------------------------------------------------------------
+
+breakFunTyM :: Monad m => Type -> m ([TyVar], Type, Type)
+breakFunTyM ty = do
+    let (tvs, fTy) = splitForAllTys ty
+    (argTy, resTy) <- splitFunTypeM fTy
+    return (tvs, argTy, resTy)
+
+assumptionEqualityT :: WWAssumptionTag -> CoreString -> CoreString -> TransformH x CoreExprEquality
+assumptionEqualityT A = assumptionAEqualityT
+assumptionEqualityT B = assumptionBEqualityT
+assumptionEqualityT C = assumptionCEqualityT
+
+assumptionAEqualityT :: CoreString -> CoreString -> TransformH x CoreExprEquality
+assumptionAEqualityT absC repC = do
+    absE <- parseCoreExprT absC
+    repE <- parseCoreExprT repC
+    (vsR, _, codR) <- breakFunTyM (exprType repE)
+    (vsA, domA, _) <- breakFunTyM (exprType absE)
+    sub <- maybe (fail "codomain of rep and domain of abs do not unify") return
+                 (unifyTypes vsR codR domA)
+    let (tvs, tys) = unzip sub
+        vsR' = [ v | v <- vsR, v `notElem` (map fst sub) ] -- things we should stick back on as foralls
+        (_, rTy) = splitForAllTys (exprType repE)
+        rTy' = substTyWith tvs tys $ mkForAllTys vsR' rTy
+    (xTy,_) <- splitFunTypeM rTy'
+    xId <- constT $ newIdH "x" xTy
+    let rhsE    = varToCoreExpr xId
+        repAppE = mkCoreApps repE $ [ case lookup v sub of
+                                        Nothing -> varToCoreExpr v
+                                        Just ty -> Type ty
+                                    | v <- vsR ] ++ [rhsE]
+        lhsE    = mkCoreApps absE $ map varToCoreExpr vsA ++ [repAppE]
+    return $ CoreExprEquality (vsA ++ vsR' ++ [xId]) lhsE rhsE
+
+assumptionBEqualityT :: CoreString -> CoreString -> TransformH x CoreExprEquality
+assumptionBEqualityT _ _ = fail "assumption B generation not implemented"
+
+assumptionCEqualityT :: CoreString -> CoreString -> TransformH x CoreExprEquality
+assumptionCEqualityT _ _ = fail "assumption C generation not implemented"
