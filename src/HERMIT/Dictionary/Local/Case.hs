@@ -107,7 +107,7 @@ externals =
         , "applications for all occurances of the named variable." ] .+ Deep
     , external "case-intro-seq" (promoteExprR . caseIntroSeqR . cmpString2Var :: String -> RewriteH Core)
         [ "Force evaluation of a variable by introducing a case."
-        , "case-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow .+ Introduce
+        , "case-intro-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow .+ Introduce
     , external "case-elim-seq" (promoteExprR caseElimSeqR :: RewriteH Core)
         [ "Eliminate a case that corresponds to a pointless seq."  ] .+ Deep .+ Eval
     , external "case-inline-alternative" (promoteExprR caseInlineAlternativeR :: RewriteH Core)
