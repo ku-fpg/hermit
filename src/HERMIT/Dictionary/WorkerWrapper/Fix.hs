@@ -171,7 +171,7 @@ wwFacBR mAss wrap unwrap = beforeBiR (wrapUnwrapTypes wrap unwrap)
                      guardMsg (eqType tyA tA) ("wrapper/unwrapper types do not match fix body type.")
                      whenJust (verifyWWAss wrap unwrap f) mAss
                      b <- constT (newIdH "x" tyB)
-                     App wrap <$> mkFixT (Lam b (App unwrap (App f (App wrap (Var b)))))
+                     App wrap <$> buildFixT (Lam b (App unwrap (App f (App wrap (Var b)))))
 
     wwR :: RewriteH CoreExpr
     wwR  =    prefixFailMsg "(reverse) worker/wrapper factorisation failed: " $
@@ -183,7 +183,7 @@ wwFacBR mAss wrap unwrap = beforeBiR (wrapUnwrapTypes wrap unwrap)
                       guardMsg (equivalentBy exprAlphaEq [wrap, wrap1, wrap2]) "wrappers do not match."
                       guardMsg (exprAlphaEq unwrap unwrap1) "unwrappers do not match."
                       whenJust (verifyWWAss wrap unwrap f) mAss
-                      mkFixT f
+                      buildFixT f
 
     wrongFixBody :: String
     wrongFixBody = "body of fix does not have the form Lam b (App unwrap (App f (App wrap (Var b))))"
@@ -440,8 +440,8 @@ verifyAssC wrap unwrap f assC =
   prefixFailMsg ("verification of worker/wrapper assumption C failed: ") $
   do (tyA,_) <- wrapUnwrapTypes wrap unwrap
      a       <- constT (newIdH "a" tyA)
-     rhs     <- mkFixT f
-     lhs     <- mkFixT (Lam a (App wrap (App unwrap (App f (Var a)))))
+     rhs     <- buildFixT f
+     lhs     <- buildFixT (Lam a (App wrap (App unwrap (App f (Var a)))))
      verifyEqualityLeftToRightT lhs rhs assC
 
 --------------------------------------------------------------------------------------------------

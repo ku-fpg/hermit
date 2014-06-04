@@ -54,9 +54,15 @@ externals :: [External]
 externals = map (.+ Proof)
     [ external "rule-to-lemma" (\nm -> IntroLemma nm (ruleNameToEqualityT nm))
         [ "Create a lemma from a GHC RULE." ]
-    , external "intro-ww-assumption-lemma" (\nm wS absC repC -> IntroLemma nm (assumptionEqualityT (read wS) absC repC))
-        [ "Introduce a lemma for desired worker/wrapper assumption"
+    , external "intro-ww-assumption-A" (\nm absC repC -> IntroLemma nm (assumptionAEqualityT absC repC))
+        [ "Introduce a lemma for worker/wrapper assumption A"
         , "using given abs and rep functions." ]
+    , external "intro-ww-assumption-B" (\nm absC repC bodyC -> IntroLemma nm (assumptionBEqualityT absC repC bodyC))
+        [ "Introduce a lemma for worker/wrapper assumption B"
+        , "using given abs, rep, and body functions." ]
+    , external "intro-ww-assumption-C" (\nm absC repC bodyC -> IntroLemma nm (assumptionCEqualityT absC repC bodyC))
+        [ "Introduce a lemma for worker/wrapper assumption C"
+        , "using given abs, rep, and body functions." ]
     , external "show-lemma" (ShowLemmas . Just)
         [ "List lemmas whose names match search string." ]
     , external "show-lemmas" (ShowLemmas Nothing)

@@ -1,25 +1,31 @@
 {-# LANGUAGE FlexibleContexts, RankNTypes #-}
 module HERMIT.Dictionary.Function
     ( externals
+    , appArgM
+    , buildCompositionT
+    , buildFixT
+    , buildIdT
     , staticArgR
     , staticArgPosR
     , staticArgPredR
     , staticArgTypesR
-    )
-where
+    ) where
 
 import Control.Arrow
+import Control.Monad.IO.Class
 
 import Data.List (nub, intercalate, intersect, partition, transpose)
 
 import HERMIT.Context
 import HERMIT.Core
-import HERMIT.Monad
-import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Kure
+import HERMIT.Monad
 
 import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.Fold hiding (externals)
+import HERMIT.Dictionary.GHC hiding (externals)
 
 externals ::  [External]
 externals =
@@ -104,5 +110,70 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
         return $ Def f $ mkCoreLams bnds $ Let (Rec [(wkr, mkCoreLams dbnds body')])
                                              $ mkApps (Var wkr) (varsToCoreExprs dbnds)
 
+------------------------------------------------------------------------------
+
+-- | Get the nth argument of an application. Arg 0 is the function being applied.
+appArgM :: Monad m => Int -> CoreExpr -> m CoreExpr
+appArgM n e | n < 0     = fail "appArgM: arg must be non-negative"
+            | otherwise = let (fn,args) = collectArgs e
+                              l = fn : args
+                          in if n > length args
+                             then fail "appArgM: not enough arguments"
+                             else return $ l !! n
+
+-- | Build composition of two functions.
+buildCompositionT :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
+                  => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
+buildCompositionT f g = do
+    (vsF, domF, codF) <- funTyComponentsM (exprType f)
+    (vsG, _   , codG) <- funTyComponentsM (exprType g)
+    composeId <- findIdT "Data.Function.."
+    -- (.)    :: forall b c a. (b -> c) -> (a -> b) -> a -> c
+    -- f . g
+    -- b = domF = codG
+    -- c = codF
+    -- a = domG
+    sub <- maybe (fail "building f . g - codomain of g and domain of f do not unify") return
+                 (unifyTypes vsG codG domF)
+
+    g' <- substOrApply g [ (v, case lookup v sub of
+                                Nothing -> varToCoreExpr v
+                                Just ty -> Type ty)
+                         | v <- vsG ]
+    (domG',_) <- funExprArgResTypes g'
+    f' <- substOrApply f [ (v, varToCoreExpr v) | v <- vsF ]
+
+    let vsG' = filter (`notElem` (map fst sub)) vsG -- things we should stick back on as foralls
+        e  = mkCoreApps (varToCoreExpr composeId) $ map Type [domF, codF, domG'] ++ [f',g']
+
+    return $ mkCoreLams (vsF ++ vsG') e
+
+-- | Given expression for f, build fix f.
+buildFixT :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
+          => CoreExpr -> Transform c m x CoreExpr
+buildFixT f = do
+    ty <- endoFunExprType f
+    fixId <- findIdT "Data.Function.fix"
+    return $ mkCoreApps (varToCoreExpr fixId) [Type ty, f]
+
+-- | Build an expression that is the monomorphic id function for given type.
+buildIdT :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
+         => Type -> Transform c m x CoreExpr
+buildIdT ty = do
+    idId <- findIdT "Data.Function.id"
+    return $ mkCoreApp (varToCoreExpr idId) (Type ty)
+
+------------------------------------------------------------------------------
+
 commas :: Show a => [a] -> String
 commas = intercalate "," . map show
+
+-- | Like mkCoreApps, but automatically beta-reduces when possible.
+substOrApply :: Monad m => CoreExpr -> [(Var,CoreExpr)] -> m CoreExpr
+substOrApply e         []         = return e
+substOrApply (Lam b e) ((v,ty):r) = if b == v
+                                    then substOrApply (substCoreExpr b ty e) r
+                                    else fail "substOrApply: unexpected binder"
+substOrApply e         rest       = return $ mkCoreApps e (map snd rest)
+
+------------------------------------------------------------------------------

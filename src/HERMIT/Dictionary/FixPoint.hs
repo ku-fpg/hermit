@@ -10,14 +10,12 @@ module HERMIT.Dictionary.FixPoint
        , fixRollingRuleBR
        , fixFusionRuleBR
          -- ** Utilities
-       , mkFixT
        , isFixExprT
        )
 where
 
 import Control.Applicative
 import Control.Arrow
-import Control.Monad.IO.Class
 
 import Data.Monoid (mempty)
 
@@ -31,6 +29,7 @@ import HERMIT.ParserCore
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.Function
 import HERMIT.Dictionary.GHC
 import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Undefined
@@ -79,7 +78,7 @@ fixIntroR :: RewriteH CoreDef
 fixIntroR = prefixFailMsg "fix introduction failed: " $
            do Def f _ <- idR
               f' <- constT $ cloneVarH id f
-              Def f <$> (mkFixT =<< (defT mempty (extractR $ substR f $ varToCoreExpr f') (\ () e' -> Lam f' e')))
+              Def f <$> (buildFixT =<< (defT mempty (extractR $ substR f $ varToCoreExpr f') (\ () e' -> Lam f' e')))
 
 --------------------------------------------------------------------------------------------------
 
@@ -129,7 +128,7 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
 
     rollingRuleResult :: Type -> CoreExpr -> CoreExpr -> TransformH z CoreExpr
     rollingRuleResult ty f g = do x <- constT (newIdH "x" ty)
-                                  mkFixT (Lam x (App f (App g (Var x))))
+                                  buildFixT (Lam x (App f (App g (Var x))))
 
     wrongFixBody :: String
     wrongFixBody = "body of fix does not have the form: Lam v (App f (App g (Var v)))"
@@ -167,13 +166,13 @@ fixFusionRuleBR meq mfstrict f g h = beforeBiR
                        guardMsg (exprAlphaEq f f') "first argument function does not match."
                        (_,g') <- isFixExprT <<< return fixg
                        guardMsg (exprAlphaEq g g') "second argument function does not match."
-                       mkFixT h
+                       buildFixT h
 
        fixFusionR :: RewriteH CoreExpr
        fixFusionR = prefixFailMsg "(reversed) fixed-point fusion failed: " $
                     do (_,h') <- isFixExprT
                        guardMsg (exprAlphaEq h h') "third argument function does not match."
-                       App f <$> mkFixT g
+                       App f <$> buildFixT g
 
 -- | If @f@ is strict, then (@f (g a)@ == @h (f a)@)  ==>  (@f (fix g)@ == @fix h@)
 fixFusionRule :: Maybe (RewriteH Core, RewriteH Core) -> Maybe (RewriteH Core) -> CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
@@ -184,24 +183,14 @@ fixFusionRule meq mfstrict = parse3beforeBiR $ fixFusionRuleBR ((extractR *** ex
 -- | Check that the expression has the form "fix t (f :: t -> t)", returning "t" and "f".
 isFixExprT :: TransformH CoreExpr (Type,CoreExpr)
 isFixExprT = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
-  do App (App (Var fixId) (Type ty)) f <- idR
-     fixId' <- findFixId
+  do (Var fixId, [Type ty, f]) <- callT
+     fixId' <- findIdT fixLocation
      guardMsg (fixId == fixId') (var2String fixId ++ " does not match " ++ fixLocation)
      return (ty,f)
 
 --------------------------------------------------------------------------------------------------
 
--- | f  ==>  fix f
-mkFixT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m) => CoreExpr -> Transform c m z CoreExpr
-mkFixT f = do t <- endoFunExprType f
-              fixId <- findFixId
-              return $ mkCoreApps (varToCoreExpr fixId) [Type t, f]
-
 fixLocation :: String
 fixLocation = "Data.Function.fix"
-
--- TODO: will crash if 'fix' is not used (or explicitly imported) in the source file.
-findFixId :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m) => Transform c m a Id
-findFixId = findIdT fixLocation
 
 --------------------------------------------------------------------------------------------------

@@ -2,7 +2,6 @@
 module HERMIT.Dictionary.WorkerWrapper.Common
     ( WWAssumptionTag(..)
     , WWAssumption(..)
-    , assumptionEqualityT
     , assumptionAEqualityT
     , assumptionBEqualityT
     , assumptionCEqualityT
@@ -18,7 +17,7 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.ParserCore
 
-import HERMIT.Dictionary.Fold
+import HERMIT.Dictionary.Function
 import HERMIT.Dictionary.Reasoning
 
 --------------------------------------------------------------------------------------------------
@@ -45,39 +44,35 @@ workLabel = "recursive-definition-of-work-for-use-by-ww-fusion"
 
 --------------------------------------------------------------------------------------------------
 
-breakFunTyM :: Monad m => Type -> m ([TyVar], Type, Type)
-breakFunTyM ty = do
-    let (tvs, fTy) = splitForAllTys ty
-    (argTy, resTy) <- splitFunTypeM fTy
-    return (tvs, argTy, resTy)
+-- TODO: generalize away from TransformH on all of these
 
-assumptionEqualityT :: WWAssumptionTag -> CoreString -> CoreString -> TransformH x CoreExprEquality
-assumptionEqualityT A = assumptionAEqualityT
-assumptionEqualityT B = assumptionBEqualityT
-assumptionEqualityT C = assumptionCEqualityT
-
+-- Given abs and rep expressions, build "abs . rep = id"
 assumptionAEqualityT :: CoreString -> CoreString -> TransformH x CoreExprEquality
-assumptionAEqualityT absC repC = do
+assumptionAEqualityT absC repC = prefixFailMsg "Building assumption A failed: " $ do
     absE <- parseCoreExprT absC
     repE <- parseCoreExprT repC
-    (vsR, domR, codR) <- breakFunTyM (exprType repE)
-    (vsA, domA, _) <- breakFunTyM (exprType absE)
-    sub <- maybe (fail "codomain of rep and domain of abs do not unify") return
-                 (unifyTypes vsR codR domA)
-    let (tvs, tys) = unzip sub
-        vsR' = filter (`notElem` tvs) vsR -- things we should stick back on as foralls
-        xTy = substTyWith tvs tys $ mkForAllTys vsR' domR
-    xId <- constT $ newIdH "x" xTy
-    let rhsE    = varToCoreExpr xId
-        repAppE = mkCoreApps repE $ [ case lookup v sub of
-                                        Nothing -> varToCoreExpr v
-                                        Just ty -> Type ty
-                                    | v <- vsR ] ++ [rhsE]
-        lhsE    = mkCoreApps absE $ map varToCoreExpr vsA ++ [repAppE]
-    return $ CoreExprEquality (vsA ++ vsR' ++ [xId]) lhsE rhsE
+    comp <- buildCompositionT absE repE
+    let (_,compBody) = collectTyBinders comp
+    (tvs, xTy, _) <- funTyComponentsM (exprType comp)
+    idE <- buildIdT xTy
+    return $ CoreExprEquality tvs compBody idE
 
-assumptionBEqualityT :: CoreString -> CoreString -> TransformH x CoreExprEquality
-assumptionBEqualityT _ _ = fail "assumption B generation not implemented"
+-- Given abs, rep, and f expressions, build "abs . rep . f = f"
+assumptionBEqualityT :: CoreString -> CoreString -> CoreString -> TransformH x CoreExprEquality
+assumptionBEqualityT absC repC fC = prefixFailMsg "Building assumption B failed: " $ do
+    absE <- parseCoreExprT absC
+    repE <- parseCoreExprT repC
+    fE   <- parseCoreExprT fC
+    repAfterF <- buildCompositionT repE fE
+    comp <- buildCompositionT absE repAfterF
+    let (tvs,lhs) = collectTyBinders comp
+    rhs <- appArgM 5 lhs >>= appArgM 5 -- get f with proper tvs applied
+    return $ CoreExprEquality tvs lhs rhs
 
-assumptionCEqualityT :: CoreString -> CoreString -> TransformH x CoreExprEquality
-assumptionCEqualityT _ _ = fail "assumption C generation not implemented"
+-- Given abs, rep, and f expressions, build "fix (abs . rep . f) = fix f"
+assumptionCEqualityT :: CoreString -> CoreString -> CoreString -> TransformH x CoreExprEquality
+assumptionCEqualityT absC repC fC = prefixFailMsg "Building assumption C failed: " $ do
+    CoreExprEquality vs lhs rhs <- assumptionBEqualityT absC repC fC
+    lhs' <- buildFixT lhs
+    rhs' <- buildFixT rhs
+    return $ CoreExprEquality vs lhs' rhs'

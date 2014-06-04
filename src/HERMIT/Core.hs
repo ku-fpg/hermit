@@ -64,6 +64,7 @@ module HERMIT.Core
           , endoFunExprType
           , funExprArgResTypes
           , funExprsWithInverseTypes
+          , funTyComponentsM
           , appCount
           , mapAlts
 
@@ -408,6 +409,13 @@ funExprsWithInverseTypes f g =
        do guardM (eqType fdom gcod)
           guardM (eqType gdom fcod)
           return (fdom,fcod)
+
+-- | Get the quantified variables, domain, and codomain of a function type.
+funTyComponentsM :: MonadCatch m => Type -> m ([TyVar], Type, Type)
+funTyComponentsM ty = setFailMsg "not a function type." $ do
+    let (tvs, fTy) = splitForAllTys ty
+    (argTy, resTy) <- splitFunTypeM fTy
+    return (tvs, argTy, resTy)
 
 -----------------------------------------------------------------------
 
