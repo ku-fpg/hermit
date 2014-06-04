@@ -60,15 +60,13 @@ assumptionAEqualityT :: CoreString -> CoreString -> TransformH x CoreExprEqualit
 assumptionAEqualityT absC repC = do
     absE <- parseCoreExprT absC
     repE <- parseCoreExprT repC
-    (vsR, _, codR) <- breakFunTyM (exprType repE)
+    (vsR, domR, codR) <- breakFunTyM (exprType repE)
     (vsA, domA, _) <- breakFunTyM (exprType absE)
     sub <- maybe (fail "codomain of rep and domain of abs do not unify") return
                  (unifyTypes vsR codR domA)
     let (tvs, tys) = unzip sub
-        vsR' = [ v | v <- vsR, v `notElem` (map fst sub) ] -- things we should stick back on as foralls
-        (_, rTy) = splitForAllTys (exprType repE)
-        rTy' = substTyWith tvs tys $ mkForAllTys vsR' rTy
-    (xTy,_) <- splitFunTypeM rTy'
+        vsR' = filter (`notElem` tvs) vsR -- things we should stick back on as foralls
+        xTy = substTyWith tvs tys $ mkForAllTys vsR' domR
     xId <- constT $ newIdH "x" xTy
     let rhsE    = varToCoreExpr xId
         repAppE = mkCoreApps repE $ [ case lookup v sub of
