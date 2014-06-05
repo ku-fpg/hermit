@@ -35,32 +35,33 @@ import HERMIT.Dictionary.Navigation.Crumbs
 
 -- | 'External's involving navigating to named entities.
 externals :: [External]
-externals = crumbExternals ++ map (.+ Navigation)
-            [ external "rhs-of" (rhsOfT . cmpString2Var :: String -> TransformH Core LocalPathH)
-                [ "Find the path to the RHS of the binding of the named variable." ]
-            , external "binding-group-of" (bindingGroupOfT . cmpString2Var :: String -> TransformH CoreTC LocalPathH)
-                [ "Find the path to the binding group of the named variable." ]
-            , external "binding-of" (bindingOfT . cmpString2Var :: String -> TransformH CoreTC LocalPathH)
-                [ "Find the path to the binding of the named variable." ]
-            , external "occurrence-of" (occurrenceOfT . cmpString2Var :: String -> TransformH CoreTC LocalPathH)
-                [ "Find the path to the first occurrence of the named variable." ]
-            , external "consider" (considerConstruct :: String -> TransformH Core LocalPathH)
-                [ "consider <c> focuses on the first construct <c>.",
-                  recognizedConsiderables]
-            , external "arg" (promoteExprT . nthArgPath :: Int -> TransformH Core LocalPathH)
-                [ "arg n focuses on the (n-1)th argument of a nested application." ]
-            , external "lams-body" (promoteExprT lamsBodyT :: TransformH Core LocalPathH)
-                [ "Descend into the body after a sequence of lambdas." ]
-            , external "lets-body" (promoteExprT letsBodyT :: TransformH Core LocalPathH)
-                [ "Descend into the body after a sequence of let bindings." ]
-            , external "prog-end" (promoteModGutsT gutsProgEndT <+ promoteProgT progEndT :: TransformH Core LocalPathH)
-                [ "Descend to the end of a program." ]
-
-            , external "parent-of" (parentOfT :: TransformH Core LocalPathH -> TransformH Core LocalPathH)
-                [ "Focus on the parent of another focal point." ]
-            , external "parent-of" (parentOfT :: TransformH CoreTC LocalPathH -> TransformH CoreTC LocalPathH)
-                [ "Focus on the parent of another focal point." ]
-            ]
+externals = crumbExternals
+    ++ map (.+ Navigation)
+        [ external "rhs-of" (rhsOfT . cmpString2Var :: String -> TransformH Core LocalPathH)
+            [ "Find the path to the RHS of the binding of the named variable." ]
+        , external "binding-group-of" (bindingGroupOfT . cmpString2Var :: String -> TransformH CoreTC LocalPathH)
+            [ "Find the path to the binding group of the named variable." ]
+        , external "binding-of" (bindingOfT . cmpString2Var :: String -> TransformH CoreTC LocalPathH)
+            [ "Find the path to the binding of the named variable." ]
+        , external "occurrence-of" (occurrenceOfT . cmpString2Var :: String -> TransformH CoreTC LocalPathH)
+            [ "Find the path to the first occurrence of the named variable." ]
+        , external "application-of" (applicationOfT . cmpString2Var :: String -> TransformH CoreTC LocalPathH)
+            [ "Find the path to the first application of the named variable." ]
+        , external "consider" (considerConstruct :: String -> TransformH Core LocalPathH)
+            [ "consider <c> focuses on the first construct <c>.", recognizedConsiderables ]
+        , external "arg" (promoteExprT . nthArgPath :: Int -> TransformH Core LocalPathH)
+            [ "arg n focuses on the (n-1)th argument of a nested application." ]
+        , external "lams-body" (promoteExprT lamsBodyT :: TransformH Core LocalPathH)
+            [ "Descend into the body after a sequence of lambdas." ]
+        , external "lets-body" (promoteExprT letsBodyT :: TransformH Core LocalPathH)
+            [ "Descend into the body after a sequence of let bindings." ]
+        , external "prog-end" (promoteModGutsT gutsProgEndT <+ promoteProgT progEndT :: TransformH Core LocalPathH)
+            [ "Descend to the end of a program." ]
+        , external "parent-of" (parentOfT :: TransformH Core LocalPathH -> TransformH Core LocalPathH)
+            [ "Focus on the parent of another focal point." ]
+        , external "parent-of" (parentOfT :: TransformH CoreTC LocalPathH -> TransformH CoreTC LocalPathH)
+            [ "Focus on the parent of another focal point." ]
+        ]
 
 ---------------------------------------------------------------------------------------
 
@@ -98,6 +99,12 @@ bindingOfT p = prefixFailMsg ("binding-of failed: ") $
 occurrenceOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => (Var -> Bool) -> Transform c m CoreTC LocalPathH
 occurrenceOfT p = prefixFailMsg ("occurrence-of failed: ") $
                   oneNonEmptyPathToT (arr $ occurrenceOf p)
+
+-- | Find the path to an application of a given function.
+applicationOfT :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, MonadCatch m, ReadPath c Crumb)
+               => (Var -> Bool) -> Transform c m CoreTC LocalPathH
+applicationOfT p = prefixFailMsg "application-of failed:" $ oneNonEmptyPathToT go
+    where go = promoteExprT (appT (extractT go) successT const) <+ arr (occurrenceOf p)
 
 -----------------------------------------------------------------------
 
