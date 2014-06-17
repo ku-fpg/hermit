@@ -52,6 +52,7 @@ module HERMIT.GHC
     , mkPhiTy
     , mkSigmaTy
     , getHscEnvCoreM
+    , tcUnifyTy
     ) where
 
 #if __GLASGOW_HASKELL__ <= 706
@@ -84,6 +85,7 @@ import OccurAnal (occurAnalyseExpr)
 import Pair (Pair(..))
 import TcType (mkPhiTy, mkSigmaTy)
 import TypeRep (Type(..),TyLit(..))
+import Unify (tcUnifyTy)
 
 #if __GLASGOW_HASKELL__ <= 706
 import Data.Maybe (isJust)

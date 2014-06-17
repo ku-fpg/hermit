@@ -2,6 +2,7 @@
 module HERMIT.Dictionary.Function
     ( externals
     , appArgM
+    , buildApplicationM
     , buildCompositionT
     , buildFixT
     , buildIdT
@@ -15,6 +16,7 @@ import Control.Arrow
 import Control.Monad.IO.Class
 
 import Data.List (nub, intercalate, intersect, partition, transpose)
+import Data.Maybe (isNothing)
 
 import HERMIT.Context
 import HERMIT.Core
@@ -24,7 +26,6 @@ import HERMIT.Kure
 import HERMIT.Monad
 
 import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.Fold hiding (externals)
 import HERMIT.Dictionary.GHC hiding (externals)
 
 externals ::  [External]
@@ -122,31 +123,36 @@ appArgM n e | n < 0     = fail "appArgM: arg must be non-negative"
                              else return $ l !! n
 
 -- | Build composition of two functions.
-buildCompositionT :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
+buildCompositionT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
                   => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
 buildCompositionT f g = do
-    (vsF, domF, codF) <- funTyComponentsM (exprType f)
-    (vsG, _   , codG) <- funTyComponentsM (exprType g)
     composeId <- findIdT "Data.Function.."
-    -- (.)    :: forall b c a. (b -> c) -> (a -> b) -> a -> c
-    -- f . g
-    -- b = domF = codG
-    -- c = codF
-    -- a = domG
-    sub <- maybe (fail "building f . g - codomain of g and domain of f do not unify") return
-                 (unifyTypes vsG codG domF)
+    fDot <- buildApplicationM (varToCoreExpr composeId) f
+    buildApplicationM fDot g
 
-    g' <- substOrApply g [ (v, case lookup v sub of
-                                Nothing -> varToCoreExpr v
-                                Just ty -> Type ty)
-                         | v <- vsG ]
-    (domG',_) <- funExprArgResTypes g'
-    f' <- substOrApply f [ (v, varToCoreExpr v) | v <- vsF ]
+-- | Given expression for f and for x, build f x, figuring out the type arguments.
+buildApplicationM :: (HasDynFlags m, MonadCatch m, MonadIO m) => CoreExpr -> CoreExpr -> m CoreExpr
+buildApplicationM f x = do
+    (vsF, domF, _) <- funTyComponentsM (exprType f)
+    let (vsX, xTy) = splitForAllTys (exprType x)
 
-    let vsG' = filter (`notElem` (map fst sub)) vsG -- things we should stick back on as foralls
-        e  = mkCoreApps (varToCoreExpr composeId) $ map Type [domF, codF, domG'] ++ [f',g']
+    sub <- maybe (do d <- getDynFlags
+                     liftIO $ putStrLn $ "f: " ++ showPpr d f
+                     liftIO $ putStrLn $ "x: " ++ showPpr d x
+                     liftIO $ putStrLn $ "vsF: " ++ showPpr d vsF
+                     liftIO $ putStrLn $ "domF: " ++ showPpr d domF
+                     liftIO $ putStrLn $ "vsX: " ++ showPpr d vsX
+                     liftIO $ putStrLn $ "xTy: " ++ showPpr d xTy
+                     fail "buildApplicationM - domain of f and type of x do not unify")
+                 return
+                 (tcUnifyTy domF xTy)
 
-    return $ mkCoreLams (vsF ++ vsG') e
+    f' <- substOrApply f [ (v, Type $ substTyVar sub v) | v <- vsF ]
+    x' <- substOrApply x [ (v, Type $ substTyVar sub v) | v <- vsX ]
+    let vs = [ v | v <- vsF ++ vsX, isNothing $ lookupTyVar sub v ]  -- things we should stick back on as foralls
+    -- TODO: make sure vsX don't capture anything in f'
+    --       and vsF' doesn't capture anything in x'
+    return $ mkCoreLams vs $ mkCoreApp f' x'
 
 -- | Given expression for f, build fix f.
 buildFixT :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
@@ -172,8 +178,9 @@ commas = intercalate "," . map show
 substOrApply :: Monad m => CoreExpr -> [(Var,CoreExpr)] -> m CoreExpr
 substOrApply e         []         = return e
 substOrApply (Lam b e) ((v,ty):r) = if b == v
-                                    then substOrApply (substCoreExpr b ty e) r
-                                    else fail "substOrApply: unexpected binder"
+                                    then substOrApply e r >>= return . substCoreExpr b ty
+                                    else fail $ "substOrApply: unexpected binder - "
+                                                ++ getOccString b ++ " - " ++ getOccString v
 substOrApply e         rest       = return $ mkCoreApps e (map snd rest)
 
 ------------------------------------------------------------------------------
