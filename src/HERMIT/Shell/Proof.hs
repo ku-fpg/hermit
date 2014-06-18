@@ -24,6 +24,7 @@ import HERMIT.External
 import HERMIT.GHC hiding (settings, (<>), text, sep, (<+>), ($+$), nest)
 import HERMIT.Kernel.Scoped
 import HERMIT.Kure
+import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.Utilities
 

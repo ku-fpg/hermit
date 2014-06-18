@@ -5,6 +5,7 @@ module HERMIT.Dictionary.Local.Case
       externals
     , caseFloatAppR
     , caseFloatArgR
+    , caseFloatArgLemmaR
     , caseFloatCaseR
     , caseFloatCastR
     , caseFloatLetR
@@ -50,7 +51,7 @@ import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.AlphaConversion hiding (externals)
 import HERMIT.Dictionary.Fold (foldVarR)
 import HERMIT.Dictionary.GHC (substCoreExpr)
-import HERMIT.Dictionary.Undefined (verifyStrictT)
+import HERMIT.Dictionary.Undefined (verifyStrictT, buildStrictnessLemmaT)
 import HERMIT.Dictionary.Unfold (unfoldR)
 
 -- NOTE: these are hard to test in small examples, as GHC does them for us, so use with caution
@@ -72,6 +73,9 @@ externals =
         , "f (case s of alt -> e) ==> case s of alt -> f e" ]   .+ Commute .+ Shallow .+ PreCondition .+ Strictness
     , external "case-float-arg-unsafe" (promoteExprR (caseFloatArg Nothing Nothing) :: RewriteH Core)
         [ "f (case s of alt -> e) ==> case s of alt -> f e" ]   .+ Commute .+ Shallow .+ PreCondition .+ Strictness
+    , external "case-float-arg-lemma" (promoteExprR . caseFloatArgLemmaR :: LemmaName -> RewriteH Core)
+        [ "f (case s of alt -> e) ==> case s of alt -> f e"
+        , "Generates a lemma with given name for strictness side condition on f." ] .+ Commute .+ Shallow .+ PreCondition .+ Strictness
     , external "case-float-case" (promoteExprR caseFloatCaseR :: RewriteH Core)
         [ "case (case ec of alt1 -> e1) of alta -> ea ==> case ec of alt1 -> case e1 of alta -> ea" ] .+ Commute .+ Eval
     , external "case-float-cast" (promoteExprR caseFloatCastR :: RewriteH Core)
@@ -188,6 +192,30 @@ caseFloatArgR mf mstrict = prefixFailMsg "Case floating from App argument failed
                                                                                       in if null vs then idR else alphaAltVarsR vs
                                                                              )
                                                        ) >>> caseFloatArgR Nothing Nothing
+
+-- | @f (case s of alt1 -> e1; alt2 -> e2)@ ==> @case s of alt1 -> f e1; alt2 -> f e2@
+--   Only safe if @f@ is strict, so introduces a lemma to prove.
+caseFloatArgLemmaR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb)
+                   => LemmaName -> Rewrite c HermitM CoreExpr
+caseFloatArgLemmaR nm = prefixFailMsg "Case floating from application argument failed: " $
+                        withPatFailMsg "App f (Case s w ty alts)" $ do
+    App f (Case s w _ alts) <- idR
+
+    let fvs         = freeVarsExpr f
+        altCaptures = map (intersectVarSet fvs . mkVarSet . altVars) alts
+        bndrCapture = elemVarSet w fvs
+
+    if | bndrCapture ->
+            appAllR idR (alphaCaseBinderR Nothing) >>> caseFloatArgR Nothing Nothing
+       | all isEmptyVarSet altCaptures -> do
+            let new_alts = mapAlts (App f) alts
+            buildStrictnessLemmaT nm f
+            return $ Case s w (coreAltsType new_alts) new_alts
+       | otherwise ->
+            appAllR idR (caseAllR idR idR idR (\ n -> let vs = varSetElems (altCaptures !! n)
+                                                      in if null vs then idR else alphaAltVarsR vs
+                                              )
+                        ) >>> caseFloatArgR Nothing Nothing
 
 -- | case (case s1 of alt11 -> e11; alt12 -> e12) of alt21 -> e21; alt22 -> e22
 --   ==>

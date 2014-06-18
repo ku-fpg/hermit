@@ -18,7 +18,6 @@ import HERMIT.Monad
 import HERMIT.ParserCore
 
 import HERMIT.Dictionary.Function
-import HERMIT.Dictionary.Reasoning
 
 --------------------------------------------------------------------------------------------------
 

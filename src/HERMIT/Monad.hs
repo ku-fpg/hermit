@@ -1,36 +1,42 @@
 {-# LANGUAGE CPP, FlexibleContexts, GADTs, InstanceSigs, KindSignatures #-}
 
 module HERMIT.Monad
-          (
-            -- * The HERMIT Monad
-            HermitM
-          , runHM
-          , liftCoreM
-          , newGlobalIdH
-          , newIdH
-          , newTyVarH
-          , newCoVarH
-          , newVarH
-          , cloneVarH
-            -- * Saving Definitions
-          , Label
-          , DefStash
-          , saveDef
-          , lookupDef
-          , getStash
-            -- * Reader Information
-          , HasHermitMEnv(..)
-          , HasModGuts(..)
-          , HasHscEnv(..)
-            -- * Messages
-          , HermitMEnv(..)
-          , DebugMessage(..)
-          , mkHermitMEnv
-          , sendDebugMessage
-) where
+    ( -- * The HERMIT Monad
+      HermitM
+    , runHM
+    , liftCoreM
+    , newGlobalIdH
+    , newIdH
+    , newTyVarH
+    , newCoVarH
+    , newVarH
+    , cloneVarH
+      -- * Saving Definitions
+    , Label
+    , DefStash
+    , saveDef
+    , lookupDef
+    , getStash
+      -- * Lemmas
+    , CoreExprEquality(..)
+    , LemmaName
+    , Lemma
+      -- * Reader Information
+    , HasHermitMEnv(..)
+    , HasModGuts(..)
+    , HasHscEnv(..)
+      -- * Writer Information
+    , LemmaMonad(..)
+      -- * Messages
+    , HermitMEnv(..)
+    , DebugMessage(..)
+    , mkHermitMEnv
+    , sendDebugMessage
+    ) where
 
 import Prelude hiding (lookup)
 
+import qualified Data.DList as DL -- for the writer
 import Data.Map
 
 import Control.Monad
@@ -57,42 +63,56 @@ type Label = String
 -- | A store of saved definitions.
 type DefStash = Map Label CoreDef
 
+-- | An equality is represented as a set of universally quantified binders, and the LHS and RHS of the equality.
+data CoreExprEquality = CoreExprEquality [CoreBndr] CoreExpr CoreExpr
+
+-- | A name for lemmas.
+type LemmaName = String
+
+-- | A named equality with a proven status.
+type Lemma = (LemmaName,CoreExprEquality,Bool)
+
 -- | A way of sending messages to top level
 newtype HermitMEnv = HermitMEnv { hs_debugChan :: DebugMessage -> HermitM () }
 
 -- | The HERMIT monad is kept abstract.
-newtype HermitM a = HermitM ((ModGuts,HermitMEnv) -> DefStash -> CoreM (KureM (DefStash, a)))
+newtype HermitM a = HermitM ((ModGuts,HermitMEnv) -> DefStash -> CoreM (KureM (DefStash, DL.DList Lemma, a)))
 
-runHermitM :: HermitM a -> (ModGuts,HermitMEnv) -> DefStash -> CoreM (KureM (DefStash, a))
+runHermitM :: HermitM a -> (ModGuts,HermitMEnv) -> DefStash -> CoreM (KureM (DefStash, DL.DList Lemma, a))
 runHermitM (HermitM f) = f
 
 -- | Eliminator for 'HermitM'.
-runHM :: (ModGuts,HermitMEnv) -> DefStash -> (DefStash -> a -> CoreM b) -> (String -> CoreM b) -> HermitM a -> CoreM b
-runHM env s success failure ma = runHermitM ma env s >>= runKureM (\ (a,b) -> success a b) failure
+runHM :: (ModGuts,HermitMEnv)                          -- env
+      -> DefStash                                      -- s
+      -> (DefStash -> DL.DList Lemma -> a -> CoreM b)  -- success
+      -> (String -> CoreM b)                           -- failure
+      -> HermitM a                                     -- ma
+      -> CoreM b
+runHM env s success failure ma = runHermitM ma env s >>= runKureM (\ (a,b,c) -> success a b c) failure
 
 ----------------------------------------------------------------------------
 
 -- | Get the stash of saved definitions.
 getStash :: HermitM DefStash
-getStash = HermitM (\ _ s -> return $ return (s, s))
+getStash = HermitM (\ _ s -> return $ return (s, DL.empty, s))
 
 -- | Replace the stash of saved definitions.
 putStash :: DefStash -> HermitM ()
-putStash s = HermitM (\ _ _ -> return $ return (s, ()))
+putStash s = HermitM (\ _ _ -> return $ return (s, DL.empty, ()))
 
 class HasHermitMEnv m where
     -- | Get the HermitMEnv
     getHermitMEnv :: m HermitMEnv
 
 instance HasHermitMEnv HermitM where
-    getHermitMEnv = HermitM (\ rdr s -> return $ return (s, snd rdr))
+    getHermitMEnv = HermitM (\ rdr s -> return $ return (s, DL.empty, snd rdr))
 
 class HasModGuts m where
     -- | Get the ModGuts (Note: this is a snapshot of the ModGuts from before the current transformation.)
     getModGuts :: m ModGuts
 
 instance HasModGuts HermitM where
-    getModGuts = HermitM (\ rdr s -> return $ return (s, fst rdr))
+    getModGuts = HermitM (\ rdr s -> return $ return (s, DL.empty, fst rdr))
 
 class HasHscEnv m where
     getHscEnv :: m HscEnv
@@ -102,6 +122,12 @@ instance HasHscEnv CoreM where
 
 instance HasHscEnv HermitM where
     getHscEnv = liftCoreM getHscEnv
+
+class LemmaMonad m where
+    addLemma :: Lemma -> m ()
+
+instance LemmaMonad HermitM where
+    addLemma l = HermitM (\ _ s -> return $ return (s, DL.singleton l, ()))
 
 sendDebugMessage :: DebugMessage -> HermitM ()
 sendDebugMessage msg = do env <- getHermitMEnv
@@ -128,12 +154,17 @@ instance Applicative HermitM where
   (<*>) :: HermitM (a -> b) -> HermitM a -> HermitM b
   (<*>) = ap
 
+addLemmas :: DL.DList Lemma -> (DefStash, DL.DList Lemma, a) -> (DefStash, DL.DList Lemma, a)
+addLemmas ls (s,ls',a) = (s,DL.append ls ls',a)
+
 instance Monad HermitM where
   return :: a -> HermitM a
-  return a = HermitM $ \ _ s -> return (return (s,a))
+  return a = HermitM $ \ _ s -> return (return (s,DL.empty,a))
 
   (>>=) :: HermitM a -> (a -> HermitM b) -> HermitM b
-  (HermitM gcm) >>= f = HermitM $ \ env -> gcm env >=> runKureM (\ (s', a) -> runHermitM (f a) env s') (return . fail)
+  (HermitM gcm) >>= f =
+        HermitM $ \ env -> gcm env >=> runKureM (\ (s',ls,a) -> liftM (liftM (addLemmas ls)) $ runHermitM (f a) env s')
+                                                (return . fail)
 
   fail :: String -> HermitM a
   fail msg = HermitM $ \ _ _ -> return (fail msg)
@@ -147,7 +178,7 @@ instance MonadCatch HermitM where
 -- | 'CoreM' can be lifted to 'HermitM'.
 liftCoreM :: CoreM a -> HermitM a
 liftCoreM ma = HermitM $ \ _ s -> do a <- ma
-                                     return (return (s,a))
+                                     return (return (s,DL.empty,a))
 
 instance MonadIO HermitM where
   liftIO :: IO a -> HermitM a

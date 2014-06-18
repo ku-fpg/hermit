@@ -105,7 +105,8 @@ eval comp = do
     v <- viewT comp
     case v of
         Return x            -> return x
-        RR rr       :>>= k  -> runS (applyS kernel rr env) >>= eval . k
+                               -- TODO: move lemmas into plugin state so we don't discard them here
+        RR rr       :>>= k  -> runS (fmap fst . applyS kernel rr env) >>= eval . k
         Query tr    :>>= k  -> runK (queryS kernel tr env) >>= eval . k
         Shell es os :>>= k -> do
             -- We want to discard the current focus, open the shell at

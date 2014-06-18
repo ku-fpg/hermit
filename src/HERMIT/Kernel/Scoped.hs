@@ -62,7 +62,7 @@ data ScopedKernel = ScopedKernel
     { resumeS      :: (MonadIO m, MonadCatch m) =>                SAST -> m ()
     , abortS       ::  MonadIO m                =>                        m ()
     , applyS       :: (MonadIO m, MonadCatch m, Injection ModGuts g, Walker HermitC g)
-                   => RewriteH g -> HermitMEnv ->                 SAST -> m SAST
+                   => RewriteH g -> HermitMEnv ->                 SAST -> m (SAST, [Lemma])
     , queryS       :: (MonadIO m, MonadCatch m, Injection ModGuts g, Walker HermitC g)
                    => TransformH g a -> HermitMEnv ->             SAST -> m a
     , deleteS      :: (MonadIO m, MonadCatch m) =>                SAST -> m ()
@@ -111,9 +111,10 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
             , applyS      = \ rr env (SAST sAst) -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
                                 applyK kernel ast (focusR (pathStackToLens base rel) rr) env
-                                  >>= runKureM (\ ast' -> atomically $ do k <- newKey
-                                                                          putTMVar store $ I.insert k (ast', base, rel) m
-                                                                          return $ SAST k)
+                                  >>= runKureM (\ (ast',ls) -> atomically $ do
+                                                    k <- newKey
+                                                    putTMVar store $ I.insert k (ast', base, rel) m
+                                                    return (SAST k,ls))
                                                fail
             , queryS      = \ t env (SAST sAst) -> liftAndCatchIO $ do
                                 m <- atomically $ readTMVar store

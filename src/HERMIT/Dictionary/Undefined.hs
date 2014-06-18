@@ -3,6 +3,7 @@ module HERMIT.Dictionary.Undefined
     ( -- * Working with Undefined Values
       -- | Note that many of these operations require 'GHC.Err.undefined' to be explicitly imported if it is not used in the source file.
       externals
+    , buildStrictnessLemmaT
     , verifyStrictT
     , mkUndefinedValT
     , isUndefinedValT
@@ -21,7 +22,7 @@ module HERMIT.Dictionary.Undefined
     )
 where
 
-import Control.Monad ((>=>))
+import Control.Monad ((>=>), liftM)
 import Control.Monad.IO.Class
 import Data.Monoid
 
@@ -82,7 +83,6 @@ externals = map (.+ Unsafe)
 undefinedLocation :: String
 undefinedLocation = "GHC.Err.undefined"
 
--- TODO: will crash if 'undefined' is not used (or explicitly imported) in the source file.
 findUndefinedIdT :: (BoundVars c, MonadCatch m, HasModGuts m, HasHscEnv m, MonadIO m, MonadThings m) => Transform c m a Id
 findUndefinedIdT = findIdT undefinedLocation
 
@@ -99,7 +99,6 @@ isUndefinedValT = prefixFailMsg "not an undefined value: " $
 errorLocation :: String
 errorLocation = "GHC.Err.error"
 
--- TODO: will crash if 'error' is not used (or explicitly imported) in the source file.
 findErrorIdT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m) => Transform c m a Id
 findErrorIdT = findIdT errorLocation
 
@@ -203,5 +202,22 @@ verifyStrictT f r = prefixFailMsg "strictness verification failed: " $
      rhs            <- mkUndefinedValT resTy
      let lhs = App f undefArg
      verifyEqualityLeftToRightT lhs rhs r
+
+-- | Apply the given expression to undefined, at the proper type.
+applyToUndefinedT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
+                  => CoreExpr -> Transform c m x CoreExpr
+applyToUndefinedT f = do
+    let (tvs, body) = collectTyBinders f
+    (dom,_) <- splitFunTypeM (exprType body)
+    undef <- mkUndefinedValT dom
+    return $ mkCoreLams tvs $ mkCoreApp body undef
+
+-- | Add a lemma for the strictness of a function.
+buildStrictnessLemmaT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasModGuts m, LemmaMonad m, MonadCatch m, MonadIO m, MonadThings m)
+                      => LemmaName -> CoreExpr -> Transform c m x ()
+buildStrictnessLemmaT nm f = do
+    (tvs, lhs) <- liftM collectTyBinders $ applyToUndefinedT f
+    rhs <- mkUndefinedValT (exprType lhs)
+    constT $ addLemma (nm, CoreExprEquality tvs lhs rhs, False)
 
 ------------------------------------------------------------------------

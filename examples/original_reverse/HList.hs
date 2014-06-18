@@ -14,6 +14,12 @@ repH xs = (xs ++)
 absH :: H a -> [a]
 absH f = f []
 
+-- Because we can't get unfolding for ++
+myAppend :: [a] -> [a] -> [a]
+myAppend []     ys = ys
+myAppend (x:xs) ys = x : myAppend xs ys
+{-# RULES "appendFix" forall xs ys. xs ++ ys = myAppend xs ys #-}
+
 -- These two we may get for free via INLINE
 {-# RULES "repH" forall xs	 . repH xs = (xs ++) #-}
 {-# RULES "absH" forall f 	 . absH f = f []     #-}

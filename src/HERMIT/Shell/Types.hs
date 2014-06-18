@@ -34,7 +34,6 @@ import HERMIT.Plugin.Types
 
 import HERMIT.Dictionary.Inline
 import HERMIT.Dictionary.Navigation
-import HERMIT.Dictionary.Reasoning (CoreExprEquality)
 
 import System.Console.Haskeline hiding (catch, display)
 import System.IO (Handle, stdout)
@@ -248,10 +247,11 @@ data VersionStore = VersionStore
     , vs_tags        :: [(String,SAST)]
     }
 
-newSAST :: ExprH -> SAST -> CommandLineState -> CommandLineState
-newSAST expr sast st = st { cl_pstate  = pstate  { ps_cursor = sast }
-                          , cl_version = version { vs_graph = (ps_cursor pstate, expr, sast) : vs_graph version }
-                          }
+newSAST :: ExprH -> SAST -> [Lemma] -> CommandLineState -> CommandLineState
+newSAST expr sast ls st = st { cl_pstate  = pstate  { ps_cursor = sast }
+                             , cl_version = version { vs_graph = (ps_cursor pstate, expr, sast) : vs_graph version }
+                             , cl_lemmas  = ls ++ cl_lemmas st
+                             }
     where pstate  = cl_pstate st
           version = cl_version st
 
@@ -358,8 +358,6 @@ instance Extern CommandLineState where
     box = CLSBox
 
 type ScriptName = String
-type LemmaName = String
-type Lemma = (LemmaName,CoreExprEquality,Bool)
 
 -- tick counter
 tick :: TVar (M.Map String Int) -> String -> IO Int

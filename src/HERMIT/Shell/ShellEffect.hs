@@ -2,7 +2,7 @@
              DeriveDataTypeable, GeneralizedNewtypeDeriving, LambdaCase,
              MultiParamTypeClasses, ScopedTypeVariables #-}
 
-module HERMIT.Shell.ShellEffect 
+module HERMIT.Shell.ShellEffect
     ( ShellEffect(..)
     , performShellEffect
     , dump
@@ -33,7 +33,7 @@ data ShellEffect
     | CLSModify (CommandLineState -> IO CommandLineState) -- ^ Modify shell state
     | PluginComp (PluginM ())
     | Continue -- ^ exit the shell, but don't abort/resume
-    | Dump (CommandLineState -> TransformH CoreTC DocH) String String Int 
+    | Dump (CommandLineState -> TransformH CoreTC DocH) String String Int
     | Resume
     deriving Typeable
 
@@ -48,7 +48,7 @@ performShellEffect :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadS
 performShellEffect Abort  = abort
 performShellEffect Resume = do
     st <- get
-    sast' <- applyS (cl_kernel st) occurAnalyseAndDezombifyR (cl_kernel_env st) (cl_cursor st)
+    (sast',_) <- applyS (cl_kernel st) occurAnalyseAndDezombifyR (cl_kernel_env st) (cl_cursor st)
     resume sast'
 
 performShellEffect Continue = get >>= continue

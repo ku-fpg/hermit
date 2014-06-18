@@ -65,9 +65,9 @@ applyRewrite rr expr = do
         ppOpts = cl_pretty_opts st
         pp = pCoreTC $ cl_pretty st
 
-    sast' <- prefixFailMsg "Rewrite failed: " $ applyS sk rr kEnv sast
+    (sast',ls) <- prefixFailMsg "Rewrite failed: " $ applyS sk rr kEnv sast
 
-    let commit = put (newSAST expr sast' st) >> showResult
+    let commit = put (newSAST expr sast' ls st) >> showResult
         showResult = if cl_diffonly st then showDiff else showWindow
         showDiff = do doc1 <- queryS sk (liftPrettyH ppOpts pp) kEnv sast
                       doc2 <- queryS sk (liftPrettyH ppOpts pp) kEnv sast'
@@ -87,28 +87,28 @@ setPath t expr = do
     -- An extension to the Path
     p <- prefixFailMsg "Cannot find path: " $ queryS (cl_kernel st) t (cl_kernel_env st) (cl_cursor st)
     ast <- prefixFailMsg "Path is invalid: " $ modPathS (cl_kernel st) (<> p) (cl_kernel_env st) (cl_cursor st)
-    put $ newSAST expr ast st
+    put $ newSAST expr ast [] st
     showWindow
 
 goDirection :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
 goDirection dir expr = do
     st <- get
     ast <- prefixFailMsg "Invalid move: " $ modPathS (cl_kernel st) (moveLocally dir) (cl_kernel_env st) (cl_cursor st)
-    put $ newSAST expr ast st
+    put $ newSAST expr ast [] st
     showWindow
 
 beginScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 beginScope expr = do
     st <- get
     ast <- beginScopeS (cl_kernel st) (cl_cursor st)
-    put $ newSAST expr ast st
+    put $ newSAST expr ast [] st
     showWindow
 
 endScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 endScope expr = do
     st <- get
     ast <- endScopeS (cl_kernel st) (cl_cursor st)
-    put $ newSAST expr ast st
+    put $ newSAST expr ast [] st
     showWindow
 
 deleteSAST :: (MonadCatch m, CLMonad m) => SAST -> m ()

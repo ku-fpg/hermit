@@ -4,7 +4,6 @@
 module HERMIT.Dictionary.Reasoning
     ( -- * Equational Reasoning
       externals
-    , CoreExprEquality(..)
     , RewriteCoreExprEqualityBox(..)
     , TransformCoreExprEqualityStringBox(..)
     , CoreExprEqualityProof
@@ -91,9 +90,6 @@ externals =
     ]
 
 ------------------------------------------------------------------------------
-
--- | An equality is represented as a set of universally quantified binders, and then the LHS and RHS of the equality.
-data CoreExprEquality = CoreExprEquality [CoreBndr] CoreExpr CoreExpr
 
 data RewriteCoreExprEqualityBox =
         RewriteCoreExprEqualityBox (RewriteH CoreExprEquality) deriving Typeable

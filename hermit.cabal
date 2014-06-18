@@ -143,6 +143,7 @@ Library
                  containers >= 0.5.0.0,
                  data-default >= 0.5.0,
                  directory >= 1.2.0.0,
+                 dlist >= 0.7.0.1,
                  ghc >= 7.6,
                  haskeline >= 0.7.0.3,
                  kure >= 2.16.0,
