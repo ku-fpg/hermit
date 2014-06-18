@@ -48,11 +48,11 @@ module HERMIT.GHC
     , buildDictionary
     , eqExprX
     , lookupRdrNameInModuleForPlugins
+    , tcUnifyTy
 #endif
     , mkPhiTy
     , mkSigmaTy
     , getHscEnvCoreM
-    , tcUnifyTy
     ) where
 
 #if __GLASGOW_HASKELL__ <= 706
@@ -85,7 +85,6 @@ import OccurAnal (occurAnalyseExpr)
 import Pair (Pair(..))
 import TcType (mkPhiTy, mkSigmaTy)
 import TypeRep (Type(..),TyLit(..))
-import Unify (tcUnifyTy)
 
 #if __GLASGOW_HASKELL__ <= 706
 import Data.Maybe (isJust)
@@ -100,6 +99,7 @@ import TcMType (newWantedEvVar)
 import TcRnMonad (getCtLoc)
 import TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
 import TcSimplify (solveWantedsTcM)
+import Unify (tcUnifyTy)
 
 import HERMIT.GHC.Typechecker
 #endif

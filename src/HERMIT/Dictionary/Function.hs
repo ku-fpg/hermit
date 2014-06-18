@@ -1,8 +1,10 @@
-{-# LANGUAGE FlexibleContexts, RankNTypes #-}
+{-# LANGUAGE CPP, FlexibleContexts, RankNTypes #-}
 module HERMIT.Dictionary.Function
     ( externals
     , appArgM
+#if __GLASGOW_HASKELL__ > 706
     , buildApplicationM
+#endif
     , buildCompositionT
     , buildFixT
     , buildIdT
@@ -16,7 +18,9 @@ import Control.Arrow
 import Control.Monad.IO.Class
 
 import Data.List (nub, intercalate, intersect, partition, transpose)
+#if __GLASGOW_HASKELL__ > 706
 import Data.Maybe (isNothing)
+#endif
 
 import HERMIT.Context
 import HERMIT.Core
@@ -26,6 +30,9 @@ import HERMIT.Kure
 import HERMIT.Monad
 
 import HERMIT.Dictionary.Common
+#if __GLASGOW_HASKELL__ <= 706
+import HERMIT.Dictionary.Fold hiding (externals)
+#endif
 import HERMIT.Dictionary.GHC hiding (externals)
 
 externals ::  [External]
@@ -126,10 +133,36 @@ appArgM n e | n < 0     = fail "appArgM: arg must be non-negative"
 buildCompositionT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
                   => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
 buildCompositionT f g = do
+#if __GLASGOW_HASKELL__ > 706
     composeId <- findIdT "Data.Function.."
     fDot <- buildApplicationM (varToCoreExpr composeId) f
     buildApplicationM fDot g
+#else
+    (vsF, domF, codF) <- funTyComponentsM (exprType f)
+    (vsG, _ , codG) <- funTyComponentsM (exprType g)
+    composeId <- findIdT "Data.Function.."
+    -- (.) :: forall b c a. (b -> c) -> (a -> b) -> a -> c
+    -- f . g
+    -- b = domF = codG
+    -- c = codF
+    -- a = domG
+    sub <- maybe (fail "building f . g - codomain of g and domain of f do not unify") return
+                 (unifyTypes vsG codG domF)
 
+    g' <- substOrApply g [ (v, case lookup v sub of
+                                Nothing -> varToCoreExpr v
+                                Just ty -> Type ty)
+                         | v <- vsG ]
+    (domG',_) <- funExprArgResTypes g'
+    f' <- substOrApply f [ (v, varToCoreExpr v) | v <- vsF ]
+
+    let vsG' = filter (`notElem` (map fst sub)) vsG -- things we should stick back on as foralls
+        e = mkCoreApps (varToCoreExpr composeId) $ map Type [domF, codF, domG'] ++ [f',g']
+
+    return $ mkCoreLams (vsF ++ vsG') e
+#endif
+
+#if __GLASGOW_HASKELL__ > 706
 -- | Given expression for f and for x, build f x, figuring out the type arguments.
 buildApplicationM :: (HasDynFlags m, MonadCatch m, MonadIO m) => CoreExpr -> CoreExpr -> m CoreExpr
 buildApplicationM f x = do
@@ -153,6 +186,7 @@ buildApplicationM f x = do
     -- TODO: make sure vsX don't capture anything in f'
     --       and vsF' doesn't capture anything in x'
     return $ mkCoreLams vs $ mkCoreApp f' x'
+#endif
 
 -- | Given expression for f, build fix f.
 buildFixT :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
