@@ -42,7 +42,6 @@ import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class
 
-import Data.List (nubBy)
 import Data.Maybe (fromMaybe)
 import Data.Monoid
 import Data.Typeable
@@ -54,9 +53,6 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.ParserCore
-#if __GLASGOW_HASKELL__ >= 708
-import HERMIT.ParserType
-#endif
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.AlphaConversion hiding (externals)
@@ -69,6 +65,11 @@ import HERMIT.Dictionary.Unfold hiding (externals)
 import HERMIT.PrettyPrinter.Common
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
+
+#if __GLASGOW_HASKELL__ >= 708
+import Data.List (nubBy)
+import HERMIT.ParserType
+#endif
 
 ------------------------------------------------------------------------------
 

@@ -45,7 +45,7 @@ data Msg s r = forall a . Req (s -> CoreM (KureM (a,[Lemma],s))) (MVar (KureM (a
 
 type ASTMap = Map AST KernelState
 
-data KernelState = KernelState { ksStash :: DefStash, ksGuts :: ModGuts }
+data KernelState = KernelState { _ksStash :: DefStash, ksGuts :: ModGuts }
 
 -- | Start a HERMIT client by providing an IO function that takes the initial 'Kernel' and inital 'AST' handle.
 --   The 'Modguts' to 'CoreM' Modguts' function required by GHC Plugins is returned.

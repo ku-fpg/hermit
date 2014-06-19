@@ -1,4 +1,5 @@
-{-# LANGUAGE ConstraintKinds, KindSignatures, GADTs, InstanceSigs, FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE ConstraintKinds, KindSignatures, GADTs, InstanceSigs,
+             FlexibleContexts, ScopedTypeVariables, CPP #-}
 
 module HERMIT.Shell.Interpreter
         ( -- * The HERMIT Interpreter
@@ -9,7 +10,11 @@ module HERMIT.Shell.Interpreter
         , interpExprH
         ) where
 
+#if MIN_VERSION_mtl(2,2,1)
+import Control.Monad.Except
+#else
 import Control.Monad.Error
+#endif
 import Control.Monad.State
 
 import Data.Char

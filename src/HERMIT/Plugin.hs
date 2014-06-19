@@ -1,4 +1,4 @@
-{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, GeneralizedNewtypeDeriving, LambdaCase #-}
+{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, GeneralizedNewtypeDeriving, LambdaCase, CPP #-}
 module HERMIT.Plugin
     ( -- * The HERMIT Plugin
       hermitPlugin
@@ -31,7 +31,11 @@ module HERMIT.Plugin
 import Control.Applicative
 import Control.Arrow
 import Control.Concurrent.STM
+#if MIN_VERSION_mtl(2,2,1)
+import Control.Monad.Except hiding (guard)
+#else
 import Control.Monad.Error hiding (guard)
+#endif
 import Control.Monad.Operational
 import Control.Monad.State hiding (guard)
 

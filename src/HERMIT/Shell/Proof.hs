@@ -1,5 +1,5 @@
 {-# LANGUAGE ConstraintKinds, DeriveDataTypeable, FlexibleContexts, FlexibleInstances, LambdaCase,
-             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances #-}
+             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, CPP #-}
 
 module HERMIT.Shell.Proof
     ( externals
@@ -12,7 +12,11 @@ module HERMIT.Shell.Proof
 
 import Control.Arrow hiding (loop, (<+>))
 import Control.Concurrent
+#if MIN_VERSION_mtl(2,2,1)
+import Control.Monad.Except
+#else
 import Control.Monad.Error
+#endif
 import Control.Monad.State
 
 import Data.Char (isSpace)

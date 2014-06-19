@@ -8,7 +8,11 @@ module HERMIT.Shell.ShellEffect
     , dump
     ) where
 
+#if MIN_VERSION_mtl(2,2,1)
+import Control.Monad.Except
+#else
 import Control.Monad.Error
+#endif
 import Control.Monad.State
 
 import Data.Typeable
