@@ -96,7 +96,7 @@ externals = map (.+ Proof)
         [ "Copy a given lemma, with a new name." ]
     , external "modify-lemma" (\ nm rr -> modifyLemmaR nm id rr (const False) :: RewriteH Core)
         [ "Modify a given lemma. Resets the proven status to Not Proven." ]
-    , external "query-lemma" QueryLemma
+    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr fst >>> t) :: LemmaName -> TransformH CoreExprEquality String -> TransformH Core String)
         [ "Apply a transformation to a lemma, returning the result." ]
     , external "dump-lemma" DumpLemma
         [ "Dump named lemma to a file."
@@ -139,7 +139,6 @@ proof_externals = map (.+ Proof)
 
 data ProofCommand
     = InteractiveProof LemmaName
-    | QueryLemma LemmaName (TransformH CoreExprEquality String)
     | ShowLemmas (Maybe LemmaName)
     | DumpLemma LemmaName String String Int
     deriving (Typeable)
@@ -170,12 +169,6 @@ performProofCommand (InteractiveProof nm) = do
     st <- gets cl_pstate
     l <- queryS (ps_kernel st) (getLemmaByNameT nm :: TransformH Core Lemma) (mkKernelEnv st) (ps_cursor st)
     interactiveProof True False (nm,l)
-
-performProofCommand (QueryLemma nm t) = do
-    -- query so lemma is transformed in current context
-    st <- get
-    res <- queryS (cl_kernel st) (getLemmaByNameT nm >>> arr fst >>> t :: TransformH Core String) (cl_kernel_env st) (cl_cursor st)
-    cl_putStrLn res
 
 performProofCommand (DumpLemma nm fn r w) = dump (\ st -> getLemmaByNameT nm >>> ppLemmaT (cl_pretty st) nm) fn r w
 
