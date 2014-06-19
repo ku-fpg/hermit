@@ -211,20 +211,20 @@ findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
 --------------------------------------------------------------------------------------------------
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findIdT :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Id
+findIdT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Id
 findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findId nm)
 
 #if __GLASGOW_HASKELL__ > 706
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findVarT :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Var
+findVarT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Var
 findVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findVar nm)
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findTyConT :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a TyCon
+findTyConT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a TyCon
 findTyConT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findTyCon nm)
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findTypeT :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Type
+findTypeT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Type
 findTypeT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findType nm)
 #endif
 

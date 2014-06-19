@@ -1,17 +1,18 @@
 {-# LANGUAGE RankNTypes, ScopedTypeVariables, TupleSections, GADTs #-}
 
 module HERMIT.Kernel
-        ( -- * The HERMIT Kernel
-          AST
-        , Kernel
-        , hermitKernel
-        , resumeK
-        , abortK
-        , applyK
-        , queryK
-        , deleteK
-        , listK
-) where
+    ( -- * The HERMIT Kernel
+      AST
+    , Kernel
+    , KernelEnv(..)
+    , hermitKernel
+    , resumeK
+    , abortK
+    , applyK
+    , queryK
+    , deleteK
+    , listK
+    ) where
 
 import Prelude hiding (lookup)
 
@@ -20,7 +21,6 @@ import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.GHC hiding (singleton, empty)
 
-import qualified Data.DList as DL
 import Data.Map
 import Control.Concurrent
 
@@ -28,24 +28,38 @@ import Control.Concurrent
 --   For now, operations on a 'Kernel' are sequential, but later
 --   it will be possible to have two 'applyK's running in parallel.
 data Kernel = Kernel
-  { resumeK ::            AST                                        -> IO ()           -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
-  , abortK  ::                                                          IO ()           -- ^ Halt the 'Kernel' and abort GHC without compiling.
-  , applyK  ::            AST -> RewriteH ModGuts     -> HermitMEnv  -> IO (KureM (AST, [Lemma]))  -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
-  , queryK  :: forall a . AST -> TransformH ModGuts a -> HermitMEnv  -> IO (KureM a)    -- ^ Apply a 'TransformH' to the 'AST' and return the resulting value.
-  , deleteK ::            AST                                        -> IO ()           -- ^ Delete the internal record of the specified 'AST'.
-  , listK   ::                                                          IO [AST]        -- ^ List all the 'AST's tracked by the 'Kernel'.
+  { resumeK ::            AST                                      -> IO ()          -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
+  , abortK  ::                                                        IO ()          -- ^ Halt the 'Kernel' and abort GHC without compiling.
+  , applyK  ::            AST -> RewriteH ModGuts     -> KernelEnv -> IO (KureM AST) -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
+  , queryK  :: forall a . AST -> TransformH ModGuts a -> KernelEnv -> IO (KureM a)   -- ^ Apply a 'TransformH' to the 'AST' and return the resulting value.
+  , deleteK ::            AST                                      -> IO ()          -- ^ Delete the internal record of the specified 'AST'.
+  , listK   ::                                                        IO [AST]       -- ^ List all the 'AST's tracked by the 'Kernel'.
   }
 
 -- | A /handle/ for a specific version of the 'ModGuts'.
 newtype AST = AST Int -- ^ Currently 'AST's are identified by an 'Int' label.
               deriving (Eq, Ord, Show)
 
-data Msg s r = forall a . Req (s -> CoreM (KureM (a,[Lemma],s))) (MVar (KureM (a,[Lemma])))
+data Msg s r = forall a . Req (s -> CoreM (KureM (a,s))) (MVar (KureM a))
              | Done (s -> CoreM r)
 
 type ASTMap = Map AST KernelState
 
-data KernelState = KernelState { _ksStash :: DefStash, ksGuts :: ModGuts }
+data KernelState = KernelState { _ksStash  :: DefStash
+                               , _ksLemmas :: Lemmas
+                               , ksGuts   :: ModGuts
+                               }
+
+fromHermitMResult :: HermitMResult ModGuts -> KernelState
+fromHermitMResult hRes = sideEffectsOnly hRes (hResult hRes)
+
+sideEffectsOnly :: HermitMResult a -> ModGuts -> KernelState
+sideEffectsOnly hRes = KernelState (hResStash hRes) (hResLemmas hRes)
+
+data KernelEnv = KernelEnv { kEnvChan :: DebugChan }
+
+fromKEnv :: KernelEnv -> ModGuts -> DefStash -> Lemmas -> HermitMEnv
+fromKEnv kEnv = mkEnv (kEnvChan kEnv)
 
 -- | Start a HERMIT client by providing an IO function that takes the initial 'Kernel' and inital 'AST' handle.
 --   The 'Modguts' to 'CoreM' Modguts' function required by GHC Plugins is returned.
@@ -64,16 +78,16 @@ hermitKernel callback modGuts = do
         let sendDone :: (ASTMap -> CoreM ModGuts) -> IO ()
             sendDone = putMVar msgMV . Done
 
-        let sendReq :: (ASTMap -> CoreM (KureM (a, [Lemma], ASTMap))) -> IO (KureM (a,[Lemma]))
+        let sendReq :: (ASTMap -> CoreM (KureM (a, ASTMap))) -> IO (KureM a)
             sendReq fn = do rep  <- newEmptyMVar
                             putMVar msgMV (Req fn rep)
                             takeMVar rep
 
         let sendReqRead :: (ASTMap -> CoreM (KureM a)) -> IO (KureM a)
-            sendReqRead fn = sendReq (\ st -> (fmap.fmap) (,[],st) $ fn st) >>= return . fmap fst
+            sendReqRead fn = sendReq (\ st -> (fmap.fmap) (,st) $ fn st) -- >>= return . fmap fst
 
         let sendReqWrite :: (ASTMap -> CoreM ASTMap) -> IO ()
-            sendReqWrite fn = sendReq (fmap ( return . ((),[],) ) . fn) >>= fmap fst . liftKureM
+            sendReqWrite fn = sendReq (fmap ( return . ((),) ) . fn) >>= {- fmap fst . -} liftKureM
 
         let kernel :: Kernel
             kernel = Kernel
@@ -89,23 +103,21 @@ hermitKernel callback modGuts = do
                 , abortK  = sendDone $ \ _ -> throwGhcException
                                               $ ProgramError "Exiting HERMIT and aborting GHC compilation."
 
-                , applyK = \ name r hm_env ->
+                , applyK = \ name r kEnv ->
                                 sendReq $ \ st ->
-                                    findWithErrMsg name st fail $ \ (KernelState defs guts) ->
-                                        runHM (guts,hm_env)
-                                              defs
-                                              (\ defs' ls guts' -> do
+                                    findWithErrMsg name st fail $ \ (KernelState defs lemmas guts) ->
+                                        runHM (fromKEnv kEnv guts defs lemmas)
+                                              (\ hRes -> do
                                                     ast <- liftIO $ takeMVar nextASTname
-                                                    return $ return (ast, DL.toList ls, insert ast (KernelState defs' guts') st))
+                                                    return $ return (ast, insert ast (fromHermitMResult hRes) st))
                                               (return . fail)
                                               (apply r (topLevelHermitC guts) guts)
 
-                , queryK = \ name t hm_env ->
+                , queryK = \ name t kEnv ->
                                 sendReqRead $ \ st ->
-                                    findWithErrMsg name st fail $ \ (KernelState defs guts) ->
-                                        runHM (guts,hm_env)
-                                              defs
-                                              (\ _ _ -> return.return)
+                                    findWithErrMsg name st fail $ \ (KernelState defs lemmas guts) ->
+                                        runHM (fromKEnv kEnv guts defs lemmas)
+                                              (return . return . hResult)
                                               (return . fail)
                                               (apply t (topLevelHermitC guts) guts)
 
@@ -121,13 +133,13 @@ hermitKernel callback modGuts = do
             loop st = do
                 m <- liftIO $ takeMVar msgMV
                 case m of
-                  Req fn rep -> fn st >>= runKureM (\ (a,ls,st') -> liftIO (putMVar rep $ return (a,ls)) >> loop st')
-                                                   (\ msg        -> liftIO (putMVar rep $ fail msg) >> loop st)
+                  Req fn rep -> fn st >>= runKureM (\ (a,st') -> liftIO (putMVar rep $ return a) >> loop st')
+                                                   (\ msg     -> liftIO (putMVar rep $ fail msg) >> loop st)
                   Done fn -> fn st
 
         _pid <- liftIO $ forkIO $ callback kernel ast0
 
-        loop (singleton ast0 $ KernelState empty modGuts)
+        loop (singleton ast0 $ KernelState empty empty modGuts)
 
         -- (Kill the pid'd thread? do we need to?)
 

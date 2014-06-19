@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, 
+{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts,
              LambdaCase, GADTs, GeneralizedNewtypeDeriving,
              ScopedTypeVariables, FlexibleInstances, CPP #-}
 module HERMIT.Plugin.Types where
@@ -17,6 +17,7 @@ import qualified Data.Map as M
 
 import HERMIT.Kure
 import HERMIT.External
+import HERMIT.Kernel (KernelEnv(..))
 import HERMIT.Kernel.Scoped
 import HERMIT.Monad
 import HERMIT.Plugin.Builder
@@ -90,12 +91,12 @@ tick var msg = atomically $ do
         writeTVar var (M.insert msg c m)
         return c
 
-mkKernelEnv :: PluginState -> HermitMEnv
+mkKernelEnv :: PluginState -> KernelEnv
 mkKernelEnv st =
     let pp = ps_pretty st
         out str = liftIO $ ps_render st stdout (pOptions pp) (Left $ str ++ "\n")
 
-    in  mkHermitMEnv $ \ msg -> case msg of
+    in  KernelEnv $ \ msg -> case msg of
                 DebugTick    msg'      -> do
                         c <- liftIO $ tick (ps_tick st) msg'
                         out $ "<" ++ show c ++ "> " ++ msg'
@@ -107,8 +108,8 @@ mkKernelEnv st =
 iokm' :: (MonadIO m, MonadCatch m) => String -> (a -> m b) -> IO (KureM a) -> m b
 iokm' msg ret m = liftIO m >>= runKureM ret (fail . (msg ++))
 
-iokm :: (MonadIO m, MonadCatch m) => String -> IO (KureM a) -> m a 
+iokm :: (MonadIO m, MonadCatch m) => String -> IO (KureM a) -> m a
 iokm msg = iokm' msg return
 
-iokm'' :: (MonadIO m, MonadCatch m) => IO (KureM a) -> m a 
+iokm'' :: (MonadIO m, MonadCatch m) => IO (KureM a) -> m a
 iokm'' = iokm ""

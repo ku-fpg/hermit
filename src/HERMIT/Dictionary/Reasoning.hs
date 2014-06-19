@@ -12,6 +12,11 @@ module HERMIT.Dictionary.Reasoning
     , eqRhsIntroR
     , birewrite
     , extensionalityR
+    , getLemmasT
+    , getLemmaByNameT
+    , insertLemmaR
+    , lemmaR
+    , modifyLemmaR
     -- ** Lifting transformations over 'CoreExprEquality'
     , lhsT
     , rhsT
@@ -42,6 +47,7 @@ import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class
 
+import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Monoid
 import Data.Typeable
@@ -442,3 +448,33 @@ instantiateEquality = flip (foldM (\ eq (v,e,vs) -> instantiateEqualityVar (==v)
 
 discardUniVars :: CoreExprEquality -> CoreExprEquality
 discardUniVars (CoreExprEquality _ lhs rhs) = CoreExprEquality [] lhs rhs
+
+------------------------------------------------------------------------------
+
+getLemmasT :: HasLemmas m => Transform c m x Lemmas
+getLemmasT = constT getLemmas
+
+getLemmaByNameT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Lemma
+getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ nm) return . Map.lookup nm
+
+lemmaR :: Bool -> LemmaName -> BiRewriteH CoreExpr
+lemmaR ok nm = flip beforeBiR birewrite $ do
+    (eq,proven) <- getLemmaByNameT nm
+    guardMsg (proven || ok) ("Lemma " ++ nm ++ " has not been proven.")
+    return eq
+
+-- We use sideEffectR because only rewrites generate new state in the Kernel.
+
+insertLemmaR :: (HasLemmas m, Monad m) => LemmaName -> CoreExprEquality -> Rewrite c m Core
+insertLemmaR nm eq = sideEffectR $ \ _ _ -> insertLemma nm (eq,False)
+
+modifyLemmaR :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, HasLemmas m, Monad m)
+             => LemmaName
+             -> (LemmaName -> LemmaName)
+             -> Rewrite c m CoreExprEquality
+             -> (Bool -> Bool)
+             -> Rewrite c m Core
+modifyLemmaR nm nFn rr pFn = do
+    (eq,p) <- getLemmaByNameT nm
+    eq' <- return eq >>> rr >>> (bothT lintExprT >> idR)
+    sideEffectR $ \ _ _ -> insertLemma (nFn nm) (eq', pFn p)

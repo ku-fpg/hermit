@@ -26,9 +26,8 @@ import HERMIT.Core
 import HERMIT.Kure
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Kernel (AST, queryK)
+import HERMIT.Kernel (AST, queryK, KernelEnv)
 import HERMIT.Kernel.Scoped
-import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 
@@ -270,11 +269,10 @@ data VersionStore = VersionStore
     , vs_tags        :: [(String,SAST)]
     }
 
-newSAST :: ExprH -> SAST -> [Lemma] -> CommandLineState -> CommandLineState
-newSAST expr sast ls st = st { cl_pstate  = pstate  { ps_cursor = sast }
-                             , cl_version = version { vs_graph = (ps_cursor pstate, expr, sast) : vs_graph version }
-                             , cl_lemmas  = ls ++ cl_lemmas st
-                             }
+newSAST :: ExprH -> SAST -> CommandLineState -> CommandLineState
+newSAST expr sast st = st { cl_pstate  = pstate  { ps_cursor = sast }
+                          , cl_version = version { vs_graph = (ps_cursor pstate, expr, sast) : vs_graph version }
+                          }
     where pstate  = cl_pstate st
           version = cl_version st
 
@@ -287,7 +285,6 @@ data CommandLineState = CommandLineState
                                                   --   because nested StateT is a pain.
     , cl_height         :: Int                    -- ^ console height, in lines
     , cl_scripts        :: [(ScriptName,Script)]
-    , cl_lemmas         :: [Lemma]                -- ^ list of lemmas, with flag indicating whether proven
     , cl_nav            :: Bool                   -- ^ keyboard input the nav panel
     , cl_version        :: VersionStore
     , cl_window         :: PathH                  -- ^ path to beginning of window, always a prefix of focus path in kernel
@@ -325,7 +322,7 @@ setFailHard st b = st { cl_pstate = (cl_pstate st) { ps_failhard = b } }
 cl_kernel :: CommandLineState -> ScopedKernel
 cl_kernel = ps_kernel . cl_pstate
 
-cl_kernel_env :: CommandLineState -> HermitMEnv
+cl_kernel_env :: CommandLineState -> KernelEnv
 cl_kernel_env = mkKernelEnv . cl_pstate
 
 cl_pretty :: CommandLineState -> PrettyPrinter
@@ -352,7 +349,6 @@ mkCLS = do
     let st = CommandLineState { cl_pstate         = ps
                               , cl_height         = h
                               , cl_scripts        = []
-                              , cl_lemmas         = []
                               , cl_nav            = False
                               , cl_version        = VersionStore { vs_graph = [] , vs_tags = [] }
                               , cl_window         = mempty

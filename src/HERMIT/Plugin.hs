@@ -44,12 +44,12 @@ import qualified Data.Map as M
 
 import HERMIT.Dictionary
 import HERMIT.External hiding (Query, Shell)
+import HERMIT.Kernel (KernelEnv)
 import HERMIT.Kernel.Scoped
 import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.GHC hiding (singleton, liftIO, display, (<>))
 import qualified HERMIT.GHC as GHC
-import HERMIT.Monad
 
 import HERMIT.Plugin.Builder
 import qualified HERMIT.Plugin.Display as Display
@@ -109,8 +109,7 @@ eval comp = do
     v <- viewT comp
     case v of
         Return x            -> return x
-                               -- TODO: move lemmas into plugin state so we don't discard them here
-        RR rr       :>>= k  -> runS (fmap fst . applyS kernel rr env) >>= eval . k
+        RR rr       :>>= k  -> runS (applyS kernel rr env) >>= eval . k
         Query tr    :>>= k  -> runK (queryS kernel tr env) >>= eval . k
         Shell es os :>>= k -> do
             -- We want to discard the current focus, open the shell at
@@ -131,7 +130,7 @@ eval comp = do
 
 ------------------------- Shell-related helpers --------------------------------------
 
-resetScoping :: HermitMEnv -> PluginM [PathH]
+resetScoping :: KernelEnv -> PluginM [PathH]
 resetScoping env = do
     kernel <- gets ps_kernel
     paths <- runK $ pathS kernel
@@ -140,7 +139,7 @@ resetScoping env = do
     catchM (runS $ modPathS kernel (const mempty) env) (const (return ()))
     return paths
 
-restoreScoping :: HermitMEnv -> [PathH] -> PluginM ()
+restoreScoping :: KernelEnv -> [PathH] -> PluginM ()
 restoreScoping _   []    = return ()
 restoreScoping env (h:t) = do
     kernel <- gets ps_kernel

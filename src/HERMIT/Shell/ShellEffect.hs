@@ -52,7 +52,7 @@ performShellEffect :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadS
 performShellEffect Abort  = abort
 performShellEffect Resume = do
     st <- get
-    (sast',_) <- applyS (cl_kernel st) occurAnalyseAndDezombifyR (cl_kernel_env st) (cl_cursor st)
+    sast' <- applyS (cl_kernel st) occurAnalyseAndDezombifyR (cl_kernel_env st) (cl_cursor st)
     resume sast'
 
 performShellEffect Continue = get >>= continue

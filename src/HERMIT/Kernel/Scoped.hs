@@ -22,7 +22,6 @@ import HERMIT.Core
 import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.GHC hiding (Direction,L)
-import HERMIT.Monad
 import HERMIT.Kernel
 
 ----------------------------------------------------------------------------
@@ -59,22 +58,22 @@ testPathStackT ps p = testLensT (pathStackToLens ps p :: LensH ModGuts CoreTC)
 
 -- | An alternative HERMIT kernel, that provides scoping.
 data ScopedKernel = ScopedKernel
-    { resumeS      :: (MonadIO m, MonadCatch m) =>                SAST -> m ()
-    , abortS       ::  MonadIO m                =>                        m ()
+    { resumeS      :: (MonadIO m, MonadCatch m) =>               SAST -> m ()
+    , abortS       ::  MonadIO m                =>                       m ()
     , applyS       :: (MonadIO m, MonadCatch m, Injection ModGuts g, Walker HermitC g)
-                   => RewriteH g -> HermitMEnv ->                 SAST -> m (SAST, [Lemma])
+                   => RewriteH g     -> KernelEnv ->             SAST -> m SAST
     , queryS       :: (MonadIO m, MonadCatch m, Injection ModGuts g, Walker HermitC g)
-                   => TransformH g a -> HermitMEnv ->             SAST -> m a
-    , deleteS      :: (MonadIO m, MonadCatch m) =>                SAST -> m ()
-    , listS        ::  MonadIO m                =>                        m [SAST]
-    , pathS        :: (MonadIO m, MonadCatch m) =>                SAST -> m [PathH]
+                   => TransformH g a -> KernelEnv ->             SAST -> m a
+    , deleteS      :: (MonadIO m, MonadCatch m) =>               SAST -> m ()
+    , listS        ::  MonadIO m                =>                       m [SAST]
+    , pathS        :: (MonadIO m, MonadCatch m) =>               SAST -> m [PathH]
     , modPathS     :: (MonadIO m, MonadCatch m)
-                   => (LocalPathH -> LocalPathH) -> HermitMEnv -> SAST -> m SAST
-    , beginScopeS  :: (MonadIO m, MonadCatch m) =>                SAST -> m SAST
-    , endScopeS    :: (MonadIO m, MonadCatch m) =>                SAST -> m SAST
+                   => (LocalPathH -> LocalPathH) -> KernelEnv -> SAST -> m SAST
+    , beginScopeS  :: (MonadIO m, MonadCatch m) =>               SAST -> m SAST
+    , endScopeS    :: (MonadIO m, MonadCatch m) =>               SAST -> m SAST
     -- means of accessing the underlying kernel, obviously for unsafe purposes
-    , kernelS      ::                                                     Kernel
-    , toASTS       :: (MonadIO m, MonadCatch m) =>                SAST -> m AST
+    , kernelS      ::                                                    Kernel
+    , toASTS       :: (MonadIO m, MonadCatch m) =>               SAST -> m AST
     }
 
 -- | A /handle/ for an 'AST' combined with scoping information.
@@ -111,10 +110,10 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
             , applyS      = \ rr env (SAST sAst) -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
                                 applyK kernel ast (focusR (pathStackToLens base rel) rr) env
-                                  >>= runKureM (\ (ast',ls) -> atomically $ do
+                                  >>= runKureM (\ ast' -> atomically $ do
                                                     k <- newKey
                                                     putTMVar store $ I.insert k (ast', base, rel) m
-                                                    return (SAST k,ls))
+                                                    return (SAST k))
                                                fail
             , queryS      = \ t env (SAST sAst) -> liftAndCatchIO $ do
                                 m <- atomically $ readTMVar store

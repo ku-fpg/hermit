@@ -130,7 +130,7 @@ appArgM n e | n < 0     = fail "appArgM: arg must be non-negative"
                              else return $ l !! n
 
 -- | Build composition of two functions.
-buildCompositionT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
+buildCompositionT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
                   => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
 buildCompositionT f g = do
 #if __GLASGOW_HASKELL__ > 706
@@ -189,7 +189,7 @@ buildApplicationM f x = do
 #endif
 
 -- | Given expression for f, build fix f.
-buildFixT :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
+buildFixT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
           => CoreExpr -> Transform c m x CoreExpr
 buildFixT f = do
     ty <- endoFunExprType f
@@ -197,7 +197,7 @@ buildFixT f = do
     return $ mkCoreApps (varToCoreExpr fixId) [Type ty, f]
 
 -- | Build an expression that is the monomorphic id function for given type.
-buildIdT :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m)
+buildIdT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
          => Type -> Transform c m x CoreExpr
 buildIdT ty = do
     idId <- findIdT "Data.Function.id"
