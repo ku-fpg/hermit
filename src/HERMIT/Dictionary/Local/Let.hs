@@ -157,6 +157,29 @@ letNonRecSubstR = prefixFailMsg "Let substitution failed: " $
     do Let (NonRec v rhs) body <- idR
        return (substCoreExpr v rhs body)
 
+{-
+TODO: This was written very early in the project by Andy.
+      It was later modified somewhat by Neil, but without reassessing the heurisitc as a whole.
+      It may need revisiting.
+
+Safe Subst Heuristic
+--------------------
+
+Substitution is safe if (A) OR (B) OR (C).
+
+(A) The let-bound variable is a type or coercion.
+
+(B) The let-bound value is either:
+      (i)   a variable;
+      (ii)  a lambda;
+      (iii) an application that requires more value arguments before it can perform any computation.
+
+(C) In the body, the let-bound variable must NOT occur:
+      (i)  more than once;
+      (ii) inside a lambda.
+
+-}
+
 -- | Currently we always substitute types and coercions, and use a heuristic to decide whether to substitute expressions.
 --   This may need revisiting.
 letNonRecSubstSafeR :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, ReadBindings c, HasEmptyContext c, MonadCatch m) => Rewrite c m CoreExpr
