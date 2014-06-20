@@ -140,7 +140,7 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
 -- h :: B -> B
 
 -- | If @f@ is strict, then (@f (g a)@ == @h (f a)@)  ==\>  (@f (fix g)@ == @fix h@)
-fixFusionRuleBR :: Maybe (CoreExprEqualityProof HermitC HermitM) -> Maybe (RewriteH CoreExpr) -> CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
+fixFusionRuleBR :: Maybe (EqualityProof HermitC HermitM) -> Maybe (RewriteH CoreExpr) -> CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
 fixFusionRuleBR meq mfstrict f g h = beforeBiR
   (prefixFailMsg "fixed-point fusion failed: " $
    do (tyA,tyB) <- funExprArgResTypes f

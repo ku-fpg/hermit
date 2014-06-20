@@ -186,13 +186,13 @@ addCoreBindAsRule rule_name nm = contextfreeT $ \ modGuts ->
          _ -> fail $ "found multiple bindings for " ++ nm
 
 -- | Returns the universally quantified binders, the LHS, and the RHS.
-ruleToEqualityT :: (BoundVars c, HasDynFlags m, HasHermitMEnv m, MonadThings m, MonadCatch m) => Transform c m CoreRule CoreExprEquality
+ruleToEqualityT :: (BoundVars c, HasDynFlags m, HasHermitMEnv m, MonadThings m, MonadCatch m) => Transform c m CoreRule Equality
 ruleToEqualityT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
   do r@Rule{} <- idR -- other possibility is "BuiltinRule"
      f <- lookupId $ ru_fn r
-     return $ CoreExprEquality (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
+     return $ Equality (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
 
-ruleNameToEqualityT :: (BoundVars c, HasCoreRules c) => RuleNameString -> Transform c HermitM a CoreExprEquality
+ruleNameToEqualityT :: (BoundVars c, HasCoreRules c) => RuleNameString -> Transform c HermitM a Equality
 ruleNameToEqualityT name = getHermitRuleT name >>> ruleToEqualityT
 
 ------------------------------------------------------------------------

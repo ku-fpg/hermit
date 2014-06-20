@@ -20,7 +20,7 @@ module HERMIT.Monad
     , lookupDef
     , HasStash(..)
       -- * Lemmas
-    , CoreExprEquality(..)
+    , Equality(..)
     , LemmaName
     , Lemma
     , Lemmas
@@ -66,13 +66,13 @@ type Label = String
 type DefStash = Map Label CoreDef
 
 -- | An equality is represented as a set of universally quantified binders, and the LHS and RHS of the equality.
-data CoreExprEquality = CoreExprEquality [CoreBndr] CoreExpr CoreExpr
+data Equality = Equality [CoreBndr] CoreExpr CoreExpr
 
 -- | A name for lemmas.
 type LemmaName = String
 
 -- | An equality with a proven status.
-type Lemma = (CoreExprEquality,Bool)
+type Lemma = (Equality,Bool)
 
 -- | A collectin of named lemmas.
 type Lemmas = Map LemmaName Lemma

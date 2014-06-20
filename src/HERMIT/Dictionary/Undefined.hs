@@ -217,6 +217,6 @@ buildStrictnessLemmaT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasHermitMEnv
 buildStrictnessLemmaT nm f = do
     (tvs, lhs) <- liftM collectTyBinders $ applyToUndefinedT f
     rhs <- mkUndefinedValT (exprType lhs)
-    constT $ insertLemma nm (CoreExprEquality tvs lhs rhs, False)
+    constT $ insertLemma nm (Equality tvs lhs rhs, False)
 
 ------------------------------------------------------------------------

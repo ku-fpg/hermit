@@ -46,7 +46,7 @@ workLabel = "recursive-definition-of-work-for-use-by-ww-fusion"
 -- TODO: generalize away from TransformH on all of these
 
 -- Given abs and rep expressions, build "abs . rep = id"
-assumptionAEqualityT :: CoreString -> CoreString -> TransformH x CoreExprEquality
+assumptionAEqualityT :: CoreString -> CoreString -> TransformH x Equality
 assumptionAEqualityT absC repC = prefixFailMsg "Building assumption A failed: " $ do
     absE <- parseCoreExprT absC
     repE <- parseCoreExprT repC
@@ -54,10 +54,10 @@ assumptionAEqualityT absC repC = prefixFailMsg "Building assumption A failed: " 
     let (_,compBody) = collectTyBinders comp
     (tvs, xTy, _) <- funTyComponentsM (exprType comp)
     idE <- buildIdT xTy
-    return $ CoreExprEquality tvs compBody idE
+    return $ Equality tvs compBody idE
 
 -- Given abs, rep, and f expressions, build "abs . rep . f = f"
-assumptionBEqualityT :: CoreString -> CoreString -> CoreString -> TransformH x CoreExprEquality
+assumptionBEqualityT :: CoreString -> CoreString -> CoreString -> TransformH x Equality
 assumptionBEqualityT absC repC fC = prefixFailMsg "Building assumption B failed: " $ do
     absE <- parseCoreExprT absC
     repE <- parseCoreExprT repC
@@ -66,12 +66,12 @@ assumptionBEqualityT absC repC fC = prefixFailMsg "Building assumption B failed:
     comp <- buildCompositionT absE repAfterF
     let (tvs,lhs) = collectTyBinders comp
     rhs <- appArgM 5 lhs >>= appArgM 5 -- get f with proper tvs applied
-    return $ CoreExprEquality tvs lhs rhs
+    return $ Equality tvs lhs rhs
 
 -- Given abs, rep, and f expressions, build "fix (abs . rep . f) = fix f"
-assumptionCEqualityT :: CoreString -> CoreString -> CoreString -> TransformH x CoreExprEquality
+assumptionCEqualityT :: CoreString -> CoreString -> CoreString -> TransformH x Equality
 assumptionCEqualityT absC repC fC = prefixFailMsg "Building assumption C failed: " $ do
-    CoreExprEquality vs lhs rhs <- assumptionBEqualityT absC repC fC
+    Equality vs lhs rhs <- assumptionBEqualityT absC repC fC
     lhs' <- buildFixT lhs
     rhs' <- buildFixT rhs
-    return $ CoreExprEquality vs lhs' rhs'
+    return $ Equality vs lhs' rhs'
