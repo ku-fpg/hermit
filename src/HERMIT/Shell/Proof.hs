@@ -73,10 +73,8 @@ externals = map (.+ Proof)
         [ "List lemmas whose names match search string." ]
     , external "show-lemmas" (ShowLemmas Nothing)
         [ "List lemmas." ]
-    , external "lemma" (promoteExprBiR . lemmaR False :: LemmaName -> BiRewriteH Core)
-        [ "Generate a bi-directional rewrite from a proven lemma." ]
-    , external "lemma-unsafe" (promoteExprBiR . lemmaR True :: LemmaName -> BiRewriteH Core)
-        [ "Generate a bi-directional rewrite from a lemma, even if it is unproven." ]
+    , external "lemma" (promoteExprBiR . lemmaR :: LemmaName -> BiRewriteH Core)
+        [ "Generate a bi-directional rewrite from a lemma." ]
     , external "lemma-lhs-intro" (lemmaLhsIntroR :: LemmaName -> RewriteH Core)
         [ "Introduce the LHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = lhs in body" ] .+ Introduce .+ Shallow
@@ -85,18 +83,18 @@ externals = map (.+ Proof)
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
     , external "prove-lemma" InteractiveProof
         [ "Proof a lemma interactively." ]
-    , external "inst-lemma" (\ nm v cs -> modifyLemmaR nm id (instantiateEqualityVarR (cmpString2Var v) cs) id :: RewriteH Core)
+    , external "inst-lemma" (\ nm v cs -> modifyLemmaR nm id (instantiateEqualityVarR (cmpString2Var v) cs) id id :: RewriteH Core)
         [ "Instantiate one of the universally quantified variables of the given lemma,"
         , "with the given Core expression, creating a new lemma. Instantiating an"
         , "already proven lemma will result in the new lemma being considered proven." ]
-    , external "inst-lemma-dictionaries" (\ nm -> modifyLemmaR nm id instantiateDictsR id :: RewriteH Core)
+    , external "inst-lemma-dictionaries" (\ nm -> modifyLemmaR nm id instantiateDictsR id id :: RewriteH Core)
         [ "Instantiate all of the universally quantified dictionaries of the given lemma."
         , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
-    , external "copy-lemma" (\ nm newName -> modifyLemmaR nm (const newName) idR id :: RewriteH Core)
+    , external "copy-lemma" (\ nm newName -> modifyLemmaR nm (const newName) idR id id :: RewriteH Core)
         [ "Copy a given lemma, with a new name." ]
-    , external "modify-lemma" (\ nm rr -> modifyLemmaR nm id rr (const False) :: RewriteH Core)
-        [ "Modify a given lemma. Resets the proven status to Not Proven." ]
-    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr fst >>> t) :: LemmaName -> TransformH Equality String -> TransformH Core String)
+    , external "modify-lemma" (\ nm rr -> modifyLemmaR nm id rr (const False) (const False) :: RewriteH Core)
+        [ "Modify a given lemma. Resets the proven status to Not Proven and used status to Not Used." ]
+    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaEq >>> t) :: LemmaName -> TransformH Equality String -> TransformH Core String)
         [ "Apply a transformation to a lemma, returning the result." ]
     , external "dump-lemma" DumpLemma
         [ "Dump named lemma to a file."
@@ -151,7 +149,7 @@ instance Extern ProofCommand where
 --------------------------------------------------------------------------------------------------------
 
 lemmaNameToEqualityT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Equality
-lemmaNameToEqualityT nm = liftM fst $ getLemmaByNameT nm
+lemmaNameToEqualityT nm = liftM lemmaEq $ getLemmaByNameT nm
 
 -- | @e@ ==> @let v = lhs in e@  (also works in a similar manner at Program nodes)
 lemmaLhsIntroR :: LemmaName -> RewriteH Core
@@ -189,9 +187,10 @@ printLemma (nm,lem) = do
 
 ppLemmaT :: PrettyPrinter -> LemmaName -> TransformH Lemma DocH
 ppLemmaT pp nm = do
-    (eq, p) <- idR
+    Lemma eq p u <- idR
     eqDoc <- return eq >>> ppEqualityT pp
     let hDoc = text nm <+> text (if p then "(Proven)" else "(Not Proven)")
+                       <+> text (if u then "(Used)"   else "(Not Used)")
     return $ hDoc $+$ nest 2 eqDoc
 
 --------------------------------------------------------------------------------------------------------
@@ -234,7 +233,7 @@ interactiveProof topLevel isTemporary lem@(nm,_) = do
                         if isTemporary
                         then cleanup st'    -- successfully proven
                         else do sast <- applyS (cl_kernel st')
-                                               (modifyLemmaR nm id idR (const True))
+                                               (modifyLemmaR nm id idR (const True) id :: RewriteH Core)
                                                (mkKernelEnv $ cl_pstate st')
                                                (cl_cursor st')
                                 cleanup $ newSAST (CmdName "proven") sast st'
@@ -260,7 +259,7 @@ runExprH lem expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr 
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => NamedLemma -> m ()
-endProof (nm, (eq, _)) = do
+endProof (nm, Lemma eq _ _) = do
     st <- get
 
     let sk = cl_kernel st
@@ -272,7 +271,7 @@ endProof (nm, (eq, _)) = do
     if b then continue st else fail $ "The two sides of " ++ nm ++ " are not alpha-equivalent."
 
 performProofShellCommand :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> ProofShellCommand -> m NamedLemma
-performProofShellCommand lem@(nm, (eq, b)) = go
+performProofShellCommand lem@(nm, Lemma eq p u) = go
     where go (PCRewrite rr)         = do
                 st <- get
                 let sk = cl_kernel st
@@ -280,8 +279,9 @@ performProofShellCommand lem@(nm, (eq, b)) = go
                     sast = cl_cursor st
 
                 -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
+                -- TODO: query doesn't save side effects, which are needed for stash/lemmas
                 eq' <- queryS sk (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core Equality) kEnv sast
-                return (nm, (eq', b))
+                return (nm, Lemma eq' p u)
           go (PCTransform t)      = do
                 st <- get
                 let sk = cl_kernel st
@@ -313,7 +313,7 @@ performProofShellCommand lem@(nm, (eq, b)) = go
           go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.") >> return lem
 
 performInduction :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> (Id -> Bool) -> m NamedLemma
-performInduction lem@(nm, (eq@(Equality bs lhs rhs), _)) idPred = do
+performInduction lem@(nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
     st <- get
     let sk = cl_kernel st
         kEnv = cl_kernel_env st
@@ -332,9 +332,9 @@ performInduction lem@(nm, (eq@(Equality bs lhs rhs), _)) idPred = do
                     liftM discardUniVars $ instantiateEqualityVar (==i) (Var i') [] eq
 
         let nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
-            hypLemmas = zip nms $ zip eqs (repeat True)
+            hypLemmas = zip nms $ zipWith3 Lemma eqs (repeat True) (repeat False)
             lemmaName = nm ++ "-induction-on-" ++ getOccString i ++ "-case-" ++ maybe "undefined" getOccString mdc
-            caseLemma = (Equality (delete i bs ++ vs) lhsE rhsE, False)
+            caseLemma = Lemma (Equality (delete i bs ++ vs) lhsE rhsE) False False
 
         -- this is pretty hacky
         sast' <- addLemmas hypLemmas  -- add temporary lemmas

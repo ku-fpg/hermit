@@ -212,11 +212,12 @@ applyToUndefinedT f = do
     return $ mkCoreLams tvs $ mkCoreApp body undef
 
 -- | Add a lemma for the strictness of a function.
+-- Note: assumes added lemma has been used
 buildStrictnessLemmaT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasHermitMEnv m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m)
                       => LemmaName -> CoreExpr -> Transform c m x ()
 buildStrictnessLemmaT nm f = do
     (tvs, lhs) <- liftM collectTyBinders $ applyToUndefinedT f
     rhs <- mkUndefinedValT (exprType lhs)
-    constT $ insertLemma nm (Equality tvs lhs rhs, False)
+    constT $ insertLemma nm $ Lemma (Equality tvs lhs rhs) False True
 
 ------------------------------------------------------------------------

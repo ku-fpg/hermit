@@ -16,6 +16,7 @@ module HERMIT.Dictionary.Reasoning
     , getLemmaByNameT
     , insertLemmaR
     , lemmaR
+    , markLemmaUsedR
     , modifyLemmaR
     -- ** Lifting transformations over 'Equality'
     , lhsT
@@ -457,24 +458,25 @@ getLemmasT = constT getLemmas
 getLemmaByNameT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Lemma
 getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ nm) return . Map.lookup nm
 
-lemmaR :: Bool -> LemmaName -> BiRewriteH CoreExpr
-lemmaR ok nm = flip beforeBiR birewrite $ do
-    (eq,proven) <- getLemmaByNameT nm
-    guardMsg (proven || ok) ("Lemma " ++ nm ++ " has not been proven.")
-    return eq
+lemmaR :: LemmaName -> BiRewriteH CoreExpr
+lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaEq)) (markLemmaUsedR nm)
 
 -- We use sideEffectR because only rewrites generate new state in the Kernel.
 
-insertLemmaR :: (HasLemmas m, Monad m) => LemmaName -> Equality -> Rewrite c m Core
-insertLemmaR nm eq = sideEffectR $ \ _ _ -> insertLemma nm (eq,False)
+insertLemmaR :: (HasLemmas m, Monad m) => LemmaName -> Equality -> Rewrite c m a
+insertLemmaR nm eq = sideEffectR $ \ _ _ -> insertLemma nm $ Lemma eq False False
 
-modifyLemmaR :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, HasLemmas m, Monad m)
+modifyLemmaR :: (HasLemmas m, Monad m)
              => LemmaName
-             -> (LemmaName -> LemmaName)
-             -> Rewrite c m Equality
-             -> (Bool -> Bool)
-             -> Rewrite c m Core
-modifyLemmaR nm nFn rr pFn = do
-    (eq,p) <- getLemmaByNameT nm
-    eq' <- return eq >>> rr >>> (bothT lintExprT >> idR)
-    sideEffectR $ \ _ _ -> insertLemma (nFn nm) (eq', pFn p)
+             -> (LemmaName -> LemmaName) -- ^ modify lemma name
+             -> Rewrite c m Equality     -- ^ rewrite the equality
+             -> (Bool -> Bool)           -- ^ modify proven status
+             -> (Bool -> Bool)           -- ^ modify used status
+             -> Rewrite c m a
+modifyLemmaR nm nFn rr pFn uFn = do
+    Lemma eq p u <- getLemmaByNameT nm
+    eq' <- rr <<< return eq
+    sideEffectR $ \ _ _ -> insertLemma (nFn nm) $ Lemma eq' (pFn p) (uFn u)
+
+markLemmaUsedR :: (HasLemmas m, Monad m) => LemmaName -> Rewrite c m a
+markLemmaUsedR nm = modifyLemmaR nm id idR id (const True)

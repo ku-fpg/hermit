@@ -145,7 +145,7 @@ Library
                  directory >= 1.2.0.0,
                  ghc >= 7.6,
                  haskeline >= 0.7.0.3,
-                 kure >= 2.16.0,
+                 kure >= 2.16.2,
                  marked-pretty >= 0.1,
                  mtl >= 2.1.2,
                  operational >= 0.2.2.1,

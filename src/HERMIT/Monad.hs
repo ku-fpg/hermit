@@ -22,7 +22,7 @@ module HERMIT.Monad
       -- * Lemmas
     , Equality(..)
     , LemmaName
-    , Lemma
+    , Lemma(..)
     , Lemmas
       -- * Reader Information
     , HasHermitMEnv(..)
@@ -72,7 +72,10 @@ data Equality = Equality [CoreBndr] CoreExpr CoreExpr
 type LemmaName = String
 
 -- | An equality with a proven status.
-type Lemma = (Equality,Bool)
+data Lemma = Lemma { lemmaEq :: Equality
+                   , lemmaP  :: Bool     -- whether lemma has been proven
+                   , lemmaU  :: Bool     -- whether lemma has been used
+                   }
 
 -- | A collectin of named lemmas.
 type Lemmas = Map LemmaName Lemma
