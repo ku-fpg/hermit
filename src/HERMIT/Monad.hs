@@ -4,7 +4,6 @@ module HERMIT.Monad
     ( -- * The HERMIT Monad
       HermitM
     , runHM
-    , liftCoreM
     , newGlobalIdH
     , newIdH
     , newTyVarH
@@ -13,6 +12,7 @@ module HERMIT.Monad
     , cloneVarH
     , HermitMEnv(..)
     , HermitMResult(..)
+    , LiftCoreM(..)
       -- * Saving Definitions
     , Label
     , DefStash
@@ -24,6 +24,7 @@ module HERMIT.Monad
     , LemmaName
     , Lemma(..)
     , Lemmas
+    , addLemma
       -- * Reader Information
     , HasHermitMEnv(..)
     , mkEnv
@@ -244,43 +245,60 @@ instance HasLemmas HermitM where
 
     getLemmas = HermitM $ \ env -> return $ return $ mkResultEnv env (hEnvLemmas env)
 
+-- | Only adds a lemma if doesn't already exist.
+addLemma :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> m ()
+addLemma nm l = do
+    ls <- getLemmas
+    maybe (insertLemma nm l) (\ _ -> return ()) (lookup nm ls)
+
 ----------------------------------------------------------------------------
 
--- | 'CoreM' can be lifted to 'HermitM'.
-liftCoreM :: CoreM a -> HermitM a
-liftCoreM coreM = HermitM $ \ env -> coreM >>= return . return . mkResultEnv env
+class Monad m => LiftCoreM m where
+    -- | 'CoreM' can be lifted to this monad.
+    liftCoreM :: CoreM a -> m a
+
+instance LiftCoreM HermitM where
+    liftCoreM coreM = HermitM $ \ env -> coreM >>= return . return . mkResultEnv env
 
 ----------------------------------------------------------------------------
+
+-- Someday, when Applicative is a superclass of monad, we can uncomment the
+-- nicer applicative definitions. For now, we don't want the extra constraint.
 
 -- | Make a 'Name' from a string.
-newName :: (Applicative m, MonadUnique m) => String -> m Name
-newName nm = mkSystemVarName <$> getUniqueM <*> pure (mkFastString nm)
+newName :: MonadUnique m => String -> m Name
+newName nm = getUniqueM >>= return . flip mkSystemVarName (mkFastString nm)
+-- newName nm = mkSystemVarName <$> getUniqueM <*> pure (mkFastString nm)
 
 -- | Make a unique global identifier for a specified type, using a provided name.
-newGlobalIdH :: (Applicative m, MonadUnique m) => String -> Type -> m Id
-newGlobalIdH nm ty = mkVanillaGlobal <$> newName nm <*> pure ty
+newGlobalIdH :: MonadUnique m => String -> Type -> m Id
+newGlobalIdH nm ty = newName nm >>= return . flip mkVanillaGlobal ty
+-- newGlobalIdH nm ty = mkVanillaGlobal <$> newName nm <*> pure ty
 
 -- | Make a unique identifier for a specified type, using a provided name.
-newIdH :: (Applicative m, MonadUnique m) => String -> Type -> m Id
-newIdH nm ty = mkLocalId <$> newName nm <*> pure ty
+newIdH :: MonadUnique m => String -> Type -> m Id
+newIdH nm ty = newName nm >>= return . flip mkLocalId ty
+-- newIdH nm ty = mkLocalId <$> newName nm <*> pure ty
 
 -- | Make a unique type variable for a specified kind, using a provided name.
-newTyVarH :: (Applicative m, MonadUnique m) => String -> Kind -> m TyVar
-newTyVarH nm k = mkTyVar <$> newName nm <*> pure k
+newTyVarH :: MonadUnique m => String -> Kind -> m TyVar
+newTyVarH nm k = newName nm >>= return . flip mkTyVar k
+-- newTyVarH nm k = mkTyVar <$> newName nm <*> pure k
 
 -- | Make a unique coercion variable for a specified type, using a provided name.
-newCoVarH :: (Applicative m, MonadUnique m) => String -> Type -> m TyVar
-newCoVarH nm ty = mkCoVar <$> newName nm <*> pure ty
+newCoVarH :: MonadUnique m => String -> Type -> m TyVar
+newCoVarH nm ty = newName nm >>= return . flip mkCoVar ty
+-- newCoVarH nm ty = mkCoVar <$> newName nm <*> pure ty
 
 -- TODO: not sure if the predicates are correct.
 -- | Experimental, use at your own risk.
-newVarH :: (Applicative m, MonadUnique m) => String -> KindOrType -> m Var
+newVarH :: MonadUnique m => String -> KindOrType -> m Var
 newVarH name tk | isCoVarType tk = newCoVarH name tk
                 | isKind tk      = newTyVarH name tk
                 | otherwise      = newIdH name tk
 
 -- | Make a new variable of the same type, with a modified textual name.
-cloneVarH :: (Applicative m, MonadUnique m) => (String -> String) -> Var -> m Var
+cloneVarH :: MonadUnique m => (String -> String) -> Var -> m Var
 cloneVarH nameMod v | isTyVar v = newTyVarH name ty
                     | isCoVar v = newCoVarH name ty
                     | isId v    = newIdH name ty

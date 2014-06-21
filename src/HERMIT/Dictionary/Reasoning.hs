@@ -156,7 +156,9 @@ eqRhsIntroR (Equality bs _ rhs) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
 --
 -- The high level idea: create a temporary function with two definitions.
 -- Fold one of the defintions, then immediately unfold the other.
-birewrite :: (AddBindings c, ReadBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c) => Equality -> BiRewrite c HermitM CoreExpr
+birewrite :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
+             , ReadPath c Crumb, MonadCatch m, MonadUnique m )
+          => Equality -> BiRewrite c m CoreExpr
 birewrite (Equality bnds l r) = bidirectional (foldUnfold l r) (foldUnfold r l)
     where foldUnfold lhs rhs = transform $ \ c e -> do
             let lhsLam = mkCoreLams bnds lhs

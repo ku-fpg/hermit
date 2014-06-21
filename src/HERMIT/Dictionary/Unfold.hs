@@ -85,9 +85,11 @@ cleanupUnfoldR = do
 -- | A more powerful 'inline'. Matches two cases:
 --      Var ==> inlines
 --      App ==> inlines the head of the function call for the app tree
-unfoldR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Rewrite c HermitM CoreExpr
+unfoldR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c
+                       , ReadBindings c, ReadPath c Crumb, MonadCatch m )
+        => Rewrite c m CoreExpr
 unfoldR = prefixFailMsg "unfold failed: " (go >>> cleanupUnfoldR)
-    where go :: Rewrite c HermitM CoreExpr
+    where go :: Rewrite c m CoreExpr
           go = appAllR go idR <+ inlineR -- this order gives better error messages
 
 unfoldPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => (Id -> [CoreExpr] -> Bool) -> Rewrite c HermitM CoreExpr
