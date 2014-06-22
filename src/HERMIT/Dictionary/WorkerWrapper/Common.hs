@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, TypeFamilies #-}
 module HERMIT.Dictionary.WorkerWrapper.Common
-    ( WWAssumptionTag(..)
+    ( externals
+    , WWAssumptionTag(..)
     , WWAssumption(..)
     , assumptionAEqualityT
     , assumptionBEqualityT
@@ -17,7 +18,27 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.ParserCore
 
-import HERMIT.Dictionary.Function
+import HERMIT.Dictionary.Function hiding (externals)
+import HERMIT.Dictionary.Reasoning hiding (externals)
+
+--------------------------------------------------------------------------------------------------
+
+-- | New Worker/Wrapper-related externals.
+externals :: [External]
+externals = map (.+ Proof)
+    [ external "intro-ww-assumption-A"
+               (\nm absC repC -> assumptionAEqualityT absC repC >>= insertLemmaR nm :: RewriteH Core)
+               [ "Introduce a lemma for worker/wrapper assumption A"
+               , "using given abs and rep functions." ]
+    , external "intro-ww-assumption-B"
+               (\nm absC repC bodyC -> assumptionBEqualityT absC repC bodyC >>= insertLemmaR nm :: RewriteH Core)
+               [ "Introduce a lemma for worker/wrapper assumption B"
+               , "using given abs, rep, and body functions." ]
+    , external "intro-ww-assumption-C"
+               (\nm absC repC bodyC -> assumptionCEqualityT absC repC bodyC >>= insertLemmaR nm :: RewriteH Core)
+               [ "Introduce a lemma for worker/wrapper assumption C"
+               , "using given abs, rep, and body functions." ]
+    ]
 
 --------------------------------------------------------------------------------------------------
 
