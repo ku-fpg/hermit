@@ -48,6 +48,7 @@ module HERMIT.GHC
     , buildDictionary
     , eqExprX
     , lookupRdrNameInModuleForPlugins
+    , tcUnifyTy
 #endif
     , mkPhiTy
     , mkSigmaTy
@@ -98,6 +99,7 @@ import TcMType (newWantedEvVar)
 import TcRnMonad (getCtLoc)
 import TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
 import TcSimplify (solveWantedsTcM)
+import Unify (tcUnifyTy)
 
 import HERMIT.GHC.Typechecker
 #endif

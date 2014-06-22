@@ -14,7 +14,8 @@ binding-of 'rev
    any-call (unfold 'repR)
    any-call (unfold '.)
    unshadow ; bash
-   any-bu case-float-arg-unsafe
+   stop-script
+   any-bu (case-float-arg-lemma "test")
    any-bu (apply-rule "repH ++") ; bash
    any-bu (apply-rule "repH []") ; bash
    any-bu (unfold-rule "rep-abs-fusion")

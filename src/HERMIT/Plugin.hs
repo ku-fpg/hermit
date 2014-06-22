@@ -1,4 +1,4 @@
-{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, GeneralizedNewtypeDeriving, LambdaCase #-}
+{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, GeneralizedNewtypeDeriving, LambdaCase, CPP #-}
 module HERMIT.Plugin
     ( -- * The HERMIT Plugin
       hermitPlugin
@@ -31,7 +31,11 @@ module HERMIT.Plugin
 import Control.Applicative
 import Control.Arrow
 import Control.Concurrent.STM
+#if MIN_VERSION_mtl(2,2,1)
+import Control.Monad.Except hiding (guard)
+#else
 import Control.Monad.Error hiding (guard)
+#endif
 import Control.Monad.Operational
 import Control.Monad.State hiding (guard)
 
@@ -40,12 +44,12 @@ import qualified Data.Map as M
 
 import HERMIT.Dictionary
 import HERMIT.External hiding (Query, Shell)
+import HERMIT.Kernel (KernelEnv)
 import HERMIT.Kernel.Scoped
 import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.GHC hiding (singleton, liftIO, display, (<>))
 import qualified HERMIT.GHC as GHC
-import HERMIT.Monad
 
 import HERMIT.Plugin.Builder
 import qualified HERMIT.Plugin.Display as Display
@@ -126,7 +130,7 @@ eval comp = do
 
 ------------------------- Shell-related helpers --------------------------------------
 
-resetScoping :: HermitMEnv -> PluginM [PathH]
+resetScoping :: KernelEnv -> PluginM [PathH]
 resetScoping env = do
     kernel <- gets ps_kernel
     paths <- runK $ pathS kernel
@@ -135,7 +139,7 @@ resetScoping env = do
     catchM (runS $ modPathS kernel (const mempty) env) (const (return ()))
     return paths
 
-restoreScoping :: HermitMEnv -> [PathH] -> PluginM ()
+restoreScoping :: KernelEnv -> [PathH] -> PluginM ()
 restoreScoping _   []    = return ()
 restoreScoping env (h:t) = do
     kernel <- gets ps_kernel

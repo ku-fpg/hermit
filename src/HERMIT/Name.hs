@@ -2,7 +2,7 @@
 #if __GLASGOW_HASKELL__ <= 706
 {-# LANGUAGE ScopedTypeVariables #-}
 #endif
-module HERMIT.Name 
+module HERMIT.Name
     ( HermitName
     , fromRdrName
     , toRdrName
@@ -45,10 +45,10 @@ import HERMIT.Monad
 -- like GHC's 'RdrName', but without specifying which 'NameSpace'
 -- the name is found in.
 data HermitName = HermitName { hnModuleName  :: Maybe ModuleName
-                             , hnUnqualified :: String 
+                             , hnUnqualified :: String
                              }
 
--- | Possible results from name lookup. 
+-- | Possible results from name lookup.
 -- Invariant: One constructor for each NameSpace.
 data Named = NamedId Id
            | NamedDataCon DataCon
@@ -128,9 +128,9 @@ parseName s | isQualified s = parseQualified s
 -- | An instance of 'MonadThings' for 'Transform', which looks in the context first.
 --
 -- NB: we store TyVars in the context, but the 'TyThing' return type is not rich enough
--- to return them. So 'lookupThing' cannot be used to look up TyVars. 
+-- to return them. So 'lookupThing' cannot be used to look up TyVars.
 -- TODO: add function for this, or modify GHC's 'TyThing'?
-instance (MonadThings m, BoundVars c) => MonadThings (Transform c m a) where 
+instance (MonadThings m, BoundVars c) => MonadThings (Transform c m a) where
     lookupThing nm = contextonlyT $ \ c ->
                         case varSetElems $ filterVarSet ((== nm) . varName) (boundVars c) of
                             (i:_) | isVarName nm -> return $ AnId i
@@ -141,7 +141,7 @@ instance (MonadThings m, BoundVars c) => MonadThings (Transform c m a) where
 --------------------------------------------------------------------------------------------------
 
 #if __GLASGOW_HASKELL__ > 706
-findId :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m) 
+findId :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
        => String -> c -> m Id
 findId nm c = do
     nmd <- findInNameSpaces [varNS, dataConNS] nm c
@@ -150,7 +150,7 @@ findId nm c = do
         NamedDataCon dc -> return $ dataConWrapId dc
         other -> fail $ "findId: impossible Named returned: " ++ show other
 
-findVar :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m) 
+findVar :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
        => String -> c -> m Var
 findVar nm c = do
     nmd <- findInNameSpaces [varNS, tyVarNS, dataConNS] nm c
@@ -160,7 +160,7 @@ findVar nm c = do
         NamedDataCon dc -> return $ dataConWrapId dc
         other -> fail $ "findVar: impossible Named returned: " ++ show other
 
-findTyCon :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m) 
+findTyCon :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
           => String -> c -> m TyCon
 findTyCon nm c = do
     nmd <- findInNameSpace tyConClassNS nm c
@@ -168,7 +168,7 @@ findTyCon nm c = do
         NamedTyCon tc -> return tc
         other -> fail $ "findTyCon: impossible Named returned: " ++ show other
 
-findType :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m) 
+findType :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
          => String -> c -> m Type
 findType nm c = do
     nmd <- findInNameSpaces [tyVarNS, tyConClassNS] nm c
@@ -179,21 +179,21 @@ findType nm c = do
 
 --------------------------------------------------------------------------------------------------
 
-findInNameSpaces :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadCatch m, MonadIO m, MonadThings m) 
+findInNameSpaces :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
                  => [NameSpace] -> String -> c -> m Named
 findInNameSpaces nss nm c = setFailMsg "Variable not in scope." -- because catchesM clobbers failure messages.
                           $ catchesM [ findInNameSpace ns nm c | ns <- nss ]
 
-findInNameSpace :: (BoundVars c, HasHscEnv m, HasModGuts m, MonadIO m, MonadThings m) 
+findInNameSpace :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
                 => NameSpace -> String -> c -> m Named
-findInNameSpace ns nm c = 
+findInNameSpace ns nm c =
     case filter ((== ns) . occNameSpace . getOccName) $ varSetElems (findBoundVars nm c) of
         _ : _ : _ -> fail "multiple matching variables in scope."
         [v]       -> return $ varToNamed v
         []        -> findInNSModGuts ns (parseName nm)
 
 -- | Looks for Named in current GlobalRdrEnv. If not present, calls 'findInNSPackageDB'.
-findInNSModGuts :: (HasHscEnv m, HasModGuts m, MonadIO m, MonadThings m) 
+findInNSModGuts :: (HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
                 => NameSpace -> HermitName -> m Named
 findInNSModGuts ns nm = do
     rdrEnv <- liftM mg_rdr_env getModGuts
@@ -203,7 +203,7 @@ findInNSModGuts ns nm = do
         _     -> fail "findInNSModGuts: multiple names returned"
 
 -- | Looks for Named in package database, or built-in packages.
-findInNSPackageDB :: (HasHscEnv m, HasModGuts m, MonadIO m, MonadThings m) 
+findInNSPackageDB :: (HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
                   => NameSpace -> HermitName -> m Named
 findInNSPackageDB ns nm = do
     mnm <- lookupName ns nm
@@ -212,7 +212,7 @@ findInNSPackageDB ns nm = do
         Just n  -> nameToNamed n
 
 -- | Helper to call GHC's lookupRdrNameInModuleForPlugins
-lookupName :: (HasModGuts m, HasHscEnv m, MonadIO m) => NameSpace -> HermitName -> m (Maybe Name)
+lookupName :: (HasHermitMEnv m, HasHscEnv m, MonadIO m) => NameSpace -> HermitName -> m (Maybe Name)
 lookupName ns nm = case isQual_maybe rdrName of
                     Nothing    -> return Nothing -- we can't use lookupName on the current module
                     Just (m,_) -> do
@@ -224,12 +224,12 @@ lookupName ns nm = case isQual_maybe rdrName of
 -- | Looks for Named amongst GHC's built-in DataCons/TyCons.
 findNamedBuiltIn :: Monad m => NameSpace -> String -> m Named
 findNamedBuiltIn ns str
-    | isValNameSpace ns = 
+    | isValNameSpace ns =
         case [ dc | tc <- wiredInTyCons, dc <- tyConDataCons tc, str == getOccString dc ] of
             [] -> fail "name not in scope."
             [dc] -> return $ NamedDataCon dc
             dcs -> fail $ "multiple DataCons match: " ++ show (map getOccString dcs)
-    | isTcClsNameSpace ns = 
+    | isTcClsNameSpace ns =
         case [ tc | tc <- wiredInTyCons, str == getOccString tc ] of
             [] -> fail "type name not in scope."
             [tc] -> return $ NamedTyCon tc
@@ -247,13 +247,13 @@ nameToNamed n | isVarName n     = liftM NamedId $ lookupId n
 #else
 
 -- | Looks for Id with given name in the context. If it is not present, calls 'findIdMG'.
-findId :: (BoundVars c, HasModGuts m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> c -> m Id
+findId :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> c -> m Id
 findId nm c = case varSetElems (findBoundVars nm c) of
-                []         -> findIdMG (parseName nm) 
+                []         -> findIdMG (parseName nm)
                 [v]        -> return v
                 _ : _ : _  -> fail "multiple matching variables in scope."
 
-findIdMG :: (HasModGuts m, MonadThings m) => HermitName -> m Id
+findIdMG :: (HasHermitMEnv m, MonadThings m) => HermitName -> m Id
 findIdMG hnm = do
     let nm = hnUnqualified hnm
     rdrEnv <- liftM mg_rdr_env getModGuts

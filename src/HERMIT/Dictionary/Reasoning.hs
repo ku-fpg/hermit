@@ -4,16 +4,21 @@
 module HERMIT.Dictionary.Reasoning
     ( -- * Equational Reasoning
       externals
-    , CoreExprEquality(..)
-    , RewriteCoreExprEqualityBox(..)
-    , TransformCoreExprEqualityStringBox(..)
-    , CoreExprEqualityProof
-    , flipCoreExprEquality
+    , RewriteEqualityBox(..)
+    , TransformEqualityStringBox(..)
+    , EqualityProof
+    , flipEquality
     , eqLhsIntroR
     , eqRhsIntroR
     , birewrite
     , extensionalityR
-    -- ** Lifting transformations over 'CoreExprEquality'
+    , getLemmasT
+    , getLemmaByNameT
+    , insertLemmaR
+    , lemmaR
+    , markLemmaUsedR
+    , modifyLemmaR
+    -- ** Lifting transformations over 'Equality'
     , lhsT
     , rhsT
     , bothT
@@ -21,9 +26,9 @@ module HERMIT.Dictionary.Reasoning
     , lhsR
     , rhsR
     , bothR
-    , ppCoreExprEqualityT
-    , proveCoreExprEqualityT
-    , verifyCoreExprEqualityT
+    , ppEqualityT
+    , proveEqualityT
+    , verifyEqualityT
     , verifyEqualityLeftToRightT
     , verifyEqualityCommonTargetT
     , verifyIsomorphismT
@@ -43,7 +48,7 @@ import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class
 
-import Data.List (nubBy)
+import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Monoid
 import Data.Typeable
@@ -55,9 +60,6 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.ParserCore
-#if __GLASGOW_HASKELL__ >= 708
-import HERMIT.ParserType
-#endif
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.AlphaConversion hiding (externals)
@@ -70,6 +72,11 @@ import HERMIT.Dictionary.Unfold hiding (externals)
 import HERMIT.PrettyPrinter.Common
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
+
+#if __GLASGOW_HASKELL__ >= 708
+import Data.List (nubBy)
+import HERMIT.ParserType
+#endif
 
 ------------------------------------------------------------------------------
 
@@ -92,35 +99,32 @@ externals =
 
 ------------------------------------------------------------------------------
 
--- | An equality is represented as a set of universally quantified binders, and then the LHS and RHS of the equality.
-data CoreExprEquality = CoreExprEquality [CoreBndr] CoreExpr CoreExpr
+data RewriteEqualityBox =
+        RewriteEqualityBox (RewriteH Equality) deriving Typeable
 
-data RewriteCoreExprEqualityBox =
-        RewriteCoreExprEqualityBox (RewriteH CoreExprEquality) deriving Typeable
+instance Extern (RewriteH Equality) where
+    type Box (RewriteH Equality) = RewriteEqualityBox
+    box = RewriteEqualityBox
+    unbox (RewriteEqualityBox r) = r
 
-instance Extern (RewriteH CoreExprEquality) where
-    type Box (RewriteH CoreExprEquality) = RewriteCoreExprEqualityBox
-    box = RewriteCoreExprEqualityBox
-    unbox (RewriteCoreExprEqualityBox r) = r
+data TransformEqualityStringBox =
+        TransformEqualityStringBox (TransformH Equality String) deriving Typeable
 
-data TransformCoreExprEqualityStringBox =
-        TransformCoreExprEqualityStringBox (TransformH CoreExprEquality String) deriving Typeable
+instance Extern (TransformH Equality String) where
+    type Box (TransformH Equality String) = TransformEqualityStringBox
+    box = TransformEqualityStringBox
+    unbox (TransformEqualityStringBox t) = t
 
-instance Extern (TransformH CoreExprEquality String) where
-    type Box (TransformH CoreExprEquality String) = TransformCoreExprEqualityStringBox
-    box = TransformCoreExprEqualityStringBox
-    unbox (TransformCoreExprEqualityStringBox t) = t
+type EqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
 
-type CoreExprEqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
-
--- | Flip the LHS and RHS of a 'CoreExprEquality'.
-flipCoreExprEquality :: CoreExprEquality -> CoreExprEquality
-flipCoreExprEquality (CoreExprEquality xs lhs rhs) = CoreExprEquality xs rhs lhs
+-- | Flip the LHS and RHS of a 'Equality'.
+flipEquality :: Equality -> Equality
+flipEquality (Equality xs lhs rhs) = Equality xs rhs lhs
 
 -- | f == g  ==>  forall x.  f x == g x
-extensionalityR :: Maybe String -> Rewrite c HermitM CoreExprEquality
+extensionalityR :: Maybe String -> Rewrite c HermitM Equality
 extensionalityR mn = prefixFailMsg "extensionality failed: " $
-  do CoreExprEquality vs lhs rhs <- idR
+  do Equality vs lhs rhs <- idR
 
      let tyL = exprKindOrType lhs
          tyR = exprKindOrType rhs
@@ -132,28 +136,30 @@ extensionalityR mn = prefixFailMsg "extensionality failed: " $
 
      let x = varToCoreExpr v
 
-     return $ CoreExprEquality (vs ++ [v])
+     return $ Equality (vs ++ [v])
                                (mkCoreApp lhs x)
                                (mkCoreApp rhs x)
 
 ------------------------------------------------------------------------------
 
 -- | @e@ ==> @let v = lhs in e@
-eqLhsIntroR :: CoreExprEquality -> Rewrite c HermitM Core
-eqLhsIntroR (CoreExprEquality bs lhs _) = nonRecIntroR "lhs" (mkCoreLams bs lhs)
+eqLhsIntroR :: Equality -> Rewrite c HermitM Core
+eqLhsIntroR (Equality bs lhs _) = nonRecIntroR "lhs" (mkCoreLams bs lhs)
 
 -- | @e@ ==> @let v = rhs in e@
-eqRhsIntroR :: CoreExprEquality -> Rewrite c HermitM Core
-eqRhsIntroR (CoreExprEquality bs _ rhs) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
+eqRhsIntroR :: Equality -> Rewrite c HermitM Core
+eqRhsIntroR (Equality bs _ rhs) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
 
 ------------------------------------------------------------------------------
 
--- | Create a 'BiRewrite' from a 'CoreExprEquality'.
+-- | Create a 'BiRewrite' from a 'Equality'.
 --
 -- The high level idea: create a temporary function with two definitions.
 -- Fold one of the defintions, then immediately unfold the other.
-birewrite :: (AddBindings c, ReadBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c) => CoreExprEquality -> BiRewrite c HermitM CoreExpr
-birewrite (CoreExprEquality bnds l r) = bidirectional (foldUnfold l r) (foldUnfold r l)
+birewrite :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
+             , ReadPath c Crumb, MonadCatch m, MonadUnique m )
+          => Equality -> BiRewrite c m CoreExpr
+birewrite (Equality bnds l r) = bidirectional (foldUnfold l r) (foldUnfold r l)
     where foldUnfold lhs rhs = transform $ \ c e -> do
             let lhsLam = mkCoreLams bnds lhs
             -- we use a unique, transitory variable for the 'function' we are folding
@@ -165,44 +171,44 @@ birewrite (CoreExprEquality bnds l r) = bidirectional (foldUnfold l r) (foldUnfo
                 c' = addHermitBindings [(v, NONREC rhsLam, mempty)] c
             apply unfoldR c' e'
 
--- | Lift a transformation over 'CoreExpr' into a transformation over the left-hand side of a 'CoreExprEquality'.
-lhsT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m CoreExprEquality b
-lhsT t = idR >>= \ (CoreExprEquality vs lhs _) -> return lhs >>> withVarsInScope vs t
+-- | Lift a transformation over 'CoreExpr' into a transformation over the left-hand side of a 'Equality'.
+lhsT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m Equality b
+lhsT t = idR >>= \ (Equality vs lhs _) -> return lhs >>> withVarsInScope vs t
 
--- | Lift a transformation over 'CoreExpr' into a transformation over the right-hand side of a 'CoreExprEquality'.
-rhsT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m CoreExprEquality b
-rhsT t = idR >>= \ (CoreExprEquality vs _ rhs) -> return rhs >>> withVarsInScope vs t
+-- | Lift a transformation over 'CoreExpr' into a transformation over the right-hand side of a 'Equality'.
+rhsT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m Equality b
+rhsT t = idR >>= \ (Equality vs _ rhs) -> return rhs >>> withVarsInScope vs t
 
--- | Lift a transformation over 'CoreExpr' into a transformation over both sides of a 'CoreExprEquality'.
-bothT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m CoreExprEquality (b,b)
+-- | Lift a transformation over 'CoreExpr' into a transformation over both sides of a 'Equality'.
+bothT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m Equality (b,b)
 bothT t = liftM2 (,) (lhsT t) (rhsT t) -- Can't wait for Applicative to be a superclass of Monad
 
--- | Lift a transformation over '[Var]' into a transformation over the universally quantified variables of a 'CoreExprEquality'.
-forallVarsT :: Monad m => Transform c m [Var] b -> Transform c m CoreExprEquality b
-forallVarsT t = idR >>= \ (CoreExprEquality vs _ _) -> return vs >>> t
+-- | Lift a transformation over '[Var]' into a transformation over the universally quantified variables of a 'Equality'.
+forallVarsT :: Monad m => Transform c m [Var] b -> Transform c m Equality b
+forallVarsT t = idR >>= \ (Equality vs _ _) -> return vs >>> t
 
--- | Lift a rewrite over 'CoreExpr' into a rewrite over the left-hand side of a 'CoreExprEquality'.
-lhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
+-- | Lift a rewrite over 'CoreExpr' into a rewrite over the left-hand side of a 'Equality'.
+lhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m Equality
 lhsR r = do
-    CoreExprEquality vs lhs rhs <- idR
+    Equality vs lhs rhs <- idR
     lhs' <- withVarsInScope vs r <<< return lhs
-    return $ CoreExprEquality vs lhs' rhs
+    return $ Equality vs lhs' rhs
 
--- | Lift a rewrite over 'CoreExpr' into a rewrite over the right-hand side of a 'CoreExprEquality'.
-rhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
+-- | Lift a rewrite over 'CoreExpr' into a rewrite over the right-hand side of a 'Equality'.
+rhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m Equality
 rhsR r = do
-    CoreExprEquality vs lhs rhs <- idR
+    Equality vs lhs rhs <- idR
     rhs' <- withVarsInScope vs r <<< return rhs
-    return $ CoreExprEquality vs lhs rhs'
+    return $ Equality vs lhs rhs'
 
--- | Lift a rewrite over 'CoreExpr' into a rewrite over both sides of a 'CoreExprEquality'.
-bothR :: (AddBindings c, MonadCatch m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m CoreExprEquality
+-- | Lift a rewrite over 'CoreExpr' into a rewrite over both sides of a 'Equality'.
+bothR :: (AddBindings c, MonadCatch m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m Equality
 bothR r = lhsR r >+> rhsR r
 
 ------------------------------------------------------------------------------
 
-ppCoreExprEqualityT :: PrettyPrinter -> TransformH CoreExprEquality DocH
-ppCoreExprEqualityT pp = do
+ppEqualityT :: PrettyPrinter -> TransformH Equality DocH
+ppEqualityT pp = do
     let pos = pOptions pp
     d1 <- forallVarsT (liftPrettyH pos $ pForall pp)
     (d2,d3) <- bothT (liftPrettyH pos $ extractT $ pCoreTC pp)
@@ -219,30 +225,30 @@ ppCoreExprEqualityT pp = do
 --
 -- TODO: need to know type of 'x' to generate a variable.
 class BuildEquality a where
-    mkEquality :: a -> HermitM CoreExprEquality
+    mkEquality :: a -> HermitM Equality
 
 instance BuildEquality (CoreExpr,CoreExpr) where
-    mkEquality :: (CoreExpr,CoreExpr) -> HermitM CoreExprEquality
-    mkEquality (lhs,rhs) = return $ CoreExprEquality [] lhs rhs
+    mkEquality :: (CoreExpr,CoreExpr) -> HermitM Equality
+    mkEquality (lhs,rhs) = return $ Equality [] lhs rhs
 
 instance BuildEquality a => BuildEquality (CoreExpr -> a) where
-    mkEquality :: (CoreExpr -> a) -> HermitM CoreExprEquality
+    mkEquality :: (CoreExpr -> a) -> HermitM Equality
     mkEquality f = do
         x <- newIdH "x" (error "need to create a type")
-        CoreExprEquality bnds lhs rhs <- mkEquality (f (varToCoreExpr x))
-        return $ CoreExprEquality (x:bnds) lhs rhs
+        Equality bnds lhs rhs <- mkEquality (f (varToCoreExpr x))
+        return $ Equality (x:bnds) lhs rhs
 
 ------------------------------------------------------------------------------
 
--- | Verify that a 'CoreExprEquality' holds, by applying a rewrite to each side, and checking that the results are equal.
-proveCoreExprEqualityT :: forall c m. (AddBindings c, Monad m, ReadPath c Crumb)
-                        => CoreExprEqualityProof c m -> Transform c m CoreExprEquality ()
-proveCoreExprEqualityT (l,r) = lhsR l >>> rhsR r >>> verifyCoreExprEqualityT
+-- | Verify that a 'Equality' holds, by applying a rewrite to each side, and checking that the results are equal.
+proveEqualityT :: forall c m. (AddBindings c, Monad m, ReadPath c Crumb)
+                        => EqualityProof c m -> Transform c m Equality ()
+proveEqualityT (l,r) = lhsR l >>> rhsR r >>> verifyEqualityT
 
--- | Verify that the left- and right-hand sides of a 'CoreExprEquality' are alpha equivalent.
-verifyCoreExprEqualityT :: Monad m => Transform c m CoreExprEquality ()
-verifyCoreExprEqualityT = do
-    CoreExprEquality _ lhs rhs <- idR
+-- | Verify that the left- and right-hand sides of a 'Equality' are alpha equivalent.
+verifyEqualityT :: Monad m => Transform c m Equality ()
+verifyEqualityT = do
+    Equality _ lhs rhs <- idR
     guardMsg (exprAlphaEq lhs rhs) "the two sides of the equality do not match."
 
 ------------------------------------------------------------------------------
@@ -257,7 +263,7 @@ verifyEqualityLeftToRightT sourceExpr targetExpr r =
      guardMsg (exprAlphaEq targetExpr resultExpr) "result of running proof on lhs of equality does not match rhs of equality."
 
 -- | Given two expressions, and a rewrite to apply to each, verify that the resulting expressions are equal.
-verifyEqualityCommonTargetT :: MonadCatch m => CoreExpr -> CoreExpr -> CoreExprEqualityProof c m -> Transform c m a ()
+verifyEqualityCommonTargetT :: MonadCatch m => CoreExpr -> CoreExpr -> EqualityProof c m -> Transform c m a ()
 verifyEqualityCommonTargetT lhs rhs (l,r) =
   prefixFailMsg "equality verification failed: " $
   do lhsResult <- l <<< return lhs
@@ -317,7 +323,7 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 ------------------------------------------------------------------------------
 
 -- TODO: revisit this for binder re-ordering issue
-instantiateDictsR :: RewriteH CoreExprEquality
+instantiateDictsR :: RewriteH Equality
 #if __GLASGOW_HASKELL__ >= 708
 instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
     bs <- forallVarsT idR
@@ -350,9 +356,9 @@ instantiateDictsR = fail "Dictionaries cannot be instantiated in GHC 7.6"
 
 ------------------------------------------------------------------------------
 
-alphaEqualityR :: (Var -> Bool) -> (String -> String) -> RewriteH CoreExprEquality
+alphaEqualityR :: (Var -> Bool) -> (String -> String) -> RewriteH Equality
 alphaEqualityR p f = prefixFailMsg "Alpha-renaming binder in equality failed: " $ do
-    CoreExprEquality bs lhs rhs <- idR
+    Equality bs lhs rhs <- idR
     guardMsg (any p bs) "specified variable is not universally quantified."
 
     let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
@@ -363,11 +369,11 @@ alphaEqualityR p f = prefixFailMsg "Alpha-renaming binder in equality failed: " 
         (subst', vs') = substBndrs subst vs
         lhs'          = substExpr (text "coreExprEquality-lhs") subst' lhs
         rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
-    return $ CoreExprEquality (bs'++(i':vs')) lhs' rhs'
+    return $ Equality (bs'++(i':vs')) lhs' rhs'
 
-unshadowEqualityR :: RewriteH CoreExprEquality
+unshadowEqualityR :: RewriteH Equality
 unshadowEqualityR = prefixFailMsg "Unshadowing equality failed: " $ do
-    c@(CoreExprEquality bs _ _) <- idR
+    c@(Equality bs _ _) <- idR
     bvs <- boundVarsT
     let visible = unionVarSets [bvs , freeVarsEquality c]
     ss <- varSetElems <$> detectShadowsM bs visible
@@ -375,13 +381,13 @@ unshadowEqualityR = prefixFailMsg "Unshadowing equality failed: " $ do
     let f = freshNameGenAvoiding Nothing . extendVarSet visible
     andR [ alphaEqualityR (==s) (f s) | s <- reverse ss ] >>> bothR (tryR unshadowExprR)
 
-freeVarsEquality :: CoreExprEquality -> VarSet
-freeVarsEquality (CoreExprEquality bs lhs rhs) =
+freeVarsEquality :: Equality -> VarSet
+freeVarsEquality (Equality bs lhs rhs) =
     delVarSetList (unionVarSets (map freeVarsExpr [lhs,rhs])) bs
 
 ------------------------------------------------------------------------------
 
-instantiateEqualityVarR :: (Var -> Bool) -> CoreString -> RewriteH CoreExprEquality
+instantiateEqualityVarR :: (Var -> Bool) -> CoreString -> RewriteH Equality
 instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
     bs <- forallVarsT idR
     (e,new) <- case filter p bs of
@@ -399,15 +405,15 @@ instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
     (_,_) <- return eq >>> bothT lintExprT -- sanity check
     return eq
 
--- | Instantiate one of the universally quantified variables in a 'CoreExprEquality'.
+-- | Instantiate one of the universally quantified variables in a 'Equality'.
 -- Note: assumes implicit ordering of variables, such that substitution happens to the right
 -- as it does in case alternatives. Only first variable that matches predicate is
 -- instantiated.
 instantiateEqualityVar :: MonadIO m => (Var -> Bool) -- predicate to select var
                                     -> CoreExpr      -- expression to instantiate with
                                     -> [Var]         -- new binders to add in place of var
-                                    -> CoreExprEquality -> m CoreExprEquality
-instantiateEqualityVar p e new (CoreExprEquality bs lhs rhs)
+                                    -> Equality -> m Equality
+instantiateEqualityVar p e new (Equality bs lhs rhs)
     | not (any p bs) = fail "specified variable is not universally quantified."
     | otherwise = do
         let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
@@ -427,21 +433,52 @@ instantiateEqualityVar p e new (CoreExprEquality bs lhs rhs)
         let inS           = delVarSetList (unionVarSets (map localFreeVarsExpr [lhs, rhs, e] ++ map freeVarsVar vs)) (i:vs)
             subst         = extendSubst (mkEmptySubst (mkInScopeSet inS)) i e
             (subst', vs') = substBndrs subst vs
-            lhs'          = substExpr (text "coreExprEquality-lhs") subst' lhs
-            rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
-        instantiateEquality (noAdds tvs) $ CoreExprEquality (bs'++new++vs') lhs' rhs'
+            lhs'          = substExpr (text "equality-lhs") subst' lhs
+            rhs'          = substExpr (text "equality-rhs") subst' rhs
+        instantiateEquality (noAdds tvs) $ Equality (bs'++new++vs') lhs' rhs'
 
 noAdds :: [(Var,CoreExpr)] -> [(Var,CoreExpr,[Var])]
 noAdds ps = [ (v,e,[]) | (v,e) <- ps ]
 
--- | Instantiate a set of universally quantified variables in a 'CoreExprEquality'.
+-- | Instantiate a set of universally quantified variables in a 'Equality'.
 -- It is important that all type variables appear before any value-level variables in the first argument.
-instantiateEquality :: MonadIO m => [(Var,CoreExpr,[Var])] -> CoreExprEquality -> m CoreExprEquality
+instantiateEquality :: MonadIO m => [(Var,CoreExpr,[Var])] -> Equality -> m Equality
 instantiateEquality = flip (foldM (\ eq (v,e,vs) -> instantiateEqualityVar (==v) e vs eq)) . reverse
 -- foldM is a left-to-right fold, so the reverse is important to do substitutions in reverse order
 -- which is what we want (all value variables should be instantiated before type variables).
 
 ------------------------------------------------------------------------------
 
-discardUniVars :: CoreExprEquality -> CoreExprEquality
-discardUniVars (CoreExprEquality _ lhs rhs) = CoreExprEquality [] lhs rhs
+discardUniVars :: Equality -> Equality
+discardUniVars (Equality _ lhs rhs) = Equality [] lhs rhs
+
+------------------------------------------------------------------------------
+
+getLemmasT :: HasLemmas m => Transform c m x Lemmas
+getLemmasT = constT getLemmas
+
+getLemmaByNameT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Lemma
+getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ nm) return . Map.lookup nm
+
+lemmaR :: LemmaName -> BiRewriteH CoreExpr
+lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaEq)) (markLemmaUsedR nm)
+
+-- We use sideEffectR because only rewrites generate new state in the Kernel.
+
+insertLemmaR :: (HasLemmas m, Monad m) => LemmaName -> Equality -> Rewrite c m a
+insertLemmaR nm eq = sideEffectR $ \ _ _ -> insertLemma nm $ Lemma eq False False
+
+modifyLemmaR :: (HasLemmas m, Monad m)
+             => LemmaName
+             -> (LemmaName -> LemmaName) -- ^ modify lemma name
+             -> Rewrite c m Equality     -- ^ rewrite the equality
+             -> (Bool -> Bool)           -- ^ modify proven status
+             -> (Bool -> Bool)           -- ^ modify used status
+             -> Rewrite c m a
+modifyLemmaR nm nFn rr pFn uFn = do
+    Lemma eq p u <- getLemmaByNameT nm
+    eq' <- rr <<< return eq
+    sideEffectR $ \ _ _ -> insertLemma (nFn nm) $ Lemma eq' (pFn p) (uFn u)
+
+markLemmaUsedR :: (HasLemmas m, Monad m) => LemmaName -> Rewrite c m a
+markLemmaUsedR nm = modifyLemmaR nm id idR id (const True)

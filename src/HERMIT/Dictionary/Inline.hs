@@ -1,22 +1,20 @@
 {-# LANGUAGE CPP, TupleSections, FlexibleContexts, ScopedTypeVariables #-}
 module HERMIT.Dictionary.Inline
-         ( -- * Inlining
-           externals
-         , InlineConfig(..)
-         , CaseBinderInlineOption(..)
-         , getUnfoldingT
-         , ensureBoundT
-         , inlineR
-         , inlineNameR
-         , inlineNamesR
-         , inlineMatchingPredR
-         , inlineCaseScrutineeR
-         , inlineCaseAlternativeR
-         , configurableInlineR
-         , inlineTargetsT
-         )
-
-where
+    ( -- * Inlining
+      externals
+    , InlineConfig(..)
+    , CaseBinderInlineOption(..)
+    , getUnfoldingT
+    , ensureBoundT
+    , inlineR
+    , inlineNameR
+    , inlineNamesR
+    , inlineMatchingPredR
+    , inlineCaseScrutineeR
+    , inlineCaseAlternativeR
+    , configurableInlineR
+    , inlineTargetsT
+    ) where
 
 #if __GLASGOW_HASKELL__ > 706
 #else
@@ -24,7 +22,6 @@ import TcType (tcSplitDFunTy)
 #endif
 
 import Control.Arrow
-import Control.Applicative
 import Control.Monad
 
 import Data.List (intercalate)
@@ -75,7 +72,8 @@ inlineMatchingPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Rea
 inlineMatchingPredR idPred = configurableInlineR AllBinders (arr $ idPred)
 
 -- | Inline the current variable.
-inlineR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Rewrite c HermitM CoreExpr
+inlineR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb, MonadCatch m)
+        => Rewrite c m CoreExpr
 inlineR = configurableInlineR AllBinders (return True)
 
 -- | Inline the current identifier if it is a case binder, using the scrutinee rather than the case-alternative pattern.
@@ -89,10 +87,11 @@ inlineCaseAlternativeR = configurableInlineR (CaseBinderOnly Alternative) (retur
 -- | The implementation of inline, an important transformation.
 -- This *only* works if the current expression has the form @Var v@ (it does not traverse the expression).
 -- It can trivially be prompted to more general cases using traversal strategies.
-configurableInlineR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c)
+configurableInlineR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
+                       , ReadPath c Crumb, MonadCatch m )
                     => InlineConfig
-                    -> (Transform c HermitM Id Bool) -- ^ Only inline identifiers that satisfy this predicate.
-                    -> Rewrite c HermitM CoreExpr
+                    -> (Transform c m Id Bool) -- ^ Only inline identifiers that satisfy this predicate.
+                    -> Rewrite c m CoreExpr
 configurableInlineR config p =
    prefixFailMsg "Inline failed: " $
    do b <- varT p
@@ -136,9 +135,9 @@ ensureDepthT uncaptured =
      all uncaptured `liftM` extractT collectDepthsT
 
 -- | Return the unfolding of an identifier, and a predicate over the binding depths of all variables within that unfolding to determine if they have been captured in their new location.
-getUnfoldingT :: ReadBindings c
+getUnfoldingT :: (ReadBindings c, MonadCatch m)
               => InlineConfig
-              -> Transform c HermitM Id (CoreExpr, BindingDepth -> Bool)
+              -> Transform c m Id (CoreExpr, BindingDepth -> Bool)
 getUnfoldingT config = transform $ \ c i ->
     case lookupHermitBinding i c of
       Nothing -> do requireAllBinders config
@@ -150,15 +149,15 @@ getUnfoldingT config = transform $ \ c i ->
                     case unfoldingInfo (idInfo i) of
                       CoreUnfolding { uf_tmpl = uft } -> return (uft, uncaptured)
 #if __GLASGOW_HASKELL__ > 706
-                      dunf@(DFunUnfolding {})         -> (,uncaptured) <$> dFunExpr dunf
+                      dunf@(DFunUnfolding {})         -> liftM (,uncaptured) $ dFunExpr dunf
 #else
-                      DFunUnfolding _arity dc args    -> (,uncaptured) <$> dFunExpr dc args (idType i)
+                      DFunUnfolding _arity dc args    -> liftM (,uncaptured) $ dFunExpr dc args (idType i)
 #endif
                       _                               -> fail $ "cannot find unfolding in Env or IdInfo."
       Just b -> let depth = hbDepth b
                 in case hbSite b of
                           CASEBINDER s alt -> let tys             = tyConAppArgs (idType i)
-                                                  altExprDepthM   = (, (<= depth+1)) <$> alt2Exp tys alt
+                                                  altExprDepthM   = liftM (, (<= depth+1)) $ alt2Exp tys alt
                                                   scrutExprDepthM = return (s, (< depth))
                                                in case config of
                                                     CaseBinderOnly Scrutinee   -> scrutExprDepthM
@@ -205,7 +204,7 @@ inlineTargetsT = collectT $ promoteT $ whenM (testM inlineR) (varT $ arr var2Str
 
 -- | Build a CoreExpr for a DFunUnfolding
 #if __GLASGOW_HASKELL__ > 706
-dFunExpr :: Unfolding -> HermitM CoreExpr
+dFunExpr :: Monad m => Unfolding -> m CoreExpr
 dFunExpr dunf@(DFunUnfolding {}) = return $ mkCoreLams (df_bndrs dunf) $ mkCoreConApps (df_con dunf) (df_args dunf)
 dFunExpr _ = fail "dFunExpr: not a DFunUnfolding"
 #else

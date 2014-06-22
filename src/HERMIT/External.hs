@@ -80,11 +80,12 @@ data CmdTag = Shell          -- ^ Shell-specific command.
             | Deep           -- ^ Command may make a deep change, can be O(n).
             | Shallow        -- ^ Command operates on local nodes only, O(1).
             | Navigation     -- ^ Uses 'Path' or 'Lens' to focus onto something.
-            | Query          -- ^ A question we ask.
+            | Query          -- ^ Extract information from an expression.
             | Predicate      -- ^ Something that passes or fails.
             | Introduce      -- ^ Introduce something, like a new name.
             | Commute        -- ^ Commute is when you swap nested terms.
             | PreCondition   -- ^ Operation has a (perhaps undocumented) precondition.
+            | Strictness     -- ^ Alters the strictness of the expression.
             | Debug          -- ^ Commands specifically to help debugging.
             | VersionControl -- ^ Version control for Core syntax.
             | Context        -- ^ A command that uses its context, such as inlining.
@@ -96,22 +97,6 @@ data CmdTag = Shell          -- ^ Shell-specific command.
             | Experiment     -- ^ Things we are trying out.
             | Deprecated     -- ^ A command that will be removed in a future release;
                              --   it has probably been renamed or subsumed by another command.
-
-
--- Unsure about these
-{-
-            | Local         -- local thing, O(1)
-            | CaseCmd       -- works on case statements
-            | Context       -- something that uses the context
-            | GHC           -- a tunnel into GHC
-            | Lens          -- focuses into a specific node
-            | LetCmd        -- works on let statements
-            | Meta          -- combines other commands
-            | Restful       -- RESTful API commands
-            | Slow          -- this command is slow
--}
-            -- Other String
-            -- etc
     deriving (Eq, Show, Read, Bounded, Enum)
 
 -- | Lists all the tags paired with a short description of what they're about.
@@ -121,30 +106,29 @@ dictionaryOfTags = notes ++ [ (tag,"(unknown purpose)")
                             , tag `notElem` map fst notes
                             ]
   where notes =
-          -- These should give the user a clue about what the sub-commands
-          -- might do
-          [ (Shell,        "Shell-specific command.")
-          , (Eval,         "The arrow of evaluation (reduces a term).")
-          , (KURE,         "Direct reflection of a combinator from the KURE DSL.")
-          , (Loop,         "Command may operate multiple times.")
-          , (Deep,         "Command may make a deep change, can be O(n).")
-          , (Shallow,      "Command operates on local nodes only, O(1).")
-          , (Navigation,   "Navigate via focus, or directional command.")
-          , (Query,        "A question we ask.")
-          , (Predicate,    "Something that passes or fails.")
-          , (Introduce,    "Introduce something, like a new name.")
-          , (Commute,      "Commute is when you swap nested terms.")
-          , (PreCondition, "Operation has a (perhaps undocumented) precondition.")
-          , (Debug,        "A command specifically to help debugging.")
-          , (VersionControl,"Version control for Core syntax.")
-          , (Context,      "A command that uses its context, such as inlining.")
-          , (Unsafe,       "Commands that are not type safe (may cause Core Lint to fail), or may otherwise change the semantics of the program.")
-          , (Proof,        "Commands related to proving lemmas.")
-          , (TODO,         "An incomplete or potentially buggy command.")
-          , (Experiment,   "Things we are trying out, use at your own risk.")
-          , (Deprecated,   "A command that will be removed in a future release; it has probably been renamed or subsumed by another command.")
+          -- These should give the user a clue about what the sub-commands might do
+          [ (Shell,          "Shell-specific command.")
+          , (Eval,           "The arrow of evaluation (reduces a term).")
+          , (KURE,           "Direct reflection of a combinator from the KURE DSL.")
+          , (Loop,           "Command may operate multiple times.")
+          , (Deep,           "Command may make a deep change, can be O(n).")
+          , (Shallow,        "Command operates on local nodes only, O(1).")
+          , (Navigation,     "Navigate via focus, or directional command.")
+          , (Query,          "Extract information from an expression.")
+          , (Predicate,      "Something that passes or fails.")
+          , (Introduce,      "Introduce something, like a new name.")
+          , (Commute,        "Commute is when you swap nested terms.")
+          , (PreCondition,   "Operation has a (perhaps undocumented) precondition.")
+          , (Strictness,     "Alters the strictness of an expression.")
+          , (Debug,          "A command specifically to help debugging.")
+          , (VersionControl, "Version control for Core syntax.")
+          , (Context,        "A command that uses its context, such as inlining.")
+          , (Unsafe,         "Commands that are not type safe (may cause Core Lint to fail), or may otherwise change the semantics of the program.")
+          , (Proof,          "Commands related to proving lemmas.")
+          , (TODO,           "An incomplete or potentially buggy command.")
+          , (Experiment,     "Things we are trying out, use at your own risk.")
+          , (Deprecated,     "A command that will be removed in a future release; it has probably been renamed or subsumed by another command.")
           ]
-
 
 -- Unfortunately, record update syntax seems to associate to the right.
 -- These operators save us some parentheses.
@@ -266,9 +250,9 @@ externTypeString = deBoxify . show . dynTypeRep . externDyn
 
 -- | Remove the word 'Box' from a string.
 deBoxify :: String -> String
-deBoxify xs 
+deBoxify xs
     | "CLSBox -> " `isPrefixOf` xs = deBoxify (drop 10 xs)
-deBoxify xs 
+deBoxify xs
     | "Box" `isPrefixOf` xs        = deBoxify (drop 3 xs)
 deBoxify (x:xs)                    = x : deBoxify xs
 deBoxify []                        = []

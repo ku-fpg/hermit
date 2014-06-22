@@ -1356,3 +1356,6 @@ deprecatedIntToPathT =  liftM (mempty @@) . deprecatedIntToCrumbT
 
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
+
+instance HasDynFlags m => HasDynFlags (Transform c m a) where
+    getDynFlags = constT getDynFlags

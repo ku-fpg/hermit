@@ -30,7 +30,6 @@ import qualified CoreLint
 
 import Control.Arrow
 
-import Data.Char (isSpace)
 import Data.List (mapAccumL)
 
 import HERMIT.Core
@@ -38,9 +37,13 @@ import HERMIT.Context
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
-import HERMIT.Monad
 
 import HERMIT.Dictionary.Debug hiding (externals)
+
+#if __GLASGOW_HASKELL__ > 706
+import Data.Char (isSpace)
+import HERMIT.Monad
+#endif
 
 ------------------------------------------------------------------------
 

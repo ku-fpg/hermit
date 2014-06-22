@@ -1,5 +1,5 @@
 {-# LANGUAGE ConstraintKinds, DeriveDataTypeable, FlexibleContexts, FlexibleInstances, LambdaCase,
-             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances #-}
+             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, CPP #-}
 
 module HERMIT.Shell.Proof
     ( externals
@@ -12,18 +12,24 @@ module HERMIT.Shell.Proof
 
 import Control.Arrow hiding (loop, (<+>))
 import Control.Concurrent
+#if MIN_VERSION_mtl(2,2,1)
+import Control.Monad.Except
+#else
 import Control.Monad.Error
+#endif
 import Control.Monad.State
 
 import Data.Char (isSpace)
 import Data.Dynamic
 import Data.List (delete, isInfixOf)
+import Data.Map (filterWithKey, toList)
 
 import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC hiding (settings, (<>), text, sep, (<+>), ($+$), nest)
 import HERMIT.Kernel.Scoped
 import HERMIT.Kure
+import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.Utilities
 
@@ -31,6 +37,7 @@ import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Rules hiding (externals)
+import HERMIT.Dictionary.WorkerWrapper.Common
 
 import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
@@ -51,56 +58,63 @@ import Text.PrettyPrint.MarkedHughesPJ as PP
 -- | Externals that get us into the prover shell, or otherwise deal with lemmas.
 externals :: [External]
 externals = map (.+ Proof)
-    [ external "rule-to-lemma" RuleToLemma
+    [ external "rule-to-lemma" (\nm -> ruleNameToEqualityT nm >>= insertLemmaR nm :: RewriteH Core)
         [ "Create a lemma from a GHC RULE." ]
+    , external "intro-ww-assumption-A" (\nm absC repC -> assumptionAEqualityT absC repC >>= insertLemmaR nm :: RewriteH Core)
+        [ "Introduce a lemma for worker/wrapper assumption A"
+        , "using given abs and rep functions." ]
+    , external "intro-ww-assumption-B" (\nm absC repC bodyC -> assumptionBEqualityT absC repC bodyC >>= insertLemmaR nm :: RewriteH Core)
+        [ "Introduce a lemma for worker/wrapper assumption B"
+        , "using given abs, rep, and body functions." ]
+    , external "intro-ww-assumption-C" (\nm absC repC bodyC -> assumptionCEqualityT absC repC bodyC >>= insertLemmaR nm :: RewriteH Core)
+        [ "Introduce a lemma for worker/wrapper assumption C"
+        , "using given abs, rep, and body functions." ]
     , external "show-lemma" (ShowLemmas . Just)
         [ "List lemmas whose names match search string." ]
     , external "show-lemmas" (ShowLemmas Nothing)
         [ "List lemmas." ]
-    , external "lemma" ((\s -> promoteExprBiR . lemma False s) :: CommandLineState -> LemmaName -> BiRewriteH Core)
-        [ "Generate a bi-directional rewrite from a proven lemma." ]
-    , external "lemma-unsafe" ((\s -> promoteExprBiR . lemma True s) :: CommandLineState -> LemmaName -> BiRewriteH Core)
-        [ "Generate a bi-directional rewrite from a lemma, even if it is unproven." ]
-    , external "lemma-lhs-intro" (lemmaLhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core)
+    , external "lemma" (promoteExprBiR . lemmaR :: LemmaName -> BiRewriteH Core)
+        [ "Generate a bi-directional rewrite from a lemma." ]
+    , external "lemma-lhs-intro" (lemmaLhsIntroR :: LemmaName -> RewriteH Core)
         [ "Introduce the LHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = lhs in body" ] .+ Introduce .+ Shallow
-    , external "lemma-rhs-intro" (lemmaRhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core)
+    , external "lemma-rhs-intro" (lemmaRhsIntroR :: LemmaName -> RewriteH Core)
         [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
     , external "prove-lemma" InteractiveProof
         [ "Proof a lemma interactively." ]
-    , external "inst-lemma" (\ nm v cs -> ModifyLemma nm id (instantiateEqualityVarR (cmpString2Var v) cs) id)
+    , external "inst-lemma" (\ nm v cs -> modifyLemmaR nm id (instantiateEqualityVarR (cmpString2Var v) cs) id id :: RewriteH Core)
         [ "Instantiate one of the universally quantified variables of the given lemma,"
         , "with the given Core expression, creating a new lemma. Instantiating an"
         , "already proven lemma will result in the new lemma being considered proven." ]
-    , external "inst-lemma-dictionaries" (\ nm -> ModifyLemma nm id instantiateDictsR id)
+    , external "inst-lemma-dictionaries" (\ nm -> modifyLemmaR nm id instantiateDictsR id id :: RewriteH Core)
         [ "Instantiate all of the universally quantified dictionaries of the given lemma."
         , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
-    , external "copy-lemma" (\ nm newName -> ModifyLemma nm (const newName) idR id)
+    , external "copy-lemma" (\ nm newName -> modifyLemmaR nm (const newName) idR id id :: RewriteH Core)
         [ "Copy a given lemma, with a new name." ]
-    , external "modify-lemma" (\ nm rr -> ModifyLemma nm id rr (const False))
-        [ "Modify a given lemma. Resets the proven status to Not Proven." ]
-    , external "query-lemma" QueryLemma
+    , external "modify-lemma" (\ nm rr -> modifyLemmaR nm id rr (const False) (const False) :: RewriteH Core)
+        [ "Modify a given lemma. Resets the proven status to Not Proven and used status to Not Used." ]
+    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaEq >>> t) :: LemmaName -> TransformH Equality String -> TransformH Core String)
         [ "Apply a transformation to a lemma, returning the result." ]
     , external "dump-lemma" DumpLemma
         [ "Dump named lemma to a file."
         , "dump-lemma <lemma-name> <filename> <renderer> <width>" ]
-    , external "extensionality" (extensionalityR . Just :: String -> RewriteH CoreExprEquality)
+    , external "extensionality" (extensionalityR . Just :: String -> RewriteH Equality)
         [ "Given a name 'x, then"
         , "f == g  ==>  forall x.  f x == g x" ]
-    , external "extensionality" (extensionalityR Nothing :: RewriteH CoreExprEquality)
+    , external "extensionality" (extensionalityR Nothing :: RewriteH Equality)
         [ "f == g  ==>  forall x.  f x == g x" ]
-    , external "lhs" (lhsR . extractR :: RewriteH Core -> RewriteH CoreExprEquality)
+    , external "lhs" (lhsR . extractR :: RewriteH Core -> RewriteH Equality)
         [ "Apply a rewrite to the LHS of an equality." ]
-    , external "lhs" (lhsT . extractT :: TransformH CoreTC String -> TransformH CoreExprEquality String)
+    , external "lhs" (lhsT . extractT :: TransformH CoreTC String -> TransformH Equality String)
         [ "Apply a transformation to the LHS of an equality." ]
-    , external "rhs" (rhsR . extractR :: RewriteH Core -> RewriteH CoreExprEquality)
+    , external "rhs" (rhsR . extractR :: RewriteH Core -> RewriteH Equality)
         [ "Apply a rewrite to the RHS of an equality." ]
-    , external "rhs" (rhsT . extractT :: TransformH CoreTC String -> TransformH CoreExprEquality String)
+    , external "rhs" (rhsT . extractT :: TransformH CoreTC String -> TransformH Equality String)
         [ "Apply a transformation to the RHS of an equality." ]
-    , external "both" (bothR . extractR :: RewriteH Core -> RewriteH CoreExprEquality)
+    , external "both" (bothR . extractR :: RewriteH Core -> RewriteH Equality)
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
-    , external "both" ((\t -> liftM (\(r,s) -> unlines [r,s]) (bothT (extractT t))) :: TransformH CoreTC String -> TransformH CoreExprEquality String)
+    , external "both" ((\t -> liftM (\(r,s) -> unlines [r,s]) (bothT (extractT t))) :: TransformH CoreTC String -> TransformH Equality String)
         [ "Apply a transformation to the RHS of an equality." ]
     ]
 
@@ -109,7 +123,7 @@ proof_externals :: [External]
 proof_externals = map (.+ Proof)
     [ external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
         [ "Perform induction on given universally quantified variable."
-        , "Each constructor case will generate a new CoreExprEquality to be proven."
+        , "Each constructor case will generate a new equality to be proven."
         ]
     , external "dump" PCDump
         [ "dump <filename> <renderer> <width>" ]
@@ -122,10 +136,7 @@ proof_externals = map (.+ Proof)
 --------------------------------------------------------------------------------------------------------
 
 data ProofCommand
-    = RuleToLemma RuleNameString
-    | InteractiveProof LemmaName
-    | ModifyLemma LemmaName (String -> String) (RewriteH CoreExprEquality) (Bool -> Bool)
-    | QueryLemma LemmaName (TransformH CoreExprEquality String)
+    = InteractiveProof LemmaName
     | ShowLemmas (Maybe LemmaName)
     | DumpLemma LemmaName String String Int
     deriving (Typeable)
@@ -137,105 +148,64 @@ instance Extern ProofCommand where
 
 --------------------------------------------------------------------------------------------------------
 
-getLemmaByName :: Monad m => CommandLineState -> LemmaName -> m Lemma
-getLemmaByName st nm =
-    case [ lm | lm@(n,_,_) <- cl_lemmas st, n == nm ] of
-        []    -> fail ("No lemma named: " ++ nm)
-        (l:_) -> return l
-
-deleteLemmaByName :: MonadState CommandLineState m => LemmaName -> m ()
-deleteLemmaByName nm = modify $ \ st -> st { cl_lemmas = [ l | l@(n,_,_) <- cl_lemmas st, nm /= n ] }
-
-lemma :: Bool -> CommandLineState -> LemmaName -> BiRewriteH CoreExpr
-lemma ok st nm = beforeBiR
-                   (do (_,equality,proven) <- getLemmaByName st nm
-                       guardMsg (proven || ok) ("Lemma " ++ nm ++ " has not been proven.")
-                       return equality
-                   )
-                   birewrite
-
---------------------------------------------------------------------------------------------------------
-
-lemmaNameToEqualityT :: Monad m => CommandLineState -> LemmaName -> m CoreExprEquality
-lemmaNameToEqualityT st nm =
-  do (_,eq,_) <- getLemmaByName st nm
-     return eq
+lemmaNameToEqualityT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Equality
+lemmaNameToEqualityT nm = liftM lemmaEq $ getLemmaByNameT nm
 
 -- | @e@ ==> @let v = lhs in e@  (also works in a similar manner at Program nodes)
-lemmaLhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core
-lemmaLhsIntroR st = lemmaNameToEqualityT st >=> eqLhsIntroR
+lemmaLhsIntroR :: LemmaName -> RewriteH Core
+lemmaLhsIntroR = lemmaNameToEqualityT >=> eqLhsIntroR
 
 -- | @e@ ==> @let v = rhs in e@  (also works in a similar manner at Program nodes)
-lemmaRhsIntroR :: CommandLineState -> LemmaName -> RewriteH Core
-lemmaRhsIntroR st = lemmaNameToEqualityT st >=> eqRhsIntroR
+lemmaRhsIntroR :: LemmaName -> RewriteH Core
+lemmaRhsIntroR = lemmaNameToEqualityT >=> eqRhsIntroR
 
 --------------------------------------------------------------------------------------------------------
 
 performProofCommand :: (MonadCatch m, MonadException m, CLMonad m) => ProofCommand -> m ()
-performProofCommand (RuleToLemma nm) = do
+
+performProofCommand (InteractiveProof nm) = do
     st <- gets cl_pstate
-    equality <- queryS (ps_kernel st) (ruleNameToEqualityT nm :: TransformH Core CoreExprEquality) (mkKernelEnv st) (ps_cursor st)
-    _ <- addLemmas [(nm,equality,False)]
-    return ()
+    l <- queryS (ps_kernel st) (getLemmaByNameT nm :: TransformH Core Lemma) (mkKernelEnv st) (ps_cursor st)
+    interactiveProof True False (nm,l)
 
-performProofCommand (InteractiveProof nm) = get >>= flip getLemmaByName nm >>= interactiveProof True
-
-performProofCommand (ModifyLemma nm nFn rr pFn) = do
-    st <- get
-    (_,eq,p) <- getLemmaByName st nm
-
-    -- query so lemma is transformed in current context
-    eq' <- queryS (cl_kernel st) (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core CoreExprEquality) (cl_kernel_env st) (cl_cursor st)
-    deleteLemmaByName (nFn nm)
-    _ <- addLemmas [(nFn nm, eq', pFn p)]
-    return ()
-
-performProofCommand (QueryLemma nm t) = do
-    st <- get
-    (_,eq,_) <- getLemmaByName st nm
-
-    -- query so lemma is transformed in current context
-    res <- queryS (cl_kernel st) (return eq >>> t :: TransformH Core String) (cl_kernel_env st) (cl_cursor st)
-    cl_putStrLn res
-
-performProofCommand (DumpLemma nm fn r w) = dump (\ st -> getLemmaByName st nm >>> ppLemmaT (cl_pretty st)) fn r w
+performProofCommand (DumpLemma nm fn r w) = dump (\ st -> getLemmaByNameT nm >>> ppLemmaT (cl_pretty st) nm) fn r w
 
 performProofCommand (ShowLemmas mnm) = do
-    ls <- gets $ filter (maybe (const True) (\ nm (n,_,_) -> nm `isInfixOf` n) mnm) . cl_lemmas
-    forM_ ls printLemma
+    st <- gets cl_pstate
+    ls <- queryS (ps_kernel st) (getLemmasT :: TransformH Core Lemmas) (mkKernelEnv st) (ps_cursor st)
+    mapM_ printLemma $ toList $ filterWithKey (maybe (\ _ _ -> True) (\ nm n _ -> nm `isInfixOf` n) mnm) ls
 
 --------------------------------------------------------------------------------------------------------
 
-printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
-printLemma lem = do
+
+printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
+           => (LemmaName,Lemma) -> m ()
+printLemma (nm,lem) = do
     st <- get
-    doc <- queryS (cl_kernel st) (return lem >>> ppLemmaT (cl_pretty st) :: TransformH Core DocH) (cl_kernel_env st) (cl_cursor st)
+    doc <- queryS (cl_kernel st) (return lem >>> ppLemmaT (cl_pretty st) nm :: TransformH Core DocH) (cl_kernel_env st) (cl_cursor st)
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
-ppLemmaT :: PrettyPrinter -> TransformH Lemma DocH
-ppLemmaT pp = do
-    (nm, eq, p) <- idR
-    eqDoc <- return eq >>> ppCoreExprEqualityT pp
+ppLemmaT :: PrettyPrinter -> LemmaName -> TransformH Lemma DocH
+ppLemmaT pp nm = do
+    Lemma eq p u <- idR
+    eqDoc <- return eq >>> ppEqualityT pp
     let hDoc = text nm <+> text (if p then "(Proven)" else "(Not Proven)")
+                       <+> text (if u then "(Used)"   else "(Not Used)")
     return $ hDoc $+$ nest 2 eqDoc
 
 --------------------------------------------------------------------------------------------------------
 
-completeProof :: (MonadError CLException m, MonadIO m, MonadState CommandLineState m) => LemmaName -> m ()
-completeProof nm = do
-    cl_putStrLn $ "Successfully proven: " ++ nm
-    modify $ \ st -> st { cl_lemmas = [ (n,e, if n == nm then True else p) | (n,e,p) <- cl_lemmas st ] }
-    get >>= continue
+type NamedLemma = (LemmaName, Lemma)
 
-interactiveProof :: forall m. (MonadCatch m, MonadException m, CLMonad m) => Bool -> Lemma -> m ()
-interactiveProof topLevel lem = do
+interactiveProof :: forall m. (MonadCatch m, MonadException m, CLMonad m) => Bool -> Bool -> NamedLemma -> m ()
+interactiveProof topLevel isTemporary lem@(nm,_) = do
     origSt <- get
     origEs <- addProofExternals topLevel
 
     let ws_complete = " ()"
 
         -- Main proof input loop
-        loop :: Lemma -> InputT m ()
+        loop :: NamedLemma -> InputT m ()
         loop l = do
             mExpr <- lift popScriptLine
             case mExpr of
@@ -258,7 +228,16 @@ interactiveProof topLevel lem = do
     catchError (runInputT settings (loop lem))
                (\case
                     CLAbort        -> cleanup origSt >> unless topLevel abort -- abandon proof attempt, bubble out to regular shell
-                    CLContinue st' -> cleanup st'    -- successfully proven
+                    CLContinue st' -> do
+                        cl_putStrLn $ "Successfully proven: " ++ nm
+                        if isTemporary
+                        then cleanup st'    -- successfully proven
+                        else do sast <- applyS (cl_kernel st')
+                                               (modifyLemmaR nm id idR (const True) id :: RewriteH Core)
+                                               (mkKernelEnv $ cl_pstate st')
+                                               (cl_cursor st')
+                                cleanup $ newSAST (CmdName "proven") sast st'
+
                     CLError msg    -> fail $ "Prover error: " ++ msg
                     _              -> fail "unsupported exception in interactive prover")
 
@@ -271,16 +250,16 @@ addProofExternals topLevel = do
     when topLevel $ modify $ \ s -> s { cl_externals = newEs }
     return es
 
-evalProofScript :: (MonadCatch m, MonadException m, CLMonad m) => Lemma -> String -> m Lemma
+evalProofScript :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> String -> m NamedLemma
 evalProofScript lem = parseScriptCLT >=> foldM runExprH lem
 
-runExprH :: (MonadCatch m, MonadException m, CLMonad m) => Lemma -> ExprH -> m Lemma
+runExprH :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> ExprH -> m NamedLemma
 runExprH lem expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n")
                   $ interpExprH interpProof expr >>= performProofShellCommand lem
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
-endProof :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => Lemma -> m ()
-endProof (nm, eq, _) = do
+endProof :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => NamedLemma -> m ()
+endProof (nm, Lemma eq _ _) = do
     st <- get
 
     let sk = cl_kernel st
@@ -288,11 +267,11 @@ endProof (nm, eq, _) = do
         sast = cl_cursor st
 
     -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-    b <- (queryS sk (return eq >>> testM verifyCoreExprEqualityT :: TransformH Core Bool) kEnv sast)
-    if b then completeProof nm else fail $ "The two sides of " ++ nm ++ " are not alpha-equivalent."
+    b <- (queryS sk (return eq >>> testM verifyEqualityT :: TransformH Core Bool) kEnv sast)
+    if b then continue st else fail $ "The two sides of " ++ nm ++ " are not alpha-equivalent."
 
-performProofShellCommand :: (MonadCatch m, MonadException m, CLMonad m) => Lemma -> ProofShellCommand -> m Lemma
-performProofShellCommand lem@(nm, eq, b) = go
+performProofShellCommand :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> ProofShellCommand -> m NamedLemma
+performProofShellCommand lem@(nm, Lemma eq p u) = go
     where go (PCRewrite rr)         = do
                 st <- get
                 let sk = cl_kernel st
@@ -300,8 +279,9 @@ performProofShellCommand lem@(nm, eq, b) = go
                     sast = cl_cursor st
 
                 -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-                eq' <- queryS sk (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core CoreExprEquality) kEnv sast
-                return (nm, eq', b)
+                -- TODO: query doesn't save side effects, which are needed for stash/lemmas
+                eq' <- queryS sk (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core Equality) kEnv sast
+                return (nm, Lemma eq' p u)
           go (PCTransform t)      = do
                 st <- get
                 let sk = cl_kernel st
@@ -326,14 +306,14 @@ performProofShellCommand lem@(nm, eq, b) = go
                 st <- get
                 -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
                 queryS (cl_kernel st) (return eq >>> t :: TransformH Core ()) (cl_kernel_env st) (cl_cursor st)
-                completeProof nm -- note: we assume that if 't' completes without failing, the lemma is proved, we don't actually check
+                continue st -- note: we assume that if 't' completes without failing, the lemma is proved, we don't actually check
                 return lem       -- never reached
-          go (PCDump fName r w)   = dump (\ st -> return lem >>> ppLemmaT (cl_pretty st)) fName r w >> return lem
+          go (PCDump fName r w)   = dump (\ st -> return (snd lem) >>> ppLemmaT (cl_pretty st) (fst lem)) fName r w >> return lem
           go PCEnd                = endProof lem >> return lem
           go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.") >> return lem
 
-performInduction :: (MonadCatch m, MonadException m, CLMonad m) => Lemma -> (Id -> Bool) -> m Lemma
-performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
+performInduction :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> (Id -> Bool) -> m NamedLemma
+performInduction lem@(nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
     st <- get
     let sk = cl_kernel st
         kEnv = cl_kernel_env st
@@ -352,28 +332,35 @@ performInduction lem@(nm, eq@(CoreExprEquality bs lhs rhs), _) idPred = do
                     liftM discardUniVars $ instantiateEqualityVar (==i) (Var i') [] eq
 
         let nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
-            hypLemmas = zip3 nms eqs (repeat True)
-            caseLemma = ( nm ++ "-induction-on-" ++ getOccString i ++ "-case-" ++ maybe "undefined" getOccString mdc
-                        , CoreExprEquality (delete i bs ++ vs) lhsE rhsE
-                        , False )
+            hypLemmas = zip nms $ zipWith3 Lemma eqs (repeat True) (repeat False)
+            lemmaName = nm ++ "-induction-on-" ++ getOccString i ++ "-case-" ++ maybe "undefined" getOccString mdc
+            caseLemma = Lemma (Equality (delete i bs ++ vs) lhsE rhsE) False False
 
-        origLemmas <- addLemmas hypLemmas
-        interactiveProof False caseLemma -- recursion!
-        modify $ \ s -> s { cl_lemmas = origLemmas } -- put original lemmas back
+        -- this is pretty hacky
+        sast' <- addLemmas hypLemmas  -- add temporary lemmas
+        interactiveProof False True (lemmaName,caseLemma) -- recursion!
+        modify $ flip setCursor sast' -- discard temporary lemmas
 
-    completeProof nm
+    get >>= continue
     return lem -- this is never reached, but the type says we need it.
 
-addLemmas :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => [Lemma] -> m [Lemma]
+addLemmas :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
+          => [NamedLemma] -> m SAST
 addLemmas lems = do
     ifM isRunningScript (return ()) $ forM_ lems printLemma
+    let addAllAtOnceR :: RewriteH Core
+        addAllAtOnceR = sideEffectR $ \ _ _ -> forM_ lems $ \ (nm,l) -> insertLemma nm l
+
     st <- get
-    put $ st { cl_lemmas = cl_lemmas st ++ lems }
-    return $ cl_lemmas st
+    sast <- applyS (cl_kernel st) addAllAtOnceR (mkKernelEnv $ cl_pstate st) (cl_cursor st)
+    put $ newSAST (CmdName "adding lemmas") sast st
+
+    -- return original SAST
+    return $ cl_cursor st
 
 data ProofShellCommand
-    = PCRewrite (RewriteH CoreExprEquality)
-    | PCTransform (TransformH CoreExprEquality String)
+    = PCRewrite (RewriteH Equality)
+    | PCTransform (TransformH Equality String)
     | PCInduction (Id -> Bool)
     | PCShell ShellEffect
     | PCScript ScriptEffect
@@ -386,9 +373,9 @@ data ProofShellCommand
     deriving Typeable
 
 -- keep abstract to avoid breaking things if we modify this later
-newtype UserProofTechnique = UserProofTechnique (TransformH CoreExprEquality ())
+newtype UserProofTechnique = UserProofTechnique (TransformH Equality ())
 
-userProofTechnique :: TransformH CoreExprEquality () -> UserProofTechnique
+userProofTechnique :: TransformH Equality () -> UserProofTechnique
 userProofTechnique = UserProofTechnique
 
 instance Extern ProofShellCommand where
@@ -405,27 +392,27 @@ instance Extern UserProofTechnique where
 
 interpProof :: Monad m => [Interp m ProofShellCommand]
 interpProof =
-  [ interp $ \ (RewriteCoreBox rr)                    -> PCRewrite $ bothR $ extractR rr
-  , interp $ \ (RewriteCoreTCBox rr)                  -> PCRewrite $ bothR $ extractR rr
-  , interp $ \ (BiRewriteCoreBox br)                  -> PCRewrite $ bothR $ (extractR (forwardT br) <+ extractR (backwardT br))
-  , interp $ \ (effect :: ShellEffect)                -> PCShell effect
-  , interp $ \ (effect :: ScriptEffect)               -> PCScript effect
-  , interp $ \ (StringBox str)                        -> PCQuery (message str)
-  , interp $ \ (query :: QueryFun)                    -> PCQuery query
-  , interp $ \ (cmd :: ProofCommand)                  -> PCProofCommand cmd
-  , interp $ \ (RewriteCoreExprEqualityBox r)         -> PCRewrite r
-  , interp $ \ (TransformCoreExprEqualityStringBox t) -> PCTransform t
-  , interp $ \ (UserProofTechniqueBox t)              -> PCUser t
-  , interp $ \ (cmd :: ProofShellCommand)             -> cmd
-  , interp $ \ (CrumbBox _cr)                         -> PCUnsupported "CrumbBox"
-  , interp $ \ (PathBox _p)                           -> PCUnsupported "PathBox"
-  , interp $ \ (TransformCorePathBox _tt)             -> PCUnsupported "TransformCorePathBox"
-  , interp $ \ (TransformCoreTCPathBox _tt)           -> PCUnsupported "TransformCoreTCPathBox"
-  , interp $ \ (TransformCoreStringBox _tt)           -> PCUnsupported "TransformCoreStringBox"
-  , interp $ \ (TransformCoreTCStringBox _tt)         -> PCUnsupported "TransformCoreTCStringBox"
-  , interp $ \ (TransformCoreTCDocHBox _tt)           -> PCUnsupported "TransformCoreTCDocHBox"
-  , interp $ \ (TransformCoreCheckBox _tt)            -> PCUnsupported "TransformCoreCheckBox"
-  , interp $ \ (TransformCoreTCCheckBox _tt)          -> PCUnsupported "TransformCoreTCCheckBox"
-  , interp $ \ (_effect :: KernelEffect)              -> PCUnsupported "KernelEffect"
+  [ interp $ \ (RewriteCoreBox rr)            -> PCRewrite $ bothR $ extractR rr
+  , interp $ \ (RewriteCoreTCBox rr)          -> PCRewrite $ bothR $ extractR rr
+  , interp $ \ (BiRewriteCoreBox br)          -> PCRewrite $ bothR $ (extractR (forwardT br) <+ extractR (backwardT br))
+  , interp $ \ (effect :: ShellEffect)        -> PCShell effect
+  , interp $ \ (effect :: ScriptEffect)       -> PCScript effect
+  , interp $ \ (StringBox str)                -> PCQuery (message str)
+  , interp $ \ (query :: QueryFun)            -> PCQuery query
+  , interp $ \ (cmd :: ProofCommand)          -> PCProofCommand cmd
+  , interp $ \ (RewriteEqualityBox r)         -> PCRewrite r
+  , interp $ \ (TransformEqualityStringBox t) -> PCTransform t
+  , interp $ \ (UserProofTechniqueBox t)      -> PCUser t
+  , interp $ \ (cmd :: ProofShellCommand)     -> cmd
+  , interp $ \ (CrumbBox _cr)                 -> PCUnsupported "CrumbBox"
+  , interp $ \ (PathBox _p)                   -> PCUnsupported "PathBox"
+  , interp $ \ (TransformCorePathBox _tt)     -> PCUnsupported "TransformCorePathBox"
+  , interp $ \ (TransformCoreTCPathBox _tt)   -> PCUnsupported "TransformCoreTCPathBox"
+  , interp $ \ (TransformCoreStringBox _tt)   -> PCUnsupported "TransformCoreStringBox"
+  , interp $ \ (TransformCoreTCStringBox _tt) -> PCUnsupported "TransformCoreTCStringBox"
+  , interp $ \ (TransformCoreTCDocHBox _tt)   -> PCUnsupported "TransformCoreTCDocHBox"
+  , interp $ \ (TransformCoreCheckBox _tt)    -> PCUnsupported "TransformCoreCheckBox"
+  , interp $ \ (TransformCoreTCCheckBox _tt)  -> PCUnsupported "TransformCoreTCCheckBox"
+  , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"
   ]
 

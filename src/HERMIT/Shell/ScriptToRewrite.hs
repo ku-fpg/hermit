@@ -1,5 +1,5 @@
 {-# LANGUAGE ConstraintKinds, DeriveDataTypeable, FlexibleContexts, LambdaCase,
-             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies #-}
+             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies, CPP #-}
 
 module HERMIT.Shell.ScriptToRewrite
     ( -- * Converting Scripts to Rewrites
@@ -16,7 +16,11 @@ module HERMIT.Shell.ScriptToRewrite
     ) where
 
 import Control.Arrow
+#if MIN_VERSION_mtl(2,2,1)
+import Control.Monad.Except
+#else
 import Control.Monad.Error
+#endif
 import Control.Monad.State
 import Control.Exception hiding (catch)
 

@@ -182,7 +182,7 @@ wwResultFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
 
                      whenJust (verifyWWAss abs rep f) mAss
 
-                     work <- mkFixT (Lam h (Lam x1 (App rep
+                     work <- buildFixT (Lam h (Lam x1 (App rep
                                                         (App (App f (Lam x2 (App abs (App (Var h) (Var x2)))))
                                                              (Var x1)
                                                         )
@@ -203,7 +203,7 @@ wwResultFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
                  guardMsg (equivalentBy exprAlphaEq [abs, abs1, abs2]) "abs's do not match."
                  guardMsg (exprAlphaEq rep rep1) "rep's do not match."
                  whenJust (verifyWWAss abs rep f) mAss
-                 mkFixT f
+                 buildFixT f
 
     wrongForm :: String
     wrongForm = wrongExprForm "\\ x1 -> abs (fix (\\ h x2 -> rep (f (\\ x3 -> abs (h x3)) x2)) x1)"
@@ -484,8 +484,8 @@ verifyAssC abs rep f assC =
      guardMsg (eqType tyA tA) "type of program body does not match types of abs/rep."
      h        <- constT (newIdH "h" tyXA)
      x        <- constT (newIdH "x" tyX)
-     rhs      <- mkFixT f
-     lhs      <- mkFixT (Lam h (Lam x (App abs (App rep (App (App f (Var h)) (Var x))))))
+     rhs      <- buildFixT f
+     lhs      <- buildFixT (Lam h (Lam x (App abs (App rep (App (App f (Var h)) (Var x))))))
      verifyEqualityLeftToRightT lhs rhs assC
 
 --------------------------------------------------------------------------------------------------

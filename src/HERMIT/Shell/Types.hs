@@ -8,7 +8,11 @@ import Control.Applicative
 import Control.Arrow
 import Control.Concurrent.STM
 import Control.Monad.State
+#if MIN_VERSION_mtl(2,2,1)
+import Control.Monad.Except
+#else
 import Control.Monad.Error
+#endif
 
 import Data.Char (isSpace)
 import Data.Dynamic
@@ -22,9 +26,8 @@ import HERMIT.Core
 import HERMIT.Kure
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Kernel (AST, queryK)
+import HERMIT.Kernel (AST, queryK, KernelEnv)
 import HERMIT.Kernel.Scoped
-import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 
@@ -34,7 +37,6 @@ import HERMIT.Plugin.Types
 
 import HERMIT.Dictionary.Inline
 import HERMIT.Dictionary.Navigation
-import HERMIT.Dictionary.Reasoning (CoreExprEquality)
 
 import System.Console.Haskeline hiding (catch, display)
 import System.IO (Handle, stdout)
@@ -140,7 +142,9 @@ data CLException = CLAbort
                  | CLContinue CommandLineState -- TODO: needed?
                  | CLError String
 
+#if !(MIN_VERSION_mtl(2,2,1))
 instance Error CLException where strMsg = CLError
+#endif
 
 abort :: MonadError CLException m => m ()
 abort = throwError CLAbort
@@ -172,14 +176,27 @@ rethrowPE (PError msg)   = throwError (CLError msg)
 -- management in the command line code.
 --
 -- NB: an alternative to monad transformers, like Oleg's Extensible Effects, might be useful here.
+#if MIN_VERSION_mtl(2,2,1)
+newtype CLT m a = CLT { unCLT :: ExceptT CLException (StateT CommandLineState m) a }
+#else
 newtype CLT m a = CLT { unCLT :: ErrorT CLException (StateT CommandLineState m) a }
+#endif
     deriving (Functor, Applicative, MonadIO, MonadError CLException, MonadState CommandLineState)
+
+-- Adapted from System.Console.Haskeline.MonadException, which hasn't provided an instance for ExceptT yet
+#if MIN_VERSION_mtl(2,2,1)
+instance MonadException m => MonadException (ExceptT e m) where
+    controlIO f = ExceptT $ controlIO $ \(RunIO run) -> let
+                    run' = RunIO (fmap ExceptT . run . runExceptT)
+                    in fmap runExceptT $ f run'
+#endif
 
 instance MonadException m => MonadException (CLT m) where
     controlIO f = CLT $ controlIO $ \(RunIO run) -> let run' = RunIO (fmap CLT . run . unCLT)
                                                     in fmap unCLT $ f run'
 
--- This is copied verbatim from haskeline, yet HERMIT won't compile without it. What?
+-- This is copied verbatim from Haskeline, which provides an instance for strict State only.
+-- This allows lazy State to enjoy the same benefits.
 instance MonadException m => MonadException (StateT s m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
@@ -202,7 +219,11 @@ instance Monad m => Monad (CLT m) where
 
 -- | Run a CLT computation.
 runCLT :: CommandLineState -> CLT m a -> m (Either CLException a, CommandLineState)
+#if MIN_VERSION_mtl(2,2,1)
+runCLT s = flip runStateT s . runExceptT . unCLT
+#else
 runCLT s = flip runStateT s . runErrorT . unCLT
+#endif
 
 -- | Lift a CLT IO computation into a CLT computation over an arbitrary MonadIO.
 clm2clt :: MonadIO m => CLT IO a -> CLT m a
@@ -264,7 +285,6 @@ data CommandLineState = CommandLineState
                                                   --   because nested StateT is a pain.
     , cl_height         :: Int                    -- ^ console height, in lines
     , cl_scripts        :: [(ScriptName,Script)]
-    , cl_lemmas         :: [Lemma]                -- ^ list of lemmas, with flag indicating whether proven
     , cl_nav            :: Bool                   -- ^ keyboard input the nav panel
     , cl_version        :: VersionStore
     , cl_window         :: PathH                  -- ^ path to beginning of window, always a prefix of focus path in kernel
@@ -302,7 +322,7 @@ setFailHard st b = st { cl_pstate = (cl_pstate st) { ps_failhard = b } }
 cl_kernel :: CommandLineState -> ScopedKernel
 cl_kernel = ps_kernel . cl_pstate
 
-cl_kernel_env :: CommandLineState -> HermitMEnv
+cl_kernel_env :: CommandLineState -> KernelEnv
 cl_kernel_env = mkKernelEnv . cl_pstate
 
 cl_pretty :: CommandLineState -> PrettyPrinter
@@ -329,7 +349,6 @@ mkCLS = do
     let st = CommandLineState { cl_pstate         = ps
                               , cl_height         = h
                               , cl_scripts        = []
-                              , cl_lemmas         = []
                               , cl_nav            = False
                               , cl_version        = VersionStore { vs_graph = [] , vs_tags = [] }
                               , cl_window         = mempty
@@ -358,8 +377,6 @@ instance Extern CommandLineState where
     box = CLSBox
 
 type ScriptName = String
-type LemmaName = String
-type Lemma = (LemmaName,CoreExprEquality,Bool)
 
 -- tick counter
 tick :: TVar (M.Map String Int) -> String -> IO Int

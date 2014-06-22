@@ -2,13 +2,17 @@
              DeriveDataTypeable, GeneralizedNewtypeDeriving, LambdaCase,
              MultiParamTypeClasses, ScopedTypeVariables #-}
 
-module HERMIT.Shell.ShellEffect 
+module HERMIT.Shell.ShellEffect
     ( ShellEffect(..)
     , performShellEffect
     , dump
     ) where
 
+#if MIN_VERSION_mtl(2,2,1)
+import Control.Monad.Except
+#else
 import Control.Monad.Error
+#endif
 import Control.Monad.State
 
 import Data.Typeable
@@ -33,7 +37,7 @@ data ShellEffect
     | CLSModify (CommandLineState -> IO CommandLineState) -- ^ Modify shell state
     | PluginComp (PluginM ())
     | Continue -- ^ exit the shell, but don't abort/resume
-    | Dump (CommandLineState -> TransformH CoreTC DocH) String String Int 
+    | Dump (CommandLineState -> TransformH CoreTC DocH) String String Int
     | Resume
     deriving Typeable
 

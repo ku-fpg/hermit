@@ -1,11 +1,15 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts, 
+{-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts,
              LambdaCase, GADTs, GeneralizedNewtypeDeriving,
-             ScopedTypeVariables, FlexibleInstances #-}
+             ScopedTypeVariables, FlexibleInstances, CPP #-}
 module HERMIT.Plugin.Types where
 
 import Control.Applicative
 import Control.Concurrent.STM
+#if MIN_VERSION_mtl(2,2,1)
+import Control.Monad.Except
+#else
 import Control.Monad.Error
+#endif
 import Control.Monad.State
 
 import Data.Dynamic
@@ -13,6 +17,7 @@ import qualified Data.Map as M
 
 import HERMIT.Kure
 import HERMIT.External
+import HERMIT.Kernel (KernelEnv(..))
 import HERMIT.Kernel.Scoped
 import HERMIT.Monad
 import HERMIT.Plugin.Builder
@@ -21,11 +26,19 @@ import HERMIT.PrettyPrinter.Common
 import System.IO
 
 type PluginM = PluginT IO
+#if MIN_VERSION_mtl(2,2,1)
+newtype PluginT m a = PluginT { unPluginT :: ExceptT PException (StateT PluginState m) a }
+#else
 newtype PluginT m a = PluginT { unPluginT :: ErrorT PException (StateT PluginState m) a }
+#endif
     deriving (Functor, Applicative, Monad, MonadIO, MonadError PException, MonadState PluginState)
 
 runPluginT :: PluginState -> PluginT m a -> m (Either PException a, PluginState)
+#if MIN_VERSION_mtl(2,2,1)
+runPluginT ps = flip runStateT ps . runExceptT . unPluginT
+#else
 runPluginT ps = flip runStateT ps . runErrorT . unPluginT
+#endif
 
 instance MonadTrans PluginT where
     lift = PluginT . lift . lift
@@ -58,7 +71,9 @@ data PluginState = PluginState
 
 data PException = PAbort | PResume SAST | PError String
 
+#if !(MIN_VERSION_mtl(2,2,1))
 instance Error PException where strMsg = PError
+#endif
 
 newtype PSBox = PSBox PluginState deriving Typeable
 instance Extern PluginState where
@@ -76,12 +91,12 @@ tick var msg = atomically $ do
         writeTVar var (M.insert msg c m)
         return c
 
-mkKernelEnv :: PluginState -> HermitMEnv
+mkKernelEnv :: PluginState -> KernelEnv
 mkKernelEnv st =
     let pp = ps_pretty st
         out str = liftIO $ ps_render st stdout (pOptions pp) (Left $ str ++ "\n")
 
-    in  mkHermitMEnv $ \ msg -> case msg of
+    in  KernelEnv $ \ msg -> case msg of
                 DebugTick    msg'      -> do
                         c <- liftIO $ tick (ps_tick st) msg'
                         out $ "<" ++ show c ++ "> " ++ msg'
@@ -93,8 +108,8 @@ mkKernelEnv st =
 iokm' :: (MonadIO m, MonadCatch m) => String -> (a -> m b) -> IO (KureM a) -> m b
 iokm' msg ret m = liftIO m >>= runKureM ret (fail . (msg ++))
 
-iokm :: (MonadIO m, MonadCatch m) => String -> IO (KureM a) -> m a 
+iokm :: (MonadIO m, MonadCatch m) => String -> IO (KureM a) -> m a
 iokm msg = iokm' msg return
 
-iokm'' :: (MonadIO m, MonadCatch m) => IO (KureM a) -> m a 
+iokm'' :: (MonadIO m, MonadCatch m) => IO (KureM a) -> m a
 iokm'' = iokm ""

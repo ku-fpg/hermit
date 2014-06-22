@@ -10,14 +10,12 @@ module HERMIT.Dictionary.FixPoint
        , fixRollingRuleBR
        , fixFusionRuleBR
          -- ** Utilities
-       , mkFixT
        , isFixExprT
        )
 where
 
 import Control.Applicative
 import Control.Arrow
-import Control.Monad.IO.Class
 
 import Data.Monoid (mempty)
 
@@ -31,6 +29,7 @@ import HERMIT.ParserCore
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.Function
 import HERMIT.Dictionary.GHC
 import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Undefined
@@ -51,13 +50,13 @@ externals =
                 [ "Rolling Rule",
                   "fix tyA (\\ a -> f (g a))  <==>  f (fix tyB (\\ b -> g (f b))"
                 ] .+ Context
-         , external "fix-fusion-rule" ((\ f g h lhsR rhsR strictf -> promoteExprBiR (fixFusionRule (Just (lhsR,rhsR)) (Just strictf) f g h)) :: CoreString -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
+         , external "fix-fusion-rule" ((\ f g h r1 r2 strictf -> promoteExprBiR (fixFusionRule (Just (r1,r2)) (Just strictf) f g h)) :: CoreString -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
                 [ "Fixed-point Fusion Rule"
                 , "Given f :: A -> B, g :: A -> A, h :: B -> B, and"
                 , "proofs that, for some x, (f (g a) ==> x) and (h (f a) ==> x) and that f is strict, then"
                 , "f (fix g) <==> fix h"
                 ] .+ Context
-         , external "fix-fusion-rule-unsafe" ((\ f g h lhsR rhsR -> promoteExprBiR (fixFusionRule (Just (lhsR,rhsR)) Nothing f g h)) :: CoreString -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
+         , external "fix-fusion-rule-unsafe" ((\ f g h r1 r2 -> promoteExprBiR (fixFusionRule (Just (r1,r2)) Nothing f g h)) :: CoreString -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
                 [ "(Unsafe) Fixed-point Fusion Rule"
                 , "Given f :: A -> B, g :: A -> A, h :: B -> B, and"
                 , "a proof that, for some x, (f (g a) ==> x) and (h (f a) ==> x), then"
@@ -79,7 +78,7 @@ fixIntroR :: RewriteH CoreDef
 fixIntroR = prefixFailMsg "fix introduction failed: " $
            do Def f _ <- idR
               f' <- constT $ cloneVarH id f
-              Def f <$> (mkFixT =<< (defT mempty (extractR $ substR f $ varToCoreExpr f') (\ () e' -> Lam f' e')))
+              Def f <$> (buildFixT =<< (defT mempty (extractR $ substR f $ varToCoreExpr f') (\ () e' -> Lam f' e')))
 
 --------------------------------------------------------------------------------------------------
 
@@ -129,7 +128,7 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
 
     rollingRuleResult :: Type -> CoreExpr -> CoreExpr -> TransformH z CoreExpr
     rollingRuleResult ty f g = do x <- constT (newIdH "x" ty)
-                                  mkFixT (Lam x (App f (App g (Var x))))
+                                  buildFixT (Lam x (App f (App g (Var x))))
 
     wrongFixBody :: String
     wrongFixBody = "body of fix does not have the form: Lam v (App f (App g (Var v)))"
@@ -141,7 +140,7 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
 -- h :: B -> B
 
 -- | If @f@ is strict, then (@f (g a)@ == @h (f a)@)  ==\>  (@f (fix g)@ == @fix h@)
-fixFusionRuleBR :: Maybe (CoreExprEqualityProof HermitC HermitM) -> Maybe (RewriteH CoreExpr) -> CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
+fixFusionRuleBR :: Maybe (EqualityProof HermitC HermitM) -> Maybe (RewriteH CoreExpr) -> CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
 fixFusionRuleBR meq mfstrict f g h = beforeBiR
   (prefixFailMsg "fixed-point fusion failed: " $
    do (tyA,tyB) <- funExprArgResTypes f
@@ -167,13 +166,13 @@ fixFusionRuleBR meq mfstrict f g h = beforeBiR
                        guardMsg (exprAlphaEq f f') "first argument function does not match."
                        (_,g') <- isFixExprT <<< return fixg
                        guardMsg (exprAlphaEq g g') "second argument function does not match."
-                       mkFixT h
+                       buildFixT h
 
        fixFusionR :: RewriteH CoreExpr
        fixFusionR = prefixFailMsg "(reversed) fixed-point fusion failed: " $
                     do (_,h') <- isFixExprT
                        guardMsg (exprAlphaEq h h') "third argument function does not match."
-                       App f <$> mkFixT g
+                       App f <$> buildFixT g
 
 -- | If @f@ is strict, then (@f (g a)@ == @h (f a)@)  ==>  (@f (fix g)@ == @fix h@)
 fixFusionRule :: Maybe (RewriteH Core, RewriteH Core) -> Maybe (RewriteH Core) -> CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
@@ -184,24 +183,14 @@ fixFusionRule meq mfstrict = parse3beforeBiR $ fixFusionRuleBR ((extractR *** ex
 -- | Check that the expression has the form "fix t (f :: t -> t)", returning "t" and "f".
 isFixExprT :: TransformH CoreExpr (Type,CoreExpr)
 isFixExprT = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
-  do App (App (Var fixId) (Type ty)) f <- idR
-     fixId' <- findFixId
+  do (Var fixId, [Type ty, f]) <- callT
+     fixId' <- findIdT fixLocation
      guardMsg (fixId == fixId') (var2String fixId ++ " does not match " ++ fixLocation)
      return (ty,f)
 
 --------------------------------------------------------------------------------------------------
 
--- | f  ==>  fix f
-mkFixT :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m) => CoreExpr -> Transform c m z CoreExpr
-mkFixT f = do t <- endoFunExprType f
-              fixId <- findFixId
-              return $ mkCoreApps (varToCoreExpr fixId) [Type t, f]
-
 fixLocation :: String
 fixLocation = "Data.Function.fix"
-
--- TODO: will crash if 'fix' is not used (or explicitly imported) in the source file.
-findFixId :: (BoundVars c, MonadCatch m, HasModGuts m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m) => Transform c m a Id
-findFixId = findIdT fixLocation
 
 --------------------------------------------------------------------------------------------------
