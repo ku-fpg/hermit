@@ -180,8 +180,7 @@ instance MonadThings HermitM where
 #if __GLASGOW_HASKELL__ < 708
         liftCoreM (lookupThing nm)
 #else
-        guts <- getModGuts
-        runTcM guts $ tcLookupGlobal nm
+        runTcM $ tcLookupGlobal nm
 #endif
 
 instance HasDynFlags HermitM where
@@ -323,10 +322,11 @@ type DebugChan = DebugMessage -> HermitM ()
 
 ----------------------------------------------------------------------------
 
-runTcM :: (HasDynFlags m, HasHscEnv m, MonadIO m) => ModGuts -> TcM a -> m a
-runTcM guts m = do
+runTcM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => TcM a -> m a
+runTcM m = do
     env <- getHscEnv
     dflags <- getDynFlags
+    guts <- getModGuts
     -- What is the effect of HsSrcFile (should we be using something else?)
     -- What should the boolean flag be set to?
     (msgs, mr) <- liftIO $ initTcFromModGuts env guts HsSrcFile False m
@@ -335,5 +335,5 @@ runTcM guts m = do
                                                    ++ text "Warnings:" : pprErrMsgBag warns
     maybe (fail $ showMsgs msgs) return mr
 
-runDsM :: (HasDynFlags m, HasHscEnv m, MonadIO m) => ModGuts -> DsM a -> m a
-runDsM guts = runTcM guts . initDsTc
+runDsM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => DsM a -> m a
+runDsM = runTcM . initDsTc

@@ -213,8 +213,7 @@ lookupUsageDetails = lookupVarEnv
 -- TODO: this is mostly an example, move somewhere?
 buildTypeable :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => Type -> m (Id, [CoreBind])
 buildTypeable ty = do
-    guts <- getModGuts
-    evar <- runTcM guts $ do
+    evar <- runTcM $ do
         cls <- tcLookupClass typeableClassName
         let predTy = mkClassPred cls [typeKind ty, ty] -- recall that Typeable is now poly-kinded
         newWantedEvVar predTy
@@ -223,8 +222,7 @@ buildTypeable ty = do
 -- | Build a dictionary for the given
 buildDictionary :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => Id -> m (Id, [CoreBind])
 buildDictionary evar = do
-    guts <- getModGuts
-    (i, bs) <- runTcM guts $ do
+    (i, bs) <- runTcM $ do
         loc <- getCtLoc $ GivenOrigin UnkSkol
         let predTy = varType evar
             nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
@@ -232,7 +230,7 @@ buildDictionary evar = do
         (wCs', bnds) <- solveWantedsTcM wCs
         reportAllUnsolved wCs'
         return (evar, bnds)
-    bnds <- runDsM guts $ dsEvBinds bs
+    bnds <- runDsM $ dsEvBinds bs
     return (i,bnds)
 
 buildDictionaryT :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadUnique m)
