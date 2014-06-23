@@ -63,9 +63,9 @@ import HERMIT.Name
 
 ------------------------------------------------------------------------------
 
--- | Apply a transformation to a value in the current context.
+-- | apply a transformation to a value in the current context.
 applyInContextT :: Transform c m a b -> a -> Transform c m x b
-applyInContextT t a = contextonlyT $ \ c -> apply t c a
+applyInContextT t a = contextonlyT $ \ c -> applyT t c a
 
 -- Note: this is the same as: return a >>> t
 
@@ -120,11 +120,11 @@ callDataConNameT nm = do
     return res
 
 -- TODO: Both callsR and callsT should be eliminated, now that we have callNameT
--- | Apply a rewrite to all applications of a given function in a top-down manner, pruning on success.
+-- | apply a rewrite to all applications of a given function in a top-down manner, pruning on success.
 callsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => String -> Rewrite c m CoreExpr -> Rewrite c m Core
 callsR nm rr = prunetdR (promoteExprR $ callNameG nm >> rr)
 
--- | Apply a translate to all applications of a given function in a top-down manner,
+-- | apply a translate to all applications of a given function in a top-down manner,
 --   pruning on success, collecting the results.
 callsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => String -> Transform c m CoreExpr b -> Transform c m Core [b]
 callsT nm t = collectPruneT (promoteExprT $ callNameG nm >> t)
@@ -241,7 +241,7 @@ inScope c v = (v `boundIn` c) ||                 -- defined in this module
 
 -- | Modify transformation to apply to current expression as if it were the body of a lambda binding the given variables.
 withVarsInScope :: (AddBindings c, ReadPath c Crumb) => [Var] -> Transform c m a b -> Transform c m a b
-withVarsInScope vs t = transform $ apply t . flip (foldl (flip addLambdaBinding)) vs -- careful to add left-to-right
+withVarsInScope vs t = transform $ applyT t . flip (foldl (flip addLambdaBinding)) vs -- careful to add left-to-right
 
 ------------------------------------------------------------------------------
 

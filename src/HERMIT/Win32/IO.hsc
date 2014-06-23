@@ -25,7 +25,11 @@ import Control.Exception (bracket)
 import Data.Char (ord)
 import Data.Typeable
 
+#if MIN_VERSION_base(4,7,0)
+import Foreign
+#else
 import Foreign hiding (unsafePerformIO)
+#endif
 import Foreign.C.Types
 
 import GHC.IO.FD (FD(..)) -- A wrapper around an Int32
@@ -41,7 +45,7 @@ import System.Win32.Types (BOOL, HANDLE, DWORD, LPDWORD, LPWSTR, LPVOID)
 -- | <http://msdn.microsoft.com/en-us/library/ms683231(VS.85).aspx>
 --   HANDLE WINAPI GetStdHandle(DWORD nStdHandle);
 --   returns INVALID_HANDLE_VALUE, NULL, or a valid handle
-foreign import stdcall unsafe "GetStdHandle"
+foreign import ccall unsafe "GetStdHandle"
     win32GetStdHandle :: DWORD -> IO HANDLE
 
 sTD_OUTPUT_HANDLE, sTD_ERROR_HANDLE :: DWORD
@@ -50,7 +54,7 @@ sTD_ERROR_HANDLE  = (#const STD_ERROR_HANDLE)
 
 -- | <http://msdn.microsoft.com/en-us/library/aa364960(VS.85).aspx>
 --   DWORD WINAPI GetFileType(HANDLE hFile);
-foreign import stdcall unsafe "GetFileType"
+foreign import ccall unsafe "GetFileType"
     win32GetFileType :: HANDLE -> IO DWORD
 
 fILE_TYPE_CHAR, fILE_TYPE_REMOTE :: DWORD
@@ -59,7 +63,7 @@ fILE_TYPE_REMOTE = (#const FILE_TYPE_REMOTE)
 
 -- | <http://msdn.microsoft.com/en-us/library/ms683167(VS.85).aspx>
 --   BOOL WINAPI GetConsoleMode(HANDLE hConsole, LPDWORD lpMode);
-foreign import stdcall unsafe "GetConsoleMode"
+foreign import ccall unsafe "GetConsoleMode"
     win32GetConsoleMode :: HANDLE -> LPDWORD -> IO BOOL
 
 iNVALID_HANDLE_VALUE :: HANDLE
@@ -77,7 +81,7 @@ isAConsole handle
 
 -- | BOOL WINAPI WriteConsoleW(HANDLE hOutput, LPWSTR lpBuffer, DWORD nChars,
 --                             LPDWORD lpCharsWritten, LPVOID lpReserved); -}
-foreign import stdcall unsafe "WriteConsoleW" win32WriteConsoleW
+foreign import ccall unsafe "WriteConsoleW" win32WriteConsoleW
   :: HANDLE -> LPWSTR -> DWORD -> LPDWORD -> LPVOID -> IO BOOL
 
 data ConsoleInfo = ConsoleInfo Int (Ptr CWchar) (Ptr DWORD) HANDLE

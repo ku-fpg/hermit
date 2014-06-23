@@ -205,7 +205,7 @@ birewrite (Equality bnds l r) = bidirectional (foldUnfold l r) (foldUnfold r l)
                 -- create a temporary context with an unfolding for the
                 -- transitory function so we can reuse unfoldR.
                 c' = addHermitBindings [(v, NONREC rhsLam, mempty)] c
-            apply unfoldR c' e'
+            applyT unfoldR c' e'
 
 -- | Lift a transformation over 'CoreExpr' into a transformation over the left-hand side of a 'Equality'.
 lhsT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m Equality b

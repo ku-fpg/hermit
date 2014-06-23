@@ -129,12 +129,12 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c
   allR :: forall m. MonadCatch m => Rewrite c m Core -> Rewrite c m Core
   allR r = prefixFailMsg "allR failed: " $
            rewrite $ \ c -> \case
-             GutsCore guts  -> inject <$> apply allRmodguts c guts
-             ProgCore p     -> inject <$> apply allRprog c p
-             BindCore bn    -> inject <$> apply allRbind c bn
-             DefCore def    -> inject <$> apply allRdef c def
-             AltCore alt    -> inject <$> apply allRalt c alt
-             ExprCore e     -> inject <$> apply allRexpr c e
+             GutsCore guts  -> inject <$> applyT allRmodguts c guts
+             ProgCore p     -> inject <$> applyT allRprog c p
+             BindCore bn    -> inject <$> applyT allRbind c bn
+             DefCore def    -> inject <$> applyT allRdef c def
+             AltCore alt    -> inject <$> applyT allRalt c alt
+             ExprCore e     -> inject <$> applyT allRexpr c e
     where
       allRmodguts :: MonadCatch m => Rewrite c m ModGuts
       allRmodguts = modGutsR (extractR r)
@@ -219,8 +219,8 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c TyCo 
   allR :: forall m. MonadCatch m => Rewrite c m TyCo -> Rewrite c m TyCo
   allR r = prefixFailMsg "allR failed: " $
            rewrite $ \ c -> \case
-             TypeCore ty     -> inject <$> apply (allR $ extractR r) c ty -- exploiting the fact that types do not contain coercions
-             CoercionCore co -> inject <$> apply allRcoercion c co
+             TypeCore ty     -> inject <$> applyT (allR $ extractR r) c ty -- exploiting the fact that types do not contain coercions
+             CoercionCore co -> inject <$> applyT allRcoercion c co
     where
       allRcoercion :: MonadCatch m => Rewrite c m Coercion
       allRcoercion = readerT $ \case
@@ -253,13 +253,13 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c
   allR :: forall m. MonadCatch m => Rewrite c m CoreTC -> Rewrite c m CoreTC
   allR r = prefixFailMsg "allR failed: " $
            rewrite $ \ c -> \case
-             Core (GutsCore guts)  -> inject <$> apply allRmodguts c guts
-             Core (ProgCore p)     -> inject <$> apply allRprog c p
-             Core (BindCore bn)    -> inject <$> apply allRbind c bn
-             Core (DefCore def)    -> inject <$> apply allRdef c def
-             Core (AltCore alt)    -> inject <$> apply allRalt c alt
-             Core (ExprCore e)     -> inject <$> apply allRexpr c e
-             TyCo tyCo             -> inject <$> apply (allR $ extractR r) c tyCo -- exploiting the fact that only types and coercions appear within types and coercions
+             Core (GutsCore guts)  -> inject <$> applyT allRmodguts c guts
+             Core (ProgCore p)     -> inject <$> applyT allRprog c p
+             Core (BindCore bn)    -> inject <$> applyT allRbind c bn
+             Core (DefCore def)    -> inject <$> applyT allRdef c def
+             Core (AltCore alt)    -> inject <$> applyT allRalt c alt
+             Core (ExprCore e)     -> inject <$> applyT allRexpr c e
+             TyCo tyCo             -> inject <$> applyT (allR $ extractR r) c tyCo -- exploiting the fact that only types and coercions appear within types and coercions
     where
       allRmodguts :: MonadCatch m => Rewrite c m ModGuts
       allRmodguts = modGutsR (extractR r)
@@ -307,7 +307,7 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c
 -- | Transform a module.
 --   Slightly different to the other congruence combinators: it passes in /all/ of the original to the reconstruction function.
 modGutsT :: (ExtendPath c Crumb, HasEmptyContext c, Monad m) => Transform c m CoreProg a -> (ModGuts -> a -> b) -> Transform c m ModGuts b
-modGutsT t f = transform $ \ c guts -> f guts <$> apply t (setEmptyContext c @@ ModGuts_Prog) (bindsToProg $ mg_binds guts)
+modGutsT t f = transform $ \ c guts -> f guts <$> applyT t (setEmptyContext c @@ ModGuts_Prog) (bindsToProg $ mg_binds guts)
 {-# INLINE modGutsT #-}
 
 -- | Rewrite the 'CoreProg' child of a module.
@@ -327,7 +327,7 @@ progNilT b = contextfreeT $ \case
 -- | Transform a program of the form: ('CoreBind' @:@ 'CoreProg')
 progConsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m CoreBind a1 -> Transform c m CoreProg a2 -> (a1 -> a2 -> b) -> Transform c m CoreProg b
 progConsT t1 t2 f = transform $ \ c -> \case
-                                          ProgCons bd p -> f <$> apply t1 (c @@ ProgCons_Head) bd <*> apply t2 (addBindingGroup bd c @@ ProgCons_Tail) p
+                                          ProgCons bd p -> f <$> applyT t1 (c @@ ProgCons_Head) bd <*> applyT t2 (addBindingGroup bd c @@ ProgCons_Tail) p
                                           _             -> fail "not a non-empty program."
 {-# INLINE progConsT #-}
 
@@ -351,7 +351,7 @@ progConsOneR r1 r2 = unwrapOneR $  progConsAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform a binding group of the form: @NonRec@ 'Var' 'CoreExpr'
 nonRecT :: (ExtendPath c Crumb, Monad m) => Transform c m Var a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m CoreBind b
 nonRecT t1 t2 f = transform $ \ c -> \case
-                                        NonRec v e -> f <$> apply t1 (c @@ NonRec_Var) v <*> apply t2 (c @@ NonRec_RHS) e
+                                        NonRec v e -> f <$> applyT t1 (c @@ NonRec_Var) v <*> applyT t2 (c @@ NonRec_RHS) e
                                         _          -> fail "not a non-recursive binding group."
 {-# INLINE nonRecT #-}
 
@@ -375,7 +375,7 @@ nonRecOneR r1 r2 = unwrapOneR (nonRecAllR (wrapOneR r1) (wrapOneR r2))
 recT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => (Int -> Transform c m CoreDef a) -> ([a] -> b) -> Transform c m CoreBind b
 recT t f = transform $ \ c -> \case
          Rec bds -> -- The group is recursive, so we add all other bindings in the group to the context (excluding the one under consideration).
-                    f <$> sequence [ apply (t n) (addDefBindingsExcept n bds c @@ Rec_Def n) (Def i e) -- here we convert from (Id,CoreExpr) to CoreDef
+                    f <$> sequence [ applyT (t n) (addDefBindingsExcept n bds c @@ Rec_Def n) (Def i e) -- here we convert from (Id,CoreExpr) to CoreDef
                                    | ((i,e),n) <- zip bds [0..]
                                    ]
          _       -> fail "not a recursive binding group."
@@ -400,7 +400,7 @@ recOneR rs = unwrapOneR $ recAllR (wrapOneR . rs)
 
 -- | Transform a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
 defT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m Id a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m CoreDef b
-defT t1 t2 f = transform $ \ c (Def i e) -> f <$> apply t1 (c @@ Def_Id) i <*> apply t2 (addDefBinding i c @@ Def_RHS) e
+defT t1 t2 f = transform $ \ c (Def i e) -> f <$> applyT t1 (c @@ Def_Id) i <*> applyT t2 (addDefBinding i c @@ Def_RHS) e
 {-# INLINE defT #-}
 
 -- | Rewrite all children of a recursive definition of the form: @Def@ 'Id' 'CoreExpr'
@@ -422,9 +422,9 @@ defOneR r1 r2 = unwrapOneR (defAllR (wrapOneR r1) (wrapOneR r2))
 
 -- | Transform a case alternative of the form: ('AltCon', ['Var'], 'CoreExpr')
 altT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m AltCon a1 -> (Int -> Transform c m Var a2) -> Transform c m CoreExpr a3 -> (a1 -> [a2] -> a3 -> b) -> Transform c m CoreAlt b
-altT t1 ts t2 f = transform $ \ c (con,vs,e) -> f <$> apply t1 (c @@ Alt_Con) con
-                                                  <*> sequence [ apply (ts n) (c @@ Alt_Var n) v | (v,n) <- zip vs [1..] ]
-                                                  <*> apply t2 (addAltBindings vs c @@ Alt_RHS) e
+altT t1 ts t2 f = transform $ \ c (con,vs,e) -> f <$> applyT t1 (c @@ Alt_Con) con
+                                                  <*> sequence [ applyT (ts n) (c @@ Alt_Var n) v | (v,n) <- zip vs [1..] ]
+                                                  <*> applyT t2 (addAltBindings vs c @@ Alt_RHS) e
 {-# INLINE altT #-}
 
 -- | Rewrite all children of a case alternative of the form: ('AltCon', 'Id', 'CoreExpr')
@@ -447,7 +447,7 @@ altOneR r1 rs r2 = unwrapOneR (altAllR (wrapOneR r1) (wrapOneR . rs) (wrapOneR r
 -- | Transform an expression of the form: @Var@ 'Id'
 varT :: (ExtendPath c Crumb, Monad m) => Transform c m Id b -> Transform c m CoreExpr b
 varT t = transform $ \ c -> \case
-                               Var v -> apply t (c @@ Var_Id) v
+                               Var v -> applyT t (c @@ Var_Id) v
                                _     -> fail "not a variable."
 {-# INLINE varT #-}
 
@@ -460,7 +460,7 @@ varR r = varT (Var <$> r)
 -- | Transform an expression of the form: @Lit@ 'Literal'
 litT :: (ExtendPath c Crumb, Monad m) => Transform c m Literal b -> Transform c m CoreExpr b
 litT t = transform $ \ c -> \case
-                               Lit x -> apply t (c @@ Lit_Lit) x
+                               Lit x -> applyT t (c @@ Lit_Lit) x
                                _     -> fail "not a literal."
 {-# INLINE litT #-}
 
@@ -473,7 +473,7 @@ litR r = litT (Lit <$> r)
 -- | Transform an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
 appT :: (ExtendPath c Crumb, Monad m) => Transform c m CoreExpr a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m CoreExpr b
 appT t1 t2 f = transform $ \ c -> \case
-                                     App e1 e2 -> f <$> apply t1 (c @@ App_Fun) e1 <*> apply t2 (c @@ App_Arg) e2
+                                     App e1 e2 -> f <$> applyT t1 (c @@ App_Fun) e1 <*> applyT t2 (c @@ App_Arg) e2
                                      _         -> fail "not an application."
 {-# INLINE appT #-}
 
@@ -496,7 +496,7 @@ appOneR r1 r2 = unwrapOneR $ appAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform an expression of the form: @Lam@ 'Var' 'CoreExpr'
 lamT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m Var a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m CoreExpr b
 lamT t1 t2 f = transform $ \ c -> \case
-                                     Lam v e -> f <$> apply t1 (c @@ Lam_Var) v <*> apply t2 (addLambdaBinding v c @@ Lam_Body) e
+                                     Lam v e -> f <$> applyT t1 (c @@ Lam_Var) v <*> applyT t2 (addLambdaBinding v c @@ Lam_Body) e
                                      _       -> fail "not a lambda."
 {-# INLINE lamT #-}
 
@@ -521,7 +521,7 @@ letT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transf
 letT t1 t2 f = transform $ \ c -> \case
         Let bds e -> -- Note we use the *original* context for the binding group.
                      -- If the bindings are recursive, they will be added to the context by recT.
-                     f <$> apply t1 (c @@ Let_Bind) bds <*> apply t2 (addBindingGroup bds c @@ Let_Body) e
+                     f <$> applyT t1 (c @@ Let_Bind) bds <*> applyT t2 (addBindingGroup bds c @@ Let_Body) e
         _         -> fail "not a let node."
 {-# INLINE letT #-}
 
@@ -550,10 +550,10 @@ caseT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m)
       -> (e -> w -> ty -> [alt] -> b)
       -> Transform c m CoreExpr b
 caseT te tw tty talts f = transform $ \ c -> \case
-         Case e w ty alts -> f <$> apply te (c @@ Case_Scrutinee) e
-                               <*> apply tw (c @@ Case_Binder) w
-                               <*> apply tty (c @@ Case_Type) ty
-                               <*> sequence [ apply (talts n) (addCaseBinderBinding (w,e,alt) c @@ Case_Alt n) alt
+         Case e w ty alts -> f <$> applyT te (c @@ Case_Scrutinee) e
+                               <*> applyT tw (c @@ Case_Binder) w
+                               <*> applyT tty (c @@ Case_Type) ty
+                               <*> sequence [ applyT (talts n) (addCaseBinderBinding (w,e,alt) c @@ Case_Alt n) alt
                                             | (alt,n) <- zip alts [0..]
                                             ]
          _                -> fail "not a case."
@@ -593,7 +593,7 @@ caseOneR re rw rty ralts = unwrapOneR $ caseAllR (wrapOneR re) (wrapOneR rw) (wr
 -- | Transform an expression of the form: @Cast@ 'CoreExpr' 'Coercion'
 castT :: (ExtendPath c Crumb, Monad m) => Transform c m CoreExpr a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m CoreExpr b
 castT t1 t2 f = transform $ \ c -> \case
-                                      Cast e co -> f <$> apply t1 (c @@ Cast_Expr) e <*> apply t2 (c @@ Cast_Co) co
+                                      Cast e co -> f <$> applyT t1 (c @@ Cast_Expr) e <*> applyT t2 (c @@ Cast_Co) co
                                       _         -> fail "not a cast."
 {-# INLINE castT #-}
 
@@ -616,7 +616,7 @@ castOneR r1 r2 = unwrapOneR $ castAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
 tickT :: (ExtendPath c Crumb, Monad m) => Transform c m CoreTickish a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m CoreExpr b
 tickT t1 t2 f = transform $ \ c -> \case
-                                      Tick tk e -> f <$> apply t1 (c @@ Tick_Tick) tk <*> apply t2 (c @@ Tick_Expr) e
+                                      Tick tk e -> f <$> applyT t1 (c @@ Tick_Tick) tk <*> applyT t2 (c @@ Tick_Expr) e
                                       _         -> fail "not a tick."
 {-# INLINE tickT #-}
 
@@ -639,7 +639,7 @@ tickOneR r1 r2 = unwrapOneR $ tickAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform an expression of the form: @Type@ 'Type'
 typeT :: (ExtendPath c Crumb, Monad m) => Transform c m Type b -> Transform c m CoreExpr b
 typeT t = transform $ \ c -> \case
-                                Type ty -> apply t (c @@ Type_Type) ty
+                                Type ty -> applyT t (c @@ Type_Type) ty
                                 _       -> fail "not a type."
 {-# INLINE typeT #-}
 
@@ -652,7 +652,7 @@ typeR r = typeT (Type <$> r)
 -- | Transform an expression of the form: @Coercion@ 'Coercion'
 coercionT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion b -> Transform c m CoreExpr b
 coercionT t = transform $ \ c -> \case
-                                    Coercion co -> apply t (c @@ Co_Co) co
+                                    Coercion co -> applyT t (c @@ Co_Co) co
                                     _           -> fail "not a coercion."
 {-# INLINE coercionT #-}
 
@@ -910,7 +910,7 @@ progBindsOneR rs = unwrapOneR $ progBindsAllR (wrapOneR . rs)
 -- | Transform a type of the form: @TyVarTy@ 'TyVar'
 tyVarT :: (ExtendPath c Crumb, Monad m) => Transform c m TyVar b -> Transform c m Type b
 tyVarT t = transform $ \ c -> \case
-                                 TyVarTy v -> apply t (c @@ TyVarTy_TyVar) v
+                                 TyVarTy v -> applyT t (c @@ TyVarTy_TyVar) v
                                  _         -> fail "not a type variable."
 {-# INLINE tyVarT #-}
 
@@ -923,7 +923,7 @@ tyVarR r = tyVarT (TyVarTy <$> r)
 -- | Transform a type of the form: @LitTy@ 'TyLit'
 litTyT :: (ExtendPath c Crumb, Monad m) => Transform c m TyLit b -> Transform c m Type b
 litTyT t = transform $ \ c -> \case
-                                 LitTy x -> apply t (c @@ LitTy_TyLit) x
+                                 LitTy x -> applyT t (c @@ LitTy_TyLit) x
                                  _       -> fail "not a type literal."
 {-# INLINE litTyT #-}
 
@@ -936,7 +936,7 @@ litTyR r = litTyT (LitTy <$> r)
 -- | Transform a type of the form: @AppTy@ 'Type' 'Type'
 appTyT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Type b
 appTyT t1 t2 f = transform $ \ c -> \case
-                                     AppTy ty1 ty2 -> f <$> apply t1 (c @@ AppTy_Fun) ty1 <*> apply t2 (c @@ AppTy_Arg) ty2
+                                     AppTy ty1 ty2 -> f <$> applyT t1 (c @@ AppTy_Fun) ty1 <*> applyT t2 (c @@ AppTy_Arg) ty2
                                      _             -> fail "not a type application."
 {-# INLINE appTyT #-}
 
@@ -959,7 +959,7 @@ appTyOneR r1 r2 = unwrapOneR $ appTyAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform a type of the form: @FunTy@ 'Type' 'Type'
 funTyT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Type b
 funTyT t1 t2 f = transform $ \ c -> \case
-                                     FunTy ty1 ty2 -> f <$> apply t1 (c @@ FunTy_Dom) ty1 <*> apply t2 (c @@ FunTy_CoDom) ty2
+                                     FunTy ty1 ty2 -> f <$> applyT t1 (c @@ FunTy_Dom) ty1 <*> applyT t2 (c @@ FunTy_CoDom) ty2
                                      _             -> fail "not a function type."
 {-# INLINE funTyT #-}
 
@@ -982,7 +982,7 @@ funTyOneR r1 r2 = unwrapOneR $ funTyAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform a type of the form: @ForAllTy@ 'Var' 'Type'
 forAllTyT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m Var a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Type b
 forAllTyT t1 t2 f = transform $ \ c -> \case
-                                          ForAllTy v ty -> f <$> apply t1 (c @@ ForAllTy_Var) v <*> apply t2 (addForallBinding v c @@ ForAllTy_Body) ty
+                                          ForAllTy v ty -> f <$> applyT t1 (c @@ ForAllTy_Var) v <*> applyT t2 (addForallBinding v c @@ ForAllTy_Body) ty
                                           _             -> fail "not a forall type."
 {-# INLINE forAllTyT #-}
 
@@ -1005,7 +1005,7 @@ forAllTyOneR r1 r2 = unwrapOneR $ forAllTyAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform a type of the form: @TyConApp@ 'TyCon' ['KindOrType']
 tyConAppT :: (ExtendPath c Crumb, Monad m) => Transform c m TyCon a1 -> (Int -> Transform c m KindOrType a2) -> (a1 -> [a2] -> b) -> Transform c m Type b
 tyConAppT t ts f = transform $ \ c -> \case
-                                         TyConApp con tys -> f <$> apply t (c @@ TyConApp_TyCon) con <*> sequence [ apply (ts n) (c @@ TyConApp_Arg n) ty | (ty,n) <- zip tys [0..] ]
+                                         TyConApp con tys -> f <$> applyT t (c @@ TyConApp_TyCon) con <*> sequence [ applyT (ts n) (c @@ TyConApp_Arg n) ty | (ty,n) <- zip tys [0..] ]
                                          _                -> fail "not a type-constructor application."
 {-# INLINE tyConAppT #-}
 
@@ -1034,7 +1034,7 @@ tyConAppOneR r rs = unwrapOneR $ tyConAppAllR (wrapOneR r) (wrapOneR . rs)
 -- | Transform a coercion of the form: @Refl@ 'Role' 'Type'
 reflT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> (Role -> a1 -> b) -> Transform c m Coercion b
 reflT t f = transform $ \ c -> \case
-                                 Refl r ty -> f r <$> apply t (c @@ Refl_Type) ty
+                                 Refl r ty -> f r <$> applyT t (c @@ Refl_Type) ty
                                  _         -> fail "not a reflexive coercion."
 
 -- | Rewrite the 'Type' child of a coercion of the form: @Refl@ 'Role' 'Type'
@@ -1044,7 +1044,7 @@ reflR r = reflT r Refl
 -- | Transform a coercion of the form: @Refl@ 'Type'
 reflT :: (ExtendPath c Crumb, Monad m) => Transform c m Type b -> Transform c m Coercion b
 reflT t = transform $ \ c -> \case
-                                 Refl ty -> apply t (c @@ Refl_Type) ty
+                                 Refl ty -> applyT t (c @@ Refl_Type) ty
                                  _       -> fail "not a reflexive coercion."
 
 -- | Rewrite the 'Type' child of a coercion of the form: @Refl@ 'Type'
@@ -1058,13 +1058,13 @@ reflR r = reflT (Refl <$> r)
 -- | Transform a coercion of the form: @TyConAppCo@ 'Role' 'TyCon' ['Coercion']
 tyConAppCoT :: (ExtendPath c Crumb, Monad m) => Transform c m TyCon a1 -> (Int -> Transform c m Coercion a2) -> (Role -> a1 -> [a2] -> b) -> Transform c m Coercion b
 tyConAppCoT t ts f = transform $ \ c -> \case
-                                           TyConAppCo r con coes -> f r <$> apply t (c @@ TyConAppCo_TyCon) con <*> sequence [ apply (ts n) (c @@ TyConAppCo_Arg n) co | (co,n) <- zip coes [0..] ]
+                                           TyConAppCo r con coes -> f r <$> applyT t (c @@ TyConAppCo_TyCon) con <*> sequence [ applyT (ts n) (c @@ TyConAppCo_Arg n) co | (co,n) <- zip coes [0..] ]
                                            _                     -> fail "not a type-constructor coercion."
 #else
 -- | Transform a coercion of the form: @TyConAppCo@ 'TyCon' ['Coercion']
 tyConAppCoT :: (ExtendPath c Crumb, Monad m) => Transform c m TyCon a1 -> (Int -> Transform c m Coercion a2) -> (a1 -> [a2] -> b) -> Transform c m Coercion b
 tyConAppCoT t ts f = transform $ \ c -> \case
-                                           TyConAppCo con coes -> f <$> apply t (c @@ TyConAppCo_TyCon) con <*> sequence [ apply (ts n) (c @@ TyConAppCo_Arg n) co | (co,n) <- zip coes [0..] ]
+                                           TyConAppCo con coes -> f <$> applyT t (c @@ TyConAppCo_TyCon) con <*> sequence [ applyT (ts n) (c @@ TyConAppCo_Arg n) co | (co,n) <- zip coes [0..] ]
                                            _                   -> fail "not a type-constructor coercion."
 #endif
 {-# INLINE tyConAppCoT #-}
@@ -1088,7 +1088,7 @@ tyConAppCoOneR r rs = unwrapOneR $ tyConAppCoAllR (wrapOneR r) (wrapOneR . rs)
 -- | Transform a coercion of the form: @AppCo@ 'Coercion' 'Coercion'
 appCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
 appCoT t1 t2 f = transform $ \ c -> \case
-                                     AppCo co1 co2 -> f <$> apply t1 (c @@ AppCo_Fun) co1 <*> apply t2 (c @@ AppCo_Arg) co2
+                                     AppCo co1 co2 -> f <$> applyT t1 (c @@ AppCo_Fun) co1 <*> applyT t2 (c @@ AppCo_Arg) co2
                                      _             -> fail "not a coercion application."
 {-# INLINE appCoT #-}
 
@@ -1111,7 +1111,7 @@ appCoOneR r1 r2 = unwrapOneR $ appCoAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion'
 forAllCoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m TyVar a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
 forAllCoT t1 t2 f = transform $ \ c -> \case
-                                          ForAllCo v co -> f <$> apply t1 (c @@ ForAllCo_TyVar) v <*> apply t2 (addForallBinding v c @@ ForAllCo_Body) co
+                                          ForAllCo v co -> f <$> applyT t1 (c @@ ForAllCo_TyVar) v <*> applyT t2 (addForallBinding v c @@ ForAllCo_Body) co
                                           _             -> fail "not a forall coercion."
 {-# INLINE forAllCoT #-}
 
@@ -1134,7 +1134,7 @@ forAllCoOneR r1 r2 = unwrapOneR $ forAllCoAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform a coercion of the form: @CoVarCo@ 'CoVar'
 coVarCoT :: (ExtendPath c Crumb, Monad m) => Transform c m CoVar b -> Transform c m Coercion b
 coVarCoT t = transform $ \ c -> \case
-                                   CoVarCo v -> apply t (c @@ CoVarCo_CoVar) v
+                                   CoVarCo v -> applyT t (c @@ CoVarCo_CoVar) v
                                    _         -> fail "not a coercion variable."
 {-# INLINE coVarCoT #-}
 
@@ -1147,13 +1147,13 @@ coVarCoR r = coVarCoT (CoVarCo <$> r)
 -- | Transform a coercion of the form: @AxiomInstCo@ ('CoAxiom' 'Branched') 'BranchIndex' ['Coercion']
 axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Transform c m (CoAxiom Branched) a1 -> Transform c m BranchIndex a2 -> (Int -> Transform c m Coercion a3) -> (a1 -> a2 -> [a3] -> b) -> Transform c m Coercion b
 axiomInstCoT t1 t2 ts f = transform $ \ c -> \case
-                                                AxiomInstCo ax idx coes -> f <$> apply t1 (c @@ AxiomInstCo_Axiom) ax <*> apply t2 (c @@ AxiomInstCo_Index) idx <*> sequence [ apply (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
+                                                AxiomInstCo ax idx coes -> f <$> applyT t1 (c @@ AxiomInstCo_Axiom) ax <*> applyT t2 (c @@ AxiomInstCo_Index) idx <*> sequence [ applyT (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
                                                 _                       -> fail "not a coercion axiom instantiation."
 #else
 -- | Transform a coercion of the form: @AxiomInstCo@ 'CoAxiom' ['Coercion']
 axiomInstCoT :: (ExtendPath c Crumb, Monad m) => Transform c m CoAxiom a1 -> (Int -> Transform c m Coercion a2) -> (a1 -> [a2] -> b) -> Transform c m Coercion b
 axiomInstCoT t ts f = transform $ \ c -> \case
-                                            AxiomInstCo ax coes -> f <$> apply t (c @@ AxiomInstCo_Axiom) ax <*> sequence [ apply (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
+                                            AxiomInstCo ax coes -> f <$> applyT t (c @@ AxiomInstCo_Axiom) ax <*> sequence [ applyT (ts n) (c @@ AxiomInstCo_Arg n) co | (co,n) <- zip coes [0..] ]
                                             _                   -> fail "not a coercion axiom instantiation."
 #endif
 {-# INLINE axiomInstCoT #-}
@@ -1196,7 +1196,7 @@ axiomInstCoOneR r rs = unwrapOneR $ axiomInstCoAllR (wrapOneR r) (wrapOneR . rs)
 -- | Transform a coercion of the form: @UnsafeCo@ 'Type' 'Type'
 unsafeCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
 unsafeCoT t1 t2 f = transform $ \ c -> \case
-                                          UnsafeCo ty1 ty2 -> f <$> apply t1 (c @@ UnsafeCo_Left) ty1 <*> apply t2 (c @@ UnsafeCo_Right) ty2
+                                          UnsafeCo ty1 ty2 -> f <$> applyT t1 (c @@ UnsafeCo_Left) ty1 <*> applyT t2 (c @@ UnsafeCo_Right) ty2
                                           _                -> fail "not an unsafe coercion."
 {-# INLINE unsafeCoT #-}
 
@@ -1219,7 +1219,7 @@ unsafeCoOneR r1 r2 = unwrapOneR $ unsafeCoAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform a coercion of the form: @SymCo@ 'Coercion'
 symCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion b -> Transform c m Coercion b
 symCoT t = transform $ \ c -> \case
-                                   SymCo co -> apply t (c @@ SymCo_Co) co
+                                   SymCo co -> applyT t (c @@ SymCo_Co) co
                                    _        -> fail "not a symmetric coercion."
 {-# INLINE symCoT #-}
 
@@ -1232,7 +1232,7 @@ symCoR r = symCoT (SymCo <$> r)
 -- | Transform a coercion of the form: @TransCo@ 'Coercion' 'Coercion'
 transCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
 transCoT t1 t2 f = transform $ \ c -> \case
-                                          TransCo co1 co2 -> f <$> apply t1 (c @@ TransCo_Left) co1 <*> apply t2 (c @@ TransCo_Right) co2
+                                          TransCo co1 co2 -> f <$> applyT t1 (c @@ TransCo_Left) co1 <*> applyT t2 (c @@ TransCo_Right) co2
                                           _               -> fail "not a transitive coercion."
 {-# INLINE transCoT #-}
 
@@ -1255,7 +1255,7 @@ transCoOneR r1 r2 = unwrapOneR $ transCoAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform a coercion of the form: @NthCo@ 'Int' 'Coercion'
 nthCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Int a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
 nthCoT t1 t2 f = transform $ \ c -> \case
-                                          NthCo n co -> f <$> apply t1 (c @@ NthCo_Int) n <*> apply t2 (c @@ NthCo_Co) co
+                                          NthCo n co -> f <$> applyT t1 (c @@ NthCo_Int) n <*> applyT t2 (c @@ NthCo_Co) co
                                           _          -> fail "not an Nth coercion."
 {-# INLINE nthCoT #-}
 
@@ -1279,7 +1279,7 @@ nthCoOneR r1 r2 = unwrapOneR $ nthCoAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform a coercion of the form: @LRCo@ 'LeftOrRight' 'Coercion'
 lrCoT :: (ExtendPath c Crumb, Monad m) => Transform c m LeftOrRight a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
 lrCoT t1 t2 f = transform $ \ c -> \case
-                                      LRCo lr co -> f <$> apply t1 (c @@ LRCo_LR) lr <*> apply t2 (c @@ LRCo_Co) co
+                                      LRCo lr co -> f <$> applyT t1 (c @@ LRCo_LR) lr <*> applyT t2 (c @@ LRCo_Co) co
                                       _          -> fail "not a left/right coercion."
 {-# INLINE lrCoT #-}
 
@@ -1304,7 +1304,7 @@ lrCoOneR r1 r2 = unwrapOneR $ lrCoAllR (wrapOneR r1) (wrapOneR r2)
 -- | Transform a coercion of the form: @InstCo@ 'Coercion' 'Type'
 instCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
 instCoT t1 t2 f = transform $ \ c -> \case
-                                          InstCo co ty -> f <$> apply t1 (c @@ InstCo_Co) co <*> apply t2 (c @@ InstCo_Type) ty
+                                          InstCo co ty -> f <$> applyT t1 (c @@ InstCo_Co) co <*> applyT t2 (c @@ InstCo_Type) ty
                                           _            -> fail "not a coercion instantiation."
 {-# INLINE instCoT #-}
 

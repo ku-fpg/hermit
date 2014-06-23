@@ -76,7 +76,7 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
 
         -- TODO: we convert an Id to string here, and callsT then uses cmpString2Var
         --       refactor to avoid intermediate string!
-        callPats <- apply (callsT (var2String f) (callT >>> arr snd)) bodyContext (ExprCore body)
+        callPats <- applyT (callsT (var2String f) (callT >>> arr snd)) bodyContext (ExprCore body)
         let argExprs = transpose callPats
             numCalls = length callPats
             allBinds = zip [0..] bnds
@@ -113,7 +113,7 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
                 (_,exprs) <- callT
                 return $ mkApps (Var wkr) [ e | (p,e) <- zip [0..] exprs, (p::Int) `elem` ps ]
 
-        ExprCore body' <- apply (callsR (var2String f) replaceCall) bodyContext (ExprCore body)
+        ExprCore body' <- applyT (callsR (var2String f) replaceCall) bodyContext (ExprCore body)
 
         return $ Def f $ mkCoreLams bnds $ Let (Rec [(wkr, mkCoreLams dbnds body')])
                                              $ mkApps (Var wkr) (varsToCoreExprs dbnds)
