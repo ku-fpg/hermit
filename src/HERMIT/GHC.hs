@@ -49,6 +49,7 @@ module HERMIT.GHC
     , eqExprX
     , lookupRdrNameInModuleForPlugins
     , tcUnifyTy
+    , zEncodeString
 #endif
     , mkPhiTy
     , mkSigmaTy
@@ -73,6 +74,7 @@ import LoadIface (loadPluginInterface)
 import Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
 import TcRnMonad (initIfaceTcRn)
 import TysPrim (alphaTyVars)
+import Encoding (zEncodeString)
 #endif
 
 -- hacky direct GHC imports

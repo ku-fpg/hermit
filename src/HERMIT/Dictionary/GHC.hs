@@ -210,7 +210,7 @@ lookupUsageDetails = lookupVarEnv
 buildDictionaryT :: Transform c HermitM Type CoreExpr
 buildDictionaryT = contextfreeT $ \ ty -> do
     dflags <- getDynFlags
-    binder <- newIdH ("$d" ++ filter (not . isSpace) (showPpr dflags ty)) ty
+    binder <- newIdH ("$d" ++ zEncodeString (filter (not . isSpace) (showPpr dflags ty))) ty
     guts <- getModGuts
     (i,bnds) <- liftCoreM $ buildDictionary guts binder
     return $ case bnds of
