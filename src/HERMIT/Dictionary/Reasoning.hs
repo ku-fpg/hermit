@@ -367,8 +367,7 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
         uniqDs = nubBy (\ b1 b2 -> eqType (varType b1) (varType b2)) dArgs
     guardMsg (not (null uniqDs)) "no universally quantified dictionaries can be instantiated."
     ds <- forM uniqDs $ \ b -> constT $ do
-            guts <- getModGuts
-            (i,bnds) <- liftCoreM $ buildDictionary guts b
+            (i,bnds) <- buildDictionary b
             let dExpr = case bnds of
                             [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
                             _ -> mkCoreLets bnds (varToCoreExpr i)

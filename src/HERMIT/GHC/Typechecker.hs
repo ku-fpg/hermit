@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, RankNTypes #-}
-module HERMIT.GHC.Typechecker 
-    ( 
+module HERMIT.GHC.Typechecker
+    (
 #if __GLASGOW_HASKELL__ > 706
       initTcFromModGuts
     , mk_type_env
@@ -34,7 +34,7 @@ import Bag
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
-import Prelude 
+import Prelude
 import VarSet (emptyVarSet)
 
 -- Note: the contents of this module should eventually be folded into GHC proper.

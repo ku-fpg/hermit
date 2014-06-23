@@ -27,12 +27,6 @@ module HERMIT.GHC
     , occurAnalyseExpr
     , isKind
     , isLiftedTypeKindCon
-#if __GLASGOW_HASKELL__ > 706
-    , coAxiomName
-    , CoAxiom.BranchIndex
-    , CoAxiom.CoAxiom
-    , CoAxiom.Branched
-#endif
     , notElemVarSet
     , varSetToStrings
     , showVarSet
@@ -42,14 +36,27 @@ module HERMIT.GHC
     , exprType
     , Control.Monad.IO.Class.liftIO
 #else
-    , runDsMtoCoreM
-    , runTcMtoCoreM
-    , buildTypeable
-    , buildDictionary
+    , coAxiomName
+    , CoAxiom.BranchIndex
+    , CoAxiom.CoAxiom
+    , CoAxiom.Branched
+    , Bag.foldBag
     , eqExprX
+    , loadSysInterface
     , lookupRdrNameInModuleForPlugins
-    , tcUnifyTy
+    , reportAllUnsolved
     , zEncodeString
+    , module Class
+    , module DsBinds
+    , module DsMonad
+    , module ErrUtils
+    , module PrelNames
+    , module TcEnv
+    , module TcMType
+    , module TcRnMonad
+    , module TcRnTypes
+    , module TcSimplify
+    , module Unify
 #endif
     , mkPhiTy
     , mkSigmaTy
@@ -67,14 +74,16 @@ import PprCore (pprCoreExpr)
 import Data.Monoid hiding ((<>))
 #else
 -- GHC 7.8
+import Encoding (zEncodeString)
+import ErrUtils (pprErrMsgBag)
 import Finder (findImportedModule, cannotFindModule)
 -- we hide these so that they don't get inadvertently used.  See Core.hs
 import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass, getHscEnv)
-import LoadIface (loadPluginInterface)
+import LoadIface (loadPluginInterface, loadSysInterface)
 import Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
+import TcErrors (reportAllUnsolved)
 import TcRnMonad (initIfaceTcRn)
 import TysPrim (alphaTyVars)
-import Encoding (zEncodeString)
 #endif
 
 -- hacky direct GHC imports
@@ -92,6 +101,7 @@ import TypeRep (Type(..),TyLit(..))
 import Data.Maybe (isJust)
 #else
 import qualified Bag
+import Class (classTyCon)
 import qualified CoAxiom -- for coAxiomName
 import DsBinds (dsEvBinds)
 import DsMonad (DsM, initDsTc)
@@ -286,43 +296,6 @@ bndrRuleAndUnfoldingVars v | isTyVar v = emptyVarSet
 --------------------------------------------------------------------------
 
 #if __GLASGOW_HASKELL__ > 706
-runTcMtoCoreM :: ModGuts -> TcM a -> CoreM a
-runTcMtoCoreM guts m = do
-    env <- CoreMonad.getHscEnv
-    -- What is the effect of HsSrcFile (should we be using something else?)
-    -- What should the boolean flag be set to?
-    (msgs, mr) <- liftIO $ initTcFromModGuts env guts HsSrcFile False m
-    -- There is probably something better for reporting the errors.
-    let dumpSDocs endMsg = Bag.foldBag (\ d r -> d ++ ('\n':r)) show endMsg
-        showMsgs (warns, errs) = "Errors:\n" ++ dumpSDocs ("Warnings:\n" ++ dumpSDocs "" warns) errs
-    maybe (fail $ showMsgs msgs) return mr
-
-runDsMtoCoreM :: ModGuts -> DsM a -> CoreM a
-runDsMtoCoreM guts = runTcMtoCoreM guts . initDsTc
-
--- TODO: this is mostly an example, move somewhere?
-buildTypeable :: ModGuts -> Type -> CoreM (Id, [CoreBind])
-buildTypeable guts ty = do
-    evar <- runTcMtoCoreM guts $ do
-        cls <- tcLookupClass typeableClassName
-        let predTy = mkClassPred cls [typeKind ty, ty] -- recall that Typeable is now poly-kinded
-        newWantedEvVar predTy
-    buildDictionary guts evar
-
--- | Build a dictionary for the given
-buildDictionary :: ModGuts -> Id -> CoreM (Id, [CoreBind])
-buildDictionary guts evar = do
-    (i, bs) <- runTcMtoCoreM guts $ do
-        loc <- getCtLoc $ GivenOrigin UnkSkol
-        let predTy = varType evar
-            nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
-            wCs = mkFlatWC [nonC]
-        (_wCs', bnds) <- solveWantedsTcM wCs
-        -- TODO: check for unsolved constraints?
-        return (evar, bnds)
-    bnds <- runDsMtoCoreM guts $ dsEvBinds bs
-    return (i,bnds)
-
 -- This function used to be in GHC itself, but was removed.
 -- It compares core for equality modulo alpha.
 eqExprX :: IdUnfoldingFun -> RnEnv2 -> CoreExpr -> CoreExpr -> Bool
