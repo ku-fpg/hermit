@@ -41,9 +41,9 @@ getConsoleWindowSize = do
 sTD_OUTPUT_HANDLE :: DWORD
 sTD_OUTPUT_HANDLE = #{const STD_OUTPUT_HANDLE}
 
-foreign import stdcall unsafe "windows.h GetStdHandle"
+foreign import ccall unsafe "windows.h GetStdHandle"
     getStdHandle :: DWORD -> IO HANDLE
-foreign import stdcall unsafe "windows.h GetConsoleScreenBufferInfo"
+foreign import ccall unsafe "windows.h GetConsoleScreenBufferInfo"
     cGetConsoleScreenBufferInfo :: HANDLE -> Ptr CONSOLE_SCREEN_BUFFER_INFO -> IO BOOL
 
 getConsoleScreenBufferInfo :: HANDLE -> IO (Maybe CONSOLE_SCREEN_BUFFER_INFO)

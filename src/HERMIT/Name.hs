@@ -90,12 +90,9 @@ allNameSpaces = [varNS, dataConNS, tyConClassNS, tyVarNS]
 
 mkQualified :: String -> String -> HermitName
 mkQualified mnm nm = HermitName (Just $ mkModuleName mnm) nm
--- mkOccName
--- mkRdrQual
 
 mkUnqualified :: String -> HermitName
 mkUnqualified = HermitName Nothing
--- mkRdrUnqual
 
 fromRdrName :: RdrName -> HermitName
 fromRdrName nm = case isQual_maybe nm of

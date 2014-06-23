@@ -147,6 +147,6 @@ showStashT :: Injection CoreDef a => PrettyC -> PrettyH a -> Transform c HermitM
 showStashT pctx pp = do
     stash <- constT getStash
     docs <- forM (Map.toList stash) $ \ (l,d) -> do
-                dfn <- constT $ apply (extractT pp) pctx d
+                dfn <- constT $ applyT (extractT pp) pctx d
                 return $ PP.text ("[ " ++ l ++ " ]") PP.$+$ dfn PP.$+$ PP.space
     return $ PP.vcat docs

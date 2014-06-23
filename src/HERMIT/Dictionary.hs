@@ -20,6 +20,7 @@ module HERMIT.Dictionary
     , module HERMIT.Dictionary.Undefined
     , module HERMIT.Dictionary.Unfold
     , module HERMIT.Dictionary.Unsafe
+    , module HERMIT.Dictionary.WorkerWrapper.Common -- TODO: rename
     , module HERMIT.Dictionary.WorkerWrapper.Fix
     , module HERMIT.Dictionary.WorkerWrapper.FixResult
     ) where
@@ -64,6 +65,8 @@ import           HERMIT.Dictionary.Unfold hiding (externals)
 import qualified HERMIT.Dictionary.Unfold as Unfold
 import           HERMIT.Dictionary.Unsafe hiding (externals)
 import qualified HERMIT.Dictionary.Unsafe as Unsafe
+import           HERMIT.Dictionary.WorkerWrapper.Common hiding (externals)
+import qualified HERMIT.Dictionary.WorkerWrapper.Common as WorkerWrapperCommon
 import           HERMIT.Dictionary.WorkerWrapper.Fix hiding (externals)
 import qualified HERMIT.Dictionary.WorkerWrapper.Fix as WorkerWrapperFix
 import           HERMIT.Dictionary.WorkerWrapper.FixResult hiding (externals)
@@ -92,6 +95,7 @@ externals =
     ++ Undefined.externals
     ++ Unfold.externals
     ++ Unsafe.externals
+    ++ WorkerWrapperCommon.externals
     ++ WorkerWrapperFix.externals
     ++ WorkerWrapperFixResult.externals
 

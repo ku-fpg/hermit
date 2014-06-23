@@ -36,8 +36,6 @@ import HERMIT.Utilities
 import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Reasoning hiding (externals)
-import HERMIT.Dictionary.Rules hiding (externals)
-import HERMIT.Dictionary.WorkerWrapper.Common
 
 import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
@@ -56,66 +54,18 @@ import Text.PrettyPrint.MarkedHughesPJ as PP
 --------------------------------------------------------------------------------------------------------
 
 -- | Externals that get us into the prover shell, or otherwise deal with lemmas.
+-- TODO: InteractiveProof is the only one that should be here, rest in Reasoning
 externals :: [External]
 externals = map (.+ Proof)
-    [ external "rule-to-lemma" (\nm -> ruleNameToEqualityT nm >>= insertLemmaR nm :: RewriteH Core)
-        [ "Create a lemma from a GHC RULE." ]
-    , external "intro-ww-assumption-A" (\nm absC repC -> assumptionAEqualityT absC repC >>= insertLemmaR nm :: RewriteH Core)
-        [ "Introduce a lemma for worker/wrapper assumption A"
-        , "using given abs and rep functions." ]
-    , external "intro-ww-assumption-B" (\nm absC repC bodyC -> assumptionBEqualityT absC repC bodyC >>= insertLemmaR nm :: RewriteH Core)
-        [ "Introduce a lemma for worker/wrapper assumption B"
-        , "using given abs, rep, and body functions." ]
-    , external "intro-ww-assumption-C" (\nm absC repC bodyC -> assumptionCEqualityT absC repC bodyC >>= insertLemmaR nm :: RewriteH Core)
-        [ "Introduce a lemma for worker/wrapper assumption C"
-        , "using given abs, rep, and body functions." ]
-    , external "show-lemma" (ShowLemmas . Just)
+    [ external "show-lemma" (ShowLemmas . Just)
         [ "List lemmas whose names match search string." ]
     , external "show-lemmas" (ShowLemmas Nothing)
         [ "List lemmas." ]
-    , external "lemma" (promoteExprBiR . lemmaR :: LemmaName -> BiRewriteH Core)
-        [ "Generate a bi-directional rewrite from a lemma." ]
-    , external "lemma-lhs-intro" (lemmaLhsIntroR :: LemmaName -> RewriteH Core)
-        [ "Introduce the LHS of a lemma as a non-recursive binding, in either an expression or a program."
-        , "body ==> let v = lhs in body" ] .+ Introduce .+ Shallow
-    , external "lemma-rhs-intro" (lemmaRhsIntroR :: LemmaName -> RewriteH Core)
-        [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
-        , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
     , external "prove-lemma" InteractiveProof
         [ "Proof a lemma interactively." ]
-    , external "inst-lemma" (\ nm v cs -> modifyLemmaR nm id (instantiateEqualityVarR (cmpString2Var v) cs) id id :: RewriteH Core)
-        [ "Instantiate one of the universally quantified variables of the given lemma,"
-        , "with the given Core expression, creating a new lemma. Instantiating an"
-        , "already proven lemma will result in the new lemma being considered proven." ]
-    , external "inst-lemma-dictionaries" (\ nm -> modifyLemmaR nm id instantiateDictsR id id :: RewriteH Core)
-        [ "Instantiate all of the universally quantified dictionaries of the given lemma."
-        , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
-    , external "copy-lemma" (\ nm newName -> modifyLemmaR nm (const newName) idR id id :: RewriteH Core)
-        [ "Copy a given lemma, with a new name." ]
-    , external "modify-lemma" (\ nm rr -> modifyLemmaR nm id rr (const False) (const False) :: RewriteH Core)
-        [ "Modify a given lemma. Resets the proven status to Not Proven and used status to Not Used." ]
-    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaEq >>> t) :: LemmaName -> TransformH Equality String -> TransformH Core String)
-        [ "Apply a transformation to a lemma, returning the result." ]
     , external "dump-lemma" DumpLemma
         [ "Dump named lemma to a file."
         , "dump-lemma <lemma-name> <filename> <renderer> <width>" ]
-    , external "extensionality" (extensionalityR . Just :: String -> RewriteH Equality)
-        [ "Given a name 'x, then"
-        , "f == g  ==>  forall x.  f x == g x" ]
-    , external "extensionality" (extensionalityR Nothing :: RewriteH Equality)
-        [ "f == g  ==>  forall x.  f x == g x" ]
-    , external "lhs" (lhsR . extractR :: RewriteH Core -> RewriteH Equality)
-        [ "Apply a rewrite to the LHS of an equality." ]
-    , external "lhs" (lhsT . extractT :: TransformH CoreTC String -> TransformH Equality String)
-        [ "Apply a transformation to the LHS of an equality." ]
-    , external "rhs" (rhsR . extractR :: RewriteH Core -> RewriteH Equality)
-        [ "Apply a rewrite to the RHS of an equality." ]
-    , external "rhs" (rhsT . extractT :: TransformH CoreTC String -> TransformH Equality String)
-        [ "Apply a transformation to the RHS of an equality." ]
-    , external "both" (bothR . extractR :: RewriteH Core -> RewriteH Equality)
-        [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
-    , external "both" ((\t -> liftM (\(r,s) -> unlines [r,s]) (bothT (extractT t))) :: TransformH CoreTC String -> TransformH Equality String)
-        [ "Apply a transformation to the RHS of an equality." ]
     ]
 
 -- | Externals that are added to the dictionary only when in interactive proof mode.
@@ -145,19 +95,6 @@ instance Extern ProofCommand where
     type Box ProofCommand = ProofCommand
     box i = i
     unbox i = i
-
---------------------------------------------------------------------------------------------------------
-
-lemmaNameToEqualityT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Equality
-lemmaNameToEqualityT nm = liftM lemmaEq $ getLemmaByNameT nm
-
--- | @e@ ==> @let v = lhs in e@  (also works in a similar manner at Program nodes)
-lemmaLhsIntroR :: LemmaName -> RewriteH Core
-lemmaLhsIntroR = lemmaNameToEqualityT >=> eqLhsIntroR
-
--- | @e@ ==> @let v = rhs in e@  (also works in a similar manner at Program nodes)
-lemmaRhsIntroR :: LemmaName -> RewriteH Core
-lemmaRhsIntroR = lemmaNameToEqualityT >=> eqRhsIntroR
 
 --------------------------------------------------------------------------------------------------------
 

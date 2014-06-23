@@ -40,24 +40,26 @@ import HERMIT.Dictionary.Unfold (cleanupUnfoldR)
 
 ------------------------------------------------------------------------
 
--- | Externals that reflect GHC functions, or are derived from GHC functions.
+-- | Externals dealing with GHC rewrite rules.
 externals :: [External]
 externals =
-         [ external "rules-help-list" (rulesHelpListT :: TransformH CoreTC String)
-                [ "List all the rules in scope." ] .+ Query
-         , external "rule-help" (ruleHelpT :: RuleNameString -> TransformH CoreTC String)
-                [ "Display details on the named rule." ] .+ Query
-         , external "apply-rule" (promoteExprR . ruleR :: RuleNameString -> RewriteH Core)
-                [ "Apply a named GHC rule" ] .+ Shallow
-         , external "apply-rules" (promoteExprR . rulesR :: [RuleNameString] -> RewriteH Core)
-                [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
-         , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
-                [ "Unfold a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
-         , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
-                [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
-         , external "specialise" (promoteModGutsR specialiseR :: RewriteH Core)
-                [ "Run GHC's specialisation pass, which performs type and dictionary specialisation."] .+ Deep
-         ]
+    [ external "rule-help" (rulesHelpListT :: TransformH CoreTC String)
+        [ "List all the rules in scope." ] .+ Query
+    , external "rule-help" (ruleHelpT :: RuleNameString -> TransformH CoreTC String)
+        [ "Display details on the named rule." ] .+ Query
+    , external "apply-rule" (promoteExprR . ruleR :: RuleNameString -> RewriteH Core)
+        [ "Apply a named GHC rule" ] .+ Shallow
+    , external "apply-rules" (promoteExprR . rulesR :: [RuleNameString] -> RewriteH Core)
+        [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
+    , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
+        [ "Unfold a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
+    , external "rule-to-lemma" (\nm -> ruleNameToEqualityT nm >>= insertLemmaR nm :: RewriteH Core)
+        [ "Create a lemma from a GHC RULE." ]
+    , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
+        [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
+    , external "specialise" (promoteModGutsR specialiseR :: RewriteH Core)
+        [ "Run GHC's specialisation pass, which performs type and dictionary specialisation."] .+ Deep
+    ]
 
 ------------------------------------------------------------------------
 

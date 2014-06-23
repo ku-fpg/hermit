@@ -21,7 +21,9 @@ module HERMIT.Dictionary.GHC
     , occurAnalyseAndDezombifyR
     , dezombifyR
 #if __GLASGOW_HASKELL__ > 706
+    , buildDictionary
     , buildDictionaryT
+    , buildTypeable
 #endif
     ) where
 
@@ -29,6 +31,7 @@ import qualified Bag
 import qualified CoreLint
 
 import Control.Arrow
+import Control.Monad.IO.Class
 
 import Data.List (mapAccumL)
 
@@ -207,12 +210,36 @@ lookupUsageDetails = lookupVarEnv
 ----------------------------------------------------------------------
 
 #if __GLASGOW_HASKELL__ > 706
-buildDictionaryT :: Transform c HermitM Type CoreExpr
-buildDictionaryT = contextfreeT $ \ ty -> do
+-- TODO: this is mostly an example, move somewhere?
+buildTypeable :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => Type -> m (Id, [CoreBind])
+buildTypeable ty = do
+    evar <- runTcM $ do
+        cls <- tcLookupClass typeableClassName
+        let predTy = mkClassPred cls [typeKind ty, ty] -- recall that Typeable is now poly-kinded
+        newWantedEvVar predTy
+    buildDictionary evar
+
+-- | Build a dictionary for the given
+buildDictionary :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => Id -> m (Id, [CoreBind])
+buildDictionary evar = do
+    (i, bs) <- runTcM $ do
+        loc <- getCtLoc $ GivenOrigin UnkSkol
+        let predTy = varType evar
+            nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
+            wCs = mkFlatWC [nonC]
+        (wCs', bnds) <- solveWantedsTcM wCs
+        reportAllUnsolved wCs'
+        return (evar, bnds)
+    bnds <- runDsM $ dsEvBinds bs
+    return (i,bnds)
+
+buildDictionaryT :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadUnique m)
+                 => Transform c m Type CoreExpr
+buildDictionaryT = prefixFailMsg "buildDictionaryT failed: " $ contextfreeT $ \ ty -> do
     dflags <- getDynFlags
-    binder <- newIdH ("$d" ++ filter (not . isSpace) (showPpr dflags ty)) ty
-    guts <- getModGuts
-    (i,bnds) <- liftCoreM $ buildDictionary guts binder
+    binder <- newIdH ("$d" ++ zEncodeString (filter (not . isSpace) (showPpr dflags ty))) ty
+    (i,bnds) <- buildDictionary binder
+    guardMsg (notNull bnds) "no dictionary bindings generated."
     return $ case bnds of
                 [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
                 _ -> mkCoreLets bnds (varToCoreExpr i)

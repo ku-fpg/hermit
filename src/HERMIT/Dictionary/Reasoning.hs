@@ -95,6 +95,44 @@ externals =
         [ "Alpha-rename a universally quantified variable." ]
     , external "unshadow-equality" unshadowEqualityR
         [ "Unshadow an equality." ]
+    , external "lemma" (promoteExprBiR . lemmaR :: LemmaName -> BiRewriteH Core)
+        [ "Generate a bi-directional rewrite from a lemma." ]
+    , external "lemma-lhs-intro" (lemmaLhsIntroR :: LemmaName -> RewriteH Core)
+        [ "Introduce the LHS of a lemma as a non-recursive binding, in either an expression or a program."
+        , "body ==> let v = lhs in body" ] .+ Introduce .+ Shallow
+    , external "lemma-rhs-intro" (lemmaRhsIntroR :: LemmaName -> RewriteH Core)
+        [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
+        , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
+    , external "inst-lemma" (\ nm v cs -> modifyLemmaR nm id (instantiateEqualityVarR (cmpString2Var v) cs) id id :: RewriteH Core)
+        [ "Instantiate one of the universally quantified variables of the given lemma,"
+        , "with the given Core expression, creating a new lemma. Instantiating an"
+        , "already proven lemma will result in the new lemma being considered proven." ]
+    , external "inst-lemma-dictionaries" (\ nm -> modifyLemmaR nm id instantiateDictsR id id :: RewriteH Core)
+        [ "Instantiate all of the universally quantified dictionaries of the given lemma."
+        , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
+    , external "copy-lemma" (\ nm newName -> modifyLemmaR nm (const newName) idR id id :: RewriteH Core)
+        [ "Copy a given lemma, with a new name." ]
+    , external "modify-lemma" (\ nm rr -> modifyLemmaR nm id rr (const False) (const False) :: RewriteH Core)
+        [ "Modify a given lemma. Resets the proven status to Not Proven and used status to Not Used." ]
+    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaEq >>> t) :: LemmaName -> TransformH Equality String -> TransformH Core String)
+        [ "Apply a transformation to a lemma, returning the result." ]
+    , external "extensionality" (extensionalityR . Just :: String -> RewriteH Equality)
+        [ "Given a name 'x, then"
+        , "f == g  ==>  forall x.  f x == g x" ]
+    , external "extensionality" (extensionalityR Nothing :: RewriteH Equality)
+        [ "f == g  ==>  forall x.  f x == g x" ]
+    , external "lhs" (lhsR . extractR :: RewriteH Core -> RewriteH Equality)
+        [ "Apply a rewrite to the LHS of an equality." ]
+    , external "lhs" (lhsT . extractT :: TransformH CoreTC String -> TransformH Equality String)
+        [ "Apply a transformation to the LHS of an equality." ]
+    , external "rhs" (rhsR . extractR :: RewriteH Core -> RewriteH Equality)
+        [ "Apply a rewrite to the RHS of an equality." ]
+    , external "rhs" (rhsT . extractT :: TransformH CoreTC String -> TransformH Equality String)
+        [ "Apply a transformation to the RHS of an equality." ]
+    , external "both" (bothR . extractR :: RewriteH Core -> RewriteH Equality)
+        [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
+    , external "both" ((\t -> liftM (\(r,s) -> unlines [r,s]) (bothT (extractT t))) :: TransformH CoreTC String -> TransformH Equality String)
+        [ "Apply a transformation to the RHS of an equality." ]
     ]
 
 ------------------------------------------------------------------------------
@@ -136,9 +174,7 @@ extensionalityR mn = prefixFailMsg "extensionality failed: " $
 
      let x = varToCoreExpr v
 
-     return $ Equality (vs ++ [v])
-                               (mkCoreApp lhs x)
-                               (mkCoreApp rhs x)
+     return $ Equality (vs ++ [v]) (mkCoreApp lhs x) (mkCoreApp rhs x)
 
 ------------------------------------------------------------------------------
 
@@ -169,7 +205,7 @@ birewrite (Equality bnds l r) = bidirectional (foldUnfold l r) (foldUnfold r l)
                 -- create a temporary context with an unfolding for the
                 -- transitory function so we can reuse unfoldR.
                 c' = addHermitBindings [(v, NONREC rhsLam, mempty)] c
-            apply unfoldR c' e'
+            applyT unfoldR c' e'
 
 -- | Lift a transformation over 'CoreExpr' into a transformation over the left-hand side of a 'Equality'.
 lhsT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m Equality b
@@ -331,8 +367,7 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
         uniqDs = nubBy (\ b1 b2 -> eqType (varType b1) (varType b2)) dArgs
     guardMsg (not (null uniqDs)) "no universally quantified dictionaries can be instantiated."
     ds <- forM uniqDs $ \ b -> constT $ do
-            guts <- getModGuts
-            (i,bnds) <- liftCoreM $ buildDictionary guts b
+            (i,bnds) <- buildDictionary b
             let dExpr = case bnds of
                             [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
                             _ -> mkCoreLets bnds (varToCoreExpr i)
@@ -463,6 +498,8 @@ getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ nm) retu
 lemmaR :: LemmaName -> BiRewriteH CoreExpr
 lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaEq)) (markLemmaUsedR nm)
 
+------------------------------------------------------------------------------
+
 -- We use sideEffectR because only rewrites generate new state in the Kernel.
 
 insertLemmaR :: (HasLemmas m, Monad m) => LemmaName -> Equality -> Rewrite c m a
@@ -482,3 +519,17 @@ modifyLemmaR nm nFn rr pFn uFn = do
 
 markLemmaUsedR :: (HasLemmas m, Monad m) => LemmaName -> Rewrite c m a
 markLemmaUsedR nm = modifyLemmaR nm id idR id (const True)
+
+------------------------------------------------------------------------------
+
+lemmaNameToEqualityT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Equality
+lemmaNameToEqualityT nm = liftM lemmaEq $ getLemmaByNameT nm
+
+-- | @e@ ==> @let v = lhs in e@  (also works in a similar manner at Program nodes)
+lemmaLhsIntroR :: LemmaName -> RewriteH Core
+lemmaLhsIntroR = lemmaNameToEqualityT >=> eqLhsIntroR
+
+-- | @e@ ==> @let v = rhs in e@  (also works in a similar manner at Program nodes)
+lemmaRhsIntroR :: LemmaName -> RewriteH Core
+lemmaRhsIntroR = lemmaNameToEqualityT >=> eqRhsIntroR
+

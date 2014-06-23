@@ -255,7 +255,7 @@ wwSplitR mAss wrap unwrap =
       >>> defAllR idR ( appAllR idR (letIntroR "f")
                         >>> letFloatArgR
                         >>> letAllR idR ( forwardT (wwFacBR mAss wrap unwrap)
-                                          >>> appAllR idR ( unfoldNameR "fix"
+                                          >>> appAllR idR ( unfoldNameR "Data.Function.fix"
                                                             >>> alphaLetWithR ["work"]
                                                             >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
                                                                                    >>> extractR (wwGenerateFusionR mAss)

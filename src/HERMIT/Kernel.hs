@@ -111,7 +111,7 @@ hermitKernel callback modGuts = do
                                                     ast <- liftIO $ takeMVar nextASTname
                                                     return $ return (ast, insert ast (fromHermitMResult hRes) st))
                                               (return . fail)
-                                              (apply r (topLevelHermitC guts) guts)
+                                              (applyT r (topLevelHermitC guts) guts)
 
                 , queryK = \ name t kEnv ->
                                 sendReqRead $ \ st ->
@@ -119,7 +119,7 @@ hermitKernel callback modGuts = do
                                         runHM (fromKEnv kEnv guts defs lemmas)
                                               (return . return . hResult)
                                               (return . fail)
-                                              (apply t (topLevelHermitC guts) guts)
+                                              (applyT t (topLevelHermitC guts) guts)
 
                 , deleteK = \ name -> sendReqWrite (return . delete name)
 
