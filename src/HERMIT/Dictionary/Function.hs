@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleContexts, RankNTypes #-}
+{-# LANGUAGE CPP, FlexibleContexts, RankNTypes, ScopedTypeVariables #-}
 module HERMIT.Dictionary.Function
     ( externals
     , appArgM
@@ -48,15 +48,18 @@ externals =
 ------------------------------------------------------------------------------------------------------
 
 -- | Traditional Static Argument Transformation
-staticArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c) => Rewrite c HermitM CoreDef
+staticArgR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+           => Rewrite c m CoreDef
 staticArgR = staticArgPredR (return . map fst)
 
 -- | Static Argument Transformation that only considers type arguments to be static.
-staticArgTypesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c) => Rewrite c HermitM CoreDef
+staticArgTypesR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+                => Rewrite c m CoreDef
 staticArgTypesR = staticArgPredR (return . map fst . filter (isTyVar . snd))
 
 -- | Static Argument Transformations which requires that arguments in the given position are static.
-staticArgPosR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c) => [Int] -> Rewrite c HermitM CoreDef
+staticArgPosR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+              => [Int] -> Rewrite c m CoreDef
 staticArgPosR is' = staticArgPredR $ \ss' -> let is = nub is'
                                                  ss = map fst ss'
                                             in if is == (is `intersect` ss)
@@ -64,9 +67,10 @@ staticArgPosR is' = staticArgPredR $ \ss' -> let is = nub is'
                                                else fail $ "args " ++ commas (filter (`notElem` ss) is) ++ " are not static."
 
 -- | Generalized Static Argument Transformation, which allows static arguments to be filtered.
-staticArgPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c)
-               => ([(Int, Var)] -> HermitM [Int]) -- ^ given list of static args and positions, decided which to transform
-               -> Rewrite c HermitM CoreDef
+staticArgPredR :: forall c m. (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb
+                              , MonadCatch m, MonadUnique m)
+               => ([(Int, Var)] -> m [Int]) -- ^ given list of static args and positions, decided which to transform
+               -> Rewrite c m CoreDef
 staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
     Def f rhs <- idR
     let (bnds, body) = collectBinders rhs
@@ -74,9 +78,11 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
     contextonlyT $ \ c -> do
         let bodyContext = foldl (flip addLambdaBinding) c bnds
 
-        -- TODO: we convert an Id to string here, and callsT then uses cmpString2Var
-        --       refactor to avoid intermediate string!
-        callPats <- applyT (callsT (var2String f) (callT >>> arr snd)) bodyContext (ExprCore body)
+            callPatsT :: Transform c m CoreExpr [[CoreExpr]]
+            callPatsT = extractT $ collectPruneT
+                            (promoteExprT $ callPredT (const . (== f)) >>> arr snd :: Transform c m Core [CoreExpr])
+
+        callPats <- applyT callPatsT bodyContext body
         let argExprs = transpose callPats
             numCalls = length callPats
             allBinds = zip [0..] bnds
@@ -110,10 +116,10 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
 
         let replaceCall :: Monad m => Rewrite c m CoreExpr
             replaceCall = do
-                (_,exprs) <- callT
+                (_,exprs) <- callPredT (const . (== f))
                 return $ mkApps (Var wkr) [ e | (p,e) <- zip [0..] exprs, (p::Int) `elem` ps ]
 
-        ExprCore body' <- applyT (callsR (var2String f) replaceCall) bodyContext (ExprCore body)
+        body' <- applyT (extractR $ prunetdR (promoteExprR replaceCall :: Rewrite c m Core)) bodyContext body
 
         return $ Def f $ mkCoreLams bnds $ Let (Rec [(wkr, mkCoreLams dbnds body')])
                                              $ mkApps (Var wkr) (varsToCoreExprs dbnds)

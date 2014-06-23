@@ -286,7 +286,7 @@ wwResultSplitR mAss abs rep =
       >>> defAllR idR ( appAllR idR (letIntroR "f")
                         >>> letFloatArgR
                         >>> letAllR idR ( forwardT (wwResultFacBR mAss abs rep)
-                                          >>> lamAllR idR (appAllR idR (appAllR ( unfoldNameR "fix"
+                                          >>> lamAllR idR (appAllR idR (appAllR ( unfoldNameR "Data.Function.fix"
                                                                                   >>> alphaLetWithR ["work"]
                                                                                   >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
                                                                                                          >>> extractR (wwResultGenerateFusionR mAss)

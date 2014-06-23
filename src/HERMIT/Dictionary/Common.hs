@@ -13,8 +13,6 @@ module HERMIT.Dictionary.Common
     , callNameG
     , callDataConT
     , callDataConNameT
-    , callsR
-    , callsT
       -- ** Collecting variable bindings
     , progConsIdsT
     , progConsRecIdsT
@@ -52,6 +50,7 @@ import Data.List
 import Data.Monoid
 
 import Control.Arrow
+import Control.Monad
 import Control.Monad.IO.Class
 
 import HERMIT.Context
@@ -86,9 +85,15 @@ callPredT p = do
 
 -- | Succeeds if we are looking at an application of given function
 --   returning zero or more arguments to which it is applied.
-callNameT :: MonadCatch m => String -> Transform c m CoreExpr (CoreExpr, [CoreExpr])
-callNameT nm = setFailMsg ("callNameT failed: not a call to '" ++ nm ++ ".") $
-    callPredT (const . cmpString2Var nm)
+--
+-- Note: function name is found using findIdT, then resulting Id is compared.
+-- So callNameT "Data.Function.fix" works as expected.
+-- If findIdT cannot find an Id, falls back to string comparison.
+callNameT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+          => String -> Transform c m CoreExpr (CoreExpr, [CoreExpr])
+callNameT nm = prefixFailMsg ("callNameT failed: not a call to '" ++ nm ++ ".") $ do
+    p <- liftM (==) (findIdT nm) <+ return (cmpString2Var nm)
+    callPredT (const . p)
 
 -- | Succeeds if we are looking at a fully saturated function call.
 callSaturatedT :: Monad m => Transform c m CoreExpr (CoreExpr, [CoreExpr])
@@ -97,8 +102,9 @@ callSaturatedT = callPredT (\ i args -> idArity i == length args)
 --       idArity is conservatively set to zero by default.
 
 -- | Succeeds if we are looking at an application of given function
-callNameG :: MonadCatch m => String -> Transform c m CoreExpr ()
-callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >>= \_ -> constT (return ())
+callNameG :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+          => String -> Transform c m CoreExpr ()
+callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >>= \_ -> return ()
 
 -- | Succeeds if we are looking at an application of a data constructor.
 callDataConT :: MonadCatch m => Transform c m CoreExpr (DataCon, [Type], [CoreExpr])
@@ -118,16 +124,6 @@ callDataConNameT nm = do
     res@(dc,_,_) <- callDataConT
     guardMsg (cmpString2Name nm (dataConName dc)) "wrong datacon."
     return res
-
--- TODO: Both callsR and callsT should be eliminated, now that we have callNameT
--- | apply a rewrite to all applications of a given function in a top-down manner, pruning on success.
-callsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => String -> Rewrite c m CoreExpr -> Rewrite c m Core
-callsR nm rr = prunetdR (promoteExprR $ callNameG nm >> rr)
-
--- | apply a translate to all applications of a given function in a top-down manner,
---   pruning on success, collecting the results.
-callsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => String -> Transform c m CoreExpr b -> Transform c m Core [b]
-callsT nm t = collectPruneT (promoteExprT $ callNameG nm >> t)
 
 ------------------------------------------------------------------------------
 
