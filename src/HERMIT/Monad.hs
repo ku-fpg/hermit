@@ -322,6 +322,7 @@ type DebugChan = DebugMessage -> HermitM ()
 
 ----------------------------------------------------------------------------
 
+#if __GLASGOW_HASKELL__ > 706
 runTcM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => TcM a -> m a
 runTcM m = do
     env <- getHscEnv
@@ -337,3 +338,4 @@ runTcM m = do
 
 runDsM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => DsM a -> m a
 runDsM = runTcM . initDsTc
+#endif

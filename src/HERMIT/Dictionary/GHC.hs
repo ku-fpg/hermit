@@ -31,7 +31,6 @@ import qualified Bag
 import qualified CoreLint
 
 import Control.Arrow
-import Control.Monad.IO.Class
 
 import Data.List (mapAccumL)
 
@@ -44,6 +43,7 @@ import HERMIT.Kure
 import HERMIT.Dictionary.Debug hiding (externals)
 
 #if __GLASGOW_HASKELL__ > 706
+import Control.Monad.IO.Class
 import Data.Char (isSpace)
 import HERMIT.Monad
 #endif
