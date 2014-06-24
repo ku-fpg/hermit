@@ -63,11 +63,14 @@ infoT =
 
               typeId   = case coreTC of
                              Core (ExprCore e)      -> let tyK = exprKindOrType e
+                                                           modName i = case nameModule_maybe (getName i) of
+                                                                        Nothing -> "no module name."
+                                                                        Just m -> moduleNameString (moduleName m)
                                                         in [(if isKind tyK then "Kind:        " else "Type:        ") ++ showPpr dynFlags tyK] ++
                                                            case e of
                                                              Var i -> [ ""
                                                                       , "OccName:                  " ++ getOccString i
-                                                                      , if isLocalVar i then "Local" else "Global"
+                                                                      , if isLocalVar i then "Local" else "Global: " ++ modName i
                                                                       , "Unique:                   " ++ show (getUnique i)
                                                                       , "Identifier arity:         " ++ show (arityOf c i)
                                                                       , "Identifier binding depth: " ++ runKureM show id (lookupHermitBindingDepth i c)
