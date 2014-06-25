@@ -16,7 +16,12 @@ module HERMIT.Dictionary.Rules
        )
 where
 
+#if __GLASGOW_HASKELL__ > 706
 import IOEnv hiding (liftIO)
+#else
+import Control.Monad.IO.Class
+import IOEnv (readMutVar, runIOEnv)
+#endif
 import qualified SpecConstr
 import qualified Specialise
 
