@@ -44,7 +44,9 @@ import qualified Data.Map as M
 
 import HERMIT.Dictionary
 import HERMIT.External hiding (Query, Shell)
+#if __GLASGOW_HASKELL__ > 706
 import HERMIT.Kernel (KernelEnv)
+#endif
 import HERMIT.Kernel.Scoped
 import HERMIT.Context
 import HERMIT.Kure
@@ -114,10 +116,14 @@ eval comp = do
         Shell es os :>>= k -> do
             -- We want to discard the current focus, open the shell at
             -- the top level, then restore the current focus.
+#if __GLASGOW_HASKELL__ > 706
             paths <- resetScoping env
+#endif
             clm (commandLine interpShellCommand os es)
+#if __GLASGOW_HASKELL__ > 706
             _ <- resetScoping env
             restoreScoping env paths
+#endif
             eval $ k ()
         Guard p (HPM m)  :>>= k  -> gets (p . ps_phase) >>= \ b -> when b (eval m) >>= eval . k
         Focus tp (HPM m) :>>= k  -> do
@@ -130,6 +136,7 @@ eval comp = do
 
 ------------------------- Shell-related helpers --------------------------------------
 
+#if __GLASGOW_HASKELL__ > 706
 resetScoping :: KernelEnv -> PluginM [PathH]
 resetScoping env = do
     kernel <- gets ps_kernel
@@ -152,6 +159,7 @@ restoreScoping env (h:t) = do
                            (const (return ()))
 
     go h t
+#endif
 
 -- | Run a kernel function on the current SAST
 runK :: (SAST -> PluginM a) -> PluginM a
