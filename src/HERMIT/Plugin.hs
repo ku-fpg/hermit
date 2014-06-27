@@ -98,7 +98,7 @@ runHPM phaseInfo pass = scopedKernel $ \ kernel initSAST -> do
     ps <- defPS initSAST kernel phaseInfo
     (r,st) <- hpmToIO ps pass
     either (\case PAbort       -> abortS kernel
-                  PResume sast -> resumeS kernel sast
+                  PResume sast -> applyS kernel occurAnalyseAndDezombifyR (mkKernelEnv st) sast >>= resumeS kernel
                   PError  err  -> putStrLn err >> abortS kernel)
            (\ _ -> resumeS kernel $ ps_cursor st) r
 
