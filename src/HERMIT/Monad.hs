@@ -4,6 +4,7 @@ module HERMIT.Monad
     ( -- * The HERMIT Monad
       HermitM
     , runHM
+    , embedHermitM
     , newGlobalIdH
     , newIdH
     , newTyVarH
@@ -123,6 +124,15 @@ runHM :: HermitMEnv                    -- env
       -> HermitM a                     -- ma
       -> CoreM b
 runHM env success failure ma = runHermitM ma env >>= runKureM success failure
+
+-- | Allow HermitM to be embedded in another monad with proper capabilities.
+embedHermitM :: (HasHermitMEnv m, HasLemmas m, HasStash m, LiftCoreM m) => HermitM a -> m a
+embedHermitM hm = do
+    env <- getHermitMEnv
+    r <- liftCoreM $ runHM env return fail hm
+    putStash $ hResStash r
+    forM_ (toList (hResLemmas r)) $ uncurry insertLemma
+    return $ hResult r
 
 instance Functor HermitM where
   fmap :: (a -> b) -> HermitM a -> HermitM b
