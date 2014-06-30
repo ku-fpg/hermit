@@ -3,6 +3,8 @@
 module HERMIT.ParserCore
     ( parseCore
     , parseCoreExprT
+    , parse2BeforeT
+    , parse3BeforeT
     , parse2beforeBiR
     , parse3beforeBiR
     , parse4beforeBiR
@@ -184,6 +186,16 @@ parseCore (CoreString s) c =
 parseCoreExprT :: (BoundVars c, HasHermitMEnv m, HasLemmas m, HasStash m, LiftCoreM m)
                => CoreString -> Transform c m a CoreExpr
 parseCoreExprT cs = contextonlyT $ embedHermitM . parseCore cs
+
+parse2BeforeT :: (BoundVars c, HasHermitMEnv m, HasLemmas m, HasStash m, LiftCoreM m)
+              => (CoreExpr -> CoreExpr -> Translate c m a b)
+              -> CoreString -> CoreString -> Translate c m a b
+parse2BeforeT f s1 s2 = parseCoreExprT s1 &&& parseCoreExprT s2 >>= uncurry f
+
+parse3BeforeT :: (BoundVars c, HasHermitMEnv m, HasLemmas m, HasStash m, LiftCoreM m)
+              => (CoreExpr -> CoreExpr -> CoreExpr -> Translate c m a b)
+              -> CoreString -> CoreString -> CoreString -> Translate c m a b
+parse3BeforeT f s1 s2 s3 = (parseCoreExprT s1 &&& parseCoreExprT s2) &&& parseCoreExprT s3 >>= (uncurry . uncurry $ f)
 
 parse2beforeBiR :: (CoreExpr -> CoreExpr -> BiRewriteH a)
                 -> CoreString -> CoreString -> BiRewriteH a
