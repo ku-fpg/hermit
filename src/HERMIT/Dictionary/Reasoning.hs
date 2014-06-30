@@ -502,8 +502,8 @@ lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaEq)) (mar
 
 -- We use sideEffectR because only rewrites generate new state in the Kernel.
 
-insertLemmaR :: (HasLemmas m, Monad m) => LemmaName -> Equality -> Rewrite c m a
-insertLemmaR nm eq = sideEffectR $ \ _ _ -> insertLemma nm $ Lemma eq False False
+insertLemmaR :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> Rewrite c m a
+insertLemmaR nm l = sideEffectR $ \ _ _ -> insertLemma nm l
 
 modifyLemmaR :: (HasLemmas m, Monad m)
              => LemmaName

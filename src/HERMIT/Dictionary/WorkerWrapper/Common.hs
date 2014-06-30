@@ -6,6 +6,7 @@ module HERMIT.Dictionary.WorkerWrapper.Common
     , assumptionAEqualityT
     , assumptionBEqualityT
     , assumptionCEqualityT
+    , split1BetaR
     , workLabel
     ) where
 
@@ -21,6 +22,7 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.ParserCore
 
+import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Function hiding (externals)
 import HERMIT.Dictionary.Reasoning hiding (externals)
 
@@ -30,17 +32,25 @@ import HERMIT.Dictionary.Reasoning hiding (externals)
 externals :: [External]
 externals = map (.+ Proof)
     [ external "intro-ww-assumption-A"
-               (\nm absC repC -> assumptionAEqualityT absC repC >>= insertLemmaR nm :: RewriteH Core)
-               [ "Introduce a lemma for worker/wrapper assumption A"
-               , "using given abs and rep functions." ]
+        (\nm absC repC -> do
+            eq <- parse2BeforeT assumptionAEqualityT absC repC
+            insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
+        [ "Introduce a lemma for worker/wrapper assumption A"
+        , "using given abs and rep functions." ]
     , external "intro-ww-assumption-B"
-               (\nm absC repC bodyC -> assumptionBEqualityT absC repC bodyC >>= insertLemmaR nm :: RewriteH Core)
-               [ "Introduce a lemma for worker/wrapper assumption B"
-               , "using given abs, rep, and body functions." ]
+        (\nm absC repC bodyC -> do
+            eq <- parse3BeforeT assumptionBEqualityT absC repC bodyC
+            insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
+        [ "Introduce a lemma for worker/wrapper assumption B"
+        , "using given abs, rep, and body functions." ]
     , external "intro-ww-assumption-C"
-               (\nm absC repC bodyC -> assumptionCEqualityT absC repC bodyC >>= insertLemmaR nm :: RewriteH Core)
-               [ "Introduce a lemma for worker/wrapper assumption C"
-               , "using given abs, rep, and body functions." ]
+        (\nm absC repC bodyC -> do
+            eq <- parse3BeforeT assumptionCEqualityT absC repC bodyC
+            insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
+        [ "Introduce a lemma for worker/wrapper assumption C"
+        , "using given abs, rep, and body functions." ]
+    , external "split-1-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split1BetaR nm) absC :: CoreString -> RewriteH Core)
+        [ "Perform worker/wrapper split 1B." ]
     ]
 
 --------------------------------------------------------------------------------------------------
@@ -67,29 +77,22 @@ workLabel = "recursive-definition-of-work-for-use-by-ww-fusion"
 
 --------------------------------------------------------------------------------------------------
 
--- TODO: generalize away from TransformH on all of these
-
 -- Given abs and rep expressions, build "abs . rep = id"
-assumptionAEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m, HasStash m
-                        , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
-                     => CoreString -> CoreString -> Transform c m x Equality
-assumptionAEqualityT absC repC = prefixFailMsg "Building assumption A failed: " $ do
-    absE <- parseCoreExprT absC
-    repE <- parseCoreExprT repC
+assumptionAEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m
+                        , MonadCatch m, MonadIO m, MonadThings m )
+                     => CoreExpr -> CoreExpr -> Transform c m x Equality
+assumptionAEqualityT absE repE = prefixFailMsg "Building assumption A failed: " $ do
     comp <- buildCompositionT absE repE
     let (_,compBody) = collectTyBinders comp
-    (tvs, xTy, _) <- funTyComponentsM (exprType comp)
+    (tvs, xTy, _) <- splitFunTypeM (exprType comp)
     idE <- buildIdT xTy
     return $ Equality tvs compBody idE
 
 -- Given abs, rep, and f expressions, build "abs . rep . f = f"
-assumptionBEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m, HasStash m
-                        , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
-                     => CoreString -> CoreString -> CoreString -> Transform c m x Equality
-assumptionBEqualityT absC repC fC = prefixFailMsg "Building assumption B failed: " $ do
-    absE <- parseCoreExprT absC
-    repE <- parseCoreExprT repC
-    fE   <- parseCoreExprT fC
+assumptionBEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m
+                        , MonadCatch m, MonadIO m, MonadThings m)
+                     => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Equality
+assumptionBEqualityT absE repE fE = prefixFailMsg "Building assumption B failed: " $ do
     repAfterF <- buildCompositionT repE fE
     comp <- buildCompositionT absE repAfterF
     let (tvs,lhs) = collectTyBinders comp
@@ -97,11 +100,28 @@ assumptionBEqualityT absC repC fC = prefixFailMsg "Building assumption B failed:
     return $ Equality tvs lhs rhs
 
 -- Given abs, rep, and f expressions, build "fix (abs . rep . f) = fix f"
-assumptionCEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m, HasStash m
-                        , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
-                     => CoreString -> CoreString -> CoreString -> Transform c m x Equality
-assumptionCEqualityT absC repC fC = prefixFailMsg "Building assumption C failed: " $ do
-    Equality vs lhs rhs <- assumptionBEqualityT absC repC fC
+assumptionCEqualityT :: (BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+                     => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Equality
+assumptionCEqualityT absE repE fE = prefixFailMsg "Building assumption C failed: " $ do
+    Equality vs lhs rhs <- assumptionBEqualityT absE repE fE
     lhs' <- buildFixT lhs
     rhs' <- buildFixT rhs
     return $ Equality vs lhs' rhs'
+
+split1BetaR :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m
+               , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m)
+            => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
+split1BetaR nm absE repE = do
+    (_fixId, [_tyA, f]) <- callNameT "Data.Function.fix"
+
+    newFixBody <- buildCompositionT repE =<< buildCompositionT f absE
+    workRhs <- buildFixT newFixBody
+
+    workId <- constT $ newIdH "worker" $ exprType workRhs
+
+    newRhs <- buildApplicationM absE (varToCoreExpr workId)
+
+    eq <- assumptionCEqualityT absE repE f
+    _ <- insertLemmaR nm $ Lemma eq False True -- unproven, used
+
+    return $ mkCoreLet (Rec [(workId, workRhs)]) newRhs
