@@ -129,7 +129,7 @@ runHM env success failure ma = runHermitM ma env >>= runKureM success failure
 embedHermitM :: (HasHermitMEnv m, HasLemmas m, HasStash m, LiftCoreM m) => HermitM a -> m a
 embedHermitM hm = do
     env <- getHermitMEnv
-    r <- liftCoreM $ runHM env return fail hm
+    r <- liftCoreM (runHermitM hm env) >>= runKureM return fail
     putStash $ hResStash r
     forM_ (toList (hResLemmas r)) $ uncurry insertLemma
     return $ hResult r
