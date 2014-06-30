@@ -174,6 +174,8 @@ buildApplicationM :: (HasDynFlags m, MonadCatch m, MonadIO m) => CoreExpr -> Cor
 buildApplicationM f x = do
     (vsF, domF, _) <- funTyComponentsM (exprType f)
     let (vsX, xTy) = splitForAllTys (exprType x)
+        allTvs = vsF ++ vsX
+        bindFn v = if v `elem` allTvs then BindMe else Skolem
 
     sub <- maybe (do d <- getDynFlags
                      liftIO $ putStrLn $ "f: " ++ showPpr d f
@@ -184,7 +186,7 @@ buildApplicationM f x = do
                      liftIO $ putStrLn $ "xTy: " ++ showPpr d xTy
                      fail "buildApplicationM - domain of f and type of x do not unify")
                  return
-                 (tcUnifyTy domF xTy)
+                 (tcUnifyTys bindFn [domF] [xTy])
 
     f' <- substOrApply f [ (v, Type $ substTyVar sub v) | v <- vsF ]
     x' <- substOrApply x [ (v, Type $ substTyVar sub v) | v <- vsX ]

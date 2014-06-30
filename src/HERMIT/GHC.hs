@@ -111,7 +111,7 @@ import TcMType (newWantedEvVar)
 import TcRnMonad (getCtLoc)
 import TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
 import TcSimplify (solveWantedsTcM)
-import Unify (tcUnifyTy)
+import Unify (tcUnifyTys, BindFlag(..))
 
 import HERMIT.GHC.Typechecker
 #endif
