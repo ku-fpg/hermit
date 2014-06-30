@@ -136,7 +136,7 @@ appArgM n e | n < 0     = fail "appArgM: arg must be non-negative"
                              else return $ l !! n
 
 -- | Build composition of two functions.
-buildCompositionT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+buildCompositionT :: (BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
                   => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
 buildCompositionT f g = do
 #if __GLASGOW_HASKELL__ > 706
@@ -172,7 +172,7 @@ buildCompositionT f g = do
 -- | Given expression for f and for x, build f x, figuring out the type arguments.
 buildApplicationM :: (HasDynFlags m, MonadCatch m, MonadIO m) => CoreExpr -> CoreExpr -> m CoreExpr
 buildApplicationM f x = do
-    (vsF, domF, _) <- funTyComponentsM (exprType f)
+    (vsF, domF, _) <- splitFunTypeM (exprType f)
     let (vsX, xTy) = splitForAllTys (exprType x)
         allTvs = vsF ++ vsX
         bindFn v = if v `elem` allTvs then BindMe else Skolem
@@ -200,7 +200,7 @@ buildApplicationM f x = do
 buildFixT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
           => CoreExpr -> Transform c m x CoreExpr
 buildFixT f = do
-    ty <- endoFunExprType f
+    (tvs, ty) <- endoFunExprTypeM f
     fixId <- findIdT "Data.Function.fix"
     return $ mkCoreApps (varToCoreExpr fixId) [Type ty, f]
 

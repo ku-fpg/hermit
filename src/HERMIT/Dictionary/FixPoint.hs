@@ -143,9 +143,9 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
 fixFusionRuleBR :: Maybe (EqualityProof HermitC HermitM) -> Maybe (RewriteH CoreExpr) -> CoreExpr -> CoreExpr -> CoreExpr -> BiRewriteH CoreExpr
 fixFusionRuleBR meq mfstrict f g h = beforeBiR
   (prefixFailMsg "fixed-point fusion failed: " $
-   do (tyA,tyB) <- funExprArgResTypes f
-      tyA'      <- endoFunExprType g
-      tyB'      <- endoFunExprType h
+   do (_,tyA,tyB) <- funExprArgResTypesM f -- TODO: don't throw away TyVars
+      (_,tyA')    <- endoFunExprTypeM g
+      (_,tyB')    <- endoFunExprTypeM h
       guardMsg (typeAlphaEq tyA tyA' && typeAlphaEq tyB tyB') "given functions do not have compatible types."
       whenJust (verifyStrictT f) mfstrict
       whenJust (\ eq ->

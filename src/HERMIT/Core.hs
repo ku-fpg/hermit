@@ -58,13 +58,12 @@ module HERMIT.Core
           , isCoArg
           , exprKindOrType
           , exprTypeM
-          , endoFunType
+          , endoFunTypeM
           , splitTyConAppM
           , splitFunTypeM
-          , endoFunExprType
-          , funExprArgResTypes
+          , endoFunExprTypeM
+          , funExprArgResTypesM
           , funExprsWithInverseTypes
-          , funTyComponentsM
           , appCount
           , mapAlts
 
@@ -381,41 +380,37 @@ mapAlts f alts = [ (ac, vs, f e) | (ac, vs, e) <- alts ]
 splitTyConAppM :: Monad m => Type -> m (TyCon, [Type])
 splitTyConAppM = maybeM "splitTyConApp failed." . splitTyConApp_maybe
 
--- | Return the domain and codomain types of a function type, if it is a function type.
-splitFunTypeM :: Monad m => Type -> m (Type,Type)
-splitFunTypeM = maybeM "not a function type." . splitFunTy_maybe
+-- | Get the quantified variables, domain, and codomain of a function type.
+splitFunTypeM :: MonadCatch m => Type -> m ([TyVar], Type, Type)
+splitFunTypeM ty = prefixFailMsg "Split function type failed: " $ do
+    let (tvs, fTy) = splitForAllTys ty
+    (argTy, resTy) <- maybeM "not a function type." $ splitFunTy_maybe fTy
+    return (tvs, argTy, resTy)
 
 -- | Return the domain/codomain type of an endofunction type.
-endoFunType :: Monad m => Type -> m Type
-endoFunType ty =
-  do (ty1,ty2) <- splitFunTypeM ty
+endoFunTypeM :: MonadCatch m => Type -> m ([TyVar], Type)
+endoFunTypeM ty =
+  do (tvs,ty1,ty2) <- splitFunTypeM ty
      guardMsg (eqType ty1 ty2) ("argument and result types differ.")
-     return ty1
+     return (tvs, ty1)
 
 -- | Return the domain/codomain type of an endofunction expression.
-endoFunExprType :: Monad m => CoreExpr -> m Type
-endoFunExprType = exprTypeM >=> endoFunType
+endoFunExprTypeM :: MonadCatch m => CoreExpr -> m ([TyVar], Type)
+endoFunExprTypeM = exprTypeM >=> endoFunTypeM
 
 -- | Return the domain and codomain types of a function expression.
-funExprArgResTypes :: Monad m => CoreExpr -> m (Type,Type)
-funExprArgResTypes = exprTypeM >=> splitFunTypeM
+funExprArgResTypesM :: MonadCatch m => CoreExpr -> m ([TyVar],Type,Type)
+funExprArgResTypesM = exprTypeM >=> splitFunTypeM
 
 -- | Check two expressions have types @a -> b@ and @b -> a@, returning @(a,b)@.
 funExprsWithInverseTypes :: MonadCatch m => CoreExpr -> CoreExpr -> m (Type,Type)
 funExprsWithInverseTypes f g =
-  do (fdom,fcod) <- funExprArgResTypes f
-     (gdom,gcod) <- funExprArgResTypes g
+  do (_,fdom,fcod) <- funExprArgResTypesM f -- TODO: don't throw away TyVars
+     (_,gdom,gcod) <- funExprArgResTypesM g
      setFailMsg "functions do not have inverse types." $
        do guardM (eqType fdom gcod)
           guardM (eqType gdom fcod)
           return (fdom,fcod)
-
--- | Get the quantified variables, domain, and codomain of a function type.
-funTyComponentsM :: MonadCatch m => Type -> m ([TyVar], Type, Type)
-funTyComponentsM ty = setFailMsg "not a function type." $ do
-    let (tvs, fTy) = splitForAllTys ty
-    (argTy, resTy) <- splitFunTypeM fTy
-    return (tvs, argTy, resTy)
 
 -----------------------------------------------------------------------
 

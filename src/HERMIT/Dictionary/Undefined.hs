@@ -196,7 +196,7 @@ undefinedCaseAltsR = prefixFailMsg "undefined-case-alts failed: " $
 -- | Verify that the given rewrite is a proof that the given expression is a strict function.
 verifyStrictT :: (BoundVars c, MonadCatch m, HasHermitMEnv m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m) => CoreExpr -> Rewrite c m CoreExpr -> Transform c m a ()
 verifyStrictT f r = prefixFailMsg "strictness verification failed: " $
-  do (argTy, resTy) <- constT (funExprArgResTypes f)
+  do (_, argTy, resTy) <- constT (funExprArgResTypesM f)
      undefArg       <- mkUndefinedValT argTy
      rhs            <- mkUndefinedValT resTy
      let lhs = App f undefArg
@@ -207,7 +207,7 @@ applyToUndefinedT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasHermitMEnv m, 
                   => CoreExpr -> Transform c m x CoreExpr
 applyToUndefinedT f = do
     let (tvs, body) = collectTyBinders f
-    (dom,_) <- splitFunTypeM (exprType body)
+    (_,dom,_) <- splitFunTypeM (exprType body)
     undef <- mkUndefinedValT dom
     return $ mkCoreLams tvs $ mkCoreApp body undef
 
