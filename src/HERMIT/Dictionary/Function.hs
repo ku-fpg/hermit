@@ -202,7 +202,8 @@ buildFixT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m
 buildFixT f = do
     (tvs, ty) <- endoFunExprTypeM f
     fixId <- findIdT "Data.Function.fix"
-    return $ mkCoreApps (varToCoreExpr fixId) [Type ty, f]
+    f' <- substOrApply f [ (v, varToCoreExpr v) | v <- tvs ]
+    return $ mkCoreLams tvs $ mkCoreApps (varToCoreExpr fixId) [Type ty, f']
 
 -- | Build an expression that is the monomorphic id function for given type.
 buildIdT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
