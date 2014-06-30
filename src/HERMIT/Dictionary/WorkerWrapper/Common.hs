@@ -9,8 +9,11 @@ module HERMIT.Dictionary.WorkerWrapper.Common
     , workLabel
     ) where
 
+import Control.Monad.IO.Class
+
 import Data.Typeable
 
+import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
@@ -67,7 +70,9 @@ workLabel = "recursive-definition-of-work-for-use-by-ww-fusion"
 -- TODO: generalize away from TransformH on all of these
 
 -- Given abs and rep expressions, build "abs . rep = id"
-assumptionAEqualityT :: CoreString -> CoreString -> TransformH x Equality
+assumptionAEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m, HasStash m
+                        , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
+                     => CoreString -> CoreString -> Transform c m x Equality
 assumptionAEqualityT absC repC = prefixFailMsg "Building assumption A failed: " $ do
     absE <- parseCoreExprT absC
     repE <- parseCoreExprT repC
@@ -78,7 +83,9 @@ assumptionAEqualityT absC repC = prefixFailMsg "Building assumption A failed: " 
     return $ Equality tvs compBody idE
 
 -- Given abs, rep, and f expressions, build "abs . rep . f = f"
-assumptionBEqualityT :: CoreString -> CoreString -> CoreString -> TransformH x Equality
+assumptionBEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m, HasStash m
+                        , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
+                     => CoreString -> CoreString -> CoreString -> Transform c m x Equality
 assumptionBEqualityT absC repC fC = prefixFailMsg "Building assumption B failed: " $ do
     absE <- parseCoreExprT absC
     repE <- parseCoreExprT repC
@@ -90,7 +97,9 @@ assumptionBEqualityT absC repC fC = prefixFailMsg "Building assumption B failed:
     return $ Equality tvs lhs rhs
 
 -- Given abs, rep, and f expressions, build "fix (abs . rep . f) = fix f"
-assumptionCEqualityT :: CoreString -> CoreString -> CoreString -> TransformH x Equality
+assumptionCEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m, HasStash m
+                        , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
+                     => CoreString -> CoreString -> CoreString -> Transform c m x Equality
 assumptionCEqualityT absC repC fC = prefixFailMsg "Building assumption C failed: " $ do
     Equality vs lhs rhs <- assumptionBEqualityT absC repC fC
     lhs' <- buildFixT lhs
