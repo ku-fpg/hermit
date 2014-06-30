@@ -17,7 +17,6 @@ import Control.Monad.State
 
 import Data.Typeable
 
-import HERMIT.Dictionary
 import HERMIT.External
 import HERMIT.Kure
 import HERMIT.Kernel.Scoped
