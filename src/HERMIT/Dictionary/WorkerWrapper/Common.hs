@@ -115,21 +115,39 @@ assumptionCEqualityT absE repE fE = prefixFailMsg "Building assumption C failed:
     return $ Equality vs lhs' rhs'
 
 #if __GLASGOW_HASKELL__ > 706
+-- Given abs, rep, and 'fix g' expressions, build "rep (abs (fix g)) = fix g"
+wwFusionEqualityT :: (HasDynFlags m, MonadCatch m, MonadIO m)
+                  => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Equality
+wwFusionEqualityT absE repE fixgE = prefixFailMsg "Building worker/wrapper fusion lemma failed: " $ do
+    protoLhs <- buildApplicationM repE =<< buildApplicationM absE fixgE
+    let (tvs, lhs) = collectTyBinders protoLhs
+    -- This way, the rhs is applied to the proper type variables.
+    rhs <- case lhs of
+            (App _ (App _ rhs)) -> return rhs
+            _                   -> fail "lhs malformed"
+    return $ Equality tvs lhs rhs
+
+-- Perform the worker/wrapper split using condition 1-beta, introducing
+-- an unproven lemma for assumption C, and an appropriate w/w fusion lemma.
 split1BetaR :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m
                , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m)
             => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
 split1BetaR nm absE repE = do
     (_fixId, [_tyA, f]) <- callNameT "Data.Function.fix"
 
-    newFixBody <- buildCompositionT repE =<< buildCompositionT f absE
-    workRhs <- buildFixT newFixBody
+    g <- buildCompositionT repE =<< buildCompositionT f absE
+    gId <- constT $ newIdH "g" $ exprType g
 
+    workRhs <- buildFixT $ varToCoreExpr gId
     workId <- constT $ newIdH "worker" $ exprType workRhs
 
     newRhs <- buildApplicationM absE (varToCoreExpr workId)
 
-    eq <- assumptionCEqualityT absE repE f
-    _ <- insertLemmaR nm $ Lemma eq False True -- unproven, used
+    assumptionEq <- assumptionCEqualityT absE repE f
+    _ <- insertLemmaR (nm++"-assumption") $ Lemma assumptionEq False True -- unproven, used
 
-    return $ mkCoreLet (Rec [(workId, workRhs)]) newRhs
+    wwFusionEq <- wwFusionEqualityT absE repE workRhs
+    _ <- insertLemmaR (nm++"-fusion") $ Lemma wwFusionEq True False -- proven (assumed), unused
+
+    return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
 #endif
