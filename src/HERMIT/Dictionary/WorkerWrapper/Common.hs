@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, TypeFamilies #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, TypeFamilies #-}
 module HERMIT.Dictionary.WorkerWrapper.Common
     ( externals
     , WWAssumptionTag(..)
@@ -6,7 +6,9 @@ module HERMIT.Dictionary.WorkerWrapper.Common
     , assumptionAEqualityT
     , assumptionBEqualityT
     , assumptionCEqualityT
+#if __GLASGOW_HASKELL__ > 706
     , split1BetaR
+#endif
     , workLabel
     ) where
 
@@ -22,7 +24,9 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.ParserCore
 
+#if __GLASGOW_HASKELL__ > 706
 import HERMIT.Dictionary.Common
+#endif
 import HERMIT.Dictionary.Function hiding (externals)
 import HERMIT.Dictionary.Reasoning hiding (externals)
 
@@ -49,8 +53,10 @@ externals = map (.+ Proof)
             insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
         [ "Introduce a lemma for worker/wrapper assumption C"
         , "using given abs, rep, and body functions." ]
+#if __GLASGOW_HASKELL__ > 706
     , external "split-1-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split1BetaR nm) absC :: CoreString -> RewriteH Core)
         [ "Perform worker/wrapper split 1B." ]
+#endif
     ]
 
 --------------------------------------------------------------------------------------------------
@@ -108,6 +114,7 @@ assumptionCEqualityT absE repE fE = prefixFailMsg "Building assumption C failed:
     rhs' <- buildFixT rhs
     return $ Equality vs lhs' rhs'
 
+#if __GLASGOW_HASKELL__ > 706
 split1BetaR :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m
                , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m)
             => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
@@ -125,3 +132,4 @@ split1BetaR nm absE repE = do
     _ <- insertLemmaR nm $ Lemma eq False True -- unproven, used
 
     return $ mkCoreLet (Rec [(workId, workRhs)]) newRhs
+#endif

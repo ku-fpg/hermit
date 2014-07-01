@@ -144,8 +144,8 @@ buildCompositionT f g = do
     fDot <- buildApplicationM (varToCoreExpr composeId) f
     buildApplicationM fDot g
 #else
-    (vsF, domF, codF) <- funTyComponentsM (exprType f)
-    (vsG, _ , codG) <- funTyComponentsM (exprType g)
+    (vsF, domF, codF) <- splitFunTypeM (exprType f)
+    (vsG, _ , codG) <- splitFunTypeM (exprType g)
     composeId <- findIdT "Data.Function.."
     -- (.) :: forall b c a. (b -> c) -> (a -> b) -> a -> c
     -- f . g
@@ -159,7 +159,7 @@ buildCompositionT f g = do
                                 Nothing -> varToCoreExpr v
                                 Just ty -> Type ty)
                          | v <- vsG ]
-    (domG',_) <- funExprArgResTypes g'
+    (_,domG',_) <- funExprArgResTypesM g'
     f' <- substOrApply f [ (v, varToCoreExpr v) | v <- vsF ]
 
     let vsG' = filter (`notElem` (map fst sub)) vsG -- things we should stick back on as foralls
