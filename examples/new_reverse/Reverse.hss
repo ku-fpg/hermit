@@ -30,3 +30,68 @@ bash
 unshadow
 
 -- transformation complete, now we can prove the lemmas
+
+prove-lemma repHstrict
+lhs unfold
+lhs (one-td (unfold-rule appendFix))
+lhs unfold
+both (innermost undefined-expr)
+end-proof
+
+prove-lemma "repH []"
+lhs unfold
+extensionality
+lhs (one-td (unfold-rule appendFix))
+lhs unfold
+both smash
+end-proof
+
+prove-lemma "repH (:)"
+both (any-call (unfold 'repH))
+both (any-call (unfold-rule appendFix))
+both smash
+lhs (unfold >>> smash)
+end-proof
+
+prove-lemma "repH ++"
+both (any-call (unfold 'repH))
+both (any-call (unfold-rule appendFix))
+lhs (eta-expand 'x)
+rhs unfold
+induction 'xs
+-- undefined
+both (replicate 2 (any-call (unfold 'myAppend)))
+both (innermost undefined-expr)
+end-case
+-- []
+both (replicate 2 (any-call (unfold 'myAppend)))
+both smash
+end-case
+-- (:)
+both (one-td unfold)
+lhs (one-td unfold)
+both smash
+rhs (one-td (backward (lemma ind-hyp-0)))
+end-case
+
+-- This auxilliary lemma greatly simplifies the proof of rev-assumption
+rule-to-lemma "++ []"
+prove-lemma "++ []"
+lhs (one-td (unfold-rule appendFix))
+induction 'xs
+lhs unfold
+lhs undefined-expr
+end-case
+lhs unfold
+lhs simplify
+end-case
+lhs unfold
+lhs simplify
+lhs (one-td (forward (lemma ind-hyp-0)))
+end-case
+
+prove-lemma "rev-assumption"
+both (unfold >>> smash)
+lhs (replicate 4 (one-td unfold >+> smash))
+lhs (one-td (forward (lemma "++ []")))
+end-proof

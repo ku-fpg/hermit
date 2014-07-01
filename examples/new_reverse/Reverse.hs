@@ -20,3 +20,6 @@ main = defaultMain
        [ bench (show n) $ whnf (\n -> sum $ rev [1..n]) n
        | n <- take 8 $ [50,100..]
        ]
+
+-- useful auxilliary lemma for proving the w/w assumption
+{-# RULES "++ []" [~] forall xs. xs ++ [] = xs #-}
