@@ -1,0 +1,32 @@
+set-pp-type Show
+
+flatten-module
+
+-- first, do the actual transformation
+binding-of 'rev
+fix-intro
+application-of 'fix
+
+-- crucial w/w split step, using condition 1-beta
+-- introduces unproven lemma for assumption C named rev-assumption
+split-1-beta "rev" [| absR |] [| repR |]
+
+any-call (unfold ['absR,'repR])
+simplify
+one-td (case-float-arg-lemma repHstrict) -- note: introduces an unproven lemma named repHstrict
+one-td (unfold-rule "repH ++")           -- note: introduces an unproven lemma named "repH ++"
+simplify
+one-td (unfold-rule "repH-absH-fusion")  -- note: introduces an unproven lemma named repH-absH-fusion
+
+-- TODO: this doesn't work yet
+-- fusion rule in terms of repR and absR, we need in terms of repH and absR
+-- modify-lemma rev-fusion (lhs ((any-call (unfold ['repR,'absR])) >+> smash))
+
+one-td (unfold-rule "repH (:)")          -- note: introduces an unproven lemma named "repH (:)"
+any-td (unfold-rule "repH []")           -- note: introduces an unproven lemma named "repH []"
+any-call (unfold 'fix)
+any-call (unfold 'absH)
+bash
+unshadow
+
+-- transformation complete, now we can prove the lemmas
