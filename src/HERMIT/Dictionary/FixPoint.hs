@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
 
 module HERMIT.Dictionary.FixPoint
        ( -- * Operations on the Fixed Point Operator (fix)
@@ -16,8 +16,8 @@ where
 
 import Control.Applicative
 import Control.Arrow
-
-import Data.Monoid (mempty)
+import Control.Monad
+import Control.Monad.IO.Class
 
 import HERMIT.Context
 import HERMIT.Core
@@ -30,9 +30,10 @@ import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Function
-import HERMIT.Dictionary.GHC
+import HERMIT.Dictionary.Kure
 import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Undefined
+import HERMIT.Dictionary.Unfold
 
 --------------------------------------------------------------------------------------------------
 
@@ -74,11 +75,20 @@ externals =
 --------------------------------------------------------------------------------------------------
 
 -- |  @f = e@   ==\>   @f = fix (\\ f -> e)@
-fixIntroR :: RewriteH CoreDef
-fixIntroR = prefixFailMsg "fix introduction failed: " $
-           do Def f _ <- idR
-              f' <- constT $ cloneVarH id f
-              Def f <$> (buildFixT =<< (defT mempty (extractR $ substR f $ varToCoreExpr f') (\ () e' -> Lam f' e')))
+fixIntroR :: forall c m.
+             ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+             , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+          => Rewrite c m CoreDef
+fixIntroR = prefixFailMsg "fix introduction failed: " $ do
+    Def f rhs <- idR
+    let (tvs, body) = collectTyBinders rhs
+    f' <- constT $ newIdH (getOccString f) (exprType body)
+    body' <- contextonlyT $ \ c -> do
+                let constLam = mkCoreLams tvs $ varToCoreExpr f'
+                    c' = addBindingGroup (NonRec f constLam)   -- we want to unfold f such as to throw away TyArgs
+                       $ addBindingGroup (NonRec f' body)    c -- add f' to context so its in-scope after unfolding
+                applyT (extractR (anyCallR (promoteR (unfoldPredR (const . (==f))) :: Rewrite c m Core))) c' body
+    liftM (Def f . mkCoreLams tvs) $ buildFixT $ Lam f' body'
 
 --------------------------------------------------------------------------------------------------
 
