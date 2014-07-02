@@ -5,6 +5,7 @@ dist/
 *.swp
 *.swo
 *.DS_Store
+*.exe
 BEFORE.HERMIT.*
 AFTER.HERMIT.*
 # example binaries
