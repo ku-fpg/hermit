@@ -1,1 +1,35 @@
--- Translate nub
+set-pp-type Show
+
+flatten-module
+
+binding-of 'nub
+fix-intro ; down
+split-2-beta nub [| absN |] [| repN |]
+
+-- this bit to essentially undo the fix-intro
+{ application-of 'repN ; app-arg ; let-intro 'nub ; one-td (unfold 'fix) ; simplify }
+innermost let-float
+alpha-let ['nub'] -- rename x to nub'
+
+-- back to the derivation
+binding-of 'worker
+one-td (unfold 'repN)
+remember origworker
+one-td (unfold 'filter)
+one-td (case-float-arg-lemma nubStrict)
+one-td (unfold 'nub')
+simplify
+
+one-td (case-float-arg-lemma nubStrict)
+{ consider case ; consider case ; case-alt 1 ; alt-rhs
+  unfold ; simplify
+  one-td (unfold-rule "filter-fusion") ; simplify
+  one-td (unfold-rule "member-fusion")
+}
+nonrec-to-rec
+any-td (fold-remembered origworker)
+
+-- prove strictness condition
+prove-lemma nubStrict
+lhs (unfold >>> undefined-expr)
+end-proof
