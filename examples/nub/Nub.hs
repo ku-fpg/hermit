@@ -1,7 +1,5 @@
 module Main where
 
-import Criterion.Main
-
 import qualified Data.Set as Set
 import Data.Set (Set)
 
@@ -22,11 +20,8 @@ absN h (x:xs) = x : h xs (Set.singleton x)
 repN :: ([Int] -> [Int]) -> [Int] -> Set Int -> [Int]
 repN h xs s = h (filter (`Set.notMember` s) xs)
 
---main = print (nub [ x | n <- [1..1000], x <- [1..n] ])
-main = defaultMain
-        [ bench (show sz) $ nf nub [ x | n <- [1..sz], x <- [1..n] ]
-        | sz <- take 2 [100,200..]
-        ]
+main :: IO ()
+main = print (nub [ x | n <- [1..1000], x <- [1..n] ])
 
 {-# RULES "filter-fusion" [~] forall p q ys. filter p (filter q ys) = filter (\y -> p y && q y) ys #-}
 {-# RULES "member-fusion" [~] forall y x s. (y /= x) && (y `Set.notMember` s) = y `Set.notMember` (Set.insert x s) #-}

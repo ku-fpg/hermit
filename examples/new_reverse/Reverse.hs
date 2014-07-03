@@ -1,6 +1,5 @@
 module Main where
 
-import Criterion.Main
 import HList
 import Data.Function (fix)
 
@@ -16,10 +15,8 @@ rev :: [a] -> [a]
 rev []     = []
 rev (x:xs) = rev xs ++ [x]
 
-main = defaultMain
-       [ bench (show n) $ whnf (\n -> sum $ rev [1..n]) n
-       | n <- take 8 $ [50,100..]
-       ]
+main :: IO ()
+main = print $ rev [1..10]
 
 -- useful auxilliary lemma for proving the w/w assumption
 {-# RULES "++ []" [~] forall xs. xs ++ [] = xs #-}
