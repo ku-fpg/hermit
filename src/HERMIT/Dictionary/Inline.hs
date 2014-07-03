@@ -20,8 +20,6 @@ module HERMIT.Dictionary.Inline
 import HERMIT.Name
 
 import TcType (tcSplitDFunTy)
-#else
-import HERMIT.Monad
 #endif
 
 import Control.Arrow
