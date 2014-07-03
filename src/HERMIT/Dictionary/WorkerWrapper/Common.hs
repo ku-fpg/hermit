@@ -8,6 +8,7 @@ module HERMIT.Dictionary.WorkerWrapper.Common
     , assumptionCEqualityT
 #if __GLASGOW_HASKELL__ > 706
     , split1BetaR
+    , split2BetaR
 #endif
     , workLabel
     ) where
@@ -55,7 +56,19 @@ externals = map (.+ Proof)
         , "using given abs, rep, and body functions." ]
 #if __GLASGOW_HASKELL__ > 706
     , external "split-1-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split1BetaR nm) absC :: CoreString -> RewriteH Core)
-        [ "Perform worker/wrapper split 1B." ]
+        [ "split-1-beta <name> <abs expression> <rep expression>"
+        , "Perform worker/wrapper split with condition 1-beta."
+        , "Given lemma name argument is used as prefix to two introduced lemmas."
+        , "  <name>-assumption: unproven lemma for w/w assumption C."
+        , "  <name>-fusion: assumed lemma for w/w fusion."
+        ]
+    , external "split-2-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split2BetaR nm) absC :: CoreString -> RewriteH Core)
+        [ "split-2-beta <name> <abs expression> <rep expression>"
+        , "Perform worker/wrapper split with condition 2-beta."
+        , "Given lemma name argument is used as prefix to two introduced lemmas."
+        , "  <name>-assumption: unproven lemma for w/w assumption C."
+        , "  <name>-fusion: assumed lemma for w/w fusion."
+        ]
 #endif
     ]
 
@@ -130,7 +143,7 @@ wwFusionEqualityT absE repE fixgE = prefixFailMsg "Building worker/wrapper fusio
 -- Perform the worker/wrapper split using condition 1-beta, introducing
 -- an unproven lemma for assumption C, and an appropriate w/w fusion lemma.
 split1BetaR :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m
-               , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m)
+               , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
             => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
 split1BetaR nm absE repE = do
     (_fixId, [_tyA, f]) <- callNameT "Data.Function.fix"
@@ -150,4 +163,24 @@ split1BetaR nm absE repE = do
     _ <- insertLemmaR (nm++"-fusion") $ Lemma wwFusionEq True False -- proven (assumed), unused
 
     return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
+
+split2BetaR :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m
+               , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+            => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
+split2BetaR nm absE repE = do
+    (_fixId, [_tyA, f]) <- callNameT "Data.Function.fix"
+    fixfE <- idR
+
+    repFixFE <- buildApplicationM repE fixfE
+    workId <- constT $ newIdH "worker" $ exprType repFixFE
+
+    newRhs <- buildApplicationM absE (varToCoreExpr workId)
+
+    assumptionEq <- assumptionCEqualityT absE repE f
+    _ <- insertLemmaR (nm++"-assumption") $ Lemma assumptionEq False True -- unproven, used
+
+    wwFusionEq <- wwFusionEqualityT absE repE (varToCoreExpr workId)
+    _ <- insertLemmaR (nm++"-fusion") $ Lemma wwFusionEq True False -- proven (assumed), unused
+
+    return $ mkCoreLets [NonRec workId repFixFE] newRhs
 #endif
