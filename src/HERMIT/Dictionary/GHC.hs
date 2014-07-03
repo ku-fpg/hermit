@@ -39,6 +39,7 @@ import HERMIT.Context
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
+import HERMIT.Name
 
 import HERMIT.Dictionary.Debug hiding (externals)
 

@@ -59,6 +59,7 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
+import HERMIT.Name
 import HERMIT.ParserCore
 import HERMIT.Utilities
 

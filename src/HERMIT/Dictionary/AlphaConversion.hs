@@ -45,6 +45,7 @@ import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Name
 import HERMIT.Utilities(dupsBy)
 
 import HERMIT.Dictionary.GHC hiding (externals)

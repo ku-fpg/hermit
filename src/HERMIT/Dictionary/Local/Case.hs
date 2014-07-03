@@ -39,12 +39,13 @@ import Control.Applicative
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Monad
-import HERMIT.Kure
-import HERMIT.GHC
 import HERMIT.External
-import HERMIT.Utilities
+import HERMIT.GHC
+import HERMIT.Kure
+import HERMIT.Monad
+import HERMIT.Name
 import HERMIT.ParserCore
+import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Inline hiding (externals)

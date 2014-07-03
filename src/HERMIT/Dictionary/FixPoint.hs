@@ -25,6 +25,7 @@ import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Name
 import HERMIT.ParserCore
 import HERMIT.Utilities
 

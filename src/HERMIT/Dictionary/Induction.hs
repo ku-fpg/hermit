@@ -17,6 +17,7 @@ import HERMIT.Core
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
+import HERMIT.Name
 -- import HERMIT.Utilities (soleElement)
 
 import HERMIT.Dictionary.Common
@@ -30,7 +31,7 @@ import HERMIT.Dictionary.Undefined
 
 ------------------------------------------------------------------------------
 
-inductionCaseSplit :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb) 
+inductionCaseSplit :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb)
                    => [Var] -> Id -> CoreExpr -> CoreExpr -> Transform c HermitM x [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]
 inductionCaseSplit vs i lhsE rhsE =
     do -- first construct an expression containing both the LHS and the RHS
