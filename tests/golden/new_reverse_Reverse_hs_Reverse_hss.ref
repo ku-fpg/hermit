@@ -1,0 +1,74 @@
+
+HList.hs:25:11: Warning:
+    Rule "repH []" may never fire because ‘repH’ might inline first
+    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘repH’
+
+HList.hs:26:11: Warning:
+    Rule "repH (:)" may never fire because ‘repH’ might inline first
+    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘repH’
+
+HList.hs:27:11: Warning:
+    Rule "repH ++" may never fire because ‘repH’ might inline first
+    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘repH’
+
+HList.hs:30:11: Warning:
+    Rule "repH-absH-fusion" may never fire
+      because ‘repH’ might inline first
+    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘repH’
+===================== Welcome to HERMIT ======================
+HERMIT is a toolkit for the interactive transformation of GHC
+core language programs. Documentation on HERMIT can be found
+on the HERMIT web page at:
+http://www.ittc.ku.edu/csdl/fpg/software/hermit.html
+
+You have just loaded the interactive shell. To exit, type 
+"abort" or "resume" to abort or resume GHC compilation.
+
+Type "help" for instructions on how to list or search the
+available HERMIT commands.
+
+To get started, you could try the following:
+  - type "binding-of 'foo", where "foo" is a function
+    defined in the module;
+  - type "set-pp-type Show" to display full type information;
+  - type "info" for more information about the current node;
+  - to descend into a child node, type the name of the child
+    ("info" includes a list of children of the current node);
+  - to ascend, use the "up" command;
+  - type "log" to display an activity log.
+==============================================================
+
+Successfully proven: repHstrict
+Successfully proven: repH []
+Successfully proven: repH (:)
+Successfully proven: repH ++-induction-on-xs-case-undefined
+Successfully proven: repH ++-induction-on-xs-case-[]
+Successfully proven: repH ++-induction-on-xs-case-:
+Successfully proven: repH ++
+Successfully proven: ++ []-induction-on-xs-case-undefined
+Successfully proven: ++ []-induction-on-xs-case-[]
+Successfully proven: ++ []-induction-on-xs-case-:
+Successfully proven: ++ []
+Successfully proven: rev-assumption
+[0m[1;34mrec[22m[0m[0m [0m[mabsR[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[31m.[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32mH[0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m
+    [0m[mabsR[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[32ma[0m[0m [0m[meta[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mg[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m.[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[32mH[0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[31m([0m[0m[0m[mabsH[0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mg[0m[0m[0m[0m[31m)[0m[0m [0m[0m[meta[0m[0m[0m
+    [0m[mrepR[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[31m.[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32mH[0m[0m [0m[0m[32ma[0m[0m[0m
+    [0m[mrepR[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[32ma[0m[0m [0m[meta[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mf[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m.[0m[0m[0m[31m)[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[31m([0m[0m[0m[32mH[0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[31m([0m[0m[0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mf[0m[0m[0m[0m[31m)[0m[0m [0m[0m[meta[0m[0m[0m
+    [0m[mrev[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[31m.[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m
+    [0m[mrev[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[32ma[0m[0m [0m[31m[31m→[31m[0m[0m
+      [0m[1;34mlet[22m[0m[0m [0m[1;34mrec[22m[0m[0m [0m[mx[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32mH[0m[0m [0m[0m[32ma[0m[0m[0m
+              [0m[mx[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[mx0[0m[0m [0m[31m[31m→[31m[0m[0m
+                [0m[1;34mcase[22m[0m[0m [0m[0m[mx0[0m[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[31m([0m[0m[0m[32mH[0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m
+                  [0m[m[][0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[mx1[0m[0m [0m[31m[31m→[31m[0m[0m [0m[0m[mx1[0m[0m[0m
+                  [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[mx1[0m[0m [0m[mxs[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[mx2[0m[0m [0m[31m[31m→[31m[0m[0m [0m[0m[mx[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mx1[0m[0m[0m [0m[0m[mx2[0m[0m[0m[0m[31m)[0m[0m
+      [0m[1;34min[22m[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[mx0[0m[0m [0m[31m[31m→[31m[0m[0m [0m[0m[mx[0m[0m[0m [0m[0m[mx0[0m[0m[0m [0m[31m([0m[0m[0m[m[][0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m
+    [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
+    [0m[mmain[0m[0m [0m[31m=[0m[0m
+      [0m[31m([0m[0m[0m[m$[0m[0m[0m[31m)[0m[0m [0m[32m[[0m[0m[0m[32mInteger[0m[0m[0m[32m][0m[0m
+        [0m[31m([0m[0m[0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m[0m[31m)[0m[0m
+        [0m[31m([0m[0m[0m[mprint[0m[0m [0m[32m[[0m[0m[0m[32mInteger[0m[0m[0m[32m][0m[0m [0m[31m([0m[0m[0m[m$fShow[][0m[0m [0m[32mInteger[0m[0m [0m[m$fShowInteger[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
+        [0m[31m([0m[0m[0m[0m[mrev[0m[0m[0m
+           [0m[32mInteger[0m[0m
+           [0m[31m([0m[0m[0m[menumFromTo[0m[0m [0m[32mInteger[0m[0m [0m[m$fEnumInteger[0m[0m [0m[31m([0m[0m[0m__integer 1[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m__integer 10[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
+    [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
+    [0m[mmain[0m[0m [0m[31m=[0m[0m [0m[mrunMainIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m [0m[0m[mmain[0m[0m[0m[0m
