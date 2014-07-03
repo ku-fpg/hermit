@@ -27,10 +27,16 @@ buildPlugin hp = defaultPlugin { installCoreToDos = install }
         install opts todos = do
             reinitializeGlobals
 
+            liftIO resetStaticOpts
             -- This is a bit of a hack; otherwise we lose what we've not seen
             liftIO $ hSetBuffering stdout NoBuffering
 #ifdef mingw32_HOST_OS
             liftIO $ hSetEncoding stdout utf8
+            
+#if __GLASGOW_HASKELL__ >= 708
+            liftIO resetStaticOpts
+#endif
+
 #endif
 
             let todos' = flattenTodos todos

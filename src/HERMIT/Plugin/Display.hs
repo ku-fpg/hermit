@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
 module HERMIT.Plugin.Display
     ( display
     , getFocusPath
@@ -10,9 +10,6 @@ import Control.Monad.State
 
 import Data.Maybe (fromMaybe)
 
-#if __GLASGOW_HASKELL__ >= 708 && defined(mingw32_HOST_OS)
-import HERMIT.GHC (resetStaticOpts)
-#endif
 import HERMIT.Kernel (queryK)
 import HERMIT.Kernel.Scoped
 import HERMIT.Kure
@@ -30,9 +27,6 @@ display window = do
     focusPath <- getFocusPath
     let skernel = ps_kernel st
         ppOpts = (pOptions $ ps_pretty st) { po_focus = Just focusPath }
-#if __GLASGOW_HASKELL__ >= 708 && defined(mingw32_HOST_OS)
-    liftIO resetStaticOpts
-#endif
     iokm' "Rendering error: "
         (liftIO . ps_render st stdout ppOpts . Right)
         (toASTS skernel (ps_cursor st) >>= \ ast ->
