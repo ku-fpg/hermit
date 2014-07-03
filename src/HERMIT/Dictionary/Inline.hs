@@ -17,8 +17,11 @@ module HERMIT.Dictionary.Inline
     ) where
 
 #if __GLASGOW_HASKELL__ <= 706
-import HERMIT.Monad
+import HERMIT.Name
+
 import TcType (tcSplitDFunTy)
+#else
+import HERMIT.Monad
 #endif
 
 import Control.Arrow

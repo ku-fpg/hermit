@@ -39,13 +39,15 @@ import HERMIT.Context
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
-import HERMIT.Name
 
 import HERMIT.Dictionary.Debug hiding (externals)
 
 #if __GLASGOW_HASKELL__ > 706
 import Control.Monad.IO.Class
+
 import Data.Char (isSpace)
+
+import HERMIT.Name
 import HERMIT.Monad
 #endif
 

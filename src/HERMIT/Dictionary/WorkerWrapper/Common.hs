@@ -23,14 +23,15 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
-import HERMIT.Name
 import HERMIT.ParserCore
+
+import HERMIT.Dictionary.Function hiding (externals)
+import HERMIT.Dictionary.Reasoning hiding (externals)
 
 #if __GLASGOW_HASKELL__ > 706
 import HERMIT.Dictionary.Common
+import HERMIT.Name
 #endif
-import HERMIT.Dictionary.Function hiding (externals)
-import HERMIT.Dictionary.Reasoning hiding (externals)
 
 --------------------------------------------------------------------------------------------------
 
