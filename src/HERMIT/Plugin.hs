@@ -97,11 +97,14 @@ runHPM :: PhaseInfo -> HPM () -> ModGuts -> CoreM ModGuts
 runHPM phaseInfo pass = scopedKernel $ \ kernel initSAST -> do
     ps <- defPS initSAST kernel phaseInfo
     (r,st) <- hpmToIO ps pass
-    let endPass sast = applyS kernel occurAnalyseAndDezombifyR (mkKernelEnv st) sast >>= resumeS kernel
+    let cleanup sast = do
+            if sast /= initSAST -- only do this if we actually changed the AST
+            then applyS kernel occurAnalyseAndDezombifyR (mkKernelEnv st) sast >>= resumeS kernel
+            else resumeS kernel sast
     either (\case PAbort       -> abortS kernel
-                  PResume sast -> endPass sast
+                  PResume sast -> cleanup sast
                   PError  err  -> putStrLn err >> abortS kernel)
-           (\ _ -> endPass $ ps_cursor st) r
+           (\ _ -> cleanup $ ps_cursor st) r
 
 hpmToIO :: PluginState -> HPM a -> IO (Either PException a, PluginState)
 hpmToIO initState = runPluginT initState . eval . unHPM
