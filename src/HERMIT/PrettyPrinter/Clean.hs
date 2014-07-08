@@ -24,7 +24,7 @@ import Data.Monoid (mempty)
 
 import HERMIT.Context
 import HERMIT.Core
-import HERMIT.GHC hiding ((<+>), (<>), ($$), ($+$), sep, hsep, empty, nest, vcat, char, text, keyword, hang)
+import HERMIT.GHC hiding ((<+>), (<>), ($$), ($+$), cat, sep, hsep, empty, nest, vcat, char, text, keyword, hang)
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Syntax
@@ -185,6 +185,9 @@ coKeyword = coText -- An alternative would be keyword.
 
 coArrow :: AbsolutePathH -> DocH
 coArrow p = coSymbol p RightArrowSymbol
+
+coTypeSymbol :: AbsolutePathH -> DocH
+coTypeSymbol p = coSymbol p TypeOfSymbol
 
 ------------------------------------------------------------------------------------------------
 
@@ -368,7 +371,7 @@ ppCoreExprR = absPathT >>= ppCoreExprPR
            <+ coercionT ppCoercionModeR
            <+ (castT ppCoreExprR (ppCoercionModeR >>> parenExpr) (,) >>> readerT (\ (_,co) -> if isEmpty co
                                                                                                  then arr fst
-                                                                                                 else toFst parenExprExceptApp >>^ \ e -> RetExpr (e <+> castSymbol p <+> co)
+                                                                                                 else toFst parenExprExceptApp >>^ \ e -> RetExpr (sep [e, castSymbol p <+> co])
                                                                                  ))
            <+ tickT ppSDoc (ppCoreExprR >>> parenExpr) (\ tk e -> RetExpr $ attrP p (text "Tick") $$ nest 2 (tk <+> e))
 
@@ -431,7 +434,7 @@ ppCoercionModeR = do p    <- absPathT
                        Omit     -> return RetEmpty
                        Abstract -> return (RetAtom $ coercionSymbol p)
                        Show     -> ppCoercionR
-                       Kind     -> ppCoKind >>^ (\ k -> RetExpr (coercionSymbol p <+> typeOfSymbol p <+> k))
+                       Kind     -> ppCoKind >>^ (\ k -> RetExpr (coercionSymbol p <+> coTypeSymbol p <+> k))
 
 ppCoercionR :: Transform PrettyC HermitM Coercion RetExpr
 ppCoercionR = absPathT >>= ppCoercionPR
@@ -476,7 +479,7 @@ ppCoKind = do
     (r, Pair co1 co2) <- arr (coercionRole &&& coercionKind)
     ty1 <- return co1 >>> ppTypeModeR >>> parenExprExceptApp
     ty2 <- return co2 >>> ppTypeModeR >>> parenExprExceptApp
-    return $ ty1 <+> coText p ("~" ++ showRole r) <+> ty2
+    return $ cat [ty1, pad (coText p ("~" ++ showRole r)), ty2]
 #else
 ppCoKind = do p <- absPathT
               (coercionKind >>> unPair) ^>> ((ppTypeModeR >>> parenExprExceptApp) *** (ppTypeModeR >>> parenExprExceptApp)) >>^ ( \(ty1,ty2) -> ty1 <+> coText p "~#" <+> ty2)
