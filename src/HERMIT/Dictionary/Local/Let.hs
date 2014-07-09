@@ -426,8 +426,9 @@ letFloatCastR = prefixFailMsg "Let floating from Cast failed: " $
 
 -- | Float a 'Let' through an expression, whatever the context.
 letFloatExprR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
-letFloatExprR = setFailMsg "Unsuitable expression for Let floating." $
-               letFloatArgR <+ letFloatAppR <+ letFloatLetR <+ letFloatLamR <+ letFloatCaseR <+ letFloatCastR
+letFloatExprR = setFailMsg "Unsuitable expression for Let floating."
+              $ letFloatArgR <+ letFloatAppR <+ letFloatLetR <+ letFloatLamR
+                  <+ letFloatCaseR <+ letFloatCaseAltR Nothing <+ letFloatCastR
 
 -- | @'ProgCons' ('NonRec' v ('Let' bds e)) p@ ==> @'ProgCons' bds ('ProgCons' ('NonRec' v e) p)@
 letFloatTopR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreProg
