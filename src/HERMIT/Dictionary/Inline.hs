@@ -16,8 +16,9 @@ module HERMIT.Dictionary.Inline
     , inlineTargetsT
     ) where
 
-#if __GLASGOW_HASKELL__ > 706
-#else
+#if __GLASGOW_HASKELL__ <= 706
+import HERMIT.Name
+
 import TcType (tcSplitDFunTy)
 #endif
 
@@ -31,7 +32,6 @@ import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
-import HERMIT.Monad
 
 import HERMIT.Dictionary.Common
 
@@ -59,36 +59,47 @@ data CaseBinderInlineOption = Scrutinee | Alternative deriving (Eq, Show)
 data InlineConfig           = CaseBinderOnly CaseBinderInlineOption | AllBinders deriving (Eq, Show)
 
 -- | If the current variable matches the given name, then inline it.
-inlineNameR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => String -> Rewrite c HermitM CoreExpr
+inlineNameR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
+               , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+            => String -> Rewrite c m CoreExpr
 inlineNameR nm = inlineMatchingPredR (cmpString2Var nm)
 
 -- | If the current variable matches any of the given names, then inline it.
-inlineNamesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => [String] -> Rewrite c HermitM CoreExpr
+inlineNamesR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
+                , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+             => [String] -> Rewrite c m CoreExpr
 inlineNamesR []  = fail "inline-names failed: no names given."
 inlineNamesR nms = inlineMatchingPredR (\ v -> any (flip cmpString2Var v) nms)
 
 -- | If the current variable satisifies the predicate, then inline it.
-inlineMatchingPredR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => (Id -> Bool) -> Rewrite c HermitM CoreExpr
+inlineMatchingPredR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
+                       , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                    => (Id -> Bool) -> Rewrite c m CoreExpr
 inlineMatchingPredR idPred = configurableInlineR AllBinders (arr $ idPred)
 
 -- | Inline the current variable.
-inlineR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb, MonadCatch m)
+inlineR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c,
+            ReadBindings c, ReadPath c Crumb, MonadCatch m, MonadUnique m)
         => Rewrite c m CoreExpr
 inlineR = configurableInlineR AllBinders (return True)
 
 -- | Inline the current identifier if it is a case binder, using the scrutinee rather than the case-alternative pattern.
-inlineCaseScrutineeR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Rewrite c HermitM CoreExpr
+inlineCaseScrutineeR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
+                        , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                     => Rewrite c m CoreExpr
 inlineCaseScrutineeR = configurableInlineR (CaseBinderOnly Scrutinee) (return True)
 
 -- | Inline the current identifier if is a case binder, using the case-alternative pattern rather than the scrutinee.
-inlineCaseAlternativeR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Rewrite c HermitM CoreExpr
+inlineCaseAlternativeR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
+                          , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                       => Rewrite c m CoreExpr
 inlineCaseAlternativeR = configurableInlineR (CaseBinderOnly Alternative) (return True)
 
 -- | The implementation of inline, an important transformation.
 -- This *only* works if the current expression has the form @Var v@ (it does not traverse the expression).
 -- It can trivially be prompted to more general cases using traversal strategies.
 configurableInlineR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
-                       , ReadPath c Crumb, MonadCatch m )
+                       , ReadPath c Crumb, MonadCatch m, MonadUnique m )
                     => InlineConfig
                     -> (Transform c m Id Bool) -- ^ Only inline identifiers that satisfy this predicate.
                     -> Rewrite c m CoreExpr
@@ -135,7 +146,7 @@ ensureDepthT uncaptured =
      all uncaptured `liftM` extractT collectDepthsT
 
 -- | Return the unfolding of an identifier, and a predicate over the binding depths of all variables within that unfolding to determine if they have been captured in their new location.
-getUnfoldingT :: (ReadBindings c, MonadCatch m)
+getUnfoldingT :: (ReadBindings c, MonadCatch m, MonadUnique m)
               => InlineConfig
               -> Transform c m Id (CoreExpr, BindingDepth -> Bool)
 getUnfoldingT config = transform $ \ c i ->
@@ -199,7 +210,9 @@ alt2Exp _   (LitAlt l  , _ ) = return $ Lit l
 alt2Exp tys (DataAlt dc, vs) = return $ mkCoreConApps dc (map Type tys ++ map (varToCoreExpr . zapVarOccInfo) vs)
 
 -- | Get list of possible inline targets. Used by shell for completion.
-inlineTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Transform c HermitM Core [String]
+inlineTargetsT :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
+                  , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+               => Transform c m Core [String]
 inlineTargetsT = collectT $ promoteT $ whenM (testM inlineR) (varT $ arr var2String)
 
 -- | Build a CoreExpr for a DFunUnfolding
@@ -208,7 +221,7 @@ dFunExpr :: Monad m => Unfolding -> m CoreExpr
 dFunExpr dunf@(DFunUnfolding {}) = return $ mkCoreLams (df_bndrs dunf) $ mkCoreConApps (df_con dunf) (df_args dunf)
 dFunExpr _ = fail "dFunExpr: not a DFunUnfolding"
 #else
-dFunExpr :: DataCon -> [DFunArg CoreExpr] -> Type -> HermitM CoreExpr
+dFunExpr :: MonadUnique m => DataCon -> [DFunArg CoreExpr] -> Type -> m CoreExpr
 dFunExpr dc args ty = do
     let (_, _, _, tcArgs) = tcSplitDFunTy ty
         (forallTvs, ty')  = splitForAllTys ty

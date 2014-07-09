@@ -20,12 +20,13 @@ import Prelude hiding (abs)
 import Control.Arrow
 
 import HERMIT.Core
-import HERMIT.Monad
-import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
-import HERMIT.Utilities
+import HERMIT.Kure
+import HERMIT.Monad
+import HERMIT.Name
 import HERMIT.ParserCore
+import HERMIT.Utilities
 
 import HERMIT.Dictionary.AlphaConversion
 import HERMIT.Dictionary.Common
@@ -172,7 +173,7 @@ wwResultFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
     wwL :: Type -> Type -> RewriteH CoreExpr
     wwL tyA tyB = prefixFailMsg "worker/wrapper factorisation failed: " $
                   do (tyXA,f)  <- isFixExprT
-                     (tyX,tA)  <- constT (splitFunTypeM tyXA)
+                     (_,tyX,tA)  <- constT (splitFunTypeM tyXA)
                      let tyXB  =  FunTy tyX tyB
                      h         <- constT (newIdH "h" tyXB)
                      guardMsg (eqType tyA tA) ("abs/rep types do not match fix body type.")
@@ -461,9 +462,9 @@ verifyAssB :: CoreExpr          -- ^ abs
            -> TransformH x ()
 verifyAssB abs rep f assB =
   prefixFailMsg ("verification of worker/wrapper assumption B failed: ") $
-  do (tyA,_) <- absRepTypes abs rep
-     tyXA     <- constT (endoFunExprType f)
-     (tyX,tA) <- constT (splitFunTypeM tyXA)
+  do (tyA,_)    <- absRepTypes abs rep
+     (_,tyXA)   <- constT (endoFunExprTypeM f)
+     (_,tyX,tA) <- constT (splitFunTypeM tyXA)
      guardMsg (eqType tyA tA) "type of program body does not match types of abs/rep."
      h        <- constT (newIdH "h" tyXA)
      x        <- constT (newIdH "x" tyX)
@@ -478,9 +479,9 @@ verifyAssC :: CoreExpr          -- ^ abs
            -> TransformH a ()
 verifyAssC abs rep f assC =
   prefixFailMsg ("verification of worker/wrapper assumption C failed: ") $
-  do (tyA,_)  <- absRepTypes abs rep
-     tyXA     <- constT (endoFunExprType f)
-     (tyX,tA) <- constT (splitFunTypeM tyXA)
+  do (tyA,_)    <- absRepTypes abs rep
+     (_,tyXA)   <- constT (endoFunExprTypeM f)
+     (_,tyX,tA) <- constT (splitFunTypeM tyXA)
      guardMsg (eqType tyA tA) "type of program body does not match types of abs/rep."
      h        <- constT (newIdH "h" tyXA)
      x        <- constT (newIdH "x" tyX)

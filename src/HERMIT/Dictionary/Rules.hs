@@ -16,7 +16,12 @@ module HERMIT.Dictionary.Rules
        )
 where
 
+#if __GLASGOW_HASKELL__ > 706
 import IOEnv hiding (liftIO)
+#else
+import Control.Monad.IO.Class
+import IOEnv (readMutVar, runIOEnv)
+#endif
 import qualified SpecConstr
 import qualified Specialise
 
@@ -53,7 +58,7 @@ externals =
         [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
     , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
         [ "Unfold a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
-    , external "rule-to-lemma" (\nm -> ruleNameToEqualityT nm >>= insertLemmaR nm :: RewriteH Core)
+    , external "rule-to-lemma" (\nm -> ruleNameToEqualityT nm >>= \ eq -> insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
         [ "Create a lemma from a GHC RULE." ]
     , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
         [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep

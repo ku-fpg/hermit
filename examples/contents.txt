@@ -172,6 +172,15 @@ Mean
 * Interesting rewrites: abstract, remember, fold, let-intro, let-float, let-tuple
 
 
+New Reverse
+===========
+
+* New derivation of classic reverse example using new worker/wrapper rewrites.
+
+* Introduces lemmas during transformation, which are subsequently proved.
+
+* Interesting rewrites: split-1-beta, prove-lemma, unfold-rule
+
 
 Nub
 ===
@@ -182,8 +191,9 @@ Nub
 
 * A corrected version is in the files named "Revised".
 
-* There has been no attempt to mechanise this revised derivation as yet.
+* Mechanized using new worker/wrapper rewrites.
 
+* Interesting rewrites: split-2-beta, prove-lemma, unfold-rule
 
 
 Quicksort

@@ -28,6 +28,7 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
+import HERMIT.Name
 
 import HERMIT.Dictionary.Common
 #if __GLASGOW_HASKELL__ <= 706
@@ -136,7 +137,7 @@ appArgM n e | n < 0     = fail "appArgM: arg must be non-negative"
                              else return $ l !! n
 
 -- | Build composition of two functions.
-buildCompositionT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+buildCompositionT :: (BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
                   => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
 buildCompositionT f g = do
 #if __GLASGOW_HASKELL__ > 706
@@ -144,8 +145,8 @@ buildCompositionT f g = do
     fDot <- buildApplicationM (varToCoreExpr composeId) f
     buildApplicationM fDot g
 #else
-    (vsF, domF, codF) <- funTyComponentsM (exprType f)
-    (vsG, _ , codG) <- funTyComponentsM (exprType g)
+    (vsF, domF, codF) <- splitFunTypeM (exprType f)
+    (vsG, _ , codG) <- splitFunTypeM (exprType g)
     composeId <- findIdT "Data.Function.."
     -- (.) :: forall b c a. (b -> c) -> (a -> b) -> a -> c
     -- f . g
@@ -159,7 +160,7 @@ buildCompositionT f g = do
                                 Nothing -> varToCoreExpr v
                                 Just ty -> Type ty)
                          | v <- vsG ]
-    (domG',_) <- funExprArgResTypes g'
+    (_,domG',_) <- funExprArgResTypesM g'
     f' <- substOrApply f [ (v, varToCoreExpr v) | v <- vsF ]
 
     let vsG' = filter (`notElem` (map fst sub)) vsG -- things we should stick back on as foralls
@@ -172,8 +173,10 @@ buildCompositionT f g = do
 -- | Given expression for f and for x, build f x, figuring out the type arguments.
 buildApplicationM :: (HasDynFlags m, MonadCatch m, MonadIO m) => CoreExpr -> CoreExpr -> m CoreExpr
 buildApplicationM f x = do
-    (vsF, domF, _) <- funTyComponentsM (exprType f)
+    (vsF, domF, _) <- splitFunTypeM (exprType f)
     let (vsX, xTy) = splitForAllTys (exprType x)
+        allTvs = vsF ++ vsX
+        bindFn v = if v `elem` allTvs then BindMe else Skolem
 
     sub <- maybe (do d <- getDynFlags
                      liftIO $ putStrLn $ "f: " ++ showPpr d f
@@ -184,7 +187,7 @@ buildApplicationM f x = do
                      liftIO $ putStrLn $ "xTy: " ++ showPpr d xTy
                      fail "buildApplicationM - domain of f and type of x do not unify")
                  return
-                 (tcUnifyTy domF xTy)
+                 (tcUnifyTys bindFn [domF] [xTy])
 
     f' <- substOrApply f [ (v, Type $ substTyVar sub v) | v <- vsF ]
     x' <- substOrApply x [ (v, Type $ substTyVar sub v) | v <- vsX ]
@@ -198,9 +201,10 @@ buildApplicationM f x = do
 buildFixT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
           => CoreExpr -> Transform c m x CoreExpr
 buildFixT f = do
-    ty <- endoFunExprType f
+    (tvs, ty) <- endoFunExprTypeM f
     fixId <- findIdT "Data.Function.fix"
-    return $ mkCoreApps (varToCoreExpr fixId) [Type ty, f]
+    f' <- substOrApply f [ (v, varToCoreExpr v) | v <- tvs ]
+    return $ mkCoreLams tvs $ mkCoreApps (varToCoreExpr fixId) [Type ty, f']
 
 -- | Build an expression that is the monomorphic id function for given type.
 buildIdT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)

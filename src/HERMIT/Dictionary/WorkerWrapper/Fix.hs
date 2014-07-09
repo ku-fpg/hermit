@@ -17,12 +17,13 @@ import Control.Applicative
 import Control.Arrow
 
 import HERMIT.Core
-import HERMIT.Monad
-import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
-import HERMIT.Utilities
+import HERMIT.Kure
+import HERMIT.Monad
+import HERMIT.Name
 import HERMIT.ParserCore
+import HERMIT.Utilities
 
 import HERMIT.Dictionary.AlphaConversion
 import HERMIT.Dictionary.Common

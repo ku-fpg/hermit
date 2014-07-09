@@ -59,6 +59,7 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
+import HERMIT.Name
 import HERMIT.ParserCore
 import HERMIT.Utilities
 
@@ -169,7 +170,7 @@ extensionalityR mn = prefixFailMsg "extensionality failed: " $
      guardMsg (tyL `typeAlphaEq` tyR) "type mismatch between sides of equality.  This shouldn't happen, so is probably a bug."
 
      -- TODO: use the fresh-name-generator in AlphaConversion to avoid shadowing.
-     (argTy,_) <- splitFunTypeM tyL
+     (_,argTy,_) <- splitFunTypeM tyL
      v <- constT $ newVarH (fromMaybe "x" mn) argTy
 
      let x = varToCoreExpr v
@@ -502,8 +503,8 @@ lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaEq)) (mar
 
 -- We use sideEffectR because only rewrites generate new state in the Kernel.
 
-insertLemmaR :: (HasLemmas m, Monad m) => LemmaName -> Equality -> Rewrite c m a
-insertLemmaR nm eq = sideEffectR $ \ _ _ -> insertLemma nm $ Lemma eq False False
+insertLemmaR :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> Rewrite c m a
+insertLemmaR nm l = sideEffectR $ \ _ _ -> insertLemma nm l
 
 modifyLemmaR :: (HasLemmas m, Monad m)
              => LemmaName

@@ -39,9 +39,10 @@ tests = [ ("concatVanishes", "Flatten.hs", "Flatten.hss")
         , ("last"          , "Last.hs"   , "Last.hss"   )
         -- broken due to Core Parser: , ("map"           , "Map.hs"    , "Map.hss"    )
         , ("mean"          , "Mean.hs"   , "Mean.hss"   )
-        -- requires Criterion: , ("nub"           , "Nub.hs"    , "Nub.hss"    )
+        , ("nub"           , "Nub.hs"    , "Nub.hss"    )
         , ("qsort"         , "QSort.hs"  , "QSort.hss"  )
         , ("reverse"       , "Reverse.hs", "Reverse.hss")
+        , ("new_reverse"   , "Reverse.hs", "Reverse.hss")
         ]
 
 fixName :: FilePath -> FilePath

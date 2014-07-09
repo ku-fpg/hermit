@@ -17,7 +17,6 @@ import Control.Monad.State
 
 import Data.Typeable
 
-import HERMIT.Dictionary
 import HERMIT.External
 import HERMIT.Kure
 import HERMIT.Kernel.Scoped
@@ -50,11 +49,7 @@ instance Extern ShellEffect where
 
 performShellEffect :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => ShellEffect -> m ()
 performShellEffect Abort  = abort
-performShellEffect Resume = do
-    st <- get
-    sast' <- applyS (cl_kernel st) occurAnalyseAndDezombifyR (cl_kernel_env st) (cl_cursor st)
-    resume sast'
-
+performShellEffect Resume = gets cl_cursor >>= resume
 performShellEffect Continue = get >>= continue
 performShellEffect (Dump pp fileName renderer width) = dump pp fileName renderer width
 

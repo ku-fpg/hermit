@@ -4,12 +4,7 @@ module HERMIT.Monad
     ( -- * The HERMIT Monad
       HermitM
     , runHM
-    , newGlobalIdH
-    , newIdH
-    , newTyVarH
-    , newCoVarH
-    , newVarH
-    , cloneVarH
+    , embedHermitM
     , HermitMEnv(..)
     , HermitMResult(..)
     , LiftCoreM(..)
@@ -123,6 +118,15 @@ runHM :: HermitMEnv                    -- env
       -> HermitM a                     -- ma
       -> CoreM b
 runHM env success failure ma = runHermitM ma env >>= runKureM success failure
+
+-- | Allow HermitM to be embedded in another monad with proper capabilities.
+embedHermitM :: (HasHermitMEnv m, HasLemmas m, HasStash m, LiftCoreM m) => HermitM a -> m a
+embedHermitM hm = do
+    env <- getHermitMEnv
+    r <- liftCoreM (runHermitM hm env) >>= runKureM return fail
+    putStash $ hResStash r
+    forM_ (toList (hResLemmas r)) $ uncurry insertLemma
+    return $ hResult r
 
 instance Functor HermitM where
   fmap :: (a -> b) -> HermitM a -> HermitM b
@@ -265,53 +269,6 @@ instance LiftCoreM HermitM where
 
 ----------------------------------------------------------------------------
 
--- Someday, when Applicative is a superclass of monad, we can uncomment the
--- nicer applicative definitions. For now, we don't want the extra constraint.
-
--- | Make a 'Name' from a string.
-newName :: MonadUnique m => String -> m Name
-newName nm = getUniqueM >>= return . flip mkSystemVarName (mkFastString nm)
--- newName nm = mkSystemVarName <$> getUniqueM <*> pure (mkFastString nm)
-
--- | Make a unique global identifier for a specified type, using a provided name.
-newGlobalIdH :: MonadUnique m => String -> Type -> m Id
-newGlobalIdH nm ty = newName nm >>= return . flip mkVanillaGlobal ty
--- newGlobalIdH nm ty = mkVanillaGlobal <$> newName nm <*> pure ty
-
--- | Make a unique identifier for a specified type, using a provided name.
-newIdH :: MonadUnique m => String -> Type -> m Id
-newIdH nm ty = newName nm >>= return . flip mkLocalId ty
--- newIdH nm ty = mkLocalId <$> newName nm <*> pure ty
-
--- | Make a unique type variable for a specified kind, using a provided name.
-newTyVarH :: MonadUnique m => String -> Kind -> m TyVar
-newTyVarH nm k = newName nm >>= return . flip mkTyVar k
--- newTyVarH nm k = mkTyVar <$> newName nm <*> pure k
-
--- | Make a unique coercion variable for a specified type, using a provided name.
-newCoVarH :: MonadUnique m => String -> Type -> m TyVar
-newCoVarH nm ty = newName nm >>= return . flip mkCoVar ty
--- newCoVarH nm ty = mkCoVar <$> newName nm <*> pure ty
-
--- TODO: not sure if the predicates are correct.
--- | Experimental, use at your own risk.
-newVarH :: MonadUnique m => String -> KindOrType -> m Var
-newVarH name tk | isCoVarType tk = newCoVarH name tk
-                | isKind tk      = newTyVarH name tk
-                | otherwise      = newIdH name tk
-
--- | Make a new variable of the same type, with a modified textual name.
-cloneVarH :: MonadUnique m => (String -> String) -> Var -> m Var
-cloneVarH nameMod v | isTyVar v = newTyVarH name ty
-                    | isCoVar v = newCoVarH name ty
-                    | isId v    = newIdH name ty
-                    | otherwise = fail "If this variable isn't a type, coercion or identifier, then what is it?"
-  where
-    name = nameMod (uqName v)
-    ty   = varType v
-
-----------------------------------------------------------------------------
-
 -- | A message packet.
 data DebugMessage :: * where
     DebugTick ::                                       String                -> DebugMessage
@@ -322,6 +279,7 @@ type DebugChan = DebugMessage -> HermitM ()
 
 ----------------------------------------------------------------------------
 
+#if __GLASGOW_HASKELL__ > 706
 runTcM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => TcM a -> m a
 runTcM m = do
     env <- getHscEnv
@@ -337,3 +295,4 @@ runTcM m = do
 
 runDsM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => DsM a -> m a
 runDsM = runTcM . initDsTc
+#endif

@@ -40,6 +40,7 @@ module HERMIT.PrettyPrinter.Common
     , updateTypeShowOption
     , updateWidthOption
       -- * Utilities
+    , pad
     , hlist
     , vlist
 #if __GLASGOW_HASKELL__ > 706
@@ -56,7 +57,7 @@ import Data.Typeable
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
-import HERMIT.GHC hiding (($$), (<>), (<+>))
+import HERMIT.GHC hiding (($$), (<>), (<+>), char)
 import HERMIT.Kure
 import HERMIT.Monad
 
@@ -487,5 +488,9 @@ listify op (d:ds) = op (PP.text "[ " <> d) (foldr (\e es -> op (PP.text ", " <> 
 vlist, hlist :: [MDoc a] -> MDoc a
 vlist = listify ($$)
 hlist = listify (<+>)
+
+-- | wrap a document in spaces
+pad :: MDoc a -> MDoc a
+pad d = char ' ' <> d <> char ' '
 
 -------------------------------------------------------------------------------

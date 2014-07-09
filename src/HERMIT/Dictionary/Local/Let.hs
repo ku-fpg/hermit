@@ -1,45 +1,45 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables, MultiWayIf, LambdaCase #-}
 
 module HERMIT.Dictionary.Local.Let
-       ( -- * Rewrites on Let Expressions
-         externals
-         -- ** Let Elimination
-       , letNonRecSubstR
-       , letNonRecSubstSafeR
-       , letSubstR
-       , letSubstSafeR
-       , letElimR
-       , letNonRecElimR
-       , letRecElimR
-       , progBindElimR
-       , progBindNonRecElimR
-       , progBindRecElimR
-         -- ** Let Introduction
-       , letIntroR
-       , letNonRecIntroR
-       , progNonRecIntroR
-       , nonRecIntroR
-       , letIntroUnfoldingR
-         -- ** Let Floating Out
-       , letFloatAppR
-       , letFloatArgR
-       , letFloatLetR
-       , letFloatLamR
-       , letFloatCaseR
-       , letFloatCastR
-       , letFloatExprR
-       , letFloatTopR
-         -- ** Let Floating In
-       , letFloatInR
-       , letFloatInAppR
-       , letFloatInCaseR
-       , letFloatInLamR
-         -- ** Miscallaneous
-       , reorderNonRecLetsR
-       , letTupleR
-       , letToCaseR
-       )
-where
+    ( -- * Rewrites on Let Expressions
+      externals
+      -- ** Let Elimination
+    , letNonRecSubstR
+    , letNonRecSubstSafeR
+    , letSubstR
+    , letSubstSafeR
+    , letElimR
+    , letNonRecElimR
+    , letRecElimR
+    , progBindElimR
+    , progBindNonRecElimR
+    , progBindRecElimR
+      -- ** Let Introduction
+    , letIntroR
+    , letNonRecIntroR
+    , progNonRecIntroR
+    , nonRecIntroR
+    , letIntroUnfoldingR
+      -- ** Let Floating Out
+    , letFloatAppR
+    , letFloatArgR
+    , letFloatLetR
+    , letFloatLamR
+    , letFloatCaseR
+    , letFloatCaseAltR
+    , letFloatCastR
+    , letFloatExprR
+    , letFloatTopR
+      -- ** Let Floating In
+    , letFloatInR
+    , letFloatInAppR
+    , letFloatInCaseR
+    , letFloatInLamR
+      -- ** Miscallaneous
+    , reorderNonRecLetsR
+    , letTupleR
+    , letToCaseR
+    ) where
 
 import Control.Arrow
 import Control.Monad
@@ -53,6 +53,7 @@ import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Name
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
@@ -102,6 +103,13 @@ externals =
         [ "let v = (let w = ew in ev) in e ==> let w = ew in let v = ev in e" ] .+ Commute .+ Shallow
     , external "let-float-case" (promoteExprR letFloatCaseR :: RewriteH Core)
         [ "case (let v = ev in e) of ... ==> let v = ev in case e of ..." ]     .+ Commute .+ Shallow .+ Eval
+    , external "let-float-case-alt" (promoteExprR (letFloatCaseAltR Nothing) :: RewriteH Core)
+        [ "case s of { ... ; p -> let v = ev in e ; ... } "
+        , "==> let v = ev in case s of { ... ; p -> e ; ... } " ]               .+ Commute .+ Shallow .+ Eval
+    , external "let-float-case-alt" (promoteExprR . letFloatCaseAltR . Just :: Int -> RewriteH Core)
+        [ "Float a let binding from specified alternative."
+        , "case s of { ... ; p -> let v = ev in e ; ... } "
+        , "==> let v = ev in case s of { ... ; p -> e ; ... } " ]               .+ Commute .+ Shallow .+ Eval
     , external "let-float-cast" (promoteExprR letFloatCastR :: RewriteH Core)
         [ "cast (let bnds in e) co ==> let bnds in cast e co" ]                 .+ Commute .+ Shallow
     , external "let-float-top" (promoteProgR letFloatTopR :: RewriteH Core)
@@ -357,6 +365,57 @@ letFloatCaseR = prefixFailMsg "Let floating from Case failed: " $
      if isEmptyVarSet captures
        then return $ Let bnds (Case e w ty alts)
        else caseAllR (alphaLetVarsR $ varSetElems captures) idR idR (const idR) >>> letFloatCaseR
+
+-- | case e of w { ... ; p -> let b = rhs in body ; ... }  ==>
+--   let b = rhs in case e of { ... ; p -> body ; ... }
+--
+-- where no variable in `p` or `w` occurs freely in `rhs`,
+-- and where `b` does not capture a free variable in the overall case,
+-- and where `w` is not rebound in `b`.
+letFloatCaseAltR :: MonadCatch m => Maybe Int -> Rewrite c m CoreExpr
+letFloatCaseAltR maybeN = prefixFailMsg "Let float from case alternative failed: " $
+                          withPatFailMsg (wrongExprForm "Case s w ty alts") $ do
+        -- Perform the first safe let-floating out of a case alternative
+    let letFloatOneAltM :: MonadCatch m => Id -> VarSet -> [CoreAlt] -> m (CoreBind,[CoreAlt])
+        letFloatOneAltM w fvs = go
+            where go [] = fail "no lets can be safely floated from alternatives."
+                  go (alt:rest) = (do (bind,alt') <- letFloatAltM w fvs alt
+                                      return (bind,alt':rest))
+                                  <+ liftM (second (alt :)) (go rest)
+
+        -- (p -> let bnds in body) ==> (bnds, p -> body)
+        letFloatAltM :: Monad m => Id -> VarSet -> CoreAlt -> m (CoreBind,CoreAlt)
+        letFloatAltM w fvs (con, vs, Let bnds body) = do
+          let bSet = mkVarSet (bindVars bnds)
+              vSet = mkVarSet (w:vs)
+
+          -- 'w' is not in 'fvs', but if it is rebound by 'b', doing this rewrite
+          -- would cause it to bind things that were previously bound by 'b'.
+          guardMsg (not (w `elemVarSet` bSet)) "floating would allow case binder to capture variables."
+
+          -- no free vars in 'rhs' are bound by 'p' or 'w'
+          guardMsg (isEmptyVarSet $ vSet `intersectVarSet` freeVarsBind bnds)
+                   "floating would cause variables in rhs to become unbound."
+
+          -- no free vars in overall case are bound by 'b'
+          guardMsg (isEmptyVarSet $ bSet `intersectVarSet` fvs)
+                   "floating would cause let binders to capture variables in case expression."
+
+          return (bnds, (con, vs, body))
+        letFloatAltM _ _ _ = fail "no let expression on alternative right-hand side."
+
+    Case e w ty alts <- idR
+    fvs <- arr freeVarsExpr
+    let l = length alts - 1
+    case maybeN of
+        Just n | n < 0 || n > l -> fail $ "valid alternative indices: 0 to " ++ show l
+               | otherwise      -> do
+            let (pre, alt:suf) = splitAt n alts
+            (bnds,alt') <- letFloatAltM w fvs alt
+            return $ Let bnds $ Case e w ty $ pre ++ (alt':suf)
+        Nothing -> do
+            (bnds,alts') <- letFloatOneAltM w fvs alts
+            return $ Let bnds $ Case e w ty alts'
 
 -- | @cast (let bnds in e) co@ ==> @let bnds in cast e co@
 letFloatCastR :: MonadCatch m => Rewrite c m CoreExpr
