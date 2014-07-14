@@ -27,10 +27,11 @@ import HERMIT.Dictionary.Local.Let (letNonRecSubstR)
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Kure
-import HERMIT.Monad
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Kure
+import HERMIT.Monad
+import HERMIT.Name
 
 import Prelude hiding (exp)
 
@@ -42,15 +43,15 @@ externals :: [External]
 externals =
     [ external "cleanup-unfold" (promoteExprR cleanupUnfoldR :: RewriteH Core)
         [ "Clean up immediately nested fully-applied lambdas, from the bottom up" ] .+ Deep
-    , external "remember" (rememberR :: Label -> RewriteH Core)
+    , external "remember" (rememberR :: RememberedName -> RewriteH Core)
         [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
-    , external "unfold-remembered" (promoteExprR . unfoldStashR :: String -> RewriteH Core)
+    , external "unfold-remembered" (promoteExprR . unfoldStashR :: RememberedName -> RewriteH Core)
         [ "Unfold a remembered definition." ] .+ Deep .+ Context
     , external "unfold" (promoteExprR unfoldR :: RewriteH Core)
         [ "In application f x y z, unfold f." ] .+ Deep .+ Context
-    , external "unfold" (promoteExprR . unfoldNameR :: String -> RewriteH Core)
+    , external "unfold" (promoteExprR . unfoldNameR . unOccurrenceName :: OccurrenceName -> RewriteH Core)
         [ "Inline a definition, and apply the arguments; traditional unfold." ] .+ Deep .+ Context
-    , external "unfold" (promoteExprR . unfoldNamesR :: [String] -> RewriteH Core)
+    , external "unfold" (promoteExprR . unfoldNamesR . map unOccurrenceName:: [OccurrenceName] -> RewriteH Core)
         [ "Unfold a definition if it is named in the list." ] .+ Deep .+ Context
     , external "unfold-saturated" (promoteExprR unfoldSaturatedR :: RewriteH Core)
         [ "Unfold a definition only if the function is fully applied." ] .+ Deep .+ Context
@@ -116,7 +117,7 @@ specializeR = unfoldPredR (const $ all isTyCoArg)
 
 -- | Stash a binding with a name for later use.
 -- Allows us to look at past definitions.
-rememberR :: Label -> Rewrite c HermitM Core
+rememberR :: RememberedName -> Rewrite c HermitM Core
 rememberR label = sideEffectR $ \ _ -> \case
                                           DefCore def           -> saveDef label def
                                           BindCore (NonRec i e) -> saveDef label (Def i e)
@@ -132,7 +133,7 @@ rememberR label = sideEffectR $ \ _ -> \case
 --         _           -> fail "remember: not a binding"
 
 -- | Apply a stashed definition (like inline, but looks in stash instead of context).
-unfoldStashR :: ReadBindings c => String -> Rewrite c HermitM CoreExpr
+unfoldStashR :: ReadBindings c => RememberedName -> Rewrite c HermitM CoreExpr
 unfoldStashR label = prefixFailMsg "Inlining stashed definition failed: " $
                      withPatFailMsg (wrongExprForm "Var v") $
     do (c, Var v) <- exposeT
@@ -150,5 +151,5 @@ showStashT pctx pp = do
     stash <- constT getStash
     docs <- forM (Map.toList stash) $ \ (l,d) -> do
                 dfn <- constT $ applyT (extractT pp) pctx d
-                return $ PP.text ("[ " ++ l ++ " ]") PP.$+$ dfn PP.$+$ PP.space
+                return $ PP.text ("[ " ++ show l ++ " ]") PP.$+$ dfn PP.$+$ PP.space
     return $ PP.vcat docs

@@ -23,6 +23,7 @@ import Data.Char (isSpace)
 import Data.Dynamic
 import Data.List (delete, isInfixOf)
 import Data.Map (filterWithKey, toList)
+import Data.String (fromString)
 
 import HERMIT.Core
 import HERMIT.External
@@ -40,6 +41,7 @@ import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
 
+import HERMIT.Shell.Completion
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.ScriptToRewrite
@@ -110,7 +112,7 @@ performProofCommand (DumpLemma nm fn r w) = dump (\ st -> getLemmaByNameT nm >>>
 performProofCommand (ShowLemmas mnm) = do
     st <- gets cl_pstate
     ls <- queryS (ps_kernel st) (getLemmasT :: TransformH Core Lemmas) (mkKernelEnv st) (ps_cursor st)
-    mapM_ printLemma $ toList $ filterWithKey (maybe (\ _ _ -> True) (\ nm n _ -> nm `isInfixOf` n) mnm) ls
+    mapM_ printLemma $ toList $ filterWithKey (maybe (\ _ _ -> True) (\ nm n _ -> show nm `isInfixOf` show n) mnm) ls
 
 --------------------------------------------------------------------------------------------------------
 
@@ -126,8 +128,8 @@ ppLemmaT :: PrettyPrinter -> LemmaName -> TransformH Lemma DocH
 ppLemmaT pp nm = do
     Lemma eq p u <- idR
     eqDoc <- return eq >>> ppEqualityT pp
-    let hDoc = text nm <+> text (if p then "(Proven)" else "(Not Proven)")
-                       <+> text (if u then "(Used)"   else "(Not Used)")
+    let hDoc = text (show nm) <+> text (if p then "(Proven)" else "(Not Proven)")
+                              <+> text (if u then "(Used)"   else "(Not Used)")
     return $ hDoc $+$ nest 2 eqDoc
 
 --------------------------------------------------------------------------------------------------------
@@ -166,7 +168,7 @@ interactiveProof topLevel isTemporary lem@(nm,_) = do
                (\case
                     CLAbort        -> cleanup origSt >> unless topLevel abort -- abandon proof attempt, bubble out to regular shell
                     CLContinue st' -> do
-                        cl_putStrLn $ "Successfully proven: " ++ nm
+                        cl_putStrLn $ "Successfully proven: " ++ show nm
                         if isTemporary
                         then cleanup st'    -- successfully proven
                         else do sast <- applyS (cl_kernel st')
@@ -205,7 +207,7 @@ endProof (nm, Lemma eq _ _) = do
 
     -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
     b <- (queryS sk (return eq >>> testM verifyEqualityT :: TransformH Core Bool) kEnv sast)
-    if b then continue st else fail $ "The two sides of " ++ nm ++ " are not alpha-equivalent."
+    if b then continue st else fail $ "The two sides of " ++ show nm ++ " are not alpha-equivalent."
 
 performProofShellCommand :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> ProofShellCommand -> m NamedLemma
 performProofShellCommand lem@(nm, Lemma eq p u) = go
@@ -268,9 +270,11 @@ performInduction lem@(nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
         eqs <- forM vs_matching_i_type $ \ i' ->
                     liftM discardUniVars $ instantiateEqualityVar (==i) (Var i') [] eq
 
-        let nms = [ "ind-hyp-" ++ show n | n :: Int <- [0..] ]
+        let nms = [ fromString ("ind-hyp-" ++ show n) | n :: Int <- [0..] ]
             hypLemmas = zip nms $ zipWith3 Lemma eqs (repeat True) (repeat False)
-            lemmaName = nm ++ "-induction-on-" ++ getOccString i ++ "-case-" ++ maybe "undefined" getOccString mdc
+            lemmaName = fromString $ show nm ++ "-induction-on-"
+                                             ++ getOccString i ++ "-case-"
+                                             ++ maybe "undefined" getOccString mdc
             caseLemma = Lemma (Equality (delete i bs ++ vs) lhsE rhsE) False False
 
         -- this is pretty hacky

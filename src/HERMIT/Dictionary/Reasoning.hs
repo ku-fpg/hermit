@@ -4,8 +4,6 @@
 module HERMIT.Dictionary.Reasoning
     ( -- * Equational Reasoning
       externals
-    , RewriteEqualityBox(..)
-    , TransformEqualityStringBox(..)
     , EqualityProof
     , flipEquality
     , eqLhsIntroR
@@ -51,7 +49,6 @@ import Control.Monad.IO.Class
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import Data.Monoid
-import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.Core
@@ -137,22 +134,6 @@ externals =
     ]
 
 ------------------------------------------------------------------------------
-
-data RewriteEqualityBox =
-        RewriteEqualityBox (RewriteH Equality) deriving Typeable
-
-instance Extern (RewriteH Equality) where
-    type Box (RewriteH Equality) = RewriteEqualityBox
-    box = RewriteEqualityBox
-    unbox (RewriteEqualityBox r) = r
-
-data TransformEqualityStringBox =
-        TransformEqualityStringBox (TransformH Equality String) deriving Typeable
-
-instance Extern (TransformH Equality String) where
-    type Box (TransformH Equality String) = TransformEqualityStringBox
-    box = TransformEqualityStringBox
-    unbox (TransformEqualityStringBox t) = t
 
 type EqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
 
@@ -494,7 +475,7 @@ getLemmasT :: HasLemmas m => Transform c m x Lemmas
 getLemmasT = constT getLemmas
 
 getLemmaByNameT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Lemma
-getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ nm) return . Map.lookup nm
+getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm) return . Map.lookup nm
 
 lemmaR :: LemmaName -> BiRewriteH CoreExpr
 lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaEq)) (markLemmaUsedR nm)

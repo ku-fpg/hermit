@@ -1,20 +1,20 @@
-{-# LANGUAGE CPP, FlexibleContexts #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleContexts, FlexibleInstances, TypeFamilies #-}
 module HERMIT.Dictionary.Rules
-       ( -- * GHC Rewrite Rules and Specialisation
-         externals
-         -- ** Rules
-       , RuleNameString
-       , ruleR
-       , rulesR
-       , ruleToEqualityT
-       , ruleNameToEqualityT
-       , getHermitRuleT
-       , getHermitRulesT
-         -- ** Specialisation
-       , specConstrR
-       , specialiseR
-       )
-where
+    ( -- * GHC Rewrite Rules and Specialisation
+      externals
+      -- ** Rules
+    , RuleName(..)
+    , RuleNameListBox(..)
+    , ruleR
+    , rulesR
+    , ruleToEqualityT
+    , ruleNameToEqualityT
+    , getHermitRuleT
+    , getHermitRulesT
+      -- ** Specialisation
+    , specConstrR
+    , specialiseR
+    ) where
 
 #if __GLASGOW_HASKELL__ > 706
 import IOEnv hiding (liftIO)
@@ -28,15 +28,17 @@ import qualified Specialise
 import Control.Arrow
 import Control.Monad
 
+import Data.Dynamic (Typeable)
 import Data.Function (on)
 import Data.List (deleteFirstsBy,intercalate)
+import Data.String (IsString(..))
 
 import HERMIT.Core
 import HERMIT.Context
 import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
-import HERMIT.GHC
+import HERMIT.GHC hiding (RuleName)
 
 import HERMIT.Dictionary.GHC (dynFlagsT)
 import HERMIT.Dictionary.Kure (anyCallR)
@@ -50,15 +52,16 @@ externals :: [External]
 externals =
     [ external "rule-help" (rulesHelpListT :: TransformH CoreTC String)
         [ "List all the rules in scope." ] .+ Query
-    , external "rule-help" (ruleHelpT :: RuleNameString -> TransformH CoreTC String)
+    , external "rule-help" (ruleHelpT :: RuleName -> TransformH CoreTC String)
         [ "Display details on the named rule." ] .+ Query
-    , external "apply-rule" (promoteExprR . ruleR :: RuleNameString -> RewriteH Core)
+    , external "apply-rule" (promoteExprR . ruleR :: RuleName -> RewriteH Core)
         [ "Apply a named GHC rule" ] .+ Shallow
-    , external "apply-rules" (promoteExprR . rulesR :: [RuleNameString] -> RewriteH Core)
+    , external "apply-rules" (promoteExprR . rulesR :: [RuleName] -> RewriteH Core)
         [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
-    , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> cleanupUnfoldR)) :: String -> RewriteH Core)
+    , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> cleanupUnfoldR)) :: RuleName -> RewriteH Core)
         [ "Unfold a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
-    , external "rule-to-lemma" (\nm -> ruleNameToEqualityT nm >>= \ eq -> insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
+    , external "rule-to-lemma" (\nm -> do eq <- ruleNameToEqualityT nm
+                                          insertLemmaR (fromString (show nm)) $ Lemma eq False False :: RewriteH Core)
         [ "Create a lemma from a GHC RULE." ]
     , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
         [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
@@ -68,51 +71,66 @@ externals =
 
 ------------------------------------------------------------------------
 
-type RuleNameString = String
+newtype RuleName = RuleName String deriving (Eq, Typeable)
+
+instance Extern RuleName where
+    type Box RuleName = RuleName
+    box = id
+    unbox = id
+
+instance IsString RuleName where fromString = RuleName
+instance Show RuleName where show (RuleName s) = s
+
+newtype RuleNameListBox = RuleNameListBox [RuleName] deriving Typeable
+
+instance Extern [RuleName] where
+    type Box [RuleName] = RuleNameListBox
+    box = RuleNameListBox
+    unbox (RuleNameListBox l) = l
 
 -- | Lookup a rule by name, attempt to apply it. If successful, record it as an unproven lemma.
 ruleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
          , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-      => RuleNameString -> Rewrite c m CoreExpr
+      => RuleName -> Rewrite c m CoreExpr
 ruleR nm = do
     eq <- ruleNameToEqualityT nm
-    forwardT (birewrite eq) >>> sideEffectR (\ _ _ -> addLemma nm $ Lemma eq False True)
+    forwardT (birewrite eq) >>> sideEffectR (\ _ _ -> addLemma (fromString (show nm)) $ Lemma eq False True)
 
 rulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
           , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-       => [RuleNameString] -> Rewrite c m CoreExpr
+       => [RuleName] -> Rewrite c m CoreExpr
 rulesR = orR . map ruleR
 
 -- | Return all in-scope CoreRules (including specialization RULES on binders), with their names.
-getHermitRulesT :: (HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Transform c m a [(RuleNameString, CoreRule)]
+getHermitRulesT :: (HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Transform c m a [(RuleName, CoreRule)]
 getHermitRulesT = contextonlyT $ \ c -> do
     rb      <- liftCoreM getRuleBase
     mgRules <- liftM mg_rules getModGuts
     hscEnv  <- liftCoreM getHscEnv
     rb'     <- liftM eps_rule_base $ liftIO $ runIOEnv () $ readMutVar (hsc_EPS hscEnv)
     let allRules = hermitCoreRules c ++ mgRules ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
-    return [ (unpackFS (ruleName r), r) | r <- allRules ]
+    return [ (fromString (unpackFS (ruleName r)), r) | r <- allRules ]
 
 -- | Get a GHC CoreRule by name.
-getHermitRuleT :: (HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadIO m) => RuleNameString -> Transform c m a CoreRule
+getHermitRuleT :: (HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadIO m) => RuleName -> Transform c m a CoreRule
 getHermitRuleT name =
   do rulesEnv <- getHermitRulesT
      case filter ((name ==) . fst) rulesEnv of
-       []      -> fail $ "failed to find rule: " ++ name ++ ". If you think the rule exists, "
+       []      -> fail $ "failed to find rule: " ++ show name ++ ". If you think the rule exists, "
                          ++ "try running the flatten-module command at the top level."
        [(_,r)] -> return r
-       _       -> fail ("Rule name \"" ++ name ++ "\" is ambiguous.")
+       _       -> fail ("Rule name \"" ++ show name ++ "\" is ambiguous.")
 
 -- | List names of all CoreRules in scope.
 rulesHelpListT :: (HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Transform c m a String
 rulesHelpListT = do
     rulesEnv <- getHermitRulesT
-    return (intercalate "\n" $ reverse $ map fst rulesEnv)
+    return (intercalate "\n" $ reverse $ map (show.fst) rulesEnv)
 
 -- | Print a named CoreRule using GHC's pretty printer for rewrite rules.
 -- TODO: use our own Equality pretty printer.
 ruleHelpT :: (HasCoreRules c, HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m)
-          => RuleNameString -> Transform c m a String
+          => RuleName -> Transform c m a String
 ruleHelpT nm = do
     r <- getHermitRuleT nm
     dflags <- dynFlagsT
@@ -121,7 +139,7 @@ ruleHelpT nm = do
 -- | Build an Equality from a named GHC rewrite rule.
 ruleNameToEqualityT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitMEnv m
                        , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
-                    => RuleNameString -> Transform c m a Equality
+                    => RuleName -> Transform c m a Equality
 ruleNameToEqualityT name = getHermitRuleT name >>> ruleToEqualityT
 
 -- | Transform GHC's CoreRule into an Equality.

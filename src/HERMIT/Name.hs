@@ -1,15 +1,23 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleInstances, TypeFamilies #-}
 #if __GLASGOW_HASKELL__ <= 706
 {-# LANGUAGE ScopedTypeVariables #-}
 #endif
 module HERMIT.Name
     ( HermitName
+    , OccurrenceName(..)
+    , OccurrenceNameListBox(..)
+    , mkOccPred
+    , BindingName(..)
+    , mkBindingPred
+    , RhsOfName(..)
+    , mkRhsOfPred
     , fromRdrName
     , toRdrName
     , toRdrNames
     , hnModuleName
     , hnUnqualified
     , parseName
+    , showName
       -- * Namespaces
     , Named(..)
     , varToNamed
@@ -42,18 +50,13 @@ import Control.Monad.IO.Class
 #if __GLASGOW_HASKELL__ <= 706
 import Data.List (intercalate)
 #endif
+import Data.Dynamic (Typeable)
 
 import HERMIT.Context
+import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
-
--- | A 'HermitName' is an optionally fully-qualified name,
--- like GHC's 'RdrName', but without specifying which 'NameSpace'
--- the name is found in.
-data HermitName = HermitName { hnModuleName  :: Maybe ModuleName
-                             , hnUnqualified :: String
-                             }
 
 -- | Possible results from name lookup.
 -- Invariant: One constructor for each NameSpace.
@@ -95,6 +98,28 @@ allNameSpaces = [varNS, dataConNS, tyConClassNS, tyVarNS]
 
 ----------------------------------------------------------
 
+-- | A 'HermitName' is an optionally fully-qualified name,
+-- like GHC's 'RdrName', but without specifying which 'NameSpace'
+-- the name is found in.
+data HermitName = HermitName { hnModuleName  :: Maybe ModuleName
+                             , hnUnqualified :: String
+                             }
+    deriving Typeable
+
+instance Extern HermitName where
+    type Box HermitName = HermitName
+    box = id
+    unbox = id
+
+-- | Parse a HermitName from a String.
+parseName :: String -> HermitName
+parseName s | isQualified s = parseQualified s
+            | otherwise     = mkUnqualified s
+
+-- | Turn a HermitName into a (possibly fully-qualified) String.
+showName :: HermitName -> String
+showName (HermitName mnm nm) = maybe id (\ m n -> moduleNameString m ++ ('.' : n))  mnm nm
+
 mkQualified :: String -> String -> HermitName
 mkQualified mnm nm = HermitName (Just $ mkModuleName mnm) nm
 
@@ -122,10 +147,47 @@ parseQualified s = mkQualified mnm nm
           (rNm, _dot:rMod) = break (=='.') cs
           (nm, mnm) = (reverse (c:rNm), reverse rMod)
 
--- | Parse a HermitName from a String.
-parseName :: String -> HermitName
-parseName s | isQualified s = parseQualified s
-            | otherwise     = mkUnqualified s
+--------------------------------------------------------------------------------------------------
+
+-- Newtype wrappers used for type-based command completion
+-- TODO: change String to HermitName
+
+newtype BindingName = BindingName { unBindingName :: String } deriving Typeable
+
+instance Extern BindingName where
+    type Box BindingName = BindingName
+    box = id
+    unbox = id
+
+mkBindingPred :: BindingName -> Var -> Bool
+mkBindingPred (BindingName str) = cmpString2Var str
+
+newtype OccurrenceName = OccurrenceName { unOccurrenceName :: String } deriving Typeable
+
+instance Extern OccurrenceName where
+    type Box OccurrenceName = OccurrenceName
+    box = id
+    unbox = id
+
+mkOccPred :: OccurrenceName -> Var -> Bool
+mkOccPred (OccurrenceName str) = cmpString2Var str
+
+newtype OccurrenceNameListBox = OccurrenceNameListBox [OccurrenceName] deriving Typeable
+
+instance Extern [OccurrenceName] where
+    type Box [OccurrenceName] = OccurrenceNameListBox
+    box = OccurrenceNameListBox
+    unbox (OccurrenceNameListBox l) = l
+
+newtype RhsOfName = RhsOfName { unRhsOfName :: String } deriving Typeable
+
+instance Extern RhsOfName where
+    type Box RhsOfName = RhsOfName
+    box = id
+    unbox = id
+
+mkRhsOfPred :: RhsOfName -> Var -> Bool
+mkRhsOfPred (RhsOfName str) = cmpString2Var str
 
 --------------------------------------------------------------------------------------------------
 

@@ -35,6 +35,7 @@ import HERMIT.Plugin.Renderer
 
 import HERMIT.PrettyPrinter.Common
 
+import HERMIT.Shell.Completion
 import HERMIT.Shell.Externals
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.KernelEffect

@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeFamilies #-}
 module HERMIT.Dictionary.Fold
     ( -- * Fold/Unfold Transformation
       externals
@@ -9,9 +10,7 @@ module HERMIT.Dictionary.Fold
     , fold
     , unifyTypes
     , tyMatchesToCoreExpr
-    )
-
-where
+    ) where
 
 import Control.Arrow
 import Control.Applicative
@@ -47,7 +46,7 @@ externals =
         , ""
         , "Note: due to associativity, if you wanted to fold 5 + 6 + 6, "
         , "you first need to apply an associativity rewrite." ]  .+ Context .+ Deep
-    , external "fold-remembered" (promoteExprR . stashFoldR :: Label -> RewriteH Core)
+    , external "fold-remembered" (promoteExprR . stashFoldR :: RememberedName -> RewriteH Core)
         [ "Fold a remembered definition." ]                      .+ Context .+ Deep
     , external "fold-any" (promoteExprR stashFoldAnyR :: RewriteH Core)
         [ "Attempt to fold any of the remembered definitions." ] .+ Context .+ Deep
@@ -55,7 +54,7 @@ externals =
 
 ------------------------------------------------------------------------
 
-stashFoldR :: ReadBindings c => Label -> Rewrite c HermitM CoreExpr
+stashFoldR :: ReadBindings c => RememberedName -> Rewrite c HermitM CoreExpr
 stashFoldR label = prefixFailMsg "Fold failed: " $
     transform $ \ c e -> do
         Def i rhs <- lookupDef label
@@ -148,7 +147,7 @@ foldMatch :: [Var]          -- ^ vars that can unify with anything
 foldMatch vs as (Var i) e | i `elem` vs = matchWithTypes vs as i e
                           | otherwise   = case e of
                                             Var i' | maybe False (==i) (lookup i' as) -> matchWithTypes vs as i e
-                                                   | i == i' -> liftM tail $ matchWithTypes vs as i e 
+                                                   | i == i' -> liftM tail $ matchWithTypes vs as i e
                                                                 -- note we depend on (i,e) being at front here
                                                                 -- this is not strictly necessary, but is faster
                                             _                -> Nothing
@@ -190,7 +189,7 @@ foldMatch vs as (Case s b ty alts) (Case s' b' ty' alts') = do
     return (x ++ tyMatchesToCoreExpr t ++ concat y)
 
 foldMatch vs as (Cast e c) (Cast e' c') = do
-    guard (coreEqCoercion c c') 
+    guard (coreEqCoercion c c')
     foldMatch vs as e e'
 
 foldMatch vs as (Type t1) (Type t2) = liftM tyMatchesToCoreExpr $ foldMatchType vs as t1 t2
@@ -237,7 +236,7 @@ foldMatchType vs as (TyConApp tc1 kOrTys1) (TyConApp tc2 kOrTys2) = do
     let f ty1 ty2 | isKind ty1 && eqKind ty1 ty2 = return []
                   | otherwise = foldMatchType vs as ty1 ty2
     liftM concat $ zipWithM f kOrTys1 kOrTys2
-    
+
 foldMatchType vs as (FunTy ty1 ty2) (FunTy ty1' ty2') = do
     x <- foldMatchType vs as ty1 ty1'
     y <- foldMatchType vs as ty2 ty2'

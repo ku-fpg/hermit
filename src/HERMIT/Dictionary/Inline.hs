@@ -32,6 +32,7 @@ import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
+import HERMIT.Name
 
 import HERMIT.Dictionary.Common
 
@@ -42,7 +43,7 @@ externals :: [External]
 externals =
             [ external "inline" (promoteExprR inlineR :: RewriteH Core)
                 [ "(Var v) ==> <defn of v>" ].+ Eval .+ Deep
-            , external "inline" (promoteExprR . inlineNameR :: String -> RewriteH Core)
+            , external "inline" (promoteExprR . inlineMatchingPredR . mkOccPred :: OccurrenceName -> RewriteH Core)
                 [ "Given a specific v, (Var v) ==> <defn of v>" ] .+ Eval .+ Deep
             , external "inline" (promoteExprR . inlineNamesR :: [String] -> RewriteH Core)
                 [ "If the current variable matches any of the given names, then inline it." ] .+ Eval .+ Deep

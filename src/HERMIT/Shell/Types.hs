@@ -5,7 +5,6 @@
 module HERMIT.Shell.Types where
 
 import Control.Applicative
-import Control.Arrow
 import Control.Concurrent.STM
 import Control.Monad.State
 #if MIN_VERSION_mtl(2,2,1)
@@ -14,9 +13,8 @@ import Control.Monad.Except
 import Control.Monad.Error
 #endif
 
-import Data.Char (isSpace)
 import Data.Dynamic
-import Data.List (intercalate, isPrefixOf, nub)
+import Data.List (intercalate)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isJust)
 import Data.Monoid (mempty)
@@ -34,9 +32,6 @@ import HERMIT.PrettyPrinter.Common
 import HERMIT.Plugin.Display
 import HERMIT.Plugin.Renderer
 import HERMIT.Plugin.Types
-
-import HERMIT.Dictionary.Inline
-import HERMIT.Dictionary.Navigation
 
 import System.Console.Haskeline hiding (catch, display)
 import System.IO (Handle, stdout)
@@ -403,59 +398,6 @@ setRunningScript ms = modify $ \st -> st { cl_running_script = ms }
 -- TODO: rename?
 putStrToConsole :: CLMonad m => String -> m ()
 putStrToConsole str = ifM isRunningScript (return ()) (cl_putStrLn str)
-
-------------------------------------------------------------------------------
-
-shellComplete :: (MonadCatch m, MonadIO m, MonadState CommandLineState m) => String -> String -> m [Completion]
-shellComplete rPrev so_far = do
-    targetQuery <- completionQuery (completionType rPrev)
-    -- (liftM.liftM) (map simpleCompletion . nub . filter (so_far `isPrefixOf`))
-    --     $ queryS (cl_kernel st) (cl_cursor (cl_session st)) targetQuery
-    -- TODO: I expect you want to build a silent version of the kernal_env for this query
-    st <- get
-    cl <- catchM (queryS (cl_kernel st) targetQuery (cl_kernel_env st) (cl_cursor st)) (\_ -> return [])
-    return $ (map simpleCompletion . nub . filter (so_far `isPrefixOf`)) cl
-
-data CompletionType = ConsiderC       -- considerable constructs and (deprecated) bindingOfT
-                    | BindingOfC      -- bindingOfT
-                    | BindingGroupOfC -- bindingGroupOfT
-                    | RhsOfC          -- rhsOfT
-                    | OccurrenceOfC   -- occurrenceOfT
-                    | InlineC         -- complete with names that can be inlined
-                    | CommandC        -- complete using dictionary commands (default)
-                    | AmbiguousC [CompletionType]  -- completionType function needs to be more specific
-    deriving (Show)
-
--- TODO: reverse rPrev and parse it, to better figure out what possiblities are in context?
---       for instance, completing "any-bu (inline " should be different than completing just "inline "
---       this would also allow typed completion?
-completionType :: String -> CompletionType
-completionType = go . dropWhile isSpace
-    where go rPrev = case [ ty | (nm, ty) <- opts, reverse nm `isPrefixOf` rPrev ] of
-                        []  -> CommandC
-                        [t] -> t
-                        ts  -> AmbiguousC ts
-          opts = [ ("inline"          , InlineC  )
-                 , ("consider"        , ConsiderC)
-                 , ("binding-of"      , BindingOfC)
-                 , ("binding-group-of", BindingGroupOfC)
-                 , ("rhs-of"          , RhsOfC)
-                 , ("occurrence-of"   , OccurrenceOfC)
-                 ]
-
-completionQuery :: (MonadIO m, MonadState CommandLineState m) => CompletionType -> m (TransformH CoreTC [String])
-completionQuery ConsiderC       = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':) >>^ (++ map fst considerables) -- the use of bindingOfTargetsT here is deprecated
-completionQuery OccurrenceOfC   = return $ occurrenceOfTargetsT    >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery BindingOfC      = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery BindingGroupOfC = return $ bindingGroupOfTargetsT  >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery RhsOfC          = return $ rhsOfTargetsT           >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery InlineC         = return $ promoteT inlineTargetsT >>^                         map ('\'':)
-completionQuery CommandC        = get >>= \s -> return $ pure (map externName (cl_externals s))
--- Need to modify opts in completionType function. No key can be a suffix of another key.
-completionQuery (AmbiguousC ts) = do
-    liftIO $ putStrLn "\nCannot tab complete: ambiguous completion type."
-    liftIO $ putStrLn $ "Possibilities: " ++ intercalate ", " (map show ts)
-    return (pure [])
 
 ------------------------------------------------------------------------------
 

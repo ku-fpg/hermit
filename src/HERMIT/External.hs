@@ -1,54 +1,52 @@
 {-# LANGUAGE GADTs, TypeFamilies, FlexibleContexts, FlexibleInstances, DeriveDataTypeable #-}
 
 module HERMIT.External
-       (
-       -- * Externals
-         External
-       , ExternalName
-       , ExternalHelp
-       , externName
-       , externDyn
-       , externHelp
-       , externTypeString
-       , externTypeArgResString
-       , Dictionary
-       , toDictionary
-       , addToDictionary
-       , toHelp
-       , external
-       , Extern(..)
-       , matchingExternals
-       -- * Tags
-       , CmdTag(..)
-       , TagE
-       , Tag((.+),remTag,tagMatch)
-       , (.&)
-       , (.||)
-       , notT
-       , externTags
-       , dictionaryOfTags
-       -- * Boxes
-       -- | Boxes are used by the 'Extern' class.
-       , TagBox(..)
-       , IntBox(..)
-       , RewriteCoreBox(..)
-       , RewriteCoreTCBox(..)
-       , BiRewriteCoreBox(..)
-       , TransformCoreStringBox(..)
-       , TransformCoreTCStringBox(..)
-       , TransformCoreCheckBox(..)
-       , TransformCoreTCCheckBox(..)
-       , TransformCorePathBox(..)
-       , TransformCoreTCPathBox(..)
-       , CoreString(..)
-       , CoreBox(..)
-       , CrumbBox(..)
-       , PathBox(..)
-       , StringBox(..)
-       , StringListBox(..)
-       , IntListBox(..)
-       , RewriteCoreListBox(..)
-) where
+    ( -- * Externals
+      External
+    , ExternalName
+    , ExternalHelp
+    , externName
+    , externDyn
+    , externHelp
+    , externTypeString
+    , externTypeArgResString
+    , splitFunTyArgs
+    , toHelp
+    , external
+    , Extern(..)
+    , matchingExternals
+      -- * Tags
+    , CmdTag(..)
+    , TagE
+    , Tag((.+),remTag,tagMatch)
+    , (.&)
+    , (.||)
+    , notT
+    , externTags
+    , dictionaryOfTags
+      -- * Boxes
+      -- | Boxes are used by the 'Extern' class.
+    , BiRewriteCoreBox(..)
+    , CoreString(..)
+    , CrumbBox(..)
+    , IntBox(..)
+    , IntListBox(..)
+    , PathBox(..)
+    , RewriteCoreBox(..)
+    , RewriteCoreListBox(..)
+    , RewriteCoreTCBox(..)
+    , RewriteEqualityBox(..)
+    , StringBox(..)
+    , StringListBox(..)
+    , TagBox(..)
+    , TransformCoreCheckBox(..)
+    , TransformCorePathBox(..)
+    , TransformCoreStringBox(..)
+    , TransformCoreTCCheckBox(..)
+    , TransformCoreTCPathBox(..)
+    , TransformCoreTCStringBox(..)
+    , TransformEqualityStringBox(..)
+    ) where
 
 import Data.Map hiding (map)
 import Data.Dynamic
@@ -58,6 +56,7 @@ import Data.Typeable.Internal (TypeRep(..), funTc)
 import HERMIT.Core
 import HERMIT.Context (LocalPathH)
 import HERMIT.Kure
+import HERMIT.Monad
 
 -----------------------------------------------------------------
 
@@ -217,20 +216,6 @@ external nm fn help = External
 matchingExternals :: (Extern tr, Tag t) => t -> [External] -> [(External, tr)]
 matchingExternals tag exts = [ (e,tr) | e <- exts, tagMatch tag e
                                       , Just tr <- [fmap unbox $ fromDynamic $ externDyn e] ]
-
--- | A 'Dictionary' is a collection of 'Dynamic's.
---   Looking up a 'Dynamic' (via an 'ExternalName' key) returns a list, as there can be multiple 'Dynamic's with the same name.
-type Dictionary = Map ExternalName [Dynamic]
-
--- | Build a 'Data.Map' from names to 'Dynamic' values.
-toDictionary :: [External] -> Dictionary
-toDictionary = fromListWith (++) . map toEntry
-
-toEntry :: External -> (ExternalName, [Dynamic])
-toEntry e = (externName e, [externDyn e])
-
-addToDictionary :: External -> Dictionary -> Dictionary
-addToDictionary ex d = fromListWith (++) $ toEntry ex : toList d
 
 -- | Build a 'Data.Map' from names to help information.
 toHelp :: [External] -> Map ExternalName ExternalHelp
@@ -419,14 +404,12 @@ instance Extern (TransformH CoreTC LocalPathH) where
 
 -----------------------------------------------------------------
 
--- TODO: Is this deliberately called "CoreBox" rather than "CoreStringBox"?
-newtype CoreString = CoreString { unCoreString :: String }
-data CoreBox = CoreBox CoreString deriving Typeable
+newtype CoreString = CoreString { unCoreString :: String } deriving Typeable
 
 instance Extern CoreString where
-    type Box CoreString = CoreBox
-    box = CoreBox
-    unbox (CoreBox s) = s
+    type Box CoreString = CoreString
+    box = id
+    unbox = id
 
 -----------------------------------------------------------------
 
@@ -463,5 +446,37 @@ instance Extern [RewriteH Core] where
     type Box [RewriteH Core] = RewriteCoreListBox
     box = RewriteCoreListBox
     unbox (RewriteCoreListBox l) = l
+
+-----------------------------------------------------------------
+
+instance Extern RememberedName where
+    type Box RememberedName = RememberedName
+    box = id
+    unbox = id
+
+-----------------------------------------------------------------
+
+instance Extern LemmaName where
+    type Box LemmaName = LemmaName
+    box = id
+    unbox = id
+
+-----------------------------------------------------------------
+
+data RewriteEqualityBox = RewriteEqualityBox (RewriteH Equality) deriving Typeable
+
+instance Extern (RewriteH Equality) where
+    type Box (RewriteH Equality) = RewriteEqualityBox
+    box = RewriteEqualityBox
+    unbox (RewriteEqualityBox r) = r
+
+-----------------------------------------------------------------
+
+data TransformEqualityStringBox = TransformEqualityStringBox (TransformH Equality String) deriving Typeable
+
+instance Extern (TransformH Equality String) where
+    type Box (TransformH Equality String) = TransformEqualityStringBox
+    box = TransformEqualityStringBox
+    unbox (TransformEqualityStringBox t) = t
 
 -----------------------------------------------------------------
