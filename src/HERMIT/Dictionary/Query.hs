@@ -1,13 +1,12 @@
 {-# LANGUAGE CPP, LambdaCase, FlexibleContexts #-}
 
 module HERMIT.Dictionary.Query
-  ( -- * Queries and Predicates
-    externals
-  , infoT
-  , compareCoreAtT
-  , compareBoundIdsT
-  )
-where
+    ( -- * Queries and Predicates
+      externals
+    , infoT
+    , compareCoreAtT
+    , compareBoundIdsT
+    ) where
 
 import Control.Arrow
 
@@ -31,13 +30,13 @@ import HERMIT.Dictionary.Inline hiding (externals)
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
 externals :: [External]
 externals =
-         [ external "info" (infoT :: TransformH CoreTC String)
-                [ "Display information about the current node." ] .+ Query
-         , external "compare-bound-ids" (compareBoundIds :: String -> String -> TransformH CoreTC ())
-                [ "Compare the definitions of two in-scope identifiers for alpha equality."] .+ Query .+ Predicate
-         , external "compare-core-at" (compareCoreAtT ::  TransformH Core LocalPathH -> TransformH Core LocalPathH -> TransformH Core ())
-                [ "Compare the core fragments at the end of the given paths for alpha-equality."] .+ Query .+ Predicate
-         ]
+    [ external "info" (infoT :: TransformH CoreTC String)
+        [ "Display information about the current node." ] .+ Query
+    , external "compare-bound-ids" (compareBoundIds :: String -> String -> TransformH CoreTC ())
+        [ "Compare the definitions of two in-scope identifiers for alpha equality."] .+ Query .+ Predicate
+    , external "compare-core-at" (compareCoreAtT ::  TransformH Core LocalPathH -> TransformH Core LocalPathH -> TransformH Core ())
+        [ "Compare the core fragments at the end of the given paths for alpha-equality."] .+ Query .+ Predicate
+    ]
 
 --------------------------------------------------------
 
@@ -52,7 +51,7 @@ infoT =
               pa       =   "Path:     " ++ showCrumbs (snocPathToPath $ absPath c)
               children =   "Children: " ++ showCrumbs crumbs
               bds      =   "Local bindings in scope: " ++ concat
-                                [ "\n  " ++ var2String k ++  " : " ++ hermitBindingSummary hbs
+                                [ "\n  " ++ unqualifiedName k ++  " : " ++ hermitBindingSummary hbs
                                 | (k,hbs) <- Map.toList (hermitBindings c)
                                 ]
               freevars = [ "Free local identifiers:  " ++ showVarSet (filterVarSet isLocalId fvs)

@@ -1,19 +1,18 @@
 {-# LANGUAGE CPP, LambdaCase, MultiWayIf #-}
 
 module HERMIT.PrettyPrinter.Clean
-  ( -- * HERMIT's Clean Pretty-Printer for GHC Core
-    pretty
-  , ppCoreTC
-  , ppModGuts
-  , ppCoreProg
-  , ppCoreBind
-  , ppCoreExpr
-  , ppCoreAlt
-  , ppKindOrType
-  , ppCoercion
-  , ppForallQuantification
-  )
-where
+    ( -- * HERMIT's Clean Pretty-Printer for GHC Core
+      pretty
+    , ppCoreTC
+    , ppModGuts
+    , ppCoreProg
+    , ppCoreBind
+    , ppCoreExpr
+    , ppCoreAlt
+    , ppKindOrType
+    , ppCoercion
+    , ppForallQuantification
+    ) where
 
 import Control.Arrow hiding ((<+>))
 import Control.Applicative ((<$>))
@@ -256,7 +255,7 @@ varColor var | isTyVar var = TypeColor
 
 ppName :: SyntaxForColor -> PrettyH Name
 ppName color = do p    <- absPathT
-                  name <- arr uqName
+                  name <- arr unqualifiedName
                   let doc = attrP p $ markColor color $ text name
                                -- TODO: is "isScriptInfixId" the right predicate to use here?
                   if all isScriptInfixIdChar name

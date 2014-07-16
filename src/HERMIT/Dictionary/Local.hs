@@ -1,30 +1,29 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module HERMIT.Dictionary.Local
-       ( -- * Local Structural Manipulations
-         HERMIT.Dictionary.Local.externals
-         -- ** Binding Groups
-       , module HERMIT.Dictionary.Local.Bind
-         -- ** Case Expressions
-       , module HERMIT.Dictionary.Local.Case
-         -- ** Cast Expressions
-       , module HERMIT.Dictionary.Local.Cast
-         -- ** Let Expressions
-       , module HERMIT.Dictionary.Local.Let
-         -- ** Miscellaneous
-       , abstractR
-       , pushR
-       , betaReduceR
-       , betaReducePlusR
-       , betaExpandR
-       , etaReduceR
-       , etaExpandR
-       , multiEtaExpandR
-       , flattenModuleR
-       , flattenProgramR
-       , flattenProgramT
-       )
-where
+    ( -- * Local Structural Manipulations
+      HERMIT.Dictionary.Local.externals
+      -- ** Binding Groups
+    , module HERMIT.Dictionary.Local.Bind
+      -- ** Case Expressions
+    , module HERMIT.Dictionary.Local.Case
+      -- ** Cast Expressions
+    , module HERMIT.Dictionary.Local.Cast
+      -- ** Let Expressions
+    , module HERMIT.Dictionary.Local.Let
+      -- ** Miscellaneous
+    , abstractR
+    , pushR
+    , betaReduceR
+    , betaReducePlusR
+    , betaExpandR
+    , etaReduceR
+    , etaExpandR
+    , multiEtaExpandR
+    , flattenModuleR
+    , flattenProgramR
+    , flattenProgramT
+    ) where
 
 import HERMIT.Core
 import HERMIT.Context
@@ -159,7 +158,7 @@ etaReduceR = prefixFailMsg "Eta-reduction failed: " $
                                Nothing -> fail "the argument expression is not a type variable."
                                Just v2 -> guardMsg (v1 == v2) "type variables are not equal."
                   _       -> fail "the argument expression is not a variable."
-               guardMsg (v1 `notElemVarSet` freeVarsExpr f) $ var2String v1 ++ " is free in the function being applied."
+               guardMsg (v1 `notElemVarSet` freeVarsExpr f) $ unqualifiedName v1 ++ " is free in the function being applied."
                return f
 
 -- | e1 ==> (\\ v -> e1 v)

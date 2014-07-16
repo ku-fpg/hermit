@@ -273,8 +273,8 @@ performInduction lem@(nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
         let nms = [ fromString ("ind-hyp-" ++ show n) | n :: Int <- [0..] ]
             hypLemmas = zip nms $ zipWith3 Lemma eqs (repeat True) (repeat False)
             lemmaName = fromString $ show nm ++ "-induction-on-"
-                                             ++ getOccString i ++ "-case-"
-                                             ++ maybe "undefined" getOccString mdc
+                                             ++ unqualifiedName i ++ "-case-"
+                                             ++ maybe "undefined" unqualifiedName mdc
             caseLemma = Lemma (Equality (delete i bs ++ vs) lhsE rhsE) False False
 
         -- this is pretty hacky

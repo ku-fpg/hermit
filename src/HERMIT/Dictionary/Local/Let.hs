@@ -350,7 +350,7 @@ letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
   do Lam v (Let binds body) <- idR
      let bs  = bindVars binds
          fvs = freeVarsBind binds
-     guardMsg (v `notElemVarSet` fvs) (var2String v ++ " occurs in the RHS of the let-bindings.")
+     guardMsg (v `notElemVarSet` fvs) (unqualifiedName v ++ " occurs in the RHS of the let-bindings.")
      if v `elem` bs
       then alphaLamR Nothing >>> letFloatLamR
       else return $ Let binds (Lam v body)

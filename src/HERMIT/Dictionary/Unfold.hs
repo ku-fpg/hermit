@@ -144,7 +144,7 @@ unfoldStashR label = prefixFailMsg "Inlining stashed definition failed: " $
                         in if all (inScope c) fvars
                            then return rhs
                            else fail $ "free variables " ++ intercalate "," (map (showPpr dflags) (filter (not . inScope c) fvars)) ++ " in stashed definition are no longer in scope."
-                   else fail $ "stashed definition applies to " ++ var2String i ++ " not " ++ var2String v
+                   else fail $ "stashed definition applies to " ++ unqualifiedName i ++ " not " ++ unqualifiedName v
 
 showStashT :: Injection CoreDef a => PrettyC -> PrettyH a -> Transform c HermitM a DocH
 showStashT pctx pp = do

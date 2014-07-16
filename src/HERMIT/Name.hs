@@ -47,9 +47,7 @@ module HERMIT.Name
 import Control.Monad
 import Control.Monad.IO.Class
 
-#if __GLASGOW_HASKELL__ <= 706
 import Data.List (intercalate)
-#endif
 import Data.Dynamic (Typeable)
 
 import HERMIT.Context
@@ -291,15 +289,15 @@ lookupName ns nm = case isQual_maybe rdrName of
 findNamedBuiltIn :: Monad m => NameSpace -> String -> m Named
 findNamedBuiltIn ns str
     | isValNameSpace ns =
-        case [ dc | tc <- wiredInTyCons, dc <- tyConDataCons tc, str == getOccString dc ] of
+        case [ dc | tc <- wiredInTyCons, dc <- tyConDataCons tc, str == unqualifiedName dc ] of
             [] -> fail "name not in scope."
             [dc] -> return $ NamedDataCon dc
-            dcs -> fail $ "multiple DataCons match: " ++ show (map getOccString dcs)
+            dcs -> fail $ "multiple DataCons match: " ++ intercalate ", " (map unqualifiedName dcs)
     | isTcClsNameSpace ns =
-        case [ tc | tc <- wiredInTyCons, str == getOccString tc ] of
+        case [ tc | tc <- wiredInTyCons, str == unqualifiedName tc ] of
             [] -> fail "type name not in scope."
             [tc] -> return $ NamedTyCon tc
-            tcs -> fail $ "multiple TyCons match: " ++ show (map getOccString tcs)
+            tcs -> fail $ "multiple TyCons match: " ++ intercalate ", " (map unqualifiedName tcs)
     | otherwise = fail "findNameBuiltIn: unusable NameSpace"
 
 -- | We have a name, find the corresponding Named.
@@ -326,7 +324,7 @@ findIdMG hnm = do
     case filter isValName $ findNamesFromString rdrEnv nm of
         []  -> findIdBuiltIn nm
         [n] -> nameToId n
-        ns  -> fail $ "multiple matches found:\n" ++ intercalate ", " (map getOccString ns)
+        ns  -> fail $ "multiple matches found:\n" ++ intercalate ", " (map unqualifiedName ns)
 
 -- | We have a name, find the corresponding Id.
 nameToId :: MonadThings m => Name -> m Id
@@ -399,5 +397,5 @@ cloneVarH nameMod v | isTyVar v = newTyVarH name ty
                     | isId v    = newIdH name ty
                     | otherwise = fail "If this variable isn't a type, coercion or identifier, then what is it?"
   where
-    name = nameMod (uqName v)
+    name = nameMod (unqualifiedName v)
     ty   = varType v

@@ -1,35 +1,33 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
 module HERMIT.Dictionary.AlphaConversion
-       ( -- * Alpha-Renaming and Shadowing
-         externals
-         -- ** Alpha-Renaming
-       , alphaR
-       , alphaLamR
-       , alphaCaseBinderR
-       , alphaAltWithR
-       , alphaAltVarsR
-       , alphaAltR
-       , alphaCaseR
-       , alphaLetWithR
-       , alphaLetVarsR
-       , alphaLetR
-       , alphaProgConsWithR
-       , alphaProgConsIdsR
-       , alphaProgConsR
-       , alphaProgR
-         -- ** Shadow Detection and Unshadowing
-       , unshadowR
-       , unshadowExprR
-       , unshadowAltR
-       , unshadowProgR
-       , visibleVarsT
-       , cloneVarAvoidingT
---       , freshNameGenAvoidingT
-       , freshNameGenAvoiding
-       , detectShadowsM
-       , replaceVarR
-       )
-where
+    ( -- * Alpha-Renaming and Shadowing
+      externals
+      -- ** Alpha-Renaming
+    , alphaR
+    , alphaLamR
+    , alphaCaseBinderR
+    , alphaAltWithR
+    , alphaAltVarsR
+    , alphaAltR
+    , alphaCaseR
+    , alphaLetWithR
+    , alphaLetVarsR
+    , alphaLetR
+    , alphaProgConsWithR
+    , alphaProgConsIdsR
+    , alphaProgConsR
+    , alphaProgR
+      -- ** Shadow Detection and Unshadowing
+    , unshadowR
+    , unshadowExprR
+    , unshadowAltR
+    , unshadowProgR
+    , visibleVarsT
+    , cloneVarAvoidingT
+    , freshNameGenAvoiding
+    , detectShadowsM
+    , replaceVarR
+    ) where
 
 import Control.Applicative
 import Control.Arrow
@@ -126,7 +124,7 @@ inventNames curr old = head
                      , nm `notElem` names
                      ]
    where
-           names = map uqName (varSetElems curr)
+           names = varSetToStrings curr
            nums = reverse $ takeWhile isDigit (reverse old)
            baseLeng = length $ drop (length nums) old
            base = take baseLeng old
@@ -137,8 +135,8 @@ inventNames curr old = head
 
 -- | Discard variables from the first set that do not shadow a variable in the second set.
 shadowedBy :: VarSet -> VarSet -> VarSet
-shadowedBy vs fvs = let fvUqNames = map uqName (varSetElems fvs)
-                     in filterVarSet (\ v -> uqName v `elem` fvUqNames) vs
+shadowedBy vs fvs = let fvNames = varSetToStrings fvs
+                     in filterVarSet (\ v -> unqualifiedName v `elem` fvNames) vs
 
 -- | Shadows are any duplicates in the list, or any occurrences of the list elements in the set.
 detectShadowsM :: Monad m => [Var] -> VarSet -> m VarSet
@@ -178,7 +176,7 @@ unshadowProgR = do
     alphaProgConsIdsR (varSetElems ss)
 
 dupVars :: [Var] -> [Var]
-dupVars = dupsBy ((==) `on` uqName)
+dupVars = dupsBy ((==) `on` unqualifiedName)
 
 -----------------------------------------------------------------------
 
@@ -325,7 +323,7 @@ alphaLetR = letVarsT >>= alphaLetVarsR
 alphaProgConsNonRecR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> Rewrite c HermitM CoreProg
 alphaProgConsNonRecR mn = setFailMsg (wrongFormForAlpha "ProgCons (NonRec v e) p") $
                     do i <- progConsNonRecIdT
-                       guardMsg (not $ isExportedId i) ("Identifier " ++ var2String i ++ " is exported, and thus cannot be alpha-renamed.")
+                       guardMsg (not $ isExportedId i) ("Identifier " ++ unqualifiedName i ++ " is exported, and thus cannot be alpha-renamed.")
                        i' <- extractT (cloneVarAvoidingT i mn [i])
                        consNonRecAnyR (return i') idR (replaceVarR i i')
 

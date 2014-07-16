@@ -9,15 +9,13 @@ module HERMIT.GHC
       module GhcPlugins
     , ppIdInfo
     , zapVarOccInfo
-    , var2String
     , thRdrNameGuesses
     , varNameNS
     , isQualified
     , cmpString2Name
     , cmpString2Var
-    , fqName
-    , uqName
-    , findNamesFromString
+    , qualifiedName
+    , unqualifiedName
     , alphaTyVars
     , Type(..)
     , TyLit(..)
@@ -165,7 +163,7 @@ exprType other = pprTrace "exprType" (pprCoreExpr other) alphaTy
 
 -- | Convert a 'VarSet' to a list of user-readable strings.
 varSetToStrings :: VarSet -> [String]
-varSetToStrings = map var2String . varSetElems
+varSetToStrings = map unqualifiedName . varSetElems
 
 -- | Show a human-readable version of a 'VarSet'.
 showVarSet :: VarSet -> String
@@ -189,24 +187,20 @@ coAxiomName = CoAxiom.coAxiomName
 -- getOccString :: NamedThing a => a -> String
 
 -- | Get the unqualified name from a 'NamedThing'.
-uqName :: NamedThing nm => nm -> String
-uqName = getOccString
+unqualifiedName :: NamedThing nm => nm -> String
+unqualifiedName = getOccString
 
 -- | Get the fully qualified name from a 'Name'.
-fqName :: Name -> String
-fqName nm = modStr ++ uqName nm
+qualifiedName :: Name -> String
+qualifiedName nm = modStr ++ unqualifiedName nm
     where modStr = maybe "" (\m -> moduleNameString (moduleName m) ++ ".") (nameModule_maybe nm)
-
--- | Convert a variable to a neat string for printing (unqualfied name).
-var2String :: Var -> String
-var2String = uqName . varName
 
 -- | Compare a 'String' to a 'Name' for equality.
 -- Strings containing a period are assumed to be fully qualified names.
 -- (Except for ".", which is an unqualified reference to composition.)
 cmpString2Name :: String -> Name -> Bool
-cmpString2Name str nm | isQualified str = str == fqName nm
-                      | otherwise       = str == uqName nm
+cmpString2Name str nm | isQualified str = str == qualifiedName nm
+                      | otherwise       = str == unqualifiedName nm
 
 isQualified :: String -> Bool
 isQualified [] = False
@@ -215,12 +209,6 @@ isQualified xs = '.' `elem` init xs -- pathological case is compose (hence the '
 -- | Compare a 'String' to a 'Var' for equality. See 'cmpString2Name'.
 cmpString2Var :: String -> Var -> Bool
 cmpString2Var str = cmpString2Name str . varName
-
--- | Find 'Name's matching a given fully qualified or unqualified name.
-findNamesFromString :: GlobalRdrEnv -> String -> [Name]
-findNamesFromString rdrEnv str | isQualified str = res
-                               | otherwise       = res
-    where res = [ nm | elt <- globalRdrEnvElts rdrEnv, let nm = gre_name elt, cmpString2Name str nm ]
 
 -- | Pretty-print an identifier.
 ppIdInfo :: Id -> IdInfo -> SDoc

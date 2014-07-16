@@ -1,18 +1,16 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
 
 module HERMIT.Dictionary.FixPoint
-       ( -- * Operations on the Fixed Point Operator (fix)
-         -- | Note that many of these operations require 'Data.Function.fix' to be explicitly imported, if it is not used in the source file.
-         HERMIT.Dictionary.FixPoint.externals
-         -- ** Rewrites and BiRewrites on Fixed Points
-       , fixIntroR
-       , fixComputationRuleBR
-       , fixRollingRuleBR
-       , fixFusionRuleBR
-         -- ** Utilities
-       , isFixExprT
-       )
-where
+    ( -- * Operations on the Fixed Point Operator (fix)
+      HERMIT.Dictionary.FixPoint.externals
+      -- ** Rewrites and BiRewrites on Fixed Points
+    , fixIntroR
+    , fixComputationRuleBR
+    , fixRollingRuleBR
+    , fixFusionRuleBR
+      -- ** Utilities
+    , isFixExprT
+    ) where
 
 import Control.Applicative
 import Control.Arrow
@@ -83,7 +81,7 @@ fixIntroR :: forall c m.
 fixIntroR = prefixFailMsg "fix introduction failed: " $ do
     Def f rhs <- idR
     let (tvs, body) = collectTyBinders rhs
-    f' <- constT $ newIdH (getOccString f) (exprType body)
+    f' <- constT $ newIdH (unqualifiedName f) (exprType body)
     body' <- contextonlyT $ \ c -> do
                 let constLam = mkCoreLams tvs $ varToCoreExpr f'
                     c' = addBindingGroup (NonRec f constLam)   -- we want to unfold f such as to throw away TyArgs
@@ -196,7 +194,7 @@ isFixExprT :: TransformH CoreExpr (Type,CoreExpr)
 isFixExprT = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
   do (Var fixId, [Type ty, f]) <- callT
      fixId' <- findIdT fixLocation
-     guardMsg (fixId == fixId') (var2String fixId ++ " does not match " ++ fixLocation)
+     guardMsg (fixId == fixId') (unqualifiedName fixId ++ " does not match " ++ fixLocation)
      return (ty,f)
 
 --------------------------------------------------------------------------------------------------

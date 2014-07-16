@@ -23,8 +23,6 @@ import TcType (tcSplitDFunTy)
 import Control.Arrow
 import Control.Monad
 
-import Data.List (intercalate)
-
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
@@ -39,17 +37,17 @@ import HERMIT.Dictionary.Common
 -- | 'External's for inlining variables.
 externals :: [External]
 externals =
-            [ external "inline" (promoteExprR inlineR :: RewriteH Core)
-                [ "(Var v) ==> <defn of v>" ].+ Eval .+ Deep
-            , external "inline" (promoteExprR . inlineMatchingPredR . mkOccPred :: OccurrenceName -> RewriteH Core)
-                [ "Given a specific v, (Var v) ==> <defn of v>" ] .+ Eval .+ Deep
-            , external "inline" (promoteExprR . inlineNamesR :: [String] -> RewriteH Core)
-                [ "If the current variable matches any of the given names, then inline it." ] .+ Eval .+ Deep
-            , external "inline-case-scrutinee" (promoteExprR inlineCaseScrutineeR :: RewriteH Core)
-                [ "if v is a case binder, replace (Var v) with the bound case scrutinee." ] .+ Eval .+ Deep
-            , external "inline-case-alternative" (promoteExprR inlineCaseAlternativeR :: RewriteH Core)
-                [ "if v is a case binder, replace (Var v) with the bound case-alternative pattern." ] .+ Eval .+ Deep .+ Unsafe
-            ]
+    [ external "inline" (promoteExprR inlineR :: RewriteH Core)
+        [ "(Var v) ==> <defn of v>" ].+ Eval .+ Deep
+    , external "inline" (promoteExprR . inlineMatchingPredR . mkOccPred :: OccurrenceName -> RewriteH Core)
+        [ "Given a specific v, (Var v) ==> <defn of v>" ] .+ Eval .+ Deep
+    , external "inline" (promoteExprR . inlineNamesR :: [String] -> RewriteH Core)
+        [ "If the current variable matches any of the given names, then inline it." ] .+ Eval .+ Deep
+    , external "inline-case-scrutinee" (promoteExprR inlineCaseScrutineeR :: RewriteH Core)
+        [ "if v is a case binder, replace (Var v) with the bound case scrutinee." ] .+ Eval .+ Deep
+    , external "inline-case-alternative" (promoteExprR inlineCaseAlternativeR :: RewriteH Core)
+        [ "if v is a case binder, replace (Var v) with the bound case-alternative pattern." ] .+ Eval .+ Deep .+ Unsafe
+    ]
 
 ------------------------------------------------------------------------
 
@@ -115,8 +113,8 @@ configurableInlineR config p =
 -- Fails, listing unbound variables if not.
 ensureBoundT :: (Monad m, ReadBindings c) => Transform c m CoreExpr ()
 ensureBoundT = do
-    unbound <- transform $ \ c -> return . filter (not . inScope c) . varSetElems . localFreeVarsExpr
-    guardMsg (null unbound) $ "the following variables are unbound: " ++ intercalate ", " (map getOccString unbound)
+    unbound <- transform $ \ c -> return . filterVarSet (not . inScope c) . localFreeVarsExpr
+    guardMsg (isEmptyVarSet unbound) $ "the following variables are unbound: " ++ showVarSet unbound
 
 -- NOTE: When inlining, we have to take care to avoid variable capture.
 --       Our approach is to track the binding depth of the inlined identifier.
@@ -152,10 +150,10 @@ getUnfoldingT config = transform $ \ c i ->
     case lookupHermitBinding i c of
       Nothing -> do requireAllBinders config
                     let uncaptured = (<= 0) -- i.e. is global
-		    -- this check is necessary because idInfo panics on TyVars, though it
-		    -- should never be the case that a type variable is NOT in the context,
-		    -- at least this will give a reasonable error message, instead of a GHC panic.
-		    guardMsg (isId i) "type variable is not in Env (this should not happen)."
+                    -- This check is necessary because idInfo panics on TyVars. Type variables should
+                    -- ALWAYS be in the context (so we should never be in this branch), but at least this
+                    -- will give a reasonable error message if something goes wrong, instead of a GHC panic.
+                    guardMsg (isId i) "type variable is not in Env (this should not happen)."
                     case unfoldingInfo (idInfo i) of
                       CoreUnfolding { uf_tmpl = uft } -> return (uft, uncaptured)
 #if __GLASGOW_HASKELL__ > 706
@@ -212,7 +210,7 @@ alt2Exp tys (DataAlt dc, vs) = return $ mkCoreConApps dc (map Type tys ++ map (v
 inlineTargetsT :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
                   , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
                => Transform c m Core [String]
-inlineTargetsT = collectT $ promoteT $ whenM (testM inlineR) (varT $ arr var2String)
+inlineTargetsT = collectT $ promoteT $ whenM (testM inlineR) (varT $ arr unqualifiedName)
 
 -- | Build a CoreExpr for a DFunUnfolding
 #if __GLASGOW_HASKELL__ > 706
