@@ -63,6 +63,7 @@ data CompletionType = ConsiderC       -- considerable constructs and (deprecated
                     | LemmaC          -- complete with list of lemmas
                     | CommandC        -- complete using dictionary commands (default)
                     | CoreC           -- complete with opening Core fragment bracket [|
+                    | NothingC        -- no completion
                     | RuleC           -- complete with GHC rewrite rule name
                     | StashC          -- complete with remembered labels
                     | StringC         -- complete with open quotes
@@ -73,9 +74,11 @@ completionType s = fromMaybe (UnknownC s) (lookup s m)
     where m = [ ("BindingName"   , BindingOfC)
               , ("Considerable"  , ConsiderC)
               , ("CoreBox"       , CoreC)
+              , ("IntBox"        , NothingC)
               , ("LemmaName"     , LemmaC)
               , ("OccurrenceName", OccurrenceOfC)
               , ("RememberedName", StashC)
+              , ("RewriteCoreBox", CommandC) -- be more specific than CommandC?
               , ("RhsOfName"     , RhsOfC)
               , ("RuleName"      , RuleC)
               , ("StringBox"     , StringC)
@@ -93,6 +96,7 @@ completionQuery BindingGroupOfC = return $ bindingGroupOfTargetsT  >>^ GHC.varSe
 completionQuery RhsOfC          = return $ rhsOfTargetsT           >>^ GHC.varSetToStrings >>^ map ('\'':)
 completionQuery InlineC         = return $ promoteT inlineTargetsT >>^                         map ('\'':)
 completionQuery LemmaC          = return $ liftM (map show . keys) $ getLemmasT
+completionQuery NothingC        = return $ pure []
 completionQuery RuleC           = return $ liftM (map (show . fst)) $ getHermitRulesT
 completionQuery StashC          = return $ liftM (map show . keys) $ constT getStash
 completionQuery StringC         = return $ pure ["\""]
