@@ -32,6 +32,7 @@ module HERMIT.GHC
     , bndrRuleAndUnfoldingVars
 #if __GLASGOW_HASKELL__ <= 706
     , exprType
+    , findNamesFromString
     , Control.Monad.IO.Class.liftIO
 #else
     , coAxiomName
@@ -209,6 +210,14 @@ isQualified xs = '.' `elem` init xs -- pathological case is compose (hence the '
 -- | Compare a 'String' to a 'Var' for equality. See 'cmpString2Name'.
 cmpString2Var :: String -> Var -> Bool
 cmpString2Var str = cmpString2Name str . varName
+
+#if __GLASGOW_HASKELL__ <= 706
+-- | Find 'Name's matching a given fully qualified or unqualified name.
+findNamesFromString :: GlobalRdrEnv -> String -> [Name]
+findNamesFromString rdrEnv str | isQualified str = res
+                               | otherwise = res
+    where res = [ nm | elt <- globalRdrEnvElts rdrEnv, let nm = gre_name elt, cmpString2Name str nm ]
+#endif
 
 -- | Pretty-print an identifier.
 ppIdInfo :: Id -> IdInfo -> SDoc
