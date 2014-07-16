@@ -23,7 +23,7 @@ import Data.Monoid (mempty)
 
 import HERMIT.Context
 import HERMIT.Core
-import HERMIT.GHC hiding ((<+>), (<>), ($$), ($+$), cat, sep, hsep, empty, nest, vcat, char, text, keyword, hang)
+import HERMIT.GHC hiding ((<+>), (<>), ($$), ($+$), cat, sep, fsep, hsep, empty, nest, vcat, char, text, keyword, hang)
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Syntax
@@ -98,21 +98,13 @@ retArrowType at        p cr1 cr2  ty1 ty2
 
 ------------------------------------------------------------------------------------------------
 
-isAtom :: RetExpr -> Bool
-isAtom (RetAtom _) = True
-isAtom _           = False
-
-------------------------------------------------------------------------------------------------
-
 normalExpr :: RetExpr -> DocH
 normalExpr  RetEmpty           = empty
 normalExpr (RetAtom e)         = e
 normalExpr (RetExpr e)         = e
 normalExpr (RetLam p vs pb e)  = hang (specialSymbol p LambdaSymbol <+> hsep vs <+> specialSymbol pb RightArrowSymbol) 2 e
 normalExpr (RetLet p vs pb e)  = sep [ keyword p "let" <+> vcat vs, keyword pb "in" <+> e ]
-normalExpr (RetApp f pes)      = let (pAtoms,pExprs) = span (isAtom.snd) pes
-                                  in sep [ hsep (f : map (normalExpr.snd) pAtoms)
-                                         , nest 2 (sep $ map (uncurry normalParens) pExprs) ]
+normalExpr (RetApp f pes)      = f <+> fsep (map (uncurry normalParens) pes)
 normalExpr (RetForAll p vs pb ty) = specialSymbol p ForallSymbol <+> hsep vs <+> symbol pb '.' <+> ty
 normalExpr (RetArrowType at ty ptys) = let a = case at of
                                                 ATType -> typeArrow
@@ -326,7 +318,7 @@ ppCoreAlt = do p <- absPathT
                     )
                     (\ _ -> ppBinderMode)
                     ppCoreExpr
-                    (\ con vs e -> hang (con <+> hsep vs <+> specialSymbol p RightArrowSymbol) 2 e)
+                    (\ con vs e -> hang (con <+> fsep vs <+> specialSymbol p RightArrowSymbol) 2 e)
 
 ppCoreDef :: PrettyH CoreDef
 ppCoreDef = defT idR (ppCoreExprR &&& ppTypeSig) (,) >>> ppDef Def_RHS
@@ -363,14 +355,14 @@ ppCoreExprR = absPathT >>= ppCoreExprPR
               lamT ppBinderMode ppCoreExprR (retLam p)
            <+ letT ppCoreBind ppCoreExprR (retLet p)
            <+ appT ppCoreExprR ppCoreExprR (retApp p App_Fun App_Arg)
-           <+ caseT ppCoreExpr ppVar (ppTypeModeR >>> parenExpr) (const ppCoreAlt) (\ s w ty alts -> RetExpr ((keyword p "case" <+> s <+> keyword p "of" <+> w <+> ty) $$ nest 2 (vcat alts)))
+           <+ caseT ppCoreExpr ppVar (ppTypeModeR >>> parenExpr) (const ppCoreAlt) (\ s w ty alts -> RetExpr (hang (keyword p "case" <+> s) 1 (keyword p "of" <+> w <+> ty) $$ nest 2 (vcat alts)))
            <+ varT (RetAtom <$> ppVarOcc)
            <+ litT (RetAtom <$> ppSDoc)
            <+ typeT ppTypeModeR
            <+ coercionT ppCoercionModeR
            <+ (castT ppCoreExprR (ppCoercionModeR >>> parenExpr) (,) >>> readerT (\ (_,co) -> if isEmpty co
                                                                                                  then arr fst
-                                                                                                 else toFst parenExprExceptApp >>^ \ e -> RetExpr (sep [e, castSymbol p <+> co])
+                                                                                                 else toFst parenExprExceptApp >>^ \ e -> RetExpr (hang e 2 (castSymbol p <+> co))
                                                                                  ))
            <+ tickT ppSDoc (ppCoreExprR >>> parenExpr) (\ tk e -> RetExpr $ attrP p (text "Tick") $$ nest 2 (tk <+> e))
 
