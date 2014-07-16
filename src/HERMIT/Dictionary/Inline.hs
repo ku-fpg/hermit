@@ -17,8 +17,6 @@ module HERMIT.Dictionary.Inline
     ) where
 
 #if __GLASGOW_HASKELL__ <= 706
-import HERMIT.Name
-
 import TcType (tcSplitDFunTy)
 #endif
 
