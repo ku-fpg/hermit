@@ -94,8 +94,6 @@ mkIntExpr' :: Integer -> CoreParseM CoreExpr
 mkIntExpr' i = do
     dflags <- lift getDynFlags
     return $ mkIntExpr dflags i
-#else
-mkIntExpr' i = return $ mkIntExpr i
 
 lookupName :: String -> CoreParseM CoreExpr
 lookupName nm = do
