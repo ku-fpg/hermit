@@ -43,6 +43,7 @@ module HERMIT.Dictionary.Local.Let
 
 import Control.Arrow
 import Control.Monad
+import Control.Monad.IO.Class
 
 import Data.List
 import Data.Monoid
@@ -301,7 +302,8 @@ chaseDependencies usedIds bsAndFrees = case partition ((`elemVarSet` usedIds) . 
 -------------------------------------------------------------------------------------------
 
 -- | @let v = ev in e@ ==> @case ev of v -> e@
-letToCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Rewrite c HermitM CoreExpr
+letToCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m, MonadUnique m)
+           => Rewrite c m CoreExpr
 letToCaseR = prefixFailMsg "Converting Let to Case failed: " $
             withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
   do Let (NonRec v ev) _ <- idR
@@ -312,7 +314,8 @@ letToCaseR = prefixFailMsg "Converting Let to Case failed: " $
 -------------------------------------------------------------------------------------------
 
 -- | @(let v = ev in e) x@ ==> @let v = ev in e x@
-letFloatAppR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatAppR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+             => Rewrite c m CoreExpr
 letFloatAppR = prefixFailMsg "Let floating from App function failed: " $
                withPatFailMsg (wrongExprForm "App (Let bnds body) e") $
   do App (Let bnds body) e <- idR
@@ -322,7 +325,8 @@ letFloatAppR = prefixFailMsg "Let floating from App function failed: " $
         else appAllR (alphaLetVarsR $ varSetElems vs) idR >>> letFloatAppR
 
 -- | @f (let v = ev in e)@ ==> @let v = ev in f e@
-letFloatArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+             => Rewrite c m CoreExpr
 letFloatArgR = prefixFailMsg "Let floating from App argument failed: " $
                withPatFailMsg (wrongExprForm "App f (Let bnds body)") $
   do App f (Let bnds body) <- idR
@@ -332,7 +336,8 @@ letFloatArgR = prefixFailMsg "Let floating from App argument failed: " $
         else appAllR idR (alphaLetVarsR $ varSetElems vs) >>> letFloatArgR
 
 -- | @let v = (let bds in e1) in e2@ ==> @let bds in let v = e1 in e2@
-letFloatLetR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatLetR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+             => Rewrite c m CoreExpr
 letFloatLetR = prefixFailMsg "Let floating from Let failed: " $
                withPatFailMsg (wrongExprForm "Let (NonRec v (Let bds e1)) e2") $
   do Let (NonRec v (Let bds e1)) e2 <- idR
@@ -344,7 +349,8 @@ letFloatLetR = prefixFailMsg "Let floating from Let failed: " $
 -- | @(\ v -> let binds in e2)@  ==>  @let binds in (\ v1 -> e2)@
 --   Fails if @v@ occurs in the RHS of @binds@.
 --   If @v@ is shadowed in binds, then @v@ will be alpha-renamed.
-letFloatLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+             => Rewrite c m CoreExpr
 letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
                withPatFailMsg (wrongExprForm "Lam v1 (Let bds body)") $
   do Lam v (Let binds body) <- idR
@@ -357,7 +363,8 @@ letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
 
 -- | @case (let bnds in e) of bndr alts@ ==> @let bnds in (case e of bndr alts)@
 --   Fails if any variables bound in @bnds@ occurs in @alts@.
-letFloatCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+              => Rewrite c m CoreExpr
 letFloatCaseR = prefixFailMsg "Let floating from Case failed: " $
                 withPatFailMsg (wrongExprForm "Case (Let bnds e) w ty alts") $
   do Case (Let bnds e) w ty alts <- idR
@@ -425,13 +432,15 @@ letFloatCastR = prefixFailMsg "Let floating from Cast failed: " $
      return $ Let bnds (Cast e co)
 
 -- | Float a 'Let' through an expression, whatever the context.
-letFloatExprR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+letFloatExprR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+              => Rewrite c m CoreExpr
 letFloatExprR = setFailMsg "Unsuitable expression for Let floating."
               $ letFloatArgR <+ letFloatAppR <+ letFloatLetR <+ letFloatLamR
                   <+ letFloatCaseR <+ letFloatCaseAltR Nothing <+ letFloatCastR
 
 -- | @'ProgCons' ('NonRec' v ('Let' bds e)) p@ ==> @'ProgCons' bds ('ProgCons' ('NonRec' v e) p)@
-letFloatTopR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreProg
+letFloatTopR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+             => Rewrite c m CoreProg
 letFloatTopR = prefixFailMsg "Let floating to top level failed: " $
                withPatFailMsg (wrongExprForm "NonRec v (Let bds e) `ProgCons` p") $
                do ProgCons (NonRec v (Let bds e)) p <- idR
@@ -445,12 +454,14 @@ letFloatTopR = prefixFailMsg "Let floating to top level failed: " $
 -------------------------------------------------------------------------------------------
 
 -- | Float in a 'Let' if possible.
-letFloatInR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb) => Rewrite c HermitM CoreExpr
+letFloatInR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+            => Rewrite c m CoreExpr
 letFloatInR = letFloatInCaseR <+ letFloatInAppR <+ letFloatInLamR
 
 -- | @let v = ev in case s of p -> e@ ==> @case (let v = ev in s) of p -> let v = ev in e@,
 --   if @v@ does not shadow a pattern binder in @p@
-letFloatInCaseR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb) => Rewrite c HermitM CoreExpr
+letFloatInCaseR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+                => Rewrite c m CoreExpr
 letFloatInCaseR = prefixFailMsg "Let floating in to case failed: " $
                   withPatFailMsg (wrongExprForm "Let bnds (Case s w ty alts)") $
   do Let bnds (Case s w ty alts) <- idR
@@ -462,7 +473,8 @@ letFloatInCaseR = prefixFailMsg "Let floating in to case failed: " $
      return (Case (Let bnds s) w ty alts) >>> caseAllR idR idR idR (\_ -> altAllR idR (\_ -> idR) (arr (Let bnds) >>> alphaLetR))
 
 -- | @let v = ev in f a@ ==> @(let v = ev in f) (let v = ev in a)@
-letFloatInAppR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb) => Rewrite c HermitM CoreExpr
+letFloatInAppR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+               => Rewrite c m CoreExpr
 letFloatInAppR = prefixFailMsg "Let floating in to app failed: " $
                 withPatFailMsg (wrongExprForm "Let bnds (App e1 e2)") $
   do Let bnds (App e1 e2) <- idR
@@ -517,7 +529,7 @@ reorderNonRecLetsR nms = prefixFailMsg "Reorder lets failed: " $
 
 -- | Combine nested non-recursive lets into case of a tuple.
 --   E.g. let {v1 = e1 ; v2 = e2 ; v3 = e3} in body ==> case (e1,e2,e3) of {(v1,v2,v3) -> body}
-letTupleR :: String -> Rewrite c HermitM CoreExpr
+letTupleR :: (MonadCatch m, MonadUnique m) => String -> Rewrite c m CoreExpr
 letTupleR nm = prefixFailMsg "Let-tuple failed: " $
       do (bnds, body) <- arr collectLets
          let numBnds = length bnds
@@ -548,32 +560,29 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
 -- This code could be factored better.
 
 -- | @e@ ==> @let v = e in v@
-letIntroR :: String -> Rewrite c HermitM CoreExpr
+letIntroR :: (MonadCatch m, MonadUnique m) => String -> Rewrite c m CoreExpr
 letIntroR nm = do e <- idR
                   Let (NonRec v e') _ <- letNonRecIntroR nm e
                   return $ Let (NonRec v e') (varToCoreExpr v)
 
 -- | @body@ ==> @let v = e in body@
-letNonRecIntroR :: String -> CoreExpr -> Rewrite c HermitM CoreExpr
+letNonRecIntroR :: (MonadCatch m, MonadUnique m) => String -> CoreExpr -> Rewrite c m CoreExpr
 letNonRecIntroR nm e = prefixFailMsg "Let-introduction failed: " $
-     contextfreeT $ \ body -> do let tyk = exprKindOrType e
-                                 v <- if | isTypeArg e  -> newTyVarH nm tyk
-                                         | isCoArg e    -> newCoVarH nm tyk
-                                         | otherwise    -> newIdH nm tyk
+     contextfreeT $ \ body -> do v <- newVarH nm $ exprKindOrType e
                                  return $ Let (NonRec v e) body
 
 
 -- This isn't a "Let", but it's serving the same role.  Maybe create a Local/Prog module?
 
 -- | @prog@ ==> @'ProgCons' (v = e) prog@
-progNonRecIntroR :: String -> CoreExpr -> Rewrite c HermitM CoreProg
+progNonRecIntroR :: (MonadCatch m, MonadUnique m) => String -> CoreExpr -> Rewrite c m CoreProg
 progNonRecIntroR nm e = prefixFailMsg "Top-level binding introduction failed: " $
   do guardMsg (not $ isTyCoArg e) "Top-level type or coercion definitions are prohibited."
      contextfreeT $ \ prog -> do i <- newIdH nm (exprType e)
                                  return $ ProgCons (NonRec i e) prog
 
 -- | nonRecIntroR nm e = 'letNonRecIntroR nm e' <+ 'progNonRecIntroR nm e'
-nonRecIntroR :: String -> CoreExpr -> Rewrite c HermitM Core
+nonRecIntroR :: (MonadCatch m, MonadUnique m) => String -> CoreExpr -> Rewrite c m Core
 nonRecIntroR nm e = readerT $ \case
                       ExprCore{} -> promoteExprR (letNonRecIntroR nm e)
                       ProgCore{} -> promoteProgR (progNonRecIntroR nm e)
@@ -581,7 +590,9 @@ nonRecIntroR nm e = readerT $ \case
 
 -- | Introduce a local definition for a (possibly imported) identifier.
 -- Rewrites occurences of the identifier to point to this new local definiton.
-letIntroUnfoldingR :: (BoundVars c, ReadBindings c) => String -> Rewrite c HermitM CoreExpr
+letIntroUnfoldingR :: ( BoundVars c, ReadBindings c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m
+                      , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+                   => String -> Rewrite c m CoreExpr
 letIntroUnfoldingR nm = do
     i <- findIdT nm
     (rhs,_) <- getUnfoldingT AllBinders <<< return i

@@ -45,10 +45,7 @@ To get started, you could try the following:
     [0m[m(,)[0m[0m [0m[ms[0m[0m [0m[ml[0m[0m [0m[31m[31m→[31m[0m[0m [0m[mdiv[0m[0m [0m[32mInt[0m[0m [0m[m$fIntegralInt[0m[0m [0m[0m[ms[0m[0m[0m [0m[0m[ml[0m[0m[0m
 [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
 [0m[mmain[0m[0m [0m[31m=[0m[0m
-  [0m[31m([0m[0m[0m[m$[0m[0m[0m[31m)[0m[0m
-    [0m[32mInt[0m[0m
-    [0m[31m([0m[0m[0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m[0m[31m)[0m[0m
-    [0m[31m([0m[0m[0m[mprint[0m[0m [0m[32mInt[0m[0m [0m[m$fShowInt[0m[0m[0m[31m)[0m[0m
-    [0m[31m([0m[0m[0m[0m[mmean[0m[0m[0m [0m[31m([0m[0m[0m[menumFromTo[0m[0m [0m[32mInt[0m[0m [0m[m$fEnumInt[0m[0m [0m[31m([0m[0m[0m[mI#[0m[0m [0m1[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mI#[0m[0m [0m10[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
+  [0m[31m([0m[0m[0m[m$[0m[0m[0m[31m)[0m[0m [0m[32mInt[0m[0m [0m[31m([0m[0m[0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mprint[0m[0m [0m[32mInt[0m[0m [0m[m$fShowInt[0m[0m[0m[31m)[0m[0m
+      [0m[31m([0m[0m[0m[0m[mmean[0m[0m[0m [0m[31m([0m[0m[0m[menumFromTo[0m[0m [0m[32mInt[0m[0m [0m[m$fEnumInt[0m[0m [0m[31m([0m[0m[0m[mI#[0m[0m [0m1[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mI#[0m[0m [0m10[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
 [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
 [0m[mmain[0m[0m [0m[31m=[0m[0m [0m[mrunMainIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m [0m[0m[mmain[0m[0m[0m[0m

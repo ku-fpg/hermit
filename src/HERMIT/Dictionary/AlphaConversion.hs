@@ -29,9 +29,8 @@ module HERMIT.Dictionary.AlphaConversion
     , replaceVarR
     ) where
 
-import Control.Applicative
 import Control.Arrow
-import Control.Monad (liftM2)
+import Control.Monad (liftM, liftM2)
 import Data.Char (isDigit)
 import Data.Function (on)
 import Data.List (intersect, delete, elemIndex)
@@ -39,7 +38,6 @@ import Data.Maybe (listToMaybe)
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
@@ -105,7 +103,7 @@ visibleVarsT = liftM2 unionVarSet boundVarsT (arr freeVarsCoreTC)
 
 -- | If a name is provided, use that as the name of the new variable.
 --   Otherwise modify the variable name making sure to /not/ clash with the given variables or any visible variables.
-cloneVarAvoidingT :: BoundVars c => Var -> Maybe String -> [Var] -> Transform c HermitM CoreTC Var
+cloneVarAvoidingT :: (BoundVars c, MonadUnique m) => Var -> Maybe String -> [Var] -> Transform c m CoreTC Var
 cloneVarAvoidingT v mn vs =
   do vvs <- visibleVarsT
      let nameModifier = freshNameGenAvoiding mn (extendVarSetList vvs vs)
@@ -146,32 +144,33 @@ detectShadowsM bs fvs = let ss = shadowedBy (mkVarSet bs) fvs `extendVarSetList`
 
 -- | Rename local variables with manifestly unique names (x, x0, x1, ...).
 --   Does not rename top-level definitions.
-unshadowR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb)
-          => Rewrite c HermitM Core
+unshadowR :: ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c
+             , ReadPath c Crumb, MonadCatch m, MonadUnique m )
+          => Rewrite c m Core
 unshadowR = setFailMsg "No shadows to eliminate." $
     anytdR (promoteExprR unshadowExprR <+ promoteAltR unshadowAltR <+ promoteProgR unshadowProgR)
 
-unshadowExprR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb)
-              => Rewrite c HermitM CoreExpr
+unshadowExprR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+              => Rewrite c m CoreExpr
 unshadowExprR = do
-    bs  <- letVarsT <+ (return <$> (caseBinderIdT <+ lamVarT))
-    fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsExpr
+    bs  <- letVarsT <+ (liftM return (caseBinderIdT <+ lamVarT))
+    fvs <- liftM2 unionVarSet boundVarsT (arr freeVarsExpr)
     ss  <- detectShadowsM bs fvs
     alphaLamR Nothing <+ alphaLetVarsR (varSetElems ss) <+ alphaCaseBinderR Nothing
 
-unshadowAltR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb)
-             => Rewrite c HermitM CoreAlt
+unshadowAltR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+             => Rewrite c m CoreAlt
 unshadowAltR = do
     bs  <- arr altVars
-    fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsAlt
+    fvs <- liftM2 unionVarSet boundVarsT (arr freeVarsAlt)
     ss  <- detectShadowsM bs fvs
     alphaAltVarsR (varSetElems ss)
 
-unshadowProgR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb)
-              => Rewrite c HermitM CoreProg
+unshadowProgR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+              => Rewrite c m CoreProg
 unshadowProgR = do
     bs  <- progConsIdsT
-    fvs <- unionVarSet <$> boundVarsT <*> arr freeVarsProg
+    fvs <- liftM2 unionVarSet boundVarsT (arr freeVarsProg)
     ss  <- detectShadowsM bs fvs
     alphaProgConsIdsR (varSetElems ss)
 
@@ -213,7 +212,8 @@ replaceRecBindVarR v v' =
 -----------------------------------------------------------------------
 
 -- | Alpha rename a lambda binder.  Optionally takes a suggested new name.
-alphaLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> Rewrite c HermitM CoreExpr
+alphaLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+          => Maybe String -> Rewrite c m CoreExpr
 alphaLamR mn = setFailMsg (wrongFormForAlpha "Lam v e") $
               do v  <- lamVarT
                  v' <- extractT (cloneVarAvoidingT v mn [v])
@@ -222,7 +222,8 @@ alphaLamR mn = setFailMsg (wrongFormForAlpha "Lam v e") $
 -----------------------------------------------------------------------
 
 -- | Alpha rename a case binder.  Optionally takes a suggested new name.
-alphaCaseBinderR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> Rewrite c HermitM CoreExpr
+alphaCaseBinderR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+                 => Maybe String -> Rewrite c m CoreExpr
 alphaCaseBinderR mn = setFailMsg (wrongFormForAlpha "Case e i ty alts") $
                      do i  <- caseBinderIdT
                         i' <- extractT (cloneVarAvoidingT i mn [i])
@@ -231,7 +232,8 @@ alphaCaseBinderR mn = setFailMsg (wrongFormForAlpha "Case e i ty alts") $
 -----------------------------------------------------------------------
 
 -- | Rename the specified variable in a case alternative.  Optionally takes a suggested new name.
-alphaAltVarR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> Var -> Rewrite c HermitM CoreAlt
+alphaAltVarR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+             => Maybe String -> Var -> Rewrite c m CoreAlt
 alphaAltVarR mn v = do
     (con, vs, rhs) <- idR
     v' <- extractT (cloneVarAvoidingT v mn vs)
@@ -248,53 +250,62 @@ alphaAltVarR mn v = do
 
 -- | Rename the specified variables in a case alternative, using the suggested names where provided.
 -- Suggested names *must* be provided in left-to-right order matching the order of the alt binders.
-alphaAltVarsWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => [(Maybe String,Var)] -> Rewrite c HermitM CoreAlt
+alphaAltVarsWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+                  => [(Maybe String,Var)] -> Rewrite c m CoreAlt
 alphaAltVarsWithR = andR . map (uncurry alphaAltVarR) . reverse -- note: right-to-left so type subst aren't undone
 
 -- | Rename the variables bound in a case alternative with the given list of suggested names.
-alphaAltWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => [String] -> Rewrite c HermitM CoreAlt
+alphaAltWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+              => [String] -> Rewrite c m CoreAlt
 alphaAltWithR ns =
   do vs <- arr altVars
      alphaAltVarsWithR $ zip (map Just ns) vs
 
 -- | Rename the specified variables in a case alternative.
-alphaAltVarsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => [Var] -> Rewrite c HermitM CoreAlt
+alphaAltVarsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+              => [Var] -> Rewrite c m CoreAlt
 alphaAltVarsR vs =
   do bs <- arr altVars
      alphaAltVarsWithR (zip (repeat Nothing) (bs `intersect` vs))
 
 -- | Rename all identifiers bound in a case alternative.
-alphaAltR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreAlt
+alphaAltR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+          => Rewrite c m CoreAlt
 alphaAltR = arr altVars >>= alphaAltVarsR
 
 -----------------------------------------------------------------------
 
 -- | Rename all identifiers bound in a case expression.
-alphaCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+alphaCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+           => Rewrite c m CoreExpr
 alphaCaseR = alphaCaseBinderR Nothing >+> caseAllR idR idR idR (const alphaAltR)
 
 -----------------------------------------------------------------------
 
 -- | Alpha rename a non-recursive let binder.  Optionally takes a suggested new name.
-alphaLetNonRecR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> Rewrite c HermitM CoreExpr
+alphaLetNonRecR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+                => Maybe String -> Rewrite c m CoreExpr
 alphaLetNonRecR mn = setFailMsg (wrongFormForAlpha "Let (NonRec v e1) e2") $
                     do v  <- letNonRecVarT
                        v' <- extractT (cloneVarAvoidingT v mn [v])
                        letNonRecAnyR (return v') idR (replaceVarR v v')
 
 -- | Alpha rename a non-recursive let binder if the variable appears in the argument list.  Optionally takes a suggested new name.
-alphaLetNonRecVarsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> [Var] -> Rewrite c HermitM CoreExpr
-alphaLetNonRecVarsR mn vs = whenM ((`elem` vs) <$> letNonRecVarT) (alphaLetNonRecR mn)
+alphaLetNonRecVarsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+                    => Maybe String -> [Var] -> Rewrite c m CoreExpr
+alphaLetNonRecVarsR mn vs = whenM (liftM (`elem` vs) letNonRecVarT) (alphaLetNonRecR mn)
 
 
 -- TODO: Maybe it would be more efficient to rename all the Ids at once, rather than one by one?
 
 -- | Rename the specified identifiers in a recursive let, using the suggested names where provided.
-alphaLetRecIdsWithR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => [(Maybe String,Id)] -> Rewrite c HermitM CoreExpr
+alphaLetRecIdsWithR :: forall c m. ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
+                                   , BoundVars c, MonadCatch m, MonadUnique m )
+                    => [(Maybe String,Id)] -> Rewrite c m CoreExpr
 alphaLetRecIdsWithR = andR . map (uncurry alphaLetRecIdR)
   where
     -- | Rename the specified identifier bound in a recursive let.  Optionally takes a suggested new name.
-    alphaLetRecIdR :: Maybe String -> Id -> Rewrite c HermitM CoreExpr
+    alphaLetRecIdR :: Maybe String -> Id -> Rewrite c m CoreExpr
     alphaLetRecIdR mn i = setFailMsg (wrongFormForAlpha "Let (Rec bs) e") $
                      do is <- letRecIdsT
                         i' <- extractT (cloneVarAvoidingT i mn is)
@@ -302,25 +313,29 @@ alphaLetRecIdsWithR = andR . map (uncurry alphaLetRecIdR)
 
 
 -- | Rename the identifiers bound in a Let with the given list of suggested names.
-alphaLetWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => [String] -> Rewrite c HermitM CoreExpr
+alphaLetWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+              => [String] -> Rewrite c m CoreExpr
 alphaLetWithR ns = alphaLetNonRecR (listToMaybe ns)
                   <+ (letRecIdsT >>= (alphaLetRecIdsWithR . zip (map Just ns)))
 
 -- | Rename the specified variables bound in a let.
-alphaLetVarsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => [Var] -> Rewrite c HermitM CoreExpr
+alphaLetVarsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+              => [Var] -> Rewrite c m CoreExpr
 alphaLetVarsR vs = alphaLetNonRecVarsR Nothing vs
                    <+ (do bs <- letT (arr bindVars) successT const
                           alphaLetRecIdsWithR (zip (repeat Nothing) (bs `intersect` vs))
                       )
 
 -- | Rename all identifiers bound in a Let.
-alphaLetR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
+alphaLetR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+          => Rewrite c m CoreExpr
 alphaLetR = letVarsT >>= alphaLetVarsR
 
 -----------------------------------------------------------------------
 
 -- | Alpha rename a non-recursive top-level binder.  Optionally takes a suggested new name.
-alphaProgConsNonRecR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> Rewrite c HermitM CoreProg
+alphaProgConsNonRecR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+                     => Maybe String -> Rewrite c m CoreProg
 alphaProgConsNonRecR mn = setFailMsg (wrongFormForAlpha "ProgCons (NonRec v e) p") $
                     do i <- progConsNonRecIdT
                        guardMsg (not $ isExportedId i) ("Identifier " ++ unqualifiedName i ++ " is exported, and thus cannot be alpha-renamed.")
@@ -328,17 +343,20 @@ alphaProgConsNonRecR mn = setFailMsg (wrongFormForAlpha "ProgCons (NonRec v e) p
                        consNonRecAnyR (return i') idR (replaceVarR i i')
 
 -- | Alpha rename a non-recursive top-level binder if the identifier appears in the argument list.  Optionally takes a suggested new name.
-alphaProgConsNonRecIdsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Maybe String -> [Id] -> Rewrite c HermitM CoreProg
-alphaProgConsNonRecIdsR mn is = whenM ((`elem` is) <$> progConsNonRecIdT) (alphaProgConsNonRecR mn)
+alphaProgConsNonRecIdsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+                        => Maybe String -> [Id] -> Rewrite c m CoreProg
+alphaProgConsNonRecIdsR mn is = whenM (liftM (`elem` is) progConsNonRecIdT) (alphaProgConsNonRecR mn)
 
 -- TODO: Maybe it would be more efficient to rename all the Ids at once, rather than one by one?
 
 -- | Rename the specified identifiers in a recursive top-level binding at the head of a program, using the suggested names where provided.
-alphaProgConsRecIdsWithR :: forall c. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => [(Maybe String,Id)] -> Rewrite c HermitM CoreProg
+alphaProgConsRecIdsWithR :: forall c m. ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
+                                        , BoundVars c, MonadCatch m, MonadUnique m )
+                         => [(Maybe String,Id)] -> Rewrite c m CoreProg
 alphaProgConsRecIdsWithR = andR . map (uncurry alphaProgConsRecIdR) . filter (not . isExportedId . snd)
   where
     -- | Rename the specified identifier bound in a recursive top-level binder.  Optionally takes a suggested new name.
-    alphaProgConsRecIdR :: Maybe String -> Id -> Rewrite c HermitM CoreProg
+    alphaProgConsRecIdR :: Maybe String -> Id -> Rewrite c m CoreProg
     alphaProgConsRecIdR mn i =  setFailMsg (wrongFormForAlpha "ProgCons (Rec bs) p") $
                       do is <- progConsRecIdsT
                          i' <- extractT (cloneVarAvoidingT i mn is)
@@ -346,31 +364,36 @@ alphaProgConsRecIdsWithR = andR . map (uncurry alphaProgConsRecIdR) . filter (no
 
 
 -- | Rename the identifiers bound in the top-level binding at the head of the program with the given list of suggested names.
-alphaProgConsWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => [String] -> Rewrite c HermitM CoreProg
+alphaProgConsWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+                   => [String] -> Rewrite c m CoreProg
 alphaProgConsWithR ns = alphaProgConsNonRecR (listToMaybe ns)
                         <+ (progConsRecIdsT >>= (alphaProgConsRecIdsWithR . zip (map Just ns)))
 
 -- | Rename the specified variables bound in the top-level binding at the head of the program.
-alphaProgConsIdsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => [Id] -> Rewrite c HermitM CoreProg
+alphaProgConsIdsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+                  => [Id] -> Rewrite c m CoreProg
 alphaProgConsIdsR vs = alphaProgConsNonRecIdsR Nothing vs
                        <+ (do bs <- progConsT (arr bindVars) successT const
                               alphaProgConsRecIdsWithR (zip (repeat Nothing) (bs `intersect` vs))
                           )
 
 -- | Rename all identifiers bound in the top-level binding at the head of the program.
-alphaProgConsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreProg
+alphaProgConsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+               => Rewrite c m CoreProg
 alphaProgConsR = progConsIdsT >>= alphaProgConsIdsR
 
 -----------------------------------------------------------------------
 
 -- | Rename all identifiers bound at the top-level.
-alphaProgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreProg
+alphaProgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+           => Rewrite c m CoreProg
 alphaProgR = alphaProgConsR >+> progConsAllR idR alphaProgR
 
 -----------------------------------------------------------------------
 
 -- | Alpha rename any bindings at this node.  Note: does not rename case alternatives unless invoked on the alternative.
-alphaR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM Core
+alphaR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+       => Rewrite c m Core
 alphaR = setFailMsg "Cannot alpha-rename here." $
            promoteExprR (alphaLamR Nothing <+ alphaCaseBinderR Nothing <+ alphaLetR)
         <+ promoteAltR alphaAltR

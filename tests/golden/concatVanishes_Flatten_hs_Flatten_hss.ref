@@ -46,7 +46,7 @@ To get started, you could try the following:
 [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
 [0m[mmain[0m[0m [0m[31m=[0m[0m
   [0m[mprint[0m[0m [0m[32m[[0m[0m[0m[32mChar[0m[0m[0m[32m][0m[0m [0m[0m[m$dShow[0m[0m[0m
-    [0m[31m([0m[0m[0m[0m[mflatten[0m[0m[0m
-       [0m[32mChar[0m[0m [0m[31m([0m[0m[0m[mNode[0m[0m [0m[32mChar[0m[0m [0m[31m([0m[0m[0m[mLeaf[0m[0m [0m[32mChar[0m[0m [0m[31m([0m[0m[0m[mC#[0m[0m [0m'h'[0m[0m[31m)[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mLeaf[0m[0m [0m[32mChar[0m[0m [0m[31m([0m[0m[0m[mC#[0m[0m [0m'i'[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
+        [0m[31m([0m[0m[0m[0m[mflatten[0m[0m[0m [0m[32mChar[0m[0m
+                 [0m[31m([0m[0m[0m[mNode[0m[0m [0m[32mChar[0m[0m [0m[31m([0m[0m[0m[mLeaf[0m[0m [0m[32mChar[0m[0m [0m[31m([0m[0m[0m[mC#[0m[0m [0m'h'[0m[0m[31m)[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mLeaf[0m[0m [0m[32mChar[0m[0m [0m[31m([0m[0m[0m[mC#[0m[0m [0m'i'[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
 [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
 [0m[mmain[0m[0m [0m[31m=[0m[0m [0m[mrunMainIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m [0m[0m[mmain[0m[0m[0m[0m

@@ -56,10 +56,7 @@ fromHermitMResult hRes = sideEffectsOnly hRes (hResult hRes)
 sideEffectsOnly :: HermitMResult a -> ModGuts -> KernelState
 sideEffectsOnly hRes = KernelState (hResStash hRes) (hResLemmas hRes)
 
-data KernelEnv = KernelEnv { kEnvChan :: DebugChan }
-
-fromKEnv :: KernelEnv -> ModGuts -> DefStash -> Lemmas -> HermitMEnv
-fromKEnv kEnv = mkEnv (kEnvChan kEnv)
+data KernelEnv = KernelEnv { kEnvChan :: DebugMessage -> HermitM () }
 
 -- | Start a HERMIT client by providing an IO function that takes the initial 'Kernel' and inital 'AST' handle.
 --   The 'Modguts' to 'CoreM' Modguts' function required by GHC Plugins is returned.
@@ -106,7 +103,8 @@ hermitKernel callback modGuts = do
                 , applyK = \ name r kEnv ->
                                 sendReq $ \ st ->
                                     findWithErrMsg name st fail $ \ (KernelState defs lemmas guts) ->
-                                        runHM (fromKEnv kEnv guts defs lemmas)
+                                        runHM (kEnvChan kEnv)
+                                              (mkEnv guts defs lemmas)
                                               (\ hRes -> do
                                                     ast <- liftIO $ takeMVar nextASTname
                                                     return $ return (ast, insert ast (fromHermitMResult hRes) st))
@@ -116,7 +114,8 @@ hermitKernel callback modGuts = do
                 , queryK = \ name t kEnv ->
                                 sendReqRead $ \ st ->
                                     findWithErrMsg name st fail $ \ (KernelState defs lemmas guts) ->
-                                        runHM (fromKEnv kEnv guts defs lemmas)
+                                        runHM (kEnvChan kEnv)
+                                              (mkEnv guts defs lemmas)
                                               (return . return . hResult)
                                               (return . fail)
                                               (applyT t (topLevelHermitC guts) guts)
