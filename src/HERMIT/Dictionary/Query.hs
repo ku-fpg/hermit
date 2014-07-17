@@ -153,14 +153,10 @@ coercionConstructor = \case
                          TransCo{}     -> "TransCo"
                          NthCo{}       -> "NthCo"
                          InstCo{}      -> "InstCo"
-#if __GLASGOW_HASKELL__ > 706
                          AxiomRuleCo{} -> "AxiomRuleCo"
                          LRCo{}        -> "LRCo"
                          SubCo{}       -> "SubCo"
                          UnivCo{}      -> "UnivCo"
-#else
-                         UnsafeCo{}    -> "UnsafeCo"
-#endif
 
 --------------------------------------------------------
 

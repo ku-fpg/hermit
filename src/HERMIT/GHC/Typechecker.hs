@@ -1,14 +1,10 @@
 {-# LANGUAGE CPP, RankNTypes #-}
 module HERMIT.GHC.Typechecker
     (
-#if __GLASGOW_HASKELL__ > 706
       initTcFromModGuts
     , mk_type_env
     , tcLookupGlobal
-#endif
     ) where
-
-#if __GLASGOW_HASKELL__ > 706
 
 import Annotations (emptyAnnEnv)
 import HsSyn
@@ -178,5 +174,3 @@ mk_field_env _ = RecFields emptyNameEnv emptyNameSet
 mk_dfun_n :: ModGuts -> OccSet
 -- TODO
 mk_dfun_n _ = emptyOccSet
-
-#endif

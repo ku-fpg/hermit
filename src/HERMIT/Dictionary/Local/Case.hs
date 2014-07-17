@@ -313,12 +313,8 @@ caseReduceLiteralR subst =
     prefixFailMsg "Case reduction failed: " $
     withPatFailMsg (wrongExprForm "Case (Lit l) v t alts") $ do
         Case s bndr _ alts <- idR
-#if __GLASGOW_HASKELL__ > 706
         let in_scope = mkInScopeSet (localFreeVarsExpr s)
         case exprIsLiteral_maybe (in_scope, idUnfolding) s of
-#else
-        case exprIsLiteral_maybe idUnfolding s of
-#endif
             Nothing -> fail "scrutinee is not a literal."
             Just l  -> do guardMsg (not (litIsLifted l)) "cannot case-reduce lifted literals" -- see Trac #5603
                           case findAlt (LitAlt l) alts of
@@ -337,12 +333,8 @@ caseReduceDataconR subst = prefixFailMsg "Case reduction failed: " $
         go :: Rewrite c HermitM CoreExpr
         go = do
             Case e bndr _ alts <- idR
-#if __GLASGOW_HASKELL__ > 706
             let in_scope = mkInScopeSet (localFreeVarsExpr e)
             case exprIsConApp_maybe (in_scope, idUnfolding) e of
-#else
-            case exprIsConApp_maybe idUnfolding e of
-#endif
                 Nothing                -> fail "head of scrutinee is not a data constructor."
                 Just (dc, univTys, es) -> case findAlt (DataAlt dc) alts of
                     Nothing             -> fail "no matching alternative."

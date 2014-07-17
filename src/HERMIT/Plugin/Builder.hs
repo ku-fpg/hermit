@@ -31,11 +31,7 @@ buildPlugin hp = defaultPlugin { installCoreToDos = install }
             liftIO $ hSetBuffering stdout NoBuffering
 #ifdef mingw32_HOST_OS
             liftIO $ hSetEncoding stdout utf8
-            
-#if __GLASGOW_HASKELL__ >= 708
             liftIO resetStaticOpts
-#endif
-
 #endif
 
             let todos' = flattenTodos todos

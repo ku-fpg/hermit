@@ -16,10 +16,6 @@ module HERMIT.Dictionary.Inline
     , inlineTargetsT
     ) where
 
-#if __GLASGOW_HASKELL__ <= 706
-import TcType (tcSplitDFunTy)
-#endif
-
 import Control.Arrow
 import Control.Monad
 
@@ -156,11 +152,7 @@ getUnfoldingT config = transform $ \ c i ->
                     guardMsg (isId i) "type variable is not in Env (this should not happen)."
                     case unfoldingInfo (idInfo i) of
                       CoreUnfolding { uf_tmpl = uft } -> return (uft, uncaptured)
-#if __GLASGOW_HASKELL__ > 706
                       dunf@(DFunUnfolding {})         -> liftM (,uncaptured) $ dFunExpr dunf
-#else
-                      DFunUnfolding _arity dc args    -> liftM (,uncaptured) $ dFunExpr dc args (idType i)
-#endif
                       _                               -> fail $ "cannot find unfolding in Env or IdInfo."
       Just b -> let depth = hbDepth b
                 in case hbSite b of
@@ -213,26 +205,8 @@ inlineTargetsT :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
 inlineTargetsT = collectT $ promoteT $ whenM (testM inlineR) (varT $ arr unqualifiedName)
 
 -- | Build a CoreExpr for a DFunUnfolding
-#if __GLASGOW_HASKELL__ > 706
 dFunExpr :: Monad m => Unfolding -> m CoreExpr
 dFunExpr dunf@(DFunUnfolding {}) = return $ mkCoreLams (df_bndrs dunf) $ mkCoreConApps (df_con dunf) (df_args dunf)
 dFunExpr _ = fail "dFunExpr: not a DFunUnfolding"
-#else
-dFunExpr :: MonadUnique m => DataCon -> [DFunArg CoreExpr] -> Type -> m CoreExpr
-dFunExpr dc args ty = do
-    let (_, _, _, tcArgs) = tcSplitDFunTy ty
-        (forallTvs, ty')  = splitForAllTys ty
-        (argTys, _resTy)  = splitFunTys ty'
-
-    ids <- mapM (uncurry newIdH) $ zip [ [ch] | ch <- cycle ['a'..'z'] ] argTys
-    vars <- mapM (cloneVarH id) forallTvs
-
-    let allVars = varsToCoreExprs $ vars ++ ids
-
-        mkArg (DFunLamArg i) = allVars !! i
-        mkArg (DFunPolyArg e) = mkCoreApps e allVars
-
-    return $ mkCoreConApps dc $ map Type tcArgs ++ map mkArg args
-#endif
 
 ------------------------------------------------------------------------

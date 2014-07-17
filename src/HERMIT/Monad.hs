@@ -8,10 +8,8 @@ module HERMIT.Monad
     , HermitMEnv(..)
     , HermitMResult(..)
     , LiftCoreM(..)
-#if __GLASGOW_HASKELL__ > 706
     , runTcM
     , runDsM
-#endif
       -- * Saving Definitions
     , RememberedName(..)
     , DefStash
@@ -54,10 +52,7 @@ import HERMIT.Core
 import HERMIT.Context
 import HERMIT.Kure.SumTypes
 import HERMIT.GHC
-
-#if __GLASGOW_HASKELL__ > 706
 import HERMIT.GHC.Typechecker
-#endif
 
 ----------------------------------------------------------------------------
 
@@ -188,12 +183,7 @@ instance MonadThings HermitM where
     -- explicitly bound in the core, so will not be in
     -- the context. These are instead kept in the
     -- ModGuts' list of instances. Which this will find.
-    lookupThing nm = do
-#if __GLASGOW_HASKELL__ < 708
-        liftCoreM (lookupThing nm)
-#else
-        runTcM $ tcLookupGlobal nm
-#endif
+    lookupThing nm = runTcM $ tcLookupGlobal nm
 
 instance HasDynFlags HermitM where
     getDynFlags :: HermitM DynFlags
@@ -287,7 +277,6 @@ type DebugChan = DebugMessage -> HermitM ()
 
 ----------------------------------------------------------------------------
 
-#if __GLASGOW_HASKELL__ > 706
 runTcM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => TcM a -> m a
 runTcM m = do
     env <- getHscEnv
@@ -303,4 +292,3 @@ runTcM m = do
 
 runDsM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => DsM a -> m a
 runDsM = runTcM . initDsTc
-#endif

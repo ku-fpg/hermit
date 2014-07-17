@@ -1,7 +1,4 @@
 {-# LANGUAGE CPP, DeriveDataTypeable, FlexibleInstances, TypeFamilies #-}
-#if __GLASGOW_HASKELL__ <= 706
-{-# LANGUAGE ScopedTypeVariables #-}
-#endif
 module HERMIT.Name
     ( HermitName
     , OccurrenceName(..)
@@ -35,13 +32,11 @@ module HERMIT.Name
     , cloneVarH
       -- * Name Lookup
     , findId
-#if __GLASGOW_HASKELL__ > 706
     , findVar
     , findTyCon
     , findType
     , findInNameSpace
     , findInNameSpaces
-#endif
     ) where
 
 import Control.Monad
@@ -204,7 +199,6 @@ instance (MonadThings m, BoundVars c) => MonadThings (Transform c m a) where
 
 --------------------------------------------------------------------------------------------------
 
-#if __GLASGOW_HASKELL__ > 706
 findId :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
        => String -> c -> m Id
 findId nm c = do
@@ -307,53 +301,6 @@ nameToNamed n | isVarName n     = liftM NamedId $ lookupId n
               | isTyConName n   = liftM NamedTyCon $ lookupTyCon n
               | isTyVarName n   = fail "nameToNamed: impossible, TyVars are not exported and cannot be looked up."
               | otherwise       = fail "nameToNamed: unknown name type"
-
-#else
-
--- | Looks for Id with given name in the context. If it is not present, calls 'findIdMG'.
-findId :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> c -> m Id
-findId nm c = case varSetElems (findBoundVars nm c) of
-                []         -> findIdMG (parseName nm)
-                [v]        -> return v
-                _ : _ : _  -> fail "multiple matching variables in scope."
-
-findIdMG :: (HasHermitMEnv m, MonadThings m) => HermitName -> m Id
-findIdMG hnm = do
-    let nm = hnUnqualified hnm
-    rdrEnv <- liftM mg_rdr_env getModGuts
-    case filter isValName $ findNamesFromString rdrEnv nm of
-        []  -> findIdBuiltIn nm
-        [n] -> nameToId n
-        ns  -> fail $ "multiple matches found:\n" ++ intercalate ", " (map unqualifiedName ns)
-
--- | We have a name, find the corresponding Id.
-nameToId :: MonadThings m => Name -> m Id
-nameToId n | isVarName n     = lookupId n
-           | isDataConName n = liftM dataConWrapId $ lookupDataCon n
-           | otherwise       = fail "nameToId: unknown name type"
-
-findIdBuiltIn :: forall m. Monad m => String -> m Id
-findIdBuiltIn = go
-    where go ":"     = dataConId consDataCon
-          go "[]"    = dataConId nilDataCon
-
-          go "True"  = return trueDataConId
-          go "False" = return falseDataConId
-
-          go "<"     = return ltDataConId
-          go "=="    = return eqDataConId
-          go ">"     = return gtDataConId
-
-          go "I#"    = dataConId intDataCon
-
-          go "()"    = return unitDataConId
-          -- TODO: add more as needed
-          --       http://www.haskell.org/ghc/docs/latest/html/libraries/ghc/TysWiredIn.html
-          go _   = fail "variable not in scope."
-
-          dataConId :: DataCon -> m Id
-          dataConId = return . dataConWorkId
-#endif
 
 -- Someday, when Applicative is a superclass of monad, we can uncomment the
 -- nicer applicative definitions. For now, we don't want the extra constraint.

@@ -41,40 +41,36 @@ module HERMIT.Dictionary.Reasoning
     , discardUniVars
     ) where
 
-import Control.Applicative
-import Control.Arrow
-import Control.Monad
-import Control.Monad.IO.Class
+import           Control.Applicative
+import           Control.Arrow
+import           Control.Monad
+import           Control.Monad.IO.Class
 
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe)
-import Data.Monoid
+import           Data.List (nubBy)
+import           Data.Maybe (fromMaybe)
+import           Data.Monoid
 
-import HERMIT.Context
-import HERMIT.Core
-import HERMIT.External
-import HERMIT.GHC
-import HERMIT.Kure
-import HERMIT.Monad
-import HERMIT.Name
-import HERMIT.ParserCore
-import HERMIT.Utilities
-
-import HERMIT.Dictionary.AlphaConversion hiding (externals)
-import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.Fold hiding (externals)
-import HERMIT.Dictionary.GHC hiding (externals)
-import HERMIT.Dictionary.Local.Let (nonRecIntroR)
-import HERMIT.Dictionary.Unfold hiding (externals)
-
-import HERMIT.PrettyPrinter.Common
+import           HERMIT.Context
+import           HERMIT.Core
+import           HERMIT.External
+import           HERMIT.GHC
+import           HERMIT.Kure
+import           HERMIT.Monad
+import           HERMIT.Name
+import           HERMIT.ParserCore
+import           HERMIT.ParserType
+import           HERMIT.PrettyPrinter.Common
+import           HERMIT.Utilities
+                
+import           HERMIT.Dictionary.AlphaConversion hiding (externals)
+import           HERMIT.Dictionary.Common
+import           HERMIT.Dictionary.Fold hiding (externals)
+import           HERMIT.Dictionary.GHC hiding (externals)
+import           HERMIT.Dictionary.Local.Let (nonRecIntroR)
+import           HERMIT.Dictionary.Unfold hiding (externals)
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
-
-#if __GLASGOW_HASKELL__ >= 708
-import Data.List (nubBy)
-import HERMIT.ParserType
-#endif
 
 ------------------------------------------------------------------------------
 
@@ -342,7 +338,6 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 
 -- TODO: revisit this for binder re-ordering issue
 instantiateDictsR :: RewriteH Equality
-#if __GLASGOW_HASKELL__ >= 708
 instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
     bs <- forallVarsT idR
     let dArgs = filter (\b -> isId b && isDictTy (varType b)) bs
@@ -367,9 +362,6 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
                 then return $ lookup3 b ds
                 else buildSubst b
     contextfreeT $ instantiateEquality allDs
-#else
-instantiateDictsR = fail "Dictionaries cannot be instantiated in GHC 7.6"
-#endif
 
 ------------------------------------------------------------------------------
 
@@ -411,13 +403,9 @@ instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
                 [] -> fail "no universally quantified variables match predicate."
                 (b:_) | isId b    -> let (before,_) = break (==b) bs
                                      in liftM (,[]) $ withVarsInScope before $ parseCoreExprT cs
-#if __GLASGOW_HASKELL__ >= 708
                       | otherwise -> do let (before,_) = break (==b) bs
                                         (ty, tvs) <- withVarsInScope before $ parseTypeWithHolesT cs
                                         return (Type ty, tvs)
-#else
-                      | otherwise -> fail "cannot instantiate type binders in GHC 7.6"
-#endif
     eq <- contextfreeT $ instantiateEqualityVar p e new
     (_,_) <- return eq >>> bothT lintExprT -- sanity check
     return eq

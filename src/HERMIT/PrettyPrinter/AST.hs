@@ -115,19 +115,12 @@ ppCoercion =  coVarCoT (ppVar >>^ \ v -> coText "CoVarCo" <+> v)
            <+ transCoT ppCoercion ppCoercion (\ co1 co2 -> coText "TransCo" $$ nest 2 (cat [parens co1, parens co2]))
            <+ nthCoT (arr $ coText . show) ppCoercion (\ n co -> coText "NthCo" <+> n $$ parens co)
            <+ instCoT ppCoercion ppKindOrType (\ co ty -> coText "InstCo" $$ nest 2 (cat [parens co, parens ty]))
-#if __GLASGOW_HASKELL__ > 706
 -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
            <+ reflT ppKindOrType (\ r ty -> coText "Refl" <+> coText (showRole r) $$ nest 2 (parens ty))
            <+ axiomInstCoT ppSDoc ppSDoc (const ppCoercion) (\ ax idx coes -> coText "AxiomInstCo" <+> ax <+> idx $$ nest 2 (vlist $ map parens coes))
            <+ lrCoT ppSDoc ppCoercion (\ lr co -> coText "LRCo" <+> lr $$ nest 2 (parens co))
            <+ tyConAppCoT ppSDoc (const ppCoercion) (\ r con coes -> coText "TyConAppCo" <+> coText (showRole r) <+> con $$ nest 2 (vlist $ map parens coes))
            -- TODO: add UnivCo and SubCo
-#else
-           <+ reflT (ppKindOrType >>^ \ ty -> coText "Refl" $$ nest 2 (parens ty))
-           <+ tyConAppCoT ppSDoc (const ppCoercion) (\ con coes -> coText "TyConAppCo" <+> con $$ nest 2 (vlist $ map parens coes))
-           <+ unsafeCoT ppKindOrType ppKindOrType (\ ty1 ty2 -> coText "UnsafeCo" $$ nest 2 (cat [parens ty1, parens ty2]))
-           <+ axiomInstCoT ppSDoc (const ppCoercion) (\ ax coes -> coText "AxiomInstCo" <+> ax $$ nest 2 (vlist $ map parens coes))
-#endif
 
 ppVar :: PrettyH Var
 ppVar = readerT $ \ v -> ppSDoc >>^ modCol v

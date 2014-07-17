@@ -5,10 +5,6 @@ module Main where
 
 import Control.Monad (forM_)
 
-#if __GLASGOW_HASKELL__ < 708
-import Data.Function (fix)
-#endif
-
 data Nat = Z | S Nat
 
 toInt :: Nat -> Int

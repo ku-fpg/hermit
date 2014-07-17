@@ -23,18 +23,12 @@ import Data.Monoid (mempty)
 
 import HERMIT.Context
 import HERMIT.Core
+import HERMIT.Dictionary (dynFlagsT)
 import HERMIT.GHC hiding ((<+>), (<>), ($$), ($+$), cat, sep, fsep, hsep, empty, nest, vcat, char, text, keyword, hang)
 import HERMIT.Kure
 import HERMIT.Monad
-import HERMIT.Syntax
-
-import HERMIT.Dictionary (dynFlagsT)
-
 import HERMIT.PrettyPrinter.Common
-
-#if __GLASGOW_HASKELL__ <= 706
-import Pair
-#endif
+import HERMIT.Syntax
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
@@ -442,7 +436,6 @@ ppCoercionR = absPathT >>= ppCoercionPR
                                                                                                                                          else RetExpr (cop2 <+> coChar p '@' <+> ty)
                                                                                                                    )
                 <+ appCoT ppCoercionR ppCoercionR (retApp p AppCo_Fun AppCo_Arg)
-#if __GLASGOW_HASKELL__ > 706
 -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
                 <+ reflT (ppTypeModeR >>^ normalExpr) (\ r ty -> RetAtom $ if isEmpty ty then coText p "refl" else coChar p '<' <> coText p (showRole r ++ ":") <> ty <> coChar p '>')
                 <+ tyConAppCoT (forkFirst ppTyConCo) (const ppCoercionR)
@@ -454,27 +447,14 @@ ppCoercionR = absPathT >>= ppCoercionPR
                 <+ lrCoT ppSDoc (ppCoercionR >>> parenExpr) (\ lr co -> RetExpr (coercionColor lr <+> co))
                 -- TODO: UnivCo and SubCo
                 <+ constT (return . RetAtom $ text "Unsupported Coercion Constructor")
-#else
-                <+ reflT (ppTypeModeR >>^ normalExpr >>^ \ ty -> RetAtom $ if isEmpty ty then coText p "refl" else coChar p '<' <> ty <> coChar p '>')
-                <+ tyConAppCoT ppTyConCo (const ppCoercionR) (retApps p TyConApp_Arg)
-                <+ unsafeCoT (ppTypeModeR >>> parenExpr) (ppTypeModeR >>> parenExpr) (\ ty1 ty2 -> (if isEmpty ty1 && isEmpty ty2 then RetAtom else RetExpr)
-                                                                                                   (coKeyword p "unsafe" <+> ty1 <+> ty2)
-                                                     )
-                <+ axiomInstCoT (coAxiomName ^>> ppName CoercionColor) (\ _ -> ppCoercionR >>> parenExpr) (\ ax coes -> RetExpr (coText p "axiomInst" <+> ax <+> sep coes))
-#endif
 
 ppCoKind :: PrettyH Coercion
-#if __GLASGOW_HASKELL__ > 706
 ppCoKind = do
     p <- absPathT
     (r, Pair co1 co2) <- arr (coercionRole &&& coercionKind)
     ty1 <- return co1 >>> ppTypeModeR >>> parenExprExceptApp
     ty2 <- return co2 >>> ppTypeModeR >>> parenExprExceptApp
     return $ cat [ty1, pad (coText p ("~" ++ showRole r)), ty2]
-#else
-ppCoKind = do p <- absPathT
-              (coercionKind >>> unPair) ^>> ((ppTypeModeR >>> parenExprExceptApp) *** (ppTypeModeR >>> parenExprExceptApp)) >>^ ( \(ty1,ty2) -> ty1 <+> coText p "~#" <+> ty2)
-#endif
 
 --------------------------------------------------------------------
 

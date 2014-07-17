@@ -1,15 +1,11 @@
 {
 {-# LANGUAGE CPP #-}
 module HERMIT.ParserType
-#if __GLASGOW_HASKELL__ <= 706
-    () where
-#else
     ( parseType
     , parseTypeT
     , parseTypeWithHoles
     , parseTypeWithHolesT
     ) where
-#endif
 
 import Control.Arrow
 import Control.Monad.State
@@ -86,10 +82,6 @@ tyarg : '(' tyapp ')'      { $2 }
 
 tyvar : NAME               {% lookupName $1 }
 {
-
-#if __GLASGOW_HASKELL__ <= 706
-findType = error "findType cannot be called in < GHC 7.8"
-#endif
 
 lookupName :: String -> TypeParseM Type
 lookupName nm = do

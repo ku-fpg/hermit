@@ -91,13 +91,11 @@ var : NAME             {% lookupName $1 }
 {
 
 mkIntExpr' :: Integer -> CoreParseM CoreExpr
-#if __GLASGOW_HASKELL__ > 706
 mkIntExpr' i = do
     dflags <- lift getDynFlags
     return $ mkIntExpr dflags i
 #else
 mkIntExpr' i = return $ mkIntExpr i
-#endif
 
 lookupName :: String -> CoreParseM CoreExpr
 lookupName nm = do
