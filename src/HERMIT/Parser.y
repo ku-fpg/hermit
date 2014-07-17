@@ -5,6 +5,7 @@ module HERMIT.Parser
     , unparseScript
     , unparseExprH
     , ExprH(..)
+    , parseExprH
     ) where
 
 import Data.Char (isSpace)
@@ -16,7 +17,8 @@ import HERMIT.Syntax (isScriptInfixIdChar, isScriptIdFirstChar, isScriptIdChar)
 
 }
 
-%name parser
+%name parser scoped
+%name exprParser ExprH
 %tokentype { Token }
 %error { parseError }
 %monad { Either String } { >>= } { return }
@@ -162,6 +164,9 @@ type Script = [ExprH]
 
 parseScript :: String -> Either String Script
 parseScript = lexer >=> parser
+
+parseExprH :: String -> Either String ExprH
+parseExprH = lexer >=> exprParser
 
 ---------------------------------------------
 

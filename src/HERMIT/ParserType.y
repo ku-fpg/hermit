@@ -117,7 +117,7 @@ getContext = gets tpContext
 addTyVar :: String -> TypeParseM Type
 addTyVar tvStr = do
     used <- gets tpUsed
-    case [ tv | tv <- used, getOccString tv == tvStr ] of
+    case [ tv | tv <- used, unqualifiedName tv == tvStr ] of
         [] -> do tv <- lift $ newTyVarH tvStr liftedTypeKind
                  modify $ \ st -> st { tpUsed = tv : tpUsed st }
                  return $ mkTyVarTy tv

@@ -1,33 +1,35 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleContexts, FlexibleInstances, InstanceSigs #-}
+{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables, TypeFamilies #-}
 
 module HERMIT.Dictionary.Navigation
-       ( -- * Navigation
-         externals
-       , occurrenceOfT
-       , bindingOfT
-       , bindingGroupOfT
-       , rhsOfT
-       , parentOfT
-       , occurrenceOfTargetsT
-       , bindingOfTargetsT
-       , bindingGroupOfTargetsT
-       , rhsOfTargetsT
-       , Considerable(..)
-       , considerables
-       , considerConstructT
-       , nthArgPath
-       )
-where
+    ( -- * Navigation
+      externals
+    , occurrenceOfT
+    , bindingOfT
+    , bindingGroupOfT
+    , rhsOfT
+    , parentOfT
+    , occurrenceOfTargetsT
+    , bindingOfTargetsT
+    , bindingGroupOfTargetsT
+    , rhsOfTargetsT
+    , Considerable(..)
+    , considerables
+    , considerConstructT
+    , nthArgPath
+    , string2considerable
+    ) where
 
+import Data.Dynamic (Typeable)
 import Data.Monoid
 
 import Control.Arrow
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC hiding ((<>))
+import HERMIT.Kure
+import HERMIT.Name
 
 import HERMIT.Dictionary.Navigation.Crumbs
 
@@ -37,17 +39,17 @@ import HERMIT.Dictionary.Navigation.Crumbs
 externals :: [External]
 externals = crumbExternals
     ++ map (.+ Navigation)
-        [ external "rhs-of" (rhsOfT . cmpString2Var :: String -> TransformH Core LocalPathH)
+        [ external "rhs-of" (rhsOfT . mkRhsOfPred :: RhsOfName -> TransformH Core LocalPathH)
             [ "Find the path to the RHS of the binding of the named variable." ]
         , external "binding-group-of" (bindingGroupOfT . cmpString2Var :: String -> TransformH CoreTC LocalPathH)
             [ "Find the path to the binding group of the named variable." ]
-        , external "binding-of" (bindingOfT . cmpString2Var :: String -> TransformH CoreTC LocalPathH)
+        , external "binding-of" (bindingOfT . mkBindingPred :: BindingName -> TransformH CoreTC LocalPathH)
             [ "Find the path to the binding of the named variable." ]
-        , external "occurrence-of" (occurrenceOfT . cmpString2Var :: String -> TransformH CoreTC LocalPathH)
+        , external "occurrence-of" (occurrenceOfT . mkOccPred :: OccurrenceName -> TransformH CoreTC LocalPathH)
             [ "Find the path to the first occurrence of the named variable." ]
-        , external "application-of" (applicationOfT . cmpString2Var :: String -> TransformH CoreTC LocalPathH)
+        , external "application-of" (applicationOfT . mkOccPred :: OccurrenceName -> TransformH CoreTC LocalPathH)
             [ "Find the path to the first application of the named variable." ]
-        , external "consider" (considerConstruct :: String -> TransformH Core LocalPathH)
+        , external "consider" (considerConstructT :: Considerable -> TransformH Core LocalPathH)
             [ "consider <c> focuses on the first construct <c>.", recognizedConsiderables ]
         , external "arg" (promoteExprT . nthArgPath :: Int -> TransformH Core LocalPathH)
             [ "arg n focuses on the (n-1)th argument of a nested application." ]
@@ -193,6 +195,12 @@ rhsOfTargetsT = crushbuT (promoteBindT (arr binderBind) <+ promoteDefT (arr bind
 
 -- | Language constructs that can be zoomed to.
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetExpr | CaseOf | Casty | Ticky | TypeExpr | CoercionExpr
+    deriving Typeable
+
+instance Extern Considerable where
+    type Box Considerable = Considerable
+    box = id
+    unbox = id
 
 recognizedConsiderables :: String
 recognizedConsiderables = "Recognized constructs are: " ++ show (map fst considerables)
@@ -213,12 +221,6 @@ considerables =   [ ("bind",Binding)
                   , ("type",TypeExpr)
                   , ("coerce",CoercionExpr)
                   ]
-
-considerConstruct :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => String -> Transform c m Core LocalPathH
-considerConstruct str = case string2considerable str of
-                          Nothing -> fail $ "Unrecognized construct \"" ++ str ++ "\". Perhaps you meant \"binding-of '" ++ str ++ "\"? "
-                                            ++ recognizedConsiderables ++ "."
-                          Just c  -> considerConstructT c
 
 -- | Find the path to the first matching construct.
 considerConstructT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Considerable -> Transform c m Core LocalPathH

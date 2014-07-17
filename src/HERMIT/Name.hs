@@ -1,15 +1,23 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleInstances, TypeFamilies #-}
 #if __GLASGOW_HASKELL__ <= 706
 {-# LANGUAGE ScopedTypeVariables #-}
 #endif
 module HERMIT.Name
     ( HermitName
+    , OccurrenceName(..)
+    , OccurrenceNameListBox(..)
+    , mkOccPred
+    , BindingName(..)
+    , mkBindingPred
+    , RhsOfName(..)
+    , mkRhsOfPred
     , fromRdrName
     , toRdrName
     , toRdrNames
     , hnModuleName
     , hnUnqualified
     , parseName
+    , showName
       -- * Namespaces
     , Named(..)
     , varToNamed
@@ -39,21 +47,14 @@ module HERMIT.Name
 import Control.Monad
 import Control.Monad.IO.Class
 
-#if __GLASGOW_HASKELL__ <= 706
 import Data.List (intercalate)
-#endif
+import Data.Dynamic (Typeable)
 
 import HERMIT.Context
+import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
-
--- | A 'HermitName' is an optionally fully-qualified name,
--- like GHC's 'RdrName', but without specifying which 'NameSpace'
--- the name is found in.
-data HermitName = HermitName { hnModuleName  :: Maybe ModuleName
-                             , hnUnqualified :: String
-                             }
 
 -- | Possible results from name lookup.
 -- Invariant: One constructor for each NameSpace.
@@ -95,6 +96,28 @@ allNameSpaces = [varNS, dataConNS, tyConClassNS, tyVarNS]
 
 ----------------------------------------------------------
 
+-- | A 'HermitName' is an optionally fully-qualified name,
+-- like GHC's 'RdrName', but without specifying which 'NameSpace'
+-- the name is found in.
+data HermitName = HermitName { hnModuleName  :: Maybe ModuleName
+                             , hnUnqualified :: String
+                             }
+    deriving Typeable
+
+instance Extern HermitName where
+    type Box HermitName = HermitName
+    box = id
+    unbox = id
+
+-- | Parse a HermitName from a String.
+parseName :: String -> HermitName
+parseName s | isQualified s = parseQualified s
+            | otherwise     = mkUnqualified s
+
+-- | Turn a HermitName into a (possibly fully-qualified) String.
+showName :: HermitName -> String
+showName (HermitName mnm nm) = maybe id (\ m n -> moduleNameString m ++ ('.' : n))  mnm nm
+
 mkQualified :: String -> String -> HermitName
 mkQualified mnm nm = HermitName (Just $ mkModuleName mnm) nm
 
@@ -122,10 +145,47 @@ parseQualified s = mkQualified mnm nm
           (rNm, _dot:rMod) = break (=='.') cs
           (nm, mnm) = (reverse (c:rNm), reverse rMod)
 
--- | Parse a HermitName from a String.
-parseName :: String -> HermitName
-parseName s | isQualified s = parseQualified s
-            | otherwise     = mkUnqualified s
+--------------------------------------------------------------------------------------------------
+
+-- Newtype wrappers used for type-based command completion
+-- TODO: change String to HermitName
+
+newtype BindingName = BindingName { unBindingName :: String } deriving Typeable
+
+instance Extern BindingName where
+    type Box BindingName = BindingName
+    box = id
+    unbox = id
+
+mkBindingPred :: BindingName -> Var -> Bool
+mkBindingPred (BindingName str) = cmpString2Var str
+
+newtype OccurrenceName = OccurrenceName { unOccurrenceName :: String } deriving Typeable
+
+instance Extern OccurrenceName where
+    type Box OccurrenceName = OccurrenceName
+    box = id
+    unbox = id
+
+mkOccPred :: OccurrenceName -> Var -> Bool
+mkOccPred (OccurrenceName str) = cmpString2Var str
+
+newtype OccurrenceNameListBox = OccurrenceNameListBox [OccurrenceName] deriving Typeable
+
+instance Extern [OccurrenceName] where
+    type Box [OccurrenceName] = OccurrenceNameListBox
+    box = OccurrenceNameListBox
+    unbox (OccurrenceNameListBox l) = l
+
+newtype RhsOfName = RhsOfName { unRhsOfName :: String } deriving Typeable
+
+instance Extern RhsOfName where
+    type Box RhsOfName = RhsOfName
+    box = id
+    unbox = id
+
+mkRhsOfPred :: RhsOfName -> Var -> Bool
+mkRhsOfPred (RhsOfName str) = cmpString2Var str
 
 --------------------------------------------------------------------------------------------------
 
@@ -229,15 +289,15 @@ lookupName ns nm = case isQual_maybe rdrName of
 findNamedBuiltIn :: Monad m => NameSpace -> String -> m Named
 findNamedBuiltIn ns str
     | isValNameSpace ns =
-        case [ dc | tc <- wiredInTyCons, dc <- tyConDataCons tc, str == getOccString dc ] of
+        case [ dc | tc <- wiredInTyCons, dc <- tyConDataCons tc, str == unqualifiedName dc ] of
             [] -> fail "name not in scope."
             [dc] -> return $ NamedDataCon dc
-            dcs -> fail $ "multiple DataCons match: " ++ show (map getOccString dcs)
+            dcs -> fail $ "multiple DataCons match: " ++ intercalate ", " (map unqualifiedName dcs)
     | isTcClsNameSpace ns =
-        case [ tc | tc <- wiredInTyCons, str == getOccString tc ] of
+        case [ tc | tc <- wiredInTyCons, str == unqualifiedName tc ] of
             [] -> fail "type name not in scope."
             [tc] -> return $ NamedTyCon tc
-            tcs -> fail $ "multiple TyCons match: " ++ show (map getOccString tcs)
+            tcs -> fail $ "multiple TyCons match: " ++ intercalate ", " (map unqualifiedName tcs)
     | otherwise = fail "findNameBuiltIn: unusable NameSpace"
 
 -- | We have a name, find the corresponding Named.
@@ -264,7 +324,7 @@ findIdMG hnm = do
     case filter isValName $ findNamesFromString rdrEnv nm of
         []  -> findIdBuiltIn nm
         [n] -> nameToId n
-        ns  -> fail $ "multiple matches found:\n" ++ intercalate ", " (map getOccString ns)
+        ns  -> fail $ "multiple matches found:\n" ++ intercalate ", " (map unqualifiedName ns)
 
 -- | We have a name, find the corresponding Id.
 nameToId :: MonadThings m => Name -> m Id
@@ -337,5 +397,5 @@ cloneVarH nameMod v | isTyVar v = newTyVarH name ty
                     | isId v    = newIdH name ty
                     | otherwise = fail "If this variable isn't a type, coercion or identifier, then what is it?"
   where
-    name = nameMod (uqName v)
+    name = nameMod (unqualifiedName v)
     ty   = varType v

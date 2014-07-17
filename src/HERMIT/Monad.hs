@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleContexts, GADTs, InstanceSigs, KindSignatures #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleContexts, GADTs, InstanceSigs, KindSignatures #-}
 
 module HERMIT.Monad
     ( -- * The HERMIT Monad
@@ -13,14 +13,14 @@ module HERMIT.Monad
     , runDsM
 #endif
       -- * Saving Definitions
-    , Label
+    , RememberedName(..)
     , DefStash
     , saveDef
     , lookupDef
     , HasStash(..)
       -- * Lemmas
     , Equality(..)
-    , LemmaName
+    , LemmaName(..)
     , Lemma(..)
     , Lemmas
     , addLemma
@@ -39,7 +39,9 @@ module HERMIT.Monad
 
 import Prelude hiding (lookup)
 
+import Data.Dynamic (Typeable)
 import Data.Map
+import Data.String (IsString(..))
 
 import Control.Monad
 import Control.Monad.IO.Class
@@ -59,17 +61,23 @@ import HERMIT.GHC.Typechecker
 
 ----------------------------------------------------------------------------
 
--- | A label for individual definitions.
-type Label = String
+-- | A label for individual definitions. Use a newtype so we can tab-complete in shell.
+newtype RememberedName = RememberedName String deriving (Eq, Ord, Typeable)
+
+instance IsString RememberedName where fromString = RememberedName
+instance Show RememberedName where show (RememberedName s) = s
 
 -- | A store of saved definitions.
-type DefStash = Map Label CoreDef
+type DefStash = Map RememberedName CoreDef
 
 -- | An equality is represented as a set of universally quantified binders, and the LHS and RHS of the equality.
 data Equality = Equality [CoreBndr] CoreExpr CoreExpr
 
--- | A name for lemmas.
-type LemmaName = String
+-- | A name for lemmas. Use a newtype so we can tab-complete in shell.
+newtype LemmaName = LemmaName String deriving (Eq, Ord, Typeable)
+
+instance IsString LemmaName where fromString = LemmaName
+instance Show LemmaName where show (LemmaName s) = s
 
 -- | An equality with a proven status.
 data Lemma = Lemma { lemmaEq :: Equality
@@ -206,11 +214,11 @@ instance HasStash HermitM where
     putStash s = HermitM $ \ env -> return $ return $ mkResult s (hEnvLemmas env) ()
 
 -- | Save a definition for future use.
-saveDef :: (HasStash m, Monad m) => Label -> CoreDef -> m ()
+saveDef :: (HasStash m, Monad m) => RememberedName -> CoreDef -> m ()
 saveDef l d = getStash >>= (insert l d >>> putStash)
 
 -- | Lookup a previously saved definition.
-lookupDef :: (HasStash m, Monad m) => Label -> m CoreDef
+lookupDef :: (HasStash m, Monad m) => RememberedName -> m CoreDef
 lookupDef l = getStash >>= (lookup l >>> maybe (fail "Definition not found.") return)
 
 ----------------------------------------------------------------------------

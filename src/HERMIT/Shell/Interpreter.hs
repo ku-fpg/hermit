@@ -2,13 +2,14 @@
              FlexibleContexts, ScopedTypeVariables, CPP #-}
 
 module HERMIT.Shell.Interpreter
-        ( -- * The HERMIT Interpreter
-          Interp
-        , interp
-        , interpM
-        , interpEM
-        , interpExprH
-        ) where
+    ( -- * The HERMIT Interpreter
+      Interp
+    , interp
+    , interpM
+    , interpEM
+    , interpExprH
+    , exprToDyns
+    ) where
 
 #if MIN_VERSION_mtl(2,2,1)
 import Control.Monad.Except
@@ -22,8 +23,13 @@ import Data.Dynamic
 import qualified Data.Map as M
 
 import HERMIT.External
-import HERMIT.Parser
 import HERMIT.Kure
+import HERMIT.Monad
+import HERMIT.Name
+import HERMIT.Parser
+
+import HERMIT.Dictionary.Navigation
+import HERMIT.Dictionary.Rules
 
 import HERMIT.Shell.Dictionary
 import HERMIT.Shell.Types
@@ -51,15 +57,15 @@ instance Monad m => Functor (Interp m) where
 -- | Execute an 'ExprH' using a given interpreter. The given interpretations
 -- are tried in order. The first one to match (have the proper type) will be executed.
 interpExprH :: CLMonad m => [Interp m b] -> ExprH -> m b
-interpExprH interps e = interpExpr e >>= runInterp e interps
+interpExprH interps e = exprToDyns e >>= runInterp e interps
 
 runInterp :: forall m b. CLMonad m => ExprH -> [Interp m b] -> [Dynamic] -> m b
 runInterp e interps dyns = case [f a e :: m b | Interp f <- interps, Just a <- map fromDynamic dyns] of
                             []     -> fail $ "Does not type-check: " ++ unparseExprH e ++ "\n"
                             comp:_ -> comp
 
-interpExpr :: MonadState CommandLineState m => ExprH -> m [Dynamic]
-interpExpr = interpExpr' False
+exprToDyns :: MonadState CommandLineState m => ExprH -> m [Dynamic]
+exprToDyns = exprToDyns' False
 
 -- input: list length n, each elem is a variable length list of possible interpretations
 -- output: variable length list, each elem is list of length n
@@ -70,19 +76,24 @@ fromDynList (hs:dynss) = [ h:t | h <- hs, t <- fromDynList dynss ]
 toBoxedList :: (Extern a, Typeable b) => [[Dynamic]] -> ([a] -> b) -> [Dynamic]
 toBoxedList dyns boxCon = [ toDyn $ boxCon (map unbox l) | dl <- dyns, Just l <- [mapM fromDynamic dl] ]
 
-interpExpr' :: MonadState CommandLineState m => Bool -> ExprH -> m [Dynamic]
-interpExpr' _   (SrcName str) = return [ toDyn $ StringBox str ]
-interpExpr' _   (CoreH str)   = return [ toDyn $ CoreBox (CoreString str) ]
-interpExpr' _   (ListH exprs) = do
-    dyns <- liftM fromDynList $ mapM (interpExpr' True) exprs
+exprToDyns' :: MonadState CommandLineState m => Bool -> ExprH -> m [Dynamic]
+exprToDyns' _   (SrcName str) = do
+    let hn = parseName str -- TODO: String -> HermitName in newtype wrappers
+                           -- TODO: remove StringBox option below
+    return [ toDyn hn, toDyn (BindingName str), toDyn (OccurrenceName str), toDyn (RhsOfName str), toDyn (StringBox str) ]
+exprToDyns' _   (CoreH str)   = return [ toDyn $ CoreString str ]
+exprToDyns' _   (ListH exprs) = do
+    dyns <- liftM fromDynList $ mapM (exprToDyns' True) exprs
     return $    toBoxedList dyns StringListBox
              ++ toBoxedList dyns (PathBox . pathToSnocPath)
                 -- ugly hack.  The whole dynamic stuff could do with overhauling.
              ++ toBoxedList dyns (TransformCorePathBox . return . pathToSnocPath)
              ++ toBoxedList dyns IntListBox
+             ++ toBoxedList dyns OccurrenceNameListBox
              ++ toBoxedList dyns RewriteCoreListBox
+             ++ toBoxedList dyns RuleNameListBox
 
-interpExpr' rhs (CmdName str)
+exprToDyns' rhs (CmdName str)
     | all isDigit str = do
         let i = read str
         return [ -- An Int is either a Path, or will be interpreted specially later.
@@ -91,18 +102,22 @@ interpExpr' rhs (CmdName str)
                , toDyn $ TransformCorePathBox (deprecatedIntToPathT i)
                ]
     | otherwise = do
-        dict <- gets (mkDict . cl_externals)
+        dict <- gets (mkDictionary . cl_externals)
         case M.lookup str dict of
             Just dyns           -> do
                 dyns' <- mapM provideState dyns
                 return $ if rhs then toDyn (StringBox str) : dyns' else dyns'
             -- not a command, try as a string arg... worst case: dynApply fails with "bad type of expression"
             -- best case: 'help ls' works instead of 'help "ls"'. this is likewise done in the clause above
-            Nothing | rhs       -> return [toDyn $ StringBox str]
+            Nothing | rhs       -> let f = maybe id ((:) . toDyn) $ string2considerable str
+                                   in return $ f [ toDyn $ StringBox str
+                                                 , toDyn $ LemmaName str
+                                                 , toDyn $ RememberedName str
+                                                 , toDyn $ RuleName str]
                     | otherwise -> fail $ "User error, unrecognised HERMIT command: " ++ show str
-interpExpr' _ (AppH e1 e2) = liftM2 dynCrossApply (interpExpr' False e1) (interpExpr' True e2)
+exprToDyns' _ (AppH e1 e2) = liftM2 dynCrossApply (exprToDyns' False e1) (exprToDyns' True e2)
 
--- We essentially treat externals of the type 'CommandLineState -> b' specially,
+-- We treat externals of the type 'CommandLineState -> b' specially,
 -- providing them the shell state here, so they don't need a monadic return type
 -- in order to access it themselves.
 provideState :: MonadState CommandLineState m => Dynamic -> m Dynamic

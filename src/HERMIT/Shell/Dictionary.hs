@@ -1,11 +1,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module HERMIT.Shell.Dictionary
-    ( mkDict
+    ( mkDictionary
+    , addToDictionary
     , pp_dictionary
     ) where
 
+import Data.Dynamic
 import Data.List
-import Data.Map (Map, fromList, toList)
+import Data.Map (Map, fromList, toList, fromListWith)
 
 import HERMIT.External
 
@@ -16,9 +18,24 @@ import qualified HERMIT.PrettyPrinter.GHC as GHCPP
 
 --------------------------------------------------------------------------
 
+-- | A 'Dictionary' is a collection of 'Dynamic's.
+--   Looking up a 'Dynamic' (via an 'ExternalName' key) returns a list, as there
+--   can be multiple 'Dynamic's with the same name.
+type Dictionary = Map ExternalName [Dynamic]
+
+-- | Build a 'Data.Map' from names to 'Dynamic' values.
+toDictionary :: [External] -> Dictionary
+toDictionary = fromListWith (++) . map toEntry
+
+toEntry :: External -> (ExternalName, [Dynamic])
+toEntry e = (externName e, [externDyn e])
+
+addToDictionary :: External -> Dictionary -> Dictionary
+addToDictionary ex d = fromListWith (++) $ toEntry ex : toList d
+
 -- | Create a dictionary from a list of 'External's.
-mkDict :: [External] -> Dictionary
-mkDict externs = toDictionary externs'
+mkDictionary :: [External] -> Dictionary
+mkDictionary externs = toDictionary externs'
   where
         msg = layoutTxt 60 (map (show . fst) dictionaryOfTags)
         externs' = externs ++

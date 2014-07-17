@@ -350,7 +350,7 @@ letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
   do Lam v (Let binds body) <- idR
      let bs  = bindVars binds
          fvs = freeVarsBind binds
-     guardMsg (v `notElemVarSet` fvs) (var2String v ++ " occurs in the RHS of the let-bindings.")
+     guardMsg (v `notElemVarSet` fvs) (unqualifiedName v ++ " occurs in the RHS of the let-bindings.")
      if v `elem` bs
       then alphaLamR Nothing >>> letFloatLamR
       else return $ Let binds (Lam v body)
@@ -426,8 +426,9 @@ letFloatCastR = prefixFailMsg "Let floating from Cast failed: " $
 
 -- | Float a 'Let' through an expression, whatever the context.
 letFloatExprR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreExpr
-letFloatExprR = setFailMsg "Unsuitable expression for Let floating." $
-               letFloatArgR <+ letFloatAppR <+ letFloatLetR <+ letFloatLamR <+ letFloatCaseR <+ letFloatCastR
+letFloatExprR = setFailMsg "Unsuitable expression for Let floating."
+              $ letFloatArgR <+ letFloatAppR <+ letFloatLetR <+ letFloatLamR
+                  <+ letFloatCaseR <+ letFloatCaseAltR Nothing <+ letFloatCastR
 
 -- | @'ProgCons' ('NonRec' v ('Let' bds e)) p@ ==> @'ProgCons' bds ('ProgCons' ('NonRec' v e) p)@
 letFloatTopR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c) => Rewrite c HermitM CoreProg

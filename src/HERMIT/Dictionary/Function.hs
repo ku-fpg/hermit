@@ -113,7 +113,7 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
             $ "type variables in args " ++ commas (nub $ map fst unboundTys) ++ " would become unbound unless args "
               ++ commas (nub $ map snd unboundTys) ++ " are included in the transformation."
 
-        wkr <- newIdH (var2String f ++ "'") (exprType (mkCoreLams dbnds body))
+        wkr <- newIdH (unqualifiedName f ++ "'") (exprType (mkCoreLams dbnds body))
 
         let replaceCall :: Monad m => Rewrite c m CoreExpr
             replaceCall = do
@@ -224,7 +224,7 @@ substOrApply e         []         = return e
 substOrApply (Lam b e) ((v,ty):r) = if b == v
                                     then substOrApply e r >>= return . substCoreExpr b ty
                                     else fail $ "substOrApply: unexpected binder - "
-                                                ++ getOccString b ++ " - " ++ getOccString v
+                                                ++ unqualifiedName b ++ " - " ++ unqualifiedName v
 substOrApply e         rest       = return $ mkCoreApps e (map snd rest)
 
 ------------------------------------------------------------------------------

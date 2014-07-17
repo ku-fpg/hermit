@@ -15,6 +15,7 @@ module HERMIT.Dictionary.WorkerWrapper.Common
 
 import Control.Monad.IO.Class
 
+import Data.String (fromString)
 import Data.Typeable
 
 import HERMIT.Context
@@ -93,8 +94,8 @@ data WWAssumption = WWAssumption WWAssumptionTag (RewriteH CoreExpr)
 -- That would have to exist at the Shell level though.
 
 -- This isn't entirely safe, as a malicious the user could define a label with this name.
-workLabel :: Label
-workLabel = "recursive-definition-of-work-for-use-by-ww-fusion"
+workLabel :: RememberedName
+workLabel = fromString "recursive-definition-of-work-for-use-by-ww-fusion"
 
 --------------------------------------------------------------------------------------------------
 
@@ -159,10 +160,10 @@ split1BetaR nm absE repE = do
     newRhs <- buildApplicationM absE (varToCoreExpr workId)
 
     assumptionEq <- assumptionCEqualityT absE repE f
-    _ <- insertLemmaR (nm++"-assumption") $ Lemma assumptionEq False True -- unproven, used
+    _ <- insertLemmaR (fromString (show nm ++ "-assumption")) $ Lemma assumptionEq False True -- unproven, used
 
     wwFusionEq <- wwFusionEqualityT absE repE workRhs
-    _ <- insertLemmaR (nm++"-fusion") $ Lemma wwFusionEq True False -- proven (assumed), unused
+    _ <- insertLemmaR (fromString (show nm ++ "-fusion")) $ Lemma wwFusionEq True False -- proven (assumed), unused
 
     return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
 
@@ -179,10 +180,10 @@ split2BetaR nm absE repE = do
     newRhs <- buildApplicationM absE (varToCoreExpr workId)
 
     assumptionEq <- assumptionCEqualityT absE repE f
-    _ <- insertLemmaR (nm++"-assumption") $ Lemma assumptionEq False True -- unproven, used
+    _ <- insertLemmaR (fromString (show nm ++ "-assumption")) $ Lemma assumptionEq False True -- unproven, used
 
     wwFusionEq <- wwFusionEqualityT absE repE (varToCoreExpr workId)
-    _ <- insertLemmaR (nm++"-fusion") $ Lemma wwFusionEq True False -- proven (assumed), unused
+    _ <- insertLemmaR (fromString (show nm ++ "-fusion")) $ Lemma wwFusionEq True False -- proven (assumed), unused
 
     return $ mkCoreLets [NonRec workId repFixFE] newRhs
 #endif

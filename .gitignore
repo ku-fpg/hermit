@@ -23,6 +23,8 @@ examples/map/Map
 examples/mean/Mean
 examples/qsort/QSort
 examples/reverse/Reverse
+examples/new_reverse/Reverse
+examples/nub/Nub
 examples/Haskell2012/paper/
 examples/Haskell2012/Append
 examples/Haskell2012/Fib

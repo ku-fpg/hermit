@@ -20,10 +20,10 @@ import Prelude hiding (exp)
 externals :: [External]
 externals = map (.+ Unsafe)
     [ external "unsafe-replace" (promoteExprR . unsafeReplaceR :: CoreString -> RewriteH Core)
-        [ "replace the currently focused expression with a new expression" 
+        [ "replace the currently focused expression with a new expression"
         , "DOES NOT ensure that free variables in the replacement expression are in scope" ]
-    , external "unsafe-replace" (promoteExprR . unsafeReplaceStashR :: String -> RewriteH Core)
-        [ "replace the currently focused expression with an expression from the stash"
+    , external "unsafe-replace" (promoteExprR . unsafeReplaceStashR :: RememberedName -> RewriteH Core)
+        [ "replace the currently focused expression with a remembered expression"
         , "DOES NOT ensure that free variables in the replacement expression are in scope" ]
     ]
 
@@ -36,7 +36,7 @@ unsafeReplaceR core =
         guardMsg (eqType (exprKindOrType e) (exprKindOrType e')) "expression types differ."
         return e'
 
-unsafeReplaceStashR :: String -> RewriteH CoreExpr
+unsafeReplaceStashR :: RememberedName -> RewriteH CoreExpr
 unsafeReplaceStashR label = prefixFailMsg "unsafe-replace failed: " $
     contextfreeT $ \ e -> do
         Def _ rhs <- lookupDef label

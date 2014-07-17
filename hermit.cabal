@@ -228,6 +228,7 @@ Library
        HERMIT.PrettyPrinter.GHC
 
        HERMIT.Shell.Command
+       HERMIT.Shell.Completion
        HERMIT.Shell.Dictionary
        HERMIT.Shell.Interpreter
        HERMIT.Shell.Externals

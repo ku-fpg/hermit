@@ -1,10 +1,9 @@
 module HERMIT.Dictionary.Local.Bind
-       ( -- * Rewrites on Binding Groups
-         externals
-       , nonrecToRecR
-       , recToNonrecR
-       )
-where
+    ( -- * Rewrites on Binding Groups
+      externals
+    , nonrecToRecR
+    , recToNonrecR
+    ) where
 
 import HERMIT.Core
 import HERMIT.External
@@ -41,7 +40,7 @@ recToNonrecR :: MonadCatch m => Rewrite c m CoreBind
 recToNonrecR = prefixFailMsg "Converting singleton recursive binding to non-recursive binding failed: " $
                withPatFailMsg (wrongExprForm "Rec [Def v e]") $
   do Rec [(v,e)] <- idR
-     guardMsg (v `notElemVarSet` freeIdsExpr e) ("'" ++ uqName v ++ " is recursively defined.")
+     guardMsg (v `notElemVarSet` freeIdsExpr e) ("'" ++ unqualifiedName v ++ " is recursively defined.")
      return (NonRec v e)
 
 ------------------------------------------------------------------------------
