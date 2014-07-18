@@ -70,11 +70,7 @@ castFloatAppR = prefixFailMsg "Cast float from application failed: " $
                 withPatFailMsg (wrongExprForm "App (Cast e1 co) e2") $
     do App (Cast e1 co) e2 <- idR
        case co of
-#if __GLASGOW_HASKELL__ > 706
             TyConAppCo _r t [c1, c2] -> do
-#else
-            TyConAppCo t [c1, c2] -> do
-#endif
                 True <- return (isFunTyCon t)
                 return $ Cast (App e1 (Cast e2 (SymCo c1))) c2
             ForAllCo t c2 -> do
@@ -82,14 +78,12 @@ castFloatAppR = prefixFailMsg "Cast float from application failed: " $
                 return (Cast (App e1 e2) (Coercion.substCo (Coercion.extendTvSubst emptyCvSubst t x') c2))
             _ -> fail "castFloatApp"
 
-#if __GLASGOW_HASKELL__ > 706
 -- | Attempts to tease a coercion apart into a type constructor and the application
 -- of a number of coercion arguments to that constructor
 splitTyConAppCo_maybe :: Coercion -> Maybe (TyCon, [Coercion])
 splitTyConAppCo_maybe (Refl ro ty)          = (fmap . second . map) (Refl ro) (splitTyConApp_maybe ty)
 splitTyConAppCo_maybe (TyConAppCo _r tc cs) = Just (tc, cs)
 splitTyConAppCo_maybe _                     = Nothing
-#endif
 
 -- TODO: revisit
 castElimSymPlusR :: (ExtendPath c Crumb, AddBindings c, Monad m) => Rewrite c m CoreExpr

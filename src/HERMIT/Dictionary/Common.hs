@@ -30,11 +30,9 @@ module HERMIT.Dictionary.Common
     , boundVarsT
     , findBoundVarT
     , findIdT
-#if __GLASGOW_HASKELL__ > 706
     , findVarT
     , findTyConT
     , findTypeT
-#endif
     , varBindingDepthT
     , varIsOccurrenceOfT
     , exprIsOccurrenceOfT
@@ -109,14 +107,9 @@ callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >>= \_ -> retur
 -- | Succeeds if we are looking at an application of a data constructor.
 callDataConT :: MonadCatch m => Transform c m CoreExpr (DataCon, [Type], [CoreExpr])
 callDataConT = prefixFailMsg "callDataConT failed:" $
-#if __GLASGOW_HASKELL__ > 706
     do mb <- contextfreeT $ \ e -> let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (localFreeVarsExpr e) ])
                                    in return $ exprIsConApp_maybe (in_scope, idUnfolding) e
        maybe (fail "not a datacon application.") return mb
-#else
-    contextfreeT (return . exprIsConApp_maybe idUnfolding)
-        >>= maybe (fail "not a datacon application.") return
-#endif
 
 -- | Succeeds if we are looking at an application of a named data constructor.
 callDataConNameT :: MonadCatch m => String -> Transform c m CoreExpr (DataCon, [Type], [CoreExpr])
@@ -210,7 +203,6 @@ findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
 findIdT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Id
 findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findId nm)
 
-#if __GLASGOW_HASKELL__ > 706
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
 findVarT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Var
 findVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findVar nm)
@@ -222,7 +214,6 @@ findTyConT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contexton
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
 findTypeT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Type
 findTypeT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findType nm)
-#endif
 
 -- TODO: "inScope" was defined elsewhere, but I've moved it here.  Should it be combined with the above functions?
 

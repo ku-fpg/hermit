@@ -6,10 +6,8 @@ module HERMIT.Dictionary.WorkerWrapper.Common
     , assumptionAEqualityT
     , assumptionBEqualityT
     , assumptionCEqualityT
-#if __GLASGOW_HASKELL__ > 706
     , split1BetaR
     , split2BetaR
-#endif
     , workLabel
     ) where
 
@@ -26,13 +24,10 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.ParserCore
 
+import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Function hiding (externals)
 import HERMIT.Dictionary.Reasoning hiding (externals)
-
-#if __GLASGOW_HASKELL__ > 706
-import HERMIT.Dictionary.Common
 import HERMIT.Name
-#endif
 
 --------------------------------------------------------------------------------------------------
 
@@ -57,7 +52,6 @@ externals = map (.+ Proof)
             insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
         [ "Introduce a lemma for worker/wrapper assumption C"
         , "using given abs, rep, and body functions." ]
-#if __GLASGOW_HASKELL__ > 706
     , external "split-1-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split1BetaR nm) absC :: CoreString -> RewriteH Core)
         [ "split-1-beta <name> <abs expression> <rep expression>"
         , "Perform worker/wrapper split with condition 1-beta."
@@ -72,7 +66,6 @@ externals = map (.+ Proof)
         , "  <name>-assumption: unproven lemma for w/w assumption C."
         , "  <name>-fusion: assumed lemma for w/w fusion."
         ]
-#endif
     ]
 
 --------------------------------------------------------------------------------------------------
@@ -130,7 +123,6 @@ assumptionCEqualityT absE repE fE = prefixFailMsg "Building assumption C failed:
     rhs' <- buildFixT rhs
     return $ Equality vs lhs' rhs'
 
-#if __GLASGOW_HASKELL__ > 706
 -- Given abs, rep, and 'fix g' expressions, build "rep (abs (fix g)) = fix g"
 wwFusionEqualityT :: (HasDynFlags m, MonadCatch m, MonadIO m)
                   => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Equality
@@ -186,4 +178,3 @@ split2BetaR nm absE repE = do
     _ <- insertLemmaR (fromString (show nm ++ "-fusion")) $ Lemma wwFusionEq True False -- proven (assumed), unused
 
     return $ mkCoreLets [NonRec workId repFixFE] newRhs
-#endif

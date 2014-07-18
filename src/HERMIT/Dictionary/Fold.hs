@@ -15,6 +15,7 @@ module HERMIT.Dictionary.Fold
 import Control.Arrow
 import Control.Applicative
 import Control.Monad
+import Control.Monad.IO.Class
 
 import qualified Data.Map as Map
 
@@ -54,7 +55,7 @@ externals =
 
 ------------------------------------------------------------------------
 
-stashFoldR :: ReadBindings c => RememberedName -> Rewrite c HermitM CoreExpr
+stashFoldR :: (ReadBindings c, HasStash m, MonadCatch m) => RememberedName -> Rewrite c m CoreExpr
 stashFoldR label = prefixFailMsg "Fold failed: " $
     transform $ \ c e -> do
         Def i rhs <- lookupDef label
@@ -63,16 +64,17 @@ stashFoldR label = prefixFailMsg "Fold failed: " $
               return
               (fold i rhs e)
 
-stashFoldAnyR :: ReadBindings c => Rewrite c HermitM CoreExpr
+stashFoldAnyR :: (ReadBindings c, HasStash m, MonadCatch m) => Rewrite c m CoreExpr
 stashFoldAnyR = setFailMsg "Fold failed: no definitions could be folded." $
-                catchesM =<< map stashFoldR <$> (Map.keys <$> constT getStash)
+                catchesM =<< liftM (map stashFoldR) (liftM Map.keys (constT getStash))
 
-foldR :: ReadBindings c => String -> Rewrite c HermitM CoreExpr
+foldR :: (ReadBindings c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m)
+      => String -> Rewrite c m CoreExpr
 foldR nm = prefixFailMsg "Fold failed: " $ do
     v <- findIdT nm
     foldVarR v Nothing
 
-foldVarR :: ReadBindings c => Var -> Maybe BindingDepth -> Rewrite c HermitM CoreExpr
+foldVarR :: (ReadBindings c, MonadCatch m, MonadUnique m) => Var -> Maybe BindingDepth -> Rewrite c m CoreExpr
 foldVarR v md = do
     case md of
         Nothing    -> return ()

@@ -20,36 +20,28 @@ module HERMIT.Dictionary.GHC
     , occurAnalyseExprChangedR
     , occurAnalyseAndDezombifyR
     , dezombifyR
-#if __GLASGOW_HASKELL__ > 706
     , buildDictionary
     , buildDictionaryT
     , buildTypeable
-#endif
     ) where
 
 import qualified Bag
 import qualified CoreLint
 
-import Control.Arrow
+import           Control.Arrow
+import           Control.Monad.IO.Class
 
-import Data.List (mapAccumL)
+import           Data.Char (isSpace)
+import           Data.List (mapAccumL)
 
-import HERMIT.Core
-import HERMIT.Context
-import HERMIT.External
-import HERMIT.GHC
-import HERMIT.Kure
-
-import HERMIT.Dictionary.Debug hiding (externals)
-
-#if __GLASGOW_HASKELL__ > 706
-import Control.Monad.IO.Class
-
-import Data.Char (isSpace)
-
-import HERMIT.Name
-import HERMIT.Monad
-#endif
+import           HERMIT.Core
+import           HERMIT.Context
+import           HERMIT.Dictionary.Debug hiding (externals)
+import           HERMIT.External
+import           HERMIT.GHC
+import           HERMIT.Kure
+import           HERMIT.Monad
+import           HERMIT.Name
 
 ------------------------------------------------------------------------
 
@@ -138,11 +130,7 @@ lintModuleT :: TransformH ModGuts String
 lintModuleT =
   do dynFlags <- dynFlagsT
      bnds     <- arr mg_binds
-#if __GLASGOW_HASKELL__ > 706
      let (warns, errs)    = CoreLint.lintCoreBindings [] bnds -- [] are vars to treat as in scope, used by GHCi
-#else
-     let (warns, errs)    = CoreLint.lintCoreBindings bnds
-#endif
          dumpSDocs endMsg = Bag.foldBag (\ d r -> d ++ ('\n':r)) (showSDoc dynFlags) endMsg
      if Bag.isEmptyBag errs
        then return $ dumpSDocs "Core Lint Passed" warns
@@ -156,11 +144,7 @@ lintExprT :: (BoundVars c, Monad m, HasDynFlags m) => Transform c m CoreExpr Str
 lintExprT = transform $ \ c e -> do
     dflags <- getDynFlags
     maybe (return "Core Lint Passed") (fail . showSDoc dflags)
-#if __GLASGOW_HASKELL__ > 706
                  $ CoreLint.lintExpr (varSetElems $ boundVars c) e
-#else
-                 $ CoreLint.lintUnfolding noSrcLoc (varSetElems $ boundVars c) e
-#endif
 
 -------------------------------------------
 
@@ -212,7 +196,6 @@ lookupUsageDetails = lookupVarEnv
 
 ----------------------------------------------------------------------
 
-#if __GLASGOW_HASKELL__ > 706
 -- TODO: this is mostly an example, move somewhere?
 buildTypeable :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => Type -> m (Id, [CoreBind])
 buildTypeable ty = do
@@ -246,4 +229,3 @@ buildDictionaryT = prefixFailMsg "buildDictionaryT failed: " $ contextfreeT $ \ 
     return $ case bnds of
                 [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
                 _ -> mkCoreLets bnds (varToCoreExpr i)
-#endif

@@ -1,10 +1,6 @@
 {-# LANGUAGE CPP #-}
 module Main where
 
-#if __GLASGOW_HASKELL__ < 708
-import Data.Function (fix)
-#endif
-
 import Prelude hiding (last)
 
 -------------------------------------------------

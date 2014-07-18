@@ -43,9 +43,7 @@ module HERMIT.PrettyPrinter.Common
     , pad
     , hlist
     , vlist
-#if __GLASGOW_HASKELL__ > 706
     , showRole
-#endif
     ) where
 
 import Data.Char
@@ -63,12 +61,10 @@ import HERMIT.Monad
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
-#if __GLASGOW_HASKELL__ > 706
 showRole :: Role -> String
 showRole Nominal          = "N"
 showRole Representational = "R"
 showRole Phantom          = "P"
-#endif
 
 -- A HERMIT document
 type DocH = MDoc HermitMark

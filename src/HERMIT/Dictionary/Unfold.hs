@@ -15,6 +15,7 @@ module HERMIT.Dictionary.Unfold
 
 import Control.Arrow
 import Control.Monad
+import Control.Monad.IO.Class
 
 import Data.List (intercalate)
 import qualified Data.Map as Map
@@ -98,10 +99,14 @@ unfoldPredR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindi
             => (Id -> [CoreExpr] -> Bool) -> Rewrite c m CoreExpr
 unfoldPredR p = callPredT p >> unfoldR
 
-unfoldNameR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => String -> Rewrite c HermitM CoreExpr
+unfoldNameR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
+               , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+            => String -> Rewrite c m CoreExpr
 unfoldNameR nm = prefixFailMsg ("unfold '" ++ nm ++ " failed: ") (callNameT nm >> unfoldR)
 
-unfoldNamesR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => [String] -> Rewrite c HermitM CoreExpr
+unfoldNamesR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
+                , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+             => [String] -> Rewrite c m CoreExpr
 unfoldNamesR []  = fail "unfold-names failed: no names given."
 unfoldNamesR nms = setFailMsg "unfold-names failed." $
                    orR (map unfoldNameR nms)

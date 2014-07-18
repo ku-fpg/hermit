@@ -1,7 +1,5 @@
 {-# LANGUAGE CPP, InstanceSigs, TypeSynonymInstances, FlexibleInstances #-}
-#if __GLASGOW_HASKELL__ > 706
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-#endif
 -- Above shadowing disabled because the eqExprX function has lots of shadowing
 module HERMIT.GHC
     ( -- * GHC Imports
@@ -30,11 +28,6 @@ module HERMIT.GHC
     , showVarSet
     , Pair(..)
     , bndrRuleAndUnfoldingVars
-#if __GLASGOW_HASKELL__ <= 706
-    , exprType
-    , findNamesFromString
-    , Control.Monad.IO.Class.liftIO
-#else
     , coAxiomName
     , CoAxiom.BranchIndex
     , CoAxiom.CoAxiom
@@ -42,12 +35,12 @@ module HERMIT.GHC
     , Bag.foldBag
     , eqExprX
     , loadSysInterface
-    , lookupRdrNameInModuleForPlugins
+    , lookupRdrNameInModule
     , reportAllUnsolved
-#ifdef mingw32_HOST_OS
-    , resetStaticOpts
-#endif
     , zEncodeString
+#ifdef mingw32_HOST_OS
+    , initStaticOpts
+#endif
     , module Class
     , module DsBinds
     , module DsMonad
@@ -59,40 +52,22 @@ module HERMIT.GHC
     , module TcRnTypes
     , module TcSimplify
     , module Unify
-#endif
     , mkPhiTy
     , mkSigmaTy
     , getHscEnvCoreM
     ) where
 
-#if __GLASGOW_HASKELL__ <= 706
--- GHC 7.6
-import qualified Control.Monad.IO.Class
-import qualified MonadUtils (MonadIO,liftIO)
-import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, exprType, liftIO, PluginPass, getHscEnv)
-import TysPrim (alphaTy, alphaTyVars)
-import Panic (throwGhcException, GhcException(..))
-import PprCore (pprCoreExpr)
-import Data.Monoid hiding ((<>))
-#else
--- GHC 7.8
+
 import Encoding (zEncodeString)
 import ErrUtils (pprErrMsgBag)
 import Finder (findImportedModule, cannotFindModule)
 -- we hide these so that they don't get inadvertently used.  See Core.hs
 import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass, getHscEnv)
-import LoadIface (loadPluginInterface, loadSysInterface)
+import LoadIface (loadSysInterface)
 import Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
 import TcErrors (reportAllUnsolved)
 import TcRnMonad (initIfaceTcRn)
 import TysPrim (alphaTyVars)
-
-#ifdef mingw32_HOST_OS
-import Data.IORef
-import StaticFlags
-#endif
-
-#endif
 
 -- hacky direct GHC imports
 import Convert (thRdrNameGuesses)
@@ -105,9 +80,6 @@ import Pair (Pair(..))
 import TcType (mkPhiTy, mkSigmaTy)
 import TypeRep (Type(..),TyLit(..))
 
-#if __GLASGOW_HASKELL__ <= 706
-import Data.Maybe (isJust)
-#else
 import qualified Bag
 import Class (classTyCon)
 import qualified CoAxiom -- for coAxiomName
@@ -121,8 +93,11 @@ import TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..),
 import TcSimplify (solveWantedsTcM)
 import Unify (tcUnifyTys, BindFlag(..))
 
-import HERMIT.GHC.Typechecker
+#if mingw32_HOST_OS
+import StaticFlags
 #endif
+
+import HERMIT.GHC.Typechecker
 
 import Data.List (intercalate)
 
@@ -134,31 +109,6 @@ varNameNS = OccName.varName
 
 getHscEnvCoreM :: CoreM HscEnv
 getHscEnvCoreM = CoreMonad.getHscEnv
-
-#if __GLASGOW_HASKELL__ <= 706
--- Note: prior to 7.8, the Let case was buggy for type
--- bindings, so we provide a fixed definition here.
-exprType :: CoreExpr -> Type
--- ^ Recover the type of a well-typed Core expression. Fails when
--- applied to the actual 'CoreSyn.Type' expression as it cannot
--- really be said to have a type
-exprType (Var var)           = idType var
-exprType (Lit lit)           = literalType lit
-exprType (Coercion co)       = coercionType co
-exprType (Let bind body)
-  | NonRec tv rhs <- bind
-  , Type ty <- rhs           = substTyWith [tv] [ty] (exprType body)
-  | otherwise                = exprType body
-exprType (Case _ _ ty _)     = ty
-exprType (Cast _ co)         = pSnd (coercionKind co)
-exprType (Tick _ e)          = exprType e
-exprType (Lam binder expr)   = mkPiType binder (exprType expr)
-exprType e@(App _ _)
-  = case collectArgs e of
-        (fun, args) -> applyTypeToArgs e (exprType fun) args
-
-exprType other = pprTrace "exprType" (pprCoreExpr other) alphaTy
-#endif
 
 --------------------------------------------------------------------------
 
@@ -172,13 +122,8 @@ showVarSet = intercalate ", " . varSetToStrings
 
 --------------------------------------------------------------------------
 
-#if __GLASGOW_HASKELL__ <= 706
--- coAxiomName :: CoAxiom -> Name
--- coAxiomName = coAxiomName
-#else
 coAxiomName :: CoAxiom.CoAxiom br -> Name
 coAxiomName = CoAxiom.coAxiomName
-#endif
 
 -- varName :: Var -> Name
 -- nameOccName :: Name -> OccName
@@ -211,14 +156,6 @@ isQualified xs = '.' `elem` init xs -- pathological case is compose (hence the '
 cmpString2Var :: String -> Var -> Bool
 cmpString2Var str = cmpString2Name str . varName
 
-#if __GLASGOW_HASKELL__ <= 706
--- | Find 'Name's matching a given fully qualified or unqualified name.
-findNamesFromString :: GlobalRdrEnv -> String -> [Name]
-findNamesFromString rdrEnv str | isQualified str = res
-                               | otherwise = res
-    where res = [ nm | elt <- globalRdrEnvElts rdrEnv, let nm = gre_name elt, cmpString2Name str nm ]
-#endif
-
 -- | Pretty-print an identifier.
 ppIdInfo :: Id -> IdInfo -> SDoc
 ppIdInfo v info
@@ -244,12 +181,7 @@ ppIdInfo v info
     has_caf_info = not (mayHaveCafRefs caf_info)
 
     str_info = strictnessInfo info
-    has_strictness =
-#if __GLASGOW_HASKELL__ > 706
-        True
-#else
-        isJust str_info
-#endif
+    has_strictness = True
 
     unf_info = unfoldingInfo info
     has_unf = hasSomeUnfolding unf_info
@@ -275,21 +207,6 @@ zapVarOccInfo i = if isId i
 notElemVarSet :: Var -> VarSet -> Bool
 notElemVarSet v vs = not (v `elemVarSet` vs)
 
-#if __GLASGOW_HASKELL__ <= 706
-instance Monoid VarSet where
-  mempty :: VarSet
-  mempty = emptyVarSet
-
-  mappend :: VarSet -> VarSet -> VarSet
-  mappend = unionVarSet
-
---------------------------------------------------------------------------
-
-instance Control.Monad.IO.Class.MonadIO CoreM where
-  liftIO :: IO a -> CoreM a
-  liftIO = MonadUtils.liftIO
-#endif
-
 --------------------------------------------------------------------------
 
 -- This function is copied from GHC, which defines but doesn't expose it.
@@ -301,7 +218,6 @@ bndrRuleAndUnfoldingVars v | isTyVar v = emptyVarSet
 
 --------------------------------------------------------------------------
 
-#if __GLASGOW_HASKELL__ > 706
 -- This function used to be in GHC itself, but was removed.
 -- It compares core for equality modulo alpha.
 eqExprX :: IdUnfoldingFun -> RnEnv2 -> CoreExpr -> CoreExpr -> Bool
@@ -374,10 +290,16 @@ locallyBoundR rn_env v = inRnEnvR rn_env v
 -- * If the module could not be found
 -- * If we could not determine the imports of the module
 --
--- This is adapted from GHC's function of the same name, but using
--- initTcFromModGuts instead of initTcInteractive.
-lookupRdrNameInModuleForPlugins :: HscEnv -> ModGuts -> ModuleName -> RdrName -> IO (Maybe Name)
-lookupRdrNameInModuleForPlugins hsc_env guts mod_name rdr_name = do
+-- This is adapted from GHC's function called lookupRdrNameInModuleForPlugins,
+-- but using initTcFromModGuts instead of initTcInteractive. Also, we ImportBySystem
+-- instead of ImportByPlugin, so the EPS gets populated with RULES and instances from
+-- the loaded module.
+--
+-- TODO: consider importing by plugin first, then only importing by system when a name
+-- is successfully found... as written we will load RULES/instances if the module loads
+-- successfully, even if the name is not found.
+lookupRdrNameInModule :: HscEnv -> ModGuts -> ModuleName -> RdrName -> IO (Maybe Name)
+lookupRdrNameInModule hsc_env guts mod_name rdr_name = do
     -- First find the package the module resides in by searching exposed packages and home modules
     found_module <- findImportedModule hsc_env mod_name Nothing
     case found_module of
@@ -385,7 +307,8 @@ lookupRdrNameInModuleForPlugins hsc_env guts mod_name rdr_name = do
             -- Find the exports of the module
             (_, mb_iface) <- initTcFromModGuts hsc_env guts HsSrcFile False $
                              initIfaceTcRn $
-                             loadPluginInterface doc mod
+                             loadSysInterface doc mod
+
             case mb_iface of
                 Just iface -> do
                     -- Try and find the required name in the exports
@@ -410,10 +333,3 @@ throwCmdLineErrorS dflags = throwCmdLineError . showSDoc dflags
 
 throwCmdLineError :: String -> IO a
 throwCmdLineError = throwGhcExceptionIO . CmdLineError
-#endif
-
-#if __GLASGOW_HASKELL__ >= 708 && defined(mingw32_HOST_OS)
--- | Needed to "fool" HERMIT into working on Windows with GHC >= 7.8
-resetStaticOpts :: IO ()
-resetStaticOpts = writeIORef v_opt_C_ready True
-#endif
