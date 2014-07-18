@@ -35,7 +35,7 @@ module HERMIT.GHC
     , Bag.foldBag
     , eqExprX
     , loadSysInterface
-    , lookupRdrNameInModuleForPlugins
+    , lookupRdrNameInModule
     , reportAllUnsolved
     , zEncodeString
 #ifdef mingw32_HOST_OS
@@ -63,7 +63,7 @@ import ErrUtils (pprErrMsgBag)
 import Finder (findImportedModule, cannotFindModule)
 -- we hide these so that they don't get inadvertently used.  See Core.hs
 import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass, getHscEnv)
-import LoadIface (loadPluginInterface, loadSysInterface)
+import LoadIface (loadSysInterface)
 import Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
 import TcErrors (reportAllUnsolved)
 import TcRnMonad (initIfaceTcRn)
@@ -290,10 +290,16 @@ locallyBoundR rn_env v = inRnEnvR rn_env v
 -- * If the module could not be found
 -- * If we could not determine the imports of the module
 --
--- This is adapted from GHC's function of the same name, but using
--- initTcFromModGuts instead of initTcInteractive.
-lookupRdrNameInModuleForPlugins :: HscEnv -> ModGuts -> ModuleName -> RdrName -> IO (Maybe Name)
-lookupRdrNameInModuleForPlugins hsc_env guts mod_name rdr_name = do
+-- This is adapted from GHC's function called lookupRdrNameInModuleForPlugins,
+-- but using initTcFromModGuts instead of initTcInteractive. Also, we ImportBySystem
+-- instead of ImportByPlugin, so the EPS gets populated with RULES and instances from
+-- the loaded module.
+--
+-- TODO: consider importing by plugin first, then only importing by system when a name
+-- is successfully found... as written we will load RULES/instances if the module loads
+-- successfully, even if the name is not found.
+lookupRdrNameInModule :: HscEnv -> ModGuts -> ModuleName -> RdrName -> IO (Maybe Name)
+lookupRdrNameInModule hsc_env guts mod_name rdr_name = do
     -- First find the package the module resides in by searching exposed packages and home modules
     found_module <- findImportedModule hsc_env mod_name Nothing
     case found_module of
@@ -301,7 +307,8 @@ lookupRdrNameInModuleForPlugins hsc_env guts mod_name rdr_name = do
             -- Find the exports of the module
             (_, mb_iface) <- initTcFromModGuts hsc_env guts HsSrcFile False $
                              initIfaceTcRn $
-                             loadPluginInterface doc mod
+                             loadSysInterface doc mod
+
             case mb_iface of
                 Just iface -> do
                     -- Try and find the required name in the exports

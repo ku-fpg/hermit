@@ -269,14 +269,14 @@ findInNSPackageDB ns nm = do
         Nothing -> findNamedBuiltIn ns (hnUnqualified nm)
         Just n  -> nameToNamed n
 
--- | Helper to call GHC's lookupRdrNameInModuleForPlugins
+-- | Helper to call lookupRdrNameInModule
 lookupName :: (HasHermitMEnv m, HasHscEnv m, MonadIO m) => NameSpace -> HermitName -> m (Maybe Name)
 lookupName ns nm = case isQual_maybe rdrName of
                     Nothing    -> return Nothing -- we can't use lookupName on the current module
                     Just (m,_) -> do
                         hscEnv <- getHscEnv
                         guts <- getModGuts
-                        liftIO $ lookupRdrNameInModuleForPlugins hscEnv guts m rdrName
+                        liftIO $ lookupRdrNameInModule hscEnv guts m rdrName
     where rdrName = toRdrName ns nm
 
 -- | Looks for Named amongst GHC's built-in DataCons/TyCons.
