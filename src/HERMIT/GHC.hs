@@ -37,10 +37,10 @@ module HERMIT.GHC
     , loadSysInterface
     , lookupRdrNameInModuleForPlugins
     , reportAllUnsolved
-#ifdef mingw32_HOST_OS
-    , resetStaticOpts
-#endif
     , zEncodeString
+#ifdef mingw32_HOST_OS
+    , initStaticOpts
+#endif
     , module Class
     , module DsBinds
     , module DsMonad
@@ -69,11 +69,6 @@ import TcErrors (reportAllUnsolved)
 import TcRnMonad (initIfaceTcRn)
 import TysPrim (alphaTyVars)
 
-#ifdef mingw32_HOST_OS
-import Data.IORef
-import StaticFlags
-#endif
-
 -- hacky direct GHC imports
 import Convert (thRdrNameGuesses)
 import CoreArity
@@ -97,6 +92,10 @@ import TcRnMonad (getCtLoc)
 import TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
 import TcSimplify (solveWantedsTcM)
 import Unify (tcUnifyTys, BindFlag(..))
+
+#if mingw32_HOST_OS
+import StaticFlags
+#endif
 
 import HERMIT.GHC.Typechecker
 
@@ -327,9 +326,3 @@ throwCmdLineErrorS dflags = throwCmdLineError . showSDoc dflags
 
 throwCmdLineError :: String -> IO a
 throwCmdLineError = throwGhcExceptionIO . CmdLineError
-
-#if defined(mingw32_HOST_OS)
--- | Needed to "fool" HERMIT into working on Windows with GHC >= 7.8
-resetStaticOpts :: IO ()
-resetStaticOpts = writeIORef v_opt_C_ready True
-#endif
