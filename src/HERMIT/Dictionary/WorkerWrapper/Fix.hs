@@ -252,7 +252,7 @@ wwGenerateFusionR mAss =
 -- | \\ wrap unwrap ->  (@prog = expr@  ==>  @prog = let f = \\ prog -> expr in let work = unwrap (f (wrap work)) in wrap work)@
 wwSplitR :: Maybe WWAssumption -> CoreExpr -> CoreExpr -> RewriteH CoreDef
 wwSplitR mAss wrap unwrap =
-      fixIntroR
+      fixIntroRecR
       >>> defAllR idR ( appAllR idR (letIntroR "f")
                         >>> letFloatArgR
                         >>> letAllR idR ( forwardT (wwFacBR mAss wrap unwrap)
