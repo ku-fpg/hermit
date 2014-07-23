@@ -32,7 +32,7 @@ import HERMIT.Context
 import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
-import HERMIT.GHC hiding (RuleName)
+import HERMIT.GHC
 
 import HERMIT.Dictionary.GHC (dynFlagsT)
 import HERMIT.Dictionary.Kure (anyCallR)
