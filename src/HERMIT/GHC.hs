@@ -51,55 +51,50 @@ module HERMIT.GHC
     , module TcRnMonad
     , module TcRnTypes
     , module TcSimplify
+    , module TcType
     , module Unify
-    , mkPhiTy
-    , mkSigmaTy
     , getHscEnvCoreM
     ) where
 
-
-import Encoding (zEncodeString)
-import ErrUtils (pprErrMsgBag)
-import Finder (findImportedModule, cannotFindModule)
--- we hide these so that they don't get inadvertently used.  See Core.hs
-import GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass, getHscEnv)
-import LoadIface (loadSysInterface)
-import Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
-import TcErrors (reportAllUnsolved)
-import TcRnMonad (initIfaceTcRn)
-import TysPrim (alphaTyVars)
-
--- hacky direct GHC imports
-import Convert (thRdrNameGuesses)
-import CoreArity
-import qualified CoreMonad -- for getHscEnv
-import Kind (isKind,isLiftedTypeKindCon)
-import qualified OccName -- for varName
-import OccurAnal (occurAnalyseExpr)
-import Pair (Pair(..))
-import TcType (mkPhiTy, mkSigmaTy)
-import TypeRep (Type(..),TyLit(..))
-
+-- Imports from GHC.
 import qualified Bag
-import Class (classTyCon)
+import           Class (classTyCon)
 import qualified CoAxiom -- for coAxiomName
-import DsBinds (dsEvBinds)
-import DsMonad (DsM, initDsTc)
-import PrelNames (typeableClassName)
-import TcEnv (tcLookupClass)
-import TcMType (newWantedEvVar)
-import TcRnMonad (getCtLoc)
-import TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
-import TcSimplify (solveWantedsTcM)
-import Unify (tcUnifyTys, BindFlag(..))
-
+import           Convert (thRdrNameGuesses)
+import           CoreArity
+import qualified CoreMonad -- for getHscEnv
+import           DsBinds (dsEvBinds)
+import           DsMonad (DsM, initDsTc)
+import           Encoding (zEncodeString)
+import           ErrUtils (pprErrMsgBag)
+import           Finder (findImportedModule, cannotFindModule)
+-- we hide these so that they don't get inadvertently used.
+-- several are redefined in Core.hs and elsewhere
+import           GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass, getHscEnv, RuleName)
+import           Kind (isKind,isLiftedTypeKindCon)
+import           LoadIface (loadSysInterface)
+import qualified OccName -- for varName
+import           OccurAnal (occurAnalyseExpr)
+import           Pair (Pair(..))
+import           Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
+import           PrelNames (typeableClassName)
 #if mingw32_HOST_OS
-import StaticFlags
+import           StaticFlags
 #endif
-
-import HERMIT.GHC.Typechecker
+import           TcEnv (tcLookupClass)
+import           TcErrors (reportAllUnsolved)
+import           TcMType (newWantedEvVar)
+import           TcRnMonad (getCtLoc, initIfaceTcRn)
+import           TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
+import           TcSimplify (solveWantedsTcM)
+import           TcType (mkPhiTy, mkSigmaTy)
+import           TypeRep (Type(..),TyLit(..))
+import           TysPrim (alphaTyVars)
+import           Unify (tcUnifyTys, BindFlag(..))
 
 import Data.List (intercalate)
+
+import HERMIT.GHC.Typechecker
 
 --------------------------------------------------------------------------
 
