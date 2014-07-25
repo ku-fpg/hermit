@@ -222,6 +222,10 @@ foldMatchType :: [TyVar]              -- ^ vars that can unify with anything
               -> Type                 -- ^ expression we are checking
               -> Maybe [(TyVar,Type)] -- ^ mapping of vars to types, or failure
 
+-- look through type synonyms
+foldMatchType vs as t1 t2 | Just t1' <- tcView t1 = foldMatchType vs as t1' t2
+                          | Just t2' <- tcView t2 = foldMatchType vs as t1 t2'
+
 foldMatchType vs as (TyVarTy v) t | v `elem` vs = return [(v,t)]
                                   | otherwise = case t of
                                                   TyVarTy v' | maybe False (==v) (lookup v' as) -> return [(v,t)]
