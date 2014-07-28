@@ -222,6 +222,7 @@ ppSDoc = do dynFlags <- dynFlagsT
              then return (cleanParens p (idText p doc))
              else return (idText p doc)
 
+-- For var bindings
 ppVar :: PrettyH Var
 ppVar = readerT $ \ v -> varName ^>> ppName (varColor v)
 
@@ -241,7 +242,9 @@ varColor var | isTyVar var = TypeColor
 
 ppName :: SyntaxForColor -> PrettyH Name
 ppName color = do p    <- absPathT
-                  name <- arr unqualifiedName
+                  c    <- contextT
+                  name <- arr (\ n -> unqualifiedName n ++ (if po_showUniques (prettyC_options c)
+                                                            then '_' : show (getUnique n) else ""))
                   let doc = attrP p $ markColor color $ text name
                                -- TODO: is "isScriptInfixId" the right predicate to use here?
                   if all isScriptInfixIdChar name

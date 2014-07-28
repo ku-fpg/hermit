@@ -198,6 +198,7 @@ data PrettyOptions = PrettyOptions
         , po_exprTypes       :: ShowOption      -- ^ Do you hide types, and type arguments, as <>?
         , po_coercions       :: ShowOption      -- ^ Do you hide coercions?
         , po_typesForBinders :: ShowOption      -- ^ Do you give the types for all bindings?
+        , po_showUniques     :: Bool            -- ^ Append uniques to OccNames? (Like GHC does)
         , po_focus           :: Maybe PathH     -- ^ This region should be highlighted (is the current focus)
         , po_depth           :: Maybe Int       -- ^ below this depth are ..., Nothing => infinite
         , po_notes           :: Bool            -- ^ notes might be added to output
@@ -224,6 +225,7 @@ instance Default PrettyOptions where
         , po_exprTypes       = Abstract
         , po_coercions       = Kind
         , po_typesForBinders = Omit
+        , po_showUniques     = False
         , po_focus           = Nothing
         , po_depth           = Nothing
         , po_notes           = False
