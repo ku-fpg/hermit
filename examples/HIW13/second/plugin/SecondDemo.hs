@@ -18,6 +18,6 @@ import Language.Haskell.TH as TH
 plugin = optimize $ \ opts -> do
     modifyCLS $ \ st -> st { cl_pretty_opts = updateTypeShowOption Show (cl_pretty_opts st) }
     at (return $ pathToSnocPath [ModGuts_Prog]) display
-    left <- liftM phasesLeft getPhaseInfo
+    left <- liftM passesLeft getPassInfo
     when (notNull left) $ liftIO $ putStrLn $ "=========== " ++ show (head left) ++ " ==========="
-    lastPhase $ interactive [] opts
+    lastPass $ interactive [] opts

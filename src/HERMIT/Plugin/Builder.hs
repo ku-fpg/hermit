@@ -7,8 +7,8 @@ module HERMIT.Plugin.Builder
     , CorePass(..)
     , getCorePass
     , ghcPasses
-    , PhaseInfo(..)
-    , getPhaseFlag
+    , PassInfo(..)
+    , getPassFlag
     )  where
 
 import Data.List
@@ -17,7 +17,7 @@ import System.IO
 import HERMIT.GHC
 
 -- | Given a list of 'CommandLineOption's, produce the 'ModGuts' to 'ModGuts' function required to build a plugin.
-type PluginPass = PhaseInfo -> [CommandLineOption] -> ModGuts -> CoreM ModGuts
+type PluginPass = PassInfo -> [CommandLineOption] -> ModGuts -> CoreM ModGuts
 
 -- | Build a plugin. This mainly handles the per-module options.
 buildPlugin :: PluginPass -> Plugin
@@ -41,12 +41,12 @@ buildPlugin hp = defaultPlugin { installCoreToDos = install }
                 allPasses = foldr (\ (n,p,seen,notyet) r -> mkPass n seen notyet : p : r)
                                   [mkPass (length todos') passes []]
                                   (zip4 [0..] todos' (inits passes) (tails passes))
-                mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n) $ modFilter hp (PhaseInfo n ps ps') opts
+                mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n) $ modFilter hp (PassInfo n ps ps') opts
 
             return allPasses
 
 -- | Determine whether to act on this module, choose plugin pass.
--- NB: we have the ability to stick module info in the phase info here
+-- NB: we have the ability to stick module info in the pass info here
 modFilter :: PluginPass -> PluginPass
 modFilter hp pInfo opts guts
     | null modOpts && notNull opts = return guts -- don't process this module
@@ -67,7 +67,7 @@ filterOpts opts guts = [ opt | nm <- opts
     where modName = moduleNameString $ moduleName $ mg_module guts
           len = length modName + 1 -- for the colon
 
--- | An enumeration type for GHC's phases.
+-- | An enumeration type for GHC's passes.
 data CorePass = FloatInwards
               | LiberateCase
               | PrintCore
@@ -115,26 +115,26 @@ ghcPasses = [ (FloatInwards , CoreDoFloatInwards)
             ]
 
 getCorePass :: CoreToDo -> CorePass
-getCorePass CoreDoFloatInwards  = FloatInwards
-getCorePass CoreLiberateCase    = LiberateCase
-getCorePass CoreDoPrintCore     = PrintCore
-getCorePass CoreDoStaticArgs    = StaticArgs
-getCorePass CoreDoStrictness    = Strictness
-getCorePass CoreDoWorkerWrapper = WorkerWrapper
-getCorePass CoreDoSpecialising  = Specialising
-getCorePass CoreDoSpecConstr    = SpecConstr
-getCorePass CoreCSE             = CSE
-getCorePass CoreDoVectorisation = Vectorisation
-getCorePass CoreDesugar         = Desugar
-getCorePass CoreDesugarOpt      = DesugarOpt
-getCorePass CoreTidy            = Tidy
-getCorePass CorePrep            = Prep
-getCorePass (CoreDoSimplify {}) = Simplify
+getCorePass CoreDoFloatInwards       = FloatInwards
+getCorePass CoreLiberateCase         = LiberateCase
+getCorePass CoreDoPrintCore          = PrintCore
+getCorePass CoreDoStaticArgs         = StaticArgs
+getCorePass CoreDoStrictness         = Strictness
+getCorePass CoreDoWorkerWrapper      = WorkerWrapper
+getCorePass CoreDoSpecialising       = Specialising
+getCorePass CoreDoSpecConstr         = SpecConstr
+getCorePass CoreCSE                  = CSE
+getCorePass CoreDoVectorisation      = Vectorisation
+getCorePass CoreDesugar              = Desugar
+getCorePass CoreDesugarOpt           = DesugarOpt
+getCorePass CoreTidy                 = Tidy
+getCorePass CorePrep                 = Prep
+getCorePass (CoreDoSimplify {})      = Simplify
 getCorePass (CoreDoFloatOutwards {}) = FloatOutwards
-getCorePass (CoreDoRuleCheck {}) = RuleCheck
-getCorePass (CoreDoPasses {})   = Passes -- these should be flattened out in practice
-getCorePass (CoreDoPluginPass nm _) = PluginPass nm
-getCorePass CoreDoNothing       = NoOp
+getCorePass (CoreDoRuleCheck {})     = RuleCheck
+getCorePass (CoreDoPasses {})        = Passes -- these should be flattened out in practice
+getCorePass (CoreDoPluginPass nm _)  = PluginPass nm
+getCorePass CoreDoNothing            = NoOp
 -- getCorePass _                   = Unknown
 
 flattenTodos :: [CoreToDo] -> [CoreToDo]
@@ -143,16 +143,16 @@ flattenTodos = concatMap f
           f CoreDoNothing     = []
           f other             = [other]
 
-data PhaseInfo =
-    PhaseInfo { phaseNum :: Int
-              , phasesDone :: [CorePass]
-              , phasesLeft :: [CorePass]
-              }
+data PassInfo =
+    PassInfo { passNum :: Int
+             , passesDone :: [CorePass]
+             , passesLeft :: [CorePass]
+             }
     deriving (Read, Show, Eq)
 
 -- | If HERMIT user specifies the -pN flag, get the N
 -- TODO: as written will discard other flags that start with -p
-getPhaseFlag :: [CommandLineOption] -> Maybe (Int, [CommandLineOption])
-getPhaseFlag opts = case partition ("-p" `isPrefixOf`) opts of
+getPassFlag :: [CommandLineOption] -> Maybe (Int, [CommandLineOption])
+getPassFlag opts = case partition ("-p" `isPrefixOf`) opts of
                         ([],_) -> Nothing
                         (ps,r) -> Just (read (drop 2 (last ps)), r)

@@ -12,15 +12,15 @@ module HERMIT.Plugin
     , setPrettyOptions
       -- ** Active modifiers
     , at
-    , phase
+    , pass
     , after
     , before
     , until
-    , allPhases
-    , firstPhase
-    , lastPhase
+    , allPasses
+    , firstPass
+    , lastPass
       -- ** Knobs and Dials
-    , getPhaseInfo
+    , getPassInfo
     , modifyCLS
       -- ** Types
     , defPS
@@ -64,10 +64,10 @@ import HERMIT.Shell.Types (clm)
 import Prelude hiding (until)
 
 hermitPlugin :: ([CommandLineOption] -> HPM ()) -> Plugin
-hermitPlugin f = buildPlugin $ \ phaseInfo -> runHPM phaseInfo . f
+hermitPlugin f = buildPlugin $ \ passInfo -> runHPM passInfo . f
 
-defPS :: SAST -> ScopedKernel -> PhaseInfo -> IO PluginState
-defPS initSAST kernel phaseInfo = do
+defPS :: SAST -> ScopedKernel -> PassInfo -> IO PluginState
+defPS initSAST kernel passInfo = do
     emptyTick <- liftIO $ atomically $ newTVar M.empty
     return $ PluginState
                 { ps_cursor         = initSAST
@@ -78,12 +78,12 @@ defPS initSAST kernel phaseInfo = do
                 , ps_diffonly       = False
                 , ps_failhard       = False
                 , ps_kernel         = kernel
-                , ps_phase          = phaseInfo
+                , ps_pass           = passInfo
                 }
 
 data HPMInst :: * -> * where
     Shell    :: [External] -> [CommandLineOption] -> HPMInst ()
-    Guard    :: (PhaseInfo -> Bool) -> HPM ()     -> HPMInst ()
+    Guard    :: (PassInfo -> Bool) -> HPM ()     -> HPMInst ()
     Focus    :: (Injection ModGuts g, Walker HermitC g) => TransformH g LocalPathH -> HPM a -> HPMInst a
     RR       :: (Injection ModGuts g, Walker HermitC g) => RewriteH g                       -> HPMInst ()
     Query    :: (Injection ModGuts g, Walker HermitC g) => TransformH g a                   -> HPMInst a
@@ -91,10 +91,10 @@ data HPMInst :: * -> * where
 newtype HPM a = HPM { unHPM :: ProgramT HPMInst PluginM a }
     deriving (Functor, Applicative, Monad, MonadIO)
 
-runHPM :: PhaseInfo -> HPM () -> ModGuts -> CoreM ModGuts
-runHPM phaseInfo pass = scopedKernel $ \ kernel initSAST -> do
-    ps <- defPS initSAST kernel phaseInfo
-    (r,st) <- hpmToIO ps pass
+runHPM :: PassInfo -> HPM () -> ModGuts -> CoreM ModGuts
+runHPM passInfo hpass = scopedKernel $ \ kernel initSAST -> do
+    ps <- defPS initSAST kernel passInfo
+    (r,st) <- hpmToIO ps hpass
     let cleanup sast = do
             if sast /= initSAST -- only do this if we actually changed the AST
             then applyS kernel occurAnalyseAndDezombifyR (mkKernelEnv st) sast >>= resumeS kernel
@@ -123,7 +123,7 @@ eval comp = do
             _ <- resetScoping env
             restoreScoping env paths
             eval $ k ()
-        Guard p (HPM m)  :>>= k  -> gets (p . ps_phase) >>= \ b -> when b (eval m) >>= eval . k
+        Guard p (HPM m)  :>>= k  -> gets (p . ps_pass) >>= \ b -> when b (eval m) >>= eval . k
         Focus tp (HPM m) :>>= k  -> do
             p <- runK (queryS kernel tp env)  -- run the pathfinding translation
             runS $ beginScopeS kernel         -- remember the current path
@@ -178,41 +178,41 @@ query = HPM . singleton . Query
 
 ----------------------------- guards ------------------------------
 
-guard :: (PhaseInfo -> Bool) -> HPM () -> HPM ()
+guard :: (PassInfo -> Bool) -> HPM () -> HPM ()
 guard p = HPM . singleton . Guard p
 
 at :: TransformH CoreTC LocalPathH -> HPM a -> HPM a
 at tp = HPM . singleton . Focus tp
 
-phase :: Int -> HPM () -> HPM ()
-phase n = guard ((n ==) . phaseNum)
+pass :: Int -> HPM () -> HPM ()
+pass n = guard ((n ==) . passNum)
 
 after :: CorePass -> HPM () -> HPM ()
-after cp = guard (\phaseInfo -> case phasesDone phaseInfo of
+after cp = guard (\passInfo -> case passesDone passInfo of
                             [] -> False
                             xs -> last xs == cp)
 
 before :: CorePass -> HPM () -> HPM ()
-before cp = guard (\phaseInfo -> case phasesLeft phaseInfo of
+before cp = guard (\passInfo -> case passesLeft passInfo of
                             (x:_) | cp == x -> True
                             _               -> False)
 
 until :: CorePass -> HPM () -> HPM ()
-until cp = guard ((cp `elem`) . phasesLeft)
+until cp = guard ((cp `elem`) . passesLeft)
 
-allPhases :: HPM () -> HPM ()
-allPhases = guard (const True)
+allPasses :: HPM () -> HPM ()
+allPasses = guard (const True)
 
-firstPhase :: HPM () -> HPM ()
-firstPhase = guard (null . phasesDone)
+firstPass :: HPM () -> HPM ()
+firstPass = guard (null . passesDone)
 
-lastPhase :: HPM () -> HPM ()
-lastPhase = guard (null . phasesLeft)
+lastPass :: HPM () -> HPM ()
+lastPass = guard (null . passesLeft)
 
 ----------------------------- other ------------------------------
 
-getPhaseInfo :: HPM PhaseInfo
-getPhaseInfo = HPM $ lift $ gets ps_phase
+getPassInfo :: HPM PassInfo
+getPassInfo = HPM $ lift $ gets ps_pass
 
 display :: HPM ()
 display = HPM $ lift $ Display.display Nothing
