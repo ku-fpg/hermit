@@ -1,15 +1,14 @@
 module HERMIT.Utilities
-  ( -- * Utilities
-    nodups
-  , dups
-  , dupsBy
-  , soleElement
-  , equivalentBy
-  , equivalent
-  , whenJust
-  , maybeM
-  )
-where
+    ( -- * Utilities
+      nodups
+    , dups
+    , dupsBy
+    , soleElement
+    , equivalentBy
+    , equivalent
+    , whenJust
+    , maybeM
+    ) where
 
 ------------------------------------------------------------------------------
 
