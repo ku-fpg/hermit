@@ -15,7 +15,6 @@ module HERMIT.Dictionary.Local
     , abstractR
     , pushR
     , betaReduceR
-    , betaReducePlusR
     , betaExpandR
     , etaReduceR
     , etaExpandR
@@ -57,8 +56,6 @@ externals =
         [ "((\\ v -> E1) E2) ==> let v = E2 in E1"
         , "This form of beta-reduction is safe if E2 is an arbitrary expression"
         , "(won't duplicate work)." ]                                 .+ Eval .+ Shallow
-    , external "beta-reduce-plus" (promoteExprR betaReducePlusR :: RewriteH Core)
-        [ "Perform one or more beta-reductions."]                               .+ Eval .+ Shallow
     , external "beta-expand" (promoteExprR betaExpandR :: RewriteH Core)
         [ "(let v = e1 in e2) ==> (\\ v -> e2) e1" ]                            .+ Shallow
     , external "eta-reduce" (promoteExprR etaReduceR :: RewriteH Core)
@@ -95,49 +92,6 @@ betaReduceR :: MonadCatch m => Rewrite c m CoreExpr
 betaReduceR = setFailMsg ("Beta-reduction failed: " ++ wrongExprForm "App (Lam v e1) e2") $
     do App (Lam v e1) e2 <- idR
        return $ Let (NonRec v e2) e1
-
-
-multiBetaReduceR :: MonadCatch m =>  (Int -> Bool) -> Rewrite c m CoreExpr
-multiBetaReduceR p = prefixFailMsg "Multi-Beta-Reduce failed: " $
-    do
-        e <- idR
-        let (f,xs) = collectArgs e
-        guardMsg (p (length xs)) "incorrect number of arguments."
-
-        let (vs,e0) = collectBinders f
-
-        guardMsg (length vs >= length xs) "insufficent lambdas."
-
-        let (vs1,vs2) = splitAt (length xs) vs
-
-        return
-           $ mkLets (zipWith NonRec vs1 xs)
-           $ mkLams vs2 e0
-
--- TODO: inline this everywhere
--- Neil: Are we sure we want to inline this?
--- | Perform one or more beta-reductions.
-betaReducePlusR :: MonadCatch m => Rewrite c m CoreExpr
-betaReducePlusR = multiBetaReduceR (> 0)
-
-{-
-
-        tagFailR "betaReducePlus failed." $
-        appT liftLambda idR App >>> beta_reduce
-  where
-          -- lift lambda finds the (perhaps hidden) lambda, and brings it out
-          liftLambda = observeR "pre-liftLambda" >>> liftLambda' >>> observeR "post-liftLambda"
-          liftLambda' =
-                   (do e@(Lam {}) <- idR
-                       return e)
-                <+ (betaReducePlus
-                        >>> observeR "liftLambda(UP)"
-                            -- let v = e in ...
-                            -- TODO: check scope here
-                        >>> (do Let bds (Lam v e) <- idR
-                                return (Lam v (Let bds e)))
-                   )
--}
 
 -- | (let v = e1 in e2) ==> (\\ v -> e2) e1
 betaExpandR :: MonadCatch m => Rewrite c m CoreExpr
