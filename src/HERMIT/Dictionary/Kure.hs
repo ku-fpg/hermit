@@ -1,11 +1,11 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
 
 module HERMIT.Dictionary.Kure
-       ( -- * KURE Strategies
-         externals
-       , anyCallR
-       )
-where
+    ( -- * KURE Strategies
+      externals
+    , anyCallR
+    , betweenR
+    ) where
 
 import Control.Arrow
 import Control.Monad (liftM)
@@ -98,6 +98,8 @@ externals = map (.+ KURE)
        [ "Promote a RewriteCore to a RewriteCoreTC" ]
    , external "extract"    (extractR :: RewriteH CoreTC -> RewriteH Core)
        [ "Extract a RewriteCore from a RewriteCoreTC" ]
+   , external "between"    (betweenR :: Int -> Int -> RewriteH CoreTC -> RewriteH CoreTC)
+       [ "between x y rr -> perform rr at least x times and at most y times." ]
    ]
 
 ------------------------------------------------------------------------------------
@@ -137,3 +139,14 @@ anyCallR rr = prefixFailMsg "any-call failed: " $
           rec = anyCallR rr
 
 ------------------------------------------------------------------------------------
+
+-- | betweenR x y rr -> perform rr at least x times and at most y times.
+betweenR :: MonadCatch m => Int -> Int -> Rewrite c m a -> Rewrite c m a
+betweenR l h rr | l < 0 = fail "betweenR: lower limit below zero"
+                | h < l = fail "betweenR: upper limit less than lower limit"
+                | otherwise = go 0
+    where -- 'c' is number of times rr has run already
+          go c | c >= h = idR               -- done
+               | c < l  = rr >>> go (c+1)   -- haven't hit lower bound yet
+               | otherwise = tryR (rr >>> go (c+1))  -- met lower bound
+
