@@ -352,7 +352,8 @@ ppCoreExprR = absPathT >>= ppCoreExprPR
               lamT ppBinderMode ppCoreExprR (retLam p)
            <+ letT ppCoreBind ppCoreExprR (retLet p)
            <+ appT ppCoreExprR ppCoreExprR (retApp p App_Fun App_Arg)
-           <+ caseT ppCoreExpr ppVar (ppTypeModeR >>> parenExpr) (const ppCoreAlt) (\ s w ty alts -> RetExpr (hang (keyword p "case" <+> s) 1 (keyword p "of" <+> w <+> ty) $$ nest 2 (vcat alts)))
+           <+ caseT ppCoreExpr ppVar (ppTypeModeR >>> parenExpr) (const ppCoreAlt)
+                (\ s w ty alts -> RetExpr (hang (keyword p "case" <+> s) 1 (keyword p "of" <+> w <+> ty) $+$ nest 2 (vcat alts)))
            <+ varT (RetAtom <$> ppVarOcc)
            <+ litT (RetAtom <$> ppSDoc)
            <+ typeT ppTypeModeR
