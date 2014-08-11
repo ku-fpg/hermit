@@ -189,13 +189,13 @@ boundVarsT :: (BoundVars c, Monad m) => Transform c m a VarSet
 boundVarsT = contextonlyT (return . boundVars)
 
 -- | Find the unique variable bound in the context that matches the given name, failing if it is not unique.
-findBoundVarT :: (BoundVars c, MonadCatch m) => String -> Transform c m a Var
-findBoundVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $
-                        do c <- contextT
-                           case varSetElems (findBoundVars nm c) of
-                             []         -> fail "no matching variables in scope."
-                             [v]        -> return v
-                             _ : _ : _  -> fail "multiple matching variables in scope."
+findBoundVarT :: (BoundVars c, MonadCatch m) => (Var -> Bool) -> Transform c m a Var
+findBoundVarT p = do
+    c <- contextT
+    case varSetElems (findBoundVars p c) of
+        []         -> fail "no matching variables in scope."
+        [v]        -> return v
+        _ : _ : _  -> fail "multiple matching variables in scope."
 
 --------------------------------------------------------------------------------------------------
 

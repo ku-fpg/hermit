@@ -68,7 +68,7 @@ externals =
     , external "flatten-program" (promoteProgR flattenProgramR :: RewriteH Core)
         [ "Flatten all the top-level binding groups in a program (list of binding groups) to a single"
         , "recursive binding group.  This can be useful if you intend to apply GHC RULES." ]
-    , external "abstract" (promoteExprR . abstractR :: String -> RewriteH Core)
+    , external "abstract" (promoteExprR . abstractR . mkOccPred :: OccurrenceName -> RewriteH Core)
         [ "Abstract over a variable using a lambda."
         , "e  ==>  (\\ x -> e) x" ]                                             .+ Shallow .+ Introduce .+ Context
     , external "push" ((\ nm strictf -> push (Just strictf) (cmpString2Var nm)) :: String -> RewriteH Core -> RewriteH Core)
@@ -153,12 +153,13 @@ flattenProgramT = do bds <- arr (concatMap bindToVarExprs . progToBinds)
 
 -- | Abstract over a variable using a lambda.
 --   e  ==>  (\ x. e) x
-abstractR :: (ReadBindings c) => String -> Rewrite c HermitM CoreExpr
-abstractR nm = prefixFailMsg "abstraction failed: " $
-   do v  <- findBoundVarT nm
-      v' <- constT (cloneVarH id v) -- currently uses the same visible name (via "id").  We could do something else here, e.g. add a prime suffix.
+abstractR :: (ReadBindings c, MonadCatch m, MonadUnique m) => (Var -> Bool) -> Rewrite c m CoreExpr
+abstractR p = prefixFailMsg "abstraction failed: " $
+   do v  <- findBoundVarT p
+      v' <- constT (cloneVarH id v) -- currently uses the same visible name (via "id").
+                                    -- We could do something else here, e.g. add a prime suffix.
       e  <- arr (substCoreExpr v (varToCoreExpr v'))
-      return $ App (Lam v' e) (varToCoreExpr v)
+      return $ mkCoreApp (Lam v' e) (varToCoreExpr v)
 
 ------------------------------------------------------------------------------------------------------
 

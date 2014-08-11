@@ -245,7 +245,7 @@ findInNameSpaces nss nm c = setFailMsg "Variable not in scope." -- because catch
 findInNameSpace :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
                 => NameSpace -> String -> c -> m Named
 findInNameSpace ns nm c =
-    case filter ((== ns) . occNameSpace . getOccName) $ varSetElems (findBoundVars nm c) of
+    case filter ((== ns) . occNameSpace . getOccName) $ varSetElems (findBoundVars (cmpString2Var nm) c) of
         _ : _ : _ -> fail "multiple matching variables in scope."
         [v]       -> return $ varToNamed v
         []        -> findInNSModGuts ns (parseName nm)
