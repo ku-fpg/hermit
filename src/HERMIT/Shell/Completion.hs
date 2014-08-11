@@ -35,7 +35,7 @@ shellComplete rPrev so_far = do
     if null partial
     then completionsFor so_far [CommandC]
     else case parseExprH partial of
-            Left err -> liftIO (putStrLn $ "\nCould not parse partial expression for completion: " ++ err) >> return []
+            Left _   -> return []
             Right e  -> do
                 eds <- attemptM $ exprToDyns e
                 case eds of
