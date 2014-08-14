@@ -107,9 +107,7 @@ bashDebugR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindin
               , HasDebugChan m, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m
               , MonadThings m, MonadUnique m )
            => Rewrite c m Core
-bashDebugR = bashUsingR [ idR >>= \e -> r >>> traceR nm >>> (catchM (promoteT lintExprT >> idR)
-                                                                    (\s -> do _ <- return e >>> observeR "[before]"
-                                                                              observeR ("[" ++ nm ++ "]\n" ++ s)))
+bashDebugR = bashUsingR [ bracketR nm r >>> catchM (promoteT lintExprT >> idR) traceR
                         | (r,nm) <- bashComponents ]
 
 -- | Perform the 'bash' algorithm with a given list of rewrites.
