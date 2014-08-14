@@ -20,7 +20,7 @@ module HERMIT.GHC
     , GhcException(..)
     , throwGhcException
     , exprArity
-    , occurAnalyseExpr
+    , occurAnalyseExpr_NoBinderSwap
     , isKind
     , isLiftedTypeKindCon
     , notElemVarSet
@@ -74,7 +74,7 @@ import           GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, Plu
 import           Kind (isKind,isLiftedTypeKindCon)
 import           LoadIface (loadSysInterface)
 import qualified OccName -- for varName
-import           OccurAnal (occurAnalyseExpr)
+import           OccurAnal (occurAnalyseExpr_NoBinderSwap)
 import           Pair (Pair(..))
 import           Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
 import           PrelNames (typeableClassName)
