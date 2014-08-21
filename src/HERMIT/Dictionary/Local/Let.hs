@@ -85,7 +85,7 @@ externals =
     --     , "only matches non-recursive lets" ]  .+ Deep .+ Eval
     , external "let-intro" (promoteExprR . letIntroR :: String -> RewriteH Core)
         [ "e => (let v = e in v), name of v is provided" ]                      .+ Shallow .+ Introduce
-    , external "let-intro-unfolding" (promoteExprR . letIntroUnfoldingR :: String -> RewriteH Core)
+    , external "let-intro-unfolding" (promoteExprR . letIntroUnfoldingR :: HermitName -> RewriteH Core)
         [ "e => let f' = defn[f'/f] in e[f'/f], name of f is provided" ]
     , external "let-elim" (promoteExprR letElimR :: RewriteH Core)
         [ "Remove an unused let binding."
@@ -592,7 +592,7 @@ nonRecIntroR nm e = readerT $ \case
 -- Rewrites occurences of the identifier to point to this new local definiton.
 letIntroUnfoldingR :: ( BoundVars c, ReadBindings c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m
                       , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-                   => String -> Rewrite c m CoreExpr
+                   => HermitName -> Rewrite c m CoreExpr
 letIntroUnfoldingR nm = do
     i <- findIdT nm
     (rhs,_) <- getUnfoldingT AllBinders <<< return i

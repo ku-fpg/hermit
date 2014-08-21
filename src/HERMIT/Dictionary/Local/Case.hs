@@ -29,8 +29,7 @@ module HERMIT.Dictionary.Local.Case
     , caseElimMergeAltsR
     , caseIntroSeqR
     , caseElimSeqR
-    )
-where
+    ) where
 
 import Control.Arrow
 import Control.Applicative
@@ -462,7 +461,7 @@ caseFoldBinderR :: forall c m. ( ExtendPath c Crumb, ReadPath c Crumb, AddBindin
 caseFoldBinderR = prefixFailMsg "case-fold-binder failed: " $ do
     w <- caseBinderIdT
     caseAllR idR idR idR $ \ _ -> do depth <- varBindingDepthT w
-                                     extractR $ anybuR (promoteExprR (foldVarR w (Just depth)) :: Rewrite c m Core)
+                                     extractR $ anybuR (promoteExprR (foldVarR (Just depth) w) :: Rewrite c m Core)
 
 -- | A cleverer version of 'mergeCaseAlts' that first attempts to abstract out any occurrences of the alternative pattern using the case binder.
 caseMergeAltsWithBinderR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c

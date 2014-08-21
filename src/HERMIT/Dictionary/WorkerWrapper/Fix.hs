@@ -1,20 +1,21 @@
 module HERMIT.Dictionary.WorkerWrapper.Fix
-       ( -- * The Worker/Wrapper Transformation
-         -- | Note that many of these operations require 'Data.Function.fix' to be in scope.
-         HERMIT.Dictionary.WorkerWrapper.Fix.externals
-       , wwFacBR
-       , wwSplitR
-       , wwSplitStaticArg
-       , wwGenerateFusionR
-       , wwFusionBR
-       , wwAssA
-       , wwAssB
-       , wwAssC
-       )
-where
+    ( -- * The Worker/Wrapper Transformation
+      -- | Note that many of these operations require 'Data.Function.fix' to be in scope.
+      HERMIT.Dictionary.WorkerWrapper.Fix.externals
+    , wwFacBR
+    , wwSplitR
+    , wwSplitStaticArg
+    , wwGenerateFusionR
+    , wwFusionBR
+    , wwAssA
+    , wwAssB
+    , wwAssC
+    ) where
 
 import Control.Applicative
 import Control.Arrow
+
+import Data.String (fromString)
 
 import HERMIT.Core
 import HERMIT.External
@@ -256,7 +257,7 @@ wwSplitR mAss wrap unwrap =
       >>> defAllR idR ( appAllR idR (letIntroR "f")
                         >>> letFloatArgR
                         >>> letAllR idR ( forwardT (wwFacBR mAss wrap unwrap)
-                                          >>> appAllR idR ( unfoldNameR "Data.Function.fix"
+                                          >>> appAllR idR ( unfoldNameR (fromString "Data.Function.fix")
                                                             >>> alphaLetWithR ["work"]
                                                             >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
                                                                                    >>> extractR (wwGenerateFusionR mAss)

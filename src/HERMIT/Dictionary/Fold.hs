@@ -8,7 +8,7 @@ module HERMIT.Dictionary.Fold
     , stashFoldAnyR
       -- * Unlifted fold interface
     , fold
-    , unifyTypes
+    , unifyTypes -- TODO: remove in favor of GHC's unification
     , tyMatchesToCoreExpr
     ) where
 
@@ -21,10 +21,11 @@ import qualified Data.Map as Map
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Monad
-import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Kure
+import HERMIT.Monad
+import HERMIT.Name
 
 import HERMIT.Dictionary.Common (varBindingDepthT,inScope,findIdT)
 import HERMIT.Dictionary.Inline hiding (externals)
@@ -35,7 +36,7 @@ import Prelude hiding (exp)
 
 externals :: [External]
 externals =
-    [ external "fold" (promoteExprR . foldR :: String -> RewriteH Core)
+    [ external "fold" (promoteExprR . foldR :: HermitName -> RewriteH Core)
         [ "fold a definition"
         , ""
         , "double :: Int -> Int"
@@ -69,13 +70,11 @@ stashFoldAnyR = setFailMsg "Fold failed: no definitions could be folded." $
                 catchesM =<< liftM (map stashFoldR) (liftM Map.keys (constT getStash))
 
 foldR :: (ReadBindings c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m)
-      => String -> Rewrite c m CoreExpr
-foldR nm = prefixFailMsg "Fold failed: " $ do
-    v <- findIdT nm
-    foldVarR v Nothing
+      => HermitName -> Rewrite c m CoreExpr
+foldR nm = prefixFailMsg "Fold failed: " $ findIdT nm >>= foldVarR Nothing
 
-foldVarR :: (ReadBindings c, MonadCatch m, MonadUnique m) => Var -> Maybe BindingDepth -> Rewrite c m CoreExpr
-foldVarR v md = do
+foldVarR :: (ReadBindings c, MonadCatch m, MonadUnique m) => Maybe BindingDepth -> Var -> Rewrite c m CoreExpr
+foldVarR md v = do
     case md of
         Nothing    -> return ()
         Just depth -> do depth' <- varBindingDepthT v

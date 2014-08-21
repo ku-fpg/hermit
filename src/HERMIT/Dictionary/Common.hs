@@ -48,7 +48,6 @@ import Data.List
 import Data.Monoid
 
 import Control.Arrow
-import Control.Monad
 import Control.Monad.IO.Class
 
 import HERMIT.Context
@@ -75,6 +74,7 @@ callT = contextfreeT $ \ e -> case e of
                                 App {} -> return (collectArgs e)
                                 _      -> fail "not an application or variable occurence."
 
+-- | Succeeds if we are looking at an application matching the given predicate.
 callPredT :: Monad m => (Id -> [CoreExpr] -> Bool) -> Transform c m CoreExpr (CoreExpr, [CoreExpr])
 callPredT p = do
     call@(Var i, args) <- callT
@@ -84,14 +84,10 @@ callPredT p = do
 -- | Succeeds if we are looking at an application of given function
 --   returning zero or more arguments to which it is applied.
 --
--- Note: function name is found using findIdT, then resulting Id is compared.
--- So callNameT "Data.Function.fix" works as expected.
--- If findIdT cannot find an Id, falls back to string comparison.
-callNameT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
-          => String -> Transform c m CoreExpr (CoreExpr, [CoreExpr])
-callNameT nm = prefixFailMsg ("callNameT failed: not a call to '" ++ nm ++ ".") $ do
-    p <- liftM (==) (findIdT nm) <+ return (cmpString2Var nm)
-    callPredT (const . p)
+-- Note: comparison is performed with cmpHN2Var.
+callNameT :: MonadCatch m => HermitName -> Transform c m CoreExpr (CoreExpr, [CoreExpr])
+callNameT nm = prefixFailMsg ("callNameT failed: not a call to '" ++ show nm ++ ".")
+             $ callPredT (const . cmpHN2Var nm)
 
 -- | Succeeds if we are looking at a fully saturated function call.
 callSaturatedT :: Monad m => Transform c m CoreExpr (CoreExpr, [CoreExpr])
@@ -100,9 +96,8 @@ callSaturatedT = callPredT (\ i args -> idArity i == length args)
 --       idArity is conservatively set to zero by default.
 
 -- | Succeeds if we are looking at an application of given function
-callNameG :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
-          => String -> Transform c m CoreExpr ()
-callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >>= \_ -> return ()
+callNameG :: MonadCatch m => HermitName -> Transform c m CoreExpr ()
+callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >> return ()
 
 -- | Succeeds if we are looking at an application of a data constructor.
 callDataConT :: MonadCatch m => Transform c m CoreExpr (DataCon, [Type], [CoreExpr])
@@ -200,22 +195,28 @@ findBoundVarT p = do
 --------------------------------------------------------------------------------------------------
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findIdT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Id
-findIdT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findId nm)
+findIdT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+        => HermitName -> Transform c m a Id
+findIdT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findId nm)
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findVarT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Var
-findVarT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findVar nm)
+findVarT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+         => HermitName -> Transform c m a Var
+findVarT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findVar nm)
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findTyConT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a TyCon
-findTyConT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findTyCon nm)
+findTyConT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+           => HermitName -> Transform c m a TyCon
+findTyConT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findTyCon nm)
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findTypeT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m) => String -> Transform c m a Type
-findTypeT nm = prefixFailMsg ("Cannot resolve name " ++ nm ++ ", ") $ contextonlyT (findType nm)
+findTypeT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+          => HermitName -> Transform c m a Type
+findTypeT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findType nm)
 
 -- TODO: "inScope" was defined elsewhere, but I've moved it here.  Should it be combined with the above functions?
+-- Used in Dictionary.Inline to check if variables an in scope.
+-- Used in Dictionary.Fold
 
 -- | Determine whether a variable is in scope.
 inScope :: ReadBindings c => c -> Var -> Bool

@@ -19,6 +19,7 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
+import HERMIT.Name
 
 import HERMIT.Dictionary.AlphaConversion hiding (externals)
 import HERMIT.Dictionary.Common
@@ -32,7 +33,7 @@ externals :: [External]
 externals =
     [ external "info" (infoT :: TransformH CoreTC String)
         [ "Display information about the current node." ] .+ Query
-    , external "compare-bound-ids" (compareBoundIds :: String -> String -> TransformH CoreTC ())
+    , external "compare-bound-ids" (compareBoundIds :: HermitName -> HermitName -> TransformH CoreTC ())
         [ "Compare the definitions of two in-scope identifiers for alpha equality."] .+ Query .+ Predicate
     , external "compare-core-at" (compareCoreAtT ::  TransformH Core LocalPathH -> TransformH Core LocalPathH -> TransformH Core ())
         [ "Compare the core fragments at the end of the given paths for alpha-equality."] .+ Query .+ Predicate
@@ -178,7 +179,8 @@ compareBoundIdsT i1 i2 =
      guardMsg (e1 `exprAlphaEq` e2) "bindings are not alpha-equivalent."
 
 -- | Compare the definitions of the two named identifiers for alpha-equality.
-compareBoundIds :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => String -> String -> Transform c HermitM x ()
+compareBoundIds :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c)
+                => HermitName -> HermitName -> Transform c HermitM x ()
 compareBoundIds nm1 nm2 = do i1 <- findIdT nm1
                              i2 <- findIdT nm2
                              compareBoundIdsT i1 i2

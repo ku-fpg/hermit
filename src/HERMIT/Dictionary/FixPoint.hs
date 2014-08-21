@@ -19,6 +19,8 @@ import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class
 
+import Data.String (fromString)
+
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.Monad
@@ -224,12 +226,12 @@ isFixExprT :: TransformH CoreExpr (Type,CoreExpr)
 isFixExprT = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
   do (Var fixId, [Type ty, f]) <- callT
      fixId' <- findIdT fixLocation
-     guardMsg (fixId == fixId') (unqualifiedName fixId ++ " does not match " ++ fixLocation)
+     guardMsg (fixId == fixId') (unqualifiedName fixId ++ " does not match " ++ show fixLocation)
      return (ty,f)
 
 --------------------------------------------------------------------------------------------------
 
-fixLocation :: String
-fixLocation = "Data.Function.fix"
+fixLocation :: HermitName
+fixLocation = fromString "Data.Function.fix"
 
 --------------------------------------------------------------------------------------------------

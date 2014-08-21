@@ -14,14 +14,16 @@ module HERMIT.Dictionary.Composite
     ) where
 
 import Control.Arrow
-import Control.Monad.IO.Class
+
+import Data.String (fromString)
 
 import HERMIT.Context
 import HERMIT.Core
-import HERMIT.GHC
-import HERMIT.Monad
-import HERMIT.Kure
 import HERMIT.External
+import HERMIT.GHC
+import HERMIT.Kure
+import HERMIT.Monad
+import HERMIT.Name
 
 import HERMIT.Dictionary.Debug hiding (externals)
 import HERMIT.Dictionary.GHC hiding (externals)
@@ -56,19 +58,19 @@ externals =
 
 ------------------------------------------------------------------------------------------------------
 
-basicCombinators :: [String]
-basicCombinators = ["$",".","id","flip","const","fst","snd","curry","uncurry"]
+basicCombinators :: [HermitName]
+basicCombinators = map fromString ["$",".","id","flip","const","fst","snd","curry","uncurry"]
 
 -- | Unfold the current expression if it is one of the basic combinators:
 -- ('$'), ('.'), 'id', 'flip', 'const', 'fst', 'snd', 'curry', and 'uncurry'.
 --   This is intended to be used as a component of simplification traversals such as 'simplifyR' or 'bashR'.
-unfoldBasicCombinatorR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
-                          , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+unfoldBasicCombinatorR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                          , MonadCatch m )
                        => Rewrite c m CoreExpr
 unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $ unfoldNamesR basicCombinators
 
-simplifyR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
-             , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+simplifyR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+             , MonadCatch m, MonadUnique m )
           => Rewrite c m Core
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
     innermostR (   promoteBindR recToNonrecR
@@ -87,14 +89,14 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
 -- basic combinators. See 'bashComponents' for a list of rewrites performed.
 -- Bash also performs occurrence analysis and de-zombification on the result, to update
 -- IdInfo attributes relied-upon by GHC.
-bashR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
-         , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+bashR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+         , MonadCatch m, MonadUnique m )
       => Rewrite c m Core
 bashR = bashExtendedWithR []
 
 -- | An extensible bash. Given rewrites are performed before normal bash rewrites.
-bashExtendedWithR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
-                     , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+bashExtendedWithR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                     , MonadCatch m, MonadUnique m )
                   => [Rewrite c m Core] -> Rewrite c m Core
 bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 
@@ -104,14 +106,13 @@ bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 -- Note: core fragment which fails linting is still returned! Otherwise would behave differently than bashR.
 -- Useful for debugging the bash command itself.
 bashDebugR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-              , HasDebugChan m, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m
-              , MonadThings m, MonadUnique m )
+              , HasDebugChan m, HasDynFlags m, MonadCatch m, MonadUnique m )
            => Rewrite c m Core
 bashDebugR = bashUsingR [ bracketR nm r >>> catchM (promoteT lintExprT >> idR) traceR
                         | (r,nm) <- bashComponents ]
 
 -- | Perform the 'bash' algorithm with a given list of rewrites.
-bashUsingR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m)
+bashUsingR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m)
            => [Rewrite c m Core] -> Rewrite c m Core
 bashUsingR rs = setFailMsg "bash failed: nothing to do." $
     repeatR (occurAnalyseR >>> onetdR (catchesT rs)) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
@@ -136,8 +137,8 @@ bashHelp = "Iteratively apply the following rewrites until nothing changes:"
          : map snd (bashComponents :: [(RewriteH Core,String)] -- to resolve ambiguity
                                                                                        )
 -- TODO: Think about a good order for bash.
-bashComponents :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
-                  , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+bashComponents :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                  , MonadCatch m, MonadUnique m )
                => [(Rewrite c m Core, String)]
 bashComponents =
   [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
@@ -173,13 +174,13 @@ bashComponents =
 -- | Smash is a more powerful but less efficient version of bash.
 -- Unlike bash, smash is not concerned with whether it duplicates work,
 -- and is intended for use during proving tasks.
-smashR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
-          , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+smashR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+          , MonadCatch m, MonadUnique m )
        => Rewrite c m Core
 smashR = smashExtendedWithR []
 
-smashExtendedWithR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
-                      , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+smashExtendedWithR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                      , MonadCatch m, MonadUnique m )
                    => [Rewrite c m Core] -> Rewrite c m Core
 smashExtendedWithR rs = smashUsingR (rs ++ map fst smashComponents1) (map fst smashComponents2)
 
@@ -197,8 +198,8 @@ smashHelp = "A more powerful but less efficient version of \"bash\", intended fo
 
 
 -- | As bash, but with "let-nonrec-subst" instead of "let-nonrec-subst-safe".
-smashComponents1 :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
-                    , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+smashComponents1 :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                    , MonadCatch m, MonadUnique m )
                  => [(Rewrite c m Core, String)]
 smashComponents1 =
   [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
