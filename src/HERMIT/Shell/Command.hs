@@ -15,7 +15,6 @@ module HERMIT.Shell.Command
     , evalScript
     ) where
 
-import Control.Concurrent
 import Control.Monad.State
 
 import Data.Char
@@ -100,17 +99,13 @@ commandLine intp opts exts = do
 
     modify $ \ st -> st { cl_externals = shell_externals ++ exts }
 
-    clState <- get
-    completionMVar <- liftIO $ newMVar clState
-
     let loop :: InputT m ()
         loop = do
             st <- lift get
             let SAST n = cl_cursor st
             mLine <- if cl_nav st
                      then liftIO getNavCmd
-                     else do liftIO $ modifyMVar_ completionMVar (const $ return st) -- so the completion can get the current state
-                             getInputLine $ "hermit<" ++ show n ++ "> "
+                     else getInputLine $ "hermit<" ++ show n ++ "> "
 
             case mLine of
                 Nothing          -> lift $ performShellEffect Resume

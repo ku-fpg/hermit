@@ -1,23 +1,24 @@
 {-# LANGUAGE TupleSections #-}
 
 module HERMIT.Dictionary.WorkerWrapper.FixResult
-       ( -- * The Worker/Wrapper Transformation (Result Variant)
-         -- | Note that many of these operations require 'Data.Function.fix' to be in scope.
-         HERMIT.Dictionary.WorkerWrapper.FixResult.externals
-       , wwResultFacBR
-       , wwResultSplitR
-       , wwResultSplitStaticArg
-       , wwResultGenerateFusionR
-       , wwResultFusionBR
-       , wwResultAssA
-       , wwResultAssB
-       , wwResultAssC
-       )
-where
+    ( -- * The Worker/Wrapper Transformation (Result Variant)
+      -- | Note that many of these operations require 'Data.Function.fix' to be in scope.
+      HERMIT.Dictionary.WorkerWrapper.FixResult.externals
+    , wwResultFacBR
+    , wwResultSplitR
+    , wwResultSplitStaticArg
+    , wwResultGenerateFusionR
+    , wwResultFusionBR
+    , wwResultAssA
+    , wwResultAssB
+    , wwResultAssC
+    ) where
 
 import Prelude hiding (abs)
 
 import Control.Arrow
+
+import Data.String (fromString)
 
 import HERMIT.Core
 import HERMIT.External
@@ -283,11 +284,11 @@ wwResultGenerateFusionR mAss =
 -- | \\ abs rep -> (@prog = expr@  ==>  @prog = let f = \\ prog -> expr in let work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1) in \\ x0 -> abs (work x0)@)
 wwResultSplitR :: Maybe WWAssumption -> CoreExpr -> CoreExpr -> RewriteH CoreDef
 wwResultSplitR mAss abs rep =
-      fixIntroR
+      fixIntroRecR
       >>> defAllR idR ( appAllR idR (letIntroR "f")
                         >>> letFloatArgR
                         >>> letAllR idR ( forwardT (wwResultFacBR mAss abs rep)
-                                          >>> lamAllR idR (appAllR idR (appAllR ( unfoldNameR "Data.Function.fix"
+                                          >>> lamAllR idR (appAllR idR (appAllR ( unfoldNameR (fromString "Data.Function.fix")
                                                                                   >>> alphaLetWithR ["work"]
                                                                                   >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
                                                                                                          >>> extractR (wwResultGenerateFusionR mAss)

@@ -17,6 +17,7 @@ import Control.Monad.IO.Class
 
 import Data.List (nub, intercalate, intersect, partition, transpose)
 import Data.Maybe (isNothing)
+import Data.String (fromString)
 
 import HERMIT.Context
 import HERMIT.Core
@@ -133,7 +134,7 @@ appArgM n e | n < 0     = fail "appArgM: arg must be non-negative"
 buildCompositionT :: (BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
                   => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
 buildCompositionT f g = do
-    composeId <- findIdT "Data.Function.."
+    composeId <- findIdT $ fromString "Data.Function.."
     fDot <- buildApplicationM (varToCoreExpr composeId) f
     buildApplicationM fDot g
 
@@ -168,7 +169,7 @@ buildFixT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m
           => CoreExpr -> Transform c m x CoreExpr
 buildFixT f = do
     (tvs, ty) <- endoFunExprTypeM f
-    fixId <- findIdT "Data.Function.fix"
+    fixId <- findIdT $ fromString "Data.Function.fix"
     f' <- substOrApply f [ (v, varToCoreExpr v) | v <- tvs ]
     return $ mkCoreLams tvs $ mkCoreApps (varToCoreExpr fixId) [Type ty, f']
 
@@ -176,7 +177,7 @@ buildFixT f = do
 buildIdT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
          => Type -> Transform c m x CoreExpr
 buildIdT ty = do
-    idId <- findIdT "Data.Function.id"
+    idId <- findIdT $ fromString "Data.Function.id"
     return $ mkCoreApp (varToCoreExpr idId) (Type ty)
 
 ------------------------------------------------------------------------------

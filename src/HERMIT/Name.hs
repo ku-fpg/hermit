@@ -1,13 +1,8 @@
 {-# LANGUAGE CPP, DeriveDataTypeable, FlexibleInstances, TypeFamilies #-}
 module HERMIT.Name
     ( HermitName
-    , OccurrenceName(..)
-    , OccurrenceNameListBox(..)
-    , mkOccPred
-    , BindingName(..)
-    , mkBindingPred
-    , RhsOfName(..)
-    , mkRhsOfPred
+    , cmpHN2Name
+    , cmpHN2Var
     , fromRdrName
     , toRdrName
     , toRdrNames
@@ -15,6 +10,14 @@ module HERMIT.Name
     , hnUnqualified
     , parseName
     , showName
+      -- * Wrappers
+    , OccurrenceName(..)
+    , OccurrenceNameListBox(..)
+    , mkOccPred
+    , BindingName(..)
+    , mkBindingPred
+    , RhsOfName(..)
+    , mkRhsOfPred
       -- * Namespaces
     , Named(..)
     , varToNamed
@@ -44,6 +47,7 @@ import Control.Monad.IO.Class
 
 import Data.List (intercalate)
 import Data.Dynamic (Typeable)
+import Data.String (IsString(..))
 
 import HERMIT.Context
 import HERMIT.External
@@ -97,28 +101,57 @@ allNameSpaces = [varNS, dataConNS, tyConClassNS, tyVarNS]
 data HermitName = HermitName { hnModuleName  :: Maybe ModuleName
                              , hnUnqualified :: String
                              }
-    deriving Typeable
+    deriving (Eq, Typeable)
 
 instance Extern HermitName where
     type Box HermitName = HermitName
     box = id
     unbox = id
 
+instance IsString HermitName where fromString = parseName
+instance Show HermitName where show = showName
+
+-- | Compare a HermitName to a Var.
+--
+-- Only compare module names if the HermitName is fully qualified.
+-- Otherwise match variables from any module with appropriate occurrence name.
+cmpHN2Var :: HermitName -> Var -> Bool
+cmpHN2Var hn = cmpHN2Name hn . varName
+
+cmpHN2Name :: HermitName -> Name -> Bool
+cmpHN2Name (HermitName hm nm) n
+    | Just mn <- hm
+    , Just m  <- nameModule_maybe n = (mn == moduleName m) && sameOccName
+    | otherwise     = sameOccName
+    where sameOccName = nm == unqualifiedName n
+
+-- | Make a qualified HermitName from a String representing the module name
+-- and a String representing the occurrence name.
+mkQualified :: String -> String -> HermitName
+mkQualified mnm nm = HermitName (Just $ mkModuleName mnm) nm
+
+-- | Make an unqualified HermitName from a String.
+mkUnqualified :: String -> HermitName
+mkUnqualified = HermitName Nothing
+
 -- | Parse a HermitName from a String.
 parseName :: String -> HermitName
 parseName s | isQualified s = parseQualified s
             | otherwise     = mkUnqualified s
 
+-- | Parse a qualified HermitName from a String.
+parseQualified :: String -> HermitName
+parseQualified [] = error "parseQualified: empty string"
+parseQualified s = mkQualified mnm nm
+    where (c:cs) = reverse s -- we are careful to parse 'Prelude..' correctly
+          (rNm, _dot:rMod) = break (=='.') cs
+          (nm, mnm) = (reverse (c:rNm), reverse rMod)
+
 -- | Turn a HermitName into a (possibly fully-qualified) String.
 showName :: HermitName -> String
-showName (HermitName mnm nm) = maybe id (\ m n -> moduleNameString m ++ ('.' : n))  mnm nm
+showName (HermitName mnm nm) = maybe id (\ m n -> moduleNameString m ++ ('.' : n)) mnm nm
 
-mkQualified :: String -> String -> HermitName
-mkQualified mnm nm = HermitName (Just $ mkModuleName mnm) nm
-
-mkUnqualified :: String -> HermitName
-mkUnqualified = HermitName Nothing
-
+-- | Make a HermitName from a RdrName
 fromRdrName :: RdrName -> HermitName
 fromRdrName nm = case isQual_maybe nm of
                     Nothing         -> HermitName Nothing    (occNameString $ rdrNameOcc nm)
@@ -133,19 +166,11 @@ toRdrName ns (HermitName mnm nm) = maybe (mkRdrUnqual onm) (flip mkRdrQual onm) 
 toRdrNames :: [NameSpace] -> HermitName -> [RdrName]
 toRdrNames nss hnm = [ toRdrName ns hnm | ns <- nss ]
 
-parseQualified :: String -> HermitName
-parseQualified [] = error "parseQualified: empty string"
-parseQualified s = mkQualified mnm nm
-    where (c:cs) = reverse s -- we are careful to parse 'Prelude..' correctly
-          (rNm, _dot:rMod) = break (=='.') cs
-          (nm, mnm) = (reverse (c:rNm), reverse rMod)
-
 --------------------------------------------------------------------------------------------------
 
 -- Newtype wrappers used for type-based command completion
--- TODO: change String to HermitName
 
-newtype BindingName = BindingName { unBindingName :: String } deriving Typeable
+newtype BindingName = BindingName { unBindingName :: HermitName } deriving Typeable
 
 instance Extern BindingName where
     type Box BindingName = BindingName
@@ -153,9 +178,9 @@ instance Extern BindingName where
     unbox = id
 
 mkBindingPred :: BindingName -> Var -> Bool
-mkBindingPred (BindingName str) = cmpString2Var str
+mkBindingPred (BindingName hnm) = cmpHN2Var hnm
 
-newtype OccurrenceName = OccurrenceName { unOccurrenceName :: String } deriving Typeable
+newtype OccurrenceName = OccurrenceName { unOccurrenceName :: HermitName } deriving Typeable
 
 instance Extern OccurrenceName where
     type Box OccurrenceName = OccurrenceName
@@ -163,7 +188,7 @@ instance Extern OccurrenceName where
     unbox = id
 
 mkOccPred :: OccurrenceName -> Var -> Bool
-mkOccPred (OccurrenceName str) = cmpString2Var str
+mkOccPred (OccurrenceName hnm) = cmpHN2Var hnm
 
 newtype OccurrenceNameListBox = OccurrenceNameListBox [OccurrenceName] deriving Typeable
 
@@ -172,7 +197,7 @@ instance Extern [OccurrenceName] where
     box = OccurrenceNameListBox
     unbox (OccurrenceNameListBox l) = l
 
-newtype RhsOfName = RhsOfName { unRhsOfName :: String } deriving Typeable
+newtype RhsOfName = RhsOfName { unRhsOfName :: HermitName } deriving Typeable
 
 instance Extern RhsOfName where
     type Box RhsOfName = RhsOfName
@@ -180,7 +205,7 @@ instance Extern RhsOfName where
     unbox = id
 
 mkRhsOfPred :: RhsOfName -> Var -> Bool
-mkRhsOfPred (RhsOfName str) = cmpString2Var str
+mkRhsOfPred (RhsOfName hnm) = cmpHN2Var hnm
 
 --------------------------------------------------------------------------------------------------
 
@@ -200,7 +225,7 @@ instance (MonadThings m, BoundVars c) => MonadThings (Transform c m a) where
 --------------------------------------------------------------------------------------------------
 
 findId :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
-       => String -> c -> m Id
+       => HermitName -> c -> m Id
 findId nm c = do
     nmd <- findInNameSpaces [varNS, dataConNS] nm c
     case nmd of
@@ -209,7 +234,7 @@ findId nm c = do
         other -> fail $ "findId: impossible Named returned: " ++ show other
 
 findVar :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
-       => String -> c -> m Var
+       => HermitName -> c -> m Var
 findVar nm c = do
     nmd <- findInNameSpaces [varNS, tyVarNS, dataConNS] nm c
     case nmd of
@@ -219,7 +244,7 @@ findVar nm c = do
         other -> fail $ "findVar: impossible Named returned: " ++ show other
 
 findTyCon :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
-          => String -> c -> m TyCon
+          => HermitName -> c -> m TyCon
 findTyCon nm c = do
     nmd <- findInNameSpace tyConClassNS nm c
     case nmd of
@@ -227,7 +252,7 @@ findTyCon nm c = do
         other -> fail $ "findTyCon: impossible Named returned: " ++ show other
 
 findType :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
-         => String -> c -> m Type
+         => HermitName -> c -> m Type
 findType nm c = do
     nmd <- findInNameSpaces [tyVarNS, tyConClassNS] nm c
     case nmd of
@@ -238,17 +263,17 @@ findType nm c = do
 --------------------------------------------------------------------------------------------------
 
 findInNameSpaces :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
-                 => [NameSpace] -> String -> c -> m Named
+                 => [NameSpace] -> HermitName -> c -> m Named
 findInNameSpaces nss nm c = setFailMsg "Variable not in scope." -- because catchesM clobbers failure messages.
                           $ catchesM [ findInNameSpace ns nm c | ns <- nss ]
 
 findInNameSpace :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
-                => NameSpace -> String -> c -> m Named
+                => NameSpace -> HermitName -> c -> m Named
 findInNameSpace ns nm c =
-    case filter ((== ns) . occNameSpace . getOccName) $ varSetElems (findBoundVars nm c) of
+    case varSetElems $ filterVarSet ((== ns) . occNameSpace . getOccName) $ findBoundVars (cmpHN2Var nm) c of
         _ : _ : _ -> fail "multiple matching variables in scope."
         [v]       -> return $ varToNamed v
-        []        -> findInNSModGuts ns (parseName nm)
+        []        -> findInNSModGuts ns nm
 
 -- | Looks for Named in current GlobalRdrEnv. If not present, calls 'findInNSPackageDB'.
 findInNSModGuts :: (HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
@@ -266,7 +291,7 @@ findInNSPackageDB :: (HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
 findInNSPackageDB ns nm = do
     mnm <- lookupName ns nm
     case mnm of
-        Nothing -> findNamedBuiltIn ns (hnUnqualified nm)
+        Nothing -> findNamedBuiltIn ns nm
         Just n  -> nameToNamed n
 
 -- | Helper to call lookupRdrNameInModule
@@ -280,15 +305,15 @@ lookupName ns nm = case isQual_maybe rdrName of
     where rdrName = toRdrName ns nm
 
 -- | Looks for Named amongst GHC's built-in DataCons/TyCons.
-findNamedBuiltIn :: Monad m => NameSpace -> String -> m Named
-findNamedBuiltIn ns str
+findNamedBuiltIn :: Monad m => NameSpace -> HermitName -> m Named
+findNamedBuiltIn ns hnm
     | isValNameSpace ns =
-        case [ dc | tc <- wiredInTyCons, dc <- tyConDataCons tc, str == unqualifiedName dc ] of
+        case [ dc | tc <- wiredInTyCons, dc <- tyConDataCons tc, cmpHN2Name hnm (getName dc) ] of
             [] -> fail "name not in scope."
             [dc] -> return $ NamedDataCon dc
             dcs -> fail $ "multiple DataCons match: " ++ intercalate ", " (map unqualifiedName dcs)
     | isTcClsNameSpace ns =
-        case [ tc | tc <- wiredInTyCons, str == unqualifiedName tc ] of
+        case [ tc | tc <- wiredInTyCons, cmpHN2Name hnm (getName tc) ] of
             [] -> fail "type name not in scope."
             [tc] -> return $ NamedTyCon tc
             tcs -> fail $ "multiple TyCons match: " ++ intercalate ", " (map unqualifiedName tcs)

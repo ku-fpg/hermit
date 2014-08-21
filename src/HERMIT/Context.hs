@@ -178,9 +178,9 @@ instance BoundVars VarSet where
   boundVars :: VarSet -> VarSet
   boundVars = id
 
--- | List all variables bound in the context that match the given name.
-findBoundVars :: BoundVars c => String -> c -> VarSet
-findBoundVars nm = filterVarSet (cmpString2Var nm) . boundVars
+-- | List all variables bound in the context that match the given predicate.
+findBoundVars :: BoundVars c => (Var -> Bool) -> c -> VarSet
+findBoundVars p = filterVarSet p . boundVars
 
 -- | A class of contexts from which HERMIT bindings can be retrieved.
 class BoundVars c => ReadBindings c where

@@ -86,7 +86,7 @@ tyvar : NAME               {% lookupName $1 }
 lookupName :: String -> TypeParseM Type
 lookupName nm = do
     c <- getContext
-    et <- lift $ attemptM $ findType nm c
+    et <- lift $ attemptM $ findType (parseName nm) c
     either (const (addTyVar nm)) return et
 
 catchFrees :: Type -> TypeParseM ([TyVar], Type)

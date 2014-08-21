@@ -24,6 +24,7 @@ module HERMIT.Dictionary.Undefined
 import Control.Monad ((>=>), liftM)
 import Control.Monad.IO.Class
 import Data.Monoid
+import Data.String (fromString)
 
 import HERMIT.Context
 import HERMIT.Core
@@ -31,6 +32,7 @@ import HERMIT.External
 import HERMIT.GHC hiding ((<>))
 import HERMIT.Kure
 import HERMIT.Monad
+import HERMIT.Name
 
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.GHC (substR)
@@ -43,7 +45,7 @@ externals = map (.+ Unsafe)
     [ external "replace-current-expr-with-undefined" (promoteExprR replaceCurrentExprWithUndefinedR :: RewriteH Core)
         [ "Set the current expression to \"undefined\"."
         ] .+ Shallow .+ Context .+ Unsafe
-    , external "replace-id-with-undefined" (replaceIdWithUndefined :: String -> RewriteH Core)
+    , external "replace-id-with-undefined" (replaceIdWithUndefined :: HermitName -> RewriteH Core)
         [ "Replace the specified identifier with \"undefined\"."
         ] .+ Deep .+ Context .+ Unsafe
     , external "error-to-undefined" (promoteExprR errorToUndefinedR :: RewriteH Core)
@@ -79,8 +81,8 @@ externals = map (.+ Unsafe)
 
 ------------------------------------------------------------------------
 
-undefinedLocation :: String
-undefinedLocation = "GHC.Err.undefined"
+undefinedLocation :: HermitName
+undefinedLocation = fromString "GHC.Err.undefined"
 
 findUndefinedIdT :: (BoundVars c, MonadCatch m, HasHermitMEnv m, HasHscEnv m, MonadIO m, MonadThings m) => Transform c m a Id
 findUndefinedIdT = findIdT undefinedLocation
@@ -91,12 +93,12 @@ isUndefinedValT = prefixFailMsg "not an undefined value: " $
                   withPatFailMsg (wrongExprForm "App (Var undefined) (Type ty)") $
                   do App (Var un) (Type _) <- idR
                      un' <- findUndefinedIdT
-                     guardMsg (un == un') ("identifier is not " ++ undefinedLocation)
+                     guardMsg (un == un') ("identifier is not " ++ show undefinedLocation)
 
 ------------------------------------------------------------------------
 
-errorLocation :: String
-errorLocation = "GHC.Err.error"
+errorLocation :: HermitName
+errorLocation = fromString "GHC.Err.error"
 
 findErrorIdT :: (BoundVars c, MonadCatch m, HasHermitMEnv m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m) => Transform c m a Id
 findErrorIdT = findIdT errorLocation
@@ -107,7 +109,7 @@ isErrorValT = prefixFailMsg "not an error value: " $
               withPatFailMsg (wrongExprForm "App (App (Var error) (Type ty)) string") $
               do App (App (Var er) (Type _)) _ <- idR
                  er' <- findErrorIdT
-                 guardMsg (er == er') ("identifier is not " ++ errorLocation)
+                 guardMsg (er == er') ("identifier is not " ++ show errorLocation)
 
 ------------------------------------------------------------------------
 
@@ -133,7 +135,7 @@ replaceCurrentExprWithUndefinedR = contextfreeT exprTypeM >>= mkUndefinedValT
 replaceIdWithUndefinedR :: (BoundVars c, MonadCatch m, HasHermitMEnv m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m) => Id -> Rewrite c m Core
 replaceIdWithUndefinedR i = mkUndefinedValT (idType i) >>= substR i
 
-replaceIdWithUndefined :: (BoundVars c, MonadCatch m, HasHermitMEnv m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m) => String -> Rewrite c m Core
+replaceIdWithUndefined :: (BoundVars c, MonadCatch m, HasHermitMEnv m, HasDynFlags m, HasHscEnv m, MonadIO m, MonadThings m)                        => HermitName -> Rewrite c m Core
 replaceIdWithUndefined = findIdT >=> replaceIdWithUndefinedR
 
 ------------------------------------------------------------------------------------------------------

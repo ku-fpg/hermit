@@ -66,7 +66,7 @@ data PluginState = PluginState
     , ps_failhard       :: Bool                                     -- ^ if true, abort on *any* failure
     -- this should be in a reader
     , ps_kernel         :: ScopedKernel
-    , ps_phase          :: PhaseInfo
+    , ps_pass           :: PassInfo
     } deriving (Typeable)
 
 data PException = PAbort | PResume SAST | PError String

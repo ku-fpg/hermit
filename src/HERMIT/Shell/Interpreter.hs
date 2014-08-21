@@ -78,9 +78,9 @@ toBoxedList dyns boxCon = [ toDyn $ boxCon (map unbox l) | dl <- dyns, Just l <-
 
 exprToDyns' :: MonadState CommandLineState m => Bool -> ExprH -> m [Dynamic]
 exprToDyns' _   (SrcName str) = do
-    let hn = parseName str -- TODO: String -> HermitName in newtype wrappers
-                           -- TODO: remove StringBox option below
-    return [ toDyn hn, toDyn (BindingName str), toDyn (OccurrenceName str), toDyn (RhsOfName str), toDyn (StringBox str) ]
+    let hn = parseName str -- TODO: remove StringBox option below
+                           -- TODO: change to SrcName :: HermitName -> ExprH
+    return [ toDyn hn, toDyn (BindingName hn), toDyn (OccurrenceName hn), toDyn (RhsOfName hn), toDyn (StringBox str) ]
 exprToDyns' _   (CoreH str)   = return [ toDyn $ CoreString str ]
 exprToDyns' _   (ListH exprs) = do
     dyns <- liftM fromDynList $ mapM (exprToDyns' True) exprs

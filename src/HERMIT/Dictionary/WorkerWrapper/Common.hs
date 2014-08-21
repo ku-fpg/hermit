@@ -141,7 +141,7 @@ split1BetaR :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLe
                , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
             => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
 split1BetaR nm absE repE = do
-    (_fixId, [_tyA, f]) <- callNameT "Data.Function.fix"
+    (_fixId, [_tyA, f]) <- callNameT $ fromString "Data.Function.fix"
 
     g <- buildCompositionT repE =<< buildCompositionT f absE
     gId <- constT $ newIdH "g" $ exprType g
@@ -163,7 +163,7 @@ split2BetaR :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLe
                , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
             => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
 split2BetaR nm absE repE = do
-    (_fixId, [_tyA, f]) <- callNameT "Data.Function.fix"
+    (_fixId, [_tyA, f]) <- callNameT $ fromString "Data.Function.fix"
     fixfE <- idR
 
     repFixFE <- buildApplicationM repE fixfE

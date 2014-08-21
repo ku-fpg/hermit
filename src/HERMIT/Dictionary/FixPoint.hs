@@ -5,6 +5,8 @@ module HERMIT.Dictionary.FixPoint
       HERMIT.Dictionary.FixPoint.externals
       -- ** Rewrites and BiRewrites on Fixed Points
     , fixIntroR
+    , fixIntroNonRecR
+    , fixIntroRecR
     , fixComputationRuleBR
     , fixRollingRuleBR
     , fixFusionRuleBR
@@ -16,6 +18,8 @@ import Control.Applicative
 import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class
+
+import Data.String (fromString)
 
 import HERMIT.Context
 import HERMIT.Core
@@ -39,55 +43,83 @@ import HERMIT.Dictionary.Unfold
 -- | Externals for manipulating fixed points.
 externals ::  [External]
 externals =
-         [ external "fix-intro" (promoteDefR fixIntroR :: RewriteH Core)
-                [ "rewrite a recursive binding into a non-recursive binding using fix"
-                ] .+ Introduce .+ Context
-         , external "fix-computation-rule" (promoteExprBiR fixComputationRuleBR :: BiRewriteH Core)
-                [ "Fixed-Point Computation Rule",
-                  "fix t f  <==>  f (fix t f)"
-                ] .+ Context
-         , external "fix-rolling-rule" (promoteExprBiR fixRollingRuleBR :: BiRewriteH Core)
-                [ "Rolling Rule",
-                  "fix tyA (\\ a -> f (g a))  <==>  f (fix tyB (\\ b -> g (f b))"
-                ] .+ Context
-         , external "fix-fusion-rule" ((\ f g h r1 r2 strictf -> promoteExprBiR (fixFusionRule (Just (r1,r2)) (Just strictf) f g h)) :: CoreString -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
-                [ "Fixed-point Fusion Rule"
-                , "Given f :: A -> B, g :: A -> A, h :: B -> B, and"
-                , "proofs that, for some x, (f (g a) ==> x) and (h (f a) ==> x) and that f is strict, then"
-                , "f (fix g) <==> fix h"
-                ] .+ Context
-         , external "fix-fusion-rule-unsafe" ((\ f g h r1 r2 -> promoteExprBiR (fixFusionRule (Just (r1,r2)) Nothing f g h)) :: CoreString -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
-                [ "(Unsafe) Fixed-point Fusion Rule"
-                , "Given f :: A -> B, g :: A -> A, h :: B -> B, and"
-                , "a proof that, for some x, (f (g a) ==> x) and (h (f a) ==> x), then"
-                , "f (fix g) <==> fix h"
-                , "Note that the precondition that f is strict is required to hold."
-                ] .+ Context .+ PreCondition
-         , external "fix-fusion-rule-unsafe" ((\ f g h -> promoteExprBiR (fixFusionRule Nothing Nothing f g h)) :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
-                [ "(Very Unsafe) Fixed-point Fusion Rule"
-                , "Given f :: A -> B, g :: A -> A, h :: B -> B, then"
-                , "f (fix g) <==> fix h"
-                , "Note that the preconditions that f (g a) == h (f a) and that f is strict are required to hold."
-                ] .+ Context .+ PreCondition
-         ]
+    [ external "fix-intro" (fixIntroR :: RewriteH Core)
+        [ "rewrite a function binding into a non-recursive binding using fix" ] .+ Introduce .+ Context
+    , external "fix-computation-rule" (promoteExprBiR fixComputationRuleBR :: BiRewriteH Core)
+        [ "Fixed-Point Computation Rule",
+          "fix t f  <==>  f (fix t f)"
+        ] .+ Context
+    , external "fix-rolling-rule" (promoteExprBiR fixRollingRuleBR :: BiRewriteH Core)
+        [ "Rolling Rule",
+          "fix tyA (\\ a -> f (g a))  <==>  f (fix tyB (\\ b -> g (f b))"
+        ] .+ Context
+    , external "fix-fusion-rule" ((\ f g h r1 r2 strictf -> promoteExprBiR
+                                                                (fixFusionRule (Just (r1,r2)) (Just strictf) f g h))
+                                                                :: CoreString -> CoreString -> CoreString
+                                                                    -> RewriteH Core -> RewriteH Core
+                                                                    -> RewriteH Core -> BiRewriteH Core)
+        [ "Fixed-point Fusion Rule"
+        , "Given f :: A -> B, g :: A -> A, h :: B -> B, and"
+        , "proofs that, for some x, (f (g a) ==> x) and (h (f a) ==> x) and that f is strict, then"
+        , "f (fix g) <==> fix h"
+        ] .+ Context
+    , external "fix-fusion-rule-unsafe" ((\ f g h r1 r2 -> promoteExprBiR (fixFusionRule (Just (r1,r2)) Nothing f g h))
+                                                            :: CoreString -> CoreString -> CoreString
+                                                                -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
+        [ "(Unsafe) Fixed-point Fusion Rule"
+        , "Given f :: A -> B, g :: A -> A, h :: B -> B, and"
+        , "a proof that, for some x, (f (g a) ==> x) and (h (f a) ==> x), then"
+        , "f (fix g) <==> fix h"
+        , "Note that the precondition that f is strict is required to hold."
+        ] .+ Context .+ PreCondition
+    , external "fix-fusion-rule-unsafe" ((\ f g h -> promoteExprBiR (fixFusionRule Nothing Nothing f g h))
+                                                        :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
+        [ "(Very Unsafe) Fixed-point Fusion Rule"
+        , "Given f :: A -> B, g :: A -> A, h :: B -> B, then"
+        , "f (fix g) <==> fix h"
+        , "Note that the preconditions that f (g a) == h (f a) and that f is strict are required to hold."
+        ] .+ Context .+ PreCondition
+    ]
 
 --------------------------------------------------------------------------------------------------
 
--- |  @f = e@   ==\>   @f = fix (\\ f -> e)@
-fixIntroR :: forall c m.
-             ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+fixIntroR :: ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
              , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-          => Rewrite c m CoreDef
-fixIntroR = prefixFailMsg "fix introduction failed: " $ do
+          => Rewrite c m Core
+fixIntroR = promoteR fixIntroRecR <+ promoteR fixIntroNonRecR
+
+fixIntroNonRecR :: ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                   , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+                => Rewrite c m CoreBind
+fixIntroNonRecR = prefixFailMsg "fix introduction failed: " $ do
+    NonRec f rhs <- idR
+    rhs' <- polyFixT f <<< return rhs
+    return $ NonRec f rhs'
+
+-- |  @f = e@   ==\>   @f = fix (\\ f -> e)@
+fixIntroRecR :: ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+             => Rewrite c m CoreDef
+fixIntroRecR = prefixFailMsg "fix introduction failed: " $ do
     Def f rhs <- idR
-    let (tvs, body) = collectTyBinders rhs
+    rhs' <- polyFixT f <<< return rhs
+    return $ Def f rhs'
+
+-- | Helper for fixIntroNonRecR and fixIntroRecR. Argument is function name.
+-- Meant to be applied to RHS of function.
+polyFixT :: forall c m.
+            ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+            , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+         => Id -> Rewrite c m CoreExpr
+polyFixT f = do
+    (tvs, body) <- arr collectTyBinders
     f' <- constT $ newIdH (unqualifiedName f) (exprType body)
     body' <- contextonlyT $ \ c -> do
                 let constLam = mkCoreLams tvs $ varToCoreExpr f'
                     c' = addBindingGroup (NonRec f constLam)   -- we want to unfold f such as to throw away TyArgs
                        $ addBindingGroup (NonRec f' body)    c -- add f' to context so its in-scope after unfolding
-                applyT (extractR (anyCallR (promoteR (unfoldPredR (const . (==f))) :: Rewrite c m Core))) c' body
-    liftM (Def f . mkCoreLams tvs) $ buildFixT $ Lam f' body'
+                applyT (tryR (extractR (anyCallR (promoteR (unfoldPredR (const . (==f))) :: Rewrite c m Core)))) c' body
+    liftM (mkCoreLams tvs) $ buildFixT $ Lam f' body'
 
 --------------------------------------------------------------------------------------------------
 
@@ -194,12 +226,12 @@ isFixExprT :: TransformH CoreExpr (Type,CoreExpr)
 isFixExprT = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
   do (Var fixId, [Type ty, f]) <- callT
      fixId' <- findIdT fixLocation
-     guardMsg (fixId == fixId') (unqualifiedName fixId ++ " does not match " ++ fixLocation)
+     guardMsg (fixId == fixId') (unqualifiedName fixId ++ " does not match " ++ show fixLocation)
      return (ty,f)
 
 --------------------------------------------------------------------------------------------------
 
-fixLocation :: String
-fixLocation = "Data.Function.fix"
+fixLocation :: HermitName
+fixLocation = fromString "Data.Function.fix"
 
 --------------------------------------------------------------------------------------------------

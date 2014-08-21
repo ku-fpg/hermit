@@ -1,5 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
-module HERMIT.Driver 
+module HERMIT.Driver
     ( hermitVersion
     , ghcFlags
     , hermitDriver
@@ -15,7 +15,7 @@ import System.Directory (doesFileExist)
 import System.Process
 import System.Exit
 
-hermitVersion :: String   
+hermitVersion :: String
 hermitVersion = "HERMIT v" ++ showVersion P.version
 
 ghcFlags :: [String]
@@ -44,6 +44,7 @@ usageOutput = unlines
         ,""
         ,"HERMIT_ARGS"
         ,"  -opt=MODULE : where MODULE is the module containing a HERMIT optimization plugin"
+        ,"  -pN         : where 0<=N<=17 is the stage in the optimization pipeline HERMIT targets"
         ,"  -vN         : controls verbosity, where N is one of the following values:"
         ,"                  0 : suppress HERMIT messages, pass -v0 to GHC"
         ,"                  1 : suppress HERMIT messages"
@@ -58,7 +59,7 @@ usageOutput = unlines
 usage :: IO ()
 usage = mapM_ putStrLn [hermitVersion, "", usageOutput]
 
--- | Entry point for HERMIT driver executable. 
+-- | Entry point for HERMIT driver executable.
 -- First String in list is expected to be target file name.
 hermitDriver :: [String] -> IO ()
 hermitDriver [] = usage

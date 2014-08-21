@@ -35,7 +35,7 @@ shellComplete rPrev so_far = do
     if null partial
     then completionsFor so_far [CommandC]
     else case parseExprH partial of
-            Left err -> liftIO (putStrLn $ "\nCould not parse partial expression for completion: " ++ err) >> return []
+            Left _   -> return []
             Right e  -> do
                 eds <- attemptM $ exprToDyns e
                 case eds of
@@ -60,6 +60,7 @@ data CompletionType = ConsiderC       -- considerable constructs and (deprecated
                     | RhsOfC          -- rhsOfT
                     | OccurrenceOfC   -- occurrenceOfT
                     | InlineC         -- complete with names that can be inlined
+                    | InScopeC        -- complete with in-scope variable names
                     | LemmaC          -- complete with list of lemmas
                     | CommandC        -- complete using dictionary commands (default)
                     | CoreC           -- complete with opening Core fragment bracket [|
@@ -74,6 +75,7 @@ completionType s = fromMaybe (UnknownC s) (lookup s m)
     where m = [ ("BindingName"   , BindingOfC)
               , ("Considerable"  , ConsiderC)
               , ("CoreBox"       , CoreC)
+              , ("HermitName"    , NothingC)
               , ("IntBox"        , NothingC)
               , ("LemmaName"     , LemmaC)
               , ("OccurrenceName", OccurrenceOfC)
@@ -95,6 +97,7 @@ completionQuery BindingOfC      = return $ bindingOfTargetsT       >>^ GHC.varSe
 completionQuery BindingGroupOfC = return $ bindingGroupOfTargetsT  >>^ GHC.varSetToStrings >>^ map ('\'':)
 completionQuery RhsOfC          = return $ rhsOfTargetsT           >>^ GHC.varSetToStrings >>^ map ('\'':)
 completionQuery InlineC         = return $ promoteT inlineTargetsT >>^                         map ('\'':)
+completionQuery InScopeC        = return $ pure ["'"] -- TODO
 completionQuery LemmaC          = return $ liftM (map show . keys) $ getLemmasT
 completionQuery NothingC        = return $ pure []
 completionQuery RuleC           = return $ liftM (map (show . fst)) $ getHermitRulesT

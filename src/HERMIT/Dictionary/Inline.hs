@@ -53,38 +53,38 @@ data InlineConfig           = CaseBinderOnly CaseBinderInlineOption | AllBinders
 
 -- | If the current variable matches the given name, then inline it.
 inlineNameR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-               , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+               , ReadBindings c, HasEmptyContext c, MonadCatch m )
             => String -> Rewrite c m CoreExpr
 inlineNameR nm = inlineMatchingPredR (cmpString2Var nm)
 
 -- | If the current variable matches any of the given names, then inline it.
 inlineNamesR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-                , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                , ReadBindings c, HasEmptyContext c, MonadCatch m )
              => [String] -> Rewrite c m CoreExpr
 inlineNamesR []  = fail "inline-names failed: no names given."
 inlineNamesR nms = inlineMatchingPredR (\ v -> any (flip cmpString2Var v) nms)
 
 -- | If the current variable satisifies the predicate, then inline it.
 inlineMatchingPredR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-                       , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                       , ReadBindings c, HasEmptyContext c, MonadCatch m )
                     => (Id -> Bool) -> Rewrite c m CoreExpr
 inlineMatchingPredR idPred = configurableInlineR AllBinders (arr $ idPred)
 
 -- | Inline the current variable.
 inlineR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c,
-            ReadBindings c, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+            ReadBindings c, ReadPath c Crumb, MonadCatch m )
         => Rewrite c m CoreExpr
 inlineR = configurableInlineR AllBinders (return True)
 
 -- | Inline the current identifier if it is a case binder, using the scrutinee rather than the case-alternative pattern.
 inlineCaseScrutineeR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-                        , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                        , ReadBindings c, HasEmptyContext c, MonadCatch m )
                      => Rewrite c m CoreExpr
 inlineCaseScrutineeR = configurableInlineR (CaseBinderOnly Scrutinee) (return True)
 
 -- | Inline the current identifier if is a case binder, using the case-alternative pattern rather than the scrutinee.
 inlineCaseAlternativeR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-                          , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                          , ReadBindings c, HasEmptyContext c, MonadCatch m )
                        => Rewrite c m CoreExpr
 inlineCaseAlternativeR = configurableInlineR (CaseBinderOnly Alternative) (return True)
 
@@ -92,7 +92,7 @@ inlineCaseAlternativeR = configurableInlineR (CaseBinderOnly Alternative) (retur
 -- This *only* works if the current expression has the form @Var v@ (it does not traverse the expression).
 -- It can trivially be prompted to more general cases using traversal strategies.
 configurableInlineR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
-                       , ReadPath c Crumb, MonadCatch m, MonadUnique m )
+                       , ReadPath c Crumb, MonadCatch m )
                     => InlineConfig
                     -> (Transform c m Id Bool) -- ^ Only inline identifiers that satisfy this predicate.
                     -> Rewrite c m CoreExpr
@@ -139,7 +139,7 @@ ensureDepthT uncaptured =
      all uncaptured `liftM` extractT collectDepthsT
 
 -- | Return the unfolding of an identifier, and a predicate over the binding depths of all variables within that unfolding to determine if they have been captured in their new location.
-getUnfoldingT :: (ReadBindings c, MonadCatch m, MonadUnique m)
+getUnfoldingT :: (ReadBindings c, MonadCatch m)
               => InlineConfig
               -> Transform c m Id (CoreExpr, BindingDepth -> Bool)
 getUnfoldingT config = transform $ \ c i ->
@@ -200,7 +200,7 @@ alt2Exp tys (DataAlt dc, vs) = return $ mkCoreConApps dc (map Type tys ++ map (v
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargetsT :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-                  , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                  , ReadBindings c, HasEmptyContext c, MonadCatch m )
                => Transform c m Core [String]
 inlineTargetsT = collectT $ promoteT $ whenM (testM inlineR) (varT $ arr unqualifiedName)
 

@@ -98,7 +98,7 @@ mkIntExpr' i = do
 lookupName :: String -> CoreParseM CoreExpr
 lookupName nm = do
     vset <- ask
-    v <- lift $ prefixFailMsg (nm ++ " lookup: ") $ findId nm vset
+    v <- lift $ prefixFailMsg (nm ++ " lookup: ") $ findId (parseName nm) vset
     return $ varToCoreExpr v
 
 type CoreParseM a = ReaderT VarSet HermitM a

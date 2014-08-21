@@ -32,12 +32,12 @@ import HERMIT.Context
 import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.External
-import HERMIT.GHC hiding (RuleName)
+import HERMIT.GHC
 
 import HERMIT.Dictionary.GHC (dynFlagsT)
 import HERMIT.Dictionary.Kure (anyCallR)
 import HERMIT.Dictionary.Reasoning hiding (externals)
-import HERMIT.Dictionary.Unfold (cleanupUnfoldR)
+import HERMIT.Dictionary.Unfold (betaReducePlusR)
 
 import IOEnv hiding (liftIO)
 
@@ -54,7 +54,7 @@ externals =
         [ "Apply a named GHC rule" ] .+ Shallow
     , external "apply-rules" (promoteExprR . rulesR :: [RuleName] -> RewriteH Core)
         [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
-    , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> cleanupUnfoldR)) :: RuleName -> RewriteH Core)
+    , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> tryR betaReducePlusR)) :: RuleName -> RewriteH Core)
         [ "Unfold a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
     , external "rule-to-lemma" (\nm -> do eq <- ruleNameToEqualityT nm
                                           insertLemmaR (fromString (show nm)) $ Lemma eq False False :: RewriteH Core)

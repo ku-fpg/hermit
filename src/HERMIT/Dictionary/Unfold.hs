@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts, ScopedTypeVariables, TupleSections, LambdaCase #-}
 module HERMIT.Dictionary.Unfold
     ( externals
-    , cleanupUnfoldR
+    , betaReducePlusR
     , rememberR
     , showStashT
     , unfoldR
@@ -15,7 +15,6 @@ module HERMIT.Dictionary.Unfold
 
 import Control.Arrow
 import Control.Monad
-import Control.Monad.IO.Class
 
 import Data.List (intercalate)
 import qualified Data.Map as Map
@@ -23,8 +22,8 @@ import qualified Data.Map as Map
 import HERMIT.PrettyPrinter.Common (DocH, PrettyH, TransformDocH(..), PrettyC)
 
 import HERMIT.Dictionary.Common
+import HERMIT.Dictionary.GHC (substCoreExpr)
 import HERMIT.Dictionary.Inline (inlineR)
-import HERMIT.Dictionary.Local.Let (letNonRecSubstR)
 
 import HERMIT.Core
 import HERMIT.Context
@@ -42,8 +41,8 @@ import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 externals :: [External]
 externals =
-    [ external "cleanup-unfold" (promoteExprR cleanupUnfoldR :: RewriteH Core)
-        [ "Clean up immediately nested fully-applied lambdas, from the bottom up" ] .+ Deep
+    [ external "beta-reduce-plus" (promoteExprR betaReducePlusR :: RewriteH Core)
+        [ "Perform one or more beta-reductions."]                               .+ Eval .+ Shallow
     , external "remember" (rememberR :: RememberedName -> RewriteH Core)
         [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
     , external "unfold-remembered" (promoteExprR . unfoldStashR :: RememberedName -> RewriteH Core)
@@ -64,52 +63,41 @@ externals =
 
 ------------------------------------------------------------------------
 
--- | cleanupUnfoldR cleans a unfold operation
---  (for example, an inline or rule application)
--- It is used at the level of the top-redex.
--- Invariant: will not introduce let bindings
-cleanupUnfoldR :: (AddBindings c, ExtendPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr
-cleanupUnfoldR = do
-    (f, args) <- callT <+ arr (,[])
-    let (vs, body) = collectBinders f
-        lenargs = length args
-        lenvs = length vs
-        comp = compare lenargs lenvs
-        body' = case comp of
-                    LT -> mkCoreLams (drop lenargs vs) body
-                    _  -> body
-        bnds = zipWith NonRec vs args
-    body'' <- andR (replicate (length bnds) letNonRecSubstR) <<< return (mkCoreLets bnds body')
-    return $ case comp of
-                GT -> mkCoreApps body'' $ drop lenvs args
-                _  -> body''
+-- | Perform one or more beta reductions.
+betaReducePlusR :: MonadCatch m => Rewrite c m CoreExpr
+betaReducePlusR = prefixFailMsg "Multi-beta-reduction failed: " $ do
+    (f,args) <- callT
+    let (f',args',atLeastOne) = reduceAll f args False
+        reduceAll (Lam v body) (a:as) _ = reduceAll (substCoreExpr v a body) as True
+        reduceAll e            as     b = (e,as,b)
+    guardMsg atLeastOne "no beta reductions possible."
+    return $ mkCoreApps f' args'
 
 -- | A more powerful 'inline'. Matches two cases:
 --      Var ==> inlines
 --      App ==> inlines the head of the function call for the app tree
 unfoldR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c
-                       , ReadBindings c, ReadPath c Crumb, MonadCatch m, MonadUnique m )
+                       , ReadBindings c, ReadPath c Crumb, MonadCatch m )
         => Rewrite c m CoreExpr
-unfoldR = prefixFailMsg "unfold failed: " (go >>> cleanupUnfoldR)
+unfoldR = prefixFailMsg "unfold failed: " (go >>> tryR betaReducePlusR)
     where go :: Rewrite c m CoreExpr
           go = appAllR go idR <+ inlineR -- this order gives better error messages
 
 unfoldPredR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-               , MonadCatch m, MonadUnique m )
+               , MonadCatch m )
             => (Id -> [CoreExpr] -> Bool) -> Rewrite c m CoreExpr
 unfoldPredR p = callPredT p >> unfoldR
 
 unfoldNameR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
-               , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-            => String -> Rewrite c m CoreExpr
-unfoldNameR nm = prefixFailMsg ("unfold '" ++ nm ++ " failed: ") (callNameT nm >> unfoldR)
+               , MonadCatch m )
+            => HermitName -> Rewrite c m CoreExpr
+unfoldNameR nm = prefixFailMsg ("unfold '" ++ show nm ++ " failed: ") (callNameT nm >> unfoldR)
 
 unfoldNamesR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
-                , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-             => [String] -> Rewrite c m CoreExpr
+                , MonadCatch m )
+             => [HermitName] -> Rewrite c m CoreExpr
 unfoldNamesR []  = fail "unfold-names failed: no names given."
-unfoldNamesR nms = setFailMsg "unfold-names failed." $
-                   orR (map unfoldNameR nms)
+unfoldNamesR nms = setFailMsg "unfold-names failed." $ orR (map unfoldNameR nms)
 
 unfoldSaturatedR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Rewrite c HermitM CoreExpr
 unfoldSaturatedR = callSaturatedT >> unfoldR

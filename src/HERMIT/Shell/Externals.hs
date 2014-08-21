@@ -116,6 +116,11 @@ shell_externals = map (.+ Shell)
             [(opt,"")] -> return $ setPrettyOpts st (updateCoShowOption opt (cl_pretty_opts st))
             _          -> return st)
        ["set how to show coercions (Show|Abstact|Omit)"]
+   , external "set-pp-uniques" (\ str -> CLSModify $ \ st ->
+        case reads str of
+            [(b,"")] -> return $ setPrettyOpts st ((cl_pretty_opts st) { po_showUniques = b } )
+            _        -> return st)
+       ["set whether uniques are printed with variable names"]
    , external "{"   BeginScope
        ["push current lens onto a stack"]       -- tag as internal
    , external "}"   EndScope

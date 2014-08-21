@@ -165,13 +165,23 @@ dezombifyR = varR (acceptR isDeadBinder >>^ zapVarOccInfo)
 
 -- | Apply 'occurAnalyseExprR' to all sub-expressions.
 occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m Core
-occurAnalyseR = let r  = promoteExprR (arr occurAnalyseExpr)
+occurAnalyseR = let r  = promoteExprR (arr occurAnalyseExpr_NoBinderSwap) -- See Note [No Binder Swap]
                     go = r <+ anyR go
                  in tryR go -- always succeed
 
+{-
+  Note [No Binder Swap]
+
+  The binder swap performed by occurrence analysis in GHC <= 7.8.3 is buggy
+  in that it can lead to unintended variable capture (Trac #9440). Concretely,
+  this will send bash into a loop, or cause core lint to fail. As this is an
+  un-expected change as far as HERMIT users are concerned anyway, we use the
+  version that doesn't perform the binder swap.
+-}
+
 -- | Occurrence analyse an expression, failing if the result is syntactically equal to the initial expression.
 occurAnalyseExprChangedR :: MonadCatch m => Rewrite c m CoreExpr
-occurAnalyseExprChangedR = changedByR exprSyntaxEq (arr occurAnalyseExpr)
+occurAnalyseExprChangedR = changedByR exprSyntaxEq (arr occurAnalyseExpr_NoBinderSwap) -- See Note [No Binder Swap]
 
 -- | Occurrence analyse all sub-expressions, failing if the result is syntactically equal to the initial expression.
 occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m Core
