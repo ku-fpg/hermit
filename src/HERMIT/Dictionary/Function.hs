@@ -131,7 +131,7 @@ appArgM n e | n < 0     = fail "appArgM: arg must be non-negative"
                              else return $ l !! n
 
 -- | Build composition of two functions.
-buildCompositionT :: (BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+buildCompositionT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
                   => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
 buildCompositionT f g = do
     composeId <- findIdT $ fromString "Data.Function.."
@@ -139,21 +139,14 @@ buildCompositionT f g = do
     buildApplicationM fDot g
 
 -- | Given expression for f and for x, build f x, figuring out the type arguments.
-buildApplicationM :: (HasDynFlags m, MonadCatch m, MonadIO m) => CoreExpr -> CoreExpr -> m CoreExpr
+buildApplicationM :: MonadCatch m => CoreExpr -> CoreExpr -> m CoreExpr
 buildApplicationM f x = do
     (vsF, domF, _) <- splitFunTypeM (exprType f)
     let (vsX, xTy) = splitForAllTys (exprType x)
         allTvs = vsF ++ vsX
         bindFn v = if v `elem` allTvs then BindMe else Skolem
 
-    sub <- maybe (do d <- getDynFlags
-                     liftIO $ putStrLn $ "f: " ++ showPpr d f
-                     liftIO $ putStrLn $ "x: " ++ showPpr d x
-                     liftIO $ putStrLn $ "vsF: " ++ showPpr d vsF
-                     liftIO $ putStrLn $ "domF: " ++ showPpr d domF
-                     liftIO $ putStrLn $ "vsX: " ++ showPpr d vsX
-                     liftIO $ putStrLn $ "xTy: " ++ showPpr d xTy
-                     fail "buildApplicationM - domain of f and type of x do not unify")
+    sub <- maybe (fail "buildApplicationM - domain of f and type of x do not unify")
                  return
                  (tcUnifyTys bindFn [domF] [xTy])
 

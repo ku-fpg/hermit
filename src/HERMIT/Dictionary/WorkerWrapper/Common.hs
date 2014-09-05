@@ -93,7 +93,7 @@ workLabel = fromString "recursive-definition-of-work-for-use-by-ww-fusion"
 --------------------------------------------------------------------------------------------------
 
 -- Given abs and rep expressions, build "abs . rep = id"
-assumptionAEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m
+assumptionAEqualityT :: ( BoundVars c, HasHermitMEnv m, HasHscEnv m
                         , MonadCatch m, MonadIO m, MonadThings m )
                      => CoreExpr -> CoreExpr -> Transform c m x Equality
 assumptionAEqualityT absE repE = prefixFailMsg "Building assumption A failed: " $ do
@@ -104,7 +104,7 @@ assumptionAEqualityT absE repE = prefixFailMsg "Building assumption A failed: " 
     return $ Equality tvs compBody idE
 
 -- Given abs, rep, and f expressions, build "abs . rep . f = f"
-assumptionBEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m
+assumptionBEqualityT :: ( BoundVars c, HasHermitMEnv m, HasHscEnv m
                         , MonadCatch m, MonadIO m, MonadThings m)
                      => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Equality
 assumptionBEqualityT absE repE fE = prefixFailMsg "Building assumption B failed: " $ do
@@ -115,7 +115,7 @@ assumptionBEqualityT absE repE fE = prefixFailMsg "Building assumption B failed:
     return $ Equality tvs lhs rhs
 
 -- Given abs, rep, and f expressions, build "fix (abs . rep . f) = fix f"
-assumptionCEqualityT :: (BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+assumptionCEqualityT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
                      => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Equality
 assumptionCEqualityT absE repE fE = prefixFailMsg "Building assumption C failed: " $ do
     Equality vs lhs rhs <- assumptionBEqualityT absE repE fE
@@ -124,8 +124,7 @@ assumptionCEqualityT absE repE fE = prefixFailMsg "Building assumption C failed:
     return $ Equality vs lhs' rhs'
 
 -- Given abs, rep, and 'fix g' expressions, build "rep (abs (fix g)) = fix g"
-wwFusionEqualityT :: (HasDynFlags m, MonadCatch m, MonadIO m)
-                  => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Equality
+wwFusionEqualityT :: MonadCatch m => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Equality
 wwFusionEqualityT absE repE fixgE = prefixFailMsg "Building worker/wrapper fusion lemma failed: " $ do
     protoLhs <- buildApplicationM repE =<< buildApplicationM absE fixgE
     let (tvs, lhs) = collectTyBinders protoLhs
@@ -137,7 +136,7 @@ wwFusionEqualityT absE repE fixgE = prefixFailMsg "Building worker/wrapper fusio
 
 -- Perform the worker/wrapper split using condition 1-beta, introducing
 -- an unproven lemma for assumption C, and an appropriate w/w fusion lemma.
-split1BetaR :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m
+split1BetaR :: ( BoundVars c, HasHermitMEnv m, HasHscEnv m, HasLemmas m
                , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
             => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
 split1BetaR nm absE repE = do
@@ -159,7 +158,7 @@ split1BetaR nm absE repE = do
 
     return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
 
-split2BetaR :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m
+split2BetaR :: ( BoundVars c, HasHermitMEnv m, HasHscEnv m, HasLemmas m
                , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
             => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
 split2BetaR nm absE repE = do
