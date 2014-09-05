@@ -99,7 +99,7 @@ allNameSpaces = [varNS, dataConNS, tyConClassNS, tyVarNS]
 -- like GHC's 'RdrName', but without specifying which 'NameSpace'
 -- the name is found in.
 data HermitName = HermitName { hnModuleName  :: Maybe ModuleName
-                             , hnUnqualified :: String
+                             , hnUnqualified :: FastString
                              }
     deriving (Eq, Typeable)
 
@@ -123,16 +123,16 @@ cmpHN2Name (HermitName hm nm) n
     | Just mn <- hm
     , Just m  <- nameModule_maybe n = (mn == moduleName m) && sameOccName
     | otherwise     = sameOccName
-    where sameOccName = nm == unqualifiedName n
+    where sameOccName = nm == occNameFS (getOccName n)
 
 -- | Make a qualified HermitName from a String representing the module name
 -- and a String representing the occurrence name.
 mkQualified :: String -> String -> HermitName
-mkQualified mnm nm = HermitName (Just $ mkModuleName mnm) nm
+mkQualified mnm = HermitName (Just $ mkModuleName mnm) . mkFastString
 
 -- | Make an unqualified HermitName from a String.
 mkUnqualified :: String -> HermitName
-mkUnqualified = HermitName Nothing
+mkUnqualified = HermitName Nothing . mkFastString
 
 -- | Parse a HermitName from a String.
 parseName :: String -> HermitName
@@ -149,18 +149,18 @@ parseQualified s = mkQualified mnm nm
 
 -- | Turn a HermitName into a (possibly fully-qualified) String.
 showName :: HermitName -> String
-showName (HermitName mnm nm) = maybe id (\ m n -> moduleNameString m ++ ('.' : n)) mnm nm
+showName (HermitName mnm nm) = maybe id (\ m n -> moduleNameString m ++ ('.' : n)) mnm $ unpackFS nm
 
 -- | Make a HermitName from a RdrName
 fromRdrName :: RdrName -> HermitName
 fromRdrName nm = case isQual_maybe nm of
-                    Nothing         -> HermitName Nothing    (occNameString $ rdrNameOcc nm)
-                    Just (mnm, onm) -> HermitName (Just mnm) (occNameString onm)
+                    Nothing         -> HermitName Nothing    (occNameFS $ rdrNameOcc nm)
+                    Just (mnm, onm) -> HermitName (Just mnm) (occNameFS onm)
 
 -- | Make a RdrName for the given NameSpace and HermitName
 toRdrName :: NameSpace -> HermitName -> RdrName
 toRdrName ns (HermitName mnm nm) = maybe (mkRdrUnqual onm) (flip mkRdrQual onm) mnm
-    where onm = mkOccName ns nm
+    where onm = mkOccNameFS ns nm
 
 -- | Make a RdrName for each given NameSpace.
 toRdrNames :: [NameSpace] -> HermitName -> [RdrName]
