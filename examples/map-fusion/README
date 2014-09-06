@@ -1,0 +1,13 @@
+Note: this example requires GHC >= 7.8 to run.
+
+First install HERMIT, which can be done via Cabal:
+
+> cabal install hermit
+
+To run the example, invoke HERMIT as follows:
+
+> hermit MapFusion.hs MapFusion.hec
+
+If it runs successfully, you can use the HERMIT command "show-lemmas" to display the map-fusion lemma (which should be noted as proved).
+
+hermit> show-lemmas

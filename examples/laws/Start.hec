@@ -1,0 +1,22 @@
+set-pp-type Show
+
+-- functor
+rule-to-lemma fmap-id
+rule-to-lemma fmap-distrib
+
+-- applicative
+rule-to-lemma identity
+rule-to-lemma homomorphism
+rule-to-lemma interchange
+rule-to-lemma composition
+rule-to-lemma fmap-pure
+
+-- monad
+rule-to-lemma return-left
+rule-to-lemma return-right
+rule-to-lemma bind-assoc
+
+-- monoid
+rule-to-lemma mempty-left
+rule-to-lemma mempty-right
+rule-to-lemma mappend-assoc

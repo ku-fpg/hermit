@@ -1,0 +1,113 @@
+-- return left unit law
+copy-lemma return-left return-left-maybe
+inst-lemma return-left-maybe 'm [| Maybe |]
+inst-lemma-dictionaries return-left-maybe
+prove-lemma return-left-maybe
+lhs (repeat (one-td unfold <+ simplify))
+end-proof
+
+-- return right unit law
+copy-lemma return-right return-right-maybe
+inst-lemma return-right-maybe 'm [| Maybe |]
+inst-lemma-dictionaries return-right-maybe
+prove-lemma return-right-maybe
+lhs (repeat (one-td unfold <+ smash))
+end-proof
+
+-- bind associativity law
+copy-lemma bind-assoc bind-assoc-maybe
+inst-lemma bind-assoc-maybe 'm [| Maybe |]
+inst-lemma-dictionaries bind-assoc-maybe
+prove-lemma bind-assoc-maybe
+both (repeat (one-td unfold <+ smash))
+end-proof
+
+-- mappend-assoc law
+-- copy-lemma mappend-assoc mappend-assoc-maybe
+-- inst-lemma mappend-assoc-maybe 'm [| Maybe |] -- problem, superclass
+
+copy-lemma fmap-id fmap-id-maybe
+inst-lemma fmap-id-maybe 'f [| Maybe |]
+inst-lemma-dictionaries fmap-id-maybe
+prove-lemma fmap-id-maybe
+lhs (repeat (one-td unfold <+ simplify))
+extensionality 'x
+both smash
+end-proof
+
+-- mempty-left
+copy-lemma mempty-left mempty-left-maybe
+inst-lemma mempty-left-maybe 'm [| Maybe a |]
+inst-lemma-dictionaries mempty-left-maybe
+prove-lemma mempty-left-maybe
+lhs (repeat (smash <+ one-td unfold))
+end-proof
+
+-- mempty-right
+copy-lemma mempty-right mempty-right-maybe
+inst-lemma mempty-right-maybe 'm [| Maybe a |]
+inst-lemma-dictionaries mempty-right-maybe
+prove-lemma mempty-right-maybe
+lhs (repeat (smash <+ one-td unfold))
+end-proof
+
+-- we can't do, need implications
+-- mappend-assoc
+-- copy-lemma mappend-assoc mappend-assoc-maybe
+-- inst-lemma mappend-assoc-maybe 'm [| Maybe a |]
+-- inst-lemma-dictionaries mappend-assoc-maybe
+-- prove-lemma mappend-assoc-maybe
+-- stop-script
+
+-- fmap-distrib
+copy-lemma fmap-distrib fmap-distrib-maybe
+inst-lemma fmap-distrib-maybe 'f [| Maybe |]
+inst-lemma-dictionaries fmap-distrib-maybe
+prove-lemma fmap-distrib-maybe
+extensionality 'mb
+induction 'mb
+both (repeat (one-td unfold <+ smash)) ; end-case -- undefined
+both (repeat (one-td unfold <+ smash)) ; end-case -- Nothing
+both (repeat (one-td unfold <+ smash)) ; end-case -- Just
+
+-- identity
+copy-lemma identity identity-maybe
+inst-lemma identity-maybe 'f [| Maybe |]
+inst-lemma-dictionaries identity-maybe
+prove-lemma identity-maybe
+induction 'v
+both (repeat (one-td unfold <+ smash)) ; end-case -- undefined
+both (repeat (one-td unfold <+ smash)) ; end-case -- Nothing
+both (repeat (one-td unfold <+ smash)) ; end-case -- Just
+
+-- homomorphism
+copy-lemma homomorphism homomorphism-maybe
+inst-lemma homomorphism-maybe 'f [| Maybe |]
+inst-lemma-dictionaries homomorphism-maybe
+prove-lemma homomorphism-maybe
+both (repeat (one-td unfold <+ smash))
+end-proof
+
+-- interchange
+copy-lemma interchange interchange-maybe
+inst-lemma interchange-maybe 'f [| Maybe |]
+inst-lemma-dictionaries interchange-maybe
+prove-lemma interchange-maybe
+both (repeat (one-td unfold <+ smash))
+end-proof
+
+-- composition
+copy-lemma composition composition-maybe
+inst-lemma composition-maybe 'f [| Maybe |]
+inst-lemma-dictionaries composition-maybe
+prove-lemma composition-maybe
+both (repeat (one-td unfold <+ smash))
+end-proof
+
+-- fmap-pure
+copy-lemma fmap-pure fmap-pure-maybe
+inst-lemma fmap-pure-maybe 'f [| Maybe |]
+inst-lemma-dictionaries fmap-pure-maybe
+prove-lemma fmap-pure-maybe
+both (repeat (one-td unfold <+ simplify)) -- something in smash caused a core lint error
+end-proof

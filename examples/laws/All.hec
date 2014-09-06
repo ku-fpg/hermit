@@ -1,0 +1,3 @@
+load-and-run "Start.hec"
+load-and-run "List.hec"
+load-and-run "Maybe.hec"
