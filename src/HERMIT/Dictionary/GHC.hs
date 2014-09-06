@@ -224,7 +224,8 @@ buildDictionary evar = do
             nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
             wCs = mkFlatWC [nonC]
         (wCs', bnds) <- solveWantedsTcM wCs
-        reportAllUnsolved wCs'
+        -- reportAllUnsolved wCs' -- this is causing a panic with dictionary instantiation
+                                  -- revist and fix!
         return (evar, bnds)
     bnds <- runDsM $ dsEvBinds bs
     return (i,bnds)
