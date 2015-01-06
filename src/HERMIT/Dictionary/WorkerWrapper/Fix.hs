@@ -203,9 +203,9 @@ wwFusionBR :: BiRewriteH CoreExpr
 wwFusionBR =
     beforeBiR (prefixFailMsg "worker/wrapper fusion failed: " $
                withPatFailMsg "malformed WW Fusion rule." $
-               do Def w (App unwrap (App _f (App wrap (Var w')))) <- constT (lookupDef workLabel)
-                  guardMsg (w == w') "malformed WW Fusion rule."
-                  return (wrap,unwrap,Var w)
+               do Equality _ w (App unwrap (App _f (App wrap w'))) <- constT (lemmaEq <$> findLemma workLabel)
+                  guardMsg (exprSyntaxEq w w') "malformed WW Fusion rule."
+                  return (wrap,unwrap,w)
               )
               (\ (wrap,unwrap,work) -> bidirectional (fusL wrap unwrap work) (fusR wrap unwrap work))
   where
@@ -241,10 +241,10 @@ wwGenerateFusionR :: Maybe WWAssumption -> RewriteH Core
 wwGenerateFusionR mAss =
     prefixFailMsg "generate WW fusion failed: " $
     withPatFailMsg wrongForm $
-    do Def w (App unwrap (App f (App wrap (Var w')))) <- projectT
+    do Def w e@(App unwrap (App f (App wrap (Var w')))) <- projectT
        guardMsg (w == w') wrongForm
        whenJust (verifyWWAss wrap unwrap f) mAss
-       rememberR workLabel
+       insertLemmaR workLabel $ Lemma (Equality [] (varToCoreExpr w) e) True False
   where
     wrongForm = "definition does not have the form: work = unwrap (f (wrap work))"
 

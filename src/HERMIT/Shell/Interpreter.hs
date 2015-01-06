@@ -112,7 +112,6 @@ exprToDyns' rhs (CmdName str)
             Nothing | rhs       -> let f = maybe id ((:) . toDyn) $ string2considerable str
                                    in return $ f [ toDyn $ StringBox str
                                                  , toDyn $ LemmaName str
-                                                 , toDyn $ RememberedName str
                                                  , toDyn $ RuleName str]
                     | otherwise -> fail $ "User error, unrecognised HERMIT command: " ++ show str
 exprToDyns' _ (AppH e1 e2) = liftM2 dynCrossApply (exprToDyns' False e1) (exprToDyns' True e2)

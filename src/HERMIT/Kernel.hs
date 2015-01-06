@@ -45,8 +45,7 @@ data Msg s r = forall a . Req (s -> CoreM (KureM (a,s))) (MVar (KureM a))
 
 type ASTMap = Map AST KernelState
 
-data KernelState = KernelState { _ksStash  :: DefStash
-                               , _ksLemmas :: Lemmas
+data KernelState = KernelState { _ksLemmas :: Lemmas
                                , ksGuts   :: ModGuts
                                }
 
@@ -54,7 +53,7 @@ fromHermitMResult :: HermitMResult ModGuts -> KernelState
 fromHermitMResult hRes = sideEffectsOnly hRes (hResult hRes)
 
 sideEffectsOnly :: HermitMResult a -> ModGuts -> KernelState
-sideEffectsOnly hRes = KernelState (hResStash hRes) (hResLemmas hRes)
+sideEffectsOnly = KernelState . hResLemmas
 
 data KernelEnv = KernelEnv { kEnvChan :: DebugMessage -> HermitM () }
 
@@ -102,9 +101,9 @@ hermitKernel callback modGuts = do
 
                 , applyK = \ name r kEnv ->
                                 sendReq $ \ st ->
-                                    findWithErrMsg name st fail $ \ (KernelState defs lemmas guts) ->
+                                    findWithErrMsg name st fail $ \ (KernelState lemmas guts) ->
                                         runHM (kEnvChan kEnv)
-                                              (mkEnv guts defs lemmas)
+                                              (mkEnv guts lemmas)
                                               (\ hRes -> do
                                                     ast <- liftIO $ takeMVar nextASTname
                                                     return $ return (ast, insert ast (fromHermitMResult hRes) st))
@@ -113,9 +112,9 @@ hermitKernel callback modGuts = do
 
                 , queryK = \ name t kEnv ->
                                 sendReqRead $ \ st ->
-                                    findWithErrMsg name st fail $ \ (KernelState defs lemmas guts) ->
+                                    findWithErrMsg name st fail $ \ (KernelState lemmas guts) ->
                                         runHM (kEnvChan kEnv)
-                                              (mkEnv guts defs lemmas)
+                                              (mkEnv guts lemmas)
                                               (return . return . hResult)
                                               (return . fail)
                                               (applyT t (topLevelHermitC guts) guts)
@@ -138,7 +137,7 @@ hermitKernel callback modGuts = do
 
         _pid <- liftIO $ forkIO $ callback kernel ast0
 
-        loop (singleton ast0 $ KernelState empty empty modGuts)
+        loop (singleton ast0 $ KernelState empty modGuts)
 
         -- (Kill the pid'd thread? do we need to?)
 

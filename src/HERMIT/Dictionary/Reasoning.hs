@@ -1,5 +1,12 @@
-{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleContexts, FlexibleInstances, InstanceSigs,
-             ScopedTypeVariables, TupleSections, TypeFamilies #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.Dictionary.Reasoning
     ( -- * Equational Reasoning
@@ -39,6 +46,10 @@ module HERMIT.Dictionary.Reasoning
     , instantiateEqualityVar
     , instantiateEqualityVarR
     , discardUniVars
+    , rememberR
+    , unfoldRememberedR
+    , foldRememberedR
+    , foldAnyRememberedR
     ) where
 
 import           Control.Applicative
@@ -47,14 +58,14 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 
 import qualified Data.Map as Map
-import           Data.List (nubBy)
+import           Data.List (isPrefixOf, nubBy)
 import           Data.Maybe (fromMaybe)
 import           Data.Monoid
 
 import           HERMIT.Context
 import           HERMIT.Core
 import           HERMIT.External
-import           HERMIT.GHC
+import           HERMIT.GHC hiding ((<>))
 import           HERMIT.Kure
 import           HERMIT.Monad
 import           HERMIT.Name
@@ -62,7 +73,7 @@ import           HERMIT.ParserCore
 import           HERMIT.ParserType
 import           HERMIT.PrettyPrinter.Common
 import           HERMIT.Utilities
-                
+
 import           HERMIT.Dictionary.AlphaConversion hiding (externals)
 import           HERMIT.Dictionary.Common
 import           HERMIT.Dictionary.Fold hiding (externals)
@@ -127,6 +138,14 @@ externals =
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
     , external "both" ((\t -> liftM (\(r,s) -> unlines [r,s]) (bothT (extractT t))) :: TransformH CoreTC String -> TransformH Equality String)
         [ "Apply a transformation to the RHS of an equality." ]
+    , external "remember" (rememberR :: LemmaName -> RewriteH Core)
+        [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
+    , external "unfold-remembered" (promoteExprR . unfoldRememberedR :: LemmaName -> RewriteH Core)
+        [ "Unfold a remembered definition." ] .+ Deep .+ Context
+    , external "fold-remembered" (promoteExprR . foldRememberedR :: LemmaName -> RewriteH Core)
+        [ "Fold a remembered definition." ]                      .+ Context .+ Deep
+    , external "fold-any-remembered" (promoteExprR foldAnyRememberedR :: RewriteH Core)
+        [ "Attempt to fold any of the remembered definitions." ] .+ Context .+ Deep
     ]
 
 ------------------------------------------------------------------------------
@@ -465,7 +484,9 @@ getLemmasT = constT getLemmas
 getLemmaByNameT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Lemma
 getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm) return . Map.lookup nm
 
-lemmaR :: LemmaName -> BiRewriteH CoreExpr
+lemmaR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+          , HasLemmas m, MonadCatch m, MonadUnique m)
+       => LemmaName -> BiRewrite c m CoreExpr
 lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaEq)) (markLemmaUsedR nm)
 
 ------------------------------------------------------------------------------
@@ -503,3 +524,33 @@ lemmaLhsIntroR = lemmaNameToEqualityT >=> eqLhsIntroR
 lemmaRhsIntroR :: LemmaName -> RewriteH Core
 lemmaRhsIntroR = lemmaNameToEqualityT >=> eqRhsIntroR
 
+------------------------------------------------------------------------------
+
+prefixRemembered :: LemmaName -> LemmaName
+prefixRemembered = ("remembered-" <>)
+
+-- | Remember a binding with a name for later use. Allows us to look at past definitions.
+rememberR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb) => LemmaName -> Rewrite c HermitM Core
+rememberR nm = prefixFailMsg "remember failed: " $ do
+    Def v e <- setFailMsg "not applied to a binding." $ defOrNonRecT idR idR Def
+    insertLemmaR (prefixRemembered nm) $ Lemma (Equality [] (varToCoreExpr v) e) True False
+
+-- | Unfold a remembered definition (like unfoldR, but looks in stash instead of context).
+unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                     , HasLemmas m, MonadCatch m, MonadUnique m)
+                  => LemmaName -> Rewrite c m CoreExpr
+unfoldRememberedR = prefixFailMsg "Unfolding remembered definition failed: " . forwardT . lemmaR . prefixRemembered
+
+-- | Fold a remembered definition (like foldR, but looks in stash instead of context).
+foldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                   , HasLemmas m, MonadCatch m, MonadUnique m)
+                => LemmaName -> Rewrite c m CoreExpr
+foldRememberedR = prefixFailMsg "Folding remembered definition failed: " . backwardT . lemmaR . prefixRemembered
+
+-- | Fold any of the remembered definitions.
+foldAnyRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                      , HasLemmas m, MonadCatch m, MonadUnique m)
+                   => Rewrite c m CoreExpr
+foldAnyRememberedR = setFailMsg "Fold failed: no definitions could be folded." $ do
+    nms <- liftM Map.keys getLemmasT
+    catchesM [ backwardT (lemmaR nm) | nm <- nms, "remembered-" `isPrefixOf` show nm ]

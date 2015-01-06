@@ -1,5 +1,14 @@
-{-# LANGUAGE ConstraintKinds, DeriveDataTypeable, FlexibleContexts, FlexibleInstances, LambdaCase,
-             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies, TypeSynonymInstances, CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module HERMIT.Shell.Proof
     ( externals
@@ -61,6 +70,8 @@ externals :: [External]
 externals = map (.+ Proof)
     [ external "show-lemma" (ShowLemmas . Just)
         [ "List lemmas whose names match search string." ]
+    , external "show-remembered" (ShowLemmas (Just "remembered-"))
+        [ "Display all remembered definitions." ]
     , external "show-lemmas" (ShowLemmas Nothing)
         [ "List lemmas." ]
     , external "prove-lemma" InteractiveProof

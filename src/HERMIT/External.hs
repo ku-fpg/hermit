@@ -449,13 +449,6 @@ instance Extern [RewriteH Core] where
 
 -----------------------------------------------------------------
 
-instance Extern RememberedName where
-    type Box RememberedName = RememberedName
-    box = id
-    unbox = id
-
------------------------------------------------------------------
-
 instance Extern LemmaName where
     type Box LemmaName = LemmaName
     box = id

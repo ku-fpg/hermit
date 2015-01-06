@@ -87,7 +87,7 @@ data WWAssumption = WWAssumption WWAssumptionTag (RewriteH CoreExpr)
 -- That would have to exist at the Shell level though.
 
 -- This isn't entirely safe, as a malicious the user could define a label with this name.
-workLabel :: RememberedName
+workLabel :: LemmaName
 workLabel = fromString "recursive-definition-of-work-for-use-by-ww-fusion"
 
 --------------------------------------------------------------------------------------------------

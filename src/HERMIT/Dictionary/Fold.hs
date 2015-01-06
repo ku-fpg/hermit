@@ -4,8 +4,6 @@ module HERMIT.Dictionary.Fold
       externals
     , foldR
     , foldVarR
-    , stashFoldR
-    , stashFoldAnyR
       -- * Unlifted fold interface
     , fold
     , unifyTypes -- TODO: remove in favor of GHC's unification
@@ -27,7 +25,7 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Name
 
-import HERMIT.Dictionary.Common (varBindingDepthT,inScope,findIdT)
+import HERMIT.Dictionary.Common (varBindingDepthT,findIdT)
 import HERMIT.Dictionary.Inline hiding (externals)
 
 import Prelude hiding (exp)
@@ -48,26 +46,9 @@ externals =
         , ""
         , "Note: due to associativity, if you wanted to fold 5 + 6 + 6, "
         , "you first need to apply an associativity rewrite." ]  .+ Context .+ Deep
-    , external "fold-remembered" (promoteExprR . stashFoldR :: RememberedName -> RewriteH Core)
-        [ "Fold a remembered definition." ]                      .+ Context .+ Deep
-    , external "fold-any" (promoteExprR stashFoldAnyR :: RewriteH Core)
-        [ "Attempt to fold any of the remembered definitions." ] .+ Context .+ Deep
     ]
 
 ------------------------------------------------------------------------
-
-stashFoldR :: (ReadBindings c, HasStash m, MonadCatch m) => RememberedName -> Rewrite c m CoreExpr
-stashFoldR label = prefixFailMsg "Fold failed: " $
-    transform $ \ c e -> do
-        Def i rhs <- lookupDef label
-        guardMsg (inScope c i) $ unqualifiedName i ++ " is not in scope.\n(A common cause of this error is trying to fold a recursive call while being in the body of a non-recursive definition.  This can be resolved by calling \"nonrec-to-rec\" on the non-recursive binding group.)"
-        maybe (fail "no match.")
-              return
-              (fold i rhs e)
-
-stashFoldAnyR :: (ReadBindings c, HasStash m, MonadCatch m) => Rewrite c m CoreExpr
-stashFoldAnyR = setFailMsg "Fold failed: no definitions could be folded." $
-                catchesM =<< liftM (map stashFoldR) (liftM Map.keys (constT getStash))
 
 foldR :: (ReadBindings c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m)
       => HermitName -> Rewrite c m CoreExpr

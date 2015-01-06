@@ -2,24 +2,16 @@
 module HERMIT.Dictionary.Unfold
     ( externals
     , betaReducePlusR
-    , rememberR
-    , showStashT
     , unfoldR
     , unfoldPredR
     , unfoldNameR
     , unfoldNamesR
     , unfoldSaturatedR
-    , unfoldStashR
     , specializeR
     ) where
 
 import Control.Arrow
 import Control.Monad
-
-import Data.List (intercalate)
-import qualified Data.Map as Map
-
-import HERMIT.PrettyPrinter.Common (DocH, PrettyH, TransformDocH(..), PrettyC)
 
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.GHC (substCoreExpr)
@@ -35,18 +27,12 @@ import HERMIT.Name
 
 import Prelude hiding (exp)
 
-import qualified Text.PrettyPrint.MarkedHughesPJ as PP
-
 ------------------------------------------------------------------------
 
 externals :: [External]
 externals =
     [ external "beta-reduce-plus" (promoteExprR betaReducePlusR :: RewriteH Core)
         [ "Perform one or more beta-reductions."]                               .+ Eval .+ Shallow
-    , external "remember" (rememberR :: RememberedName -> RewriteH Core)
-        [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
-    , external "unfold-remembered" (promoteExprR . unfoldStashR :: RememberedName -> RewriteH Core)
-        [ "Unfold a remembered definition." ] .+ Deep .+ Context
     , external "unfold" (promoteExprR unfoldR :: RewriteH Core)
         [ "In application f x y z, unfold f." ] .+ Deep .+ Context
     , external "unfold" (promoteExprR . unfoldNameR . unOccurrenceName :: OccurrenceName -> RewriteH Core)
@@ -57,8 +43,6 @@ externals =
         [ "Unfold a definition only if the function is fully applied." ] .+ Deep .+ Context
     , external "specialize" (promoteExprR specializeR :: RewriteH Core)
         [ "Specialize an application to its type and coercion arguments." ] .+ Deep .+ Context
-    , external "show-remembered" (TransformDocH showStashT :: TransformDocH CoreTC)
-        [ "Display all remembered definitions." ]
     ]
 
 ------------------------------------------------------------------------
@@ -104,45 +88,3 @@ unfoldSaturatedR = callSaturatedT >> unfoldR
 
 specializeR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c) => Rewrite c HermitM CoreExpr
 specializeR = unfoldPredR (const $ all isTyCoArg)
-
--- NOTE: Using a Rewrite because of the way the Kernel is set up.
---       This is a temporary hack until we work out the best way to structure the Kernel.
-
--- | Stash a binding with a name for later use.
--- Allows us to look at past definitions.
-rememberR :: RememberedName -> Rewrite c HermitM Core
-rememberR label = sideEffectR $ \ _ -> \case
-                                          DefCore def           -> saveDef label def
-                                          BindCore (NonRec i e) -> saveDef label (Def i e)
-                                          _                     -> fail "remember failed: not applied to a binding."
-
--- | Stash a binding with a name for later use.
--- Allows us to look at past definitions.
--- rememberR :: String -> Transform c m Core ()
--- rememberR label = contextfreeT $ \ core ->
---     case core of
---         DefCore def -> saveDef label def
---         BindCore (NonRec i e) -> saveDef label (Def i e)
---         _           -> fail "remember: not a binding"
-
--- | Apply a stashed definition (like inline, but looks in stash instead of context).
-unfoldStashR :: ReadBindings c => RememberedName -> Rewrite c HermitM CoreExpr
-unfoldStashR label = prefixFailMsg "Inlining stashed definition failed: " $
-                     withPatFailMsg (wrongExprForm "Var v") $
-    do (c, Var v) <- exposeT
-       constT $ do Def i rhs <- lookupDef label
-                   dflags <- getDynFlags
-                   if idName i == idName v -- TODO: Is there a reason we're not just using equality on Id?
-                   then let fvars = varSetElems $ localFreeVarsExpr rhs
-                        in if all (inScope c) fvars
-                           then return rhs
-                           else fail $ "free variables " ++ intercalate "," (map (showPpr dflags) (filter (not . inScope c) fvars)) ++ " in stashed definition are no longer in scope."
-                   else fail $ "stashed definition applies to " ++ unqualifiedName i ++ " not " ++ unqualifiedName v
-
-showStashT :: Injection CoreDef a => PrettyC -> PrettyH a -> Transform c HermitM a DocH
-showStashT pctx pp = do
-    stash <- constT getStash
-    docs <- forM (Map.toList stash) $ \ (l,d) -> do
-                dfn <- constT $ applyT (extractT pp) pctx d
-                return $ PP.text ("[ " ++ show l ++ " ]") PP.$+$ dfn PP.$+$ PP.space
-    return $ PP.vcat docs

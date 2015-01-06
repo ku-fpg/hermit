@@ -10,18 +10,13 @@ module HERMIT.Monad
     , LiftCoreM(..)
     , runTcM
     , runDsM
-      -- * Saving Definitions
-    , RememberedName(..)
-    , DefStash
-    , saveDef
-    , lookupDef
-    , HasStash(..)
       -- * Lemmas
     , Equality(..)
     , LemmaName(..)
     , Lemma(..)
     , Lemmas
     , addLemma
+    , findLemma
       -- * Reader Information
     , HasHermitMEnv(..)
     , mkEnv
@@ -39,10 +34,10 @@ import Prelude hiding (lookup)
 
 import Data.Dynamic (Typeable)
 import Data.Map
+import Data.Monoid
 import Data.String (IsString(..))
 
 import Control.Applicative
-import Control.Arrow
 import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.IO.Class
@@ -57,20 +52,15 @@ import HERMIT.GHC.Typechecker
 
 ----------------------------------------------------------------------------
 
--- | A label for individual definitions. Use a newtype so we can tab-complete in shell.
-newtype RememberedName = RememberedName String deriving (Eq, Ord, Typeable)
-
-instance IsString RememberedName where fromString = RememberedName
-instance Show RememberedName where show (RememberedName s) = s
-
--- | A store of saved definitions.
-type DefStash = Map RememberedName CoreDef
-
 -- | An equality is represented as a set of universally quantified binders, and the LHS and RHS of the equality.
 data Equality = Equality [CoreBndr] CoreExpr CoreExpr
 
 -- | A name for lemmas. Use a newtype so we can tab-complete in shell.
 newtype LemmaName = LemmaName String deriving (Eq, Ord, Typeable)
+
+instance Monoid LemmaName where
+    mempty = LemmaName mempty
+    mappend (LemmaName n1) (LemmaName n2) = LemmaName (mappend n1 n2)
 
 instance IsString LemmaName where fromString = LemmaName
 instance Show LemmaName where show (LemmaName s) = s
@@ -87,28 +77,26 @@ type Lemmas = Map LemmaName Lemma
 -- | The HermitM reader environment.
 data HermitMEnv = HermitMEnv { hEnvModGuts   :: ModGuts -- ^ Note: this is a snapshot of the ModGuts from
                                                         --         before the current transformation.
-                             , hEnvStash     :: DefStash
                              , hEnvLemmas    :: Lemmas
                              }
 
-mkEnv :: ModGuts -> DefStash -> Lemmas -> HermitMEnv
+mkEnv :: ModGuts -> Lemmas -> HermitMEnv
 mkEnv = HermitMEnv
 
 -- | The HermitM result record.
-data HermitMResult a = HermitMResult { hResStash  :: DefStash
-                                     , hResLemmas :: Lemmas
+data HermitMResult a = HermitMResult { hResLemmas :: Lemmas
                                      , hResult    :: a
                                      }
 
-mkResult :: DefStash -> Lemmas -> a -> HermitMResult a
+mkResult :: Lemmas -> a -> HermitMResult a
 mkResult = HermitMResult
 
 mkResultEnv :: HermitMEnv -> a -> HermitMResult a
-mkResultEnv env = mkResult (hEnvStash env) (hEnvLemmas env)
+mkResultEnv = mkResult . hEnvLemmas
 
 -- | The HERMIT monad is kept abstract.
 --
--- It provides a reader for ModGuts, state for DefStash and Lemmas,
+-- It provides a reader for ModGuts, state for Lemmas,
 -- and access to a debugging channel.
 newtype HermitM a = HermitM { runHermitM :: DebugChan -> HermitMEnv -> CoreM (KureM (HermitMResult a)) }
 
@@ -124,7 +112,7 @@ runHM :: DebugChan                     -- debug chan
 runHM chan env success failure ma = runHermitM ma chan env >>= runKureM success failure
 
 -- | Allow HermitM to be embedded in another monad with proper capabilities.
-embedHermitM :: (HasDebugChan m, HasHermitMEnv m, HasLemmas m, HasStash m, LiftCoreM m) => HermitM a -> m a
+embedHermitM :: (HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m) => HermitM a -> m a
 embedHermitM hm = do
     env <- getHermitMEnv
     c <- liftCoreM $ liftIO newTChanIO -- we are careful to do IO within liftCoreM to avoid the MonadIO constraint
@@ -137,7 +125,6 @@ embedHermitM hm = do
                 Just dm -> chan dm >> relayDebugMessages
 
     relayDebugMessages
-    putStash $ hResStash r
     forM_ (toList (hResLemmas r)) $ uncurry insertLemma
     return $ hResult r
 
@@ -158,8 +145,8 @@ instance Monad HermitM where
 
   (>>=) :: HermitM a -> (a -> HermitM b) -> HermitM b
   (HermitM gcm) >>= f =
-        HermitM $ \ chan env -> gcm chan env >>= runKureM (\ (HermitMResult s ls a) ->
-                                                            let env' = env { hEnvStash = s, hEnvLemmas = ls }
+        HermitM $ \ chan env -> gcm chan env >>= runKureM (\ (HermitMResult ls a) ->
+                                                            let env' = env { hEnvLemmas = ls }
                                                             in  runHermitM (f a) chan env')
                                                           (return . fail)
 
@@ -199,28 +186,6 @@ instance MonadThings HermitM where
 instance HasDynFlags HermitM where
     getDynFlags :: HermitM DynFlags
     getDynFlags = liftCoreM getDynFlags
-
-----------------------------------------------------------------------------
-
-class HasStash m where
-    -- | Get the stash of saved definitions.
-    getStash :: m DefStash
-
-    -- | Replace the stash of saved definitions.
-    putStash :: DefStash -> m ()
-
-instance HasStash HermitM where
-    getStash = HermitM $ \ _ env -> return $ return $ mkResultEnv env $ hEnvStash env
-
-    putStash s = HermitM $ \ _ env -> return $ return $ mkResult s (hEnvLemmas env) ()
-
--- | Save a definition for future use.
-saveDef :: (HasStash m, Monad m) => RememberedName -> CoreDef -> m ()
-saveDef l d = getStash >>= (insert l d >>> putStash)
-
--- | Lookup a previously saved definition.
-lookupDef :: (HasStash m, Monad m) => RememberedName -> m CoreDef
-lookupDef l = getStash >>= (lookup l >>> maybe (fail "Definition not found.") return)
 
 ----------------------------------------------------------------------------
 
@@ -266,7 +231,7 @@ class HasLemmas m where
     getLemmas :: m Lemmas
 
 instance HasLemmas HermitM where
-    insertLemma nm l = HermitM $ \ _ env -> return $ return $ mkResult (hEnvStash env) (insert nm l $ hEnvLemmas env) ()
+    insertLemma nm l = HermitM $ \ _ env -> return $ return $ mkResult (insert nm l $ hEnvLemmas env) ()
 
     getLemmas = HermitM $ \ _ env -> return $ return $ mkResultEnv env (hEnvLemmas env)
 
@@ -275,6 +240,12 @@ addLemma :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> m ()
 addLemma nm l = do
     ls <- getLemmas
     maybe (insertLemma nm l) (\ _ -> return ()) (lookup nm ls)
+
+-- | Find a lemma by name. Fails if lemma does not exist.
+findLemma :: (HasLemmas m, Monad m) => LemmaName -> m Lemma
+findLemma nm = do
+    r <- liftM (lookup nm) getLemmas
+    maybe (fail $ "lemma does not exist: " ++ show nm) return r
 
 ----------------------------------------------------------------------------
 

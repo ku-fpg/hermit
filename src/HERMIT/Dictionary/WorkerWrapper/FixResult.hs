@@ -16,6 +16,7 @@ module HERMIT.Dictionary.WorkerWrapper.FixResult
 
 import Prelude hiding (abs)
 
+import Control.Applicative
 import Control.Arrow
 
 import Data.String (fromString)
@@ -223,14 +224,15 @@ wwResultFusionBR :: BiRewriteH CoreExpr
 wwResultFusionBR =
     beforeBiR (prefixFailMsg "worker/wrapper fusion failed: " $
                withPatFailMsg "malformed WW Fusion rule." $
-               do Def w (Lam x1 (App rep
-                                     (App (App _ (Lam x2 (App abs (App (Var w') (Var x2')))))
+               do Equality _ w
+                        (Lam x1 (App rep
+                                     (App (App _ (Lam x2 (App abs (App w' (Var x2')))))
                                           (Var x1')
                                      )
                                 )
-                        ) <- constT (lookupDef workLabel)
-                  guardMsg (w == w' && x1 == x1' && x2 == x2') "malformed WW Fusion rule."
-                  return (abs,rep,Var w)
+                        ) <- constT (lemmaEq <$> findLemma workLabel)
+                  guardMsg (exprSyntaxEq w w' && x1 == x1' && x2 == x2') "malformed WW Fusion rule."
+                  return (abs,rep,w)
               )
               (\ (abs,rep,work) -> bidirectional (fusL abs rep work) (fusR abs rep work))
   where
@@ -266,15 +268,15 @@ wwResultGenerateFusionR :: Maybe WWAssumption -> RewriteH Core
 wwResultGenerateFusionR mAss =
     prefixFailMsg "generate WW fusion failed: " $
     withPatFailMsg wrongForm $
-    do Def w (Lam x1 (App rep
+    do Def w e@(Lam x1 (App rep
                           (App (App f (Lam x2 (App abs (App (Var w') (Var x2')))))
                                (Var x1')
                           )
-                     )
-             ) <- projectT
+                       )
+               ) <- projectT
        guardMsg (w == w' && x1 == x1' && x2 == x2') wrongForm
        whenJust (verifyWWAss abs rep f) mAss
-       rememberR workLabel
+       insertLemmaR workLabel $ Lemma (Equality [] (varToCoreExpr w) e) True False
   where
     wrongForm = "definition does not have the form: work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)"
 

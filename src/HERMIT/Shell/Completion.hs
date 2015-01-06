@@ -14,7 +14,6 @@ import HERMIT.Kure
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
 import HERMIT.Kernel.Scoped
-import HERMIT.Monad
 import HERMIT.Parser
 
 import HERMIT.Dictionary.Inline
@@ -66,7 +65,6 @@ data CompletionType = ConsiderC       -- considerable constructs and (deprecated
                     | CoreC           -- complete with opening Core fragment bracket [|
                     | NothingC        -- no completion
                     | RuleC           -- complete with GHC rewrite rule name
-                    | StashC          -- complete with remembered labels
                     | StringC         -- complete with open quotes
                     | UnknownC String -- unknown Extern instance (empty completion)
 
@@ -79,7 +77,6 @@ completionType s = fromMaybe (UnknownC s) (lookup s m)
               , ("IntBox"        , NothingC)
               , ("LemmaName"     , LemmaC)
               , ("OccurrenceName", OccurrenceOfC)
-              , ("RememberedName", StashC)
               , ("RewriteCoreBox", CommandC) -- be more specific than CommandC?
               , ("RhsOfName"     , RhsOfC)
               , ("RuleName"      , RuleC)
@@ -101,7 +98,6 @@ completionQuery InScopeC        = return $ pure ["'"] -- TODO
 completionQuery LemmaC          = return $ liftM (map show . keys) $ getLemmasT
 completionQuery NothingC        = return $ pure []
 completionQuery RuleC           = return $ liftM (map (show . fst)) $ getHermitRulesT
-completionQuery StashC          = return $ liftM (map show . keys) $ constT getStash
 completionQuery StringC         = return $ pure ["\""]
 completionQuery CommandC        = gets cl_externals >>= return . pure . map externName
 completionQuery CoreC           = return $ pure ["[|"]
