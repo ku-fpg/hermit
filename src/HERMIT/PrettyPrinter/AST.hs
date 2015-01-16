@@ -19,7 +19,7 @@ where
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
-import Data.Default
+import Data.Default.Class
 
 import HERMIT.GHC hiding (($$), (<+>), (<>), ($+$), cat, nest, parens, text, empty, hsep)
 import HERMIT.Kure

@@ -18,7 +18,7 @@ import Control.Arrow hiding ((<+>))
 import Control.Applicative ((<$>))
 
 import Data.Char (isSpace)
-import Data.Default
+import Data.Default.Class
 import Data.Monoid (mempty)
 
 import HERMIT.Context

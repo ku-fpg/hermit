@@ -17,7 +17,7 @@ where
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
-import Data.Default
+import Data.Default.Class
 
 import HERMIT.Kure
 import HERMIT.Core
