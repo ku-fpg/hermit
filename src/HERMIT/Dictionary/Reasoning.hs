@@ -50,6 +50,7 @@ module HERMIT.Dictionary.Reasoning
     , unfoldRememberedR
     , foldRememberedR
     , foldAnyRememberedR
+    , prefixRemembered
     ) where
 
 import           Control.Applicative
