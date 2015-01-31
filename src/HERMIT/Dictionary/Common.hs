@@ -216,16 +216,18 @@ findTypeT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ conte
 
 -- TODO: "inScope" was defined elsewhere, but I've moved it here.  Should it be combined with the above functions?
 -- Used in Dictionary.Inline to check if variables an in scope.
--- Used in Dictionary.Fold
 
 -- | Determine whether a variable is in scope.
 inScope :: ReadBindings c => c -> Var -> Bool
+inScope c v = not (isDeadBinder v || (isLocalVar v && (v `notElemVarSet` boundVars c)))
+{- the check of unfoldingInfo seems to have nothing to do with inscope-dness
 inScope c v = (v `boundIn` c) ||                 -- defined in this module
               (isId v &&                         -- idInfo panics on TyVars
                case unfoldingInfo (idInfo v) of
                 CoreUnfolding {} -> True         -- defined elsewhere
                 DFunUnfolding {} -> True
                 _                -> False)
+-}
 
 -- | Modify transformation to apply to current expression as if it were the body of a lambda binding the given variables.
 withVarsInScope :: (AddBindings c, ReadPath c Crumb) => [Var] -> Transform c m a b -> Transform c m a b
