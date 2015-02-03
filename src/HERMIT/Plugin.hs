@@ -138,7 +138,6 @@ resetScoping env = do
     paths <- runK $ pathS kernel
     replicateM_ (length paths - 1) $ runS $ endScopeS kernel
     -- modPathS commonly fails here because the path is unchanged, so throw away failures
-    liftIO $ print paths
     catchM (runS $ modPathS kernel (const mempty) env) (const (return ()))
     return paths
 
