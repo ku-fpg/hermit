@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -21,12 +20,11 @@ module HERMIT.Shell.Proof
 
 import Control.Arrow hiding (loop, (<+>))
 import Control.Concurrent
-#if MIN_VERSION_mtl(2,2,1)
-import Control.Monad.Except
-#else
-import Control.Monad.Error
-#endif
-import Control.Monad.State
+import Control.Monad ((>=>), foldM, forM, forM_, liftM, unless, when)
+import Control.Monad.Error.Class (MonadError(catchError))
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.State (MonadState(get, put), gets, modify)
+import Control.Monad.Trans.Class (lift)
 
 import Data.Char (isSpace)
 import Data.Dynamic

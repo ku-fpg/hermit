@@ -1,4 +1,4 @@
-{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, GeneralizedNewtypeDeriving, LambdaCase, CPP #-}
+{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, GeneralizedNewtypeDeriving, LambdaCase #-}
 module HERMIT.Plugin
     ( -- * The HERMIT Plugin
       hermitPlugin
@@ -31,13 +31,11 @@ module HERMIT.Plugin
 import Control.Applicative
 import Control.Arrow
 import Control.Concurrent.STM
-#if MIN_VERSION_mtl(2,2,1)
-import Control.Monad.Except hiding (guard)
-#else
-import Control.Monad.Error hiding (guard)
-#endif
+import Control.Monad (replicateM_, when)
+import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Operational
-import Control.Monad.State hiding (guard)
+import Control.Monad.State (gets, modify)
+import Control.Monad.Trans.Class (MonadTrans(..))
 
 import Data.Monoid
 import qualified Data.Map as M
@@ -140,6 +138,7 @@ resetScoping env = do
     paths <- runK $ pathS kernel
     replicateM_ (length paths - 1) $ runS $ endScopeS kernel
     -- modPathS commonly fails here because the path is unchanged, so throw away failures
+    liftIO $ print paths
     catchM (runS $ modPathS kernel (const mempty) env) (const (return ()))
     return paths
 

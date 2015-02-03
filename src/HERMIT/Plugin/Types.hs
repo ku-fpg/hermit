@@ -1,16 +1,18 @@
 {-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts,
              LambdaCase, GADTs, GeneralizedNewtypeDeriving,
              ScopedTypeVariables, FlexibleInstances, CPP #-}
+#if !(MIN_VERSION_mtl(2,2,0))
+{-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
+#endif
 module HERMIT.Plugin.Types where
 
 import Control.Applicative
 import Control.Concurrent.STM
-#if MIN_VERSION_mtl(2,2,1)
-import Control.Monad.Except
-#else
-import Control.Monad.Error
-#endif
-import Control.Monad.State
+import Control.Monad.Error.Class (MonadError(..))
+import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.State (MonadState(..), StateT(..))
+import Control.Monad.Trans.Class (MonadTrans(..))
+import Control.Monad.Trans.Except (ExceptT, runExceptT, catchE, throwE)
 
 import Data.Dynamic
 import qualified Data.Map as M
@@ -26,19 +28,16 @@ import HERMIT.PrettyPrinter.Common
 import System.IO
 
 type PluginM = PluginT IO
-#if MIN_VERSION_mtl(2,2,1)
 newtype PluginT m a = PluginT { unPluginT :: ExceptT PException (StateT PluginState m) a }
-#else
-newtype PluginT m a = PluginT { unPluginT :: ErrorT PException (StateT PluginState m) a }
-#endif
-    deriving (Functor, Applicative, Monad, MonadIO, MonadError PException, MonadState PluginState)
+    deriving (Functor, Applicative, MonadIO, MonadError PException, MonadState PluginState)
 
 runPluginT :: PluginState -> PluginT m a -> m (Either PException a, PluginState)
-#if MIN_VERSION_mtl(2,2,1)
 runPluginT ps = flip runStateT ps . runExceptT . unPluginT
-#else
-runPluginT ps = flip runStateT ps . runErrorT . unPluginT
-#endif
+
+instance Monad m => Monad (PluginT m) where
+    return = PluginT . return
+    PluginT m >>= k = PluginT (m >>= unPluginT . k)
+    fail = PluginT . throwError . PError
 
 instance MonadTrans PluginT where
     lift = PluginT . lift . lift
@@ -70,10 +69,6 @@ data PluginState = PluginState
     } deriving (Typeable)
 
 data PException = PAbort | PResume SAST | PError String
-
-#if !(MIN_VERSION_mtl(2,2,1))
-instance Error PException where strMsg = PError
-#endif
 
 newtype PSBox = PSBox PluginState deriving Typeable
 instance Extern PluginState where
@@ -113,3 +108,17 @@ iokm msg = iokm' msg return
 
 iokm'' :: (MonadIO m, MonadCatch m) => IO (KureM a) -> m a
 iokm'' = iokm ""
+
+------------------------------------------------------------------------------
+
+-- ExceptT instances provided for old versions of mtl.
+#if !(MIN_VERSION_mtl(2,2,0))
+instance Monad m => MonadError e (ExceptT e m) where
+    throwError = throwE
+    catchError = catchE
+
+instance MonadState s m => MonadState s (ExceptT e m) where
+    get   = lift get
+    put   = lift . put
+    state = lift . state
+#endif

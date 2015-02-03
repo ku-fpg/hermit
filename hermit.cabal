@@ -137,22 +137,23 @@ extra-source-files:
 
 Library
   ghc-options: -Wall -fno-warn-orphans
-  Build-Depends: base               >= 4 && < 5,
-                 ansi-terminal      >= 0.5.5,
+  Build-Depends: base                >= 4 && < 5,
+                 ansi-terminal       >= 0.5.5,
                  array,
-                 containers         >= 0.5.0.0,
-                 data-default-class >= 0.0.1,
-                 directory          >= 1.2.0.0,
-                 ghc                >= 7.8,
-                 haskeline          >= 0.7.0.3,
-                 kure               >= 2.16.4,
-                 marked-pretty      >= 0.1,
-                 mtl                >= 2.1.2,
-                 operational        >= 0.2.2.1,
-                 process            >= 1.1.0.2,
-                 stm                >= 2.4,
-                 temporary          >= 1.2.0.3,
-                 transformers
+                 containers          >= 0.5.0.0,
+                 data-default-class  >= 0.0.1,
+                 directory           >= 1.2.0.0,
+                 ghc                 >= 7.8,
+                 haskeline           >= 0.7.0.3,
+                 kure                >= 2.16.4,
+                 marked-pretty       >= 0.1,
+                 mtl                 >= 2.1.2,
+                 operational         >= 0.2.2.1,
+                 process             >= 1.1.0.2,
+                 stm                 >= 2.4,
+                 temporary           >= 1.2.0.3,
+                 transformers        >= 0.2,
+                 transformers-compat >= 0.3
 
   if os(windows)
     build-depends: Win32

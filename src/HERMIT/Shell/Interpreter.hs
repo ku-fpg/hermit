@@ -1,5 +1,5 @@
 {-# LANGUAGE ConstraintKinds, KindSignatures, GADTs, InstanceSigs,
-             FlexibleContexts, ScopedTypeVariables, CPP #-}
+             FlexibleContexts, ScopedTypeVariables #-}
 
 module HERMIT.Shell.Interpreter
     ( -- * The HERMIT Interpreter
@@ -11,12 +11,8 @@ module HERMIT.Shell.Interpreter
     , exprToDyns
     ) where
 
-#if MIN_VERSION_mtl(2,2,1)
-import Control.Monad.Except
-#else
-import Control.Monad.Error
-#endif
-import Control.Monad.State
+import Control.Monad (liftM, liftM2)
+import Control.Monad.State (MonadState(get), gets)
 
 import Data.Char
 import Data.Dynamic

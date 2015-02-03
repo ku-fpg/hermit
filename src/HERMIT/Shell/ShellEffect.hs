@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, KindSignatures, GADTs, FlexibleContexts, TypeFamilies,
+{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, TypeFamilies,
              DeriveDataTypeable, GeneralizedNewtypeDeriving, LambdaCase,
              MultiParamTypeClasses, ScopedTypeVariables #-}
 
@@ -8,12 +8,9 @@ module HERMIT.Shell.ShellEffect
     , dump
     ) where
 
-#if MIN_VERSION_mtl(2,2,1)
-import Control.Monad.Except
-#else
-import Control.Monad.Error
-#endif
-import Control.Monad.State
+import Control.Monad.Error.Class (MonadError)
+import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.State (MonadState(..), gets)
 
 import Data.Typeable
 
