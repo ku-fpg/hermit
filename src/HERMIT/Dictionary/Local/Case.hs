@@ -458,10 +458,12 @@ caseMergeAltsR = prefixFailMsg "merge-case-alts failed: " $
 caseFoldBinderR :: forall c m. ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
                                , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
                 => Rewrite c m CoreExpr
-caseFoldBinderR = prefixFailMsg "case-fold-binder failed: " $ do
-    w <- caseBinderIdT
-    caseAllR idR idR idR $ \ _ -> do depth <- varBindingDepthT w
-                                     extractR $ anybuR (promoteExprR (foldVarR (Just depth) w) :: Rewrite c m Core)
+caseFoldBinderR = prefixFailMsg "case-fold-binder failed: " $
+    -- ensure the case binder is not dead, or else fold will fail
+    caseAllR idR (arr (flip setIdOccInfo NoOccInfo)) idR (const idR) >>> (do
+        w <- caseBinderIdT
+        caseAllR idR idR idR $ \ _ -> do depth <- varBindingDepthT w
+                                         extractR $ anybuR (promoteExprR (foldVarR (Just depth) w) :: Rewrite c m Core))
 
 -- | A cleverer version of 'mergeCaseAlts' that first attempts to abstract out any occurrences of the alternative pattern using the case binder.
 caseMergeAltsWithBinderR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
