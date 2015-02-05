@@ -34,7 +34,6 @@ import HERMIT.Name
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.GHC (substCoreExpr)
 import HERMIT.Dictionary.Local.Bind hiding (externals)
 import qualified HERMIT.Dictionary.Local.Bind as Bind
 import HERMIT.Dictionary.Local.Case hiding (externals)

@@ -18,6 +18,7 @@ import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.Core
+import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure

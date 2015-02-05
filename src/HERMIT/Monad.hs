@@ -1,4 +1,7 @@
-{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleContexts, GADTs, InstanceSigs, KindSignatures #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE KindSignatures #-}
 
 module HERMIT.Monad
     ( -- * The HERMIT Monad
@@ -11,10 +14,7 @@ module HERMIT.Monad
     , runTcM
     , runDsM
       -- * Lemmas
-    , Equality(..)
-    , LemmaName(..)
-    , Lemma(..)
-    , Lemmas
+    , HasLemmas(..)
     , addLemma
     , findLemma
       -- * Reader Information
@@ -22,8 +22,6 @@ module HERMIT.Monad
     , mkEnv
     , getModGuts
     , HasHscEnv(..)
-      -- * Writer Information
-    , HasLemmas(..)
       -- * Messages
     , HasDebugChan(..)
     , DebugMessage(..)
@@ -32,47 +30,23 @@ module HERMIT.Monad
 
 import Prelude hiding (lookup)
 
-import Data.Dynamic (Typeable)
-import Data.Map
-import Data.Monoid
-import Data.String (IsString(..))
-
 import Control.Applicative
 import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.IO.Class
 
+import Data.Map
+
 import Language.KURE
 
 import HERMIT.Core
 import HERMIT.Context
+import HERMIT.Equality
 import HERMIT.Kure.SumTypes
 import HERMIT.GHC
 import HERMIT.GHC.Typechecker
 
 ----------------------------------------------------------------------------
-
--- | An equality is represented as a set of universally quantified binders, and the LHS and RHS of the equality.
-data Equality = Equality [CoreBndr] CoreExpr CoreExpr
-
--- | A name for lemmas. Use a newtype so we can tab-complete in shell.
-newtype LemmaName = LemmaName String deriving (Eq, Ord, Typeable)
-
-instance Monoid LemmaName where
-    mempty = LemmaName mempty
-    mappend (LemmaName n1) (LemmaName n2) = LemmaName (mappend n1 n2)
-
-instance IsString LemmaName where fromString = LemmaName
-instance Show LemmaName where show (LemmaName s) = s
-
--- | An equality with a proven status.
-data Lemma = Lemma { lemmaEq :: Equality
-                   , lemmaP  :: Bool     -- whether lemma has been proven
-                   , lemmaU  :: Bool     -- whether lemma has been used
-                   }
-
--- | A collectin of named lemmas.
-type Lemmas = Map LemmaName Lemma
 
 -- | The HermitM reader environment.
 data HermitMEnv = HermitMEnv { hEnvModGuts   :: ModGuts -- ^ Note: this is a snapshot of the ModGuts from

@@ -18,9 +18,9 @@ import Data.Char
 import Data.Dynamic
 import qualified Data.Map as M
 
+import HERMIT.Equality
 import HERMIT.External
 import HERMIT.Kure
-import HERMIT.Monad
 import HERMIT.Name
 import HERMIT.Parser
 

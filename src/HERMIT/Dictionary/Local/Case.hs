@@ -16,7 +16,7 @@ module HERMIT.Dictionary.Local.Case
     , caseReduceR
     , caseReduceDataconR
     , caseReduceLiteralR
-    -- , caseReduceIdR
+      -- , caseReduceIdR
     , caseReduceUnfoldR
     , caseSplitR
     , caseSplitInlineR
@@ -41,6 +41,7 @@ import Data.Monoid
 
 import HERMIT.Core
 import HERMIT.Context
+import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
@@ -53,7 +54,6 @@ import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.AlphaConversion hiding (externals)
 import HERMIT.Dictionary.Fold (foldVarR)
-import HERMIT.Dictionary.GHC (substCoreExpr)
 import HERMIT.Dictionary.Undefined (verifyStrictT, buildStrictnessLemmaT)
 import HERMIT.Dictionary.Unfold (unfoldR)
 

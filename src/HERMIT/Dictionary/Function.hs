@@ -28,7 +28,6 @@ import HERMIT.Monad
 import HERMIT.Name
 
 import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.GHC hiding (externals)
 
 externals ::  [External]
 externals =

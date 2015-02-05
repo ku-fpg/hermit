@@ -55,8 +55,8 @@ import Data.Typeable.Internal (TypeRep(..), funTc)
 
 import HERMIT.Core
 import HERMIT.Context (LocalPathH)
+import HERMIT.Equality
 import HERMIT.Kure
-import HERMIT.Monad
 
 -----------------------------------------------------------------
 

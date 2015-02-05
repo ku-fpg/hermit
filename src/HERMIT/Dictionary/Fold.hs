@@ -1,13 +1,14 @@
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 module HERMIT.Dictionary.Fold
     ( -- * Fold/Unfold Transformation
       externals
     , foldR
     , foldVarR
+    , runFoldR
       -- * Unlifted fold interface
-    , fold
-    , unifyTypes -- TODO: remove in favor of GHC's unification
-    , tyMatchesToCoreExpr
+    , fold, compileFold, runFold, CompiledFold
     ) where
 
 import Control.Arrow
@@ -15,15 +16,20 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
 
-import qualified Data.Map as Map
+import Data.List (delete, (\\))
+import qualified Data.Map as M
+import Data.Maybe (catMaybes, fromMaybe, maybeToList)
+import qualified Data.IntMap.Lazy as I
 
 import HERMIT.Core
 import HERMIT.Context
+import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Name
+import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common (varBindingDepthT,findIdT)
 import HERMIT.Dictionary.Inline hiding (externals)
@@ -60,177 +66,382 @@ foldVarR md v = do
         Nothing    -> return ()
         Just depth -> do depth' <- varBindingDepthT v
                          guardMsg (depth == depth') "Specified binding depth does not match that of variable binding, this is probably a shadowing occurrence."
-    e <- idR
     (rhs,_) <- getUnfoldingT AllBinders <<< return v
-    maybe (fail "no match.") return (fold v rhs e)
+    transform $ \ c -> maybeM "no match." . fold [mkEquality [] rhs (varToCoreExpr v)] c
+
+-- | Rewrite using a compiled fold. Useful inside traversal strategies like
+-- anytdR, because you can compile the fold once outside the traversal, then
+-- apply it everywhere in the tree.
+runFoldR :: (BoundVars c, Monad m) => CompiledFold -> Rewrite c m CoreExpr
+runFoldR compiled = transform $ \c -> maybeM "no match." . runFold compiled c
 
 ------------------------------------------------------------------------
 
-countBinders :: CoreExpr -> Int
-countBinders e = length vs
-    where (vs,_) = collectBinders e
+newtype CompiledFold = CompiledFold { getCompiledFold :: EMap ([Var], CoreExpr) }
 
-collectNBinders :: Int -> CoreExpr -> Maybe ([Var], CoreExpr)
-collectNBinders = go []
-  where
-    go bs 0 e         = return (reverse bs, e)
-    go bs i (Lam b e) = go (b:bs) (i-1) e
-    go _ _  _         = Nothing
+-- | Attempt to apply a list of Equalitys to the given expression, folding the
+-- left-hand side into an application of the right-hand side. This
+-- implementation depends on `Equality` being well-formed. That is, both the
+-- LHS and RHS are NOT lambda expressions. Always use `mkEquality` to ensure
+-- this is the case.
+fold :: BoundVars c => [Equality] -> c -> CoreExpr -> Maybe CoreExpr
+fold = runFold . compileFold
 
-unifyHoles :: Ord k
-           => [k]              -- keys we care about (TODO: figure out what else is getting in there)
-           -> (a -> a -> Bool) -- notion of equality
-           -> [(k,a)]          -- list of key/values
-           -> Maybe [(k,a)]    -- list of unified key/values, or failure
-unifyHoles vs eq kvs = do
-    -- return Nothing if not equal, so sequence will fail below
-    let checkEqual m1 m2 = ifM (eq <$> m1 <*> m2) m1 Nothing
-        m = Map.fromListWith checkEqual [(k,Just v) | (k,v) <- kvs ]
+-- | Compile a list of Equality's into a single fold matcher.
+compileFold :: [Equality] -> CompiledFold
+compileFold = CompiledFold . foldr addFold fEmpty
+    where addFold (Equality vs lhs rhs) = insertFold emptyAlphaEnv vs lhs (vs, rhs)
 
-    es <- sequence [ join (Map.lookup v m) | v <- vs ]
-    return $ zip vs es
+-- | Attempt to fold an expression using a matcher in a given context.
+runFold :: BoundVars c => CompiledFold -> c -> CoreExpr -> Maybe CoreExpr
+runFold compiled c exp = do
+    (hs, (vs', rhs')) <- singleResult $ filterOutOfScope c $ findFold exp $ getCompiledFold compiled
+    args <- sequence [ lookupVarEnv hs v | v <- vs' ]
+    return $ uncurry mkCoreApps $ betaReduceAll (mkCoreLams vs' rhs') args
 
-fold :: Id -> CoreExpr -> CoreExpr -> Maybe CoreExpr
-fold i lam exp = do
-    (vs,body) <- collectNBinders (countBinders lam - countBinders exp) lam
-    al <- foldMatch vs [] body exp
+insertFold :: Fold m => AlphaEnv -> [Var] -> Key m -> a -> m a -> m a
+insertFold env vs k x = fAlter env vs k (const (Just x))
 
-    es <- liftM (map snd) $ unifyHoles vs exprAlphaEq al
+findFold :: Fold m => Key m -> m a -> [(VarEnv CoreExpr, a)]
+findFold = fFold emptyVarEnv emptyAlphaEnv
 
-    return $ mkCoreApps (varToCoreExpr i) es
+filterOutOfScope :: BoundVars c => c -> [(VarEnv CoreExpr, ([Var], CoreExpr))] -> [(VarEnv CoreExpr, ([Var], CoreExpr))]
+filterOutOfScope c = go
+    where go [] = []
+          go (x@(_,(vs,e)):r)
+            | isEmptyVarSet (filterVarSet (not . inScope c) (delVarSetList (freeVarsExpr e) vs)) = x : go r
+            | otherwise = go r
 
--- Note: Var in the concrete instance is first
--- (not the Var found in the definition we are trying to fold).
-addAlpha :: Var -> Var -> [(Var,Var)] -> [(Var,Var)]
-addAlpha rId lId alphas | rId == lId = alphas
-                        | otherwise  = (rId,lId) : alphas
-
-matchWithTypes :: [Var] -> [(Var,Var)] -> Id -> CoreExpr -> Maybe [(Var,CoreExpr)]
-matchWithTypes vs as i e = do
-    tys <- foldMatchType vs as (idType i) (exprType e)
-    return $ (i,e) : tyMatchesToCoreExpr tys
-
-tyMatchesToCoreExpr :: [(TyVar, Type)] -> [(Var, CoreExpr)]
-tyMatchesToCoreExpr = map (\(v,t) -> (v, Type t))
+singleResult :: [a] -> Maybe a
+singleResult [x] = Just x
+singleResult _   = Nothing
 
 ------------------------------------------------------------------------
 
--- Note: return list can have duplicate keys, caller is responsible
--- for checking that dupes refer to same expression
-foldMatch :: [Var]          -- ^ vars that can unify with anything
-          -> [(Var,Var)]    -- ^ alpha equivalences, wherever there is binding
-                            --   note: we depend on behavior of lookup here, so new entries
-                            --         should always be added to the front of the list so
-                            --         we don't have to explicity remove them when shadowing occurs
-          -> CoreExpr       -- ^ pattern we are matching on
-          -> CoreExpr       -- ^ expression we are checking
-          -> Maybe [(Var,CoreExpr)] -- ^ mapping of vars to expressions, or failure
+data AlphaEnv = AE { _aeNext :: Int, _aeEnv :: VarEnv Int }
 
-foldMatch vs as (Var i) e | i `elem` vs = matchWithTypes vs as i e
-                          | otherwise   = case e of
-                                            Var i' | maybe False (==i) (lookup i' as) -> matchWithTypes vs as i e
-                                                   | i == i' -> liftM tail $ matchWithTypes vs as i e
-                                                                -- note we depend on (i,e) being at front here
-                                                                -- this is not strictly necessary, but is faster
-                                            _                -> Nothing
-foldMatch _  _ (Lit l) (Lit l') | l == l' = return []
+emptyAlphaEnv :: AlphaEnv
+emptyAlphaEnv = AE 0 emptyVarEnv
 
-foldMatch vs as (App e a) (App e' a') = do
-    x <- foldMatch vs as e e'
-    y <- foldMatch vs as a a'
-    return (x ++ y)
+extendAlphaEnv :: Var -> AlphaEnv -> AlphaEnv
+extendAlphaEnv v (AE i env) = AE (i+1) (extendVarEnv env v i)
 
-foldMatch vs as (Lam v e) (Lam v' e') = foldMatch (filter (/=v) vs) (addAlpha v' v as) e e'
-
-foldMatch vs as (Let (NonRec v rhs) e) (Let (NonRec v' rhs') e') = do
-    x <- foldMatch vs as rhs rhs'
-    y <- foldMatch (filter (/=v) vs) (addAlpha v' v as) e e'
-    return (x ++ y)
-
--- TODO: this depends on bindings being in the same order
-foldMatch vs as (Let (Rec bnds) e) (Let (Rec bnds') e') | length bnds == length bnds' = do
-    let vs' = filter (`notElem` map fst bnds) vs
-        as' = foldr (uncurry addAlpha) as $ zip (map fst bnds) (map fst bnds')
-        bmatch (_,rhs) (_,rhs') = foldMatch vs' as' rhs rhs'
-    x <- zipWithM bmatch bnds bnds'
-    y <- foldMatch vs' as' e e'
-    return (concat x ++ y)
-
-foldMatch vs as (Tick t e) (Tick t' e') | t == t' = foldMatch vs as e e'
-
-foldMatch vs as (Case s b ty alts) (Case s' b' ty' alts') = do
-    guard (length alts == length alts')
-    t <- foldMatchType vs as ty ty'
-    x <- foldMatch vs as s s'
-    let as' = addAlpha b' b as
-        vs' = filter (/=b) vs
-        altMatch (ac, is, e) (ac', is', e') | ac == ac' =
-            foldMatch (filter (`notElem` is) vs') (foldr (uncurry addAlpha) as' $ zip is' is) e e'
-        altMatch _ _ = Nothing
-    y <- zipWithM altMatch alts alts'
-    return (x ++ tyMatchesToCoreExpr t ++ concat y)
-
-foldMatch vs as (Cast e c) (Cast e' c') = do
-    guard (coreEqCoercion c c')
-    foldMatch vs as e e'
-
-foldMatch vs as (Type t1) (Type t2) = liftM tyMatchesToCoreExpr $ foldMatchType vs as t1 t2
-
--- TODO: do we want to descend into these? There are Types in here.
-foldMatch _ _ (Coercion c) (Coercion c') | coreEqCoercion c c' = return []
-
-foldMatch _ _ _ _ = Nothing
+lookupAlphaEnv :: Var -> AlphaEnv -> Maybe Int
+lookupAlphaEnv v (AE _ env) = lookupVarEnv env v
 
 ------------------------------------------------------------------------
 
--- | Given list of TyVars which can match any type (the holes),
--- a pattern, and a concrete type, return mapping from hole to type
--- for successful unification.
-unifyTypes :: [TyVar] -> Type -> Type -> Maybe [(TyVar, Type)]
-unifyTypes holes pat ty = do
-    al <- foldMatchType holes [] pat ty
-    -- unlike folding itself, we don't care that every hole is assigned
-    let found = [ v | (v,_) <- al, v `elem` holes ]
-    unifyHoles found typeAlphaEq al
+-- TODO: Maybe a -> a ??? -- we never need to delete
+type A a = Maybe a -> Maybe a
 
-foldMatchType :: [TyVar]              -- ^ vars that can unify with anything
-              -> [(TyVar,TyVar)]      -- ^ alpha equivalences, wherever there is binding
-                                      --   note: we depend on behavior of lookup here, so new entries
-                                      --         should always be added to the front of the list so
-                                      --         we don't have to explicity remove them when shadowing occurs
-              -> Type                 -- ^ pattern we are matching on
-              -> Type                 -- ^ expression we are checking
-              -> Maybe [(TyVar,Type)] -- ^ mapping of vars to types, or failure
+toA :: Fold m => (m a -> m a) -> Maybe (m a) -> Maybe (m a)
+toA f = Just . f . fromMaybe fEmpty
 
--- look through type synonyms
-foldMatchType vs as t1 t2 | Just t1' <- tcView t1 = foldMatchType vs as t1' t2
-                          | Just t2' <- tcView t2 = foldMatchType vs as t1 t2'
+type LMap a = M.Map Literal a
+type BMap = TyMap -- Binders are de-bruijn indexed, so we only compare their types
 
-foldMatchType vs as (TyVarTy v) t | v `elem` vs = return [(v,t)]
-                                  | otherwise = case t of
-                                                  TyVarTy v' | maybe False (==v) (lookup v' as) -> return [(v,t)]
-                                                             | v == v' {- compare kinds? -} -> return []
-                                                  _ -> Nothing
+------------------------------------------------------------------------
 
-foldMatchType vs as (AppTy ty1 ty2) (AppTy ty1' ty2') = do
-    x <- foldMatchType vs as ty1 ty1'
-    y <- foldMatchType vs as ty2 ty2'
-    return (x ++ y)
+class Fold m where
+    type Key m :: *
+    fEmpty :: m a
+    fAlter :: AlphaEnv -> [Var] -> Key m -> A a -> m a -> m a
+    fFold :: VarEnv CoreExpr -> AlphaEnv -> Key m -> m a -> [(VarEnv CoreExpr, a)]
 
-foldMatchType vs as (TyConApp tc1 kOrTys1) (TyConApp tc2 kOrTys2) = do
-    guard ((tc1 == tc2) && (length kOrTys1 == length kOrTys2))
-    let f ty1 ty2 | isKind ty1 && eqKind ty1 ty2 = return []
-                  | otherwise = foldMatchType vs as ty1 ty2
-    liftM concat $ zipWithM f kOrTys1 kOrTys2
+-- TODO: Idea ... Generalized Tries with Effects
+--       Reader - De Bruijn indexing
+--       State-ish - Folding with hole filling
 
-foldMatchType vs as (FunTy ty1 ty2) (FunTy ty1' ty2') = do
-    x <- foldMatchType vs as ty1 ty1'
-    y <- foldMatchType vs as ty2 ty2'
-    return (x ++ y)
+------------------------------------------------------------------------
 
-foldMatchType vs as (ForAllTy v ty) (ForAllTy v' ty') = foldMatchType (filter (/=v) vs) (addAlpha v' v as) ty ty'
+-- Note [Var Uniques]
+-- Free variable occurrences can have the same unique at a different type!
+-- The reason is that when GHC substitutes into the type of the Var, it DOES NOT
+-- freshen the unique of the Var. This is not normally a problem for GHC, because
+-- if two Vars with the same unique are bound within scope of each other, one gets
+-- freshened at creation. However, with Lemmas, we have the possibility of applying
+-- a fold from one subtree to a completely different subtree, so can cross scopes.
+--
+-- To solve this, we first look up the Var by unique, then check it's type with a TyMap.
+-- This is unnecessary for bound vars, because their types are checked when we pass
+-- the binding itself.
 
-foldMatchType _ _ (LitTy l1) (LitTy l2) | l1 == l2 = return []
+data VMap a = VM { bvmap :: I.IntMap a, fvmap :: VarEnv (TyMap a) } -- See Note [Var Uniques]
+            | VMEmpty
 
-foldMatchType _ _ _ _ = Nothing
+instance Fold VMap where
+    type Key VMap = Var
 
+    fEmpty :: VMap a
+    fEmpty = VMEmpty
+
+    fAlter :: AlphaEnv -> [Var] -> Key VMap -> A a -> VMap a -> VMap a
+    fAlter env vs v f VMEmpty = fAlter env vs v f (VM I.empty emptyVarEnv)
+    fAlter env vs v f m@VM{}
+        | Just bv <- lookupAlphaEnv v env = m { bvmap = I.alter f bv (bvmap m) }
+        | otherwise                       = m { fvmap = alterVarEnv (toA (fAlter env vs (varType v) f)) (fvmap m) v }
+
+    fFold :: VarEnv CoreExpr -> AlphaEnv -> Key VMap -> VMap a -> [(VarEnv CoreExpr, a)]
+    fFold _  _   _ VMEmpty = []
+    fFold hs env v m@VM{}
+        | Just bv <- lookupAlphaEnv v env = maybeToList $ (hs,) <$> I.lookup bv (bvmap m)
+        | otherwise                       = do
+            m' <- maybeToList $ lookupVarEnv (fvmap m) v
+            fFold hs env (varType v) m'
+
+------------------------------------------------------------------------
+
+data TyMap a = TyMEmpty
+             | TyM { tmHole   :: TyMap (M.Map Var a)
+                   , tmVar    :: VMap a
+                   , tmApp    :: TyMap (TyMap a)
+                   , tmFun    :: TyMap (TyMap a)
+                   , tmTcApp  :: NameEnv (ListMap TyMap a)
+                   , tmForall :: TyMap (BMap a)
+                   , tmTyLit  :: TyLitMap a
+                   }
+
+instance Fold TyMap where
+    type Key TyMap = Type
+
+    fEmpty :: TyMap a
+    fEmpty = TyMEmpty
+
+    fAlter :: AlphaEnv -> [Var] -> Key TyMap -> A a -> TyMap a -> TyMap a
+    fAlter env vs ty f TyMEmpty = fAlter env vs ty f (TyM fEmpty fEmpty fEmpty fEmpty emptyNameEnv fEmpty fEmpty)
+    fAlter env vs ty f m@TyM{} = go ty
+        where go (TyVarTy v)
+                | v `elem` vs  = m { tmHole = fAlter env vs (varType v) (Just . M.alter f v . fromMaybe M.empty) (tmHole m) }
+                | otherwise    = m { tmVar = fAlter env vs v f (tmVar m) }
+              go (AppTy t1 t2) = m { tmApp = fAlter env vs t1 (toA (fAlter env vs t2 f)) (tmApp m) }
+              go (FunTy t1 t2) = m { tmFun = fAlter env vs t1 (toA (fAlter env vs t2 f)) (tmFun m) }
+              go (TyConApp tc tys) = m { tmTcApp = alterNameEnv (toA (fAlter env vs tys f)) (tmTcApp m) (getName tc) }
+              go (ForAllTy tv t) = m { tmForall = fAlter (extendAlphaEnv tv env) (delete tv vs) t
+                                                         (toA (fAlter env vs (varType tv) f)) (tmForall m) }
+              go (LitTy l)     = m { tmTyLit = fAlter env vs l f (tmTyLit m) }
+
+    fFold :: VarEnv CoreExpr -> AlphaEnv -> Key TyMap -> TyMap a -> [(VarEnv CoreExpr, a)]
+    fFold _ _ _ TyMEmpty = []
+    fFold hs env ty m@TyM{} = hss ++ go ty
+        where hss = do
+                (hs', m') <- fFold hs env (typeKind ty) (tmHole m)
+                extendResult m' (Type ty) hs'
+
+              go (TyVarTy v) = fFold hs env v (tmVar m)
+              go (AppTy t1 t2) = do
+                (hs', m') <- fFold hs env t1 (tmApp m)
+                fFold hs' env t2 m'
+              go (FunTy t1 t2) = do
+                (hs', m') <- fFold hs env t1 (tmFun m)
+                fFold hs' env t2 m'
+              go (TyConApp tc tys) = maybeToList (lookupNameEnv (tmTcApp m) (getName tc)) >>= fFold hs env tys
+              go (ForAllTy tv t) = do
+                (hs', m') <- fFold hs (extendAlphaEnv tv env) t (tmForall m)
+                fFold hs' env (varType tv) m'
+              go (LitTy l) = fFold hs env l (tmTyLit m)
+
+------------------------------------------------------------------------
+
+data TyLitMap a = TLM { tlmNumber :: M.Map Integer a
+                      , tlmString :: M.Map FastString a
+                      }
+
+instance Fold TyLitMap where
+    type Key TyLitMap = TyLit
+
+    fEmpty :: TyLitMap a
+    fEmpty = TLM M.empty M.empty
+
+    fAlter :: AlphaEnv -> [Var] -> Key TyLitMap -> A a -> TyLitMap a -> TyLitMap a
+    fAlter _ _ l f m = go l
+        where go (NumTyLit n) = m { tlmNumber = M.alter f n (tlmNumber m) }
+              go (StrTyLit s) = m { tlmString = M.alter f s (tlmString m) }
+
+    fFold :: VarEnv CoreExpr -> AlphaEnv -> Key TyLitMap -> TyLitMap a -> [(VarEnv CoreExpr, a)]
+    fFold hs _ l m = go l
+        where go (NumTyLit n) = maybeToList $ (hs,) <$> M.lookup n (tlmNumber m)
+              go (StrTyLit s) = maybeToList $ (hs,) <$> M.lookup s (tlmString m)
+
+------------------------------------------------------------------------
+
+-- Note [Coercions]
+-- We don't actually care about the structure of the coercion evidence
+-- itself when we are folding types and expressions. We merely care that
+-- there are two coercions with the same type. Hence, we look up the type
+-- of the coercion in a TyMap.
+
+-- Note [Tick]
+-- We completely look through Ticks, discarding them from pattern expressions
+-- at insertion and from candidate expressions at folding/lookup. It is assumed
+-- that the Tick is properly present in the RHS, which is the ultimate return
+-- value of fFold, thus it will appear in the resulting code.
+
+-- Note [Holes]
+-- Holes are distinguished variables which can match any expression. (The universally
+-- quantified variables in an Equality.) They are stored as a TyMap, so the type
+-- of the expression can be checked against the type of the hole. This wraps a
+-- map from Var to result. We use a regular map instead of a VarEnv so we can get
+-- the Var back, which allows us to assign it to the expression when building
+-- the fold result.
+
+data EMap a = EMEmpty
+            | EM { emHole  :: TyMap (M.Map Var a) -- See Note [Holes]
+                 , emVar   :: VMap a
+                 , emLit   :: LMap a
+                 , emCo    :: TyMap a        -- See Note [Coercions]
+                 , emType  :: TyMap a
+                 , emCast  :: EMap (TyMap a) -- See Note [Coercions]
+                 , emApp   :: EMap (EMap a)
+                 , emLam   :: EMap (BMap a)
+                 , emLetN  :: EMap (EMap (BMap a))
+                   -- consider using set rather than list for order-independence
+                 , emLetR  :: ListMap EMap (EMap (ListMap BMap a))
+                 , emCase  :: EMap (ListMap AMap a)
+                 , emECase :: EMap (TyMap a)
+                 }
+
+emptyEMapWrapper :: EMap a
+emptyEMapWrapper = EM fEmpty fEmpty M.empty fEmpty fEmpty fEmpty
+                      fEmpty fEmpty fEmpty fEmpty fEmpty fEmpty
+
+instance Fold EMap where
+    type Key EMap = CoreExpr
+    fEmpty = EMEmpty
+
+    fAlter :: AlphaEnv -> [Var] -> Key EMap -> A a -> EMap a -> EMap a
+    fAlter env vs exp f EMEmpty = fAlter env vs exp f emptyEMapWrapper
+    fAlter env vs exp f m@EM{} = go exp
+        where go (Var v)
+                | v `elem` vs = m { emHole = fAlter env vs (varType v) (Just . M.alter f v . fromMaybe M.empty) (emHole m) }
+                | otherwise   = m { emVar  = fAlter env vs v f (emVar m) }
+              go (Lit l)      = m { emLit  = M.alter f l (emLit m) }
+              go (Coercion c) = m { emCo   = fAlter env vs (coercionType c) f (emCo m) }
+              go (Type t)     = m { emType = fAlter env vs t f (emType m) }
+              go (Cast e c)   = m { emCast = fAlter env vs e (toA (fAlter env vs (coercionType c) f)) (emCast m) }
+              go (Tick _ e)   = fAlter env vs e f m -- See Note [Tick]
+              go (App l r)    = m { emApp  = fAlter env vs l (toA (fAlter env vs r f)) (emApp m) }
+              go (Lam b e)    = m { emLam  = fAlter (extendAlphaEnv b env) (delete b vs) e
+                                                    (toA (fAlter env vs (varType b) f))
+                                                    (emLam m) }
+              go (Case s _ t []) = m { emECase = fAlter env vs s (toA (fAlter env vs t f)) (emECase m) }
+              go (Case s b _ as) = m { emCase = fAlter env vs s
+                                                       (toA (fAlter (extendAlphaEnv b env) (delete b vs) as f))
+                                                       (emCase m) }
+              go (Let (NonRec b r) e) = m { emLetN = fAlter (extendAlphaEnv b env) (delete b vs) e
+                                                            (toA (fAlter env vs r (toA (fAlter env vs (varType b) f))))
+                                                            (emLetN m) }
+              go (Let (Rec ds) e) = let (bs, rhss) = unzip ds
+                                        env' = foldr extendAlphaEnv env bs
+                                        vs' = vs \\ bs
+                                    in m { emLetR = fAlter env' vs' rhss
+                                                           (toA (fAlter env' vs' e
+                                                                        (toA (fAlter env vs (map varType bs) f))))
+                                                           (emLetR m) }
+
+    fFold :: VarEnv CoreExpr -> AlphaEnv -> Key EMap -> EMap a -> [(VarEnv CoreExpr, a)]
+    fFold _  _   _ EMEmpty = []
+    fFold hs env exp m@EM{} = hss ++ go exp
+        where hss = do
+                (hs', m') <- fFold hs env (exprKindOrType exp) (emHole m)
+                extendResult m' exp hs'
+
+              go (Var v)      = fFold hs env v (emVar m)
+              go (Lit l)      = maybeToList $ (hs,) <$> M.lookup l (emLit m)
+              go (Coercion c) = fFold hs env (coercionType c) (emCo m)
+              go (Type t)     = fFold hs env t (emType m)
+              go (Cast e c)   = do
+                (hs', m') <- fFold hs env e (emCast m)
+                fFold hs' env (coercionType c) m'
+              go (Tick _ e)   = fFold hs env e m -- See Note [Tick]
+              go (App l r)    = do
+                (hs', m') <- fFold hs env l (emApp m)
+                fFold hs' env r m'
+              go (Lam b e)    = do
+                (hs', m') <- fFold hs (extendAlphaEnv b env) e (emLam m)
+                fFold hs' env (varType b) m'
+              go (Case s _ t []) = do
+                (hs', m') <- fFold hs env s (emECase m)
+                fFold hs' env t m'
+              go (Case s b _ as) = do
+                (hs', m') <- fFold hs env s (emCase m)
+                fFold hs' (extendAlphaEnv b env) as m'
+              go (Let (NonRec b r) e) = do
+                (hs' , m' ) <- fFold hs (extendAlphaEnv b env) e (emLetN m)
+                (hs'', m'') <- fFold hs' env r m'
+                fFold hs'' env (varType b) m''
+              go (Let (Rec ds) e) = do
+                let (bs, rhss) = unzip ds
+                    env' = foldr extendAlphaEnv env bs
+                (hs' , m' ) <- fFold hs env' rhss (emLetR m)
+                (hs'', m'') <- fFold hs' env' e m'
+                fFold hs'' env (map varType bs) m''
+
+-- Add the matched expression to the holes map, fails if expression differs from one already in hole.
+extendResult :: M.Map Var a -> CoreExpr -> VarEnv CoreExpr -> [(VarEnv CoreExpr, a)]
+extendResult hm e m = catMaybes
+    [ case lookupVarEnv m v of
+        Nothing -> return (extendVarEnv m v e, x)
+        Just e' -> sameExpr e e' >> return (m, x)
+    | (v,x) <- M.assocs hm ]
+
+-- | Determine if two expressions are alpha-equivalent.
+sameExpr :: CoreExpr -> CoreExpr -> Maybe ()
+sameExpr e1 e2 = snd <$> singleResult (findFold e2 m)
+    where m = insertFold emptyAlphaEnv [] e1 () EMEmpty
+
+------------------------------------------------------------------------
+
+data ListMap m a
+  = ListMap { lmNil  :: Maybe a
+            , lmCons :: m (ListMap m a) }
+
+instance Fold m => Fold (ListMap m) where
+    type Key (ListMap m) = [Key m]
+
+    fEmpty :: ListMap m a
+    fEmpty = ListMap Nothing fEmpty
+
+    fAlter :: AlphaEnv -> [Var] -> Key (ListMap m) -> A a -> ListMap m a -> ListMap m a
+    fAlter _   _  []     f m = m { lmNil  = f (lmNil m) }
+    fAlter env vs (x:xs) f m = m { lmCons = fAlter env vs x (toA (fAlter env vs xs f)) (lmCons m) }
+
+    fFold :: VarEnv CoreExpr -> AlphaEnv -> Key (ListMap m) -> ListMap m a -> [(VarEnv CoreExpr, a)]
+    fFold hs _   []     m = maybeToList $ (hs,) <$> lmNil m
+    fFold hs env (x:xs) m = do
+        (hs', m') <- fFold hs env x (lmCons m)
+        fFold hs' env xs m'
+
+------------------------------------------------------------------------
+
+-- Note [Alt Binders]
+-- We don't store the uniques/types of the alt-binders, because they are
+-- completely determined by the scrutinee/datacon/rhs.
+
+data AMap a = AMEmpty
+            | AM { amDef  :: EMap a
+                 , amData :: NameEnv (EMap a) -- See Note [Alt Binders]
+                 , amLit  :: LMap (EMap a) }
+
+instance Fold AMap where
+    type Key AMap = Alt CoreBndr
+
+    fEmpty :: AMap a
+    fEmpty = AMEmpty
+
+    fAlter :: AlphaEnv -> [Var] -> Key AMap -> A a -> AMap a -> AMap a
+    fAlter env vs alt f AMEmpty = fAlter env vs alt f (AM fEmpty emptyNameEnv M.empty)
+    fAlter env vs alt f m@AM{} = go alt
+        where go (DEFAULT  , _ , rhs) = m { amDef  = fAlter env vs rhs f (amDef m) }
+              go (DataAlt d, bs, rhs) = m { amData = alterNameEnv
+                                                        (toA (fAlter (foldr extendAlphaEnv env bs) (vs \\ bs) rhs f))
+                                                        (amData m) (getName d) }
+              go (LitAlt l , _ , rhs) = m { amLit  = M.alter (toA (fAlter env vs rhs f)) l (amLit m) }
+
+    fFold :: VarEnv CoreExpr -> AlphaEnv -> Key AMap -> AMap a -> [(VarEnv CoreExpr, a)]
+    fFold _ _ _ AMEmpty = []
+    fFold hs env alt m@AM{} = go alt
+        where go (DEFAULT  , _ , rhs) = fFold hs env rhs (amDef m)
+              go (DataAlt d, bs, rhs) = do
+                m' <- maybeToList (lookupNameEnv (amData m) (getName d))
+                fFold hs (foldr extendAlphaEnv env bs) rhs m'
+              go (LitAlt l , _ , rhs) = maybeToList (M.lookup l (amLit m)) >>= fFold hs env rhs

@@ -14,7 +14,6 @@ import Control.Arrow
 import Control.Monad
 
 import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.GHC (substCoreExpr)
 import HERMIT.Dictionary.Inline (inlineR)
 
 import HERMIT.Core

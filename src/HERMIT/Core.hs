@@ -1,79 +1,81 @@
 {-# LANGUAGE CPP, LambdaCase #-}
 module HERMIT.Core
-          (
-          -- * Generic Data Type
-            CoreProg(..)
-          , CoreDef(..)
-          , CoreTickish
-          -- * Equality
-          -- | We define both syntactic equality and alpha equality.
+    ( -- * Generic Data Type
+      CoreProg(..)
+    , CoreDef(..)
+    , CoreTickish
+      -- * Equality
+      -- | We define both syntactic equality and alpha equality.
 
-          -- ** Syntactic Equality
-          , progSyntaxEq
-          , bindSyntaxEq
-          , defSyntaxEq
-          , exprSyntaxEq
-          , altSyntaxEq
-          , typeSyntaxEq
-          , coercionSyntaxEq
+      -- ** Syntactic Equality
+    , progSyntaxEq
+    , bindSyntaxEq
+    , defSyntaxEq
+    , exprSyntaxEq
+    , altSyntaxEq
+    , typeSyntaxEq
+    , coercionSyntaxEq
 
-          -- ** Alpha Equality
-          , progAlphaEq
-          , bindAlphaEq
-          , defAlphaEq
-          , exprAlphaEq
-          , altAlphaEq
-          , typeAlphaEq
-          , coercionAlphaEq
+      -- ** Alpha Equality
+    , progAlphaEq
+    , bindAlphaEq
+    , defAlphaEq
+    , exprAlphaEq
+    , altAlphaEq
+    , typeAlphaEq
+    , coercionAlphaEq
 
-          -- * Conversions to/from 'Core'
-          , defsToRecBind
-          , defToIdExpr
-          , progToBinds
-          , bindsToProg
-          , bindToVarExprs
+      -- * Conversions to/from 'Core'
+    , defsToRecBind
+    , defToIdExpr
+    , progToBinds
+    , bindsToProg
+    , bindToVarExprs
 
-          -- * Collecting variable bindings
-          , progIds
-          , bindVars
-          , defId
-          , altVars
+      -- * Collecting variable bindings
+    , progIds
+    , bindVars
+    , defId
+    , altVars
 
-          -- * Collecting free variables
-          -- $freeVarsNote
-          , freeVarsProg
-          , freeVarsBind
-          , freeVarsDef
-          , freeVarsExpr
-          , freeVarsAlt
-          , freeVarsVar
-          , localFreeVarsAlt
-          , freeVarsType
-          , freeVarsCoercion
-          , localFreeVarsExpr
-          , freeIdsExpr
-          , localFreeIdsExpr
+      -- * Collecting free variables
+      -- $freeVarsNote
+    , freeVarsProg
+    , freeVarsBind
+    , freeVarsDef
+    , freeVarsExpr
+    , freeVarsAlt
+    , freeVarsVar
+    , localFreeVarsAlt
+    , freeVarsType
+    , freeVarsCoercion
+    , localFreeVarsExpr
+    , freeIdsExpr
+    , localFreeIdsExpr
 
-          -- * Utilities
-          , isCoArg
-          , exprKindOrType
-          , exprTypeM
-          , endoFunTypeM
-          , splitTyConAppM
-          , splitFunTypeM
-          , endoFunExprTypeM
-          , funExprArgResTypesM
-          , funExprsWithInverseTypes
-          , appCount
-          , mapAlts
+      -- * Utilities
+    , isCoArg
+    , exprKindOrType
+    , exprTypeM
+    , endoFunTypeM
+    , splitTyConAppM
+    , splitFunTypeM
+    , endoFunExprTypeM
+    , funExprArgResTypesM
+    , funExprsWithInverseTypes
+    , appCount
+    , mapAlts
+    , substCoreAlt
+    , substCoreExpr
+    , betaReduceAll
 
-          -- * Crumbs
-          , Crumb(..)
-          , showCrumbs
---          , crumbToDeprecatedInt
-          , deprecatedLeftSibling
-          , deprecatedRightSibling
-) where
+      -- * Crumbs
+    , Crumb(..)
+    , showCrumbs
+      -- , crumbToDeprecatedInt
+    , deprecatedLeftSibling
+    , deprecatedRightSibling
+    ) where
 
 import Control.Monad ((>=>))
 
@@ -563,3 +565,21 @@ deprecatedRightSibling = \case
 
 
 -----------------------------------------------------------------------
+
+-- | Substitute all occurrences of a variable with an expression, in an expression.
+substCoreExpr :: Var -> CoreExpr -> (CoreExpr -> CoreExpr)
+substCoreExpr v e expr = substExpr (text "substCoreExpr") (extendSubst emptySub v e) expr
+    where emptySub = mkEmptySubst (mkInScopeSet (localFreeVarsExpr (Let (NonRec v e) expr)))
+
+-- | Substitute all occurrences of a variable with an expression, in a case alternative.
+substCoreAlt :: Var -> CoreExpr -> CoreAlt -> CoreAlt
+substCoreAlt v e alt = let (con, vs, rhs) = alt
+                           inS            = (flip delVarSet v . unionVarSet (localFreeVarsExpr e) . localFreeVarsAlt) alt
+                           subst          = extendSubst (mkEmptySubst (mkInScopeSet inS)) v e
+                           (subst', vs')  = substBndrs subst vs
+                        in (con, vs', substExpr (text "alt-rhs") subst' rhs)
+
+-- | Beta-reduce as many lambda-binders as possible.
+betaReduceAll :: CoreExpr -> [CoreExpr] -> (CoreExpr, [CoreExpr])
+betaReduceAll (Lam v body) (a:as) = betaReduceAll (substCoreExpr v a body) as
+betaReduceAll e            as     = (e,as)

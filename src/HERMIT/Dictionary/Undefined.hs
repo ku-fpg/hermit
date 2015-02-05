@@ -28,6 +28,7 @@ import Data.String (fromString)
 
 import HERMIT.Context
 import HERMIT.Core
+import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC hiding ((<>))
 import HERMIT.Kure

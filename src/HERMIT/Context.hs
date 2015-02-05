@@ -35,6 +35,7 @@ module HERMIT.Context
        , lookupHermitBinding
        , lookupHermitBindingDepth
        , lookupHermitBindingSite
+       , inScope
          -- ** Accessing GHC rewrite rules from the context
        , HasCoreRules(..)
          -- ** An empty Context
@@ -190,6 +191,11 @@ class BoundVars c => ReadBindings c where
 -- | Determine if a variable is bound in a context.
 boundIn :: ReadBindings c => Var -> c -> Bool
 boundIn i c = i `member` hermitBindings c
+
+-- | Determine whether a variable is in scope.
+inScope :: BoundVars c => c -> Var -> Bool
+inScope c v = not (isDeadBinder v || (isLocalVar v && (v `notElemVarSet` boundVars c)))
+-- Used in Dictionary.Inline and Dictionary.Fold to check if variables are in scope.
 
 -- | Lookup the binding for a variable in a context.
 lookupHermitBinding :: (ReadBindings c, Monad m) => Var -> c -> m HermitBinding

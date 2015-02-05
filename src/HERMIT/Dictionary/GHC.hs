@@ -1,18 +1,15 @@
 {-# LANGUAGE CPP, FlexibleContexts #-}
 module HERMIT.Dictionary.GHC
     ( -- * GHC-based Transformations
-     -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
-     externals
-     -- ** Substitution
+      -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
+      externals
+      -- ** Substitution
     , substR
-    , substCoreAlt
-    , substCoreExpr
-     -- ** Utilities
-    --      , inScope
+      -- ** Utilities
     , dynFlagsT
     , arityOf
-     -- ** Lifted GHC capabilities
-     -- A zombie is an identifer that has 'OccInfo' 'IAmDead', but still has occurrences.
+      -- ** Lifted GHC capabilities
+      -- A zombie is an identifer that has 'OccInfo' 'IAmDead', but still has occurrences.
     , lintExprT
     , lintModuleT
     , occurAnalyseR
@@ -48,21 +45,21 @@ import           HERMIT.Name
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
 externals :: [External]
 externals =
-         [ external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH Core)
-                [ "Deshadow a program." ] .+ Deep
-         , external "dezombify" (promoteExprR dezombifyR :: RewriteH Core)
-                [ "Zap the occurrence information in the current identifer if it is a zombie."] .+ Shallow
-         , external "occurrence-analysis" (occurrenceAnalysisR :: RewriteH Core)
-                [ "Perform dependency analysis on all sub-expressions; simplifying and updating identifer info."] .+ Deep
-         , external "lint-expr" (promoteExprT lintExprT :: TransformH CoreTC String)
-                [ "Runs GHC's Core Lint, which typechecks the current expression."
-                , "Note: this can miss several things that a whole-module core lint will find."
-                , "For instance, running this on the RHS of a binding, the type of the RHS will"
-                , "not be checked against the type of the binding. Running on the whole let expression"
-                , "will catch that however."] .+ Deep .+ Debug .+ Query
-         , external "lint-module" (promoteModGutsT lintModuleT :: TransformH CoreTC String)
-                [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
-         ]
+    [ external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH Core)
+        [ "Deshadow a program." ] .+ Deep
+    , external "dezombify" (promoteExprR dezombifyR :: RewriteH Core)
+        [ "Zap the occurrence information in the current identifer if it is a zombie."] .+ Shallow
+    , external "occurrence-analysis" (occurrenceAnalysisR :: RewriteH Core)
+        [ "Perform dependency analysis on all sub-expressions; simplifying and updating identifer info."] .+ Deep
+    , external "lint-expr" (promoteExprT lintExprT :: TransformH CoreTC String)
+        [ "Runs GHC's Core Lint, which typechecks the current expression."
+        , "Note: this can miss several things that a whole-module core lint will find."
+        , "For instance, running this on the RHS of a binding, the type of the RHS will"
+        , "not be checked against the type of the binding. Running on the whole let expression"
+        , "will catch that however."] .+ Deep .+ Debug .+ Query
+    , external "lint-module" (promoteModGutsT lintModuleT :: TransformH CoreTC String)
+        [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
+    ]
 
 ------------------------------------------------------------------------
 
@@ -71,30 +68,12 @@ substR :: MonadCatch m => Var -> CoreExpr -> Rewrite c m Core
 substR v e = setFailMsg "Can only perform substitution on expressions, case alternatives or programs." $
              promoteExprR (arr $ substCoreExpr v e) <+ promoteProgR (substTopBindR v e) <+ promoteAltR (arr $ substCoreAlt v e)
 
--- | Substitute all occurrences of a variable with an expression, in an expression.
-substCoreExpr :: Var -> CoreExpr -> (CoreExpr -> CoreExpr)
-substCoreExpr v e expr =
-    -- The InScopeSet needs to include any free variables appearing in the
-    -- expression to be substituted.  Constructing a NonRec Let expression
-    -- to pass on to exprFeeVars takes care of this, but ...
-    -- TODO Is there a better way to do this ???
-    let emptySub = mkEmptySubst (mkInScopeSet (localFreeVarsExpr (Let (NonRec v e) expr)))
-     in substExpr (text "substCoreExpr") (extendSubst emptySub v e) expr
-
 -- | Substitute all occurrences of a variable with an expression, in a program.
 substTopBindR :: Monad m => Var -> CoreExpr -> Rewrite c m CoreProg
 substTopBindR v e =  contextfreeT $ \ p -> do
     -- TODO.  Do we need to initialize the emptySubst with bindFreeVars?
     let emptySub =  emptySubst -- mkEmptySubst (mkInScopeSet (exprFreeVars exp))
     return $ bindsToProg $ snd (mapAccumL substBind (extendSubst emptySub v e) (progToBinds p))
-
--- | Substitute all occurrences of a variable with an expression, in a case alternative.
-substCoreAlt :: Var -> CoreExpr -> CoreAlt -> CoreAlt
-substCoreAlt v e alt = let (con, vs, rhs) = alt
-                           inS            = (flip delVarSet v . unionVarSet (localFreeVarsExpr e) . localFreeVarsAlt) alt
-                           subst          = extendSubst (mkEmptySubst (mkInScopeSet inS)) v e
-                           (subst', vs')  = substBndrs subst vs
-                        in (con, vs', substExpr (text "alt-rhs") subst' rhs)
 
 ------------------------------------------------------------------------
 

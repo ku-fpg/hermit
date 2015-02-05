@@ -18,6 +18,7 @@ import Control.Arrow
 import Data.String (fromString)
 
 import HERMIT.Core
+import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure

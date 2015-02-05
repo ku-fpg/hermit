@@ -27,12 +27,13 @@ import Data.Function (on)
 import Data.List (deleteFirstsBy,intercalate)
 import Data.String (IsString(..))
 
-import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Monad
-import HERMIT.Kure
+import HERMIT.Core
+import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Kure
+import HERMIT.Monad
 
 import HERMIT.Dictionary.GHC (dynFlagsT)
 import HERMIT.Dictionary.Kure (anyCallR)

@@ -33,6 +33,7 @@ import Data.Map (filterWithKey, toList)
 import Data.String (fromString)
 
 import HERMIT.Core
+import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC hiding (settings, (<>), text, sep, (<+>), ($+$), nest)
 import HERMIT.Kernel.Scoped
@@ -273,11 +274,13 @@ performInduction lem@(nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
 
     forM_ cases $ \ (mdc,vs,lhsE,rhsE) -> do
 
+        -- TODO rethink the remake.discardUniVars
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
+            remake (Equality bndrs l r) = mkEquality bndrs l r
 
         -- Generate list of specialized induction hypotheses for the recursive cases.
         eqs <- forM vs_matching_i_type $ \ i' ->
-                    liftM discardUniVars $ instantiateEqualityVar (==i) (Var i') [] eq
+                    liftM (remake.discardUniVars) $ instantiateEqualityVar (==i) (Var i') [] eq
 
         let nms = [ fromString ("ind-hyp-" ++ show n) | n :: Int <- [0..] ]
             hypLemmas = zip nms $ zipWith3 Lemma eqs (repeat True) (repeat False)

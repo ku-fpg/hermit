@@ -17,6 +17,7 @@ module HERMIT.Kernel
 import Prelude hiding (lookup)
 
 import HERMIT.Context
+import HERMIT.Equality
 import HERMIT.Monad
 import HERMIT.Kure
 import HERMIT.GHC hiding (singleton, empty)

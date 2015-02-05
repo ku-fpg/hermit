@@ -46,17 +46,18 @@ module HERMIT.Dictionary.Reasoning
     , instantiateEqualityVar
     , instantiateEqualityVarR
     , discardUniVars
+      -- ** Remembering definitions.
+    , prefixRemembered
     , rememberR
     , unfoldRememberedR
     , foldRememberedR
     , foldAnyRememberedR
-    , prefixRemembered
+    , compileRememberedT
     ) where
 
 import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad
-import           Control.Monad.IO.Class
 
 import qualified Data.Map as Map
 import           Data.List (isPrefixOf, nubBy)
@@ -65,6 +66,7 @@ import           Data.Monoid
 
 import           HERMIT.Context
 import           HERMIT.Core
+import           HERMIT.Equality
 import           HERMIT.External
 import           HERMIT.GHC hiding ((<>))
 import           HERMIT.Kure
@@ -80,7 +82,6 @@ import           HERMIT.Dictionary.Common
 import           HERMIT.Dictionary.Fold hiding (externals)
 import           HERMIT.Dictionary.GHC hiding (externals)
 import           HERMIT.Dictionary.Local.Let (nonRecIntroR)
-import           HERMIT.Dictionary.Unfold hiding (externals)
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
@@ -153,10 +154,6 @@ externals =
 
 type EqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
 
--- | Flip the LHS and RHS of a 'Equality'.
-flipEquality :: Equality -> Equality
-flipEquality (Equality xs lhs rhs) = Equality xs rhs lhs
-
 -- | f == g  ==>  forall x.  f x == g x
 extensionalityR :: Maybe String -> Rewrite c HermitM Equality
 extensionalityR mn = prefixFailMsg "extensionality failed: " $
@@ -193,17 +190,15 @@ eqRhsIntroR (Equality bs _ rhs) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
 birewrite :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
              , ReadPath c Crumb, MonadCatch m, MonadUnique m )
           => Equality -> BiRewrite c m CoreExpr
-birewrite (Equality bnds l r) = bidirectional (foldUnfold l r) (foldUnfold r l)
-    where foldUnfold lhs rhs = transform $ \ c e -> do
-            let lhsLam = mkCoreLams bnds lhs
-            -- we use a unique, transitory variable for the 'function' we are folding
-            v <- newIdH "biTemp" (exprType lhsLam)
-            e' <- maybe (fail "folding LHS failed") return (fold v lhsLam e)
-            let rhsLam = mkCoreLams bnds rhs
-                -- create a temporary context with an unfolding for the
-                -- transitory function so we can reuse unfoldR.
-                c' = addHermitBindings [(v, NONREC rhsLam, mempty)] c
-            applyT unfoldR c' e'
+birewrite (Equality bs l r) = bidirectional (foldUnfold "left" l r) (foldUnfold "right" r l)
+    where foldUnfold side lhs rhs = transform $ \ c ->
+                                        maybeM ("expression did not match "++side++"-hand side")
+                                        . fold [Equality bs lhs rhs] c -- See Note [Equality]
+
+-- Note [Equality]
+--
+-- We assume that the Equality argument to birewrite is well-formed. That is,
+-- the lhs and rhs are NOT lambda expressions. Use mkEquality to ensure this.
 
 -- | Lift a transformation over 'CoreExpr' into a transformation over the left-hand side of a 'Equality'.
 lhsT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m Equality b
@@ -250,29 +245,7 @@ ppEqualityT pp = do
 
 ------------------------------------------------------------------------------
 
--- Idea: use Haskell's functions to fill the holes automagically
---
--- plusId <- findIdT "+"
--- timesId <- findIdT "*"
--- mkEquality $ \ x -> ( mkCoreApps (Var plusId)  [x,x]
---                     , mkCoreApps (Var timesId) [Lit 2, x])
---
--- TODO: need to know type of 'x' to generate a variable.
-class BuildEquality a where
-    mkEquality :: a -> HermitM Equality
-
-instance BuildEquality (CoreExpr,CoreExpr) where
-    mkEquality :: (CoreExpr,CoreExpr) -> HermitM Equality
-    mkEquality (lhs,rhs) = return $ Equality [] lhs rhs
-
-instance BuildEquality a => BuildEquality (CoreExpr -> a) where
-    mkEquality :: (CoreExpr -> a) -> HermitM Equality
-    mkEquality f = do
-        x <- newIdH "x" (error "need to create a type")
-        Equality bnds lhs rhs <- mkEquality (f (varToCoreExpr x))
-        return $ Equality (x:bnds) lhs rhs
-
-------------------------------------------------------------------------------
+-- TODO: everything between here and instantiateDictsR needs to be rethought/removed
 
 -- | Verify that a 'Equality' holds, by applying a rewrite to each side, and checking that the results are equal.
 proveEqualityT :: forall c m. (AddBindings c, Monad m, ReadPath c Crumb)
@@ -410,10 +383,6 @@ unshadowEqualityR = prefixFailMsg "Unshadowing equality failed: " $ do
     let f = freshNameGenAvoiding Nothing . extendVarSet visible
     andR [ alphaEqualityR (==s) (f s) | s <- reverse ss ] >>> bothR (tryR unshadowExprR)
 
-freeVarsEquality :: Equality -> VarSet
-freeVarsEquality (Equality bs lhs rhs) =
-    delVarSetList (unionVarSets (map freeVarsExpr [lhs,rhs])) bs
-
 ------------------------------------------------------------------------------
 
 instantiateEqualityVarR :: (Var -> Bool) -> CoreString -> RewriteH Equality
@@ -429,53 +398,6 @@ instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
     eq <- contextfreeT $ instantiateEqualityVar p e new
     (_,_) <- return eq >>> bothT lintExprT -- sanity check
     return eq
-
--- | Instantiate one of the universally quantified variables in a 'Equality'.
--- Note: assumes implicit ordering of variables, such that substitution happens to the right
--- as it does in case alternatives. Only first variable that matches predicate is
--- instantiated.
-instantiateEqualityVar :: MonadIO m => (Var -> Bool) -- predicate to select var
-                                    -> CoreExpr      -- expression to instantiate with
-                                    -> [Var]         -- new binders to add in place of var
-                                    -> Equality -> m Equality
-instantiateEqualityVar p e new (Equality bs lhs rhs)
-    | not (any p bs) = fail "specified variable is not universally quantified."
-    | otherwise = do
-        let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
-            tyVars    = filter isTyVar bs'
-            failMsg   = fail "type of provided expression differs from selected binder."
-
-            -- unifyTypes will give back mappings from a TyVar to itself
-            -- we don't want to do these instantiations, or else variables
-            -- become unbound
-            dropSelfSubst :: [(TyVar, Type)] -> [(TyVar,Type)]
-            dropSelfSubst ps = [ (v,t) | (v,t) <- ps, case t of
-                                                        TyVarTy v' | v' == v -> False
-                                                        _ -> True ]
-        tvs <- maybe failMsg (return . tyMatchesToCoreExpr . dropSelfSubst)
-                $ unifyTypes tyVars (varType i) (exprKindOrType e)
-
-        let inS           = delVarSetList (unionVarSets (map localFreeVarsExpr [lhs, rhs, e] ++ map freeVarsVar vs)) (i:vs)
-            subst         = extendSubst (mkEmptySubst (mkInScopeSet inS)) i e
-            (subst', vs') = substBndrs subst vs
-            lhs'          = substExpr (text "equality-lhs") subst' lhs
-            rhs'          = substExpr (text "equality-rhs") subst' rhs
-        instantiateEquality (noAdds tvs) $ Equality (bs'++new++vs') lhs' rhs'
-
-noAdds :: [(Var,CoreExpr)] -> [(Var,CoreExpr,[Var])]
-noAdds ps = [ (v,e,[]) | (v,e) <- ps ]
-
--- | Instantiate a set of universally quantified variables in a 'Equality'.
--- It is important that all type variables appear before any value-level variables in the first argument.
-instantiateEquality :: MonadIO m => [(Var,CoreExpr,[Var])] -> Equality -> m Equality
-instantiateEquality = flip (foldM (\ eq (v,e,vs) -> instantiateEqualityVar (==v) e vs eq)) . reverse
--- foldM is a left-to-right fold, so the reverse is important to do substitutions in reverse order
--- which is what we want (all value variables should be instantiated before type variables).
-
-------------------------------------------------------------------------------
-
-discardUniVars :: Equality -> Equality
-discardUniVars (Equality _ lhs rhs) = Equality [] lhs rhs
 
 ------------------------------------------------------------------------------
 
@@ -534,7 +456,7 @@ prefixRemembered = ("remembered-" <>)
 rememberR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb) => LemmaName -> Rewrite c HermitM Core
 rememberR nm = prefixFailMsg "remember failed: " $ do
     Def v e <- setFailMsg "not applied to a binding." $ defOrNonRecT idR idR Def
-    insertLemmaR (prefixRemembered nm) $ Lemma (Equality [] (varToCoreExpr v) e) True False
+    insertLemmaR (prefixRemembered nm) $ Lemma (mkEquality [] (varToCoreExpr v) e) True False
 
 -- | Unfold a remembered definition (like unfoldR, but looks in stash instead of context).
 unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
@@ -552,6 +474,11 @@ foldRememberedR = prefixFailMsg "Folding remembered definition failed: " . backw
 foldAnyRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                       , HasLemmas m, MonadCatch m, MonadUnique m)
                    => Rewrite c m CoreExpr
-foldAnyRememberedR = setFailMsg "Fold failed: no definitions could be folded." $ do
-    nms <- liftM Map.keys getLemmasT
-    catchesM [ backwardT (lemmaR nm) | nm <- nms, "remembered-" `isPrefixOf` show nm ]
+foldAnyRememberedR = setFailMsg "Fold failed: no definitions could be folded."
+                   $ compileRememberedT >>= runFoldR
+
+-- | Compile all remembered definitions into something that can be run with `runFoldR`
+compileRememberedT :: (HasLemmas m, Monad m) => Transform c m x CompiledFold
+compileRememberedT = do
+    eqs <- liftM (map lemmaEq . Map.elems . Map.filterWithKey (\ k _ -> "remembered-" `isPrefixOf` show k)) getLemmasT
+    return $ compileFold $ map flipEquality eqs -- fold rhs to lhs
