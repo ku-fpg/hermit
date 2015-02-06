@@ -6,11 +6,10 @@ module HERMIT.Shell.Types where
 import Control.Applicative
 import Control.Concurrent.STM
 import Control.Monad (liftM)
-import Control.Monad.Error.Class (MonadError(..))
+import Control.Monad.Except (MonadError(..), ExceptT(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.State (MonadState(..), StateT(..), gets, modify)
-import Control.Monad.Trans.Except (ExceptT(..))
 
 import Data.Dynamic
 import Data.List (intercalate)

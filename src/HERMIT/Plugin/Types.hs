@@ -1,18 +1,14 @@
 {-# LANGUAGE TypeFamilies, DeriveDataTypeable, FlexibleContexts,
              LambdaCase, GADTs, GeneralizedNewtypeDeriving,
-             ScopedTypeVariables, FlexibleInstances, CPP #-}
-#if !(MIN_VERSION_mtl(2,2,0))
-{-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
-#endif
+             ScopedTypeVariables, FlexibleInstances #-}
 module HERMIT.Plugin.Types where
 
 import Control.Applicative
 import Control.Concurrent.STM
-import Control.Monad.Error.Class (MonadError(..))
+import Control.Monad.Except (MonadError(..), ExceptT, runExceptT)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State (MonadState(..), StateT(..))
 import Control.Monad.Trans.Class (MonadTrans(..))
-import Control.Monad.Trans.Except (ExceptT, runExceptT, catchE, throwE)
 
 import Data.Dynamic
 import qualified Data.Map as M
@@ -108,17 +104,3 @@ iokm msg = iokm' msg return
 
 iokm'' :: (MonadIO m, MonadCatch m) => IO (KureM a) -> m a
 iokm'' = iokm ""
-
-------------------------------------------------------------------------------
-
--- ExceptT instances provided for old versions of mtl.
-#if !(MIN_VERSION_mtl(2,2,0))
-instance Monad m => MonadError e (ExceptT e m) where
-    throwError = throwE
-    catchError = catchE
-
-instance MonadState s m => MonadState s (ExceptT e m) where
-    get   = lift get
-    put   = lift . put
-    state = lift . state
-#endif
