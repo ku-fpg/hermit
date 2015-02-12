@@ -58,6 +58,7 @@ mkTestScript h hss = do
                   , "load-and-run \"" ++ hss ++ "\""
                   , "top ; down"
                   , "display" -- all the bindings
+                  , "show-lemmas"
                   , "resume" ]
     hClose h
 
