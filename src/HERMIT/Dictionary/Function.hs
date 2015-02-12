@@ -134,8 +134,8 @@ buildCompositionT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, M
                   => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
 buildCompositionT f g = do
     composeId <- findIdT $ fromString "Data.Function.."
-    fDot <- buildApplicationM (varToCoreExpr composeId) f
-    buildApplicationM fDot g
+    fDot <- prefixFailMsg "building (.) f failed:" $ buildApplicationM (varToCoreExpr composeId) f
+    prefixFailMsg "building f . g failed:" $ buildApplicationM fDot g
 
 -- | Given expression for f and for x, build f x, figuring out the type arguments.
 buildApplicationM :: MonadCatch m => CoreExpr -> CoreExpr -> m CoreExpr

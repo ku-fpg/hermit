@@ -146,7 +146,7 @@ catchFailHard :: (MonadCatch m, CLMonad m) => m () -> (String -> m ()) -> m ()
 catchFailHard m failure =
     catchM m $ \ msg -> ifM (gets cl_failhard)
                             (do pp <- gets cl_pretty
-                                performQuery (QueryDocH $ pCoreTC pp) (CmdName "display")
+                                performQuery (QueryPrettyH $ pCoreTC pp) (CmdName "display")
                                 cl_putStrLn msg
                                 abort)
                             (failure msg)
@@ -170,10 +170,12 @@ interpShellCommand =
   , interpEM $ \ (StringBox str)               -> performQuery (message str)
   , interpEM $ \ (TransformCoreStringBox tt)   -> performQuery (QueryString tt)
   , interpEM $ \ (TransformCoreTCStringBox tt) -> performQuery (QueryString tt)
-  , interpEM $ \ (PrettyHCoreTCBox t)          -> performQuery (QueryDocH t)
-  , interpEM $ \ (PrettyHCoreBox t)            -> performQuery (QueryDocH t)
-  , interpEM $ \ (TransformCoreCheckBox tt)    -> performQuery (CorrectnessCritera tt)
-  , interpEM $ \ (TransformCoreTCCheckBox tt)  -> performQuery (CorrectnessCritera tt)
+  , interpEM $ \ (TransformCoreDocHBox t)      -> performQuery (QueryDocH t)
+  , interpEM $ \ (TransformCoreTCDocHBox t)    -> performQuery (QueryDocH t)
+  , interpEM $ \ (PrettyHCoreBox t)            -> performQuery (QueryPrettyH t)
+  , interpEM $ \ (PrettyHCoreTCBox t)          -> performQuery (QueryPrettyH t)
+  , interpEM $ \ (TransformCoreCheckBox tt)    -> performQuery (CorrectnessCriteria tt)
+  , interpEM $ \ (TransformCoreTCCheckBox tt)  -> performQuery (CorrectnessCriteria tt)
   , interpEM $ \ (effect :: KernelEffect)      -> flip performKernelEffect effect
   , interpM  $ \ (effect :: ShellEffect)       -> performShellEffect effect
   , interpM  $ \ (effect :: ScriptEffect)      -> performScriptEffect (runExprH interpShellCommand) effect

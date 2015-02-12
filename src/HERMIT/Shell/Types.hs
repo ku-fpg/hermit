@@ -43,14 +43,16 @@ import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, te
 ----------------------------------------------------------------------------------
 
 data QueryFun :: * where
-   QueryString        :: (Injection GHC.ModGuts g, Walker HermitC g)
-                      => TransformH g String                         -> QueryFun
-   QueryDocH          :: (Injection GHC.ModGuts g, Walker HermitC g)
-                      => PrettyH g                                   -> QueryFun
-   Diff               :: SAST -> SAST                                -> QueryFun
-   Inquiry            :: (CommandLineState -> IO String)             -> QueryFun
-   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g)
-                      => TransformH g ()                             -> QueryFun
+   QueryString         :: (Injection GHC.ModGuts g, Walker HermitC g)
+                       => TransformH g String                         -> QueryFun
+   QueryDocH           :: (Injection GHC.ModGuts g, Walker HermitC g)
+                       => TransformH g DocH                           -> QueryFun
+   QueryPrettyH        :: (Injection GHC.ModGuts g, Walker HermitC g)
+                       => PrettyH g                                   -> QueryFun
+   Diff                :: SAST -> SAST                                -> QueryFun
+   Inquiry             :: (CommandLineState -> IO String)             -> QueryFun
+   CorrectnessCriteria :: (Injection GHC.ModGuts g, Walker HermitC g)
+                       => TransformH g ()                             -> QueryFun
    deriving Typeable
 
 message :: String -> QueryFun
@@ -70,6 +72,12 @@ performQuery (QueryString q) _ = do
     putStrToConsole str
 
 performQuery (QueryDocH q) _ = do
+    st <- get
+    (sast, doc) <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
+    modify $ setCursor sast
+    liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
+
+performQuery (QueryPrettyH q) _ = do
     st <- get
     (sast, doc) <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (liftPrettyH (pOptions (cl_pretty st)) q) (cl_kernel_env st) (cl_cursor st)
     modify $ setCursor sast
@@ -100,7 +108,7 @@ performQuery (Diff s1 s2) _ = do
     cl_putStrLn "====="
     cl_putStr r
 
-performQuery (CorrectnessCritera q) expr = do
+performQuery (CorrectnessCriteria q) expr = do
     st <- get
     -- TODO: Again, we may want a quiet version of the kernel_env
     (sast, ()) <- modFailMsg (\ err -> unparseExprH expr ++ " [exception: " ++ err ++ "]")

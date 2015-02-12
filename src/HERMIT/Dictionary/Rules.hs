@@ -5,8 +5,11 @@ module HERMIT.Dictionary.Rules
       -- ** Rules
     , RuleName(..)
     , RuleNameListBox(..)
-    , ruleR
-    , rulesR
+    , foldRuleR
+    , foldRulesR
+    , unfoldRuleR
+    , unfoldRulesR
+    , compileRulesT
     , ruleToEqualityT
     , ruleNameToEqualityT
     , getHermitRuleT
@@ -35,10 +38,11 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 
-import HERMIT.Dictionary.GHC (dynFlagsT)
+import HERMIT.Dictionary.Fold (compileFold, CompiledFold)
 import HERMIT.Dictionary.Kure (anyCallR)
 import HERMIT.Dictionary.Reasoning hiding (externals)
-import HERMIT.Dictionary.Unfold (betaReducePlusR)
+
+import HERMIT.PrettyPrinter.Common
 
 import IOEnv hiding (liftIO)
 
@@ -47,16 +51,18 @@ import IOEnv hiding (liftIO)
 -- | Externals dealing with GHC rewrite rules.
 externals :: [External]
 externals =
-    [ external "rule-help" (rulesHelpListT :: TransformH CoreTC String)
+    [ external "show-rules" (rulesHelpListT :: TransformH CoreTC String)
         [ "List all the rules in scope." ] .+ Query
-    , external "rule-help" (ruleHelpT :: RuleName -> TransformH CoreTC String)
+    , external "show-rule" (ruleHelpT :: PrettyPrinter -> RuleName -> TransformH CoreTC DocH)
         [ "Display details on the named rule." ] .+ Query
-    , external "apply-rule" (promoteExprR . ruleR :: RuleName -> RewriteH Core)
-        [ "Apply a named GHC rule" ] .+ Shallow
-    , external "apply-rules" (promoteExprR . rulesR :: [RuleName] -> RewriteH Core)
-        [ "Apply named GHC rules, succeed if any of the rules succeed" ] .+ Shallow
-    , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> tryR betaReducePlusR)) :: RuleName -> RewriteH Core)
-        [ "Unfold a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
+    , external "fold-rule" (promoteExprR . foldRuleR :: RuleName -> RewriteH Core)
+        [ "Apply a named GHC rule right-to-left." ] .+ Shallow
+    , external "fold-rules" (promoteExprR . foldRulesR :: [RuleName] -> RewriteH Core)
+        [ "Apply named GHC rules right-to-left, succeed if any of the rules succeed." ] .+ Shallow
+    , external "unfold-rule" (promoteExprR . unfoldRuleR :: RuleName -> RewriteH Core)
+        [ "Apply a named GHC rule left-to-right." ] .+ Shallow
+    , external "unfold-rules" (promoteExprR . unfoldRulesR :: [RuleName] -> RewriteH Core)
+        [ "Apply named GHC rules left-to-right, succeed if any of the rules succeed" ] .+ Shallow
     , external "rule-to-lemma" (\nm -> do eq <- ruleNameToEqualityT nm
                                           insertLemmaT (fromString (show nm)) $ Lemma eq False False :: TransformH Core ())
         [ "Create a lemma from a GHC RULE." ]
@@ -85,18 +91,46 @@ instance Extern [RuleName] where
     box = RuleNameListBox
     unbox (RuleNameListBox l) = l
 
--- | Lookup a rule by name, attempt to apply it. If successful, record it as an unproven lemma.
-ruleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-         , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-      => RuleName -> Rewrite c m CoreExpr
-ruleR nm = do
+-- | Lookup a rule by name, attempt to apply it left-to-right. If successful, record it as an unproven lemma.
+foldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+               , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+            => RuleName -> Rewrite c m CoreExpr
+foldRuleR nm = do
+    eq <- ruleNameToEqualityT nm
+    backwardT (birewrite eq) >>> (constT (addLemma (fromString (show nm)) $ Lemma eq False True) >> idR)
+
+-- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
+foldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+              , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+           => [RuleName] -> Rewrite c m CoreExpr
+foldRulesR = orR . map foldRuleR
+
+-- | Lookup a rule by name, attempt to apply it left-to-right. If successful, record it as an unproven lemma.
+unfoldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+               , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+            => RuleName -> Rewrite c m CoreExpr
+unfoldRuleR nm = do
     eq <- ruleNameToEqualityT nm
     forwardT (birewrite eq) >>> (constT (addLemma (fromString (show nm)) $ Lemma eq False True) >> idR)
 
-rulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-          , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-       => [RuleName] -> Rewrite c m CoreExpr
-rulesR = orR . map ruleR
+-- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
+unfoldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+             => [RuleName] -> Rewrite c m CoreExpr
+unfoldRulesR = orR . map unfoldRuleR
+
+-- | Can be used with runFoldR. Note: currently doesn't create a lemma for the rule used.
+compileRulesT :: (BoundVars c, HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
+              => [RuleName] -> Transform c m a CompiledFold
+compileRulesT nms = do
+    let suggestion = "If you think the rule exists, try running the flatten-module command at the top level."
+    let failMsg []   = "no rule names supplied."
+        failMsg [nm] = "failed to find rule: " ++ show nm ++ ". " ++ suggestion
+        failMsg _    = "failed to find any rules named " ++ intercalate ", " (map show nms) ++ ". " ++ suggestion
+    allRules <- getHermitRulesT
+    case filter ((`elem` nms) . fst) allRules of
+        [] -> fail (failMsg nms)
+        rs -> liftM compileFold $ forM (map snd rs) $ \ r -> return r >>> ruleToEqualityT
 
 -- | Return all in-scope CoreRules (including specialization RULES on binders), with their names.
 getHermitRulesT :: (HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Transform c m a [(RuleName, CoreRule)]
@@ -124,14 +158,11 @@ rulesHelpListT = do
     rulesEnv <- getHermitRulesT
     return (intercalate "\n" $ reverse $ map (show.fst) rulesEnv)
 
--- | Print a named CoreRule using GHC's pretty printer for rewrite rules.
--- TODO: use our own Equality pretty printer.
-ruleHelpT :: (HasCoreRules c, HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m)
-          => RuleName -> Transform c m a String
-ruleHelpT nm = do
-    r <- getHermitRuleT nm
-    dflags <- dynFlagsT
-    return $ showSDoc dflags $ pprRulesForUser [r]
+-- | Print a named CoreRule using the equality printer.
+ruleHelpT :: (HasCoreRules c, ReadBindings c, ReadPath c Crumb) => PrettyPrinter -> RuleName -> Transform c HermitM a DocH
+ruleHelpT pp nm = do
+    eq <- ruleNameToEqualityT nm
+    return eq >>> liftPrettyH (pOptions pp) (ppEqualityT pp)
 
 -- | Build an Equality from a named GHC rewrite rule.
 ruleNameToEqualityT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitMEnv m
@@ -140,7 +171,7 @@ ruleNameToEqualityT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitME
 ruleNameToEqualityT name = getHermitRuleT name >>> ruleToEqualityT
 
 -- | Transform GHC's CoreRule into an Equality.
-ruleToEqualityT :: (BoundVars c, HasDynFlags m, HasHermitMEnv m, MonadThings m, MonadCatch m)
+ruleToEqualityT :: (BoundVars c, HasHermitMEnv m, MonadThings m, MonadCatch m)
                 => Transform c m CoreRule Equality
 ruleToEqualityT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
   do r@Rule{} <- idR -- other possibility is "BuiltinRule"

@@ -329,10 +329,14 @@ interpProof =
   , interp $ \ (PathBox _p)                   -> PCUnsupported "PathBox"
   , interp $ \ (TransformCorePathBox _tt)     -> PCUnsupported "TransformCorePathBox"
   , interp $ \ (TransformCoreTCPathBox _tt)   -> PCUnsupported "TransformCoreTCPathBox"
-  , interp $ \ (TransformCoreStringBox _tt)   -> PCUnsupported "TransformCoreStringBox"
-  , interp $ \ (TransformCoreTCStringBox _tt) -> PCUnsupported "TransformCoreTCStringBox"
-  , interp $ \ (TransformCoreCheckBox _tt)    -> PCUnsupported "TransformCoreCheckBox"
-  , interp $ \ (TransformCoreTCCheckBox _tt)  -> PCUnsupported "TransformCoreTCCheckBox"
+  , interp $ \ (TransformCoreDocHBox t)       -> PCQuery (QueryDocH t)
+  , interp $ \ (TransformCoreTCDocHBox t)     -> PCQuery (QueryDocH t)
+  , interp $ \ (PrettyHCoreBox t)             -> PCQuery (QueryPrettyH t)
+  , interp $ \ (PrettyHCoreTCBox t)           -> PCQuery (QueryPrettyH t)
+  , interp $ \ (TransformCoreStringBox tt)    -> PCQuery (QueryString tt)
+  , interp $ \ (TransformCoreTCStringBox tt)  -> PCQuery (QueryString tt)
+  , interp $ \ (TransformCoreCheckBox tt)     -> PCQuery (CorrectnessCriteria tt)
+  , interp $ \ (TransformCoreTCCheckBox tt)   -> PCQuery (CorrectnessCriteria tt)
   , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"
   ]
 

@@ -143,13 +143,15 @@ split1BetaR :: ( BoundVars c, HasHermitMEnv m, HasHscEnv m, HasLemmas m
 split1BetaR nm absE repE = do
     (_fixId, [_tyA, f]) <- callNameT $ fromString "Data.Function.fix"
 
-    g <- buildCompositionT repE =<< buildCompositionT f absE
+    g <- prefixFailMsg "building (rep . f . abs) failed: "
+       $ buildCompositionT repE =<< buildCompositionT f absE
     gId <- constT $ newIdH "g" $ exprType g
 
     workRhs <- buildFixT $ varToCoreExpr gId
     workId <- constT $ newIdH "worker" $ exprType workRhs
 
-    newRhs <- buildApplicationM absE (varToCoreExpr workId)
+    newRhs <- prefixFailMsg "building (abs work) failed: "
+            $ buildApplicationM absE (varToCoreExpr workId)
 
     assumptionEq <- assumptionCEqualityT absE repE f
     insertLemmaT (fromString (show nm ++ "-assumption")) $ Lemma assumptionEq False True -- unproven, used

@@ -1,15 +1,25 @@
-load-as-rewrite "WWA" "WW-Ass-A.hss"
-define-rewrite "WWC" "ww-result-AssA-to-AssC WWA"
-load-as-rewrite "StrictRepH" "StrictRepH.hss"
+flatten-module
 binding-of 'qsort
-ww-result-split-static-arg 2 [0] [| absH |] [| repH |] WWC
-bash
-{ rhs-of 'work
-  alpha-lam 'xs
-  lam-body
-  eta-expand 'acc
-  lam-body
-  bash-extended-with [push 'repH StrictRepH, forward ww-result-fusion, apply-rules ["repH ++", "repH (:)", "repH []"] ]
-  bash-extended-with [push-unsafe 'work]
+static-arg
+{
+    binding-of 'qsort'
+    fix-intro
+    def-rhs
+    split-1-beta qsort [|absR|] [|repR|]
+    rhs-of 'worker
+    repeat (any-call (unfold ['fix,'g,'repR,'absR]))
+    simplify
+    one-td (case-float-arg-lemma repHstrict)
+    innermost let-float
+    any-td (unfold-rule "repH ++")
+    any-call (unfold-rule repH-absH-fusion)
+    unshadow
+    any-td (inline 'ds1)
+    simplify
+    alpha-let [worker]
+    repeat (any-call (unfold-rules ["repH (:)","repH []"]))
+    simplify
 }
-one-td (unfold 'absH)
+repeat (any-call (unfold ['absR, 'absH]))
+innermost let-float
+bash

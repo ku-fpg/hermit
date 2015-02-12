@@ -7,6 +7,14 @@ import Data.List
 
 data Tree a = Node (Tree a) (Tree a) | Leaf a
 
+{-# INLINE repR #-}
+repR :: ([a] -> [a]) -> ([a] -> H a)
+repR f = repH . f
+
+{-# INLINE absR #-}
+absR :: ([a] -> H a) -> ([a] -> [a])
+absR g = absH . g
+
 qsort :: Ord a => [a] -> [a]
 qsort []     = []
 qsort (a:as) = qsort bs ++ [a] ++ qsort cs
