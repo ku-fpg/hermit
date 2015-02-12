@@ -69,13 +69,13 @@ applyRewrite rr expr = do
 
     let commit = put (newSAST expr sast' st) >> showResult
         showResult = if cl_diffonly st then showDiff else showWindow
-        showDiff = do doc1 <- queryS sk (liftPrettyH ppOpts pp) kEnv sast
-                      doc2 <- queryS sk (liftPrettyH ppOpts pp) kEnv sast'
+        showDiff = do (_,doc1) <- queryS sk (liftPrettyH ppOpts pp) kEnv sast
+                      (_,doc2) <- queryS sk (liftPrettyH ppOpts pp) kEnv sast'
                       diffDocH (cl_pretty st) doc1 doc2 >>= cl_putStr
 
     if cl_corelint st
         then do ast' <- toASTS sk sast'
-                liftIO (queryK (kernelS sk) ast' lintModuleT kEnv)
+                liftIO (liftM (liftM snd) $ queryK (kernelS sk) ast' lintModuleT kEnv)
                 >>= runKureM (\ warns -> putStrToConsole warns >> commit)
                              (\ errs  -> liftIO (deleteS sk sast') >> fail errs)
         else commit
@@ -85,8 +85,8 @@ setPath :: (Injection GHC.ModGuts g, Walker HermitC g, MonadCatch m, CLMonad m)
 setPath t expr = do
     st <- get
     -- An extension to the Path
-    p <- prefixFailMsg "Cannot find path: " $ queryS (cl_kernel st) t (cl_kernel_env st) (cl_cursor st)
-    ast <- prefixFailMsg "Path is invalid: " $ modPathS (cl_kernel st) (<> p) (cl_kernel_env st) (cl_cursor st)
+    (sast, p) <- prefixFailMsg "Cannot find path: " $ queryS (cl_kernel st) t (cl_kernel_env st) (cl_cursor st)
+    ast <- prefixFailMsg "Path is invalid: " $ modPathS (cl_kernel st) (<> p) (cl_kernel_env st) sast
     put $ newSAST expr ast st
     showWindow
 

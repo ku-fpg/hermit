@@ -5,7 +5,7 @@ module HERMIT.Dictionary.WorkerWrapper.Fix
     , wwFacBR
     , wwSplitR
     , wwSplitStaticArg
-    , wwGenerateFusionR
+    , wwGenerateFusionT
     , wwFusionBR
     , wwAssA
     , wwAssB
@@ -139,12 +139,12 @@ externals =
          , external "ww-AssA-to-AssC" (promoteExprR . wwAssAimpliesAssC . extractR :: RewriteH Core -> RewriteH Core)
                    [ "Convert a proof of worker/wrapper Assumption A into a proof of worker/wrapper Assumption C."
                    ]
-         , external "ww-generate-fusion" (wwGenerateFusionR . mkWWAssC :: RewriteH Core -> RewriteH Core)
+         , external "ww-generate-fusion" (wwGenerateFusionT . mkWWAssC :: RewriteH Core -> TransformH Core ())
                    [ "Given a proof of Assumption C (fix A (\\ a -> wrap (unwrap (f a))) ==> fix A f), then",
                      "execute this command on \"work = unwrap (f (wrap work))\" to enable the \"ww-fusion\" rule thereafter.",
                      "Note that this is performed automatically as part of \"ww-split\"."
                    ] .+ Experiment .+ TODO
-         , external "ww-generate-fusion-unsafe" (wwGenerateFusionR Nothing :: RewriteH Core)
+         , external "ww-generate-fusion-unsafe" (wwGenerateFusionT Nothing :: TransformH Core ())
                    [ "Execute this command on \"work = unwrap (f (wrap work))\" to enable the \"ww-fusion\" rule thereafter.",
                      "The precondition \"fix A (wrap . unwrap . f) == fix A f\" is expected to hold.",
                      "Note that this is performed automatically as part of \"ww-split\"."
@@ -238,14 +238,14 @@ wwFusion = wwFusionBR
 -- | Save the recursive definition of work in the stash, so that we can later verify uses of 'wwFusionBR'.
 --   Must be applied to a definition of the form: @work = unwrap (f (wrap work))@
 --   Note that this is performed automatically as part of 'wwSplitR'.
-wwGenerateFusionR :: Maybe WWAssumption -> RewriteH Core
-wwGenerateFusionR mAss =
+wwGenerateFusionT :: Maybe WWAssumption -> TransformH Core ()
+wwGenerateFusionT mAss =
     prefixFailMsg "generate WW fusion failed: " $
     withPatFailMsg wrongForm $
     do Def w e@(App unwrap (App f (App wrap (Var w')))) <- projectT
        guardMsg (w == w') wrongForm
        whenJust (verifyWWAss wrap unwrap f) mAss
-       insertLemmaR workLabel $ Lemma (Equality [] (varToCoreExpr w) e) True False
+       insertLemmaT workLabel $ Lemma (Equality [] (varToCoreExpr w) e) True False
   where
     wrongForm = "definition does not have the form: work = unwrap (f (wrap work))"
 
@@ -261,7 +261,7 @@ wwSplitR mAss wrap unwrap =
                                           >>> appAllR idR ( unfoldNameR (fromString "Data.Function.fix")
                                                             >>> alphaLetWithR ["work"]
                                                             >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
-                                                                                   >>> extractR (wwGenerateFusionR mAss)
+                                                                                   >>> (extractT (wwGenerateFusionT mAss) >> idR)
                                                                            )
                                                                            idR
                                                           )

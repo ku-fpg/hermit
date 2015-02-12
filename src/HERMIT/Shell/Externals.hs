@@ -186,10 +186,10 @@ versionCmd whereTo st =
         Goto n -> do
             all_nds <- listS (cl_kernel st)
             if SAST n `elem` all_nds
-                then return $ setCursor st (SAST n)
+                then return $ setCursor (SAST n) st
                 else fail $ "Cannot find AST #" ++ show n ++ "."
         GotoTag tag -> case lookup tag (vs_tags (cl_version st)) of
-                        Just sast -> return $ setCursor st sast
+                        Just sast -> return $ setCursor sast st
                         Nothing   -> fail $ "Cannot find tag " ++ show tag ++ "."
         Step -> do
             let ns = [ edge | edge@(s,_,_) <- vs_graph (cl_version st), s == cl_cursor st ]
@@ -197,7 +197,7 @@ versionCmd whereTo st =
                 [] -> fail "Cannot step forward (no more steps)."
                 [(_,cmd,d) ] -> do
                     putStrLn $ "step : " ++ unparseExprH cmd
-                    return $ setCursor st d
+                    return $ setCursor d st
                 _ -> fail "Cannot step forward (multiple choices)"
         Back -> do
             let ns = [ edge | edge@(_,_,d) <- vs_graph (cl_version st), d == cl_cursor st ]
@@ -205,7 +205,7 @@ versionCmd whereTo st =
                 []         -> fail "Cannot step backwards (no more steps)."
                 [(s,cmd,_) ] -> do
                     putStrLn $ "back, unstepping : " ++ unparseExprH cmd
-                    return $ setCursor st s
+                    return $ setCursor s st
                 _          -> fail "Cannot step backwards (multiple choices, impossible!)."
         AddTag tag -> do
             return $ st { cl_version = (cl_version st) { vs_tags = (tag, cl_cursor st) : vs_tags (cl_version st) }}

@@ -32,7 +32,7 @@ data Kernel = Kernel
   { resumeK ::            AST                                      -> IO ()          -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
   , abortK  ::                                                        IO ()          -- ^ Halt the 'Kernel' and abort GHC without compiling.
   , applyK  ::            AST -> RewriteH ModGuts     -> KernelEnv -> IO (KureM AST) -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
-  , queryK  :: forall a . AST -> TransformH ModGuts a -> KernelEnv -> IO (KureM a)   -- ^ Apply a 'TransformH' to the 'AST' and return the resulting value.
+  , queryK  :: forall a . AST -> TransformH ModGuts a -> KernelEnv -> IO (KureM (AST,a)) -- ^ Apply a 'TransformH' to the 'AST', return the resulting value, and potentially a new 'AST'.
   , deleteK ::            AST                                      -> IO ()          -- ^ Delete the internal record of the specified 'AST'.
   , listK   ::                                                        IO [AST]       -- ^ List all the 'AST's tracked by the 'Kernel'.
   }
@@ -51,10 +51,7 @@ data KernelState = KernelState { _ksLemmas :: Lemmas
                                }
 
 fromHermitMResult :: HermitMResult ModGuts -> KernelState
-fromHermitMResult hRes = sideEffectsOnly hRes (hResult hRes)
-
-sideEffectsOnly :: HermitMResult a -> ModGuts -> KernelState
-sideEffectsOnly = KernelState . hResLemmas
+fromHermitMResult hRes = KernelState (hResLemmas hRes) (hResult hRes)
 
 data KernelEnv = KernelEnv { kEnvChan :: DebugMessage -> HermitM () }
 
@@ -112,11 +109,16 @@ hermitKernel callback modGuts = do
                                               (applyT r (topLevelHermitC guts) guts)
 
                 , queryK = \ name t kEnv ->
-                                sendReqRead $ \ st ->
+                                sendReq $ \ st ->
                                     findWithErrMsg name st fail $ \ (KernelState lemmas guts) ->
                                         runHM (kEnvChan kEnv)
                                               (mkEnv guts lemmas)
-                                              (return . return . hResult)
+                                              (\ hRes -> let r = hResult hRes
+                                                         in if hResChanged hRes
+                                                            then do
+                                                                ast <- liftIO $ takeMVar nextASTname
+                                                                return $ return ((ast,r), insert ast (KernelState (hResLemmas hRes) guts) st)
+                                                            else return (return ((name,r),st)))
                                               (return . fail)
                                               (applyT t (topLevelHermitC guts) guts)
 

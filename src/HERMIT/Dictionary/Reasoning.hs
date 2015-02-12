@@ -19,10 +19,10 @@ module HERMIT.Dictionary.Reasoning
     , extensionalityR
     , getLemmasT
     , getLemmaByNameT
-    , insertLemmaR
+    , insertLemmaT
     , lemmaR
-    , markLemmaUsedR
-    , modifyLemmaR
+    , markLemmaUsedT
+    , modifyLemmaT
     -- ** Lifting transformations over 'Equality'
     , lhsT
     , rhsT
@@ -110,16 +110,16 @@ externals =
     , external "lemma-rhs-intro" (lemmaRhsIntroR :: LemmaName -> RewriteH Core)
         [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
-    , external "inst-lemma" (\ nm v cs -> modifyLemmaR nm id (instantiateEqualityVarR (cmpString2Var v) cs) id id :: RewriteH Core)
+    , external "inst-lemma" (\ nm v cs -> modifyLemmaT nm id (instantiateEqualityVarR (cmpString2Var v) cs) id id :: TransformH Core ())
         [ "Instantiate one of the universally quantified variables of the given lemma,"
         , "with the given Core expression, creating a new lemma. Instantiating an"
         , "already proven lemma will result in the new lemma being considered proven." ]
-    , external "inst-lemma-dictionaries" (\ nm -> modifyLemmaR nm id instantiateDictsR id id :: RewriteH Core)
+    , external "inst-lemma-dictionaries" (\ nm -> modifyLemmaT nm id instantiateDictsR id id :: TransformH Core ())
         [ "Instantiate all of the universally quantified dictionaries of the given lemma."
         , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
-    , external "copy-lemma" (\ nm newName -> modifyLemmaR nm (const newName) idR id id :: RewriteH Core)
+    , external "copy-lemma" (\ nm newName -> modifyLemmaT nm (const newName) idR id id :: TransformH Core ())
         [ "Copy a given lemma, with a new name." ]
-    , external "modify-lemma" (\ nm rr -> modifyLemmaR nm id rr (const False) (const False) :: RewriteH Core)
+    , external "modify-lemma" (\ nm rr -> modifyLemmaT nm id rr (const False) (const False) :: TransformH Core ())
         [ "Modify a given lemma. Resets the proven status to Not Proven and used status to Not Used." ]
     , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaEq >>> t) :: LemmaName -> TransformH Equality String -> TransformH Core String)
         [ "Apply a transformation to a lemma, returning the result." ]
@@ -140,7 +140,7 @@ externals =
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
     , external "both" ((\t -> liftM (\(r,s) -> unlines [r,s]) (bothT (extractT t))) :: TransformH CoreTC String -> TransformH Equality String)
         [ "Apply a transformation to the RHS of an equality." ]
-    , external "remember" (rememberR :: LemmaName -> RewriteH Core)
+    , external "remember" (rememberR :: LemmaName -> TransformH Core ())
         [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
     , external "unfold-remembered" (promoteExprR . unfoldRememberedR :: LemmaName -> RewriteH Core)
         [ "Unfold a remembered definition." ] .+ Deep .+ Context
@@ -410,29 +410,27 @@ getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm)
 lemmaR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
           , HasLemmas m, MonadCatch m, MonadUnique m)
        => LemmaName -> BiRewrite c m CoreExpr
-lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaEq)) (markLemmaUsedR nm)
+lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaEq)) (markLemmaUsedT nm >> idR)
 
 ------------------------------------------------------------------------------
 
--- We use sideEffectR because only rewrites generate new state in the Kernel.
+insertLemmaT :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> Transform c m a ()
+insertLemmaT nm l = constT $ insertLemma nm l
 
-insertLemmaR :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> Rewrite c m a
-insertLemmaR nm l = sideEffectR $ \ _ _ -> insertLemma nm l
-
-modifyLemmaR :: (HasLemmas m, Monad m)
+modifyLemmaT :: (HasLemmas m, Monad m)
              => LemmaName
              -> (LemmaName -> LemmaName) -- ^ modify lemma name
              -> Rewrite c m Equality     -- ^ rewrite the equality
              -> (Bool -> Bool)           -- ^ modify proven status
              -> (Bool -> Bool)           -- ^ modify used status
-             -> Rewrite c m a
-modifyLemmaR nm nFn rr pFn uFn = do
+             -> Transform c m a ()
+modifyLemmaT nm nFn rr pFn uFn = do
     Lemma eq p u <- getLemmaByNameT nm
     eq' <- rr <<< return eq
-    sideEffectR $ \ _ _ -> insertLemma (nFn nm) $ Lemma eq' (pFn p) (uFn u)
+    constT $ insertLemma (nFn nm) $ Lemma eq' (pFn p) (uFn u)
 
-markLemmaUsedR :: (HasLemmas m, Monad m) => LemmaName -> Rewrite c m a
-markLemmaUsedR nm = modifyLemmaR nm id idR id (const True)
+markLemmaUsedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
+markLemmaUsedT nm = modifyLemmaT nm id idR id (const True)
 
 ------------------------------------------------------------------------------
 
@@ -453,10 +451,11 @@ prefixRemembered :: LemmaName -> LemmaName
 prefixRemembered = ("remembered-" <>)
 
 -- | Remember a binding with a name for later use. Allows us to look at past definitions.
-rememberR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb) => LemmaName -> Rewrite c HermitM Core
+rememberR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasLemmas m, MonadCatch m)
+          => LemmaName -> Transform c m Core ()
 rememberR nm = prefixFailMsg "remember failed: " $ do
     Def v e <- setFailMsg "not applied to a binding." $ defOrNonRecT idR idR Def
-    insertLemmaR (prefixRemembered nm) $ Lemma (mkEquality [] (varToCoreExpr v) e) True False
+    insertLemmaT (prefixRemembered nm) $ Lemma (mkEquality [] (varToCoreExpr v) e) True False
 
 -- | Unfold a remembered definition (like unfoldR, but looks in stash instead of context).
 unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb

@@ -7,7 +7,7 @@ module HERMIT.Dictionary.WorkerWrapper.FixResult
     , wwResultFacBR
     , wwResultSplitR
     , wwResultSplitStaticArg
-    , wwResultGenerateFusionR
+    , wwResultGenerateFusionT
     , wwResultFusionBR
     , wwResultAssA
     , wwResultAssB
@@ -143,12 +143,12 @@ externals =
          , external "ww-result-AssA-to-AssC" (promoteExprR . wwResultAssAimpliesAssC . extractR :: RewriteH Core -> RewriteH Core)
                    [ "Convert a proof of worker/wrapper Assumption A into a proof of worker/wrapper Assumption C."
                    ]
-         , external "ww-result-generate-fusion" (wwResultGenerateFusionR . mkWWAssC :: RewriteH Core -> RewriteH Core)
+         , external "ww-result-generate-fusion" (wwResultGenerateFusionT . mkWWAssC :: RewriteH Core -> TransformH Core ())
                    [ "Given a proof of Assumption C (fix (X->A) (\\ h x -> abs (rep (f h x))) ==> fix (X->A) f), then",
                      "execute this command on \"work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)\" to enable the \"ww-result-fusion\" rule thereafter.",
                      "Note that this is performed automatically as part of \"ww-result-split\"."
                    ] .+ Experiment .+ TODO
-         , external "ww-result-generate-fusion-unsafe" (wwResultGenerateFusionR Nothing :: RewriteH Core)
+         , external "ww-result-generate-fusion-unsafe" (wwResultGenerateFusionT Nothing :: TransformH Core ())
                    [ "Execute this command on \"work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)\" to enable the \"ww-fusion\" rule thereafter.",
                      "The precondition \"fix (X->A) (\\ h x -> abs (rep (f h x))) == fix (X->A) f\" is expected to hold.",
                      "Note that this is performed automatically as part of \"ww-result-split\"."
@@ -265,8 +265,8 @@ wwFusion = wwResultFusionBR
 -- | Save the recursive definition of work in the stash, so that we can later verify uses of 'wwResultFusionBR'.
 --   Must be applied to a definition of the form: @work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)@
 --   Note that this is performed automatically as part of 'wwResultSplitR'.
-wwResultGenerateFusionR :: Maybe WWAssumption -> RewriteH Core
-wwResultGenerateFusionR mAss =
+wwResultGenerateFusionT :: Maybe WWAssumption -> TransformH Core ()
+wwResultGenerateFusionT mAss =
     prefixFailMsg "generate WW fusion failed: " $
     withPatFailMsg wrongForm $
     do Def w e@(Lam x1 (App rep
@@ -277,7 +277,7 @@ wwResultGenerateFusionR mAss =
                ) <- projectT
        guardMsg (w == w' && x1 == x1' && x2 == x2') wrongForm
        whenJust (verifyWWAss abs rep f) mAss
-       insertLemmaR workLabel $ Lemma (Equality [] (varToCoreExpr w) e) True False
+       insertLemmaT workLabel $ Lemma (Equality [] (varToCoreExpr w) e) True False
   where
     wrongForm = "definition does not have the form: work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)"
 
@@ -294,7 +294,7 @@ wwResultSplitR mAss abs rep =
                                           >>> lamAllR idR (appAllR idR (appAllR ( unfoldNameR (fromString "Data.Function.fix")
                                                                                   >>> alphaLetWithR ["work"]
                                                                                   >>> letRecAllR (\ _ -> defAllR idR (betaReduceR >>> letNonRecSubstR)
-                                                                                                         >>> extractR (wwResultGenerateFusionR mAss)
+                                                                                                         >>> (extractT (wwResultGenerateFusionT mAss) >> idR)
                                                                                                  )
                                                                                                  idR
                                                                                 )

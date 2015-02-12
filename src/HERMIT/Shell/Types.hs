@@ -64,12 +64,14 @@ performQuery :: (MonadCatch m, CLMonad m) => QueryFun -> ExprH -> m ()
 
 performQuery (QueryString q) _ = do
     st <- get
-    str <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
+    (sast, str) <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
+    modify $ setCursor sast
     putStrToConsole str
 
 performQuery (QueryDocH q) _ = do
     st <- get
-    doc <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (q (initPrettyC $ cl_pretty_opts st) $ pCoreTC $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
+    (sast, doc) <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (q (initPrettyC $ cl_pretty_opts st) $ pCoreTC $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
+    modify $ setCursor sast
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
 performQuery (Inquiry f) _ = get >>= liftIO . f >>= putStrToConsole
@@ -107,8 +109,9 @@ performQuery Display _ = do
 performQuery (CorrectnessCritera q) expr = do
     st <- get
     -- TODO: Again, we may want a quiet version of the kernel_env
-    modFailMsg (\ err -> unparseExprH expr ++ " [exception: " ++ err ++ "]")
-        $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
+    (sast, ()) <- modFailMsg (\ err -> unparseExprH expr ++ " [exception: " ++ err ++ "]")
+                $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
+    modify $ setCursor sast
     putStrToConsole $ unparseExprH expr ++ " [correct]"
 
 ppWholeProgram :: (MonadIO m, MonadState CommandLineState m) => AST -> m DocH
@@ -117,7 +120,7 @@ ppWholeProgram ast = do
     liftIO (queryK (kernelS $ cl_kernel st)
             ast
             (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ pCoreTC $ cl_pretty st)
-            (cl_kernel_env st)) >>= runKureM return fail
+            (cl_kernel_env st)) >>= runKureM (return . snd) fail -- discard new AST, assuming pp won't create one
 
 ----------------------------------------------------------------------------------
 
@@ -283,8 +286,8 @@ setCoreLint st b = st { cl_pstate = (cl_pstate st) { ps_corelint = b } }
 cl_cursor :: CommandLineState -> SAST
 cl_cursor = ps_cursor . cl_pstate
 
-setCursor :: CommandLineState -> SAST -> CommandLineState
-setCursor st sast = st { cl_pstate = (cl_pstate st) { ps_cursor = sast } }
+setCursor :: SAST -> CommandLineState -> CommandLineState
+setCursor sast st = st { cl_pstate = (cl_pstate st) { ps_cursor = sast } }
 
 cl_diffonly :: CommandLineState -> Bool
 cl_diffonly = ps_diffonly . cl_pstate

@@ -38,19 +38,19 @@ externals = map (.+ Proof)
     [ external "intro-ww-assumption-A"
         (\nm absC repC -> do
             eq <- parse2BeforeT assumptionAEqualityT absC repC
-            insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
+            insertLemmaT nm $ Lemma eq False False :: TransformH Core ())
         [ "Introduce a lemma for worker/wrapper assumption A"
         , "using given abs and rep functions." ]
     , external "intro-ww-assumption-B"
         (\nm absC repC bodyC -> do
             eq <- parse3BeforeT assumptionBEqualityT absC repC bodyC
-            insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
+            insertLemmaT nm $ Lemma eq False False :: TransformH Core ())
         [ "Introduce a lemma for worker/wrapper assumption B"
         , "using given abs, rep, and body functions." ]
     , external "intro-ww-assumption-C"
         (\nm absC repC bodyC -> do
             eq <- parse3BeforeT assumptionCEqualityT absC repC bodyC
-            insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
+            insertLemmaT nm $ Lemma eq False False :: TransformH Core ())
         [ "Introduce a lemma for worker/wrapper assumption C"
         , "using given abs, rep, and body functions." ]
     , external "split-1-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split1BetaR nm) absC :: CoreString -> RewriteH Core)
@@ -152,10 +152,10 @@ split1BetaR nm absE repE = do
     newRhs <- buildApplicationM absE (varToCoreExpr workId)
 
     assumptionEq <- assumptionCEqualityT absE repE f
-    _ <- insertLemmaR (fromString (show nm ++ "-assumption")) $ Lemma assumptionEq False True -- unproven, used
+    insertLemmaT (fromString (show nm ++ "-assumption")) $ Lemma assumptionEq False True -- unproven, used
 
     wwFusionEq <- wwFusionEqualityT absE repE workRhs
-    _ <- insertLemmaR (fromString (show nm ++ "-fusion")) $ Lemma wwFusionEq True False -- proven (assumed), unused
+    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionEq True False -- proven (assumed), unused
 
     return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
 
@@ -172,9 +172,9 @@ split2BetaR nm absE repE = do
     newRhs <- buildApplicationM absE (varToCoreExpr workId)
 
     assumptionEq <- assumptionCEqualityT absE repE f
-    _ <- insertLemmaR (fromString (show nm ++ "-assumption")) $ Lemma assumptionEq False True -- unproven, used
+    insertLemmaT (fromString (show nm ++ "-assumption")) $ Lemma assumptionEq False True -- unproven, used
 
     wwFusionEq <- wwFusionEqualityT absE repE (varToCoreExpr workId)
-    _ <- insertLemmaR (fromString (show nm ++ "-fusion")) $ Lemma wwFusionEq True False -- proven (assumed), unused
+    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionEq True False -- proven (assumed), unused
 
     return $ mkCoreLets [NonRec workId repFixFE] newRhs

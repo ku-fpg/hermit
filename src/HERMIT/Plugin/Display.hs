@@ -28,7 +28,7 @@ display window = do
     let skernel = ps_kernel st
         ppOpts = (pOptions $ ps_pretty st) { po_focus = Just focusPath }
     iokm' "Rendering error: "
-        (liftIO . ps_render st stdout ppOpts . Right)
+        (liftIO . ps_render st stdout ppOpts . Right . snd) -- discard new AST, assuming pretty printer won't create one
         (toASTS skernel (ps_cursor st) >>= \ ast ->
             queryK (kernelS skernel) ast (extractT $ pathT (fromMaybe focusPath window) $ liftPrettyH ppOpts $ pCoreTC $ ps_pretty st) (mkKernelEnv st))
 

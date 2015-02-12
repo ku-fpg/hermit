@@ -58,7 +58,7 @@ externals =
     , external "unfold-rule" ((\ nm -> promoteExprR (ruleR nm >>> tryR betaReducePlusR)) :: RuleName -> RewriteH Core)
         [ "Unfold a named GHC rule" ] .+ Deep .+ Context .+ TODO -- TODO: does not work with rules with no arguments
     , external "rule-to-lemma" (\nm -> do eq <- ruleNameToEqualityT nm
-                                          insertLemmaR (fromString (show nm)) $ Lemma eq False False :: RewriteH Core)
+                                          insertLemmaT (fromString (show nm)) $ Lemma eq False False :: TransformH Core ())
         [ "Create a lemma from a GHC RULE." ]
     , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
         [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
@@ -91,7 +91,7 @@ ruleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c,
       => RuleName -> Rewrite c m CoreExpr
 ruleR nm = do
     eq <- ruleNameToEqualityT nm
-    forwardT (birewrite eq) >>> sideEffectR (\ _ _ -> addLemma (fromString (show nm)) $ Lemma eq False True)
+    forwardT (birewrite eq) >>> (constT (addLemma (fromString (show nm)) $ Lemma eq False True) >> idR)
 
 rulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
           , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )

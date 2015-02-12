@@ -1,6 +1,13 @@
-{-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, TypeFamilies,
-             DeriveDataTypeable, GeneralizedNewtypeDeriving, LambdaCase,
-             MultiParamTypeClasses, ScopedTypeVariables #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.Shell.ShellEffect
     ( ShellEffect(..)
@@ -8,7 +15,6 @@ module HERMIT.Shell.ShellEffect
     , dump
     ) where
 
-import Control.Monad.Error.Class (MonadError)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State (MonadState(..), gets)
 
@@ -28,13 +34,13 @@ import System.IO
 
 ----------------------------------------------------------------------------------
 
-data ShellEffect
-    = Abort -- ^ Abort GHC
-    | CLSModify (CommandLineState -> IO CommandLineState) -- ^ Modify shell state
-    | PluginComp (PluginM ())
-    | Continue -- ^ exit the shell, but don't abort/resume
-    | Dump (CommandLineState -> TransformH CoreTC DocH) String String Int
-    | Resume
+data ShellEffect :: * where
+    Abort      :: ShellEffect
+    CLSModify  :: (CommandLineState -> IO CommandLineState) -> ShellEffect
+    PluginComp :: PluginM () -> ShellEffect
+    Continue   :: ShellEffect
+    Dump       :: (CommandLineState -> TransformH CoreTC DocH) -> String -> String -> Int -> ShellEffect
+    Resume     :: ShellEffect
     deriving Typeable
 
 instance Extern ShellEffect where
@@ -44,13 +50,13 @@ instance Extern ShellEffect where
 
 ----------------------------------------------------------------------------------
 
-performShellEffect :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => ShellEffect -> m ()
+performShellEffect :: (MonadCatch m, CLMonad m) => ShellEffect -> m ()
 performShellEffect Abort  = abort
 performShellEffect Resume = gets cl_cursor >>= resume
 performShellEffect Continue = get >>= continue
 performShellEffect (Dump pp fileName renderer width) = dump pp fileName renderer width
 
-performShellEffect (CLSModify f) = get >>= liftAndCatchIO . f >>= put >> showWindow
+performShellEffect (CLSModify f)  = get >>= liftAndCatchIO . f >>= put >> showWindow
 
 performShellEffect (PluginComp m) = pluginM m >> showWindow
 
@@ -58,7 +64,7 @@ dump :: (MonadCatch m, MonadIO m, MonadState CommandLineState m) => (CommandLine
 dump pp fileName renderer width = do
     st <- get
     case lookup renderer shellRenderers of
-      Just r -> do doc <- prefixFailMsg "Bad renderer option: " $ queryS (cl_kernel st) (pp st) (cl_kernel_env st) (cl_cursor st)
+      Just r -> do (_,doc) <- prefixFailMsg "Bad renderer option: " $ queryS (cl_kernel st) (pp st) (cl_kernel_env st) (cl_cursor st)
                    liftIO $ do h <- openFile fileName WriteMode
                                r h ((cl_pretty_opts st) { po_width = width }) (Right doc)
                                hClose h

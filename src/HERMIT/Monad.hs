@@ -8,7 +8,7 @@ module HERMIT.Monad
       HermitM
     , runHM
     , embedHermitM
-    , HermitMEnv(..)
+    , HermitMEnv
     , HermitMResult(..)
     , LiftCoreM(..)
     , runTcM
@@ -48,25 +48,28 @@ import HERMIT.GHC.Typechecker
 
 ----------------------------------------------------------------------------
 
--- | The HermitM reader environment.
-data HermitMEnv = HermitMEnv { hEnvModGuts   :: ModGuts -- ^ Note: this is a snapshot of the ModGuts from
+-- | The HermitM environment.
+data HermitMEnv = HermitMEnv { hEnvChanged   :: Bool -- ^ Whether Lemmas have changed
+                             , hEnvModGuts   :: ModGuts -- ^ Note: this is a snapshot of the ModGuts from
                                                         --         before the current transformation.
                              , hEnvLemmas    :: Lemmas
                              }
 
 mkEnv :: ModGuts -> Lemmas -> HermitMEnv
-mkEnv = HermitMEnv
+mkEnv = HermitMEnv False
 
 -- | The HermitM result record.
-data HermitMResult a = HermitMResult { hResLemmas :: Lemmas
+data HermitMResult a = HermitMResult { hResChanged :: Bool -- ^ Whether Lemmas have changed
+                                     , hResLemmas :: Lemmas
                                      , hResult    :: a
                                      }
 
-mkResult :: Lemmas -> a -> HermitMResult a
-mkResult = HermitMResult
+changedResult :: Lemmas -> a -> HermitMResult a
+changedResult = HermitMResult True
 
-mkResultEnv :: HermitMEnv -> a -> HermitMResult a
-mkResultEnv = mkResult . hEnvLemmas
+-- Does not change the Changed status of Lemmas
+mkResult :: HermitMEnv -> a -> HermitMResult a
+mkResult env = HermitMResult (hEnvChanged env) (hEnvLemmas env)
 
 -- | The HERMIT monad is kept abstract.
 --
@@ -99,7 +102,7 @@ embedHermitM hm = do
                 Just dm -> chan dm >> relayDebugMessages
 
     relayDebugMessages
-    forM_ (toList (hResLemmas r)) $ uncurry insertLemma
+    forM_ (toList (hResLemmas r)) $ uncurry insertLemma -- TODO: fix
     return $ hResult r
 
 instance Functor HermitM where
@@ -115,12 +118,12 @@ instance Applicative HermitM where
 
 instance Monad HermitM where
   return :: a -> HermitM a
-  return a = HermitM $ \ _ env -> return (return (mkResultEnv env a))
+  return a = HermitM $ \ _ env -> return (return (mkResult env a))
 
   (>>=) :: HermitM a -> (a -> HermitM b) -> HermitM b
   (HermitM gcm) >>= f =
-        HermitM $ \ chan env -> gcm chan env >>= runKureM (\ (HermitMResult ls a) ->
-                                                            let env' = env { hEnvLemmas = ls }
+        HermitM $ \ chan env -> gcm chan env >>= runKureM (\ (HermitMResult c ls a) ->
+                                                            let env' = env { hEnvChanged = c, hEnvLemmas = ls }
                                                             in  runHermitM (f a) chan env')
                                                           (return . fail)
 
@@ -168,7 +171,7 @@ class HasHermitMEnv m where
     getHermitMEnv :: m HermitMEnv
 
 instance HasHermitMEnv HermitM where
-    getHermitMEnv = HermitM $ \ _ env -> return $ return $ mkResultEnv env env
+    getHermitMEnv = HermitM $ \ _ env -> return $ return $ mkResult env env
 
 getModGuts :: (HasHermitMEnv m, Monad m) => m ModGuts
 getModGuts = liftM hEnvModGuts getHermitMEnv
@@ -180,7 +183,7 @@ class HasDebugChan m where
     getDebugChan :: m (DebugMessage -> m ())
 
 instance HasDebugChan HermitM where
-    getDebugChan = HermitM $ \ chan env -> return $ return $ mkResultEnv env chan
+    getDebugChan = HermitM $ \ chan env -> return $ return $ mkResult env chan
 
 sendDebugMessage :: (HasDebugChan m, Monad m) => DebugMessage -> m ()
 sendDebugMessage msg = getDebugChan >>= ($ msg)
@@ -205,9 +208,9 @@ class HasLemmas m where
     getLemmas :: m Lemmas
 
 instance HasLemmas HermitM where
-    insertLemma nm l = HermitM $ \ _ env -> return $ return $ mkResult (insert nm l $ hEnvLemmas env) ()
+    insertLemma nm l = HermitM $ \ _ env -> return $ return $ changedResult (insert nm l $ hEnvLemmas env) ()
 
-    getLemmas = HermitM $ \ _ env -> return $ return $ mkResultEnv env (hEnvLemmas env)
+    getLemmas = HermitM $ \ _ env -> return $ return $ mkResult env (hEnvLemmas env)
 
 -- | Only adds a lemma if doesn't already exist.
 addLemma :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> m ()
@@ -228,7 +231,7 @@ class Monad m => LiftCoreM m where
     liftCoreM :: CoreM a -> m a
 
 instance LiftCoreM HermitM where
-    liftCoreM coreM = HermitM $ \ _ env -> coreM >>= return . return . mkResultEnv env
+    liftCoreM coreM = HermitM $ \ _ env -> coreM >>= return . return . mkResult env
 
 ----------------------------------------------------------------------------
 

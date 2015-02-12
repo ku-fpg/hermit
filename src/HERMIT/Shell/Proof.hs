@@ -114,14 +114,14 @@ performProofCommand :: (MonadCatch m, MonadException m, CLMonad m) => ProofComma
 
 performProofCommand (InteractiveProof nm) = do
     st <- gets cl_pstate
-    l <- queryS (ps_kernel st) (getLemmaByNameT nm :: TransformH Core Lemma) (mkKernelEnv st) (ps_cursor st)
+    (_,l) <- queryS (ps_kernel st) (getLemmaByNameT nm :: TransformH Core Lemma) (mkKernelEnv st) (ps_cursor st)
     interactiveProof True False (nm,l)
 
 performProofCommand (DumpLemma nm fn r w) = dump (\ st -> getLemmaByNameT nm >>> ppLemmaT (cl_pretty st) nm) fn r w
 
 performProofCommand (ShowLemmas mnm) = do
     st <- gets cl_pstate
-    ls <- queryS (ps_kernel st) (getLemmasT :: TransformH Core Lemmas) (mkKernelEnv st) (ps_cursor st)
+    (_,ls) <- queryS (ps_kernel st) (getLemmasT :: TransformH Core Lemmas) (mkKernelEnv st) (ps_cursor st)
     mapM_ printLemma $ toList $ filterWithKey (maybe (\ _ _ -> True) (\ nm n _ -> show nm `isInfixOf` show n) mnm) ls
 
 --------------------------------------------------------------------------------------------------------
@@ -131,7 +131,7 @@ printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState Com
            => (LemmaName,Lemma) -> m ()
 printLemma (nm,lem) = do
     st <- get
-    doc <- queryS (cl_kernel st) (return lem >>> ppLemmaT (cl_pretty st) nm :: TransformH Core DocH) (cl_kernel_env st) (cl_cursor st)
+    (_,doc) <- queryS (cl_kernel st) (return lem >>> ppLemmaT (cl_pretty st) nm :: TransformH Core DocH) (cl_kernel_env st) (cl_cursor st)
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
 ppLemmaT :: PrettyPrinter -> LemmaName -> TransformH Lemma DocH
@@ -181,8 +181,8 @@ interactiveProof topLevel isTemporary lem@(nm,_) = do
                         cl_putStrLn $ "Successfully proven: " ++ show nm
                         if isTemporary
                         then cleanup st'    -- successfully proven
-                        else do sast <- applyS (cl_kernel st')
-                                               (modifyLemmaR nm id idR (const True) id :: RewriteH Core)
+                        else do (sast,()) <- queryS (cl_kernel st')
+                                               (modifyLemmaT nm id idR (const True) id :: TransformH Core ())
                                                (mkKernelEnv $ cl_pstate st')
                                                (cl_cursor st')
                                 cleanup $ newSAST (CmdName "proven") sast st'
@@ -216,7 +216,7 @@ endProof (nm, Lemma eq _ _) = do
         sast = cl_cursor st
 
     -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-    b <- (queryS sk (return eq >>> testM verifyEqualityT :: TransformH Core Bool) kEnv sast)
+    (_,b) <- (queryS sk (return eq >>> testM verifyEqualityT :: TransformH Core Bool) kEnv sast)
     if b then continue st else fail $ "The two sides of " ++ show nm ++ " are not alpha-equivalent."
 
 performProofShellCommand :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> ProofShellCommand -> m NamedLemma
@@ -228,8 +228,8 @@ performProofShellCommand lem@(nm, Lemma eq p u) = go
                     sast = cl_cursor st
 
                 -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-                -- TODO: query doesn't save side effects, which are needed for stash/lemmas
-                eq' <- queryS sk (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core Equality) kEnv sast
+                (sast', eq') <- queryS sk (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core Equality) kEnv sast
+                modify $ setCursor sast'
                 return (nm, Lemma eq' p u)
           go (PCTransform t)      = do
                 st <- get
@@ -238,14 +238,15 @@ performProofShellCommand lem@(nm, Lemma eq p u) = go
                     sast = cl_cursor st
 
                 -- Why do a query? See above.
-                res <- queryS sk (return eq >>> t :: TransformH Core String) kEnv sast
+                (sast', res) <- queryS sk (return eq >>> t :: TransformH Core String) kEnv sast
+                modify $ setCursor sast'
                 cl_putStrLn res
                 return lem
           go (PCInduction idPred) = performInduction lem idPred
           go (PCShell effect)     = performShellEffect effect >> return lem
           go (PCScript effect)    = do
                 lemVar <- liftIO $ newMVar lem -- couldn't resist that name
-                let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= \l -> liftIO (putMVar lemVar l)
+                let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= liftIO . putMVar lemVar
                 performScriptEffect lemHack effect
                 liftIO $ takeMVar lemVar
           go (PCQuery query)      = performQuery query (error "PCQuery ExprH") >> return lem
@@ -254,8 +255,8 @@ performProofShellCommand lem@(nm, Lemma eq p u) = go
              do
                 st <- get
                 -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-                queryS (cl_kernel st) (return eq >>> t :: TransformH Core ()) (cl_kernel_env st) (cl_cursor st)
-                continue st -- note: we assume that if 't' completes without failing, the lemma is proved, we don't actually check
+                (sast',()) <- queryS (cl_kernel st) (return eq >>> t :: TransformH Core ()) (cl_kernel_env st) (cl_cursor st)
+                continue $ setCursor sast' st -- note: we assume that if 't' completes without failing, the lemma is proved, we don't actually check
                 return lem       -- never reached
           go (PCDump fName r w)   = dump (\ st -> return (snd lem) >>> ppLemmaT (cl_pretty st) (fst lem)) fName r w >> return lem
           go PCEnd                = endProof lem >> return lem
@@ -270,7 +271,7 @@ performInduction lem@(nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
 
     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $ soleElement (filter idPred bs)
     -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-    cases <- queryS sk (inductionCaseSplit bs i lhs rhs :: TransformH Core [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]) kEnv sast
+    (_,cases) <- queryS sk (inductionCaseSplit bs i lhs rhs :: TransformH Core [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]) kEnv sast
 
     forM_ cases $ \ (mdc,vs,lhsE,rhsE) -> do
 
@@ -292,7 +293,7 @@ performInduction lem@(nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
         -- this is pretty hacky
         sast' <- addLemmas hypLemmas  -- add temporary lemmas
         interactiveProof False True (lemmaName,caseLemma) -- recursion!
-        modify $ flip setCursor sast' -- discard temporary lemmas
+        modify $ setCursor sast' -- discard temporary lemmas
 
     get >>= continue
     return lem -- this is never reached, but the type says we need it.
@@ -301,11 +302,11 @@ addLemmas :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState Comm
           => [NamedLemma] -> m SAST
 addLemmas lems = do
     ifM isRunningScript (return ()) $ forM_ lems printLemma
-    let addAllAtOnceR :: RewriteH Core
-        addAllAtOnceR = sideEffectR $ \ _ _ -> forM_ lems $ \ (nm,l) -> insertLemma nm l
+    let addAllAtOnceT :: TransformH Core ()
+        addAllAtOnceT = constT $ forM_ lems $ \ (nm,l) -> insertLemma nm l
 
     st <- get
-    sast <- applyS (cl_kernel st) addAllAtOnceR (mkKernelEnv $ cl_pstate st) (cl_cursor st)
+    (sast,()) <- queryS (cl_kernel st) addAllAtOnceT (mkKernelEnv $ cl_pstate st) (cl_cursor st)
     put $ newSAST (CmdName "adding lemmas") sast st
 
     -- return original SAST

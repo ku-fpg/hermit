@@ -63,7 +63,7 @@ data ScopedKernel = ScopedKernel
     , applyS       :: (MonadIO m, MonadCatch m, Injection ModGuts g, Walker HermitC g)
                    => RewriteH g     -> KernelEnv ->             SAST -> m SAST
     , queryS       :: (MonadIO m, MonadCatch m, Injection ModGuts g, Walker HermitC g)
-                   => TransformH g a -> KernelEnv ->             SAST -> m a
+                   => TransformH g a -> KernelEnv ->             SAST -> m (SAST, a)
     , deleteS      :: (MonadIO m, MonadCatch m) =>               SAST -> m ()
     , listS        ::  MonadIO m                =>                       m [SAST]
     , pathS        :: (MonadIO m, MonadCatch m) =>               SAST -> m [PathH]
@@ -115,11 +115,17 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                                     putTMVar store $ I.insert k (ast', base, rel) m
                                                     return (SAST k))
                                                fail
-            , queryS      = \ t env (SAST sAst) -> liftAndCatchIO $ do
-                                m <- atomically $ readTMVar store
+            , queryS      = \ t env (SAST sAst) -> safeTakeTMVar store $ \ m -> do
                                 (ast, base, rel) <- get sAst m
                                 queryK kernel ast (focusT (pathStackToLens base rel) t) env
-                                    >>= liftKureM
+                                  >>= runKureM (\ (ast',r) -> atomically $
+                                                    if (ast == ast')
+                                                    then do putTMVar store m
+                                                            return (SAST sAst, r)
+                                                    else do k <- newKey
+                                                            putTMVar store $ I.insert k (ast', base, rel) m
+                                                            return (SAST k, r))
+                                               fail
             , deleteS     = \ (SAST sAst) -> safeTakeTMVar store $ \ m -> do
                                 (ast,_,_) <- get sAst m
                                 let m' = I.delete sAst m
@@ -137,13 +143,13 @@ scopedKernel callback = hermitKernel $ \ kernel initAST -> do
                                 (ast, base, rel) <- get sAst m
                                 let rel' = f rel
                                 queryK kernel ast (testPathStackT base rel') env
-                                  >>= runKureM (\ b -> if rel == rel'
-                                                        then fail "Path is unchanged, nothing to do."
-                                                        else if b
-                                                              then atomically $ do k <- newKey
-                                                                                   putTMVar store $ I.insert k (ast, base, rel') m
-                                                                                   return $ SAST k
-                                                              else fail "Invalid path created.")
+                                  >>= runKureM (\ (_,b) -> if rel == rel'
+                                                           then fail "Path is unchanged, nothing to do."
+                                                           else if b
+                                                                then atomically $ do k <- newKey
+                                                                                     putTMVar store $ I.insert k (ast, base, rel') m
+                                                                                     return $ SAST k
+                                                                else fail "Invalid path created.")
                                                fail
             , beginScopeS = \ (SAST sAst) -> safeTakeTMVar store $ \m -> do
                                 (ast, base, rel) <- get sAst m

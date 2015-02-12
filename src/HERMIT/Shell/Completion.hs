@@ -50,7 +50,8 @@ completionsFor :: (MonadCatch m, MonadIO m, MonadState CommandLineState m)
 completionsFor so_far cts = do
     qs <- mapM completionQuery cts
     (k,(env,sast)) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor)
-    cls <- forM qs $ \ q -> catchM (queryS k q env sast) (\_ -> return [])
+    -- 'liftM snd' is because we assume completion queries don't create new ASTs
+    cls <- forM qs $ \ q -> catchM (liftM snd $ queryS k q env sast) (\_ -> return [])
     return $ map simpleCompletion $ nub $ filter (so_far `isPrefixOf`) $ concat cls
 
 data CompletionType = ConsiderC       -- considerable constructs and (deprecated) bindingOfT

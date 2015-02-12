@@ -1,4 +1,5 @@
 {-# LANGUAGE KindSignatures, GADTs, FlexibleContexts, GeneralizedNewtypeDeriving, LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
 module HERMIT.Plugin
     ( -- * The HERMIT Plugin
       hermitPlugin
@@ -112,7 +113,7 @@ eval comp = do
     case v of
         Return x            -> return x
         RR rr       :>>= k  -> runS (applyS kernel rr env) >>= eval . k
-        Query tr    :>>= k  -> runK (queryS kernel tr env) >>= eval . k
+        Query tr    :>>= k  -> runQ (queryS kernel tr env) >>= eval . k
         Shell es os :>>= k -> do
             -- We want to discard the current focus, open the shell at
             -- the top level, then restore the current focus.
@@ -123,7 +124,7 @@ eval comp = do
             eval $ k ()
         Guard p (HPM m)  :>>= k  -> gets (p . ps_pass) >>= \ b -> when b (eval m) >>= eval . k
         Focus tp (HPM m) :>>= k  -> do
-            p <- runK (queryS kernel tp env)  -- run the pathfinding translation
+            p <- runQ (queryS kernel tp env)  -- run the pathfinding translation
             runS $ beginScopeS kernel         -- remember the current path
             runS $ modPathS kernel (<> p) env -- modify the current path
             r <- eval m             	      -- run the focused computation
@@ -161,9 +162,13 @@ runK f = gets ps_cursor >>= f
 
 -- | Run a kernel function on the current SAST and update ps_cursor
 runS :: (SAST -> PluginM SAST) -> PluginM ()
-runS f = do
-    sast <- runK f
+runS f = runQ (fmap (,()) . f)
+
+runQ :: (SAST -> PluginM (SAST, a)) -> PluginM a
+runQ f = do
+    (sast, r) <- runK f
     modify $ \st -> st { ps_cursor = sast }
+    return r
 
 interactive :: [External] -> [CommandLineOption] -> HPM ()
 interactive es os = HPM . singleton $ Shell (externals ++ es) os
