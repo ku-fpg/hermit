@@ -3,7 +3,8 @@
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
 module HERMIT.PrettyPrinter.AST
   ( -- * HERMIT's AST Pretty-Printer for GHC Core
-    pretty
+    externals
+  , pretty
   , ppCoreTC
   , ppModGuts
   , ppCoreProg
@@ -21,11 +22,10 @@ import Control.Arrow hiding ((<+>))
 import Data.Char (isSpace)
 import Data.Default.Class
 
+import HERMIT.Core
+import HERMIT.External
 import HERMIT.GHC hiding (($$), (<+>), (<>), ($+$), cat, nest, parens, text, empty, hsep)
 import HERMIT.Kure
-import HERMIT.Core
-
-import HERMIT.Dictionary (dynFlagsT)
 
 import HERMIT.PrettyPrinter.Common
 
@@ -41,11 +41,14 @@ tyText = typeColor . text
 
 ---------------------------------------------------------------------------
 
+externals :: [External]
+externals = [ external "ast" pretty ["AST pretty printer."] ]
+
 pretty :: PrettyPrinter
 pretty = PP { pForall = ppForallQuantification
             , pCoreTC = ppCoreTC
             , pOptions = def
-            } 
+            }
 
 -- | Pretty print a fragment of GHC Core using HERMIT's \"AST\" pretty printer.
 --   This displays the tree of constructors using nested indentation.
@@ -63,7 +66,7 @@ ppCoreTC =
 -- Use for any GHC structure, the 'showSDoc' prefix is to remind us
 -- that we are eliding infomation here.
 ppSDoc :: Outputable a => PrettyH a
-ppSDoc =  do dynFlags   <- dynFlagsT
+ppSDoc =  do dynFlags   <- constT getDynFlags
              hideNotes  <- (po_notes . prettyC_options) ^<< contextT
              arr (toDoc . (if hideNotes then id else ("showSDoc: " ++)) . showPpr dynFlags)
     where toDoc s | any isSpace s = parens (text s)

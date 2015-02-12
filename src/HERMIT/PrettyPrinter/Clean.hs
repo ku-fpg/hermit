@@ -2,7 +2,8 @@
 
 module HERMIT.PrettyPrinter.Clean
     ( -- * HERMIT's Clean Pretty-Printer for GHC Core
-      pretty
+      externals
+    , pretty
     , ppCoreTC
     , ppModGuts
     , ppCoreProg
@@ -23,7 +24,7 @@ import Data.Monoid (mempty)
 
 import HERMIT.Context
 import HERMIT.Core
-import HERMIT.Dictionary (dynFlagsT)
+import HERMIT.External
 import HERMIT.GHC hiding ((<+>), (<>), ($$), ($+$), cat, sep, fsep, hsep, empty, nest, vcat, char, text, keyword, hang)
 import HERMIT.Kure
 import HERMIT.Monad
@@ -33,6 +34,9 @@ import HERMIT.Syntax
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
 ------------------------------------------------------------------------------------------------
+
+externals :: [External]
+externals = [ external "clean" pretty ["Clean pretty printer."] ]
 
 pretty :: PrettyPrinter
 pretty = PP { pForall = ppForallQuantification
@@ -215,7 +219,7 @@ ppCoreTC =
 
 -- Use for any GHC structure
 ppSDoc :: Outputable a => PrettyH a
-ppSDoc = do dynFlags <- dynFlagsT
+ppSDoc = do dynFlags <- constT getDynFlags
             p        <- absPathT
             doc      <- arr (showPpr dynFlags)
             if any isSpace doc

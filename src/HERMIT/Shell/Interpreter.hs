@@ -112,15 +112,17 @@ exprToDyns' rhs (CmdName str)
                     | otherwise -> fail $ "User error, unrecognised HERMIT command: " ++ show str
 exprToDyns' _ (AppH e1 e2) = liftM2 dynCrossApply (exprToDyns' False e1) (exprToDyns' True e2)
 
--- We treat externals of the type 'CommandLineState -> b' specially,
--- providing them the shell state here, so they don't need a monadic return type
+-- We treat externals of the type 'CommandLineState -> b' and 'PrettyPrinter -> b' specially,
+-- providing their arguments from the shell state here, so they don't need a monadic return type
 -- in order to access it themselves.
 provideState :: MonadState CommandLineState m => Dynamic -> m Dynamic
 provideState dyn = do
     st <- get
     case dynApply dyn (toDyn $ box st) of
         Just d  -> return d
-        Nothing -> return dyn
+        Nothing -> case dynApply dyn (toDyn $ box $ cl_pretty st) of
+                    Just d' -> return d'
+                    Nothing -> return dyn
 
 -- Cross product of possible applications.
 dynCrossApply :: [Dynamic] -> [Dynamic] -> [Dynamic]

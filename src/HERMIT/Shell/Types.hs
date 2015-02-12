@@ -43,13 +43,14 @@ import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, te
 ----------------------------------------------------------------------------------
 
 data QueryFun :: * where
-   QueryString   :: (Injection GHC.ModGuts g, Walker HermitC g)
-                 => TransformH g String                                   -> QueryFun
-   QueryDocH     :: (PrettyC -> PrettyH CoreTC -> TransformH CoreTC DocH) -> QueryFun
-   Diff          :: SAST -> SAST                                          -> QueryFun
-   Display       ::                                                          QueryFun
-   Inquiry       :: (CommandLineState -> IO String)                       -> QueryFun
-   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g) => TransformH g () -> QueryFun
+   QueryString        :: (Injection GHC.ModGuts g, Walker HermitC g)
+                      => TransformH g String                         -> QueryFun
+   QueryDocH          :: (Injection GHC.ModGuts g, Walker HermitC g)
+                      => PrettyH g                                   -> QueryFun
+   Diff               :: SAST -> SAST                                -> QueryFun
+   Inquiry            :: (CommandLineState -> IO String)             -> QueryFun
+   CorrectnessCritera :: (Injection GHC.ModGuts g, Walker HermitC g)
+                      => TransformH g ()                             -> QueryFun
    deriving Typeable
 
 message :: String -> QueryFun
@@ -70,7 +71,7 @@ performQuery (QueryString q) _ = do
 
 performQuery (QueryDocH q) _ = do
     st <- get
-    (sast, doc) <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (q (initPrettyC $ cl_pretty_opts st) $ pCoreTC $ cl_pretty st) (cl_kernel_env st) (cl_cursor st)
+    (sast, doc) <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (liftPrettyH (pOptions (cl_pretty st)) q) (cl_kernel_env st) (cl_cursor st)
     modify $ setCursor sast
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
@@ -98,13 +99,6 @@ performQuery (Diff s1 s2) _ = do
     cl_putStrLn "Diff:"
     cl_putStrLn "====="
     cl_putStr r
-
--- Explicit calls to display should work no matter what the loading state is.
-performQuery Display _ = do
-    running_script_st <- gets cl_running_script
-    setRunningScript Nothing
-    showWindow
-    setRunningScript running_script_st
 
 performQuery (CorrectnessCritera q) expr = do
     st <- get

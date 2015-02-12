@@ -11,11 +11,8 @@
 
 module HERMIT.Shell.Proof
     ( externals
-    , ProofCommand(..)
-    , performProofCommand
     , UserProofTechnique
     , userProofTechnique
-    , ppLemmaT
     ) where
 
 import Control.Arrow hiding (loop, (<+>))
@@ -23,13 +20,12 @@ import Control.Concurrent
 import Control.Monad ((>=>), foldM, forM, forM_, liftM, unless, when)
 import Control.Monad.Error.Class (MonadError(catchError))
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.State (MonadState(get, put), gets, modify)
+import Control.Monad.State (MonadState(get, put), modify)
 import Control.Monad.Trans.Class (lift)
 
 import Data.Char (isSpace)
 import Data.Dynamic
-import Data.List (delete, isInfixOf)
-import Data.Map (filterWithKey, toList)
+import Data.List (delete)
 import Data.String (fromString)
 
 import HERMIT.Core
@@ -59,25 +55,13 @@ import HERMIT.Shell.Types
 import System.Console.Haskeline hiding (catch, display)
 import System.IO
 
-import Text.PrettyPrint.MarkedHughesPJ as PP
-
 --------------------------------------------------------------------------------------------------------
 
--- | Externals that get us into the prover shell, or otherwise deal with lemmas.
--- TODO: InteractiveProof is the only one that should be here, rest in Reasoning
+-- | Externals that get us into the prover shell.
 externals :: [External]
 externals = map (.+ Proof)
-    [ external "show-lemma" (ShowLemmas . Just)
-        [ "List lemmas whose names match search string." ]
-    , external "show-remembered" (ShowLemmas (Just "remembered-"))
-        [ "Display all remembered definitions." ]
-    , external "show-lemmas" (ShowLemmas Nothing)
-        [ "List lemmas." ]
-    , external "prove-lemma" InteractiveProof
+    [ external "prove-lemma" (CLSModify . interactiveProofIO)
         [ "Proof a lemma interactively." ]
-    , external "dump-lemma" DumpLemma
-        [ "Dump named lemma to a file."
-        , "dump-lemma <lemma-name> <filename> <renderer> <width>" ]
     ]
 
 -- | Externals that are added to the dictionary only when in interactive proof mode.
@@ -87,7 +71,7 @@ proof_externals = map (.+ Proof)
         [ "Perform induction on given universally quantified variable."
         , "Each constructor case will generate a new equality to be proven."
         ]
-    , external "dump" PCDump
+    , external "dump" (\pp fp r w -> liftPrettyH (pOptions pp) (ppEqualityT pp) >>> dumpT fp pp r w)
         [ "dump <filename> <renderer> <width>" ]
     , external "end-proof" PCEnd
         [ "check for alpha-equality, marking the lemma as proven" ]
@@ -97,54 +81,23 @@ proof_externals = map (.+ Proof)
 
 --------------------------------------------------------------------------------------------------------
 
-data ProofCommand
-    = InteractiveProof LemmaName
-    | ShowLemmas (Maybe LemmaName)
-    | DumpLemma LemmaName String String Int
-    deriving (Typeable)
-
-instance Extern ProofCommand where
-    type Box ProofCommand = ProofCommand
-    box i = i
-    unbox i = i
-
---------------------------------------------------------------------------------------------------------
-
-performProofCommand :: (MonadCatch m, MonadException m, CLMonad m) => ProofCommand -> m ()
-
-performProofCommand (InteractiveProof nm) = do
-    st <- gets cl_pstate
-    (_,l) <- queryS (ps_kernel st) (getLemmaByNameT nm :: TransformH Core Lemma) (mkKernelEnv st) (ps_cursor st)
-    interactiveProof True False (nm,l)
-
-performProofCommand (DumpLemma nm fn r w) = dump (\ st -> getLemmaByNameT nm >>> ppLemmaT (cl_pretty st) nm) fn r w
-
-performProofCommand (ShowLemmas mnm) = do
-    st <- gets cl_pstate
-    (_,ls) <- queryS (ps_kernel st) (getLemmasT :: TransformH Core Lemmas) (mkKernelEnv st) (ps_cursor st)
-    mapM_ printLemma $ toList $ filterWithKey (maybe (\ _ _ -> True) (\ nm n _ -> show nm `isInfixOf` show n) mnm) ls
-
---------------------------------------------------------------------------------------------------------
-
-
 printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
            => (LemmaName,Lemma) -> m ()
 printLemma (nm,lem) = do
     st <- get
-    (_,doc) <- queryS (cl_kernel st) (return lem >>> ppLemmaT (cl_pretty st) nm :: TransformH Core DocH) (cl_kernel_env st) (cl_cursor st)
+    (_,doc) <- queryS (cl_kernel st) (return lem >>> liftPrettyH (pOptions (cl_pretty st)) (ppLemmaT (cl_pretty st) nm) :: TransformH Core DocH) (cl_kernel_env st) (cl_cursor st)
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
-
-ppLemmaT :: PrettyPrinter -> LemmaName -> TransformH Lemma DocH
-ppLemmaT pp nm = do
-    Lemma eq p u <- idR
-    eqDoc <- return eq >>> ppEqualityT pp
-    let hDoc = text (show nm) <+> text (if p then "(Proven)" else "(Not Proven)")
-                              <+> text (if u then "(Used)"   else "(Not Used)")
-    return $ hDoc $+$ nest 2 eqDoc
 
 --------------------------------------------------------------------------------------------------------
 
 type NamedLemma = (LemmaName, Lemma)
+
+interactiveProofIO :: LemmaName -> CommandLineState -> IO (Either CLException CommandLineState)
+interactiveProofIO nm s = do
+    let st = cl_pstate s
+    (_,l) <- queryS (ps_kernel st) (getLemmaByNameT nm :: TransformH Core Lemma) (mkKernelEnv st) (ps_cursor st)
+    (r,s') <- runCLT s $ interactiveProof True False (nm,l)
+    return $ fmap (const s') r
 
 interactiveProof :: forall m. (MonadCatch m, MonadException m, CLMonad m) => Bool -> Bool -> NamedLemma -> m ()
 interactiveProof topLevel isTemporary lem@(nm,_) = do
@@ -242,6 +195,16 @@ performProofShellCommand lem@(nm, Lemma eq p u) = go
                 modify $ setCursor sast'
                 cl_putStrLn res
                 return lem
+          go (PCUnit t)      = do
+                st <- get
+                let sk = cl_kernel st
+                    kEnv = cl_kernel_env st
+                    sast = cl_cursor st
+
+                -- Why do a query? See above.
+                (sast', ()) <- queryS sk (return eq >>> t :: TransformH Core ()) kEnv sast
+                modify $ setCursor sast'
+                return lem
           go (PCInduction idPred) = performInduction lem idPred
           go (PCShell effect)     = performShellEffect effect >> return lem
           go (PCScript effect)    = do
@@ -250,7 +213,6 @@ performProofShellCommand lem@(nm, Lemma eq p u) = go
                 performScriptEffect lemHack effect
                 liftIO $ takeMVar lemVar
           go (PCQuery query)      = performQuery query (error "PCQuery ExprH") >> return lem
-          go (PCProofCommand cmd) = performProofCommand cmd >> return lem
           go (PCUser prf)         = let UserProofTechnique t = prf in -- may add more constructors later
              do
                 st <- get
@@ -258,7 +220,6 @@ performProofShellCommand lem@(nm, Lemma eq p u) = go
                 (sast',()) <- queryS (cl_kernel st) (return eq >>> t :: TransformH Core ()) (cl_kernel_env st) (cl_cursor st)
                 continue $ setCursor sast' st -- note: we assume that if 't' completes without failing, the lemma is proved, we don't actually check
                 return lem       -- never reached
-          go (PCDump fName r w)   = dump (\ st -> return (snd lem) >>> ppLemmaT (cl_pretty st) (fst lem)) fName r w >> return lem
           go PCEnd                = endProof lem >> return lem
           go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.") >> return lem
 
@@ -315,13 +276,12 @@ addLemmas lems = do
 data ProofShellCommand
     = PCRewrite (RewriteH Equality)
     | PCTransform (TransformH Equality String)
+    | PCUnit (TransformH Equality ())
     | PCInduction (Id -> Bool)
     | PCShell ShellEffect
     | PCScript ScriptEffect
     | PCQuery QueryFun
-    | PCProofCommand ProofCommand
     | PCUser UserProofTechnique
-    | PCDump String String Int
     | PCEnd
     | PCUnsupported String
     deriving Typeable
@@ -344,6 +304,13 @@ instance Extern UserProofTechnique where
     box = UserProofTechniqueBox
     unbox (UserProofTechniqueBox t) = t
 
+data TransformEqualityUnitBox = TransformEqualityUnitBox (TransformH Equality ()) deriving Typeable
+
+instance Extern (TransformH Equality ()) where
+    type Box (TransformH Equality ()) = TransformEqualityUnitBox
+    box = TransformEqualityUnitBox
+    unbox (TransformEqualityUnitBox i) = i
+
 interpProof :: Monad m => [Interp m ProofShellCommand]
 interpProof =
   [ interp $ \ (RewriteCoreBox rr)            -> PCRewrite $ bothR $ extractR rr
@@ -353,9 +320,9 @@ interpProof =
   , interp $ \ (effect :: ScriptEffect)       -> PCScript effect
   , interp $ \ (StringBox str)                -> PCQuery (message str)
   , interp $ \ (query :: QueryFun)            -> PCQuery query
-  , interp $ \ (cmd :: ProofCommand)          -> PCProofCommand cmd
   , interp $ \ (RewriteEqualityBox r)         -> PCRewrite r
   , interp $ \ (TransformEqualityStringBox t) -> PCTransform t
+  , interp $ \ (TransformEqualityUnitBox t)   -> PCUnit t
   , interp $ \ (UserProofTechniqueBox t)      -> PCUser t
   , interp $ \ (cmd :: ProofShellCommand)     -> cmd
   , interp $ \ (CrumbBox _cr)                 -> PCUnsupported "CrumbBox"
@@ -364,7 +331,6 @@ interpProof =
   , interp $ \ (TransformCoreTCPathBox _tt)   -> PCUnsupported "TransformCoreTCPathBox"
   , interp $ \ (TransformCoreStringBox _tt)   -> PCUnsupported "TransformCoreStringBox"
   , interp $ \ (TransformCoreTCStringBox _tt) -> PCUnsupported "TransformCoreTCStringBox"
-  , interp $ \ (TransformCoreTCDocHBox _tt)   -> PCUnsupported "TransformCoreTCDocHBox"
   , interp $ \ (TransformCoreCheckBox _tt)    -> PCUnsupported "TransformCoreCheckBox"
   , interp $ \ (TransformCoreTCCheckBox _tt)  -> PCUnsupported "TransformCoreTCCheckBox"
   , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"

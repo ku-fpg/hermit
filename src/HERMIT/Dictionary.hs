@@ -71,6 +71,11 @@ import           HERMIT.Dictionary.WorkerWrapper.Fix hiding (externals)
 import qualified HERMIT.Dictionary.WorkerWrapper.Fix as WorkerWrapperFix
 import           HERMIT.Dictionary.WorkerWrapper.FixResult hiding (externals)
 import qualified HERMIT.Dictionary.WorkerWrapper.FixResult as WorkerWrapperFixResult
+--------------------------------------------------------------------------
+
+import qualified HERMIT.PrettyPrinter.AST as AST
+import qualified HERMIT.PrettyPrinter.Clean as Clean
+import qualified HERMIT.PrettyPrinter.GHC as GHCPP
 
 --------------------------------------------------------------------------
 
@@ -98,5 +103,8 @@ externals =
     ++ WorkerWrapperCommon.externals
     ++ WorkerWrapperFix.externals
     ++ WorkerWrapperFixResult.externals
+    ++ AST.externals
+    ++ Clean.externals
+    ++ GHCPP.externals
 
 --------------------------------------------------------------------------

@@ -235,12 +235,13 @@ externTypeString = deBoxify . show . dynTypeRep . externDyn
 
 -- | Remove the word 'Box' from a string.
 deBoxify :: String -> String
-deBoxify xs
-    | "CLSBox -> " `isPrefixOf` xs = deBoxify (drop 10 xs)
-deBoxify xs
-    | "Box" `isPrefixOf` xs        = deBoxify (drop 3 xs)
-deBoxify (x:xs)                    = x : deBoxify xs
-deBoxify []                        = []
+deBoxify s | "CLSBox -> "        `isPrefixOf` s = go (drop 10 s)
+           | "PrettyPrinter -> " `isPrefixOf` s = go (drop 17 s)
+           | otherwise = go s
+    where go xs
+            | "Box" `isPrefixOf` xs = go (drop 3 xs)
+          go (x:xs)                 = x : go xs
+          go []                     = []
 
 externTypeArgResString :: External -> ([String], String)
 externTypeArgResString e = (map (deBoxify . show) aTys, deBoxify (show rTy))

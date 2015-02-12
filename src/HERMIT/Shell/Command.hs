@@ -38,7 +38,6 @@ import HERMIT.Shell.Completion
 import HERMIT.Shell.Externals
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.KernelEffect
-import HERMIT.Shell.Proof
 import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
@@ -144,7 +143,13 @@ commandLine intp opts exts = do
 
 -- | Like 'catchM', but checks the 'cl_failhard' setting and does so if needed.
 catchFailHard :: (MonadCatch m, CLMonad m) => m () -> (String -> m ()) -> m ()
-catchFailHard m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display (CmdName "display") >> cl_putStrLn msg >> abort) (failure msg)
+catchFailHard m failure =
+    catchM m $ \ msg -> ifM (gets cl_failhard)
+                            (do pp <- gets cl_pretty
+                                performQuery (QueryDocH $ pCoreTC pp) (CmdName "display")
+                                cl_putStrLn msg
+                                abort)
+                            (failure msg)
 
 evalScript :: (MonadCatch m, CLMonad m) => [Interp m ()] -> String -> m ()
 evalScript intp = parseScriptCLT >=> mapM_ (runExprH intp)
@@ -165,14 +170,14 @@ interpShellCommand =
   , interpEM $ \ (StringBox str)               -> performQuery (message str)
   , interpEM $ \ (TransformCoreStringBox tt)   -> performQuery (QueryString tt)
   , interpEM $ \ (TransformCoreTCStringBox tt) -> performQuery (QueryString tt)
-  , interpEM $ \ (TransformCoreTCDocHBox tt)   -> performQuery (QueryDocH $ unTransformDocH tt)
+  , interpEM $ \ (PrettyHCoreTCBox t)          -> performQuery (QueryDocH t)
+  , interpEM $ \ (PrettyHCoreBox t)            -> performQuery (QueryDocH t)
   , interpEM $ \ (TransformCoreCheckBox tt)    -> performQuery (CorrectnessCritera tt)
   , interpEM $ \ (TransformCoreTCCheckBox tt)  -> performQuery (CorrectnessCritera tt)
   , interpEM $ \ (effect :: KernelEffect)      -> flip performKernelEffect effect
   , interpM  $ \ (effect :: ShellEffect)       -> performShellEffect effect
   , interpM  $ \ (effect :: ScriptEffect)      -> performScriptEffect (runExprH interpShellCommand) effect
   , interpEM $ \ (query :: QueryFun)           -> performQuery query
-  , interpM  $ \ (cmd :: ProofCommand)         -> performProofCommand cmd
   ]
 
 -------------------------------------------------------------------------------

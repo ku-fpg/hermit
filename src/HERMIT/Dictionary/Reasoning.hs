@@ -23,6 +23,8 @@ module HERMIT.Dictionary.Reasoning
     , lemmaR
     , markLemmaUsedT
     , modifyLemmaT
+    , showLemmasT
+    , ppLemmaT
     -- ** Lifting transformations over 'Equality'
     , lhsT
     , rhsT
@@ -56,11 +58,11 @@ module HERMIT.Dictionary.Reasoning
     ) where
 
 import           Control.Applicative
-import           Control.Arrow
+import           Control.Arrow hiding ((<+>))
 import           Control.Monad
 
 import qualified Data.Map as Map
-import           Data.List (isPrefixOf, nubBy)
+import           Data.List (isInfixOf, isPrefixOf, nubBy)
 import           Data.Maybe (fromMaybe)
 import           Data.Monoid
 
@@ -68,7 +70,7 @@ import           HERMIT.Context
 import           HERMIT.Core
 import           HERMIT.Equality
 import           HERMIT.External
-import           HERMIT.GHC hiding ((<>))
+import           HERMIT.GHC hiding ((<>), (<+>), nest, ($+$))
 import           HERMIT.Kure
 import           HERMIT.Monad
 import           HERMIT.Name
@@ -123,6 +125,10 @@ externals =
         [ "Modify a given lemma. Resets the proven status to Not Proven and used status to Not Used." ]
     , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaEq >>> t) :: LemmaName -> TransformH Equality String -> TransformH Core String)
         [ "Apply a transformation to a lemma, returning the result." ]
+    , external "show-lemma" ((\pp n -> showLemmasT (Just n) pp) :: PrettyPrinter -> LemmaName -> PrettyH Core)
+        [ "List lemmas whose names match search string." ]
+    , external "show-lemmas" (showLemmasT Nothing :: PrettyPrinter -> PrettyH Core)
+        [ "List lemmas." ]
     , external "extensionality" (extensionalityR . Just :: String -> RewriteH Equality)
         [ "Given a name 'x, then"
         , "f == g  ==>  forall x.  f x == g x" ]
@@ -148,6 +154,8 @@ externals =
         [ "Fold a remembered definition." ]                      .+ Context .+ Deep
     , external "fold-any-remembered" (promoteExprR foldAnyRememberedR :: RewriteH Core)
         [ "Attempt to fold any of the remembered definitions." ] .+ Context .+ Deep
+    , external "show-remembered" (showLemmasT (Just "remembered-") :: PrettyPrinter -> PrettyH Core)
+        [ "Display all remembered definitions." ]
     ]
 
 ------------------------------------------------------------------------------
@@ -236,11 +244,25 @@ bothR r = lhsR r >+> rhsR r
 
 ------------------------------------------------------------------------------
 
-ppEqualityT :: PrettyPrinter -> TransformH Equality DocH
+showLemmasT :: Maybe LemmaName -> PrettyPrinter -> PrettyH a
+showLemmasT mnm pp = do
+    ls <- getLemmasT
+    let ls' = Map.toList $ Map.filterWithKey (maybe (\ _ _ -> True) (\ nm n _ -> show nm `isInfixOf` show n) mnm) ls
+    ds <- forM ls' $ \(nm,l) -> return l >>> ppLemmaT pp nm
+    return $ PP.vcat ds
+
+ppLemmaT :: PrettyPrinter -> LemmaName -> PrettyH Lemma
+ppLemmaT pp nm = do
+    Lemma eq p u <- idR
+    eqDoc <- return eq >>> ppEqualityT pp
+    let hDoc = PP.text (show nm) PP.<+> PP.text (if p then "(Proven)" else "(Not Proven)")
+                                 PP.<+> PP.text (if u then "(Used)"   else "(Not Used)")
+    return $ hDoc PP.$+$ PP.nest 2 eqDoc
+
+ppEqualityT :: PrettyPrinter -> PrettyH Equality
 ppEqualityT pp = do
-    let pos = pOptions pp
-    d1 <- forallVarsT (liftPrettyH pos $ pForall pp)
-    (d2,d3) <- bothT (liftPrettyH pos $ extractT $ pCoreTC pp)
+    d1 <- forallVarsT $ pForall pp
+    (d2,d3) <- bothT $ extractT $ pCoreTC pp
     return $ PP.sep [d1,d2,syntaxColor (PP.text "="),d3]
 
 ------------------------------------------------------------------------------

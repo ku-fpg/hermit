@@ -28,12 +28,12 @@ module HERMIT.PrettyPrinter.Common
       -- * Pretty Printer Traversals
     , PrettyPrinter(..)
     , PrettyH
+    , PrettyHCoreBox(..)
+    , PrettyHCoreTCBox(..)
     , liftPrettyH
     , PrettyC(..)
     , initPrettyC
     , liftPrettyC
-    , TransformDocH(..)
-    , TransformCoreTCDocHBox(..)
       -- * Pretty Printer Options
     , PrettyOptions(..)
     , updateCoShowOption
@@ -68,16 +68,6 @@ showRole Phantom          = "P"
 
 -- A HERMIT document
 type DocH = MDoc HermitMark
-
--- newtype wrapper for proper instance selection
-newtype TransformDocH a = TransformDocH { unTransformDocH :: PrettyC -> PrettyH a -> TransformH a DocH }
-
-data TransformCoreTCDocHBox = TransformCoreTCDocHBox (TransformDocH CoreTC) deriving Typeable
-
-instance Extern (TransformDocH CoreTC) where
-    type Box (TransformDocH CoreTC) = TransformCoreTCDocHBox
-    box = TransformCoreTCDocHBox
-    unbox (TransformCoreTCDocHBox i) = i
 
 -- These are the zero-width marks on the document
 data HermitMark
@@ -133,9 +123,29 @@ data PrettyPrinter = PP { pForall  :: PrettyH [Var]
                         , pCoreTC  :: PrettyH CoreTC
                         , pOptions :: PrettyOptions
                         }
+    deriving Typeable
+
+instance Extern PrettyPrinter where
+    type Box PrettyPrinter = PrettyPrinter
+    box i = i
+    unbox i = i
 
 type PrettyH a = Transform PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?
+
+data PrettyHCoreBox = PrettyHCoreBox (PrettyH Core) deriving Typeable
+
+instance Extern (PrettyH Core) where
+    type Box (PrettyH Core) = PrettyHCoreBox
+    box = PrettyHCoreBox
+    unbox (PrettyHCoreBox i) = i
+
+data PrettyHCoreTCBox = PrettyHCoreTCBox (PrettyH CoreTC) deriving Typeable
+
+instance Extern (PrettyH CoreTC) where
+    type Box (PrettyH CoreTC) = PrettyHCoreTCBox
+    box = PrettyHCoreTCBox
+    unbox (PrettyHCoreTCBox i) = i
 
 -- | Context for PrettyH translations.
 data PrettyC = PrettyC { prettyC_path    :: AbsolutePathH

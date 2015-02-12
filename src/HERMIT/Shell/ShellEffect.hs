@@ -12,9 +12,10 @@
 module HERMIT.Shell.ShellEffect
     ( ShellEffect(..)
     , performShellEffect
-    , dump
+    , dumpT
     ) where
 
+import Control.Monad.Except (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State (MonadState(..), gets)
 
@@ -22,7 +23,6 @@ import Data.Typeable
 
 import HERMIT.External
 import HERMIT.Kure
-import HERMIT.Kernel.Scoped
 import HERMIT.PrettyPrinter.Common
 
 import HERMIT.Plugin.Renderer
@@ -36,10 +36,9 @@ import System.IO
 
 data ShellEffect :: * where
     Abort      :: ShellEffect
-    CLSModify  :: (CommandLineState -> IO CommandLineState) -> ShellEffect
+    CLSModify  :: (CommandLineState -> IO (Either CLException CommandLineState)) -> ShellEffect
     PluginComp :: PluginM () -> ShellEffect
     Continue   :: ShellEffect
-    Dump       :: (CommandLineState -> TransformH CoreTC DocH) -> String -> String -> Int -> ShellEffect
     Resume     :: ShellEffect
     deriving Typeable
 
@@ -54,18 +53,16 @@ performShellEffect :: (MonadCatch m, CLMonad m) => ShellEffect -> m ()
 performShellEffect Abort  = abort
 performShellEffect Resume = gets cl_cursor >>= resume
 performShellEffect Continue = get >>= continue
-performShellEffect (Dump pp fileName renderer width) = dump pp fileName renderer width
 
-performShellEffect (CLSModify f)  = get >>= liftAndCatchIO . f >>= put >> showWindow
+performShellEffect (CLSModify f)  = get >>= liftAndCatchIO . f >>= either throwError put >> showWindow
 
 performShellEffect (PluginComp m) = pluginM m >> showWindow
 
-dump :: (MonadCatch m, MonadIO m, MonadState CommandLineState m) => (CommandLineState -> TransformH CoreTC DocH) -> String -> String -> Int -> m ()
-dump pp fileName renderer width = do
-    st <- get
+dumpT :: FilePath -> PrettyPrinter -> String -> Int -> TransformH DocH ()
+dumpT fileName pp renderer width = do
     case lookup renderer shellRenderers of
-      Just r -> do (_,doc) <- prefixFailMsg "Bad renderer option: " $ queryS (cl_kernel st) (pp st) (cl_kernel_env st) (cl_cursor st)
+      Just r -> do doc <- idR -- prefixFailMsg "Bad renderer option: " $ liftPrettyH (pOptions pp) (pCoreTC pp)
                    liftIO $ do h <- openFile fileName WriteMode
-                               r h ((cl_pretty_opts st) { po_width = width }) (Right doc)
+                               r h ((pOptions pp) { po_width = width }) (Right doc)
                                hClose h
-      _ -> fail "dump: bad pretty-printer or renderer option"
+      _ -> fail "dump: bad renderer option"

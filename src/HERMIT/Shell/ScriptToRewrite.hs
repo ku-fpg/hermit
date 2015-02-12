@@ -30,8 +30,6 @@ import HERMIT.Kure
 import HERMIT.External
 import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript, unparseScript)
 
-import HERMIT.PrettyPrinter.Common(TransformCoreTCDocHBox(..))
-
 import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.ShellEffect
@@ -183,7 +181,6 @@ interpScriptR =
   , interp (\ (_ :: QueryFun)              -> ScriptUnsupported "query")
   , interp (\ (TransformCoreStringBox _)   -> ScriptUnsupported "query")
   , interp (\ (TransformCoreTCStringBox _) -> ScriptUnsupported "query")
-  , interp (\ (TransformCoreTCDocHBox _)   -> ScriptUnsupported "query")
   , interp (\ (TransformCoreCheckBox _)    -> ScriptUnsupported "predicate")
   , interp (\ (StringBox _)                -> ScriptUnsupported "message")
   ]
