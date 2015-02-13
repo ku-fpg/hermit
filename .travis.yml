@@ -3,6 +3,10 @@ language: haskell
 ghc:
   - 7.8.4
 
+before_install:
+  - cabal install happy
+  - cabal install alex
+
 install:
   - cabal update
   - cabal install -j --only-dependencies --enable-tests
