@@ -15,7 +15,7 @@ module HERMIT.Shell.ShellEffect
     , dumpT
     ) where
 
-import Control.Monad.Except (MonadError(..))
+import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State (MonadState(..), gets)
 

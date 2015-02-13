@@ -5,10 +5,11 @@ module HERMIT.Plugin.Types where
 
 import Control.Applicative
 import Control.Concurrent.STM
-import Control.Monad.Except (MonadError(..), ExceptT, runExceptT)
+import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State (MonadState(..), StateT(..))
 import Control.Monad.Trans.Class (MonadTrans(..))
+import Control.Monad.Trans.Except (ExceptT, runExceptT)
 
 import Data.Dynamic
 import qualified Data.Map as M

@@ -101,6 +101,7 @@ build-type:          Simple
 Cabal-Version:       >= 1.14
 
 extra-source-files:
+    README.md
     examples/concatVanishes/ConcatVanishes.hss
     examples/concatVanishes/Flatten.hs
     examples/concatVanishes/Flatten.hss
@@ -148,12 +149,12 @@ Library
                  kure                >= 2.16.4,
                  marked-pretty       >= 0.1,
                  mtl                 >= 2.1.2,
-                 mtl-compat          >= 0.1,
                  operational         >= 0.2.2.1,
                  process             >= 1.1.0.2,
                  stm                 >= 2.4,
                  temporary           >= 1.2.0.3,
-                 transformers        >= 0.2
+                 transformers        >= 0.2,
+                 transformers-compat >= 0.4
 
   if os(windows)
     build-depends: Win32
