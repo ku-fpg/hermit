@@ -97,12 +97,3 @@ mkKernelEnv st =
                         out $ "[" ++ msg' ++ "]"
                         doc :: DocH <- applyT (pCoreTC pp) (liftPrettyC (pOptions pp) cxt) (inject core)
                         liftIO $ ps_render st stdout (pOptions pp) (Right doc)
-
-iokm' :: (MonadIO m, MonadCatch m) => String -> (a -> m b) -> IO (KureM a) -> m b
-iokm' msg ret m = liftIO m >>= runKureM ret (fail . (msg ++))
-
-iokm :: (MonadIO m, MonadCatch m) => String -> IO (KureM a) -> m a
-iokm msg = iokm' msg return
-
-iokm'' :: (MonadIO m, MonadCatch m) => IO (KureM a) -> m a
-iokm'' = iokm ""
