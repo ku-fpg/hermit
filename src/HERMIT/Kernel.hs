@@ -120,10 +120,11 @@ findAST ast m f = find ast m (f $ "Cannot find syntax tree: " ++ show ast)
 --   initial 'Kernel' and inital 'AST' handle. The callback is only
 --   ever called once. The 'Modguts -> CoreM Modguts' function
 --   required by GHC Plugins is returned.
-hermitKernel :: (String, IORef (Maybe (AST, ASTMap))) -- ^ Global (across passes) AST store.
-             -> (Kernel -> AST -> IO ())              -- ^ Callback
+hermitKernel :: IORef (Maybe (AST, ASTMap)) -- ^ Global (across passes) AST store.
+             -> String                      -- ^ Last GHC pass name
+             -> (Kernel -> AST -> IO ())    -- ^ Callback
              -> ModGuts -> CoreM ModGuts
-hermitKernel (lastPass, store) callback modGuts = do
+hermitKernel store lastPass callback modGuts = do
 
     msgMV :: MVar Msg <- liftIO newEmptyMVar
 

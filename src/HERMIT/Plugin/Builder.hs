@@ -13,6 +13,7 @@ module HERMIT.Plugin.Builder
 
 import Data.IORef
 import Data.List
+import qualified Data.Map as M
 
 import HERMIT.GHC
 import HERMIT.Kernel
@@ -39,38 +40,50 @@ buildPlugin hp = defaultPlugin { installCoreToDos = install }
             liftIO initStaticOpts
 #endif
 
-            store <- liftIO $ newIORef Nothing
+            store <- liftIO $ newIORef (M.empty :: M.Map ModuleName (IORef (Maybe (AST, ASTMap))))
             let todos' = flattenTodos todos
                 passes = map getCorePass todos'
                 allPasses = foldr (\ (n,p,seen,notyet) r -> mkPass n seen notyet : p : r)
                                   [mkPass (length todos') passes []]
                                   (zip4 [0..] todos' (inits passes) (tails passes))
                 mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n)
-                                $ modFilter hp store (PassInfo n ps ps') opts
+                                $ modFilter store hp (PassInfo n ps ps') opts
 
             return allPasses
 
--- | Determine whether to act on this module, choose plugin pass.
+-- | Determine whether to act on this module, selecting global store.
 -- NB: we have the ability to stick module info in the pass info here
-modFilter :: HERMITPass -> HERMITPass
-modFilter hp store pInfo opts guts
+modFilter :: IORef (M.Map ModuleName (IORef (Maybe (AST, ASTMap)))) -- global store
+          -> HERMITPass
+          -> PassInfo
+          -> [CommandLineOption]
+          -> ModGuts -> CoreM ModGuts
+modFilter store hp pInfo opts guts
     | null modOpts && notNull opts = return guts -- don't process this module
-    | otherwise                    = hp store pInfo (h_opts ++ filter notNull modOpts) guts
-    where modOpts = filterOpts m_opts guts
+    | otherwise                    = do m <- liftIO $ readIORef store
+                                        modStore <- case M.lookup modName m of
+                                                        Nothing  -> liftIO $ do
+                                                                        ref <- newIORef Nothing
+                                                                        writeIORef store $ M.insert modName ref m
+                                                                        return ref
+                                                        Just ref -> return ref
+                                        hp modStore pInfo (h_opts ++ filter notNull modOpts) guts
+    where modOpts = filterOpts m_opts modName
           (m_opts, h_opts) = partition (isInfixOf ":") opts
+          modName = moduleName $ mg_module guts
 
 -- | Filter options to those pertaining to this module, stripping module prefix.
-filterOpts :: [CommandLineOption] -> ModGuts -> [CommandLineOption]
-filterOpts opts guts = [ opt | nm <- opts
-                             , let mopt = if modName `isPrefixOf` nm
-                                          then Just (drop len nm)
-                                          else if "*:" `isPrefixOf` nm
-                                               then Just (drop 2 nm)
-                                               else Nothing
-                             , Just opt <- [mopt]
-                             ]
-    where modName = moduleNameString $ moduleName $ mg_module guts
-          len = length modName + 1 -- for the colon
+filterOpts :: [CommandLineOption] -> ModuleName -> [CommandLineOption]
+filterOpts opts mname = [ opt | nm <- opts
+                              , let mopt = if modName `isPrefixOf` nm
+                                           then Just (drop len nm)
+                                           else if "*:" `isPrefixOf` nm
+                                                then Just (drop 2 nm)
+                                                else Nothing
+                              , Just opt <- [mopt]
+                              ]
+    where modName = moduleNameString mname
+          len = lengthFS (moduleNameFS mname) + 1 -- for the colon
 
 -- | An enumeration type for GHC's passes.
 data CorePass = FloatInwards

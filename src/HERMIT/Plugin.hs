@@ -97,7 +97,7 @@ lpName pInfo = case passesDone pInfo of
                     ps -> "-- GHC - " ++ show (last ps)
 
 runHPM :: IORef (Maybe (AST, ASTMap)) -> PassInfo -> HPM () -> ModGuts -> CoreM ModGuts
-runHPM store passInfo hpass = hermitKernel (lpName passInfo, store) $ \ kernel initAST -> do
+runHPM store passInfo hpass = hermitKernel store (lpName passInfo) $ \ kernel initAST -> do
     ps <- defPS initAST kernel passInfo
     (r,st) <- hpmToIO ps hpass
     let cleanup ast = do
