@@ -2,19 +2,20 @@
 
 module HERMIT.Shell.Externals where
 
-import Control.Applicative
 import Control.Arrow
+import Control.Monad (liftM)
 
+import Data.Dynamic (fromDynamic)
 import Data.List (intercalate)
 import qualified Data.Map as M
-import Control.Monad (liftM)
-import Data.Dynamic (fromDynamic)
+import Data.Maybe (fromMaybe)
+import Data.Monoid (mempty)
 
 import HERMIT.Context
 import HERMIT.Equality
 import HERMIT.Kure
 import HERMIT.External
-import HERMIT.Kernel.Scoped
+import HERMIT.Kernel
 import HERMIT.Parser
 import HERMIT.Plugin.Renderer
 import HERMIT.PrettyPrinter.Common
@@ -38,8 +39,8 @@ shell_externals = map (.+ Shell)
         [ "hard UNIX-style exit; does not return to GHC; does not save" ]
     , external "continue"        Continue  -- Shell Exit, but not HERMIT
         [ "exits shell; resumes HERMIT" ]
-    , external "gc"              (Delete . SAST)
-        [ "garbage-collect a given AST; does not remove from command log" ]
+    , external "gc"              Delete
+        [ "garbage-collect a given AST" ]
     , external "gc"              (CLSModify $ liftM Right . gc)
         [ "garbage-collect all ASTs except for the initial and current AST" ]
     , external "display"         pCoreTC
@@ -60,19 +61,15 @@ shell_externals = map (.+ Shell)
         [ "fix the window to the current focus" ]
     , external "top"             (Direction T)
         [ "move to root of current scope" ]
-    , external "back"            (CLSModify $ versionCmd Back)
-        [ "go back in the derivation" ]                                          .+ VersionControl
     , external "log"             (Inquiry showDerivationTree)
+        [ "go back in the derivation" ]                                          .+ VersionControl
+    , external "back"            (CLSModify $ versionCmd Back)
         [ "go back in the derivation" ]                                          .+ VersionControl
     , external "step"            (CLSModify $ versionCmd Step)
         [ "step forward in the derivation" ]                                     .+ VersionControl
     , external "goto"            (CLSModify . versionCmd . Goto)
         [ "goto a specific step in the derivation" ]                             .+ VersionControl
-    , external "goto"            (CLSModify . versionCmd . GotoTag)
-        [ "goto a named step in the derivation" ]
-    , external "tag"             (CLSModify . versionCmd . AddTag)
-        [ "tag <label> names the current AST with a label" ]                     .+ VersionControl
-    , external "diff"            (\ s1 s2 -> Diff (SAST s1) (SAST s2))
+    , external "diff"            Diff
         [ "show diff of two ASTs" ]                                              .+ VersionControl
     , external "set-pp-diffonly" (\ bStr -> CLSModify $ \ st ->
         case reads bStr of
@@ -172,17 +169,16 @@ gc :: CommandLineState -> IO CommandLineState
 gc st = do
     let k = cl_kernel st
         cursor = cl_cursor st
-        initSAST = cl_initSAST st
-    asts <- listS k
-    mapM_ (deleteS k) [ sast | sast <- asts, sast `notElem` [cursor, initSAST] ]
+    asts <- listK k
+    mapM_ (deleteK k) [ ast | (ast,_,_) <- asts, ast `notElem` [cursor, firstAST] ]
     return st
 
 ----------------------------------------------------------------------------------
 
 setWindow :: CommandLineState -> IO (Either CLException CommandLineState)
 setWindow st = do
-    paths <- concat <$> pathS (cl_kernel st) (cl_cursor st)
-    return $ Right $ st { cl_window = paths }
+    let (base, rel) = fromMaybe ([],mempty) (M.lookup (cl_cursor st) (cl_foci st))
+    return $ Right $ st { cl_window = concat $ pathStack2Paths base rel }
 
 showRenderers :: QueryFun
 showRenderers = message $ "set-renderer " ++ show (map fst shellRenderers)
@@ -190,68 +186,57 @@ showRenderers = message $ "set-renderer " ++ show (map fst shellRenderers)
 --------------------------------------------------------
 
 versionCmd :: VersionCmd -> CommandLineState -> IO (Either CLException CommandLineState)
-versionCmd whereTo st =
+versionCmd whereTo st = do
+    all_asts <- listK (cl_kernel st)
     case whereTo of
-        Goto n -> do
-            all_nds <- listS (cl_kernel st)
-            if SAST n `elem` all_nds
-                then return $ Right $ setCursor (SAST n) st
-                else return $ Left $ CLError $ "Cannot find AST #" ++ show n ++ "."
-        GotoTag tag -> case lookup tag (vs_tags (cl_version st)) of
-                        Just sast -> return $ Right $ setCursor sast st
-                        Nothing   -> return $ Left $ CLError $ "Cannot find tag " ++ show tag ++ "."
+        Goto ast ->
+            if ast `elem` [ ast' | (ast',_,_) <- all_asts ]
+                then return $ Right $ setCursor ast st
+                else return $ Left $ CLError $ "Cannot find AST #" ++ show ast ++ "."
         Step -> do
-            let ns = [ edge | edge@(s,_,_) <- vs_graph (cl_version st), s == cl_cursor st ]
+            let ns = [ (fromMaybe "unknown" msg, ast) | (ast,msg,Just p) <- all_asts, p == cl_cursor st ]
             case ns of
                 [] -> return $ Left $ CLError "Cannot step forward (no more steps)."
-                [(_,cmd,d) ] -> do
-                    putStrLn $ "step : " ++ unparseExprH cmd
-                    return $ Right $ setCursor d st
-                _ -> return $ Left $ CLError "Cannot step forward (multiple choices)"
+                [(cmd,ast)] -> do
+                    putStrLn $ "step : " ++ cmd
+                    return $ Right $ setCursor ast st
+                _ -> return $ Left $ CLError $ "Cannot step forward (multiple choices), use goto {"
+                                                ++ intercalate "," (map (show.snd) ns) ++ "}"
         Back -> do
-            let ns = [ edge | edge@(_,_,d) <- vs_graph (cl_version st), d == cl_cursor st ]
+            let ns = [ (fromMaybe "unknown" msg, p) | (ast,msg,Just p) <- all_asts, ast == cl_cursor st ]
             case ns of
-                []         -> return $ Left $ CLError "Cannot step backwards (no more steps)."
-                [(s,cmd,_) ] -> do
-                    putStrLn $ "back, unstepping : " ++ unparseExprH cmd
-                    return $ Right $ setCursor s st
-                _          -> return $ Left $ CLError "Cannot step backwards (multiple choices, impossible!)."
-        AddTag tag -> do
-            return $ Right $ st { cl_version = (cl_version st) { vs_tags = (tag, cl_cursor st) : vs_tags (cl_version st) }}
+                [] -> return $ Left $ CLError "Cannot step backwards (no more steps)."
+                [(cmd,ast)] -> do
+                    putStrLn $ "back, unstepping : " ++ cmd
+                    return $ Right $ setCursor ast st
+                _ -> return $ Left $ CLError "Cannot step backwards (multiple choices, impossible!)."
 
 -------------------------------------------------------------------------------
 
 showDerivationTree :: CommandLineState -> IO String
-showDerivationTree st = return $ unlines $ showRefactorTrail graph tags start me
-  where
-          graph = [ (a,[unparseExprH b],c) | (SAST a,b,SAST c) <- vs_graph (cl_version st) ]
-          tags  = [ (n,nm) | (nm,SAST n) <- vs_tags (cl_version st) ]
-          SAST me = cl_cursor st
-          SAST start = cl_initSAST st
+showDerivationTree st = do
+    all_asts <- listK (cl_kernel st)
+    let graph = [ (a,[fromMaybe "-- command missing!" b],c) | (c,b,Just a) <- all_asts ]
+    return $ unlines $ showRefactorTrail graph firstAST (cl_cursor st)
 
-showRefactorTrail :: (Eq a, Show a) => [(a,[String],a)] -> [(a,String)] -> a -> a -> [String]
-showRefactorTrail db tags a me =
+showRefactorTrail :: (Eq a, Show a) => [(a,[String],a)] -> a -> a -> [String]
+showRefactorTrail db a me =
         case [ (b,c) | (a0,b,c) <- db, a == a0 ] of
-           [] -> [show' 3 a ++ " " ++ dot ++ tags_txt]
+           [] -> [show' 3 a ++ " " ++ dot]
            ((b,c):bs) ->
-                      [show' 3 a ++ " " ++ dot ++ (if not (null bs) then "->" else "") ++ tags_txt ] ++
+                      [show' 3 a ++ " " ++ dot ++ (if not (null bs) then "->" else "") ] ++
                       ["    " ++ "| " ++ txt | txt <- b ] ++
-                      showRefactorTrail db tags c me ++
+                      showRefactorTrail db c me ++
                       if null bs
                       then []
                       else [] :
                           showRefactorTrail [ (a',b',c') | (a',b',c') <- db
                                                           , not (a == a' && c == c')
-                                                          ]  tags a me
+                                                          ] a me
 
   where
           dot = if a == me then "*" else "o"
           show' n x = replicate (n - length (show a)) ' ' ++ show x
-          tags_txt = concat [ ' ' : txt
-                            | (n,txt) <- tags
-                            , n == a
-                            ]
-
 
 -------------------------------------------------------------------------------
 

@@ -1,67 +1,106 @@
-{-# LANGUAGE RankNTypes, ScopedTypeVariables, TupleSections, GADTs #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.Kernel
     ( -- * The HERMIT Kernel
       AST
+    , firstAST
+    , ASTMap
     , Kernel
     , KernelEnv(..)
     , hermitKernel
+      -- ** Kernel Interface
     , resumeK
     , abortK
     , applyK
     , queryK
     , deleteK
     , listK
+    , tellK
     ) where
 
-import Prelude hiding (lookup)
+import Prelude hiding (lookup, null)
 
 import Control.Concurrent
 import Control.Monad
 import Control.Monad.IO.Class
 
+import Data.IORef
 import Data.Map
+import Data.Maybe (isJust)
+import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.Equality
+import HERMIT.External
 import HERMIT.GHC hiding (singleton, empty)
 import HERMIT.Kure
 import HERMIT.Monad
 
--- | A 'Kernel' is a repository for complete Core syntax trees ('ModGuts').
---   For now, operations on a 'Kernel' are sequential, but later
---   it will be possible to have two 'applyK's running in parallel.
+-- | A 'Kernel' is a repository for complete Core syntax trees ('ModGuts') and Lemmas.
 data Kernel = Kernel
-  { resumeK :: MonadIO m => AST                                      -> m ()          -- ^ Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
-  , abortK  :: MonadIO m =>                                             m ()          -- ^ Halt the 'Kernel' and abort GHC without compiling.
-  , applyK  :: MonadIO m => AST -> RewriteH ModGuts     -> KernelEnv -> m (KureM AST) -- ^ Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
-  , queryK  :: MonadIO m => AST -> TransformH ModGuts a -> KernelEnv -> m (KureM (AST,a)) -- ^ Apply a 'TransformH' to the 'AST', return the resulting value, and potentially a new 'AST'.
-  , deleteK :: MonadIO m => AST                                      -> m ()          -- ^ Delete the internal record of the specified 'AST'.
-  , listK   :: MonadIO m =>                                             m [AST]       -- ^ List all the 'AST's tracked by the 'Kernel'.
+  { -- | Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
+    resumeK :: MonadIO m =>                                   AST -> m ()
+    -- | Halt the 'Kernel' and abort GHC without compiling.
+  , abortK  :: MonadIO m =>                                          m ()
+    -- | Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
+  , applyK  :: (MonadIO m, MonadCatch m)
+            => RewriteH ModGuts     -> Maybe String -> KernelEnv -> AST -> m AST
+    -- | Apply a 'TransformH' to the 'AST', return the resulting value, and potentially a new 'AST'.
+  , queryK  :: (MonadIO m, MonadCatch m)
+            => TransformH ModGuts a -> Maybe String -> KernelEnv -> AST -> m (AST,a)
+    -- | Delete the internal record of the specified 'AST'.
+  , deleteK :: MonadIO m =>                                   AST -> m ()
+    -- | List all the 'AST's tracked by the 'Kernel', including version data.
+  , listK   :: MonadIO m =>                                          m [(AST,Maybe String, Maybe AST)]
+    -- | Log a new AST with same Lemmas/ModGuts as given AST.
+  , tellK   :: (MonadIO m, MonadCatch m) => String         -> AST -> m AST
   }
 
 -- | A /handle/ for a specific version of the 'ModGuts'.
 newtype AST = AST Int -- ^ Currently 'AST's are identified by an 'Int' label.
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Typeable)
+
+firstAST :: AST
+firstAST = AST 0
 
 -- for succ
 instance Enum AST where
     toEnum = AST
     fromEnum (AST i) = i
 
+instance Show AST where
+    show (AST i) = show i
+
+instance Read AST where
+    readsPrec p s = [ (AST i,s') | (i,s') <- readsPrec p s ]
+
+instance Extern AST where
+    type Box AST = AST
+    box i = i
+    unbox i = i
+
 data ASTMap = ASTMap { astNext :: AST
                      , astMap  :: Map AST KernelState
                      }
 
-data KernelState = KernelState { _ksLemmas :: Lemmas
-                               , ksGuts   :: ModGuts
-                               }
+emptyASTMap :: ASTMap
+emptyASTMap = ASTMap firstAST empty
 
-fromHermitMResult :: HermitMResult ModGuts -> KernelState
-fromHermitMResult hRes = KernelState (hResLemmas hRes) (hResult hRes)
+data KernelState = KernelState { ksLemmas  :: Lemmas
+                               , ksGuts    :: ModGuts
+                               , _ksParent :: Maybe AST
+                               , _ksCommit :: Maybe String
+                               }
 
 data KernelEnv = KernelEnv { kEnvChan :: DebugMessage -> HermitM () }
 
+-- | Internal API. The 'Kernel' object wraps these calls.
 data Msg where
     Apply  :: AST -> (KernelState -> CoreM (KureM (Maybe KernelState, a)))
                   -> (MVar (KureM (AST, a))) -> Msg
@@ -79,18 +118,23 @@ findAST ast m f = find ast m (f $ "Cannot find syntax tree: " ++ show ast)
 
 -- | Start a HERMIT client by providing an IO callback that takes the
 --   initial 'Kernel' and inital 'AST' handle. The callback is only
---   ever called once. The 'Modguts' to 'CoreM Modguts' function
+--   ever called once. The 'Modguts -> CoreM Modguts' function
 --   required by GHC Plugins is returned.
-hermitKernel :: (Kernel -> AST -> IO ()) -> ModGuts -> CoreM ModGuts
-hermitKernel callback modGuts = do
+hermitKernel :: (String, IORef (Maybe (AST, ASTMap))) -- ^ Global (across passes) AST store.
+             -> (Kernel -> AST -> IO ())              -- ^ Callback
+             -> ModGuts -> CoreM ModGuts
+hermitKernel (lastPass, store) callback modGuts = do
 
     msgMV :: MVar Msg <- liftIO newEmptyMVar
 
-    let withAST :: MonadIO m => AST -> (KernelState -> CoreM (KureM (Maybe KernelState, a))) -> m (KureM (AST, a))
-        withAST ast k = liftIO $ do
-            resVar <- newEmptyMVar
-            putMVar msgMV $ Apply ast k resVar
-            takeMVar resVar
+    let withAST :: (MonadIO m, MonadCatch m)
+                => AST -> (KernelState -> CoreM (KureM (Maybe KernelState, a))) -> m (AST, a)
+        withAST ast k = do
+            r <- liftIO $ do
+                    resVar <- newEmptyMVar
+                    putMVar msgMV $ Apply ast k resVar
+                    takeMVar resVar
+            runKureM return fail r
 
         readOnly :: MonadIO m => (Map AST KernelState -> KureM a) -> m (KureM a)
         readOnly f = liftIO $ do
@@ -105,20 +149,24 @@ hermitKernel callback modGuts = do
 
             , abortK  = liftIO $ putMVar msgMV (Done Nothing)
 
-            , applyK = \ ast rr kEnv -> liftM (liftM fst) $
-                            withAST ast $ \ (KernelState lemmas guts) ->
+            , applyK = \ rr msg kEnv ast -> liftM fst $
+                            withAST ast $ \ (KernelState lemmas guts _ _) -> do
+                                let handleS hRes = return $ return
+                                                   (Just (KernelState (hResLemmas hRes) (hResult hRes) (Just ast) msg), ())
                                 runHM (kEnvChan kEnv)
                                       (mkEnv guts lemmas)
-                                      (return . return . (,()) . Just . fromHermitMResult)
+                                      handleS
                                       (return . fail)
                                       (applyT rr (topLevelHermitC guts) guts)
 
-            , queryK = \ ast t kEnv ->
-                            withAST ast $ \ (KernelState lemmas guts) -> do
+            , queryK = \ t msg kEnv ast ->
+                            withAST ast $ \ (KernelState lemmas guts _ _) -> do
                                 let handleS hRes
-                                        | hResChanged hRes = return $ return (Just (KernelState (hResLemmas hRes) guts), r)
-                                        | otherwise        = return $ return (Nothing, r)
+                                        | hResChanged hRes = f (Just (KernelState (hResLemmas hRes) guts (Just ast) msg), r)
+                                        | isJust msg       = f (Just (KernelState lemmas guts (Just ast) msg), r)
+                                        | otherwise        = f (Nothing, r) -- pure query, not recorded in AST store
                                         where r = hResult hRes
+                                              f = return . return
                                 runHM (kEnvChan kEnv)
                                       (mkEnv guts lemmas)
                                       handleS
@@ -127,47 +175,51 @@ hermitKernel callback modGuts = do
 
             , deleteK = liftIO . putMVar msgMV . Delete
 
-            , listK = readOnly (return . keys) >>= runKureM return fail
+            , listK = readOnly (\m -> return [ (ast,msg,p) | (ast,KernelState _ _ p msg) <- toList m ])
+                        >>= runKureM return fail
+
+            , tellK = \ msg ast -> liftM fst $
+                            withAST ast $ \ (KernelState lemmas guts _ _) ->
+                                return $ return (Just $ KernelState lemmas guts (Just ast) (Just msg), ())
             }
 
     let loop :: ASTMap -> CoreM ModGuts
-        loop st = do
-            m <- liftIO $ takeMVar msgMV
-            case m of
+        loop m = do
+            msg <- liftIO $ takeMVar msgMV
+            case msg of
               Apply ast f resVar -> do
-                kr <- findAST ast (astMap st) (return . fail) f
+                kr <- findAST ast (astMap m) (return . fail) f
                 let handleS (mbKS, r) =
                         case mbKS of
-                            Nothing -> do
-                                liftIO $ putMVar resVar $ return (ast,r)
-                                loop st
-                            Just ks -> do
-                                let (ast', st') = insertAST ks st
-                                liftIO $ putMVar resVar $ return (ast',r)
-                                loop st'
-                    handleF msg = do
-                        liftIO $ putMVar resVar (fail msg)
-                        loop st
+                            Nothing -> liftIO (putMVar resVar $ return (ast,r)) >> loop m
+                            Just ks -> let (ast', m') = insertAST ks m in
+                                       liftIO (putMVar resVar (return (ast',r))) >> loop m'
+                    handleF str = liftIO (putMVar resVar $ fail str) >> loop m
                 runKureM handleS handleF kr
-              Read fn -> liftIO (fn (astMap st)) >> loop st
-              Delete ast -> loop $ ASTMap (astNext st) $ delete ast (astMap st)
+              Read fn -> liftIO (fn (astMap m)) >> loop m
+              Delete ast -> loop $ ASTMap (astNext m) $ delete ast (astMap m)
               Done mbAST ->
                 case mbAST of
                     Nothing  ->
                         abortKernel "Exiting HERMIT and aborting GHC compilation."
-                    Just ast ->
-                        findAST ast (astMap st)
-                            (\msg -> abortKernel $ msg ++ ", exiting HERMIT and aborting GHC compilation.")
-                            (return . ksGuts)
+                    Just ast -> do
+                        findAST ast (astMap m)
+                            (\str -> abortKernel $ str ++ ", exiting HERMIT and aborting GHC compilation.")
+                            (\ks -> liftIO (writeIORef store (Just (ast, m))) >> return (ksGuts ks))
 
-    -- We always start with AST 0
-    let ast0 = AST 0
+    -- Get the most recent AST and ASTMap the last HERMIT pass resumed with.
+    mbS <- liftIO $ readIORef store
+    (ast0,m) <- case mbS of
+        Nothing      -> return $ insertAST (KernelState empty modGuts Nothing Nothing) emptyASTMap
+        Just (ast,m) -> do
+            ls <- findAST ast (astMap m)
+                    (\msg -> abortKernel $ msg ++ ", exiting HERMIT and aborting GHC compilation.")
+                    (return . ksLemmas)
+            return $ insertAST (KernelState ls modGuts (Just ast) (Just lastPass)) m
 
-    _pid <- liftIO $ forkIO $ callback kernel ast0
+    void $ liftIO $ forkIO $ callback kernel ast0
 
-    loop (ASTMap (AST 1) $ singleton ast0 $ KernelState empty modGuts)
-
-    -- (Kill the pid'd thread? do we need to?)
+    loop m
 
 abortKernel :: String -> CoreM a
 abortKernel = throwGhcException . ProgramError

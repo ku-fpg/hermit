@@ -4,6 +4,7 @@
 module HERMIT.Shell.Types where
 
 import Control.Applicative
+import Control.Arrow
 import Control.Concurrent.STM
 import Control.Monad (liftM)
 import Control.Monad.Error.Class (MonadError(..))
@@ -13,9 +14,8 @@ import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
 
 import Data.Dynamic
-import Data.List (intercalate)
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromJust, fromMaybe, isJust)
 import Data.Monoid (mempty)
 
 import HERMIT.Context
@@ -23,8 +23,7 @@ import HERMIT.Core
 import HERMIT.Kure
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Kernel (AST, queryK, KernelEnv)
-import HERMIT.Kernel.Scoped
+import HERMIT.Kernel
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 
@@ -50,7 +49,7 @@ data QueryFun :: * where
                        => TransformH g DocH                           -> QueryFun
    QueryPrettyH        :: (Injection GHC.ModGuts g, Walker HermitC g)
                        => PrettyH g                                   -> QueryFun
-   Diff                :: SAST -> SAST                                -> QueryFun
+   Diff                :: AST -> AST                                  -> QueryFun
    Inquiry             :: (CommandLineState -> IO String)             -> QueryFun
    CorrectnessCriteria :: (Injection GHC.ModGuts g, Walker HermitC g)
                        => TransformH g ()                             -> QueryFun
@@ -65,86 +64,79 @@ instance Extern QueryFun where
    unbox i = i
 
 performQuery :: (MonadCatch m, CLMonad m) => QueryFun -> ExprH -> m ()
+performQuery qf expr = go qf
+    where expr' = Just $ unparseExprH expr
+          go (QueryString q) =
+            putStrToConsole =<< prefixFailMsg "Query failed: " (queryInFocus q expr')
 
-performQuery (QueryString q) _ = do
-    st <- get
-    (sast, str) <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
-    modify $ setCursor sast
-    putStrToConsole str
+          go (QueryDocH q) = do
+            doc <- prefixFailMsg "Query failed: " $ queryInFocus q expr'
+            st <- get
+            liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
-performQuery (QueryDocH q) _ = do
-    st <- get
-    (sast, doc) <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
-    modify $ setCursor sast
-    liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
+          go (QueryPrettyH q) = do
+            st <- get
+            doc <- prefixFailMsg "Query failed: " $ queryInFocus (liftPrettyH (pOptions (cl_pretty st)) q) expr'
+            liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
-performQuery (QueryPrettyH q) _ = do
-    st <- get
-    (sast, doc) <- prefixFailMsg "Query failed: " $ queryS (cl_kernel st) (liftPrettyH (pOptions (cl_pretty st)) q) (cl_kernel_env st) (cl_cursor st)
-    modify $ setCursor sast
-    liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
+          go (Inquiry f) = get >>= liftIO . f >>= putStrToConsole
 
-performQuery (Inquiry f) _ = get >>= liftIO . f >>= putStrToConsole
+          go (Diff ast1 ast2) = do
+            st <- get
 
-performQuery (Diff s1 s2) _ = do
-    st <- get
+        {- TODO
+            let getCmds sast | sast == s1 = []
+                             | otherwise = case [ (f,c) | (f,c,to) <- vs_graph (cl_version st), to == sast ] of
+                                            [(sast',cmd)] -> unparseExprH cmd : getCmds sast'
+                                            _ -> ["error: history broken!"] -- should be impossible
 
-    ast1 <- toASTS (cl_kernel st) s1
-    ast2 <- toASTS (cl_kernel st) s2
-    let getCmds sast | sast == s1 = []
-                     | otherwise = case [ (f,c) | (f,c,to) <- vs_graph (cl_version st), to == sast ] of
-                                    [(sast',cmd)] -> unparseExprH cmd : getCmds sast'
-                                    _ -> ["error: history broken!"] -- should be impossible
+            cl_putStrLn "Commands:"
+            cl_putStrLn "========="
+            cl_putStrLn $ unlines $ reverse $ getCmds s2
+        -}
 
-    cl_putStrLn "Commands:"
-    cl_putStrLn "========="
-    cl_putStrLn $ unlines $ reverse $ getCmds s2
+            doc1 <- ppWholeProgram ast1
+            doc2 <- ppWholeProgram ast2
 
-    doc1 <- ppWholeProgram ast1
-    doc2 <- ppWholeProgram ast2
+            r <- diffDocH (cl_pretty st) doc1 doc2
 
-    r <- diffDocH (cl_pretty st) doc1 doc2
+            cl_putStrLn "Diff:"
+            cl_putStrLn "====="
+            cl_putStr r
 
-    cl_putStrLn "Diff:"
-    cl_putStrLn "====="
-    cl_putStr r
+          go (CorrectnessCriteria q) = do
+            -- TODO: Again, we may want a quiet version of the kernel_env
+            let str = fromJust expr'
+            modFailMsg (\ err -> str ++ " [exception: " ++ err ++ "]") $ queryInFocus q expr'
+            putStrToConsole $ str ++ " [correct]"
 
-performQuery (CorrectnessCriteria q) expr = do
-    st <- get
-    -- TODO: Again, we may want a quiet version of the kernel_env
-    (sast, ()) <- modFailMsg (\ err -> unparseExprH expr ++ " [exception: " ++ err ++ "]")
-                $ queryS (cl_kernel st) q (cl_kernel_env st) (cl_cursor st)
-    modify $ setCursor sast
-    putStrToConsole $ unparseExprH expr ++ " [correct]"
-
-ppWholeProgram :: (MonadIO m, MonadState CommandLineState m) => AST -> m DocH
+ppWholeProgram :: (CLMonad m, MonadCatch m) => AST -> m DocH
 ppWholeProgram ast = do
     st <- get
-    liftIO (queryK (kernelS $ cl_kernel st)
-            ast
-            (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ pCoreTC $ cl_pretty st)
-            (cl_kernel_env st)) >>= runKureM (return . snd) fail -- discard new AST, assuming pp won't create one
+    d <- queryK (cl_kernel st)
+                (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ pCoreTC $ cl_pretty st)
+                Nothing
+                (cl_kernel_env st) ast
+    return $ snd d -- discard new AST, assuming pp won't create one
 
 ----------------------------------------------------------------------------------
 
 data VersionCmd = Back                  -- back (up) the derivation tree
                 | Step                  -- down one step; assumes only one choice
-                | Goto Int              -- goto a specific node, if possible
-                | GotoTag String        -- goto a specific named tag
-                | AddTag String         -- add a tag
+                | Goto AST              -- goto a specific node, if possible
         deriving Show
 
 ----------------------------------------------------------------------------------
 
 data CLException = CLAbort
-                 | CLResume SAST
+                 | CLResume AST
                  | CLContinue CommandLineState -- TODO: needed?
                  | CLError String
 
 abort :: MonadError CLException m => m ()
 abort = throwError CLAbort
 
-resume :: MonadError CLException m => SAST -> m ()
+resume :: MonadError CLException m => AST -> m ()
 resume = throwError . CLResume
 
 continue :: MonadError CLException m => CommandLineState -> m ()
@@ -249,20 +241,6 @@ instance Monad m => MonadCatch (CLT m) where
 
 ----------------------------------------------------------------------------------
 
-data VersionStore = VersionStore
-    { vs_graph       :: [(SAST,ExprH,SAST)]
-    , vs_tags        :: [(String,SAST)]
-    }
-
-newSAST :: ExprH -> SAST -> CommandLineState -> CommandLineState
-newSAST expr sast st = st { cl_pstate  = pstate  { ps_cursor = sast }
-                          , cl_version = version { vs_graph = (ps_cursor pstate, expr, sast) : vs_graph version }
-                          }
-    where pstate  = cl_pstate st
-          version = cl_version st
-
-----------------------------------------------------------------------------------
-
 -- Session-local issues; things that are never saved (except the PluginState).
 data CommandLineState = CommandLineState
     { cl_pstate         :: PluginState            -- ^ Access to the enclosing plugin state. This is propagated back
@@ -271,12 +249,10 @@ data CommandLineState = CommandLineState
     , cl_height         :: Int                    -- ^ console height, in lines
     , cl_scripts        :: [(ScriptName,Script)]
     , cl_nav            :: Bool                   -- ^ keyboard input the nav panel
-    , cl_version        :: VersionStore
+    , cl_foci           :: M.Map AST ([LocalPathH], LocalPathH)
     , cl_window         :: PathH                  -- ^ path to beginning of window, always a prefix of focus path in kernel
     , cl_externals      :: [External]             -- ^ Currently visible externals
     , cl_running_script :: Maybe Script           -- ^ Nothing = no script running, otherwise the remaining script commands
-    -- this should be in a reader
-    , cl_initSAST       :: SAST
     } deriving (Typeable)
 
 -- To ease the pain of nested records, define some boilerplate here.
@@ -286,10 +262,10 @@ cl_corelint = ps_corelint . cl_pstate
 setCoreLint :: CommandLineState -> Bool -> CommandLineState
 setCoreLint st b = st { cl_pstate = (cl_pstate st) { ps_corelint = b } }
 
-cl_cursor :: CommandLineState -> SAST
+cl_cursor :: CommandLineState -> AST
 cl_cursor = ps_cursor . cl_pstate
 
-setCursor :: SAST -> CommandLineState -> CommandLineState
+setCursor :: AST -> CommandLineState -> CommandLineState
 setCursor sast st = st { cl_pstate = (cl_pstate st) { ps_cursor = sast } }
 
 cl_diffonly :: CommandLineState -> Bool
@@ -304,7 +280,7 @@ cl_failhard = ps_failhard . cl_pstate
 setFailHard :: CommandLineState -> Bool -> CommandLineState
 setFailHard st b = st { cl_pstate = (cl_pstate st) { ps_failhard = b } }
 
-cl_kernel :: CommandLineState -> ScopedKernel
+cl_kernel :: CommandLineState -> Kernel
 cl_kernel = ps_kernel . cl_pstate
 
 cl_kernel_env :: CommandLineState -> KernelEnv
@@ -335,11 +311,10 @@ mkCLS = do
                               , cl_height         = h
                               , cl_scripts        = []
                               , cl_nav            = False
-                              , cl_version        = VersionStore { vs_graph = [] , vs_tags = [] }
+                              , cl_foci           = M.empty
                               , cl_window         = mempty
                               , cl_externals      = [] -- Note, empty dictionary.
                               , cl_running_script = Nothing
-                              , cl_initSAST       = ps_cursor ps
                               }
     return $ setPrettyOpts st $ (cl_pretty_opts st) { po_width = w }
 
@@ -391,32 +366,89 @@ putStrToConsole str = ifM isRunningScript (return ()) (cl_putStrLn str)
 
 ------------------------------------------------------------------------------
 
+pathStack2Paths :: [LocalPath crumb] -> LocalPath crumb -> [Path crumb]
+pathStack2Paths ps p = reverse (map snocPathToPath (p:ps))
+
+-- | A primitive means of denoting navigation of a tree (within a local scope).
+data Direction = L -- ^ Left
+               | R -- ^ Right
+               | U -- ^ Up
+               | T -- ^ Top
+               deriving (Eq,Show)
+
+-- | Movement confined within the local scope.
+moveLocally :: Direction -> LocalPathH -> LocalPathH
+moveLocally d (SnocPath p) = case p of
+                               []     -> mempty
+                               cr:crs -> case d of
+                                           T -> mempty
+                                           U -> SnocPath crs
+                                           L -> SnocPath (fromMaybe cr (deprecatedLeftSibling cr)  : crs)
+                                           R -> SnocPath (fromMaybe cr (deprecatedRightSibling cr) : crs)
+
+
+pathStackToLens :: (Injection a g, Walker HermitC g) => [LocalPathH] -> LocalPathH -> LensH a g
+pathStackToLens ps p = injectL >>> pathL (concat $ pathStack2Paths ps p)
+
+-- This function is used to check the validity of paths, so which sum type we use is important.
+testPathStackT :: [LocalPathH] -> LocalPathH -> TransformH GHC.ModGuts Bool
+testPathStackT ps p = testLensT (pathStackToLens ps p :: LensH GHC.ModGuts CoreTC)
+
+getPathStack :: CLMonad m => m ([LocalPathH], LocalPathH)
+getPathStack = do
+    st <- get
+    return $ fromMaybe ([],mempty) (M.lookup (cl_cursor st) (cl_foci st))
+
+getFocusPath :: CLMonad m => m PathH
+getFocusPath = do
+    (base, rel) <- getPathStack
+    return $ concat $ pathStack2Paths base rel
+
+addFocusT :: (Injection a g, Walker HermitC g, CLMonad m) => TransformH g b -> m (TransformH a b)
+addFocusT t = do
+    (base, rel) <- getPathStack
+    return $ focusT (pathStackToLens base rel) t
+
+addFocusR :: (Injection a g, Walker HermitC g, CLMonad m) => RewriteH g -> m (RewriteH a)
+addFocusR r = do
+    (base, rel) <- getPathStack
+    return $ focusR (pathStackToLens base rel) r
+
+------------------------------------------------------------------------------
+
+addAST :: CLMonad m => AST -> m ()
+addAST ast = addASTWithPath ast id
+
+addASTWithPath :: CLMonad m => AST -> (LocalPathH -> LocalPathH) -> m ()
+addASTWithPath ast f = do
+    (base, rel) <- getPathStack
+    modify $ \ st -> st { cl_foci = M.alter (const (Just (base, f rel))) ast (cl_foci st) }
+    modify $ setCursor ast
+
+------------------------------------------------------------------------------
+
 fixWindow :: CLMonad m => m ()
 fixWindow = do
-    st <- get
     -- check to make sure new path is still inside window
-    focusPath <- pluginM getFocusPath
+    focusPath <- getFocusPath
     -- move the window in two cases:
     --  1. window path is not prefix of focus path
     --  2. window path is empty (since at the top level we only show type sigs)
     {- when (not (isPrefixOf (cl_window st) focusPath) || null (cl_window st))
        $ put $ st { cl_window = focusPath } -}
-    put $ st { cl_window = focusPath } -- TODO: temporary until we figure out a better highlight interface
+    modify $ \ st -> st { cl_window = focusPath  } -- TODO: temporary until we figure out a better highlight interface
 
 showWindow :: CLMonad m => m ()
 showWindow = ifM isRunningScript (return ()) $ fixWindow >> gets cl_window >>= pluginM . display . Just
 
 ------------------------------------------------------------------------------
 
-showGraph :: [(SAST,ExprH,SAST)] -> [(String,SAST)] -> SAST -> String
-showGraph graph tags this@(SAST n) =
-        (if length paths > 1 then "tag " ++ show n ++ "\n" else "") ++
-        concat (intercalate
-                ["goto " ++ show n ++ "\n"]
-                [ [ unparseExprH b ++ "\n" ++ showGraph graph tags c ]
-                | (b,c) <- paths
-                ])
-  where
-          paths = [ (b,c) | (a,b,c) <- graph, a == this ]
+queryInFocus :: (Walker HermitC g, Injection GHC.ModGuts g, MonadCatch m, CLMonad m)
+             => TransformH g b -> Maybe String -> m b
+queryInFocus t msg = do
+    q <- addFocusT t
+    st <- get
+    (ast', r) <- queryK (cl_kernel st) q msg (cl_kernel_env st) (cl_cursor st)
+    addAST ast'
+    return r
 
-------------------------------------------------------------------------------

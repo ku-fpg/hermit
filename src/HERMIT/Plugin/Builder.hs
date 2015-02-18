@@ -2,7 +2,7 @@
 
 module HERMIT.Plugin.Builder
     ( -- * The HERMIT Plugin
-      PluginPass
+      HERMITPass
     , buildPlugin
     , CorePass(..)
     , getCorePass
@@ -11,16 +11,19 @@ module HERMIT.Plugin.Builder
     , getPassFlag
     )  where
 
+import Data.IORef
 import Data.List
-import System.IO
 
 import HERMIT.GHC
+import HERMIT.Kernel
+
+import System.IO
 
 -- | Given a list of 'CommandLineOption's, produce the 'ModGuts' to 'ModGuts' function required to build a plugin.
-type PluginPass = PassInfo -> [CommandLineOption] -> ModGuts -> CoreM ModGuts
+type HERMITPass = IORef (Maybe (AST, ASTMap)) -> PassInfo -> [CommandLineOption] -> ModGuts -> CoreM ModGuts
 
 -- | Build a plugin. This mainly handles the per-module options.
-buildPlugin :: PluginPass -> Plugin
+buildPlugin :: HERMITPass -> Plugin
 buildPlugin hp = defaultPlugin { installCoreToDos = install }
     where
         install :: [CommandLineOption] -> [CoreToDo] -> CoreM [CoreToDo]
@@ -36,21 +39,23 @@ buildPlugin hp = defaultPlugin { installCoreToDos = install }
             liftIO initStaticOpts
 #endif
 
+            store <- liftIO $ newIORef Nothing
             let todos' = flattenTodos todos
                 passes = map getCorePass todos'
                 allPasses = foldr (\ (n,p,seen,notyet) r -> mkPass n seen notyet : p : r)
                                   [mkPass (length todos') passes []]
                                   (zip4 [0..] todos' (inits passes) (tails passes))
-                mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n) $ modFilter hp (PassInfo n ps ps') opts
+                mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n)
+                                $ modFilter hp store (PassInfo n ps ps') opts
 
             return allPasses
 
 -- | Determine whether to act on this module, choose plugin pass.
 -- NB: we have the ability to stick module info in the pass info here
-modFilter :: PluginPass -> PluginPass
-modFilter hp pInfo opts guts
+modFilter :: HERMITPass -> HERMITPass
+modFilter hp store pInfo opts guts
     | null modOpts && notNull opts = return guts -- don't process this module
-    | otherwise                    = hp pInfo (h_opts ++ filter notNull modOpts) guts
+    | otherwise                    = hp store pInfo (h_opts ++ filter notNull modOpts) guts
     where modOpts = filterOpts m_opts guts
           (m_opts, h_opts) = partition (isInfixOf ":") opts
 

@@ -14,10 +14,10 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Data.Dynamic
 import qualified Data.Map as M
 
+import HERMIT.Core (Crumb)
 import HERMIT.Kure
 import HERMIT.External
-import HERMIT.Kernel (KernelEnv(..))
-import HERMIT.Kernel.Scoped
+import HERMIT.Kernel
 import HERMIT.Monad
 import HERMIT.Plugin.Builder
 import HERMIT.PrettyPrinter.Common
@@ -53,7 +53,8 @@ instance Monad m => MonadCatch (PluginT m) where
 
 -- Session-local issues; things that are never saved.
 data PluginState = PluginState
-    { ps_cursor         :: SAST                                     -- ^ the current AST
+    { ps_cursor         :: AST                                      -- ^ the current AST
+    , ps_focus          :: AbsolutePath Crumb                       -- ^ current focused path
     , ps_pretty         :: PrettyPrinter                            -- ^ which pretty printer to use
     , ps_render         :: Handle -> PrettyOptions -> Either String DocH -> IO () -- ^ the way of outputing to the screen
     , ps_tick           :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
@@ -61,11 +62,11 @@ data PluginState = PluginState
     , ps_diffonly       :: Bool                                     -- ^ if true, show diffs rather than pp full code (TODO: move into pretty opts)
     , ps_failhard       :: Bool                                     -- ^ if true, abort on *any* failure
     -- this should be in a reader
-    , ps_kernel         :: ScopedKernel
+    , ps_kernel         :: Kernel
     , ps_pass           :: PassInfo
     } deriving (Typeable)
 
-data PException = PAbort | PResume SAST | PError String
+data PException = PAbort | PResume AST | PError String
 
 newtype PSBox = PSBox PluginState deriving Typeable
 instance Extern PluginState where

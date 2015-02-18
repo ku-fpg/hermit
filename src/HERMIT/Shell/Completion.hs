@@ -1,4 +1,6 @@
-{-# LANGUAGE FlexibleContexts, LambdaCase #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 module HERMIT.Shell.Completion (shellComplete) where
 
 import Control.Applicative
@@ -13,7 +15,7 @@ import Data.Maybe (fromMaybe)
 import HERMIT.Kure
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Kernel.Scoped
+import HERMIT.Kernel
 import HERMIT.Parser
 
 import HERMIT.Dictionary.Inline
@@ -28,7 +30,7 @@ import System.Console.Haskeline hiding (catch, display)
 
 ----------------------------------------------------------------------------------
 
-shellComplete :: (MonadCatch m, MonadIO m, MonadState CommandLineState m) => String -> String -> m [Completion]
+shellComplete :: (MonadCatch m, CLMonad m) => String -> String -> m [Completion]
 shellComplete rPrev so_far = do
     let (partial, _) = toUnmatched rPrev
     if null partial
@@ -45,13 +47,13 @@ shellComplete rPrev so_far = do
                                              , not (null args) ]
                         completionsFor so_far $ filterUnknowns $ map (completionType.show) ts
 
-completionsFor :: (MonadCatch m, MonadIO m, MonadState CommandLineState m)
+completionsFor :: (MonadCatch m, CLMonad m)
                => String -> [CompletionType] -> m [Completion]
 completionsFor so_far cts = do
     qs <- mapM completionQuery cts
-    (k,(env,sast)) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor)
+    (k,(env,ast)) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor)
     -- 'liftM snd' is because we assume completion queries don't create new ASTs
-    cls <- forM qs $ \ q -> catchM (liftM snd $ queryS k q env sast) (\_ -> return [])
+    cls <- forM qs $ \ q -> catchM (do q' <- addFocusT q ; liftM snd $ queryK k q' Nothing env ast) (\_ -> return [])
     return $ map simpleCompletion $ nub $ filter (so_far `isPrefixOf`) $ concat cls
 
 data CompletionType = ConsiderC       -- considerable constructs and (deprecated) bindingOfT

@@ -1,18 +1,16 @@
 {-# LANGUAGE ConstraintKinds, DeriveDataTypeable, FlexibleContexts, LambdaCase, TypeFamilies #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module HERMIT.Shell.KernelEffect
     ( KernelEffect(..)
     , performKernelEffect
     , applyRewrite
     , setPath
-    , goDirection
-    , beginScope
-    , endScope
-    , deleteSAST
     ) where
 
 import Control.Monad.State
 
+import qualified Data.Map as M
 import Data.Monoid
 import Data.Typeable
 
@@ -20,8 +18,7 @@ import HERMIT.Context
 import HERMIT.Dictionary
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Kernel (queryK)
-import HERMIT.Kernel.Scoped hiding (abortS, resumeS)
+import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Parser
 
@@ -37,7 +34,7 @@ import HERMIT.Shell.Types
 data KernelEffect = Direction  Direction -- Change the currect location using directions.
                   | BeginScope           -- Begin scope.
                   | EndScope             -- End scope.
-                  | Delete     SAST      -- Delete an AST
+                  | Delete     AST       -- Delete an AST
    deriving Typeable
 
 instance Extern KernelEffect where
@@ -50,7 +47,7 @@ performKernelEffect e = \case
                             Direction dir -> goDirection dir e
                             BeginScope    -> beginScope e
                             EndScope      -> endScope e
-                            Delete sast   -> deleteSAST sast
+                            Delete sast   -> deleteAST sast
 
 -------------------------------------------------------------------------------
 
@@ -59,59 +56,73 @@ applyRewrite :: (Injection GHC.ModGuts g, Walker HermitC g, MonadCatch m, CLMona
 applyRewrite rr expr = do
     st <- get
 
-    let sk = cl_kernel st
+    let k = cl_kernel st
         kEnv = cl_kernel_env st
-        sast = cl_cursor st
+        ast = cl_cursor st
         ppOpts = cl_pretty_opts st
         pp = pCoreTC $ cl_pretty st
 
-    sast' <- prefixFailMsg "Rewrite failed: " $ applyS sk rr kEnv sast
+    rr' <- addFocusR rr
+    ast' <- prefixFailMsg "Rewrite failed:" $ applyK k rr' (Just (unparseExprH expr)) kEnv ast
 
-    let commit = put (newSAST expr sast' st) >> showResult
-        showResult = if cl_diffonly st then showDiff else showWindow
-        showDiff = do (_,doc1) <- queryS sk (liftPrettyH ppOpts pp) kEnv sast
-                      (_,doc2) <- queryS sk (liftPrettyH ppOpts pp) kEnv sast'
+    let showResult = if cl_diffonly st then showDiff else showWindow
+        showDiff = do q <- addFocusT $ liftPrettyH ppOpts pp
+                      (_,doc1) <- queryK k q Nothing kEnv ast
+                      (_,doc2) <- queryK k q Nothing kEnv ast'
                       diffDocH (cl_pretty st) doc1 doc2 >>= cl_putStr
 
-    if cl_corelint st
-        then do ast' <- toASTS sk sast'
-                liftIO (liftM (liftM snd) $ queryK (kernelS sk) ast' lintModuleT kEnv)
-                >>= runKureM (\ warns -> putStrToConsole warns >> commit)
-                             (\ errs  -> liftIO (deleteS sk sast') >> fail errs)
-        else commit
+    when (cl_corelint st) $ do
+        warns <- liftM snd (queryK k lintModuleT Nothing kEnv ast')
+                    `catchM` (\ errs -> deleteK k ast' >> fail errs)
+        putStrToConsole warns
+
+    addAST ast' >> showResult
 
 setPath :: (Injection GHC.ModGuts g, Walker HermitC g, MonadCatch m, CLMonad m)
         => TransformH g LocalPathH -> ExprH -> m ()
 setPath t expr = do
-    st <- get
-    -- An extension to the Path
-    (sast, p) <- prefixFailMsg "Cannot find path: " $ queryS (cl_kernel st) t (cl_kernel_env st) (cl_cursor st)
-    ast <- prefixFailMsg "Path is invalid: " $ modPathS (cl_kernel st) (<> p) (cl_kernel_env st) sast
-    put $ newSAST expr ast st
+    p <- prefixFailMsg "Cannot find path: " $ queryInFocus t (Just $ unparseExprH expr)
+    ast <- gets cl_cursor
+    addASTWithPath ast (<> p)
     showWindow
 
 goDirection :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
 goDirection dir expr = do
     st <- get
-    ast <- prefixFailMsg "Invalid move: " $ modPathS (cl_kernel st) (moveLocally dir) (cl_kernel_env st) (cl_cursor st)
-    put $ newSAST expr ast st
-    showWindow
+    (base, rel) <- getPathStack
+    let k = cl_kernel st
+        env = cl_kernel_env st
+        ast = cl_cursor st
+        rel' = moveLocally dir rel
+    (ast',b) <- queryK k (testPathStackT base rel') Nothing env ast
+    if b
+    then do ast'' <- tellK k (unparseExprH expr) ast'
+            addASTWithPath ast'' (const rel')
+            showWindow
+    else fail "invalid path."
 
 beginScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 beginScope expr = do
-    st <- get
-    ast <- beginScopeS (cl_kernel st) (cl_cursor st)
-    put $ newSAST expr ast st
+    s <- get
+    ast <- tellK (cl_kernel s) (unparseExprH expr) (cl_cursor s)
+    (base, rel) <- getPathStack
+    modify $ \ st -> st { cl_foci = M.alter (const (Just (rel : base, mempty))) ast (cl_foci st) }
+    modify $ setCursor ast
     showWindow
 
 endScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 endScope expr = do
-    st <- get
-    ast <- endScopeS (cl_kernel st) (cl_cursor st)
-    put $ newSAST expr ast st
-    showWindow
+    (base, _) <- getPathStack
+    case base of
+        [] -> fail "no scope to end."
+        (rel:base') -> do
+            s <- get
+            ast <- tellK (cl_kernel s) (unparseExprH expr) (cl_cursor s)
+            modify $ \ st -> st { cl_foci = M.alter (const (Just (base', rel))) ast (cl_foci st) }
+            modify $ setCursor ast
+            showWindow
 
-deleteSAST :: (MonadCatch m, CLMonad m) => SAST -> m ()
-deleteSAST sast = gets cl_kernel >>= flip deleteS sast
+deleteAST :: (MonadCatch m, CLMonad m) => AST -> m ()
+deleteAST ast = gets cl_kernel >>= flip deleteK ast
 
 -------------------------------------------------------------------------------

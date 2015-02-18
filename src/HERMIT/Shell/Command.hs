@@ -25,11 +25,9 @@ import Data.Monoid
 import HERMIT.Context
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Kernel.Scoped hiding (abortS, resumeS)
 import HERMIT.Kure
 import HERMIT.Parser
 
-import HERMIT.Plugin.Display
 import HERMIT.Plugin.Renderer
 
 import HERMIT.PrettyPrinter.Common
@@ -101,10 +99,9 @@ commandLine intp opts exts = do
     let loop :: InputT m ()
         loop = do
             st <- lift get
-            let SAST n = cl_cursor st
             mLine <- if cl_nav st
                      then liftIO getNavCmd
-                     else getInputLine $ "hermit<" ++ show n ++ "> "
+                     else getInputLine $ "hermit<" ++ show (cl_cursor st) ++ "> "
 
             case mLine of
                 Nothing          -> lift $ performShellEffect Resume

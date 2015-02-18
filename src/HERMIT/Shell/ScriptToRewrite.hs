@@ -23,9 +23,11 @@ import Control.Monad.State (MonadState, gets, modify)
 import Control.Exception hiding (catch)
 
 import Data.Dynamic
+import Data.Maybe (fromMaybe)
+import qualified Data.Map as M
 
 import HERMIT.Context(LocalPathH)
-import HERMIT.Kernel.Scoped
+import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript, unparseScript)
@@ -81,10 +83,15 @@ performScriptEffect runner = go
                     putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
 
           go (SaveFile fileName) = do
-            version <- gets cl_version
             putStrToConsole $ "[saving " ++ fileName ++ "]"
+            (k,cur) <- gets (cl_kernel &&& cl_cursor)
+            all_asts <- listK k
+            let m = M.fromList [ (ast,(msg,p)) | (ast,msg,p) <- all_asts ]
+                follow ast
+                    | Just (msg, Just p) <- M.lookup ast m = fromMaybe "-- missing command!" msg : follow p
+                    | otherwise = []
             -- no checks to see if you are clobering; be careful
-            liftIO $ writeFile fileName $ showGraph (vs_graph version) (vs_tags version) (SAST 0)
+            liftIO $ writeFile fileName $ unlines $ reverse $ follow cur
 
           go (ScriptToRewrite rewriteName scriptName) = do
             script <- lookupScript scriptName

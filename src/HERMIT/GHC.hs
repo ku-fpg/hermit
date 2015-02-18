@@ -70,7 +70,7 @@ import           ErrUtils (pprErrMsgBag)
 import           Finder (findImportedModule, cannotFindModule)
 -- we hide these so that they don't get inadvertently used.
 -- several are redefined in Core.hs and elsewhere
-import           GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass, getHscEnv, RuleName)
+import           GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, getHscEnv, RuleName)
 import           Kind (isKind,isLiftedTypeKindCon)
 import           LoadIface (loadSysInterface)
 import qualified OccName -- for varName

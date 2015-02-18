@@ -32,19 +32,19 @@ module HERMIT.Plugin
 import Control.Applicative
 import Control.Arrow
 import Control.Concurrent.STM
-import Control.Monad (replicateM_, when)
+import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Operational
 import Control.Monad.State (gets, modify)
 import Control.Monad.Trans.Class (MonadTrans(..))
 
-import Data.Monoid
+import Data.IORef
 import qualified Data.Map as M
+import Data.Monoid
 
 import HERMIT.Dictionary
 import HERMIT.External hiding (Query, Shell)
-import HERMIT.Kernel (KernelEnv)
-import HERMIT.Kernel.Scoped
+import HERMIT.Kernel
 import HERMIT.Context
 import HERMIT.Kure
 import HERMIT.GHC hiding (singleton, liftIO, display, (<>))
@@ -63,13 +63,14 @@ import HERMIT.Shell.Types (clm)
 import Prelude hiding (until)
 
 hermitPlugin :: ([CommandLineOption] -> HPM ()) -> Plugin
-hermitPlugin f = buildPlugin $ \ passInfo -> runHPM passInfo . f
+hermitPlugin f = buildPlugin $ \ store passInfo -> runHPM store passInfo . f
 
-defPS :: SAST -> ScopedKernel -> PassInfo -> IO PluginState
-defPS initSAST kernel passInfo = do
+defPS :: AST -> Kernel -> PassInfo -> IO PluginState
+defPS initAST kernel passInfo = do
     emptyTick <- liftIO $ atomically $ newTVar M.empty
     return $ PluginState
-                { ps_cursor         = initSAST
+                { ps_cursor         = initAST
+                , ps_focus          = mempty
                 , ps_pretty         = Clean.pretty
                 , ps_render         = unicodeConsole
                 , ps_tick           = emptyTick
@@ -90,17 +91,22 @@ data HPMInst :: * -> * where
 newtype HPM a = HPM { unHPM :: ProgramT HPMInst PluginM a }
     deriving (Functor, Applicative, Monad, MonadIO)
 
-runHPM :: PassInfo -> HPM () -> ModGuts -> CoreM ModGuts
-runHPM passInfo hpass = scopedKernel $ \ kernel initSAST -> do
-    ps <- defPS initSAST kernel passInfo
+lpName :: PassInfo -> String
+lpName pInfo = case passesDone pInfo of
+                    [] -> "-- front end" -- comment format in case these appear in dumped script
+                    ps -> "-- GHC - " ++ show (last ps)
+
+runHPM :: IORef (Maybe (AST, ASTMap)) -> PassInfo -> HPM () -> ModGuts -> CoreM ModGuts
+runHPM store passInfo hpass = hermitKernel (lpName passInfo, store) $ \ kernel initAST -> do
+    ps <- defPS initAST kernel passInfo
     (r,st) <- hpmToIO ps hpass
-    let cleanup sast = do
-            if sast /= initSAST -- only do this if we actually changed the AST
-            then applyS kernel occurAnalyseAndDezombifyR (mkKernelEnv st) sast >>= resumeS kernel
-            else resumeS kernel sast
-    either (\case PAbort       -> abortS kernel
-                  PResume sast -> cleanup sast
-                  PError  err  -> putStrLn err >> abortS kernel)
+    let cleanup ast = do
+            if ast /= initAST -- only do this if we actually changed the AST
+            then applyK kernel (extractR occurAnalyseAndDezombifyR) Nothing (mkKernelEnv st) ast >>= resumeK kernel
+            else resumeK kernel ast
+    either (\case PAbort      -> abortK kernel
+                  PResume ast -> cleanup ast
+                  PError  err -> putStrLn err >> abortK kernel)
            (\ _ -> cleanup $ ps_cursor st) r
 
 hpmToIO :: PluginState -> HPM a -> IO (Either PException a, PluginState)
@@ -108,63 +114,33 @@ hpmToIO initState = runPluginT initState . eval . unHPM
 
 eval :: ProgramT HPMInst PluginM a -> PluginM a
 eval comp = do
-    (kernel, env) <- gets $ ps_kernel &&& mkKernelEnv
+    (kernel, (env, path)) <- gets $ ps_kernel &&& mkKernelEnv &&& ps_focus
     v <- viewT comp
     case v of
-        Return x            -> return x
-        RR rr       :>>= k  -> runS (applyS kernel rr env) >>= eval . k
-        Query tr    :>>= k  -> runQ (queryS kernel tr env) >>= eval . k
-        Shell es os :>>= k -> do
-            -- We want to discard the current focus, open the shell at
-            -- the top level, then restore the current focus.
-            paths <- resetScoping env
-            clm (commandLine interpShellCommand os es)
-            _ <- resetScoping env
-            restoreScoping env paths
-            eval $ k ()
+        Return x           -> return x
+        RR rr       :>>= k -> runS (applyK kernel (extractR $ localPathR path rr) Nothing env) >>= eval . k
+        Query tr    :>>= k -> runQ (queryK kernel (extractT $ localPathT path tr) Nothing env) >>= eval . k
+        Shell es os :>>= k -> clm (commandLine interpShellCommand os es) >>= eval . k
         Guard p (HPM m)  :>>= k  -> gets (p . ps_pass) >>= \ b -> when b (eval m) >>= eval . k
         Focus tp (HPM m) :>>= k  -> do
-            p <- runQ (queryS kernel tp env)  -- run the pathfinding translation
-            runS $ beginScopeS kernel         -- remember the current path
-            runS $ modPathS kernel (<> p) env -- modify the current path
+            p <- runQ (queryK kernel (extractT tp) Nothing env)  -- run the pathfinding translation
+            old_p <- gets ps_focus
+            modify $ \st -> st { ps_focus = old_p <> p }
             r <- eval m             	      -- run the focused computation
-            runS $ endScopeS kernel           -- endscope on it, so we go back to where we started
+            modify $ \st -> st { ps_focus = old_p }
             eval $ k r
 
 ------------------------- Shell-related helpers --------------------------------------
 
-resetScoping :: KernelEnv -> PluginM [PathH]
-resetScoping env = do
-    kernel <- gets ps_kernel
-    paths <- runK $ pathS kernel
-    replicateM_ (length paths - 1) $ runS $ endScopeS kernel
-    -- modPathS commonly fails here because the path is unchanged, so throw away failures
-    catchM (runS $ modPathS kernel (const mempty) env) (const (return ()))
-    return paths
-
-restoreScoping :: KernelEnv -> [PathH] -> PluginM ()
-restoreScoping _   []    = return ()
-restoreScoping env (h:t) = do
-    kernel <- gets ps_kernel
-
-    let go p []      = restore p
-        go p (p':ps) = restore p >> runS (beginScopeS kernel) >> go p' ps
-
-        -- modPathS commonly fails here because the path is unchanged, so throw away failures
-        restore p = catchM (runS $ modPathS kernel (<> pathToSnocPath p) env)
-                           (const (return ()))
-
-    go h t
-
--- | Run a kernel function on the current SAST
-runK :: (SAST -> PluginM a) -> PluginM a
+-- | Run a kernel function on the current AST
+runK :: (AST -> PluginM a) -> PluginM a
 runK f = gets ps_cursor >>= f
 
--- | Run a kernel function on the current SAST and update ps_cursor
-runS :: (SAST -> PluginM SAST) -> PluginM ()
+-- | Run a kernel function on the current AST and update ps_cursor
+runS :: (AST -> PluginM AST) -> PluginM ()
 runS f = runQ (fmap (,()) . f)
 
-runQ :: (SAST -> PluginM (SAST, a)) -> PluginM a
+runQ :: (AST -> PluginM (AST, a)) -> PluginM a
 runQ f = do
     (sast, r) <- runK f
     modify $ \st -> st { ps_cursor = sast }

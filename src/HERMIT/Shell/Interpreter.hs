@@ -20,6 +20,7 @@ import qualified Data.Map as M
 
 import HERMIT.Equality
 import HERMIT.External
+import HERMIT.Kernel (AST)
 import HERMIT.Kure
 import HERMIT.Name
 import HERMIT.Parser
@@ -94,7 +95,8 @@ exprToDyns' rhs (CmdName str)
         let i = read str
         return [ -- An Int is either a Path, or will be interpreted specially later.
                  toDyn $ IntBox i
-                 -- TODO: Find a better long-term solution.
+               , toDyn $ (read str :: AST)
+                 -- TODO: we really should stop using Ints as pathfinders, we have Crumbs now.
                , toDyn $ TransformCorePathBox (deprecatedIntToPathT i)
                ]
     | otherwise = do
