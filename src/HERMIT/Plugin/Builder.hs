@@ -13,7 +13,6 @@ module HERMIT.Plugin.Builder
 
 import Data.IORef
 import Data.List
-import qualified Data.Map as M
 
 import HERMIT.GHC
 import HERMIT.Kernel
@@ -40,7 +39,7 @@ buildPlugin hp = defaultPlugin { installCoreToDos = install }
             liftIO initStaticOpts
 #endif
 
-            store <- liftIO $ newIORef (M.empty :: M.Map ModuleName (IORef (Maybe (AST, ASTMap))))
+            store <- liftIO $ newIORef (Nothing :: Maybe (ModuleName, IORef (Maybe (AST, ASTMap))))
             let todos' = flattenTodos todos
                 passes = map getCorePass todos'
                 allPasses = foldr (\ (n,p,seen,notyet) r -> mkPass n seen notyet : p : r)
@@ -53,20 +52,20 @@ buildPlugin hp = defaultPlugin { installCoreToDos = install }
 
 -- | Determine whether to act on this module, selecting global store.
 -- NB: we have the ability to stick module info in the pass info here
-modFilter :: IORef (M.Map ModuleName (IORef (Maybe (AST, ASTMap)))) -- global store
+modFilter :: IORef (Maybe (ModuleName, IORef (Maybe (AST, ASTMap)))) -- global store
           -> HERMITPass
           -> PassInfo
           -> [CommandLineOption]
           -> ModGuts -> CoreM ModGuts
 modFilter store hp pInfo opts guts
     | null modOpts && notNull opts = return guts -- don't process this module
-    | otherwise                    = do m <- liftIO $ readIORef store
-                                        modStore <- case M.lookup modName m of
-                                                        Nothing  -> liftIO $ do
-                                                                        ref <- newIORef Nothing
-                                                                        writeIORef store $ M.insert modName ref m
-                                                                        return ref
-                                                        Just ref -> return ref
+    | otherwise                    = do mb <- liftIO $ readIORef store
+                                        modStore <- case mb of
+                                                        Just (nm,ref) | nm == modName -> return ref
+                                                        _ -> liftIO $ do
+                                                            ref <- newIORef Nothing
+                                                            writeIORef store $ Just (modName, ref)
+                                                            return ref
                                         hp modStore pInfo (h_opts ++ filter notNull modOpts) guts
     where modOpts = filterOpts m_opts modName
           (m_opts, h_opts) = partition (isInfixOf ":") opts
