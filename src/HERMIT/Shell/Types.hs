@@ -93,17 +93,17 @@ performQuery qf expr = go qf
 
           go (Diff ast1 ast2) = do
             st <- get
+            all_asts <- listK (cl_kernel st)
 
-        {- TODO
-            let getCmds sast | sast == s1 = []
-                             | otherwise = case [ (f,c) | (f,c,to) <- vs_graph (cl_version st), to == sast ] of
-                                            [(sast',cmd)] -> unparseExprH cmd : getCmds sast'
+            let getCmds ast
+                    | ast == ast1 = []
+                    | otherwise   = case [ (p,msg) | (to,msg,Just p) <- all_asts, to == ast ] of
+                                            [(ast',msg)] -> fromMaybe "-- unknown command!" msg : getCmds ast'
                                             _ -> ["error: history broken!"] -- should be impossible
 
             cl_putStrLn "Commands:"
             cl_putStrLn "========="
-            cl_putStrLn $ unlines $ reverse $ getCmds s2
-        -}
+            cl_putStrLn $ unlines $ reverse $ getCmds ast2
 
             doc1 <- ppWholeProgram ast1
             doc2 <- ppWholeProgram ast2
