@@ -36,13 +36,13 @@ import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Parser
+import HERMIT.Syntax
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Reasoning hiding (externals)
 
-import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
 
 import HERMIT.Shell.Completion
@@ -96,15 +96,12 @@ type NamedLemma = (LemmaName, Lemma)
 interactiveProofIO :: LemmaName -> CommandLineState -> IO (Either CLException CommandLineState)
 interactiveProofIO nm s = do
     (r,s') <- runCLT s $ do
-                l <- queryInFocus (getLemmaByNameT nm :: TransformH Core Lemma) (Just $ "prove-lemma " ++ show nm)
-                interactiveProof True False (nm,l)
+                l <- queryInFocus (getLemmaByNameT nm :: TransformH Core Lemma) (Just $ "prove-lemma " ++ quoteShow nm)
+                interactiveProof True (nm,l)
     return $ fmap (const s') r
 
-interactiveProof :: forall m. (MonadCatch m, MonadException m, CLMonad m) => Bool -> Bool -> NamedLemma -> m ()
-interactiveProof topLevel isTemporary lem@(nm,_) = do
-    origSt <- get
-    origEs <- addProofExternals topLevel
-
+interactiveProof :: forall m. (MonadCatch m, MonadException m, CLMonad m) => Bool -> NamedLemma -> m ()
+interactiveProof topLevel lem@(nm,_) = do
     let ws_complete = " ()"
 
         -- Main proof input loop
@@ -120,41 +117,39 @@ interactiveProof topLevel isTemporary lem@(nm,_) = do
                         Just ('-':'-':_) -> loop l
                         Just line        -> if all isSpace line
                                             then loop l
-                                            else lift (evalProofScript l line `catchM` (\msg -> cl_putStrLn msg >> return l)) >>= loop
-                Just e -> lift (runExprH l e `catchM` (\msg -> setRunningScript Nothing >> cl_putStrLn msg >> return l)) >>= loop
+                                            else lift (evalProofScript l line
+                                                        `catchM` (\msg -> cl_putStrLn msg >> return l)) >>= loop
+                Just e -> lift (runExprH l e
+                                    `catchM` (\msg -> setRunningScript Nothing >> cl_putStrLn msg >> return l)) >>= loop
 
-    -- Display a proof banner?
+        settings = setComplete (completeWordWithPrev Nothing ws_complete shellComplete) defaultSettings
 
-    -- Start the CLI
-    let settings = setComplete (completeWordWithPrev Nothing ws_complete shellComplete) defaultSettings
-        cleanup s = put (s { cl_externals = origEs })
-    catchError (runInputT settings (loop lem))
+    origSt <- get
+
+    catchError (withProofExternals topLevel $ runInputT settings (loop lem))
                (\case
-                    CLAbort        -> cleanup origSt >> unless topLevel abort -- abandon proof attempt, bubble out to regular shell
+                    CLAbort        -> put origSt -- abandon proof attempt
                     CLContinue st' -> do
-                        cl_putStrLn $ "Successfully proven: " ++ show nm
-                        if isTemporary
-                        then cleanup st'    -- successfully proven
-                        else do q <- addFocusT (modifyLemmaT nm id idR (const True) id :: TransformH Core ())
-                                (ast,()) <- queryK (cl_kernel st')
-                                               q
-                                               (Just $ "-- proven " ++ show nm) -- comment in script
-                                               (mkKernelEnv $ cl_pstate st')
-                                               (cl_cursor st')
-                                cleanup st'
-                                addAST ast
+                        cl_putStrLn $ "Successfully proven: " ++ quoteShow nm
+                        put st'
+                        when topLevel $
+                            queryInFocus (modifyLemmaT nm id idR (const True) id :: TransformH Core ())
+                                         (Just $ "-- proven " ++ quoteShow nm) -- comment in script
 
                     CLError msg    -> fail $ "Prover error: " ++ msg
                     _              -> fail "unsupported exception in interactive prover")
 
-addProofExternals :: MonadState CommandLineState m => Bool -> m [External]
-addProofExternals topLevel = do
+withProofExternals :: MonadState CommandLineState m => Bool -> m a -> m a
+withProofExternals False comp = comp
+withProofExternals True  comp = do
     st <- get
     let es = cl_externals st
         -- commands with same same in proof_externals will override those in normal externals
         newEs = proof_externals ++ filter ((`notElem` (map externName proof_externals)) . externName) es
-    when topLevel $ modify $ \ s -> s { cl_externals = newEs }
-    return es
+    modify $ \ s -> s { cl_externals = newEs }
+    r <- comp
+    modify $ \ s -> s { cl_externals = es }
+    return r
 
 evalProofScript :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> String -> m NamedLemma
 evalProofScript lem = parseScriptCLT >=> foldM runExprH lem
@@ -171,7 +166,7 @@ endProof expr (nm, Lemma eq _ _) = do
     then do st <- get
             addAST =<< tellK (cl_kernel st) (unparseExprH expr) (cl_cursor st)
             get >>= continue
-    else fail $ "The two sides of " ++ show nm ++ " are not alpha-equivalent."
+    else fail $ "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
 
 -- Note [Query]
 -- We want to do our proof in the current context of the shell, whatever that is,
@@ -235,22 +230,25 @@ performInduction expr lem@(nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
             lemmaName = fromString $ show nm ++ "-induction-on-" ++ unqualifiedName i ++ "-case-" ++ caseName
             caseLemma = Lemma (Equality (delete i bs ++ vs) lhsE rhsE) False False
 
-        -- this is pretty hacky
-        addLemmas hypLemmas  -- add temporary lemmas
-        interactiveProof False True (lemmaName,caseLemma) -- recursion!
-        modify $ setCursor ast -- discard temporary lemmas
+        withLemmas hypLemmas $ interactiveProof False (lemmaName,caseLemma) -- recursion!
 
     get >>= continue
     return lem -- this is never reached, but the type says we need it.
 
-addLemmas :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
-          => [NamedLemma] -> m ()
-addLemmas lems = do
+withLemmas :: (MonadCatch m, CLMonad m) => [NamedLemma] -> m a -> m a
+withLemmas []   comp = comp
+withLemmas lems comp = do
     ifM isRunningScript (return ()) $ forM_ lems printLemma
 
-    unless (null lems) $ do
-        queryInFocus (constT (forM_ lems $ \ (nm,l) -> insertLemma nm l) :: TransformH Core ())
-                     (Just $ "-- adding lemmas: " ++ intercalate ", " (map (show.fst) lems))
+    let lemmaNames = intercalate ", " $ map (quoteShow . fst) lems
+
+    ls <- queryInFocus (getLemmasT :: TransformH Core Lemmas) Nothing
+    queryInFocus (constT (forM_ lems $ \ (nm,l) -> insertLemma nm l) :: TransformH Core ())
+                 (Just $ "-- adding lemmas: " ++ lemmaNames)
+    r <- comp
+    queryInFocus (constT (putLemmas ls) :: TransformH Core ())
+                 (Just $ "-- removing lemmas: " ++ lemmaNames)
+    return r
 
 data ProofShellCommand
     = PCRewrite (RewriteH Equality)
@@ -318,4 +316,8 @@ interpProof =
   , interp $ \ (TransformCoreTCCheckBox tt)   -> PCQuery (CorrectnessCriteria tt)
   , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"
   ]
+
+quoteShow :: Show a => a -> String
+quoteShow x = if all isScriptIdChar s then s else show s
+    where s = show x
 

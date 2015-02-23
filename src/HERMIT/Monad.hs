@@ -17,6 +17,7 @@ module HERMIT.Monad
     , HasLemmas(..)
     , addLemma
     , findLemma
+    , insertLemma
       -- * Reader Information
     , HasHermitMEnv(..)
     , mkEnv
@@ -202,15 +203,16 @@ instance HasHscEnv HermitM where
 ----------------------------------------------------------------------------
 
 class HasLemmas m where
-    -- | Add (or replace) a named lemma.
-    insertLemma :: LemmaName -> Lemma -> m ()
-
     getLemmas :: m Lemmas
+    putLemmas :: Lemmas -> m ()
 
 instance HasLemmas HermitM where
-    insertLemma nm l = HermitM $ \ _ env -> return $ return $ changedResult (insert nm l $ hEnvLemmas env) ()
-
     getLemmas = HermitM $ \ _ env -> return $ return $ mkResult env (hEnvLemmas env)
+    putLemmas m = HermitM $ \ _ _ -> return $ return $ changedResult m ()
+
+-- | Insert or replace a lemma.
+insertLemma :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> m ()
+insertLemma nm l = getLemmas >>= putLemmas . insert nm l
 
 -- | Only adds a lemma if doesn't already exist.
 addLemma :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> m ()
