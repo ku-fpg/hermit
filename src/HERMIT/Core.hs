@@ -72,9 +72,8 @@ module HERMIT.Core
       -- * Crumbs
     , Crumb(..)
     , showCrumbs
-      -- , crumbToDeprecatedInt
-    , deprecatedLeftSibling
-    , deprecatedRightSibling
+    , leftSibling
+    , rightSibling
     ) where
 
 import Control.Monad ((>=>))
@@ -506,63 +505,29 @@ showCrumb = \case
 
                _              -> "Warning: Crumb should not be in use!  This is probably Neil's fault."
 
-{-
--- | Earlier versions of HERMIT used 'Int' as the crumb type.
---   This function maps a 'Crumb' back to that corresponding 'Int', for backwards compatibility purposes.
-crumbToDeprecatedInt :: Crumb -> Maybe Int
-crumbToDeprecatedInt = \case
-                          ModGuts_Prog   -> Just 0
-                          ProgCons_Bind  -> Just 0
-                          ProgCons_Tail  -> Just 1
-                          NonRec_RHS     -> Just 0
-                          NonRec_Var     -> Nothing
-                          Rec_Def n      -> Just n
-                          Def_Id         -> Nothing
-                          Def_RHS        -> Just 0
-                          App_Fun        -> Just 0
-                          App_Arg        -> Just 1
-                          Lam_Var        -> Nothing
-                          Lam_Body       -> Just 0
-                          Let_Bind       -> Just 0
-                          Let_Body       -> Just 1
-                          Case_Scrutinee -> Just 0
-                          Case_Binder    -> Nothing
-                          Case_Type      -> Nothing
-                          Case_Alt n     -> Just (n + 1)
-                          Cast_Expr      -> Just 0
-                          Cast_Co        -> Nothing
-                          Tick_Tick      -> Nothing
-                          Tick_Expr      -> Just 0
-                          Type_Type      -> Nothing
-                          Co_Co          -> Nothing
-                          Alt_Con        -> Nothing
-                          Alt_Var _      -> Nothing
-                          Alt_RHS        -> Just 0
--}
 -- | Converts a 'Crumb' into the 'Crumb' pointing to its left-sibling, if a such a 'Crumb' exists.
---   This is for backwards compatibility purposes with the old Int representation.
-deprecatedLeftSibling :: Crumb -> Maybe Crumb
-deprecatedLeftSibling = \case
-                           ProgCons_Tail       -> Just ProgCons_Head
-                           Rec_Def n | n > 0   -> Just (Rec_Def (n-1))
-                           App_Arg             -> Just App_Fun
-                           Let_Body            -> Just Let_Bind
-                           Case_Alt n | n == 0 -> Just Case_Scrutinee
-                                      | n >  0 -> Just (Case_Alt (n-1))
-                           _                   -> Nothing
+--   This is used for moving 'left' in the shell.
+leftSibling :: Crumb -> Maybe Crumb
+leftSibling = \case
+                   ProgCons_Tail       -> Just ProgCons_Head
+                   Rec_Def n | n > 0   -> Just (Rec_Def (n-1))
+                   App_Arg             -> Just App_Fun
+                   Let_Body            -> Just Let_Bind
+                   Case_Alt n | n == 0 -> Just Case_Scrutinee
+                              | n >  0 -> Just (Case_Alt (n-1))
+                   _                   -> Nothing
 
 -- | Converts a 'Crumb' into the 'Crumb' pointing to its right-sibling, if a such a 'Crumb' exists.
---   This is for backwards compatibility purposes with the old Int representation.
-deprecatedRightSibling :: Crumb -> Maybe Crumb
-deprecatedRightSibling = \case
-                           ProgCons_Head       -> Just ProgCons_Tail
-                           Rec_Def n           -> Just (Rec_Def (n+1))
-                           App_Fun             -> Just App_Arg
-                           Let_Bind            -> Just Let_Body
-                           Case_Scrutinee      -> Just (Case_Alt 0)
-                           Case_Alt n          -> Just (Case_Alt (n+1))
-                           _                   -> Nothing
-
+--   This is used for moving 'right' in the shell.
+rightSibling :: Crumb -> Maybe Crumb
+rightSibling = \case
+                   ProgCons_Head       -> Just ProgCons_Tail
+                   Rec_Def n           -> Just (Rec_Def (n+1))
+                   App_Fun             -> Just App_Arg
+                   Let_Bind            -> Just Let_Body
+                   Case_Scrutinee      -> Just (Case_Alt 0)
+                   Case_Alt n          -> Just (Case_Alt (n+1))
+                   _                   -> Nothing
 
 -----------------------------------------------------------------------
 

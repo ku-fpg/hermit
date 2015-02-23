@@ -383,8 +383,8 @@ moveLocally d (SnocPath p) = case p of
                                cr:crs -> case d of
                                            T -> mempty
                                            U -> SnocPath crs
-                                           L -> SnocPath (fromMaybe cr (deprecatedLeftSibling cr)  : crs)
-                                           R -> SnocPath (fromMaybe cr (deprecatedRightSibling cr) : crs)
+                                           L -> SnocPath (fromMaybe cr (leftSibling cr)  : crs)
+                                           R -> SnocPath (fromMaybe cr (rightSibling cr) : crs)
 
 
 pathStackToLens :: (Injection a g, Walker HermitC g) => [LocalPathH] -> LocalPathH -> LensH a g

@@ -1,8 +1,15 @@
-{-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, InstanceSigs, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.Dictionary.Navigation
     ( -- * Navigation
       externals
+    , downT
     , occurrenceOfT
     , bindingOfT
     , bindingGroupOfT
@@ -19,10 +26,11 @@ module HERMIT.Dictionary.Navigation
     , string2considerable
     ) where
 
+import Control.Arrow
+import Control.Monad
+
 import Data.Dynamic (Typeable)
 import Data.Monoid
-
-import Control.Arrow
 
 import HERMIT.Core
 import HERMIT.Context
@@ -63,6 +71,8 @@ externals = crumbExternals
             [ "Focus on the parent of another focal point." ]
         , external "parent-of" (parentOfT :: TransformH CoreTC LocalPathH -> TransformH CoreTC LocalPathH)
             [ "Focus on the parent of another focal point." ]
+        , external "down" (downT :: TransformH Core LocalPathH)
+            [ "Move to the first child."]
         ]
 
 ---------------------------------------------------------------------------------------
@@ -283,3 +293,20 @@ gutsProgEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyCo
 gutsProgEndT = modGutsT progEndT (\ _ p -> (mempty @@ ModGuts_Prog) <> p)
 
 ---------------------------------------------------------------------------------------
+
+-- | Path to first child.
+downT :: Monad m => Transform c m Core LocalPathH
+downT = liftM (mempty @@) $ contextfreeT $ \case
+                                GutsCore _              -> return ModGuts_Prog
+                                AltCore _               -> return Alt_RHS
+                                DefCore _               -> return Def_RHS
+                                ProgCore (ProgCons _ _) -> return ProgCons_Head
+                                BindCore (NonRec _ _)   -> return NonRec_RHS
+                                BindCore (Rec _)        -> return (Rec_Def 0)
+                                ExprCore (App _ _)      -> return App_Fun
+                                ExprCore (Lam _ _)      -> return Lam_Body
+                                ExprCore (Let _ _)      -> return Let_Bind
+                                ExprCore (Case _ _ _ _) -> return Case_Scrutinee
+                                ExprCore (Cast _ _)     -> return Cast_Expr
+                                ExprCore (Tick _ _)     -> return Tick_Expr
+                                _                       -> fail ("no children")

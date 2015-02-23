@@ -56,7 +56,7 @@ completionsFor so_far cts = do
     cls <- forM qs $ \ q -> catchM (do q' <- addFocusT q ; liftM snd $ queryK k q' Nothing env ast) (\_ -> return [])
     return $ map simpleCompletion $ nub $ filter (so_far `isPrefixOf`) $ concat cls
 
-data CompletionType = ConsiderC       -- considerable constructs and (deprecated) bindingOfT
+data CompletionType = ConsiderC       -- considerable constructs
                     | BindingOfC      -- bindingOfT
                     | BindingGroupOfC -- bindingGroupOfT
                     | RhsOfC          -- rhsOfT

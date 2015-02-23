@@ -1,4 +1,11 @@
-{-# LANGUAGE CPP, LambdaCase, FlexibleInstances, MultiParamTypeClasses, FlexibleContexts, UndecidableInstances, ScopedTypeVariables, InstanceSigs #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module HERMIT.Kure
        (
@@ -74,9 +81,6 @@ module HERMIT.Kure
        , nthCoT, nthCoAllR, nthCoAnyR, nthCoOneR
        , instCoT, instCoAllR, instCoAnyR, instCoOneR
        , lrCoT, lrCoAllR, lrCoAnyR, lrCoOneR
-       -- * Conversion to deprecated Int representation
-       , deprecatedIntToCrumbT
-       , deprecatedIntToPathT
        )
 where
 
@@ -93,8 +97,6 @@ import HERMIT.Monad
 import HERMIT.Kure.SumTypes
 
 import Control.Monad
-
-import Data.Monoid (mempty)
 
 ---------------------------------------------------------------------
 
@@ -1231,38 +1233,6 @@ instCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewr
 instCoOneR r1 r2 = unwrapOneR $ instCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE instCoOneR #-}
 
----------------------------------------------------------------------
----------------------------------------------------------------------
-
--- | Earlier versions of HERMIT used 'Int' as the crumb type.
---   This translation maps an 'Int' to the corresponding 'Crumb', for backwards compatibility purposes.
-deprecatedIntToCrumbT :: Monad m => Int -> Transform c m Core Crumb
-deprecatedIntToCrumbT n = contextfreeT $ \case
-                                            GutsCore _                 | n == 0                        -> return ModGuts_Prog
-                                            AltCore _                  | n == 0                        -> return Alt_RHS
-                                            DefCore _                  | n == 0                        -> return Def_RHS
-                                            ProgCore (ProgCons _ _)    | n == 0                        -> return ProgCons_Head
-                                                                       | n == 1                        -> return ProgCons_Tail
-                                            BindCore (NonRec _ _)      | n == 0                        -> return NonRec_RHS
-                                            BindCore (Rec bds)         | (n >= 0) && (n < length bds)  -> return (Rec_Def n)
-                                            ExprCore (App _ _)         | n == 0                        -> return App_Fun
-                                                                       | n == 1                        -> return App_Arg
-                                            ExprCore (Lam _ _)         | n == 0                        -> return Lam_Body
-                                            ExprCore (Let _ _)         | n == 0                        -> return Let_Bind
-                                                                       | n == 1                        -> return Let_Body
-                                            ExprCore (Case _ _ _ alts) | n == 0                        -> return Case_Scrutinee
-                                                                       | (n > 0) && (n <= length alts) -> return (Case_Alt (n-1))
-                                            ExprCore (Cast _ _)        | n == 0                        -> return Cast_Expr
-                                            ExprCore (Tick _ _)        | n == 0                        -> return Tick_Expr
-                                            _                                                          -> fail ("Child " ++ show n ++ " does not exist.")
-{-# INLINE deprecatedIntToCrumbT #-}
-
--- | Builds a path to the first child, based on the old numbering system.
-deprecatedIntToPathT :: Monad m => Int -> Transform c m Core LocalPathH
-deprecatedIntToPathT =  liftM (mempty @@) . deprecatedIntToCrumbT
-{-# INLINE deprecatedIntToPathT #-}
-
----------------------------------------------------------------------
 ---------------------------------------------------------------------
 
 instance HasDynFlags m => HasDynFlags (Transform c m a) where

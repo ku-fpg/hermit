@@ -11,7 +11,6 @@ import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 
-import HERMIT.Context
 import HERMIT.Equality
 import HERMIT.Kure
 import HERMIT.External
@@ -51,8 +50,6 @@ shell_externals = map (.+ Shell)
         [ "move to the previous child"]
     , external "up"              (Direction U)
         [ "move to the parent node"]
-    , external "down"            (deprecatedIntToPathT 0 :: TransformH Core LocalPathH) -- TODO: short-term solution
-        [ "move to the first child"]
     , external "navigate"        (CLSModify $ \ st -> return $ Right $ st { cl_nav = True })
         [ "switch to navigate mode" ]
     , external "command-line"    (CLSModify $ \ st -> return $ Right $ st { cl_nav = False })

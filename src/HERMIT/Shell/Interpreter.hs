@@ -93,11 +93,9 @@ exprToDyns' _   (ListH exprs) = do
 exprToDyns' rhs (CmdName str)
     | all isDigit str = do
         let i = read str
-        return [ -- An Int is either a Path, or will be interpreted specially later.
+        return [ -- An Int is either an AST, or will be interpreted specially later.
                  toDyn $ IntBox i
                , toDyn $ (read str :: AST)
-                 -- TODO: we really should stop using Ints as pathfinders, we have Crumbs now.
-               , toDyn $ TransformCorePathBox (deprecatedIntToPathT i)
                ]
     | otherwise = do
         dict <- gets (mkDictionary . cl_externals)
