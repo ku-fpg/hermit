@@ -130,7 +130,7 @@ interactiveProof topLevel lem@(nm,_) = do
                (\case
                     CLAbort        -> put origSt -- abandon proof attempt
                     CLContinue st' -> do
-                        cl_putStrLn $ "Successfully proven: " ++ quoteShow nm
+                        cl_putStrLn $ "Successfully proven: " ++ show nm
                         put st'
                         when topLevel $
                             queryInFocus (modifyLemmaT nm id idR (const True) id :: TransformH Core ())
