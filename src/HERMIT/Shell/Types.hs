@@ -146,13 +146,13 @@ data CLException = CLAbort
                  | CLContinue CommandLineState -- TODO: needed?
                  | CLError String
 
-abort :: MonadError CLException m => m ()
+abort :: MonadError CLException m => m a
 abort = throwError CLAbort
 
-resume :: MonadError CLException m => AST -> m ()
+resume :: MonadError CLException m => AST -> m a
 resume = throwError . CLResume
 
-continue :: MonadError CLException m => CommandLineState -> m ()
+continue :: MonadError CLException m => CommandLineState -> m a
 continue = throwError . CLContinue
 
 rethrowCLE :: CLException -> PluginM a

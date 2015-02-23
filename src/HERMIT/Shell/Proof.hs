@@ -18,7 +18,7 @@ module HERMIT.Shell.Proof
 import Control.Arrow hiding (loop, (<+>))
 import Control.Concurrent
 import Control.Monad ((>=>), foldM, forM, forM_, liftM, unless, when)
-import Control.Monad.Error.Class (MonadError(catchError))
+import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.State (MonadState(get, put), modify, gets)
 import Control.Monad.Trans.Class (lift)
@@ -139,16 +139,18 @@ interactiveProof topLevel lem@(nm,_) = do
                     CLError msg    -> fail $ "Prover error: " ++ msg
                     _              -> fail "unsupported exception in interactive prover")
 
-withProofExternals :: MonadState CommandLineState m => Bool -> m a -> m a
+withProofExternals :: (MonadError CLException m, MonadState CommandLineState m) => Bool -> m a -> m a
 withProofExternals False comp = comp
 withProofExternals True  comp = do
     st <- get
     let es = cl_externals st
         -- commands with same same in proof_externals will override those in normal externals
         newEs = proof_externals ++ filter ((`notElem` (map externName proof_externals)) . externName) es
+        reset s = s { cl_externals = es }
     modify $ \ s -> s { cl_externals = newEs }
-    r <- comp
-    modify $ \ s -> s { cl_externals = es }
+    r <- comp `catchError` (\case CLContinue s -> continue (reset s)
+                                  other        -> modify reset >> throwError other)
+    modify reset
     return r
 
 evalProofScript :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> String -> m NamedLemma
@@ -159,7 +161,7 @@ runExprH lem expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr 
                   $ interpExprH interpProof expr >>= performProofShellCommand expr lem
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
-endProof :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m) => ExprH -> NamedLemma -> m ()
+endProof :: (MonadCatch m, CLMonad m) => ExprH -> NamedLemma -> m ()
 endProof expr (nm, Lemma eq _ _) = do
     b <- queryInFocus (return eq >>> testM verifyEqualityT :: TransformH Core Bool) Nothing
     if b
@@ -172,7 +174,8 @@ endProof expr (nm, Lemma eq _ _) = do
 -- We want to do our proof in the current context of the shell, whatever that is,
 -- so we run them using queryInFocus below. This has the benefit that proof commands
 -- can generate additional lemmas, and add to the version history.
-performProofShellCommand :: (MonadCatch m, MonadException m, CLMonad m) => ExprH -> NamedLemma -> ProofShellCommand -> m NamedLemma
+performProofShellCommand :: (MonadCatch m, MonadException m, CLMonad m)
+                         => ExprH -> NamedLemma -> ProofShellCommand -> m NamedLemma
 performProofShellCommand expr lem@(nm, Lemma eq p u) = go
     where expr' = Just $ unparseExprH expr
           go (PCRewrite rr) = do
@@ -197,13 +200,12 @@ performProofShellCommand expr lem@(nm, Lemma eq p u) = go
                 queryInFocus (return eq >>> t :: TransformH Core ()) expr'
                 get >>= continue -- note: we assume that if 't' completes without failing,
                                  -- the lemma is proved, we don't actually check
-                return lem       -- never reached, but makes types happy
           go PCEnd                = endProof expr lem >> return lem
           go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.") >> return lem
 
 performInduction :: (MonadCatch m, MonadException m, CLMonad m)
                  => Maybe String -> NamedLemma -> (Id -> Bool) -> m NamedLemma
-performInduction expr lem@(nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
+performInduction expr (nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $
          soleElement (filter idPred bs)
 
@@ -233,7 +235,6 @@ performInduction expr lem@(nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
         withLemmas hypLemmas $ interactiveProof False (lemmaName,caseLemma) -- recursion!
 
     get >>= continue
-    return lem -- this is never reached, but the type says we need it.
 
 withLemmas :: (MonadCatch m, CLMonad m) => [NamedLemma] -> m a -> m a
 withLemmas []   comp = comp
