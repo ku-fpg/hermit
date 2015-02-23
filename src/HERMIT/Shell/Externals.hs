@@ -66,6 +66,10 @@ shell_externals = map (.+ Shell)
         [ "step forward in the derivation" ]                                     .+ VersionControl
     , external "goto"            (CLSModify . versionCmd . Goto)
         [ "goto a specific step in the derivation" ]                             .+ VersionControl
+    , external "goto"            (CLSModify . versionCmd . GotoTag)
+        [ "goto a specific step in the derivation by tag name" ]                 .+ VersionControl
+    , external "tag"             (CLSModify . versionCmd . Tag)
+        [ "name the current step in the derivation" ]                            .+ VersionControl
     , external "diff"            Diff
         [ "show diff of two ASTs" ]                                              .+ VersionControl
     , external "set-pp-diffonly" (\ bStr -> CLSModify $ \ st ->
@@ -190,6 +194,12 @@ versionCmd whereTo st = do
             if ast `elem` [ ast' | (ast',_,_) <- all_asts ]
                 then return $ Right $ setCursor ast st
                 else return $ Left $ CLError $ "Cannot find AST #" ++ show ast ++ "."
+        GotoTag nm ->
+            case [ ast | (ast,nms) <- M.toList (cl_tags st), nm `elem` nms ] of
+                [] -> return $ Left $ CLError $ "No tag named: " ++ nm
+                (ast:_) -> return $ Right $ setCursor ast st
+        Tag nm ->
+            return $ Right $ st { cl_tags = M.insertWith (++) (cl_cursor st) [nm] (cl_tags st) }
         Step -> do
             let ns = [ (fromMaybe "unknown" msg, ast) | (ast,msg,Just p) <- all_asts, p == cl_cursor st ]
             case ns of
@@ -228,12 +238,11 @@ showRefactorTrail db a me =
                       then []
                       else [] :
                           showRefactorTrail [ (a',b',c') | (a',b',c') <- db
-                                                          , not (a == a' && c == c')
-                                                          ] a me
+                                                         , not (a == a' && c == c')
+                                                         ] a me
 
-  where
-          dot = if a == me then "*" else "o"
-          show' n x = replicate (n - length (show a)) ' ' ++ show x
+  where dot = if a == me then "*" else "o"
+        show' n x = replicate (n - length (show a)) ' ' ++ show x
 
 -------------------------------------------------------------------------------
 

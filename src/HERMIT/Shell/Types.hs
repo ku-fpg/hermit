@@ -1,6 +1,16 @@
-{-# LANGUAGE ConstraintKinds, CPP, KindSignatures, GADTs, FlexibleContexts, DeriveDataTypeable,
-             FunctionalDependencies, GeneralizedNewtypeDeriving, InstanceSigs,
-             LambdaCase, RankNTypes, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 module HERMIT.Shell.Types where
 
 import Control.Applicative
@@ -121,9 +131,12 @@ ppWholeProgram ast = do
 
 ----------------------------------------------------------------------------------
 
-data VersionCmd = Back                  -- back (up) the derivation tree
-                | Step                  -- down one step; assumes only one choice
-                | Goto AST              -- goto a specific node, if possible
+type TagName = String
+data VersionCmd = Back            -- back (up) the derivation tree
+                | Step            -- down one step; assumes only one choice
+                | Goto AST        -- goto a specific AST
+                | GotoTag TagName -- goto a specific AST, by tag name
+                | Tag TagName     -- tag the current AST with a name
         deriving Show
 
 ----------------------------------------------------------------------------------
@@ -249,7 +262,8 @@ data CommandLineState = CommandLineState
     , cl_height         :: Int                    -- ^ console height, in lines
     , cl_scripts        :: [(ScriptName,Script)]
     , cl_nav            :: Bool                   -- ^ keyboard input the nav panel
-    , cl_foci           :: M.Map AST ([LocalPathH], LocalPathH)
+    , cl_foci           :: M.Map AST ([LocalPathH], LocalPathH) -- ^ focus assigned to each AST
+    , cl_tags           :: M.Map AST [String]     -- ^ list of tags on an AST
     , cl_window         :: PathH                  -- ^ path to beginning of window, always a prefix of focus path in kernel
     , cl_externals      :: [External]             -- ^ Currently visible externals
     , cl_running_script :: Maybe Script           -- ^ Nothing = no script running, otherwise the remaining script commands
@@ -312,6 +326,7 @@ mkCLS = do
                               , cl_scripts        = []
                               , cl_nav            = False
                               , cl_foci           = M.empty
+                              , cl_tags           = M.empty
                               , cl_window         = mempty
                               , cl_externals      = [] -- Note, empty dictionary.
                               , cl_running_script = Nothing
