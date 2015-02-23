@@ -11,8 +11,6 @@ Description:
   This is an alpha `please give feedback' release.
   Shortcomings/gotchas include:
   .
-    * Command line completion is ad hoc at the moment.
-  .
     * log command prints linearly, even if command history is a tree.
   .
     * A number of rewrites don't enforce preconditions. eg: cast elimination
@@ -129,12 +127,17 @@ extra-source-files:
     examples/last/Last.hss
     examples/mean/Mean.hs
     examples/mean/Mean.hss
+    examples/nub/Nub.hs
+    examples/nub/Nub.hss
     examples/qsort/HList.hs
     examples/qsort/QSort.hs
     examples/qsort/QSort.hss
     examples/reverse/HList.hs
     examples/reverse/Reverse.hs
     examples/reverse/Reverse.hss
+    examples/new_reverse/HList.hs
+    examples/new_reverse/Reverse.hs
+    examples/new_reverse/Reverse.hss
 
 Library
   ghc-options: -Wall -fno-warn-orphans
