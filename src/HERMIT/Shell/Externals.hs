@@ -134,8 +134,11 @@ shell_externals = map (.+ Shell)
         ["load <script-name> <file-name> : load a HERMIT script from a file and save it under the specified name."]
     , external "load-and-run"  loadAndRun
         ["load-and-run <file-name> : load a HERMIT script from a file and run it immediately."]
-    , external "save"  SaveFile
+    , external "save"  (SaveFile False)
         ["save <filename> : save the current complete derivation into a file."]
+    , external "save-verbose"  (SaveFile True)
+        ["save-verbose <filename> : save the current complete derivation into a file,"
+        ,"including output of each command as a comment."]
     , external "save-script" SaveScript
         ["save-script <filename> <script name> : save a loaded or manually defined script to a file." ]
     , external "load-as-rewrite" (\ rewriteName fileName -> SeqMeta [LoadFile rewriteName fileName, ScriptToRewrite rewriteName rewriteName])
@@ -192,12 +195,12 @@ versionCmd whereTo st = do
     case whereTo of
         Goto ast ->
             if ast `elem` [ ast' | (ast',_,_) <- all_asts ]
-                then return $ Right $ setCursor ast st
+                then reEnterProofIO $ setCursor ast st
                 else return $ Left $ CLError $ "Cannot find AST #" ++ show ast ++ "."
         GotoTag nm ->
             case [ ast | (ast,nms) <- M.toList (cl_tags st), nm `elem` nms ] of
                 [] -> return $ Left $ CLError $ "No tag named: " ++ nm
-                (ast:_) -> return $ Right $ setCursor ast st
+                (ast:_) -> reEnterProofIO $ setCursor ast st
         Tag nm ->
             return $ Right $ st { cl_tags = M.insertWith (++) (cl_cursor st) [nm] (cl_tags st) }
         Step -> do
@@ -206,7 +209,7 @@ versionCmd whereTo st = do
                 [] -> return $ Left $ CLError "Cannot step forward (no more steps)."
                 [(cmd,ast)] -> do
                     putStrLn $ "step : " ++ cmd
-                    return $ Right $ setCursor ast st
+                    reEnterProofIO $ setCursor ast st
                 _ -> return $ Left $ CLError $ "Cannot step forward (multiple choices), use goto {"
                                                 ++ intercalate "," (map (show.snd) ns) ++ "}"
         Back -> do
@@ -215,7 +218,7 @@ versionCmd whereTo st = do
                 [] -> return $ Left $ CLError "Cannot step backwards (no more steps)."
                 [(cmd,ast)] -> do
                     putStrLn $ "back, unstepping : " ++ cmd
-                    return $ Right $ setCursor ast st
+                    reEnterProofIO $ setCursor ast st
                 _ -> return $ Left $ CLError "Cannot step backwards (multiple choices, impossible!)."
 
 -------------------------------------------------------------------------------

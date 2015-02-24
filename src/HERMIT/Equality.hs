@@ -13,6 +13,7 @@ module HERMIT.Equality
     , LemmaName(..)
     , Lemma(..)
     , Lemmas
+    , NamedLemma
     ) where
 
 import Prelude hiding (lookup)
@@ -69,6 +70,9 @@ data Lemma = Lemma { lemmaEq :: Equality
 
 -- | A collection of named lemmas.
 type Lemmas = M.Map LemmaName Lemma
+
+-- | A LemmaName, Lemma pair.
+type NamedLemma = (LemmaName, Lemma)
 
 ------------------------------------------------------------------------------
 

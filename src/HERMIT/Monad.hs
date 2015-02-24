@@ -205,10 +205,17 @@ instance HasHscEnv HermitM where
 class HasLemmas m where
     getLemmas :: m Lemmas
     putLemmas :: Lemmas -> m ()
+    withLemmas :: Lemmas -> m a -> m a
 
 instance HasLemmas HermitM where
     getLemmas = HermitM $ \ _ env -> return $ return $ mkResult env (hEnvLemmas env)
     putLemmas m = HermitM $ \ _ _ -> return $ return $ changedResult m ()
+    withLemmas ls (HermitM f) = HermitM $ \ d env -> do
+                                    kr <- f d (env { hEnvLemmas = union ls (hEnvLemmas env) })
+                                    runKureM (\ (HermitMResult c ls' a) ->
+                                                    let ls'' = difference ls' ls
+                                                    in return $ return $ HermitMResult c ls'' a)
+                                             (return . fail) kr
 
 -- | Insert or replace a lemma.
 insertLemma :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> m ()

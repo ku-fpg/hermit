@@ -13,26 +13,26 @@ module HERMIT.Shell.Proof
     ( externals
     , UserProofTechnique
     , userProofTechnique
+    , reEnterProofIO
     ) where
 
 import Control.Arrow hiding (loop, (<+>))
-import Control.Concurrent
-import Control.Monad ((>=>), foldM, forM, forM_, liftM, unless, when)
+import Control.Monad ((>=>), forM, forM_, liftM, unless)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.State (MonadState(get, put), modify, gets)
+import Control.Monad.State (MonadState(get), modify, gets)
 import Control.Monad.Trans.Class (lift)
 
 import Data.Char (isSpace)
 import Data.Dynamic
-import Data.List (delete, intercalate)
+import Data.List (delete)
+import qualified Data.Map as M
 import Data.String (fromString)
 
 import HERMIT.Core
 import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC hiding (settings, (<>), text, sep, (<+>), ($+$), nest)
-import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Parser
@@ -91,57 +91,51 @@ printLemma (nm,lem) = do
 
 --------------------------------------------------------------------------------------------------------
 
-type NamedLemma = (LemmaName, Lemma)
-
+-- | Top level entry point! Assumption is that proof stack is empty if this is called.
 interactiveProofIO :: LemmaName -> CommandLineState -> IO (Either CLException CommandLineState)
 interactiveProofIO nm s = do
-    (r,s') <- runCLT s $ do
+    (r,st) <- runCLT s $ do
                 l <- queryInFocus (getLemmaByNameT nm :: TransformH Core Lemma) (Just $ "prove-lemma " ++ quoteShow nm)
-                interactiveProof True (nm,l)
-    return $ fmap (const s') r
+                pushProofStack $ Unproven nm l [] False
+                interactiveProof
+    -- Proof stack in st will always be empty
+    return $ fmap (const st) r
 
-interactiveProof :: forall m. (MonadCatch m, MonadException m, CLMonad m) => Bool -> NamedLemma -> m ()
-interactiveProof topLevel lem@(nm,_) = do
-    let ws_complete = " ()"
+-- | Used by the version commands to resume a proof after 'goto'.
+reEnterProofIO :: CommandLineState -> IO (Either CLException CommandLineState)
+reEnterProofIO s = do
+    (r,st) <- runCLT s interactiveProof
+    return $ fmap (const st) r
 
-        -- Main proof input loop
-        loop :: NamedLemma -> InputT m ()
-        loop l = do
-            mExpr <- lift popScriptLine
-            case mExpr of
-                Nothing -> do
-                    lift $ printLemma l
-                    mLine <- getInputLine $ "proof> "
-                    case mLine of
-                        Nothing          -> fail "proof aborted (input: Nothing)"
-                        Just ('-':'-':_) -> loop l
-                        Just line        -> if all isSpace line
-                                            then loop l
-                                            else lift (evalProofScript l line
-                                                        `catchM` (\msg -> cl_putStrLn msg >> return l)) >>= loop
-                Just e -> lift (runExprH l e
-                                    `catchM` (\msg -> setRunningScript Nothing >> cl_putStrLn msg >> return l)) >>= loop
+-- | If the proof stack is empty, this is a no-op.
+interactiveProof :: forall m. (MonadCatch m, MonadException m, CLMonad m) => m ()
+interactiveProof = do
+    let -- Main proof input loop
+        loop :: InputT m ()
+        loop = do
+            el <- lift $ tryM () announceProven >> attemptM currentLemma
+            case el of
+                Left _ -> return () -- no lemma is currently being proven, so exit
+                Right (nm,l,_) -> do
+                    mExpr <- lift popScriptLine
+                    case mExpr of
+                        Nothing -> do
+                            lift $ printLemma (nm,l)
+                            mLine <- getInputLine $ "proof> "
+                            case mLine of
+                                Nothing          -> fail "proof aborted (input: Nothing)"
+                                Just ('-':'-':_) -> loop
+                                Just line        -> do unless (all isSpace line) $
+                                                            lift (evalProofScript line `catchM` cl_putStrLn)
+                                                       loop
+                        Just e -> lift (runExprH e `catchM` (\ msg -> setRunningScript Nothing >> cl_putStrLn msg)) >> loop
 
-        settings = setComplete (completeWordWithPrev Nothing ws_complete shellComplete) defaultSettings
+        settings = setComplete (completeWordWithPrev Nothing " ()" shellComplete) defaultSettings
 
-    origSt <- get
+    withProofExternals $ runInputT settings loop
 
-    catchError (withProofExternals topLevel $ runInputT settings (loop lem))
-               (\case
-                    CLAbort        -> put origSt -- abandon proof attempt
-                    CLContinue st' -> do
-                        cl_putStrLn $ "Successfully proven: " ++ show nm
-                        put st'
-                        when topLevel $
-                            queryInFocus (modifyLemmaT nm id idR (const True) id :: TransformH Core ())
-                                         (Just $ "-- proven " ++ quoteShow nm) -- comment in script
-
-                    CLError msg    -> fail $ "Prover error: " ++ msg
-                    _              -> fail "unsupported exception in interactive prover")
-
-withProofExternals :: (MonadError CLException m, MonadState CommandLineState m) => Bool -> m a -> m a
-withProofExternals False comp = comp
-withProofExternals True  comp = do
+withProofExternals :: (MonadError CLException m, MonadState CommandLineState m) => m a -> m a
+withProofExternals comp = do
     st <- get
     let es = cl_externals st
         -- commands with same same in proof_externals will override those in normal externals
@@ -153,59 +147,71 @@ withProofExternals True  comp = do
     modify reset
     return r
 
-evalProofScript :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> String -> m NamedLemma
-evalProofScript lem = parseScriptCLT >=> foldM runExprH lem
+evalProofScript :: (MonadCatch m, MonadException m, CLMonad m) => String -> m ()
+evalProofScript = parseScriptCLT >=> mapM_ runExprH
 
-runExprH :: (MonadCatch m, MonadException m, CLMonad m) => NamedLemma -> ExprH -> m NamedLemma
-runExprH lem expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n")
-                  $ interpExprH interpProof expr >>= performProofShellCommand expr lem
+runExprH :: (MonadCatch m, MonadException m, CLMonad m) => ExprH -> m ()
+runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n")
+              $ interpExprH interpProof expr >>= performProofShellCommand expr
+
+transformEq :: Equality -> [NamedLemma] -> TransformH Equality a -> TransformH Core a
+transformEq eq ls t = contextonlyT $ \ c -> withLemmas (M.fromList ls) (applyT t c eq)
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
-endProof :: (MonadCatch m, CLMonad m) => ExprH -> NamedLemma -> m ()
-endProof expr (nm, Lemma eq _ _) = do
-    b <- queryInFocus (return eq >>> testM verifyEqualityT :: TransformH Core Bool) Nothing
-    if b
-    then do st <- get
-            addAST =<< tellK (cl_kernel st) (unparseExprH expr) (cl_cursor st)
-            get >>= continue
-    else fail $ "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
+endProof :: (MonadCatch m, CLMonad m) => ExprH -> m ()
+endProof expr = do
+    Unproven nm (Lemma eq _ _) ls temp : _ <- getProofStack
+    let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
+        t = verifyEqualityT >> unless temp (markLemmaProvedT nm)
+    queryInFocus (transformEq eq ls (setFailMsg msg t)) (Just $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
+    _ <- popProofStack
+    cl_putStrLn $ "Successfully proven: " ++ show nm
 
 -- Note [Query]
 -- We want to do our proof in the current context of the shell, whatever that is,
 -- so we run them using queryInFocus below. This has the benefit that proof commands
 -- can generate additional lemmas, and add to the version history.
 performProofShellCommand :: (MonadCatch m, MonadException m, CLMonad m)
-                         => ExprH -> NamedLemma -> ProofShellCommand -> m NamedLemma
-performProofShellCommand expr lem@(nm, Lemma eq p u) = go
+                         => ExprH -> ProofShellCommand -> m ()
+performProofShellCommand expr = go
     where expr' = Just $ unparseExprH expr
           go (PCRewrite rr) = do
-                eq' <- queryInFocus (return eq >>> rr >>> (bothT lintExprT >> idR) :: TransformH Core Equality) expr'
-                return (nm, Lemma eq' p u)
+                -- careful to only modify the lemma in the resulting AST
+                ast <- gets cl_cursor
+                todo@(Unproven nm (Lemma eq p u) ls t) <- popProofStack
+                eq' <- queryInFocus (transformEq eq ls $ rr >>> (bothT lintExprT >> idR)) expr'
+                pushProofStack $ Unproven nm (Lemma eq' p u) ls t
+                modify $ \ st -> st { cl_proofstack = M.insertWith (++) ast [todo] (cl_proofstack st) }
           go (PCTransform t) = do
-                cl_putStrLn =<< queryInFocus (return eq >>> t :: TransformH Core String) expr'
-                return lem
+                (_, Lemma eq _ _, ls) <- currentLemma
+                cl_putStrLn =<< queryInFocus (transformEq eq ls t) expr'
           go (PCUnit t) = do
-                queryInFocus (return eq >>> t :: TransformH Core ()) expr'
-                return lem
-          go (PCInduction idPred) = performInduction expr' lem idPred
-          go (PCShell effect)     = performShellEffect effect >> return lem
+                (_, Lemma eq _ _, ls) <- currentLemma
+                queryInFocus (transformEq eq ls t) expr'
+          go (PCInduction idPred) = performInduction expr' idPred
+          go (PCShell effect)     = performShellEffect effect
           go (PCScript effect)    = do
-                lemVar <- liftIO $ newMVar lem -- couldn't resist that name
-                let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= liftIO . putMVar lemVar
-                performScriptEffect lemHack effect
-                liftIO $ takeMVar lemVar
-          go (PCQuery query)      = performQuery query expr >> return lem
+                -- lemVar <- liftIO $ newMVar lem -- couldn't resist that name
+                -- let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= liftIO . putMVar lemVar
+                performScriptEffect runExprH effect
+                -- liftIO $ takeMVar lemVar
+          go (PCQuery query)      = performQuery query expr
           go (PCUser prf)         = do
                 let UserProofTechnique t = prf -- may add more constructors later
-                queryInFocus (return eq >>> t :: TransformH Core ()) expr'
-                get >>= continue -- note: we assume that if 't' completes without failing,
-                                 -- the lemma is proved, we don't actually check
-          go PCEnd                = endProof expr lem >> return lem
-          go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.") >> return lem
+                -- note: we assume that if 't' completes without failing,
+                -- the lemma is proved, we don't actually check
+                ast <- gets cl_cursor
+                todo@(Unproven nm (Lemma eq _ _) ls temp) <- popProofStack
+                queryInFocus (transformEq eq ls t >> unless temp (markLemmaProvedT nm)) expr'
+                modify $ \ st -> st { cl_proofstack = M.insertWith (++) ast [todo] (cl_proofstack st) }
+                cl_putStrLn $ "Successfully proven: " ++ show nm
+          go PCEnd                = endProof expr
+          go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.")
 
 performInduction :: (MonadCatch m, MonadException m, CLMonad m)
-                 => Maybe String -> NamedLemma -> (Id -> Bool) -> m NamedLemma
-performInduction expr (nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
+                 => Maybe String -> (Id -> Bool) -> m ()
+performInduction expr idPred = do
+    (nm, Lemma eq@(Equality bs lhs rhs) _ _, ls) <- currentLemma
     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $
          soleElement (filter idPred bs)
 
@@ -213,15 +219,16 @@ performInduction expr (nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
     cases <- queryInFocus (inductionCaseSplit bs i lhs rhs :: TransformH Core [(Maybe DataCon, [Var], CoreExpr, CoreExpr)])
                           expr
 
-    forM_ cases $ \ (mdc,vs,lhsE,rhsE) -> do
+    -- replace the current lemma with the three subcases
+    -- proving them will prove this case automatically
+    Unproven _ _ _ t <- popProofStack
+    pushProofStack $ Proven nm t
+    forM_ (reverse cases) $ \ (mdc,vs,lhsE,rhsE) -> do
 
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
             -- TODO rethink the remake.discardUniVars
             remake (Equality bndrs l r) = mkEquality bndrs l r
             caseName = maybe "undefined" unqualifiedName mdc
-
-        (k,ast) <- gets (cl_kernel &&& cl_cursor)
-        addAST =<< tellK k ("-- case: " ++ caseName) ast
 
         -- Generate list of specialized induction hypotheses for the recursive cases.
         eqs <- forM vs_matching_i_type $ \ i' ->
@@ -232,24 +239,7 @@ performInduction expr (nm, Lemma eq@(Equality bs lhs rhs) _ _) idPred = do
             lemmaName = fromString $ show nm ++ "-induction-on-" ++ unqualifiedName i ++ "-case-" ++ caseName
             caseLemma = Lemma (Equality (delete i bs ++ vs) lhsE rhsE) False False
 
-        withLemmas hypLemmas $ interactiveProof False (lemmaName,caseLemma) -- recursion!
-
-    get >>= continue
-
-withLemmas :: (MonadCatch m, CLMonad m) => [NamedLemma] -> m a -> m a
-withLemmas []   comp = comp
-withLemmas lems comp = do
-    ifM isRunningScript (return ()) $ forM_ lems printLemma
-
-    let lemmaNames = intercalate ", " $ map (quoteShow . fst) lems
-
-    ls <- queryInFocus (getLemmasT :: TransformH Core Lemmas) Nothing
-    queryInFocus (constT (forM_ lems $ \ (nm,l) -> insertLemma nm l) :: TransformH Core ())
-                 (Just $ "-- adding lemmas: " ++ lemmaNames)
-    r <- comp
-    queryInFocus (constT (putLemmas ls) :: TransformH Core ())
-                 (Just $ "-- removing lemmas: " ++ lemmaNames)
-    return r
+        pushProofStack $ Unproven lemmaName caseLemma (hypLemmas ++ ls) True
 
 data ProofShellCommand
     = PCRewrite (RewriteH Equality)
@@ -317,8 +307,4 @@ interpProof =
   , interp $ \ (TransformCoreTCCheckBox tt)   -> PCQuery (CorrectnessCriteria tt)
   , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"
   ]
-
-quoteShow :: Show a => a -> String
-quoteShow x = if all isScriptIdChar s then s else show s
-    where s = show x
 

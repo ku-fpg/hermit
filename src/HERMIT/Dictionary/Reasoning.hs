@@ -20,8 +20,10 @@ module HERMIT.Dictionary.Reasoning
     , getLemmasT
     , getLemmaByNameT
     , insertLemmaT
+    , insertLemmasT
     , lemmaR
     , markLemmaUsedT
+    , markLemmaProvedT
     , modifyLemmaT
     , showLemmasT
     , ppLemmaT
@@ -439,6 +441,9 @@ lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaEq)) (mar
 insertLemmaT :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> Transform c m a ()
 insertLemmaT nm l = constT $ insertLemma nm l
 
+insertLemmasT :: (HasLemmas m, Monad m) => [NamedLemma] -> Transform c m a ()
+insertLemmasT = constT . mapM_ (uncurry insertLemma)
+
 modifyLemmaT :: (HasLemmas m, Monad m)
              => LemmaName
              -> (LemmaName -> LemmaName) -- ^ modify lemma name
@@ -454,6 +459,8 @@ modifyLemmaT nm nFn rr pFn uFn = do
 markLemmaUsedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
 markLemmaUsedT nm = modifyLemmaT nm id idR id (const True)
 
+markLemmaProvedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
+markLemmaProvedT nm = modifyLemmaT nm id idR (const True) id
 ------------------------------------------------------------------------------
 
 lemmaNameToEqualityT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Equality

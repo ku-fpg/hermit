@@ -16,7 +16,7 @@ module HERMIT.Shell.Types where
 import Control.Applicative
 import Control.Arrow
 import Control.Concurrent.STM
-import Control.Monad (liftM)
+import Control.Monad (liftM, unless)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State (MonadState(..), StateT(..), gets, modify)
@@ -30,12 +30,15 @@ import Data.Monoid (mempty)
 
 import HERMIT.Context
 import HERMIT.Core
+import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Kure
+import HERMIT.Equality
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
 import HERMIT.Kernel
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
+import HERMIT.Syntax
 
 import HERMIT.Plugin.Display
 import HERMIT.Plugin.Renderer
@@ -264,10 +267,14 @@ data CommandLineState = CommandLineState
     , cl_nav            :: Bool                   -- ^ keyboard input the nav panel
     , cl_foci           :: M.Map AST ([LocalPathH], LocalPathH) -- ^ focus assigned to each AST
     , cl_tags           :: M.Map AST [String]     -- ^ list of tags on an AST
+    , cl_proofstack     :: M.Map AST [ProofTodo]  -- ^ stack of todos for the proof shell
     , cl_window         :: PathH                  -- ^ path to beginning of window, always a prefix of focus path in kernel
     , cl_externals      :: [External]             -- ^ Currently visible externals
     , cl_running_script :: Maybe Script           -- ^ Nothing = no script running, otherwise the remaining script commands
     } deriving (Typeable)
+
+data ProofTodo = Unproven LemmaName Lemma [NamedLemma] Bool -- ^ lemma we are proving, plus temporary lemmas in scope
+               | Proven LemmaName                      Bool -- ^ lemma successfully proven, temporary status
 
 -- To ease the pain of nested records, define some boilerplate here.
 cl_corelint :: CommandLineState -> Bool
@@ -327,6 +334,7 @@ mkCLS = do
                               , cl_nav            = False
                               , cl_foci           = M.empty
                               , cl_tags           = M.empty
+                              , cl_proofstack     = M.empty
                               , cl_window         = mempty
                               , cl_externals      = [] -- Note, empty dictionary.
                               , cl_running_script = Nothing
@@ -437,8 +445,48 @@ addAST ast = addASTWithPath ast id
 addASTWithPath :: CLMonad m => AST -> (LocalPathH -> LocalPathH) -> m ()
 addASTWithPath ast f = do
     (base, rel) <- getPathStack
-    modify $ \ st -> st { cl_foci = M.alter (const (Just (base, f rel))) ast (cl_foci st) }
-    modify $ setCursor ast
+    copyProofStack ast
+    modify $ \ st -> setCursor ast (st { cl_foci = M.insert ast (base, f rel) (cl_foci st) })
+
+copyProofStack :: CLMonad m => AST -> m ()
+copyProofStack ast = modify $ \ st -> let newStack = fromMaybe [] $ M.lookup (cl_cursor st) (cl_proofstack st)
+                                      in st { cl_proofstack = M.insert ast newStack (cl_proofstack st) }
+
+pushProofStack :: CLMonad m => ProofTodo -> m ()
+pushProofStack todo = modify $ \ st -> st { cl_proofstack = M.insertWith (++) (cl_cursor st) [todo] (cl_proofstack st) }
+
+popProofStack :: CLMonad m => m ProofTodo
+popProofStack = do
+    t : ts <- getProofStack
+    modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) ts (cl_proofstack st) }
+    return t
+
+currentLemma :: CLMonad m => m (LemmaName, Lemma, [NamedLemma])
+currentLemma = do
+    todo : _ <- getProofStack
+
+    case todo of
+        Unproven nm l ls _ -> return (nm, l, ls)
+        Proven _ _ -> fail "currentLemma: Proven lemma on top of stack!"
+
+announceProven :: (MonadCatch m, CLMonad m) => m ()
+announceProven = getProofStack >>= go
+    where go (Proven nm temp : r) = do
+            queryInFocus (unless temp (modifyLemmaT nm id idR (const True) id) :: TransformH Core ())
+                         (Just $ "-- proven " ++ quoteShow nm) -- comment in script
+            -- take it off the stack for the new AST
+            modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
+            cl_putStrLn ("Successfully proven: " ++ show nm) >> go r
+          go _ = return ()
+
+-- | Always returns a non-empty list.
+getProofStack :: CLMonad m => m [ProofTodo]
+getProofStack = do
+    (ps, ast) <- gets (cl_proofstack &&& cl_cursor)
+
+    case M.lookup ast ps of
+        Just todos@(_:_) -> return todos
+        _ -> fail "No lemma currently being proved."
 
 ------------------------------------------------------------------------------
 

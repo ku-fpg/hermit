@@ -1,6 +1,6 @@
 module HERMIT.Syntax
-   (
-      -- * Utility Predicates for lexing Identifiers
+    ( -- * Utility Predicates for lexing Identifiers
+      quoteShow,
       -- ** Lexing HERMIT Scripts
       isScriptIdFirstChar,
       isScriptIdChar,
@@ -9,8 +9,7 @@ module HERMIT.Syntax
       isCoreIdFirstChar,
       isCoreIdChar,
       isCoreInfixIdChar
-   )
-where
+    ) where
 
 import Data.Char (isAlphaNum, isAlpha)
 
@@ -57,3 +56,7 @@ infixOperatorSymbols :: [Char]
 infixOperatorSymbols = "!£$%^&*-+=@#<>?/.:|"
 
 ---------------------------------------------------------------------
+
+quoteShow :: Show a => a -> String
+quoteShow x = if all isScriptIdChar s then s else show s
+    where s = show x

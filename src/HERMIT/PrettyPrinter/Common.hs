@@ -6,6 +6,7 @@ module HERMIT.PrettyPrinter.Common
     , Attr(..)
     , attrP
     , HTML(..)
+    , ASCII(..)
       -- ** Colors
     , coercionColor
     , idColor

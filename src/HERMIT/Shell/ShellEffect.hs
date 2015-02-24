@@ -61,7 +61,7 @@ performShellEffect (PluginComp m) = pluginM m >> showWindow
 dumpT :: FilePath -> PrettyPrinter -> String -> Int -> TransformH DocH ()
 dumpT fileName pp renderer width = do
     case lookup renderer shellRenderers of
-      Just r -> do doc <- idR -- prefixFailMsg "Bad renderer option: " $ liftPrettyH (pOptions pp) (pCoreTC pp)
+      Just r -> do doc <- idR
                    liftIO $ do h <- openFile fileName WriteMode
                                r h ((pOptions pp) { po_width = width }) (Right doc)
                                hClose h

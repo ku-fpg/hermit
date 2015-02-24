@@ -23,7 +23,6 @@ import Control.Monad.State (MonadState, gets, modify)
 import Control.Exception hiding (catch)
 
 import Data.Dynamic
-import Data.Maybe (fromMaybe)
 import qualified Data.Map as M
 
 import HERMIT.Context(LocalPathH)
@@ -31,6 +30,9 @@ import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript, unparseScript)
+import HERMIT.Dictionary.Reasoning
+import HERMIT.PrettyPrinter.Common
+import qualified HERMIT.PrettyPrinter.Clean as Clean
 
 import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.Interpreter
@@ -45,7 +47,7 @@ data ScriptEffect
     = DefineScript ScriptName String
     | LoadFile ScriptName FilePath  -- load a file on top of the current node
     | RunScript ScriptName
-    | SaveFile FilePath
+    | SaveFile Bool FilePath        -- Bool = whether to dump code/lemma between commands
     | SaveScript FilePath ScriptName
     | ScriptToRewrite RewriteName ScriptName
     | SeqMeta [ScriptEffect]
@@ -69,6 +71,23 @@ popScriptLine :: MonadState CommandLineState m => m (Maybe ExprH)
 popScriptLine = gets cl_running_script >>= maybe (return Nothing) (\case []     -> setRunningScript Nothing >> return Nothing
                                                                          (e:es) -> setRunningScript (Just es) >> return (Just e))
 
+getFragment :: (MonadCatch m, CLMonad m) => Bool -> AST -> m ([String] -> [String])
+getFragment False _  = return id
+getFragment True ast = do
+    now <- gets cl_cursor
+    modify $ setCursor ast
+    ps <- gets cl_proofstack
+    let discardProvens (Proven _ _ : r) = discardProvens r
+        discardProvens other = other
+        opts = pOptions Clean.pretty
+    doc <- case fmap discardProvens $ M.lookup ast ps of
+            Just (Unproven nm l _ _ : _) -> queryInFocus (liftPrettyH opts $ return l >>> ppLemmaT Clean.pretty nm :: TransformH Core DocH) Nothing
+            _                            -> queryInFocus (liftPrettyH opts $ pCoreTC Clean.pretty) Nothing
+    let ASCII str = renderCode opts doc
+        str' = unlines $ ("" :) $ map ("-- " ++) $ lines str
+    modify $ setCursor now
+    return (str' :)
+
 performScriptEffect :: (MonadCatch m, CLMonad m) => (ExprH -> m ()) -> ScriptEffect -> m ()
 performScriptEffect runner = go
     where go (SeqMeta ms) = mapM_ go ms
@@ -82,16 +101,20 @@ performScriptEffect runner = go
                     modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
                     putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
 
-          go (SaveFile fileName) = do
+          go (SaveFile verb fileName) = do
             putStrToConsole $ "[saving " ++ fileName ++ "]"
             (k,cur) <- gets (cl_kernel &&& cl_cursor)
             all_asts <- listK k
             let m = M.fromList [ (ast,(msg,p)) | (ast,msg,p) <- all_asts ]
                 follow ast
-                    | Just (msg, Just p) <- M.lookup ast m = fromMaybe "-- missing command!" msg : follow p
-                    | otherwise = []
+                    | Just (msg, p) <- M.lookup ast m = do
+                        ls <- maybe (return []) follow p
+                        f <- getFragment verb ast
+                        return $ f $ maybe id (:) msg ls
+                    | otherwise = return []
             -- no checks to see if you are clobering; be careful
-            liftIO $ writeFile fileName $ unlines $ reverse $ follow cur
+            ls <- follow cur
+            liftIO $ writeFile fileName $ unlines $ reverse ls
 
           go (ScriptToRewrite rewriteName scriptName) = do
             script <- lookupScript scriptName
