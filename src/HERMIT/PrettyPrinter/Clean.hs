@@ -16,7 +16,6 @@ module HERMIT.PrettyPrinter.Clean
     ) where
 
 import Control.Arrow hiding ((<+>))
-import Control.Applicative ((<$>))
 
 import Data.Char (isSpace)
 import Data.Default.Class

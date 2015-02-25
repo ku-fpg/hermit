@@ -12,16 +12,15 @@ module HERMIT.Dictionary.WorkerWrapper.Fix
     , wwAssC
     ) where
 
-import Control.Applicative
 import Control.Arrow
 
 import Data.String (fromString)
 
 import HERMIT.Core
-import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.Name
 import HERMIT.ParserCore
@@ -204,7 +203,7 @@ wwFusionBR :: BiRewriteH CoreExpr
 wwFusionBR =
     beforeBiR (prefixFailMsg "worker/wrapper fusion failed: " $
                withPatFailMsg "malformed WW Fusion rule." $
-               do Equality _ w (App unwrap (App _f (App wrap w'))) <- constT (lemmaEq <$> findLemma workLabel)
+               do Quantified _ (Equiv w (App unwrap (App _f (App wrap w')))) <- constT (lemmaQ <$> findLemma workLabel)
                   guardMsg (exprSyntaxEq w w') "malformed WW Fusion rule."
                   return (wrap,unwrap,w)
               )
@@ -245,7 +244,7 @@ wwGenerateFusionT mAss =
     do Def w e@(App unwrap (App f (App wrap (Var w')))) <- projectT
        guardMsg (w == w') wrongForm
        whenJust (verifyWWAss wrap unwrap f) mAss
-       insertLemmaT workLabel $ Lemma (Equality [] (varToCoreExpr w) e) True False
+       insertLemmaT workLabel $ Lemma (Quantified [] (Equiv (varToCoreExpr w) e)) True False
   where
     wrongForm = "definition does not have the form: work = unwrap (f (wrap work))"
 

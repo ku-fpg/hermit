@@ -42,10 +42,10 @@ import Language.KURE
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Equality
-import HERMIT.Kure.SumTypes
 import HERMIT.GHC
 import HERMIT.GHC.Typechecker
+import HERMIT.Kure.SumTypes
+import HERMIT.Lemma
 
 ----------------------------------------------------------------------------
 

@@ -32,7 +32,6 @@ module HERMIT.Dictionary.Local.Case
     ) where
 
 import Control.Arrow
-import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
 
@@ -41,10 +40,10 @@ import Data.Monoid
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.Name
 import HERMIT.ParserCore

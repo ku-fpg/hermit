@@ -10,8 +10,8 @@ module HERMIT.Dictionary.Rules
     , unfoldRuleR
     , unfoldRulesR
     , compileRulesT
-    , ruleToEqualityT
-    , ruleNameToEqualityT
+    , ruleToQuantifiedT
+    , ruleNameToQuantifiedT
     , getHermitRuleT
     , getHermitRulesT
       -- ** Specialisation
@@ -32,13 +32,13 @@ import Data.String (IsString(..))
 
 import HERMIT.Context
 import HERMIT.Core
-import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Monad
 
-import HERMIT.Dictionary.Fold (compileFold, CompiledFold)
+import HERMIT.Dictionary.Fold (compileFold, CompiledFold, toEqualities)
 import HERMIT.Dictionary.Kure (anyCallR)
 import HERMIT.Dictionary.Reasoning hiding (externals)
 
@@ -63,8 +63,8 @@ externals =
         [ "Apply a named GHC rule left-to-right." ] .+ Shallow
     , external "unfold-rules" (promoteExprR . unfoldRulesR :: [RuleName] -> RewriteH Core)
         [ "Apply named GHC rules left-to-right, succeed if any of the rules succeed" ] .+ Shallow
-    , external "rule-to-lemma" (\nm -> do eq <- ruleNameToEqualityT nm
-                                          insertLemmaT (fromString (show nm)) $ Lemma eq False False :: TransformH Core ())
+    , external "rule-to-lemma" (\nm -> do q <- ruleNameToQuantifiedT nm
+                                          insertLemmaT (fromString (show nm)) $ Lemma q False False :: TransformH Core ())
         [ "Create a lemma from a GHC RULE." ]
     , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
         [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
@@ -96,8 +96,8 @@ foldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContex
                , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
             => RuleName -> Rewrite c m CoreExpr
 foldRuleR nm = do
-    eq <- ruleNameToEqualityT nm
-    backwardT (birewrite eq) >>> (constT (addLemma (fromString (show nm)) $ Lemma eq False True) >> idR)
+    q <- ruleNameToQuantifiedT nm
+    backwardT (birewrite q) >>> (constT (addLemma (fromString (show nm)) $ Lemma q False True) >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
 foldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
@@ -110,8 +110,8 @@ unfoldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyCont
                , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
             => RuleName -> Rewrite c m CoreExpr
 unfoldRuleR nm = do
-    eq <- ruleNameToEqualityT nm
-    forwardT (birewrite eq) >>> (constT (addLemma (fromString (show nm)) $ Lemma eq False True) >> idR)
+    q <- ruleNameToQuantifiedT nm
+    forwardT (birewrite q) >>> (constT (addLemma (fromString (show nm)) $ Lemma q False True) >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
 unfoldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
@@ -130,7 +130,9 @@ compileRulesT nms = do
     allRules <- getHermitRulesT
     case filter ((`elem` nms) . fst) allRules of
         [] -> fail (failMsg nms)
-        rs -> liftM compileFold $ forM (map snd rs) $ \ r -> return r >>> ruleToEqualityT
+        rs -> liftM (compileFold . concatMap toEqualities)
+                $ forM (map snd rs) $ \ r -> return r >>> ruleToQuantifiedT
+
 
 -- | Return all in-scope CoreRules (including specialization RULES on binders), with their names.
 getHermitRulesT :: (HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Transform c m a [(RuleName, CoreRule)]
@@ -158,25 +160,23 @@ rulesHelpListT = do
     rulesEnv <- getHermitRulesT
     return (intercalate "\n" $ reverse $ map (show.fst) rulesEnv)
 
--- | Print a named CoreRule using the equality printer.
+-- | Print a named CoreRule using the quantified printer.
 ruleHelpT :: (HasCoreRules c, ReadBindings c, ReadPath c Crumb) => PrettyPrinter -> RuleName -> Transform c HermitM a DocH
-ruleHelpT pp nm = do
-    eq <- ruleNameToEqualityT nm
-    return eq >>> liftPrettyH (pOptions pp) (ppEqualityT pp)
+ruleHelpT pp nm = ruleNameToQuantifiedT nm >>> liftPrettyH (pOptions pp) (ppQuantifiedT pp)
 
--- | Build an Equality from a named GHC rewrite rule.
-ruleNameToEqualityT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitMEnv m
+-- | Build an Quantified from a named GHC rewrite rule.
+ruleNameToQuantifiedT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitMEnv m
                        , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
-                    => RuleName -> Transform c m a Equality
-ruleNameToEqualityT name = getHermitRuleT name >>> ruleToEqualityT
+                    => RuleName -> Transform c m a Quantified
+ruleNameToQuantifiedT name = getHermitRuleT name >>> ruleToQuantifiedT
 
--- | Transform GHC's CoreRule into an Equality.
-ruleToEqualityT :: (BoundVars c, HasHermitMEnv m, MonadThings m, MonadCatch m)
-                => Transform c m CoreRule Equality
-ruleToEqualityT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
+-- | Transform GHC's CoreRule into an Quantified.
+ruleToQuantifiedT :: (BoundVars c, HasHermitMEnv m, MonadThings m, MonadCatch m)
+                => Transform c m CoreRule Quantified
+ruleToQuantifiedT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
   do r@Rule{} <- idR -- other possibility is "BuiltinRule"
      f <- lookupId $ ru_fn r
-     return $ Equality (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
+     return $ mkQuantified (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
 
 ------------------------------------------------------------------------
 
@@ -234,6 +234,6 @@ specRules = crushtdT $ promoteBindT bindSpecRules
 rulesToRewrite :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                   , HasDynFlags m, HasHermitMEnv m, MonadCatch m, MonadThings m, MonadUnique m )
                => [CoreRule] -> Rewrite c m CoreExpr
-rulesToRewrite rs = catchesM [ (return r >>> ruleToEqualityT) >>= forwardT . birewrite | r <- rs ]
+rulesToRewrite rs = catchesM [ (return r >>> ruleToQuantifiedT) >>= forwardT . birewrite | r <- rs ]
 
 ------------------------------------------------------------------------

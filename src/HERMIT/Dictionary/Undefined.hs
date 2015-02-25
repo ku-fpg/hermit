@@ -28,10 +28,10 @@ import Data.String (fromString)
 
 import HERMIT.Context
 import HERMIT.Core
-import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC hiding ((<>))
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.Name
 
@@ -221,6 +221,6 @@ buildStrictnessLemmaT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasHermitMEnv
 buildStrictnessLemmaT nm f = do
     (tvs, lhs) <- liftM collectTyBinders $ applyToUndefinedT f
     rhs <- mkUndefinedValT (exprType lhs)
-    constT $ insertLemma nm $ Lemma (mkEquality tvs lhs rhs) False True
+    constT $ insertLemma nm $ Lemma (mkQuantified tvs lhs rhs) False True
 
 ------------------------------------------------------------------------

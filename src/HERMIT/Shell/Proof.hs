@@ -30,16 +30,15 @@ import qualified Data.Map as M
 import Data.String (fromString)
 
 import HERMIT.Core
-import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC hiding (settings, (<>), text, sep, (<+>), ($+$), nest)
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.Syntax
 import HERMIT.Utilities
 
-import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Induction
 import HERMIT.Dictionary.Reasoning hiding (externals)
 
@@ -69,9 +68,9 @@ proof_externals :: [External]
 proof_externals = map (.+ Proof)
     [ external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
         [ "Perform induction on given universally quantified variable."
-        , "Each constructor case will generate a new equality to be proven."
+        , "Each constructor case will generate a new lemma to be proven."
         ]
-    , external "dump" (\pp fp r w -> liftPrettyH (pOptions pp) (ppEqualityT pp) >>> dumpT fp pp r w)
+    , external "dump" (\pp fp r w -> promoteT (liftPrettyH (pOptions pp) (ppQuantifiedT pp)) >>> dumpT fp pp r w :: TransformH QC ())
         [ "dump <filename> <renderer> <width>" ]
     , external "end-proof" PCEnd
         [ "check for alpha-equality, marking the lemma as proven" ]
@@ -154,16 +153,19 @@ runExprH :: (MonadCatch m, MonadException m, CLMonad m) => ExprH -> m ()
 runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n")
               $ interpExprH interpProof expr >>= performProofShellCommand expr
 
-transformEq :: Equality -> [NamedLemma] -> TransformH Equality a -> TransformH Core a
-transformEq eq ls t = contextonlyT $ \ c -> withLemmas (M.fromList ls) (applyT t c eq)
+transformQ :: Quantified -> [NamedLemma] -> TransformH QC a -> TransformH Core a
+transformQ q ls t = contextonlyT $ \ c -> withLemmas (M.fromList ls) (applyT (extractT t) c q)
+
+rewriteQ :: Quantified -> [NamedLemma] -> RewriteH QC -> TransformH Core Quantified
+rewriteQ q ls rr = contextonlyT $ \ c -> withLemmas (M.fromList ls) (applyT (extractR rr) c q)
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 endProof expr = do
-    Unproven nm (Lemma eq _ _) ls temp : _ <- getProofStack
+    Unproven nm (Lemma q _ _) ls temp : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
-        t = verifyEqualityT >> unless temp (markLemmaProvedT nm)
-    queryInFocus (transformEq eq ls (setFailMsg msg t)) (Just $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
+        t = promoteT $ verifyQuantifiedT >> unless temp (markLemmaProvedT nm)
+    queryInFocus (transformQ q ls (setFailMsg msg t)) (Just $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
     cl_putStrLn $ "Successfully proven: " ++ show nm
 
@@ -177,17 +179,16 @@ performProofShellCommand expr = go
     where expr' = Just $ unparseExprH expr
           go (PCRewrite rr) = do
                 -- careful to only modify the lemma in the resulting AST
-                ast <- gets cl_cursor
-                todo@(Unproven nm (Lemma eq p u) ls t) <- popProofStack
-                eq' <- queryInFocus (transformEq eq ls $ rr >>> (bothT lintExprT >> idR)) expr'
-                pushProofStack $ Unproven nm (Lemma eq' p u) ls t
-                modify $ \ st -> st { cl_proofstack = M.insertWith (++) ast [todo] (cl_proofstack st) }
+                Unproven nm (Lemma q p u) ls t : todos <- getProofStack
+                q' <- queryInFocus (rewriteQ q ls $ rr >>> (promoteT lintQuantifiedT >> idR)) expr'
+                let todo = Unproven nm (Lemma q' p u) ls t
+                modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo:todos) (cl_proofstack st) }
           go (PCTransform t) = do
-                (_, Lemma eq _ _, ls) <- currentLemma
-                cl_putStrLn =<< queryInFocus (transformEq eq ls t) expr'
+                (_, Lemma q _ _, ls) <- currentLemma
+                cl_putStrLn =<< queryInFocus (transformQ q ls t) expr'
           go (PCUnit t) = do
-                (_, Lemma eq _ _, ls) <- currentLemma
-                queryInFocus (transformEq eq ls t) expr'
+                (_, Lemma q _ _, ls) <- currentLemma
+                queryInFocus (transformQ q ls t) expr'
           go (PCInduction idPred) = performInduction expr' idPred
           go (PCShell effect)     = performShellEffect effect
           go (PCScript effect)    = do
@@ -200,10 +201,9 @@ performProofShellCommand expr = go
                 let UserProofTechnique t = prf -- may add more constructors later
                 -- note: we assume that if 't' completes without failing,
                 -- the lemma is proved, we don't actually check
-                ast <- gets cl_cursor
-                todo@(Unproven nm (Lemma eq _ _) ls temp) <- popProofStack
-                queryInFocus (transformEq eq ls t >> unless temp (markLemmaProvedT nm)) expr'
-                modify $ \ st -> st { cl_proofstack = M.insertWith (++) ast [todo] (cl_proofstack st) }
+                Unproven nm (Lemma q _ _) ls temp : _ <- getProofStack
+                queryInFocus (transformQ q ls t >> unless temp (markLemmaProvedT nm)) expr'
+                _ <- popProofStack
                 cl_putStrLn $ "Successfully proven: " ++ show nm
           go PCEnd                = endProof expr
           go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.")
@@ -211,7 +211,7 @@ performProofShellCommand expr = go
 performInduction :: (MonadCatch m, MonadException m, CLMonad m)
                  => Maybe String -> (Id -> Bool) -> m ()
 performInduction expr idPred = do
-    (nm, Lemma eq@(Equality bs lhs rhs) _ _, ls) <- currentLemma
+    (nm, Lemma q@(Quantified bs (Equiv lhs rhs)) _ _, ls) <- currentLemma
     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $
          soleElement (filter idPred bs)
 
@@ -226,25 +226,24 @@ performInduction expr idPred = do
     forM_ (reverse cases) $ \ (mdc,vs,lhsE,rhsE) -> do
 
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
-            -- TODO rethink the remake.discardUniVars
-            remake (Equality bndrs l r) = mkEquality bndrs l r
             caseName = maybe "undefined" unqualifiedName mdc
 
         -- Generate list of specialized induction hypotheses for the recursive cases.
-        eqs <- forM vs_matching_i_type $ \ i' ->
-                    liftM (remake.discardUniVars) $ instantiateEqualityVar (==i) (Var i') [] eq
+        qs <- forM vs_matching_i_type $ \ i' -> do
+                liftM discardUniVars $ instantiateQuantifiedVar (==i) (Var i') [] q
+                -- TODO rethink the discardUniVars
 
         let nms = [ fromString ("ind-hyp-" ++ show n) | n :: Int <- [0..] ]
-            hypLemmas = zip nms $ zipWith3 Lemma eqs (repeat True) (repeat False)
+            hypLemmas = zip nms $ zipWith3 Lemma qs (repeat True) (repeat False)
             lemmaName = fromString $ show nm ++ "-induction-on-" ++ unqualifiedName i ++ "-case-" ++ caseName
-            caseLemma = Lemma (Equality (delete i bs ++ vs) lhsE rhsE) False False
+            caseLemma = Lemma (mkQuantified (delete i bs ++ vs) lhsE rhsE) False False
 
         pushProofStack $ Unproven lemmaName caseLemma (hypLemmas ++ ls) True
 
 data ProofShellCommand
-    = PCRewrite (RewriteH Equality)
-    | PCTransform (TransformH Equality String)
-    | PCUnit (TransformH Equality ())
+    = PCRewrite (RewriteH QC)
+    | PCTransform (TransformH QC String)
+    | PCUnit (TransformH QC ())
     | PCInduction (Id -> Bool)
     | PCShell ShellEffect
     | PCScript ScriptEffect
@@ -255,9 +254,10 @@ data ProofShellCommand
     deriving Typeable
 
 -- keep abstract to avoid breaking things if we modify this later
-newtype UserProofTechnique = UserProofTechnique (TransformH Equality ())
+newtype UserProofTechnique = UserProofTechnique (TransformH QC ())
+    deriving Typeable
 
-userProofTechnique :: TransformH Equality () -> UserProofTechnique
+userProofTechnique :: TransformH QC () -> UserProofTechnique
 userProofTechnique = UserProofTechnique
 
 instance Extern ProofShellCommand where
@@ -265,33 +265,24 @@ instance Extern ProofShellCommand where
     box i = i
     unbox i = i
 
-data UserProofTechniqueBox = UserProofTechniqueBox UserProofTechnique deriving Typeable
-
 instance Extern UserProofTechnique where
-    type Box UserProofTechnique = UserProofTechniqueBox
-    box = UserProofTechniqueBox
-    unbox (UserProofTechniqueBox t) = t
-
-data TransformEqualityUnitBox = TransformEqualityUnitBox (TransformH Equality ()) deriving Typeable
-
-instance Extern (TransformH Equality ()) where
-    type Box (TransformH Equality ()) = TransformEqualityUnitBox
-    box = TransformEqualityUnitBox
-    unbox (TransformEqualityUnitBox i) = i
+    type Box UserProofTechnique = UserProofTechnique
+    box i = i
+    unbox i = i
 
 interpProof :: Monad m => [Interp m ProofShellCommand]
 interpProof =
-  [ interp $ \ (RewriteCoreBox rr)            -> PCRewrite $ bothR $ extractR rr
-  , interp $ \ (RewriteCoreTCBox rr)          -> PCRewrite $ bothR $ extractR rr
-  , interp $ \ (BiRewriteCoreBox br)          -> PCRewrite $ bothR $ (extractR (forwardT br) <+ extractR (backwardT br))
+  [ interp $ \ (RewriteCoreBox rr)            -> PCRewrite $ promoteR $ bothQR $ core2qcR rr
+  , interp $ \ (RewriteCoreTCBox rr)          -> PCRewrite $ promoteR $ bothQR $ core2qcR $ extractR rr
+  , interp $ \ (BiRewriteCoreBox br)          -> PCRewrite $ promoteR $ bothQR $ core2qcR $ forwardT br <+ backwardT br
   , interp $ \ (effect :: ShellEffect)        -> PCShell effect
   , interp $ \ (effect :: ScriptEffect)       -> PCScript effect
   , interp $ \ (StringBox str)                -> PCQuery (message str)
   , interp $ \ (query :: QueryFun)            -> PCQuery query
-  , interp $ \ (RewriteEqualityBox r)         -> PCRewrite r
-  , interp $ \ (TransformEqualityStringBox t) -> PCTransform t
-  , interp $ \ (TransformEqualityUnitBox t)   -> PCUnit t
-  , interp $ \ (UserProofTechniqueBox t)      -> PCUser t
+  , interp $ \ (RewriteQCBox r)               -> PCRewrite r
+  , interp $ \ (TransformQCStringBox t)       -> PCTransform t
+  , interp $ \ (TransformQCUnitBox t)         -> PCUnit t
+  , interp $ \ (t :: UserProofTechnique)      -> PCUser t
   , interp $ \ (cmd :: ProofShellCommand)     -> cmd
   , interp $ \ (CrumbBox _cr)                 -> PCUnsupported "CrumbBox"
   , interp $ \ (PathBox _p)                   -> PCUnsupported "PathBox"

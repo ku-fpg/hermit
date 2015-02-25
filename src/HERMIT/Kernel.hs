@@ -36,10 +36,10 @@ import Data.Maybe (isJust)
 import Data.Typeable
 
 import HERMIT.Context
-import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC hiding (singleton, empty)
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Monad
 
 -- | A 'Kernel' is a repository for complete Core syntax trees ('ModGuts') and Lemmas.

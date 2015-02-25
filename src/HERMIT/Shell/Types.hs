@@ -31,11 +31,11 @@ import Data.Monoid (mempty)
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.Dictionary.Reasoning hiding (externals)
-import HERMIT.Kure
-import HERMIT.Equality
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
 import HERMIT.Kernel
+import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 import HERMIT.Syntax

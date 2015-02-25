@@ -18,10 +18,10 @@ import Data.Char
 import Data.Dynamic
 import qualified Data.Map as M
 
-import HERMIT.Equality
 import HERMIT.External
 import HERMIT.Kernel (AST)
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Name
 import HERMIT.Parser
 

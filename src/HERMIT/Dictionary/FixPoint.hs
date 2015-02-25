@@ -14,7 +14,6 @@ module HERMIT.Dictionary.FixPoint
     , isFixExprT
     ) where
 
-import Control.Applicative
 import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class

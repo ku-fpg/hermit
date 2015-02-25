@@ -1,6 +1,9 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 module HERMIT.Dictionary.Fold
     ( -- * Fold/Unfold Transformation
       externals
@@ -9,10 +12,14 @@ module HERMIT.Dictionary.Fold
     , runFoldR
       -- * Unlifted fold interface
     , fold, compileFold, runFold, CompiledFold
+      -- * Equality
+    , Equality(..)
+    , toEqualities
+    , flipEquality
+    , freeVarsEquality
     ) where
 
 import Control.Arrow
-import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
 
@@ -20,13 +27,14 @@ import Data.List (delete, (\\))
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, fromMaybe, maybeToList)
 import qualified Data.IntMap.Lazy as I
+import Data.Typeable
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.Name
 import HERMIT.Utilities
@@ -67,7 +75,7 @@ foldVarR md v = do
         Just depth -> do depth' <- varBindingDepthT v
                          guardMsg (depth == depth') "Specified binding depth does not match that of variable binding, this is probably a shadowing occurrence."
     (rhs,_) <- getUnfoldingT AllBinders <<< return v
-    transform $ \ c -> maybeM "no match." . fold [mkEquality [] rhs (varToCoreExpr v)] c
+    transform $ \ c -> maybeM "no match." . fold (toEqualities $ mkQuantified [] rhs (varToCoreExpr v)) c
 
 -- | Rewrite using a compiled fold. Useful inside traversal strategies like
 -- anytdR, because you can compile the fold once outside the traversal, then
@@ -445,3 +453,102 @@ instance Fold AMap where
                 m' <- maybeToList (lookupNameEnv (amData m) (getName d))
                 fFold hs (foldr extendAlphaEnv env bs) rhs m'
               go (LitAlt l , _ , rhs) = maybeToList (M.lookup l (amLit m)) >>= fFold hs env rhs
+
+----------------------------------------------------------------------------
+
+-- | An equality is represented as a set of universally quantified binders, and the LHS and RHS of the equality.
+data Equality = Equality [CoreBndr] CoreExpr CoreExpr
+
+-- | Build an equality from a list of universally quantified binders and two expressions.
+-- If the head of either expression is a lambda expression, it's binder will become a universally quantified binder
+-- over both sides. It is assumed the two expressions have the same type.
+--
+-- Ex.    mkEquality [] (\x. foo x) bar === forall x. foo x = bar x
+--        mkEquality [] (baz y z) (\x. foo x x) === forall x. baz y z x = foo x x
+--        mkEquality [] (\x. foo x) (\y. bar y) === forall x. foo x = bar x
+mkEquality :: [CoreBndr] -> CoreExpr -> CoreExpr -> Equality
+mkEquality vs lhs rhs = Equality (tvs++vs++lbs++rbs) lhs' rbody
+    where (lbs, lbody) = collectBinders lhs
+          rhs' = uncurry mkCoreApps $ betaReduceAll rhs $ map varToCoreExpr lbs
+          (rbs, rbody) = collectBinders rhs'
+          lhs' = mkCoreApps lbody $ map varToCoreExpr rbs
+          -- now quantify over the free type variables
+          tvs = varSetElems
+              $ filterVarSet isTyVar
+              $ freeVarsEquality
+              $ Equality (vs++lbs++rbs) lhs' rbody
+
+-- | TODO: temporary shim while we convert
+toEqualities :: Quantified -> [Equality]
+toEqualities = go []
+    where go qs (Quantified vs cl) = go2 (qs++vs) cl
+
+          go2 qs (Equiv e1 e2) = [mkEquality qs e1 e2]
+          go2 qs (Conj q1 q2)  = go qs q1 ++ go qs q2
+          go2 _  _             = []
+
+------------------------------------------------------------------------------
+
+-- | Flip the LHS and RHS of a 'Equality'.
+flipEquality :: Equality -> Equality
+flipEquality (Equality xs lhs rhs) = Equality xs rhs lhs
+
+------------------------------------------------------------------------------
+
+{-
+-- Idea: use Haskell's functions to fill the holes automagically
+--
+-- plusId <- findIdT "+"
+-- timesId <- findIdT "*"
+-- mkEquality $ \ x -> ( mkCoreApps (Var plusId)  [x,x]
+--                     , mkCoreApps (Var timesId) [Lit 2, x])
+--
+-- TODO: need to know type of 'x' to generate a variable.
+class BuildEquality a where
+    mkEquality :: a -> HermitM Equality
+
+instance BuildEquality (CoreExpr,CoreExpr) where
+    mkEquality :: (CoreExpr,CoreExpr) -> HermitM Equality
+    mkEquality (lhs,rhs) = return $ Equality [] lhs rhs
+
+instance BuildEquality a => BuildEquality (CoreExpr -> a) where
+    mkEquality :: (CoreExpr -> a) -> HermitM Equality
+    mkEquality f = do
+        x <- newIdH "x" (error "need to create a type")
+        Equality bnds lhs rhs <- mkEquality (f (varToCoreExpr x))
+        return $ Equality (x:bnds) lhs rhs
+-}
+
+------------------------------------------------------------------------------
+
+freeVarsEquality :: Equality -> VarSet
+freeVarsEquality (Equality bs lhs rhs) =
+    delVarSetList (unionVarSets (map freeVarsExpr [lhs,rhs])) bs
+
+------------------------------------------------------------------------------
+
+data RewriteEqualityBox = RewriteEqualityBox (RewriteH Equality) deriving Typeable
+
+instance Extern (RewriteH Equality) where
+    type Box (RewriteH Equality) = RewriteEqualityBox
+    box = RewriteEqualityBox
+    unbox (RewriteEqualityBox r) = r
+
+-----------------------------------------------------------------
+
+data TransformEqualityStringBox = TransformEqualityStringBox (TransformH Equality String) deriving Typeable
+
+instance Extern (TransformH Equality String) where
+    type Box (TransformH Equality String) = TransformEqualityStringBox
+    box = TransformEqualityStringBox
+    unbox (TransformEqualityStringBox t) = t
+
+-----------------------------------------------------------------
+
+data TransformEqualityUnitBox = TransformEqualityUnitBox (TransformH Equality ()) deriving Typeable
+
+instance Extern (TransformH Equality ()) where
+    type Box (TransformH Equality ()) = TransformEqualityUnitBox
+    box = TransformEqualityUnitBox
+    unbox (TransformEqualityUnitBox i) = i
+

@@ -206,13 +206,13 @@ Library
        HERMIT.Dictionary.WorkerWrapper.Fix
        HERMIT.Dictionary.WorkerWrapper.FixResult
 
-       HERMIT.Equality
        HERMIT.External
        HERMIT.GHC
        HERMIT.GHC.Typechecker
        HERMIT.Kernel
        HERMIT.Kure
        HERMIT.Kure.SumTypes
+       HERMIT.Lemma
        HERMIT.Monad
        HERMIT.Name
        HERMIT.Parser

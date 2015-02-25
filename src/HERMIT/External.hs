@@ -35,7 +35,7 @@ module HERMIT.External
     , RewriteCoreBox(..)
     , RewriteCoreListBox(..)
     , RewriteCoreTCBox(..)
-    , RewriteEqualityBox(..)
+    , RewriteQCBox(..)
     , StringBox(..)
     , StringListBox(..)
     , TagBox(..)
@@ -45,7 +45,8 @@ module HERMIT.External
     , TransformCoreTCCheckBox(..)
     , TransformCoreTCPathBox(..)
     , TransformCoreTCStringBox(..)
-    , TransformEqualityStringBox(..)
+    , TransformQCStringBox(..)
+    , TransformQCUnitBox(..)
     ) where
 
 import Data.Map hiding (map)
@@ -55,8 +56,8 @@ import Data.Typeable.Internal (TypeRep(..), funTc)
 
 import HERMIT.Core
 import HERMIT.Context (LocalPathH)
-import HERMIT.Equality
 import HERMIT.Kure
+import HERMIT.Lemma
 
 -----------------------------------------------------------------
 
@@ -457,20 +458,29 @@ instance Extern LemmaName where
 
 -----------------------------------------------------------------
 
-data RewriteEqualityBox = RewriteEqualityBox (RewriteH Equality) deriving Typeable
+data RewriteQCBox = RewriteQCBox (RewriteH QC) deriving Typeable
 
-instance Extern (RewriteH Equality) where
-    type Box (RewriteH Equality) = RewriteEqualityBox
-    box = RewriteEqualityBox
-    unbox (RewriteEqualityBox r) = r
+instance Extern (RewriteH QC) where
+    type Box (RewriteH QC) = RewriteQCBox
+    box = RewriteQCBox
+    unbox (RewriteQCBox r) = r
 
 -----------------------------------------------------------------
 
-data TransformEqualityStringBox = TransformEqualityStringBox (TransformH Equality String) deriving Typeable
+data TransformQCStringBox = TransformQCStringBox (TransformH QC String) deriving Typeable
 
-instance Extern (TransformH Equality String) where
-    type Box (TransformH Equality String) = TransformEqualityStringBox
-    box = TransformEqualityStringBox
-    unbox (TransformEqualityStringBox t) = t
+instance Extern (TransformH QC String) where
+    type Box (TransformH QC String) = TransformQCStringBox
+    box = TransformQCStringBox
+    unbox (TransformQCStringBox t) = t
+
+-----------------------------------------------------------------
+
+data TransformQCUnitBox = TransformQCUnitBox (TransformH QC ()) deriving Typeable
+
+instance Extern (TransformH QC ()) where
+    type Box (TransformH QC ()) = TransformQCUnitBox
+    box = TransformQCUnitBox
+    unbox (TransformQCUnitBox t) = t
 
 -----------------------------------------------------------------

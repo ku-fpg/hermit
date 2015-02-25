@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -12,7 +13,6 @@ module HERMIT.Dictionary.Reasoning
     ( -- * Equational Reasoning
       externals
     , EqualityProof
-    , flipEquality
     , eqLhsIntroR
     , eqRhsIntroR
     , birewrite
@@ -27,6 +27,15 @@ module HERMIT.Dictionary.Reasoning
     , modifyLemmaT
     , showLemmasT
     , ppLemmaT
+    , ppQuantifiedT
+    , core2qcT
+    , core2qcR
+    , lhsQT
+    , rhsQT
+    , bothQT
+    , lhsQR
+    , rhsQR
+    , bothQR
     -- ** Lifting transformations over 'Equality'
     , lhsT
     , rhsT
@@ -35,9 +44,8 @@ module HERMIT.Dictionary.Reasoning
     , lhsR
     , rhsR
     , bothR
-    , ppEqualityT
-    , proveEqualityT
-    , verifyEqualityT
+    , verifyQuantifiedT
+    , lintQuantifiedT
     , verifyEqualityLeftToRightT
     , verifyEqualityCommonTargetT
     , verifyIsomorphismT
@@ -46,9 +54,9 @@ module HERMIT.Dictionary.Reasoning
     , alphaEqualityR
     , unshadowEqualityR
     , instantiateDictsR
-    , instantiateEquality
-    , instantiateEqualityVar
-    , instantiateEqualityVarR
+    , instantiateQuantified
+    , instantiateQuantifiedVar
+    , instantiateQuantifiedVarR
     , discardUniVars
       -- ** Remembering definitions.
     , prefixRemembered
@@ -59,7 +67,6 @@ module HERMIT.Dictionary.Reasoning
     , compileRememberedT
     ) where
 
-import           Control.Applicative
 import           Control.Arrow hiding ((<+>))
 import           Control.Monad
 
@@ -70,10 +77,10 @@ import           Data.Monoid
 
 import           HERMIT.Context
 import           HERMIT.Core
-import           HERMIT.Equality
 import           HERMIT.External
 import           HERMIT.GHC hiding ((<>), (<+>), nest, ($+$))
 import           HERMIT.Kure
+import           HERMIT.Lemma
 import           HERMIT.Monad
 import           HERMIT.Name
 import           HERMIT.ParserCore
@@ -114,7 +121,7 @@ externals =
     , external "lemma-rhs-intro" (lemmaRhsIntroR :: LemmaName -> RewriteH Core)
         [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
-    , external "inst-lemma" (\ nm v cs -> modifyLemmaT nm id (instantiateEqualityVarR (cmpString2Var v) cs) id id :: TransformH Core ())
+    , external "inst-lemma" (\ nm v cs -> modifyLemmaT nm id (instantiateQuantifiedVarR (cmpString2Var v) cs) id id :: TransformH Core ())
         [ "Instantiate one of the universally quantified variables of the given lemma,"
         , "with the given Core expression, creating a new lemma. Instantiating an"
         , "already proven lemma will result in the new lemma being considered proven." ]
@@ -123,31 +130,31 @@ externals =
         , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
     , external "copy-lemma" (\ nm newName -> modifyLemmaT nm (const newName) idR id id :: TransformH Core ())
         [ "Copy a given lemma, with a new name." ]
-    , external "modify-lemma" (\ nm rr -> modifyLemmaT nm id rr (const False) (const False) :: TransformH Core ())
+    , external "modify-lemma" ((\ nm rr -> modifyLemmaT nm id (extractR rr) (const False) (const False)) :: LemmaName -> RewriteH QC -> TransformH Core ())
         [ "Modify a given lemma. Resets the proven status to Not Proven and used status to Not Used." ]
-    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaEq >>> t) :: LemmaName -> TransformH Equality String -> TransformH Core String)
+    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaQ >>> extractT t) :: LemmaName -> TransformH QC String -> TransformH Core String)
         [ "Apply a transformation to a lemma, returning the result." ]
     , external "show-lemma" ((\pp n -> showLemmasT (Just n) pp) :: PrettyPrinter -> LemmaName -> PrettyH Core)
         [ "List lemmas whose names match search string." ]
     , external "show-lemmas" (showLemmasT Nothing :: PrettyPrinter -> PrettyH Core)
         [ "List lemmas." ]
-    , external "extensionality" (extensionalityR . Just :: String -> RewriteH Equality)
+    , external "extensionality" (promoteR . extensionalityR . Just :: String -> RewriteH QC)
         [ "Given a name 'x, then"
         , "f == g  ==>  forall x.  f x == g x" ]
-    , external "extensionality" (extensionalityR Nothing :: RewriteH Equality)
+    , external "extensionality" (promoteR (extensionalityR Nothing) :: RewriteH QC)
         [ "f == g  ==>  forall x.  f x == g x" ]
-    , external "lhs" (lhsR . extractR :: RewriteH Core -> RewriteH Equality)
-        [ "Apply a rewrite to the LHS of an equality." ]
-    , external "lhs" (lhsT . extractT :: TransformH CoreTC String -> TransformH Equality String)
-        [ "Apply a transformation to the LHS of an equality." ]
-    , external "rhs" (rhsR . extractR :: RewriteH Core -> RewriteH Equality)
-        [ "Apply a rewrite to the RHS of an equality." ]
-    , external "rhs" (rhsT . extractT :: TransformH CoreTC String -> TransformH Equality String)
-        [ "Apply a transformation to the RHS of an equality." ]
-    , external "both" (bothR . extractR :: RewriteH Core -> RewriteH Equality)
+    , external "lhs" (promoteR . lhsQR . core2qcR :: RewriteH Core -> RewriteH QC)
+        [ "Apply a rewrite to the LHS of a quantified clause." ]
+    , external "lhs" (promoteT . lhsQT . core2qcT . extractT :: TransformH CoreTC String -> TransformH QC String)
+        [ "Apply a transformation to the LHS of a quantified clause." ]
+    , external "rhs" (promoteR . rhsQR . core2qcR :: RewriteH Core -> RewriteH QC)
+        [ "Apply a rewrite to the RHS of a quantified clause." ]
+    , external "rhs" (promoteT . rhsQT . core2qcT . extractT :: TransformH CoreTC String -> TransformH QC String)
+        [ "Apply a transformation to the RHS of a quantified clause." ]
+    , external "both" (promoteR . bothQR . core2qcR :: RewriteH Core -> RewriteH QC)
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
-    , external "both" ((\t -> liftM (\(r,s) -> unlines [r,s]) (bothT (extractT t))) :: TransformH CoreTC String -> TransformH Equality String)
-        [ "Apply a transformation to the RHS of an equality." ]
+    , external "both" ((\t -> do (r,s) <- promoteT (bothQT (core2qcT (extractT t))); return (unlines [r,s])) :: TransformH CoreTC String -> TransformH QC String)
+        [ "Apply a transformation to both sides of a quantified clause." ]
     , external "remember" (rememberR :: LemmaName -> TransformH Core ())
         [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
     , external "unfold-remembered" (promoteExprR . unfoldRememberedR :: LemmaName -> RewriteH Core)
@@ -162,12 +169,18 @@ externals =
 
 ------------------------------------------------------------------------------
 
+core2qcT :: forall c m a. Monad m => Transform c m Core a -> Transform c m QC a
+core2qcT t = promoteT (extractT t :: Transform c m CoreExpr a)
+
+core2qcR :: forall c m. Monad m => Rewrite c m Core -> Rewrite c m QC
+core2qcR rr = promoteR (extractR rr :: Rewrite c m CoreExpr)
+
 type EqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
 
 -- | f == g  ==>  forall x.  f x == g x
-extensionalityR :: Maybe String -> Rewrite c HermitM Equality
+extensionalityR :: Maybe String -> Rewrite c HermitM Quantified
 extensionalityR mn = prefixFailMsg "extensionality failed: " $
-  do Equality vs lhs rhs <- idR
+  do Quantified vs (Equiv lhs rhs) <- idR
 
      let tyL = exprKindOrType lhs
          tyR = exprKindOrType rhs
@@ -179,31 +192,28 @@ extensionalityR mn = prefixFailMsg "extensionality failed: " $
 
      let x = varToCoreExpr v
 
-     return $ Equality (vs ++ [v]) (mkCoreApp lhs x) (mkCoreApp rhs x)
+     return $ Quantified (vs ++ [v]) $ Equiv (mkCoreApp lhs x) (mkCoreApp rhs x)
 
 ------------------------------------------------------------------------------
 
 -- | @e@ ==> @let v = lhs in e@
-eqLhsIntroR :: Equality -> Rewrite c HermitM Core
-eqLhsIntroR (Equality bs lhs _) = nonRecIntroR "lhs" (mkCoreLams bs lhs)
+eqLhsIntroR :: Quantified -> Rewrite c HermitM Core
+eqLhsIntroR (Quantified bs (Equiv lhs _)) = nonRecIntroR "lhs" (mkCoreLams bs lhs)
 
 -- | @e@ ==> @let v = rhs in e@
-eqRhsIntroR :: Equality -> Rewrite c HermitM Core
-eqRhsIntroR (Equality bs _ rhs) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
+eqRhsIntroR :: Quantified -> Rewrite c HermitM Core
+eqRhsIntroR (Quantified bs (Equiv _ rhs)) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
 
 ------------------------------------------------------------------------------
 
--- | Create a 'BiRewrite' from a 'Equality'.
---
--- The high level idea: create a temporary function with two definitions.
--- Fold one of the defintions, then immediately unfold the other.
+-- | Create a 'BiRewrite' from a 'Quantified'.
 birewrite :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
              , ReadPath c Crumb, MonadCatch m, MonadUnique m )
-          => Equality -> BiRewrite c m CoreExpr
-birewrite (Equality bs l r) = bidirectional (foldUnfold "left" l r) (foldUnfold "right" r l)
-    where foldUnfold side lhs rhs = transform $ \ c ->
-                                        maybeM ("expression did not match "++side++"-hand side")
-                                        . fold [Equality bs lhs rhs] c -- See Note [Equality]
+          => Quantified -> BiRewrite c m CoreExpr
+birewrite q = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)
+    where foldUnfold side f = transform $ \ c ->
+                                maybeM ("expression did not match "++side++"-hand side")
+                                . fold (map f (toEqualities q)) c -- See Note [Equality]
 
 -- Note [Equality]
 --
@@ -221,10 +231,6 @@ rhsT t = idR >>= \ (Equality vs _ rhs) -> return rhs >>> withVarsInScope vs t
 -- | Lift a transformation over 'CoreExpr' into a transformation over both sides of a 'Equality'.
 bothT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m Equality (b,b)
 bothT t = liftM2 (,) (lhsT t) (rhsT t) -- Can't wait for Applicative to be a superclass of Monad
-
--- | Lift a transformation over '[Var]' into a transformation over the universally quantified variables of a 'Equality'.
-forallVarsT :: Monad m => Transform c m [Var] b -> Transform c m Equality b
-forallVarsT t = idR >>= \ (Equality vs _ _) -> return vs >>> t
 
 -- | Lift a rewrite over 'CoreExpr' into a rewrite over the left-hand side of a 'Equality'.
 lhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m Equality
@@ -246,6 +252,66 @@ bothR r = lhsR r >+> rhsR r
 
 ------------------------------------------------------------------------------
 
+-- | Lift a transformation over 'QC' into a transformation over the left-hand side of a 'Quantified'.
+lhsQT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified a
+lhsQT t = quantifiedT successT (clauseT t successT (\_ l _ -> l)) (flip const)
+
+-- | Lift a transformation over 'QC' into a transformation over the right-hand side of a 'Quantified'.
+rhsQT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified a
+rhsQT t = quantifiedT successT (clauseT successT t (\_ _ r -> r)) (flip const)
+
+-- | Lift a transformation over 'QC' into a transformation over both sides of a 'Quantified'.
+bothQT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified (a, a)
+bothQT t = quantifiedT successT (clauseT t t (const (,))) (flip const)
+
+-- | Lift a rewrite over 'QC' into a rewrite over the left-hand side of a 'Quantified'.
+lhsQR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m QC -> Rewrite c m Quantified
+lhsQR r = quantifiedR (clauseR r idR)
+
+-- | Lift a rewrite over 'QC' into a rewrite over the right-hand side of a 'Quantified'.
+rhsQR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m QC -> Rewrite c m Quantified
+rhsQR r = quantifiedR (clauseR idR r)
+
+-- | Lift a rewrite over 'QC' into a rewrite over both sides of a 'Quantified'.
+bothQR :: (AddBindings c, MonadCatch m, ReadPath c Crumb)
+      => Rewrite c m QC -> Rewrite c m Quantified
+bothQR r = lhsQR r >+> rhsQR r
+
+------------------------------------------------------------------------------
+
+-- | Lift a transformation over 'Clause' into a transformation over a 'Quantified'.
+quantifiedT :: (AddBindings c, Monad m, ReadPath c Crumb)
+            => Transform c m [Var] a -> Transform c m Clause b -> (a -> b -> d) -> Transform c m Quantified d
+quantifiedT tvs tc f = do
+    Quantified vs cl <- idR
+    f <$> (return vs >>> tvs) <*> (return cl >>> withVarsInScope vs tc)
+
+quantifiedR :: (AddBindings c, ReadPath c Crumb, Monad m) => Rewrite c m Clause -> Rewrite c m Quantified
+quantifiedR rr = quantifiedT idR rr Quantified
+
+-- | Original clause passed to function so it can decide how to handle connective.
+clauseT :: Monad m => Transform c m QC a -> Transform c m QC b -> (Clause -> a -> b -> d) -> Transform c m Clause d
+clauseT t1 t2 f =
+    readerT $ \ cl -> case cl of
+        Conj  q1 q2 -> f cl <$> (return q1 >>> extractT t1) <*> (return q2 >>> extractT t2)
+        Disj  q1 q2 -> f cl <$> (return q1 >>> extractT t1) <*> (return q2 >>> extractT t2)
+        Impl  q1 q2 -> f cl <$> (return q1 >>> extractT t1) <*> (return q2 >>> extractT t2)
+        Equiv e1 e2 -> f cl <$> (return e1 >>> extractT t1) <*> (return e2 >>> extractT t2)
+
+clauseR :: Monad m => Rewrite c m QC -> Rewrite c m QC -> Rewrite c m Clause
+clauseR r1 r2 =
+    readerT $ \ cl -> case cl of
+        Conj  q1 q2 -> Conj  <$> (return q1 >>> extractR r1) <*> (return q2 >>> extractR r2)
+        Disj  q1 q2 -> Disj  <$> (return q1 >>> extractR r1) <*> (return q2 >>> extractR r2)
+        Impl  q1 q2 -> Impl  <$> (return q1 >>> extractR r1) <*> (return q2 >>> extractR r2)
+        Equiv q1 q2 -> Equiv <$> (return q1 >>> extractR r1) <*> (return q2 >>> extractR r2)
+
+-- | Lift a transformation over '[Var]' into a transformation over the universally quantified variables of a 'Quantified'.
+forallVarsT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m [Var] b -> Transform c m Quantified b
+forallVarsT t = quantifiedT t successT const
+
+------------------------------------------------------------------------------
+
 showLemmasT :: Maybe LemmaName -> PrettyPrinter -> PrettyH a
 showLemmasT mnm pp = do
     ls <- getLemmasT
@@ -255,36 +321,57 @@ showLemmasT mnm pp = do
 
 ppLemmaT :: PrettyPrinter -> LemmaName -> PrettyH Lemma
 ppLemmaT pp nm = do
-    Lemma eq p u <- idR
-    eqDoc <- return eq >>> ppEqualityT pp
+    Lemma q p u <- idR
+    qDoc <- return q >>> ppQuantifiedT pp
     let hDoc = PP.text (show nm) PP.<+> PP.text (if p then "(Proven)" else "(Not Proven)")
                                  PP.<+> PP.text (if u then "(Used)"   else "(Not Used)")
-    return $ hDoc PP.$+$ PP.nest 2 eqDoc
+    return $ hDoc PP.$+$ PP.nest 2 qDoc
 
-ppEqualityT :: PrettyPrinter -> PrettyH Equality
-ppEqualityT pp = do
-    d1 <- forallVarsT $ pForall pp
-    (d2,d3) <- bothT $ extractT $ pCoreTC pp
-    return $ PP.sep [d1,d2,syntaxColor (PP.text "="),d3]
+ppQuantifiedT :: PrettyPrinter -> PrettyH Quantified
+ppQuantifiedT pp = do
+    (d1,d2) <- quantifiedT (pForall pp) (ppClauseT pp) (,)
+    return $ PP.sep [d1,d2]
+
+ppClauseT :: PrettyPrinter -> PrettyH Clause
+ppClauseT pp = do
+    let t = promoteT (ppQuantifiedT pp) <+ promoteT (extractT (pCoreTC pp) :: PrettyH CoreExpr)
+    (d1,d2,oper) <- clauseT t t (\ cl d1 d2 -> (d1,d2,  syntaxColor
+                                                      $ PP.text
+                                                      $ case cl of
+                                                            Conj {}  -> "^"
+                                                            Disj {}  -> "v"
+                                                            Impl {}  -> "=>"
+                                                            Equiv {} -> "="))
+
+    return $ PP.sep [d1,oper,d2]
 
 ------------------------------------------------------------------------------
 
 -- TODO: everything between here and instantiateDictsR needs to be rethought/removed
 
--- | Verify that a 'Equality' holds, by applying a rewrite to each side, and checking that the results are equal.
-proveEqualityT :: forall c m. (AddBindings c, Monad m, ReadPath c Crumb)
-                        => EqualityProof c m -> Transform c m Equality ()
-proveEqualityT (l,r) = lhsR l >>> rhsR r >>> verifyEqualityT
+verifyQuantifiedT :: (AddBindings c, ReadPath c Crumb, MonadCatch m) => Transform c m Quantified ()
+verifyQuantifiedT = quantifiedT successT verifyClauseT (flip const)
 
--- | Verify that the left- and right-hand sides of a 'Equality' are alpha equivalent.
-verifyEqualityT :: Monad m => Transform c m Equality ()
-verifyEqualityT = do
-    Equality _ lhs rhs <- idR
-    guardMsg (exprAlphaEq lhs rhs) "the two sides of the equality do not match."
+verifyClauseT :: (AddBindings c, ReadPath c Crumb, MonadCatch m) => Transform c m Clause ()
+verifyClauseT =
+    readerT (\case Conj  q1 q2 -> (return q1 >>> verifyQuantifiedT) >> (return q2 >>> verifyQuantifiedT)
+                   Disj  q1 q2 -> (return q1 >>> verifyQuantifiedT) <+ (return q2 >>> verifyQuantifiedT)
+                   Impl  _  _  -> fail "verifyClauseT: Impl TODO"
+                   Equiv e1 e2 -> guardMsg (exprAlphaEq e1 e2) "the two sides of the equality do not match.")
+
+lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m)
+                => Transform c m Quantified String
+lintQuantifiedT = quantifiedT successT lintClauseT (flip const)
+
+lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m) => Transform c m Clause String
+lintClauseT = do
+    let t = promoteT lintQuantifiedT <+ promoteT lintExprT
+    (w1,w2) <- clauseT t t (const (,))
+    return $ unlines [w1,w2]
 
 ------------------------------------------------------------------------------
 
--- TODO: are these other functions used? If so, can they be rewritten in terms of lhsR and rhsR as above?
+-- TODO: this is used in century plugin, but otherwise should be removed
 
 -- | Given two expressions, and a rewrite from the former to the latter, verify that rewrite.
 verifyEqualityLeftToRightT :: MonadCatch m => CoreExpr -> CoreExpr -> Rewrite c m CoreExpr -> Transform c m a ()
@@ -354,7 +441,7 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 ------------------------------------------------------------------------------
 
 -- TODO: revisit this for binder re-ordering issue
-instantiateDictsR :: RewriteH Equality
+instantiateDictsR :: RewriteH Quantified
 instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
     bs <- forallVarsT idR
     let dArgs = filter (\b -> isId b && isDictTy (varType b)) bs
@@ -378,7 +465,7 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
                 if b `elem` uniqDs
                 then return $ lookup3 b ds
                 else buildSubst b
-    contextfreeT $ instantiateEquality allDs
+    contextfreeT $ instantiateQuantified allDs
 
 ------------------------------------------------------------------------------
 
@@ -405,12 +492,12 @@ unshadowEqualityR = prefixFailMsg "Unshadowing equality failed: " $ do
     ss <- varSetElems <$> detectShadowsM bs visible
     guardMsg (not (null ss)) "no shadows to eliminate."
     let f = freshNameGenAvoiding Nothing . extendVarSet visible
-    andR [ alphaEqualityR (==s) (f s) | s <- reverse ss ] >>> bothR (tryR unshadowExprR)
+    andR [ alphaEqualityR (==s) (f s) | s <- reverse ss ] >>> bothR (promoteR (tryR unshadowExprR))
 
 ------------------------------------------------------------------------------
 
-instantiateEqualityVarR :: (Var -> Bool) -> CoreString -> RewriteH Equality
-instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
+instantiateQuantifiedVarR :: (Var -> Bool) -> CoreString -> RewriteH Quantified
+instantiateQuantifiedVarR p cs = prefixFailMsg "instantiation failed: " $ do
     bs <- forallVarsT idR
     (e,new) <- case filter p bs of
                 [] -> fail "no universally quantified variables match predicate."
@@ -419,9 +506,7 @@ instantiateEqualityVarR p cs = prefixFailMsg "instantiation failed: " $ do
                       | otherwise -> do let (before,_) = break (==b) bs
                                         (ty, tvs) <- withVarsInScope before $ parseTypeWithHolesT cs
                                         return (Type ty, tvs)
-    eq <- contextfreeT $ instantiateEqualityVar p e new
-    (_,_) <- return eq >>> bothT lintExprT -- sanity check
-    return eq
+    contextfreeT (instantiateQuantifiedVar p e new) >>> (lintQuantifiedT >> idR) -- lint for sanity
 
 ------------------------------------------------------------------------------
 
@@ -434,7 +519,7 @@ getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm)
 lemmaR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
           , HasLemmas m, MonadCatch m, MonadUnique m)
        => LemmaName -> BiRewrite c m CoreExpr
-lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaEq)) (markLemmaUsedT nm >> idR)
+lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaQ)) (markLemmaUsedT nm >> idR)
 
 ------------------------------------------------------------------------------
 
@@ -447,14 +532,14 @@ insertLemmasT = constT . mapM_ (uncurry insertLemma)
 modifyLemmaT :: (HasLemmas m, Monad m)
              => LemmaName
              -> (LemmaName -> LemmaName) -- ^ modify lemma name
-             -> Rewrite c m Equality     -- ^ rewrite the equality
+             -> Rewrite c m Quantified   -- ^ rewrite the quantified clause
              -> (Bool -> Bool)           -- ^ modify proven status
              -> (Bool -> Bool)           -- ^ modify used status
              -> Transform c m a ()
 modifyLemmaT nm nFn rr pFn uFn = do
-    Lemma eq p u <- getLemmaByNameT nm
-    eq' <- rr <<< return eq
-    constT $ insertLemma (nFn nm) $ Lemma eq' (pFn p) (uFn u)
+    Lemma q p u <- getLemmaByNameT nm
+    q' <- rr <<< return q
+    constT $ insertLemma (nFn nm) $ Lemma q' (pFn p) (uFn u)
 
 markLemmaUsedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
 markLemmaUsedT nm = modifyLemmaT nm id idR id (const True)
@@ -463,16 +548,16 @@ markLemmaProvedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
 markLemmaProvedT nm = modifyLemmaT nm id idR (const True) id
 ------------------------------------------------------------------------------
 
-lemmaNameToEqualityT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Equality
-lemmaNameToEqualityT nm = liftM lemmaEq $ getLemmaByNameT nm
+lemmaNameToQuantifiedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Quantified
+lemmaNameToQuantifiedT nm = liftM lemmaQ $ getLemmaByNameT nm
 
 -- | @e@ ==> @let v = lhs in e@  (also works in a similar manner at Program nodes)
 lemmaLhsIntroR :: LemmaName -> RewriteH Core
-lemmaLhsIntroR = lemmaNameToEqualityT >=> eqLhsIntroR
+lemmaLhsIntroR = lemmaNameToQuantifiedT >=> eqLhsIntroR
 
 -- | @e@ ==> @let v = rhs in e@  (also works in a similar manner at Program nodes)
 lemmaRhsIntroR :: LemmaName -> RewriteH Core
-lemmaRhsIntroR = lemmaNameToEqualityT >=> eqRhsIntroR
+lemmaRhsIntroR = lemmaNameToQuantifiedT >=> eqRhsIntroR
 
 ------------------------------------------------------------------------------
 
@@ -484,7 +569,7 @@ rememberR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasLemmas m, 
           => LemmaName -> Transform c m Core ()
 rememberR nm = prefixFailMsg "remember failed: " $ do
     Def v e <- setFailMsg "not applied to a binding." $ defOrNonRecT idR idR Def
-    insertLemmaT (prefixRemembered nm) $ Lemma (mkEquality [] (varToCoreExpr v) e) True False
+    insertLemmaT (prefixRemembered nm) $ Lemma (mkQuantified [] (varToCoreExpr v) e) True False
 
 -- | Unfold a remembered definition (like unfoldR, but looks in stash instead of context).
 unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
@@ -508,5 +593,5 @@ foldAnyRememberedR = setFailMsg "Fold failed: no definitions could be folded."
 -- | Compile all remembered definitions into something that can be run with `runFoldR`
 compileRememberedT :: (HasLemmas m, Monad m) => Transform c m x CompiledFold
 compileRememberedT = do
-    eqs <- liftM (map lemmaEq . Map.elems . Map.filterWithKey (\ k _ -> "remembered-" `isPrefixOf` show k)) getLemmasT
-    return $ compileFold $ map flipEquality eqs -- fold rhs to lhs
+    qs <- liftM (map lemmaQ . Map.elems . Map.filterWithKey (\ k _ -> "remembered-" `isPrefixOf` show k)) getLemmasT
+    return $ compileFold $ concatMap (map flipEquality . toEqualities) qs -- fold rhs to lhs

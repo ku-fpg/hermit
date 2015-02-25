@@ -16,16 +16,15 @@ module HERMIT.Dictionary.WorkerWrapper.FixResult
 
 import Prelude hiding (abs)
 
-import Control.Applicative
 import Control.Arrow
 
 import Data.String (fromString)
 
 import HERMIT.Core
-import HERMIT.Equality
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.Name
 import HERMIT.ParserCore
@@ -225,13 +224,13 @@ wwResultFusionBR :: BiRewriteH CoreExpr
 wwResultFusionBR =
     beforeBiR (prefixFailMsg "worker/wrapper fusion failed: " $
                withPatFailMsg "malformed WW Fusion rule." $
-               do Equality _ w
+               do Quantified _ (Equiv w
                         (Lam x1 (App rep
                                      (App (App _ (Lam x2 (App abs (App w' (Var x2')))))
                                           (Var x1')
                                      )
                                 )
-                        ) <- constT (lemmaEq <$> findLemma workLabel)
+                        )) <- constT (lemmaQ <$> findLemma workLabel)
                   guardMsg (exprSyntaxEq w w' && x1 == x1' && x2 == x2') "malformed WW Fusion rule."
                   return (abs,rep,w)
               )
@@ -277,7 +276,7 @@ wwResultGenerateFusionT mAss =
                ) <- projectT
        guardMsg (w == w' && x1 == x1' && x2 == x2') wrongForm
        whenJust (verifyWWAss abs rep f) mAss
-       insertLemmaT workLabel $ Lemma (Equality [] (varToCoreExpr w) e) True False
+       insertLemmaT workLabel $ Lemma (Quantified [] (Equiv (varToCoreExpr w) e)) True False
   where
     wrongForm = "definition does not have the form: work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)"
 

@@ -11,10 +11,10 @@ import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 
-import HERMIT.Equality
-import HERMIT.Kure
 import HERMIT.External
 import HERMIT.Kernel
+import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Parser
 import HERMIT.Plugin.Renderer
 import HERMIT.PrettyPrinter.Common

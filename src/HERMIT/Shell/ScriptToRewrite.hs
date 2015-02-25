@@ -16,7 +16,6 @@ module HERMIT.Shell.ScriptToRewrite
     ) where
 
 import Control.Arrow
-import Control.Monad (liftM)
 import Control.Monad.Error.Class (catchError, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State (MonadState, gets, modify)
@@ -250,9 +249,3 @@ addScriptToDict nm scr = do
 
 -----------------------------------
 
--- I find it annoying that Functor is not a superclass of Monad.
-(<$>) :: Monad m => (a -> b) -> m a -> m b
-(<$>) = liftM
-{-# INLINE (<$>) #-}
-
------------------------------------
