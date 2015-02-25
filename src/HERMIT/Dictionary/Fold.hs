@@ -467,16 +467,8 @@ data Equality = Equality [CoreBndr] CoreExpr CoreExpr
 --        mkEquality [] (baz y z) (\x. foo x x) === forall x. baz y z x = foo x x
 --        mkEquality [] (\x. foo x) (\y. bar y) === forall x. foo x = bar x
 mkEquality :: [CoreBndr] -> CoreExpr -> CoreExpr -> Equality
-mkEquality vs lhs rhs = Equality (tvs++vs++lbs++rbs) lhs' rbody
-    where (lbs, lbody) = collectBinders lhs
-          rhs' = uncurry mkCoreApps $ betaReduceAll rhs $ map varToCoreExpr lbs
-          (rbs, rbody) = collectBinders rhs'
-          lhs' = mkCoreApps lbody $ map varToCoreExpr rbs
-          -- now quantify over the free type variables
-          tvs = varSetElems
-              $ filterVarSet isTyVar
-              $ freeVarsEquality
-              $ Equality (vs++lbs++rbs) lhs' rbody
+mkEquality vs lhs rhs = case mkQuantified vs lhs rhs of
+                            Quantified vs' (Equiv lhs' rhs') -> Equality vs' lhs' rhs'
 
 -- | TODO: temporary shim while we convert
 toEqualities :: Quantified -> [Equality]
