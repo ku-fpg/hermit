@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -53,22 +52,14 @@ module HERMIT.Dictionary.Reasoning
     , instantiateQuantifiedVar
     , instantiateQuantifiedVarR
     , discardUniVars
-      -- ** Remembering definitions.
-    , prefixRemembered
-    , rememberR
-    , unfoldRememberedR
-    , foldRememberedR
-    , foldAnyRememberedR
-    , compileRememberedT
     ) where
 
 import           Control.Arrow hiding ((<+>))
 import           Control.Monad
 
 import qualified Data.Map as Map
-import           Data.List (isInfixOf, isPrefixOf, nubBy)
+import           Data.List (isInfixOf, nubBy)
 import           Data.Maybe (fromMaybe)
-import           Data.Monoid
 
 import           HERMIT.Context
 import           HERMIT.Core
@@ -151,17 +142,6 @@ externals =
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
     , external "both" ((\t -> do (r,s) <- promoteT (bothT (core2qcT (extractT t))); return (unlines [r,s])) :: TransformH CoreTC String -> TransformH QC String)
         [ "Apply a transformation to both sides of a quantified clause." ]
--------------------------------------------------------------------------------
-    , external "remember" (rememberR :: LemmaName -> TransformH Core ())
-        [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
-    , external "unfold-remembered" (promoteExprR . unfoldRememberedR :: LemmaName -> RewriteH Core)
-        [ "Unfold a remembered definition." ] .+ Deep .+ Context
-    , external "fold-remembered" (promoteExprR . foldRememberedR :: LemmaName -> RewriteH Core)
-        [ "Fold a remembered definition." ]                      .+ Context .+ Deep
-    , external "fold-any-remembered" (promoteExprR foldAnyRememberedR :: RewriteH Core)
-        [ "Attempt to fold any of the remembered definitions." ] .+ Context .+ Deep
-    , external "show-remembered" (showLemmasT (Just "remembered-") :: PrettyPrinter -> PrettyH Core)
-        [ "Display all remembered definitions." ]
     ]
 
 ------------------------------------------------------------------------------
@@ -565,38 +545,3 @@ lemmaRhsIntroR :: LemmaName -> RewriteH Core
 lemmaRhsIntroR = lemmaNameToQuantifiedT >=> eqRhsIntroR
 
 ------------------------------------------------------------------------------
-
-prefixRemembered :: LemmaName -> LemmaName
-prefixRemembered = ("remembered-" <>)
-
--- | Remember a binding with a name for later use. Allows us to look at past definitions.
-rememberR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasLemmas m, MonadCatch m)
-          => LemmaName -> Transform c m Core ()
-rememberR nm = prefixFailMsg "remember failed: " $ do
-    Def v e <- setFailMsg "not applied to a binding." $ defOrNonRecT idR idR Def
-    insertLemmaT (prefixRemembered nm) $ Lemma (mkQuantified [] (varToCoreExpr v) e) True False
-
--- | Unfold a remembered definition (like unfoldR, but looks in stash instead of context).
-unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-                     , HasLemmas m, MonadCatch m, MonadUnique m)
-                  => LemmaName -> Rewrite c m CoreExpr
-unfoldRememberedR = prefixFailMsg "Unfolding remembered definition failed: " . forwardT . lemmaR . prefixRemembered
-
--- | Fold a remembered definition (like foldR, but looks in stash instead of context).
-foldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-                   , HasLemmas m, MonadCatch m, MonadUnique m)
-                => LemmaName -> Rewrite c m CoreExpr
-foldRememberedR = prefixFailMsg "Folding remembered definition failed: " . backwardT . lemmaR . prefixRemembered
-
--- | Fold any of the remembered definitions.
-foldAnyRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-                      , HasLemmas m, MonadCatch m, MonadUnique m)
-                   => Rewrite c m CoreExpr
-foldAnyRememberedR = setFailMsg "Fold failed: no definitions could be folded."
-                   $ compileRememberedT >>= runFoldR
-
--- | Compile all remembered definitions into something that can be run with `runFoldR`
-compileRememberedT :: (HasLemmas m, Monad m) => Transform c m x CompiledFold
-compileRememberedT = do
-    qs <- liftM (map lemmaQ . Map.elems . Map.filterWithKey (\ k _ -> "remembered-" `isPrefixOf` show k)) getLemmasT
-    return $ compileFold $ concatMap (map flipEquality . toEqualities) qs -- fold rhs to lhs
