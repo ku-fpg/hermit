@@ -45,7 +45,6 @@ module HERMIT.Dictionary.Reasoning
     , verifyIsomorphismT
     , verifyRetractionT
     , retractionBR
-    , alphaEqualityR
     , unshadowQuantifiedR
     , instantiateDictsR
     , instantiateQuantified
@@ -94,8 +93,6 @@ externals =
         , "f (g y) <==> y."
         , "Note that the precondition (f (g y) == y) is expected to hold."
         ] .+ Shallow .+ PreCondition
-    , external "alpha-equality" ((\ nm newName -> alphaEqualityR (cmpString2Var nm) (const newName)))
-        [ "Alpha-rename a universally quantified variable." ]
     , external "unshadow" (promoteR unshadowQuantifiedR :: RewriteH QC)
         [ "Unshadow a quantified clause." ]
     , external "lemma" (promoteExprBiR . lemmaR :: LemmaName -> BiRewriteH Core)
@@ -190,12 +187,7 @@ birewrite :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBinding
 birewrite q = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)
     where foldUnfold side f = transform $ \ c ->
                                 maybeM ("expression did not match "++side++"-hand side")
-                                . fold (map f (toEqualities q)) c -- See Note [Equality]
-
--- Note [Equality]
---
--- We assume that the Equality argument to birewrite is well-formed. That is,
--- the lhs and rhs are NOT lambda expressions. Use mkEquality to ensure this.
+                                . fold (map f (toEqualities q)) c
 
 ------------------------------------------------------------------------------
 
@@ -417,23 +409,6 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
                 then return $ lookup3 b ds
                 else buildSubst b
     contextfreeT $ instantiateQuantified allDs
-
-------------------------------------------------------------------------------
-
-alphaEqualityR :: (Var -> Bool) -> (String -> String) -> RewriteH Equality
-alphaEqualityR p f = prefixFailMsg "Alpha-renaming binder in equality failed: " $ do
-    Equality bs lhs rhs <- idR
-    guardMsg (any p bs) "specified variable is not universally quantified."
-
-    let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
-    i' <- constT $ cloneVarH f i
-
-    let inS           = delVarSetList (unionVarSets (map localFreeVarsExpr [lhs, rhs] ++ map freeVarsVar vs)) (i:i':vs)
-        subst         = extendSubst (mkEmptySubst (mkInScopeSet inS)) i (varToCoreExpr i')
-        (subst', vs') = substBndrs subst vs
-        lhs'          = substExpr (text "coreExprEquality-lhs") subst' lhs
-        rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
-    return $ Equality (bs'++(i':vs')) lhs' rhs'
 
 ------------------------------------------------------------------------------
 
