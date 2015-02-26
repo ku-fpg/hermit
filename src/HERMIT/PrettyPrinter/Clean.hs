@@ -266,6 +266,12 @@ ppTyCon = getName ^>> ppName TypeColor
 ppTyConCo :: PrettyH TyCon
 ppTyConCo = getName ^>> ppName CoercionColor
 
+ppDetailedVar :: PrettyH Var
+ppDetailedVar = do
+    p <- absPathT
+    (v,ty) <- ppVar &&& (varType ^>> ppKindOrType)
+    return $ cleanParens p $ v <+> typeOfSymbol p <+> ty
+
 -- binders are vars that is bound by lambda or case, etc.
 -- depending on the mode, they might not be displayed
 ppBinderMode :: PrettyH Var
@@ -276,15 +282,19 @@ ppBinderMode = do p    <- absPathT
                      | isTyVar v -> case po_exprTypes opts of
                                                            Omit     -> return empty
                                                            Abstract -> return (typeBindSymbol p)
+                                                           Detailed -> ppDetailedVar
                                                            _        -> ppVar
                      | isCoVar v -> case po_coercions opts of
                                                            Omit     -> return empty
                                                            Abstract -> return (coercionBindSymbol p)
+                                                           Detailed -> ppDetailedVar
                                                            Show     -> ppVar
                                                            Kind     -> do pCoKind <- ppCoKind <<^ CoVarCo
                                                                           return $ cleanParens p (coercionBindSymbol p <+> typeOfSymbol p <+> pCoKind)
                                                           -- TODO: refactor this to be more systematic.  It should be possible to request type sigs for all type bindings.
-                     | otherwise       -> ppVar
+                     | otherwise -> case po_exprTypes opts of
+                                        Detailed -> ppDetailedVar
+                                        _        -> ppVar
 
 ppModGuts :: PrettyH ModGuts
 ppModGuts = do p    <- absPathT
@@ -425,8 +435,8 @@ ppCoercionModeR = do p    <- absPathT
                      case po_coercions opts of
                        Omit     -> return RetEmpty
                        Abstract -> return (RetAtom $ coercionSymbol p)
-                       Show     -> ppCoercionR
                        Kind     -> ppCoKind >>^ (\ k -> RetExpr (coercionSymbol p <+> coTypeSymbol p <+> k))
+                       _        -> ppCoercionR
 
 ppCoercionR :: Transform PrettyC HermitM Coercion RetExpr
 ppCoercionR = absPathT >>= ppCoercionPR

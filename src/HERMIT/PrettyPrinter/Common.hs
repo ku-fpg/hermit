@@ -233,7 +233,7 @@ data PrettyOptions = PrettyOptions
         , po_width           :: Int
         } deriving Show
 
-data ShowOption = Show | Abstract | Omit | Kind deriving (Eq, Ord, Show, Read)
+data ShowOption = Show | Abstract | Detailed | Omit | Kind deriving (Eq, Ord, Show, Read)
 
 -- Types don't have a Kind showing option.
 updateTypeShowOption :: ShowOption -> PrettyOptions -> PrettyOptions
