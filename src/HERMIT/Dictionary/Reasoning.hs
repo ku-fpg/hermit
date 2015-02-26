@@ -25,6 +25,7 @@ module HERMIT.Dictionary.Reasoning
     , markLemmaUsedT
     , markLemmaProvedT
     , modifyLemmaT
+    , showLemmaT
     , showLemmasT
     , ppLemmaT
     , ppQuantifiedT
@@ -134,7 +135,9 @@ externals =
         [ "Modify a given lemma. Resets the proven status to Not Proven and used status to Not Used." ]
     , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaQ >>> extractT t) :: LemmaName -> TransformH QC String -> TransformH Core String)
         [ "Apply a transformation to a lemma, returning the result." ]
-    , external "show-lemma" ((\pp n -> showLemmasT (Just n) pp) :: PrettyPrinter -> LemmaName -> PrettyH Core)
+    , external "show-lemma" ((\pp n -> showLemmaT n pp) :: PrettyPrinter -> LemmaName -> PrettyH Core)
+        [ "Display a lemma." ]
+    , external "show-lemmas" ((\pp n -> showLemmasT (Just n) pp) :: PrettyPrinter -> LemmaName -> PrettyH Core)
         [ "List lemmas whose names match search string." ]
     , external "show-lemmas" (showLemmasT Nothing :: PrettyPrinter -> PrettyH Core)
         [ "List lemmas." ]
@@ -318,6 +321,9 @@ showLemmasT mnm pp = do
     let ls' = Map.toList $ Map.filterWithKey (maybe (\ _ _ -> True) (\ nm n _ -> show nm `isInfixOf` show n) mnm) ls
     ds <- forM ls' $ \(nm,l) -> return l >>> ppLemmaT pp nm
     return $ PP.vcat ds
+
+showLemmaT :: LemmaName -> PrettyPrinter -> PrettyH a
+showLemmaT nm pp = getLemmaByNameT nm >>> ppLemmaT pp nm
 
 ppLemmaT :: PrettyPrinter -> LemmaName -> PrettyH Lemma
 ppLemmaT pp nm = do

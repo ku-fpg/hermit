@@ -63,8 +63,7 @@ externals =
         [ "Apply a named GHC rule left-to-right." ] .+ Shallow
     , external "unfold-rules" (promoteExprR . unfoldRulesR :: [RuleName] -> RewriteH Core)
         [ "Apply named GHC rules left-to-right, succeed if any of the rules succeed" ] .+ Shallow
-    , external "rule-to-lemma" (\nm -> do q <- ruleNameToQuantifiedT nm
-                                          insertLemmaT (fromString (show nm)) $ Lemma q False False :: TransformH Core ())
+    , external "rule-to-lemma" ((\pp nm -> ruleToLemmaT nm >> liftPrettyH (pOptions pp) (showLemmaT (fromString (show nm)) pp)) :: PrettyPrinter -> RuleName -> TransformH Core DocH)
         [ "Create a lemma from a GHC RULE." ]
     , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
         [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
@@ -177,6 +176,13 @@ ruleToQuantifiedT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
   do r@Rule{} <- idR -- other possibility is "BuiltinRule"
      f <- lookupId $ ru_fn r
      return $ mkQuantified (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
+
+ruleToLemmaT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitMEnv m, HasLemmas m
+                , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
+             => RuleName -> Transform c m a ()
+ruleToLemmaT nm = do
+    q <- ruleNameToQuantifiedT nm
+    insertLemmaT (fromString (show nm)) $ Lemma q False False
 
 ------------------------------------------------------------------------
 
