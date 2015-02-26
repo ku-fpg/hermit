@@ -29,22 +29,16 @@ module HERMIT.Dictionary.Reasoning
     , showLemmasT
     , ppLemmaT
     , ppQuantifiedT
+      -- ** Lifting transformations over 'Quantified'
     , core2qcT
     , core2qcR
-    , lhsQT
-    , rhsQT
-    , bothQT
-    , lhsQR
-    , rhsQR
-    , bothQR
-    -- ** Lifting transformations over 'Equality'
     , lhsT
     , rhsT
     , bothT
-    , forallVarsT
     , lhsR
     , rhsR
     , bothR
+    , forallVarsT
     , verifyQuantifiedT
     , lintQuantifiedT
     , verifyEqualityLeftToRightT
@@ -145,17 +139,17 @@ externals =
         , "f == g  ==>  forall x.  f x == g x" ]
     , external "extensionality" (promoteR (extensionalityR Nothing) :: RewriteH QC)
         [ "f == g  ==>  forall x.  f x == g x" ]
-    , external "lhs" (promoteR . lhsQR . core2qcR :: RewriteH Core -> RewriteH QC)
+    , external "lhs" (promoteR . lhsR . core2qcR :: RewriteH Core -> RewriteH QC)
         [ "Apply a rewrite to the LHS of a quantified clause." ]
-    , external "lhs" (promoteT . lhsQT . core2qcT . extractT :: TransformH CoreTC String -> TransformH QC String)
+    , external "lhs" (promoteT . lhsT . core2qcT . extractT :: TransformH CoreTC String -> TransformH QC String)
         [ "Apply a transformation to the LHS of a quantified clause." ]
-    , external "rhs" (promoteR . rhsQR . core2qcR :: RewriteH Core -> RewriteH QC)
+    , external "rhs" (promoteR . rhsR . core2qcR :: RewriteH Core -> RewriteH QC)
         [ "Apply a rewrite to the RHS of a quantified clause." ]
-    , external "rhs" (promoteT . rhsQT . core2qcT . extractT :: TransformH CoreTC String -> TransformH QC String)
+    , external "rhs" (promoteT . rhsT . core2qcT . extractT :: TransformH CoreTC String -> TransformH QC String)
         [ "Apply a transformation to the RHS of a quantified clause." ]
-    , external "both" (promoteR . bothQR . core2qcR :: RewriteH Core -> RewriteH QC)
+    , external "both" (promoteR . bothR . core2qcR :: RewriteH Core -> RewriteH QC)
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
-    , external "both" ((\t -> do (r,s) <- promoteT (bothQT (core2qcT (extractT t))); return (unlines [r,s])) :: TransformH CoreTC String -> TransformH QC String)
+    , external "both" ((\t -> do (r,s) <- promoteT (bothT (core2qcT (extractT t))); return (unlines [r,s])) :: TransformH CoreTC String -> TransformH QC String)
         [ "Apply a transformation to both sides of a quantified clause." ]
 -------------------------------------------------------------------------------
     , external "remember" (rememberR :: LemmaName -> TransformH Core ())
@@ -223,62 +217,32 @@ birewrite q = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEqual
 -- We assume that the Equality argument to birewrite is well-formed. That is,
 -- the lhs and rhs are NOT lambda expressions. Use mkEquality to ensure this.
 
--- | Lift a transformation over 'CoreExpr' into a transformation over the left-hand side of a 'Equality'.
-lhsT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m Equality b
-lhsT t = idR >>= \ (Equality vs lhs _) -> return lhs >>> withVarsInScope vs t
-
--- | Lift a transformation over 'CoreExpr' into a transformation over the right-hand side of a 'Equality'.
-rhsT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m Equality b
-rhsT t = idR >>= \ (Equality vs _ rhs) -> return rhs >>> withVarsInScope vs t
-
--- | Lift a transformation over 'CoreExpr' into a transformation over both sides of a 'Equality'.
-bothT :: (AddBindings c, Monad m, ReadPath c Crumb) => Transform c m CoreExpr b -> Transform c m Equality (b,b)
-bothT t = liftM2 (,) (lhsT t) (rhsT t) -- Can't wait for Applicative to be a superclass of Monad
-
--- | Lift a rewrite over 'CoreExpr' into a rewrite over the left-hand side of a 'Equality'.
-lhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m Equality
-lhsR r = do
-    Equality vs lhs rhs <- idR
-    lhs' <- withVarsInScope vs r <<< return lhs
-    return $ Equality vs lhs' rhs
-
--- | Lift a rewrite over 'CoreExpr' into a rewrite over the right-hand side of a 'Equality'.
-rhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m Equality
-rhsR r = do
-    Equality vs lhs rhs <- idR
-    rhs' <- withVarsInScope vs r <<< return rhs
-    return $ Equality vs lhs rhs'
-
--- | Lift a rewrite over 'CoreExpr' into a rewrite over both sides of a 'Equality'.
-bothR :: (AddBindings c, MonadCatch m, ReadPath c Crumb) => Rewrite c m CoreExpr -> Rewrite c m Equality
-bothR r = lhsR r >+> rhsR r
-
 ------------------------------------------------------------------------------
 
 -- | Lift a transformation over 'QC' into a transformation over the left-hand side of a 'Quantified'.
-lhsQT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified a
-lhsQT t = quantifiedT successT (clauseT t successT (\_ l _ -> l)) (flip const)
+lhsT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified a
+lhsT t = quantifiedT successT (clauseT t successT (\_ l _ -> l)) (flip const)
 
 -- | Lift a transformation over 'QC' into a transformation over the right-hand side of a 'Quantified'.
-rhsQT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified a
-rhsQT t = quantifiedT successT (clauseT successT t (\_ _ r -> r)) (flip const)
+rhsT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified a
+rhsT t = quantifiedT successT (clauseT successT t (\_ _ r -> r)) (flip const)
 
 -- | Lift a transformation over 'QC' into a transformation over both sides of a 'Quantified'.
-bothQT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified (a, a)
-bothQT t = quantifiedT successT (clauseT t t (const (,))) (flip const)
+bothT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified (a, a)
+bothT t = quantifiedT successT (clauseT t t (const (,))) (flip const)
 
 -- | Lift a rewrite over 'QC' into a rewrite over the left-hand side of a 'Quantified'.
-lhsQR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m QC -> Rewrite c m Quantified
-lhsQR r = quantifiedR (clauseR r idR)
+lhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m QC -> Rewrite c m Quantified
+lhsR r = quantifiedR (clauseR r idR)
 
 -- | Lift a rewrite over 'QC' into a rewrite over the right-hand side of a 'Quantified'.
-rhsQR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m QC -> Rewrite c m Quantified
-rhsQR r = quantifiedR (clauseR idR r)
+rhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m QC -> Rewrite c m Quantified
+rhsR r = quantifiedR (clauseR idR r)
 
 -- | Lift a rewrite over 'QC' into a rewrite over both sides of a 'Quantified'.
-bothQR :: (AddBindings c, MonadCatch m, ReadPath c Crumb)
+bothR :: (AddBindings c, MonadCatch m, ReadPath c Crumb)
       => Rewrite c m QC -> Rewrite c m Quantified
-bothQR r = lhsQR r >+> rhsQR r
+bothR r = lhsR r >+> rhsR r
 
 ------------------------------------------------------------------------------
 
@@ -353,8 +317,6 @@ ppClauseT pp = do
 
 ------------------------------------------------------------------------------
 
--- TODO: everything between here and instantiateDictsR needs to be rethought/removed
-
 verifyQuantifiedT :: (AddBindings c, ReadPath c Crumb, MonadCatch m) => Transform c m Quantified ()
 verifyQuantifiedT = quantifiedT successT verifyClauseT (flip const)
 
@@ -365,6 +327,7 @@ verifyClauseT =
                    Impl  _  _  -> fail "verifyClauseT: Impl TODO"
                    Equiv e1 e2 -> guardMsg (exprAlphaEq e1 e2) "the two sides of the equality do not match.")
 
+-- TODO: doesn't catch lint errors in the quantifiers
 lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m)
                 => Transform c m Quantified String
 lintQuantifiedT = quantifiedT successT lintClauseT (flip const)
@@ -376,6 +339,8 @@ lintClauseT = do
     return $ unlines [w1,w2]
 
 ------------------------------------------------------------------------------
+
+-- TODO: everything between here and instantiateDictsR needs to be rethought/removed
 
 -- TODO: this is used in century plugin, but otherwise should be removed
 
@@ -489,6 +454,8 @@ alphaEqualityR p f = prefixFailMsg "Alpha-renaming binder in equality failed: " 
         lhs'          = substExpr (text "coreExprEquality-lhs") subst' lhs
         rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
     return $ Equality (bs'++(i':vs')) lhs' rhs'
+
+------------------------------------------------------------------------------
 
 unshadowQuantifiedR :: MonadUnique m => Rewrite c m Quantified
 unshadowQuantifiedR = contextfreeT unshadowQuantified

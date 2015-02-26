@@ -272,9 +272,9 @@ instance Extern UserProofTechnique where
 
 interpProof :: Monad m => [Interp m ProofShellCommand]
 interpProof =
-  [ interp $ \ (RewriteCoreBox rr)            -> PCRewrite $ promoteR $ bothQR $ core2qcR rr
-  , interp $ \ (RewriteCoreTCBox rr)          -> PCRewrite $ promoteR $ bothQR $ core2qcR $ extractR rr
-  , interp $ \ (BiRewriteCoreBox br)          -> PCRewrite $ promoteR $ bothQR $ core2qcR $ forwardT br <+ backwardT br
+  [ interp $ \ (RewriteCoreBox rr)            -> PCRewrite $ promoteR $ bothR $ core2qcR rr
+  , interp $ \ (RewriteCoreTCBox rr)          -> PCRewrite $ promoteR $ bothR $ core2qcR $ extractR rr
+  , interp $ \ (BiRewriteCoreBox br)          -> PCRewrite $ promoteR $ bothR $ core2qcR $ forwardT br <+ backwardT br
   , interp $ \ (effect :: ShellEffect)        -> PCShell effect
   , interp $ \ (effect :: ScriptEffect)       -> PCScript effect
   , interp $ \ (StringBox str)                -> PCQuery (message str)
