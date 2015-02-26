@@ -53,7 +53,7 @@ module HERMIT.Dictionary.Reasoning
     , verifyRetractionT
     , retractionBR
     , alphaEqualityR
-    , unshadowEqualityR
+    , unshadowQuantifiedR
     , instantiateDictsR
     , instantiateQuantified
     , instantiateQuantifiedVar
@@ -89,7 +89,6 @@ import           HERMIT.ParserType
 import           HERMIT.PrettyPrinter.Common
 import           HERMIT.Utilities
 
-import           HERMIT.Dictionary.AlphaConversion hiding (externals)
 import           HERMIT.Dictionary.Common
 import           HERMIT.Dictionary.Fold hiding (externals)
 import           HERMIT.Dictionary.GHC hiding (externals)
@@ -112,8 +111,8 @@ externals =
         ] .+ Shallow .+ PreCondition
     , external "alpha-equality" ((\ nm newName -> alphaEqualityR (cmpString2Var nm) (const newName)))
         [ "Alpha-rename a universally quantified variable." ]
-    , external "unshadow-equality" unshadowEqualityR
-        [ "Unshadow an equality." ]
+    , external "unshadow" (promoteR unshadowQuantifiedR :: RewriteH QC)
+        [ "Unshadow a quantified clause." ]
     , external "lemma" (promoteExprBiR . lemmaR :: LemmaName -> BiRewriteH Core)
         [ "Generate a bi-directional rewrite from a lemma." ]
     , external "lemma-lhs-intro" (lemmaLhsIntroR :: LemmaName -> RewriteH Core)
@@ -158,6 +157,7 @@ externals =
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
     , external "both" ((\t -> do (r,s) <- promoteT (bothQT (core2qcT (extractT t))); return (unlines [r,s])) :: TransformH CoreTC String -> TransformH QC String)
         [ "Apply a transformation to both sides of a quantified clause." ]
+-------------------------------------------------------------------------------
     , external "remember" (rememberR :: LemmaName -> TransformH Core ())
         [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
     , external "unfold-remembered" (promoteExprR . unfoldRememberedR :: LemmaName -> RewriteH Core)
@@ -490,15 +490,47 @@ alphaEqualityR p f = prefixFailMsg "Alpha-renaming binder in equality failed: " 
         rhs'          = substExpr (text "coreExprEquality-rhs") subst' rhs
     return $ Equality (bs'++(i':vs')) lhs' rhs'
 
-unshadowEqualityR :: RewriteH Equality
-unshadowEqualityR = prefixFailMsg "Unshadowing equality failed: " $ do
-    c@(Equality bs _ _) <- idR
-    bvs <- boundVarsT
-    let visible = unionVarSets [bvs , freeVarsEquality c]
-    ss <- varSetElems <$> detectShadowsM bs visible
-    guardMsg (not (null ss)) "no shadows to eliminate."
-    let f = freshNameGenAvoiding Nothing . extendVarSet visible
-    andR [ alphaEqualityR (==s) (f s) | s <- reverse ss ] >>> bothR (promoteR (tryR unshadowExprR))
+unshadowQuantifiedR :: MonadUnique m => Rewrite c m Quantified
+unshadowQuantifiedR = contextfreeT unshadowQuantified
+
+unshadowQuantified :: MonadUnique m => Quantified -> m Quantified
+unshadowQuantified q = go emptySubst (mapUniqSet fs (freeVarsQuantified q)) q
+    where fs = occNameFS . getOccName
+
+          go subst seen (Quantified bs cl) = go1 subst seen bs [] cl
+
+          go1 subst seen []     bs' cl = do
+            cl' <- go2 subst seen cl
+            return $ Quantified (reverse bs') cl'
+          go1 subst seen (b:bs) bs' cl
+            | fsb `elementOfUniqSet` seen = do
+                b'' <- cloneVarFSH (inventNames seen) b'
+                go1 (extendSubst subst' b' (varToCoreExpr b'')) (addOneToUniqSet seen (fs b'')) bs (b'':bs') cl
+            | otherwise = go1 subst' (addOneToUniqSet seen fsb) bs (b':bs') cl
+                where fsb = fs b'
+                      (subst', b') = substBndr subst b
+
+          go2 subst seen (Conj q1 q2) = do
+            q1' <- go subst seen q1
+            q2' <- go subst seen q2
+            return $ Conj q1' q2'
+          go2 subst seen (Disj q1 q2) = do
+            q1' <- go subst seen q1
+            q2' <- go subst seen q2
+            return $ Disj q1' q2'
+          go2 subst seen (Impl q1 q2) = do
+            q1' <- go subst seen q1
+            q2' <- go subst seen q2
+            return $ Impl q1' q2'
+          go2 subst _ (Equiv e1 e2) =
+            let e1' = substExpr (text "unshadowQuantified e1") subst e1
+                e2' = substExpr (text "unshadowQuantified e2") subst e2
+            in return $ Equiv e1' e2'
+
+inventNames :: UniqSet FastString -> FastString -> FastString
+inventNames s nm = head [ nm' | i :: Int <- [0..]
+                              , let nm' = nm `appendFS` (mkFastString (show i))
+                              , not (nm' `elementOfUniqSet` s) ]
 
 ------------------------------------------------------------------------------
 

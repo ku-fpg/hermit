@@ -33,6 +33,7 @@ module HERMIT.Name
     , newCoVarH
     , newVarH
     , cloneVarH
+    , cloneVarFSH
       -- * Name Lookup
     , findId
     , findVar
@@ -327,33 +328,25 @@ nameToNamed n | isVarName n     = liftM NamedId $ lookupId n
               | isTyVarName n   = fail "nameToNamed: impossible, TyVars are not exported and cannot be looked up."
               | otherwise       = fail "nameToNamed: unknown name type"
 
--- Someday, when Applicative is a superclass of monad, we can uncomment the
--- nicer applicative definitions. For now, we don't want the extra constraint.
-
 -- | Make a 'Name' from a string.
 newName :: MonadUnique m => String -> m Name
-newName nm = getUniqueM >>= return . flip mkSystemVarName (mkFastString nm)
--- newName nm = mkSystemVarName <$> getUniqueM <*> pure (mkFastString nm)
+newName nm = mkSystemVarName <$> getUniqueM <*> return (mkFastString nm)
 
 -- | Make a unique global identifier for a specified type, using a provided name.
 newGlobalIdH :: MonadUnique m => String -> Type -> m Id
-newGlobalIdH nm ty = newName nm >>= return . flip mkVanillaGlobal ty
--- newGlobalIdH nm ty = mkVanillaGlobal <$> newName nm <*> pure ty
+newGlobalIdH nm ty = mkVanillaGlobal <$> newName nm <*> return ty
 
 -- | Make a unique identifier for a specified type, using a provided name.
 newIdH :: MonadUnique m => String -> Type -> m Id
-newIdH nm ty = newName nm >>= return . flip mkLocalId ty
--- newIdH nm ty = mkLocalId <$> newName nm <*> pure ty
+newIdH nm ty = mkLocalId <$> newName nm <*> return ty
 
 -- | Make a unique type variable for a specified kind, using a provided name.
 newTyVarH :: MonadUnique m => String -> Kind -> m TyVar
-newTyVarH nm k = newName nm >>= return . flip mkTyVar k
--- newTyVarH nm k = mkTyVar <$> newName nm <*> pure k
+newTyVarH nm k = mkTyVar <$> newName nm <*> return k
 
 -- | Make a unique coercion variable for a specified type, using a provided name.
 newCoVarH :: MonadUnique m => String -> Type -> m TyVar
-newCoVarH nm ty = newName nm >>= return . flip mkCoVar ty
--- newCoVarH nm ty = mkCoVar <$> newName nm <*> pure ty
+newCoVarH nm ty = mkCoVar <$> newName nm <*> return ty
 
 -- TODO: not sure if the predicates are correct.
 -- | Experimental, use at your own risk.
@@ -370,4 +363,14 @@ cloneVarH nameMod v | isTyVar v = newTyVarH name ty
                     | otherwise = fail "If this variable isn't a type, coercion or identifier, then what is it?"
   where
     name = nameMod (unqualifiedName v)
+    ty   = varType v
+
+-- | Make a new variable of the same type, with a modified textual name.
+cloneVarFSH :: MonadUnique m => (FastString -> FastString) -> Var -> m Var
+cloneVarFSH nameMod v | isTyVar v = newTyVarH name ty
+                      | isCoVar v = newCoVarH name ty
+                      | isId v    = newIdH name ty
+                      | otherwise = fail "If this variable isn't a type, coercion or identifier, then what is it?"
+  where
+    name = unpackFS $ nameMod $ occNameFS $ getOccName v
     ty   = varType v

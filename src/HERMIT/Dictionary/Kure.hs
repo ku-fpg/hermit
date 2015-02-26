@@ -35,6 +35,8 @@ externals = map (.+ KURE)
        [ "Compose rewrites, requiring both to succeed." ]
    , external ">>>"        ((>>>) :: BiRewriteH Core -> BiRewriteH Core -> BiRewriteH Core)
        [ "Compose bidirectional rewrites, requiring both to succeed." ]
+   , external ">>>"        ((>>>) :: RewriteH QC -> RewriteH QC -> RewriteH QC)
+       [ "Compose rewrites, requiring both to succeed." ]
    , external ">+>"        ((>+>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "Compose rewrites, allowing one to fail." ]
    , external "try"        (tryR :: RewriteH Core -> RewriteH Core)
