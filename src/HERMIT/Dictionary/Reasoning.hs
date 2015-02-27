@@ -318,7 +318,6 @@ verifyClauseT =
                    Impl  _  _  -> fail "verifyClauseT: Impl TODO"
                    Equiv e1 e2 -> guardMsg (exprAlphaEq e1 e2) "the two sides of the equality do not match.")
 
--- TODO: doesn't catch lint errors in the quantifiers
 lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m)
                 => Transform c m Quantified String
 lintQuantifiedT = lintQuantifiedWorkT []
