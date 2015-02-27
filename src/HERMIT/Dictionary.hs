@@ -16,6 +16,7 @@ module HERMIT.Dictionary
     , module HERMIT.Dictionary.New
     , module HERMIT.Dictionary.Query
     , module HERMIT.Dictionary.Reasoning
+    , module HERMIT.Dictionary.Remembered
     , module HERMIT.Dictionary.Rules
     , module HERMIT.Dictionary.Undefined
     , module HERMIT.Dictionary.Unfold
@@ -57,6 +58,8 @@ import           HERMIT.Dictionary.Query hiding (externals)
 import qualified HERMIT.Dictionary.Query as Query
 import           HERMIT.Dictionary.Reasoning hiding (externals)
 import qualified HERMIT.Dictionary.Reasoning as Reasoning
+import           HERMIT.Dictionary.Remembered hiding (externals)
+import qualified HERMIT.Dictionary.Remembered as Remembered
 import           HERMIT.Dictionary.Rules hiding (externals)
 import qualified HERMIT.Dictionary.Rules as Rules
 import           HERMIT.Dictionary.Undefined hiding (externals)
@@ -96,6 +99,7 @@ externals =
     ++ New.externals
     ++ Query.externals
     ++ Reasoning.externals
+    ++ Remembered.externals
     ++ Rules.externals
     ++ Undefined.externals
     ++ Unfold.externals
