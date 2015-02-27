@@ -95,6 +95,25 @@ externals =
         ] .+ Shallow .+ PreCondition
     , external "unshadow" (promoteR unshadowQuantifiedR :: RewriteH QC)
         [ "Unshadow a quantified clause." ]
+    , external "merge-quantifiers" (\n1 n2 -> promoteR (mergeQuantifiersR (cmpHN2Var n1) (cmpHN2Var n2)) :: RewriteH QC)
+        [ "Merge quantifiers from two clauses if they have the same type."
+        , "Example:"
+        , "(forall (x::Int). foo x = x) ^ (forall (y::Int). bar y y = 5)"
+        , "merge-quantifiers 'x 'y"
+        , "forall (x::Int). (foo x = x) ^ (bar x x = 5)"
+        , "Note: if only one quantifier matches, it will be floated if possible." ]
+    , external "float-left" (\n1 -> promoteR (mergeQuantifiersR (cmpHN2Var n1) (const False)) :: RewriteH QC)
+        [ "Float quantifier out of left-hand side." ]
+    , external "float-right" (\n1 -> promoteR (mergeQuantifiersR (const False) (cmpHN2Var n1)) :: RewriteH QC)
+        [ "Float quantifier out of right-hand side." ]
+    , external "conjunct" (\n1 n2 n3 -> conjunctLemmasT n1 n2 n3 :: TransformH Core ())
+        [ "conjunt new-name lhs-name rhs-name" ]
+    , external "disjunct" (\n1 n2 n3 -> disjunctLemmasT n1 n2 n3 :: TransformH Core ())
+        [ "disjunt new-name lhs-name rhs-name" ]
+    , external "imply" (\n1 n2 n3 -> implyLemmasT n1 n2 n3 :: TransformH Core ())
+        [ "imply new-name antecedent-name consequent-name" ]
+    , external "lint" (promoteT lintQuantifiedT :: TransformH QC String)
+        [ "Lint check a quantified clause." ]
     , external "lemma" (promoteExprBiR . lemmaR :: LemmaName -> BiRewriteH Core)
         [ "Generate a bi-directional rewrite from a lemma." ]
     , external "lemma-lhs-intro" (lemmaLhsIntroR :: LemmaName -> RewriteH Core)
@@ -302,11 +321,17 @@ verifyClauseT =
 -- TODO: doesn't catch lint errors in the quantifiers
 lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m)
                 => Transform c m Quantified String
-lintQuantifiedT = quantifiedT successT lintClauseT (flip const)
+lintQuantifiedT = lintQuantifiedWorkT []
 
-lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m) => Transform c m Clause String
-lintClauseT = do
-    let t = promoteT lintQuantifiedT <+ promoteT lintExprT
+lintQuantifiedWorkT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m)
+                    => [Var] -> Transform c m Quantified String
+lintQuantifiedWorkT bs = readerT $ \ (Quantified bs' _) -> quantifiedT successT (lintClauseT (bs++bs')) (flip const)
+
+lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m)
+            => [Var] -> Transform c m Clause String
+lintClauseT bs = do
+    t <- readerT $ \case Equiv {} -> return $ promoteT (arr (mkCoreLams bs) >>> lintExprT)
+                         _        -> return $ promoteT (lintQuantifiedWorkT bs)
     (w1,w2) <- clauseT t t (const (,))
     return $ unlines [w1,w2]
 
@@ -409,6 +434,85 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
                 then return $ lookup3 b ds
                 else buildSubst b
     contextfreeT $ instantiateQuantified allDs
+
+------------------------------------------------------------------------------
+
+conjunctLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
+conjunctLemmasT new lhs rhs = do
+    Lemma ql pl _ <- getLemmaByNameT lhs
+    Lemma qr pr _ <- getLemmaByNameT rhs
+    insertLemmaT new $ Lemma (Quantified [] (Conj ql qr)) (pl && pr) False
+
+disjunctLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
+disjunctLemmasT new lhs rhs = do
+    Lemma ql pl _ <- getLemmaByNameT lhs
+    Lemma qr pr _ <- getLemmaByNameT rhs
+    insertLemmaT new $ Lemma (Quantified [] (Disj ql qr)) (pl || pr) False
+
+implyLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
+implyLemmasT new lhs rhs = do
+    Lemma ql _  _ <- getLemmaByNameT lhs
+    Lemma qr pr _ <- getLemmaByNameT rhs
+    insertLemmaT new $ Lemma (Quantified [] (Impl ql qr)) pr False
+
+------------------------------------------------------------------------------
+
+mergeQuantifiersR :: MonadCatch m => (Var -> Bool) -> (Var -> Bool) -> Rewrite c m Quantified
+mergeQuantifiersR pl pr = contextfreeT $ mergeQuantifiers pl pr
+
+mergeQuantifiers :: MonadCatch m => (Var -> Bool) -> (Var -> Bool) -> Quantified -> m Quantified
+mergeQuantifiers pl pr (Quantified bs cl) = prefixFailMsg "merge-quantifiers failed: " $ do
+    (con,lq@(Quantified bsl cll),rq@(Quantified bsr clr)) <- case cl of
+        Conj q1 q2 -> return (Conj,q1,q2)
+        Disj q1 q2 -> return (Disj,q1,q2)
+        Impl q1 q2 -> return (Impl,q1,q2)
+        _ -> fail "no quantifiers on either side."
+
+    let (lBefore,lbs) = break pl bsl
+        (rBefore,rbs) = break pr bsr
+        check b q l r = guardMsg (not (b `elemVarSet` freeVarsQuantified q)) $
+                                 "specified "++l++" binder would capture in "++r++"-hand clause."
+
+    case (lbs,rbs) of
+        ([],[])        -> fail "no quantifiers match."
+        ([],rb:rAfter) -> do
+            check rb lq "right" "left"
+            return $ Quantified (bs++[rb]) $ con lq (Quantified (rBefore++rAfter) clr)
+        (lb:lAfter,[]) -> do
+            check lb rq "left" "right"
+            return $ Quantified (bs++[lb]) $ con (Quantified (lBefore++lAfter) cll) rq
+        (lb:lAfter,rb:rAfter) -> do
+            guardMsg (eqType (varType lb) (varType rb)) "specified quantifiers have differing types."
+            check lb rq "left" "right"
+            check rb lq "right" "left"
+
+            let Quantified partial clr' = substQuantified rb (varToCoreExpr lb) $ Quantified rAfter clr
+                rq' = Quantified (rBefore ++ partial) clr'
+                lq' = Quantified (lBefore ++ lAfter) cll
+
+            return $ Quantified (bs++[lb]) (con lq' rq')
+
+------------------------------------------------------------------------------
+
+-- | Assumes Var is free in Quantified. If not, no substitution will happen, though uniques might be freshened.
+substQuantified :: Var -> CoreArg -> Quantified -> Quantified
+substQuantified v e q = go (extendSubst sub v e) q
+    where sub = mkEmptySubst $ mkInScopeSet $ delVarSet (unionVarSet (freeVarsExpr e) (freeVarsQuantified q)) v
+
+          go subst (Quantified bs cl) =
+            let (bs', cl') = go1 subst bs [] cl
+            in Quantified bs' cl'
+          go1 subst [] bs' cl = (reverse bs', go2 subst cl)
+          go1 subst (b:bs) bs' cl =
+            let (subst',b') = substBndr subst b
+            in go1 subst' bs (b':bs') cl
+          go2 subst (Conj q1 q2) = Conj (go subst q1) (go subst q2)
+          go2 subst (Disj q1 q2) = Disj (go subst q1) (go subst q2)
+          go2 subst (Impl q1 q2) = Impl (go subst q1) (go subst q2)
+          go2 subst (Equiv e1 e2) =
+            let e1' = substExpr (text "substQuantified e1") subst e1
+                e2' = substExpr (text "substQuantified e2") subst e2
+            in Equiv e1' e2'
 
 ------------------------------------------------------------------------------
 
