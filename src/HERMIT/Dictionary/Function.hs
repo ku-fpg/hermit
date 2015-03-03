@@ -2,7 +2,8 @@
 module HERMIT.Dictionary.Function
     ( externals
     , appArgM
-    , buildApplicationM
+    , buildAppM
+    , buildAppsM
     , buildCompositionT
     , buildFixT
     , buildIdT
@@ -13,6 +14,7 @@ module HERMIT.Dictionary.Function
     ) where
 
 import Control.Arrow
+import Control.Monad
 import Control.Monad.IO.Class
 
 import Data.List (nub, intercalate, intersect, partition, transpose)
@@ -134,18 +136,21 @@ buildCompositionT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, M
                   => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
 buildCompositionT f g = do
     composeId <- findIdT $ fromString "Data.Function.."
-    fDot <- prefixFailMsg "building (.) f failed:" $ buildApplicationM (varToCoreExpr composeId) f
-    prefixFailMsg "building f . g failed:" $ buildApplicationM fDot g
+    fDot <- prefixFailMsg "building (.) f failed:" $ buildAppM (varToCoreExpr composeId) f
+    prefixFailMsg "building f . g failed:" $ buildAppM fDot g
+
+buildAppsM :: MonadCatch m => CoreExpr -> [CoreExpr] -> m CoreExpr
+buildAppsM = foldM buildAppM
 
 -- | Given expression for f and for x, build f x, figuring out the type arguments.
-buildApplicationM :: MonadCatch m => CoreExpr -> CoreExpr -> m CoreExpr
-buildApplicationM f x = do
+buildAppM :: MonadCatch m => CoreExpr -> CoreExpr -> m CoreExpr
+buildAppM f x = do
     (vsF, domF, _) <- splitFunTypeM (exprType f)
     let (vsX, xTy) = splitForAllTys (exprType x)
         allTvs = vsF ++ vsX
         bindFn v = if v `elem` allTvs then BindMe else Skolem
 
-    sub <- maybe (fail "buildApplicationM - domain of f and type of x do not unify")
+    sub <- maybe (fail "buildAppM - domain of f and type of x do not unify")
                  return
                  (tcUnifyTys bindFn [domF] [xTy])
 

@@ -5,6 +5,7 @@ module HERMIT.Dictionary.Undefined
       externals
     , buildStrictnessLemmaT
     , verifyStrictT
+    , applyToUndefinedT
     , mkUndefinedValT
     , isUndefinedValT
     , replaceCurrentExprWithUndefinedR

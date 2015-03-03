@@ -127,7 +127,7 @@ assumptionCQuantifiedT absE repE fE = prefixFailMsg "Building assumption C faile
 -- Given abs, rep, and 'fix g' expressions, build "rep (abs (fix g)) = fix g"
 wwFusionQuantifiedT :: MonadCatch m => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Quantified
 wwFusionQuantifiedT absE repE fixgE = prefixFailMsg "Building worker/wrapper fusion lemma failed: " $ do
-    protoLhs <- buildApplicationM repE =<< buildApplicationM absE fixgE
+    protoLhs <- buildAppM repE =<< buildAppM absE fixgE
     let (tvs, lhs) = collectTyBinders protoLhs
     -- This way, the rhs is applied to the proper type variables.
     rhs <- case lhs of
@@ -151,7 +151,7 @@ split1BetaR nm absE repE = do
     workId <- constT $ newIdH "worker" $ exprType workRhs
 
     newRhs <- prefixFailMsg "building (abs work) failed: "
-            $ buildApplicationM absE (varToCoreExpr workId)
+            $ buildAppM absE (varToCoreExpr workId)
 
     assumptionQ <- assumptionCQuantifiedT absE repE f
     insertLemmaT (fromString (show nm ++ "-assumption")) $ Lemma assumptionQ False True -- unproven, used
@@ -168,10 +168,10 @@ split2BetaR nm absE repE = do
     (_fixId, [_tyA, f]) <- callNameT $ fromString "Data.Function.fix"
     fixfE <- idR
 
-    repFixFE <- buildApplicationM repE fixfE
+    repFixFE <- buildAppM repE fixfE
     workId <- constT $ newIdH "worker" $ exprType repFixFE
 
-    newRhs <- buildApplicationM absE (varToCoreExpr workId)
+    newRhs <- buildAppM absE (varToCoreExpr workId)
 
     assumptionQ <- assumptionCQuantifiedT absE repE f
     insertLemmaT (fromString (show nm ++ "-assumption")) $ Lemma assumptionQ False True -- unproven, used
