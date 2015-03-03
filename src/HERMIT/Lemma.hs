@@ -38,7 +38,7 @@ import HERMIT.GHC hiding ((<>))
 --        mkQuantified [] (baz y z) (\x. foo x x) === forall x. baz y z x = foo x x
 --        mkQuantified [] (\x. foo x) (\y. bar y) === forall x. foo x = bar x
 mkQuantified :: [CoreBndr] -> CoreExpr -> CoreExpr -> Quantified
-mkQuantified vs lhs rhs = Quantified (tvs++vs++lbs++rbs) (Equiv lhs' rbody)
+mkQuantified vs lhs rhs = dropBinders $ Quantified (tvs++vs++lbs++rbs) (Equiv lhs' rbody)
     where (lbs, lbody) = collectBinders lhs
           rhs' = uncurry mkCoreApps $ betaReduceAll rhs $ map varToCoreExpr lbs
           (rbs, rbody) = collectBinders rhs'
@@ -56,6 +56,22 @@ freeVarsClause (Conj  q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
 freeVarsClause (Disj  q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
 freeVarsClause (Impl  q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
 freeVarsClause (Equiv e1 e2) = unionVarSets $ map freeVarsExpr [e1,e2]
+
+dropBinders :: Quantified -> Quantified
+dropBinders (Quantified bs cl) =
+    case bs of
+        []      -> Quantified [] (dropBindersClause cl)
+        (b:bs') -> case dropBinders (Quantified bs' cl) of
+                    q@(Quantified bs'' cl')
+                        | b `elemVarSet` freeVarsQuantified q -> Quantified (b:bs'') cl'
+                        | otherwise -> q
+
+dropBindersClause :: Clause -> Clause
+dropBindersClause (Conj q1 q2) = Conj (dropBinders q1) (dropBinders q2)
+dropBindersClause (Disj q1 q2) = Disj (dropBinders q1) (dropBinders q2)
+dropBindersClause (Impl q1 q2) = Impl (dropBinders q1) (dropBinders q2)
+dropBindersClause equiv        = equiv
+
 
 -- | A name for lemmas. Use a newtype so we can tab-complete in shell.
 newtype LemmaName = LemmaName String deriving (Eq, Ord, Typeable)
