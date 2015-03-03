@@ -273,8 +273,9 @@ data CommandLineState = CommandLineState
     , cl_running_script :: Maybe Script           -- ^ Nothing = no script running, otherwise the remaining script commands
     } deriving (Typeable)
 
-data ProofTodo = Unproven LemmaName Lemma [NamedLemma] Bool -- ^ lemma we are proving, plus temporary lemmas in scope
-               | Proven LemmaName                      Bool -- ^ lemma successfully proven, temporary status
+data ProofTodo = Unproven   LemmaName Lemma [NamedLemma] Bool -- ^ lemma we are proving, plus temporary lemmas in scope
+               | Proven     LemmaName                    Bool -- ^ lemma successfully proven, temporary status
+               | IntroLemma LemmaName Quantified Bool         -- ^ introduce this lemma with given proven status
 
 -- To ease the pain of nested records, define some boilerplate here.
 cl_corelint :: CommandLineState -> Bool
@@ -467,12 +468,18 @@ currentLemma = do
 
     case todo of
         Unproven nm l ls _ -> return (nm, l, ls)
-        Proven _ _ -> fail "currentLemma: Proven lemma on top of stack!"
+        _ -> fail "currentLemma: unproven lemma not on top of stack!"
 
 announceProven :: (MonadCatch m, CLMonad m) => m ()
 announceProven = getProofStack >>= go
     where go (Proven nm temp : r) = do
             queryInFocus (unless temp (modifyLemmaT nm id idR (const True) id) :: TransformH Core ())
+                         (Just $ "-- proven " ++ quoteShow nm) -- comment in script
+            -- take it off the stack for the new AST
+            modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
+            cl_putStrLn ("Successfully proven: " ++ show nm) >> go r
+          go (IntroLemma nm q p : r) = do
+            queryInFocus (insertLemmaT nm (Lemma q p False) :: TransformH Core ())
                          (Just $ "-- proven " ++ quoteShow nm) -- comment in script
             -- take it off the stack for the new AST
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }

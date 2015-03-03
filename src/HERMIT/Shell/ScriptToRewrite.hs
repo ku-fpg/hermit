@@ -16,6 +16,7 @@ module HERMIT.Shell.ScriptToRewrite
     ) where
 
 import Control.Arrow
+import Control.Monad
 import Control.Monad.Error.Class (catchError, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State (MonadState, gets, modify)
@@ -38,6 +39,7 @@ import HERMIT.Shell.Interpreter
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
+import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 ------------------------------------
 
 type RewriteName = String
@@ -73,15 +75,24 @@ popScriptLine = gets cl_running_script >>= maybe (return Nothing) (\case []     
 getFragment :: (MonadCatch m, CLMonad m) => Bool -> AST -> m ([String] -> [String])
 getFragment False _  = return id
 getFragment True ast = do
-    now <- gets cl_cursor
+    (now,opts) <- gets (cl_cursor &&& cl_pretty_opts)
     modify $ setCursor ast
     ps <- gets cl_proofstack
-    let discardProvens (Proven _ _ : r) = discardProvens r
-        discardProvens other = other
-        opts = pOptions Clean.pretty
+    let discardProvens [] = []
+        discardProvens r@(Unproven{} : _) = r
+        discardProvens (_:r) = discardProvens r
     doc <- case fmap discardProvens $ M.lookup ast ps of
-            Just (Unproven nm l _ _ : _) -> queryInFocus (liftPrettyH opts $ return l >>> ppLemmaT Clean.pretty nm :: TransformH Core DocH) Nothing
-            _                            -> queryInFocus (liftPrettyH opts $ pCoreTC Clean.pretty) Nothing
+            Just (Unproven nm l ls _ : _) -> do
+                as <- case ls of
+                        [] -> return []
+                        _  -> liftM (PP.text "Assumed lemmas: " :) $
+                                queryInFocus ((liftPrettyH opts $
+                                                forM ls $ \(n',l') ->
+                                                    return l' >>> ppLemmaT Clean.pretty n') :: TransformH Core [DocH]) Nothing
+                d <- queryInFocus (liftPrettyH opts $
+                                    return l >>> ppLemmaT Clean.pretty nm :: TransformH Core DocH) Nothing
+                return $ PP.vcat $ as ++ [PP.text "Proving:", d]
+            _                             -> queryInFocus (liftPrettyH opts $ pCoreTC Clean.pretty) Nothing
     let ASCII str = renderCode opts doc
         str' = unlines $ ("" :) $ map ("-- " ++) $ lines str
     modify $ setCursor now

@@ -73,8 +73,10 @@ proof_externals = map (.+ Proof)
         [ "Perform induction on given universally quantified variable."
         , "Each constructor case will generate a new lemma to be proven."
         ]
-    , external "prove-consequent" PCRight
+    , external "prove-consequent" PCConsequent
         [ "Prove the consequent of an implication by assuming the antecedent." ]
+    , external "prove-antecedent" PCAntecedent
+        [ "Introduce a proven lemma corresponding to the consequent by proving the antecedent." ]
     , external "split-assumed" PCSplitAssumed
         [ "Split an assumed lemma which is a conjuction/disjunction." ]
     , external "dump" (\pp fp r w -> promoteT (liftPrettyH (pOptions pp) (ppQuantifiedT pp)) >>> dumpT fp pp r w :: TransformH QC ())
@@ -202,7 +204,8 @@ performProofShellCommand expr = go
                 (_, Lemma q _ _, ls) <- currentLemma
                 queryInFocus (transformQ q ls t) expr'
           go (PCInduction idPred) = performInduction expr' idPred
-          go PCRight              = performRightSplit (fromJust expr')
+          go PCConsequent         = proveConsequent (fromJust expr')
+          go PCAntecedent         = proveAntecedent (fromJust expr')
           go (PCSplitAssumed i)   = splitAssumed i (fromJust expr')
           go (PCShell effect)     = performShellEffect effect
           go (PCScript effect)    = do
@@ -222,21 +225,38 @@ performProofShellCommand expr = go
           go PCEnd                = endProof expr
           go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.")
 
-performRightSplit :: (MonadCatch m, CLMonad m) => String -> m ()
-performRightSplit expr = do
+proveConsequent :: (MonadCatch m, CLMonad m) => String -> m ()
+proveConsequent expr = do
     Unproven nm (Lemma (Quantified bs cl) p u) ls t : _ <- getProofStack
     (q,ls') <- case cl of
                 Impl (Quantified aBs acl) (Quantified cBs ccl) ->
                     let n = nm <> "-antecedent"
                         l = Lemma (Quantified (bs++aBs) acl) True False
                     in return (Quantified (bs++cBs) ccl, (n,l):ls)
-                _ -> fail "right-split not supported."
+                _ -> fail "not an implication."
     let nm' = nm <> "-consequent"
     (k,ast) <- gets (cl_kernel &&& cl_cursor)
     addAST =<< tellK k expr ast
     _ <- popProofStack
     pushProofStack $ Proven nm t -- proving the consequent proves the lemma
     pushProofStack $ Unproven nm' (Lemma q p u) ls' True
+
+proveAntecedent :: (MonadCatch m, CLMonad m) => String -> m ()
+proveAntecedent expr = do
+    Unproven nm (Lemma (Quantified bs cl) p u) ls _ : _ <- getProofStack
+    ((anm,alem),(cnm,cq)) <- case cl of
+        Impl (Quantified aBs acl) (Quantified cBs ccl) ->
+            let n = nm <> "-consequent"
+                q = Quantified (bs++cBs) ccl
+                n' = nm <> "-antecedent"
+                l' = Lemma (Quantified (bs++aBs) acl) False u
+            in return ((n',l'),(n,q))
+        _ -> fail "not an implication."
+    (k,ast) <- gets (cl_kernel &&& cl_cursor)
+    addAST =<< tellK k expr ast
+    _ <- popProofStack
+    pushProofStack $ IntroLemma cnm cq p -- proving the antecedent introduces the consequent as a lemma
+    pushProofStack $ Unproven anm alem ls True
 
 splitAssumed :: (MonadCatch m, CLMonad m) => Int -> String -> m ()
 splitAssumed i expr = do
@@ -308,7 +328,8 @@ data ProofShellCommand
     | PCTransform (TransformH QC String)
     | PCUnit (TransformH QC ())
     | PCInduction (Id -> Bool)
-    | PCRight
+    | PCConsequent
+    | PCAntecedent
     | PCSplitAssumed Int
     | PCShell ShellEffect
     | PCScript ScriptEffect

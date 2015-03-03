@@ -100,8 +100,8 @@ completionQuery InlineC         = return $ promoteT inlineTargetsT >>^          
 completionQuery InScopeC        = return $ pure ["'"] -- TODO
 completionQuery LemmaC          = do
     let findTemps [] = []
-        findTemps (Proven _ _ : r) = findTemps r
         findTemps (Unproven _ _ ls _ : _) = map (show . fst) ls
+        findTemps (_ : r) = findTemps r
     cur <- gets cl_cursor
     tempLemmas <- gets (findTemps . fromMaybe [] . M.lookup cur . cl_proofstack)
     return $ liftM ((tempLemmas ++) . map show . M.keys) $ getLemmasT

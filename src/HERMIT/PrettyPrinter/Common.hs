@@ -203,7 +203,7 @@ instance HasEmptyContext PrettyC where
 
 ------------------------------------------------------------------------
 
-liftPrettyH :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> PrettyH a -> Transform c HermitM a DocH
+liftPrettyH :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> Transform PrettyC HermitM a b -> Transform c HermitM a b
 liftPrettyH = liftContext . liftPrettyC
 
 liftPrettyC :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> c -> PrettyC
