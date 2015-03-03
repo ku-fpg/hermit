@@ -471,19 +471,26 @@ mergeQuantifiers pl pr (Quantified bs cl) = prefixFailMsg "merge-quantifiers fai
         (rBefore,rbs) = break pr bsr
         check b q l r = guardMsg (not (b `elemVarSet` freeVarsQuantified q)) $
                                  "specified "++l++" binder would capture in "++r++"-hand clause."
+        checkUB v vs = let fvs = freeVarsVar v
+                       in guardMsg (not (any (`elemVarSet` fvs) vs)) $ "binder " ++ getOccString v ++
+                            " cannot be floated because it depends on binders not being floated."
 
     case (lbs,rbs) of
         ([],[])        -> fail "no quantifiers match."
         ([],rb:rAfter) -> do
             check rb lq "right" "left"
+            checkUB rb rBefore
             return $ Quantified (bs++[rb]) $ con lq (Quantified (rBefore++rAfter) clr)
         (lb:lAfter,[]) -> do
             check lb rq "left" "right"
+            checkUB lb lBefore
             return $ Quantified (bs++[lb]) $ con (Quantified (lBefore++lAfter) cll) rq
         (lb:lAfter,rb:rAfter) -> do
             guardMsg (eqType (varType lb) (varType rb)) "specified quantifiers have differing types."
             check lb rq "left" "right"
             check rb lq "right" "left"
+            checkUB lb lBefore
+            checkUB rb rBefore
 
             let Quantified partial clr' = substQuantified rb (varToCoreExpr lb) $ Quantified rAfter clr
                 rq' = Quantified (rBefore ++ partial) clr'
