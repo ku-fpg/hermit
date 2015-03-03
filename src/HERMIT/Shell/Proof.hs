@@ -27,11 +27,14 @@ import Data.Char (isSpace)
 import Data.Dynamic
 import Data.List (delete)
 import qualified Data.Map as M
+import Data.Maybe
+import Data.Monoid
 import Data.String (fromString)
 
 import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC hiding (settings, (<>), text, sep, (<+>), ($+$), nest)
+import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Lemma
 import HERMIT.Monad
@@ -70,6 +73,10 @@ proof_externals = map (.+ Proof)
         [ "Perform induction on given universally quantified variable."
         , "Each constructor case will generate a new lemma to be proven."
         ]
+    , external "prove-consequent" PCRight
+        [ "Prove the consequent of an implication by assuming the antecedent." ]
+    , external "split-assumed" PCSplitAssumed
+        [ "Split an assumed lemma which is a conjuction/disjunction." ]
     , external "dump" (\pp fp r w -> promoteT (liftPrettyH (pOptions pp) (ppQuantifiedT pp)) >>> dumpT fp pp r w :: TransformH QC ())
         [ "dump <filename> <renderer> <width>" ]
     , external "end-proof" PCEnd
@@ -115,11 +122,16 @@ interactiveProof = do
             el <- lift $ tryM () announceProven >> attemptM currentLemma
             case el of
                 Left _ -> return () -- no lemma is currently being proven, so exit
-                Right (nm,l,_) -> do
+                Right (nm,l,ls) -> do
                     mExpr <- lift popScriptLine
                     case mExpr of
                         Nothing -> do
-                            lift $ printLemma (nm,l)
+                            lift $ do
+                                unless (null ls) $ do
+                                    cl_putStrLn "Assumed lemmas:"
+                                    mapM_ printLemma [ (fromString (show i) <> ": " <> n, lem)
+                                                     | (i::Int,(n,lem)) <- zip [1..] ls ]
+                                printLemma (nm,l)
                             mLine <- getInputLine $ "proof> "
                             case mLine of
                                 Nothing          -> fail "proof aborted (input: Nothing)"
@@ -190,6 +202,8 @@ performProofShellCommand expr = go
                 (_, Lemma q _ _, ls) <- currentLemma
                 queryInFocus (transformQ q ls t) expr'
           go (PCInduction idPred) = performInduction expr' idPred
+          go PCRight              = performRightSplit (fromJust expr')
+          go (PCSplitAssumed i)   = splitAssumed i (fromJust expr')
           go (PCShell effect)     = performShellEffect effect
           go (PCScript effect)    = do
                 -- lemVar <- liftIO $ newMVar lem -- couldn't resist that name
@@ -207,6 +221,55 @@ performProofShellCommand expr = go
                 cl_putStrLn $ "Successfully proven: " ++ show nm
           go PCEnd                = endProof expr
           go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.")
+
+performRightSplit :: (MonadCatch m, CLMonad m) => String -> m ()
+performRightSplit expr = do
+    Unproven nm (Lemma (Quantified bs cl) p u) ls t : _ <- getProofStack
+    (q,ls') <- case cl of
+                Impl (Quantified aBs acl) (Quantified cBs ccl) ->
+                    let n = nm <> "-antecedent"
+                        l = Lemma (Quantified (bs++aBs) acl) True False
+                    in return (Quantified (bs++cBs) ccl, (n,l):ls)
+                _ -> fail "right-split not supported."
+    let nm' = nm <> "-consequent"
+    (k,ast) <- gets (cl_kernel &&& cl_cursor)
+    addAST =<< tellK k expr ast
+    _ <- popProofStack
+    pushProofStack $ Proven nm t -- proving the consequent proves the lemma
+    pushProofStack $ Unproven nm' (Lemma q p u) ls' True
+
+splitAssumed :: (MonadCatch m, CLMonad m) => Int -> String -> m ()
+splitAssumed i expr = do
+    Unproven nm lem ls t : _ <- getProofStack
+    (b, (n, Lemma q p u):a) <- getIth i $ (nm,lem) : ls
+    qs <- splitQuantified q
+    let nls = [ (n <> fromString (show j), Lemma q' p u) | (j::Int,q') <- zip [0..] qs ]
+    (k,ast) <- gets (cl_kernel &&& cl_cursor)
+    addAST =<< tellK k expr ast
+    _ <- popProofStack
+    case b of
+        [] -> let (n',l') = head nls
+              in pushProofStack $ Unproven n' l' (tail nls ++ a) t
+        _ -> pushProofStack $ Unproven nm lem (tail b ++ nls ++ a) t
+
+getIth :: MonadCatch m => Int -> [a] -> m ([a],[a])
+getIth _ [] = fail "getIth: out of range"
+getIth n (x:xs) = go n x xs []
+    where go 0 y ys zs = return (reverse zs, y:ys)
+          go _ _ [] _  = fail "getIth: out of range"
+          go i z (y:ys) zs = go (i-1) y ys (z:zs)
+
+-- | Always returns non-empty list, or fails.
+splitQuantified :: MonadCatch m => Quantified -> m [Quantified]
+splitQuantified (Quantified bs cl) = do
+    case cl of
+        Conj (Quantified lbs lcl) (Quantified rbs rcl) ->
+            return [Quantified (bs++lbs) lcl, Quantified (bs++rbs) rcl]
+        Disj (Quantified lbs lcl) (Quantified rbs rcl) ->
+            return [Quantified (bs++lbs) lcl, Quantified (bs++rbs) rcl]
+        Impl (Quantified lbs lcl) (Quantified rbs rcl) ->
+            return [Quantified (bs++lbs) lcl, Quantified (bs++rbs) rcl]
+        _ -> fail "equalities cannot be split!"
 
 performInduction :: (MonadCatch m, MonadException m, CLMonad m)
                  => Maybe String -> (Id -> Bool) -> m ()
@@ -245,6 +308,8 @@ data ProofShellCommand
     | PCTransform (TransformH QC String)
     | PCUnit (TransformH QC ())
     | PCInduction (Id -> Bool)
+    | PCRight
+    | PCSplitAssumed Int
     | PCShell ShellEffect
     | PCScript ScriptEffect
     | PCQuery QueryFun
