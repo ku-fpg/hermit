@@ -9,7 +9,7 @@ import Control.Monad.State
 
 import Data.Dynamic
 import Data.List (isPrefixOf, nub)
-import Data.Map (keys)
+import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 
 import HERMIT.Kure
@@ -98,7 +98,13 @@ completionQuery BindingGroupOfC = return $ bindingGroupOfTargetsT  >>^ GHC.varSe
 completionQuery RhsOfC          = return $ rhsOfTargetsT           >>^ GHC.varSetToStrings >>^ map ('\'':)
 completionQuery InlineC         = return $ promoteT inlineTargetsT >>^                         map ('\'':)
 completionQuery InScopeC        = return $ pure ["'"] -- TODO
-completionQuery LemmaC          = return $ liftM (map show . keys) $ getLemmasT
+completionQuery LemmaC          = do
+    let findTemps [] = []
+        findTemps (Proven _ _ : r) = findTemps r
+        findTemps (Unproven _ _ ls _ : _) = map (show . fst) ls
+    cur <- gets cl_cursor
+    tempLemmas <- gets (findTemps . fromMaybe [] . M.lookup cur . cl_proofstack)
+    return $ liftM ((tempLemmas ++) . map show . M.keys) $ getLemmasT
 completionQuery NothingC        = return $ pure []
 completionQuery RuleC           = return $ liftM (map (show . fst)) $ getHermitRulesT
 completionQuery StringC         = return $ pure ["\""]
