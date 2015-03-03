@@ -17,13 +17,14 @@ module HERMIT.Dictionary.Fold
     , toEqualities
     , flipEquality
     , freeVarsEquality
+    , ppEqualityT
     ) where
 
 import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class
 
-import Data.List (delete, (\\))
+import Data.List (delete, (\\), intersect)
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, fromMaybe, maybeToList)
 import qualified Data.IntMap.Lazy as I
@@ -41,6 +42,9 @@ import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common (varBindingDepthT,findIdT)
 import HERMIT.Dictionary.Inline hiding (externals)
+
+import HERMIT.PrettyPrinter.Common
+import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 import Prelude hiding (exp)
 
@@ -75,7 +79,7 @@ foldVarR md v = do
         Just depth -> do depth' <- varBindingDepthT v
                          guardMsg (depth == depth') "Specified binding depth does not match that of variable binding, this is probably a shadowing occurrence."
     (rhs,_) <- getUnfoldingT AllBinders <<< return v
-    transform $ \ c -> maybeM "no match." . fold (toEqualities $ mkQuantified [] rhs (varToCoreExpr v)) c
+    transform $ \ c -> maybeM "no match." . fold [mkEquality [] rhs (varToCoreExpr v)] c
 
 -- | Rewrite using a compiled fold. Useful inside traversal strategies like
 -- anytdR, because you can compile the fold once outside the traversal, then
@@ -85,7 +89,7 @@ runFoldR compiled = transform $ \c -> maybeM "no match." . runFold compiled c
 
 ------------------------------------------------------------------------
 
-newtype CompiledFold = CompiledFold { getCompiledFold :: EMap ([Var], CoreExpr) }
+newtype CompiledFold = CompiledFold (EMap ([Var], CoreExpr))
 
 -- | Attempt to apply a list of Equalitys to the given expression, folding the
 -- left-hand side into an application of the right-hand side. This
@@ -98,12 +102,14 @@ fold = runFold . compileFold
 -- | Compile a list of Equality's into a single fold matcher.
 compileFold :: [Equality] -> CompiledFold
 compileFold = CompiledFold . foldr addFold fEmpty
-    where addFold (Equality vs lhs rhs) = insertFold emptyAlphaEnv vs lhs (vs, rhs)
+    where addFold (Equality vs lhs rhs) =
+            let hs = vs `intersect` varSetElems (freeVarsExpr lhs)
+            in insertFold emptyAlphaEnv vs lhs (hs, rhs)
 
 -- | Attempt to fold an expression using a matcher in a given context.
 runFold :: BoundVars c => CompiledFold -> c -> CoreExpr -> Maybe CoreExpr
-runFold compiled c exp = do
-    (hs, (vs', rhs')) <- singleResult $ filterOutOfScope c $ findFold exp $ getCompiledFold compiled
+runFold (CompiledFold f) c exp = do
+    (hs, (vs', rhs')) <- singleResult $ filterOutOfScope c $ findFold exp f
     args <- sequence [ lookupVarEnv hs v | v <- vs' ]
     return $ uncurry mkCoreApps $ betaReduceAll (mkCoreLams vs' rhs') args
 
@@ -470,7 +476,6 @@ mkEquality :: [CoreBndr] -> CoreExpr -> CoreExpr -> Equality
 mkEquality vs lhs rhs = case mkQuantified vs lhs rhs of
                             Quantified vs' (Equiv lhs' rhs') -> Equality vs' lhs' rhs'
 
--- | TODO: temporary shim while we convert
 toEqualities :: Quantified -> [Equality]
 toEqualities = go []
     where go qs (Quantified vs cl) = go2 (qs++vs) cl
@@ -478,6 +483,14 @@ toEqualities = go []
           go2 qs (Equiv e1 e2) = [mkEquality qs e1 e2]
           go2 qs (Conj q1 q2)  = go qs q1 ++ go qs q2
           go2 _  _             = []
+
+ppEqualityT :: PrettyPrinter -> PrettyH Equality
+ppEqualityT pp = do
+    Equality bs lhs rhs <- idR
+    dfa <- return bs >>> pForall pp
+    d1 <- return lhs >>> extractT (pCoreTC pp)
+    d2 <- return rhs >>> extractT (pCoreTC pp)
+    return $ PP.sep [dfa,d1,PP.text "=",d2]
 
 ------------------------------------------------------------------------------
 
