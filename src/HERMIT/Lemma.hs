@@ -5,10 +5,12 @@ module HERMIT.Lemma
       Quantified(..)
     , mkQuantified
     , Clause(..)
-    , instantiateQuantified
-    , instantiateQuantifiedVar
+    , instQuantified
+    , instsQuantified
     , discardUniVars
     , freeVarsQuantified
+    , substQuantified
+    , substQuantifieds
       -- * Lemmas
     , LemmaName(..)
     , Lemma(..)
@@ -27,6 +29,7 @@ import Data.Monoid
 
 import HERMIT.Core
 import HERMIT.GHC hiding ((<>))
+import Language.KURE.MonadCatch
 
 ----------------------------------------------------------------------------
 
@@ -109,41 +112,101 @@ discardUniVars (Quantified _ cl) = Quantified [] cl
 
 ------------------------------------------------------------------------------
 
--- TODO: handle other types of Quantified
+-- | Assumes Var is free in Quantified. If not, no substitution will happen, though uniques might be freshened.
+substQuantified :: Var -> CoreArg -> Quantified -> Quantified
+substQuantified v e = substQuantifieds [(v,e)]
+
+substQuantifieds :: [(Var,CoreArg)] -> Quantified -> Quantified
+substQuantifieds ps q = substQuantifiedSubst (extendSubstList sub ps) q
+    where (vs,es) = unzip ps
+          sub = mkEmptySubst
+              $ mkInScopeSet
+              $ delVarSetList (unionVarSets $ freeVarsQuantified q : map freeVarsExpr es) vs
+
+-- | Note: Subst must be properly set up with an InScopeSet that includes all vars
+-- in scope in the *range* of the substitution.
+substQuantifiedSubst :: Subst -> Quantified -> Quantified
+substQuantifiedSubst = go
+    where go sub (Quantified bs cl) =
+            let (bs', cl') = go1 sub bs [] cl
+            in Quantified bs' cl'
+
+          go1 subst [] bs' cl = (reverse bs', go2 subst cl)
+          go1 subst (b:bs) bs' cl =
+            let (subst',b') = substBndr subst b
+            in go1 subst' bs (b':bs') cl
+          go2 subst (Conj q1 q2) = Conj (go subst q1) (go subst q2)
+          go2 subst (Disj q1 q2) = Disj (go subst q1) (go subst q2)
+          go2 subst (Impl q1 q2) = Impl (go subst q1) (go subst q2)
+          go2 subst (Equiv e1 e2) =
+            let e1' = substExpr (text "substQuantified e1") subst e1
+                e2' = substExpr (text "substQuantified e2") subst e2
+            in Equiv e1' e2'
+
+------------------------------------------------------------------------------
 
 -- | Instantiate one of the universally quantified variables in a 'Quantified'.
 -- Note: assumes implicit ordering of variables, such that substitution happens to the right
 -- as it does in case alternatives. Only first variable that matches predicate is
 -- instantiated.
-instantiateQuantifiedVar :: Monad m => (Var -> Bool) -- predicate to select var
-                                    -> CoreExpr      -- expression to instantiate with
-                                    -> [Var]         -- new binders to add in place of var
-                                    -> Quantified -> m Quantified
-instantiateQuantifiedVar p e new (Quantified bs (Equiv lhs rhs))
-    | not (any p bs) = fail "specified variable is not universally quantified."
-    | otherwise = do
-        let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
-            tyVars    = filter isTyVar bs'
-            failMsg   = fail "type of provided expression differs from selected binder."
+instQuantified :: MonadCatch m => (Var -> Bool) -- predicate to select var
+                               -> CoreExpr      -- expression to instantiate with
+                               -> Quantified -> m Quantified
+instQuantified p e = liftM fst . go []
+    where go bbs (Quantified bs cl)
+            | not (any p bs) = -- not quantified at this level, so try further down
+                let go2 con q1 q2 = do
+                        er <- attemptM $ go (bs++bbs) q1
+                        (cl',s) <- case er of
+                            Right (q1',s) -> return (con q1' q2, s)
+                            Left _ -> do
+                                er' <- attemptM $ go (bs++bbs) q2
+                                case er' of
+                                    Right (q2',s) -> return (con q1 q2', s)
+                                    Left msg -> fail msg
+                        return (replaceVars s bs (Quantified [] cl'), s)
+                in case cl of
+                    Equiv{} -> fail "specified variable is not universally quantified."
+                    Conj q1 q2 -> go2 Conj q1 q2
+                    Disj q1 q2 -> go2 Disj q1 q2
+                    Impl q1 q2 -> go2 Impl q1 q2
 
-            bindFn v = if v `elem` tyVars then BindMe else Skolem
+            | otherwise = do -- quantified here, so do substitution and start bubbling up
+                let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
+                    tyVars = filter isTyVar (bs'++bbs)
+                    failMsg = fail "type of provided expression differs from selected binder."
 
-        sub <- maybe failMsg (return . tvSubstToSubst) (tcUnifyTys bindFn [varType i] [exprKindOrType e])
+                    bindFn v = if v `elem` tyVars then BindMe else Skolem
 
-        let inS           = delVarSetList (unionVarSets (map localFreeVarsExpr [lhs, rhs, e] ++ map freeVarsVar vs)) (i:vs)
-            subst         = extendSubst (addInScopeSet sub inS) i e -- TODO: subst in both of these?
-            (subst', vs') = substBndrs subst vs
-            lhs'          = substExpr (text "equality-lhs") subst' lhs
-            rhs'          = substExpr (text "equality-rhs") subst' rhs
-        return $ Quantified (bs'++new++vs') (Equiv lhs' rhs')
+                sub <- maybe failMsg return $ tcUnifyTys bindFn [varType i] [exprKindOrType e]
 
-tvSubstToSubst :: TvSubst -> Subst
-tvSubstToSubst (TvSubst inS tEnv) = mkSubst inS tEnv emptyVarEnv emptyVarEnv
+                    -- if i is a tyvar, we know e is a type, so free vars will be tyvars
+                let itvs = [ v | isTyVar i, v <- varSetElems (freeVarsExpr e) ]
+                    q' = substQuantified i e $ Quantified vs cl
+
+                return (replaceVars sub (bs'++itvs) q', sub)
+
+-- | The function which 'bubbles up' after the instantiation takes place,
+-- replacing any type variables that were instantiated as a result of specialization.
+replaceVars :: TvSubst -> [Var] -> Quantified -> Quantified
+replaceVars sub vs = go (reverse vs)
+    where addB b (Quantified bs cl) = Quantified (b:bs) cl
+
+          go [] q = q
+          go (b:bs) q
+            | isTyVar b = case lookupTyVar sub b of
+                            Nothing -> go bs (addB b q)
+                            Just ty -> let new = varSetElems (freeVarsType ty)
+                                       in go (new++bs) (substQuantified b (Type ty) q)
+            | otherwise = go bs (addB b q)
+
+-- tvSubstToSubst :: TvSubst -> Subst
+-- tvSubstToSubst (TvSubst inS tEnv) = mkSubst inS tEnv emptyVarEnv emptyVarEnv
 
 -- | Instantiate a set of universally quantified variables in a 'Quantified'.
 -- It is important that all type variables appear before any value-level variables in the first argument.
-instantiateQuantified :: Monad m => [(Var,CoreExpr,[Var])] -> Quantified -> m Quantified
-instantiateQuantified = flip (foldM (\ eq (v,e,vs) -> instantiateQuantifiedVar (==v) e vs eq)) . reverse
+instsQuantified :: MonadCatch m => [(Var,CoreExpr)] -> Quantified -> m Quantified
+instsQuantified = flip (foldM (\ q (v,e) -> instQuantified (==v) e q)) . reverse
 -- foldM is a left-to-right fold, so the reverse is important to do substitutions in reverse order
 -- which is what we want (all value variables should be instantiated before type variables).
 

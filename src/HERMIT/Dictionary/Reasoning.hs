@@ -47,8 +47,6 @@ module HERMIT.Dictionary.Reasoning
     , retractionBR
     , unshadowQuantifiedR
     , instantiateDictsR
-    , instantiateQuantified
-    , instantiateQuantifiedVar
     , instantiateQuantifiedVarR
     , discardUniVars
     ) where
@@ -417,22 +415,22 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
     ds <- forM uniqDs $ \ b -> constT $ do
             (i,bnds) <- buildDictionary b
             let dExpr = case bnds of
-                            [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
+                            -- the common case that we would have gotten a single non-recursive let
+                            [NonRec v e] | i == v -> e
                             _ -> mkCoreLets bnds (varToCoreExpr i)
-                new = varSetElems $ delVarSetList (localFreeVarsExpr dExpr) bs
-            return (b,dExpr,new)
-    let buildSubst :: Monad m => Var -> m (Var, CoreExpr, [Var])
-        buildSubst b = case [ (b,e,[]) | (b',e,_) <- ds, eqType (varType b) (varType b') ] of
+            return (b,dExpr)
+    let buildSubst :: Monad m => Var -> m (Var, CoreExpr)
+        buildSubst b = case [ (b,e) | (b',e) <- ds, eqType (varType b) (varType b') ] of
                         [] -> fail "cannot find equivalent dictionary expression (impossible!)"
                         [t] -> return t
                         _   -> fail "multiple dictionary expressions found (impossible!)"
-        lookup3 :: Var -> [(Var,CoreExpr,[Var])] -> (Var,CoreExpr,[Var])
-        lookup3 v l = head [ t | t@(v',_,_) <- l, v == v' ]
+        lookup2 :: Var -> [(Var,CoreExpr)] -> (Var,CoreExpr)
+        lookup2 v l = head [ t | t@(v',_) <- l, v == v' ]
     allDs <- forM dArgs $ \ b -> constT $ do
                 if b `elem` uniqDs
-                then return $ lookup3 b ds
+                then return $ lookup2 b ds
                 else buildSubst b
-    contextfreeT $ instantiateQuantified allDs
+    contextfreeT $ instsQuantified allDs
 
 ------------------------------------------------------------------------------
 
@@ -500,28 +498,6 @@ mergeQuantifiers pl pr (Quantified bs cl) = prefixFailMsg "merge-quantifiers fai
 
 ------------------------------------------------------------------------------
 
--- | Assumes Var is free in Quantified. If not, no substitution will happen, though uniques might be freshened.
-substQuantified :: Var -> CoreArg -> Quantified -> Quantified
-substQuantified v e q = go (extendSubst sub v e) q
-    where sub = mkEmptySubst $ mkInScopeSet $ delVarSet (unionVarSet (freeVarsExpr e) (freeVarsQuantified q)) v
-
-          go subst (Quantified bs cl) =
-            let (bs', cl') = go1 subst bs [] cl
-            in Quantified bs' cl'
-          go1 subst [] bs' cl = (reverse bs', go2 subst cl)
-          go1 subst (b:bs) bs' cl =
-            let (subst',b') = substBndr subst b
-            in go1 subst' bs (b':bs') cl
-          go2 subst (Conj q1 q2) = Conj (go subst q1) (go subst q2)
-          go2 subst (Disj q1 q2) = Disj (go subst q1) (go subst q2)
-          go2 subst (Impl q1 q2) = Impl (go subst q1) (go subst q2)
-          go2 subst (Equiv e1 e2) =
-            let e1' = substExpr (text "substQuantified e1") subst e1
-                e2' = substExpr (text "substQuantified e2") subst e2
-            in Equiv e1' e2'
-
-------------------------------------------------------------------------------
-
 unshadowQuantifiedR :: MonadUnique m => Rewrite c m Quantified
 unshadowQuantifiedR = contextfreeT unshadowQuantified
 
@@ -569,14 +545,13 @@ inventNames s nm = head [ nm' | i :: Int <- [0..]
 instantiateQuantifiedVarR :: (Var -> Bool) -> CoreString -> RewriteH Quantified
 instantiateQuantifiedVarR p cs = prefixFailMsg "instantiation failed: " $ do
     bs <- forallVarsT idR
-    (e,new) <- case filter p bs of
+    e <- case filter p bs of
                 [] -> fail "no universally quantified variables match predicate."
                 (b:_) | isId b    -> let (before,_) = break (==b) bs
-                                     in liftM (,[]) $ withVarsInScope before $ parseCoreExprT cs
-                      | otherwise -> do let (before,_) = break (==b) bs
-                                        (ty, tvs) <- withVarsInScope before $ parseTypeWithHolesT cs
-                                        return (Type ty, tvs)
-    contextfreeT (instantiateQuantifiedVar p e new) >>> (lintQuantifiedT >> idR) -- lint for sanity
+                                     in withVarsInScope before $ parseCoreExprT cs
+                      | otherwise -> let (before,_) = break (==b) bs
+                                     in liftM (Type . fst) $ withVarsInScope before $ parseTypeWithHolesT cs
+    contextfreeT (instQuantified p e) >>> (lintQuantifiedT >> idR) -- lint for sanity
 
 ------------------------------------------------------------------------------
 
