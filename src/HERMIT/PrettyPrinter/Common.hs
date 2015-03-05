@@ -309,7 +309,7 @@ instance RenderSpecial ASCII where
         renderSpecial CoercionBindSymbol  = ASCII "~#"   -- <<coercion binding>>>
         renderSpecial TypeSymbol          = ASCII "*"    -- <<type>>>
         renderSpecial TypeBindSymbol      = ASCII "*"    -- <<type binding>>>
-        renderSpecial ForallSymbol        = ASCII "\\/"
+        renderSpecial ForallSymbol        = ASCII "forall"
 
 newtype Unicode = Unicode Char
 
