@@ -27,7 +27,6 @@ import Data.Char (isSpace)
 import Data.Dynamic
 import Data.List (delete)
 import qualified Data.Map as M
-import Data.Maybe
 import Data.Monoid
 import Data.String (fromString)
 
@@ -95,7 +94,7 @@ printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState Com
            => (LemmaName,Lemma) -> m ()
 printLemma (nm,lem) = do
     pp <- gets cl_pretty
-    doc <- queryInFocus (return lem >>> liftPrettyH (pOptions pp) (ppLemmaT pp nm) :: TransformH Core DocH) Nothing
+    doc <- queryInFocus (return lem >>> liftPrettyH (pOptions pp) (ppLemmaT pp nm) :: TransformH Core DocH) Never
     st <- get
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
@@ -105,7 +104,7 @@ printLemma (nm,lem) = do
 interactiveProofIO :: LemmaName -> CommandLineState -> IO (Either CLException CommandLineState)
 interactiveProofIO nm s = do
     (r,st) <- runCLT s $ do
-                l <- queryInFocus (getLemmaByNameT nm :: TransformH Core Lemma) (Just $ "prove-lemma " ++ quoteShow nm)
+                l <- queryInFocus (getLemmaByNameT nm :: TransformH Core Lemma) (Always $ "prove-lemma " ++ quoteShow nm)
                 pushProofStack $ Unproven nm l [] False
                 interactiveProof
     -- Proof stack in st will always be empty
@@ -181,7 +180,7 @@ endProof expr = do
     Unproven nm (Lemma q _ _) ls temp : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
         t = promoteT $ verifyQuantifiedT >> unless temp (markLemmaProvedT nm)
-    queryInFocus (transformQ q ls (setFailMsg msg t)) (Just $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
+    queryInFocus (transformQ q ls (setFailMsg msg t)) (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
     cl_putStrLn $ "Successfully proven: " ++ show nm
 
@@ -192,37 +191,33 @@ endProof expr = do
 performProofShellCommand :: (MonadCatch m, MonadException m, CLMonad m)
                          => ExprH -> ProofShellCommand -> m ()
 performProofShellCommand expr = go
-    where expr' = Just $ unparseExprH expr
+    where str = unparseExprH expr
           go (PCRewrite rr) = do
                 -- careful to only modify the lemma in the resulting AST
                 Unproven nm (Lemma q p u) ls t : todos <- getProofStack
-                q' <- queryInFocus (rewriteQ q ls $ rr >>> (promoteT lintQuantifiedT >> idR)) expr'
+                q' <- queryInFocus (rewriteQ q ls $ rr >>> (promoteT lintQuantifiedT >> idR)) (Always str)
                 let todo = Unproven nm (Lemma q' p u) ls t
                 modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo:todos) (cl_proofstack st) }
           go (PCTransform t) = do
                 (_, Lemma q _ _, ls) <- currentLemma
-                cl_putStrLn =<< queryInFocus (transformQ q ls t) expr'
+                cl_putStrLn =<< queryInFocus (transformQ q ls t) (Changed str)
           go (PCUnit t) = do
                 (_, Lemma q _ _, ls) <- currentLemma
-                queryInFocus (transformQ q ls t) expr'
-          go (PCInduction idPred) = performInduction expr' idPred
-          go PCConsequent         = proveConsequent (fromJust expr')
-          go PCAntecedent         = proveAntecedent (fromJust expr')
-          go PCConjunction        = proveConjuction (fromJust expr')
-          go (PCSplitAssumed i)   = splitAssumed i (fromJust expr')
+                queryInFocus (transformQ q ls t) (Changed str)
+          go (PCInduction idPred) = performInduction (Always str) idPred
+          go PCConsequent         = proveConsequent str
+          go PCAntecedent         = proveAntecedent str
+          go PCConjunction        = proveConjuction str
+          go (PCSplitAssumed i)   = splitAssumed i str
           go (PCShell effect)     = performShellEffect effect
-          go (PCScript effect)    = do
-                -- lemVar <- liftIO $ newMVar lem -- couldn't resist that name
-                -- let lemHack e = liftIO (takeMVar lemVar) >>= flip runExprH e >>= liftIO . putMVar lemVar
-                performScriptEffect runExprH effect
-                -- liftIO $ takeMVar lemVar
+          go (PCScript effect)    = performScriptEffect runExprH effect
           go (PCQuery query)      = performQuery query expr
           go (PCUser prf)         = do
                 let UserProofTechnique t = prf -- may add more constructors later
                 -- note: we assume that if 't' completes without failing,
                 -- the lemma is proved, we don't actually check
                 Unproven nm (Lemma q _ _) ls temp : _ <- getProofStack
-                queryInFocus (transformQ q ls t >> unless temp (markLemmaProvedT nm)) expr'
+                queryInFocus (transformQ q ls t >> unless temp (markLemmaProvedT nm)) (Changed str)
                 _ <- popProofStack
                 cl_putStrLn $ "Successfully proven: " ++ show nm
           go PCEnd                = endProof expr
@@ -304,15 +299,15 @@ splitQuantified (Quantified bs cl) = do
         _ -> fail "equalities cannot be split!"
 
 performInduction :: (MonadCatch m, MonadException m, CLMonad m)
-                 => Maybe String -> (Id -> Bool) -> m ()
-performInduction expr idPred = do
+                 => CommitMsg -> (Id -> Bool) -> m ()
+performInduction cm idPred = do
     (nm, Lemma q@(Quantified bs (Equiv lhs rhs)) _ _, ls) <- currentLemma
     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $
          soleElement (filter idPred bs)
 
     -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
     cases <- queryInFocus (inductionCaseSplit bs i lhs rhs :: TransformH Core [(Maybe DataCon, [Var], CoreExpr, CoreExpr)])
-                          expr
+                          cm
 
     -- replace the current lemma with the three subcases
     -- proving them will prove this case automatically

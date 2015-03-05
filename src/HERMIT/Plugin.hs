@@ -102,7 +102,7 @@ runHPM store passInfo hpass = hermitKernel store (lpName passInfo) $ \ kernel in
     (r,st) <- hpmToIO ps hpass
     let cleanup ast = do
             if ast /= initAST -- only do this if we actually changed the AST
-            then applyK kernel (extractR occurAnalyseAndDezombifyR) Nothing (mkKernelEnv st) ast >>= resumeK kernel
+            then applyK kernel (extractR occurAnalyseAndDezombifyR) Never (mkKernelEnv st) ast >>= resumeK kernel
             else resumeK kernel ast
     either (\case PAbort      -> abortK kernel
                   PResume ast -> cleanup ast
@@ -118,12 +118,12 @@ eval comp = do
     v <- viewT comp
     case v of
         Return x           -> return x
-        RR rr       :>>= k -> runS (applyK kernel (extractR $ localPathR path rr) Nothing env) >>= eval . k
-        Query tr    :>>= k -> runQ (queryK kernel (extractT $ localPathT path tr) Nothing env) >>= eval . k
+        RR rr       :>>= k -> runS (applyK kernel (extractR $ localPathR path rr) Never env) >>= eval . k
+        Query tr    :>>= k -> runQ (queryK kernel (extractT $ localPathT path tr) Never env) >>= eval . k
         Shell es os :>>= k -> clm (commandLine interpShellCommand os es) >>= eval . k
         Guard p (HPM m)  :>>= k  -> gets (p . ps_pass) >>= \ b -> when b (eval m) >>= eval . k
         Focus tp (HPM m) :>>= k  -> do
-            p <- runQ (queryK kernel (extractT tp) Nothing env)  -- run the pathfinding translation
+            p <- runQ (queryK kernel (extractT tp) Never env)  -- run the pathfinding translation
             old_p <- gets ps_focus
             modify $ \st -> st { ps_focus = old_p <> p }
             r <- eval m             	      -- run the focused computation

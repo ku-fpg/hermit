@@ -53,7 +53,7 @@ completionsFor so_far cts = do
     qs <- mapM completionQuery cts
     (k,(env,ast)) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor)
     -- 'liftM snd' is because we assume completion queries don't create new ASTs
-    cls <- forM qs $ \ q -> catchM (do q' <- addFocusT q ; liftM snd $ queryK k q' Nothing env ast) (\_ -> return [])
+    cls <- forM qs $ \ q -> catchM (do q' <- addFocusT q ; liftM snd $ queryK k q' Never env ast) (\_ -> return [])
     return $ map simpleCompletion $ nub $ filter (so_far `isPrefixOf`) $ concat cls
 
 data CompletionType = ConsiderC       -- considerable constructs

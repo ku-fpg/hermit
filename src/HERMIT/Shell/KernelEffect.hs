@@ -63,16 +63,16 @@ applyRewrite rr expr = do
         pp = pCoreTC $ cl_pretty st
 
     rr' <- addFocusR rr
-    ast' <- prefixFailMsg "Rewrite failed:" $ applyK k rr' (Just (unparseExprH expr)) kEnv ast
+    ast' <- prefixFailMsg "Rewrite failed:" $ applyK k rr' (Always (unparseExprH expr)) kEnv ast
 
     let showResult = if cl_diffonly st then showDiff else showWindow
         showDiff = do q <- addFocusT $ liftPrettyH ppOpts pp
-                      (_,doc1) <- queryK k q Nothing kEnv ast
-                      (_,doc2) <- queryK k q Nothing kEnv ast'
+                      (_,doc1) <- queryK k q Never kEnv ast
+                      (_,doc2) <- queryK k q Never kEnv ast'
                       diffDocH (cl_pretty st) doc1 doc2 >>= cl_putStr
 
     when (cl_corelint st) $ do
-        warns <- liftM snd (queryK k lintModuleT Nothing kEnv ast')
+        warns <- liftM snd (queryK k lintModuleT Never kEnv ast')
                     `catchM` (\ errs -> deleteK k ast' >> fail errs)
         putStrToConsole warns
 
@@ -81,7 +81,7 @@ applyRewrite rr expr = do
 setPath :: (Injection GHC.ModGuts g, Walker HermitC g, MonadCatch m, CLMonad m)
         => TransformH g LocalPathH -> ExprH -> m ()
 setPath t expr = do
-    p <- prefixFailMsg "Cannot find path: " $ queryInFocus t (Just $ unparseExprH expr)
+    p <- prefixFailMsg "Cannot find path: " $ queryInFocus t (Always $ unparseExprH expr)
     ast <- gets cl_cursor
     addASTWithPath ast (<> p)
     showWindow
@@ -94,7 +94,7 @@ goDirection dir expr = do
         env = cl_kernel_env st
         ast = cl_cursor st
         rel' = moveLocally dir rel
-    (ast',b) <- queryK k (testPathStackT base rel') Nothing env ast
+    (ast',b) <- queryK k (testPathStackT base rel') Never env ast
     if b
     then do ast'' <- tellK k (unparseExprH expr) ast'
             addASTWithPath ast'' (const rel')

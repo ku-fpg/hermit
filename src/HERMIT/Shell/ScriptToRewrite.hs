@@ -88,11 +88,11 @@ getFragment True ast = do
                         _  -> liftM (PP.text "Assumed lemmas: " :) $
                                 queryInFocus ((liftPrettyH opts $
                                                 forM ls $ \(n',l') ->
-                                                    return l' >>> ppLemmaT Clean.pretty n') :: TransformH Core [DocH]) Nothing
+                                                    return l' >>> ppLemmaT Clean.pretty n') :: TransformH Core [DocH]) Never
                 d <- queryInFocus (liftPrettyH opts $
-                                    return l >>> ppLemmaT Clean.pretty nm :: TransformH Core DocH) Nothing
+                                    return l >>> ppLemmaT Clean.pretty nm :: TransformH Core DocH) Never
                 return $ PP.vcat $ as ++ [PP.text "Proving:", d]
-            _                             -> queryInFocus (liftPrettyH opts $ pCoreTC Clean.pretty) Nothing
+            _                             -> queryInFocus (liftPrettyH opts $ pCoreTC Clean.pretty) Never
     let ASCII str = renderCode opts doc
         str' = unlines $ ("" :) $ map ("-- " ++) $ lines str
     modify $ setCursor now

@@ -25,7 +25,7 @@ import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
 
 import Data.Dynamic
 import qualified Data.Map as M
-import Data.Maybe (fromJust, fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Monoid (mempty)
 
 import HERMIT.Context
@@ -78,18 +78,18 @@ instance Extern QueryFun where
 
 performQuery :: (MonadCatch m, CLMonad m) => QueryFun -> ExprH -> m ()
 performQuery qf expr = go qf
-    where expr' = Just $ unparseExprH expr
+    where cm = Changed $ unparseExprH expr
           go (QueryString q) =
-            putStrToConsole =<< prefixFailMsg "Query failed: " (queryInFocus q expr')
+            putStrToConsole =<< prefixFailMsg "Query failed: " (queryInFocus q cm)
 
           go (QueryDocH q) = do
-            doc <- prefixFailMsg "Query failed: " $ queryInFocus q expr'
+            doc <- prefixFailMsg "Query failed: " $ queryInFocus q cm
             st <- get
             liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
           go (QueryPrettyH q) = do
             st <- get
-            doc <- prefixFailMsg "Query failed: " $ queryInFocus (liftPrettyH (pOptions (cl_pretty st)) q) expr'
+            doc <- prefixFailMsg "Query failed: " $ queryInFocus (liftPrettyH (pOptions (cl_pretty st)) q) cm
             liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
           go (Inquiry f) = get >>= liftIO . f >>= putStrToConsole
@@ -119,8 +119,8 @@ performQuery qf expr = go qf
 
           go (CorrectnessCriteria q) = do
             -- TODO: Again, we may want a quiet version of the kernel_env
-            let str = fromJust expr'
-            modFailMsg (\ err -> str ++ " [exception: " ++ err ++ "]") $ queryInFocus q expr'
+            let str = unparseExprH expr
+            modFailMsg (\ err -> str ++ " [exception: " ++ err ++ "]") $ queryInFocus q cm
             putStrToConsole $ str ++ " [correct]"
 
 ppWholeProgram :: (CLMonad m, MonadCatch m) => AST -> m DocH
@@ -128,7 +128,7 @@ ppWholeProgram ast = do
     st <- get
     d <- queryK (cl_kernel st)
                 (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ pCoreTC $ cl_pretty st)
-                Nothing
+                Never
                 (cl_kernel_env st) ast
     return $ snd d -- discard new AST, assuming pp won't create one
 
@@ -474,13 +474,13 @@ announceProven :: (MonadCatch m, CLMonad m) => m ()
 announceProven = getProofStack >>= go
     where go (Proven nm temp : r) = do
             queryInFocus (unless temp (modifyLemmaT nm id idR (const True) id) :: TransformH Core ())
-                         (Just $ "-- proven " ++ quoteShow nm) -- comment in script
+                         (Always $ "-- proven " ++ quoteShow nm) -- comment in script
             -- take it off the stack for the new AST
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
             cl_putStrLn ("Successfully proven: " ++ show nm) >> go r
           go (IntroLemma nm q p : r) = do
             queryInFocus (insertLemmaT nm (Lemma q p False) :: TransformH Core ())
-                         (Just $ "-- proven " ++ quoteShow nm) -- comment in script
+                         (Always $ "-- proven " ++ quoteShow nm) -- comment in script
             -- take it off the stack for the new AST
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
             cl_putStrLn ("Successfully proven: " ++ show nm) >> go r
@@ -514,7 +514,7 @@ showWindow = ifM isRunningScript (return ()) $ fixWindow >> gets cl_window >>= p
 ------------------------------------------------------------------------------
 
 queryInFocus :: (Walker HermitC g, Injection GHC.ModGuts g, MonadCatch m, CLMonad m)
-             => TransformH g b -> Maybe String -> m b
+             => TransformH g b -> CommitMsg -> m b
 queryInFocus t msg = do
     q <- addFocusT t
     st <- get
