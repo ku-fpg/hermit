@@ -173,16 +173,20 @@ instQuantified p e = liftM fst . go []
 
             | otherwise = do -- quantified here, so do substitution and start bubbling up
                 let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
-                    tyVars = filter isTyVar (bs'++bbs)
+                    (eTvs, eTy) = splitForAllTys $ exprKindOrType e
+                    tyVars = eTvs ++ filter isTyVar (bs'++bbs)
                     failMsg = fail "type of provided expression differs from selected binder."
 
                     bindFn v = if v `elem` tyVars then BindMe else Skolem
 
-                sub <- maybe failMsg return $ tcUnifyTys bindFn [varType i] [exprKindOrType e]
+                sub <- maybe failMsg return $ tcUnifyTys bindFn [varType i] [eTy]
 
                     -- if i is a tyvar, we know e is a type, so free vars will be tyvars
-                let itvs = [ v | isTyVar i, v <- varSetElems (freeVarsExpr e) ]
-                    q' = substQuantified i e $ Quantified vs cl
+                let e' = mkCoreApps e [ case lookupTyVar sub v of
+                                            Nothing -> Type (mkTyVarTy v)
+                                            Just ty -> Type ty | v <- eTvs ]
+                let itvs = [ v | isTyVar i, v <- varSetElems (freeVarsExpr e') ]
+                    q' = substQuantified i e' $ Quantified vs cl
 
                 return (replaceVars sub (bs'++itvs) q', sub)
 
