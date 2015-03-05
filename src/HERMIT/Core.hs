@@ -278,23 +278,38 @@ altVars (_,vs,_) = vs
 -- The GHC Function exprFreeVars defined in "CoreFVs" only returns *locally-defined* free variables.
 -- In HERMIT, this is typically not what we want, so we define our own functions.
 -- We reuse some of the functionality in "CoreFVs", but alas much of it is not exposed, so we have to reimplement some of it.
-
--- | Find all free variables in an expression.
-freeVarsExpr :: CoreExpr -> VarSet
-freeVarsExpr = exprSomeFreeVars (const True)
+-- We do not use GHC's exprSomeFreeVars because it does not return the full set of free vars for a Var.
+-- It only returns the Var itself, rather than extendVarSet (freeVarsVar v) v like it should.
 
 -- | Find all free identifiers in an expression.
 freeIdsExpr :: CoreExpr -> IdSet
-freeIdsExpr = exprSomeFreeVars isId
+freeIdsExpr = filterVarSet isId . freeVarsExpr
 
 -- | Find all locally defined free variables in an expression.
 localFreeVarsExpr :: CoreExpr -> VarSet
-localFreeVarsExpr = exprSomeFreeVars isLocalVar
+localFreeVarsExpr = filterVarSet isLocalVar . freeVarsExpr
 
 -- | Find all locally defined free identifiers in an expression.
 localFreeIdsExpr :: CoreExpr -> VarSet
-localFreeIdsExpr = exprSomeFreeVars isLocalId
+localFreeIdsExpr = filterVarSet isLocalId . freeVarsExpr
 
+-- | Find all free variables in an expression.
+freeVarsExpr :: CoreExpr -> VarSet
+freeVarsExpr (Var v) = extendVarSet (freeVarsVar v) v
+freeVarsExpr (Lit {}) = emptyVarSet
+freeVarsExpr (App e1 e2) = freeVarsExpr e1 `unionVarSet` freeVarsExpr e2
+freeVarsExpr (Lam b e) = delVarSet (freeVarsExpr e) b
+freeVarsExpr (Let b e) = freeVarsBind b `unionVarSet` delVarSetList (freeVarsExpr e) (bindersOf b)
+freeVarsExpr (Case s b ty alts) = let altFVs = delVarSet (unionVarSets $ map freeVarsAlt alts) b
+                                  in unionVarSets [freeVarsExpr s, freeVarsType ty, altFVs]
+freeVarsExpr (Cast e co) = freeVarsExpr e `unionVarSet` freeVarsCoercion co
+freeVarsExpr (Tick t e) = freeVarsTick t `unionVarSet` freeVarsExpr e
+freeVarsExpr (Type ty) = freeVarsType ty
+freeVarsExpr (Coercion co) = freeVarsCoercion co
+
+freeVarsTick :: Tickish Id -> VarSet
+freeVarsTick (Breakpoint _ ids) = mkVarSet ids
+freeVarsTick _ = emptyVarSet
 
 -- | Find all free identifiers in a binding group, which excludes any variables bound in the group.
 freeVarsBind :: CoreBind -> VarSet
