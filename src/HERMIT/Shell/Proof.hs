@@ -77,6 +77,8 @@ proof_externals = map (.+ Proof)
         [ "Prove the consequent of an implication by assuming the antecedent." ]
     , external "prove-antecedent" PCAntecedent
         [ "Introduce a proven lemma corresponding to the consequent by proving the antecedent." ]
+    , external "prove-conjuction" PCConjunction
+        [ "Prove a conjuction by proving both sides of it." ]
     , external "split-assumed" PCSplitAssumed
         [ "Split an assumed lemma which is a conjuction/disjunction." ]
     , external "dump" (\pp fp r w -> promoteT (liftPrettyH (pOptions pp) (ppQuantifiedT pp)) >>> dumpT fp pp r w :: TransformH QC ())
@@ -132,7 +134,7 @@ interactiveProof = do
                                 unless (null ls) $ do
                                     cl_putStrLn "Assumed lemmas:"
                                     mapM_ printLemma [ (fromString (show i) <> ": " <> n, lem)
-                                                     | (i::Int,(n,lem)) <- zip [1..] ls ]
+                                                     | (i::Int,(n,lem)) <- zip [0..] ls ]
                                 printLemma (nm,l)
                             mLine <- getInputLine $ "proof> "
                             case mLine of
@@ -206,6 +208,7 @@ performProofShellCommand expr = go
           go (PCInduction idPred) = performInduction expr' idPred
           go PCConsequent         = proveConsequent (fromJust expr')
           go PCAntecedent         = proveAntecedent (fromJust expr')
+          go PCConjunction        = proveConjuction (fromJust expr')
           go (PCSplitAssumed i)   = splitAssumed i (fromJust expr')
           go (PCShell effect)     = performShellEffect effect
           go (PCScript effect)    = do
@@ -244,33 +247,42 @@ proveConsequent expr = do
 proveAntecedent :: (MonadCatch m, CLMonad m) => String -> m ()
 proveAntecedent expr = do
     Unproven nm (Lemma (Quantified bs cl) p u) ls _ : _ <- getProofStack
-    ((anm,alem),(cnm,cq)) <- case cl of
-        Impl (Quantified aBs acl) (Quantified cBs ccl) ->
-            let n = nm <> "-consequent"
-                q = Quantified (bs++cBs) ccl
-                n' = nm <> "-antecedent"
-                l' = Lemma (Quantified (bs++aBs) acl) False u
-            in return ((n',l'),(n,q))
+    case cl of
+        Impl (Quantified aBs acl) (Quantified cBs ccl) -> do
+            let cnm = nm <> "-consequent"
+                cq = Quantified (bs++cBs) ccl
+                anm = nm <> "-antecedent"
+                alem = Lemma (Quantified (bs++aBs) acl) False u
+            (k,ast) <- gets (cl_kernel &&& cl_cursor)
+            addAST =<< tellK k expr ast
+            _ <- popProofStack
+            pushProofStack $ IntroLemma cnm cq p -- proving the antecedent introduces the consequent as a lemma
+            pushProofStack $ Unproven anm alem ls True
         _ -> fail "not an implication."
-    (k,ast) <- gets (cl_kernel &&& cl_cursor)
-    addAST =<< tellK k expr ast
-    _ <- popProofStack
-    pushProofStack $ IntroLemma cnm cq p -- proving the antecedent introduces the consequent as a lemma
-    pushProofStack $ Unproven anm alem ls True
+
+proveConjuction :: (MonadCatch m, CLMonad m) => String -> m ()
+proveConjuction expr = do
+    Unproven nm (Lemma (Quantified bs cl) p u) ls t : _ <- getProofStack
+    case cl of
+        Conj (Quantified lbs lcl) (Quantified rbs rcl) -> do
+            (k,ast) <- gets (cl_kernel &&& cl_cursor)
+            addAST =<< tellK k expr ast
+            _ <- popProofStack
+            pushProofStack $ Proven nm t
+            pushProofStack $ Unproven (nm <> "-r") (Lemma (Quantified (bs++rbs) rcl) p u) ls True
+            pushProofStack $ Unproven (nm <> "-l") (Lemma (Quantified (bs++lbs) lcl) p u) ls True
+        _ -> fail "not a conjuction."
 
 splitAssumed :: (MonadCatch m, CLMonad m) => Int -> String -> m ()
 splitAssumed i expr = do
     Unproven nm lem ls t : _ <- getProofStack
-    (b, (n, Lemma q p u):a) <- getIth i $ (nm,lem) : ls
+    (b, (n, Lemma q p u):a) <- getIth i ls
     qs <- splitQuantified q
     let nls = [ (n <> fromString (show j), Lemma q' p u) | (j::Int,q') <- zip [0..] qs ]
     (k,ast) <- gets (cl_kernel &&& cl_cursor)
     addAST =<< tellK k expr ast
     _ <- popProofStack
-    case b of
-        [] -> let (n',l') = head nls
-              in pushProofStack $ Unproven n' l' (tail nls ++ a) t
-        _ -> pushProofStack $ Unproven nm lem (tail b ++ nls ++ a) t
+    pushProofStack $ Unproven nm lem (b ++ nls ++ a) t
 
 getIth :: MonadCatch m => Int -> [a] -> m ([a],[a])
 getIth _ [] = fail "getIth: out of range"
@@ -330,6 +342,7 @@ data ProofShellCommand
     | PCInduction (Id -> Bool)
     | PCConsequent
     | PCAntecedent
+    | PCConjunction
     | PCSplitAssumed Int
     | PCShell ShellEffect
     | PCScript ScriptEffect
