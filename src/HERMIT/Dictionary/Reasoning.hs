@@ -129,8 +129,8 @@ externals =
         , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
     , external "copy-lemma" (\ nm newName -> modifyLemmaT nm (const newName) idR id id :: TransformH Core ())
         [ "Copy a given lemma, with a new name." ]
-    , external "modify-lemma" ((\ nm rr -> modifyLemmaT nm id (extractR rr) (const False) (const False)) :: LemmaName -> RewriteH QC -> TransformH Core ())
-        [ "Modify a given lemma. Resets the proven status to Not Proven and used status to Not Used." ]
+    , external "modify-lemma" ((\ nm rr -> modifyLemmaT nm id (extractR rr) id (const False)) :: LemmaName -> RewriteH QC -> TransformH Core ())
+        [ "Modify a given lemma. Resets used status to Not Used." ]
     , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaQ >>> extractT t) :: LemmaName -> TransformH QC String -> TransformH Core String)
         [ "Apply a transformation to a lemma, returning the result." ]
     , external "show-lemma" ((\pp n -> showLemmaT n pp) :: PrettyPrinter -> LemmaName -> PrettyH Core)

@@ -62,6 +62,8 @@ externals = map (.+ KURE)
        [ "Promote a rewrite to operate over an entire tree in bottom-up order, requiring success for at least one node." ] .+ Deep
    , external "any-td"     (anytdR :: RewriteH Core -> RewriteH Core)
        [ "Promote a rewrite to operate over an entire tree in top-down order, requiring success for at least one node." ] .+ Deep
+   , external "any-td"     (anytdR :: RewriteH QC -> RewriteH QC)
+       [ "Promote a rewrite to operate over an entire tree in top-down order, requiring success for at least one node." ] .+ Deep
    , external "any-du"     (anyduR :: RewriteH Core -> RewriteH Core)
        [ "Apply a rewrite twice, in a top-down and bottom-up way, using one single tree traversal,",
          "succeeding if any succeed."] .+ Deep
@@ -80,6 +82,14 @@ externals = map (.+ KURE)
    , external "focus"      (hfocusR . return :: LocalPathH -> RewriteH CoreTC -> RewriteH CoreTC)
        [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
    , external "focus"      (hfocusT . return :: LocalPathH -> TransformH CoreTC String -> TransformH CoreTC String)
+       [ "Apply a query at a focal point."] .+ Navigation .+ Deep
+   , external "focus"      ((\t -> extractR . hfocusR t . promoteR) :: TransformH CoreTC LocalPathH -> RewriteH Core -> RewriteH Core)
+       [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
+   , external "focus"      ((\t -> extractT . hfocusT t . promoteT) :: TransformH CoreTC LocalPathH -> TransformH Core String -> TransformH Core String)
+       [ "Apply a query at a focal point."] .+ Navigation .+ Deep
+   , external "focus"      ((\p -> extractR . hfocusR (return p) . promoteR) :: LocalPathH -> RewriteH Core -> RewriteH Core)
+       [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
+   , external "focus"      ((\p -> extractT . hfocusT (return p) . promoteT) :: LocalPathH -> TransformH Core String -> TransformH Core String)
        [ "Apply a query at a focal point."] .+ Navigation .+ Deep
    , external "when"       ((>>) :: TransformH Core () -> RewriteH Core -> RewriteH Core)
        [ "Apply a rewrite only if the check succeeds." ] .+ Predicate
