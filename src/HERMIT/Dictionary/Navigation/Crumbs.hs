@@ -95,6 +95,24 @@ crumbExternals = map (.+ Navigation)
                 [ "Descend into the type within a coercion instantiation." ]
             , external "lr-co" LRCo_Co
                 [ "Descend into the coercion within a left/right projection coercion." ]
+            , external "quant-clause" Quant_Clause
+                [ "Descend into the clause of a quantified clause." ]
+            , external "conj-left" Conj_Left
+                [ "Descend into left-hand side of a conjunction." ]
+            , external "conj-right" Conj_Right
+                [ "Descend into right-hand side of a conjunction." ]
+            , external "disj-left" Disj_Left
+                [ "Descend into left-hand side of a disjunction." ]
+            , external "disj-right" Disj_Right
+                [ "Descend into right-hand side of a disjunction." ]
+            , external "antecedent" Impl_Left
+                [ "Descend into antecedent of an implication." ]
+            , external "consequent" Impl_Right
+                [ "Descend into consequent of an implication." ]
+            , external "equiv-left" Equiv_Left
+                [ "Descend into left-hand side of an equivalence." ]
+            , external "equiv-right" Equiv_Right
+                [ "Descend into right-hand side of an equivalence." ]
             ]
 
 ---------------------------------------------------------------------------------------

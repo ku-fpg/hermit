@@ -464,9 +464,13 @@ data Crumb =
            | NthCo_Int | NthCo_Co
            | InstCo_Co | InstCo_Type
            | LRCo_LR | LRCo_Co
+           -- Quantified
+           | Quant_Clause
+           | Conj_Left | Conj_Right
+           | Disj_Left | Disj_Right
+           | Impl_Left | Impl_Right
+           | Equiv_Left | Equiv_Right
            deriving (Eq,Read,Show)
-           -- TODO: Write a prettier Show instance
-
 
 showCrumbs :: [Crumb] -> String
 showCrumbs crs = "[" ++ intercalate ", " (map showCrumb crs) ++ "]"
@@ -517,8 +521,17 @@ showCrumb = \case
                InstCo_Co         -> "inst-co"
                InstCo_Type       -> "inst-type"
                LRCo_Co           -> "lr-co"
-
-               _              -> "Warning: Crumb should not be in use!  This is probably Neil's fault."
+               -- Quantified
+               Quant_Clause -> "quant-clause"
+               Conj_Left    -> "conj-left"
+               Conj_Right   -> "conj-right"
+               Disj_Left    -> "disj-left"
+               Disj_Right   -> "disj-right"
+               Impl_Left    -> "antecedent"
+               Impl_Right   -> "consequent"
+               Equiv_Left   -> "equiv-left"
+               Equiv_Right  -> "equiv-right"
+               _ -> "Warning: Crumb should not be in use!  This is probably Neil's fault."
 
 -- | Converts a 'Crumb' into the 'Crumb' pointing to its left-sibling, if a such a 'Crumb' exists.
 --   This is used for moving 'left' in the shell.

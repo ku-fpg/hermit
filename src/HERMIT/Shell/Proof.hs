@@ -30,6 +30,7 @@ import qualified Data.Map as M
 import Data.Monoid
 import Data.String (fromString)
 
+import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC hiding (settings, (<>), text, sep, (<+>), ($+$), nest)
@@ -91,10 +92,10 @@ proof_externals = map (.+ Proof)
 --------------------------------------------------------------------------------------------------------
 
 printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
-           => (LemmaName,Lemma) -> m ()
-printLemma (nm,lem) = do
+           => PathStack -> (LemmaName,Lemma) -> m ()
+printLemma p (nm,lem) = do -- TODO
     pp <- gets cl_pretty
-    doc <- queryInFocus (return lem >>> liftPrettyH (pOptions pp) (ppLemmaT pp nm) :: TransformH Core DocH) Never
+    doc <- queryInFocus (return lem >>> liftPrettyH (pOptions pp) (ppLemmaT (pathStack2Path p) pp nm) :: TransformH Core DocH) Never
     st <- get
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
@@ -105,7 +106,7 @@ interactiveProofIO :: LemmaName -> CommandLineState -> IO (Either CLException Co
 interactiveProofIO nm s = do
     (r,st) <- runCLT s $ do
                 l <- queryInFocus (getLemmaByNameT nm :: TransformH Core Lemma) (Always $ "prove-lemma " ++ quoteShow nm)
-                pushProofStack $ Unproven nm l [] False
+                pushProofStack $ Unproven nm l [] mempty False
                 interactiveProof
     -- Proof stack in st will always be empty
     return $ fmap (const st) r
@@ -125,16 +126,17 @@ interactiveProof = do
             el <- lift $ tryM () announceProven >> attemptM currentLemma
             case el of
                 Left _ -> return () -- no lemma is currently being proven, so exit
-                Right (nm,l,ls) -> do
+                Right (nm,l,ls,p) -> do
                     mExpr <- lift popScriptLine
                     case mExpr of
                         Nothing -> do
                             lift $ do
                                 unless (null ls) $ do
                                     cl_putStrLn "Assumed lemmas:"
-                                    mapM_ printLemma [ (fromString (show i) <> ": " <> n, lem)
-                                                     | (i::Int,(n,lem)) <- zip [0..] ls ]
-                                printLemma (nm,l)
+                                    mapM_ (printLemma mempty)
+                                          [ (fromString (show i) <> ": " <> n, lem)
+                                          | (i::Int,(n,lem)) <- zip [0..] ls ]
+                                printLemma p (nm,l)
                             mLine <- getInputLine $ "proof> "
                             case mLine of
                                 Nothing          -> fail "proof aborted (input: Nothing)"
@@ -177,7 +179,7 @@ rewriteQ q ls rr = contextonlyT $ \ c -> withLemmas (M.fromList ls) (applyT (ext
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 endProof expr = do
-    Unproven nm (Lemma q _ _) ls temp : _ <- getProofStack
+    Unproven nm (Lemma q _ _) ls _ temp : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
         t = promoteT $ verifyQuantifiedT >> unless temp (markLemmaProvedT nm)
     queryInFocus (transformQ q ls (setFailMsg msg t)) (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
@@ -194,42 +196,49 @@ performProofShellCommand expr = go
     where str = unparseExprH expr
           go (PCRewrite rr) = do
                 -- careful to only modify the lemma in the resulting AST
-                Unproven nm (Lemma q p u) ls t : todos <- getProofStack
-                q' <- queryInFocus (rewriteQ q ls $ rr >>> (promoteT lintQuantifiedT >> idR)) (Always str)
-                let todo = Unproven nm (Lemma q' p u) ls t
+                Unproven nm (Lemma q p u) ls pth t : todos <- getProofStack
+                q' <- queryInFocus (rewriteQ q ls $ pathR (pathStack2Path pth) rr >>> (promoteT lintQuantifiedT >> idR)) (Always str)
+                let todo = Unproven nm (Lemma q' p u) ls pth t
                 modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo:todos) (cl_proofstack st) }
           go (PCTransform t) = do
-                (_, Lemma q _ _, ls) <- currentLemma
-                cl_putStrLn =<< queryInFocus (transformQ q ls t) (Changed str)
+                (_, Lemma q _ _, ls, p) <- currentLemma
+                cl_putStrLn =<< queryInFocus (transformQ q ls $ pathT (pathStack2Path p) t) (Changed str)
           go (PCUnit t) = do
-                (_, Lemma q _ _, ls) <- currentLemma
-                queryInFocus (transformQ q ls t) (Changed str)
+                (_, Lemma q _ _, ls, p) <- currentLemma
+                queryInFocus (transformQ q ls $ pathT (pathStack2Path p) t) (Changed str)
           go (PCInduction idPred) = performInduction (Always str) idPred
           go PCConsequent         = proveConsequent str
           go PCAntecedent         = proveAntecedent str
           go PCConjunction        = proveConjuction str
           go (PCSplitAssumed i)   = splitAssumed i str
           go (PCShell effect)     = performShellEffect effect
+          go (PCKernel effect)    = performKernelEffect expr effect
           go (PCScript effect)    = performScriptEffect runExprH effect
           go (PCQuery query)      = performQuery query expr
           go (PCUser prf)         = do
                 let UserProofTechnique t = prf -- may add more constructors later
                 -- note: we assume that if 't' completes without failing,
                 -- the lemma is proved, we don't actually check
-                Unproven nm (Lemma q _ _) ls temp : _ <- getProofStack
+                Unproven nm (Lemma q _ _) ls _ temp : _ <- getProofStack
                 queryInFocus (transformQ q ls t >> unless temp (markLemmaProvedT nm)) (Changed str)
                 _ <- popProofStack
                 cl_putStrLn $ "Successfully proven: " ++ show nm
           go PCEnd                = endProof expr
+          go (PCPath tr) = do
+                Unproven nm (Lemma q p u) ls (base,pth) t : todos <- getProofStack
+                pth' <- queryInFocus (transformQ q ls $ localPathT pth tr) (Always str)
+                -- TODO: test if valid path
+                let todo = Unproven nm (Lemma q p u) ls (base, pth <> pth') t
+                modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo:todos) (cl_proofstack st) }
           go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.")
 
 proveConsequent :: (MonadCatch m, CLMonad m) => String -> m ()
 proveConsequent expr = do
-    Unproven nm (Lemma (Quantified bs cl) p u) ls t : _ <- getProofStack
+    Unproven nm (Lemma (Quantified bs cl) p u) ls _ t : _ <- getProofStack
     (q,ls') <- case cl of
-                Impl (Quantified aBs acl) (Quantified cBs ccl) ->
+                Impl ante (Quantified cBs ccl) ->
                     let n = nm <> "-antecedent"
-                        l = Lemma (Quantified (bs++aBs) acl) True False
+                        l = Lemma ante True False
                     in return (Quantified (bs++cBs) ccl, (n,l):ls)
                 _ -> fail "not an implication."
     let nm' = nm <> "-consequent"
@@ -237,11 +246,11 @@ proveConsequent expr = do
     addAST =<< tellK k expr ast
     _ <- popProofStack
     pushProofStack $ Proven nm t -- proving the consequent proves the lemma
-    pushProofStack $ Unproven nm' (Lemma q p u) ls' True
+    pushProofStack $ Unproven nm' (Lemma q p u) ls' mempty True
 
 proveAntecedent :: (MonadCatch m, CLMonad m) => String -> m ()
 proveAntecedent expr = do
-    Unproven nm (Lemma (Quantified bs cl) p u) ls _ : _ <- getProofStack
+    Unproven nm (Lemma (Quantified bs cl) p u) ls _ _ : _ <- getProofStack
     case cl of
         Impl (Quantified aBs acl) (Quantified cBs ccl) -> do
             let cnm = nm <> "-consequent"
@@ -252,32 +261,32 @@ proveAntecedent expr = do
             addAST =<< tellK k expr ast
             _ <- popProofStack
             pushProofStack $ IntroLemma cnm cq p -- proving the antecedent introduces the consequent as a lemma
-            pushProofStack $ Unproven anm alem ls True
+            pushProofStack $ Unproven anm alem ls mempty True
         _ -> fail "not an implication."
 
 proveConjuction :: (MonadCatch m, CLMonad m) => String -> m ()
 proveConjuction expr = do
-    Unproven nm (Lemma (Quantified bs cl) p u) ls t : _ <- getProofStack
+    Unproven nm (Lemma (Quantified bs cl) p u) ls _ t : _ <- getProofStack
     case cl of
         Conj (Quantified lbs lcl) (Quantified rbs rcl) -> do
             (k,ast) <- gets (cl_kernel &&& cl_cursor)
             addAST =<< tellK k expr ast
             _ <- popProofStack
             pushProofStack $ Proven nm t
-            pushProofStack $ Unproven (nm <> "-r") (Lemma (Quantified (bs++rbs) rcl) p u) ls True
-            pushProofStack $ Unproven (nm <> "-l") (Lemma (Quantified (bs++lbs) lcl) p u) ls True
+            pushProofStack $ Unproven (nm <> "-r") (Lemma (Quantified (bs++rbs) rcl) p u) ls mempty True
+            pushProofStack $ Unproven (nm <> "-l") (Lemma (Quantified (bs++lbs) lcl) p u) ls mempty True
         _ -> fail "not a conjuction."
 
 splitAssumed :: (MonadCatch m, CLMonad m) => Int -> String -> m ()
 splitAssumed i expr = do
-    Unproven nm lem ls t : _ <- getProofStack
+    Unproven nm lem ls _ t : _ <- getProofStack
     (b, (n, Lemma q p u):a) <- getIth i ls
     qs <- splitQuantified q
     let nls = [ (n <> fromString (show j), Lemma q' p u) | (j::Int,q') <- zip [0..] qs ]
     (k,ast) <- gets (cl_kernel &&& cl_cursor)
     addAST =<< tellK k expr ast
     _ <- popProofStack
-    pushProofStack $ Unproven nm lem (b ++ nls ++ a) t
+    pushProofStack $ Unproven nm lem (b ++ nls ++ a) mempty t
 
 getIth :: MonadCatch m => Int -> [a] -> m ([a],[a])
 getIth _ [] = fail "getIth: out of range"
@@ -301,7 +310,7 @@ splitQuantified (Quantified bs cl) = do
 performInduction :: (MonadCatch m, MonadException m, CLMonad m)
                  => CommitMsg -> (Id -> Bool) -> m ()
 performInduction cm idPred = do
-    (nm, Lemma q@(Quantified bs (Equiv lhs rhs)) _ _, ls) <- currentLemma
+    (nm, Lemma q@(Quantified bs (Equiv lhs rhs)) _ _, ls, _) <- currentLemma
     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $
          soleElement (filter idPred bs)
 
@@ -311,7 +320,7 @@ performInduction cm idPred = do
 
     -- replace the current lemma with the three subcases
     -- proving them will prove this case automatically
-    Unproven _ _ _ t <- popProofStack
+    Unproven _ _ _ _ t <- popProofStack
     pushProofStack $ Proven nm t
     forM_ (reverse cases) $ \ (mdc,vs,lhsE,rhsE) -> do
 
@@ -328,7 +337,7 @@ performInduction cm idPred = do
             lemmaName = fromString $ show nm ++ "-induction-on-" ++ unqualifiedName i ++ "-case-" ++ caseName
             caseLemma = Lemma (mkQuantified (delete i bs ++ vs) lhsE rhsE) False False
 
-        pushProofStack $ Unproven lemmaName caseLemma (hypLemmas ++ ls) True
+        pushProofStack $ Unproven lemmaName caseLemma (hypLemmas ++ ls) mempty True
 
 data ProofShellCommand
     = PCRewrite (RewriteH QC)
@@ -340,10 +349,12 @@ data ProofShellCommand
     | PCConjunction
     | PCSplitAssumed Int
     | PCShell ShellEffect
+    | PCKernel KernelEffect
     | PCScript ScriptEffect
     | PCQuery QueryFun
     | PCUser UserProofTechnique
     | PCEnd
+    | PCPath (TransformH QC LocalPathH)
     | PCUnsupported String
     deriving Typeable
 
@@ -366,10 +377,11 @@ instance Extern UserProofTechnique where
 
 interpProof :: Monad m => [Interp m ProofShellCommand]
 interpProof =
-  [ interp $ \ (RewriteCoreBox rr)            -> PCRewrite $ promoteR $ bothR $ core2qcR rr
-  , interp $ \ (RewriteCoreTCBox rr)          -> PCRewrite $ promoteR $ bothR $ core2qcR $ extractR rr
-  , interp $ \ (BiRewriteCoreBox br)          -> PCRewrite $ promoteR $ bothR $ core2qcR $ forwardT br <+ backwardT br
+  [ interp $ \ (RewriteCoreBox rr)            -> PCRewrite $ core2qcR rr
+  , interp $ \ (RewriteCoreTCBox rr)          -> PCRewrite $ core2qcR $ extractR rr
+  , interp $ \ (BiRewriteCoreBox br)          -> PCRewrite $ core2qcR $ forwardT br <+ backwardT br
   , interp $ \ (effect :: ShellEffect)        -> PCShell effect
+  , interp $ \ (effect :: KernelEffect)       -> PCKernel effect
   , interp $ \ (effect :: ScriptEffect)       -> PCScript effect
   , interp $ \ (StringBox str)                -> PCQuery (message str)
   , interp $ \ (query :: QueryFun)            -> PCQuery query
@@ -378,10 +390,10 @@ interpProof =
   , interp $ \ (TransformQCUnitBox t)         -> PCUnit t
   , interp $ \ (t :: UserProofTechnique)      -> PCUser t
   , interp $ \ (cmd :: ProofShellCommand)     -> cmd
-  , interp $ \ (CrumbBox _cr)                 -> PCUnsupported "CrumbBox"
-  , interp $ \ (PathBox _p)                   -> PCUnsupported "PathBox"
-  , interp $ \ (TransformCorePathBox _tt)     -> PCUnsupported "TransformCorePathBox"
-  , interp $ \ (TransformCoreTCPathBox _tt)   -> PCUnsupported "TransformCoreTCPathBox"
+  , interp $ \ (CrumbBox cr)                  -> PCPath (return $ mempty @@ cr)
+  , interp $ \ (PathBox p)                    -> PCPath (return p)
+  , interp $ \ (TransformCorePathBox tt)      -> PCPath (promoteT (extractT tt :: TransformH CoreExpr LocalPathH))
+  , interp $ \ (TransformCoreTCPathBox tt)    -> PCPath (promoteT (extractT tt :: TransformH CoreExpr LocalPathH))
   , interp $ \ (TransformCoreDocHBox t)       -> PCQuery (QueryDocH t)
   , interp $ \ (TransformCoreTCDocHBox t)     -> PCQuery (QueryDocH t)
   , interp $ \ (PrettyHCoreBox t)             -> PCQuery (QueryPrettyH t)
@@ -390,6 +402,6 @@ interpProof =
   , interp $ \ (TransformCoreTCStringBox tt)  -> PCQuery (QueryString tt)
   , interp $ \ (TransformCoreCheckBox tt)     -> PCQuery (CorrectnessCriteria tt)
   , interp $ \ (TransformCoreTCCheckBox tt)   -> PCQuery (CorrectnessCriteria tt)
-  , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"
+  -- , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"
   ]
 

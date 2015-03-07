@@ -265,7 +265,7 @@ data CommandLineState = CommandLineState
     , cl_height         :: Int                    -- ^ console height, in lines
     , cl_scripts        :: [(ScriptName,Script)]
     , cl_nav            :: Bool                   -- ^ keyboard input the nav panel
-    , cl_foci           :: M.Map AST ([LocalPathH], LocalPathH) -- ^ focus assigned to each AST
+    , cl_foci           :: M.Map AST PathStack    -- ^ focus assigned to each AST
     , cl_tags           :: M.Map AST [String]     -- ^ list of tags on an AST
     , cl_proofstack     :: M.Map AST [ProofTodo]  -- ^ stack of todos for the proof shell
     , cl_window         :: PathH                  -- ^ path to beginning of window, always a prefix of focus path in kernel
@@ -273,7 +273,12 @@ data CommandLineState = CommandLineState
     , cl_running_script :: Maybe Script           -- ^ Nothing = no script running, otherwise the remaining script commands
     } deriving (Typeable)
 
-data ProofTodo = Unproven   LemmaName Lemma [NamedLemma] Bool -- ^ lemma we are proving, plus temporary lemmas in scope
+type PathStack = ([LocalPathH], LocalPathH)
+
+data ProofTodo = Unproven   LemmaName Lemma [NamedLemma] PathStack Bool -- ^ lemma we are proving
+                                                                         -- temporary lemmas in scope
+                                                                         -- path into lemma to focus on
+                                                                         -- temporary status of this lemma
                | Proven     LemmaName                    Bool -- ^ lemma successfully proven, temporary status
                | IntroLemma LemmaName Quantified Bool         -- ^ introduce this lemma with given proven status
 
@@ -390,8 +395,8 @@ putStrToConsole str = ifM isRunningScript (return ()) (cl_putStrLn str)
 
 ------------------------------------------------------------------------------
 
-pathStack2Paths :: [LocalPath crumb] -> LocalPath crumb -> [Path crumb]
-pathStack2Paths ps p = reverse (map snocPathToPath (p:ps))
+pathStack2Path :: ([LocalPath crumb], LocalPath crumb) -> Path crumb
+pathStack2Path (ps,p) = concat $ reverse (map snocPathToPath (p:ps))
 
 -- | A primitive means of denoting navigation of a tree (within a local scope).
 data Direction = L -- ^ Left
@@ -412,7 +417,7 @@ moveLocally d (SnocPath p) = case p of
 
 
 pathStackToLens :: (Injection a g, Walker HermitC g) => [LocalPathH] -> LocalPathH -> LensH a g
-pathStackToLens ps p = injectL >>> pathL (concat $ pathStack2Paths ps p)
+pathStackToLens ps p = injectL >>> pathL (pathStack2Path (ps,p))
 
 -- This function is used to check the validity of paths, so which sum type we use is important.
 testPathStackT :: [LocalPathH] -> LocalPathH -> TransformH GHC.ModGuts Bool
@@ -424,9 +429,7 @@ getPathStack = do
     return $ fromMaybe ([],mempty) (M.lookup (cl_cursor st) (cl_foci st))
 
 getFocusPath :: CLMonad m => m PathH
-getFocusPath = do
-    (base, rel) <- getPathStack
-    return $ concat $ pathStack2Paths base rel
+getFocusPath = liftM pathStack2Path getPathStack
 
 addFocusT :: (Injection a g, Walker HermitC g, CLMonad m) => TransformH g b -> m (TransformH a b)
 addFocusT t = do
@@ -462,12 +465,12 @@ popProofStack = do
     modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) ts (cl_proofstack st) }
     return t
 
-currentLemma :: CLMonad m => m (LemmaName, Lemma, [NamedLemma])
+currentLemma :: CLMonad m => m (LemmaName, Lemma, [NamedLemma], PathStack)
 currentLemma = do
     todo : _ <- getProofStack
 
     case todo of
-        Unproven nm l ls _ -> return (nm, l, ls)
+        Unproven nm l ls p _ -> return (nm, l, ls, p)
         _ -> fail "currentLemma: unproven lemma not on top of stack!"
 
 announceProven :: (MonadCatch m, CLMonad m) => m ()
@@ -489,11 +492,16 @@ announceProven = getProofStack >>= go
 -- | Always returns a non-empty list.
 getProofStack :: CLMonad m => m [ProofTodo]
 getProofStack = do
+    todos <- getProofStackEmpty
+    case todos of
+        [] -> fail "No lemma currently being proved."
+        _ -> return todos
+
+getProofStackEmpty :: CLMonad m => m [ProofTodo]
+getProofStackEmpty = do
     (ps, ast) <- gets (cl_proofstack &&& cl_cursor)
 
-    case M.lookup ast ps of
-        Just todos@(_:_) -> return todos
-        _ -> fail "No lemma currently being proved."
+    maybe (return []) return $ M.lookup ast ps
 
 ------------------------------------------------------------------------------
 

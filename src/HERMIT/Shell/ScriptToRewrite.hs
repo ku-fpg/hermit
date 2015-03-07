@@ -24,6 +24,7 @@ import Control.Exception hiding (catch)
 
 import Data.Dynamic
 import qualified Data.Map as M
+import Data.Monoid
 
 import HERMIT.Context(LocalPathH)
 import HERMIT.Kernel
@@ -82,15 +83,16 @@ getFragment True ast = do
         discardProvens r@(Unproven{} : _) = r
         discardProvens (_:r) = discardProvens r
     doc <- case fmap discardProvens $ M.lookup ast ps of
-            Just (Unproven nm l ls _ : _) -> do
+            Just (Unproven nm l ls p _ : _) -> do
                 as <- case ls of
                         [] -> return []
                         _  -> liftM (PP.text "Assumed lemmas: " :) $
                                 queryInFocus ((liftPrettyH opts $
                                                 forM ls $ \(n',l') ->
-                                                    return l' >>> ppLemmaT Clean.pretty n') :: TransformH Core [DocH]) Never
+                                                    return l' >>> ppLemmaT mempty Clean.pretty n'
+                                              ) :: TransformH Core [DocH]) Never
                 d <- queryInFocus (liftPrettyH opts $
-                                    return l >>> ppLemmaT Clean.pretty nm :: TransformH Core DocH) Never
+                                    return l >>> ppLemmaT (pathStack2Path p) Clean.pretty nm :: TransformH Core DocH) Never
                 return $ PP.vcat $ as ++ [PP.text "Proving:", d]
             _                             -> queryInFocus (liftPrettyH opts $ pCoreTC Clean.pretty) Never
     let ASCII str = renderCode opts doc

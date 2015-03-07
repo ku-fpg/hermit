@@ -54,9 +54,10 @@ module HERMIT.Dictionary.Reasoning
 import           Control.Arrow hiding ((<+>))
 import           Control.Monad
 
-import qualified Data.Map as Map
 import           Data.List (isInfixOf, nubBy)
+import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
+import           Data.Monoid
 
 import           HERMIT.Context
 import           HERMIT.Core
@@ -272,19 +273,22 @@ showLemmasT :: Maybe LemmaName -> PrettyPrinter -> PrettyH a
 showLemmasT mnm pp = do
     ls <- getLemmasT
     let ls' = Map.toList $ Map.filterWithKey (maybe (\ _ _ -> True) (\ nm n _ -> show nm `isInfixOf` show n) mnm) ls
-    ds <- forM ls' $ \(nm,l) -> return l >>> ppLemmaT pp nm
+    ds <- forM ls' $ \(nm,l) -> return l >>> ppLemmaT mempty pp nm
     return $ PP.vcat ds
 
 showLemmaT :: LemmaName -> PrettyPrinter -> PrettyH a
-showLemmaT nm pp = getLemmaByNameT nm >>> ppLemmaT pp nm
+showLemmaT nm pp = getLemmaByNameT nm >>> ppLemmaT mempty pp nm
 
-ppLemmaT :: PrettyPrinter -> LemmaName -> PrettyH Lemma
-ppLemmaT pp nm = do
+ppLemmaT :: PathH -> PrettyPrinter -> LemmaName -> PrettyH Lemma
+ppLemmaT pth pp nm = do
     Lemma q p u <- idR
-    qDoc <- return q >>> ppQuantifiedT pp
+    qDoc <- return q >>> extractT (pathT pth (ppQCT pp))
     let hDoc = PP.text (show nm) PP.<+> PP.text (if p then "(Proven)" else "(Not Proven)")
                                  PP.<+> PP.text (if u then "(Used)"   else "(Not Used)")
     return $ hDoc PP.$+$ PP.nest 2 qDoc
+
+ppQCT :: PrettyPrinter -> PrettyH QC
+ppQCT pp = promoteT (ppQuantifiedT pp) <+ promoteT (ppClauseT pp) <+ promoteT (extractT (pCoreTC pp) :: PrettyH CoreExpr)
 
 ppQuantifiedT :: PrettyPrinter -> PrettyH Quantified
 ppQuantifiedT pp = do
