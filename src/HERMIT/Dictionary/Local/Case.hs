@@ -52,7 +52,7 @@ import HERMIT.Utilities
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.AlphaConversion hiding (externals)
-import HERMIT.Dictionary.Fold (foldVarR)
+import HERMIT.Dictionary.Fold hiding (externals)
 import HERMIT.Dictionary.Undefined (verifyStrictT, buildStrictnessLemmaT)
 import HERMIT.Dictionary.Unfold (unfoldR)
 
@@ -103,12 +103,18 @@ externals =
         , "case L of L -> e ==> e" ]                                         .+ Shallow .+ Eval
     , external "case-reduce-unfold" (promoteExprR (caseReduceUnfoldR True) :: RewriteH Core)
         [ "Unfold the case scrutinee and then case-reduce." ] .+ Shallow .+ Eval .+ Context
-    , external "case-split" (promoteExprR . caseSplitR . cmpString2Var :: String -> RewriteH Core)
+    , external "case-split" ((\nm -> findVarT (unOccurrenceName nm) >>= promoteExprR . caseSplitR . varToCoreExpr) :: OccurrenceName -> RewriteH Core)
         [ "case-split 'x"
-        , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ] .+ Shallow .+ Strictness
-    , external "case-split-inline" (promoteExprR . caseSplitInlineR . cmpString2Var :: String -> RewriteH Core)
+        , "e ==> case x of C1 vs -> e; C2 vs -> e, where x is free in e" ] .+ Deep .+ Strictness
+    , external "case-split" (parseCoreExprT >=> promoteR . caseSplitR :: CoreString -> RewriteH Core)
+        [ "case-split [| expr |]"
+        , "e ==> case expr of C1 vs -> e; C2 vs -> e"] .+ Deep .+ Strictness
+    , external "case-split-inline" ((\nm -> findVarT (unOccurrenceName nm) >>= promoteExprR . caseSplitInlineR . varToCoreExpr) :: OccurrenceName -> RewriteH Core)
         [ "Like case-split, but additionally inlines the matched constructor "
         , "applications for all occurances of the named variable." ] .+ Deep .+ Strictness
+    , external "case-split-inline" (parseCoreExprT >=> promoteR . caseSplitInlineR :: CoreString -> RewriteH Core)
+        [ "Like case-split, but additionally inlines the matched constructor "
+        , "applications for all occurances of the case binder." ] .+ Deep .+ Strictness
     , external "case-intro-seq" (promoteExprR . caseIntroSeqR . cmpString2Var :: String -> RewriteH Core)
         [ "Force evaluation of a variable by introducing a case."
         , "case-intro-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow .+ Introduce .+ Strictness
@@ -362,24 +368,33 @@ caseReduceDataconR subst = prefixFailMsg "Case reduction failed: " $
                               | otherwise                  -> caseOneR (fail "scrutinee") (fail "binder") (fail "type") (\ _ -> acceptR (\ (dc'',_,_) -> dc'' == dc') >>> alphaAltVarsR shadows) >>> go
 -- WARNING: The alpha-renaming to avoid variable capture has not been tested.  We need testing infrastructure!
 
--- | Case split a free identifier in an expression:
+-- | Case split on an arbitrary scrutinee s. All free variables in s should be in scope.
 --
--- E.g. Assume expression e which mentions i :: [a]
+-- E.g. If s has type [a], then case-split s:
 --
--- e ==> case i of i
---         []     -> e
---         (a:as) -> e
-caseSplitR :: (MonadCatch m, MonadUnique m) => (Id -> Bool) -> Rewrite c m CoreExpr
-caseSplitR idPred = prefixFailMsg "caseSplit failed: " $
-               do i            <- matchingFreeIdT idPred
-                  (tycon, tys) <- splitTyConAppM (idType i)
-                  let aNms     = map (:[]) $ cycle ['a'..'z']
-                  contextfreeT $ \ e -> do dcsAndVars <- mapM (\ dc -> liftM (dc,) (sequence [ newIdH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]))
-                                                              (tyConDataCons tycon)
-                                           w <- cloneVarH (++ "'") i
-                                           let e' = substCoreExpr i (Var w) e
-                                               alts = [ (DataAlt dc, as, e') | (dc,as) <- dcsAndVars ]
-                                           return $ Case (Var i) w (coreAltsType alts) alts
+-- e ==> case s of w
+--         []     -> e[w/s]
+--         (a:as) -> e[w/s]
+--
+-- Note that occurrences of s in e are replaced with the case binder.
+caseSplitR :: forall c m. ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb
+                          , MonadCatch m, MonadUnique m )
+           => CoreExpr -> Rewrite c m CoreExpr
+caseSplitR s = prefixFailMsg "case-split failed: " $ do
+    c <- contextT
+    guardMsg (all (inScope c) $ varSetElems $ freeVarsExpr s) "variables in desired scrutinee are unbound."
+    w <- constT $ newVarH "w" (exprType s)
+    let f = compileFold [Equality [] s (varToCoreExpr w)]
+    e' <- tryR $ withVarsInScope [w] $ extractR (anytdR (promoteR $ runFoldR f) :: Rewrite c m Core)
+    constT $ do
+        (tyCon, tys) <- splitTyConAppM (exprType s)
+        let aNms = map (:[]) $ cycle ['a'..'z']
+        dcsAndBss <- forM (tyConDataCons tyCon) $ \ dc -> do
+                        bs <- sequence [ newIdH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
+                        return (dc,bs)
+        let alts = [ (DataAlt dc, bs, e') | (dc,bs) <- dcsAndBss ]
+        guardMsg (not (null alts)) "no constructors for scrutinee of that type."
+        return $ Case s w (exprType e') alts
 
 -- | Force evaluation of an identifier by introducing a case.
 --   This is equivalent to adding @(seq v)@ in the source code.
@@ -410,8 +425,8 @@ matchingFreeIdT idPred = do
 -- > caseSplitInline idPred = caseSplit idPred >>> caseInlineAlternativeR
 caseSplitInlineR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
                     , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
-                 => (Id -> Bool) -> Rewrite c m CoreExpr
-caseSplitInlineR idPred = caseSplitR idPred >>> caseInlineAlternativeR
+                 => CoreExpr -> Rewrite c m CoreExpr
+caseSplitInlineR s = caseSplitR s >>> caseInlineAlternativeR
 
 ------------------------------------------------------------------------------
 

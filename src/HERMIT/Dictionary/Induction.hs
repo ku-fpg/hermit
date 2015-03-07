@@ -44,7 +44,7 @@ inductionCaseSplit vs i lhsE rhsE =
 
        -- then case split on the identifier, inlining the pattern
        -- we consider the other universally quantified variables to be in scope while doing so
-       Case _ _ _ alts <- withVarsInScope vs (caseSplitInlineR (==i)) <<< return contrivedExpr
+       Case _ _ _ alts <- withVarsInScope vs (caseSplitInlineR (varToCoreExpr i)) <<< return contrivedExpr
        let dataConCases = map compressAlts alts
 
        lhsUndefined <- extractR (replaceIdWithUndefinedR i) <<< return lhsE
