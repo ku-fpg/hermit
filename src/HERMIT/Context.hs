@@ -60,7 +60,6 @@ import HERMIT.GHC hiding (empty)
 -- | The depth of a binding.  Used, for example, to detect shadowing when inlining.
 type BindingDepth = Int
 
-
 -- | HERMIT\'s representation of variable bindings.
 --   Bound expressions cannot be inlined without checking for shadowing issues (using the depth information).
 data HermitBindingSite = LAM                                -- ^ A lambda-bound variable.
