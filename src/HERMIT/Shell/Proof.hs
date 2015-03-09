@@ -80,10 +80,12 @@ proof_externals = map (.+ Proof)
         [ "Split an assumed lemma which is a conjuction/disjunction." ]
     , external "dump" (\pp fp r w -> promoteT (liftPrettyH (pOptions pp) (ppQuantifiedT pp)) >>> dumpT fp pp r w :: TransformH QC ())
         [ "dump <filename> <renderer> <width>" ]
-    , external "end-proof" PCEnd
+    , external "end-proof" (PCEnd False)
         [ "check for alpha-equality, marking the lemma as proven" ]
-    , external "end-case" PCEnd
+    , external "end-case" (PCEnd False)
         [ "check for alpha-equality, marking the proof case as proven" ]
+    , external "assume" (PCEnd True)
+        [ "mark lemma as assumed" ]
     ]
 
 --------------------------------------------------------------------------------------------------------
@@ -116,11 +118,11 @@ withProofExternals comp = do
     return r
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
-endProof :: (MonadCatch m, CLMonad m) => ExprH -> m ()
-endProof expr = do
+endProof :: (MonadCatch m, CLMonad m) => Bool -> ExprH -> m ()
+endProof assumed expr = do
     Unproven nm (Lemma q _ _) _ _ _ temp : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
-        t = verifyQuantifiedT >> unless temp (markLemmaProvedT nm)
+        t = unless assumed verifyQuantifiedT >> unless temp (markLemmaProvedT nm)
     queryInFocus (return q >>> setFailMsg msg t :: TransformH Core ()) (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
     cl_putStrLn $ "Successfully proven: " ++ show nm
@@ -163,7 +165,7 @@ performProofShellCommand expr = go
                 queryInFocus (return q >>> (extractT t >> unless temp (markLemmaProvedT nm)) :: TransformH Core ()) (Changed str)
                 _ <- popProofStack
                 cl_putStrLn $ "Successfully proven: " ++ show nm
-          go PCEnd                = endProof expr
+          go (PCEnd assumed)      = endProof assumed expr
           go (PCPath tr) = do
                 Unproven nm (Lemma q p u) c ls pth@(base,rel) t : todos <- getProofStack
                 rel' <- queryInFocus (return q >>> extractT (pathT (pathStack2Path pth) tr) :: TransformH Core LocalPathH) (Always str)
@@ -178,14 +180,14 @@ proveConsequent expr = do
     (q,ls') <- case cl of
                 Impl ante (Quantified cBs ccl) ->
                     let n = nm <> "-antecedent"
-                        l = Lemma ante True False
+                        l = Lemma ante Assumed False
                     in return (Quantified (bs++cBs) ccl, (n,l):ls)
                 _ -> fail "not an implication."
     let nm' = nm <> "-consequent"
     (k,ast) <- gets (cl_kernel &&& cl_cursor)
     addAST =<< tellK k expr ast
     _ <- popProofStack
-    pushProofStack $ Proven nm t -- proving the consequent proves the lemma
+    pushProofStack $ MarkProven nm t -- proving the consequent proves the lemma
     pushProofStack $ Unproven nm' (Lemma q p u) c ls' mempty True
 
 proveAntecedent :: (MonadCatch m, CLMonad m) => String -> m ()
@@ -196,7 +198,7 @@ proveAntecedent expr = do
             let cnm = nm <> "-consequent"
                 cq = Quantified (bs++cBs) ccl
                 anm = nm <> "-antecedent"
-                alem = Lemma (Quantified (bs++aBs) acl) False u
+                alem = Lemma (Quantified (bs++aBs) acl) NotProven u
             (k,ast) <- gets (cl_kernel &&& cl_cursor)
             addAST =<< tellK k expr ast
             _ <- popProofStack
@@ -212,7 +214,7 @@ proveConjuction expr = do
             (k,ast) <- gets (cl_kernel &&& cl_cursor)
             addAST =<< tellK k expr ast
             _ <- popProofStack
-            pushProofStack $ Proven nm t
+            pushProofStack $ MarkProven nm t
             pushProofStack $ Unproven (nm <> "-r") (Lemma (Quantified (bs++rbs) rcl) p u) c ls mempty True
             pushProofStack $ Unproven (nm <> "-l") (Lemma (Quantified (bs++lbs) lcl) p u) c ls mempty True
         _ -> fail "not a conjuction."
@@ -273,7 +275,7 @@ performInduction cm idPred = do
     -- replace the current lemma with the three subcases
     -- proving them will prove this case automatically
     pt@(Unproven {}) <- popProofStack
-    pushProofStack $ Proven nm $ ptTemp pt
+    pushProofStack $ MarkProven nm $ ptTemp pt
     forM_ (reverse cases) $ \ (mdc,vs,lhsE,rhsE) -> do
 
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
@@ -285,9 +287,9 @@ performInduction cm idPred = do
                 -- TODO rethink the discardUniVars
 
         let nms = [ fromString ("ind-hyp-" ++ show n) | n :: Int <- [0..] ]
-            hypLemmas = zip nms $ zipWith3 Lemma qs (repeat True) (repeat False)
-            lemmaName = fromString $ show nm ++ "-induction-on-" ++ unqualifiedName i ++ "-case-" ++ caseName
-            caseLemma = Lemma (mkQuantified (delete i bs ++ vs) lhsE rhsE) False False
+            hypLemmas = zip nms $ zipWith3 Lemma qs (repeat Assumed) (repeat False)
+            lemmaName = fromString $ show nm ++ "-induction-case-" ++ caseName
+            caseLemma = Lemma (mkQuantified (delete i bs ++ vs) lhsE rhsE) NotProven False
 
         pushProofStack $ Unproven lemmaName caseLemma (ptContext pt) (hypLemmas ++ ls) mempty True
 
@@ -306,7 +308,7 @@ data ProofShellCommand
     | PCScript ScriptEffect
     | PCQuery QueryFun
     | PCUser UserProofTechnique
-    | PCEnd
+    | PCEnd Bool -- ^ True = assume this lemma, False = check for alpha-equivalence
     | PCPath (TransformH QC LocalPathH)
     | PCUnsupported String
     deriving Typeable

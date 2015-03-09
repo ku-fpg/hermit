@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module HERMIT.Lemma
     ( -- * Quantified
@@ -14,6 +15,8 @@ module HERMIT.Lemma
       -- * Lemmas
     , LemmaName(..)
     , Lemma(..)
+    , Proven(..)
+    , andP, orP
     , Lemmas
     , NamedLemma
     ) where
@@ -88,9 +91,36 @@ instance Show LemmaName where show (LemmaName s) = s
 
 -- | An equality with a proven/used status.
 data Lemma = Lemma { lemmaQ :: Quantified
-                   , lemmaP :: Bool     -- whether lemma has been proven
-                   , lemmaU :: Bool     -- whether lemma has been used
+                   , lemmaP :: Proven     -- whether lemma has been proven
+                   , lemmaU :: Bool       -- whether lemma has been used
                    }
+
+data Proven = Proven | Assumed | NotProven
+    deriving (Eq, Typeable)
+
+instance Show Proven where
+    show Proven = "Proven"
+    show Assumed = "Assumed"
+    show NotProven = "Not Proven"
+
+-- Ordering: NotProven < Assumed < Proven
+instance Ord Proven where
+    compare :: Proven -> Proven -> Ordering
+    compare Proven    Proven    = EQ
+    compare Assumed   Assumed   = EQ
+    compare NotProven NotProven = EQ
+    compare Proven    _         = GT
+    compare _         Proven    = LT
+    compare NotProven _         = LT
+    compare _         NotProven = GT
+
+-- When conjuncting, result is as proven as the least of the two
+andP :: Proven -> Proven -> Proven
+andP = min
+
+-- When disjuncting, result is as proven as the most of the two
+orP :: Proven -> Proven -> Proven
+orP = max
 
 data Quantified = Quantified [CoreBndr] Clause
 

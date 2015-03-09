@@ -28,6 +28,7 @@ module HERMIT.Dictionary.Reasoning
     , showLemmasT
     , ppLemmaT
     , ppQuantifiedT
+    , ppQCT
       -- ** Lifting transformations over 'Quantified'
     , core2qcT
     , core2qcR
@@ -281,10 +282,9 @@ showLemmaT nm pp = getLemmaByNameT nm >>> ppLemmaT mempty pp nm
 
 ppLemmaT :: PathH -> PrettyPrinter -> LemmaName -> PrettyH Lemma
 ppLemmaT pth pp nm = do
-    Lemma q p u <- idR
+    Lemma q p _u <- idR
     qDoc <- return q >>> extractT (pathT pth (ppQCT pp))
-    let hDoc = PP.text (show nm) PP.<+> PP.text (if p then "(Proven)" else "(Not Proven)")
-                                 PP.<+> PP.text (if u then "(Used)"   else "(Not Used)")
+    let hDoc = PP.text (show nm) PP.<+> PP.text ("(" ++ show p ++ ")")
     return $ hDoc PP.$+$ PP.nest 2 qDoc
 
 ppQCT :: PrettyPrinter -> PrettyH QC
@@ -442,13 +442,13 @@ conjunctLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName
 conjunctLemmasT new lhs rhs = do
     Lemma ql pl _ <- getLemmaByNameT lhs
     Lemma qr pr _ <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Conj ql qr)) (pl && pr) False
+    insertLemmaT new $ Lemma (Quantified [] (Conj ql qr)) (pl `andP` pr) False
 
 disjunctLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 disjunctLemmasT new lhs rhs = do
     Lemma ql pl _ <- getLemmaByNameT lhs
     Lemma qr pr _ <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Disj ql qr)) (pl || pr) False
+    insertLemmaT new $ Lemma (Quantified [] (Disj ql qr)) (pl `orP` pr) False
 
 implyLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 implyLemmasT new lhs rhs = do
@@ -582,7 +582,7 @@ modifyLemmaT :: (HasLemmas m, Monad m)
              => LemmaName
              -> (LemmaName -> LemmaName) -- ^ modify lemma name
              -> Rewrite c m Quantified   -- ^ rewrite the quantified clause
-             -> (Bool -> Bool)           -- ^ modify proven status
+             -> (Proven -> Proven)       -- ^ modify proven status
              -> (Bool -> Bool)           -- ^ modify used status
              -> Transform c m a ()
 modifyLemmaT nm nFn rr pFn uFn = do
@@ -594,7 +594,7 @@ markLemmaUsedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
 markLemmaUsedT nm = modifyLemmaT nm id idR id (const True)
 
 markLemmaProvedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
-markLemmaProvedT nm = modifyLemmaT nm id idR (const True) id
+markLemmaProvedT nm = modifyLemmaT nm id idR (const Proven) id
 ------------------------------------------------------------------------------
 
 lemmaNameToQuantifiedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Quantified

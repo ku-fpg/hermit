@@ -56,6 +56,8 @@ import HERMIT.Win32.Console
 import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, termLines)
 #endif
 
+import qualified Text.PrettyPrint.MarkedHughesPJ as PP
+
 ----------------------------------------------------------------------------------
 
 data QueryFun :: * where
@@ -286,8 +288,8 @@ data ProofTodo = Unproven
                     , ptPath    :: PathStack    -- ^ path into lemma to focus on
                     , ptTemp    :: Bool         -- ^ temporary status of this lemma
                     }
-               | Proven     LemmaName                 Bool -- ^ lemma successfully proven, temporary status
-               | IntroLemma LemmaName Quantified Bool      -- ^ introduce this lemma with given proven status
+               | MarkProven LemmaName Bool              -- ^ lemma successfully proven, temporary status
+               | IntroLemma LemmaName Quantified Proven -- ^ introduce this lemma with given proven status
 
 -- To ease the pain of nested records, define some boilerplate here.
 cl_corelint :: CommandLineState -> Bool
@@ -482,8 +484,8 @@ currentLemma = do
 
 announceProven :: (MonadCatch m, CLMonad m) => m ()
 announceProven = getProofStack >>= go
-    where go (Proven nm temp : r) = do
-            queryInFocus (unless temp (modifyLemmaT nm id idR (const True) id) :: TransformH Core ())
+    where go (MarkProven nm temp : r) = do
+            queryInFocus (unless temp (modifyLemmaT nm id idR (const Proven) id) :: TransformH Core ())
                          (Always $ "-- proven " ++ quoteShow nm) -- comment in script
             -- take it off the stack for the new AST
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
@@ -554,11 +556,12 @@ showWindow = ifM isRunningScript (return ()) $ do
 
 printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
            => PathStack -> (LemmaName,Lemma) -> m ()
-printLemma p (nm,lem) = do -- TODO
+printLemma p (nm,Lemma q _ _) = do -- TODO
     pp <- gets cl_pretty
-    doc <- queryInFocus (return lem >>> liftPrettyH (pOptions pp) (ppLemmaT (pathStack2Path p) pp nm) :: TransformH Core DocH) Never
+    doc <- queryInFocus (return q >>> extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (ppQCT pp))) :: TransformH Core DocH) Never
+    let doc' = PP.text (show nm) PP.$+$ PP.nest 2 doc
     st <- get
-    liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
+    liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc')
 
 ------------------------------------------------------------------------------
 
