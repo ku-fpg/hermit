@@ -19,7 +19,7 @@ import System.IO (Handle, hGetContents, hPutStrLn, hClose, openFile, IOMode(Writ
 import System.IO.Temp (withTempFile)
 import System.Process hiding (runCommand)
 
-type Test = (FilePath, FilePath, FilePath)
+type Test = (FilePath, FilePath, FilePath, [String])
 
 -- subdirectory names
 golden, dump :: String
@@ -27,23 +27,23 @@ golden = "golden"
 dump = "dump"
 
 tests :: [Test]
-tests = [ ("concatVanishes", "Flatten.hs", "Flatten.hss")
-        , ("concatVanishes", "QSort.hs"  , "QSort.hss"  )
-        , ("concatVanishes", "Rev.hs"    , "Rev.hss"    )
-        , ("evaluation"    , "Eval.hs"   , "Eval.hss"   )
-        , ("factorial"     , "Fac.hs"    , "Fac.hss"    )
+tests = [ ("concatVanishes", "Flatten.hs", "Flatten.hss", [])
+        , ("concatVanishes", "QSort.hs"  , "QSort.hss"  , [])
+        , ("concatVanishes", "Rev.hs"    , "Rev.hss"    , [])
+        , ("evaluation"    , "Eval.hs"   , "Eval.hss"   , [])
+        , ("factorial"     , "Fac.hs"    , "Fac.hss"    , [])
         -- broken due to Core Parser: , ("fib-stream"    , "Fib.hs"    , "Fib.hss"    )
-        , ("fib-tuple"     , "Fib.hs"    , "Fib.hss"    )
-        , ("flatten"       , "Flatten.hs", "Flatten.hss")
+        , ("fib-tuple"     , "Fib.hs"    , "Fib.hss"    , [])
+        , ("flatten"       , "Flatten.hs", "Flatten.hec", ["-safe-mode"])
         -- for some reason loops in testsuite but not normally: , ("hanoi"         , "Hanoi.hs"  , "Hanoi.hss"  )
-        , ("last"          , "Last.hs"   , "Last.hss"   )
-        , ("last"          , "Last.hs"   , "NewLast.hss")
+        , ("last"          , "Last.hs"   , "Last.hss"   , [])
+        , ("last"          , "Last.hs"   , "NewLast.hss", [])
         -- broken due to Core Parser: , ("map"           , "Map.hs"    , "Map.hss"    )
-        , ("mean"          , "Mean.hs"   , "Mean.hss"   )
-        , ("nub"           , "Nub.hs"    , "Nub.hss"    )
-        , ("qsort"         , "QSort.hs"  , "QSort.hss"  )
-        , ("reverse"       , "Reverse.hs", "Reverse.hss")
-        , ("new_reverse"   , "Reverse.hs", "Reverse.hss")
+        , ("mean"          , "Mean.hs"   , "Mean.hss"   , [])
+        , ("nub"           , "Nub.hs"    , "Nub.hss"    , [])
+        , ("qsort"         , "QSort.hs"  , "QSort.hss"  , [])
+        , ("reverse"       , "Reverse.hs", "Reverse.hss", [])
+        , ("new_reverse"   , "Reverse.hs", "Reverse.hec", ["-safe-mode"])
         ]
 
 fixName :: FilePath -> FilePath
@@ -66,7 +66,7 @@ main :: IO ()
 main = do
     pwd <- getCurrentDirectory
 
-    forM_ tests $ \ (dir, hs, hss) -> do
+    forM_ tests $ \ (dir, hs, hss, extraFlags) -> do
         withTempFile pwd "Test.hss" $ \ fp h -> do
             putStr $ "Running " ++ dir </> hs ++ " - "
 
@@ -86,8 +86,7 @@ main = do
             let cmd = unwords $ [ "(", "cd", pathp, ";", "ghc" , hs ] ++ ghcFlags ++
                                 [ "-fplugin=HERMIT"
                                 , "-fplugin-opt=HERMIT:Main:" ++ fp -- made by mkTestScript
-                                , "-v0"
-                                , ")" ]
+                                , "-v0"] ++ [ "-fplugin-opt=HERMIT:Main:" ++ f | f <- extraFlags] ++ [ ")" ]
                 diff = unwords [ "diff", "-b", "-U 5", gfile, dfile ]
 
             -- Adding a &> dfile redirect in cmd causes the call to GHC to not block

@@ -16,6 +16,7 @@ module HERMIT.Shell.Proof
     , withProofExternals
     , performProofShellCommand
     , interpProof
+    , forceProofs
     ) where
 
 import Control.Arrow hiding (loop, (<+>))
@@ -117,12 +118,22 @@ withProofExternals comp = do
     modify reset
     return r
 
+forceProofs :: (MonadCatch m, CLMonad m) => m ()
+forceProofs = do
+    (c,nls) <- queryInFocus (contextT &&& getUsedNotProvenT :: TransformH Core (HermitC, [NamedLemma])) Never
+    todos <- getProofStackEmpty
+    let already = map ptName todos
+        nls' = [ (nm,l) | (nm,l) <- nls, not (nm `elem` already) ]
+    forM_ nls' $ \ (nm,l) -> pushProofStack (Unproven nm l c [] mempty False)
+
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, CLMonad m) => Bool -> ExprH -> m ()
 endProof assumed expr = do
     Unproven nm (Lemma q _ _) _ _ _ temp : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
-        t = unless assumed verifyQuantifiedT >> unless temp (markLemmaProvedT nm)
+        t = if assumed
+            then                      unless temp (markLemmaAssumedT nm)
+            else verifyQuantifiedT >> unless temp (markLemmaProvedT nm)
     queryInFocus (return q >>> setFailMsg msg t :: TransformH Core ()) (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
     cl_putStrLn $ "Successfully proven: " ++ show nm

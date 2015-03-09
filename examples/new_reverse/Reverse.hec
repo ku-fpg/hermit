@@ -1,0 +1,674 @@
+flatten-module
+rule-to-lemma "++ []"
+
+-- module main:Main where
+--   absR :: forall a . ([a] -> H a) -> [a] -> [a]
+--   repR :: forall a . ([a] -> [a]) -> [a] -> H a
+--   rev :: forall a . [a] -> [a]
+--   main :: IO ()
+--   main :: IO ()
+
+prove-lemma "++ []"
+
+-- Goal:
+-- forall * xs. (++) * xs ([] *) = xs
+
+lhs (one-td (unfold-rule appendFix))
+
+-- Goal:
+-- forall *. (++) * = myAppend *
+
+assume -- proven appendFix
+
+-- Goal:
+-- forall * xs. myAppend * xs ([] *) = xs
+
+induction 'xs
+
+-- Goal:
+-- forall *. myAppend * (undefined *) ([] *) = undefined *
+
+lhs unfold
+
+-- Goal:
+-- forall *.
+-- case undefined * of wild *
+--   [] -> [] *
+--   (:) x xs -> (:) * x (myAppend * xs ([] *))
+-- =
+-- undefined *
+
+lhs undefined-expr
+
+-- Goal:
+-- forall *. undefined * = undefined *
+
+end-case -- proven "++ []-induction-case-undefined"
+
+-- Goal:
+-- forall *. myAppend * ([] *) ([] *) = [] *
+
+lhs unfold
+
+-- Goal:
+-- forall *.
+-- case [] * of wild *
+--   [] -> [] *
+--   (:) x xs -> (:) * x (myAppend * xs ([] *))
+-- =
+-- [] *
+
+lhs simplify
+
+-- Goal:
+-- forall *. [] * = [] *
+
+end-case -- proven "++ []-induction-case-[]"
+
+-- Assumed lemmas: 
+-- ind-hyp-0 (Assumed)
+--   myAppend * b ([] *) = b
+-- Goal:
+-- forall * a b. myAppend * ((:) * a b) ([] *) = (:) * a b
+
+lhs unfold
+
+-- Assumed lemmas: 
+-- ind-hyp-0 (Assumed)
+--   myAppend * b ([] *) = b
+-- Goal:
+-- forall * a b.
+-- case (:) * a b of wild *
+--   [] -> [] *
+--   (:) x xs -> (:) * x (myAppend * xs ([] *))
+-- =
+-- (:) * a b
+
+lhs simplify
+
+-- Assumed lemmas: 
+-- ind-hyp-0 (Assumed)
+--   myAppend * b ([] *) = b
+-- Goal:
+-- forall * a b. (:) * a (myAppend * b ([] *)) = (:) * a b
+
+lhs (one-td (forward (lemma ind-hyp-0)))
+
+-- Assumed lemmas: 
+-- ind-hyp-0 (Assumed)
+--   myAppend * b ([] *) = b
+-- Goal:
+-- forall * a b. (:) * a b = (:) * a b
+
+end-case -- proven "++ []-induction-case-:"
+-- proven "++ []"
+rule-to-lemma "repH []"
+
+-- module main:Main where
+--   absR :: forall a . ([a] -> H a) -> [a] -> [a]
+--   repR :: forall a . ([a] -> [a]) -> [a] -> H a
+--   rev :: forall a . [a] -> [a]
+--   main :: IO ()
+--   main :: IO ()
+
+prove-lemma "repH []"
+
+-- Goal:
+-- forall *. repH * ([] *) = id *
+
+lhs unfold
+
+-- Goal:
+-- forall *. (++) * ([] *) = id *
+
+extensionality
+
+-- Goal:
+-- forall * x. (++) * ([] *) x = id * x
+
+lhs (one-td (unfold-rule appendFix))
+
+-- Goal:
+-- forall * x. myAppend * ([] *) x = id * x
+
+lhs unfold
+
+-- Goal:
+-- forall * x.
+-- case [] * of wild *
+--   [] -> x
+--   (:) x xs -> (:) * x (myAppend * xs x)
+-- =
+-- id * x
+
+both smash
+
+-- Goal:
+-- forall * x. x = x
+
+end-proof -- proven "repH []"
+rule-to-lemma "repH (:)"
+
+-- module main:Main where
+--   absR :: forall a . ([a] -> H a) -> [a] -> [a]
+--   repR :: forall a . ([a] -> [a]) -> [a] -> H a
+--   rev :: forall a . [a] -> [a]
+--   main :: IO ()
+--   main :: IO ()
+
+prove-lemma "repH (:)"
+
+-- Goal:
+-- forall * x xs. repH * ((:) * x xs) = (.) * * * ((:) * x) (repH * xs)
+
+both (any-call (unfold 'repH))
+
+-- Goal:
+-- forall * x xs. (++) * ((:) * x xs) = (.) * * * ((:) * x) ((++) * xs)
+
+both (any-call (unfold-rule appendFix))
+
+-- Goal:
+-- forall * x xs. myAppend * ((:) * x xs) = (.) * * * ((:) * x) (myAppend * xs)
+
+both smash
+
+-- Goal:
+-- forall * x xs. myAppend * ((:) * x xs) = \ x -> (:) * x (myAppend * xs x)
+
+lhs (unfold >>> smash)
+
+-- Goal:
+-- forall * x xs. \ ys -> (:) * x (myAppend * xs ys) = \ x -> (:) * x (myAppend * xs x)
+
+end-proof -- proven "repH (:)"
+rule-to-lemma "repH ++"
+
+-- module main:Main where
+--   absR :: forall a . ([a] -> H a) -> [a] -> [a]
+--   repR :: forall a . ([a] -> [a]) -> [a] -> H a
+--   rev :: forall a . [a] -> [a]
+--   main :: IO ()
+--   main :: IO ()
+
+prove-lemma "repH ++"
+
+-- Goal:
+-- forall * xs ys. repH * ((++) * xs ys) = (.) * * * (repH * xs) (repH * ys)
+
+both (any-call (unfold 'repH))
+
+-- Goal:
+-- forall * xs ys. (++) * ((++) * xs ys) = (.) * * * ((++) * xs) ((++) * ys)
+
+both (any-call (unfold-rule appendFix))
+
+-- Goal:
+-- forall * xs ys. myAppend * (myAppend * xs ys) = (.) * * * (myAppend * xs) (myAppend * ys)
+
+lhs (eta-expand 'x)
+
+-- Goal:
+-- forall * xs ys. \ x -> myAppend * (myAppend * xs ys) x = (.) * * * (myAppend * xs) (myAppend * ys)
+
+rhs unfold
+
+-- Goal:
+-- forall * xs ys. \ x -> myAppend * (myAppend * xs ys) x = \ x -> myAppend * xs (myAppend * ys x)
+
+induction 'xs
+
+-- Goal:
+-- forall * ys x. myAppend * (myAppend * (undefined *) ys) x = myAppend * (undefined *) (myAppend * ys x)
+
+both (replicate 2 (any-call (unfold 'myAppend)))
+
+-- Goal:
+-- forall * ys x.
+-- case case undefined * of wild *
+--        [] -> ys
+--        (:) x xs -> (:) * x (myAppend * xs ys)
+--  of wild *
+--   [] -> x
+--   (:) x xs ->
+--     (:) * x
+--         (case xs of wild *
+--            [] -> x
+--            (:) x xs -> (:) * x (myAppend * xs x))
+-- =
+-- case undefined * of wild *
+--   [] ->
+--     case ys of wild *
+--       [] -> x
+--       (:) x xs ->
+--         (:) * x
+--             (case xs of wild *
+--                [] -> x
+--                (:) x xs -> (:) * x (myAppend * xs x))
+--   (:) x xs ->
+--     (:) * x
+--         (case xs of wild *
+--            [] ->
+--              case ys of wild *
+--                [] -> x
+--                (:) x xs ->
+--                  (:) * x
+--                      (case xs of wild *
+--                         [] -> x
+--                         (:) x xs -> (:) * x (myAppend * xs x))
+--            (:) x xs ->
+--              (:) * x
+--                  (myAppend * xs
+--                            (case ys of wild *
+--                               [] -> x
+--                               (:) x xs ->
+--                                 (:) * x
+--                                     (case xs of wild *
+--                                        [] -> x
+--                                        (:) x xs -> (:) * x (myAppend * xs x)))))
+
+both (innermost undefined-expr)
+
+-- Goal:
+-- forall * ys x. undefined * = undefined *
+
+end-case -- proven "repH ++-induction-case-undefined"
+
+-- Goal:
+-- forall * ys x. myAppend * (myAppend * ([] *) ys) x = myAppend * ([] *) (myAppend * ys x)
+
+both (replicate 2 (any-call (unfold 'myAppend)))
+
+-- Goal:
+-- forall * ys x.
+-- case case [] * of wild *
+--        [] -> ys
+--        (:) x xs -> (:) * x (myAppend * xs ys)
+--  of wild *
+--   [] -> x
+--   (:) x xs ->
+--     (:) * x
+--         (case xs of wild *
+--            [] -> x
+--            (:) x xs -> (:) * x (myAppend * xs x))
+-- =
+-- case [] * of wild *
+--   [] ->
+--     case ys of wild *
+--       [] -> x
+--       (:) x xs ->
+--         (:) * x
+--             (case xs of wild *
+--                [] -> x
+--                (:) x xs -> (:) * x (myAppend * xs x))
+--   (:) x xs ->
+--     (:) * x
+--         (case xs of wild *
+--            [] ->
+--              case ys of wild *
+--                [] -> x
+--                (:) x xs ->
+--                  (:) * x
+--                      (case xs of wild *
+--                         [] -> x
+--                         (:) x xs -> (:) * x (myAppend * xs x))
+--            (:) x xs ->
+--              (:) * x
+--                  (myAppend * xs
+--                            (case ys of wild *
+--                               [] -> x
+--                               (:) x xs ->
+--                                 (:) * x
+--                                     (case xs of wild *
+--                                        [] -> x
+--                                        (:) x xs -> (:) * x (myAppend * xs x)))))
+
+both smash
+
+-- Goal:
+-- forall * ys x.
+-- case ys of wild *
+--   [] -> x
+--   (:) x xs ->
+--     (:) * x
+--         (case xs of wild *
+--            [] -> x
+--            (:) x xs -> (:) * x (myAppend * xs x))
+-- =
+-- case ys of wild *
+--   [] -> x
+--   (:) x xs ->
+--     (:) * x
+--         (case xs of wild *
+--            [] -> x
+--            (:) x xs -> (:) * x (myAppend * xs x))
+
+end-case -- proven "repH ++-induction-case-[]"
+
+-- Assumed lemmas: 
+-- ind-hyp-0 (Assumed)
+--   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
+-- Goal:
+-- forall * ys a b x. myAppend * (myAppend * ((:) * a b) ys) x = myAppend * ((:) * a b) (myAppend * ys x)
+
+both (one-td unfold)
+
+-- Assumed lemmas: 
+-- ind-hyp-0 (Assumed)
+--   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
+-- Goal:
+-- forall * ys a b x.
+-- case myAppend * ((:) * a b) ys of wild *
+--   [] -> x
+--   (:) x xs -> (:) * x (myAppend * xs x)
+-- =
+-- case (:) * a b of wild *
+--   [] -> myAppend * ys x
+--   (:) x xs -> (:) * x (myAppend * xs (myAppend * ys x))
+
+lhs (one-td unfold)
+
+-- Assumed lemmas: 
+-- ind-hyp-0 (Assumed)
+--   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
+-- Goal:
+-- forall * ys a b x.
+-- case case (:) * a b of wild *
+--        [] -> ys
+--        (:) x xs -> (:) * x (myAppend * xs ys)
+--  of wild *
+--   [] -> x
+--   (:) x xs -> (:) * x (myAppend * xs x)
+-- =
+-- case (:) * a b of wild *
+--   [] -> myAppend * ys x
+--   (:) x xs -> (:) * x (myAppend * xs (myAppend * ys x))
+
+both smash
+
+-- Assumed lemmas: 
+-- ind-hyp-0 (Assumed)
+--   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
+-- Goal:
+-- forall * ys a b x. (:) * a (myAppend * (myAppend * b ys) x) = (:) * a (myAppend * b (myAppend * ys x))
+
+rhs (one-td (backward (lemma ind-hyp-0)))
+
+-- Assumed lemmas: 
+-- ind-hyp-0 (Assumed)
+--   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
+-- Goal:
+-- forall * ys a b x. (:) * a (myAppend * (myAppend * b ys) x) = (:) * a (myAppend * (myAppend * b ys) x)
+
+end-case -- proven "repH ++-induction-case-:"
+-- proven "repH ++"
+
+-- module main:Main where
+--   absR :: forall a . ([a] -> H a) -> [a] -> [a]
+--   repR :: forall a . ([a] -> [a]) -> [a] -> H a
+--   rev :: forall a . [a] -> [a]
+--   main :: IO ()
+--   main :: IO ()
+
+binding-of 'rev
+
+-- rev = \ * ds ->
+--   case ds of wild *
+--     [] -> [] *
+--     (:) x xs -> (++) * (rev * xs) ((:) * x ([] *))
+
+fix-intro
+
+-- rev = \ * ->
+--   fix *
+--       (\ rev ds ->
+--          case ds of wild *
+--            [] -> [] *
+--            (:) x xs -> (++) * (rev xs) ((:) * x ([] *)))
+
+application-of 'fix
+
+-- fix *
+--     (\ rev ds ->
+--        case ds of wild *
+--          [] -> [] *
+--          (:) x xs -> (++) * (rev xs) ((:) * x ([] *)))
+
+split-1-beta rev [| absR |] [| repR |]
+
+-- Goal:
+-- fix *
+--     ((.) * * * (absR *)
+--          ((.) * * * (repR *)
+--               (\ rev ds ->
+--                  case ds of wild *
+--                    [] -> [] *
+--                    (:) x xs -> (++) * (rev xs) ((:) * x ([] *)))))
+-- =
+-- fix *
+--     (\ rev ds ->
+--        case ds of wild *
+--          [] -> [] *
+--          (:) x xs -> (++) * (rev xs) ((:) * x ([] *)))
+
+both (unfold >>> smash)
+
+-- Goal:
+-- let rec x =
+--           absR *
+--                (repR *
+--                      (\ ds ->
+--                         case ds of wild *
+--                           [] -> [] *
+--                           (:) x xs -> (++) * (x xs) ((:) * x ([] *))))
+-- in x
+-- =
+-- let rec x = \ ds ->
+--           case ds of wild *
+--             [] -> [] *
+--             (:) x xs -> (++) * (x xs) ((:) * x ([] *))
+-- in x
+
+lhs (replicate 4 ((one-td unfold) >+> smash))
+
+-- Goal:
+-- let rec x = \ x ->
+--           (++) *
+--                (case x of wild *
+--                   [] -> [] *
+--                   (:) x xs -> (++) * (x xs) ((:) * x ([] *)))
+--                ([] *)
+-- in x
+-- =
+-- let rec x = \ ds ->
+--           case ds of wild *
+--             [] -> [] *
+--             (:) x xs -> (++) * (x xs) ((:) * x ([] *))
+-- in x
+
+lhs (one-td (forward (lemma "++ []")))
+
+-- Goal:
+-- let rec x = \ x ->
+--           case x of wild *
+--             [] -> [] *
+--             (:) x xs -> (++) * (x xs) ((:) * x ([] *))
+-- in x
+-- =
+-- let rec x = \ ds ->
+--           case ds of wild *
+--             [] -> [] *
+--             (:) x xs -> (++) * (x xs) ((:) * x ([] *))
+-- in x
+
+end-proof -- proven rev-assumption
+
+-- let g =
+--       (.) * * * (repR *)
+--           ((.) * * *
+--                (\ rev ds ->
+--                   case ds of wild *
+--                     [] -> [] *
+--                     (:) x xs -> (++) * (rev xs) ((:) * x ([] *)))
+--                (absR *))
+--     worker = fix * g
+-- in absR * worker
+
+any-call (unfold ['absR,'repR])
+
+-- let g =
+--       (.) * * * (\ eta -> (\ f -> (.) * * * (repH *) f) eta)
+--           ((.) * * *
+--                (\ rev ds ->
+--                   case ds of wild *
+--                     [] -> [] *
+--                     (:) x xs -> (++) * (rev xs) ((:) * x ([] *)))
+--                (\ eta -> (\ g -> (.) * * * (absH *) g) eta))
+--     worker = fix * g
+-- in (\ g -> (.) * * * (absH *) g) worker
+
+simplify
+
+-- let worker =
+--       fix *
+--           (\ x x ->
+--              repH *
+--                   (case x of wild *
+--                      [] -> [] *
+--                      (:) x xs -> (++) * (absH * (x xs)) ((:) * x ([] *))))
+-- in \ x -> absH * (worker x)
+
+one-td (case-float-arg-lemma repHstrict)
+
+-- Goal:
+-- forall *. repH * (undefined *) = undefined *
+
+lhs unfold
+
+-- Goal:
+-- forall *. (++) * (undefined *) = undefined *
+
+lhs (one-td (unfold-rule appendFix))
+
+-- Goal:
+-- forall *. myAppend * (undefined *) = undefined *
+
+lhs unfold
+
+-- Goal:
+-- forall *.
+-- \ ys ->
+--   case undefined * of wild *
+--     [] -> ys
+--     (:) x xs -> (:) * x (myAppend * xs ys)
+-- =
+-- undefined *
+
+both (innermost undefined-expr)
+
+-- Goal:
+-- forall *. undefined * = undefined *
+
+end-proof -- proven repHstrict
+
+-- let worker =
+--       fix *
+--           (\ x x ->
+--              case x of wild *
+--                [] -> repH * ([] *)
+--                (:) x xs -> repH * ((++) * (absH * (x xs)) ((:) * x ([] *))))
+-- in \ x -> absH * (worker x)
+
+one-td (forward (lemma "repH ++"))
+
+-- let worker =
+--       fix *
+--           (\ x x ->
+--              case x of wild *
+--                [] -> repH * ([] *)
+--                (:) x xs -> (.) * * * (repH * (absH * (x xs))) (repH * ((:) * x ([] *))))
+-- in \ x -> absH * (worker x)
+
+simplify
+
+-- let worker =
+--       fix *
+--           (\ x x ->
+--              case x of wild *
+--                [] -> repH * ([] *)
+--                (:) x xs -> \ x -> repH * (absH * (x xs)) (repH * ((:) * x ([] *)) x))
+-- in \ x -> absH * (worker x)
+
+one-td (unfold-rule repH-absH-fusion)
+
+-- Goal:
+-- forall * h. repH * (absH * h) = h
+
+assume -- proven repH-absH-fusion
+
+-- let worker =
+--       fix *
+--           (\ x x ->
+--              case x of wild *
+--                [] -> repH * ([] *)
+--                (:) x xs -> \ x -> x xs (repH * ((:) * x ([] *)) x))
+-- in \ x -> absH * (worker x)
+
+one-td (forward (lemma "repH (:)"))
+
+-- let worker =
+--       fix *
+--           (\ x x ->
+--              case x of wild *
+--                [] -> repH * ([] *)
+--                (:) x xs -> \ x -> x xs ((.) * * * ((:) * x) (repH * ([] *)) x))
+-- in \ x -> absH * (worker x)
+
+any-td (forward (lemma "repH []"))
+
+-- let worker =
+--       fix *
+--           (\ x x ->
+--              case x of wild *
+--                [] -> id *
+--                (:) x xs -> \ x -> x xs ((.) * * * ((:) * x) (id *) x))
+-- in \ x -> absH * (worker x)
+
+any-call (unfold 'fix)
+
+-- let worker =
+--       let rec x =
+--                 (\ x x ->
+--                    case x of wild *
+--                      [] -> id *
+--                      (:) x xs -> \ x -> x xs ((.) * * * ((:) * x) (id *) x)) x
+--       in x
+-- in \ x -> absH * (worker x)
+
+any-call (unfold 'absH)
+
+-- let worker =
+--       let rec x =
+--                 (\ x x ->
+--                    case x of wild *
+--                      [] -> id *
+--                      (:) x xs -> \ x -> x xs ((.) * * * ((:) * x) (id *) x)) x
+--       in x
+-- in \ x -> worker x ([] *)
+
+bash
+
+-- let rec x = \ x ->
+--           case x of wild *
+--             [] -> \ x -> x
+--             (:) x xs -> \ x -> x xs ((:) * x x)
+-- in \ x -> x x ([] *)
+
+unshadow
+
+-- let rec x = \ x0 ->
+--           case x0 of wild *
+--             [] -> \ x1 -> x1
+--             (:) x1 xs -> \ x2 -> x xs ((:) * x1 x2)
+-- in \ x0 -> x x0 ([] *)
+

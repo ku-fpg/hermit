@@ -47,17 +47,17 @@ To get started, you could try the following:
       [0m[31m([0m[0m[0m[0m[mrev[0m[0m[0m [0m[32mChar[0m[0m [0m[31m([0m[0m[0m[munpackCString#[0m[0m [0m"hello"#[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
 [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
 [0m[mmain[0m[0m [0m[31m=[0m[0m [0m[mrunMainIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m [0m[0m[mmain[0m[0m[0m[0m
-++ [] (Not Proven) (Used)
+++ [] (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mxs[0m[0m[0m[31m.[0m[0m [0m[31m([0m[0m[0m[m++[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[31m([0m[0m[0m[m[][0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[0m[mxs[0m[0m[0m
-++ strict (Not Proven) (Used)
+++ strict (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m[0m[31m.[0m[0m [0m[31m([0m[0m[0m[m++[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[mundefined[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [31m=[0m [0m[mundefined[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m
-recursive-definition-of-work-for-use-by-ww-fusion (Proven) (Not Used)
+recursive-definition-of-work-for-use-by-ww-fusion (Proven)
   [0m[7;93mwork[27m[0m[0m [31m=[0m [0m[31m[31mλ[31m[0m[0m [0m[mx1[0m[0m [0m[31m[31m→[31m[0m[0m [0m[mrepH[0m[0m [0m[32ma[0m[0m [0m[31m([0m[0m[0m[7;93mf[27m[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mx2[0m[0m [0m[31m[31m→[31m[0m[0m [0m[mabsH[0m[0m [0m[32ma[0m[0m [0m[31m([0m[0m[0m[7;93mwork[27m[0m[0m [0m[0m[mx2[0m[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m [0m[0m[mx1[0m[0m[0m[0m[31m)[0m[0m
-repH (:) (Not Proven) (Used)
+repH (:) (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mx[0m[0m [0m[mxs[0m[0m[0m[31m.[0m[0m
   [0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mx[0m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[31m([0m[0m[0m[m.[0m[0m[0m[31m)[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mx[0m[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m
-repH ++ (Not Proven) (Used)
+repH ++ (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mxs[0m[0m [0m[mys[0m[0m[0m[31m.[0m[0m
   [0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[31m([0m[0m[0m[m++[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[0m[mys[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[31m([0m[0m[0m[m.[0m[0m[0m[31m)[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[31m([0m[0m[0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mys[0m[0m[0m[0m[31m)[0m[0m
-repH [] (Not Proven) (Used)
+repH [] (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m[0m[31m.[0m[0m [0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[m[][0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[mid[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m[0m

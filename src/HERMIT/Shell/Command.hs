@@ -102,6 +102,7 @@ commandLine :: forall m. (MonadCatch m, MonadException m, CLMonad m)
 commandLine opts exts = do
     let (flags, filesToLoad) = partition (isPrefixOf "-") opts
         ws_complete = " ()" -- treated as 'whitespace' by completer
+        safeMode = "-safe-mode" `elem` flags
 
     modify $ \ st -> st { cl_externals = shell_externals ++ exts }
 
@@ -130,7 +131,9 @@ commandLine opts exts = do
     let -- Main proof input loop
         loop :: InputT m ()
         loop = do
-            el <- lift $ tryM () announceProven >> attemptM currentLemma
+            el <- lift $ do tryM () announceProven
+                            when safeMode forceProofs
+                            attemptM currentLemma
             let prompt = either (const "hermit") (const "proof") el
             mExpr <- lift popScriptLine
             case mExpr of

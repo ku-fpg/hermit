@@ -18,11 +18,13 @@ module HERMIT.Dictionary.Reasoning
     , extensionalityR
     , getLemmasT
     , getLemmaByNameT
+    , getUsedNotProvenT
     , insertLemmaT
     , insertLemmasT
     , lemmaR
     , markLemmaUsedT
     , markLemmaProvedT
+    , markLemmaAssumedT
     , modifyLemmaT
     , showLemmaT
     , showLemmasT
@@ -565,6 +567,11 @@ getLemmasT = constT getLemmas
 getLemmaByNameT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Lemma
 getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm) return . Map.lookup nm
 
+getUsedNotProvenT :: (HasLemmas m, Monad m) => Transform c m x [NamedLemma]
+getUsedNotProvenT = do
+    ls <- getLemmasT
+    return [ (nm,l) | (nm, l@(Lemma _ NotProven True)) <- Map.toList ls ]
+
 lemmaR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
           , HasLemmas m, MonadCatch m, MonadUnique m)
        => LemmaName -> BiRewrite c m CoreExpr
@@ -595,6 +602,9 @@ markLemmaUsedT nm = modifyLemmaT nm id idR id (const True)
 
 markLemmaProvedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
 markLemmaProvedT nm = modifyLemmaT nm id idR (const Proven) id
+
+markLemmaAssumedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
+markLemmaAssumedT nm = modifyLemmaT nm id idR (const Assumed) id
 ------------------------------------------------------------------------------
 
 lemmaNameToQuantifiedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Quantified

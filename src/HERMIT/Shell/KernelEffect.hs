@@ -73,7 +73,6 @@ setPath t expr = do
     p <- prefixFailMsg "Cannot find path: " $ queryInFocus t (Always $ unparseExprH expr)
     ast <- gets cl_cursor
     addASTWithPath ast (<> p)
-    showWindow
 
 goDirection :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
 goDirection dir expr = do
@@ -90,7 +89,6 @@ goDirection dir expr = do
             if b
             then do ast'' <- tellK k (unparseExprH expr) ast'
                     addASTWithPath ast'' (const rel')
-                    showWindow
             else fail "invalid path."
         Unproven nm l c ls (base,p) t : todos -> do
             let p' = moveLocally dir p
@@ -110,7 +108,6 @@ beginScope expr = do
             (base, rel) <- getPathStack
             addAST =<< logExpr
             modify $ \ st -> st { cl_foci = M.insert (cl_cursor st) (rel : base, mempty) (cl_foci st) }
-            showWindow
         Unproven nm l c ls (base,p) t : todos -> do
             addAST =<< logExpr
             let todos' = Unproven nm l c ls (p : base, mempty) t : todos
@@ -131,7 +128,6 @@ endScope expr = do
                 (rel:base') -> do
                     addAST =<< logExpr
                     modify $ \ st -> st { cl_foci = M.insert (cl_cursor st) (base', rel) (cl_foci st) }
-                    showWindow
         Unproven nm l c ls (base,_) t : todos -> do
             case base of
                 [] -> fail "no scope to end."

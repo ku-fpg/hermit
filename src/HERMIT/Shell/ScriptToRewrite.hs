@@ -28,9 +28,10 @@ import qualified Data.Map as M
 import Data.Monoid
 
 import HERMIT.Context(LocalPathH)
+import HERMIT.External
 import HERMIT.Kernel
 import HERMIT.Kure
-import HERMIT.External
+import HERMIT.Lemma
 import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript, unparseScript)
 import HERMIT.Dictionary.Reasoning
 import HERMIT.PrettyPrinter.Common
@@ -81,17 +82,17 @@ pushScriptLine = pushScript . (:[])
 pushScript :: MonadState CommandLineState m => Script -> m ()
 pushScript es = modify $ \ st -> st { cl_running_script = Just $ maybe es (++es) (cl_running_script st) }
 
-getFragment :: (MonadCatch m, CLMonad m) => Bool -> AST -> m ([String] -> [String])
-getFragment False _  = return id
+getFragment :: (MonadCatch m, CLMonad m) => Bool -> AST -> m String
+getFragment False _  = return ""
 getFragment True ast = do
     (now,opts) <- gets (cl_cursor &&& cl_pretty_opts)
     modify $ setCursor ast
-    ps <- gets cl_proofstack
+    ps <- getProofStackEmpty
     let discardProvens [] = []
         discardProvens r@(Unproven{} : _) = r
         discardProvens (_:r) = discardProvens r
-    doc <- case fmap discardProvens $ M.lookup ast ps of
-            Just (Unproven nm l _ ls p _ : _) -> do
+    doc <- case discardProvens ps of
+            Unproven _ (Lemma q _ _) _ ls p _ : _ -> do
                 as <- case ls of
                         [] -> return []
                         _  -> liftM (PP.text "Assumed lemmas: " :) $
@@ -100,13 +101,13 @@ getFragment True ast = do
                                                     return l' >>> ppLemmaT mempty Clean.pretty n'
                                               ) :: TransformH Core [DocH]) Never
                 d <- queryInFocus (liftPrettyH opts $
-                                    return l >>> ppLemmaT (pathStack2Path p) Clean.pretty nm :: TransformH Core DocH) Never
-                return $ PP.vcat $ as ++ [PP.text "Proving:", d]
+                                    return q >>> extractT (pathT (pathStack2Path p) (ppQCT Clean.pretty)) :: TransformH Core DocH) Never
+                return $ PP.vcat $ as ++ [PP.text "Goal:", d]
             _                             -> queryInFocus (liftPrettyH opts $ pCoreTC Clean.pretty) Never
     let ASCII str = renderCode opts doc
         str' = unlines $ ("" :) $ map ("-- " ++) $ lines str
     modify $ setCursor now
-    return (str' :)
+    return str'
 
 fileToScript :: CLMonad m => FilePath -> m Script
 fileToScript fileName = do
@@ -129,14 +130,15 @@ performScriptEffect = go
             (k,cur) <- gets (cl_kernel &&& cl_cursor)
             all_asts <- listK k
             let m = M.fromList [ (ast,(msg,p)) | (ast,msg,p) <- all_asts ]
-                follow ast
+                follow lastFrag ast
                     | Just (msg, p) <- M.lookup ast m = do
-                        ls <- maybe (return []) follow p
                         f <- getFragment verb ast
-                        return $ f $ maybe id (:) msg ls
+                        ls <- maybe (return []) (follow f) p
+                        let g = if f == lastFrag then id else (f:)
+                        return $ g $ maybe id (:) msg ls
                     | otherwise = return []
             -- no checks to see if you are clobering; be careful
-            ls <- follow cur
+            ls <- follow "" cur
             liftIO $ writeFile fileName $ unlines $ reverse ls
 
           go (ScriptToRewrite rewriteName scriptName) = do

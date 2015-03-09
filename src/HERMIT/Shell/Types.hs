@@ -288,8 +288,8 @@ data ProofTodo = Unproven
                     , ptPath    :: PathStack    -- ^ path into lemma to focus on
                     , ptTemp    :: Bool         -- ^ temporary status of this lemma
                     }
-               | MarkProven LemmaName Bool              -- ^ lemma successfully proven, temporary status
-               | IntroLemma LemmaName Quantified Proven -- ^ introduce this lemma with given proven status
+               | MarkProven { ptName :: LemmaName, ptTemp :: Bool } -- ^ lemma successfully proven, temporary status
+               | IntroLemma { ptName :: LemmaName, ptQuantified :: Quantified, ptProven :: Proven } -- ^ introduce this lemma with given proven status
 
 -- To ease the pain of nested records, define some boilerplate here.
 cl_corelint :: CommandLineState -> Bool

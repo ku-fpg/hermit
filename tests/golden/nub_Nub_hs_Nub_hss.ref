@@ -80,15 +80,15 @@ Successfully proven: nubStrict
                                  [0m[31m([0m[0m[0m[menumFromTo[0m[0m [0m[32mInt[0m[0m [0m[m$fEnumInt[0m[0m [0m[31m([0m[0m[0m[mI#[0m[0m [0m1[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mI#[0m[0m [0m1000[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
     [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
     [0m[mmain[0m[0m [0m[31m=[0m[0m [0m[mrunMainIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m [0m[0m[mmain[0m[0m[0m[0m
-filter-fusion (Not Proven) (Used)
+filter-fusion (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mp[0m[0m [0m[mq[0m[0m [0m[mys[0m[0m[0m[31m.[0m[0m
   [0m[7;93mfilter[27m[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mp[0m[0m[0m [0m[31m([0m[0m[0m[7;93mfilter[27m[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mq[0m[0m[0m [0m[0m[mys[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[7;93mfilter[27m[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[my[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m&&[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[0m[mp[0m[0m[0m [0m[0m[my[0m[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[0m[mq[0m[0m[0m [0m[0m[my[0m[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m [0m[0m[mys[0m[0m[0m
-member-fusion (Not Proven) (Used)
+member-fusion (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[m$dEq[0m[0m [0m[m$dOrd[0m[0m [0m[my[0m[0m [0m[mx[0m[0m [0m[ms[0m[0m[0m[31m.[0m[0m
   [0m[31m([0m[0m[0m[m&&[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[31m([0m[0m[0m[m/=[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[m$dEq[0m[0m[0m [0m[0m[my[0m[0m[0m [0m[0m[mx[0m[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mnotMember[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[m$dOrd[0m[0m[0m [0m[0m[my[0m[0m[0m [0m[0m[ms[0m[0m[0m[0m[31m)[0m[0m
   [31m=[0m
   [0m[mnotMember[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[m$dOrd[0m[0m[0m [0m[0m[my[0m[0m[0m [0m[31m([0m[0m[0m[minsert[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[m$dOrd[0m[0m[0m [0m[0m[mx[0m[0m[0m [0m[0m[ms[0m[0m[0m[0m[31m)[0m[0m
-nub-assumption (Not Proven) (Used)
+nub-assumption (Not Proven)
   [0m[mfix[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m
       [0m[31m([0m[0m[0m[31m([0m[0m[0m[m.[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32mSet[0m[0m [0m[32mInt[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [0m[7;93mabsN[27m[0m[0m
            [0m[31m([0m[0m[0m[31m([0m[0m[0m[m.[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32mSet[0m[0m [0m[32mInt[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [0m[7;93mrepN[27m[0m[0m
@@ -106,11 +106,11 @@ nub-assumption (Not Proven) (Used)
            [0m[m[][0m[0m [0m[31m[31m→[31m[0m[0m [0m[m[][0m[0m [0m[32mInt[0m[0m
            [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[mx[0m[0m [0m[mxs[0m[0m [0m[31m[31m→[31m[0m[0m
              [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInt[0m[0m [0m[0m[mx[0m[0m[0m [0m[31m([0m[0m[0m[0m[mnub[0m[0m[0m [0m[31m([0m[0m[0m[7;93mfilter[27m[0m[0m [0m[32mInt[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m/=[0m[0m[0m[31m)[0m[0m [0m[32mInt[0m[0m [0m[m$fEqInt[0m[0m [0m[0m[mds[0m[0m[0m [0m[0m[mx[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
-nub-fusion (Proven) (Not Used)
+nub-fusion (Assumed)
   [0m[7;93mrepN[27m[0m[0m [0m[31m([0m[0m[0m[7;93mabsN[27m[0m[0m [0m[7;93mworker[27m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[7;93mworker[27m[0m[0m
-nubStrict (Proven) (Used)
+nubStrict (Proven)
   [0m[7;93mnub'[27m[0m[0m [0m[31m([0m[0m[0m[mundefined[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [31m=[0m [0m[mundefined[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
-remembered-origworker (Proven) (Used)
+remembered-origworker (Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[mxs[0m[0m [0m[ms[0m[0m[0m[31m.[0m[0m
   [0m[7;93mworker[27m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[0m[ms[0m[0m[0m
   [31m=[0m
