@@ -9,6 +9,7 @@ module HERMIT.Dictionary.Fold
       externals
     , foldR
     , foldVarR
+    , foldVarConfigR
     , runFoldR
       -- * Unlifted fold interface
     , fold, compileFold, runFold, CompiledFold
@@ -73,13 +74,17 @@ foldR :: (ReadBindings c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m,
 foldR nm = prefixFailMsg "Fold failed: " $ findIdT nm >>= foldVarR Nothing
 
 foldVarR :: (ReadBindings c, MonadCatch m, MonadUnique m) => Maybe BindingDepth -> Var -> Rewrite c m CoreExpr
-foldVarR md v = do
+foldVarR = foldVarConfigR AllBinders
+
+foldVarConfigR :: (ReadBindings c, MonadCatch m, MonadUnique m)
+               => InlineConfig -> Maybe BindingDepth -> Var -> Rewrite c m CoreExpr
+foldVarConfigR config md v = do
     case md of
         Nothing    -> return ()
         Just depth -> do depth' <- varBindingDepthT v
                          guardMsg (depth == depth') "Specified binding depth does not match that of variable binding, this is probably a shadowing occurrence."
-    (rhs,_) <- getUnfoldingT AllBinders <<< return v
-    transform $ \ c -> maybeM "no match." . fold [mkEquality [] rhs (varToCoreExpr v)] c
+    rhss <- liftM (map fst) $ getUnfoldingsT config <<< return v
+    transform $ \ c -> maybeM "no match." . fold [mkEquality [] rhs (varToCoreExpr v) | rhs <- rhss] c
 
 -- | Rewrite using a compiled fold. Useful inside traversal strategies like
 -- anytdR, because you can compile the fold once outside the traversal, then

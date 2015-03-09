@@ -5,6 +5,7 @@ module HERMIT.Dictionary.Inline
     , InlineConfig(..)
     , CaseBinderInlineOption(..)
     , getUnfoldingT
+    , getUnfoldingsT
     , ensureBoundT
     , inlineR
     , inlineNameR
@@ -142,7 +143,16 @@ ensureDepthT uncaptured =
 getUnfoldingT :: (ReadBindings c, MonadCatch m)
               => InlineConfig
               -> Transform c m Id (CoreExpr, BindingDepth -> Bool)
-getUnfoldingT config = transform $ \ c i ->
+getUnfoldingT config = do
+    r <- getUnfoldingsT config
+    case r of
+        [] -> fail "no unfolding for variable."
+        (u:_) -> return u
+
+getUnfoldingsT :: (ReadBindings c, MonadCatch m)
+               => InlineConfig
+               -> Transform c m Id [(CoreExpr, BindingDepth -> Bool)]
+getUnfoldingsT config = transform $ \ c i ->
     case lookupHermitBinding i c of
       Nothing -> do requireAllBinders config
                     let uncaptured = (<= 0) -- i.e. is global
@@ -151,34 +161,38 @@ getUnfoldingT config = transform $ \ c i ->
                     -- will give a reasonable error message if something goes wrong, instead of a GHC panic.
                     guardMsg (isId i) "type variable is not in Env (this should not happen)."
                     case unfoldingInfo (idInfo i) of
-                      CoreUnfolding { uf_tmpl = uft } -> return (uft, uncaptured)
-                      dunf@(DFunUnfolding {})         -> liftM (,uncaptured) $ dFunExpr dunf
+                      CoreUnfolding { uf_tmpl = uft } -> single (uft, uncaptured)
+                      dunf@(DFunUnfolding {})         -> single . (,uncaptured) =<< dFunExpr dunf
                       _                               -> fail $ "cannot find unfolding in Env or IdInfo."
       Just b -> let depth = hbDepth b
                 in case hbSite b of
                           CASEBINDER s alt -> let tys             = tyConAppArgs (idType i)
-                                                  altExprDepthM   = liftM (, (<= depth+1)) $ alt2Exp tys alt
-                                                  scrutExprDepthM = return (s, (< depth))
+                                                  altExprDepthM   = single . (, (<= depth+1)) =<< alt2Exp tys alt
+                                                  scrutExprDepthM = single (s, (< depth))
                                                in case config of
                                                     CaseBinderOnly Scrutinee   -> scrutExprDepthM
                                                     CaseBinderOnly Alternative -> altExprDepthM
-                                                    AllBinders                 -> altExprDepthM <+ scrutExprDepthM
+                                                    AllBinders                 -> do
+                                                        au <- altExprDepthM <+ return []
+                                                        su <- scrutExprDepthM
+                                                        return $ au ++ su
 
                           NONREC e         -> do requireAllBinders config
-                                                 return (e, (< depth))
+                                                 single (e, (< depth))
 
                           REC e            -> do requireAllBinders config
-                                                 return (e, (<= depth))
+                                                 single (e, (<= depth))
 
                           MUTUALREC e      -> do requireAllBinders config
-                                                 return (e, (<= depth+1))
+                                                 single (e, (<= depth+1))
 
                           TOPLEVEL e       -> do requireAllBinders config
-                                                 return (e, (<= depth)) -- Depth should always be 0 for top-level bindings.
+                                                 single (e, (<= depth)) -- Depth should always be 0 for top-level bindings.
                                                                         -- Any inlined variables should only refer to top-level bindings or global things, else they've been captured.
 
                           _                -> fail "variable is not bound to an expression."
   where
+    single = return . (:[])
     requireAllBinders :: Monad m => InlineConfig -> m ()
     requireAllBinders AllBinders         = return ()
     requireAllBinders (CaseBinderOnly _) = fail "not a case binder."
