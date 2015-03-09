@@ -147,7 +147,7 @@ commandLine opts exts = do
                         Just line        -> if all isSpace line
                                             then loop
                                             else lift (evalScript line `catchFailHard` cl_putStrLn) >> loop
-                Just e -> lift (runExprH e `catchM` (\ msg -> setRunningScript Nothing >> cl_putStrLn msg)) >> loop
+                Just e -> lift (runExprH e `catchFailHard` (\ msg -> setRunningScript Nothing >> cl_putStrLn msg)) >> loop
 
     -- Start the CLI
     let settings = setComplete (completeWordWithPrev Nothing ws_complete completer) defaultSettings
@@ -194,7 +194,7 @@ interpShell =
   , interpEM $ \ (TransformCoreTCCheckBox tt)  -> performQuery (CorrectnessCriteria tt)
   , interpEM $ \ (effect :: KernelEffect)      -> flip performKernelEffect effect
   , interpM  $ \ (effect :: ShellEffect)       -> performShellEffect effect
-  , interpM  $ \ (effect :: ScriptEffect)      -> performScriptEffect runExprH effect
+  , interpM  $ \ (effect :: ScriptEffect)      -> performScriptEffect effect
   , interpEM $ \ (query :: QueryFun)           -> performQuery query
   ]
 

@@ -115,11 +115,6 @@ withProofExternals comp = do
     modify reset
     return r
 
--- TODO: remove for the one in Command
-runProofExprH :: (MonadCatch m, CLMonad m) => ExprH -> m ()
-runProofExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n")
-                   $ interpExprH interpProof expr >>= performProofShellCommand expr
-
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 endProof expr = do
@@ -158,7 +153,7 @@ performProofShellCommand expr = go
           go (PCSplitAssumed i)   = splitAssumed i str
           go (PCShell effect)     = performShellEffect effect
           go (PCKernel effect)    = performKernelEffect expr effect
-          go (PCScript effect)    = performScriptEffect runProofExprH effect
+          go (PCScript effect)    = performScriptEffect effect
           go (PCQuery query)      = performQuery query expr
           go (PCUser prf)         = do
                 let UserProofTechnique t = prf -- may add more constructors later

@@ -19,7 +19,6 @@ module HERMIT.Shell.ScriptToRewrite
 
 import Control.Arrow
 import Control.Monad
-import Control.Monad.Error.Class (catchError, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State (MonadState, gets, modify)
 import Control.Exception hiding (catch)
@@ -117,8 +116,8 @@ fileToScript fileName = do
         Left (err :: IOException) -> fail ("IO error: " ++ show err)
         Right str -> parseScriptCLT str
 
-performScriptEffect :: (MonadCatch m, CLMonad m) => (ExprH -> m ()) -> ScriptEffect -> m ()
-performScriptEffect runner = go
+performScriptEffect :: (MonadCatch m, CLMonad m) => ScriptEffect -> m ()
+performScriptEffect = go
     where go (SeqMeta ms) = mapM_ go ms
           go (LoadFile scriptName fileName) = do
             script <- fileToScript fileName
@@ -153,11 +152,9 @@ performScriptEffect runner = go
           go (RunScript scriptName) = do
             script <- lookupScript scriptName
             running_script_st <- gets cl_running_script
-            setRunningScript $ Just script
-            runScript runner `catchError` (\ err -> setRunningScript running_script_st >> throwError err)
-            setRunningScript running_script_st
-            putStrToConsole ("Script \"" ++ scriptName ++ "\" ran successfully.")
-            showWindow
+            setRunningScript $ case running_script_st of
+                                Nothing -> Just script
+                                Just es -> Just (script ++ es)
 
           go (SaveScript fileName scriptName) = do
             script <- lookupScript scriptName
