@@ -121,7 +121,7 @@ externals =
     , external "lemma-rhs-intro" (lemmaRhsIntroR :: LemmaName -> RewriteH Core)
         [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
-    , external "inst-lemma" (\ nm v cs -> modifyLemmaT nm id (instantiateQuantifiedVarR (cmpString2Var v) cs) id id :: TransformH Core ())
+    , external "inst-lemma" (\ nm v cs -> modifyLemmaT nm id (instantiateQuantifiedVarR (cmpHN2Var v) cs) id id :: TransformH Core ())
         [ "Instantiate one of the universally quantified variables of the given lemma,"
         , "with the given Core expression, creating a new lemma. Instantiating an"
         , "already proven lemma will result in the new lemma being considered proven." ]
