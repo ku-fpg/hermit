@@ -9,9 +9,11 @@ module HERMIT.Shell.ScriptToRewrite
     , parseScriptCLT
     , performScriptEffect
     , popScriptLine
+    , pushScriptLine
+    , pushScript
     , runScript
+    , fileToScript
     , scriptToRewrite
-    , setRunningScript
     , ScriptEffect(..)
     ) where
 
@@ -70,8 +72,15 @@ runScript run = go
     where go = popScriptLine >>= maybe (return ()) (\e -> run e >> go)
 
 popScriptLine :: MonadState CommandLineState m => m (Maybe ExprH)
-popScriptLine = gets cl_running_script >>= maybe (return Nothing) (\case []     -> setRunningScript Nothing >> return Nothing
-                                                                         (e:es) -> setRunningScript (Just es) >> return (Just e))
+popScriptLine = gets cl_running_script >>= maybe (return Nothing)
+                                                 (\case []     -> setRunningScript Nothing >> return Nothing
+                                                        (e:es) -> setRunningScript (Just es) >> return (Just e))
+
+pushScriptLine :: MonadState CommandLineState m => ExprH -> m ()
+pushScriptLine = pushScript . (:[])
+
+pushScript :: MonadState CommandLineState m => Script -> m ()
+pushScript es = modify $ \ st -> st { cl_running_script = Just $ maybe es (++es) (cl_running_script st) }
 
 getFragment :: (MonadCatch m, CLMonad m) => Bool -> AST -> m ([String] -> [String])
 getFragment False _  = return id
@@ -83,7 +92,7 @@ getFragment True ast = do
         discardProvens r@(Unproven{} : _) = r
         discardProvens (_:r) = discardProvens r
     doc <- case fmap discardProvens $ M.lookup ast ps of
-            Just (Unproven nm l ls p _ : _) -> do
+            Just (Unproven nm l _ ls p _ : _) -> do
                 as <- case ls of
                         [] -> return []
                         _  -> liftM (PP.text "Assumed lemmas: " :) $
@@ -100,18 +109,21 @@ getFragment True ast = do
     modify $ setCursor now
     return (str' :)
 
+fileToScript :: CLMonad m => FilePath -> m Script
+fileToScript fileName = do
+    putStrToConsole $ "Loading \"" ++ fileName ++ "\"..."
+    res <- liftIO $ try (readFile fileName)
+    case res of
+        Left (err :: IOException) -> fail ("IO error: " ++ show err)
+        Right str -> parseScriptCLT str
+
 performScriptEffect :: (MonadCatch m, CLMonad m) => (ExprH -> m ()) -> ScriptEffect -> m ()
 performScriptEffect runner = go
     where go (SeqMeta ms) = mapM_ go ms
           go (LoadFile scriptName fileName) = do
-            putStrToConsole $ "Loading \"" ++ fileName ++ "\"..."
-            res <- liftIO $ try (readFile fileName)
-            case res of
-                Left (err :: IOException) -> fail ("IO error: " ++ show err)
-                Right str -> do
-                    script <- parseScriptCLT str
-                    modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
-                    putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
+            script <- fileToScript fileName
+            modify $ \ st -> st {cl_scripts = (scriptName,script) : cl_scripts st}
+            putStrToConsole ("Script \"" ++ scriptName ++ "\" loaded successfully from \"" ++ fileName ++ "\".")
 
           go (SaveFile verb fileName) = do
             putStrToConsole $ "[saving " ++ fileName ++ "]"

@@ -23,10 +23,6 @@ import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Parser
 
-import HERMIT.Plugin.Renderer
-
-import HERMIT.PrettyPrinter.Common
-
 import HERMIT.Shell.Types
 
 -------------------------------------------------------------------------------
@@ -60,24 +56,16 @@ applyRewrite rr expr = do
     let k = cl_kernel st
         kEnv = cl_kernel_env st
         ast = cl_cursor st
-        ppOpts = cl_pretty_opts st
-        pp = pCoreTC $ cl_pretty st
 
     rr' <- addFocusR rr
     ast' <- prefixFailMsg "Rewrite failed:" $ applyK k rr' (Always (unparseExprH expr)) kEnv ast
-
-    let showResult = if cl_diffonly st then showDiff else showWindow
-        showDiff = do q <- addFocusT $ liftPrettyH ppOpts pp
-                      (_,doc1) <- queryK k q Never kEnv ast
-                      (_,doc2) <- queryK k q Never kEnv ast'
-                      diffDocH (cl_pretty st) doc1 doc2 >>= cl_putStr
 
     when (cl_corelint st) $ do
         warns <- liftM snd (queryK k lintModuleT Never kEnv ast')
                     `catchM` (\ errs -> deleteK k ast' >> fail errs)
         putStrToConsole warns
 
-    addAST ast' >> showResult
+    addAST ast'
 
 setPath :: (Injection GHC.ModGuts g, Walker HermitC g, MonadCatch m, CLMonad m)
         => TransformH g LocalPathH -> ExprH -> m ()
@@ -104,9 +92,9 @@ goDirection dir expr = do
                     addASTWithPath ast'' (const rel')
                     showWindow
             else fail "invalid path."
-        Unproven nm l ls (base,p) t : todos -> do
+        Unproven nm l c ls (base,p) t : todos -> do
             let p' = moveLocally dir p
-                todos' = Unproven nm l ls (base,p') t : todos
+                todos' = Unproven nm l c ls (base,p') t : todos
             -- TODO: test the path for validity
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
         _ -> fail "goDirection: impossible case!"
@@ -123,9 +111,9 @@ beginScope expr = do
             addAST =<< logExpr
             modify $ \ st -> st { cl_foci = M.insert (cl_cursor st) (rel : base, mempty) (cl_foci st) }
             showWindow
-        Unproven nm l ls (base,p) t : todos -> do
+        Unproven nm l c ls (base,p) t : todos -> do
             addAST =<< logExpr
-            let todos' = Unproven nm l ls (p : base, mempty) t : todos
+            let todos' = Unproven nm l c ls (p : base, mempty) t : todos
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
         _ -> fail "beginScope: impossible case!"
 
@@ -144,12 +132,12 @@ endScope expr = do
                     addAST =<< logExpr
                     modify $ \ st -> st { cl_foci = M.insert (cl_cursor st) (base', rel) (cl_foci st) }
                     showWindow
-        Unproven nm l ls (base,_) t : todos -> do
+        Unproven nm l c ls (base,_) t : todos -> do
             case base of
                 [] -> fail "no scope to end."
                 (p:base') -> do
                     addAST =<< logExpr
-                    let todos' = Unproven nm l ls (base', p) t : todos
+                    let todos' = Unproven nm l c ls (base', p) t : todos
                     modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
         _ -> fail "endScope: impossible case!"
 

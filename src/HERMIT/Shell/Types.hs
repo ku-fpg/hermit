@@ -8,6 +8,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -26,7 +27,8 @@ import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
 import Data.Dynamic
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isJust)
-import Data.Monoid (mempty)
+import Data.Monoid (mempty, (<>))
+import Data.String (fromString)
 
 import HERMIT.Context
 import HERMIT.Core
@@ -36,6 +38,7 @@ import qualified HERMIT.GHC as GHC
 import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Lemma
+import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 import HERMIT.Syntax
@@ -275,12 +278,16 @@ data CommandLineState = CommandLineState
 
 type PathStack = ([LocalPathH], LocalPathH)
 
-data ProofTodo = Unproven   LemmaName Lemma [NamedLemma] PathStack Bool -- ^ lemma we are proving
-                                                                         -- temporary lemmas in scope
-                                                                         -- path into lemma to focus on
-                                                                         -- temporary status of this lemma
-               | Proven     LemmaName                    Bool -- ^ lemma successfully proven, temporary status
-               | IntroLemma LemmaName Quantified Bool         -- ^ introduce this lemma with given proven status
+data ProofTodo = Unproven
+                    { ptName    :: LemmaName    -- ^ lemma we are proving
+                    , ptLemma   :: Lemma
+                    , ptContext :: HermitC      -- ^ context in which lemma is being proved
+                    , ptAssumed :: [NamedLemma] -- ^ temporary lemmas in scope
+                    , ptPath    :: PathStack    -- ^ path into lemma to focus on
+                    , ptTemp    :: Bool         -- ^ temporary status of this lemma
+                    }
+               | Proven     LemmaName                 Bool -- ^ lemma successfully proven, temporary status
+               | IntroLemma LemmaName Quantified Bool      -- ^ introduce this lemma with given proven status
 
 -- To ease the pain of nested records, define some boilerplate here.
 cl_corelint :: CommandLineState -> Bool
@@ -465,12 +472,12 @@ popProofStack = do
     modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) ts (cl_proofstack st) }
     return t
 
-currentLemma :: CLMonad m => m (LemmaName, Lemma, [NamedLemma], PathStack)
+currentLemma :: CLMonad m => m (LemmaName, Lemma, HermitC, [NamedLemma], PathStack)
 currentLemma = do
     todo : _ <- getProofStack
 
     case todo of
-        Unproven nm l ls p _ -> return (nm, l, ls, p)
+        Unproven nm l c ls p _ -> return (nm, l, c, ls, p)
         _ -> fail "currentLemma: unproven lemma not on top of stack!"
 
 announceProven :: (MonadCatch m, CLMonad m) => m ()
@@ -516,17 +523,59 @@ fixWindow = do
        $ put $ st { cl_window = focusPath } -}
     modify $ \ st -> st { cl_window = focusPath  } -- TODO: temporary until we figure out a better highlight interface
 
-showWindow :: CLMonad m => m ()
-showWindow = ifM isRunningScript (return ()) $ fixWindow >> gets cl_window >>= pluginM . display . Just
+showWindow :: (MonadCatch m, CLMonad m) => m ()
+showWindow = ifM isRunningScript (return ()) $ do
+    (ps,ast) <- gets (cl_proofstack &&& cl_cursor)
+    case M.lookup ast ps of
+        Just (Unproven _ l _ ls p _ : _)  -> do
+            unless (null ls) $ do
+                cl_putStrLn "Assumed lemmas:"
+                mapM_ (printLemma mempty)
+                      [ (fromString (show i) <> ": " <> n, lem)
+                      | (i::Int,(n,lem)) <- zip [0..] ls ]
+            printLemma p ("Goal:",l)
+        _ -> do st <- get
+                if cl_diffonly st
+                then do
+                    let k = cl_kernel st
+
+                    all_asts <- listK k
+
+                    let kEnv = cl_kernel_env st
+                        ast' = head $ [ cur | (cur, _, Just p) <- all_asts, p == ast ] ++ [ast]
+                        ppOpts = cl_pretty_opts st
+                        pp = cl_pretty st
+
+                    q <- addFocusT $ liftPrettyH ppOpts $ pCoreTC pp
+                    (_,doc1) <- queryK k q Never kEnv ast
+                    (_,doc2) <- queryK k q Never kEnv ast'
+                    diffDocH pp doc1 doc2 >>= cl_putStr
+                else fixWindow >> gets cl_window >>= pluginM . display . Just
+
+printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
+           => PathStack -> (LemmaName,Lemma) -> m ()
+printLemma p (nm,lem) = do -- TODO
+    pp <- gets cl_pretty
+    doc <- queryInFocus (return lem >>> liftPrettyH (pOptions pp) (ppLemmaT (pathStack2Path p) pp nm) :: TransformH Core DocH) Never
+    st <- get
+    liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
 ------------------------------------------------------------------------------
 
 queryInFocus :: (Walker HermitC g, Injection GHC.ModGuts g, MonadCatch m, CLMonad m)
              => TransformH g b -> CommitMsg -> m b
 queryInFocus t msg = do
-    q <- addFocusT t
+    (ls,mc) <- (do pt@(Unproven {}) : _ <- getProofStack
+                   return (ptAssumed pt, Just $ ptContext pt)) <+ return ([],Nothing)
+    q <- addFocusT $ inContext mc $ withLemmasInScope ls t
     st <- get
     (ast', r) <- queryK (cl_kernel st) q msg (cl_kernel_env st) (cl_cursor st)
     addAST ast'
     return r
 
+withLemmasInScope :: HasLemmas m => [(LemmaName,Lemma)] -> Transform c m a b -> Transform c m a b
+withLemmasInScope ls t = transform $ \ c -> withLemmas (M.fromList ls) . applyT t c
+
+inContext :: Maybe c -> Transform c m a b -> Transform c m a b
+inContext Nothing  t = t
+inContext (Just c) t = contextfreeT (applyT t c)

@@ -195,12 +195,12 @@ versionCmd whereTo st = do
     case whereTo of
         Goto ast ->
             if ast `elem` [ ast' | (ast',_,_) <- all_asts ]
-                then reEnterProofIO $ setCursor ast st
+                then return $ Right $ setCursor ast st
                 else return $ Left $ CLError $ "Cannot find AST #" ++ show ast ++ "."
         GotoTag nm ->
             case [ ast | (ast,nms) <- M.toList (cl_tags st), nm `elem` nms ] of
                 [] -> return $ Left $ CLError $ "No tag named: " ++ nm
-                (ast:_) -> reEnterProofIO $ setCursor ast st
+                (ast:_) -> return $ Right $ setCursor ast st
         Tag nm ->
             return $ Right $ st { cl_tags = M.insertWith (++) (cl_cursor st) [nm] (cl_tags st) }
         Step -> do
@@ -209,7 +209,7 @@ versionCmd whereTo st = do
                 [] -> return $ Left $ CLError "Cannot step forward (no more steps)."
                 [(cmd,ast)] -> do
                     putStrLn $ "step : " ++ cmd
-                    reEnterProofIO $ setCursor ast st
+                    return $ Right $ setCursor ast st
                 _ -> return $ Left $ CLError $ "Cannot step forward (multiple choices), use goto {"
                                                 ++ intercalate "," (map (show.snd) ns) ++ "}"
         Back -> do
@@ -218,7 +218,7 @@ versionCmd whereTo st = do
                 [] -> return $ Left $ CLError "Cannot step backwards (no more steps)."
                 [(cmd,ast)] -> do
                     putStrLn $ "back, unstepping : " ++ cmd
-                    reEnterProofIO $ setCursor ast st
+                    return $ Right $ setCursor ast st
                 _ -> return $ Left $ CLError "Cannot step backwards (multiple choices, impossible!)."
 
 -------------------------------------------------------------------------------

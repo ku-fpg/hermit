@@ -1,7 +1,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
-module HERMIT.Shell.Completion (shellComplete) where
+module HERMIT.Shell.Completion (completer) where
 
 import Control.Applicative
 import Control.Arrow
@@ -24,11 +24,19 @@ import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Rules
 
 import HERMIT.Shell.Interpreter
+import HERMIT.Shell.Proof
 import HERMIT.Shell.Types
 
 import System.Console.Haskeline hiding (catch, display)
 
 ----------------------------------------------------------------------------------
+
+completer :: (MonadCatch m, CLMonad m) => String -> String -> m [Completion]
+completer rPrev so_far = do
+    (ps,ast) <- gets (cl_proofstack &&& cl_cursor)
+    case M.lookup ast ps of
+        Just (_:_)  -> withProofExternals $ shellComplete rPrev so_far
+        _           -> shellComplete rPrev so_far
 
 shellComplete :: (MonadCatch m, CLMonad m) => String -> String -> m [Completion]
 shellComplete rPrev so_far = do
@@ -100,7 +108,7 @@ completionQuery InlineC         = return $ promoteT inlineTargetsT >>^          
 completionQuery InScopeC        = return $ pure ["'"] -- TODO
 completionQuery LemmaC          = do
     let findTemps [] = []
-        findTemps (Unproven _ _ ls _ _ : _) = map (show . fst) ls
+        findTemps (pt@(Unproven {}) : _) = map (show . fst) (ptAssumed pt)
         findTemps (_ : r) = findTemps r
     cur <- gets cl_cursor
     tempLemmas <- gets (findTemps . fromMaybe [] . M.lookup cur . cl_proofstack)

@@ -120,7 +120,7 @@ eval comp = do
         Return x           -> return x
         RR rr       :>>= k -> runS (applyK kernel (extractR $ localPathR path rr) Never env) >>= eval . k
         Query tr    :>>= k -> runQ (queryK kernel (extractT $ localPathT path tr) Never env) >>= eval . k
-        Shell es os :>>= k -> clm (commandLine interpShellCommand os es) >>= eval . k
+        Shell es os :>>= k -> clm (commandLine os es) >>= eval . k
         Guard p (HPM m)  :>>= k  -> gets (p . ps_pass) >>= \ b -> when b (eval m) >>= eval . k
         Focus tp (HPM m) :>>= k  -> do
             p <- runQ (queryK kernel (extractT tp) Never env)  -- run the pathfinding translation

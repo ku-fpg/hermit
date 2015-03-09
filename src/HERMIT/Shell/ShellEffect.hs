@@ -54,9 +54,9 @@ performShellEffect Abort  = abort
 performShellEffect Resume = gets cl_cursor >>= resume
 performShellEffect Continue = get >>= continue
 
-performShellEffect (CLSModify f)  = get >>= liftAndCatchIO . f >>= either throwError put >> showWindow
+performShellEffect (CLSModify f)  = get >>= liftAndCatchIO . f >>= either throwError put
 
-performShellEffect (PluginComp m) = pluginM m >> showWindow
+performShellEffect (PluginComp m) = pluginM m
 
 dumpT :: FilePath -> PrettyPrinter -> String -> Int -> TransformH DocH ()
 dumpT fileName pp renderer width = do

@@ -1,9 +1,16 @@
-{-# LANGUAGE ConstraintKinds, CPP, FlexibleContexts, GADTs, LambdaCase, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.Shell.Command
     ( -- * The HERMIT Command-line Shell
       commandLine
-    , interpShellCommand
+    , interpShell
     , unicodeConsole
     , diffDocH
     , diffR
@@ -11,14 +18,15 @@ module HERMIT.Shell.Command
     , performQuery
     , cl_kernel_env
     , getFocusPath
-    , shellComplete
     , evalScript
     ) where
 
+import Control.Arrow hiding (loop)
 import Control.Monad.State
 
 import Data.Char
 import Data.List (isPrefixOf, partition)
+import qualified Data.Map as M
 import Data.Maybe
 import Data.Monoid
 
@@ -36,6 +44,7 @@ import HERMIT.Shell.Completion
 import HERMIT.Shell.Externals
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.KernelEffect
+import HERMIT.Shell.Proof
 import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
@@ -89,26 +98,12 @@ cygwinWarning = unlines
 
 -- | The first argument includes a list of files to load.
 commandLine :: forall m. (MonadCatch m, MonadException m, CLMonad m)
-            => [Interp m ()] -> [GHC.CommandLineOption] -> [External] -> m ()
-commandLine intp opts exts = do
+            => [GHC.CommandLineOption] -> [External] -> m ()
+commandLine opts exts = do
     let (flags, filesToLoad) = partition (isPrefixOf "-") opts
-        ws_complete = " ()"
+        ws_complete = " ()" -- treated as 'whitespace' by completer
 
     modify $ \ st -> st { cl_externals = shell_externals ++ exts }
-
-    let loop :: InputT m ()
-        loop = do
-            st <- lift get
-            mLine <- if cl_nav st
-                     then liftIO getNavCmd
-                     else getInputLine $ "hermit<" ++ show (cl_cursor st) ++ "> "
-
-            case mLine of
-                Nothing          -> lift $ performShellEffect Resume
-                Just ('-':'-':_) -> loop
-                Just line        -> if all isSpace line
-                                    then loop
-                                    else lift (evalScript intp line `catchFailHard` cl_putStrLn) >> loop
 
     -- Display the banner
     if any (`elem` ["-v0", "-v1"]) flags
@@ -125,17 +120,37 @@ commandLine intp opts exts = do
     -- Load and run any scripts
     setRunningScript $ Just []
     sequence_ [ case fileName of
-                 "abort"  -> performShellEffect Abort
-                 "resume" -> performShellEffect Resume
-                 _        -> performScriptEffect (runExprH intp) $ loadAndRun fileName
+                 "abort"  -> parseScriptCLT "abort" >>= pushScript
+                 "resume" -> parseScriptCLT "resume" >>= pushScript
+                 _        -> fileToScript fileName >>= pushScript
               | fileName <- reverse filesToLoad
               , not (null fileName)
               ] `catchFailHard` \ msg -> cl_putStrLn $ "Booting Failure: " ++ msg
-    setRunningScript Nothing
+
+    let -- Main proof input loop
+        loop :: InputT m ()
+        loop = do
+            el <- lift $ tryM () announceProven >> attemptM currentLemma
+            let prompt = either (const "hermit") (const "proof") el
+            mExpr <- lift popScriptLine
+            case mExpr of
+                Nothing -> do -- no script running
+                    lift showWindow
+                    st <- lift get
+                    mLine <- if cl_nav st
+                             then liftIO getNavCmd
+                             else getInputLine $ prompt ++ "<" ++ show (cl_cursor st) ++ "> "
+
+                    case mLine of
+                        Nothing          -> lift $ performShellEffect Resume
+                        Just ('-':'-':_) -> loop
+                        Just line        -> if all isSpace line
+                                            then loop
+                                            else lift (evalScript line `catchFailHard` cl_putStrLn) >> loop
+                Just e -> lift (runExprH e `catchM` (\ msg -> setRunningScript Nothing >> cl_putStrLn msg)) >> loop
 
     -- Start the CLI
-    showWindow
-    let settings = setComplete (completeWordWithPrev Nothing ws_complete shellComplete) defaultSettings
+    let settings = setComplete (completeWordWithPrev Nothing ws_complete completer) defaultSettings
     runInputT settings loop
 
 -- | Like 'catchM', but checks the 'cl_failhard' setting and does so if needed.
@@ -148,15 +163,19 @@ catchFailHard m failure =
                                 abort)
                             (failure msg)
 
-evalScript :: (MonadCatch m, CLMonad m) => [Interp m ()] -> String -> m ()
-evalScript intp = parseScriptCLT >=> mapM_ (runExprH intp)
+evalScript :: (MonadCatch m, CLMonad m) => String -> m ()
+evalScript = parseScriptCLT >=> mapM_ runExprH
 
-runExprH :: (MonadCatch m, CLMonad m) => [Interp m ()] -> ExprH -> m ()
-runExprH intp expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ interpExprH intp expr
+runExprH :: (MonadCatch m, CLMonad m) => ExprH -> m ()
+runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
+    (ps,ast) <- gets (cl_proofstack &&& cl_cursor)
+    case M.lookup ast ps of
+        Just (_:_)  -> withProofExternals $ interpExprH interpProof expr >>= performProofShellCommand expr
+        _           -> interpExprH interpShell expr
 
 -- | Interpret a boxed thing as one of the four possible shell command types.
-interpShellCommand :: (MonadCatch m, MonadException m, CLMonad m) => [Interp m ()]
-interpShellCommand =
+interpShell :: (MonadCatch m, CLMonad m) => [Interp m ()]
+interpShell =
   [ interpEM $ \ (RewriteCoreBox rr)           -> applyRewrite rr
   , interpEM $ \ (RewriteCoreTCBox rr)         -> applyRewrite rr
   , interpEM $ \ (BiRewriteCoreBox br)         -> applyRewrite $ whicheverR br
@@ -175,15 +194,9 @@ interpShellCommand =
   , interpEM $ \ (TransformCoreTCCheckBox tt)  -> performQuery (CorrectnessCriteria tt)
   , interpEM $ \ (effect :: KernelEffect)      -> flip performKernelEffect effect
   , interpM  $ \ (effect :: ShellEffect)       -> performShellEffect effect
-  , interpM  $ \ (effect :: ScriptEffect)      -> performScriptEffect (runExprH interpShellCommand) effect
+  , interpM  $ \ (effect :: ScriptEffect)      -> performScriptEffect runExprH effect
   , interpEM $ \ (query :: QueryFun)           -> performQuery query
   ]
-
--------------------------------------------------------------------------------
-
--- TODO: This can be refactored. We always showWindow. Also, Perhaps return a modifier, not ()
---   UPDATE: Not true.  We don't always showWindow.
--- TODO: All of these should through an exception if they fail to execute the command as given.
 
 -------------------------------------------------------------------------------
 
