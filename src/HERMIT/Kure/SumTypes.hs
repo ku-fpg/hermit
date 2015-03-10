@@ -1,51 +1,58 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, InstanceSigs, LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 
 module HERMIT.Kure.SumTypes
-  ( -- * Sum Types
-    Core(..)
-  , TyCo(..)
-  , CoreTC(..)
-  , QC(..)
-  -- * Equality
-  -- ** Syntactic Equality
-  , coreSyntaxEq
-  , tyCoSyntaxEq
-  , coreTCSyntaxEq
-  -- ** Alpha Equality
-  , coreAlphaEq
-  , tyCoAlphaEq
-  , coreTCAlphaEq
-  -- ** Collecting Free Variables
-  , freeVarsCore
-  , freeVarsTyCo
-  , freeVarsCoreTC
-  -- * Promotion Combinators
-  -- ** Transform Promotions
-  , promoteModGutsT
-  , promoteProgT
-  , promoteBindT
-  , promoteDefT
-  , promoteExprT
-  , promoteAltT
-  , promoteTypeT
-  , promoteCoercionT
-  , promoteQuantifiedT
-  , promoteClauseT
-  -- ** Rewrite Promotions
-  , promoteModGutsR
-  , promoteProgR
-  , promoteBindR
-  , promoteDefR
-  , promoteExprR
-  , promoteAltR
-  , promoteTypeR
-  , promoteCoercionR
-  , promoteQuantifiedR
-  , promoteClauseR
-  -- ** BiRewrite Promotions
-  , promoteExprBiR
-  )
-where
+    ( -- * Sum Types
+      Core(..)
+    , TyCo(..)
+    , CoreTC(..)
+    , QC(..)
+      -- * Equality
+      -- ** Syntactic Equality
+    , coreSyntaxEq
+    , tyCoSyntaxEq
+    , coreTCSyntaxEq
+      -- ** Alpha Equality
+    , coreAlphaEq
+    , tyCoAlphaEq
+    , coreTCAlphaEq
+      -- ** Collecting Free Variables
+    , freeVarsCore
+    , freeVarsTyCo
+    , freeVarsCoreTC
+      -- * Promotion Combinators
+      -- ** Transform Promotions
+    , promoteModGutsT
+    , promoteProgT
+    , promoteBindT
+    , promoteDefT
+    , promoteExprT
+    , promoteAltT
+    , promoteTypeT
+    , promoteCoercionT
+    , promoteQuantifiedT
+    , promoteClauseT
+    , promoteCoreT
+    , promoteCoreTCT
+      -- ** Rewrite Promotions
+    , promoteModGutsR
+    , promoteProgR
+    , promoteBindR
+    , promoteDefR
+    , promoteExprR
+    , promoteAltR
+    , promoteTypeR
+    , promoteCoercionR
+    , promoteQuantifiedR
+    , promoteClauseR
+    , promoteCoreR
+    , promoteCoreTCR
+      -- ** BiRewrite Promotions
+    , promoteExprBiR
+    ) where
 
 import Language.KURE.Transform
 import Language.KURE.Injection
@@ -537,6 +544,16 @@ promoteClauseT :: (Monad m, Injection Clause g) => Transform c m Clause b -> Tra
 promoteClauseT = promoteWithFailMsgT "This translate can only succeed at clause nodes."
 {-# INLINE promoteClauseT #-}
 
+-- | Promote a translate on 'Core'.
+promoteCoreT :: (Monad m, Injection Core g) => Transform c m Core b -> Transform c m g b
+promoteCoreT = promoteWithFailMsgT "This translate can only succeed at core nodes."
+{-# INLINE promoteCoreT #-}
+
+-- | Promote a translate on 'CoreTC'.
+promoteCoreTCT :: (Monad m, Injection CoreTC g) => Transform c m CoreTC b -> Transform c m g b
+promoteCoreTCT = promoteWithFailMsgT "This translate can only succeed at core nodes."
+{-# INLINE promoteCoreTCT #-}
+
 ---------------------------------------------------------------------
 
 -- | Promote a rewrite on 'ModGuts'.
@@ -588,6 +605,17 @@ promoteQuantifiedR = promoteWithFailMsgR "This rewrite can only succeed at quant
 promoteClauseR :: (Monad m, Injection Clause g) => Rewrite c m Clause -> Rewrite c m g
 promoteClauseR = promoteWithFailMsgR "This rewrite can only succeed at quantified nodes."
 {-# INLINE promoteClauseR #-}
+
+-- | Promote a rewrite on 'Core'.
+promoteCoreR :: (Monad m, Injection Core g) => Rewrite c m Core -> Rewrite c m g
+promoteCoreR = promoteWithFailMsgR "This rewrite can only succeed at core nodes."
+{-# INLINE promoteCoreR #-}
+
+-- | Promote a rewrite on 'CoreTC'.
+promoteCoreTCR :: (Monad m, Injection CoreTC g) => Rewrite c m CoreTC -> Rewrite c m g
+promoteCoreTCR = promoteWithFailMsgR "This rewrite can only succeed at core nodes."
+{-# INLINE promoteCoreTCR #-}
+
 ---------------------------------------------------------------------
 
 -- | Promote a bidirectional rewrite on 'CoreExpr'.

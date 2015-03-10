@@ -33,10 +33,10 @@ import System.Console.Haskeline hiding (catch, display)
 
 completer :: (MonadCatch m, CLMonad m) => String -> String -> m [Completion]
 completer rPrev so_far = do
-    (ps,ast) <- gets (cl_proofstack &&& cl_cursor)
-    case M.lookup ast ps of
-        Just (_:_)  -> withProofExternals $ shellComplete rPrev so_far
-        _           -> shellComplete rPrev so_far
+    ps <- getProofStackEmpty
+    case ps of
+        [] -> shellComplete rPrev so_far
+        _  -> withProofExternals $ shellComplete rPrev so_far
 
 shellComplete :: (MonadCatch m, CLMonad m) => String -> String -> m [Completion]
 shellComplete rPrev so_far = do
@@ -59,9 +59,7 @@ completionsFor :: (MonadCatch m, CLMonad m)
                => String -> [CompletionType] -> m [Completion]
 completionsFor so_far cts = do
     qs <- mapM completionQuery cts
-    (k,(env,ast)) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor)
-    -- 'liftM snd' is because we assume completion queries don't create new ASTs
-    cls <- forM qs $ \ q -> catchM (do q' <- addFocusT q ; liftM snd $ queryK k q' Never env ast) (\_ -> return [])
+    cls <- forM qs $ \ q -> queryInContext q Never `catchM` (\_ -> return [])
     return $ map simpleCompletion $ nub $ filter (so_far `isPrefixOf`) $ concat cls
 
 data CompletionType = ConsiderC       -- considerable constructs
@@ -98,12 +96,12 @@ filterUnknowns :: [CompletionType] -> [CompletionType]
 filterUnknowns l = if null l' then l else l'
     where l' = filter (\case UnknownC _ -> False ; _ -> True) l
 
-completionQuery :: (MonadIO m, MonadState CommandLineState m) => CompletionType -> m (TransformH CoreTC [String])
+completionQuery :: (MonadIO m, MonadState CommandLineState m) => CompletionType -> m (TransformH QC [String])
 completionQuery ConsiderC       = return $ pure $ map fst considerables
-completionQuery OccurrenceOfC   = return $ occurrenceOfTargetsT    >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery BindingOfC      = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery BindingGroupOfC = return $ bindingGroupOfTargetsT  >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery RhsOfC          = return $ rhsOfTargetsT           >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery OccurrenceOfC   = return $ promoteCoreTCT occurrenceOfTargetsT   >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery BindingOfC      = return $ promoteCoreTCT bindingOfTargetsT      >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery BindingGroupOfC = return $ promoteCoreTCT bindingGroupOfTargetsT >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery RhsOfC          = return $ promoteCoreTCT rhsOfTargetsT          >>^ GHC.varSetToStrings >>^ map ('\'':)
 completionQuery InlineC         = return $ promoteT inlineTargetsT >>^                         map ('\'':)
 completionQuery InScopeC        = return $ pure ["'"] -- TODO
 completionQuery LemmaC          = do

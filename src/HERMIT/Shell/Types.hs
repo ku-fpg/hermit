@@ -61,16 +61,12 @@ import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 ----------------------------------------------------------------------------------
 
 data QueryFun :: * where
-   QueryString         :: (Injection GHC.ModGuts g, Walker HermitC g)
-                       => TransformH g String                         -> QueryFun
-   QueryDocH           :: (Injection GHC.ModGuts g, Walker HermitC g)
-                       => TransformH g DocH                           -> QueryFun
-   QueryPrettyH        :: (Injection GHC.ModGuts g, Walker HermitC g)
-                       => PrettyH g                                   -> QueryFun
-   Diff                :: AST -> AST                                  -> QueryFun
-   Inquiry             :: (CommandLineState -> IO String)             -> QueryFun
-   CorrectnessCriteria :: (Injection GHC.ModGuts g, Walker HermitC g)
-                       => TransformH g ()                             -> QueryFun
+   QueryString  :: Injection a QC => TransformH a String       -> QueryFun
+   QueryDocH    :: Injection a QC => TransformH a DocH         -> QueryFun
+   QueryPrettyH :: Injection a QC => PrettyH a                 -> QueryFun
+   Diff         :: AST -> AST                                  -> QueryFun
+   Inquiry      :: (CommandLineState -> IO String)             -> QueryFun
+   QueryUnit    :: Injection a QC => TransformH a ()           -> QueryFun
    deriving Typeable
 
 message :: String -> QueryFun
@@ -85,16 +81,16 @@ performQuery :: (MonadCatch m, CLMonad m) => QueryFun -> ExprH -> m ()
 performQuery qf expr = go qf
     where cm = Changed $ unparseExprH expr
           go (QueryString q) =
-            putStrToConsole =<< prefixFailMsg "Query failed: " (queryInFocus q cm)
+            putStrToConsole =<< prefixFailMsg "Query failed: " (queryInContext (promoteT q) cm)
 
           go (QueryDocH q) = do
-            doc <- prefixFailMsg "Query failed: " $ queryInFocus q cm
+            doc <- prefixFailMsg "Query failed: " $ queryInContext (promoteT q) cm
             st <- get
             liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
           go (QueryPrettyH q) = do
             st <- get
-            doc <- prefixFailMsg "Query failed: " $ queryInFocus (liftPrettyH (pOptions (cl_pretty st)) q) cm
+            doc <- prefixFailMsg "Query failed: " $ queryInContext (liftPrettyH (pOptions (cl_pretty st)) $ promoteT q) cm
             liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
           go (Inquiry f) = get >>= liftIO . f >>= putStrToConsole
@@ -122,10 +118,10 @@ performQuery qf expr = go qf
             cl_putStrLn "====="
             cl_putStr r
 
-          go (CorrectnessCriteria q) = do
+          go (QueryUnit q) = do
             -- TODO: Again, we may want a quiet version of the kernel_env
             let str = unparseExprH expr
-            modFailMsg (\ err -> str ++ " [exception: " ++ err ++ "]") $ queryInFocus q cm
+            modFailMsg (\ err -> str ++ " [exception: " ++ err ++ "]") $ queryInContext (promoteT q) cm
             putStrToConsole $ str ++ " [correct]"
 
 ppWholeProgram :: (CLMonad m, MonadCatch m) => AST -> m DocH
@@ -453,13 +449,26 @@ addFocusR r = do
 ------------------------------------------------------------------------------
 
 addAST :: CLMonad m => AST -> m ()
-addAST ast = addASTWithPath ast id
-
-addASTWithPath :: CLMonad m => AST -> (LocalPathH -> LocalPathH) -> m ()
-addASTWithPath ast f = do
-    (base, rel) <- getPathStack
+addAST ast = do
     copyProofStack ast
-    modify $ \ st -> setCursor ast (st { cl_foci = M.insert ast (base, f rel) (cl_foci st) })
+    copyPathStack ast
+    modify $ setCursor ast
+
+modifyLocalPath :: CLMonad m => (LocalPathH -> LocalPathH) -> m ()
+modifyLocalPath f = do
+    ps <- getProofStackEmpty
+    case ps of
+        todo@(Unproven {}) : todos -> do
+            let todo' = todo { ptPath = second f (ptPath todo) }
+            modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo':todos) (cl_proofstack st) }
+        _ -> do
+            (base, rel) <- getPathStack
+            modify $ \ st -> st { cl_foci = M.insert (cl_cursor st) (base, f rel) (cl_foci st) }
+
+copyPathStack :: CLMonad m => AST -> m ()
+copyPathStack ast = do
+    (base, rel) <- getPathStack
+    modify $ \ st -> st { cl_foci = M.insert ast (base, rel) (cl_foci st) }
 
 copyProofStack :: CLMonad m => AST -> m ()
 copyProofStack ast = modify $ \ st -> let newStack = fromMaybe [] $ M.lookup (cl_cursor st) (cl_proofstack st)
@@ -588,8 +597,11 @@ inProofFocusR _ _ = fail "no proof in progress."
 withLemmasInScope :: HasLemmas m => [(LemmaName,Lemma)] -> Transform c m a b -> Transform c m a b
 withLemmasInScope ls t = transform $ \ c -> withLemmas (M.fromList ls) . applyT t c
 
-{-
-inContext :: Maybe c -> Transform c m a b -> Transform c m a b
-inContext Nothing  t = t
-inContext (Just c) t = contextfreeT (applyT t c)
--}
+-- TODO: better name
+queryInContext :: forall b m. (MonadCatch m, CLMonad m) => TransformH QC b -> CommitMsg -> m b
+queryInContext tr cm = do
+    ps <- getProofStackEmpty
+    case ps of
+        todo@(Unproven {}) : _
+          -> {- GHC.trace "in proof context" $  -}  queryInFocus (inProofFocusT todo tr) cm
+        _ -> {- GHC.trace "in modguts context" $ -} queryInFocus (extractT tr :: TransformH CoreTC b) cm

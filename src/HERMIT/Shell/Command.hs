@@ -21,12 +21,10 @@ module HERMIT.Shell.Command
     , evalScript
     ) where
 
-import Control.Arrow hiding (loop)
 import Control.Monad.State
 
 import Data.Char
 import Data.List (isPrefixOf, partition)
-import qualified Data.Map as M
 import Data.Maybe
 import Data.Monoid
 
@@ -132,13 +130,13 @@ commandLine opts exts = do
         loop :: InputT m ()
         loop = do
             el <- lift $ do tryM () announceProven
-                            when safeMode forceProofs
+                            when safeMode $ tryM () forceProofs
                             attemptM currentLemma
             let prompt = either (const "hermit") (const "proof") el
             mExpr <- lift popScriptLine
             case mExpr of
                 Nothing -> do -- no script running
-                    lift showWindow
+                    lift $ showWindow `catchFailHard` (cl_putStrLn . ("cannot showWindow: " ++))
                     st <- lift get
                     mLine <- if cl_nav st
                              then liftIO getNavCmd
@@ -171,19 +169,17 @@ evalScript = parseScriptCLT >=> mapM_ runExprH
 
 runExprH :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
-    (ps,ast) <- gets (cl_proofstack &&& cl_cursor)
-    case M.lookup ast ps of
-        Just (_:_)  -> withProofExternals $ interpExprH interpProof expr >>= performProofShellCommand expr
-        _           -> interpExprH interpShell expr
+    ps <- getProofStackEmpty
+    (if null ps then id else withProofExternals) $ interpExprH interpShell expr
 
 -- | Interpret a boxed thing as one of the four possible shell command types.
 interpShell :: (MonadCatch m, CLMonad m) => [Interp m ()]
 interpShell =
-  [ interpEM $ \ (RewriteCoreBox rr)           -> applyRewrite rr
-  , interpEM $ \ (RewriteCoreTCBox rr)         -> applyRewrite rr
-  , interpEM $ \ (BiRewriteCoreBox br)         -> applyRewrite $ whicheverR br
-  , interpEM $ \ (CrumbBox cr)                 -> setPath (return (mempty @@ cr) :: TransformH CoreTC LocalPathH)
-  , interpEM $ \ (PathBox p)                   -> setPath (return p :: TransformH CoreTC LocalPathH)
+  [ interpEM $ \ (RewriteCoreBox rr)           -> applyRewrite $ promoteCoreR rr
+  , interpEM $ \ (RewriteCoreTCBox rr)         -> applyRewrite $ promoteCoreTCR rr
+  , interpEM $ \ (BiRewriteCoreBox br)         -> applyRewrite $ promoteCoreR $ whicheverR br
+  , interpEM $ \ (CrumbBox cr)                 -> setPath (return (mempty @@ cr) :: TransformH QC LocalPathH)
+  , interpEM $ \ (PathBox p)                   -> setPath (return p :: TransformH QC LocalPathH)
   , interpEM $ \ (TransformCorePathBox tt)     -> setPath tt
   , interpEM $ \ (TransformCoreTCPathBox tt)   -> setPath tt
   , interpEM $ \ (StringBox str)               -> performQuery (message str)
@@ -193,12 +189,17 @@ interpShell =
   , interpEM $ \ (TransformCoreTCDocHBox t)    -> performQuery (QueryDocH t)
   , interpEM $ \ (PrettyHCoreBox t)            -> performQuery (QueryPrettyH t)
   , interpEM $ \ (PrettyHCoreTCBox t)          -> performQuery (QueryPrettyH t)
-  , interpEM $ \ (TransformCoreCheckBox tt)    -> performQuery (CorrectnessCriteria tt)
-  , interpEM $ \ (TransformCoreTCCheckBox tt)  -> performQuery (CorrectnessCriteria tt)
+  , interpEM $ \ (TransformCoreCheckBox tt)    -> performQuery (QueryUnit tt)
+  , interpEM $ \ (TransformCoreTCCheckBox tt)  -> performQuery (QueryUnit tt)
   , interpEM $ \ (effect :: KernelEffect)      -> flip performKernelEffect effect
   , interpM  $ \ (effect :: ShellEffect)       -> performShellEffect effect
   , interpM  $ \ (effect :: ScriptEffect)      -> performScriptEffect effect
   , interpEM $ \ (query :: QueryFun)           -> performQuery query
+  , interpEM $ \ (t :: UserProofTechnique)     -> performProofShellCommand $ PCUser t
+  , interpEM $ \ (cmd :: ProofShellCommand)    -> performProofShellCommand cmd
+  , interpEM $ \ (RewriteQCBox r)              -> applyRewrite r
+  , interpEM $ \ (TransformQCStringBox t)      -> performQuery (QueryString t)
+  , interpEM $ \ (TransformQCUnitBox t)        -> performQuery (QueryUnit t)
   ]
 
 -------------------------------------------------------------------------------

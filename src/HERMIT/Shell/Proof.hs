@@ -15,8 +15,8 @@ module HERMIT.Shell.Proof
     , userProofTechnique
     , withProofExternals
     , performProofShellCommand
-    , interpProof
     , forceProofs
+    , ProofShellCommand(PCUser)
     ) where
 
 import Control.Arrow hiding (loop, (<+>))
@@ -26,7 +26,6 @@ import Control.Monad.State (MonadState(get), modify, gets)
 
 import Data.Dynamic
 import Data.List (delete)
-import qualified Data.Map as M
 import Data.Monoid
 import Data.String (fromString)
 
@@ -47,9 +46,6 @@ import HERMIT.Dictionary.Reasoning hiding (externals)
 
 import HERMIT.PrettyPrinter.Common
 
-import HERMIT.Shell.Interpreter
-import HERMIT.Shell.KernelEffect
-import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
@@ -150,31 +146,15 @@ endProof assumed expr = do
 -- so we run them using queryInFocus below. This has the benefit that proof commands
 -- can generate additional lemmas, and add to the version history.
 performProofShellCommand :: (MonadCatch m, CLMonad m)
-                         => ExprH -> ProofShellCommand -> m ()
-performProofShellCommand expr = go
+                         => ProofShellCommand -> ExprH -> m ()
+performProofShellCommand cmd expr = go cmd
     where str = unparseExprH expr
-          go (PCRewrite rr) = do
-                -- careful to only modify the lemma in the resulting AST
-                todo : todos <- getProofStack
-                q' <- queryInFocus (inProofFocusR todo rr >>> (contextfreeT (applyT lintQuantifiedT (ptContext todo)) >> idR) :: TransformH Core Quantified) (Always str)
-                let todo' = todo { ptLemma = (ptLemma todo) { lemmaQ = q' } }
-                modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo':todos) (cl_proofstack st) }
-          go (PCTransform t) = do
-                todo : _ <- getProofStack
-                cl_putStrLn =<< queryInFocus (inProofFocusT todo t) (Changed str)
-          go (PCUnit t) = do
-                todo : _ <- getProofStack
-                queryInFocus (inProofFocusT todo t) (Changed str)
           go (PCInduction idPred) = performInduction (Always str) idPred
           go PCConsequent         = proveConsequent str
           go PCAntecedent         = proveAntecedent str
           go PCConjunction        = proveConjuction str
           go (PCInstAssumed i v cs) = instAssumed i v cs str
           go (PCSplitAssumed i)   = splitAssumed i str
-          go (PCShell effect)     = performShellEffect effect
-          go (PCKernel effect)    = performKernelEffect expr effect
-          go (PCScript effect)    = performScriptEffect effect
-          go (PCQuery query)      = performQuery query expr
           go (PCUser prf)         = do
                 let UserProofTechnique t = prf -- may add more constructors later
                 -- note: we assume that if 't' completes without failing,
@@ -184,13 +164,6 @@ performProofShellCommand expr = go
                 _ <- popProofStack
                 cl_putStrLn $ "Successfully proven: " ++ show (ptName todo)
           go (PCEnd assumed)      = endProof assumed expr
-          go (PCPath tr) = do
-                todo : todos <- getProofStack
-                rel' <- queryInFocus (inProofFocusT todo tr) (Always str)
-                -- TODO: test if valid path
-                let todo' = todo { ptPath = second (<> rel') (ptPath todo) } -- Unproven nm (Lemma q p u) c ls (base, rel <> rel') t
-                modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo':todos) (cl_proofstack st) }
-          go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.")
 
 proveConsequent :: (MonadCatch m, CLMonad m) => String -> m ()
 proveConsequent expr = do
@@ -310,23 +283,14 @@ performInduction cm idPred = do
         pushProofStack $ Unproven lemmaName caseLemma (ptContext pt) (hypLemmas ++ ls) mempty True
 
 data ProofShellCommand
-    = PCRewrite (RewriteH QC)
-    | PCTransform (TransformH QC String)
-    | PCUnit (TransformH QC ())
-    | PCInduction (Id -> Bool)
+    = PCInduction (Id -> Bool)
     | PCConsequent
     | PCAntecedent
     | PCConjunction
     | PCSplitAssumed Int
     | PCInstAssumed Int (Var -> Bool) CoreString
-    | PCShell ShellEffect
-    | PCKernel KernelEffect
-    | PCScript ScriptEffect
-    | PCQuery QueryFun
     | PCUser UserProofTechnique
     | PCEnd Bool -- ^ True = assume this lemma, False = check for alpha-equivalence
-    | PCPath (TransformH QC LocalPathH)
-    | PCUnsupported String
     deriving Typeable
 
 -- keep abstract to avoid breaking things if we modify this later
@@ -345,34 +309,3 @@ instance Extern UserProofTechnique where
     type Box UserProofTechnique = UserProofTechnique
     box i = i
     unbox i = i
-
-interpProof :: Monad m => [Interp m ProofShellCommand]
-interpProof =
-  [ interp $ \ (RewriteCoreBox rr)            -> PCRewrite $ promoteR rr
-  , interp $ \ (RewriteCoreTCBox rr)          -> PCRewrite $ promoteR rr
-  , interp $ \ (BiRewriteCoreBox br)          -> PCRewrite $ promoteR $ forwardT br <+ backwardT br
-  , interp $ \ (effect :: ShellEffect)        -> PCShell effect
-  , interp $ \ (effect :: KernelEffect)       -> PCKernel effect
-  , interp $ \ (effect :: ScriptEffect)       -> PCScript effect
-  , interp $ \ (StringBox str)                -> PCQuery (message str)
-  , interp $ \ (query :: QueryFun)            -> PCQuery query
-  , interp $ \ (RewriteQCBox r)               -> PCRewrite r
-  , interp $ \ (TransformQCStringBox t)       -> PCTransform t
-  , interp $ \ (TransformQCUnitBox t)         -> PCUnit t
-  , interp $ \ (t :: UserProofTechnique)      -> PCUser t
-  , interp $ \ (cmd :: ProofShellCommand)     -> cmd
-  , interp $ \ (CrumbBox cr)                  -> PCPath (return $ mempty @@ cr)
-  , interp $ \ (PathBox p)                    -> PCPath (return p)
-  , interp $ \ (TransformCorePathBox tt)      -> PCPath (promoteT tt)
-  , interp $ \ (TransformCoreTCPathBox tt)    -> PCPath (promoteT tt)
-  , interp $ \ (TransformCoreDocHBox t)       -> PCQuery (QueryDocH t)
-  , interp $ \ (TransformCoreTCDocHBox t)     -> PCQuery (QueryDocH t)
-  , interp $ \ (PrettyHCoreBox t)             -> PCQuery (QueryPrettyH t)
-  , interp $ \ (PrettyHCoreTCBox t)           -> PCQuery (QueryPrettyH t)
-  , interp $ \ (TransformCoreStringBox tt)    -> PCQuery (QueryString tt)
-  , interp $ \ (TransformCoreTCStringBox tt)  -> PCQuery (QueryString tt)
-  , interp $ \ (TransformCoreCheckBox tt)     -> PCQuery (CorrectnessCriteria tt)
-  , interp $ \ (TransformCoreTCCheckBox tt)   -> PCQuery (CorrectnessCriteria tt)
-  -- , interp $ \ (_effect :: KernelEffect)      -> PCUnsupported "KernelEffect"
-  ]
-

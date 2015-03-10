@@ -18,9 +18,9 @@ import Data.Typeable
 import HERMIT.Context
 import HERMIT.Dictionary
 import HERMIT.External
-import qualified HERMIT.GHC as GHC
 import HERMIT.Kernel
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Parser
 
 import HERMIT.Shell.Types
@@ -48,54 +48,54 @@ performKernelEffect e = \case
 
 -------------------------------------------------------------------------------
 
-applyRewrite :: (Injection GHC.ModGuts g, Walker HermitC g, MonadCatch m, CLMonad m)
-             => RewriteH g -> ExprH -> m ()
+applyRewrite :: (MonadCatch m, CLMonad m) => RewriteH QC -> ExprH -> m ()
 applyRewrite rr expr = do
-    st <- get
+    ps <- getProofStackEmpty
+    let str = unparseExprH expr
+    case ps of
+        todo@(Unproven {}) : todos -> do
+            q' <- queryInFocus (inProofFocusR todo (promoteR rr) >>> (contextfreeT (applyT lintQuantifiedT (ptContext todo)) >> idR) :: TransformH Core Quantified) (Always str)
+            let todo' = todo { ptLemma = (ptLemma todo) { lemmaQ = q' } }
+            modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo':todos) (cl_proofstack st) }
+        _ -> do
+            (k,(kEnv,(ast,cl))) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor &&& cl_corelint)
 
-    let k = cl_kernel st
-        kEnv = cl_kernel_env st
-        ast = cl_cursor st
+            rr' <- addFocusR (extractR rr :: RewriteH CoreTC)
+            ast' <- prefixFailMsg "Rewrite failed:" $ applyK k rr' (Always str) kEnv ast
 
-    rr' <- addFocusR rr
-    ast' <- prefixFailMsg "Rewrite failed:" $ applyK k rr' (Always (unparseExprH expr)) kEnv ast
+            when cl $ do
+                warns <- liftM snd (queryK k lintModuleT Never kEnv ast')
+                            `catchM` (\ errs -> deleteK k ast' >> fail errs)
+                putStrToConsole warns
 
-    when (cl_corelint st) $ do
-        warns <- liftM snd (queryK k lintModuleT Never kEnv ast')
-                    `catchM` (\ errs -> deleteK k ast' >> fail errs)
-        putStrToConsole warns
+            addAST ast'
 
-    addAST ast'
-
-setPath :: (Injection GHC.ModGuts g, Walker HermitC g, MonadCatch m, CLMonad m)
-        => TransformH g LocalPathH -> ExprH -> m ()
+setPath :: (Injection a QC, MonadCatch m, CLMonad m) => TransformH a LocalPathH -> ExprH -> m ()
 setPath t expr = do
-    p <- prefixFailMsg "Cannot find path: " $ queryInFocus t (Always $ unparseExprH expr)
-    ast <- gets cl_cursor
-    addASTWithPath ast (<> p)
+    p <- prefixFailMsg "Cannot find path: " $ queryInContext (promoteT t) (Always $ unparseExprH expr)
+    modifyLocalPath (<> p)
 
 goDirection :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
 goDirection dir expr = do
     ps <- getProofStackEmpty
+    let str = unparseExprH expr
+    st <- get
+    let k = cl_kernel st
+        ast = cl_cursor st
     case ps of
-        [] -> do -- not in proof shell, so modify normal path stack
+        Unproven {} : _ -> do
+            -- TODO: test the path for validity
+            addAST =<< tellK k str ast
+            modifyLocalPath (moveLocally dir)
+        _ -> do -- not in proof shell, so modify normal path stack
             (base, rel) <- getPathStack
-            st <- get
-            let k = cl_kernel st
-                env = cl_kernel_env st
-                ast = cl_cursor st
+            let env = cl_kernel_env st
                 rel' = moveLocally dir rel
             (ast',b) <- queryK k (testPathStackT base rel') Never env ast
             if b
-            then do ast'' <- tellK k (unparseExprH expr) ast'
-                    addASTWithPath ast'' (const rel')
+            then do addAST =<< tellK k str ast'
+                    modifyLocalPath (const rel')
             else fail "invalid path."
-        Unproven nm l c ls (base,p) t : todos -> do
-            let p' = moveLocally dir p
-                todos' = Unproven nm l c ls (base,p') t : todos
-            -- TODO: test the path for validity
-            modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
-        _ -> fail "goDirection: impossible case!"
 
 beginScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 beginScope expr = do
