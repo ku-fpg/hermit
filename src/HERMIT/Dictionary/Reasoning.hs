@@ -119,8 +119,15 @@ externals =
         [ "imply new-name antecedent-name consequent-name" ]
     , external "lint" (promoteT lintQuantifiedT :: TransformH QC String)
         [ "Lint check a quantified clause." ]
+-- TODO: rename "lemma" to something else, e.g. "lemma-bidirectional"
+--       Then implement a new "lemma" command which compares the current goal to the named lemma.
+--       This will be particularly useful for when the current goal is a *composite* lemma that we have already proved.
     , external "lemma" (promoteExprBiR . lemmaR :: LemmaName -> BiRewriteH Core)
         [ "Generate a bi-directional rewrite from a lemma." ]
+    , external "lemma-forward" (forwardT . promoteExprBiR . lemmaR :: LemmaName -> RewriteH Core)
+        [ "Generate a rewrite from a lemma, left-to-right." ]
+    , external "lemma-backward" (backwardT . promoteExprBiR . lemmaR :: LemmaName -> RewriteH Core)
+        [ "Generate a rewrite from a lemma, right-to-left." ]
     , external "lemma-consequent" (promoteExprBiR . lemmaConsequentR :: LemmaName -> BiRewriteH Core)
         [ "Generate a bi-directional rewrite from the consequent of an implication lemma."
         , "The antecedent is instantiated and introduced as an unproven obligation." ]
