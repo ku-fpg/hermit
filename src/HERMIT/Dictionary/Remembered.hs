@@ -65,13 +65,13 @@ rememberR nm = prefixFailMsg "remember failed: " $ do
 unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                      , HasLemmas m, MonadCatch m, MonadUnique m)
                   => LemmaName -> Rewrite c m CoreExpr
-unfoldRememberedR = prefixFailMsg "Unfolding remembered definition failed: " . forwardT . lemmaR . prefixRemembered
+unfoldRememberedR = prefixFailMsg "Unfolding remembered definition failed: " . forwardT . lemmaBiR . prefixRemembered
 
 -- | Fold a remembered definition (like foldR, but looks in stash instead of context).
 foldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                    , HasLemmas m, MonadCatch m, MonadUnique m)
                 => LemmaName -> Rewrite c m CoreExpr
-foldRememberedR = prefixFailMsg "Folding remembered definition failed: " . backwardT . lemmaR . prefixRemembered
+foldRememberedR = prefixFailMsg "Folding remembered definition failed: " . backwardT . lemmaBiR . prefixRemembered
 
 -- | Fold any of the remembered definitions.
 foldAnyRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb

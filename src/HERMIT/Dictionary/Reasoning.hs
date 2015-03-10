@@ -22,7 +22,7 @@ module HERMIT.Dictionary.Reasoning
     , getUsedNotProvenT
     , insertLemmaT
     , insertLemmasT
-    , lemmaR
+    , lemmaBiR
     , lemmaConsequentR
     , markLemmaUsedT
     , markLemmaProvedT
@@ -122,11 +122,11 @@ externals =
 -- TODO: rename "lemma" to something else, e.g. "lemma-bidirectional"
 --       Then implement a new "lemma" command which compares the current goal to the named lemma.
 --       This will be particularly useful for when the current goal is a *composite* lemma that we have already proved.
-    , external "lemma" (promoteExprBiR . lemmaR :: LemmaName -> BiRewriteH Core)
+    , external "lemma-birewrite" (promoteExprBiR . lemmaBiR :: LemmaName -> BiRewriteH Core)
         [ "Generate a bi-directional rewrite from a lemma." ]
-    , external "lemma-forward" (forwardT . promoteExprBiR . lemmaR :: LemmaName -> RewriteH Core)
+    , external "lemma-forward" (forwardT . promoteExprBiR . lemmaBiR :: LemmaName -> RewriteH Core)
         [ "Generate a rewrite from a lemma, left-to-right." ]
-    , external "lemma-backward" (backwardT . promoteExprBiR . lemmaR :: LemmaName -> RewriteH Core)
+    , external "lemma-backward" (backwardT . promoteExprBiR . lemmaBiR :: LemmaName -> RewriteH Core)
         [ "Generate a rewrite from a lemma, right-to-left." ]
     , external "lemma-consequent" (promoteExprBiR . lemmaConsequentR :: LemmaName -> BiRewriteH Core)
         [ "Generate a bi-directional rewrite from the consequent of an implication lemma."
@@ -587,10 +587,10 @@ getUsedNotProvenT = do
 
 ------------------------------------------------------------------------------
 
-lemmaR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-          , HasLemmas m, MonadCatch m, MonadUnique m)
-       => LemmaName -> BiRewrite c m CoreExpr
-lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaQ)) (markLemmaUsedT nm >> idR)
+lemmaBiR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+            , HasLemmas m, MonadCatch m, MonadUnique m)
+         => LemmaName -> BiRewrite c m CoreExpr
+lemmaBiR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaQ)) (markLemmaUsedT nm >> idR)
 
 lemmaConsequentR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
                                 , ReadPath c Crumb, HasLemmas m, MonadCatch m, MonadUnique m)

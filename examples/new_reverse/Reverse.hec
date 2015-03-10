@@ -65,7 +65,7 @@ lhs simplify
 
 end-case -- proven "++ []-induction-case-[]"
 
--- Assumed lemmas: 
+-- Assumed lemmas:
 -- ind-hyp-0 (Assumed)
 --   myAppend * b ([] *) = b
 -- Goal:
@@ -73,7 +73,7 @@ end-case -- proven "++ []-induction-case-[]"
 
 lhs unfold
 
--- Assumed lemmas: 
+-- Assumed lemmas:
 -- ind-hyp-0 (Assumed)
 --   myAppend * b ([] *) = b
 -- Goal:
@@ -86,15 +86,15 @@ lhs unfold
 
 lhs simplify
 
--- Assumed lemmas: 
+-- Assumed lemmas:
 -- ind-hyp-0 (Assumed)
 --   myAppend * b ([] *) = b
 -- Goal:
 -- forall * a b. (:) * a (myAppend * b ([] *)) = (:) * a b
 
-lhs (one-td (forward (lemma ind-hyp-0)))
+lhs (one-td (lemma-forward ind-hyp-0))
 
--- Assumed lemmas: 
+-- Assumed lemmas:
 -- ind-hyp-0 (Assumed)
 --   myAppend * b ([] *) = b
 -- Goal:
@@ -345,7 +345,7 @@ both smash
 
 end-case -- proven "repH ++-induction-case-[]"
 
--- Assumed lemmas: 
+-- Assumed lemmas:
 -- ind-hyp-0 (Assumed)
 --   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
 -- Goal:
@@ -353,7 +353,7 @@ end-case -- proven "repH ++-induction-case-[]"
 
 both (one-td unfold)
 
--- Assumed lemmas: 
+-- Assumed lemmas:
 -- ind-hyp-0 (Assumed)
 --   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
 -- Goal:
@@ -368,7 +368,7 @@ both (one-td unfold)
 
 lhs (one-td unfold)
 
--- Assumed lemmas: 
+-- Assumed lemmas:
 -- ind-hyp-0 (Assumed)
 --   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
 -- Goal:
@@ -386,15 +386,15 @@ lhs (one-td unfold)
 
 both smash
 
--- Assumed lemmas: 
+-- Assumed lemmas:
 -- ind-hyp-0 (Assumed)
 --   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
 -- Goal:
 -- forall * ys a b x. (:) * a (myAppend * (myAppend * b ys) x) = (:) * a (myAppend * b (myAppend * ys x))
 
-rhs (one-td (backward (lemma ind-hyp-0)))
+rhs (one-td (lemma-backward ind-hyp-0))
 
--- Assumed lemmas: 
+-- Assumed lemmas:
 -- ind-hyp-0 (Assumed)
 --   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
 -- Goal:
@@ -486,7 +486,7 @@ lhs (replicate 4 ((one-td unfold) >+> smash))
 --             (:) x xs -> (++) * (x xs) ((:) * x ([] *))
 -- in x
 
-lhs (one-td (forward (lemma "++ []")))
+lhs (one-td (lemma-forward "++ []"))
 
 -- Goal:
 -- let rec x = \ x ->
@@ -579,7 +579,7 @@ end-proof -- proven repHstrict
 --                (:) x xs -> repH * ((++) * (absH * (x xs)) ((:) * x ([] *))))
 -- in \ x -> absH * (worker x)
 
-one-td (forward (lemma "repH ++"))
+one-td (lemma-forward "repH ++")
 
 -- let worker =
 --       fix *
@@ -614,7 +614,7 @@ assume -- proven repH-absH-fusion
 --                (:) x xs -> \ x -> x xs (repH * ((:) * x ([] *)) x))
 -- in \ x -> absH * (worker x)
 
-one-td (forward (lemma "repH (:)"))
+one-td (lemma-forward "repH (:)")
 
 -- let worker =
 --       fix *
@@ -624,7 +624,7 @@ one-td (forward (lemma "repH (:)"))
 --                (:) x xs -> \ x -> x xs ((.) * * * ((:) * x) (repH * ([] *)) x))
 -- in \ x -> absH * (worker x)
 
-any-td (forward (lemma "repH []"))
+any-td (lemma-forward "repH []")
 
 -- let worker =
 --       fix *
