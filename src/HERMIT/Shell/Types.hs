@@ -529,13 +529,13 @@ showWindow :: (MonadCatch m, CLMonad m) => m ()
 showWindow = ifM isRunningScript (return ()) $ do
     (ps,ast) <- gets (cl_proofstack &&& cl_cursor)
     case M.lookup ast ps of
-        Just (Unproven _ l _ ls p _ : _)  -> do
+        Just (Unproven _ l c ls p _ : _)  -> do
             unless (null ls) $ do
                 cl_putStrLn "Assumed lemmas:"
-                mapM_ (printLemma mempty)
+                mapM_ (printLemma c mempty)
                       [ (fromString (show i) <> ": " <> n, lem)
                       | (i::Int,(n,lem)) <- zip [0..] ls ]
-            printLemma p ("Goal:",l)
+            printLemma c p ("Goal:",l)
         _ -> do st <- get
                 if cl_diffonly st
                 then do
@@ -555,10 +555,10 @@ showWindow = ifM isRunningScript (return ()) $ do
                 else fixWindow >> gets cl_window >>= pluginM . display . Just
 
 printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
-           => PathStack -> (LemmaName,Lemma) -> m ()
-printLemma p (nm,Lemma q _ _) = do -- TODO
+           => HermitC -> PathStack -> (LemmaName,Lemma) -> m ()
+printLemma c p (nm,Lemma q _ _) = do -- TODO
     pp <- gets cl_pretty
-    doc <- queryInFocus (return q >>> extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (ppQCT pp))) :: TransformH Core DocH) Never
+    doc <- queryInFocus ((constT $ applyT (extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (ppQCT pp)))) c q) :: TransformH Core DocH) Never
     let doc' = PP.text (show nm) PP.$+$ PP.nest 2 doc
     st <- get
     liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc')
@@ -568,17 +568,28 @@ printLemma p (nm,Lemma q _ _) = do -- TODO
 queryInFocus :: (Walker HermitC g, Injection GHC.ModGuts g, MonadCatch m, CLMonad m)
              => TransformH g b -> CommitMsg -> m b
 queryInFocus t msg = do
-    (ls,mc) <- (do pt@(Unproven {}) : _ <- getProofStack
-                   return (ptAssumed pt, Just $ ptContext pt)) <+ return ([],Nothing)
-    q <- addFocusT $ inContext mc $ withLemmasInScope ls t
+    q <- addFocusT t
     st <- get
     (ast', r) <- queryK (cl_kernel st) q msg (cl_kernel_env st) (cl_cursor st)
     addAST ast'
     return r
 
+-- meant to be used inside queryInFocus
+inProofFocusT :: ProofTodo -> TransformH QC b -> TransformH Core b
+inProofFocusT (Unproven _ (Lemma q _ _) c ls ps _) t =
+    contextfreeT $ withLemmas (M.fromList ls) . applyT (return q >>> extractT (pathT (pathStack2Path ps) t)) c
+inProofFocusT _ _ = fail "no proof in progress."
+
+inProofFocusR :: ProofTodo -> RewriteH QC -> TransformH Core Quantified
+inProofFocusR (Unproven _ (Lemma q _ _) c ls ps _) rr =
+    contextfreeT $ withLemmas (M.fromList ls) . applyT (return q >>> extractR (pathR (pathStack2Path ps) rr)) c
+inProofFocusR _ _ = fail "no proof in progress."
+
 withLemmasInScope :: HasLemmas m => [(LemmaName,Lemma)] -> Transform c m a b -> Transform c m a b
 withLemmasInScope ls t = transform $ \ c -> withLemmas (M.fromList ls) . applyT t c
 
+{-
 inContext :: Maybe c -> Transform c m a b -> Transform c m a b
 inContext Nothing  t = t
 inContext (Just c) t = contextfreeT (applyT t c)
+-}

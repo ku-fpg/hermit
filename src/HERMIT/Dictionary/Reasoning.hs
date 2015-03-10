@@ -333,7 +333,7 @@ lintQuantifiedWorkT bs = readerT $ \ (Quantified bs' _) -> quantifiedT successT 
 lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m)
             => [Var] -> Transform c m Clause String
 lintClauseT bs = do
-    t <- readerT $ \case Equiv {} -> return $ promoteT (arr (mkCoreLams bs) >>> lintExprT)
+    t <- readerT $ \case Equiv {} -> return $ promoteT ({- arr (mkCoreLams bs) >>> -} lintExprT) -- TODO: why does this break core lint?!
                          _        -> return $ promoteT (lintQuantifiedWorkT bs)
     (w1,w2) <- clauseT t t (const (,))
     return $ unlines [w1,w2]

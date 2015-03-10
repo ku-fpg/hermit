@@ -96,12 +96,12 @@ interactiveProofIO :: LemmaName -> CommandLineState -> IO (Either CLException Co
 interactiveProofIO nm s = do
     (r,st) <- runCLT s $ do
                 ps <- getProofStackEmpty
-                let cT = case ps of
-                            pt@(Unproven {}) : _ ->
-                                 return (lemmaQ (ptLemma pt))
-                                    >>> extractT (pathT (pathStack2Path (ptPath pt)) contextT :: TransformH QC HermitC)
-                            _ -> contextT
-                (c,l) <- queryInFocus (cT &&& getLemmaByNameT nm :: TransformH Core (HermitC,Lemma)) (Always $ "prove-lemma " ++ quoteShow nm)
+                let t :: TransformH x (HermitC,Lemma)
+                    t = contextT &&& getLemmaByNameT nm
+                (c,l) <- case ps of
+                            [] -> queryInFocus (t :: TransformH Core (HermitC,Lemma))
+                                               (Always $ "prove-lemma " ++ quoteShow nm)
+                            todo : _ -> queryInFocus (inProofFocusT todo t) Never
                 pushProofStack $ Unproven nm l c [] mempty False
     return $ fmap (const st) r
 
@@ -124,17 +124,24 @@ forceProofs = do
     todos <- getProofStackEmpty
     let already = map ptName todos
         nls' = [ (nm,l) | (nm,l) <- nls, not (nm `elem` already) ]
-    forM_ nls' $ \ (nm,l) -> pushProofStack (Unproven nm l c [] mempty False)
+    if null nls'
+    then return ()
+    else do
+        c' <- case todos of
+                todo : _ -> queryInFocus (inProofFocusT todo contextT) Never
+                _        -> return c
+        forM_ nls' $ \ (nm,l) -> pushProofStack (Unproven nm l c' [] mempty False)
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, CLMonad m) => Bool -> ExprH -> m ()
 endProof assumed expr = do
-    Unproven nm (Lemma q _ _) _ _ _ temp : _ <- getProofStack
+    Unproven nm (Lemma q _ _) c _ _ temp : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
         t = if assumed
             then                      unless temp (markLemmaAssumedT nm)
             else verifyQuantifiedT >> unless temp (markLemmaProvedT nm)
-    queryInFocus (return q >>> setFailMsg msg t :: TransformH Core ()) (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
+    queryInFocus (constT (applyT (setFailMsg msg t) c q) :: TransformH Core ())
+                 (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
     cl_putStrLn $ "Successfully proven: " ++ show nm
 
@@ -148,16 +155,16 @@ performProofShellCommand expr = go
     where str = unparseExprH expr
           go (PCRewrite rr) = do
                 -- careful to only modify the lemma in the resulting AST
-                Unproven nm (Lemma q p u) c ls pth t : todos <- getProofStack
-                q' <- queryInFocus (return q >>> extractR (pathR (pathStack2Path pth) rr >>> (promoteT lintQuantifiedT >> idR)) :: TransformH Core Quantified) (Always str)
-                let todo = Unproven nm (Lemma q' p u) c ls pth t
-                modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo:todos) (cl_proofstack st) }
+                todo : todos <- getProofStack
+                q' <- queryInFocus (inProofFocusR todo rr >>> (contextfreeT (applyT lintQuantifiedT (ptContext todo)) >> idR) :: TransformH Core Quantified) (Always str)
+                let todo' = todo { ptLemma = (ptLemma todo) { lemmaQ = q' } }
+                modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo':todos) (cl_proofstack st) }
           go (PCTransform t) = do
-                (_, Lemma q _ _, _, _, p) <- currentLemma
-                cl_putStrLn =<< queryInFocus (return q >>> extractT (pathT (pathStack2Path p) t) :: TransformH Core String) (Changed str)
+                todo : _ <- getProofStack
+                cl_putStrLn =<< queryInFocus (inProofFocusT todo t) (Changed str)
           go (PCUnit t) = do
-                (_, Lemma q _ _, _, _, p) <- currentLemma
-                queryInFocus (return q >>> extractT (pathT (pathStack2Path p) t) :: TransformH Core ()) (Changed str)
+                todo : _ <- getProofStack
+                queryInFocus (inProofFocusT todo t) (Changed str)
           go (PCInduction idPred) = performInduction (Always str) idPred
           go PCConsequent         = proveConsequent str
           go PCAntecedent         = proveAntecedent str
@@ -172,17 +179,17 @@ performProofShellCommand expr = go
                 let UserProofTechnique t = prf -- may add more constructors later
                 -- note: we assume that if 't' completes without failing,
                 -- the lemma is proved, we don't actually check
-                Unproven nm (Lemma q _ _) _ _ _ temp : _ <- getProofStack
-                queryInFocus (return q >>> (extractT t >> unless temp (markLemmaProvedT nm)) :: TransformH Core ()) (Changed str)
+                todo : _ <- getProofStack
+                queryInFocus (inProofFocusT todo t >> unless (ptTemp todo) (markLemmaProvedT (ptName todo))) (Changed str)
                 _ <- popProofStack
-                cl_putStrLn $ "Successfully proven: " ++ show nm
+                cl_putStrLn $ "Successfully proven: " ++ show (ptName todo)
           go (PCEnd assumed)      = endProof assumed expr
           go (PCPath tr) = do
-                Unproven nm (Lemma q p u) c ls pth@(base,rel) t : todos <- getProofStack
-                rel' <- queryInFocus (return q >>> extractT (pathT (pathStack2Path pth) tr) :: TransformH Core LocalPathH) (Always str)
+                todo : todos <- getProofStack
+                rel' <- queryInFocus (inProofFocusT todo tr) (Always str)
                 -- TODO: test if valid path
-                let todo = Unproven nm (Lemma q p u) c ls (base, rel <> rel') t
-                modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo:todos) (cl_proofstack st) }
+                let todo' = todo { ptPath = second (<> rel') (ptPath todo) } -- Unproven nm (Lemma q p u) c ls (base, rel <> rel') t
+                modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo':todos) (cl_proofstack st) }
           go (PCUnsupported s)    = cl_putStrLn (s ++ " command unsupported in proof mode.")
 
 proveConsequent :: (MonadCatch m, CLMonad m) => String -> m ()
@@ -243,15 +250,13 @@ splitAssumed i expr = do
 
 instAssumed :: (MonadCatch m, CLMonad m) => Int -> (Var -> Bool) -> CoreString -> String -> m ()
 instAssumed i pr cs expr = do
-    Unproven nm lem c ls ps t : _ <- getProofStack
-    (b, orig@(n, Lemma q p u):a) <- getIth i ls
-    let tr :: TransformH QC Quantified
-        tr = return q >>> instantiateQuantifiedVarR pr cs
-    q' <- queryInFocus (return (lemmaQ lem) >>> extractT (pathT (pathStack2Path ps) tr) :: TransformH Core Quantified) Never
+    todo : _ <- getProofStack
+    (b, orig@(n, Lemma q p u):a) <- getIth i $ ptAssumed todo
+    q' <- queryInFocus (inProofFocusT todo $ return q >>> instantiateQuantifiedVarR pr cs) Never
     (k,ast) <- gets (cl_kernel &&& cl_cursor)
     addAST =<< tellK k expr ast
     _ <- popProofStack
-    pushProofStack $ Unproven nm lem c (b ++ (n <> "'", Lemma q' p u):orig:a) ps t
+    pushProofStack $ todo { ptAssumed = b ++ orig:(n <> "'", Lemma q' p u):a }
 
 getIth :: MonadCatch m => Int -> [a] -> m ([a],[a])
 getIth _ [] = fail "getIth: out of range"
