@@ -34,8 +34,6 @@ module HERMIT.Dictionary.Reasoning
     , ppQuantifiedT
     , ppQCT
       -- ** Lifting transformations over 'Quantified'
-    , core2qcT
-    , core2qcR
     , lhsT
     , rhsT
     , bothT
@@ -161,27 +159,21 @@ externals =
         , "f == g  ==>  forall x.  f x == g x" ]
     , external "extensionality" (promoteR (extensionalityR Nothing) :: RewriteH QC)
         [ "f == g  ==>  forall x.  f x == g x" ]
-    , external "lhs" (promoteR . lhsR . core2qcR :: RewriteH Core -> RewriteH QC)
+    , external "lhs" (promoteR . lhsR . promoteR :: RewriteH Core -> RewriteH QC)
         [ "Apply a rewrite to the LHS of a quantified clause." ]
-    , external "lhs" (promoteT . lhsT . core2qcT . extractT :: TransformH CoreTC String -> TransformH QC String)
+    , external "lhs" (promoteT . lhsT . promoteT :: TransformH CoreTC String -> TransformH QC String)
         [ "Apply a transformation to the LHS of a quantified clause." ]
-    , external "rhs" (promoteR . rhsR . core2qcR :: RewriteH Core -> RewriteH QC)
+    , external "rhs" (promoteR . rhsR . promoteR :: RewriteH Core -> RewriteH QC)
         [ "Apply a rewrite to the RHS of a quantified clause." ]
-    , external "rhs" (promoteT . rhsT . core2qcT . extractT :: TransformH CoreTC String -> TransformH QC String)
+    , external "rhs" (promoteT . rhsT . promoteT :: TransformH CoreTC String -> TransformH QC String)
         [ "Apply a transformation to the RHS of a quantified clause." ]
-    , external "both" (promoteR . bothR . core2qcR :: RewriteH Core -> RewriteH QC)
+    , external "both" (promoteR . bothR . promoteR :: RewriteH Core -> RewriteH QC)
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
-    , external "both" ((\t -> do (r,s) <- promoteT (bothT (core2qcT (extractT t))); return (unlines [r,s])) :: TransformH CoreTC String -> TransformH QC String)
+    , external "both" ((\t -> do (r,s) <- promoteT (bothT (promoteT t)); return (unlines [r,s])) :: TransformH CoreTC String -> TransformH QC String)
         [ "Apply a transformation to both sides of a quantified clause." ]
     ]
 
 ------------------------------------------------------------------------------
-
-core2qcT :: forall c m a. Monad m => Transform c m Core a -> Transform c m QC a
-core2qcT t = promoteT (extractT t :: Transform c m CoreExpr a)
-
-core2qcR :: forall c m. Monad m => Rewrite c m Core -> Rewrite c m QC
-core2qcR rr = promoteR (extractR rr :: Rewrite c m CoreExpr)
 
 type EqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
 
@@ -303,7 +295,7 @@ ppLemmaT pth pp nm = do
     return $ hDoc PP.$+$ PP.nest 2 qDoc
 
 ppQCT :: PrettyPrinter -> PrettyH QC
-ppQCT pp = promoteT (ppQuantifiedT pp) <+ promoteT (ppClauseT pp) <+ promoteT (extractT (pCoreTC pp) :: PrettyH CoreExpr)
+ppQCT pp = promoteT (ppQuantifiedT pp) <+ promoteT (ppClauseT pp) <+ promoteT (pCoreTC pp)
 
 ppQuantifiedT :: PrettyPrinter -> PrettyH Quantified
 ppQuantifiedT pp = do
@@ -312,7 +304,7 @@ ppQuantifiedT pp = do
 
 ppClauseT :: PrettyPrinter -> PrettyH Clause
 ppClauseT pp = do
-    let t = promoteT (ppQuantifiedT pp) <+ promoteT (extractT (pCoreTC pp) :: PrettyH CoreExpr)
+    let t = promoteT (ppQuantifiedT pp) <+ promoteT (pCoreTC pp)
     (d1,d2,oper) <- clauseT t t (\ cl d1 d2 -> (d1,d2,  syntaxColor
                                                       $ PP.text
                                                       $ case cl of

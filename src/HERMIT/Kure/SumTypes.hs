@@ -5,6 +5,7 @@ module HERMIT.Kure.SumTypes
     Core(..)
   , TyCo(..)
   , CoreTC(..)
+  , QC(..)
   -- * Equality
   -- ** Syntactic Equality
   , coreSyntaxEq
@@ -28,6 +29,8 @@ module HERMIT.Kure.SumTypes
   , promoteAltT
   , promoteTypeT
   , promoteCoercionT
+  , promoteQuantifiedT
+  , promoteClauseT
   -- ** Rewrite Promotions
   , promoteModGutsR
   , promoteProgR
@@ -37,6 +40,8 @@ module HERMIT.Kure.SumTypes
   , promoteAltR
   , promoteTypeR
   , promoteCoercionR
+  , promoteQuantifiedR
+  , promoteClauseR
   -- ** BiRewrite Promotions
   , promoteExprBiR
   )
@@ -48,6 +53,7 @@ import Language.KURE.BiTransform
 
 import HERMIT.Core
 import HERMIT.GHC
+import HERMIT.Lemma
 
 ---------------------------------------------------------------------
 
@@ -66,6 +72,11 @@ data TyCo = TypeCore Type                -- ^ A type.
 -- | CoreTC is a sum type for use by KURE.  CoreTC = Core + TyCo
 data CoreTC = Core Core
             | TyCo TyCo
+
+-- QC (for Quantified Clause) is the sum type for Quantified + Clause types.
+data QC = QCQuantified Quantified
+        | QCClause     Clause
+        | QCCoreTC     CoreTC
 
 ---------------------------------------------------------------------
 
@@ -361,6 +372,121 @@ instance Injection Coercion CoreTC where
 
 ---------------------------------------------------------------------
 
+instance Injection Quantified QC where
+
+  inject :: Quantified -> QC
+  inject = QCQuantified
+  {-# INLINE inject #-}
+
+  project :: QC -> Maybe Quantified
+  project (QCQuantified q) = Just q
+  project _                = Nothing
+  {-# INLINE project #-}
+
+instance Injection Clause QC where
+
+  inject :: Clause -> QC
+  inject = QCClause
+  {-# INLINE inject #-}
+
+  project :: QC -> Maybe Clause
+  project (QCClause cl) = Just cl
+  project _             = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreTC QC where
+
+  inject :: CoreTC -> QC
+  inject = QCCoreTC
+  {-# INLINE inject #-}
+
+  project :: QC -> Maybe CoreTC
+  project (QCCoreTC c) = Just c
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection Core QC where
+  inject :: Core -> QC
+  inject = QCCoreTC . inject
+  {-# INLINE inject #-}
+
+  project :: QC -> Maybe Core
+  project (QCCoreTC c) = project c
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection TyCo QC where
+  inject :: TyCo -> QC
+  inject = QCCoreTC . inject
+  {-# INLINE inject #-}
+
+  project :: QC -> Maybe TyCo
+  project (QCCoreTC c) = project c
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreExpr QC where
+  inject :: CoreExpr -> QC
+  inject = QCCoreTC . inject
+  {-# INLINE inject #-}
+
+  project :: QC -> Maybe CoreExpr
+  project (QCCoreTC c) = project c
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreBind QC where
+  inject :: CoreBind -> QC
+  inject = QCCoreTC . inject
+  {-# INLINE inject #-}
+
+  project :: QC -> Maybe CoreBind
+  project (QCCoreTC c) = project c
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreDef QC where
+  inject :: CoreDef -> QC
+  inject = QCCoreTC . inject
+  {-# INLINE inject #-}
+
+  project :: QC -> Maybe CoreDef
+  project (QCCoreTC c) = project c
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreAlt QC where
+  inject :: CoreAlt -> QC
+  inject = QCCoreTC . inject
+  {-# INLINE inject #-}
+
+  project :: QC -> Maybe CoreAlt
+  project (QCCoreTC c) = project c
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection Type QC where
+  inject :: Type -> QC
+  inject = QCCoreTC . inject
+  {-# INLINE inject #-}
+
+  project :: QC -> Maybe Type
+  project (QCCoreTC c) = project c
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection Coercion QC where
+  inject :: Coercion -> QC
+  inject = QCCoreTC . inject
+  {-# INLINE inject #-}
+
+  project :: QC -> Maybe Coercion
+  project (QCCoreTC c) = project c
+  project _            = Nothing
+  {-# INLINE project #-}
+
+---------------------------------------------------------------------
+
 -- | Promote a translate on 'ModGuts'.
 promoteModGutsT :: (Monad m, Injection ModGuts g) => Transform c m ModGuts b -> Transform c m g b
 promoteModGutsT = promoteWithFailMsgT "This translate can only succeed at the module level."
@@ -400,6 +526,16 @@ promoteTypeT = promoteWithFailMsgT "This translate can only succeed at type node
 promoteCoercionT :: (Monad m, Injection Coercion g) => Transform c m Coercion b -> Transform c m g b
 promoteCoercionT = promoteWithFailMsgT "This translate can only succeed at coercion nodes."
 {-# INLINE promoteCoercionT #-}
+
+-- | Promote a translate on 'Quantified'.
+promoteQuantifiedT :: (Monad m, Injection Quantified g) => Transform c m Quantified b -> Transform c m g b
+promoteQuantifiedT = promoteWithFailMsgT "This translate can only succeed at quantified nodes."
+{-# INLINE promoteQuantifiedT #-}
+
+-- | Promote a translate on 'Clause'.
+promoteClauseT :: (Monad m, Injection Clause g) => Transform c m Clause b -> Transform c m g b
+promoteClauseT = promoteWithFailMsgT "This translate can only succeed at clause nodes."
+{-# INLINE promoteClauseT #-}
 
 ---------------------------------------------------------------------
 
@@ -443,6 +579,15 @@ promoteCoercionR :: (Monad m, Injection Coercion g) => Rewrite c m Coercion -> R
 promoteCoercionR = promoteWithFailMsgR "This rewrite can only succeed at coercion nodes."
 {-# INLINE promoteCoercionR #-}
 
+-- | Promote a rewrite on 'Quantified'.
+promoteQuantifiedR :: (Monad m, Injection Quantified g) => Rewrite c m Quantified -> Rewrite c m g
+promoteQuantifiedR = promoteWithFailMsgR "This rewrite can only succeed at quantified nodes."
+{-# INLINE promoteQuantifiedR #-}
+
+-- | Promote a rewrite on 'Clause'.
+promoteClauseR :: (Monad m, Injection Clause g) => Rewrite c m Clause -> Rewrite c m g
+promoteClauseR = promoteWithFailMsgR "This rewrite can only succeed at quantified nodes."
+{-# INLINE promoteClauseR #-}
 ---------------------------------------------------------------------
 
 -- | Promote a bidirectional rewrite on 'CoreExpr'.
@@ -451,3 +596,4 @@ promoteExprBiR b = bidirectional (promoteExprR $ forwardT b) (promoteExprR $ bac
 {-# INLINE promoteExprBiR #-}
 
 ---------------------------------------------------------------------
+

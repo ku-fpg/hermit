@@ -348,9 +348,9 @@ instance Extern UserProofTechnique where
 
 interpProof :: Monad m => [Interp m ProofShellCommand]
 interpProof =
-  [ interp $ \ (RewriteCoreBox rr)            -> PCRewrite $ core2qcR rr
-  , interp $ \ (RewriteCoreTCBox rr)          -> PCRewrite $ core2qcR $ extractR rr
-  , interp $ \ (BiRewriteCoreBox br)          -> PCRewrite $ core2qcR $ forwardT br <+ backwardT br
+  [ interp $ \ (RewriteCoreBox rr)            -> PCRewrite $ promoteR rr
+  , interp $ \ (RewriteCoreTCBox rr)          -> PCRewrite $ promoteR rr
+  , interp $ \ (BiRewriteCoreBox br)          -> PCRewrite $ promoteR $ forwardT br <+ backwardT br
   , interp $ \ (effect :: ShellEffect)        -> PCShell effect
   , interp $ \ (effect :: KernelEffect)       -> PCKernel effect
   , interp $ \ (effect :: ScriptEffect)       -> PCScript effect
@@ -363,8 +363,8 @@ interpProof =
   , interp $ \ (cmd :: ProofShellCommand)     -> cmd
   , interp $ \ (CrumbBox cr)                  -> PCPath (return $ mempty @@ cr)
   , interp $ \ (PathBox p)                    -> PCPath (return p)
-  , interp $ \ (TransformCorePathBox tt)      -> PCPath (promoteT (extractT tt :: TransformH CoreExpr LocalPathH))
-  , interp $ \ (TransformCoreTCPathBox tt)    -> PCPath (promoteT (extractT tt :: TransformH CoreExpr LocalPathH))
+  , interp $ \ (TransformCorePathBox tt)      -> PCPath (promoteT tt)
+  , interp $ \ (TransformCoreTCPathBox tt)    -> PCPath (promoteT tt)
   , interp $ \ (TransformCoreDocHBox t)       -> PCQuery (QueryDocH t)
   , interp $ \ (TransformCoreTCDocHBox t)     -> PCQuery (QueryDocH t)
   , interp $ \ (PrettyHCoreBox t)             -> PCQuery (QueryPrettyH t)

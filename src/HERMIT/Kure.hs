@@ -81,8 +81,6 @@ module HERMIT.Kure
        , nthCoT, nthCoAllR, nthCoAnyR, nthCoOneR
        , instCoT, instCoAllR, instCoAnyR, instCoOneR
        , lrCoT, lrCoAllR, lrCoAnyR, lrCoOneR
-       -- * Quantified Clauses
-       , QC
        -- * Applicative
        -- | Remove in 7.10
        , (<$>)
@@ -1247,92 +1245,15 @@ instance HasDynFlags m => HasDynFlags (Transform c m a) where
 
 ---------------------------------------------------------------------
 
--- QC (for Quantified Clause) is the sum type for Quantified + Clause types.
-data QC = QCQuantified Quantified
-        | QCClause     Clause
-        | QCExpr       CoreExpr
-        | QCBind       CoreBind
-        | QCDef        CoreDef
-        | QCAlt        CoreAlt
-
-instance Injection Quantified QC where
-
-  inject :: Quantified -> QC
-  inject = QCQuantified
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe Quantified
-  project (QCQuantified q) = Just q
-  project _                = Nothing
-  {-# INLINE project #-}
-
-instance Injection Clause QC where
-
-  inject :: Clause -> QC
-  inject = QCClause
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe Clause
-  project (QCClause cl) = Just cl
-  project _             = Nothing
-  {-# INLINE project #-}
-
-instance Injection CoreExpr QC where
-
-  inject :: CoreExpr -> QC
-  inject = QCExpr
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe CoreExpr
-  project (QCExpr e) = Just e
-  project _          = Nothing
-  {-# INLINE project #-}
-
-instance Injection CoreBind QC where
-
-  inject :: CoreBind -> QC
-  inject = QCBind
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe CoreBind
-  project (QCBind b) = Just b
-  project _          = Nothing
-  {-# INLINE project #-}
-
-instance Injection CoreDef QC where
-
-  inject :: CoreDef -> QC
-  inject = QCDef
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe CoreDef
-  project (QCDef d) = Just d
-  project _         = Nothing
-  {-# INLINE project #-}
-
-instance Injection CoreAlt QC where
-
-  inject :: CoreAlt -> QC
-  inject = QCAlt
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe CoreAlt
-  project (QCAlt a) = Just a
-  project _         = Nothing
-  {-# INLINE project #-}
-
 -- | Walking over Quantified and Clause
 instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb) => Walker c QC where
 
     allR :: forall m. MonadCatch m => Rewrite c m QC -> Rewrite c m QC
     allR r = prefixFailMsg "allR failed: " $
                 rewrite $ \ c -> \case
-                    QCQuantified q -> inject <$> applyT allRquantified c q
-                    QCClause cl    -> inject <$> applyT allRclause c cl
-                    QCExpr e       -> inject <$> applyT allRexpr c e
-                    QCBind b       -> inject <$> applyT allRbind c b
-                    QCDef d        -> inject <$> applyT allRdef c d
-                    QCAlt a        -> inject <$> applyT allRalt c a
+                    QCQuantified q  -> inject <$> applyT allRquantified c q
+                    QCClause cl     -> inject <$> applyT allRclause c cl
+                    QCCoreTC coreTC -> inject <$> applyT (allR $ extractR r) c coreTC -- exploiting the fact that quantified/clause does not appear within CoreTC
         where
             allRquantified :: MonadCatch m => Rewrite c m Quantified
             allRquantified = rewrite $ \ c (Quantified bs cl) ->
@@ -1352,29 +1273,3 @@ instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb
                                 Equiv e1 e2 -> Equiv <$> applyT (extractR r) (c @@ Equiv_Left) e1
                                                      <*> applyT (extractR r) (c @@ Equiv_Right) e2
             {-# INLINE allRclause #-}
-
-            allRbind :: MonadCatch m => Rewrite c m CoreBind
-            allRbind = readerT $ \case
-                                    NonRec{}  -> nonRecAllR idR (extractR r) -- we don't descend into the Var
-                                    Rec _     -> recAllR (const $ extractR r)
-            {-# INLINE allRbind #-}
-
-            allRdef :: MonadCatch m => Rewrite c m CoreDef
-            allRdef = defAllR idR (extractR r) -- we don't descend into the Id
-            {-# INLINE allRdef #-}
-
-            allRalt :: MonadCatch m => Rewrite c m CoreAlt
-            allRalt = altAllR idR (const idR) (extractR r) -- we don't descend into the AltCon or Vars
-            {-# INLINE allRalt #-}
-
-            allRexpr :: MonadCatch m => Rewrite c m CoreExpr
-            allRexpr = readerT $ \case
-                                    App{}   -> appAllR (extractR r) (extractR r)
-                                    Lam{}   -> lamAllR idR (extractR r) -- we don't descend into the Var
-                                    Let{}   -> letAllR (extractR r) (extractR r)
-                                               -- we don't descend into the case binder or Type
-                                    Case{}  -> caseAllR (extractR r) idR idR (const $ extractR r)
-                                    Cast{}  -> castAllR (extractR r) idR -- we don't descend into the Coercion
-                                    Tick{}  -> tickAllR idR (extractR r) -- we don't descend into the Tickish
-                                    _       -> idR
-            {-# INLINE allRexpr #-}
