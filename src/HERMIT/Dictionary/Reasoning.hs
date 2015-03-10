@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -22,6 +23,7 @@ module HERMIT.Dictionary.Reasoning
     , insertLemmaT
     , insertLemmasT
     , lemmaR
+    , lemmaConsequentR
     , markLemmaUsedT
     , markLemmaProvedT
     , markLemmaAssumedT
@@ -57,6 +59,7 @@ module HERMIT.Dictionary.Reasoning
 import           Control.Arrow hiding ((<+>))
 import           Control.Monad
 
+import           Data.Either (partitionEithers)
 import           Data.List (isInfixOf, nubBy)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
@@ -118,6 +121,9 @@ externals =
         [ "Lint check a quantified clause." ]
     , external "lemma" (promoteExprBiR . lemmaR :: LemmaName -> BiRewriteH Core)
         [ "Generate a bi-directional rewrite from a lemma." ]
+    , external "lemma-consequent" (promoteExprBiR . lemmaConsequentR :: LemmaName -> BiRewriteH Core)
+        [ "Generate a bi-directional rewrite from the consequent of an implication lemma."
+        , "The antecedent is instantiated and introduced as an unproven obligation." ]
     , external "lemma-lhs-intro" (lemmaLhsIntroR :: LemmaName -> RewriteH Core)
         [ "Introduce the LHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = lhs in body" ] .+ Introduce .+ Shallow
@@ -572,10 +578,36 @@ getUsedNotProvenT = do
     ls <- getLemmasT
     return [ (nm,l) | (nm, l@(Lemma _ NotProven True)) <- Map.toList ls ]
 
+------------------------------------------------------------------------------
+
 lemmaR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
           , HasLemmas m, MonadCatch m, MonadUnique m)
        => LemmaName -> BiRewrite c m CoreExpr
 lemmaR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaQ)) (markLemmaUsedT nm >> idR)
+
+lemmaConsequentR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
+                                , ReadPath c Crumb, HasLemmas m, MonadCatch m, MonadUnique m)
+                 => LemmaName -> BiRewrite c m CoreExpr
+lemmaConsequentR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)) (markLemmaUsedT nm >> idR)
+    where go :: Quantified -> BiRewrite c m CoreExpr
+          go (Quantified bs (Impl ante (Quantified bs' cl))) = do
+            let eqs = toEqualities $ Quantified (bs++bs') cl -- consequent
+                foldUnfold side f =
+                    transform $ \ c e -> do
+                        let cf = compileFold $ map f eqs
+                        (e',hs) <- maybeM ("expression did not match "++side++"-hand side") $ runFoldMatches cf c e
+                        let matches = [ case lookupVarEnv hs b of
+                                            Nothing -> Left b
+                                            Just arg -> Right (b,arg)
+                                      | b <- bs ]
+                            (unmatched, subs) = partitionEithers matches
+                            Quantified aBs acl = substQuantifieds subs ante
+                            q = Quantified (unmatched++aBs) acl
+                        insertLemma (nm <> "-antecedent") $ Lemma q NotProven True
+                        return e'
+            bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)
+          go _ = let t = fail $ show nm ++ " is not an implication."
+                 in bidirectional t t
 
 ------------------------------------------------------------------------------
 

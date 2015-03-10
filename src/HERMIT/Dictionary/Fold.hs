@@ -12,7 +12,7 @@ module HERMIT.Dictionary.Fold
     , foldVarConfigR
     , runFoldR
       -- * Unlifted fold interface
-    , fold, compileFold, runFold, CompiledFold
+    , fold, compileFold, runFold, runFoldMatches, CompiledFold
       -- * Equality
     , Equality(..)
     , toEqualities
@@ -113,10 +113,15 @@ compileFold = CompiledFold . foldr addFold fEmpty
 
 -- | Attempt to fold an expression using a matcher in a given context.
 runFold :: BoundVars c => CompiledFold -> c -> CoreExpr -> Maybe CoreExpr
-runFold (CompiledFold f) c exp = do
+runFold f c e = fst <$> runFoldMatches f c e
+
+-- | Attempt to fold an expression using a matcher in a given context.
+-- Return resulting expression and a map of what when in the holes in the pattern.
+runFoldMatches :: BoundVars c => CompiledFold -> c -> CoreExpr -> Maybe (CoreExpr, VarEnv CoreExpr)
+runFoldMatches (CompiledFold f) c exp = do
     (hs, (vs', rhs')) <- singleResult $ filterOutOfScope c $ findFold exp f
     args <- sequence [ lookupVarEnv hs v | v <- vs' ]
-    return $ uncurry mkCoreApps $ betaReduceAll (mkCoreLams vs' rhs') args
+    return (uncurry mkCoreApps $ betaReduceAll (mkCoreLams vs' rhs') args, hs)
 
 insertFold :: Fold m => AlphaEnv -> [Var] -> Key m -> a -> m a -> m a
 insertFold env vs k x = fAlter env vs k (const (Just x))
