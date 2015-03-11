@@ -68,6 +68,7 @@ module HERMIT.Core
     , substCoreAlt
     , substCoreExpr
     , betaReduceAll
+    , mkDataConApp
 
       -- * Crumbs
     , Crumb(..)
@@ -576,3 +577,15 @@ substCoreAlt v e alt = let (con, vs, rhs) = alt
 betaReduceAll :: CoreExpr -> [CoreExpr] -> (CoreExpr, [CoreExpr])
 betaReduceAll (Lam v body) (a:as) = betaReduceAll (substCoreExpr v a body) as
 betaReduceAll e            as     = (e,as)
+
+-- | Build a constructor application.
+--   Accepts a list of types to which the type constructor is instantiated. Ex.
+--
+-- > data T a b = C a b Int
+--
+-- Pseudocode:
+--
+-- > mkDataConApp [a',b'] C [x,y,z] ==> C a' b' (x::a') (y::b') (z::Int) :: T a' b'
+--
+mkDataConApp :: [Type] -> DataCon -> [Var] -> CoreExpr
+mkDataConApp tys dc vs = mkCoreConApps dc (map Type tys ++ map (varToCoreExpr . zapVarOccInfo) vs)

@@ -43,7 +43,9 @@ import HERMIT.Syntax
 import HERMIT.Utilities
 
 import HERMIT.Dictionary.Induction
+import HERMIT.Dictionary.Local.Case hiding (externals)
 import HERMIT.Dictionary.Reasoning hiding (externals)
+import HERMIT.Dictionary.Undefined hiding (externals)
 
 import HERMIT.PrettyPrinter.Common
 
@@ -64,6 +66,10 @@ proof_externals :: [External]
 proof_externals = map (.+ Proof)
     [ external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
         [ "Perform induction on given universally quantified variable."
+        , "Each constructor case will generate a new lemma to be proven."
+        ]
+    , external "prove-by-cases" (PCByCases . cmpString2Var :: String -> ProofShellCommand)
+        [ "Case split on given universally quantified variable."
         , "Each constructor case will generate a new lemma to be proven."
         ]
     , external "prove-consequent" PCConsequent
@@ -152,6 +158,7 @@ performProofShellCommand :: (MonadCatch m, CLMonad m)
 performProofShellCommand cmd expr = go cmd
     where str = unparseExprH expr
           go (PCInduction idPred) = performInduction (Always str) idPred
+          go (PCByCases idPred)   = proveByCases (Always str) idPred
           go PCConsequent         = proveConsequent str
 --          go PCAntecedent         = proveAntecedent str
           go PCConjunction        = proveConjuction str
@@ -287,8 +294,33 @@ performInduction cm idPred = do
 
         pushProofStack $ Unproven lemmaName caseLemma ctxt (hypLemmas ++ ls) mempty
 
+proveByCases :: (MonadCatch m, CLMonad m)
+             => CommitMsg -> (Id -> Bool) -> m ()
+proveByCases cm idPred = do
+    (nm, Lemma (Quantified bs cl) _ _ temp, ctxt, ls, _) <- currentLemma
+    guardMsg (any idPred bs) "specified identifier is not universally quantified in this lemma."
+    let (as,b:bs') = break idPred bs -- safe because above guard
+    guardMsg (not (any idPred bs')) "multiple matching quantifiers."
+
+    cases <- queryInContext (do ue <- mkUndefinedValT (varType b)
+                                liftM (ue:) (constT (caseExprsForM (varToCoreExpr b)))) cm
+
+    -- replace the current lemma with the three subcases
+    -- proving them will prove the overall lemma automatically
+    _ <- popProofStack
+    pushProofStack $ MarkProven nm temp
+    forM_ (zip [(0::Int)..] cases) $ \ (i,e) -> do
+
+        let lemmaName = fromString $ show nm ++ "-case-" ++ show i
+            Quantified bs'' cl' = substQuantified b e $ Quantified bs' cl
+            fvs = varSetElems $ localFreeVarsExpr e
+            caseLemma = Lemma (Quantified (as++fvs++bs'') cl') NotProven False True
+
+        pushProofStack $ Unproven lemmaName caseLemma ctxt ls mempty
+
 data ProofShellCommand
     = PCInduction (Id -> Bool)
+    | PCByCases (Id -> Bool)
     | PCConsequent
 --    | PCAntecedent
     | PCConjunction

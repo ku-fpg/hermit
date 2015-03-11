@@ -210,7 +210,7 @@ getUnfoldingsT config = transform $ \ c i ->
 alt2Exp :: Monad m => [Type] -> (AltCon,[Var]) -> m CoreExpr
 alt2Exp _   (DEFAULT   , _ ) = fail "DEFAULT alternative cannot be converted to an expression."
 alt2Exp _   (LitAlt l  , _ ) = return $ Lit l
-alt2Exp tys (DataAlt dc, vs) = return $ mkCoreConApps dc (map Type tys ++ map (varToCoreExpr . zapVarOccInfo) vs)
+alt2Exp tys (DataAlt dc, vs) = return $ mkDataConApp tys dc vs
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargetsT :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c

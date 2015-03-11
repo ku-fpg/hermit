@@ -18,6 +18,8 @@ module HERMIT.Dictionary.Local.Case
     , caseReduceLiteralR
       -- , caseReduceIdR
     , caseReduceUnfoldR
+    , casesForM
+    , caseExprsForM
     , caseSplitR
     , caseSplitInlineR
     , caseInlineScrutineeR
@@ -387,14 +389,24 @@ caseSplitR s = prefixFailMsg "case-split failed: " $ do
     let f = compileFold [Equality [] s (varToCoreExpr w)]
     e' <- tryR $ withVarsInScope [w] $ extractR (anytdR (promoteR $ runFoldR f) :: Rewrite c m Core)
     constT $ do
-        (tyCon, tys) <- splitTyConAppM (exprType s)
-        let aNms = map (:[]) $ cycle ['a'..'z']
-        dcsAndBss <- forM (tyConDataCons tyCon) $ \ dc -> do
-                        bs <- sequence [ newIdH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
-                        return (dc,bs)
+        dcsAndBss <- casesForM s
         let alts = [ (DataAlt dc, bs, e') | (dc,bs) <- dcsAndBss ]
         guardMsg (not (null alts)) "no constructors for scrutinee of that type."
         return $ Case s w (exprType e') alts
+
+casesForM :: MonadUnique m => CoreExpr -> m [(DataCon, [Id])]
+casesForM e = do
+    (tyCon, tys) <- splitTyConAppM (exprType e)
+    let aNms = map (:[]) $ cycle ['a'..'z']
+    forM (tyConDataCons tyCon) $ \ dc -> do
+        bs <- sequence [ newIdH a ty | (a,ty) <- zip aNms $ dataConInstArgTys dc tys ]
+        return (dc,bs)
+
+caseExprsForM :: MonadUnique m => CoreExpr -> m [CoreExpr]
+caseExprsForM e = do
+    (_, tys) <- splitTyConAppM (exprType e)
+    cases <- casesForM e
+    return [ mkDataConApp tys dc vs | (dc,vs) <- cases ]
 
 -- | Force evaluation of an identifier by introducing a case.
 --   This is equivalent to adding @(seq v)@ in the source code.

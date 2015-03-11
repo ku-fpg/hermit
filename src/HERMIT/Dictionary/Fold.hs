@@ -119,7 +119,7 @@ runFold f c e = fst <$> runFoldMatches f c e
 -- Return resulting expression and a map of what when in the holes in the pattern.
 runFoldMatches :: BoundVars c => CompiledFold -> c -> CoreExpr -> Maybe (CoreExpr, VarEnv CoreExpr)
 runFoldMatches (CompiledFold f) c exp = do
-    (hs, (vs', rhs')) <- singleResult $ filterOutOfScope c $ findFold exp f
+    (hs, (vs', rhs')) <- soleElement $ filterOutOfScope c $ findFold exp f
     args <- sequence [ lookupVarEnv hs v | v <- vs' ]
     return (uncurry mkCoreApps $ betaReduceAll (mkCoreLams vs' rhs') args, hs)
 
@@ -135,10 +135,6 @@ filterOutOfScope c = go
           go (x@(_,(vs,e)):r)
             | isEmptyVarSet (filterVarSet (not . inScope c) (delVarSetList (freeVarsExpr e) vs)) = x : go r
             | otherwise = go r
-
-singleResult :: [a] -> Maybe a
-singleResult [x] = Just x
-singleResult _   = Nothing
 
 ------------------------------------------------------------------------
 
@@ -410,7 +406,7 @@ extendResult hm e m = catMaybes
 
 -- | Determine if two expressions are alpha-equivalent.
 sameExpr :: CoreExpr -> CoreExpr -> Maybe ()
-sameExpr e1 e2 = snd <$> singleResult (findFold e2 m)
+sameExpr e1 e2 = snd <$> soleElement (findFold e2 m)
     where m = insertFold emptyAlphaEnv [] e1 () EMEmpty
 
 ------------------------------------------------------------------------
