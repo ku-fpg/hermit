@@ -12,6 +12,7 @@ module HERMIT.Lemma
     , freeVarsQuantified
     , substQuantified
     , substQuantifieds
+    , dropBinders
       -- * Lemmas
     , LemmaName(..)
     , Lemma(..)

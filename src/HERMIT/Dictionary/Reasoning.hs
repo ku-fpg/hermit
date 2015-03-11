@@ -51,6 +51,7 @@ module HERMIT.Dictionary.Reasoning
     , unshadowQuantifiedR
     , instantiateDictsR
     , instantiateQuantifiedVarR
+    , abstractQuantifiedR
     , discardUniVars
     ) where
 
@@ -117,9 +118,6 @@ externals =
         [ "imply new-name antecedent-name consequent-name" ]
     , external "lint" (promoteT lintQuantifiedT :: TransformH QC String)
         [ "Lint check a quantified clause." ]
--- TODO: rename "lemma" to something else, e.g. "lemma-bidirectional"
---       Then implement a new "lemma" command which compares the current goal to the named lemma.
---       This will be particularly useful for when the current goal is a *composite* lemma that we have already proved.
     , external "lemma-birewrite" (promoteExprBiR . lemmaBiR :: LemmaName -> BiRewriteH Core)
         [ "Generate a bi-directional rewrite from a lemma." ]
     , external "lemma-forward" (forwardT . promoteExprBiR . lemmaBiR :: LemmaName -> RewriteH Core)
@@ -142,6 +140,8 @@ externals =
     , external "inst-lemma-dictionaries" (\ nm -> modifyLemmaT nm id instantiateDictsR id id :: TransformH Core ())
         [ "Instantiate all of the universally quantified dictionaries of the given lemma."
         , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
+    , external "abstract" ((\nm cs -> promoteQuantifiedR $ abstractQuantifiedR nm cs) :: String -> CoreString -> RewriteH QC)
+        [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
     , external "copy-lemma" (\ nm newName -> modifyLemmaT nm (const newName) idR id id :: TransformH Core ())
         [ "Copy a given lemma, with a new name." ]
     , external "modify-lemma" ((\ nm rr -> modifyLemmaT nm id (extractR rr) id (const False)) :: LemmaName -> RewriteH QC -> TransformH Core ())
@@ -199,10 +199,12 @@ extensionalityR mn = prefixFailMsg "extensionality failed: " $
 -- | @e@ ==> @let v = lhs in e@
 eqLhsIntroR :: Quantified -> Rewrite c HermitM Core
 eqLhsIntroR (Quantified bs (Equiv lhs _)) = nonRecIntroR "lhs" (mkCoreLams bs lhs)
+eqLhsIntroR _                             = fail "compound lemmas not supported."
 
 -- | @e@ ==> @let v = rhs in e@
 eqRhsIntroR :: Quantified -> Rewrite c HermitM Core
 eqRhsIntroR (Quantified bs (Equiv _ rhs)) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
+eqRhsIntroR _                             = fail "compound lemmas not supported."
 
 ------------------------------------------------------------------------------
 
@@ -326,6 +328,8 @@ verifyClauseT =
                    Disj  q1 q2 -> (return q1 >>> verifyQuantifiedT) <+ (return q2 >>> verifyQuantifiedT)
                    Impl  _  _  -> fail "verifyClauseT: Impl TODO"
                    Equiv e1 e2 -> guardMsg (exprAlphaEq e1 e2) "the two sides of the equality do not match.")
+
+------------------------------------------------------------------------------
 
 lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m)
                 => Transform c m Quantified String
@@ -563,6 +567,21 @@ instantiateQuantifiedVarR p cs = prefixFailMsg "instantiation failed: " $ do
                       | otherwise -> let (before,_) = break (==b) bs
                                      in liftM (Type . fst) $ withVarsInScope before $ parseTypeWithHolesT cs
     contextfreeT (instQuantified p e) >>> (lintQuantifiedT >> idR) -- lint for sanity
+
+------------------------------------------------------------------------------
+
+-- | Replace all occurrences of the given expression with a new quantified variable.
+abstractQuantifiedR :: forall c m.
+                       ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                       , HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadUnique m )
+                    => String -> CoreString -> Rewrite c m Quantified
+abstractQuantifiedR nm cs = prefixFailMsg "abstraction failed: " $ do
+    Quantified bs cl <- idR
+    e <- withVarsInScope bs $ parseCoreExprT cs
+    b <- constT $ newVarH nm (exprKindOrType e)
+    let f = compileFold [Equality [] e (varToCoreExpr b)] -- we don't use mkEquality on purpose, so we can abstract lambdas
+    liftM dropBinders $ return (Quantified (bs++[b]) cl) >>>
+                            extractR (anytdR $ promoteExprR $ runFoldR f :: Rewrite c m QC)
 
 ------------------------------------------------------------------------------
 
