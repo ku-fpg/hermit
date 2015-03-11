@@ -25,7 +25,7 @@ import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.State (MonadState(get), modify, gets)
 
 import Data.Dynamic
-import Data.List (delete)
+import Data.List (delete, zipWith4)
 import Data.Monoid
 import Data.String (fromString)
 
@@ -36,6 +36,7 @@ import HERMIT.GHC hiding (settings, (<>), text, sep, (<+>), ($+$), nest)
 import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Lemma
+import HERMIT.Monad
 import HERMIT.Name
 import HERMIT.Parser
 import HERMIT.Syntax
@@ -67,8 +68,8 @@ proof_externals = map (.+ Proof)
         ]
     , external "prove-consequent" PCConsequent
         [ "Prove the consequent of an implication by assuming the antecedent." ]
-    , external "prove-antecedent" PCAntecedent
-        [ "Introduce a proven lemma corresponding to the consequent by proving the antecedent." ]
+--    , external "prove-antecedent" PCAntecedent
+--        [ "Introduce a proven lemma corresponding to the consequent by proving the antecedent." ]
     , external "prove-conjuction" PCConjunction
         [ "Prove a conjuction by proving both sides of it." ]
     , external "inst-assumed" (\ i nm cs -> PCInstAssumed i (cmpHN2Var nm) cs)
@@ -98,7 +99,7 @@ interactiveProofIO nm s = do
                             [] -> queryInFocus (t :: TransformH Core (HermitC,Lemma))
                                                (Always $ "prove-lemma " ++ quoteShow nm)
                             todo : _ -> queryInFocus (inProofFocusT todo t) Never
-                pushProofStack $ Unproven nm l c [] mempty False
+                pushProofStack $ Unproven nm l c [] mempty
     return $ fmap (const st) r
 
 withProofExternals :: (MonadError CLException m, MonadState CommandLineState m) => m a -> m a
@@ -126,16 +127,17 @@ forceProofs = do
         c' <- case todos of
                 todo : _ -> queryInFocus (inProofFocusT todo contextT) Never
                 _        -> return c
-        forM_ nls' $ \ (nm,l) -> pushProofStack (Unproven nm l c' [] mempty False)
+        forM_ nls' $ \ (nm,l) -> pushProofStack (Unproven nm l c' [] mempty)
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, CLMonad m) => Bool -> ExprH -> m ()
 endProof assumed expr = do
-    Unproven nm (Lemma q _ _) c _ _ temp : _ <- getProofStack
+    Unproven nm (Lemma q _ _ temp) c _ _ : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
+        deleteOr tr = if temp then constT (deleteLemma nm) else tr
         t = if assumed
-            then                      unless temp (markLemmaAssumedT nm)
-            else verifyQuantifiedT >> unless temp (markLemmaProvedT nm)
+            then                      deleteOr (markLemmaAssumedT nm)
+            else verifyQuantifiedT >> deleteOr (markLemmaProvedT nm)
     queryInFocus (constT (applyT (setFailMsg msg t) c q) :: TransformH Core ())
                  (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
@@ -151,7 +153,7 @@ performProofShellCommand cmd expr = go cmd
     where str = unparseExprH expr
           go (PCInduction idPred) = performInduction (Always str) idPred
           go PCConsequent         = proveConsequent str
-          go PCAntecedent         = proveAntecedent str
+--          go PCAntecedent         = proveAntecedent str
           go PCConjunction        = proveConjuction str
           go (PCInstAssumed i v cs) = instAssumed i v cs str
           go (PCSplitAssumed i)   = splitAssumed i str
@@ -160,18 +162,19 @@ performProofShellCommand cmd expr = go cmd
                 -- note: we assume that if 't' completes without failing,
                 -- the lemma is proved, we don't actually check
                 todo : _ <- getProofStack
-                queryInFocus (inProofFocusT todo t >> unless (ptTemp todo) (markLemmaProvedT (ptName todo))) (Changed str)
+                queryInFocus (inProofFocusT todo t >> unless (lemmaT $ ptLemma todo) (markLemmaProvedT (ptName todo)))
+                             (Changed str)
                 _ <- popProofStack
                 cl_putStrLn $ "Successfully proven: " ++ show (ptName todo)
           go (PCEnd assumed)      = endProof assumed expr
 
 proveConsequent :: (MonadCatch m, CLMonad m) => String -> m ()
 proveConsequent expr = do
-    Unproven nm (Lemma (Quantified bs cl) p u) c ls _ t : _ <- getProofStack
+    Unproven nm (Lemma (Quantified bs cl) p u t) c ls _ : _ <- getProofStack
     (q,ls') <- case cl of
                 Impl ante (Quantified cBs ccl) ->
                     let n = nm <> "-antecedent"
-                        l = Lemma ante Assumed False
+                        l = Lemma ante Assumed False True
                     in return (Quantified (bs++cBs) ccl, (n,l):ls)
                 _ -> fail "not an implication."
     let nm' = nm <> "-consequent"
@@ -179,8 +182,9 @@ proveConsequent expr = do
     addAST =<< tellK k expr ast
     _ <- popProofStack
     pushProofStack $ MarkProven nm t -- proving the consequent proves the lemma
-    pushProofStack $ Unproven nm' (Lemma q p u) c ls' mempty True
+    pushProofStack $ Unproven nm' (Lemma q p u True) c ls' mempty
 
+{-
 proveAntecedent :: (MonadCatch m, CLMonad m) => String -> m ()
 proveAntecedent expr = do
     Unproven nm (Lemma (Quantified bs cl) p u) c ls _ _ : _ <- getProofStack
@@ -196,40 +200,41 @@ proveAntecedent expr = do
             pushProofStack $ IntroLemma cnm cq p -- proving the antecedent introduces the consequent as a lemma
             pushProofStack $ Unproven anm alem c ls mempty True
         _ -> fail "not an implication."
+-}
 
 proveConjuction :: (MonadCatch m, CLMonad m) => String -> m ()
 proveConjuction expr = do
-    Unproven nm (Lemma (Quantified bs cl) p u) c ls _ t : _ <- getProofStack
+    Unproven nm (Lemma (Quantified bs cl) p u t) c ls _ : _ <- getProofStack
     case cl of
         Conj (Quantified lbs lcl) (Quantified rbs rcl) -> do
             (k,ast) <- gets (cl_kernel &&& cl_cursor)
             addAST =<< tellK k expr ast
             _ <- popProofStack
             pushProofStack $ MarkProven nm t
-            pushProofStack $ Unproven (nm <> "-r") (Lemma (Quantified (bs++rbs) rcl) p u) c ls mempty True
-            pushProofStack $ Unproven (nm <> "-l") (Lemma (Quantified (bs++lbs) lcl) p u) c ls mempty True
+            pushProofStack $ Unproven (nm <> "-r") (Lemma (Quantified (bs++rbs) rcl) p u True) c ls mempty
+            pushProofStack $ Unproven (nm <> "-l") (Lemma (Quantified (bs++lbs) lcl) p u True) c ls mempty
         _ -> fail "not a conjuction."
 
 splitAssumed :: (MonadCatch m, CLMonad m) => Int -> String -> m ()
 splitAssumed i expr = do
-    Unproven nm lem c ls ps t : _ <- getProofStack
-    (b, (n, Lemma q p u):a) <- getIth i ls
+    Unproven nm lem c ls ps : _ <- getProofStack
+    (b, (n, Lemma q p u t):a) <- getIth i ls
     qs <- splitQuantified q
-    let nls = [ (n <> fromString (show j), Lemma q' p u) | (j::Int,q') <- zip [0..] qs ]
+    let nls = [ (n <> fromString (show j), Lemma q' p u t) | (j::Int,q') <- zip [0..] qs ]
     (k,ast) <- gets (cl_kernel &&& cl_cursor)
     addAST =<< tellK k expr ast
     _ <- popProofStack
-    pushProofStack $ Unproven nm lem c (b ++ nls ++ a) ps t
+    pushProofStack $ Unproven nm lem c (b ++ nls ++ a) ps
 
 instAssumed :: (MonadCatch m, CLMonad m) => Int -> (Var -> Bool) -> CoreString -> String -> m ()
 instAssumed i pr cs expr = do
     todo : _ <- getProofStack
-    (b, orig@(n, Lemma q p u):a) <- getIth i $ ptAssumed todo
+    (b, orig@(n, Lemma q p u t):a) <- getIth i $ ptAssumed todo
     q' <- queryInFocus (inProofFocusT todo $ return q >>> instantiateQuantifiedVarR pr cs) Never
     (k,ast) <- gets (cl_kernel &&& cl_cursor)
     addAST =<< tellK k expr ast
     _ <- popProofStack
-    pushProofStack $ todo { ptAssumed = b ++ orig:(n <> "'", Lemma q' p u):a }
+    pushProofStack $ todo { ptAssumed = b ++ orig:(n <> "'", Lemma q' p u t):a }
 
 getIth :: MonadCatch m => Int -> [a] -> m ([a],[a])
 getIth _ [] = fail "getIth: out of range"
@@ -253,7 +258,7 @@ splitQuantified (Quantified bs cl) = do
 performInduction :: (MonadCatch m, CLMonad m)
                  => CommitMsg -> (Id -> Bool) -> m ()
 performInduction cm idPred = do
-    (nm, Lemma q@(Quantified bs (Equiv lhs rhs)) _ _, _, ls, _) <- currentLemma
+    (nm, Lemma q@(Quantified bs (Equiv lhs rhs)) _ _ temp, ctxt, ls, _) <- currentLemma
     i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $
          soleElement (filter idPred bs)
 
@@ -263,8 +268,8 @@ performInduction cm idPred = do
 
     -- replace the current lemma with the three subcases
     -- proving them will prove this case automatically
-    pt@(Unproven {}) <- popProofStack
-    pushProofStack $ MarkProven nm $ ptTemp pt
+    _ <- popProofStack
+    pushProofStack $ MarkProven nm temp
     forM_ (reverse cases) $ \ (mdc,vs,lhsE,rhsE) -> do
 
         let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
@@ -276,16 +281,16 @@ performInduction cm idPred = do
                 -- TODO rethink the discardUniVars
 
         let nms = [ fromString ("ind-hyp-" ++ show n) | n :: Int <- [0..] ]
-            hypLemmas = zip nms $ zipWith3 Lemma qs (repeat Assumed) (repeat False)
+            hypLemmas = zip nms $ zipWith4 Lemma qs (repeat Assumed) (repeat False) (repeat True)
             lemmaName = fromString $ show nm ++ "-induction-case-" ++ caseName
-            caseLemma = Lemma (mkQuantified (delete i bs ++ vs) lhsE rhsE) NotProven False
+            caseLemma = Lemma (mkQuantified (delete i bs ++ vs) lhsE rhsE) NotProven False True
 
-        pushProofStack $ Unproven lemmaName caseLemma (ptContext pt) (hypLemmas ++ ls) mempty True
+        pushProofStack $ Unproven lemmaName caseLemma ctxt (hypLemmas ++ ls) mempty
 
 data ProofShellCommand
     = PCInduction (Id -> Bool)
     | PCConsequent
-    | PCAntecedent
+--    | PCAntecedent
     | PCConjunction
     | PCSplitAssumed Int
     | PCInstAssumed Int (Var -> Bool) CoreString

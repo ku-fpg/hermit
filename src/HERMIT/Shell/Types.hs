@@ -282,10 +282,9 @@ data ProofTodo = Unproven
                     , ptContext :: HermitC      -- ^ context in which lemma is being proved
                     , ptAssumed :: [NamedLemma] -- ^ temporary lemmas in scope
                     , ptPath    :: PathStack    -- ^ path into lemma to focus on
-                    , ptTemp    :: Bool         -- ^ temporary status of this lemma
                     }
                | MarkProven { ptName :: LemmaName, ptTemp :: Bool } -- ^ lemma successfully proven, temporary status
-               | IntroLemma { ptName :: LemmaName, ptQuantified :: Quantified, ptProven :: Proven } -- ^ introduce this lemma with given proven status
+--               | IntroLemma { ptName :: LemmaName, ptQuantified :: Quantified, ptProven :: Proven } -- ^ introduce this lemma with given proven status
 
 -- To ease the pain of nested records, define some boilerplate here.
 cl_corelint :: CommandLineState -> Bool
@@ -488,23 +487,25 @@ currentLemma = do
     todo : _ <- getProofStack
 
     case todo of
-        Unproven nm l c ls p _ -> return (nm, l, c, ls, p)
+        Unproven nm l c ls p -> return (nm, l, c, ls, p)
         _ -> fail "currentLemma: unproven lemma not on top of stack!"
 
 announceProven :: (MonadCatch m, CLMonad m) => m ()
 announceProven = getProofStack >>= go
     where go (MarkProven nm temp : r) = do
-            queryInFocus (unless temp (modifyLemmaT nm id idR (const Proven) id) :: TransformH Core ())
+            queryInFocus (if temp then constT (deleteLemma nm) else modifyLemmaT nm id idR (const Proven) id :: TransformH Core ())
                          (Always $ "-- proven " ++ quoteShow nm) -- comment in script
             -- take it off the stack for the new AST
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
             cl_putStrLn ("Successfully proven: " ++ show nm) >> go r
+{-
           go (IntroLemma nm q p : r) = do
             queryInFocus (insertLemmaT nm (Lemma q p False) :: TransformH Core ())
                          (Always $ "-- proven " ++ quoteShow nm) -- comment in script
             -- take it off the stack for the new AST
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
             cl_putStrLn ("Successfully proven: " ++ show nm) >> go r
+-}
           go _ = return ()
 
 -- | Always returns a non-empty list.
@@ -538,7 +539,7 @@ showWindow :: (MonadCatch m, CLMonad m) => m ()
 showWindow = ifM isRunningScript (return ()) $ do
     (ps,ast) <- gets (cl_proofstack &&& cl_cursor)
     case M.lookup ast ps of
-        Just (Unproven _ l c ls p _ : _)  -> do
+        Just (Unproven _ l c ls p : _)  -> do
             unless (null ls) $ do
                 cl_putStrLn "Assumed lemmas:"
                 mapM_ (printLemma c mempty)
@@ -565,7 +566,7 @@ showWindow = ifM isRunningScript (return ()) $ do
 
 printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
            => HermitC -> PathStack -> (LemmaName,Lemma) -> m ()
-printLemma c p (nm,Lemma q _ _) = do -- TODO
+printLemma c p (nm,Lemma q _ _ _) = do -- TODO
     pp <- gets cl_pretty
     doc <- queryInFocus ((constT $ applyT (extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (ppQCT pp)))) c q) :: TransformH Core DocH) Never
     let doc' = PP.text (show nm) PP.$+$ PP.nest 2 doc
@@ -585,12 +586,12 @@ queryInFocus t msg = do
 
 -- meant to be used inside queryInFocus
 inProofFocusT :: ProofTodo -> TransformH QC b -> TransformH Core b
-inProofFocusT (Unproven _ (Lemma q _ _) c ls ps _) t =
+inProofFocusT (Unproven _ (Lemma q _ _ _) c ls ps) t =
     contextfreeT $ withLemmas (M.fromList ls) . applyT (return q >>> extractT (pathT (pathStack2Path ps) t)) c
 inProofFocusT _ _ = fail "no proof in progress."
 
 inProofFocusR :: ProofTodo -> RewriteH QC -> TransformH Core Quantified
-inProofFocusR (Unproven _ (Lemma q _ _) c ls ps _) rr =
+inProofFocusR (Unproven _ (Lemma q _ _ _) c ls ps) rr =
     contextfreeT $ withLemmas (M.fromList ls) . applyT (return q >>> extractR (pathR (pathStack2Path ps) rr)) c
 inProofFocusR _ _ = fail "no proof in progress."
 

@@ -92,7 +92,7 @@ getFragment True ast = do
         discardProvens r@(Unproven{} : _) = r
         discardProvens (_:r) = discardProvens r
     doc <- case discardProvens ps of
-            Unproven _ (Lemma q _ _) _ ls p _ : _ -> do
+            Unproven _ (Lemma q _ _ _) _ ls p : _ -> do
                 as <- case ls of
                         [] -> return []
                         _  -> liftM (PP.text "Assumed lemmas: " :) $

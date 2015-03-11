@@ -108,9 +108,9 @@ beginScope expr = do
             (base, rel) <- getPathStack
             addAST =<< logExpr
             modify $ \ st -> st { cl_foci = M.insert (cl_cursor st) (rel : base, mempty) (cl_foci st) }
-        Unproven nm l c ls (base,p) t : todos -> do
+        Unproven nm l c ls (base,p) : todos -> do
             addAST =<< logExpr
-            let todos' = Unproven nm l c ls (p : base, mempty) t : todos
+            let todos' = Unproven nm l c ls (p : base, mempty) : todos
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
         _ -> fail "beginScope: impossible case!"
 
@@ -128,12 +128,12 @@ endScope expr = do
                 (rel:base') -> do
                     addAST =<< logExpr
                     modify $ \ st -> st { cl_foci = M.insert (cl_cursor st) (base', rel) (cl_foci st) }
-        Unproven nm l c ls (base,_) t : todos -> do
+        Unproven nm l c ls (base,_) : todos -> do
             case base of
                 [] -> fail "no scope to end."
                 (p:base') -> do
                     addAST =<< logExpr
-                    let todos' = Unproven nm l c ls (base', p) t : todos
+                    let todos' = Unproven nm l c ls (base', p) : todos
                     modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
         _ -> fail "endScope: impossible case!"
 

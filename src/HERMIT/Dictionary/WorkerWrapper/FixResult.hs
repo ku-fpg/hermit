@@ -276,7 +276,7 @@ wwResultGenerateFusionT mAss =
                ) <- projectT
        guardMsg (w == w' && x1 == x1' && x2 == x2') wrongForm
        whenJust (verifyWWAss abs rep f) mAss
-       insertLemmaT workLabel $ Lemma (Quantified [] (Equiv (varToCoreExpr w) e)) Proven False
+       insertLemmaT workLabel $ Lemma (Quantified [] (Equiv (varToCoreExpr w) e)) Proven False False
   where
     wrongForm = "definition does not have the form: work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)"
 

@@ -18,6 +18,7 @@ module HERMIT.Monad
     , addLemma
     , findLemma
     , insertLemma
+    , deleteLemma
       -- * Reader Information
     , HasHermitMEnv(..)
     , mkEnv
@@ -232,6 +233,9 @@ findLemma :: (HasLemmas m, Monad m) => LemmaName -> m Lemma
 findLemma nm = do
     r <- liftM (lookup nm) getLemmas
     maybe (fail $ "lemma does not exist: " ++ show nm) return r
+
+deleteLemma :: (HasLemmas m, Monad m) => LemmaName -> m ()
+deleteLemma nm = getLemmas >>= putLemmas . delete nm
 
 ----------------------------------------------------------------------------
 

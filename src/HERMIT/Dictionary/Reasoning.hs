@@ -289,7 +289,7 @@ showLemmaT nm pp = getLemmaByNameT nm >>> ppLemmaT mempty pp nm
 
 ppLemmaT :: PathH -> PrettyPrinter -> LemmaName -> PrettyH Lemma
 ppLemmaT pth pp nm = do
-    Lemma q p _u <- idR
+    Lemma q p _u _t <- idR
     qDoc <- return q >>> extractT (pathT pth (ppQCT pp))
     let hDoc = PP.text (show nm) PP.<+> PP.text ("(" ++ show p ++ ")")
     return $ hDoc PP.$+$ PP.nest 2 qDoc
@@ -447,21 +447,21 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
 
 conjunctLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 conjunctLemmasT new lhs rhs = do
-    Lemma ql pl _ <- getLemmaByNameT lhs
-    Lemma qr pr _ <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Conj ql qr)) (pl `andP` pr) False
+    Lemma ql pl _ tl <- getLemmaByNameT lhs
+    Lemma qr pr _ tr <- getLemmaByNameT rhs
+    insertLemmaT new $ Lemma (Quantified [] (Conj ql qr)) (pl `andP` pr) False (tl || tr)
 
 disjunctLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 disjunctLemmasT new lhs rhs = do
-    Lemma ql pl _ <- getLemmaByNameT lhs
-    Lemma qr pr _ <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Disj ql qr)) (pl `orP` pr) False
+    Lemma ql pl _ tl <- getLemmaByNameT lhs
+    Lemma qr pr _ tr <- getLemmaByNameT rhs
+    insertLemmaT new $ Lemma (Quantified [] (Disj ql qr)) (pl `orP` pr) False (tl || tr)
 
 implyLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 implyLemmasT new lhs rhs = do
-    Lemma ql _  _ <- getLemmaByNameT lhs
-    Lemma qr pr _ <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Impl ql qr)) pr False
+    Lemma ql _  _ tl <- getLemmaByNameT lhs
+    Lemma qr pr _ tr <- getLemmaByNameT rhs
+    insertLemmaT new $ Lemma (Quantified [] (Impl ql qr)) pr False (tl || tr)
 
 ------------------------------------------------------------------------------
 
@@ -575,7 +575,7 @@ getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm)
 getUsedNotProvenT :: (HasLemmas m, Monad m) => Transform c m x [NamedLemma]
 getUsedNotProvenT = do
     ls <- getLemmasT
-    return [ (nm,l) | (nm, l@(Lemma _ NotProven True)) <- Map.toList ls ]
+    return [ (nm,l) | (nm, l@(Lemma _ NotProven True _)) <- Map.toList ls ]
 
 ------------------------------------------------------------------------------
 
@@ -602,7 +602,7 @@ lemmaConsequentR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)) (m
                             (unmatched, subs) = partitionEithers matches
                             Quantified aBs acl = substQuantifieds subs ante
                             q = Quantified (unmatched++aBs) acl
-                        insertLemma (nm <> "-antecedent") $ Lemma q NotProven True
+                        insertLemma (nm <> "-antecedent") $ Lemma q NotProven True True
                         return e'
             bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)
           go _ = let t = fail $ show nm ++ " is not an implication."
@@ -624,9 +624,9 @@ modifyLemmaT :: (HasLemmas m, Monad m)
              -> (Bool -> Bool)           -- ^ modify used status
              -> Transform c m a ()
 modifyLemmaT nm nFn rr pFn uFn = do
-    Lemma q p u <- getLemmaByNameT nm
+    Lemma q p u t <- getLemmaByNameT nm
     q' <- rr <<< return q
-    constT $ insertLemma (nFn nm) $ Lemma q' (pFn p) (uFn u)
+    constT $ insertLemma (nFn nm) $ Lemma q' (pFn p) (uFn u) t
 
 markLemmaUsedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
 markLemmaUsedT nm = modifyLemmaT nm id idR id (const True)
