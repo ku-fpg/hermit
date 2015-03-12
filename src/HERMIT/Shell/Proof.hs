@@ -77,8 +77,6 @@ proof_externals = map (.+ Proof)
         ]
     , external "prove-consequent" PCConsequent
         [ "Prove the consequent of an implication by assuming the antecedent." ]
---    , external "prove-antecedent" PCAntecedent
---        [ "Introduce a proven lemma corresponding to the consequent by proving the antecedent." ]
     , external "prove-conjuction" PCConjunction
         [ "Prove a conjuction by proving both sides of it." ]
     , external "inst-assumed" (\ i nm cs -> PCInstAssumed i (cmpHN2Var nm) cs)
@@ -166,7 +164,6 @@ performProofShellCommand cmd expr = go cmd
           go (PCInduction idPred) = performInduction (Always str) idPred
           go (PCByCases idPred)   = proveByCases (Always str) idPred
           go PCConsequent         = proveConsequent str
---          go PCAntecedent         = proveAntecedent str
           go PCConjunction        = proveConjuction str
           go (PCInstAssumed i v cs) = instAssumed i v cs str
           go (PCSplitAssumed i)   = splitAssumed i str
@@ -196,24 +193,6 @@ proveConsequent expr = do
     _ <- popProofStack
     pushProofStack $ MarkProven nm t -- proving the consequent proves the lemma
     pushProofStack $ Unproven nm' (Lemma q p u True) c ls' mempty
-
-{-
-proveAntecedent :: (MonadCatch m, CLMonad m) => String -> m ()
-proveAntecedent expr = do
-    Unproven nm (Lemma (Quantified bs cl) p u) c ls _ _ : _ <- getProofStack
-    case cl of
-        Impl (Quantified aBs acl) (Quantified cBs ccl) -> do
-            let cnm = nm <> "-consequent"
-                cq = Quantified (bs++cBs) ccl
-                anm = nm <> "-antecedent"
-                alem = Lemma (Quantified (bs++aBs) acl) NotProven u
-            (k,ast) <- gets (cl_kernel &&& cl_cursor)
-            addAST =<< tellK k expr ast
-            _ <- popProofStack
-            pushProofStack $ IntroLemma cnm cq p -- proving the antecedent introduces the consequent as a lemma
-            pushProofStack $ Unproven anm alem c ls mempty True
-        _ -> fail "not an implication."
--}
 
 proveConjuction :: (MonadCatch m, CLMonad m) => String -> m ()
 proveConjuction expr = do
@@ -329,7 +308,6 @@ data ProofShellCommand
     | PCInduction (Id -> Bool)
     | PCByCases (Id -> Bool)
     | PCConsequent
---    | PCAntecedent
     | PCConjunction
     | PCSplitAssumed Int
     | PCInstAssumed Int (Var -> Bool) CoreString
