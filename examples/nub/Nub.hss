@@ -17,6 +17,12 @@ one-td (unfold 'repN)
 remember origworker
 one-td (unfold 'filter)
 one-td (case-float-arg-lemma nubStrict)
+
+-- prove strictness condition
+prove-lemma nubStrict
+lhs (unfold >>> undefined-expr)
+end-proof
+
 one-td (unfold 'nub')
 simplify
 
@@ -29,7 +35,3 @@ one-td (case-float-arg-lemma nubStrict)
 nonrec-to-rec
 any-td (fold-remembered origworker)
 
--- prove strictness condition
-prove-lemma nubStrict
-lhs (unfold >>> undefined-expr)
-end-proof
