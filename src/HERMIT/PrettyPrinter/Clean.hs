@@ -13,6 +13,7 @@ module HERMIT.PrettyPrinter.Clean
     , ppKindOrType
     , ppCoercion
     , ppForallQuantification
+    , symbol -- should be in Common
     ) where
 
 import Control.Arrow hiding ((<+>))

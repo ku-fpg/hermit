@@ -75,6 +75,7 @@ import           HERMIT.Name
 import           HERMIT.ParserCore
 import           HERMIT.ParserType
 import           HERMIT.PrettyPrinter.Common
+import           HERMIT.PrettyPrinter.Clean (symbol) -- this should be in Common
 import           HERMIT.Utilities
 
 import           HERMIT.Dictionary.Common
@@ -308,15 +309,17 @@ ppQuantifiedT pp = do
 
 ppClauseT :: PrettyPrinter -> PrettyH Clause
 ppClauseT pp = do
-    let t = promoteT (ppQuantifiedT pp) <+ promoteT (pCoreTC pp)
-    (d1,d2,oper) <- clauseT t t (\ cl d1 d2 -> (d1,d2,  syntaxColor
-                                                      $ PP.text
-                                                      $ case cl of
-                                                            Conj {}  -> "^"
-                                                            Disj {}  -> "v"
-                                                            Impl {}  -> "=>"
-                                                            Equiv {} -> "="))
-
+    let t = absPathT &&& (promoteT (ppQuantifiedT pp) <+ promoteT (pCoreTC pp))
+        parenify (p1,d1) (p2,d2) o = ( symbol p1 '(' PP.<> d1 PP.<> symbol p1 ')'
+                                     , symbol p2 '(' PP.<> d2 PP.<> symbol p2 ')'
+                                     , syntaxColor (PP.text o)
+                                     )
+    (d1,d2,oper) <- clauseT t t (\ cl r1 r2 ->
+                                    case cl of
+                                        Conj {} -> parenify r1 r2 "^"
+                                        Disj {} -> parenify r1 r2 "v"
+                                        Impl {} -> parenify r1 r2 "=>"
+                                        Equiv {} -> (snd r1, snd r2, syntaxColor $ PP.text "="))
     return $ PP.sep [d1,oper,d2]
 
 ------------------------------------------------------------------------------
