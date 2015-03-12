@@ -226,6 +226,8 @@ smashComponents1 =
   , (promoteProgR letFloatTopR, "let-float-top")                     -- O(n)
   , (promoteExprR castElimReflR, "cast-elim-refl")                   -- O(1)
   , (promoteExprR castElimSymR, "cast-elim-sym")                     -- O(1)
+  , (promoteExprR castFloatAppR, "cast-float-app")                   -- O(1)
+  , (promoteExprR castFloatLamR, "cast-float-lam")                   -- O(1)
 --  , (promoteExprR dezombifyR, "dezombify")                           -- O(1) -- performed at the end
   ]
 

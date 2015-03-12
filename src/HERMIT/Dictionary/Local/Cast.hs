@@ -6,6 +6,7 @@ module HERMIT.Dictionary.Local.Cast
     , castElimReflR
     , castElimSymR
     , castFloatAppR
+    , castFloatLamR
     , castElimSymPlusR -- TODO: revisit
     )
 where
@@ -38,6 +39,8 @@ externals =
         [ "removes pairs of symmetric casts possibly separated by let or case forms" ] .+ Deep .+ TODO
     , external "cast-float-app" (promoteExprR castFloatAppR :: RewriteH Core)
         [ "(cast e (c1 -> c2)) x ==> cast (e (cast x (sym c1))) c2" ] .+ Shallow
+    , external "cast-float-lam" (promoteExprR castFloatLamR :: RewriteH Core)
+        [ "\\ x::a -> cast x (a -> b) ==> cast (\\x::a -> x) ((a -> a) -> (a -> b))" ] .+ Shallow
     , external "cast-elim-unsafe" (promoteExprR castElimUnsafeR :: RewriteH Core)
         [ "removes casts regardless of whether it is safe to do so" ] .+ Shallow .+ Experiment .+ Unsafe .+ TODO
     ]
@@ -77,6 +80,16 @@ castFloatAppR = prefixFailMsg "Cast float from application failed: " $
                 Type x' <- return e2
                 return (Cast (App e1 e2) (Coercion.substCo (Coercion.extendTvSubst emptyCvSubst t x') c2))
             _ -> fail "castFloatApp"
+
+-- (\ x::a -> cast x (a -> b)) :: a -> b
+-- cast (\x::a -> x) ((a -> a) -> (a -> b))
+castFloatLamR :: MonadCatch m => Rewrite c m CoreExpr
+castFloatLamR = prefixFailMsg "Cast float from lambda failed: " $
+                withPatFailMsg (wrongExprForm "Lam b (Cast e co)") $ do
+    Lam b (Cast e co) <- idR
+    let r = coercionRole co
+        aTy = exprType e
+    return $ Cast (Lam b e) (mkFunCo r (mkReflCo r aTy) co)
 
 -- | Attempts to tease a coercion apart into a type constructor and the application
 -- of a number of coercion arguments to that constructor
