@@ -81,6 +81,10 @@ externals = map (.+ KURE)
        [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
    , external "focus"      (hfocusT :: TransformH QC LocalPathH -> TransformH QC String -> TransformH QC String)
        [ "Apply a query at a focal point."] .+ Navigation .+ Deep
+   , external "focus"      ((\t -> hfocusR t . promoteCoreTCR) :: TransformH QC LocalPathH -> RewriteH CoreTC -> RewriteH QC)
+       [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
+   , external "focus"      ((\t -> hfocusT t . promoteCoreTCT) :: TransformH QC LocalPathH -> TransformH CoreTC String -> TransformH QC String)
+       [ "Apply a query at a focal point."] .+ Navigation .+ Deep
    , external "focus"      ((\t -> extractR . hfocusR (promoteCoreTCT t) . promoteCoreTCR) :: TransformH CoreTC LocalPathH -> RewriteH CoreTC -> RewriteH CoreTC)
        [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
    , external "focus"      ((\t -> extractT . hfocusT (promoteCoreTCT t) . promoteCoreTCT) :: TransformH CoreTC LocalPathH -> TransformH CoreTC String -> TransformH CoreTC String)
