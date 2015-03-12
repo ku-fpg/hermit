@@ -338,10 +338,11 @@ verifyClauseT =
 
 verifyEquivalentT :: (HasLemmas m, MonadCatch m) => LemmaName -> Transform c m Quantified ()
 verifyEquivalentT nm = prefixFailMsg "verification failed: " $ do
-    Lemma q p _ _ <- getLemmaByNameT nm
+    Lemma q p u t <- getLemmaByNameT nm
     guardMsg (p /= NotProven) "specified lemma is also not proven."
     eq <- arr (q `proves`)
     guardMsg eq "lemmas are not equivalent."
+    unless (u || t) $ markLemmaUsedT nm
 
 verifyOrCreateT :: (HasLemmas m, MonadCatch m) => LemmaName -> Lemma -> Transform c m a ()
 verifyOrCreateT nm l = do
