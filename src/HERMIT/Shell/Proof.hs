@@ -26,6 +26,7 @@ import Control.Monad.State (MonadState(get), modify, gets)
 
 import Data.Dynamic
 import Data.List (delete, zipWith4)
+import qualified Data.Map as M
 import Data.Monoid
 import Data.String (fromString)
 
@@ -140,7 +141,7 @@ forceProofs = do
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, CLMonad m) => Either Bool LemmaName -> ExprH -> m ()
 endProof reason expr = do
-    Unproven nm (Lemma q _ _ temp) c _ _ : _ <- getProofStack
+    Unproven nm (Lemma q _ _ temp) c ls _ : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
         deleteOr tr = if temp then constT (deleteLemma nm) else tr
         t = case reason of
@@ -148,7 +149,7 @@ endProof reason expr = do
                     | assumed   -> deleteOr (markLemmaAssumedT nm)
                     | otherwise -> setFailMsg msg verifyQuantifiedT >> deleteOr (markLemmaProvedT nm)
                 Right nm' -> verifyEquivalentT nm' >> deleteOr (markLemmaProvedT nm)
-    queryInFocus (constT (applyT t c q) :: TransformH Core ())
+    queryInFocus (constT (withLemmas (M.fromList ls) $ applyT t c q) :: TransformH Core ())
                  (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
     cl_putStrLn $ "Successfully proven: " ++ show nm
