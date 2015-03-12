@@ -118,6 +118,10 @@ externals = map (.+ KURE)
        , "Preference is given to applications with more arguments." ] .+ Deep
    , external "promote"    (promoteR :: RewriteH Core -> RewriteH CoreTC)
        [ "Promote a RewriteCore to a RewriteCoreTC" ]
+   , external "promote"    (promoteR :: RewriteH CoreTC -> RewriteH QC)
+       [ "Promote a RewriteCoreTC to a RewriteQC" ]
+   , external "promote"    (promoteR :: RewriteH Core -> RewriteH QC)
+       [ "Promote a RewriteCore to a RewriteQC" ]
    , external "extract"    (extractR :: RewriteH CoreTC -> RewriteH Core)
        [ "Extract a RewriteCore from a RewriteCoreTC" ]
    , external "between"    (betweenR :: Int -> Int -> RewriteH CoreTC -> RewriteH CoreTC)
@@ -175,4 +179,3 @@ betweenR l h rr | l < 0 = fail "betweenR: lower limit below zero"
           go c | c >= h = idR               -- done
                | c < l  = rr >>> go (c+1)   -- haven't hit lower bound yet
                | otherwise = tryR (rr >>> go (c+1))  -- met lower bound
-
