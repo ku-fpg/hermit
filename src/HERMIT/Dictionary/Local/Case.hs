@@ -51,14 +51,13 @@ import HERMIT.Name
 import HERMIT.ParserCore
 import HERMIT.Utilities
 
-import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.AlphaConversion hiding (externals)
+import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Fold hiding (externals)
+import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.Undefined (verifyStrictT, buildStrictnessLemmaT)
 import HERMIT.Dictionary.Unfold (unfoldR)
 
--- NOTE: these are hard to test in small examples, as GHC does them for us, so use with caution
 ------------------------------------------------------------------------------
 
 -- | Externals relating to Case expressions.

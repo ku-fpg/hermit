@@ -64,7 +64,9 @@ externals = map (.+ Proof)
 -- | Externals that are added to the dictionary only when in interactive proof mode.
 proof_externals :: [External]
 proof_externals = map (.+ Proof)
-    [ external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
+    [ external "lemma" PCLemma
+        [ "Prove lemma by asserting it is alpha-equivalent to an already proven lemma." ]
+    , external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
         [ "Perform induction on given universally quantified variable."
         , "Each constructor case will generate a new lemma to be proven."
         ]
@@ -136,15 +138,17 @@ forceProofs = do
         forM_ nls' $ \ (nm,l) -> pushProofStack (Unproven nm l c' [] mempty)
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
-endProof :: (MonadCatch m, CLMonad m) => Bool -> ExprH -> m ()
-endProof assumed expr = do
+endProof :: (MonadCatch m, CLMonad m) => Either Bool LemmaName -> ExprH -> m ()
+endProof reason expr = do
     Unproven nm (Lemma q _ _ temp) c _ _ : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
         deleteOr tr = if temp then constT (deleteLemma nm) else tr
-        t = if assumed
-            then                      deleteOr (markLemmaAssumedT nm)
-            else verifyQuantifiedT >> deleteOr (markLemmaProvedT nm)
-    queryInFocus (constT (applyT (setFailMsg msg t) c q) :: TransformH Core ())
+        t = case reason of
+                Left assumed
+                    | assumed   -> deleteOr (markLemmaAssumedT nm)
+                    | otherwise -> setFailMsg msg verifyQuantifiedT >> deleteOr (markLemmaProvedT nm)
+                Right nm' -> verifyEquivalentT nm' >> deleteOr (markLemmaProvedT nm)
+    queryInFocus (constT (applyT t c q) :: TransformH Core ())
                  (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
     cl_putStrLn $ "Successfully proven: " ++ show nm
@@ -157,6 +161,7 @@ performProofShellCommand :: (MonadCatch m, CLMonad m)
                          => ProofShellCommand -> ExprH -> m ()
 performProofShellCommand cmd expr = go cmd
     where str = unparseExprH expr
+          go (PCLemma nm)         = endProof (Right nm) expr
           go (PCInduction idPred) = performInduction (Always str) idPred
           go (PCByCases idPred)   = proveByCases (Always str) idPred
           go PCConsequent         = proveConsequent str
@@ -173,7 +178,7 @@ performProofShellCommand cmd expr = go cmd
                              (Changed str)
                 _ <- popProofStack
                 cl_putStrLn $ "Successfully proven: " ++ show (ptName todo)
-          go (PCEnd assumed)      = endProof assumed expr
+          go (PCEnd assumed)      = endProof (Left assumed) expr
 
 proveConsequent :: (MonadCatch m, CLMonad m) => String -> m ()
 proveConsequent expr = do
@@ -319,7 +324,8 @@ proveByCases cm idPred = do
         pushProofStack $ Unproven lemmaName caseLemma ctxt ls mempty
 
 data ProofShellCommand
-    = PCInduction (Id -> Bool)
+    = PCLemma LemmaName
+    | PCInduction (Id -> Bool)
     | PCByCases (Id -> Bool)
     | PCConsequent
 --    | PCAntecedent

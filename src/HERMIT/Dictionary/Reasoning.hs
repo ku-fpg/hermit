@@ -42,6 +42,8 @@ module HERMIT.Dictionary.Reasoning
     , bothR
     , forallVarsT
     , verifyQuantifiedT
+    , verifyEquivalentT
+    , verifyOrCreateT
     , lintQuantifiedT
     , verifyEqualityLeftToRightT
     , verifyEqualityCommonTargetT
@@ -333,6 +335,20 @@ verifyClauseT =
                    Disj  q1 q2 -> (return q1 >>> verifyQuantifiedT) <+ (return q2 >>> verifyQuantifiedT)
                    Impl  _  _  -> fail "verifyClauseT: Impl TODO"
                    Equiv e1 e2 -> guardMsg (exprAlphaEq e1 e2) "the two sides of the equality do not match.")
+
+verifyEquivalentT :: (HasLemmas m, MonadCatch m) => LemmaName -> Transform c m Quantified ()
+verifyEquivalentT nm = prefixFailMsg "verification failed: " $ do
+    Lemma q p _ _ <- getLemmaByNameT nm
+    guardMsg (p /= NotProven) "specified lemma is also not proven."
+    eq <- arr (q `proves`)
+    guardMsg eq "lemmas are not equivalent."
+
+verifyOrCreateT :: (HasLemmas m, MonadCatch m) => LemmaName -> Lemma -> Transform c m a ()
+verifyOrCreateT nm l = do
+    exists <- testM $ getLemmaByNameT nm
+    if exists
+    then return (lemmaQ l) >>> verifyEquivalentT nm
+    else insertLemmaT nm l
 
 ------------------------------------------------------------------------------
 

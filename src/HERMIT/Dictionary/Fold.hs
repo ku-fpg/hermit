@@ -13,6 +13,7 @@ module HERMIT.Dictionary.Fold
     , runFoldR
       -- * Unlifted fold interface
     , fold, compileFold, runFold, runFoldMatches, CompiledFold
+    , proves -- for now
       -- * Equality
     , Equality(..)
     , toEqualities
@@ -409,6 +410,14 @@ sameExpr :: CoreExpr -> CoreExpr -> Maybe ()
 sameExpr e1 e2 = snd <$> soleElement (findFold e2 m)
     where m = insertFold emptyAlphaEnv [] e1 () EMEmpty
 
+-- | Determine if the left Quantified 'proves' the right one.
+-- Here, 'proves' means that the right Quantified is a substitution
+-- of the left one, where only the top-level binders of the left
+-- Quantified can be substituted.
+proves :: Quantified -> Quantified -> Bool
+proves (Quantified bs cl1) (Quantified _ cl2) = maybe False (const True) $ soleElement (findFold cl2 m)
+    where m = insertFold emptyAlphaEnv bs cl1 () CLMEmpty
+
 ------------------------------------------------------------------------
 
 data ListMap m a
@@ -465,6 +474,71 @@ instance Fold AMap where
                 m' <- maybeToList (lookupNameEnv (amData m) (getName d))
                 fFold hs (foldr extendAlphaEnv env bs) rhs m'
               go (LitAlt l , _ , rhs) = maybeToList (M.lookup l (amLit m)) >>= fFold hs env rhs
+
+----------------------------------------------------------------------------
+
+data QMap a = QM { qmap :: CLMap (ListMap BMap a) }
+
+emptyQMapWrapper :: QMap a
+emptyQMapWrapper = QM fEmpty
+
+instance Fold QMap where
+    type Key QMap = Quantified
+
+    fEmpty :: QMap a
+    fEmpty = emptyQMapWrapper
+
+    fAlter :: AlphaEnv -> [Var] -> Key QMap -> A a -> QMap a -> QMap a
+    fAlter env vs (Quantified bs cl) f m =
+        m { qmap = fAlter (foldr extendAlphaEnv env bs) (vs \\ bs) cl
+                          (toA (fAlter env vs (map varType bs) f)) (qmap m) }
+
+    fFold :: VarEnv CoreExpr -> AlphaEnv -> Key QMap -> QMap a -> [(VarEnv CoreExpr, a)]
+    fFold hs env (Quantified bs cl) m = do
+        (hs', m') <- fFold hs (foldr extendAlphaEnv env bs) cl (qmap m)
+        fFold hs' env (map varType bs) m'
+
+----------------------------------------------------------------------------
+
+data CLMap a = CLMEmpty
+             | CLM { clmConj  :: QMap (QMap a)
+                   , clmDisj  :: QMap (QMap a)
+                   , clmImpl  :: QMap (QMap a)
+                   , clmEquiv :: EMap (EMap a)
+                   }
+
+emptyCLMapWrapper :: CLMap a
+emptyCLMapWrapper = CLM fEmpty fEmpty fEmpty fEmpty
+
+instance Fold CLMap where
+    type Key CLMap = Clause
+
+    fEmpty :: CLMap a
+    fEmpty = CLMEmpty
+
+    fAlter :: AlphaEnv -> [Var] -> Key CLMap -> A a -> CLMap a -> CLMap a
+    fAlter env vs cl f CLMEmpty = fAlter env vs cl f emptyCLMapWrapper
+    fAlter env vs cl f m@(CLM{}) = go cl
+        where go (Conj  q1 q2) = m { clmConj  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmConj  m) }
+              go (Disj  q1 q2) = m { clmDisj  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmDisj  m) }
+              go (Impl  q1 q2) = m { clmImpl  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmImpl  m) }
+              go (Equiv e1 e2) = m { clmEquiv = fAlter env vs e1 (toA (fAlter env vs e2 f)) (clmEquiv m) }
+
+    fFold :: VarEnv CoreExpr -> AlphaEnv -> Key CLMap -> CLMap a -> [(VarEnv CoreExpr, a)]
+    fFold _  _   _  CLMEmpty = []
+    fFold hs env cl m@CLM{}  = go cl
+        where go (Conj q1 q2) = do
+                (hs', m') <- fFold hs env q1 (clmConj m)
+                fFold hs' env q2 m'
+              go (Disj q1 q2) = do
+                (hs', m') <- fFold hs env q1 (clmDisj m)
+                fFold hs' env q2 m'
+              go (Impl q1 q2) = do
+                (hs', m') <- fFold hs env q1 (clmImpl m)
+                fFold hs' env q2 m'
+              go (Equiv e1 e2) = do
+                (hs', m') <- fFold hs env e1 (clmEquiv m)
+                fFold hs' env e2 m'
 
 ----------------------------------------------------------------------------
 
