@@ -309,7 +309,7 @@ proveByCases cm idPred = do
     -- proving them will prove the overall lemma automatically
     _ <- popProofStack
     pushProofStack $ MarkProven nm temp
-    forM_ (zip [(0::Int)..] cases) $ \ (i,e) -> do
+    forM_ (zip [(0::Int)..] $ reverse cases) $ \ (i,e) -> do
 
         let lemmaName = fromString $ show nm ++ "-case-" ++ show i
             Quantified bs'' cl' = substQuantified b e $ Quantified bs' cl

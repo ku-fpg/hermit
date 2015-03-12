@@ -140,7 +140,9 @@ externals =
     , external "inst-lemma-dictionaries" (\ nm -> modifyLemmaT nm id instantiateDictsR id id :: TransformH Core ())
         [ "Instantiate all of the universally quantified dictionaries of the given lemma."
         , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
-    , external "abstract" ((\nm cs -> promoteQuantifiedR $ abstractQuantifiedR nm cs) :: String -> CoreString -> RewriteH QC)
+    , external "abstract" ((\nm -> promoteQuantifiedR . abstractQuantifiedR nm . csInQBodyT) :: String -> CoreString -> RewriteH QC)
+        [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
+    , external "abstract" ((\nm rr -> promoteQuantifiedR $ abstractQuantifiedR nm $ extractT rr >>> setFailMsg "path must focus on an expression" projectT) :: String -> RewriteH QC -> RewriteH QC)
         [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
     , external "copy-lemma" (\ nm newName -> modifyLemmaT nm (const newName) idR id id :: TransformH Core ())
         [ "Copy a given lemma, with a new name." ]
@@ -574,14 +576,19 @@ instantiateQuantifiedVarR p cs = prefixFailMsg "instantiation failed: " $ do
 abstractQuantifiedR :: forall c m.
                        ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                        , HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadUnique m )
-                    => String -> CoreString -> Rewrite c m Quantified
-abstractQuantifiedR nm cs = prefixFailMsg "abstraction failed: " $ do
+                    => String -> Transform c m Quantified CoreExpr -> Rewrite c m Quantified
+abstractQuantifiedR nm tr = prefixFailMsg "abstraction failed: " $ do
+    e <- tr
     Quantified bs cl <- idR
-    e <- withVarsInScope bs $ parseCoreExprT cs
     b <- constT $ newVarH nm (exprKindOrType e)
     let f = compileFold [Equality [] e (varToCoreExpr b)] -- we don't use mkEquality on purpose, so we can abstract lambdas
     liftM dropBinders $ return (Quantified (bs++[b]) cl) >>>
                             extractR (anytdR $ promoteExprR $ runFoldR f :: Rewrite c m QC)
+
+csInQBodyT :: ( AddBindings c, ReadBindings c, ReadPath c Crumb, HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m ) => CoreString -> Transform c m Quantified CoreExpr
+csInQBodyT cs = do
+    Quantified bs _ <- idR
+    withVarsInScope bs $ parseCoreExprT cs
 
 ------------------------------------------------------------------------------
 

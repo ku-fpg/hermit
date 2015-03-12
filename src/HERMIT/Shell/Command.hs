@@ -182,6 +182,7 @@ interpShell =
   , interpEM $ \ (PathBox p)                   -> setPath (return p :: TransformH QC LocalPathH)
   , interpEM $ \ (TransformCorePathBox tt)     -> setPath tt
   , interpEM $ \ (TransformCoreTCPathBox tt)   -> setPath tt
+  , interpEM $ \ (TransformQCLocalPathBox tt)  -> setPath tt
   , interpEM $ \ (StringBox str)               -> performQuery (message str)
   , interpEM $ \ (TransformCoreStringBox tt)   -> performQuery (QueryString tt)
   , interpEM $ \ (TransformCoreTCStringBox tt) -> performQuery (QueryString tt)

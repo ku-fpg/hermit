@@ -33,7 +33,6 @@ import           Data.List (mapAccumL)
 
 import           HERMIT.Core
 import           HERMIT.Context
-import           HERMIT.Dictionary.Debug hiding (externals)
 import           HERMIT.External
 import           HERMIT.GHC
 import           HERMIT.Kure
@@ -113,7 +112,7 @@ lintModuleT =
          dumpSDocs endMsg = Bag.foldBag (\ d r -> d ++ ('\n':r)) (showSDoc dynFlags) endMsg
      if Bag.isEmptyBag errs
        then return $ dumpSDocs "Core Lint Passed" warns
-       else observeR (dumpSDocs "" errs) >>> fail "Core Lint Failed"
+       else fail $ "Core Lint Failed:\n" ++ dumpSDocs "" errs
 
 -- | Note: this can miss several things that a whole-module core lint will find.
 -- For instance, running this on the RHS of a binding, the type of the RHS will

@@ -47,6 +47,8 @@ module HERMIT.External
     , TransformCoreTCStringBox(..)
     , TransformQCStringBox(..)
     , TransformQCUnitBox(..)
+    , TransformQCCoreTCBox(..)
+    , TransformQCLocalPathBox(..)
     ) where
 
 import Data.Map hiding (map)
@@ -482,5 +484,23 @@ instance Extern (TransformH QC ()) where
     type Box (TransformH QC ()) = TransformQCUnitBox
     box = TransformQCUnitBox
     unbox (TransformQCUnitBox t) = t
+
+-----------------------------------------------------------------
+
+data TransformQCCoreTCBox = TransformQCCoreTCBox (TransformH QC CoreTC) deriving Typeable
+
+instance Extern (TransformH QC CoreTC) where
+    type Box (TransformH QC CoreTC) = TransformQCCoreTCBox
+    box = TransformQCCoreTCBox
+    unbox (TransformQCCoreTCBox t) = t
+
+-----------------------------------------------------------------
+
+data TransformQCLocalPathBox = TransformQCLocalPathBox (TransformH QC LocalPathH) deriving Typeable
+
+instance Extern (TransformH QC LocalPathH) where
+    type Box (TransformH QC LocalPathH) = TransformQCLocalPathBox
+    box = TransformQCLocalPathBox
+    unbox (TransformQCLocalPathBox t) = t
 
 -----------------------------------------------------------------

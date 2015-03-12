@@ -21,6 +21,7 @@ import HERMIT.Kernel
 import HERMIT.Monad
 import HERMIT.Plugin.Builder
 import HERMIT.PrettyPrinter.Common
+import HERMIT.Dictionary.Reasoning
 
 import System.IO
 
@@ -93,7 +94,7 @@ mkKernelEnv st =
                 DebugTick    msg'      -> do
                         c <- liftIO $ tick (ps_tick st) msg'
                         out $ "<" ++ show c ++ "> " ++ msg'
-                DebugCore  msg' cxt core -> do
+                DebugCore  msg' cxt qc -> do
                         out $ "[" ++ msg' ++ "]"
-                        doc :: DocH <- applyT (pCoreTC pp) (liftPrettyC (pOptions pp) cxt) (inject core)
+                        doc :: DocH <- applyT (ppQCT pp) (liftPrettyC (pOptions pp) cxt) qc
                         liftIO $ ps_render st stdout (pOptions pp) (Right doc)
