@@ -130,15 +130,15 @@ performScriptEffect = go
             (k,cur) <- gets (cl_kernel &&& cl_cursor)
             all_asts <- listK k
             let m = M.fromList [ (ast,(msg,p)) | (ast,msg,p) <- all_asts ]
-                follow lastFrag ast
+                follow ast
                     | Just (msg, p) <- M.lookup ast m = do
                         f <- getFragment verb ast
-                        ls <- maybe (return []) (follow f) p
+                        (ls,lastFrag) <- maybe (return ([],"")) follow p
                         let g = if f == lastFrag then id else (f:)
-                        return $ g $ maybe id (:) msg ls
-                    | otherwise = return []
+                        return (g $ maybe (maybe id (const ("-- missing command!":)) p) (:) msg ls, f)
+                    | otherwise = return ([],"")
             -- no checks to see if you are clobering; be careful
-            ls <- follow "" cur
+            ls <- fst <$> follow cur
             liftIO $ writeFile fileName $ unlines $ reverse ls
 
           go (ScriptToRewrite rewriteName scriptName) = do
