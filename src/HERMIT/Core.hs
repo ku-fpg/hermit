@@ -466,11 +466,11 @@ data Crumb =
            | InstCo_Co | InstCo_Type
            | LRCo_LR | LRCo_Co
            -- Quantified
-           | Quant_Clause
-           | Conj_Left | Conj_Right
-           | Disj_Left | Disj_Right
-           | Impl_Left | Impl_Right
-           | Equiv_Left | Equiv_Right
+           | Forall_Body
+           | Conj_Lhs | Conj_Rhs
+           | Disj_Lhs | Disj_Rhs
+           | Impl_Lhs | Impl_Rhs
+           | Eq_Lhs | Eq_Rhs
            deriving (Eq,Read,Show)
 
 showCrumbs :: [Crumb] -> String
@@ -523,15 +523,15 @@ showCrumb = \case
                InstCo_Type       -> "inst-type"
                LRCo_Co           -> "lr-co"
                -- Quantified
-               Quant_Clause -> "quant-clause"
-               Conj_Left    -> "conj-left"
-               Conj_Right   -> "conj-right"
-               Disj_Left    -> "disj-left"
-               Disj_Right   -> "disj-right"
-               Impl_Left    -> "antecedent"
-               Impl_Right   -> "consequent"
-               Equiv_Left   -> "equiv-left"
-               Equiv_Right  -> "equiv-right"
+               Forall_Body -> "forall-body"
+               Conj_Lhs    -> "conj-lhs"
+               Conj_Rhs    -> "conj-rhs"
+               Disj_Lhs    -> "disj-lhs"
+               Disj_Rhs    -> "disj-rhs"
+               Impl_Lhs    -> "antecedent"
+               Impl_Rhs    -> "consequent"
+               Eq_Lhs      -> "eq-lhs"
+               Eq_Rhs      -> "eq-rhs"
                _ -> "Warning: Crumb should not be in use!  This is probably Neil's fault."
 
 -- | Converts a 'Crumb' into the 'Crumb' pointing to its left-sibling, if a such a 'Crumb' exists.

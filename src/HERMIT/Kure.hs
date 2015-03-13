@@ -1258,18 +1258,18 @@ instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb
             allRquantified :: MonadCatch m => Rewrite c m Quantified
             allRquantified = rewrite $ \ c (Quantified bs cl) ->
                                 let c' = foldl (flip addLambdaBinding) c bs
-                                in Quantified bs <$> applyT (extractR r) (c' @@ Quant_Clause) cl
+                                in Quantified bs <$> applyT (extractR r) (c' @@ Forall_Body) cl
             {-# INLINE allRquantified #-}
 
             allRclause :: MonadCatch m => Rewrite c m Clause
             allRclause = rewrite $ \ c cl ->
                             case cl of
-                                Conj  q1 q2 -> Conj  <$> applyT (extractR r) (c @@ Conj_Left) q1
-                                                     <*> applyT (extractR r) (c @@ Conj_Right) q2
-                                Disj  q1 q2 -> Disj  <$> applyT (extractR r) (c @@ Disj_Left) q1
-                                                     <*> applyT (extractR r) (c @@ Disj_Right) q2
-                                Impl  q1 q2 -> Impl  <$> applyT (extractR r) (c @@ Impl_Left) q1
-                                                     <*> applyT (extractR r) (c @@ Impl_Right) q2
-                                Equiv e1 e2 -> Equiv <$> applyT (extractR r) (c @@ Equiv_Left) e1
-                                                     <*> applyT (extractR r) (c @@ Equiv_Right) e2
+                                Conj  q1 q2 -> Conj  <$> applyT (extractR r) (c @@ Conj_Lhs) q1
+                                                     <*> applyT (extractR r) (c @@ Conj_Rhs) q2
+                                Disj  q1 q2 -> Disj  <$> applyT (extractR r) (c @@ Disj_Lhs) q1
+                                                     <*> applyT (extractR r) (c @@ Disj_Rhs) q2
+                                Impl  q1 q2 -> Impl  <$> applyT (extractR r) (c @@ Impl_Lhs) q1
+                                                     <*> applyT (extractR r) (c @@ Impl_Rhs) q2
+                                Equiv e1 e2 -> Equiv <$> applyT (extractR r) (c @@ Eq_Lhs) e1
+                                                     <*> applyT (extractR r) (c @@ Eq_Rhs) e2
             {-# INLINE allRclause #-}
