@@ -3,7 +3,7 @@ set-pp-type Show
 flatten-module
 
 binding-of 'nub
-fix-intro ; down
+fix-intro ; def-rhs
 split-2-beta nub [| absN |] [| repN |]
 
 -- this bit to essentially undo the fix-intro

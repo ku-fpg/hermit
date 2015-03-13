@@ -44,10 +44,6 @@ shell_externals = map (.+ Shell)
         [ "garbage-collect all ASTs except for the initial and current AST" ]
     , external "display"         pCoreTC
         [ "redisplays current state" ]
-    , external "left"            (Direction L)
-        [ "move to the next child"]
-    , external "right"           (Direction R)
-        [ "move to the previous child"]
     , external "up"              (Direction U)
         [ "move to the parent node"]
     , external "navigate"        (CLSModify $ \ st -> return $ Right $ st { cl_nav = True })

@@ -56,7 +56,7 @@ mkTestScript h hss = do
                   , "set-pp-type Show"
                   , "set-fail-hard True"
                   , "load-and-run \"" ++ hss ++ "\""
-                  , "top ; down"
+                  , "top ; prog"
                   , "display" -- all the bindings
                   , "show-lemmas"
                   , "resume" ]
