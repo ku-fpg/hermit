@@ -105,7 +105,7 @@ shell_externals = map (.+ Shell)
         [ "dump <filename> <renderer> <width> - DEPRECATED"]
     , external "dump" (\fp pp r w -> liftPrettyH (pOptions pp) (pCoreTC pp) >>> dumpT fp pp r w)
         [ "dump <filename> <pretty-printer> <renderer> <width>"]
-    , external "dump-lemma" ((\nm fp pp r w -> getLemmaByNameT nm >>> liftPrettyH (pOptions pp) (ppLemmaT mempty pp nm) >>> dumpT fp pp r w) :: LemmaName -> FilePath -> PrettyPrinter -> String -> Int -> TransformH CoreTC ())
+    , external "dump-lemma" ((\nm fp pp r w -> getLemmaByNameT nm >>> liftPrettyH (pOptions pp) (ppLemmaT mempty pp nm) >>> dumpT fp pp r w) :: LemmaName -> FilePath -> PrettyPrinter -> String -> Int -> TransformH QC ())
         [ "Dump named lemma to a file."
         , "dump-lemma <lemma-name> <filename> <pretty-printer> <renderer> <width>" ]
     , external "set-pp-width" (\ w -> CLSModify $ \ st ->
