@@ -176,19 +176,16 @@ performProofShellCommand cmd expr = go cmd
 
 proveConsequent :: (MonadCatch m, CLMonad m) => String -> m ()
 proveConsequent expr = do
-    Unproven nm (Lemma (Quantified bs cl) p u t) c ls _ : _ <- getProofStack
-    (q,ls') <- case cl of
-                Impl ante (Quantified cBs ccl) ->
-                    let n = nm <> "-antecedent"
-                        l = Lemma ante Assumed False True
-                    in return (Quantified (bs++cBs) ccl, (n,l):ls)
-                _ -> fail "not an implication."
-    let nm' = nm <> "-consequent"
+    todo : _ <- getProofStack
+    (c, Impl ante con) <- setFailMsg "not an implication" $
+                          queryInFocus (inProofFocusT todo (contextT &&& projectT)) Never
+    let nm = ptName todo
+        ls = (nm <> "-antecedent", Lemma ante Assumed False True) : ptAssumed todo
     (k,ast) <- gets (cl_kernel &&& cl_cursor)
     addAST =<< tellK k expr ast
     _ <- popProofStack
-    pushProofStack $ MarkProven nm t -- proving the consequent proves the lemma
-    pushProofStack $ Unproven nm' (Lemma q p u True) c ls' mempty
+    pushProofStack $ MarkProven nm (lemmaT (ptLemma todo)) -- proving the consequent proves the lemma
+    pushProofStack $ Unproven (nm <> "-consequent") (Lemma con NotProven False True) c ls mempty
 
 proveConjuction :: (MonadCatch m, CLMonad m) => String -> m ()
 proveConjuction expr = do
@@ -251,8 +248,8 @@ performInduction cm idPred = do
          soleElement (filter idPred bs)
 
     -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-    cases <- queryInFocus (inductionCaseSplit bs i lhs rhs :: TransformH Core [(Maybe DataCon, [Var], CoreExpr, CoreExpr)])
-                          cm
+    cases <- queryInContext (inductionCaseSplit bs i lhs rhs :: TransformH QC [(Maybe DataCon, [Var], CoreExpr, CoreExpr)])
+                            cm
 
     -- replace the current lemma with the three subcases
     -- proving them will prove this case automatically
