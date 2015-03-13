@@ -194,7 +194,7 @@ getPassInfo :: HPM PassInfo
 getPassInfo = HPM $ lift $ gets ps_pass
 
 display :: HPM ()
-display = HPM $ lift $ Display.display Nothing
+display = HPM $ lift $ Display.display Nothing Nothing
 
 modifyCLS :: (PluginState -> PluginState) -> HPM ()
 modifyCLS = HPM . modify

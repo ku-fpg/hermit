@@ -13,6 +13,7 @@ module HERMIT.Shell.ShellEffect
     ( ShellEffect(..)
     , performShellEffect
     , dumpT
+    , dump
     ) where
 
 import Control.Monad.Error.Class (MonadError(..))
@@ -66,3 +67,14 @@ dumpT fileName pp renderer width = do
                                r h ((pOptions pp) { po_width = width }) (Right doc)
                                hClose h
       _ -> fail "dump: bad renderer option"
+
+dump :: FilePath -> PrettyPrinter -> String -> Int -> CommandLineState -> IO (Either CLException CommandLineState)
+dump fileName pp renderer width st = do
+    let st' = setPrettyOpts (setPretty st pp) $ (cl_pretty_opts st) { po_width = width }
+    (r, _st'') <- runCLT st' $ do
+        pluginM (changeRenderer renderer)
+        h <- liftIO $ openFile fileName WriteMode
+        showWindow (Just h)
+        liftIO $ hClose h
+    return $ fmap (const st) r
+

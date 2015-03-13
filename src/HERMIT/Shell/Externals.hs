@@ -101,9 +101,9 @@ shell_externals = map (.+ Shell)
     , external "set-pp-renderer"    showRenderers
         [ "set the output renderer mode"]
     , -- DEPRECATED - this dump behavior uses the current pretty printer selected in the shell
-      external "dump" (\pp fp r w -> liftPrettyH (pOptions pp) (pCoreTC pp) >>> dumpT fp pp r w)
+      external "dump" (\pp fp r w -> CLSModify (dump fp pp r w))
         [ "dump <filename> <renderer> <width> - DEPRECATED"]
-    , external "dump" (\fp pp r w -> liftPrettyH (pOptions pp) (pCoreTC pp) >>> dumpT fp pp r w)
+    , external "dump" (\fp pp r w -> CLSModify (dump fp pp r w))
         [ "dump <filename> <pretty-printer> <renderer> <width>"]
     , external "dump-lemma" ((\nm fp pp r w -> getLemmaByNameT nm >>> liftPrettyH (pOptions pp) (ppLemmaT mempty pp nm) >>> dumpT fp pp r w) :: LemmaName -> FilePath -> PrettyPrinter -> String -> Int -> TransformH QC ())
         [ "Dump named lemma to a file."

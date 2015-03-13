@@ -48,8 +48,6 @@ import HERMIT.Dictionary.Local.Case hiding (externals)
 import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Undefined hiding (externals)
 
-import HERMIT.PrettyPrinter.Common
-
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
@@ -83,8 +81,6 @@ proof_externals = map (.+ Proof)
         [ "Split an assumed lemma which is a conjuction/disjunction." ]
     , external "split-assumed" PCSplitAssumed
         [ "Split an assumed lemma which is a conjuction/disjunction." ]
-    , external "dump" (\pp fp r w -> promoteT (liftPrettyH (pOptions pp) (ppQuantifiedT pp)) >>> dumpT fp pp r w :: TransformH QC ())
-        [ "dump <filename> <renderer> <width>" ]
     , external "end-proof" (PCEnd False)
         [ "check for alpha-equality, marking the lemma as proven" ]
     , external "end-case" (PCEnd False)

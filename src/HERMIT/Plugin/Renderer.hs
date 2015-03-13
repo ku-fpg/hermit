@@ -25,10 +25,10 @@ import System.IO.Temp
 import System.Process
 
 changeRenderer :: String -> PluginM ()
-changeRenderer renderer = modify $ \ st ->
-        case lookup renderer shellRenderers of
-          Nothing -> st          -- TODO: should fail with message
-          Just r  -> st { ps_render = r }
+changeRenderer renderer =
+    case lookup renderer shellRenderers of
+        Nothing -> fail "bad renderer option."
+        Just r  -> modify $ \ st -> st { ps_render = r }
 
 shellRenderers :: [(String,Handle -> PrettyOptions -> Either String DocH -> IO ())]
 shellRenderers = [ ("unicode-terminal", unicodeConsole) ]

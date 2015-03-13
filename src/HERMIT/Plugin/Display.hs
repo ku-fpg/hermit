@@ -17,15 +17,16 @@ import HERMIT.PrettyPrinter.Common
 
 import System.IO
 
-display :: Maybe PathH -> PluginM ()
-display window = do
+display :: Maybe Handle -> Maybe PathH -> PluginM ()
+display mbh window = do
     st <- get
     let k = ps_kernel st
         ast = ps_cursor st
         ppOpts = pOptions $ ps_pretty st
+        h = fromMaybe stdout mbh
     d <- queryK k (extractT $ pathT (fromMaybe mempty window) $ liftPrettyH ppOpts $ pCoreTC $ ps_pretty st)
                 Never (mkKernelEnv st) ast
-    liftIO $ ps_render st stdout ppOpts $ Right $ snd d -- discard new AST, assuming pretty printer won't create one
+    liftIO $ ps_render st h ppOpts $ Right $ snd d -- discard new AST, assuming pretty printer won't create one
 
 ps_putStr :: (MonadIO m, MonadState PluginState m) => String -> m ()
 ps_putStr str = do

@@ -498,14 +498,6 @@ announceProven = getProofStack >>= go
             -- take it off the stack for the new AST
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
             cl_putStrLn ("Successfully proven: " ++ show nm) >> go r
-{-
-          go (IntroLemma nm q p : r) = do
-            queryInFocus (insertLemmaT nm (Lemma q p False) :: TransformH Core ())
-                         (Always $ "-- proven " ++ quoteShow nm) -- comment in script
-            -- take it off the stack for the new AST
-            modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
-            cl_putStrLn ("Successfully proven: " ++ show nm) >> go r
--}
           go _ = return ()
 
 -- | Always returns a non-empty list.
@@ -535,17 +527,19 @@ fixWindow = do
        $ put $ st { cl_window = focusPath } -}
     modify $ \ st -> st { cl_window = focusPath  } -- TODO: temporary until we figure out a better highlight interface
 
-showWindow :: (MonadCatch m, CLMonad m) => m ()
-showWindow = ifM isRunningScript (return ()) $ do
-    (ps,ast) <- gets (cl_proofstack &&& cl_cursor)
+showWindow :: (MonadCatch m, CLMonad m) => Maybe Handle -> m ()
+showWindow mbh = do
+    (ps,(ast,(pp,render))) <- gets (cl_proofstack &&& cl_cursor &&& cl_pretty &&& (ps_render . cl_pstate))
+    let h = fromMaybe stdout mbh
+        pStr = render h (pOptions pp) . Left
     case M.lookup ast ps of
         Just (Unproven _ l c ls p : _)  -> do
             unless (null ls) $ do
-                cl_putStrLn "Assumed lemmas:"
-                mapM_ (printLemma c mempty)
+                liftIO $ pStr "Assumed lemmas:\n"
+                mapM_ (printLemma h c mempty)
                       [ (fromString (show i) <> ": " <> n, lem)
                       | (i::Int,(n,lem)) <- zip [0..] ls ]
-            printLemma c p ("Goal:",l)
+            printLemma h c p ("Goal:",l)
         _ -> do st <- get
                 if cl_diffonly st
                 then do
@@ -556,22 +550,21 @@ showWindow = ifM isRunningScript (return ()) $ do
                     let kEnv = cl_kernel_env st
                         ast' = head $ [ cur | (cur, _, Just p) <- all_asts, p == ast ] ++ [ast]
                         ppOpts = cl_pretty_opts st
-                        pp = cl_pretty st
 
                     q <- addFocusT $ liftPrettyH ppOpts $ pCoreTC pp
                     (_,doc1) <- queryK k q Never kEnv ast
                     (_,doc2) <- queryK k q Never kEnv ast'
-                    diffDocH pp doc1 doc2 >>= cl_putStr
-                else fixWindow >> gets cl_window >>= pluginM . display . Just
+                    diffDocH pp doc1 doc2 >>= liftIO . pStr -- TODO
+                else fixWindow >> gets cl_window >>= pluginM . display mbh . Just --TODO
 
 printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
-           => HermitC -> PathStack -> (LemmaName,Lemma) -> m ()
-printLemma c p (nm,Lemma q _ _ _) = do -- TODO
+           => Handle -> HermitC -> PathStack -> (LemmaName,Lemma) -> m ()
+printLemma h c p (nm,Lemma q _ _ _) = do -- TODO
     pp <- gets cl_pretty
     doc <- queryInFocus ((constT $ applyT (extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (ppQCT pp)))) c q) :: TransformH Core DocH) Never
     let doc' = PP.text (show nm) PP.$+$ PP.nest 2 doc
     st <- get
-    liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc')
+    liftIO $ cl_render st h (cl_pretty_opts st) (Right doc')
 
 ------------------------------------------------------------------------------
 

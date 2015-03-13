@@ -136,7 +136,8 @@ commandLine opts exts = do
             mExpr <- lift popScriptLine
             case mExpr of
                 Nothing -> do -- no script running
-                    lift $ showWindow `catchFailHard` (cl_putStrLn . ("cannot showWindow: " ++))
+                    lift $ ifM isRunningScript (return ()) (showWindow Nothing)
+                            `catchFailHard` (cl_putStrLn . ("cannot showWindow: " ++))
                     st <- lift get
                     mLine <- if cl_nav st
                              then liftIO getNavCmd
