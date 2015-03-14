@@ -71,6 +71,8 @@ externals = map (.+ KURE)
          "succeeding if any succeed."] .+ Deep
    , external "one-td"     (onetdR :: RewriteH Core -> RewriteH Core)
        [ "Apply a rewrite to the first node (in a top-down order) for which it can succeed." ] .+ Deep
+   , external "one-td"     (onetdR :: RewriteH QC -> RewriteH QC)
+       [ "Apply a rewrite to the first node (in a top-down order) for which it can succeed." ] .+ Deep
    , external "one-bu"     (onebuR :: RewriteH Core -> RewriteH Core)
        [ "Apply a rewrite to the first node (in a bottom-up order) for which it can succeed." ] .+ Deep
    , external "prune-td"   (prunetdR :: RewriteH Core -> RewriteH Core)
