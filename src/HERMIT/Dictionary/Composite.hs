@@ -14,6 +14,7 @@ module HERMIT.Dictionary.Composite
     ) where
 
 import Control.Arrow
+import Control.Monad
 
 import Data.String (fromString)
 
@@ -25,6 +26,7 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Name
 
+import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Debug hiding (externals)
 import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Inline hiding (externals)
@@ -67,7 +69,9 @@ basicCombinators = map fromString ["$",".","id","flip","const","fst","snd","curr
 unfoldBasicCombinatorR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                           , MonadCatch m )
                        => Rewrite c m CoreExpr
-unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $ unfoldNamesR basicCombinators
+unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $ orR (map f basicCombinators)
+    where f nm = voidM (callNameT nm) >> voidM callSaturatedT >> unfoldR
+          voidM = liftM (const ()) -- can't wait for AMP
 
 simplifyR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
              , MonadCatch m, MonadUnique m )

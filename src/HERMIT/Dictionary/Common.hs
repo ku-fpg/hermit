@@ -90,9 +90,9 @@ callNameT nm = prefixFailMsg ("callNameT failed: not a call to '" ++ show nm ++ 
 
 -- | Succeeds if we are looking at a fully saturated function call.
 callSaturatedT :: Monad m => Transform c m CoreExpr (CoreExpr, [CoreExpr])
-callSaturatedT = callPredT (\ i args -> idArity i == length args)
--- TODO: probably better to calculate arity based on Id's type, as
---       idArity is conservatively set to zero by default.
+callSaturatedT = callPredT (\ i args -> let (tvs, ty) = splitForAllTys (varType i)
+                                            (bs,_) = splitFunTys ty
+                                        in (length tvs + length bs) == length args)
 
 -- | Succeeds if we are looking at an application of given function
 callNameG :: MonadCatch m => HermitName -> Transform c m CoreExpr ()

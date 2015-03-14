@@ -12,7 +12,7 @@ fix-intro
   -- so polymorphic variable 'a' is in scope
   -- we need to think about making lemmas into closures
   prove-lemma last-assumption
-  lhs (repeat (any-call (unfold ['wrap, 'unwrap])))
+  lhs (repeat (any-call (unfold ['., 'wrap, 'unwrap])))
   both smash
   end-proof
 }

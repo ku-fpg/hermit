@@ -7,7 +7,7 @@ static-arg
     def-rhs
     split-1-beta qsort [|absR|] [|repR|]
     rhs-of 'worker
-    repeat (any-call (unfold ['fix,'g,'repR,'absR]))
+    repeat (any-call (unfold ['.,'fix,'g,'repR,'absR]))
     simplify
     one-td (case-float-arg-lemma repHstrict)
     innermost let-float
@@ -18,8 +18,7 @@ static-arg
     simplify
     alpha-let [worker]
     repeat (any-call (unfold-rules ["repH (:)","repH []"]))
-    simplify
 }
-repeat (any-call (unfold ['absR, 'absH]))
+repeat (any-call (unfold ['.,'absR, 'absH]))
 innermost let-float
 bash

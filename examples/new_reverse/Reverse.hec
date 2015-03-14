@@ -171,7 +171,7 @@ both (any-call (unfold-rule appendFix))
 -- Goal:
 -- forall * x xs. myAppend * ((:) * x xs) = (.) * * * ((:) * x) (myAppend * xs)
 
-both smash
+rhs unfold
 
 -- Goal:
 -- forall * x xs. myAppend * ((:) * x xs) = \ x -> (:) * x (myAppend * xs x)
@@ -469,7 +469,7 @@ both (unfold >>> smash)
 --             (:) x xs -> (++) * (x xs) ((:) * x ([] *))
 -- in x
 
-lhs (replicate 4 ((one-td unfold) >+> smash))
+lhs (replicate 5 ((one-td unfold) >+> smash))
 
 -- Goal:
 -- let rec x = \ x ->
@@ -527,7 +527,7 @@ any-call (unfold ['absR,'repR])
 --     worker = fix * g
 -- in (\ g -> (.) * * * (absH *) g) worker
 
-simplify
+repeat (any-call (unfold '.)) ; smash
 
 -- let worker =
 --       fix *
@@ -589,7 +589,7 @@ one-td (lemma-forward "repH ++")
 --                (:) x xs -> (.) * * * (repH * (absH * (x xs))) (repH * ((:) * x ([] *))))
 -- in \ x -> absH * (worker x)
 
-simplify
+repeat (any-call (unfold '.))
 
 -- let worker =
 --       fix *
