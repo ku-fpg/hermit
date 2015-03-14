@@ -100,7 +100,7 @@ externals =
         , "f (g y) <==> y."
         , "Note that the precondition (f (g y) == y) is expected to hold."
         ] .+ Shallow .+ PreCondition
-    , external "unshadow" (promoteQuantifiedR unshadowQuantifiedR :: RewriteH QC)
+    , external "unshadow-quantified" (promoteQuantifiedR unshadowQuantifiedR :: RewriteH QC)
         [ "Unshadow a quantified clause." ]
     , external "merge-quantifiers" (\n1 n2 -> promoteR (mergeQuantifiersR (cmpHN2Var n1) (cmpHN2Var n2)) :: RewriteH QC)
         [ "Merge quantifiers from two clauses if they have the same type."
@@ -140,9 +140,8 @@ externals =
         [ "Instantiate one of the universally quantified variables of the given lemma,"
         , "with the given Core expression, creating a new lemma. Instantiating an"
         , "already proven lemma will result in the new lemma being considered proven." ]
-    , external "inst-lemma-dictionaries" (\ nm -> modifyLemmaT nm id instantiateDictsR id id :: TransformH Core ())
-        [ "Instantiate all of the universally quantified dictionaries of the given lemma."
-        , "Only works on dictionaries whose types are monomorphic (no free type variables)." ]
+    , external "inst-dictionaries" (promoteQuantifiedR instantiateDictsR :: RewriteH QC)
+        [ "Instantiate all of the universally quantified dictionaries of the given lemma." ]
     , external "abstract" ((\nm -> promoteQuantifiedR . abstractQuantifiedR nm . csInQBodyT) :: String -> CoreString -> RewriteH QC)
         [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
     , external "abstract" ((\nm rr -> promoteQuantifiedR $ abstractQuantifiedR nm $ extractT rr >>> setFailMsg "path must focus on an expression" projectT) :: String -> RewriteH QC -> RewriteH QC)
@@ -467,7 +466,7 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
                 if b `elem` uniqDs
                 then return $ lookup2 b ds
                 else buildSubst b
-    contextfreeT $ instsQuantified allDs
+    transform (\ c -> instsQuantified (boundVars c) allDs) >>> arr redundantDicts
 
 ------------------------------------------------------------------------------
 
@@ -588,7 +587,7 @@ instantiateQuantifiedVarR p cs = prefixFailMsg "instantiation failed: " $ do
                                      in withVarsInScope before $ parseCoreExprT cs
                       | otherwise -> let (before,_) = break (==b) bs
                                      in liftM (Type . fst) $ withVarsInScope before $ parseTypeWithHolesT cs
-    contextfreeT (instQuantified p e) >>> (lintQuantifiedT >> idR) -- lint for sanity
+    transform (\ c -> instQuantified (boundVars c) p e) >>> (lintQuantifiedT >> idR) -- lint for sanity
 
 ------------------------------------------------------------------------------
 

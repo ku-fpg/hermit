@@ -172,10 +172,11 @@ ruleNameToQuantifiedT name = getHermitRuleT name >>> ruleToQuantifiedT
 -- | Transform GHC's CoreRule into an Quantified.
 ruleToQuantifiedT :: (BoundVars c, HasHermitMEnv m, MonadThings m, MonadCatch m)
                 => Transform c m CoreRule Quantified
-ruleToQuantifiedT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $
-  do r@Rule{} <- idR -- other possibility is "BuiltinRule"
-     f <- lookupId $ ru_fn r
-     return $ mkQuantified (ru_bndrs r) (mkCoreApps (Var f) (ru_args r)) (ru_rhs r)
+ruleToQuantifiedT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $ do
+    r@Rule{} <- idR -- other possibility is "BuiltinRule"
+    f <- lookupId $ ru_fn r
+    let lhs = mkCoreApps (varToCoreExpr f) (ru_args r)
+    return $ mkQuantified (ru_bndrs r) lhs (ru_rhs r)
 
 ruleToLemmaT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitMEnv m, HasLemmas m
                 , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)

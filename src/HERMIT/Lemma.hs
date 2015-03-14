@@ -13,6 +13,7 @@ module HERMIT.Lemma
     , substQuantified
     , substQuantifieds
     , dropBinders
+    , redundantDicts
       -- * Lemmas
     , LemmaName(..)
     , Lemma(..)
@@ -45,7 +46,7 @@ import Language.KURE.MonadCatch
 --        mkQuantified [] (baz y z) (\x. foo x x) === forall x. baz y z x = foo x x
 --        mkQuantified [] (\x. foo x) (\y. bar y) === forall x. foo x = bar x
 mkQuantified :: [CoreBndr] -> CoreExpr -> CoreExpr -> Quantified
-mkQuantified vs lhs rhs = dropBinders $ Quantified (tvs++vs++lbs++rbs) (Equiv lhs' rbody)
+mkQuantified vs lhs rhs = redundantDicts $ dropBinders $ Quantified (tvs++vs++lbs++rbs) (Equiv lhs' rbody)
     where (lbs, lbody) = collectBinders lhs
           rhs' = uncurry mkCoreApps $ betaReduceAll rhs $ map varToCoreExpr lbs
           (rbs, rbody) = collectBinders rhs'
@@ -177,14 +178,30 @@ substQuantifiedSubst = go
 
 ------------------------------------------------------------------------------
 
+redundantDicts :: Quantified -> Quantified
+redundantDicts (Quantified bs cl) = go [] [] cl bs
+    where go bnds _   c [] = Quantified (reverse bnds) c
+          go bnds tys c (b:bs')
+              | isDictTy bTy = -- is a dictionary binder
+                let match = [ varToCoreExpr pb | (pb,ty) <- tys , eqType bTy ty ]
+                in if null match
+                   then go (b:bnds) ((b,bTy):tys) c bs' -- not seen before
+                   else let Quantified bs'' c' = substQuantified b (head match) $ Quantified bs' c
+                        in go bnds tys c' bs'' -- seen
+              | otherwise = go (b:bnds) tys c bs'
+            where bTy = varType b
+
+------------------------------------------------------------------------------
+
 -- | Instantiate one of the universally quantified variables in a 'Quantified'.
 -- Note: assumes implicit ordering of variables, such that substitution happens to the right
 -- as it does in case alternatives. Only first variable that matches predicate is
 -- instantiated.
-instQuantified :: MonadCatch m => (Var -> Bool) -- predicate to select var
+instQuantified :: MonadCatch m => VarSet        -- vars in scope
+                               -> (Var -> Bool) -- predicate to select var
                                -> CoreExpr      -- expression to instantiate with
                                -> Quantified -> m Quantified
-instQuantified p e = liftM fst . go []
+instQuantified inScope p e = liftM fst . go []
     where go bbs (Quantified bs cl)
             | not (any p bs) = -- not quantified at this level, so try further down
                 let go2 con q1 q2 = do
@@ -206,7 +223,8 @@ instQuantified p e = liftM fst . go []
             | otherwise = do -- quantified here, so do substitution and start bubbling up
                 let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
                     (eTvs, eTy) = splitForAllTys $ exprKindOrType e
-                    tyVars = eTvs ++ filter isTyVar (bs'++bbs)
+                    bsInScope = bs'++bbs
+                    tyVars = eTvs ++ filter isTyVar bsInScope
                     failMsg = fail "type of provided expression differs from selected binder."
 
                     bindFn v = if v `elem` tyVars then BindMe else Skolem
@@ -217,10 +235,12 @@ instQuantified p e = liftM fst . go []
                 let e' = mkCoreApps e [ case lookupTyVar sub v of
                                             Nothing -> Type (mkTyVarTy v)
                                             Just ty -> Type ty | v <- eTvs ]
-                let itvs = [ v | isTyVar i, v <- varSetElems (freeVarsExpr e') ]
+                let newBs = varSetElems
+                          $ filterVarSet (\v -> not (isId v) || isLocalId v)
+                          $ delVarSetList (minusVarSet (freeVarsExpr e') inScope) bsInScope
                     q' = substQuantified i e' $ Quantified vs cl
 
-                return (replaceVars sub (bs'++itvs) q', sub)
+                return (replaceVars sub (bs' ++ newBs) q', sub)
 
 -- | The function which 'bubbles up' after the instantiation takes place,
 -- replacing any type variables that were instantiated as a result of specialization.
@@ -241,8 +261,8 @@ replaceVars sub vs = go (reverse vs)
 
 -- | Instantiate a set of universally quantified variables in a 'Quantified'.
 -- It is important that all type variables appear before any value-level variables in the first argument.
-instsQuantified :: MonadCatch m => [(Var,CoreExpr)] -> Quantified -> m Quantified
-instsQuantified = flip (foldM (\ q (v,e) -> instQuantified (==v) e q)) . reverse
+instsQuantified :: MonadCatch m => VarSet -> [(Var,CoreExpr)] -> Quantified -> m Quantified
+instsQuantified inScope = flip (foldM (\ q (v,e) -> instQuantified inScope (==v) e q)) . reverse
 -- foldM is a left-to-right fold, so the reverse is important to do substitutions in reverse order
 -- which is what we want (all value variables should be instantiated before type variables).
 

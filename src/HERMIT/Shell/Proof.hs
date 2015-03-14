@@ -262,7 +262,7 @@ performInduction cm idPred = do
 
         -- Generate list of specialized induction hypotheses for the recursive cases.
         qs <- forM vs_matching_i_type $ \ i' -> do
-                liftM discardUniVars $ instQuantified (==i) (Var i') q
+                liftM discardUniVars $ instQuantified (boundVars ctxt) (==i) (Var i') q
                 -- TODO rethink the discardUniVars
 
         let nms = [ fromString ("ind-hyp-" ++ show n) | n :: Int <- [0..] ]
