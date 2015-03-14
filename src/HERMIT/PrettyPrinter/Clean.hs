@@ -423,7 +423,7 @@ ppForallQuantification =
   do vs <- mapT ppBinderMode
      if null vs
      then return empty
-     else return $ specialSymbol mempty ForallSymbol <+> hsep vs <> symbol mempty '.'
+     else return $ specialSymbol mempty ForallSymbol <+> sep vs <> symbol mempty '.'
 
 --------------------------------------------------------------------
 
