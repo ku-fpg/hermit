@@ -189,8 +189,10 @@ interpShell =
   , interpEM $ \ (TransformCoreTCStringBox tt) -> performQuery (QueryString tt)
   , interpEM $ \ (TransformCoreDocHBox t)      -> performQuery (QueryDocH t)
   , interpEM $ \ (TransformCoreTCDocHBox t)    -> performQuery (QueryDocH t)
+  , interpEM $ \ (TransformQCDocHBox t)        -> performQuery (QueryDocH t)
   , interpEM $ \ (PrettyHCoreBox t)            -> performQuery (QueryPrettyH t)
   , interpEM $ \ (PrettyHCoreTCBox t)          -> performQuery (QueryPrettyH t)
+  , interpEM $ \ (PrettyHQCBox t)              -> performQuery (QueryPrettyH t)
   , interpEM $ \ (TransformCoreCheckBox tt)    -> performQuery (QueryUnit tt)
   , interpEM $ \ (TransformCoreTCCheckBox tt)  -> performQuery (QueryUnit tt)
   , interpEM $ \ (effect :: KernelEffect)      -> flip performKernelEffect effect

@@ -31,8 +31,10 @@ module HERMIT.PrettyPrinter.Common
     , PrettyH
     , PrettyHCoreBox(..)
     , PrettyHCoreTCBox(..)
+    , PrettyHQCBox(..)
     , TransformCoreDocHBox(..)
     , TransformCoreTCDocHBox(..)
+    , TransformQCDocHBox(..)
     , liftPrettyH
     , PrettyC(..)
     , initPrettyC
@@ -150,6 +152,13 @@ instance Extern (PrettyH CoreTC) where
     box = PrettyHCoreTCBox
     unbox (PrettyHCoreTCBox i) = i
 
+data PrettyHQCBox = PrettyHQCBox (PrettyH QC) deriving Typeable
+
+instance Extern (PrettyH QC) where
+    type Box (PrettyH QC) = PrettyHQCBox
+    box = PrettyHQCBox
+    unbox (PrettyHQCBox i) = i
+
 data TransformCoreDocHBox = TransformCoreDocHBox (TransformH Core DocH) deriving Typeable
 
 instance Extern (TransformH Core DocH) where
@@ -163,6 +172,13 @@ instance Extern (TransformH CoreTC DocH) where
     type Box (TransformH CoreTC DocH) = TransformCoreTCDocHBox
     box = TransformCoreTCDocHBox
     unbox (TransformCoreTCDocHBox i) = i
+
+data TransformQCDocHBox = TransformQCDocHBox (TransformH QC DocH) deriving Typeable
+
+instance Extern (TransformH QC DocH) where
+    type Box (TransformH QC DocH) = TransformQCDocHBox
+    box = TransformQCDocHBox
+    unbox (TransformQCDocHBox i) = i
 
 -- | Context for PrettyH translations.
 data PrettyC = PrettyC { prettyC_path    :: AbsolutePathH

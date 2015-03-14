@@ -100,7 +100,7 @@ externals =
         , "f (g y) <==> y."
         , "Note that the precondition (f (g y) == y) is expected to hold."
         ] .+ Shallow .+ PreCondition
-    , external "unshadow" (promoteR unshadowQuantifiedR :: RewriteH QC)
+    , external "unshadow" (promoteQuantifiedR unshadowQuantifiedR :: RewriteH QC)
         [ "Unshadow a quantified clause." ]
     , external "merge-quantifiers" (\n1 n2 -> promoteR (mergeQuantifiersR (cmpHN2Var n1) (cmpHN2Var n2)) :: RewriteH QC)
         [ "Merge quantifiers from two clauses if they have the same type."
@@ -153,11 +153,11 @@ externals =
         [ "Modify a given lemma. Resets used status to Not Used." ]
     , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaQ >>> extractT t) :: LemmaName -> TransformH QC String -> TransformH Core String)
         [ "Apply a transformation to a lemma, returning the result." ]
-    , external "show-lemma" ((\pp n -> showLemmaT n pp) :: PrettyPrinter -> LemmaName -> PrettyH Core)
+    , external "show-lemma" ((\pp n -> showLemmaT n pp) :: PrettyPrinter -> LemmaName -> PrettyH QC)
         [ "Display a lemma." ]
-    , external "show-lemmas" ((\pp n -> showLemmasT (Just n) pp) :: PrettyPrinter -> LemmaName -> PrettyH Core)
+    , external "show-lemmas" ((\pp n -> showLemmasT (Just n) pp) :: PrettyPrinter -> LemmaName -> PrettyH QC)
         [ "List lemmas whose names match search string." ]
-    , external "show-lemmas" (showLemmasT Nothing :: PrettyPrinter -> PrettyH Core)
+    , external "show-lemmas" (showLemmasT Nothing :: PrettyPrinter -> PrettyH QC)
         [ "List lemmas." ]
     , external "extensionality" (promoteR . extensionalityR . Just :: String -> RewriteH QC)
         [ "Given a name 'x, then"
