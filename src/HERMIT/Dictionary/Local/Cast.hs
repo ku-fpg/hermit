@@ -18,9 +18,9 @@ import Control.Monad
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Kure
 
 import HERMIT.Dictionary.Common
 
@@ -81,15 +81,15 @@ castFloatAppR = prefixFailMsg "Cast float from application failed: " $
                 return (Cast (App e1 e2) (Coercion.substCo (Coercion.extendTvSubst emptyCvSubst t x') c2))
             _ -> fail "castFloatApp"
 
--- (\ x::a -> cast x (a -> b)) :: a -> b
--- cast (\x::a -> x) ((a -> a) -> (a -> b))
+-- (\ x::a -> cast e (b -> c)) :: a -> c
+-- cast (\x::a -> e) ((a -> b) -> (a -> c))
 castFloatLamR :: MonadCatch m => Rewrite c m CoreExpr
 castFloatLamR = prefixFailMsg "Cast float from lambda failed: " $
                 withPatFailMsg (wrongExprForm "Lam b (Cast e co)") $ do
     Lam b (Cast e co) <- idR
     let r = coercionRole co
-        aTy = exprType e
-    return $ Cast (Lam b e) (mkFunCo r (mkReflCo r aTy) co)
+        aTy = varType b
+    return (Cast (Lam b e) (mkFunCo r (mkReflCo r aTy) co))
 
 -- | Attempts to tease a coercion apart into a type constructor and the application
 -- of a number of coercion arguments to that constructor
