@@ -28,10 +28,10 @@ import HERMIT.Shell.Types
 -------------------------------------------------------------------------------
 
 -- | KernelEffects are things that affect the state of the Kernel
-data KernelEffect = Direction  Direction -- Change the currect location using directions.
-                  | BeginScope           -- Begin scope.
-                  | EndScope             -- End scope.
-                  | Delete     AST       -- Delete an AST
+data KernelEffect = Direction Direction -- Move up or top.
+                  | BeginScope          -- Begin scope.
+                  | EndScope            -- End scope.
+                  | Delete AST          -- Delete an AST
    deriving Typeable
 
 instance Extern KernelEffect where
@@ -41,10 +41,10 @@ instance Extern KernelEffect where
 
 performKernelEffect :: (MonadCatch m, CLMonad m) => ExprH -> KernelEffect -> m ()
 performKernelEffect e = \case
-                            Direction dir -> goDirection dir e
-                            BeginScope    -> beginScope e
-                            EndScope      -> endScope e
-                            Delete sast   -> deleteAST sast
+                            Direction d -> goUp d e
+                            BeginScope  -> beginScope e
+                            EndScope    -> endScope e
+                            Delete sast -> deleteAST sast
 
 -------------------------------------------------------------------------------
 
@@ -72,30 +72,16 @@ applyRewrite rr expr = do
 
 setPath :: (Injection a LCoreTC, MonadCatch m, CLMonad m) => TransformH a LocalPathH -> ExprH -> m ()
 setPath t expr = do
-    p <- prefixFailMsg "Cannot find path: " $ queryInContext (promoteT t) (Always $ unparseExprH expr)
-    modifyLocalPath (<> p)
+    p <- prefixFailMsg "Cannot find path: " $ queryInContext (promoteT t) Never
+    modifyLocalPath (<> p) expr
 
-goDirection :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
-goDirection dir expr = do
-    ps <- getProofStackEmpty
-    let str = unparseExprH expr
-    st <- get
-    let k = cl_kernel st
-        ast = cl_cursor st
-    case ps of
-        Unproven {} : _ -> do
-            -- TODO: test the path for validity
-            addAST =<< tellK k str ast
-            modifyLocalPath (moveLocally dir)
-        _ -> do -- not in proof shell, so modify normal path stack
-            (base, rel) <- getPathStack
-            let env = cl_kernel_env st
-                rel' = moveLocally dir rel
-            (ast',b) <- queryK k (testPathStackT base rel') Never env ast
-            if b
-            then do addAST =<< tellK k str ast'
-                    modifyLocalPath (const rel')
-            else fail "invalid path."
+goUp :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
+goUp T expr = modifyLocalPath (const mempty) expr
+goUp U expr = do
+    (_,rel) <- getPathStack
+    case rel of
+        SnocPath [] -> fail "cannot move up, at root of scope."
+        SnocPath (_:cs) -> modifyLocalPath (const $ SnocPath cs) expr
 
 beginScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 beginScope expr = do

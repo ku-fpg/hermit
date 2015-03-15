@@ -17,7 +17,7 @@ module HERMIT.Shell.Types where
 import Control.Applicative
 import Control.Arrow
 import Control.Concurrent.STM
-import Control.Monad (liftM, unless)
+import Control.Monad (liftM, unless, when)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State (MonadState(..), StateT(..), gets, modify)
@@ -403,29 +403,12 @@ pathStack2Path :: ([LocalPath crumb], LocalPath crumb) -> Path crumb
 pathStack2Path (ps,p) = concat $ reverse (map snocPathToPath (p:ps))
 
 -- | A primitive means of denoting navigation of a tree (within a local scope).
-data Direction = L -- ^ Left
-               | R -- ^ Right
-               | U -- ^ Up
+data Direction = U -- ^ Up
                | T -- ^ Top
                deriving (Eq,Show)
 
--- | Movement confined within the local scope.
-moveLocally :: Direction -> LocalPathH -> LocalPathH
-moveLocally d (SnocPath p) = case p of
-                               []     -> mempty
-                               cr:crs -> case d of
-                                           T -> mempty
-                                           U -> SnocPath crs
-                                           L -> SnocPath (fromMaybe cr (leftSibling cr)  : crs)
-                                           R -> SnocPath (fromMaybe cr (rightSibling cr) : crs)
-
-
 pathStackToLens :: (Injection a g, Walker HermitC g) => [LocalPathH] -> LocalPathH -> LensH a g
 pathStackToLens ps p = injectL >>> pathL (pathStack2Path (ps,p))
-
--- This function is used to check the validity of paths, so which sum type we use is important.
-testPathStackT :: [LocalPathH] -> LocalPathH -> TransformH GHC.ModGuts Bool
-testPathStackT ps p = testLensT (pathStackToLens ps p :: LensH GHC.ModGuts CoreTC)
 
 getPathStack :: CLMonad m => m ([LocalPathH], LocalPathH)
 getPathStack = do
@@ -453,16 +436,37 @@ addAST ast = do
     copyPathStack ast
     modify $ setCursor ast
 
-modifyLocalPath :: CLMonad m => (LocalPathH -> LocalPathH) -> m ()
-modifyLocalPath f = do
+modifyLocalPath :: (MonadCatch m, CLMonad m) => (LocalPathH -> LocalPathH) -> ExprH -> m ()
+modifyLocalPath f expr = do
     ps <- getProofStackEmpty
+    (k,(kEnv,ast)) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor)
     case ps of
-        todo@(Unproven {}) : todos -> do
-            let todo' = todo { ptPath = second f (ptPath todo) }
+        todo@(Unproven _ (Lemma q _ _ _) c _ _) : todos -> do
+            let (base, rel) = ptPath todo
+                rel' = f rel
+            requireDifferent rel rel'
+            (ast',()) <- queryK k (constT
+                                    (applyT
+                                      (setFailMsg "invalid path."
+                                        (focusT (pathStackToLens base rel' :: LensH Quantified LCoreTC) successT))
+                                      c q))
+                                  (Always $ unparseExprH expr) kEnv ast
+            addAST ast'
+            let todo' = todo { ptPath = (base, rel') }
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo':todos) (cl_proofstack st) }
         _ -> do
             (base, rel) <- getPathStack
-            modify $ \ st -> st { cl_foci = M.insert (cl_cursor st) (base, f rel) (cl_foci st) }
+            let rel' = f rel
+            requireDifferent rel rel'
+            -- we are testing paths, so the sum type matters
+            (ast',()) <- queryK k (setFailMsg "invalid path."
+                                    (focusT (pathStackToLens base rel' :: LensH GHC.ModGuts CoreTC) successT))
+                                  (Always $ unparseExprH expr) kEnv ast
+            addAST ast'
+            modify $ \ st -> st { cl_foci = M.insert (cl_cursor st) (base, rel') (cl_foci st) }
+
+requireDifferent :: Monad m => LocalPathH -> LocalPathH -> m ()
+requireDifferent p1 p2 = when (p1 == p2) $ fail "path unchanged, nothing to do."
 
 copyPathStack :: CLMonad m => AST -> m ()
 copyPathStack ast = do
