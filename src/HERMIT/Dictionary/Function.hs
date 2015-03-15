@@ -33,11 +33,11 @@ import HERMIT.Dictionary.Common
 
 externals ::  [External]
 externals =
-    [ external "static-arg" (promoteDefR staticArgR :: RewriteH Core)
+    [ external "static-arg" (promoteDefR staticArgR :: RewriteH LCore)
         [ "perform the static argument transformation on a recursive function." ]
-    , external "static-arg-types" (promoteDefR staticArgTypesR :: RewriteH Core)
+    , external "static-arg-types" (promoteDefR staticArgTypesR :: RewriteH LCore)
         [ "perform the static argument transformation on a recursive function, only transforming type arguments." ]
-    , external "static-arg-pos" (promoteDefR . staticArgPosR :: [Int] -> RewriteH Core)
+    , external "static-arg-pos" (promoteDefR . staticArgPosR :: [Int] -> RewriteH LCore)
         [ "perform the static argument transformation on a recursive function, only transforming the arguments specified (by index)." ]
     ]
 

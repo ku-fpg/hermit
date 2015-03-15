@@ -51,23 +51,23 @@ import IOEnv hiding (liftIO)
 -- | Externals dealing with GHC rewrite rules.
 externals :: [External]
 externals =
-    [ external "show-rules" (rulesHelpListT :: TransformH CoreTC String)
+    [ external "show-rules" (rulesHelpListT :: TransformH LCoreTC String)
         [ "List all the rules in scope." ] .+ Query
-    , external "show-rule" (ruleHelpT :: PrettyPrinter -> RuleName -> TransformH CoreTC DocH)
+    , external "show-rule" (ruleHelpT :: PrettyPrinter -> RuleName -> TransformH LCoreTC DocH)
         [ "Display details on the named rule." ] .+ Query
-    , external "fold-rule" (promoteExprR . foldRuleR :: RuleName -> RewriteH Core)
+    , external "fold-rule" (promoteExprR . foldRuleR :: RuleName -> RewriteH LCore)
         [ "Apply a named GHC rule right-to-left." ] .+ Shallow
-    , external "fold-rules" (promoteExprR . foldRulesR :: [RuleName] -> RewriteH Core)
+    , external "fold-rules" (promoteExprR . foldRulesR :: [RuleName] -> RewriteH LCore)
         [ "Apply named GHC rules right-to-left, succeed if any of the rules succeed." ] .+ Shallow
-    , external "unfold-rule" (promoteExprR . unfoldRuleR :: RuleName -> RewriteH Core)
+    , external "unfold-rule" (promoteExprR . unfoldRuleR :: RuleName -> RewriteH LCore)
         [ "Apply a named GHC rule left-to-right." ] .+ Shallow
-    , external "unfold-rules" (promoteExprR . unfoldRulesR :: [RuleName] -> RewriteH Core)
+    , external "unfold-rules" (promoteExprR . unfoldRulesR :: [RuleName] -> RewriteH LCore)
         [ "Apply named GHC rules left-to-right, succeed if any of the rules succeed" ] .+ Shallow
-    , external "rule-to-lemma" ((\pp nm -> ruleToLemmaT nm >> liftPrettyH (pOptions pp) (showLemmaT (fromString (show nm)) pp)) :: PrettyPrinter -> RuleName -> TransformH Core DocH)
+    , external "rule-to-lemma" ((\pp nm -> ruleToLemmaT nm >> liftPrettyH (pOptions pp) (showLemmaT (fromString (show nm)) pp)) :: PrettyPrinter -> RuleName -> TransformH LCore DocH)
         [ "Create a lemma from a GHC RULE." ]
-    , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH Core)
+    , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH LCore)
         [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
-    , external "specialise" (promoteModGutsR specialiseR :: RewriteH Core)
+    , external "specialise" (promoteModGutsR specialiseR :: RewriteH LCore)
         [ "Run GHC's specialisation pass, which performs type and dictionary specialisation."] .+ Deep
     ]
 

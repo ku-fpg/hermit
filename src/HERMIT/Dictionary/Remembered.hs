@@ -37,15 +37,15 @@ import           HERMIT.Dictionary.Reasoning hiding (externals)
 
 externals :: [External]
 externals =
-    [ external "remember" (rememberR :: LemmaName -> TransformH Core ())
+    [ external "remember" (promoteCoreT . rememberR :: LemmaName -> TransformH LCore ())
         [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
-    , external "unfold-remembered" (promoteExprR . unfoldRememberedR :: LemmaName -> RewriteH Core)
+    , external "unfold-remembered" (promoteExprR . unfoldRememberedR :: LemmaName -> RewriteH LCore)
         [ "Unfold a remembered definition." ] .+ Deep .+ Context
-    , external "fold-remembered" (promoteExprR . foldRememberedR :: LemmaName -> RewriteH Core)
+    , external "fold-remembered" (promoteExprR . foldRememberedR :: LemmaName -> RewriteH LCore)
         [ "Fold a remembered definition." ]                      .+ Context .+ Deep
-    , external "fold-any-remembered" (promoteExprR foldAnyRememberedR :: RewriteH Core)
+    , external "fold-any-remembered" (promoteExprR foldAnyRememberedR :: RewriteH LCore)
         [ "Attempt to fold any of the remembered definitions." ] .+ Context .+ Deep
-    , external "show-remembered" (showLemmasT (Just "remembered-") :: PrettyPrinter -> PrettyH Core)
+    , external "show-remembered" (promoteCoreT . showLemmasT (Just "remembered-") :: PrettyPrinter -> PrettyH LCore)
         [ "Display all remembered definitions." ]
     ]
 

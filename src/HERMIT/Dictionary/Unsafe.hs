@@ -17,7 +17,7 @@ import Prelude hiding (exp)
 
 externals :: [External]
 externals = map (.+ Unsafe)
-    [ external "unsafe-replace" (promoteExprR . unsafeReplaceR :: CoreString -> RewriteH Core)
+    [ external "unsafe-replace" (promoteExprR . unsafeReplaceR :: CoreString -> RewriteH LCore)
         [ "replace the currently focused expression with a new expression"
         , "DOES NOT ensure that free variables in the replacement expression are in scope" ]
     ]

@@ -37,24 +37,24 @@ import HERMIT.Dictionary.Unfold hiding (externals)
 
 externals ::  [External]
 externals =
-    [ external "unfold-basic-combinator" (promoteExprR unfoldBasicCombinatorR :: RewriteH Core)
+    [ external "unfold-basic-combinator" (promoteExprR unfoldBasicCombinatorR :: RewriteH LCore)
         [ "Unfold the current expression if it is one of the basic combinators:"
         , "($), (.), id, flip, const, fst, snd, curry, and uncurry." ]
-    , external "simplify" (simplifyR :: RewriteH Core)
+    , external "simplify" (promoteCoreR simplifyR :: RewriteH LCore)
         [ "innermost (unfold-basic-combinator <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ let-elim)" ]
-    , external "bash" (bashR :: RewriteH Core)
+    , external "bash" (bashR :: RewriteH LCore)
         bashHelp .+ Eval .+ Deep .+ Loop
-    , external "smash" (smashR :: RewriteH Core)
+    , external "smash" (smashR :: RewriteH LCore)
         smashHelp .+ Eval .+ Deep .+ Loop .+ Experiment
-    , external "bash-extended-with" (bashExtendedWithR :: [RewriteH Core] -> RewriteH Core)
+    , external "bash-extended-with" (bashExtendedWithR :: [RewriteH LCore] -> RewriteH LCore)
         [ "Run \"bash\" extended with additional rewrites.",
           "Note: be sure that the new rewrite either fails or makes progress, else this may loop."
         ] .+ Eval .+ Deep .+ Loop
-    , external "smash-extended-with" (smashExtendedWithR :: [RewriteH Core] -> RewriteH Core)
+    , external "smash-extended-with" (smashExtendedWithR :: [RewriteH LCore] -> RewriteH LCore)
         [ "Run \"smash\" extended with additional rewrites.",
           "Note: be sure that the new rewrite either fails or makes progress, else this may loop."
         ] .+ Eval .+ Deep .+ Loop
-    , external "bash-debug" (bashDebugR :: RewriteH Core)
+    , external "bash-debug" (bashDebugR :: RewriteH LCore)
         [ "verbose bash - most useful with set-auto-corelint True" ] .+ Eval .+ Deep .+ Loop
     ]
 
@@ -95,13 +95,13 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
 -- IdInfo attributes relied-upon by GHC.
 bashR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
          , MonadCatch m, MonadUnique m )
-      => Rewrite c m Core
+      => Rewrite c m LCore
 bashR = bashExtendedWithR []
 
 -- | An extensible bash. Given rewrites are performed before normal bash rewrites.
 bashExtendedWithR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                      , MonadCatch m, MonadUnique m )
-                  => [Rewrite c m Core] -> Rewrite c m Core
+                  => [Rewrite c m LCore] -> Rewrite c m LCore
 bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 
 -- | Like 'bashR', but outputs name of each successful sub-rewrite, providing a log.
@@ -111,15 +111,15 @@ bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 -- Useful for debugging the bash command itself.
 bashDebugR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
               , HasDebugChan m, HasDynFlags m, MonadCatch m, MonadUnique m )
-           => Rewrite c m Core
+           => Rewrite c m LCore
 bashDebugR = bashUsingR [ bracketR nm r >>> catchM (promoteT lintExprT >> idR) traceR
                         | (r,nm) <- bashComponents ]
 
 -- | Perform the 'bash' algorithm with a given list of rewrites.
 bashUsingR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m)
-           => [Rewrite c m Core] -> Rewrite c m Core
+           => [Rewrite c m LCore] -> Rewrite c m LCore
 bashUsingR rs = setFailMsg "bash failed: nothing to do." $
-    repeatR (occurAnalyseR >>> onetdR (catchesT rs)) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
+    repeatR (promoteCoreR occurAnalyseR >>> onetdR (catchesT rs)) >+> anytdR (promoteExprR dezombifyR) >+> promoteCoreR occurAnalyseChangedR
 
 {-
 Occurrence Analysis updates meta-data, as well as performing some basic simplifications.
@@ -138,12 +138,12 @@ bound in the alternative.
 
 bashHelp :: [String]
 bashHelp = "Iteratively apply the following rewrites until nothing changes:"
-         : map snd (bashComponents :: [(RewriteH Core,String)] -- to resolve ambiguity
+         : map snd (bashComponents :: [(RewriteH LCore,String)] -- to resolve ambiguity
                                                                                        )
 -- TODO: Think about a good order for bash.
 bashComponents :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                   , MonadCatch m, MonadUnique m )
-               => [(Rewrite c m Core, String)]
+               => [(Rewrite c m LCore, String)]
 bashComponents =
   [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
     (promoteExprR betaReduceR, "beta-reduce")                        -- O(1)
@@ -180,31 +180,31 @@ bashComponents =
 -- and is intended for use during proving tasks.
 smashR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
           , MonadCatch m, MonadUnique m )
-       => Rewrite c m Core
+       => Rewrite c m LCore
 smashR = smashExtendedWithR []
 
 smashExtendedWithR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                       , MonadCatch m, MonadUnique m )
-                   => [Rewrite c m Core] -> Rewrite c m Core
+                   => [Rewrite c m LCore] -> Rewrite c m LCore
 smashExtendedWithR rs = smashUsingR (rs ++ map fst smashComponents1) (map fst smashComponents2)
 
 
-smashUsingR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => [Rewrite c m Core] -> [Rewrite c m Core] -> Rewrite c m Core
+smashUsingR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => [Rewrite c m LCore] -> [Rewrite c m LCore] -> Rewrite c m LCore
 smashUsingR rs1 rs2 =
     setFailMsg "smash failed: nothing to do." $
-    repeatR (occurAnalyseR >>> (onetdR (catchesT rs1) <+ onetdR (catchesT rs2))) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
+    repeatR (promoteCoreR occurAnalyseR >>> (onetdR (catchesT rs1) <+ onetdR (catchesT rs2))) >+> anytdR (promoteExprR dezombifyR) >+> promoteCoreR occurAnalyseChangedR
 
 
 smashHelp :: [String]
 smashHelp = "A more powerful but less efficient version of \"bash\", intended for use while proving lemmas.  Iteratively apply the following rewrites until nothing changes:" : map snd (smashComponents1 ++ smashComponents2
-                                                                                           :: [(RewriteH Core,String)] -- to resolve ambiguity
+                                                                                           :: [(RewriteH LCore,String)] -- to resolve ambiguity
                                                                                         )
 
 
 -- | As bash, but with "let-nonrec-subst" instead of "let-nonrec-subst-safe".
 smashComponents1 :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                     , MonadCatch m, MonadUnique m )
-                 => [(Rewrite c m Core, String)]
+                 => [(Rewrite c m LCore, String)]
 smashComponents1 =
   [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??
     (promoteExprR betaReduceR, "beta-reduce")                        -- O(1)
@@ -237,7 +237,7 @@ smashComponents1 =
 
 smashComponents2 :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
                     , MonadCatch m, MonadUnique m )
-                 => [(Rewrite c m Core, String)]
+                 => [(Rewrite c m LCore, String)]
 smashComponents2 =
     [ (promoteExprR caseElimMergeAltsR, "case-elim-merge-alts") -- do this last, lest it prevent other simplifications
     ]

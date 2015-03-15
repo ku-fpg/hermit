@@ -42,21 +42,21 @@ import HERMIT.Dictionary.Unfold
 -- | Externals for manipulating fixed points.
 externals ::  [External]
 externals =
-    [ external "fix-intro" (fixIntroR :: RewriteH Core)
+    [ external "fix-intro" (promoteCoreR fixIntroR :: RewriteH LCore)
         [ "rewrite a function binding into a non-recursive binding using fix" ] .+ Introduce .+ Context
-    , external "fix-computation-rule" (promoteExprBiR fixComputationRuleBR :: BiRewriteH Core)
+    , external "fix-computation-rule" (promoteExprBiR fixComputationRuleBR :: BiRewriteH LCore)
         [ "Fixed-Point Computation Rule",
           "fix t f  <==>  f (fix t f)"
         ] .+ Context
-    , external "fix-rolling-rule" (promoteExprBiR fixRollingRuleBR :: BiRewriteH Core)
+    , external "fix-rolling-rule" (promoteExprBiR fixRollingRuleBR :: BiRewriteH LCore)
         [ "Rolling Rule",
           "fix tyA (\\ a -> f (g a))  <==>  f (fix tyB (\\ b -> g (f b))"
         ] .+ Context
     , external "fix-fusion-rule" ((\ f g h r1 r2 strictf -> promoteExprBiR
                                                                 (fixFusionRule (Just (r1,r2)) (Just strictf) f g h))
                                                                 :: CoreString -> CoreString -> CoreString
-                                                                    -> RewriteH Core -> RewriteH Core
-                                                                    -> RewriteH Core -> BiRewriteH Core)
+                                                                    -> RewriteH LCore -> RewriteH LCore
+                                                                    -> RewriteH LCore -> BiRewriteH LCore)
         [ "Fixed-point Fusion Rule"
         , "Given f :: A -> B, g :: A -> A, h :: B -> B, and"
         , "proofs that, for some x, (f (g a) ==> x) and (h (f a) ==> x) and that f is strict, then"
@@ -64,7 +64,7 @@ externals =
         ] .+ Context
     , external "fix-fusion-rule-unsafe" ((\ f g h r1 r2 -> promoteExprBiR (fixFusionRule (Just (r1,r2)) Nothing f g h))
                                                             :: CoreString -> CoreString -> CoreString
-                                                                -> RewriteH Core -> RewriteH Core -> BiRewriteH Core)
+                                                                -> RewriteH LCore -> RewriteH LCore -> BiRewriteH LCore)
         [ "(Unsafe) Fixed-point Fusion Rule"
         , "Given f :: A -> B, g :: A -> A, h :: B -> B, and"
         , "a proof that, for some x, (f (g a) ==> x) and (h (f a) ==> x), then"
@@ -72,7 +72,7 @@ externals =
         , "Note that the precondition that f is strict is required to hold."
         ] .+ Context .+ PreCondition
     , external "fix-fusion-rule-unsafe" ((\ f g h -> promoteExprBiR (fixFusionRule Nothing Nothing f g h))
-                                                        :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
+                                                        :: CoreString -> CoreString -> CoreString -> BiRewriteH LCore)
         [ "(Very Unsafe) Fixed-point Fusion Rule"
         , "Given f :: A -> B, g :: A -> A, h :: B -> B, then"
         , "f (fix g) <==> fix h"
@@ -215,7 +215,7 @@ fixFusionRuleBR meq mfstrict f g h = beforeBiR
                        App f <$> buildFixT g
 
 -- | If @f@ is strict, then (@f (g a)@ == @h (f a)@)  ==>  (@f (fix g)@ == @fix h@)
-fixFusionRule :: Maybe (RewriteH Core, RewriteH Core) -> Maybe (RewriteH Core) -> CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
+fixFusionRule :: Maybe (RewriteH LCore, RewriteH LCore) -> Maybe (RewriteH LCore) -> CoreString -> CoreString -> CoreString -> BiRewriteH CoreExpr
 fixFusionRule meq mfstrict = parse3beforeBiR $ fixFusionRuleBR ((extractR *** extractR) <$> meq) (extractR <$> mfstrict)
 
 --------------------------------------------------------------------------------------------------

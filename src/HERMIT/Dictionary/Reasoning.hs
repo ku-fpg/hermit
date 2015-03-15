@@ -91,89 +91,89 @@ import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 externals :: [External]
 externals =
-    [ external "retraction" ((\ f g r -> promoteExprBiR $ retraction (Just r) f g) :: CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
+    [ external "retraction" ((\ f g r -> promoteExprBiR $ retraction (Just r) f g) :: CoreString -> CoreString -> RewriteH LCore -> BiRewriteH LCore)
         [ "Given f :: X -> Y and g :: Y -> X, and a proof that f (g y) ==> y, then"
         , "f (g y) <==> y."
         ] .+ Shallow
-    , external "retraction-unsafe" ((\ f g -> promoteExprBiR $ retraction Nothing f g) :: CoreString -> CoreString -> BiRewriteH Core)
+    , external "retraction-unsafe" ((\ f g -> promoteExprBiR $ retraction Nothing f g) :: CoreString -> CoreString -> BiRewriteH LCore)
         [ "Given f :: X -> Y and g :: Y -> X, then"
         , "f (g y) <==> y."
         , "Note that the precondition (f (g y) == y) is expected to hold."
         ] .+ Shallow .+ PreCondition
     , external "unshadow-quantified" (promoteQuantifiedR unshadowQuantifiedR :: RewriteH LCoreTC)
         [ "Unshadow a quantified clause." ]
-    , external "merge-quantifiers" (\n1 n2 -> promoteR (mergeQuantifiersR (cmpHN2Var n1) (cmpHN2Var n2)) :: RewriteH LCoreTC)
+    , external "merge-quantifiers" (\n1 n2 -> promoteR (mergeQuantifiersR (cmpHN2Var n1) (cmpHN2Var n2)) :: RewriteH LCore)
         [ "Merge quantifiers from two clauses if they have the same type."
         , "Example:"
         , "(forall (x::Int). foo x = x) ^ (forall (y::Int). bar y y = 5)"
         , "merge-quantifiers 'x 'y"
         , "forall (x::Int). (foo x = x) ^ (bar x x = 5)"
         , "Note: if only one quantifier matches, it will be floated if possible." ]
-    , external "float-left" (\n1 -> promoteR (mergeQuantifiersR (cmpHN2Var n1) (const False)) :: RewriteH LCoreTC)
+    , external "float-left" (\n1 -> promoteR (mergeQuantifiersR (cmpHN2Var n1) (const False)) :: RewriteH LCore)
         [ "Float quantifier out of left-hand side." ]
-    , external "float-right" (\n1 -> promoteR (mergeQuantifiersR (const False) (cmpHN2Var n1)) :: RewriteH LCoreTC)
+    , external "float-right" (\n1 -> promoteR (mergeQuantifiersR (const False) (cmpHN2Var n1)) :: RewriteH LCore)
         [ "Float quantifier out of right-hand side." ]
-    , external "conjunct" (\n1 n2 n3 -> conjunctLemmasT n1 n2 n3 :: TransformH Core ())
+    , external "conjunct" (\n1 n2 n3 -> conjunctLemmasT n1 n2 n3 :: TransformH LCore ())
         [ "conjunt new-name lhs-name rhs-name" ]
-    , external "disjunct" (\n1 n2 n3 -> disjunctLemmasT n1 n2 n3 :: TransformH Core ())
+    , external "disjunct" (\n1 n2 n3 -> disjunctLemmasT n1 n2 n3 :: TransformH LCore ())
         [ "disjunt new-name lhs-name rhs-name" ]
-    , external "imply" (\n1 n2 n3 -> implyLemmasT n1 n2 n3 :: TransformH Core ())
+    , external "imply" (\n1 n2 n3 -> implyLemmasT n1 n2 n3 :: TransformH LCore ())
         [ "imply new-name antecedent-name consequent-name" ]
     , external "lint" (promoteT lintQuantifiedT :: TransformH LCoreTC String)
         [ "Lint check a quantified clause." ]
-    , external "lemma-birewrite" (promoteExprBiR . lemmaBiR :: LemmaName -> BiRewriteH Core)
+    , external "lemma-birewrite" (promoteExprBiR . lemmaBiR :: LemmaName -> BiRewriteH LCore)
         [ "Generate a bi-directional rewrite from a lemma." ]
-    , external "lemma-forward" (forwardT . promoteExprBiR . lemmaBiR :: LemmaName -> RewriteH Core)
+    , external "lemma-forward" (forwardT . promoteExprBiR . lemmaBiR :: LemmaName -> RewriteH LCore)
         [ "Generate a rewrite from a lemma, left-to-right." ]
-    , external "lemma-backward" (backwardT . promoteExprBiR . lemmaBiR :: LemmaName -> RewriteH Core)
+    , external "lemma-backward" (backwardT . promoteExprBiR . lemmaBiR :: LemmaName -> RewriteH LCore)
         [ "Generate a rewrite from a lemma, right-to-left." ]
-    , external "lemma-consequent" (promoteExprBiR . lemmaConsequentR :: LemmaName -> BiRewriteH Core)
+    , external "lemma-consequent" (promoteExprBiR . lemmaConsequentR :: LemmaName -> BiRewriteH LCore)
         [ "Generate a bi-directional rewrite from the consequent of an implication lemma."
         , "The antecedent is instantiated and introduced as an unproven obligation." ]
-    , external "lemma-lhs-intro" (lemmaLhsIntroR :: LemmaName -> RewriteH Core)
+    , external "lemma-lhs-intro" (promoteCoreR . lemmaLhsIntroR :: LemmaName -> RewriteH LCore)
         [ "Introduce the LHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = lhs in body" ] .+ Introduce .+ Shallow
-    , external "lemma-rhs-intro" (lemmaRhsIntroR :: LemmaName -> RewriteH Core)
+    , external "lemma-rhs-intro" (promoteCoreR . lemmaRhsIntroR :: LemmaName -> RewriteH LCore)
         [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
-    , external "inst-lemma" (\ nm v cs -> modifyLemmaT nm id (instantiateQuantifiedVarR (cmpHN2Var v) cs) id id :: TransformH Core ())
+    , external "inst-lemma" (\ nm v cs -> modifyLemmaT nm id (instantiateQuantifiedVarR (cmpHN2Var v) cs) id id :: TransformH LCore ())
         [ "Instantiate one of the universally quantified variables of the given lemma,"
         , "with the given Core expression, creating a new lemma. Instantiating an"
         , "already proven lemma will result in the new lemma being considered proven." ]
-    , external "inst-dictionaries" (promoteQuantifiedR instantiateDictsR :: RewriteH LCoreTC)
+    , external "inst-dictionaries" (promoteQuantifiedR instantiateDictsR :: RewriteH LCore)
         [ "Instantiate all of the universally quantified dictionaries of the given lemma." ]
-    , external "abstract" ((\nm -> promoteQuantifiedR . abstractQuantifiedR nm . csInQBodyT) :: String -> CoreString -> RewriteH LCoreTC)
+    , external "abstract" ((\nm -> promoteQuantifiedR . abstractQuantifiedR nm . csInQBodyT) :: String -> CoreString -> RewriteH LCore)
         [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
-    , external "abstract" ((\nm rr -> promoteQuantifiedR $ abstractQuantifiedR nm $ extractT rr >>> setFailMsg "path must focus on an expression" projectT) :: String -> RewriteH LCoreTC -> RewriteH LCoreTC)
+    , external "abstract" ((\nm rr -> promoteQuantifiedR $ abstractQuantifiedR nm $ extractT rr >>> setFailMsg "path must focus on an expression" projectT) :: String -> RewriteH LCore -> RewriteH LCore)
         [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
-    , external "copy-lemma" (\ nm newName -> modifyLemmaT nm (const newName) idR id id :: TransformH Core ())
+    , external "copy-lemma" (\ nm newName -> modifyLemmaT nm (const newName) idR id id :: TransformH LCore ())
         [ "Copy a given lemma, with a new name." ]
-    , external "modify-lemma" ((\ nm rr -> modifyLemmaT nm id (extractR rr) id (const False)) :: LemmaName -> RewriteH LCoreTC -> TransformH Core ())
+    , external "modify-lemma" ((\ nm rr -> modifyLemmaT nm id (extractR rr) id (const False)) :: LemmaName -> RewriteH LCore -> TransformH LCore ())
         [ "Modify a given lemma. Resets used status to Not Used." ]
-    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaQ >>> extractT t) :: LemmaName -> TransformH LCoreTC String -> TransformH Core String)
+    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaQ >>> extractT t) :: LemmaName -> TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to a lemma, returning the result." ]
-    , external "show-lemma" ((\pp n -> showLemmaT n pp) :: PrettyPrinter -> LemmaName -> PrettyH LCoreTC)
+    , external "show-lemma" ((\pp n -> showLemmaT n pp) :: PrettyPrinter -> LemmaName -> PrettyH LCore)
         [ "Display a lemma." ]
-    , external "show-lemmas" ((\pp n -> showLemmasT (Just n) pp) :: PrettyPrinter -> LemmaName -> PrettyH LCoreTC)
+    , external "show-lemmas" ((\pp n -> showLemmasT (Just n) pp) :: PrettyPrinter -> LemmaName -> PrettyH LCore)
         [ "List lemmas whose names match search string." ]
-    , external "show-lemmas" (showLemmasT Nothing :: PrettyPrinter -> PrettyH LCoreTC)
+    , external "show-lemmas" (showLemmasT Nothing :: PrettyPrinter -> PrettyH LCore)
         [ "List lemmas." ]
-    , external "extensionality" (promoteR . extensionalityR . Just :: String -> RewriteH LCoreTC)
+    , external "extensionality" (promoteR . extensionalityR . Just :: String -> RewriteH LCore)
         [ "Given a name 'x, then"
         , "f == g  ==>  forall x.  f x == g x" ]
-    , external "extensionality" (promoteR (extensionalityR Nothing) :: RewriteH LCoreTC)
+    , external "extensionality" (promoteR (extensionalityR Nothing) :: RewriteH LCore)
         [ "f == g  ==>  forall x.  f x == g x" ]
-    , external "lhs" (promoteR . lhsR . promoteR :: RewriteH Core -> RewriteH LCoreTC)
+    , external "lhs" (promoteQuantifiedR . lhsR :: RewriteH LCore -> RewriteH LCore)
         [ "Apply a rewrite to the LHS of a quantified clause." ]
-    , external "lhs" (promoteT . lhsT . promoteT :: TransformH CoreTC String -> TransformH LCoreTC String)
+    , external "lhs" (promoteQuantifiedT . lhsT :: TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to the LHS of a quantified clause." ]
-    , external "rhs" (promoteR . rhsR . promoteR :: RewriteH Core -> RewriteH LCoreTC)
+    , external "rhs" (promoteQuantifiedR . rhsR :: RewriteH LCore -> RewriteH LCore)
         [ "Apply a rewrite to the RHS of a quantified clause." ]
-    , external "rhs" (promoteT . rhsT . promoteT :: TransformH CoreTC String -> TransformH LCoreTC String)
+    , external "rhs" (promoteQuantifiedT . rhsT :: TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to the RHS of a quantified clause." ]
-    , external "both" (promoteR . bothR . promoteR :: RewriteH Core -> RewriteH LCoreTC)
+    , external "both" (promoteQuantifiedR . bothR :: RewriteH LCore -> RewriteH LCore)
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
-    , external "both" ((\t -> do (r,s) <- promoteT (bothT (promoteT t)); return (unlines [r,s])) :: TransformH CoreTC String -> TransformH LCoreTC String)
+    , external "both" ((\t -> do (r,s) <- promoteQuantifiedT (bothT t); return (unlines [r,s])) :: TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to both sides of a quantified clause." ]
     ]
 
@@ -223,48 +223,50 @@ birewrite q = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEqual
 
 ------------------------------------------------------------------------------
 -- TODO: deprecate these?
+-- Yes, but later.  They're in the paper now.
+-- We should be using "childR crumb", really.
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over the left-hand side of a 'Quantified'.
 lhsT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
-     => Transform c m LCoreTC a -> Transform c m Quantified a
+     => Transform c m LCore a -> Transform c m Quantified a
 lhsT t = quantifiedT successT (clauseT t successT (\_ l _ -> l)) (flip const)
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over the right-hand side of a 'Quantified'.
 rhsT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
-     => Transform c m LCoreTC a -> Transform c m Quantified a
+     => Transform c m LCore a -> Transform c m Quantified a
 rhsT t = quantifiedT successT (clauseT successT t (\_ _ r -> r)) (flip const)
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over both sides of a 'Quantified'.
 bothT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
-      => Transform c m LCoreTC a -> Transform c m Quantified (a, a)
+      => Transform c m LCore a -> Transform c m Quantified (a, a)
 bothT t = quantifiedT successT (clauseT t t (const (,))) (flip const)
 
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over the left-hand side of a 'Quantified'.
 lhsR :: (AddBindings c, Monad m, ReadPath c Crumb, ExtendPath c Crumb)
-     => Rewrite c m LCoreTC -> Rewrite c m Quantified
+     => Rewrite c m LCore -> Rewrite c m Quantified
 lhsR r = quantifiedR idR (clauseR r idR)
 
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over the right-hand side of a 'Quantified'.
 rhsR :: (AddBindings c, Monad m, ReadPath c Crumb, ExtendPath c Crumb)
-     => Rewrite c m LCoreTC -> Rewrite c m Quantified
+     => Rewrite c m LCore -> Rewrite c m Quantified
 rhsR r = quantifiedR idR (clauseR idR r)
 
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over both sides of a 'Quantified'.
 bothR :: (AddBindings c, MonadCatch m, ReadPath c Crumb, ExtendPath c Crumb)
-      => Rewrite c m LCoreTC -> Rewrite c m Quantified
+      => Rewrite c m LCore -> Rewrite c m Quantified
 bothR r = lhsR r >+> rhsR r
 
 ------------------------------------------------------------------------------
 
 -- | Original clause passed to function so it can decide how to handle connective.
-clauseT :: (Monad m, ExtendPath c Crumb) => Transform c m LCoreTC a -> Transform c m LCoreTC b -> (Clause -> a -> b -> d) -> Transform c m Clause d
+clauseT :: (Monad m, ExtendPath c Crumb) => Transform c m LCore a -> Transform c m LCore b -> (Clause -> a -> b -> d) -> Transform c m Clause d
 clauseT t1 t2 f = readerT $ \ cl -> case cl of
                                       Conj{}  -> conjT  (extractT t1) (extractT t2) (f cl)
                                       Disj{}  -> disjT  (extractT t1) (extractT t2) (f cl)
                                       Impl{}  -> implT  (extractT t1) (extractT t2) (f cl)
                                       Equiv{} -> equivT (extractT t1) (extractT t2) (f cl)
 
-clauseR :: (Monad m, ExtendPath c Crumb) => Rewrite c m LCoreTC -> Rewrite c m LCoreTC -> Rewrite c m Clause
+clauseR :: (Monad m, ExtendPath c Crumb) => Rewrite c m LCore -> Rewrite c m LCore -> Rewrite c m Clause
 clauseR r1 r2 = readerT $ \case
                              Conj{}  -> conjAllR (extractR r1) (extractR r2)
                              Disj{}  -> disjAllR (extractR r1) (extractR r2)
@@ -304,7 +306,7 @@ ppQuantifiedT pp = do
 
 ppClauseT :: PrettyPrinter -> PrettyH Clause
 ppClauseT pp = do
-    let t = absPathT &&& (promoteT (ppQuantifiedT pp) <+ promoteT (pCoreTC pp))
+    let t = absPathT &&& (promoteT (ppQuantifiedT pp) <+ promoteT (extractT (pCoreTC pp) :: PrettyH Core)) -- TODO: temporary hack, need to think about what's going on here and fix it
         parenify (p1,d1) (p2,d2) o = ( symbol p1 '(' PP.<> d1 PP.<> symbol p1 ')'
                                      , symbol p2 '(' PP.<> d2 PP.<> symbol p2 ')'
                                      , syntaxColor (PP.text o)
@@ -430,7 +432,7 @@ retractionBR mr f g = beforeBiR
          return y
 
 -- | Given @f :: X -> Y@ and @g :: Y -> X@, and a proof that @f (g y)@ ==> @y@, then @f (g y)@ <==> @y@.
-retraction :: Maybe (RewriteH Core) -> CoreString -> CoreString -> BiRewriteH CoreExpr
+retraction :: Maybe (RewriteH LCore) -> CoreString -> CoreString -> BiRewriteH CoreExpr
 retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 
 ------------------------------------------------------------------------------

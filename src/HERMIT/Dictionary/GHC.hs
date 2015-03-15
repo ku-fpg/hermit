@@ -44,19 +44,19 @@ import           HERMIT.Name
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
 externals :: [External]
 externals =
-    [ external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH Core)
+    [ external "deshadow-prog" (promoteProgR deShadowProgR :: RewriteH LCore)
         [ "Deshadow a program." ] .+ Deep
-    , external "dezombify" (promoteExprR dezombifyR :: RewriteH Core)
+    , external "dezombify" (promoteExprR dezombifyR :: RewriteH LCore)
         [ "Zap the occurrence information in the current identifer if it is a zombie."] .+ Shallow
-    , external "occurrence-analysis" (occurrenceAnalysisR :: RewriteH Core)
+    , external "occurrence-analysis" (occurrenceAnalysisR :: RewriteH LCore)
         [ "Perform dependency analysis on all sub-expressions; simplifying and updating identifer info."] .+ Deep
-    , external "lint-expr" (promoteExprT lintExprT :: TransformH CoreTC String)
+    , external "lint-expr" (promoteExprT lintExprT :: TransformH LCoreTC String)
         [ "Runs GHC's Core Lint, which typechecks the current expression."
         , "Note: this can miss several things that a whole-module core lint will find."
         , "For instance, running this on the RHS of a binding, the type of the RHS will"
         , "not be checked against the type of the binding. Running on the whole let expression"
         , "will catch that however."] .+ Deep .+ Debug .+ Query
-    , external "lint-module" (promoteModGutsT lintModuleT :: TransformH CoreTC String)
+    , external "lint-module" (promoteModGutsT lintModuleT :: TransformH LCoreTC String)
         [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
     ]
 
@@ -142,7 +142,7 @@ dezombifyR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
 dezombifyR = varR (acceptR isDeadBinder >>^ zapVarOccInfo)
 
 -- | Apply 'occurAnalyseExprR' to all sub-expressions.
-occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m Core
+occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c u, Injection CoreExpr u) => Rewrite c m u
 occurAnalyseR = let r  = promoteExprR (arr occurAnalyseExpr_NoBinderSwap) -- See Note [No Binder Swap]
                     go = r <+ anyR go
                  in tryR go -- always succeed
@@ -166,10 +166,10 @@ occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, Ha
 occurAnalyseChangedR = changedByR coreSyntaxEq occurAnalyseR
 
 -- | Run GHC's occurrence analyser, and also eliminate any zombies.
-occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m Core
+occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c LCore) => Rewrite c m LCore
 occurAnalyseAndDezombifyR = allbuR (tryR $ promoteExprR dezombifyR) >>> occurAnalyseR
 
-occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m Core
+occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c LCore) => Rewrite c m LCore
 occurrenceAnalysisR = occurAnalyseAndDezombifyR
 
 {- Does not work (no export)

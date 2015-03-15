@@ -14,11 +14,11 @@ import HERMIT.Dictionary.Local.Let hiding (externals)
 
 externals ::  [External]
 externals = map ((.+ Experiment) . (.+ TODO))
-         [ external "var" (promoteExprT . isVar :: String -> TransformH Core ())
+         [ external "var" (promoteExprT . isVar :: String -> TransformH LCore ())
                 [ "var '<v> returns successfully for variable v, and fails otherwise."
                 , "Useful in combination with \"when\", as in: when (var v) r"
                 ] .+ Predicate
-         , external "nonrec-intro" (nonRecIntro :: String -> CoreString -> RewriteH Core)
+         , external "nonrec-intro" ((\ s str -> promoteCoreR (nonRecIntro s str)) :: String -> CoreString -> RewriteH LCore)
                 [ "Introduce a new non-recursive binding.  Only works at Expression or Program nodes."
                 , "nonrec-into 'v [| e |]"
                 , "body ==> let v = e in body"

@@ -34,15 +34,15 @@ import HERMIT.Dictionary.Common
 -- | 'External's for inlining variables.
 externals :: [External]
 externals =
-    [ external "inline" (promoteExprR inlineR :: RewriteH Core)
+    [ external "inline" (promoteExprR inlineR :: RewriteH LCore)
         [ "(Var v) ==> <defn of v>" ].+ Eval .+ Deep
-    , external "inline" (promoteExprR . inlineMatchingPredR . mkOccPred :: OccurrenceName -> RewriteH Core)
+    , external "inline" (promoteExprR . inlineMatchingPredR . mkOccPred :: OccurrenceName -> RewriteH LCore)
         [ "Given a specific v, (Var v) ==> <defn of v>" ] .+ Eval .+ Deep
-    , external "inline" (promoteExprR . inlineNamesR :: [String] -> RewriteH Core)
+    , external "inline" (promoteExprR . inlineNamesR :: [String] -> RewriteH LCore)
         [ "If the current variable matches any of the given names, then inline it." ] .+ Eval .+ Deep
-    , external "inline-case-scrutinee" (promoteExprR inlineCaseScrutineeR :: RewriteH Core)
+    , external "inline-case-scrutinee" (promoteExprR inlineCaseScrutineeR :: RewriteH LCore)
         [ "if v is a case binder, replace (Var v) with the bound case scrutinee." ] .+ Eval .+ Deep
-    , external "inline-case-alternative" (promoteExprR inlineCaseAlternativeR :: RewriteH Core)
+    , external "inline-case-alternative" (promoteExprR inlineCaseAlternativeR :: RewriteH LCore)
         [ "if v is a case binder, replace (Var v) with the bound case-alternative pattern." ] .+ Eval .+ Deep .+ Unsafe
     ]
 
@@ -215,7 +215,7 @@ alt2Exp tys (DataAlt dc, vs) = return $ mkDataConApp tys dc vs
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargetsT :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
                   , ReadBindings c, HasEmptyContext c, MonadCatch m )
-               => Transform c m Core [String]
+               => Transform c m LCore [String]
 inlineTargetsT = collectT $ promoteT $ whenM (testM inlineR) (varT $ arr unqualifiedName)
 
 -- | Build a CoreExpr for a DFunUnfolding

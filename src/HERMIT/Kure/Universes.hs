@@ -335,6 +335,28 @@ instance Injection TyCo LCoreTC where
 
 ---------------------------------------------------------------------
 
+instance Injection ModGuts LCore where
+
+  inject :: ModGuts -> LCore
+  inject = LCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCore -> Maybe ModGuts
+  project (LCore c) = project c
+  project _         = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreProg LCore where
+
+  inject :: CoreProg -> LCore
+  inject = LCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCore -> Maybe CoreProg
+  project (LCore c) = project c
+  project _         = Nothing
+  {-# INLINE project #-}
+
 instance Injection CoreExpr LCore where
   inject :: CoreExpr -> LCore
   inject = LCore . inject
@@ -411,6 +433,28 @@ instance Injection Core LCoreTC where
   {-# INLINE project #-}
 
 ---------------------------------------------------------------------
+
+instance Injection ModGuts LCoreTC where
+
+  inject :: ModGuts -> LCoreTC
+  inject = LTCCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe ModGuts
+  project (LTCCore lc) = project lc
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreProg LCoreTC where
+
+  inject :: CoreProg -> LCoreTC
+  inject = LTCCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe CoreProg
+  project (LTCCore lc) = project lc
+  project _            = Nothing
+  {-# INLINE project #-}
 
 instance Injection CoreExpr LCoreTC where
   inject :: CoreExpr -> LCoreTC

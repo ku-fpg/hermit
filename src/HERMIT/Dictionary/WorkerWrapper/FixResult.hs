@@ -48,21 +48,21 @@ externals ::  [External]
 externals =
          [
            external "ww-result-factorisation" ((\ abs rep assC -> promoteExprBiR $ wwFac (mkWWAssC assC) abs rep)
-                                          :: CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
+                                          :: CoreString -> CoreString -> RewriteH LCore -> BiRewriteH LCore)
                 [ "Worker/Wrapper Factorisation (Result Variant)",
                   "For any \"f :: (X -> A) -> (X -> A)\", and given \"abs :: B -> A\" and \"rep :: A -> B\" as arguments,",
                   "and a proof of Assumption C (fix (X -> A) (\\ h x -> abs (rep (f h x))) ==> fix (X->A) f), then",
                   "fix (X->A) f  ==>  \\ x1 -> abs (fix (X->B) (\\ h x2 -> rep (f (\\ x3 -> abs (h x3)) x2)) x1"
                 ] .+ Introduce .+ Context
          , external "ww-result-factorisation-unsafe" ((\ abs rep -> promoteExprBiR $ wwFac Nothing abs rep)
-                                               :: CoreString -> CoreString -> BiRewriteH Core)
+                                               :: CoreString -> CoreString -> BiRewriteH LCore)
                 [ "Unsafe Worker/Wrapper Factorisation (Result Variant)",
                   "For any \"f :: (X -> A) -> (X -> A)\", and given \"abs :: B -> A\" and \"rep :: A -> B\" as arguments, then",
                   "fix (X->A) f  ==>  \\ x1 -> abs (fix (X->B) (\\ h x2 -> rep (f (\\ x3 -> abs (h x3)) x2)) x1",
                   "Note: the pre-condition \"fix (X -> A) (\\ h x -> abs (rep (f h x))) == fix (X->A) f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-result-split" ((\ abs rep assC -> promoteDefR $ wwSplit (mkWWAssC assC) abs rep)
-                                  :: CoreString -> CoreString -> RewriteH Core -> RewriteH Core)
+                                  :: CoreString -> CoreString -> RewriteH LCore -> RewriteH LCore)
                 [ "Worker/Wrapper Split (Result Variant)",
                   "For any \"prog :: X -> A\", and given \"abs :: B -> A\" and \"rep :: A -> B\" as arguments,",
                   "and a proof of Assumption C (fix (X->A) (\\ h x -> abs (rep (f h x))) ==> fix (X->A) f), then",
@@ -71,7 +71,7 @@ externals =
                   "                              in \\ x0 -> abs (work x0)"
                 ] .+ Introduce .+ Context
          , external "ww-result-split-unsafe" ((\ abs rep -> promoteDefR $ wwSplit Nothing abs rep)
-                                       :: CoreString -> CoreString -> RewriteH Core)
+                                       :: CoreString -> CoreString -> RewriteH LCore)
                 [ "Unsafe Worker/Wrapper Split (Result Variant)",
                   "For any \"prog :: X -> A\", and given \"abs :: B -> A\" and \"rep :: A -> B\" as arguments, then",
                   "prog = expr  ==>  prog = let f = \\ prog -> expr",
@@ -80,79 +80,79 @@ externals =
                   "Note: the pre-condition \"fix (X->A) (\\ h x -> abs (rep (f h x))) == fix (X->A) f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-result-split-static-arg" ((\ n is abs rep assC -> promoteDefR $ wwResultSplitStaticArg n is (mkWWAssC assC) abs rep)
-                                      :: Int -> [Int] -> CoreString -> CoreString -> RewriteH Core -> RewriteH Core)
+                                      :: Int -> [Int] -> CoreString -> CoreString -> RewriteH LCore -> RewriteH LCore)
                 [ "Worker/Wrapper Split - Static Argument Variant (Result Variant)",
                   "Perform the static argument transformation on the first n arguments, then perform the worker/wrapper split,",
                   "applying the given abs and rep functions to the specified (by index) static arguments before use."
                 ] .+ Introduce .+ Context
          , external "ww-result-split-static-arg-unsafe" ((\ n is abs rep -> promoteDefR $ wwResultSplitStaticArg n is Nothing abs rep)
-                                      :: Int -> [Int] -> CoreString -> CoreString -> RewriteH Core)
+                                      :: Int -> [Int] -> CoreString -> CoreString -> RewriteH LCore)
                 [ "Unsafe Worker/Wrapper Split - Static Argument Variant (Result Variant)",
                   "Perform the static argument transformation on the first n arguments, then perform the (unsafe) worker/wrapper split,",
                   "applying the given abs and rep functions to the specified (by index) static arguments before use."
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-result-assumption-A" ((\ abs rep assA -> promoteExprBiR $ wwA (Just $ extractR assA) abs rep)
-                                       :: CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
+                                       :: CoreString -> CoreString -> RewriteH LCore -> BiRewriteH LCore)
                 [ "Worker/Wrapper Assumption A (Result Variant)",
                   "For a \"abs :: B -> A\" and a \"rep :: A -> B\",",
                   "and given a proof of \"abs (rep a)  ==>  a\", then",
                   "abs (rep a)  <==>  a"
                 ] .+ Introduce .+ Context
          , external "ww-result-assumption-B" ((\ abs rep f assB -> promoteExprBiR $ wwB (Just $ extractR assB) abs rep f)
-                                       :: CoreString -> CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
+                                       :: CoreString -> CoreString -> CoreString -> RewriteH LCore -> BiRewriteH LCore)
                 [ "Worker/Wrapper Assumption B (Result Variant)",
                   "For a \"abs :: B -> A\", an \"rep :: A -> B\", and an \"f :: (X -> A) -> X -> A\",",
                   "and given a proof of \"abs (rep (f h x))  ==>  f h x\", then",
                   "abs (rep (f h x))  <==>  f h x"
                 ] .+ Introduce .+ Context
          , external "ww-result-assumption-C" ((\ abs rep f assC -> promoteExprBiR $ wwC (Just $ extractR assC) abs rep f)
-                                       :: CoreString -> CoreString -> CoreString -> RewriteH Core -> BiRewriteH Core)
+                                       :: CoreString -> CoreString -> CoreString -> RewriteH LCore -> BiRewriteH LCore)
                 [ "Worker/Wrapper Assumption C (Result Variant)",
                   "For a \"abs :: B -> A\", an \"rep :: A -> B\", and an \"f :: (X -> A) -> X -> A\",",
                   "and given a proof of \"fix (X->A) (\\ h x -> abs (rep (f h x))) ==> fix (X->A) f\", then",
                   "fix (X->A) (\\ h x -> abs (rep (f h x)))  <==>  fix (X->A) f"
                 ] .+ Introduce .+ Context
          , external "ww-result-assumption-A-unsafe" ((\ abs rep -> promoteExprBiR $ wwA Nothing abs rep)
-                                              :: CoreString -> CoreString -> BiRewriteH Core)
+                                              :: CoreString -> CoreString -> BiRewriteH LCore)
                 [ "Unsafe Worker/Wrapper Assumption A (Result Variant)",
                   "For a \"abs :: B -> A\" and a \"rep :: A -> B\", then",
                   "abs (rep a)  <==>  a",
                   "Note: only use this if it's true!"
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-result-assumption-B-unsafe" ((\ abs rep f -> promoteExprBiR $ wwB Nothing abs rep f)
-                                              :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
+                                              :: CoreString -> CoreString -> CoreString -> BiRewriteH LCore)
                 [ "Unsafe Worker/Wrapper Assumption B (Result Variant)",
                   "For a \"abs :: B -> A\", an \"rep :: A -> B\", and an \"f :: (X -> A) -> X -> A\", then",
                   "abs (rep (f h x))  <==>  f h x",
                   "Note: only use this if it's true!"
                 ] .+ Introduce .+ Context .+ PreCondition
          , external "ww-result-assumption-C-unsafe" ((\ abs rep f -> promoteExprBiR $ wwC Nothing abs rep f)
-                                              :: CoreString -> CoreString -> CoreString -> BiRewriteH Core)
+                                              :: CoreString -> CoreString -> CoreString -> BiRewriteH LCore)
                 [ "Unsafe Worker/Wrapper Assumption C (Result Variant)",
                   "For a \"abs :: B -> A\", an \"rep :: A -> B\", and an \"f :: (X -> A) -> X -> A\", then",
                   "fix (X->A) (\\ h x -> abs (rep (f h x)))  <==>  fix (X->A) f",
                   "Note: only use this if it's true!"
                 ] .+ Introduce .+ Context .+ PreCondition
-         , external "ww-result-AssA-to-AssB" (promoteExprR . wwResultAssAimpliesAssB . extractR :: RewriteH Core -> RewriteH Core)
+         , external "ww-result-AssA-to-AssB" (promoteExprR . wwResultAssAimpliesAssB . extractR :: RewriteH LCore -> RewriteH LCore)
                    [ "Convert a proof of worker/wrapper Assumption A into a proof of worker/wrapper Assumption B."
                    ]
-         , external "ww-result-AssB-to-AssC" (promoteExprR . wwResultAssBimpliesAssC . extractR :: RewriteH Core -> RewriteH Core)
+         , external "ww-result-AssB-to-AssC" (promoteExprR . wwResultAssBimpliesAssC . extractR :: RewriteH LCore -> RewriteH LCore)
                    [ "Convert a proof of worker/wrapper Assumption B into a proof of worker/wrapper Assumption C."
                    ]
-         , external "ww-result-AssA-to-AssC" (promoteExprR . wwResultAssAimpliesAssC . extractR :: RewriteH Core -> RewriteH Core)
+         , external "ww-result-AssA-to-AssC" (promoteExprR . wwResultAssAimpliesAssC . extractR :: RewriteH LCore -> RewriteH LCore)
                    [ "Convert a proof of worker/wrapper Assumption A into a proof of worker/wrapper Assumption C."
                    ]
-         , external "ww-result-generate-fusion" (wwResultGenerateFusionT . mkWWAssC :: RewriteH Core -> TransformH Core ())
+         , external "ww-result-generate-fusion" (wwResultGenerateFusionT . mkWWAssC :: RewriteH LCore -> TransformH LCore ())
                    [ "Given a proof of Assumption C (fix (X->A) (\\ h x -> abs (rep (f h x))) ==> fix (X->A) f), then",
                      "execute this command on \"work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)\" to enable the \"ww-result-fusion\" rule thereafter.",
                      "Note that this is performed automatically as part of \"ww-result-split\"."
                    ] .+ Experiment .+ TODO
-         , external "ww-result-generate-fusion-unsafe" (wwResultGenerateFusionT Nothing :: TransformH Core ())
+         , external "ww-result-generate-fusion-unsafe" (wwResultGenerateFusionT Nothing :: TransformH LCore ())
                    [ "Execute this command on \"work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)\" to enable the \"ww-fusion\" rule thereafter.",
                      "The precondition \"fix (X->A) (\\ h x -> abs (rep (f h x))) == fix (X->A) f\" is expected to hold.",
                      "Note that this is performed automatically as part of \"ww-result-split\"."
                    ] .+ Experiment .+ TODO
-         , external "ww-result-fusion" (promoteExprBiR wwFusion :: BiRewriteH Core)
+         , external "ww-result-fusion" (promoteExprBiR wwFusion :: BiRewriteH LCore)
                 [ "Worker/Wrapper Fusion (Result Variant)",
                   "rep (abs (work x))  <==>  work x",
                   "Note: you are required to have previously executed the command \"ww-generate-fusion\" on the definition",
@@ -160,7 +160,7 @@ externals =
                 ] .+ Introduce .+ Context .+ PreCondition .+ TODO
          ]
   where
-    mkWWAssC :: RewriteH Core -> Maybe WWAssumption
+    mkWWAssC :: RewriteH LCore -> Maybe WWAssumption
     mkWWAssC r = Just (WWAssumption C (extractR r))
 
 --------------------------------------------------------------------------------------------------
@@ -264,7 +264,7 @@ wwFusion = wwResultFusionBR
 -- | Save the recursive definition of work in the stash, so that we can later verify uses of 'wwResultFusionBR'.
 --   Must be applied to a definition of the form: @work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)@
 --   Note that this is performed automatically as part of 'wwResultSplitR'.
-wwResultGenerateFusionT :: Maybe WWAssumption -> TransformH Core ()
+wwResultGenerateFusionT :: Maybe WWAssumption -> TransformH LCore ()
 wwResultGenerateFusionT mAss =
     prefixFailMsg "generate WW fusion failed: " $
     withPatFailMsg wrongForm $

@@ -30,17 +30,17 @@ import Prelude hiding (exp)
 
 externals :: [External]
 externals =
-    [ external "beta-reduce-plus" (promoteExprR betaReducePlusR :: RewriteH Core)
+    [ external "beta-reduce-plus" (promoteExprR betaReducePlusR :: RewriteH LCore)
         [ "Perform one or more beta-reductions."]                               .+ Eval .+ Shallow
-    , external "unfold" (promoteExprR unfoldR :: RewriteH Core)
+    , external "unfold" (promoteExprR unfoldR :: RewriteH LCore)
         [ "In application f x y z, unfold f." ] .+ Deep .+ Context
-    , external "unfold" (promoteExprR . unfoldNameR . unOccurrenceName :: OccurrenceName -> RewriteH Core)
+    , external "unfold" (promoteExprR . unfoldNameR . unOccurrenceName :: OccurrenceName -> RewriteH LCore)
         [ "Inline a definition, and apply the arguments; traditional unfold." ] .+ Deep .+ Context
-    , external "unfold" (promoteExprR . unfoldNamesR . map unOccurrenceName:: [OccurrenceName] -> RewriteH Core)
+    , external "unfold" (promoteExprR . unfoldNamesR . map unOccurrenceName:: [OccurrenceName] -> RewriteH LCore)
         [ "Unfold a definition if it is named in the list." ] .+ Deep .+ Context
-    , external "unfold-saturated" (promoteExprR unfoldSaturatedR :: RewriteH Core)
+    , external "unfold-saturated" (promoteExprR unfoldSaturatedR :: RewriteH LCore)
         [ "Unfold a definition only if the function is fully applied." ] .+ Deep .+ Context
-    , external "specialize" (promoteExprR specializeR :: RewriteH Core)
+    , external "specialize" (promoteExprR specializeR :: RewriteH LCore)
         [ "Specialize an application to its type and coercion arguments." ] .+ Deep .+ Context
     ]
 

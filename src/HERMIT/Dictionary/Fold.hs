@@ -54,7 +54,7 @@ import Prelude hiding (exp)
 
 externals :: [External]
 externals =
-    [ external "fold" (promoteExprR . foldR :: HermitName -> RewriteH Core)
+    [ external "fold" (promoteExprR . foldR :: HermitName -> RewriteH LCore)
         [ "fold a definition"
         , ""
         , "double :: Int -> Int"
@@ -636,4 +636,3 @@ instance Extern (TransformH Equality ()) where
     type Box (TransformH Equality ()) = TransformEqualityUnitBox
     box = TransformEqualityUnitBox
     unbox (TransformEqualityUnitBox i) = i
-

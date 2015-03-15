@@ -38,29 +38,29 @@ externals = map (.+ Proof)
     [ external "intro-ww-assumption-A"
         (\nm absC repC -> do
             q <- parse2BeforeT assumptionAQuantifiedT absC repC
-            insertLemmaT nm $ Lemma q NotProven False False :: TransformH Core ())
+            insertLemmaT nm $ Lemma q NotProven False False :: TransformH LCore ())
         [ "Introduce a lemma for worker/wrapper assumption A"
         , "using given abs and rep functions." ]
     , external "intro-ww-assumption-B"
         (\nm absC repC bodyC -> do
             q <- parse3BeforeT assumptionBQuantifiedT absC repC bodyC
-            insertLemmaT nm $ Lemma q NotProven False False :: TransformH Core ())
+            insertLemmaT nm $ Lemma q NotProven False False :: TransformH LCore ())
         [ "Introduce a lemma for worker/wrapper assumption B"
         , "using given abs, rep, and body functions." ]
     , external "intro-ww-assumption-C"
         (\nm absC repC bodyC -> do
             q <- parse3BeforeT assumptionCQuantifiedT absC repC bodyC
-            insertLemmaT nm $ Lemma q NotProven False False :: TransformH Core ())
+            insertLemmaT nm $ Lemma q NotProven False False :: TransformH LCore ())
         [ "Introduce a lemma for worker/wrapper assumption C"
         , "using given abs, rep, and body functions." ]
-    , external "split-1-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split1BetaR nm) absC :: CoreString -> RewriteH Core)
+    , external "split-1-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split1BetaR nm) absC :: CoreString -> RewriteH LCore)
         [ "split-1-beta <name> <abs expression> <rep expression>"
         , "Perform worker/wrapper split with condition 1-beta."
         , "Given lemma name argument is used as prefix to two introduced lemmas."
         , "  <name>-assumption: unproven lemma for w/w assumption C."
         , "  <name>-fusion: assumed lemma for w/w fusion."
         ]
-    , external "split-2-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split2BetaR nm) absC :: CoreString -> RewriteH Core)
+    , external "split-2-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split2BetaR nm) absC :: CoreString -> RewriteH LCore)
         [ "split-2-beta <name> <abs expression> <rep expression>"
         , "Perform worker/wrapper split with condition 2-beta."
         , "Given lemma name argument is used as prefix to two introduced lemmas."

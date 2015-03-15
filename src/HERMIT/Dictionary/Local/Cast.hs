@@ -29,19 +29,19 @@ import HERMIT.Dictionary.Common
 -- | Externals relating to Case expressions.
 externals :: [External]
 externals =
-    [ external "cast-elim" (promoteExprR castElimR :: RewriteH Core)
+    [ external "cast-elim" (promoteExprR castElimR :: RewriteH LCore)
         [ "cast-elim-refl <+ cast-elim-sym" ] .+ Shallow -- don't include in "Bash", as sub-rewrites are tagged "Bash" already.
-    , external "cast-elim-refl" (promoteExprR castElimReflR :: RewriteH Core)
+    , external "cast-elim-refl" (promoteExprR castElimReflR :: RewriteH LCore)
         [ "cast e co ==> e ; if co is a reflexive coercion" ] .+ Shallow
-    , external "cast-elim-sym" (promoteExprR castElimSymR :: RewriteH Core)
+    , external "cast-elim-sym" (promoteExprR castElimSymR :: RewriteH LCore)
         [ "removes pairs of symmetric casts" ]                .+ Shallow
-    , external "cast-elim-sym-plus" (promoteExprR castElimSymPlusR :: RewriteH Core)
+    , external "cast-elim-sym-plus" (promoteExprR castElimSymPlusR :: RewriteH LCore)
         [ "removes pairs of symmetric casts possibly separated by let or case forms" ] .+ Deep .+ TODO
-    , external "cast-float-app" (promoteExprR castFloatAppR :: RewriteH Core)
+    , external "cast-float-app" (promoteExprR castFloatAppR :: RewriteH LCore)
         [ "(cast e (c1 -> c2)) x ==> cast (e (cast x (sym c1))) c2" ] .+ Shallow
-    , external "cast-float-lam" (promoteExprR castFloatLamR :: RewriteH Core)
+    , external "cast-float-lam" (promoteExprR castFloatLamR :: RewriteH LCore)
         [ "\\ x::a -> cast x (a -> b) ==> cast (\\x::a -> x) ((a -> a) -> (a -> b))" ] .+ Shallow
-    , external "cast-elim-unsafe" (promoteExprR castElimUnsafeR :: RewriteH Core)
+    , external "cast-elim-unsafe" (promoteExprR castElimUnsafeR :: RewriteH LCore)
         [ "removes casts regardless of whether it is safe to do so" ] .+ Shallow .+ Experiment .+ Unsafe .+ TODO
     ]
 
@@ -137,4 +137,3 @@ castElimSymPlusR = castT idR idR (flip go) >>> joinT
 
 castElimUnsafeR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
 castElimUnsafeR = castT idR idR const
-

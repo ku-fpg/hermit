@@ -98,11 +98,11 @@ filterUnknowns l = if null l' then l else l'
 
 completionQuery :: (MonadIO m, MonadState CommandLineState m) => CompletionType -> m (TransformH LCoreTC [String])
 completionQuery ConsiderC       = return $ pure $ map fst considerables
-completionQuery OccurrenceOfC   = return $ promoteCoreTCT occurrenceOfTargetsT   >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery BindingOfC      = return $ promoteCoreTCT bindingOfTargetsT      >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery BindingGroupOfC = return $ promoteCoreTCT bindingGroupOfTargetsT >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery RhsOfC          = return $ promoteCoreTCT rhsOfTargetsT          >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery InlineC         = return $ promoteT inlineTargetsT >>^                         map ('\'':)
+completionQuery OccurrenceOfC   = return $ occurrenceOfTargetsT   >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery BindingOfC      = return $ bindingOfTargetsT      >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery BindingGroupOfC = return $ bindingGroupOfTargetsT >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery RhsOfC          = return $ rhsOfTargetsT          >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery InlineC         = return $ promoteLCoreT inlineTargetsT >>^                   map ('\'':)
 completionQuery InScopeC        = return $ pure ["'"] -- TODO
 completionQuery LemmaC          = do
     let findTemps [] = []
@@ -135,4 +135,3 @@ toUnmatched = go 0 ""
           go n acc (')':cs) = go (n+1) (')':acc) cs
           go n acc (c:cs)   = go n     (c:acc)   cs
           go _ acc []       = (acc, [])
-

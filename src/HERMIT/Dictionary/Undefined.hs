@@ -44,39 +44,39 @@ import HERMIT.Dictionary.Reasoning hiding (externals)
 
 externals :: [External]
 externals = map (.+ Unsafe)
-    [ external "replace-current-expr-with-undefined" (promoteExprR replaceCurrentExprWithUndefinedR :: RewriteH Core)
+    [ external "replace-current-expr-with-undefined" (promoteExprR replaceCurrentExprWithUndefinedR :: RewriteH LCore)
         [ "Set the current expression to \"undefined\"."
         ] .+ Shallow .+ Context .+ Unsafe
-    , external "replace-id-with-undefined" (replaceIdWithUndefined :: HermitName -> RewriteH Core)
+    , external "replace-id-with-undefined" (promoteCoreR . replaceIdWithUndefined :: HermitName -> RewriteH LCore)
         [ "Replace the specified identifier with \"undefined\"."
         ] .+ Deep .+ Context .+ Unsafe
-    , external "error-to-undefined" (promoteExprR errorToUndefinedR :: RewriteH Core)
+    , external "error-to-undefined" (promoteExprR errorToUndefinedR :: RewriteH LCore)
         [ "error ty string  ==>  undefined ty"
         ] .+ Shallow .+ Context
-    , external "is-undefined-val" (promoteExprT isUndefinedValT :: TransformH Core ())
+    , external "is-undefined-val" (promoteExprT isUndefinedValT :: TransformH LCore ())
         [ "Succeed if the current expression is an undefined value."
         ] .+ Shallow .+ Context .+ Predicate
-    , external "undefined-expr" (promoteExprR undefinedExprR :: RewriteH Core)
+    , external "undefined-expr" (promoteExprR undefinedExprR :: RewriteH LCore)
         [ "undefined-app <+ undefined-lam <+ undefined-let <+ undefined-cast <+ undefined-tick <+ undefined-case"
         ] .+ Eval .+ Shallow .+ Context
-    , external "undefined-app" (promoteExprR undefinedAppR :: RewriteH Core)
+    , external "undefined-app" (promoteExprR undefinedAppR :: RewriteH LCore)
         [ "(undefined ty1) e  ==>  undefined ty2"
         ] .+ Eval .+ Shallow .+ Context
-    , external "undefined-lam" (promoteExprR undefinedLamR :: RewriteH Core)
+    , external "undefined-lam" (promoteExprR undefinedLamR :: RewriteH LCore)
         [ "(\\ v -> undefined ty1)  ==>  undefined ty2   (where v is not a 'TyVar')"
         ] .+ Eval .+ Shallow .+ Context
-    , external "undefined-let" (promoteExprR undefinedLetR :: RewriteH Core)
+    , external "undefined-let" (promoteExprR undefinedLetR :: RewriteH LCore)
         [ "let bds in (undefined ty)  ==>  undefined ty"
         ] .+ Eval .+ Shallow .+ Context
-    , external "undefined-case" (promoteExprR undefinedCaseR :: RewriteH Core)
+    , external "undefined-case" (promoteExprR undefinedCaseR :: RewriteH LCore)
         [ "case (undefined ty) of alts  ==>  undefined ty"
         , "OR"
         , "case e of {pat_1 -> undefined ty ; pat_2 -> undefined ty ; ... ; pat_n -> undefined ty} ==> undefined ty"
         ] .+ Eval .+ Shallow .+ Context
-    , external "undefined-cast" (promoteExprR undefinedCastR :: RewriteH Core)
+    , external "undefined-cast" (promoteExprR undefinedCastR :: RewriteH LCore)
         [ "Cast (undefined ty1) co  ==>  undefined ty2"
         ] .+ Eval .+ Shallow .+ Context
-    , external "undefined-tick" (promoteExprR undefinedTickR :: RewriteH Core)
+    , external "undefined-tick" (promoteExprR undefinedTickR :: RewriteH LCore)
         [ "Tick tick (undefined ty1)  ==>  undefined ty1"
         ] .+ Eval .+ Shallow .+ Context
     ]
