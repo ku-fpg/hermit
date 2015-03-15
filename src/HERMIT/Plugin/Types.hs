@@ -96,5 +96,5 @@ mkKernelEnv st =
                         out $ "<" ++ show c ++ "> " ++ msg'
                 DebugCore  msg' cxt qc -> do
                         out $ "[" ++ msg' ++ "]"
-                        doc :: DocH <- applyT (ppQCT pp) (liftPrettyC (pOptions pp) cxt) qc
+                        doc :: DocH <- applyT (ppLCoreTCT pp) (liftPrettyC (pOptions pp) cxt) qc
                         liftIO $ ps_render st stdout (pOptions pp) (Right doc)

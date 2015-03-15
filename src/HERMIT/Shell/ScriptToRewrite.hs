@@ -101,7 +101,7 @@ getFragment True ast = do
                                                     return l' >>> ppLemmaT mempty Clean.pretty n'
                                               ) :: TransformH Core [DocH]) Never
                 d <- queryInFocus (liftPrettyH opts $
-                                    return q >>> extractT (pathT (pathStack2Path p) (ppQCT Clean.pretty)) :: TransformH Core DocH) Never
+                                    return q >>> extractT (pathT (pathStack2Path p) (ppLCoreTCT Clean.pretty)) :: TransformH Core DocH) Never
                 return $ PP.vcat $ as ++ [PP.text "Goal:", d]
             _                             -> queryInFocus (liftPrettyH opts $ pCoreTC Clean.pretty) Never
     let ASCII str = renderCode opts doc

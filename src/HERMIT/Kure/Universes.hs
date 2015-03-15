@@ -11,7 +11,6 @@ module HERMIT.Kure.Universes
     , LCore(..)
     , LCoreTC(..)
     , CoreTC(..)
-    , QC(..)
       -- * Equality
       -- ** Syntactic Equality
     , coreSyntaxEq
@@ -101,13 +100,6 @@ data LCoreTC = LTCCore LCore
              | LTCTyCo TyCo
 
 -- TODO: alpha and syntactic equality for the new universes
-
--- TODO: QC universe to be deprecated (probably)
-
--- | QC (for Quantified Clause) is the universe for Quantified + Clause types.
-data QC = QCQuantified Quantified
-        | QCClause     Clause
-        | QCCoreTC     CoreTC
 
 ---------------------------------------------------------------------
 
@@ -616,123 +608,6 @@ instance Injection CoreTC LCoreTC where
   project :: LCoreTC -> Maybe CoreTC
   project (LTCCore c)  = Core `fmap` project c
   project (LTCTyCo tc) = Just (TyCo tc)
-  {-# INLINE project #-}
-
----------------------------------------------------------------------
-
--- TODO: these instances to be deprecated (probably)
-
-instance Injection Quantified QC where
-
-  inject :: Quantified -> QC
-  inject = QCQuantified
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe Quantified
-  project (QCQuantified q) = Just q
-  project _                = Nothing
-  {-# INLINE project #-}
-
-instance Injection Clause QC where
-
-  inject :: Clause -> QC
-  inject = QCClause
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe Clause
-  project (QCClause cl) = Just cl
-  project _             = Nothing
-  {-# INLINE project #-}
-
-instance Injection CoreTC QC where
-
-  inject :: CoreTC -> QC
-  inject = QCCoreTC
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe CoreTC
-  project (QCCoreTC c) = Just c
-  project _            = Nothing
-  {-# INLINE project #-}
-
-instance Injection Core QC where
-  inject :: Core -> QC
-  inject = QCCoreTC . inject
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe Core
-  project (QCCoreTC c) = project c
-  project _            = Nothing
-  {-# INLINE project #-}
-
-instance Injection TyCo QC where
-  inject :: TyCo -> QC
-  inject = QCCoreTC . inject
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe TyCo
-  project (QCCoreTC c) = project c
-  project _            = Nothing
-  {-# INLINE project #-}
-
-instance Injection CoreExpr QC where
-  inject :: CoreExpr -> QC
-  inject = QCCoreTC . inject
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe CoreExpr
-  project (QCCoreTC c) = project c
-  project _            = Nothing
-  {-# INLINE project #-}
-
-instance Injection CoreBind QC where
-  inject :: CoreBind -> QC
-  inject = QCCoreTC . inject
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe CoreBind
-  project (QCCoreTC c) = project c
-  project _            = Nothing
-  {-# INLINE project #-}
-
-instance Injection CoreDef QC where
-  inject :: CoreDef -> QC
-  inject = QCCoreTC . inject
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe CoreDef
-  project (QCCoreTC c) = project c
-  project _            = Nothing
-  {-# INLINE project #-}
-
-instance Injection CoreAlt QC where
-  inject :: CoreAlt -> QC
-  inject = QCCoreTC . inject
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe CoreAlt
-  project (QCCoreTC c) = project c
-  project _            = Nothing
-  {-# INLINE project #-}
-
-instance Injection Type QC where
-  inject :: Type -> QC
-  inject = QCCoreTC . inject
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe Type
-  project (QCCoreTC c) = project c
-  project _            = Nothing
-  {-# INLINE project #-}
-
-instance Injection Coercion QC where
-  inject :: Coercion -> QC
-  inject = QCCoreTC . inject
-  {-# INLINE inject #-}
-
-  project :: QC -> Maybe Coercion
-  project (QCCoreTC c) = project c
-  project _            = Nothing
   {-# INLINE project #-}
 
 ---------------------------------------------------------------------

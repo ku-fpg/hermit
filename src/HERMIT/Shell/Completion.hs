@@ -96,7 +96,7 @@ filterUnknowns :: [CompletionType] -> [CompletionType]
 filterUnknowns l = if null l' then l else l'
     where l' = filter (\case UnknownC _ -> False ; _ -> True) l
 
-completionQuery :: (MonadIO m, MonadState CommandLineState m) => CompletionType -> m (TransformH QC [String])
+completionQuery :: (MonadIO m, MonadState CommandLineState m) => CompletionType -> m (TransformH LCoreTC [String])
 completionQuery ConsiderC       = return $ pure $ map fst considerables
 completionQuery OccurrenceOfC   = return $ promoteCoreTCT occurrenceOfTargetsT   >>^ GHC.varSetToStrings >>^ map ('\'':)
 completionQuery BindingOfC      = return $ promoteCoreTCT bindingOfTargetsT      >>^ GHC.varSetToStrings >>^ map ('\'':)

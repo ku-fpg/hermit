@@ -23,7 +23,7 @@ externals :: [External]
 externals = map (.+ KURE)
    [ external "id"         (idR :: RewriteH Core)
        [ "Perform an identity rewrite."] .+ Shallow
-   , external "id"         (idR :: RewriteH QC)
+   , external "id"         (idR :: RewriteH LCoreTC)
        [ "Perform an identity rewrite."] .+ Shallow
    , external "success"    (successT :: TransformH Core ())
        [ "An always succeeding translation." ]
@@ -37,7 +37,7 @@ externals = map (.+ KURE)
        [ "Compose rewrites, requiring both to succeed." ]
    , external ">>>"        ((>>>) :: BiRewriteH Core -> BiRewriteH Core -> BiRewriteH Core)
        [ "Compose bidirectional rewrites, requiring both to succeed." ]
-   , external ">>>"        ((>>>) :: RewriteH QC -> RewriteH QC -> RewriteH QC)
+   , external ">>>"        ((>>>) :: RewriteH LCoreTC -> RewriteH LCoreTC -> RewriteH LCoreTC)
        [ "Compose rewrites, requiring both to succeed." ]
    , external ">+>"        ((>+>) :: RewriteH Core -> RewriteH Core -> RewriteH Core)
        [ "Compose rewrites, allowing one to fail." ]
@@ -64,14 +64,14 @@ externals = map (.+ KURE)
        [ "Promote a rewrite to operate over an entire tree in bottom-up order, requiring success for at least one node." ] .+ Deep
    , external "any-td"     (anytdR :: RewriteH Core -> RewriteH Core)
        [ "Promote a rewrite to operate over an entire tree in top-down order, requiring success for at least one node." ] .+ Deep
-   , external "any-td"     (anytdR :: RewriteH QC -> RewriteH QC)
+   , external "any-td"     (anytdR :: RewriteH LCoreTC -> RewriteH LCoreTC)
        [ "Promote a rewrite to operate over an entire tree in top-down order, requiring success for at least one node." ] .+ Deep
    , external "any-du"     (anyduR :: RewriteH Core -> RewriteH Core)
        [ "Apply a rewrite twice, in a top-down and bottom-up way, using one single tree traversal,",
          "succeeding if any succeed."] .+ Deep
    , external "one-td"     (onetdR :: RewriteH Core -> RewriteH Core)
        [ "Apply a rewrite to the first node (in a top-down order) for which it can succeed." ] .+ Deep
-   , external "one-td"     (onetdR :: RewriteH QC -> RewriteH QC)
+   , external "one-td"     (onetdR :: RewriteH LCoreTC -> RewriteH LCoreTC)
        [ "Apply a rewrite to the first node (in a top-down order) for which it can succeed." ] .+ Deep
    , external "one-bu"     (onebuR :: RewriteH Core -> RewriteH Core)
        [ "Apply a rewrite to the first node (in a bottom-up order) for which it can succeed." ] .+ Deep
@@ -79,13 +79,13 @@ externals = map (.+ KURE)
        [ "Attempt to apply a rewrite in a top-down manner, prunning at successful rewrites." ] .+ Deep
    , external "innermost"  (innermostR :: RewriteH Core -> RewriteH Core)
        [ "A fixed-point traveral, starting with the innermost term." ] .+ Deep .+ Loop
-   , external "focus"      (hfocusR :: TransformH QC LocalPathH -> RewriteH QC -> RewriteH QC)
+   , external "focus"      (hfocusR :: TransformH LCoreTC LocalPathH -> RewriteH LCoreTC -> RewriteH LCoreTC)
        [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
-   , external "focus"      (hfocusT :: TransformH QC LocalPathH -> TransformH QC String -> TransformH QC String)
+   , external "focus"      (hfocusT :: TransformH LCoreTC LocalPathH -> TransformH LCoreTC String -> TransformH LCoreTC String)
        [ "Apply a query at a focal point."] .+ Navigation .+ Deep
-   , external "focus"      ((\t -> hfocusR t . promoteCoreTCR) :: TransformH QC LocalPathH -> RewriteH CoreTC -> RewriteH QC)
+   , external "focus"      ((\t -> hfocusR t . promoteCoreTCR) :: TransformH LCoreTC LocalPathH -> RewriteH CoreTC -> RewriteH LCoreTC)
        [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
-   , external "focus"      ((\t -> hfocusT t . promoteCoreTCT) :: TransformH QC LocalPathH -> TransformH CoreTC String -> TransformH QC String)
+   , external "focus"      ((\t -> hfocusT t . promoteCoreTCT) :: TransformH LCoreTC LocalPathH -> TransformH CoreTC String -> TransformH LCoreTC String)
        [ "Apply a query at a focal point."] .+ Navigation .+ Deep
    , external "focus"      ((\t -> extractR . hfocusR (promoteCoreTCT t) . promoteCoreTCR) :: TransformH CoreTC LocalPathH -> RewriteH CoreTC -> RewriteH CoreTC)
        [ "Apply a rewrite to a focal point."] .+ Navigation .+ Deep
@@ -120,28 +120,28 @@ externals = map (.+ KURE)
        , "Preference is given to applications with more arguments." ] .+ Deep
    , external "promote"    (promoteR :: RewriteH Core -> RewriteH CoreTC)
        [ "Promote a RewriteCore to a RewriteCoreTC" ]
-   , external "promote"    (promoteR :: RewriteH CoreTC -> RewriteH QC)
-       [ "Promote a RewriteCoreTC to a RewriteQC" ]
-   , external "promote"    (promoteR :: RewriteH Core -> RewriteH QC)
-       [ "Promote a RewriteCore to a RewriteQC" ]
+   , external "promote"    (promoteR :: RewriteH CoreTC -> RewriteH LCoreTC)
+       [ "Promote a RewriteCoreTC to a RewriteLCoreTC" ]
+   , external "promote"    (promoteR :: RewriteH Core -> RewriteH LCoreTC)
+       [ "Promote a RewriteCore to a RewriteLCoreTC" ]
    , external "extract"    (extractR :: RewriteH CoreTC -> RewriteH Core)
        [ "Extract a RewriteCore from a RewriteCoreTC" ]
    , external "between"    (betweenR :: Int -> Int -> RewriteH CoreTC -> RewriteH CoreTC)
        [ "between x y rr -> perform rr at least x times and at most y times." ]
-   , external "atPath"     (flip hfocusT idR :: TransformH QC LocalPathH -> TransformH QC QC)
+   , external "atPath"     (flip hfocusT idR :: TransformH LCoreTC LocalPathH -> TransformH LCoreTC LCoreTC)
        [ "return the expression found at the given path" ]
    ]
 
 ------------------------------------------------------------------------------------
 
 hfocusR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m)
-        => Transform c m QC LocalPathH -> Rewrite c m QC -> Rewrite c m QC
+        => Transform c m LCoreTC LocalPathH -> Rewrite c m LCoreTC -> Rewrite c m LCoreTC
 hfocusR tp r = do lp <- tp
                   localPathR lp r
 {-# INLINE hfocusR #-}
 
 hfocusT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m)
-        => Transform c m QC LocalPathH -> Transform c m QC b -> Transform c m QC b
+        => Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC b -> Transform c m LCoreTC b
 hfocusT tp t = do lp <- tp
                   localPathT lp t
 {-# INLINE hfocusT #-}

@@ -48,7 +48,7 @@ performKernelEffect e = \case
 
 -------------------------------------------------------------------------------
 
-applyRewrite :: (MonadCatch m, CLMonad m) => RewriteH QC -> ExprH -> m ()
+applyRewrite :: (MonadCatch m, CLMonad m) => RewriteH LCoreTC -> ExprH -> m ()
 applyRewrite rr expr = do
     ps <- getProofStackEmpty
     let str = unparseExprH expr
@@ -70,7 +70,7 @@ applyRewrite rr expr = do
 
             addAST ast'
 
-setPath :: (Injection a QC, MonadCatch m, CLMonad m) => TransformH a LocalPathH -> ExprH -> m ()
+setPath :: (Injection a LCoreTC, MonadCatch m, CLMonad m) => TransformH a LocalPathH -> ExprH -> m ()
 setPath t expr = do
     p <- prefixFailMsg "Cannot find path: " $ queryInContext (promoteT t) (Always $ unparseExprH expr)
     modifyLocalPath (<> p)

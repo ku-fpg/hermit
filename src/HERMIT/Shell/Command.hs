@@ -176,34 +176,41 @@ runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "
 -- | Interpret a boxed thing as one of the four possible shell command types.
 interpShell :: (MonadCatch m, CLMonad m) => [Interp m ()]
 interpShell =
-  [ interpEM $ \ (RewriteCoreBox rr)           -> applyRewrite $ promoteCoreR rr
+  [ interpEM $ \ (CrumbBox cr)                  -> setPath (return (mempty @@ cr) :: TransformH LCoreTC LocalPathH)
+  , interpEM $ \ (PathBox p)                    -> setPath (return p :: TransformH LCoreTC LocalPathH)
+  , interpEM $ \ (StringBox str)                -> performQuery (message str)
+  , interpEM $ \ (effect :: KernelEffect)       -> flip performKernelEffect effect
+  , interpM  $ \ (effect :: ShellEffect)        -> performShellEffect effect
+  , interpM  $ \ (effect :: ScriptEffect)       -> performScriptEffect effect
+  , interpEM $ \ (query :: QueryFun)            -> performQuery query
+  , interpEM $ \ (t :: UserProofTechnique)      -> performProofShellCommand $ PCUser t
+  , interpEM $ \ (cmd :: ProofShellCommand)     -> performProofShellCommand cmd
+  , interpEM $ \ (TransformLCoreStringBox tt)   -> performQuery (QueryString tt)
+  , interpEM $ \ (TransformLCoreTCStringBox tt) -> performQuery (QueryString tt)
+  , interpEM $ \ (TransformLCoreUnitBox tt)     -> performQuery (QueryUnit tt)
+  , interpEM $ \ (TransformLCoreTCUnitBox tt)   -> performQuery (QueryUnit tt)
+  , interpEM $ \ (TransformLCorePathBox tt)     -> setPath tt
+  , interpEM $ \ (TransformLCoreTCPathBox tt)   -> setPath tt
+  , interpEM $ \ (RewriteLCoreBox rr)           -> applyRewrite $ promoteLCoreR rr
+  , interpEM $ \ (RewriteLCoreTCBox rr)         -> applyRewrite rr
+  , interpEM $ \ (BiRewriteLCoreBox br)         -> applyRewrite $ promoteLCoreR $ whicheverR br
+  , interpEM $ \ (BiRewriteLCoreTCBox br)       -> applyRewrite $ whicheverR br
+  , interpEM $ \ (PrettyHLCoreBox t)            -> performQuery (QueryPrettyH t)
+  , interpEM $ \ (PrettyHLCoreTCBox t)          -> performQuery (QueryPrettyH t)
+    -- TODO likely remove
+  , interpEM $ \ (PrettyHCoreBox t)            -> performQuery (QueryPrettyH t)
+  , interpEM $ \ (PrettyHCoreTCBox t)          -> performQuery (QueryPrettyH t)
+  , interpEM $ \ (RewriteCoreBox rr)           -> applyRewrite $ promoteCoreR rr
   , interpEM $ \ (RewriteCoreTCBox rr)         -> applyRewrite $ promoteCoreTCR rr
   , interpEM $ \ (BiRewriteCoreBox br)         -> applyRewrite $ promoteCoreR $ whicheverR br
-  , interpEM $ \ (CrumbBox cr)                 -> setPath (return (mempty @@ cr) :: TransformH QC LocalPathH)
-  , interpEM $ \ (PathBox p)                   -> setPath (return p :: TransformH QC LocalPathH)
   , interpEM $ \ (TransformCorePathBox tt)     -> setPath tt
   , interpEM $ \ (TransformCoreTCPathBox tt)   -> setPath tt
-  , interpEM $ \ (TransformQCLocalPathBox tt)  -> setPath tt
-  , interpEM $ \ (StringBox str)               -> performQuery (message str)
   , interpEM $ \ (TransformCoreStringBox tt)   -> performQuery (QueryString tt)
   , interpEM $ \ (TransformCoreTCStringBox tt) -> performQuery (QueryString tt)
   , interpEM $ \ (TransformCoreDocHBox t)      -> performQuery (QueryDocH t)
   , interpEM $ \ (TransformCoreTCDocHBox t)    -> performQuery (QueryDocH t)
-  , interpEM $ \ (TransformQCDocHBox t)        -> performQuery (QueryDocH t)
-  , interpEM $ \ (PrettyHCoreBox t)            -> performQuery (QueryPrettyH t)
-  , interpEM $ \ (PrettyHCoreTCBox t)          -> performQuery (QueryPrettyH t)
-  , interpEM $ \ (PrettyHQCBox t)              -> performQuery (QueryPrettyH t)
   , interpEM $ \ (TransformCoreCheckBox tt)    -> performQuery (QueryUnit tt)
   , interpEM $ \ (TransformCoreTCCheckBox tt)  -> performQuery (QueryUnit tt)
-  , interpEM $ \ (effect :: KernelEffect)      -> flip performKernelEffect effect
-  , interpM  $ \ (effect :: ShellEffect)       -> performShellEffect effect
-  , interpM  $ \ (effect :: ScriptEffect)      -> performScriptEffect effect
-  , interpEM $ \ (query :: QueryFun)           -> performQuery query
-  , interpEM $ \ (t :: UserProofTechnique)     -> performProofShellCommand $ PCUser t
-  , interpEM $ \ (cmd :: ProofShellCommand)    -> performProofShellCommand cmd
-  , interpEM $ \ (RewriteQCBox r)              -> applyRewrite r
-  , interpEM $ \ (TransformQCStringBox t)      -> performQuery (QueryString t)
-  , interpEM $ \ (TransformQCUnitBox t)        -> performQuery (QueryUnit t)
   ]
 
 -------------------------------------------------------------------------------

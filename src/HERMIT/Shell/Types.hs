@@ -61,12 +61,12 @@ import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 ----------------------------------------------------------------------------------
 
 data QueryFun :: * where
-   QueryString  :: Injection a QC => TransformH a String       -> QueryFun
-   QueryDocH    :: Injection a QC => TransformH a DocH         -> QueryFun
-   QueryPrettyH :: Injection a QC => PrettyH a                 -> QueryFun
-   Diff         :: AST -> AST                                  -> QueryFun
-   Inquiry      :: (CommandLineState -> IO String)             -> QueryFun
-   QueryUnit    :: Injection a QC => TransformH a ()           -> QueryFun
+   QueryString  :: Injection a LCoreTC => TransformH a String       -> QueryFun
+   QueryDocH    :: Injection a LCoreTC => TransformH a DocH         -> QueryFun
+   QueryPrettyH :: Injection a LCoreTC => PrettyH a                 -> QueryFun
+   Diff         :: AST -> AST                                       -> QueryFun
+   Inquiry      :: (CommandLineState -> IO String)                  -> QueryFun
+   QueryUnit    :: Injection a LCoreTC => TransformH a ()           -> QueryFun
    deriving Typeable
 
 message :: String -> QueryFun
@@ -561,7 +561,7 @@ printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState Com
            => Handle -> HermitC -> PathStack -> (LemmaName,Lemma) -> m ()
 printLemma h c p (nm,Lemma q _ _ _) = do -- TODO
     pp <- gets cl_pretty
-    doc <- queryInFocus ((constT $ applyT (extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (ppQCT pp)))) c q) :: TransformH Core DocH) Never
+    doc <- queryInFocus ((constT $ applyT (extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (ppLCoreTCT pp)))) c q) :: TransformH Core DocH) Never
     let doc' = PP.text (show nm) PP.$+$ PP.nest 2 doc
     st <- get
     liftIO $ cl_render st h (cl_pretty_opts st) (Right doc')
@@ -578,12 +578,12 @@ queryInFocus t msg = do
     return r
 
 -- meant to be used inside queryInFocus
-inProofFocusT :: ProofTodo -> TransformH QC b -> TransformH Core b
+inProofFocusT :: ProofTodo -> TransformH LCoreTC b -> TransformH Core b
 inProofFocusT (Unproven _ (Lemma q _ _ _) c ls ps) t =
     contextfreeT $ withLemmas (M.fromList ls) . applyT (return q >>> extractT (pathT (pathStack2Path ps) t)) c
 inProofFocusT _ _ = fail "no proof in progress."
 
-inProofFocusR :: ProofTodo -> RewriteH QC -> TransformH Core Quantified
+inProofFocusR :: ProofTodo -> RewriteH LCoreTC -> TransformH Core Quantified
 inProofFocusR (Unproven _ (Lemma q _ _ _) c ls ps) rr =
     contextfreeT $ withLemmas (M.fromList ls) . applyT (return q >>> extractR (pathR (pathStack2Path ps) rr)) c
 inProofFocusR _ _ = fail "no proof in progress."
@@ -592,7 +592,7 @@ withLemmasInScope :: HasLemmas m => [(LemmaName,Lemma)] -> Transform c m a b -> 
 withLemmasInScope ls t = transform $ \ c -> withLemmas (M.fromList ls) . applyT t c
 
 -- TODO: better name
-queryInContext :: forall b m. (MonadCatch m, CLMonad m) => TransformH QC b -> CommitMsg -> m b
+queryInContext :: forall b m. (MonadCatch m, CLMonad m) => TransformH LCoreTC b -> CommitMsg -> m b
 queryInContext tr cm = do
     ps <- getProofStackEmpty
     case ps of

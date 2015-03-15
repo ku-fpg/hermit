@@ -29,12 +29,14 @@ module HERMIT.PrettyPrinter.Common
       -- * Pretty Printer Traversals
     , PrettyPrinter(..)
     , PrettyH
-    , PrettyHCoreBox(..)
-    , PrettyHCoreTCBox(..)
-    , PrettyHQCBox(..)
-    , TransformCoreDocHBox(..)
-    , TransformCoreTCDocHBox(..)
-    , TransformQCDocHBox(..)
+    , PrettyHLCoreBox(..)
+    , PrettyHLCoreTCBox(..)
+    , TransformLCoreDocHBox(..)
+    , TransformLCoreTCDocHBox(..)
+    , PrettyHCoreBox(..) -- TODO: remove?
+    , PrettyHCoreTCBox(..) -- TODO: remove?
+    , TransformCoreDocHBox(..) -- TODO: remove?
+    , TransformCoreTCDocHBox(..) -- TODO: remove?
     , liftPrettyH
     , PrettyC(..)
     , initPrettyC
@@ -138,6 +140,37 @@ instance Extern PrettyPrinter where
 type PrettyH a = Transform PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?
 
+data PrettyHLCoreBox = PrettyHLCoreBox (PrettyH LCore) deriving Typeable
+
+instance Extern (PrettyH LCore) where
+    type Box (PrettyH LCore) = PrettyHLCoreBox
+    box = PrettyHLCoreBox
+    unbox (PrettyHLCoreBox i) = i
+
+data TransformLCoreDocHBox = TransformLCoreDocHBox (TransformH LCore DocH) deriving Typeable
+
+instance Extern (TransformH LCore DocH) where
+    type Box (TransformH LCore DocH) = TransformLCoreDocHBox
+    box = TransformLCoreDocHBox
+    unbox (TransformLCoreDocHBox i) = i
+
+data PrettyHLCoreTCBox = PrettyHLCoreTCBox (PrettyH LCoreTC) deriving Typeable
+
+instance Extern (PrettyH LCoreTC) where
+    type Box (PrettyH LCoreTC) = PrettyHLCoreTCBox
+    box = PrettyHLCoreTCBox
+    unbox (PrettyHLCoreTCBox i) = i
+
+data TransformLCoreTCDocHBox = TransformLCoreTCDocHBox (TransformH LCoreTC DocH) deriving Typeable
+
+instance Extern (TransformH LCoreTC DocH) where
+    type Box (TransformH LCoreTC DocH) = TransformLCoreTCDocHBox
+    box = TransformLCoreTCDocHBox
+    unbox (TransformLCoreTCDocHBox i) = i
+
+-------------------------------------------------------------------------------
+-- TODO: remove these?
+
 data PrettyHCoreBox = PrettyHCoreBox (PrettyH Core) deriving Typeable
 
 instance Extern (PrettyH Core) where
@@ -151,13 +184,6 @@ instance Extern (PrettyH CoreTC) where
     type Box (PrettyH CoreTC) = PrettyHCoreTCBox
     box = PrettyHCoreTCBox
     unbox (PrettyHCoreTCBox i) = i
-
-data PrettyHQCBox = PrettyHQCBox (PrettyH QC) deriving Typeable
-
-instance Extern (PrettyH QC) where
-    type Box (PrettyH QC) = PrettyHQCBox
-    box = PrettyHQCBox
-    unbox (PrettyHQCBox i) = i
 
 data TransformCoreDocHBox = TransformCoreDocHBox (TransformH Core DocH) deriving Typeable
 
@@ -173,12 +199,8 @@ instance Extern (TransformH CoreTC DocH) where
     box = TransformCoreTCDocHBox
     unbox (TransformCoreTCDocHBox i) = i
 
-data TransformQCDocHBox = TransformQCDocHBox (TransformH QC DocH) deriving Typeable
-
-instance Extern (TransformH QC DocH) where
-    type Box (TransformH QC DocH) = TransformQCDocHBox
-    box = TransformQCDocHBox
-    unbox (TransformQCDocHBox i) = i
+-- end TODO
+-------------------------------------------------------------------------------
 
 -- | Context for PrettyH translations.
 data PrettyC = PrettyC { prettyC_path    :: AbsolutePathH

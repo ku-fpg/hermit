@@ -52,9 +52,9 @@ externals = crumbExternals
             [ "Find the path to the binding group of the named variable." ]
         , external "binding-of" (bindingOfT . mkBindingPred :: BindingName -> TransformH CoreTC LocalPathH)
             [ "Find the path to the binding of the named variable." ]
-        , external "occurrence-of" (occurrenceOfT . mkOccPred :: OccurrenceName -> TransformH QC LocalPathH)
+        , external "occurrence-of" (occurrenceOfT . mkOccPred :: OccurrenceName -> TransformH LCoreTC LocalPathH)
             [ "Find the path to the first occurrence of the named variable." ]
-        , external "application-of" (applicationOfT . mkOccPred :: OccurrenceName -> TransformH QC LocalPathH)
+        , external "application-of" (applicationOfT . mkOccPred :: OccurrenceName -> TransformH LCoreTC LocalPathH)
             [ "Find the path to the first application of the named variable." ]
         , external "consider" (considerConstructT :: Considerable -> TransformH Core LocalPathH)
             [ "consider <c> focuses on the first construct <c>.", recognizedConsiderables ]
@@ -106,13 +106,13 @@ bindingOfT p = prefixFailMsg ("binding-of failed: ") $
 
 -- | Find the path to the first occurrence of a variable.
 occurrenceOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m)
-              => (Var -> Bool) -> Transform c m QC LocalPathH
+              => (Var -> Bool) -> Transform c m LCoreTC LocalPathH
 occurrenceOfT p = prefixFailMsg ("occurrence-of failed: ") $
                   oneNonEmptyPathToT (arr $ occurrenceOf p)
 
 -- | Find the path to an application of a given function.
 applicationOfT :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, MonadCatch m, ReadPath c Crumb)
-               => (Var -> Bool) -> Transform c m QC LocalPathH
+               => (Var -> Bool) -> Transform c m LCoreTC LocalPathH
 applicationOfT p = prefixFailMsg "application-of failed:" $ oneNonEmptyPathToT go
     where go = promoteExprT (appT (extractT go) successT const) <+ arr (occurrenceOf p)
 
@@ -160,7 +160,7 @@ binderCoercion _              = emptyVarSet
 
 -----------------------------------------------------------------------
 
-occurrenceOf :: (Var -> Bool) -> QC -> Bool
+occurrenceOf :: (Var -> Bool) -> LCoreTC -> Bool
 occurrenceOf p = maybe False p . (projectM >=> varOccurrence)
 
 varOccurrence :: CoreTC -> Maybe Var

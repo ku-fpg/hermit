@@ -8,91 +8,89 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module HERMIT.Kure
-       (
-       -- * KURE
+    ( -- * KURE
 
-       -- | All the required functionality of KURE is exported here, so other modules do not need to import KURE directly.
-         module Language.KURE
-       , module Language.KURE.BiTransform
-       , module Language.KURE.Lens
-       , module Language.KURE.ExtendableContext
-       , module Language.KURE.Pathfinder
-       -- * Sub-Modules
-       , module HERMIT.Kure.Universes
-       -- * Synonyms
-       , TransformH
-       , RewriteH
-       , BiRewriteH
-       , LensH
-       , PathH
+      -- | All the required functionality of KURE is exported here, so other modules do not need to import KURE directly.
+      module Language.KURE
+    , module Language.KURE.BiTransform
+    , module Language.KURE.Lens
+    , module Language.KURE.ExtendableContext
+    , module Language.KURE.Pathfinder
+      -- * Sub-Modules
+    , module HERMIT.Kure.Universes
+      -- * Synonyms
+    , TransformH
+    , RewriteH
+    , BiRewriteH
+    , LensH
+    , PathH
 
-       -- * Congruence combinators
-       -- ** Modguts
-       , modGutsT, modGutsR
-       -- ** Program
-       , progNilT
-       , progConsT, progConsAllR, progConsAnyR, progConsOneR
-       -- ** Binding Groups
-       , nonRecT, nonRecAllR, nonRecAnyR, nonRecOneR
-       , recT, recAllR, recAnyR, recOneR
-       -- ** Recursive Definitions
-       , defT, defAllR, defAnyR, defOneR
-       -- ** Case Alternatives
-       , altT, altAllR, altAnyR, altOneR
-       -- ** Expressions
-       , varT, varR
-       , litT, litR
-       , appT, appAllR, appAnyR, appOneR
-       , lamT, lamAllR, lamAnyR, lamOneR
-       , letT, letAllR, letAnyR, letOneR
-       , caseT, caseAllR, caseAnyR, caseOneR
-       , castT, castAllR, castAnyR, castOneR
-       , tickT, tickAllR, tickAnyR, tickOneR
-       , typeT, typeR
-       , coercionT, coercionR
-       -- ** Composite Congruence Combinators
-       , defOrNonRecT, defOrNonRecAllR, defOrNonRecAnyR, defOrNonRecOneR
-       , recDefT, recDefAllR, recDefAnyR, recDefOneR
-       , letNonRecT, letNonRecAllR, letNonRecAnyR, letNonRecOneR
-       , letRecT, letRecAllR, letRecAnyR, letRecOneR
-       , letRecDefT, letRecDefAllR, letRecDefAnyR, letRecDefOneR
-       , consNonRecT, consNonRecAllR, consNonRecAnyR, consNonRecOneR
-       , consRecT, consRecAllR, consRecAnyR, consRecOneR
-       , consRecDefT, consRecDefAllR, consRecDefAnyR, consRecDefOneR
-       , caseAltT, caseAltAllR, caseAltAnyR, caseAltOneR
-       -- ** Recursive Composite Congruence Combinators
-       , progBindsT, progBindsAllR, progBindsAnyR, progBindsOneR
-       -- ** Types
-       , tyVarT, tyVarR
-       , litTyT, litTyR
-       , appTyT, appTyAllR, appTyAnyR, appTyOneR
-       , funTyT, funTyAllR, funTyAnyR, funTyOneR
-       , forAllTyT, forAllTyAllR, forAllTyAnyR, forAllTyOneR
-       , tyConAppT, tyConAppAllR, tyConAppAnyR, tyConAppOneR
-       -- ** Coercions
-       , reflT, reflR
-       , tyConAppCoT, tyConAppCoAllR, tyConAppCoAnyR, tyConAppCoOneR
-       , appCoT, appCoAllR, appCoAnyR, appCoOneR
-       , forAllCoT, forAllCoAllR, forAllCoAnyR, forAllCoOneR
-       , coVarCoT, coVarCoR
-       , axiomInstCoT, axiomInstCoAllR, axiomInstCoAnyR, axiomInstCoOneR
-       , symCoT, symCoR
-       , transCoT, transCoAllR, transCoAnyR, transCoOneR
-       , nthCoT, nthCoAllR, nthCoAnyR, nthCoOneR
-       , instCoT, instCoAllR, instCoAnyR, instCoOneR
-       , lrCoT, lrCoAllR, lrCoAnyR, lrCoOneR
+      -- * Congruence combinators
+      -- ** Modguts
+    , modGutsT, modGutsR
+      -- ** Program
+    , progNilT
+    , progConsT, progConsAllR, progConsAnyR, progConsOneR
+      -- ** Binding Groups
+    , nonRecT, nonRecAllR, nonRecAnyR, nonRecOneR
+    , recT, recAllR, recAnyR, recOneR
+      -- ** Recursive Definitions
+    , defT, defAllR, defAnyR, defOneR
+      -- ** Case Alternatives
+    , altT, altAllR, altAnyR, altOneR
+      -- ** Expressions
+    , varT, varR
+    , litT, litR
+    , appT, appAllR, appAnyR, appOneR
+    , lamT, lamAllR, lamAnyR, lamOneR
+    , letT, letAllR, letAnyR, letOneR
+    , caseT, caseAllR, caseAnyR, caseOneR
+    , castT, castAllR, castAnyR, castOneR
+    , tickT, tickAllR, tickAnyR, tickOneR
+    , typeT, typeR
+    , coercionT, coercionR
+      -- ** Composite Congruence Combinators
+    , defOrNonRecT, defOrNonRecAllR, defOrNonRecAnyR, defOrNonRecOneR
+    , recDefT, recDefAllR, recDefAnyR, recDefOneR
+    , letNonRecT, letNonRecAllR, letNonRecAnyR, letNonRecOneR
+    , letRecT, letRecAllR, letRecAnyR, letRecOneR
+    , letRecDefT, letRecDefAllR, letRecDefAnyR, letRecDefOneR
+    , consNonRecT, consNonRecAllR, consNonRecAnyR, consNonRecOneR
+    , consRecT, consRecAllR, consRecAnyR, consRecOneR
+    , consRecDefT, consRecDefAllR, consRecDefAnyR, consRecDefOneR
+    , caseAltT, caseAltAllR, caseAltAnyR, caseAltOneR
+      -- ** Recursive Composite Congruence Combinators
+    , progBindsT, progBindsAllR, progBindsAnyR, progBindsOneR
+      -- ** Types
+    , tyVarT, tyVarR
+    , litTyT, litTyR
+    , appTyT, appTyAllR, appTyAnyR, appTyOneR
+    , funTyT, funTyAllR, funTyAnyR, funTyOneR
+    , forAllTyT, forAllTyAllR, forAllTyAnyR, forAllTyOneR
+    , tyConAppT, tyConAppAllR, tyConAppAnyR, tyConAppOneR
+      -- ** Coercions
+    , reflT, reflR
+    , tyConAppCoT, tyConAppCoAllR, tyConAppCoAnyR, tyConAppCoOneR
+    , appCoT, appCoAllR, appCoAnyR, appCoOneR
+    , forAllCoT, forAllCoAllR, forAllCoAnyR, forAllCoOneR
+    , coVarCoT, coVarCoR
+    , axiomInstCoT, axiomInstCoAllR, axiomInstCoAnyR, axiomInstCoOneR
+    , symCoT, symCoR
+    , transCoT, transCoAllR, transCoAnyR, transCoOneR
+    , nthCoT, nthCoAllR, nthCoAnyR, nthCoOneR
+    , instCoT, instCoAllR, instCoAnyR, instCoOneR
+    , lrCoT, lrCoAllR, lrCoAnyR, lrCoOneR
       -- ** Lemmas
-      , conjT, conjAllR
-      , disjT, disjAllR
-      , implT, implAllR
-      , equivT, equivAllR
-      , quantifiedT, quantifiedR
-       -- * Applicative
-       -- | Remove in 7.10
-       , (<$>)
-       , (<*>)
-       )
-where
+    , conjT, conjAllR
+    , disjT, disjAllR
+    , implT, implAllR
+    , equivT, equivAllR
+    , quantifiedT, quantifiedR
+      -- * Applicative
+      -- | Remove in 7.10
+    , (<$>)
+    , (<*>)
+    ) where
 
 import Language.KURE
 import Language.KURE.BiTransform
@@ -337,32 +335,6 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c
                               Coercion{} -> coercionR (extractR r)
                               _          -> idR
       {-# INLINE allRexpr #-}
-
----------------------------------------------------------------------
-
--- TODO: to be deprecated (probably)
-
--- | Walking over Quantified and Clause
-instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb) => Walker c QC where
-
-    allR :: forall m. MonadCatch m => Rewrite c m QC -> Rewrite c m QC
-    allR r = prefixFailMsg "allR failed: " $
-                rewrite $ \ c -> \case
-                    QCQuantified q  -> inject <$> applyT allRquantified c q
-                    QCClause cl     -> inject <$> applyT allRclause c cl
-                    QCCoreTC coreTC -> inject <$> applyT (allR $ extractR r) c coreTC -- exploiting the fact that quantified/clause does not appear within CoreTC
-        where
-            allRquantified :: MonadCatch m => Rewrite c m Quantified
-            allRquantified = quantifiedR idR (extractR r) -- we don't descend into the binders
-            {-# INLINE allRquantified #-}
-
-            allRclause :: MonadCatch m => Rewrite c m Clause
-            allRclause = readerT $ \case
-                                Conj{}  -> conjAllR (extractR r) (extractR r)
-                                Disj{}  -> disjAllR (extractR r) (extractR r)
-                                Impl{}  -> implAllR  (extractR r) (extractR r)
-                                Equiv{} -> equivAllR (extractR r) (extractR r)
-            {-# INLINE allRclause #-}
 
 ---------------------------------------------------------------------
 

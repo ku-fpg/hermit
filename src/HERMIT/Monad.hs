@@ -250,8 +250,8 @@ instance LiftCoreM HermitM where
 
 -- | A message packet.
 data DebugMessage :: * where
-    DebugTick ::                                       String            -> DebugMessage
-    DebugCore :: (ReadBindings c, ReadPath c Crumb) => String -> c -> QC -> DebugMessage
+    DebugTick ::                                       String                 -> DebugMessage
+    DebugCore :: (ReadBindings c, ReadPath c Crumb) => String -> c -> LCoreTC -> DebugMessage
 
 ----------------------------------------------------------------------------
 

@@ -248,8 +248,9 @@ performInduction cm idPred = do
          soleElement (filter idPred bs)
 
     -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-    cases <- queryInContext (inductionCaseSplit bs i lhs rhs :: TransformH QC [(Maybe DataCon, [Var], CoreExpr, CoreExpr)])
-                            cm
+    cases <- queryInContext
+                (inductionCaseSplit bs i lhs rhs :: TransformH LCoreTC [(Maybe DataCon, [Var], CoreExpr, CoreExpr)])
+                cm
 
     -- replace the current lemma with the three subcases
     -- proving them will prove this case automatically
@@ -309,10 +310,10 @@ data ProofShellCommand
     deriving Typeable
 
 -- keep abstract to avoid breaking things if we modify this later
-newtype UserProofTechnique = UserProofTechnique (TransformH QC ())
+newtype UserProofTechnique = UserProofTechnique (TransformH LCoreTC ())
     deriving Typeable
 
-userProofTechnique :: TransformH QC () -> UserProofTechnique
+userProofTechnique :: TransformH LCoreTC () -> UserProofTechnique
 userProofTechnique = UserProofTechnique
 
 instance Extern ProofShellCommand where
