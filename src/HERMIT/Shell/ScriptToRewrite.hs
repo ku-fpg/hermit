@@ -25,7 +25,6 @@ import Control.Exception hiding (catch)
 
 import Data.Dynamic
 import qualified Data.Map as M
-import Data.Monoid
 
 import HERMIT.Context(LocalPathH)
 import HERMIT.External
@@ -98,7 +97,7 @@ getFragment True ast = do
                         _  -> liftM (PP.text "Assumed lemmas: " :) $
                                 queryInFocus ((liftPrettyH opts $
                                                 forM ls $ \(n',l') ->
-                                                    return l' >>> ppLemmaT mempty Clean.pretty n'
+                                                    return l' >>> ppLemmaT Clean.pretty n'
                                               ) :: TransformH Core [DocH]) Never
                 d <- queryInFocus (liftPrettyH opts $
                                     return q >>> extractT (pathT (pathStack2Path p) (ppLCoreTCT Clean.pretty)) :: TransformH Core DocH) Never

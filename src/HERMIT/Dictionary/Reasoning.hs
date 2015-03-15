@@ -281,16 +281,16 @@ showLemmasT :: Maybe LemmaName -> PrettyPrinter -> PrettyH a
 showLemmasT mnm pp = do
     ls <- getLemmasT
     let ls' = Map.toList $ Map.filterWithKey (maybe (\ _ _ -> True) (\ nm n _ -> show nm `isInfixOf` show n) mnm) ls
-    ds <- forM ls' $ \(nm,l) -> return l >>> ppLemmaT mempty pp nm
+    ds <- forM ls' $ \(nm,l) -> return l >>> ppLemmaT pp nm
     return $ PP.vcat ds
 
 showLemmaT :: LemmaName -> PrettyPrinter -> PrettyH a
-showLemmaT nm pp = getLemmaByNameT nm >>> ppLemmaT mempty pp nm
+showLemmaT nm pp = getLemmaByNameT nm >>> ppLemmaT pp nm
 
-ppLemmaT :: PathH -> PrettyPrinter -> LemmaName -> PrettyH Lemma
-ppLemmaT pth pp nm = do
+ppLemmaT :: PrettyPrinter -> LemmaName -> PrettyH Lemma
+ppLemmaT pp nm = do
     Lemma q p _u _t <- idR
-    qDoc <- return q >>> extractT (pathT pth (ppLCoreTCT pp))
+    qDoc <- return q >>> ppQuantifiedT pp
     let hDoc = PP.text (show nm) PP.<+> PP.text ("(" ++ show p ++ ")")
     return $ hDoc PP.$+$ PP.nest 2 qDoc
 
