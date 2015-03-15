@@ -82,6 +82,11 @@ data Core = GutsCore  ModGuts            -- ^ The module.
 data TyCo = TypeCore Type                -- ^ A type.
           | CoercionCore Coercion        -- ^ A coercion.
 
+-- | Core is a KURE universe for traversing GHC Core, including types and coercions.
+--   CoreTC = Core + TyCo
+data CoreTC = Core Core
+            | TyCo TyCo
+
 -- | LCore is a KURE universe for traversing HERMIT lemmas and the Core expressions they contain.
 --   Types and coercions are not traversed (for that, use 'LCoreTC').
 --   LCore = Core + Quantified + Clause
@@ -95,13 +100,9 @@ data LCore = LQuantified Quantified
 data LCoreTC = LTCCore LCore
              | LTCTyCo TyCo
 
--- TODO: alpha and syntactic equality for the new sum types
+-- TODO: alpha and syntactic equality for the new universes
 
--- Universes below to be deprecated (probably)
-
--- | CoreTC is a universe for use by KURE.  CoreTC = Core + TyCo
-data CoreTC = Core Core
-            | TyCo TyCo
+-- TODO: QC universe to be deprecated (probably)
 
 -- | QC (for Quantified Clause) is the universe for Quantified + Clause types.
 data QC = QCQuantified Quantified
@@ -481,10 +482,6 @@ instance Injection Coercion LCoreTC where
 
 ---------------------------------------------------------------------
 
--- instances below are probably going to be deprecated
-
----------------------------------------------------------------------
-
 instance Injection Core CoreTC where
 
   inject :: Core -> CoreTC
@@ -606,6 +603,24 @@ instance Injection Coercion CoreTC where
   {-# INLINE project #-}
 
 ---------------------------------------------------------------------
+
+-- This one's a bit unusual, as it doesn't directly follow the structure of the sum types.
+
+instance Injection CoreTC LCoreTC where
+
+  inject :: CoreTC -> LCoreTC
+  inject (Core c)  = LTCCore (LCore c)
+  inject (TyCo tc) = LTCTyCo tc
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe CoreTC
+  project (LTCCore c)  = Core `fmap` project c
+  project (LTCTyCo tc) = Just (TyCo tc)
+  {-# INLINE project #-}
+
+---------------------------------------------------------------------
+
+-- TODO: these instances to be deprecated (probably)
 
 instance Injection Quantified QC where
 

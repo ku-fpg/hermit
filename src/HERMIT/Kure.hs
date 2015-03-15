@@ -81,6 +81,12 @@ module HERMIT.Kure
        , nthCoT, nthCoAllR, nthCoAnyR, nthCoOneR
        , instCoT, instCoAllR, instCoAnyR, instCoOneR
        , lrCoT, lrCoAllR, lrCoAnyR, lrCoOneR
+      -- ** Lemmas
+      , conjT, conjAllR
+      , disjT, disjAllR
+      , implT, implAllR
+      , equivT, equivAllR
+      , quantifiedT, quantifiedR
        -- * Applicative
        -- | Remove in 7.10
        , (<$>)
@@ -171,9 +177,6 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c
                               _       -> idR
       {-# INLINE allRexpr #-}
 
--- NOTE: I tried telling GHC to inline allR and compilation hit the (default) simplifier tick limit.
--- TODO: Investigate whether that was achieving useful optimisations.
-
 ---------------------------------------------------------------------
 
 -- | Walking over types (only).
@@ -235,7 +238,56 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c TyCo 
 
 ---------------------------------------------------------------------
 
--- | Walking over modules, programs, binding groups, definitions, expressions and case alternatives.
+-- | Walking over modules, programs, binding groups, definitions, expressions, case alternatives, lemma quantifiers and lemma clauses.
+instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb) => Walker c LCore where
+
+    allR :: forall m. MonadCatch m => Rewrite c m LCore -> Rewrite c m LCore
+    allR r = prefixFailMsg "allR failed: " $
+                rewrite $ \ c -> \case
+                    LQuantified q  -> inject <$> applyT allRquantified c q
+                    LClause cl     -> inject <$> applyT allRclause c cl
+                    LCore core     -> inject <$> applyT (allR $ extractR r) c core -- exploiting the fact that quantified/clause does not appear within Core
+        where
+            allRquantified :: MonadCatch m => Rewrite c m Quantified
+            allRquantified = quantifiedR idR (extractR r) -- we don't descend into the binders
+            {-# INLINE allRquantified #-}
+
+            allRclause :: MonadCatch m => Rewrite c m Clause
+            allRclause = readerT $ \case
+                                Conj{}  -> conjAllR  (extractR r) (extractR r)
+                                Disj{}  -> disjAllR  (extractR r) (extractR r)
+                                Impl{}  -> implAllR  (extractR r) (extractR r)
+                                Equiv{} -> equivAllR (extractR r) (extractR r)
+            {-# INLINE allRclause #-}
+
+---------------------------------------------------------------------
+
+-- | Walking over modules, programs, binding groups, definitions, expressions, case alternatives, types, coercions, lemma quantifiers and lemma clauses.
+instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb) => Walker c LCoreTC where
+
+    allR :: forall m. MonadCatch m => Rewrite c m LCoreTC -> Rewrite c m LCoreTC
+    allR r = prefixFailMsg "allR failed: " $
+                rewrite $ \ c -> \case
+                    LTCCore (LQuantified q)  -> inject <$> applyT allRquantified c q
+                    LTCCore (LClause cl)     -> inject <$> applyT allRclause c cl
+                    LTCCore (LCore core)     -> inject <$> applyT (allR (extractR r :: Rewrite c m CoreTC)) c (Core core) -- convert to CoreTC, and exploit the fact that quantifiers and clauses will not appear in Core/CoreTC
+                    LTCTyCo tyCo             -> inject <$> applyT (allR $ extractR r) c tyCo -- exploiting the fact that only types and coercions appear within types and coercions
+        where
+            allRquantified :: MonadCatch m => Rewrite c m Quantified
+            allRquantified = quantifiedR idR (extractR r) -- we don't descend into the binders
+            {-# INLINE allRquantified #-}
+
+            allRclause :: MonadCatch m => Rewrite c m Clause
+            allRclause = readerT $ \case
+                                Conj{}  -> conjAllR (extractR r) (extractR r)
+                                Disj{}  -> disjAllR (extractR r) (extractR r)
+                                Impl{}  -> implAllR  (extractR r) (extractR r)
+                                Equiv{} -> equivAllR (extractR r) (extractR r)
+            {-# INLINE allRclause #-}
+
+---------------------------------------------------------------------
+
+-- | Walking over modules, programs, binding groups, definitions, expressions, case alternatives, types and coercions.
 instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c) => Walker c CoreTC where
 
   allR :: forall m. MonadCatch m => Rewrite c m CoreTC -> Rewrite c m CoreTC
@@ -285,6 +337,32 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c
                               Coercion{} -> coercionR (extractR r)
                               _          -> idR
       {-# INLINE allRexpr #-}
+
+---------------------------------------------------------------------
+
+-- TODO: to be deprecated (probably)
+
+-- | Walking over Quantified and Clause
+instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb) => Walker c QC where
+
+    allR :: forall m. MonadCatch m => Rewrite c m QC -> Rewrite c m QC
+    allR r = prefixFailMsg "allR failed: " $
+                rewrite $ \ c -> \case
+                    QCQuantified q  -> inject <$> applyT allRquantified c q
+                    QCClause cl     -> inject <$> applyT allRclause c cl
+                    QCCoreTC coreTC -> inject <$> applyT (allR $ extractR r) c coreTC -- exploiting the fact that quantified/clause does not appear within CoreTC
+        where
+            allRquantified :: MonadCatch m => Rewrite c m Quantified
+            allRquantified = quantifiedR idR (extractR r) -- we don't descend into the binders
+            {-# INLINE allRquantified #-}
+
+            allRclause :: MonadCatch m => Rewrite c m Clause
+            allRclause = readerT $ \case
+                                Conj{}  -> conjAllR (extractR r) (extractR r)
+                                Disj{}  -> disjAllR (extractR r) (extractR r)
+                                Impl{}  -> implAllR  (extractR r) (extractR r)
+                                Equiv{} -> equivAllR (extractR r) (extractR r)
+            {-# INLINE allRclause #-}
 
 ---------------------------------------------------------------------
 
@@ -1240,36 +1318,72 @@ instCoOneR r1 r2 = unwrapOneR $ instCoAllR (wrapOneR r1) (wrapOneR r2)
 
 ---------------------------------------------------------------------
 
+-- | Transform a clause of the form: @Conj@ 'Quantified' 'Quantified'
+conjT :: (ExtendPath c Crumb, Monad m) => Transform c m Quantified a1 -> Transform c m Quantified a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+conjT t1 t2 f = transform $ \ c -> \case
+                                     Conj q1 q2 -> f <$> applyT t1 (c @@ Conj_Lhs) q1 <*> applyT t2 (c @@ Conj_Rhs) q2
+                                     _          -> fail "not a conjunction."
+{-# INLINE conjT #-}
+
+-- | Rewrite all children of a clause of the form: : @Conj@ 'Quantified' 'Quantified'
+conjAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Quantified -> Rewrite c m Quantified -> Rewrite c m Clause
+conjAllR r1 r2 = conjT r1 r2 Conj
+{-# INLINE conjAllR #-}
+
+
+-- | Transform a clause of the form: @Disj@ 'Quantified' 'Quantified'
+disjT :: (ExtendPath c Crumb, Monad m) => Transform c m Quantified a1 -> Transform c m Quantified a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+disjT t1 t2 f = transform $ \ c -> \case
+                                     Conj q1 q2 -> f <$> applyT t1 (c @@ Disj_Lhs) q1 <*> applyT t2 (c @@ Disj_Rhs) q2
+                                     _          -> fail "not a disjunction."
+{-# INLINE disjT #-}
+
+-- | Rewrite all children of a clause of the form: : @Disj@ 'Quantified' 'Quantified'
+disjAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Quantified -> Rewrite c m Quantified -> Rewrite c m Clause
+disjAllR r1 r2 = disjT r1 r2 Disj
+{-# INLINE disjAllR #-}
+
+
+-- | Transform a clause of the form: @Impl@ 'Quantified' 'Quantified'
+implT :: (ExtendPath c Crumb, Monad m) => Transform c m Quantified a1 -> Transform c m Quantified a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+implT t1 t2 f = transform $ \ c -> \case
+                                     Impl q1 q2 -> f <$> applyT t1 (c @@ Impl_Lhs) q1 <*> applyT t2 (c @@ Impl_Rhs) q2
+                                     _          -> fail "not an implication."
+{-# INLINE implT #-}
+
+-- | Rewrite all children of a clause of the form: : @Impl@ 'Quantified' 'Quantified'
+implAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Quantified -> Rewrite c m Quantified -> Rewrite c m Clause
+implAllR r1 r2 = implT r1 r2 Impl
+{-# INLINE implAllR #-}
+
+-- | Transform a clause of the form: @Equiv@ 'CoreExpr' 'CoreExpr'
+equivT :: (ExtendPath c Crumb, Monad m) => Transform c m CoreExpr a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+equivT t1 t2 f = transform $ \ c -> \case
+                                     Equiv e1 e2 -> f <$> applyT t1 (c @@ Eq_Lhs) e1 <*> applyT t2 (c @@ Eq_Rhs) e2
+                                     _           -> fail "not an equivalence."
+{-# INLINE equivT #-}
+
+-- | Rewrite all children of a clause of the form: : @Equiv@ 'CoreExpr' 'CoreExpr'
+equivAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m Clause
+equivAllR r1 r2 = equivT r1 r2 Equiv
+{-# INLINE equivAllR #-}
+
+---------------------------------------------------------------------
+
+-- | Transform a quantifier of the form: @Quantified@ 'Clause'
+quantifiedT :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, Monad m) => Transform c m [CoreBndr] a1 -> Transform c m Clause a2 -> (a1 -> a2 -> b) -> Transform c m Quantified b
+quantifiedT t1 t2 f = transform $ \ c (Quantified bs cl) -> let c' = foldl (flip addLambdaBinding) c bs
+                                                             in f <$> applyT t1 c bs <*> applyT t2 (c' @@ Forall_Body) cl
+{-# INLINE quantifiedT #-}
+
+-- | Rewrite the clause of a quantifier of the form: @Quantified@ 'Clause'
+quantifiedR :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, Monad m) => Rewrite c m [CoreBndr] -> Rewrite c m Clause -> Rewrite c m Quantified
+quantifiedR r1 r2 = quantifiedT r1 r2 Quantified
+{-# INLINE quantifiedR #-}
+
+---------------------------------------------------------------------
+
 instance HasDynFlags m => HasDynFlags (Transform c m a) where
     getDynFlags = constT getDynFlags
 
 ---------------------------------------------------------------------
-
--- | Walking over Quantified and Clause
-instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb) => Walker c QC where
-
-    allR :: forall m. MonadCatch m => Rewrite c m QC -> Rewrite c m QC
-    allR r = prefixFailMsg "allR failed: " $
-                rewrite $ \ c -> \case
-                    QCQuantified q  -> inject <$> applyT allRquantified c q
-                    QCClause cl     -> inject <$> applyT allRclause c cl
-                    QCCoreTC coreTC -> inject <$> applyT (allR $ extractR r) c coreTC -- exploiting the fact that quantified/clause does not appear within CoreTC
-        where
-            allRquantified :: MonadCatch m => Rewrite c m Quantified
-            allRquantified = rewrite $ \ c (Quantified bs cl) ->
-                                let c' = foldl (flip addLambdaBinding) c bs
-                                in Quantified bs <$> applyT (extractR r) (c' @@ Forall_Body) cl
-            {-# INLINE allRquantified #-}
-
-            allRclause :: MonadCatch m => Rewrite c m Clause
-            allRclause = rewrite $ \ c cl ->
-                            case cl of
-                                Conj  q1 q2 -> Conj  <$> applyT (extractR r) (c @@ Conj_Lhs) q1
-                                                     <*> applyT (extractR r) (c @@ Conj_Rhs) q2
-                                Disj  q1 q2 -> Disj  <$> applyT (extractR r) (c @@ Disj_Lhs) q1
-                                                     <*> applyT (extractR r) (c @@ Disj_Rhs) q2
-                                Impl  q1 q2 -> Impl  <$> applyT (extractR r) (c @@ Impl_Lhs) q1
-                                                     <*> applyT (extractR r) (c @@ Impl_Rhs) q2
-                                Equiv e1 e2 -> Equiv <$> applyT (extractR r) (c @@ Eq_Lhs) e1
-                                                     <*> applyT (extractR r) (c @@ Eq_Rhs) e2
-            {-# INLINE allRclause #-}

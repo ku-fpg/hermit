@@ -224,41 +224,33 @@ birewrite q = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEqual
 ------------------------------------------------------------------------------
 
 -- | Lift a transformation over 'QC' into a transformation over the left-hand side of a 'Quantified'.
-lhsT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified a
+lhsT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified a
 lhsT t = quantifiedT successT (clauseT t successT (\_ l _ -> l)) (flip const)
 
 -- | Lift a transformation over 'QC' into a transformation over the right-hand side of a 'Quantified'.
-rhsT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified a
+rhsT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified a
 rhsT t = quantifiedT successT (clauseT successT t (\_ _ r -> r)) (flip const)
 
 -- | Lift a transformation over 'QC' into a transformation over both sides of a 'Quantified'.
-bothT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified (a, a)
+bothT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m) => Transform c m QC a -> Transform c m Quantified (a, a)
 bothT t = quantifiedT successT (clauseT t t (const (,))) (flip const)
 
 -- | Lift a rewrite over 'QC' into a rewrite over the left-hand side of a 'Quantified'.
-lhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m QC -> Rewrite c m Quantified
-lhsR r = quantifiedR (clauseR r idR)
+lhsR :: (AddBindings c, Monad m, ReadPath c Crumb, ExtendPath c Crumb) => Rewrite c m QC -> Rewrite c m Quantified
+lhsR r = quantifiedR idR (clauseR r idR)
 
 -- | Lift a rewrite over 'QC' into a rewrite over the right-hand side of a 'Quantified'.
-rhsR :: (AddBindings c, Monad m, ReadPath c Crumb) => Rewrite c m QC -> Rewrite c m Quantified
-rhsR r = quantifiedR (clauseR idR r)
+rhsR :: (AddBindings c, Monad m, ReadPath c Crumb, ExtendPath c Crumb) => Rewrite c m QC -> Rewrite c m Quantified
+rhsR r = quantifiedR idR (clauseR idR r)
 
 -- | Lift a rewrite over 'QC' into a rewrite over both sides of a 'Quantified'.
-bothR :: (AddBindings c, MonadCatch m, ReadPath c Crumb)
+bothR :: (AddBindings c, MonadCatch m, ReadPath c Crumb, ExtendPath c Crumb)
       => Rewrite c m QC -> Rewrite c m Quantified
 bothR r = lhsR r >+> rhsR r
 
 ------------------------------------------------------------------------------
 
--- | Lift a transformation over 'Clause' into a transformation over a 'Quantified'.
-quantifiedT :: (AddBindings c, Monad m, ReadPath c Crumb)
-            => Transform c m [Var] a -> Transform c m Clause b -> (a -> b -> d) -> Transform c m Quantified d
-quantifiedT tvs tc f = do
-    Quantified vs cl <- idR
-    f <$> (return vs >>> tvs) <*> (return cl >>> withVarsInScope vs tc)
-
-quantifiedR :: (AddBindings c, ReadPath c Crumb, Monad m) => Rewrite c m Clause -> Rewrite c m Quantified
-quantifiedR rr = quantifiedT idR rr Quantified
+-- TODO: this isn't idiosyncratic KURE.  Traversal should be handled by the congruence combinators in HERMIT/Kure.hs, or derived generic strategies.
 
 -- | Original clause passed to function so it can decide how to handle connective.
 clauseT :: Monad m => Transform c m QC a -> Transform c m QC b -> (Clause -> a -> b -> d) -> Transform c m Clause d
@@ -278,7 +270,7 @@ clauseR r1 r2 =
         Equiv q1 q2 -> Equiv <$> (return q1 >>> extractR r1) <*> (return q2 >>> extractR r2)
 
 -- | Lift a transformation over '[Var]' into a transformation over the universally quantified variables of a 'Quantified'.
-forallVarsT :: (AddBindings c, ReadPath c Crumb, Monad m) => Transform c m [Var] b -> Transform c m Quantified b
+forallVarsT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m) => Transform c m [Var] b -> Transform c m Quantified b
 forallVarsT t = quantifiedT t successT const
 
 ------------------------------------------------------------------------------
@@ -325,10 +317,10 @@ ppClauseT pp = do
 
 ------------------------------------------------------------------------------
 
-verifyQuantifiedT :: (AddBindings c, ReadPath c Crumb, MonadCatch m) => Transform c m Quantified ()
+verifyQuantifiedT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m) => Transform c m Quantified ()
 verifyQuantifiedT = quantifiedT successT verifyClauseT (flip const)
 
-verifyClauseT :: (AddBindings c, ReadPath c Crumb, MonadCatch m) => Transform c m Clause ()
+verifyClauseT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m) => Transform c m Clause ()
 verifyClauseT =
     readerT (\case Conj  q1 q2 -> (return q1 >>> verifyQuantifiedT) >> (return q2 >>> verifyQuantifiedT)
                    Disj  q1 q2 -> (return q1 >>> verifyQuantifiedT) <+ (return q2 >>> verifyQuantifiedT)
@@ -352,15 +344,15 @@ verifyOrCreateT nm l = do
 
 ------------------------------------------------------------------------------
 
-lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m)
+lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
                 => Transform c m Quantified String
 lintQuantifiedT = lintQuantifiedWorkT []
 
-lintQuantifiedWorkT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m)
+lintQuantifiedWorkT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
                     => [Var] -> Transform c m Quantified String
 lintQuantifiedWorkT bs = readerT $ \ (Quantified bs' _) -> quantifiedT successT (lintClauseT (bs++bs')) (flip const)
 
-lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, HasDynFlags m, MonadCatch m)
+lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
             => [Var] -> Transform c m Clause String
 lintClauseT bs = do
     t <- readerT $ \case Equiv {} -> return $ promoteT ({- arr (mkCoreLams bs) >>> -} lintExprT) -- TODO: why does this break core lint?!
