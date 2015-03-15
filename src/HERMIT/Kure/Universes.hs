@@ -8,6 +8,8 @@ module HERMIT.Kure.Universes
     ( -- * Universes
       Core(..)
     , TyCo(..)
+    , LCore(..)
+    , LCoreTC(..)
     , CoreTC(..)
     , QC(..)
       -- * Equality
@@ -36,6 +38,7 @@ module HERMIT.Kure.Universes
     , promoteQuantifiedT
     , promoteClauseT
     , promoteCoreT
+    , promoteLCoreT
     , promoteCoreTCT
       -- ** Rewrite Promotions
     , promoteModGutsR
@@ -49,6 +52,7 @@ module HERMIT.Kure.Universes
     , promoteQuantifiedR
     , promoteClauseR
     , promoteCoreR
+    , promoteLCoreR
     , promoteCoreTCR
       -- ** BiRewrite Promotions
     , promoteExprBiR
@@ -64,7 +68,8 @@ import HERMIT.Lemma
 
 ---------------------------------------------------------------------
 
--- | Core is a universe for use by KURE.  Core = ModGuts + CoreProg + CoreBind + CoreDef + CoreExpr + CoreAlt
+-- | Core is a KURE universe for traversing GHC Core, excluding types and coercions.
+--   Core = ModGuts + CoreProg + CoreBind + CoreDef + CoreExpr + CoreAlt
 data Core = GutsCore  ModGuts            -- ^ The module.
           | ProgCore  CoreProg           -- ^ A program (a telescope of top-level binding groups).
           | BindCore  CoreBind           -- ^ A binding group.
@@ -72,15 +77,33 @@ data Core = GutsCore  ModGuts            -- ^ The module.
           | ExprCore  CoreExpr           -- ^ An expression.
           | AltCore   CoreAlt            -- ^ A case alternative.
 
--- | TyCo is a universe for use by KURE.  TyCo = Type + Coercion
+-- | TyCo is a KURE universe for traversing types and coercions.
+--   TyCo = Type + Coercion
 data TyCo = TypeCore Type                -- ^ A type.
           | CoercionCore Coercion        -- ^ A coercion.
+
+-- | LCore is a KURE universe for traversing HERMIT lemmas and the Core expressions they contain.
+--   Types and coercions are not traversed (for that, use 'LCoreTC').
+--   LCore = Core + Quantified + Clause
+data LCore = LQuantified Quantified
+           | LClause     Clause
+           | LCore       Core
+
+-- | LCoreTC is a KURE universe for traversing HERMIT lemmas and the Core expressions they contain.
+--   Unlike 'LCore', types and coercions are also traversed.
+--   LCore = LCore + TyCo
+data LCoreTC = LTCCore LCore
+             | LTCTyCo TyCo
+
+-- TODO: alpha and syntactic equality for the new sum types
+
+-- Universes below to be deprecated (probably)
 
 -- | CoreTC is a universe for use by KURE.  CoreTC = Core + TyCo
 data CoreTC = Core Core
             | TyCo TyCo
 
--- QC (for Quantified Clause) is the universe for Quantified + Clause types.
+-- | QC (for Quantified Clause) is the universe for Quantified + Clause types.
 data QC = QCQuantified Quantified
         | QCClause     Clause
         | QCCoreTC     CoreTC
@@ -254,6 +277,211 @@ instance Injection Coercion TyCo where
   project (CoercionCore ty) = Just ty
   project _                 = Nothing
   {-# INLINE project #-}
+
+---------------------------------------------------------------------
+
+instance Injection Core LCore where
+
+  inject :: Core -> LCore
+  inject = LCore
+  {-# INLINE inject #-}
+
+  project :: LCore -> Maybe Core
+  project (LCore c) = Just c
+  project _         = Nothing
+  {-# INLINE project #-}
+
+
+instance Injection Clause LCore where
+
+  inject :: Clause -> LCore
+  inject = LClause
+  {-# INLINE inject #-}
+
+  project :: LCore -> Maybe Clause
+  project (LClause cl) = Just cl
+  project _            = Nothing
+  {-# INLINE project #-}
+
+
+instance Injection Quantified LCore where
+
+  inject :: Quantified -> LCore
+  inject = LQuantified
+  {-# INLINE inject #-}
+
+  project :: LCore -> Maybe Quantified
+  project (LQuantified q) = Just q
+  project _               = Nothing
+  {-# INLINE project #-}
+
+---------------------------------------------------------------------
+
+instance Injection LCore LCoreTC where
+
+  inject :: LCore -> LCoreTC
+  inject = LTCCore
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe LCore
+  project (LTCCore core) = Just core
+  project _              = Nothing
+  {-# INLINE project #-}
+
+
+instance Injection TyCo LCoreTC where
+
+  inject :: TyCo -> LCoreTC
+  inject = LTCTyCo
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe TyCo
+  project (LTCTyCo tyCo) = Just tyCo
+  project _              = Nothing
+  {-# INLINE project #-}
+
+---------------------------------------------------------------------
+
+instance Injection CoreExpr LCore where
+  inject :: CoreExpr -> LCore
+  inject = LCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCore -> Maybe CoreExpr
+  project (LCore c) = project c
+  project _         = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreBind LCore where
+  inject :: CoreBind -> LCore
+  inject = LCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCore -> Maybe CoreBind
+  project (LCore c) = project c
+  project _         = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreDef LCore where
+  inject :: CoreDef -> LCore
+  inject = LCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCore -> Maybe CoreDef
+  project (LCore c) = project c
+  project _         = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreAlt LCore where
+  inject :: CoreAlt -> LCore
+  inject = LCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCore -> Maybe CoreAlt
+  project (LCore c) = project c
+  project _         = Nothing
+  {-# INLINE project #-}
+
+---------------------------------------------------------------------
+
+instance Injection Quantified LCoreTC where
+
+  inject :: Quantified -> LCoreTC
+  inject = LTCCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe Quantified
+  project (LTCCore lc) = project lc
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection Clause LCoreTC where
+
+  inject :: Clause -> LCoreTC
+  inject = LTCCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe Clause
+  project (LTCCore lc) = project lc
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection Core LCoreTC where
+
+  inject :: Core -> LCoreTC
+  inject = LTCCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe Core
+  project (LTCCore lc) = project lc
+  project _            = Nothing
+  {-# INLINE project #-}
+
+---------------------------------------------------------------------
+
+instance Injection CoreExpr LCoreTC where
+  inject :: CoreExpr -> LCoreTC
+  inject = LTCCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe CoreExpr
+  project (LTCCore lc) = project lc
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreBind LCoreTC where
+  inject :: CoreBind -> LCoreTC
+  inject = LTCCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe CoreBind
+  project (LTCCore lc) = project lc
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreDef LCoreTC where
+  inject :: CoreDef -> LCoreTC
+  inject = LTCCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe CoreDef
+  project (LTCCore lc) = project lc
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection CoreAlt LCoreTC where
+  inject :: CoreAlt -> LCoreTC
+  inject = LTCCore . inject
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe CoreAlt
+  project (LTCCore lc) = project lc
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection Type LCoreTC where
+  inject :: Type -> LCoreTC
+  inject = LTCTyCo . inject
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe Type
+  project (LTCTyCo tc) = project tc
+  project _            = Nothing
+  {-# INLINE project #-}
+
+instance Injection Coercion LCoreTC where
+  inject :: Coercion -> LCoreTC
+  inject = LTCTyCo . inject
+  {-# INLINE inject #-}
+
+  project :: LCoreTC -> Maybe Coercion
+  project (LTCTyCo tc) = project tc
+  project _            = Nothing
+  {-# INLINE project #-}
+
+---------------------------------------------------------------------
+
+-- instances below are probably going to be deprecated
 
 ---------------------------------------------------------------------
 
@@ -549,6 +777,11 @@ promoteCoreT :: (Monad m, Injection Core g) => Transform c m Core b -> Transform
 promoteCoreT = promoteWithFailMsgT "This translate can only succeed at core nodes."
 {-# INLINE promoteCoreT #-}
 
+-- | Promote a translate on 'LCore'.
+promoteLCoreT :: (Monad m, Injection LCore g) => Transform c m LCore b -> Transform c m g b
+promoteLCoreT = promoteWithFailMsgT "This translate can only succeed at lemma or core nodes."
+{-# INLINE promoteLCoreT #-}
+
 -- | Promote a translate on 'CoreTC'.
 promoteCoreTCT :: (Monad m, Injection CoreTC g) => Transform c m CoreTC b -> Transform c m g b
 promoteCoreTCT = promoteWithFailMsgT "This translate can only succeed at core nodes."
@@ -610,6 +843,11 @@ promoteClauseR = promoteWithFailMsgR "This rewrite can only succeed at quantifie
 promoteCoreR :: (Monad m, Injection Core g) => Rewrite c m Core -> Rewrite c m g
 promoteCoreR = promoteWithFailMsgR "This rewrite can only succeed at core nodes."
 {-# INLINE promoteCoreR #-}
+
+-- | Promote a rewrite on 'Core'.
+promoteLCoreR :: (Monad m, Injection LCore g) => Rewrite c m LCore -> Rewrite c m g
+promoteLCoreR = promoteWithFailMsgR "This rewrite can only succeed at lemma or core nodes."
+{-# INLINE promoteLCoreR #-}
 
 -- | Promote a rewrite on 'CoreTC'.
 promoteCoreTCR :: (Monad m, Injection CoreTC g) => Rewrite c m CoreTC -> Rewrite c m g
