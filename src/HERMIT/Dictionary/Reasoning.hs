@@ -250,24 +250,20 @@ bothR r = lhsR r >+> rhsR r
 
 ------------------------------------------------------------------------------
 
--- TODO: this isn't idiosyncratic KURE.  Traversal should be handled by the congruence combinators in HERMIT/Kure.hs, or derived generic strategies.
-
 -- | Original clause passed to function so it can decide how to handle connective.
-clauseT :: Monad m => Transform c m QC a -> Transform c m QC b -> (Clause -> a -> b -> d) -> Transform c m Clause d
-clauseT t1 t2 f =
-    readerT $ \ cl -> case cl of
-        Conj  q1 q2 -> f cl <$> (return q1 >>> extractT t1) <*> (return q2 >>> extractT t2)
-        Disj  q1 q2 -> f cl <$> (return q1 >>> extractT t1) <*> (return q2 >>> extractT t2)
-        Impl  q1 q2 -> f cl <$> (return q1 >>> extractT t1) <*> (return q2 >>> extractT t2)
-        Equiv e1 e2 -> f cl <$> (return e1 >>> extractT t1) <*> (return e2 >>> extractT t2)
+clauseT :: (Monad m, ExtendPath c Crumb) => Transform c m QC a -> Transform c m QC b -> (Clause -> a -> b -> d) -> Transform c m Clause d
+clauseT t1 t2 f = readerT $ \ cl -> case cl of
+                                      Conj{}  -> conjT  (extractT t1) (extractT t2) (f cl)
+                                      Disj{}  -> disjT  (extractT t1) (extractT t2) (f cl)
+                                      Impl{}  -> implT  (extractT t1) (extractT t2) (f cl)
+                                      Equiv{} -> equivT (extractT t1) (extractT t2) (f cl)
 
-clauseR :: Monad m => Rewrite c m QC -> Rewrite c m QC -> Rewrite c m Clause
-clauseR r1 r2 =
-    readerT $ \ cl -> case cl of
-        Conj  q1 q2 -> Conj  <$> (return q1 >>> extractR r1) <*> (return q2 >>> extractR r2)
-        Disj  q1 q2 -> Disj  <$> (return q1 >>> extractR r1) <*> (return q2 >>> extractR r2)
-        Impl  q1 q2 -> Impl  <$> (return q1 >>> extractR r1) <*> (return q2 >>> extractR r2)
-        Equiv q1 q2 -> Equiv <$> (return q1 >>> extractR r1) <*> (return q2 >>> extractR r2)
+clauseR :: (Monad m, ExtendPath c Crumb) => Rewrite c m QC -> Rewrite c m QC -> Rewrite c m Clause
+clauseR r1 r2 = readerT $ \case
+                             Conj{}  -> conjAllR (extractR r1) (extractR r2)
+                             Disj{}  -> disjAllR (extractR r1) (extractR r2)
+                             Impl{}  -> implAllR (extractR r1) (extractR r2)
+                             Equiv{} -> equivAllR (extractR r1) (extractR r2)
 
 -- | Lift a transformation over '[Var]' into a transformation over the universally quantified variables of a 'Quantified'.
 forallVarsT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m) => Transform c m [Var] b -> Transform c m Quantified b
