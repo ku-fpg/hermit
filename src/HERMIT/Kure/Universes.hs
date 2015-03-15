@@ -5,7 +5,7 @@
 {-# LANGUAGE LambdaCase #-}
 
 module HERMIT.Kure.Universes
-    ( -- * Sum Types
+    ( -- * Universes
       Core(..)
     , TyCo(..)
     , CoreTC(..)
@@ -620,7 +620,7 @@ promoteCoreTCR = promoteWithFailMsgR "This rewrite can only succeed at core node
 
 -- | Promote a bidirectional rewrite on 'CoreExpr'.
 promoteExprBiR :: (Monad m, Injection CoreExpr g) => BiRewrite c m CoreExpr -> BiRewrite c m g
-promoteExprBiR b = bidirectional (promoteExprR $ forwardT b) (promoteExprR $ backwardT b)
+promoteExprBiR = promoteWithFailMsgBiR "This rewrite can only succeed at expression nodes."
 {-# INLINE promoteExprBiR #-}
 
 ---------------------------------------------------------------------
