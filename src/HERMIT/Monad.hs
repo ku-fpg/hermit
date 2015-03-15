@@ -45,7 +45,7 @@ import HERMIT.Core
 import HERMIT.Context
 import HERMIT.GHC
 import HERMIT.GHC.Typechecker
-import HERMIT.Kure.SumTypes
+import HERMIT.Kure.Universes
 import HERMIT.Lemma
 
 ----------------------------------------------------------------------------

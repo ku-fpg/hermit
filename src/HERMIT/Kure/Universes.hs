@@ -4,7 +4,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 
-module HERMIT.Kure.SumTypes
+module HERMIT.Kure.Universes
     ( -- * Sum Types
       Core(..)
     , TyCo(..)
@@ -64,7 +64,7 @@ import HERMIT.Lemma
 
 ---------------------------------------------------------------------
 
--- | Core is a sum type for use by KURE.  Core = ModGuts + CoreProg + CoreBind + CoreDef + CoreExpr + CoreAlt
+-- | Core is a universe for use by KURE.  Core = ModGuts + CoreProg + CoreBind + CoreDef + CoreExpr + CoreAlt
 data Core = GutsCore  ModGuts            -- ^ The module.
           | ProgCore  CoreProg           -- ^ A program (a telescope of top-level binding groups).
           | BindCore  CoreBind           -- ^ A binding group.
@@ -72,15 +72,15 @@ data Core = GutsCore  ModGuts            -- ^ The module.
           | ExprCore  CoreExpr           -- ^ An expression.
           | AltCore   CoreAlt            -- ^ A case alternative.
 
--- | TyCo is a sum type for use by KURE.  TyCo = Type + Coercion
+-- | TyCo is a universe for use by KURE.  TyCo = Type + Coercion
 data TyCo = TypeCore Type                -- ^ A type.
           | CoercionCore Coercion        -- ^ A coercion.
 
--- | CoreTC is a sum type for use by KURE.  CoreTC = Core + TyCo
+-- | CoreTC is a universe for use by KURE.  CoreTC = Core + TyCo
 data CoreTC = Core Core
             | TyCo TyCo
 
--- QC (for Quantified Clause) is the sum type for Quantified + Clause types.
+-- QC (for Quantified Clause) is the universe for Quantified + Clause types.
 data QC = QCQuantified Quantified
         | QCClause     Clause
         | QCCoreTC     CoreTC
@@ -624,4 +624,3 @@ promoteExprBiR b = bidirectional (promoteExprR $ forwardT b) (promoteExprR $ bac
 {-# INLINE promoteExprBiR #-}
 
 ---------------------------------------------------------------------
-

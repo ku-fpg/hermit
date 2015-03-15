@@ -18,7 +18,7 @@ module HERMIT.Kure
        , module Language.KURE.ExtendableContext
        , module Language.KURE.Pathfinder
        -- * Sub-Modules
-       , module HERMIT.Kure.SumTypes
+       , module HERMIT.Kure.Universes
        -- * Synonyms
        , TransformH
        , RewriteH
@@ -97,7 +97,7 @@ import Language.KURE.Pathfinder
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.GHC
-import HERMIT.Kure.SumTypes
+import HERMIT.Kure.Universes
 import HERMIT.Lemma
 import HERMIT.Monad
 

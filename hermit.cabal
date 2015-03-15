@@ -212,7 +212,7 @@ Library
        HERMIT.GHC.Typechecker
        HERMIT.Kernel
        HERMIT.Kure
-       HERMIT.Kure.SumTypes
+       HERMIT.Kure.Universes
        HERMIT.Lemma
        HERMIT.Monad
        HERMIT.Name
