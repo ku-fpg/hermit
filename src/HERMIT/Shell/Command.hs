@@ -199,20 +199,6 @@ interpShell =
   , interpEM $ \ (BiRewriteLCoreTCBox br)       -> applyRewrite $ whicheverR br
   , interpEM $ \ (PrettyHLCoreBox t)            -> performQuery (QueryPrettyH t)
   , interpEM $ \ (PrettyHLCoreTCBox t)          -> performQuery (QueryPrettyH t)
-    -- TODO likely remove
-  , interpEM $ \ (PrettyHCoreBox t)            -> performQuery (QueryPrettyH t)
-  , interpEM $ \ (PrettyHCoreTCBox t)          -> performQuery (QueryPrettyH t)
-  , interpEM $ \ (RewriteCoreBox rr)           -> applyRewrite $ promoteCoreR rr
-  , interpEM $ \ (RewriteCoreTCBox rr)         -> applyRewrite $ promoteCoreTCR rr
-  , interpEM $ \ (BiRewriteCoreBox br)         -> applyRewrite $ promoteCoreR $ whicheverR br
-  , interpEM $ \ (TransformCorePathBox tt)     -> setPath tt
-  , interpEM $ \ (TransformCoreTCPathBox tt)   -> setPath tt
-  , interpEM $ \ (TransformCoreStringBox tt)   -> performQuery (QueryString tt)
-  , interpEM $ \ (TransformCoreTCStringBox tt) -> performQuery (QueryString tt)
-  , interpEM $ \ (TransformCoreDocHBox t)      -> performQuery (QueryDocH t)
-  , interpEM $ \ (TransformCoreTCDocHBox t)    -> performQuery (QueryDocH t)
-  , interpEM $ \ (TransformCoreCheckBox tt)    -> performQuery (QueryUnit tt)
-  , interpEM $ \ (TransformCoreTCCheckBox tt)  -> performQuery (QueryUnit tt)
   ]
 
 -------------------------------------------------------------------------------

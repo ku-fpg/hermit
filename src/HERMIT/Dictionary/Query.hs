@@ -31,7 +31,7 @@ import HERMIT.Dictionary.Inline hiding (externals)
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
 externals :: [External]
 externals =
-    [ external "info" (infoT :: TransformH CoreTC String)
+    [ external "info" (promoteCoreTCT infoT :: TransformH LCoreTC String)
         [ "Display information about the current node." ] .+ Query
     , external "compare-bound-ids" (compareBoundIds :: HermitName -> HermitName -> TransformH LCoreTC ())
         [ "Compare the definitions of two in-scope identifiers for alpha equality."] .+ Query .+ Predicate

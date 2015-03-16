@@ -33,10 +33,6 @@ module HERMIT.PrettyPrinter.Common
     , PrettyHLCoreTCBox(..)
     , TransformLCoreDocHBox(..)
     , TransformLCoreTCDocHBox(..)
-    , PrettyHCoreBox(..) -- TODO: remove?
-    , PrettyHCoreTCBox(..) -- TODO: remove?
-    , TransformCoreDocHBox(..) -- TODO: remove?
-    , TransformCoreTCDocHBox(..) -- TODO: remove?
     , liftPrettyH
     , PrettyC(..)
     , initPrettyC
@@ -168,38 +164,6 @@ instance Extern (TransformH LCoreTC DocH) where
     box = TransformLCoreTCDocHBox
     unbox (TransformLCoreTCDocHBox i) = i
 
--------------------------------------------------------------------------------
--- TODO: remove these?
-
-data PrettyHCoreBox = PrettyHCoreBox (PrettyH Core) deriving Typeable
-
-instance Extern (PrettyH Core) where
-    type Box (PrettyH Core) = PrettyHCoreBox
-    box = PrettyHCoreBox
-    unbox (PrettyHCoreBox i) = i
-
-data PrettyHCoreTCBox = PrettyHCoreTCBox (PrettyH CoreTC) deriving Typeable
-
-instance Extern (PrettyH CoreTC) where
-    type Box (PrettyH CoreTC) = PrettyHCoreTCBox
-    box = PrettyHCoreTCBox
-    unbox (PrettyHCoreTCBox i) = i
-
-data TransformCoreDocHBox = TransformCoreDocHBox (TransformH Core DocH) deriving Typeable
-
-instance Extern (TransformH Core DocH) where
-    type Box (TransformH Core DocH) = TransformCoreDocHBox
-    box = TransformCoreDocHBox
-    unbox (TransformCoreDocHBox i) = i
-
-data TransformCoreTCDocHBox = TransformCoreTCDocHBox (TransformH CoreTC DocH) deriving Typeable
-
-instance Extern (TransformH CoreTC DocH) where
-    type Box (TransformH CoreTC DocH) = TransformCoreTCDocHBox
-    box = TransformCoreTCDocHBox
-    unbox (TransformCoreTCDocHBox i) = i
-
--- end TODO
 -------------------------------------------------------------------------------
 
 -- | Context for PrettyH translations.

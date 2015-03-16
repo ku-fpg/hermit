@@ -42,7 +42,8 @@ shell_externals = map (.+ Shell)
         [ "garbage-collect a given AST" ]
     , external "gc"              (CLSModify $ liftM Right . gc)
         [ "garbage-collect all ASTs except for the initial and current AST" ]
-    , external "display"         pCoreTC
+    , external "display"         (CLSModify $ \ st -> do (er,st') <- runCLT st (showWindow Nothing)
+                                                         return $ fmap (const st') er)
         [ "redisplays current state" ]
     , external "up"              (Direction U)
         [ "move to the parent node"]
@@ -163,7 +164,7 @@ shell_externals = map (.+ Shell)
         [ "Stop running the current script." ]
     --, external "test-rewrites" (testRewrites :: [(ExternalName,RewriteH Core)] -> TransformH Core String)
     --  ["Test a given set of rewrites to see if they succeed"] .+ Experiment
-    , external "possible-rewrites" (testAllT:: CommandLineState-> TransformH Core String)
+    , external "possible-rewrites" (testAllT:: CommandLineState -> TransformH LCore String)
         ["Test all given set of rewrites to see if they succeed"] .+ Experiment
     -- TODO: maybe add a "list-scripts" as well that just lists the names of loaded scripts?
     ] ++ Proof.externals
@@ -255,14 +256,14 @@ showScripts :: [(ScriptName,Script)] -> String
 showScripts = concatMap (\ (name,script) -> name ++ ": " ++ unparseScript script ++ "\n\n")
 
 -------------------------------------------------------------------------------
-testAllT :: CommandLineState -> TransformH Core String
+testAllT :: CommandLineState -> TransformH LCore String
 testAllT st = do
                 let es  = cl_externals st
-                    mbs = map (\d -> (externName d, fromDynamic (externDyn d) :: Maybe RewriteCoreBox)) es
+                    mbs = map (\d -> (externName d, fromDynamic (externDyn d) :: Maybe RewriteLCoreBox)) es
                     namedRewrites = [(name ,unbox boxedR) | (name, Just boxedR) <- mbs]
                 testRewrites False namedRewrites
 
-testRewrites :: Bool-> [(ExternalName, RewriteH Core)] -> TransformH Core String
+testRewrites :: Bool-> [(ExternalName, RewriteH LCore)] -> TransformH LCore String
 testRewrites debug rewrites = case debug of
                        True -> let list =  mapM (\ (n,r) -> liftM (f n) (testM r)) rewrites
                                in  liftM unlines list

@@ -49,17 +49,6 @@ module HERMIT.External
     , RewriteLCoreTCBox(..)
     , BiRewriteLCoreTCBox(..)
     , RewriteLCoreTCListBox(..)
-      -- TODO: likely remove
-    , BiRewriteCoreBox(..)
-    , RewriteCoreBox(..)
-    , RewriteCoreListBox(..)
-    , RewriteCoreTCBox(..)
-    , TransformCoreCheckBox(..)
-    , TransformCorePathBox(..)
-    , TransformCoreStringBox(..)
-    , TransformCoreTCCheckBox(..)
-    , TransformCoreTCPathBox(..)
-    , TransformCoreTCStringBox(..)
     ) where
 
 import Data.Map hiding (map)
@@ -492,97 +481,5 @@ instance Extern [RewriteH LCoreTC] where
     type Box [RewriteH LCoreTC] = RewriteLCoreTCListBox
     box = RewriteLCoreTCListBox
     unbox (RewriteLCoreTCListBox l) = l
-
------------------------------------------------------------------
-
--- TODO: everything below here likely to be removed.
-
-data RewriteCoreBox = RewriteCoreBox (RewriteH Core) deriving Typeable
-
-instance Extern (RewriteH Core) where
-    type Box (RewriteH Core) = RewriteCoreBox
-    box = RewriteCoreBox
-    unbox (RewriteCoreBox r) = r
-
------------------------------------------------------------------
-
-data RewriteCoreTCBox = RewriteCoreTCBox (RewriteH CoreTC) deriving Typeable
-
-instance Extern (RewriteH CoreTC) where
-    type Box (RewriteH CoreTC) = RewriteCoreTCBox
-    box = RewriteCoreTCBox
-    unbox (RewriteCoreTCBox r) = r
-
------------------------------------------------------------------
-
-data BiRewriteCoreBox = BiRewriteCoreBox (BiRewriteH Core) deriving Typeable
-
-instance Extern (BiRewriteH Core) where
-    type Box (BiRewriteH Core) = BiRewriteCoreBox
-    box = BiRewriteCoreBox
-    unbox (BiRewriteCoreBox b) = b
-
------------------------------------------------------------------
-
-data TransformCoreTCStringBox = TransformCoreTCStringBox (TransformH CoreTC String) deriving Typeable
-
-instance Extern (TransformH CoreTC String) where
-    type Box (TransformH CoreTC String) = TransformCoreTCStringBox
-    box = TransformCoreTCStringBox
-    unbox (TransformCoreTCStringBox t) = t
-
------------------------------------------------------------------
-
-data TransformCoreStringBox = TransformCoreStringBox (TransformH Core String) deriving Typeable
-
-instance Extern (TransformH Core String) where
-    type Box (TransformH Core String) = TransformCoreStringBox
-    box = TransformCoreStringBox
-    unbox (TransformCoreStringBox t) = t
-
------------------------------------------------------------------
-
-data TransformCoreTCCheckBox = TransformCoreTCCheckBox (TransformH CoreTC ()) deriving Typeable
-
-instance Extern (TransformH CoreTC ()) where
-    type Box (TransformH CoreTC ()) = TransformCoreTCCheckBox
-    box = TransformCoreTCCheckBox
-    unbox (TransformCoreTCCheckBox t) = t
-
------------------------------------------------------------------
-
-data TransformCoreCheckBox = TransformCoreCheckBox (TransformH Core ()) deriving Typeable
-
-instance Extern (TransformH Core ()) where
-    type Box (TransformH Core ()) = TransformCoreCheckBox
-    box = TransformCoreCheckBox
-    unbox (TransformCoreCheckBox t) = t
-
------------------------------------------------------------------
-
-data TransformCorePathBox = TransformCorePathBox (TransformH Core LocalPathH) deriving Typeable
-
-instance Extern (TransformH Core LocalPathH) where
-    type Box (TransformH Core LocalPathH) = TransformCorePathBox
-    box = TransformCorePathBox
-    unbox (TransformCorePathBox t) = t
-
------------------------------------------------------------------
-
-data TransformCoreTCPathBox = TransformCoreTCPathBox (TransformH CoreTC LocalPathH) deriving Typeable
-
-instance Extern (TransformH CoreTC LocalPathH) where
-    type Box (TransformH CoreTC LocalPathH) = TransformCoreTCPathBox
-    box = TransformCoreTCPathBox
-    unbox (TransformCoreTCPathBox t) = t
-
------------------------------------------------------------------
-
-data RewriteCoreListBox = RewriteCoreListBox [RewriteH Core] deriving Typeable
-
-instance Extern [RewriteH Core] where
-    type Box [RewriteH Core] = RewriteCoreListBox
-    box = RewriteCoreListBox
-    unbox (RewriteCoreListBox l) = l
 
 -----------------------------------------------------------------
