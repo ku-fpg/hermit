@@ -14,6 +14,7 @@ module HERMIT.Dictionary.Fold
       -- * Unlifted fold interface
     , fold, compileFold, runFold, runFoldMatches, CompiledFold
     , proves -- for now
+    , lemmaMatch
       -- * Equality
     , Equality(..)
     , toEqualities
@@ -417,6 +418,13 @@ sameExpr e1 e2 = snd <$> soleElement (findFold e2 m)
 proves :: Quantified -> Quantified -> Bool
 proves (Quantified bs cl1) (Quantified _ cl2) = maybe False (const True) $ soleElement (findFold cl2 m)
     where m = insertFold emptyAlphaEnv bs cl1 () CLMEmpty
+
+-- | Determine if the right Quantified is a substitution
+-- instance of the left Quantified (which is a pattern
+-- with a given set of holes).
+lemmaMatch :: [Var] -> Quantified -> Quantified -> Maybe (VarEnv CoreExpr)
+lemmaMatch hs ql qr = fmap fst $ soleElement (findFold qr m)
+    where m = insertFold emptyAlphaEnv hs ql () emptyQMapWrapper
 
 ------------------------------------------------------------------------
 

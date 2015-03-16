@@ -127,7 +127,10 @@ externals =
         [ "Generate a rewrite from a lemma, left-to-right." ]
     , external "lemma-backward" (backwardT . promoteExprBiR . lemmaBiR :: LemmaName -> RewriteH LCore)
         [ "Generate a rewrite from a lemma, right-to-left." ]
-    , external "lemma-consequent" (promoteExprBiR . lemmaConsequentR :: LemmaName -> BiRewriteH LCore)
+    , external "lemma-consequent" (promoteQuantifiedR . lemmaConsequentR :: LemmaName -> RewriteH LCore)
+        [ "Match the current lemma with the consequent of an implication lemma."
+        , "Upon success, replaces with antecedent of the implication, properly instantiated." ]
+    , external "lemma-consequent-birewrite" (promoteExprBiR . lemmaConsequentBiR :: LemmaName -> BiRewriteH LCore)
         [ "Generate a bi-directional rewrite from the consequent of an implication lemma."
         , "The antecedent is instantiated and introduced as an unproven obligation." ]
     , external "lemma-lhs-intro" (promoteCoreR . lemmaLhsIntroR :: LemmaName -> RewriteH LCore)
@@ -148,8 +151,8 @@ externals =
         [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
     , external "copy-lemma" (\ nm newName -> modifyLemmaT nm (const newName) idR id id :: TransformH LCore ())
         [ "Copy a given lemma, with a new name." ]
-    , external "modify-lemma" ((\ nm rr -> modifyLemmaT nm id (extractR rr) id (const False)) :: LemmaName -> RewriteH LCore -> TransformH LCore ())
-        [ "Modify a given lemma. Resets used status to Not Used." ]
+    , external "modify-lemma" ((\ nm rr -> modifyLemmaT nm id (extractR rr) (const NotProven) (const False)) :: LemmaName -> RewriteH LCore -> TransformH LCore ())
+        [ "Modify a given lemma. Resets proven status to Not Proven and used status to Not Used." ]
     , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaQ >>> extractT t) :: LemmaName -> TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to a lemma, returning the result." ]
     , external "show-lemma" ((\pp n -> showLemmaT n pp) :: PrettyPrinter -> LemmaName -> PrettyH LCore)
@@ -627,8 +630,25 @@ lemmaBiR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaQ)) (ma
 
 lemmaConsequentR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
                                 , ReadPath c Crumb, HasLemmas m, MonadCatch m, MonadUnique m)
-                 => LemmaName -> BiRewrite c m CoreExpr
-lemmaConsequentR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)) (markLemmaUsedT nm >> idR)
+                 => LemmaName -> Rewrite c m Quantified
+lemmaConsequentR nm = prefixFailMsg "lemma-consequent failed:" $
+                      withPatFailMsg "lemma is not an implication." $ do
+    Quantified hs (Impl ante con) <- lemmaQ <$> getLemmaByNameT nm
+    q' <- transform $ \ c q -> do
+        m <- maybeM ("consequent did not match.") $ lemmaMatch hs con q
+        subs <- maybeM ("some quantifiers not instantiated.") $
+                mapM (\h -> (h,) <$> lookupVarEnv m h) hs
+        let q' = substQuantifieds subs ante
+        guardMsg (all (inScope c) $ varSetElems (freeVarsQuantified q'))
+                 "some variables in result would be out of scope."
+        return q'
+    markLemmaUsedT nm
+    return q'
+
+lemmaConsequentBiR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
+                                  , ReadPath c Crumb, HasLemmas m, MonadCatch m, MonadUnique m)
+                   => LemmaName -> BiRewrite c m CoreExpr
+lemmaConsequentBiR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)) (markLemmaUsedT nm >> idR)
     where go :: Quantified -> BiRewrite c m CoreExpr
           go (Quantified bs (Impl ante (Quantified bs' cl))) = do
             let eqs = toEqualities $ Quantified (bs++bs') cl -- consequent
