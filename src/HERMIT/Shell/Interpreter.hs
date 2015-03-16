@@ -84,11 +84,11 @@ exprToDyns' _   (ListH exprs) = do
     return $    toBoxedList dyns StringListBox
              ++ toBoxedList dyns (PathBox . pathToSnocPath)
                 -- ugly hack.  The whole dynamic stuff could do with overhauling.
-             ++ toBoxedList dyns (TransformCorePathBox . return . pathToSnocPath)
+             ++ toBoxedList dyns (TransformLCorePathBox . return . pathToSnocPath)
              ++ toBoxedList dyns IntListBox
              ++ toBoxedList dyns OccurrenceNameListBox
-             ++ toBoxedList dyns RewriteCoreListBox
              ++ toBoxedList dyns RuleNameListBox
+             ++ toBoxedList dyns RewriteLCoreListBox
 
 exprToDyns' rhs (CmdName str)
     | all isDigit str = do

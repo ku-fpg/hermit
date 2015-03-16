@@ -112,7 +112,11 @@ externals = map (.+ KURE)
        [ "Extract a RewriteCore from a RewriteCoreTC" ]
    , external "between"    (betweenR :: Int -> Int -> RewriteH LCoreTC -> RewriteH LCoreTC)
        [ "between x y rr -> perform rr at least x times and at most y times." ]
+   , external "atPath"     (flip hfocusT idR :: TransformH LCore LocalPathH -> TransformH LCore LCore)
+       [ "return the expression found at the given path" ]
    , external "atPath"     (flip hfocusT idR :: TransformH LCoreTC LocalPathH -> TransformH LCoreTC LCoreTC)
+       [ "return the expression found at the given path" ]
+   , external "atPath"     (extractT . flip hfocusT projectT :: TransformH LCoreTC LocalPathH -> TransformH LCore LCore)
        [ "return the expression found at the given path" ]
    ]
 

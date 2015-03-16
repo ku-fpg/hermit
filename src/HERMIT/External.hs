@@ -37,7 +37,6 @@ module HERMIT.External
       -- ** LCore Boxes
     , TransformLCoreStringBox(..)
     , TransformLCoreUnitBox(..)
-    , TransformLCoreCoreTCBox(..)
     , TransformLCorePathBox(..)
     , RewriteLCoreBox(..)
     , BiRewriteLCoreBox(..)
@@ -45,7 +44,7 @@ module HERMIT.External
       -- ** LCoreTC Boxes
     , TransformLCoreTCStringBox(..)
     , TransformLCoreTCUnitBox(..)
-    , TransformLCoreTCCoreTCBox(..)
+    , TransformLCoreTCLCoreBox(..)
     , TransformLCoreTCPathBox(..)
     , RewriteLCoreTCBox(..)
     , BiRewriteLCoreTCBox(..)
@@ -406,15 +405,6 @@ instance Extern (TransformH LCore ()) where
 
 -----------------------------------------------------------------
 
-data TransformLCoreCoreTCBox = TransformLCoreCoreTCBox (TransformH LCore CoreTC) deriving Typeable
-
-instance Extern (TransformH LCore CoreTC) where
-    type Box (TransformH LCore CoreTC) = TransformLCoreCoreTCBox
-    box = TransformLCoreCoreTCBox
-    unbox (TransformLCoreCoreTCBox t) = t
-
------------------------------------------------------------------
-
 data TransformLCorePathBox = TransformLCorePathBox (TransformH LCore LocalPathH) deriving Typeable
 
 instance Extern (TransformH LCore LocalPathH) where
@@ -469,12 +459,12 @@ instance Extern (TransformH LCoreTC ()) where
 
 -----------------------------------------------------------------
 
-data TransformLCoreTCCoreTCBox = TransformLCoreTCCoreTCBox (TransformH LCoreTC CoreTC) deriving Typeable
+data TransformLCoreTCLCoreBox = TransformLCoreTCLCoreBox (TransformH LCoreTC LCore) deriving Typeable
 
-instance Extern (TransformH LCoreTC CoreTC) where
-    type Box (TransformH LCoreTC CoreTC) = TransformLCoreTCCoreTCBox
-    box = TransformLCoreTCCoreTCBox
-    unbox (TransformLCoreTCCoreTCBox t) = t
+instance Extern (TransformH LCoreTC LCore) where
+    type Box (TransformH LCoreTC LCore) = TransformLCoreTCLCoreBox
+    box = TransformLCoreTCLCoreBox
+    unbox (TransformLCoreTCLCoreBox t) = t
 
 -----------------------------------------------------------------
 

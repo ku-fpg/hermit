@@ -185,9 +185,9 @@ data ScopedScriptR
               | ScriptPrimSc ExprH PrimScriptR
 
 data PrimScriptR
-       = ScriptRewriteHCore (RewriteH Core)
+       = ScriptRewriteHCore (RewriteH LCore)
        | ScriptPath PathH
-       | ScriptTransformHCorePath (TransformH Core LocalPathH)
+       | ScriptTransformHCorePath (TransformH LCore LocalPathH)
 
 
 -- TODO: Hacky parsing, needs cleaning up
@@ -219,27 +219,27 @@ unscopedToScopedScriptR = parse
 
 interpScriptR :: Monad m => [Interp m UnscopedScriptR]
 interpScriptR =
-  [ interp (\ (RewriteCoreBox r)           -> ScriptPrimUn $ ScriptRewriteHCore r)
-  , interp (\ (RewriteCoreTCBox _)         -> ScriptUnsupported "rewrite that traverses types and coercions") -- TODO
-  , interp (\ (BiRewriteCoreBox br)        -> ScriptPrimUn $ ScriptRewriteHCore $ whicheverR br)
-  , interp (\ (CrumbBox cr)                -> ScriptPrimUn $ ScriptPath [cr])
-  , interp (\ (PathBox p)                  -> ScriptPrimUn $ ScriptPath (snocPathToPath p))
-  , interp (\ (TransformCorePathBox t)     -> ScriptPrimUn $ ScriptTransformHCorePath t)
-  , interp (\ (effect :: KernelEffect)     -> case effect of
+  [ interp (\ (RewriteLCoreBox r)           -> ScriptPrimUn $ ScriptRewriteHCore r)
+  , interp (\ (RewriteLCoreTCBox _)         -> ScriptUnsupported "rewrite that traverses types and coercions") -- TODO
+  , interp (\ (BiRewriteLCoreBox br)        -> ScriptPrimUn $ ScriptRewriteHCore $ whicheverR br)
+  , interp (\ (CrumbBox cr)                 -> ScriptPrimUn $ ScriptPath [cr])
+  , interp (\ (PathBox p)                   -> ScriptPrimUn $ ScriptPath (snocPathToPath p))
+  , interp (\ (TransformLCorePathBox t)     -> ScriptPrimUn $ ScriptTransformHCorePath t)
+  , interp (\ (effect :: KernelEffect)      -> case effect of
                                                 BeginScope -> ScriptBeginScope
                                                 EndScope   -> ScriptEndScope
                                                 _          -> ScriptUnsupported "Kernel effect" )
-  , interp (\ (_ :: ShellEffect)           -> ScriptUnsupported "shell effect")
-  , interp (\ (_ :: QueryFun)              -> ScriptUnsupported "query")
-  , interp (\ (TransformCoreStringBox _)   -> ScriptUnsupported "query")
-  , interp (\ (TransformCoreTCStringBox _) -> ScriptUnsupported "query")
-  , interp (\ (TransformCoreCheckBox _)    -> ScriptUnsupported "predicate")
-  , interp (\ (StringBox _)                -> ScriptUnsupported "message")
+  , interp (\ (_ :: ShellEffect)            -> ScriptUnsupported "shell effect")
+  , interp (\ (_ :: QueryFun)               -> ScriptUnsupported "query")
+  , interp (\ (TransformLCoreStringBox _)   -> ScriptUnsupported "query")
+  , interp (\ (TransformLCoreTCStringBox _) -> ScriptUnsupported "query")
+  , interp (\ (TransformLCoreUnitBox _)     -> ScriptUnsupported "predicate")
+  , interp (\ (StringBox _)                 -> ScriptUnsupported "message")
   ]
 
 -----------------------------------
 
-scopedScriptsToRewrite :: [ScopedScriptR] -> RewriteH Core
+scopedScriptsToRewrite :: [ScopedScriptR] -> RewriteH LCore
 scopedScriptsToRewrite []        = idR
 scopedScriptsToRewrite (x : xs)  = let rest = scopedScriptsToRewrite xs
                                        failWith e = prefixFailMsg ("Error in script expression: " ++ unparseExprH e ++ "\n")
@@ -253,7 +253,7 @@ scopedScriptsToRewrite (x : xs)  = let rest = scopedScriptsToRewrite xs
 
 -----------------------------------
 
-scriptToRewrite :: CLMonad m => Script -> m (RewriteH Core)
+scriptToRewrite :: CLMonad m => Script -> m (RewriteH LCore)
 scriptToRewrite scr = do
     unscoped <- mapM (interpExprH interpScriptR) scr
     scoped   <- unscopedToScopedScriptR $ zip scr unscoped

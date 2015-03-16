@@ -191,6 +191,8 @@ interpShell =
   , interpEM $ \ (TransformLCoreTCUnitBox tt)   -> performQuery (QueryUnit tt)
   , interpEM $ \ (TransformLCorePathBox tt)     -> setPath tt
   , interpEM $ \ (TransformLCoreTCPathBox tt)   -> setPath tt
+  , interpEM $ \ (TransformLCoreDocHBox t)      -> performQuery (QueryDocH t)
+  , interpEM $ \ (TransformLCoreTCDocHBox t)      -> performQuery (QueryDocH t)
   , interpEM $ \ (RewriteLCoreBox rr)           -> applyRewrite $ promoteLCoreR rr
   , interpEM $ \ (RewriteLCoreTCBox rr)         -> applyRewrite rr
   , interpEM $ \ (BiRewriteLCoreBox br)         -> applyRewrite $ promoteLCoreR $ whicheverR br
