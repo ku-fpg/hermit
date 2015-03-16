@@ -19,6 +19,7 @@ module HERMIT.GHC
     , TyLit(..)
     , GhcException(..)
     , throwGhcException
+    , throwCmdLineErrorS
     , exprArity
     , occurAnalyseExpr_NoBinderSwap
     , isKind
@@ -44,6 +45,7 @@ module HERMIT.GHC
     , module Class
     , module DsBinds
     , module DsMonad
+    , module DynamicLoading
     , module ErrUtils
     , module PrelNames
     , module TcEnv
@@ -65,6 +67,7 @@ import           CoreArity
 import qualified CoreMonad -- for getHscEnv
 import           DsBinds (dsEvBinds)
 import           DsMonad (DsM, initDsTc)
+import           DynamicLoading (forceLoadTyCon, getValueSafely, lookupRdrNameInModuleForPlugins)
 import           Encoding (zEncodeString)
 import           ErrUtils (pprErrMsgBag)
 import           Finder (findImportedModule, cannotFindModule)

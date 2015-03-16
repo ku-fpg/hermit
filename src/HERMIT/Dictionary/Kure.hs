@@ -110,6 +110,8 @@ externals = map (.+ KURE)
        [ "Promote a RewriteCore to a RewriteCoreTC" ]
    , external "extract"    (extractR :: RewriteH LCoreTC -> RewriteH LCore)
        [ "Extract a RewriteCore from a RewriteCoreTC" ]
+   , external "extract"    (extractT :: TransformH LCoreTC String -> TransformH LCore String)
+       [ "Extract a TransformLCoreString from a TransformLCoreTCString" ]
    , external "between"    (betweenR :: Int -> Int -> RewriteH LCoreTC -> RewriteH LCoreTC)
        [ "between x y rr -> perform rr at least x times and at most y times." ]
    , external "atPath"     (flip hfocusT idR :: TransformH LCore LocalPathH -> TransformH LCore LCore)

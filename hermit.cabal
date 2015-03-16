@@ -244,6 +244,8 @@ Library
 
        HERMIT.Utilities
 
+       HERMIT.Libraries.Int
+
   Other-modules:
        HERMIT.Syntax
 

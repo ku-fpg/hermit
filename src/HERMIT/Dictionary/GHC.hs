@@ -3,6 +3,9 @@ module HERMIT.Dictionary.GHC
     ( -- * GHC-based Transformations
       -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
       externals
+      -- ** Dynamic Loading
+    , loadLemmaLibraryT
+    , LemmaLibrary
       -- ** Substitution
     , substR
       -- ** Utilities
@@ -30,12 +33,15 @@ import           Control.Monad.IO.Class
 
 import           Data.Char (isSpace)
 import           Data.List (mapAccumL)
+import qualified Data.Map as M
+import           Data.String
 
 import           HERMIT.Core
 import           HERMIT.Context
 import           HERMIT.External
 import           HERMIT.GHC
 import           HERMIT.Kure
+import           HERMIT.Lemma
 import           HERMIT.Monad
 import           HERMIT.Name
 
@@ -58,6 +64,8 @@ externals =
         , "will catch that however."] .+ Deep .+ Debug .+ Query
     , external "lint-module" (promoteModGutsT lintModuleT :: TransformH LCoreTC String)
         [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
+    , external "load-lemma-library" (loadLemmaLibraryT :: HermitName -> TransformH LCore ())
+        [ "Dynamically load a library of lemmas." ]
     ]
 
 ------------------------------------------------------------------------
@@ -218,3 +226,42 @@ buildDictionaryT = prefixFailMsg "buildDictionaryT failed: " $ contextfreeT $ \ 
     return $ case bnds of
                 [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
                 _ -> mkCoreLets bnds (varToCoreExpr i)
+
+-- | A LemmaLibrary is a transformation that produces a set of lemmas,
+-- which are then added to the lemma store. It is not allowed to insert
+-- its own lemmas directly (if it tries they are throw away), but can
+-- certainly read the existing store.
+type LemmaLibrary = TransformH () Lemmas
+
+loadLemmaLibraryT :: HermitName -> TransformH x ()
+loadLemmaLibraryT nm = contextonlyT $ \ c -> do
+    hscEnv <- getHscEnv
+    comp <- liftAndCatchIO $ loadLemmaLibrary hscEnv nm
+    m' <- applyT comp c () -- TODO: discard side effects
+    m <- getLemmas
+    putLemmas $ m' `M.union` m
+
+loadLemmaLibrary :: HscEnv -> HermitName -> IO LemmaLibrary
+loadLemmaLibrary hscEnv hnm = do
+    name <- lookupHermitNameForPlugins hscEnv varNS hnm
+    lib_tycon_name <- lookupHermitNameForPlugins hscEnv tyConClassNS $ fromString "HERMIT.Dictionary.GHC.LemmaLibrary"
+    lib_tycon <- forceLoadTyCon hscEnv lib_tycon_name
+    mb_v <- getValueSafely hscEnv name $ mkTyConTy lib_tycon
+    let dflags = hsc_dflags hscEnv
+    maybe (fail $ showSDoc dflags $ hsep
+                [ ptext (sLit "The value"), ppr name
+                , ptext (sLit "did not have the type")
+                , ppr lib_tycon, ptext (sLit "as required.")])
+          return mb_v
+
+lookupHermitNameForPlugins :: HscEnv -> NameSpace -> HermitName -> IO Name
+lookupHermitNameForPlugins hscEnv ns hnm = do
+    modName <- maybe (fail "name must be fully qualified with module name.") return (hnModuleName hnm)
+    let dflags = hsc_dflags hscEnv
+        rdrName = toRdrName ns hnm
+    mbName <- lookupRdrNameInModuleForPlugins hscEnv modName rdrName
+    maybe (fail $ showSDoc dflags $ hsep
+            [ ptext (sLit "The module"), ppr modName
+            , ptext (sLit "did not export the name")
+            , ppr rdrName ])
+          return mbName
