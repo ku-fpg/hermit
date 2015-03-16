@@ -102,7 +102,7 @@ runHPM store passInfo hpass = hermitKernel store (lpName passInfo) $ \ kernel in
     (r,st) <- hpmToIO ps hpass
     let cleanup ast = do
             if ast /= initAST -- only do this if we actually changed the AST
-            then applyK kernel (extractR occurAnalyseAndDezombifyR) Never (mkKernelEnv st) ast >>= resumeK kernel
+            then applyK kernel (extractR (occurAnalyseAndDezombifyR :: RewriteH Core)) Never (mkKernelEnv st) ast >>= resumeK kernel
             else resumeK kernel ast
     either (\case PAbort      -> abortK kernel
                   PResume ast -> cleanup ast

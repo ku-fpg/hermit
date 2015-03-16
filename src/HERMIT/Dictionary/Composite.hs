@@ -40,7 +40,7 @@ externals =
     [ external "unfold-basic-combinator" (promoteExprR unfoldBasicCombinatorR :: RewriteH LCore)
         [ "Unfold the current expression if it is one of the basic combinators:"
         , "($), (.), id, flip, const, fst, snd, curry, and uncurry." ]
-    , external "simplify" (promoteCoreR simplifyR :: RewriteH LCore)
+    , external "simplify" (simplifyR :: RewriteH LCore)
         [ "innermost (unfold-basic-combinator <+ beta-reduce-plus <+ safe-let-subst <+ case-reduce <+ let-elim)" ]
     , external "bash" (bashR :: RewriteH LCore)
         bashHelp .+ Eval .+ Deep .+ Loop
@@ -75,7 +75,7 @@ unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $ orR (map
 
 simplifyR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
              , MonadCatch m, MonadUnique m )
-          => Rewrite c m Core
+          => Rewrite c m LCore
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
     innermostR (   promoteBindR recToNonrecR
                 <+ promoteExprR ( unfoldBasicCombinatorR
@@ -119,7 +119,7 @@ bashDebugR = bashUsingR [ bracketR nm r >>> catchM (promoteT lintExprT >> idR) t
 bashUsingR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m)
            => [Rewrite c m LCore] -> Rewrite c m LCore
 bashUsingR rs = setFailMsg "bash failed: nothing to do." $
-    repeatR (promoteCoreR occurAnalyseR >>> onetdR (catchesT rs)) >+> anytdR (promoteExprR dezombifyR) >+> promoteCoreR occurAnalyseChangedR
+    repeatR (occurAnalyseR >>> onetdR (catchesT rs)) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
 
 {-
 Occurrence Analysis updates meta-data, as well as performing some basic simplifications.
@@ -192,7 +192,7 @@ smashExtendedWithR rs = smashUsingR (rs ++ map fst smashComponents1) (map fst sm
 smashUsingR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => [Rewrite c m LCore] -> [Rewrite c m LCore] -> Rewrite c m LCore
 smashUsingR rs1 rs2 =
     setFailMsg "smash failed: nothing to do." $
-    repeatR (promoteCoreR occurAnalyseR >>> (onetdR (catchesT rs1) <+ onetdR (catchesT rs2))) >+> anytdR (promoteExprR dezombifyR) >+> promoteCoreR occurAnalyseChangedR
+    repeatR (occurAnalyseR >>> (onetdR (catchesT rs1) <+ onetdR (catchesT rs2))) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
 
 
 smashHelp :: [String]

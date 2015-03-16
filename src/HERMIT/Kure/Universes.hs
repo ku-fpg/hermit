@@ -16,6 +16,8 @@ module HERMIT.Kure.Universes
     , coreSyntaxEq
     , tyCoSyntaxEq
     , coreTCSyntaxEq
+    , lcoreSyntaxEq
+    , lcoreTCSyntaxEq
       -- ** Alpha Equality
     , coreAlphaEq
     , tyCoAlphaEq
@@ -99,8 +101,6 @@ data LCore = LQuantified Quantified
 data LCoreTC = LTCCore LCore
              | LTCTyCo TyCo
 
--- TODO: alpha and syntactic equality for the new universes
-
 ---------------------------------------------------------------------
 
 -- | Alpha equality of 'Core' fragments.
@@ -125,6 +125,8 @@ coreTCAlphaEq (Core c1)  (Core c2)  = coreAlphaEq c1 c2
 coreTCAlphaEq (TyCo tc1) (TyCo tc2) = tyCoAlphaEq tc1 tc2
 coreTCAlphaEq _          _          = False
 
+-- TODO: alpha equality for LCore and LCoreTC
+
 ---------------------------------------------------------------------
 
 -- | Syntactic equality of 'Core' fragments.
@@ -148,6 +150,19 @@ coreTCSyntaxEq :: CoreTC -> CoreTC -> Bool
 coreTCSyntaxEq (Core c1)  (Core c2)  = coreSyntaxEq c1 c2
 coreTCSyntaxEq (TyCo tc1) (TyCo tc2) = tyCoSyntaxEq tc1 tc2
 coreTCSyntaxEq _          _          = False
+
+-- | Syntactic equality of 'LCore' fragments.
+lcoreSyntaxEq :: LCore -> LCore -> Bool
+lcoreSyntaxEq (LCore c1)       (LCore c2)       = coreSyntaxEq c1 c2
+lcoreSyntaxEq (LClause cl1)    (LClause cl2)    = clauseSyntaxEq cl1 cl2
+lcoreSyntaxEq (LQuantified q1) (LQuantified q2) = quantifiedSyntaxEq q1 q2
+lcoreSyntaxEq _                _                = False
+
+-- | Syntactic equality of 'LCoreTC' fragments.
+lcoreTCSyntaxEq :: LCoreTC -> LCoreTC -> Bool
+lcoreTCSyntaxEq (LTCCore lc1) (LTCCore lc2) = lcoreSyntaxEq lc1 lc2
+lcoreTCSyntaxEq (LTCTyCo tc1) (LTCTyCo tc2) = tyCoSyntaxEq tc1 tc2
+lcoreTCSyntaxEq _             _             = False
 
 ---------------------------------------------------------------------
 

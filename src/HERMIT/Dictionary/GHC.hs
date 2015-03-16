@@ -162,11 +162,11 @@ occurAnalyseExprChangedR :: MonadCatch m => Rewrite c m CoreExpr
 occurAnalyseExprChangedR = changedByR exprSyntaxEq (arr occurAnalyseExpr_NoBinderSwap) -- See Note [No Binder Swap]
 
 -- | Occurrence analyse all sub-expressions, failing if the result is syntactically equal to the initial expression.
-occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m Core
-occurAnalyseChangedR = changedByR coreSyntaxEq occurAnalyseR
+occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m LCore
+occurAnalyseChangedR = changedByR lcoreSyntaxEq occurAnalyseR
 
 -- | Run GHC's occurrence analyser, and also eliminate any zombies.
-occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c LCore) => Rewrite c m LCore
+occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c u, Injection CoreExpr u) => Rewrite c m u
 occurAnalyseAndDezombifyR = allbuR (tryR $ promoteExprR dezombifyR) >>> occurAnalyseR
 
 occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c LCore) => Rewrite c m LCore

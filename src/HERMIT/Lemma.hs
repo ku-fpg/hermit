@@ -10,6 +10,8 @@ module HERMIT.Lemma
     , instsQuantified
     , discardUniVars
     , freeVarsQuantified
+    , clauseSyntaxEq
+    , quantifiedSyntaxEq
     , substQuantified
     , substQuantifieds
     , dropBinders
@@ -265,5 +267,21 @@ instsQuantified :: MonadCatch m => VarSet -> [(Var,CoreExpr)] -> Quantified -> m
 instsQuantified inScope = flip (foldM (\ q (v,e) -> instQuantified inScope (==v) e q)) . reverse
 -- foldM is a left-to-right fold, so the reverse is important to do substitutions in reverse order
 -- which is what we want (all value variables should be instantiated before type variables).
+
+------------------------------------------------------------------------------
+
+-- Syntactic Equality
+
+-- | Syntactic Equality of clauses.
+clauseSyntaxEq :: Clause -> Clause -> Bool
+clauseSyntaxEq (Conj q1 q2)  (Conj p1 p2)    = quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
+clauseSyntaxEq (Disj q1 q2)  (Disj p1 p2)    = quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
+clauseSyntaxEq (Impl q1 q2)  (Impl p1 p2)    = quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
+clauseSyntaxEq (Equiv e1 e2) (Equiv e1' e2') = exprSyntaxEq e1 e1'      && exprSyntaxEq e2 e2'
+clauseSyntaxEq _             _               = False
+
+-- | Syntactic Equality of quantifiers.
+quantifiedSyntaxEq :: Quantified -> Quantified -> Bool
+quantifiedSyntaxEq (Quantified bs1 cl1) (Quantified bs2 cl2) = (bs1 == bs2) && clauseSyntaxEq cl1 cl2
 
 ------------------------------------------------------------------------------
