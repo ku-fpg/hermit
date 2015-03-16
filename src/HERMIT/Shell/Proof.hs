@@ -75,12 +75,12 @@ proof_externals = map (.+ Proof)
         ]
     , external "prove-consequent" PCConsequent
         [ "Prove the consequent of an implication by assuming the antecedent." ]
-    , external "prove-conjuction" PCConjunction
-        [ "Prove a conjuction by proving both sides of it." ]
+    , external "prove-conjunction" PCConjunction
+        [ "Prove a conjunction by proving both sides of it." ]
     , external "inst-assumed" (\ i nm cs -> PCInstAssumed i (cmpHN2Var nm) cs)
-        [ "Split an assumed lemma which is a conjuction/disjunction." ]
+        [ "Split an assumed lemma which is a conjunction/disjunction." ]
     , external "split-assumed" PCSplitAssumed
-        [ "Split an assumed lemma which is a conjuction/disjunction." ]
+        [ "Split an assumed lemma which is a conjunction/disjunction." ]
     , external "end-proof" (PCEnd False)
         [ "check for alpha-equality, marking the lemma as proven" ]
     , external "end-case" (PCEnd False)
@@ -160,7 +160,7 @@ performProofShellCommand cmd expr = go cmd
           go (PCInduction idPred) = performInduction (Always str) idPred
           go (PCByCases idPred)   = proveByCases (Always str) idPred
           go PCConsequent         = proveConsequent str
-          go PCConjunction        = proveConjuction str
+          go PCConjunction        = proveConjunction str
           go (PCInstAssumed i v cs) = instAssumed i v cs str
           go (PCSplitAssumed i)   = splitAssumed i str
           go (PCUser prf)         = do
@@ -187,8 +187,8 @@ proveConsequent expr = do
     pushProofStack $ MarkProven nm (lemmaT (ptLemma todo)) -- proving the consequent proves the lemma
     pushProofStack $ Unproven (nm <> "-consequent") (Lemma con NotProven False True) c ls mempty
 
-proveConjuction :: (MonadCatch m, CLMonad m) => String -> m ()
-proveConjuction expr = do
+proveConjunction :: (MonadCatch m, CLMonad m) => String -> m ()
+proveConjunction expr = do
     Unproven nm (Lemma (Quantified bs cl) p u t) c ls _ : _ <- getProofStack
     case cl of
         Conj (Quantified lbs lcl) (Quantified rbs rcl) -> do
@@ -198,7 +198,7 @@ proveConjuction expr = do
             pushProofStack $ MarkProven nm t
             pushProofStack $ Unproven (nm <> "-r") (Lemma (Quantified (bs++rbs) rcl) p u True) c ls mempty
             pushProofStack $ Unproven (nm <> "-l") (Lemma (Quantified (bs++lbs) lcl) p u True) c ls mempty
-        _ -> fail "not a conjuction."
+        _ -> fail "not a conjunction."
 
 splitAssumed :: (MonadCatch m, CLMonad m) => Int -> String -> m ()
 splitAssumed i expr = do
