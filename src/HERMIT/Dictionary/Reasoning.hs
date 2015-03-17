@@ -694,8 +694,8 @@ markLemmaUsedT nm u = modifyLemmaT nm id idR id (const u)
 markLemmaProvedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
 markLemmaProvedT nm = modifyLemmaT nm id idR (const Proven) id
 
-markLemmaAssumedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
-markLemmaAssumedT nm = modifyLemmaT nm id idR (const Assumed) id
+markLemmaAssumedT :: (HasLemmas m, Monad m) => Bool -> LemmaName -> Transform c m a ()
+markLemmaAssumedT user nm = modifyLemmaT nm id idR (const (Assumed user)) id
 ------------------------------------------------------------------------------
 
 lemmaNameToQuantifiedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Quantified

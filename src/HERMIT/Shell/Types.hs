@@ -17,7 +17,7 @@ module HERMIT.Shell.Types where
 import Control.Applicative
 import Control.Arrow
 import Control.Concurrent.STM
-import Control.Monad (liftM, unless, when)
+import Control.Monad (liftM, unless, when, forM_)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State (MonadState(..), StateT(..), gets, modify)
@@ -515,6 +515,29 @@ announceProven = getProofStack >>= go
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
             cl_putStrLn ("Successfully proven: " ++ show nm) >> go r
           go _ = return ()
+
+announceUnprovens :: (MonadCatch m, CLMonad m) => m ()
+announceUnprovens = do
+    (c,m) <- queryInFocus (contextT &&& getLemmasT :: TransformH LCore (HermitC,Lemmas)) Never
+    sf <- gets cl_safety
+    case sf of
+        StrictSafety -> do
+            let ls = [ nl | nl@(_,Lemma _ p u _) <- M.toList m, p /= Proven, u /= NotUsed ]
+            forM_ ls $ \ nl@(nm,_) -> do
+                cl_putStrLn $ "Fatal: Lemma " ++ show nm ++ " has not been proven, but was used."
+                printLemma stdout c mempty nl
+            unless (null ls) abort -- don't finish if this happens
+        NormalSafety -> do
+            let np = [ nl | nl@(_,Lemma _ NotProven u _) <- M.toList m, u /= NotUsed ]
+            forM_ np $ \ nl@(nm,_) -> do
+                cl_putStrLn $ "Fatal: Lemma " ++ show nm ++ " has not been proven, but was used."
+                printLemma stdout c mempty nl
+            unless (null np) abort -- don't finish if this happens
+            let as = [ nl | nl@(_,Lemma _ (Assumed True) u _) <- M.toList m, u /= NotUsed ]
+            forM_ as $ \ nl@(nm,_) -> do
+                cl_putStrLn $ "Warning: Lemma " ++ show nm ++ " was assumed but not proven."
+                printLemma stdout c mempty nl
+        NoSafety -> return ()
 
 -- | Always returns a non-empty list.
 getProofStack :: CLMonad m => m [ProofTodo]

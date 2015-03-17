@@ -52,8 +52,8 @@ instance Extern ShellEffect where
 
 performShellEffect :: (MonadCatch m, CLMonad m) => ShellEffect -> m ()
 performShellEffect Abort  = abort
-performShellEffect Resume = gets cl_cursor >>= resume
-performShellEffect Continue = get >>= continue
+performShellEffect Resume = announceUnprovens >> gets cl_cursor >>= resume
+performShellEffect Continue = announceUnprovens >> get >>= continue
 
 performShellEffect (CLSModify f)  = get >>= liftAndCatchIO . f >>= either throwError put
 

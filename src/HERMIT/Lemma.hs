@@ -101,19 +101,24 @@ data Lemma = Lemma { lemmaQ :: Quantified
                    , lemmaT :: Bool       -- whether lemma is temporary
                    }
 
-data Proven = Proven | Assumed | NotProven
+data Proven = Proven
+            | Assumed Bool -- ^ True = assumed by user, False = assumed by library/HERMIT for good reason
+            | NotProven
     deriving (Eq, Typeable)
 
 instance Show Proven where
     show Proven = "Proven"
-    show Assumed = "Assumed"
+    show (Assumed _) = "Assumed"
     show NotProven = "Not Proven"
 
--- Ordering: NotProven < Assumed < Proven
+-- Ordering: NotProven < Assumed True < Assumed False < Proven
 instance Ord Proven where
     compare :: Proven -> Proven -> Ordering
     compare Proven    Proven    = EQ
-    compare Assumed   Assumed   = EQ
+    compare (Assumed l) (Assumed r)
+        | l && (not r) = LT
+        | (not l) && r = GT
+        | otherwise = EQ
     compare NotProven NotProven = EQ
     compare Proven    _         = GT
     compare _         Proven    = LT

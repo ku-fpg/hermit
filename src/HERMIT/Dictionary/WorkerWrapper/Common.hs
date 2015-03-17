@@ -157,7 +157,7 @@ split1BetaR u nm absE repE = do
     verifyOrCreateT u (fromString (show nm ++ "-assumption")) $ Lemma assumptionQ NotProven u False -- unproven, used, permanent
 
     wwFusionQ <- wwFusionQuantifiedT absE repE workRhs
-    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionQ Assumed NotUsed False -- assumed, unused, permanent
+    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionQ (Assumed False) NotUsed False -- assumed, unused, permanent
 
     return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
 
@@ -177,6 +177,6 @@ split2BetaR u nm absE repE = do
     verifyOrCreateT u (fromString (show nm ++ "-assumption")) $ Lemma assumptionQ NotProven u False -- unproven, used, permanent
 
     wwFusionQ <- wwFusionQuantifiedT absE repE (varToCoreExpr workId)
-    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionQ Assumed NotUsed False -- assumed, unused, permanent
+    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionQ (Assumed False) NotUsed False -- assumed, unused, permanent
 
     return $ mkCoreLets [NonRec workId repFixFE] newRhs
