@@ -17,11 +17,12 @@ module HERMIT.Shell.Proof
     , withProofExternals
     , performProofShellCommand
     , forceProofs
-    , ProofShellCommand(PCUser)
+    , ProofShellCommand(PCEnd)
+    , ProofReason(UserProof)
     ) where
 
 import Control.Arrow hiding (loop, (<+>))
-import Control.Monad (forM, forM_, liftM, unless)
+import Control.Monad (forM, forM_, liftM)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.State (MonadState, modify, gets)
 
@@ -64,9 +65,9 @@ externals = map (.+ Proof)
 -- | Externals that are added to the dictionary only when in interactive proof mode.
 proof_externals :: [External]
 proof_externals = map (.+ Proof)
-    [ external "lemma" (PCEnd . Right . (Obligation,))
+    [ external "lemma" (PCEnd . LemmaProof Obligation)
         [ "Prove lemma by asserting it is alpha-equivalent to an already proven lemma." ]
-    , external "lemma-unsafe" (PCEnd . Right . (UnsafeUsed,))
+    , external "lemma-unsafe" (PCEnd . LemmaProof UnsafeUsed)
         [ "Prove lemma by asserting it is alpha-equivalent to an already proven lemma." ] .+ Unsafe
     , external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
         [ "Perform induction on given universally quantified variable."
@@ -84,11 +85,11 @@ proof_externals = map (.+ Proof)
         [ "Split an assumed lemma which is a conjunction/disjunction." ]
     , external "split-assumed" PCSplitAssumed
         [ "Split an assumed lemma which is a conjunction/disjunction." ]
-    , external "end-proof" (PCEnd (Left False))
+    , external "end-proof" (PCEnd Reflexivity)
         [ "check for alpha-equality, marking the lemma as proven" ]
-    , external "end-case" (PCEnd (Left False))
+    , external "end-case" (PCEnd Reflexivity)
         [ "check for alpha-equality, marking the proof case as proven" ]
-    , external "assume" (PCEnd (Left True))
+    , external "assume" (PCEnd UserAssume)
         [ "mark lemma as assumed" ]
     ]
 
@@ -136,16 +137,17 @@ forceProofs = do
         forM_ nls' $ \ (nm,l) -> pushProofStack (Unproven nm l c' [] mempty)
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
-endProof :: (MonadCatch m, CLMonad m) => Either Bool (Used,LemmaName) -> ExprH -> m ()
+endProof :: (MonadCatch m, CLMonad m) => ProofReason -> ExprH -> m ()
 endProof reason expr = do
     Unproven nm (Lemma q _ _ temp) c ls _ : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
         deleteOr tr = if temp then constT (deleteLemma nm) else tr
         t = case reason of
-                Left assumed
-                    | assumed   -> deleteOr (markLemmaProvenT nm Assumed)
-                    | otherwise -> setFailMsg msg verifyQuantifiedT >> deleteOr (markLemmaProvenT nm Proven)
-                Right (u,nm') -> verifyEquivalentT u nm' >> deleteOr (markLemmaProvenT nm Proven)
+                UserAssume -> deleteOr (markLemmaProvenT nm Assumed)
+                Reflexivity -> setFailMsg msg verifyQuantifiedT >> deleteOr (markLemmaProvenT nm Proven)
+                LemmaProof u nm' -> verifyEquivalentT u nm' >> deleteOr (markLemmaProvenT nm Proven)
+                UserProof up -> let UserProofTechnique tr = up
+                                in extractT tr >> deleteOr (markLemmaProvenT nm Proven)
     queryInFocus (constT (withLemmas (M.fromList ls) $ applyT t c q) :: TransformH Core ())
                  (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
@@ -165,15 +167,6 @@ performProofShellCommand cmd expr = go cmd
           go PCConjunction        = proveConjunction str
           go (PCInstAssumed i v cs) = instAssumed i v cs str
           go (PCSplitAssumed i)   = splitAssumed i str
-          go (PCUser prf)         = do
-                let UserProofTechnique t = prf -- may add more constructors later
-                -- note: we assume that if 't' completes without failing,
-                -- the lemma is proved, we don't actually check
-                todo : _ <- getProofStack
-                queryInFocus (inProofFocusT todo t >> unless (lemmaT $ ptLemma todo) (markLemmaProvenT (ptName todo) Proven))
-                             (Changed str)
-                _ <- popProofStack
-                cl_putStrLn $ "Successfully proven: " ++ show (ptName todo)
           go (PCEnd why)          = endProof why expr
 
 proveConsequent :: (MonadCatch m, CLMonad m) => String -> m ()
@@ -306,11 +299,13 @@ data ProofShellCommand
     | PCConjunction
     | PCSplitAssumed Int
     | PCInstAssumed Int (Var -> Bool) CoreString
-    | PCUser UserProofTechnique
-    | PCEnd (Either Bool (Used,LemmaName)) -- ^ Left True = assume this lemma
-                                           --   Left False = check for alpha-equivalence
-                                           --   Right (u,nm) = try to prove with given lemma, marking it u
+    | PCEnd ProofReason
     deriving Typeable
+
+data ProofReason = UserProof UserProofTechnique -- ^ Run the technique, mark Proven if succeeds
+                 | UserAssume                   -- ^ Assume
+                 | Reflexivity                  -- ^ Check for alpha-equivalence first
+                 | LemmaProof Used LemmaName    -- ^ Used should be 'UnsafeUsed' or 'Obligation'
 
 -- keep abstract to avoid breaking things if we modify this later
 newtype UserProofTechnique = UserProofTechnique (TransformH LCoreTC ())

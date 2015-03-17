@@ -190,7 +190,7 @@ interpShell =
   , interpM  $ \ (effect :: ShellEffect)        -> performShellEffect effect
   , interpM  $ \ (effect :: ScriptEffect)       -> performScriptEffect effect
   , interpEM $ \ (query :: QueryFun)            -> performQuery query
-  , interpEM $ \ (t :: UserProofTechnique)      -> performProofShellCommand $ PCUser t
+  , interpEM $ \ (t :: UserProofTechnique)      -> performProofShellCommand $ PCEnd $ UserProof t
   , interpEM $ \ (cmd :: ProofShellCommand)     -> performProofShellCommand cmd
   , interpEM $ \ (TransformLCoreStringBox tt)   -> performQuery (QueryString tt)
   , interpEM $ \ (TransformLCoreTCStringBox tt) -> performQuery (QueryString tt)
