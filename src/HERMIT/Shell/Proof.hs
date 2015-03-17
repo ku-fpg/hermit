@@ -143,9 +143,9 @@ endProof reason expr = do
         deleteOr tr = if temp then constT (deleteLemma nm) else tr
         t = case reason of
                 Left assumed
-                    | assumed   -> deleteOr (markLemmaAssumedT True nm)
-                    | otherwise -> setFailMsg msg verifyQuantifiedT >> deleteOr (markLemmaProvedT nm)
-                Right (u,nm') -> verifyEquivalentT u nm' >> deleteOr (markLemmaProvedT nm)
+                    | assumed   -> deleteOr (markLemmaProvenT nm Assumed)
+                    | otherwise -> setFailMsg msg verifyQuantifiedT >> deleteOr (markLemmaProvenT nm Proven)
+                Right (u,nm') -> verifyEquivalentT u nm' >> deleteOr (markLemmaProvenT nm Proven)
     queryInFocus (constT (withLemmas (M.fromList ls) $ applyT t c q) :: TransformH Core ())
                  (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
@@ -170,7 +170,7 @@ performProofShellCommand cmd expr = go cmd
                 -- note: we assume that if 't' completes without failing,
                 -- the lemma is proved, we don't actually check
                 todo : _ <- getProofStack
-                queryInFocus (inProofFocusT todo t >> unless (lemmaT $ ptLemma todo) (markLemmaProvedT (ptName todo)))
+                queryInFocus (inProofFocusT todo t >> unless (lemmaT $ ptLemma todo) (markLemmaProvenT (ptName todo) Proven))
                              (Changed str)
                 _ <- popProofStack
                 cl_putStrLn $ "Successfully proven: " ++ show (ptName todo)
@@ -182,7 +182,7 @@ proveConsequent expr = do
     (c, Impl ante con) <- setFailMsg "not an implication" $
                           queryInFocus (inProofFocusT todo (contextT &&& projectT)) Never
     let nm = ptName todo
-        ls = (nm <> "-antecedent", Lemma ante (Assumed False) NotUsed True) : ptAssumed todo
+        ls = (nm <> "-antecedent", Lemma ante BuiltIn NotUsed True) : ptAssumed todo
     (k,ast) <- gets (cl_kernel &&& cl_cursor)
     addAST =<< tellK k expr ast
     _ <- popProofStack
@@ -269,7 +269,7 @@ performInduction cm idPred = do
                 -- TODO rethink the discardUniVars
 
         let nms = [ fromString ("ind-hyp-" ++ show n) | n :: Int <- [0..] ]
-            hypLemmas = zip nms $ zipWith4 Lemma qs (repeat (Assumed False)) (repeat NotUsed) (repeat True)
+            hypLemmas = zip nms $ zipWith4 Lemma qs (repeat BuiltIn) (repeat NotUsed) (repeat True)
             lemmaName = fromString $ show nm ++ "-induction-case-" ++ caseName
             caseLemma = Lemma (mkQuantified (delete i bs ++ vs) lhsE rhsE) NotProven Obligation True
 

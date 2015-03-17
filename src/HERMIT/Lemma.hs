@@ -102,28 +102,32 @@ data Lemma = Lemma { lemmaQ :: Quantified
                    }
 
 data Proven = Proven
-            | Assumed Bool -- ^ True = assumed by user, False = assumed by library/HERMIT for good reason
+            | Assumed -- ^ Assumed by user
+            | BuiltIn -- ^ Assumed by library/HERMIT
             | NotProven
     deriving (Eq, Typeable)
 
 instance Show Proven where
     show Proven = "Proven"
-    show (Assumed _) = "Assumed"
+    show Assumed = "Assumed"
+    show BuiltIn = "Built In"
     show NotProven = "Not Proven"
 
--- Ordering: NotProven < Assumed True < Assumed False < Proven
+instance Enum Proven where
+    toEnum 1 = Assumed
+    toEnum 2 = BuiltIn
+    toEnum 3 = Proven
+    toEnum _ = NotProven
+
+    fromEnum NotProven = 0
+    fromEnum Assumed = 1
+    fromEnum BuiltIn = 2
+    fromEnum Proven = 3
+
+-- Ordering: NotProven < Assumed < BuiltIn < Proven
 instance Ord Proven where
     compare :: Proven -> Proven -> Ordering
-    compare Proven    Proven    = EQ
-    compare (Assumed l) (Assumed r)
-        | l && (not r) = LT
-        | (not l) && r = GT
-        | otherwise = EQ
-    compare NotProven NotProven = EQ
-    compare Proven    _         = GT
-    compare _         Proven    = LT
-    compare NotProven _         = LT
-    compare _         NotProven = GT
+    compare p1 p2 = compare (fromEnum p1) (fromEnum p2)
 
 -- When conjuncting, result is as proven as the least of the two
 andP :: Proven -> Proven -> Proven

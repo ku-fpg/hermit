@@ -109,7 +109,7 @@ nub-assumption (Assumed)
            [0m[m[][0m[0m [0m[31m[31m→[31m[0m[0m [0m[m[][0m[0m [0m[32mInt[0m[0m
            [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[mx[0m[0m [0m[mxs[0m[0m [0m[31m[31m→[31m[0m[0m
              [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInt[0m[0m [0m[0m[mx[0m[0m[0m [0m[31m([0m[0m[0m[0m[mnub[0m[0m[0m [0m[31m([0m[0m[0m[7;93mfilter[27m[0m[0m [0m[32mInt[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m/=[0m[0m[0m[31m)[0m[0m [0m[32mInt[0m[0m [0m[m$fEqInt[0m[0m [0m[0m[mds[0m[0m[0m [0m[0m[mx[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
-nub-fusion (Assumed)
+nub-fusion (Built In)
   [0m[7;93mrepN[27m[0m[0m [0m[31m([0m[0m[0m[7;93mabsN[27m[0m[0m [0m[7;93mworker[27m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[7;93mworker[27m[0m[0m
 nubStrict (Proven)
   [0m[7;93mnub'[27m[0m[0m [0m[31m([0m[0m[0m[mundefined[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [31m=[0m [0m[mundefined[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m

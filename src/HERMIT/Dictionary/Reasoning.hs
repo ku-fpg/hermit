@@ -25,8 +25,7 @@ module HERMIT.Dictionary.Reasoning
     , lemmaBiR
     , lemmaConsequentR
     , markLemmaUsedT
-    , markLemmaProvedT
-    , markLemmaAssumedT
+    , markLemmaProvenT
     , modifyLemmaT
     , showLemmaT
     , showLemmasT
@@ -691,11 +690,9 @@ modifyLemmaT nm nFn rr pFn uFn = do
 markLemmaUsedT :: (HasLemmas m, Monad m) => LemmaName -> Used -> Transform c m a ()
 markLemmaUsedT nm u = modifyLemmaT nm id idR id (const u)
 
-markLemmaProvedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
-markLemmaProvedT nm = modifyLemmaT nm id idR (const Proven) id
+markLemmaProvenT :: (HasLemmas m, Monad m) => LemmaName -> Proven -> Transform c m a ()
+markLemmaProvenT nm p = modifyLemmaT nm id idR (const p) id
 
-markLemmaAssumedT :: (HasLemmas m, Monad m) => Bool -> LemmaName -> Transform c m a ()
-markLemmaAssumedT user nm = modifyLemmaT nm id idR (const (Assumed user)) id
 ------------------------------------------------------------------------------
 
 lemmaNameToQuantifiedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Quantified

@@ -522,7 +522,7 @@ announceUnprovens = do
     sf <- gets cl_safety
     case sf of
         StrictSafety -> do
-            let ls = [ nl | nl@(_,Lemma _ p u _) <- M.toList m, p `elem` [NotProven, Assumed True], u /= NotUsed ]
+            let ls = [ nl | nl@(_,Lemma _ p u _) <- M.toList m, p `elem` [NotProven, Assumed], u /= NotUsed ]
             forM_ ls $ \ nl@(nm,_) -> do
                 cl_putStrLn $ "Fatal: Lemma " ++ show nm ++ " has not been proven, but was used."
                 printLemma stdout c mempty nl
@@ -533,7 +533,7 @@ announceUnprovens = do
                 cl_putStrLn $ "Fatal: Lemma " ++ show nm ++ " has not been proven, but was used."
                 printLemma stdout c mempty nl
             unless (null np) abort -- don't finish if this happens
-            let as = [ nl | nl@(_,Lemma _ (Assumed True) u _) <- M.toList m, u /= NotUsed ]
+            let as = [ nl | nl@(_,Lemma _ Assumed u _) <- M.toList m, u /= NotUsed ]
             forM_ as $ \ nl@(nm,_) -> do
                 cl_putStrLn $ "Warning: Lemma " ++ show nm ++ " was assumed but not proven."
                 printLemma stdout c mempty nl
