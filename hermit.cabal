@@ -2,19 +2,8 @@ Name:                hermit
 Version:             0.7.0.0
 Synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
 Description:
-  HERMIT uses Haskell to express semi-formal models,
-  efficient implementations, and provide a bridging DSL
-  to describe via stepwise refinement the connection between
-  these models and implementations. The key transformation
-  in the bridging DSL is the worker/wrapper transformation.
-  .
-  This is an alpha `please give feedback' release.
-  Shortcomings/gotchas include:
-  .
-    * log command prints linearly, even if command history is a tree.
-  .
-    * A number of rewrites don't enforce preconditions. eg: cast elimination
-      always works, even if the cast is necessary
+  HERMIT is a Haskell-specific toolkit designed to mechanize
+  equational reasoning and program transformation during compilation in GHC.
   .
   Examples can be found in the examples sub-directory.
   .
@@ -93,8 +82,8 @@ Category:            Language, Formal Methods, Optimization, Transformation, Ref
 License:             BSD3
 License-file:        LICENSE
 Author:              Andrew Farmer, Andy Gill, Ed Komp, Neil Sculthorpe
-Maintainer:          Andy Gill <andygill@ku.edu>
-Stability:           alpha
+Maintainer:          Andrew Farmer <afarmer@ittc.ku.edu>
+Stability:           beta
 build-type:          Simple
 Cabal-Version:       >= 1.14
 
@@ -120,11 +109,12 @@ extra-source-files:
     examples/fib-tuple/Fib.hss
     examples/flatten/HList.hs
     examples/flatten/Flatten.hs
-    examples/flatten/Flatten.hss
+    examples/flatten/Flatten.hec
     examples/hanoi/Hanoi.hs
     examples/hanoi/Hanoi.hss
     examples/last/Last.hs
     examples/last/Last.hss
+    examples/last/NewLast.hss
     examples/mean/Mean.hs
     examples/mean/Mean.hss
     examples/nub/Nub.hs
@@ -137,7 +127,7 @@ extra-source-files:
     examples/reverse/Reverse.hss
     examples/new_reverse/HList.hs
     examples/new_reverse/Reverse.hs
-    examples/new_reverse/Reverse.hss
+    examples/new_reverse/Reverse.hec
 
 Library
   ghc-options: -Wall -fno-warn-orphans
