@@ -16,7 +16,6 @@ module HERMIT.Dictionary.Local.Case
     , caseReduceR
     , caseReduceDataconR
     , caseReduceLiteralR
-      -- , caseReduceIdR
     , caseReduceUnfoldR
     , casesForM
     , caseExprsForM
@@ -74,9 +73,9 @@ externals =
     , external "case-float-arg-unsafe" ((\ f -> promoteExprR (caseFloatArg (Just f) Nothing)) :: CoreString -> RewriteH LCore)
         [ "For a specified f,"
         , "f (case s of alt -> e) ==> case s of alt -> f e" ]   .+ Commute .+ Shallow .+ PreCondition .+ Strictness
-    , external "case-float-arg-unsafe" (promoteExprR (caseFloatArg Nothing Nothing) :: RewriteH LCore)
-        [ "f (case s of alt -> e) ==> case s of alt -> f e" ]   .+ Commute .+ Shallow .+ PreCondition .+ Strictness
-    , external "case-float-arg-lemma" (promoteExprR . caseFloatArgLemmaR :: LemmaName -> RewriteH LCore)
+    , external "case-float-arg-unsafe" (promoteExprR . caseFloatArgLemmaR UnsafeUsed :: LemmaName -> RewriteH LCore)
+        [ "f (case s of alt -> e) ==> case s of alt -> f e" ]   .+ Commute .+ Shallow .+ PreCondition .+ Strictness .+ Unsafe
+    , external "case-float-arg-lemma" (promoteExprR . caseFloatArgLemmaR Obligation :: LemmaName -> RewriteH LCore)
         [ "f (case s of alt -> e) ==> case s of alt -> f e"
         , "Generates a lemma with given name for strictness side condition on f." ] .+ Commute .+ Shallow .+ PreCondition .+ Strictness
     , external "case-float-case" (promoteExprR caseFloatCaseR :: RewriteH LCore)
@@ -208,9 +207,9 @@ caseFloatArgR mf mstrict = prefixFailMsg "Case floating from App argument failed
 --   Only safe if @f@ is strict, so introduces a lemma to prove.
 caseFloatArgLemmaR :: ( AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, HasHermitMEnv m
                       , HasHscEnv m, HasDynFlags m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-                   => LemmaName -> Rewrite c m CoreExpr
-caseFloatArgLemmaR nm = prefixFailMsg "Case floating from application argument failed: " $
-                        withPatFailMsg "App f (Case s w ty alts)" $ do
+                   => Used -> LemmaName -> Rewrite c m CoreExpr
+caseFloatArgLemmaR u nm = prefixFailMsg "Case floating from application argument failed: " $
+                          withPatFailMsg "App f (Case s w ty alts)" $ do
     App f (Case s w _ alts) <- idR
 
     let fvs         = freeVarsExpr f
@@ -221,7 +220,7 @@ caseFloatArgLemmaR nm = prefixFailMsg "Case floating from application argument f
             appAllR idR (alphaCaseBinderR Nothing) >>> caseFloatArgR Nothing Nothing
        | all isEmptyVarSet altCaptures -> do
             let new_alts = mapAlts (App f) alts
-            buildStrictnessLemmaT nm f
+            buildStrictnessLemmaT u nm f
             return $ Case s w (coreAltsType new_alts) new_alts
        | otherwise ->
             appAllR idR (caseAllR idR idR idR (\ n -> let vs = varSetElems (altCaptures !! n)

@@ -272,6 +272,7 @@ data CommandLineState = CommandLineState
     , cl_window         :: PathH                  -- ^ path to beginning of window, always a prefix of focus path in kernel
     , cl_externals      :: [External]             -- ^ Currently visible externals
     , cl_running_script :: Maybe Script           -- ^ Nothing = no script running, otherwise the remaining script commands
+    , cl_safety         :: Safety                 -- ^ which level of safety we are running in
     } deriving (Typeable)
 
 type PathStack = ([LocalPathH], LocalPathH)
@@ -284,7 +285,17 @@ data ProofTodo = Unproven
                     , ptPath    :: PathStack    -- ^ path into lemma to focus on
                     }
                | MarkProven { ptName :: LemmaName, ptTemp :: Bool } -- ^ lemma successfully proven, temporary status
---               | IntroLemma { ptName :: LemmaName, ptQuantified :: Quantified, ptProven :: Proven } -- ^ introduce this lemma with given proven status
+
+data Safety = StrictSafety | NormalSafety | NoSafety
+
+filterSafety :: Safety -> [External] -> [External]
+filterSafety NoSafety     = id
+filterSafety NormalSafety = filter ((Unsafe `notElem`) . externTags)
+filterSafety StrictSafety = filter ((`notElem` ["assume"]) . externName) . filterSafety NormalSafety
+-- TODO: currently, we only prevent assuming proofs in strict mode
+-- it would probably be better to explicitly tag every command allowed
+-- in strict safety mode with the 'Safe' tag, then change this to:
+-- filterSafety StrictSafety = filter ((Safe `elem`) . externTags)
 
 -- To ease the pain of nested records, define some boilerplate here.
 cl_corelint :: CommandLineState -> Bool
@@ -348,6 +359,7 @@ mkCLS = do
                               , cl_window         = mempty
                               , cl_externals      = [] -- Note, empty dictionary.
                               , cl_running_script = Nothing
+                              , cl_safety         = NormalSafety
                               }
     return $ setPrettyOpts st $ (cl_pretty_opts st) { po_width = w }
 

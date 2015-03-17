@@ -21,6 +21,7 @@ module HERMIT.Lemma
     , Lemma(..)
     , Proven(..)
     , andP, orP
+    , Used(..)
     , Lemmas
     , NamedLemma
     ) where
@@ -96,7 +97,7 @@ instance Show LemmaName where show (LemmaName s) = s
 -- | An equality with a proven/used status.
 data Lemma = Lemma { lemmaQ :: Quantified
                    , lemmaP :: Proven     -- whether lemma has been proven
-                   , lemmaU :: Bool       -- whether lemma has been used
+                   , lemmaU :: Used       -- whether lemma has been used
                    , lemmaT :: Bool       -- whether lemma is temporary
                    }
 
@@ -126,6 +127,16 @@ andP = min
 -- When disjuncting, result is as proven as the most of the two
 orP :: Proven -> Proven -> Proven
 orP = max
+
+data Used = Obligation -- ^ this MUST be proven immediately
+          | UnsafeUsed -- ^ used, but can be proven later (only introduced in unsafe shell)
+          | NotUsed    -- ^ not used
+    deriving (Eq, Typeable)
+
+instance Show Used where
+    show Obligation = "Obligation"
+    show UnsafeUsed = "Used"
+    show NotUsed    = "Not Used"
 
 data Quantified = Quantified [CoreBndr] Clause
 

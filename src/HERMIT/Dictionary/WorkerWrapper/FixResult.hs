@@ -78,7 +78,7 @@ externals =
                   "                          in let work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)",
                   "                              in \\ x0 -> abs (work x0)",
                   "Note: the pre-condition \"fix (X->A) (\\ h x -> abs (rep (f h x))) == fix (X->A) f\" is expected to hold."
-                ] .+ Introduce .+ Context .+ PreCondition
+                ] .+ Introduce .+ Context .+ PreCondition .+ Unsafe
          , external "ww-result-split-static-arg" ((\ n is abs rep assC -> promoteDefR $ wwResultSplitStaticArg n is (mkWWAssC assC) abs rep)
                                       :: Int -> [Int] -> CoreString -> CoreString -> RewriteH LCore -> RewriteH LCore)
                 [ "Worker/Wrapper Split - Static Argument Variant (Result Variant)",
@@ -90,7 +90,7 @@ externals =
                 [ "Unsafe Worker/Wrapper Split - Static Argument Variant (Result Variant)",
                   "Perform the static argument transformation on the first n arguments, then perform the (unsafe) worker/wrapper split,",
                   "applying the given abs and rep functions to the specified (by index) static arguments before use."
-                ] .+ Introduce .+ Context .+ PreCondition
+                ] .+ Introduce .+ Context .+ PreCondition .+ Unsafe
          , external "ww-result-assumption-A" ((\ abs rep assA -> promoteExprBiR $ wwA (Just $ extractR assA) abs rep)
                                        :: CoreString -> CoreString -> RewriteH LCore -> BiRewriteH LCore)
                 [ "Worker/Wrapper Assumption A (Result Variant)",
@@ -276,7 +276,7 @@ wwResultGenerateFusionT mAss =
                ) <- projectT
        guardMsg (w == w' && x1 == x1' && x2 == x2') wrongForm
        whenJust (verifyWWAss abs rep f) mAss
-       insertLemmaT workLabel $ Lemma (Quantified [] (Equiv (varToCoreExpr w) e)) Proven False False
+       insertLemmaT workLabel $ Lemma (Quantified [] (Equiv (varToCoreExpr w) e)) Proven NotUsed False
   where
     wrongForm = "definition does not have the form: work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)"
 

@@ -19,7 +19,7 @@ module HERMIT.Dictionary.Reasoning
     , extensionalityR
     , getLemmasT
     , getLemmaByNameT
-    , getUsedNotProvenT
+    , getObligationNotProvenT
     , insertLemmaT
     , insertLemmasT
     , lemmaBiR
@@ -121,16 +121,16 @@ externals =
         [ "imply new-name antecedent-name consequent-name" ]
     , external "lint" (promoteT lintQuantifiedT :: TransformH LCoreTC String)
         [ "Lint check a quantified clause." ]
-    , external "lemma-birewrite" (promoteExprBiR . lemmaBiR :: LemmaName -> BiRewriteH LCore)
+    , external "lemma-birewrite" (promoteExprBiR . lemmaBiR Obligation :: LemmaName -> BiRewriteH LCore)
         [ "Generate a bi-directional rewrite from a lemma." ]
-    , external "lemma-forward" (forwardT . promoteExprBiR . lemmaBiR :: LemmaName -> RewriteH LCore)
+    , external "lemma-forward" (forwardT . promoteExprBiR . lemmaBiR Obligation :: LemmaName -> RewriteH LCore)
         [ "Generate a rewrite from a lemma, left-to-right." ]
-    , external "lemma-backward" (backwardT . promoteExprBiR . lemmaBiR :: LemmaName -> RewriteH LCore)
+    , external "lemma-backward" (backwardT . promoteExprBiR . lemmaBiR Obligation :: LemmaName -> RewriteH LCore)
         [ "Generate a rewrite from a lemma, right-to-left." ]
-    , external "lemma-consequent" (promoteQuantifiedR . lemmaConsequentR :: LemmaName -> RewriteH LCore)
+    , external "lemma-consequent" (promoteQuantifiedR . lemmaConsequentR Obligation :: LemmaName -> RewriteH LCore)
         [ "Match the current lemma with the consequent of an implication lemma."
         , "Upon success, replaces with antecedent of the implication, properly instantiated." ]
-    , external "lemma-consequent-birewrite" (promoteExprBiR . lemmaConsequentBiR :: LemmaName -> BiRewriteH LCore)
+    , external "lemma-consequent-birewrite" (promoteExprBiR . lemmaConsequentBiR Obligation :: LemmaName -> BiRewriteH LCore)
         [ "Generate a bi-directional rewrite from the consequent of an implication lemma."
         , "The antecedent is instantiated and introduced as an unproven obligation." ]
     , external "lemma-lhs-intro" (promoteCoreR . lemmaLhsIntroR :: LemmaName -> RewriteH LCore)
@@ -151,7 +151,7 @@ externals =
         [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
     , external "copy-lemma" (\ nm newName -> modifyLemmaT nm (const newName) idR id id :: TransformH LCore ())
         [ "Copy a given lemma, with a new name." ]
-    , external "modify-lemma" ((\ nm rr -> modifyLemmaT nm id (extractR rr) (const NotProven) (const False)) :: LemmaName -> RewriteH LCore -> TransformH LCore ())
+    , external "modify-lemma" ((\ nm rr -> modifyLemmaT nm id (extractR rr) (const NotProven) (const NotUsed)) :: LemmaName -> RewriteH LCore -> TransformH LCore ())
         [ "Modify a given lemma. Resets proven status to Not Proven and used status to Not Used." ]
     , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaQ >>> extractT t) :: LemmaName -> TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to a lemma, returning the result." ]
@@ -334,19 +334,18 @@ verifyClauseT =
                    Impl  _  _  -> fail "verifyClauseT: Impl TODO"
                    Equiv e1 e2 -> guardMsg (exprAlphaEq e1 e2) "the two sides of the equality do not match.")
 
-verifyEquivalentT :: (HasLemmas m, MonadCatch m) => LemmaName -> Transform c m Quantified ()
-verifyEquivalentT nm = prefixFailMsg "verification failed: " $ do
-    Lemma q p u t <- getLemmaByNameT nm
-    guardMsg (p /= NotProven) "specified lemma is also not proven."
+verifyEquivalentT :: (HasLemmas m, MonadCatch m) => Used -> LemmaName -> Transform c m Quantified ()
+verifyEquivalentT used nm = prefixFailMsg "verification failed: " $ do
+    Lemma q _ _ _ <- getLemmaByNameT nm
     eq <- arr (q `proves`)
     guardMsg eq "lemmas are not equivalent."
-    unless (u || t) $ markLemmaUsedT nm
+    markLemmaUsedT nm used
 
-verifyOrCreateT :: (HasLemmas m, MonadCatch m) => LemmaName -> Lemma -> Transform c m a ()
-verifyOrCreateT nm l = do
+verifyOrCreateT :: (HasLemmas m, MonadCatch m) => Used -> LemmaName -> Lemma -> Transform c m a ()
+verifyOrCreateT u nm l = do
     exists <- testM $ getLemmaByNameT nm
     if exists
-    then return (lemmaQ l) >>> verifyEquivalentT nm
+    then return (lemmaQ l) >>> verifyEquivalentT u nm
     else insertLemmaT nm l
 
 ------------------------------------------------------------------------------
@@ -473,19 +472,19 @@ conjunctLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName
 conjunctLemmasT new lhs rhs = do
     Lemma ql pl _ tl <- getLemmaByNameT lhs
     Lemma qr pr _ tr <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Conj ql qr)) (pl `andP` pr) False (tl || tr)
+    insertLemmaT new $ Lemma (Quantified [] (Conj ql qr)) (pl `andP` pr) NotUsed (tl || tr)
 
 disjunctLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 disjunctLemmasT new lhs rhs = do
     Lemma ql pl _ tl <- getLemmaByNameT lhs
     Lemma qr pr _ tr <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Disj ql qr)) (pl `orP` pr) False (tl || tr)
+    insertLemmaT new $ Lemma (Quantified [] (Disj ql qr)) (pl `orP` pr) NotUsed (tl || tr)
 
 implyLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 implyLemmasT new lhs rhs = do
     Lemma ql _  _ tl <- getLemmaByNameT lhs
     Lemma qr pr _ tr <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Impl ql qr)) pr False (tl || tr)
+    insertLemmaT new $ Lemma (Quantified [] (Impl ql qr)) pr NotUsed (tl || tr)
 
 ------------------------------------------------------------------------------
 
@@ -616,23 +615,23 @@ getLemmasT = constT getLemmas
 getLemmaByNameT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Lemma
 getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm) return . Map.lookup nm
 
-getUsedNotProvenT :: (HasLemmas m, Monad m) => Transform c m x [NamedLemma]
-getUsedNotProvenT = do
+getObligationNotProvenT :: (HasLemmas m, Monad m) => Transform c m x [NamedLemma]
+getObligationNotProvenT = do
     ls <- getLemmasT
-    return [ (nm,l) | (nm, l@(Lemma _ NotProven True _)) <- Map.toList ls ]
+    return [ (nm,l) | (nm, l@(Lemma _ NotProven Obligation _)) <- Map.toList ls ]
 
 ------------------------------------------------------------------------------
 
 lemmaBiR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
             , HasLemmas m, MonadCatch m, MonadUnique m)
-         => LemmaName -> BiRewrite c m CoreExpr
-lemmaBiR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaQ)) (markLemmaUsedT nm >> idR)
+         => Used -> LemmaName -> BiRewrite c m CoreExpr
+lemmaBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaQ)) (markLemmaUsedT nm u >> idR)
 
 lemmaConsequentR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
                                 , ReadPath c Crumb, HasLemmas m, MonadCatch m, MonadUnique m)
-                 => LemmaName -> Rewrite c m Quantified
-lemmaConsequentR nm = prefixFailMsg "lemma-consequent failed:" $
-                      withPatFailMsg "lemma is not an implication." $ do
+                 => Used -> LemmaName -> Rewrite c m Quantified
+lemmaConsequentR u nm = prefixFailMsg "lemma-consequent failed:" $
+                        withPatFailMsg "lemma is not an implication." $ do
     Quantified hs (Impl ante con) <- lemmaQ <$> getLemmaByNameT nm
     q' <- transform $ \ c q -> do
         m <- maybeM ("consequent did not match.") $ lemmaMatch hs con q
@@ -642,13 +641,13 @@ lemmaConsequentR nm = prefixFailMsg "lemma-consequent failed:" $
         guardMsg (all (inScope c) $ varSetElems (freeVarsQuantified q'))
                  "some variables in result would be out of scope."
         return q'
-    markLemmaUsedT nm
+    markLemmaUsedT nm u
     return q'
 
 lemmaConsequentBiR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
                                   , ReadPath c Crumb, HasLemmas m, MonadCatch m, MonadUnique m)
-                   => LemmaName -> BiRewrite c m CoreExpr
-lemmaConsequentBiR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)) (markLemmaUsedT nm >> idR)
+                   => Used -> LemmaName -> BiRewrite c m CoreExpr
+lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)) (markLemmaUsedT nm u >> idR)
     where go :: Quantified -> BiRewrite c m CoreExpr
           go (Quantified bs (Impl ante (Quantified bs' cl))) = do
             let eqs = toEqualities $ Quantified (bs++bs') cl -- consequent
@@ -663,7 +662,7 @@ lemmaConsequentBiR nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)) 
                             (unmatched, subs) = partitionEithers matches
                             Quantified aBs acl = substQuantifieds subs ante
                             q = Quantified (unmatched++aBs) acl
-                        insertLemma (nm <> "-antecedent") $ Lemma q NotProven True True
+                        insertLemma (nm <> "-antecedent") $ Lemma q NotProven u True
                         return e'
             bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)
           go _ = let t = fail $ show nm ++ " is not an implication."
@@ -682,15 +681,15 @@ modifyLemmaT :: (HasLemmas m, Monad m)
              -> (LemmaName -> LemmaName) -- ^ modify lemma name
              -> Rewrite c m Quantified   -- ^ rewrite the quantified clause
              -> (Proven -> Proven)       -- ^ modify proven status
-             -> (Bool -> Bool)           -- ^ modify used status
+             -> (Used -> Used)           -- ^ modify used status
              -> Transform c m a ()
 modifyLemmaT nm nFn rr pFn uFn = do
     Lemma q p u t <- getLemmaByNameT nm
     q' <- rr <<< return q
     constT $ insertLemma (nFn nm) $ Lemma q' (pFn p) (uFn u) t
 
-markLemmaUsedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
-markLemmaUsedT nm = modifyLemmaT nm id idR id (const True)
+markLemmaUsedT :: (HasLemmas m, Monad m) => LemmaName -> Used -> Transform c m a ()
+markLemmaUsedT nm u = modifyLemmaT nm id idR id (const u)
 
 markLemmaProvedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m a ()
 markLemmaProvedT nm = modifyLemmaT nm id idR (const Proven) id

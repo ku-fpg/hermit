@@ -38,29 +38,29 @@ externals = map (.+ Proof)
     [ external "intro-ww-assumption-A"
         (\nm absC repC -> do
             q <- parse2BeforeT assumptionAQuantifiedT absC repC
-            insertLemmaT nm $ Lemma q NotProven False False :: TransformH LCore ())
+            insertLemmaT nm $ Lemma q NotProven NotUsed False :: TransformH LCore ())
         [ "Introduce a lemma for worker/wrapper assumption A"
         , "using given abs and rep functions." ]
     , external "intro-ww-assumption-B"
         (\nm absC repC bodyC -> do
             q <- parse3BeforeT assumptionBQuantifiedT absC repC bodyC
-            insertLemmaT nm $ Lemma q NotProven False False :: TransformH LCore ())
+            insertLemmaT nm $ Lemma q NotProven NotUsed False :: TransformH LCore ())
         [ "Introduce a lemma for worker/wrapper assumption B"
         , "using given abs, rep, and body functions." ]
     , external "intro-ww-assumption-C"
         (\nm absC repC bodyC -> do
             q <- parse3BeforeT assumptionCQuantifiedT absC repC bodyC
-            insertLemmaT nm $ Lemma q NotProven False False :: TransformH LCore ())
+            insertLemmaT nm $ Lemma q NotProven NotUsed False :: TransformH LCore ())
         [ "Introduce a lemma for worker/wrapper assumption C"
         , "using given abs, rep, and body functions." ]
-    , external "split-1-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split1BetaR nm) absC :: CoreString -> RewriteH LCore)
+    , external "split-1-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split1BetaR Obligation nm) absC :: CoreString -> RewriteH LCore)
         [ "split-1-beta <name> <abs expression> <rep expression>"
         , "Perform worker/wrapper split with condition 1-beta."
         , "Given lemma name argument is used as prefix to two introduced lemmas."
         , "  <name>-assumption: unproven lemma for w/w assumption C."
         , "  <name>-fusion: assumed lemma for w/w fusion."
         ]
-    , external "split-2-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split2BetaR nm) absC :: CoreString -> RewriteH LCore)
+    , external "split-2-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split2BetaR Obligation nm) absC :: CoreString -> RewriteH LCore)
         [ "split-2-beta <name> <abs expression> <rep expression>"
         , "Perform worker/wrapper split with condition 2-beta."
         , "Given lemma name argument is used as prefix to two introduced lemmas."
@@ -139,8 +139,8 @@ wwFusionQuantifiedT absE repE fixgE = prefixFailMsg "Building worker/wrapper fus
 -- an unproven lemma for assumption C, and an appropriate w/w fusion lemma.
 split1BetaR :: ( BoundVars c, HasHermitMEnv m, HasHscEnv m, HasLemmas m
                , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-            => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
-split1BetaR nm absE repE = do
+            => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
+split1BetaR u nm absE repE = do
     (_fixId, [_tyA, f]) <- callNameT $ fromString "Data.Function.fix"
 
     g <- prefixFailMsg "building (rep . f . abs) failed: "
@@ -154,17 +154,17 @@ split1BetaR nm absE repE = do
             $ buildAppM absE (varToCoreExpr workId)
 
     assumptionQ <- assumptionCQuantifiedT absE repE f
-    insertLemmaT (fromString (show nm ++ "-assumption")) $ Lemma assumptionQ NotProven True False -- unproven, used, permanent
+    verifyOrCreateT u (fromString (show nm ++ "-assumption")) $ Lemma assumptionQ NotProven u False -- unproven, used, permanent
 
     wwFusionQ <- wwFusionQuantifiedT absE repE workRhs
-    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionQ Assumed False False -- assumed, unused, permanent
+    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionQ Assumed NotUsed False -- assumed, unused, permanent
 
     return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
 
 split2BetaR :: ( BoundVars c, HasHermitMEnv m, HasHscEnv m, HasLemmas m
                , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-            => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
-split2BetaR nm absE repE = do
+            => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
+split2BetaR u nm absE repE = do
     (_fixId, [_tyA, f]) <- callNameT $ fromString "Data.Function.fix"
     fixfE <- idR
 
@@ -174,9 +174,9 @@ split2BetaR nm absE repE = do
     newRhs <- buildAppM absE (varToCoreExpr workId)
 
     assumptionQ <- assumptionCQuantifiedT absE repE f
-    insertLemmaT (fromString (show nm ++ "-assumption")) $ Lemma assumptionQ NotProven True False -- unproven, used, permanent
+    verifyOrCreateT u (fromString (show nm ++ "-assumption")) $ Lemma assumptionQ NotProven u False -- unproven, used, permanent
 
     wwFusionQ <- wwFusionQuantifiedT absE repE (varToCoreExpr workId)
-    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionQ Assumed False False -- assumed, unused, permanent
+    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionQ Assumed NotUsed False -- assumed, unused, permanent
 
     return $ mkCoreLets [NonRec workId repFixFE] newRhs

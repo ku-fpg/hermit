@@ -27,23 +27,23 @@ golden = "golden"
 dump = "dump"
 
 tests :: [Test]
-tests = [ ("concatVanishes", "Flatten.hs", "Flatten.hss", [])
-        , ("concatVanishes", "QSort.hs"  , "QSort.hss"  , [])
-        , ("concatVanishes", "Rev.hs"    , "Rev.hss"    , [])
+tests = [ ("concatVanishes", "Flatten.hs", "Flatten.hss", ["-safety=unsafe"])
+        , ("concatVanishes", "QSort.hs"  , "QSort.hss"  , ["-safety=unsafe"])
+        , ("concatVanishes", "Rev.hs"    , "Rev.hss"    , ["-safety=unsafe"])
         , ("evaluation"    , "Eval.hs"   , "Eval.hss"   , [])
         , ("factorial"     , "Fac.hs"    , "Fac.hss"    , [])
         -- broken due to Core Parser: , ("fib-stream"    , "Fib.hs"    , "Fib.hss"    )
         , ("fib-tuple"     , "Fib.hs"    , "Fib.hss"    , [])
-        , ("flatten"       , "Flatten.hs", "Flatten.hec", ["-safe-mode"])
+        , ("flatten"       , "Flatten.hs", "Flatten.hec", ["-safety=unsafe"])
         -- for some reason loops in testsuite but not normally: , ("hanoi"         , "Hanoi.hs"  , "Hanoi.hss"  )
-        , ("last"          , "Last.hs"   , "Last.hss"   , [])
-        , ("last"          , "Last.hs"   , "NewLast.hss", [])
+        , ("last"          , "Last.hs"   , "Last.hss"   , ["-safety=unsafe"])
+        , ("last"          , "Last.hs"   , "NewLast.hss", ["-safety=safe"])
         -- broken due to Core Parser: , ("map"           , "Map.hs"    , "Map.hss"    )
         , ("mean"          , "Mean.hs"   , "Mean.hss"   , [])
         , ("nub"           , "Nub.hs"    , "Nub.hss"    , [])
         , ("qsort"         , "QSort.hs"  , "QSort.hss"  , [])
-        , ("reverse"       , "Reverse.hs", "Reverse.hss", [])
-        , ("new_reverse"   , "Reverse.hs", "Reverse.hec", ["-safe-mode"])
+        , ("reverse"       , "Reverse.hs", "Reverse.hss", ["-safety=unsafe"])
+        , ("new_reverse"   , "Reverse.hs", "Reverse.hec", [])
         ]
 
 fixName :: FilePath -> FilePath

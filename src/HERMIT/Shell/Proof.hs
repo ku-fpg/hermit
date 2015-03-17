@@ -6,6 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -22,7 +23,7 @@ module HERMIT.Shell.Proof
 import Control.Arrow hiding (loop, (<+>))
 import Control.Monad (forM, forM_, liftM, unless)
 import Control.Monad.Error.Class (MonadError(..))
-import Control.Monad.State (MonadState(get), modify, gets)
+import Control.Monad.State (MonadState, modify, gets)
 
 import Data.Dynamic
 import Data.List (delete, zipWith4)
@@ -63,8 +64,10 @@ externals = map (.+ Proof)
 -- | Externals that are added to the dictionary only when in interactive proof mode.
 proof_externals :: [External]
 proof_externals = map (.+ Proof)
-    [ external "lemma" PCLemma
+    [ external "lemma" (PCEnd . Right . (Obligation,))
         [ "Prove lemma by asserting it is alpha-equivalent to an already proven lemma." ]
+    , external "lemma-unsafe" (PCEnd . Right . (UnsafeUsed,))
+        [ "Prove lemma by asserting it is alpha-equivalent to an already proven lemma." ] .+ Unsafe
     , external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
         [ "Perform induction on given universally quantified variable."
         , "Each constructor case will generate a new lemma to be proven."
@@ -81,11 +84,11 @@ proof_externals = map (.+ Proof)
         [ "Split an assumed lemma which is a conjunction/disjunction." ]
     , external "split-assumed" PCSplitAssumed
         [ "Split an assumed lemma which is a conjunction/disjunction." ]
-    , external "end-proof" (PCEnd False)
+    , external "end-proof" (PCEnd (Left False))
         [ "check for alpha-equality, marking the lemma as proven" ]
-    , external "end-case" (PCEnd False)
+    , external "end-case" (PCEnd (Left False))
         [ "check for alpha-equality, marking the proof case as proven" ]
-    , external "assume" (PCEnd True)
+    , external "assume" (PCEnd (Left True))
         [ "mark lemma as assumed" ]
     ]
 
@@ -107,10 +110,10 @@ interactiveProofIO nm s = do
 
 withProofExternals :: (MonadError CLException m, MonadState CommandLineState m) => m a -> m a
 withProofExternals comp = do
-    st <- get
-    let es = cl_externals st
+    (es,sf) <- gets (cl_externals &&& cl_safety)
+    let pes = filterSafety sf proof_externals
         -- commands with same same in proof_externals will override those in normal externals
-        newEs = proof_externals ++ filter ((`notElem` (map externName proof_externals)) . externName) es
+        newEs = pes ++ filter ((`notElem` (map externName pes)) . externName) es
         reset s = s { cl_externals = es }
     modify $ \ s -> s { cl_externals = newEs }
     r <- comp `catchError` (\case CLContinue s -> continue (reset s)
@@ -120,10 +123,10 @@ withProofExternals comp = do
 
 forceProofs :: (MonadCatch m, CLMonad m) => m ()
 forceProofs = do
-    (c,nls) <- queryInFocus (contextT &&& getUsedNotProvenT :: TransformH Core (HermitC, [NamedLemma])) Never
+    (c,nls) <- queryInFocus (contextT &&& getObligationNotProvenT :: TransformH Core (HermitC, [NamedLemma])) Never
     todos <- getProofStackEmpty
     let already = map ptName todos
-        nls' = [ (nm,l) | (nm,l) <- nls, not (nm `elem` already) ]
+        nls' = [ nl | nl@(nm,_) <- nls, not (nm `elem` already) ]
     if null nls'
     then return ()
     else do
@@ -133,7 +136,7 @@ forceProofs = do
         forM_ nls' $ \ (nm,l) -> pushProofStack (Unproven nm l c' [] mempty)
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
-endProof :: (MonadCatch m, CLMonad m) => Either Bool LemmaName -> ExprH -> m ()
+endProof :: (MonadCatch m, CLMonad m) => Either Bool (Used,LemmaName) -> ExprH -> m ()
 endProof reason expr = do
     Unproven nm (Lemma q _ _ temp) c ls _ : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
@@ -142,7 +145,7 @@ endProof reason expr = do
                 Left assumed
                     | assumed   -> deleteOr (markLemmaAssumedT nm)
                     | otherwise -> setFailMsg msg verifyQuantifiedT >> deleteOr (markLemmaProvedT nm)
-                Right nm' -> verifyEquivalentT nm' >> deleteOr (markLemmaProvedT nm)
+                Right (u,nm') -> verifyEquivalentT u nm' >> deleteOr (markLemmaProvedT nm)
     queryInFocus (constT (withLemmas (M.fromList ls) $ applyT t c q) :: TransformH Core ())
                  (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
@@ -156,7 +159,6 @@ performProofShellCommand :: (MonadCatch m, CLMonad m)
                          => ProofShellCommand -> ExprH -> m ()
 performProofShellCommand cmd expr = go cmd
     where str = unparseExprH expr
-          go (PCLemma nm)         = endProof (Right nm) expr
           go (PCInduction idPred) = performInduction (Always str) idPred
           go (PCByCases idPred)   = proveByCases (Always str) idPred
           go PCConsequent         = proveConsequent str
@@ -172,7 +174,7 @@ performProofShellCommand cmd expr = go cmd
                              (Changed str)
                 _ <- popProofStack
                 cl_putStrLn $ "Successfully proven: " ++ show (ptName todo)
-          go (PCEnd assumed)      = endProof (Left assumed) expr
+          go (PCEnd why)          = endProof why expr
 
 proveConsequent :: (MonadCatch m, CLMonad m) => String -> m ()
 proveConsequent expr = do
@@ -180,12 +182,12 @@ proveConsequent expr = do
     (c, Impl ante con) <- setFailMsg "not an implication" $
                           queryInFocus (inProofFocusT todo (contextT &&& projectT)) Never
     let nm = ptName todo
-        ls = (nm <> "-antecedent", Lemma ante Assumed False True) : ptAssumed todo
+        ls = (nm <> "-antecedent", Lemma ante Assumed NotUsed True) : ptAssumed todo
     (k,ast) <- gets (cl_kernel &&& cl_cursor)
     addAST =<< tellK k expr ast
     _ <- popProofStack
     pushProofStack $ MarkProven nm (lemmaT (ptLemma todo)) -- proving the consequent proves the lemma
-    pushProofStack $ Unproven (nm <> "-consequent") (Lemma con NotProven False True) c ls mempty
+    pushProofStack $ Unproven (nm <> "-consequent") (Lemma con NotProven Obligation True) c ls mempty
 
 proveConjunction :: (MonadCatch m, CLMonad m) => String -> m ()
 proveConjunction expr = do
@@ -267,9 +269,9 @@ performInduction cm idPred = do
                 -- TODO rethink the discardUniVars
 
         let nms = [ fromString ("ind-hyp-" ++ show n) | n :: Int <- [0..] ]
-            hypLemmas = zip nms $ zipWith4 Lemma qs (repeat Assumed) (repeat False) (repeat True)
+            hypLemmas = zip nms $ zipWith4 Lemma qs (repeat Assumed) (repeat NotUsed) (repeat True)
             lemmaName = fromString $ show nm ++ "-induction-case-" ++ caseName
-            caseLemma = Lemma (mkQuantified (delete i bs ++ vs) lhsE rhsE) NotProven False True
+            caseLemma = Lemma (mkQuantified (delete i bs ++ vs) lhsE rhsE) NotProven Obligation True
 
         pushProofStack $ Unproven lemmaName caseLemma ctxt (hypLemmas ++ ls) mempty
 
@@ -293,20 +295,21 @@ proveByCases cm idPred = do
         let lemmaName = fromString $ show nm ++ "-case-" ++ show i
             Quantified bs'' cl' = substQuantified b e $ Quantified bs' cl
             fvs = varSetElems $ localFreeVarsExpr e
-            caseLemma = Lemma (Quantified (as++fvs++bs'') cl') NotProven False True
+            caseLemma = Lemma (Quantified (as++fvs++bs'') cl') NotProven Obligation True
 
         pushProofStack $ Unproven lemmaName caseLemma ctxt ls mempty
 
 data ProofShellCommand
-    = PCLemma LemmaName
-    | PCInduction (Id -> Bool)
+    = PCInduction (Id -> Bool)
     | PCByCases (Id -> Bool)
     | PCConsequent
     | PCConjunction
     | PCSplitAssumed Int
     | PCInstAssumed Int (Var -> Bool) CoreString
     | PCUser UserProofTechnique
-    | PCEnd Bool -- ^ True = assume this lemma, False = check for alpha-equivalence
+    | PCEnd (Either Bool (Used,LemmaName)) -- ^ Left True = assume this lemma
+                                           --   Left False = check for alpha-equivalence
+                                           --   Right (u,nm) = try to prove with given lemma, marking it u
     deriving Typeable
 
 -- keep abstract to avoid breaking things if we modify this later

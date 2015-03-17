@@ -5,5 +5,5 @@
 --  repH x []
                                        { unfold 'repH }
 --  x ++ []
-                                       { unfold-rule "++ []" }
+                                       { unfold-rule-unsafe "++ []" }
 --  x

@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -100,9 +101,15 @@ commandLine :: forall m. (MonadCatch m, MonadException m, CLMonad m)
 commandLine opts exts = do
     let (flags, filesToLoad) = partition (isPrefixOf "-") opts
         ws_complete = " ()" -- treated as 'whitespace' by completer
-        safeMode = "-safe-mode" `elem` flags
+        safeMode = "-safety=strict" `elem` flags
+        unsafeMode = "-safety=unsafe" `elem` flags
+        safetyMode = if | unsafeMode -> NoSafety
+                        | safeMode   -> StrictSafety
+                        | otherwise  -> NormalSafety
 
-    modify $ \ st -> st { cl_externals = shell_externals ++ exts }
+    modify $ \ st -> st { cl_externals = filterSafety safetyMode $ shell_externals ++ exts
+                        , cl_safety = safetyMode
+                        }
 
     -- Display the banner
     if any (`elem` ["-v0", "-v1"]) flags
@@ -130,7 +137,7 @@ commandLine opts exts = do
         loop :: InputT m ()
         loop = do
             el <- lift $ do tryM () announceProven
-                            when safeMode $ tryM () forceProofs
+                            tryM () forceProofs
                             attemptM currentLemma
             let prompt = either (const "hermit") (const "proof") el
             mExpr <- lift popScriptLine

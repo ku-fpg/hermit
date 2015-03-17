@@ -93,6 +93,8 @@ data CmdTag = Shell          -- ^ Shell-specific command.
             | Context        -- ^ A command that uses its context, such as inlining.
             | Unsafe         -- ^ Commands that are not type safe (may cause Core Lint to fail),
                              --   or may otherwise change the semantics of the program.
+                             --   Only available in unsafe mode!
+            | Safe           -- ^ Include in Strict Safety mode (currently unused)
             | Proof          -- ^ Commands related to proving lemmas.
 
             | TODO           -- ^ An incomplete or potentially buggy command.

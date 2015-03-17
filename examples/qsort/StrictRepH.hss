@@ -1,8 +1,0 @@
--- Proof that "repH" is strict
-
-
---  repH ty (undefined [ty])
-                             { unfold 'repH }
---  (++) ty (undefined [ty])
-                             { unfold-rule "++ strict" }
---  undefined ([ty] -> [ty])

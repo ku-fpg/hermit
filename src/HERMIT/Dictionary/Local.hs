@@ -75,7 +75,7 @@ externals =
         , "given a proof that f (fully saturated with type arguments) is strict." ] .+ Shallow .+ Commute
     , external "push-unsafe" (push Nothing . cmpString2Var :: String -> RewriteH LCore)
         [ "Push a function 'f into a case-expression or let-expression argument."
-        , "Requires 'f to be strict." ] .+ Shallow .+ Commute .+ PreCondition
+        , "Requires 'f to be strict." ] .+ Shallow .+ Commute .+ PreCondition .+ Unsafe
     ]
     ++ Bind.externals
     ++ Case.externals

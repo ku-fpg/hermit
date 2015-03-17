@@ -43,7 +43,7 @@ import HERMIT.Dictionary.Reasoning hiding (externals)
 ------------------------------------------------------------------------
 
 externals :: [External]
-externals = map (.+ Unsafe)
+externals = map (.+ Strictness)
     [ external "replace-current-expr-with-undefined" (promoteExprR replaceCurrentExprWithUndefinedR :: RewriteH LCore)
         [ "Set the current expression to \"undefined\"."
         ] .+ Shallow .+ Context .+ Unsafe
@@ -218,10 +218,10 @@ applyToUndefinedT f = do
 -- | Add a lemma for the strictness of a function.
 -- Note: assumes added lemma has been used
 buildStrictnessLemmaT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasHermitMEnv m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m)
-                      => LemmaName -> CoreExpr -> Transform c m x ()
-buildStrictnessLemmaT nm f = do
+                      => Used -> LemmaName -> CoreExpr -> Transform c m x ()
+buildStrictnessLemmaT u nm f = do
     (tvs, lhs) <- liftM collectTyBinders $ applyToUndefinedT f
     rhs <- mkUndefinedValT (exprType lhs)
-    verifyOrCreateT nm $ Lemma (mkQuantified tvs lhs rhs) NotProven True False
+    verifyOrCreateT u nm $ Lemma (mkQuantified tvs lhs rhs) NotProven u False
 
 ------------------------------------------------------------------------

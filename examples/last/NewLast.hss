@@ -5,14 +5,11 @@ binding-of 'last
 fix-intro
 { application-of 'fix
   split-1-beta last [| wrap |] [| unwrap |]
-  repeat (any-call (unfold ['g, 'wrap, 'unwrap, 'fix]))
-  bash
-
-  -- we do this before ending scope,
-  -- so polymorphic variable 'a' is in scope
-  -- we need to think about making lemmas into closures
-  prove-lemma last-assumption
+  -- prove the assumption
   lhs (repeat (any-call (unfold ['., 'wrap, 'unwrap])))
   both smash
   end-proof
+
+  repeat (any-call (unfold ['g, 'wrap, 'unwrap, 'fix]))
+  bash
 }

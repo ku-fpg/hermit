@@ -43,7 +43,7 @@ externals =
     , external "inline-case-scrutinee" (promoteExprR inlineCaseScrutineeR :: RewriteH LCore)
         [ "if v is a case binder, replace (Var v) with the bound case scrutinee." ] .+ Eval .+ Deep
     , external "inline-case-alternative" (promoteExprR inlineCaseAlternativeR :: RewriteH LCore)
-        [ "if v is a case binder, replace (Var v) with the bound case-alternative pattern." ] .+ Eval .+ Deep .+ Unsafe
+        [ "if v is a case binder, replace (Var v) with the bound case-alternative pattern." ] .+ Eval .+ Deep
     ]
 
 ------------------------------------------------------------------------

@@ -39,9 +39,9 @@ externals :: [External]
 externals =
     [ external "remember" (promoteCoreT . rememberR :: LemmaName -> TransformH LCore ())
         [ "Remember the current binding, allowing it to be folded/unfolded in the future." ] .+ Context
-    , external "unfold-remembered" (promoteExprR . unfoldRememberedR :: LemmaName -> RewriteH LCore)
+    , external "unfold-remembered" (promoteExprR . unfoldRememberedR Obligation :: LemmaName -> RewriteH LCore)
         [ "Unfold a remembered definition." ] .+ Deep .+ Context
-    , external "fold-remembered" (promoteExprR . foldRememberedR :: LemmaName -> RewriteH LCore)
+    , external "fold-remembered" (promoteExprR . foldRememberedR Obligation :: LemmaName -> RewriteH LCore)
         [ "Fold a remembered definition." ]                      .+ Context .+ Deep
     , external "fold-any-remembered" (promoteExprR foldAnyRememberedR :: RewriteH LCore)
         [ "Attempt to fold any of the remembered definitions." ] .+ Context .+ Deep
@@ -59,19 +59,19 @@ rememberR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasLemmas m, 
           => LemmaName -> Transform c m Core ()
 rememberR nm = prefixFailMsg "remember failed: " $ do
     Def v e <- setFailMsg "not applied to a binding." $ defOrNonRecT idR idR Def
-    insertLemmaT (prefixRemembered nm) $ Lemma (mkQuantified [] (varToCoreExpr v) e) Proven False False
+    insertLemmaT (prefixRemembered nm) $ Lemma (mkQuantified [] (varToCoreExpr v) e) Proven NotUsed False
 
 -- | Unfold a remembered definition (like unfoldR, but looks in stash instead of context).
 unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                      , HasLemmas m, MonadCatch m, MonadUnique m)
-                  => LemmaName -> Rewrite c m CoreExpr
-unfoldRememberedR = prefixFailMsg "Unfolding remembered definition failed: " . forwardT . lemmaBiR . prefixRemembered
+                  => Used -> LemmaName -> Rewrite c m CoreExpr
+unfoldRememberedR u = prefixFailMsg "Unfolding remembered definition failed: " . forwardT . lemmaBiR u . prefixRemembered
 
 -- | Fold a remembered definition (like foldR, but looks in stash instead of context).
 foldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                    , HasLemmas m, MonadCatch m, MonadUnique m)
-                => LemmaName -> Rewrite c m CoreExpr
-foldRememberedR = prefixFailMsg "Folding remembered definition failed: " . backwardT . lemmaBiR . prefixRemembered
+                => Used -> LemmaName -> Rewrite c m CoreExpr
+foldRememberedR u = prefixFailMsg "Folding remembered definition failed: " . backwardT . lemmaBiR u . prefixRemembered
 
 -- | Fold any of the remembered definitions.
 foldAnyRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb

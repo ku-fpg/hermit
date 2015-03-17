@@ -17,12 +17,6 @@ binding-of 'flatten
 
 ww-result-split-static-arg 1 [0] [| absH |] [| repH |] WWC
 
--- Proving:
--- ++ [] (Not Proven)
---   forall * xs. (++) * xs ([] *) = xs
-
-assume -- proven "++ []"
-
 -- flatten = \ * ds ->
 --   (let f = \ flatten' ds ->
 --          case ds of wild *
@@ -82,31 +76,7 @@ lam-body
 --         Leaf a -> (:) * a ([] *))
 --      acc
 
-bash-extended-with [push 'repH StrictRepH,forward ww-result-fusion,unfold-rules ["repH ++","repH (:)","repH []"]]
-
--- Proving:
--- repH [] (Not Proven)
---   forall *. repH * ([] *) = id *
-
-assume -- proven "repH []"
-
--- Proving:
--- repH ++ (Not Proven)
---   forall * xs ys. repH * ((++) * xs ys) = (.) * * * (repH * xs) (repH * ys)
-
-assume -- proven "repH ++"
-
--- Proving:
--- repH (:) (Not Proven)
---   forall * x xs. repH * ((:) * x xs) = (.) * * * ((:) * x) (repH * xs)
-
-assume -- proven "repH (:)"
-
--- Proving:
--- ++ strict (Not Proven)
---   forall *. (++) * (undefined *) = undefined *
-
-assume -- proven "++ strict"
+bash-extended-with [push 'repH StrictRepH,forward ww-result-fusion,unfold-rules-unsafe ["repH ++","repH (:)","repH []"]]
 
 -- case tree of wild *
 --   Node l r -> work l (work r acc)
