@@ -64,8 +64,10 @@ externals =
         , "will catch that however."] .+ Deep .+ Debug .+ Query
     , external "lint-module" (promoteModGutsT lintModuleT :: TransformH LCoreTC String)
         [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
-    , external "load-lemma-library" (loadLemmaLibraryT :: HermitName -> TransformH LCore ())
+    , external "load-lemma-library" (flip loadLemmaLibraryT Nothing :: HermitName -> TransformH LCore ())
         [ "Dynamically load a library of lemmas." ]
+    , external "load-lemma-library" ((\nm -> loadLemmaLibraryT nm . Just) :: HermitName -> LemmaName -> TransformH LCore ())
+        [ "Dynamically load a specific lemma from a library of lemmas." ]
     ]
 
 ------------------------------------------------------------------------
@@ -233,13 +235,19 @@ buildDictionaryT = prefixFailMsg "buildDictionaryT failed: " $ contextfreeT $ \ 
 -- certainly read the existing store.
 type LemmaLibrary = TransformH () Lemmas
 
-loadLemmaLibraryT :: HermitName -> TransformH x ()
-loadLemmaLibraryT nm = contextonlyT $ \ c -> do
-    hscEnv <- getHscEnv
-    comp <- liftAndCatchIO $ loadLemmaLibrary hscEnv nm
-    m' <- applyT comp c () -- TODO: discard side effects
-    m <- getLemmas
-    putLemmas $ m' `M.union` m
+loadLemmaLibraryT :: HermitName -> Maybe LemmaName -> TransformH x ()
+loadLemmaLibraryT nm mblnm = prefixFailMsg "Loading lemma library failed: " $
+    contextonlyT $ \ c -> do
+        hscEnv <- getHscEnv
+        comp <- liftAndCatchIO $ loadLemmaLibrary hscEnv nm
+        m' <- applyT comp c () -- TODO: discard side effects
+        m'' <- maybe (return m')
+                     (\lnm -> if M.member lnm m'
+                              then return $ M.filterWithKey (const . (== lnm)) m'
+                              else fail $ show lnm ++ " not found in library.")
+                     mblnm
+        m <- getLemmas
+        putLemmas $ m'' `M.union` m
 
 loadLemmaLibrary :: HscEnv -> HermitName -> IO LemmaLibrary
 loadLemmaLibrary hscEnv hnm = do
