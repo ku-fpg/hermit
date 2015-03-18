@@ -226,7 +226,7 @@ caseFloatArgLemmaR u nm = prefixFailMsg "Case floating from application argument
             appAllR idR (caseAllR idR idR idR (\ n -> let vs = varSetElems (altCaptures !! n)
                                                       in if null vs then idR else alphaAltVarsR vs
                                               )
-                        ) >>> caseFloatArgR Nothing Nothing
+                        ) >>> caseFloatArgLemmaR u nm
 
 -- | case (case s1 of alt11 -> e11; alt12 -> e12) of alt21 -> e21; alt22 -> e22
 --   ==>
