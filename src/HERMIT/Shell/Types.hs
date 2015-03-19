@@ -25,6 +25,7 @@ import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
 
 import Data.Dynamic
+import Data.List (intercalate)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isJust)
 import Data.Monoid (mempty, (<>))
@@ -507,14 +508,20 @@ currentLemma = do
         _ -> fail "currentLemma: unproven lemma not on top of stack!"
 
 announceProven :: (MonadCatch m, CLMonad m) => m ()
-announceProven = getProofStack >>= go
-    where go (MarkProven nm temp : r) = do
-            queryInFocus (if temp then constT (deleteLemma nm) else modifyLemmaT nm id idR (const Proven) id :: TransformH Core ())
-                         (Always $ "-- proven " ++ quoteShow nm) -- comment in script
-            -- take it off the stack for the new AST
-            modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
-            cl_putStrLn ("Successfully proven: " ++ show nm) >> go r
-          go _ = return ()
+announceProven = getProofStackEmpty >>= go []
+    where go ps (MarkProven nm temp : r) = do
+            let t = if temp then constT (deleteLemma nm) else modifyLemmaT nm id idR (const Proven) id
+            go ((nm,t):ps) r
+          go ps r = case ps of
+                        [] -> return ()
+                        _  -> do -- adjust the stack for the existing AST, because we don't want
+                                 -- to replay these after a 'goto'!
+                                 let (nms, ts) = unzip $ reverse ps
+                                     commaNames f = intercalate ", " (map f nms)
+                                 modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
+                                 queryInFocus (sequence_ ts :: TransformH Core ())
+                                              (Always $ "-- proven " ++ commaNames quoteShow)
+                                 cl_putStrLn ("Successfully proven: " ++ commaNames show)
 
 announceUnprovens :: (MonadCatch m, CLMonad m) => m ()
 announceUnprovens = do
