@@ -36,11 +36,12 @@ import System.IO
 ----------------------------------------------------------------------------------
 
 data ShellEffect :: * where
-    Abort      :: ShellEffect
-    CLSModify  :: (CommandLineState -> IO (Either CLException CommandLineState)) -> ShellEffect
-    PluginComp :: PluginM () -> ShellEffect
-    Continue   :: ShellEffect
-    Resume     :: ShellEffect
+    Abort             :: ShellEffect
+    CLSModify         :: (CommandLineState -> IO (Either CLException CommandLineState)) -> ShellEffect
+    CLSModifyAndShow  :: (CommandLineState -> IO (Either CLException CommandLineState)) -> ShellEffect
+    PluginComp        :: PluginM () -> ShellEffect
+    Continue          :: ShellEffect
+    Resume            :: ShellEffect
     deriving Typeable
 
 instance Extern ShellEffect where
@@ -55,7 +56,11 @@ performShellEffect Abort  = abort
 performShellEffect Resume = announceUnprovens >> gets cl_cursor >>= resume
 performShellEffect Continue = announceUnprovens >> get >>= continue
 
-performShellEffect (CLSModify f)  = get >>= liftAndCatchIO . f >>= either throwError put
+performShellEffect (CLSModify f) = get >>= liftAndCatchIO . f >>= either throwError put
+
+performShellEffect (CLSModifyAndShow f) = do
+    get >>= liftAndCatchIO . f >>= either throwError put
+    ifM isRunningScript (return ()) (showWindow Nothing)
 
 performShellEffect (PluginComp m) = pluginM m
 

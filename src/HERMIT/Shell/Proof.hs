@@ -58,7 +58,7 @@ import HERMIT.Shell.Types
 -- | Externals that get us into the prover shell.
 externals :: [External]
 externals = map (.+ Proof)
-    [ external "prove-lemma" (CLSModify . interactiveProofIO)
+    [ external "prove-lemma" (CLSModifyAndShow . interactiveProofIO)
         [ "Proof a lemma interactively." ]
     ]
 

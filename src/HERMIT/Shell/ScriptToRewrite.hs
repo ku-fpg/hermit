@@ -11,7 +11,6 @@ module HERMIT.Shell.ScriptToRewrite
     , popScriptLine
     , pushScriptLine
     , pushScript
-    , runScript
     , fileToScript
     , scriptToRewrite
     , ScriptEffect(..)
@@ -65,10 +64,6 @@ instance Extern ScriptEffect where
 --   The script is given the same name as the filepath.
 loadAndRun :: FilePath -> ScriptEffect
 loadAndRun fp = SeqMeta [LoadFile fp fp, RunScript fp]
-
-runScript :: MonadState CommandLineState m => (ExprH -> m ()) -> m ()
-runScript run = go
-    where go = popScriptLine >>= maybe (return ()) (\e -> run e >> go)
 
 popScriptLine :: MonadState CommandLineState m => m (Maybe ExprH)
 popScriptLine = gets cl_running_script >>= maybe (return Nothing)

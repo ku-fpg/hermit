@@ -51,25 +51,25 @@ shell_externals = map (.+ Shell)
         [ "switch to navigate mode" ]
     , external "command-line"    (CLSModify $ \ st -> return $ Right $ st { cl_nav = False })
         [ "switch to command line mode" ]
-    , external "set-window"      (CLSModify setWindow)
+    , external "set-window"      (CLSModifyAndShow setWindow)
         [ "fix the window to the current focus" ]
     , external "top"             (Direction T)
         [ "move to root of current scope" ]
     , external "log"             (Inquiry showDerivationTree)
         [ "go back in the derivation" ]                                          .+ VersionControl
-    , external "back"            (CLSModify $ versionCmd Back)
+    , external "back"            (CLSModifyAndShow $ versionCmd Back)
         [ "go back in the derivation" ]                                          .+ VersionControl
-    , external "step"            (CLSModify $ versionCmd Step)
+    , external "step"            (CLSModifyAndShow $ versionCmd Step)
         [ "step forward in the derivation" ]                                     .+ VersionControl
-    , external "goto"            (CLSModify . versionCmd . Goto)
+    , external "goto"            (CLSModifyAndShow . versionCmd . Goto)
         [ "goto a specific step in the derivation" ]                             .+ VersionControl
-    , external "goto"            (CLSModify . versionCmd . GotoTag)
+    , external "goto"            (CLSModifyAndShow . versionCmd . GotoTag)
         [ "goto a specific step in the derivation by tag name" ]                 .+ VersionControl
     , external "tag"             (CLSModify . versionCmd . Tag)
         [ "name the current step in the derivation" ]                            .+ VersionControl
     , external "diff"            Diff
         [ "show diff of two ASTs" ]                                              .+ VersionControl
-    , external "set-pp-diffonly" (\ bStr -> CLSModify $ \ st ->
+    , external "set-pp-diffonly" (\ bStr -> CLSModifyAndShow $ \ st ->
         case reads bStr of
             [(b,"")] -> return $ Right $ setDiffOnly st b
             _        -> return $ Left $ CLError "valid arguments are True and False" )
@@ -87,7 +87,7 @@ shell_externals = map (.+ Shell)
             _        -> return $ Left $ CLError "valid arguments are True and False" )
         [ "set-auto-corelint <True|False>; False by default"
         , "run core lint type-checker after every rewrite, reverting on failure" ]
-    , external "set-pp"          (\ name -> CLSModify $ \ st ->
+    , external "set-pp"          (\ name -> CLSModifyAndShow $ \ st ->
         case M.lookup name pp_dictionary of
             Nothing -> return $ Left $ CLError $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
             Just pp -> return $ Right $ flip setPrettyOpts (cl_pretty_opts st) $ setPretty st pp) -- careful to preserve the current options
@@ -108,20 +108,20 @@ shell_externals = map (.+ Shell)
     , external "dump-lemma" ((\pp nm fp r w -> getLemmaByNameT nm >>> liftPrettyH (pOptions pp) (ppLemmaT pp nm) >>> dumpT fp pp r w) :: PrettyPrinter -> LemmaName -> FilePath -> String -> Int -> TransformH LCoreTC ())
         [ "Dump named lemma to a file."
         , "dump-lemma <lemma-name> <filename> <pretty-printer> <renderer> <width>" ]
-    , external "set-pp-width" (\ w -> CLSModify $ \ st ->
+    , external "set-pp-width" (\ w -> CLSModifyAndShow $ \ st ->
             return $ Right $ setPrettyOpts st (updateWidthOption w (cl_pretty_opts st)))
         ["set the width of the screen"]
-    , external "set-pp-type" (\ str -> CLSModify $ \ st ->
+    , external "set-pp-type" (\ str -> CLSModifyAndShow $ \ st ->
         case reads str :: [(ShowOption,String)] of
             [(opt,"")] -> return $ Right $ setPrettyOpts st (updateTypeShowOption opt (cl_pretty_opts st))
             _          -> return $ Left $ CLError "valid arguments are Show, Abstract, and Omit")
         ["set how to show expression-level types (Show|Abstact|Omit)"]
-    , external "set-pp-coercion" (\ str -> CLSModify $ \ st ->
+    , external "set-pp-coercion" (\ str -> CLSModifyAndShow $ \ st ->
         case reads str :: [(ShowOption,String)] of
             [(opt,"")] -> return $ Right $ setPrettyOpts st (updateCoShowOption opt (cl_pretty_opts st))
             _          -> return $ Left $ CLError "valid arguments are Show, Abstract, and Omit")
         ["set how to show coercions (Show|Abstact|Omit)"]
-    , external "set-pp-uniques" (\ str -> CLSModify $ \ st ->
+    , external "set-pp-uniques" (\ str -> CLSModifyAndShow $ \ st ->
         case reads str of
             [(b,"")] -> return $ Right $ setPrettyOpts st ((cl_pretty_opts st) { po_showUniques = b } )
             _        -> return $ Left $ CLError "valid arguments are True and False")

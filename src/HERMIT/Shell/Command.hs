@@ -124,7 +124,7 @@ commandLine opts exts = do
 #endif
 
     -- Load and run any scripts
-    setRunningScript $ Just []
+    setRunningScript $ Just [] -- suppress all output until after first scripts run
     sequence_ [ case fileName of
                  "abort"  -> parseScriptCLT "abort" >>= pushScript
                  "resume" -> parseScriptCLT "resume" >>= pushScript
@@ -134,8 +134,8 @@ commandLine opts exts = do
               ] `catchFailHard` \ msg -> cl_putStrLn $ "Booting Failure: " ++ msg
 
     let -- Main proof input loop
-        loop :: InputT m ()
-        loop = do
+        loop :: Bool -> InputT m ()
+        loop firstInput = do
             el <- lift $ do tryM () announceProven
                             tryM () forceProofs
                             attemptM currentLemma
@@ -143,8 +143,7 @@ commandLine opts exts = do
             mExpr <- lift popScriptLine
             case mExpr of
                 Nothing -> do -- no script running
-                    lift $ ifM isRunningScript (return ()) (showWindow Nothing)
-                            `catchFailHard` (cl_putStrLn . ("cannot showWindow: " ++))
+                    when firstInput $ lift $ showWindow Nothing
                     st <- lift get
                     mLine <- if cl_nav st
                              then liftIO getNavCmd
@@ -152,15 +151,17 @@ commandLine opts exts = do
 
                     case mLine of
                         Nothing          -> lift $ performShellEffect Resume
-                        Just ('-':'-':_) -> loop
+                        Just ('-':'-':_) -> loop False
                         Just line        -> if all isSpace line
-                                            then loop
-                                            else lift (evalScript line `catchFailHard` cl_putStrLn) >> loop
-                Just e -> lift (runExprH e `catchFailHard` (\ msg -> setRunningScript Nothing >> cl_putStrLn msg)) >> loop
+                                            then loop False
+                                            else lift (evalScript line `catchFailHard` cl_putStrLn) >> loop False
+                Just e -> do
+                    lift (runExprH e `catchFailHard` (\ msg -> setRunningScript Nothing >> cl_putStrLn msg))
+                    loop True
 
     -- Start the CLI
     let settings = setComplete (completeWordWithPrev Nothing ws_complete completer) defaultSettings
-    runInputT settings loop
+    runInputT settings (loop True)
 
 -- | Like 'catchM', but checks the 'cl_failhard' setting and does so if needed.
 catchFailHard :: (MonadCatch m, CLMonad m) => m () -> (String -> m ()) -> m ()

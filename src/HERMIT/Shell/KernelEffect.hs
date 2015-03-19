@@ -69,11 +69,13 @@ applyRewrite rr expr = do
                 putStrToConsole warns
 
             addAST ast'
+    ifM isRunningScript (return ()) (showWindow Nothing)
 
 setPath :: (Injection a LCoreTC, MonadCatch m, CLMonad m) => TransformH a LocalPathH -> ExprH -> m ()
 setPath t expr = do
     p <- prefixFailMsg "Cannot find path: " $ queryInContext (promoteT t) Never
     modifyLocalPath (<> p) expr
+    ifM isRunningScript (return ()) (showWindow Nothing)
 
 goUp :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
 goUp T expr = modifyLocalPath (const mempty) expr
@@ -82,6 +84,7 @@ goUp U expr = do
     case rel of
         SnocPath [] -> fail "cannot move up, at root of scope."
         SnocPath (_:cs) -> modifyLocalPath (const $ SnocPath cs) expr
+    ifM isRunningScript (return ()) (showWindow Nothing)
 
 beginScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 beginScope expr = do
@@ -99,6 +102,7 @@ beginScope expr = do
             let todos' = Unproven nm l c ls (p : base, mempty) : todos
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
         _ -> fail "beginScope: impossible case!"
+    ifM isRunningScript (return ()) (showWindow Nothing)
 
 endScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 endScope expr = do
@@ -122,6 +126,7 @@ endScope expr = do
                     let todos' = Unproven nm l c ls (base', p) : todos
                     modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
         _ -> fail "endScope: impossible case!"
+    ifM isRunningScript (return ()) (showWindow Nothing)
 
 deleteAST :: (MonadCatch m, CLMonad m) => AST -> m ()
 deleteAST ast = gets cl_kernel >>= flip deleteK ast
