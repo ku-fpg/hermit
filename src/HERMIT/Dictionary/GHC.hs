@@ -1,4 +1,6 @@
-{-# LANGUAGE CPP, FlexibleContexts #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 module HERMIT.Dictionary.GHC
     ( -- * GHC-based Transformations
       -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
@@ -15,6 +17,8 @@ module HERMIT.Dictionary.GHC
       -- A zombie is an identifer that has 'OccInfo' 'IAmDead', but still has occurrences.
     , lintExprT
     , lintModuleT
+    , lintQuantifiedT
+    , lintClauseT
     , occurAnalyseR
     , occurAnalyseChangedR
     , occurAnalyseExprChangedR
@@ -29,9 +33,11 @@ import qualified Bag
 import qualified CoreLint
 
 import           Control.Arrow
+import           Control.Monad
 import           Control.Monad.IO.Class
 
 import           Data.Char (isSpace)
+import           Data.Either (partitionEithers)
 import           Data.List (mapAccumL)
 import qualified Data.Map as M
 import           Data.String
@@ -64,9 +70,11 @@ externals =
         , "will catch that however."] .+ Deep .+ Debug .+ Query
     , external "lint-module" (promoteModGutsT lintModuleT :: TransformH LCoreTC String)
         [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
-    , external "load-lemma-library" (flip loadLemmaLibraryT Nothing :: HermitName -> TransformH LCore ())
+    , external "lint" (promoteT lintQuantifiedT :: TransformH LCoreTC String)
+        [ "Lint check a quantified clause." ]
+    , external "load-lemma-library" (flip loadLemmaLibraryT Nothing :: HermitName -> TransformH LCore String)
         [ "Dynamically load a library of lemmas." ]
-    , external "load-lemma-library" ((\nm -> loadLemmaLibraryT nm . Just) :: HermitName -> LemmaName -> TransformH LCore ())
+    , external "load-lemma-library" ((\nm -> loadLemmaLibraryT nm . Just) :: HermitName -> LemmaName -> TransformH LCore String)
         [ "Dynamically load a specific lemma from a library of lemmas." ]
     ]
 
@@ -182,16 +190,6 @@ occurAnalyseAndDezombifyR = allbuR (tryR $ promoteExprR dezombifyR) >>> occurAna
 occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c LCore) => Rewrite c m LCore
 occurrenceAnalysisR = occurAnalyseAndDezombifyR
 
-{- Does not work (no export)
--- Here is a hook into the occur analysis, and a way of looking at the result
-occAnalysis ::  CoreExpr -> UsageDetails
-occAnalysis = fst . occAnal (initOccEnv all_active_rules)
-
-lookupUsageDetails :: UsageDetails -> Var -> Maybe OccInfo
-lookupUsageDetails = lookupVarEnv
-
--}
-
 ----------------------------------------------------------------------
 
 -- TODO: this is mostly an example, move somewhere?
@@ -229,25 +227,52 @@ buildDictionaryT = prefixFailMsg "buildDictionaryT failed: " $ contextfreeT $ \ 
                 [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
                 _ -> mkCoreLets bnds (varToCoreExpr i)
 
+----------------------------------------------------------------------
+
+lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
+                => Transform c m Quantified String
+lintQuantifiedT = lintQuantifiedWorkT []
+
+lintQuantifiedWorkT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
+                    => [Var] -> Transform c m Quantified String
+lintQuantifiedWorkT bs = readerT $ \ (Quantified bs' _) -> quantifiedT successT (lintClauseT (bs++bs')) (flip const)
+
+lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
+            => [Var] -> Transform c m Clause String
+lintClauseT bs = do
+    t <- readerT $ \case Equiv {} -> return $ promoteT ({- arr (mkCoreLams bs) >>> -} lintExprT) -- TODO: why does this break core lint?!
+                         _        -> return $ promoteT (lintQuantifiedWorkT bs)
+    (w1,w2) <- clauseT t t (const (,))
+    return $ unlines [w1,w2]
+
+----------------------------------------------------------------------
+
 -- | A LemmaLibrary is a transformation that produces a set of lemmas,
 -- which are then added to the lemma store. It is not allowed to insert
 -- its own lemmas directly (if it tries they are throw away), but can
 -- certainly read the existing store.
 type LemmaLibrary = TransformH () Lemmas
 
-loadLemmaLibraryT :: HermitName -> Maybe LemmaName -> TransformH x ()
+loadLemmaLibraryT :: HermitName -> Maybe LemmaName -> TransformH x String
 loadLemmaLibraryT nm mblnm = prefixFailMsg "Loading lemma library failed: " $
     contextonlyT $ \ c -> do
         hscEnv <- getHscEnv
         comp <- liftAndCatchIO $ loadLemmaLibrary hscEnv nm
-        m' <- applyT comp c () -- TODO: discard side effects
-        m'' <- maybe (return m')
-                     (\lnm -> if M.member lnm m'
-                              then return $ M.filterWithKey (const . (== lnm)) m'
-                              else fail $ show lnm ++ " not found in library.")
+        ls <- applyT comp c () -- TODO: discard side effects
+        nls <- maybe (return $ M.toList ls)
+                     (\lnm -> maybe (fail $ show lnm ++ " not found in library.")
+                                    (\ l -> return [(lnm,l)])
+                                    (M.lookup lnm ls))
                      mblnm
+        r <- forM nls $ \ nl@(n, l) -> do
+                    er <- attemptM $ applyT lintQuantifiedT c $ lemmaQ l
+                    case er of
+                        Left msg -> return $ Left $ "Not adding lemma " ++ show n ++ " because lint failed.\n" ++ msg
+                        Right _  -> return $ Right nl
+        let (fs,nls') = partitionEithers r
         m <- getLemmas
-        putLemmas $ m'' `M.union` m
+        putLemmas $ (M.fromList nls') `M.union` m
+        return $ unlines (fs ++ ["Successfully loaded library " ++ show nm])
 
 loadLemmaLibrary :: HscEnv -> HermitName -> IO LemmaLibrary
 loadLemmaLibrary hscEnv hnm = do

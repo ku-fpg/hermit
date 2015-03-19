@@ -39,11 +39,9 @@ module HERMIT.Dictionary.Reasoning
     , lhsR
     , rhsR
     , bothR
-    , forallVarsT
     , verifyQuantifiedT
     , verifyEquivalentT
     , verifyOrCreateT
-    , lintQuantifiedT
     , verifyEqualityLeftToRightT
     , verifyEqualityCommonTargetT
     , verifyIsomorphismT
@@ -118,8 +116,6 @@ externals =
         [ "disjunt new-name lhs-name rhs-name" ]
     , external "imply" (\n1 n2 n3 -> implyLemmasT n1 n2 n3 :: TransformH LCore ())
         [ "imply new-name antecedent-name consequent-name" ]
-    , external "lint" (promoteT lintQuantifiedT :: TransformH LCoreTC String)
-        [ "Lint check a quantified clause." ]
     , external "lemma-birewrite" (promoteExprBiR . lemmaBiR Obligation :: LemmaName -> BiRewriteH LCore)
         [ "Generate a bi-directional rewrite from a lemma." ]
     , external "lemma-forward" (forwardT . promoteExprBiR . lemmaBiR Obligation :: LemmaName -> RewriteH LCore)
@@ -260,27 +256,6 @@ bothR r = lhsR r >+> rhsR r
 
 ------------------------------------------------------------------------------
 
--- | Original clause passed to function so it can decide how to handle connective.
-clauseT :: (Monad m, ExtendPath c Crumb) => Transform c m LCore a -> Transform c m LCore b -> (Clause -> a -> b -> d) -> Transform c m Clause d
-clauseT t1 t2 f = readerT $ \ cl -> case cl of
-                                      Conj{}  -> conjT  (extractT t1) (extractT t2) (f cl)
-                                      Disj{}  -> disjT  (extractT t1) (extractT t2) (f cl)
-                                      Impl{}  -> implT  (extractT t1) (extractT t2) (f cl)
-                                      Equiv{} -> equivT (extractT t1) (extractT t2) (f cl)
-
-clauseR :: (Monad m, ExtendPath c Crumb) => Rewrite c m LCore -> Rewrite c m LCore -> Rewrite c m Clause
-clauseR r1 r2 = readerT $ \case
-                             Conj{}  -> conjAllR (extractR r1) (extractR r2)
-                             Disj{}  -> disjAllR (extractR r1) (extractR r2)
-                             Impl{}  -> implAllR (extractR r1) (extractR r2)
-                             Equiv{} -> equivAllR (extractR r1) (extractR r2)
-
--- | Lift a transformation over '[Var]' into a transformation over the universally quantified variables of a 'Quantified'.
-forallVarsT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m) => Transform c m [Var] b -> Transform c m Quantified b
-forallVarsT t = quantifiedT t successT const
-
-------------------------------------------------------------------------------
-
 showLemmasT :: Maybe LemmaName -> PrettyPrinter -> PrettyH a
 showLemmasT mnm pp = do
     ls <- getLemmasT
@@ -346,24 +321,6 @@ verifyOrCreateT u nm l = do
     if exists
     then return (lemmaQ l) >>> verifyEquivalentT u nm
     else insertLemmaT nm l
-
-------------------------------------------------------------------------------
-
-lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
-                => Transform c m Quantified String
-lintQuantifiedT = lintQuantifiedWorkT []
-
-lintQuantifiedWorkT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
-                    => [Var] -> Transform c m Quantified String
-lintQuantifiedWorkT bs = readerT $ \ (Quantified bs' _) -> quantifiedT successT (lintClauseT (bs++bs')) (flip const)
-
-lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
-            => [Var] -> Transform c m Clause String
-lintClauseT bs = do
-    t <- readerT $ \case Equiv {} -> return $ promoteT ({- arr (mkCoreLams bs) >>> -} lintExprT) -- TODO: why does this break core lint?!
-                         _        -> return $ promoteT (lintQuantifiedWorkT bs)
-    (w1,w2) <- clauseT t t (const (,))
-    return $ unlines [w1,w2]
 
 ------------------------------------------------------------------------------
 
