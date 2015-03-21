@@ -9,6 +9,7 @@ module HERMIT.Dictionary
     , module HERMIT.Dictionary.Fold
     , module HERMIT.Dictionary.Function
     , module HERMIT.Dictionary.GHC
+    , module HERMIT.Dictionary.Induction
     , module HERMIT.Dictionary.Inline
     , module HERMIT.Dictionary.Kure
     , module HERMIT.Dictionary.Local
@@ -44,6 +45,8 @@ import           HERMIT.Dictionary.Function hiding (externals)
 import qualified HERMIT.Dictionary.Function as Function
 import           HERMIT.Dictionary.GHC hiding (externals)
 import qualified HERMIT.Dictionary.GHC as GHC
+import           HERMIT.Dictionary.Induction hiding (externals)
+import qualified HERMIT.Dictionary.Induction as Induction
 import           HERMIT.Dictionary.Inline hiding (externals)
 import qualified HERMIT.Dictionary.Inline as Inline
 import           HERMIT.Dictionary.Kure hiding (externals)
@@ -92,6 +95,7 @@ externals =
     ++ Fold.externals
     ++ Function.externals
     ++ GHC.externals
+    ++ Induction.externals
     ++ Inline.externals
     ++ Kure.externals
     ++ Local.externals

@@ -45,7 +45,7 @@ import HERMIT.Parser
 import HERMIT.Syntax
 import HERMIT.Utilities
 
-import HERMIT.Dictionary.Induction
+import HERMIT.Dictionary.Induction hiding (externals)
 import HERMIT.Dictionary.Local.Case hiding (externals)
 import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Undefined hiding (externals)
