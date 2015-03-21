@@ -80,7 +80,10 @@ setPath t expr = do
 goUp :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
 goUp T expr = modifyLocalPath (const mempty) expr
 goUp U expr = do
-    (_,rel) <- getPathStack
+    ps <- getProofStackEmpty
+    (_,rel) <- case ps of
+                [] -> getPathStack
+                todo:_ -> return $ ptPath todo
     case rel of
         SnocPath [] -> fail "cannot move up, at root of scope."
         SnocPath (_:cs) -> modifyLocalPath (const $ SnocPath cs) expr
