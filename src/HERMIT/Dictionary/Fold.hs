@@ -513,10 +513,11 @@ data CLMap a = CLMEmpty
                    , clmDisj  :: QMap (QMap a)
                    , clmImpl  :: QMap (QMap a)
                    , clmEquiv :: EMap (EMap a)
+                   , clmTrue  :: Maybe a
                    }
 
 emptyCLMapWrapper :: CLMap a
-emptyCLMapWrapper = CLM fEmpty fEmpty fEmpty fEmpty
+emptyCLMapWrapper = CLM fEmpty fEmpty fEmpty fEmpty Nothing
 
 instance Fold CLMap where
     type Key CLMap = Clause
@@ -531,6 +532,7 @@ instance Fold CLMap where
               go (Disj  q1 q2) = m { clmDisj  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmDisj  m) }
               go (Impl  q1 q2) = m { clmImpl  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmImpl  m) }
               go (Equiv e1 e2) = m { clmEquiv = fAlter env vs e1 (toA (fAlter env vs e2 f)) (clmEquiv m) }
+              go CTrue         = m { clmTrue  = f (clmTrue m) }
 
     fFold :: VarEnv CoreExpr -> AlphaEnv -> Key CLMap -> CLMap a -> [(VarEnv CoreExpr, a)]
     fFold _  _   _  CLMEmpty = []
@@ -547,6 +549,7 @@ instance Fold CLMap where
               go (Equiv e1 e2) = do
                 (hs', m') <- fFold hs env e1 (clmEquiv m)
                 fFold hs' env e2 m'
+              go CTrue = maybe [] (\v-> [(hs,v)]) (clmTrue m)
 
 ----------------------------------------------------------------------------
 

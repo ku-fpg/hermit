@@ -242,8 +242,11 @@ lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb
 lintClauseT bs = do
     t <- readerT $ \case Equiv {} -> return $ promoteT ({- arr (mkCoreLams bs) >>> -} lintExprT) -- TODO: why does this break core lint?!
                          _        -> return $ promoteT (lintQuantifiedWorkT bs)
-    (w1,w2) <- clauseT t t (const (,))
-    return $ unlines [w1,w2]
+    let f s1 s2 | null s1 || null s2 = s1 ++ s2
+                | s1 == s2 = s1
+                | otherwise = s1 ++ "\n" ++ s2
+    str <- clauseT t t (const f) (return "")
+    return str
 
 ----------------------------------------------------------------------
 

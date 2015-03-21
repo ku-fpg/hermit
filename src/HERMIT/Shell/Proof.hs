@@ -144,7 +144,8 @@ endProof reason expr = do
         deleteOr tr = if temp then constT (deleteLemma nm) else tr
         t = case reason of
                 UserAssume -> deleteOr (markLemmaProvenT nm Assumed)
-                Reflexivity -> setFailMsg msg verifyQuantifiedT >> deleteOr (markLemmaProvenT nm Proven)
+                Reflexivity -> setFailMsg msg (do tryR (extractR reflexivityR) >>> verifyQuantifiedT
+                                                  deleteOr (markLemmaProvenT nm Proven))
                 LemmaProof u nm' -> verifyEquivalentT u nm' >> deleteOr (markLemmaProvenT nm Proven)
                 UserProof up -> let UserProofTechnique tr = up
                                 in extractT tr >> deleteOr (markLemmaProvenT nm Proven)

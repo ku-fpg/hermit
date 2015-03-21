@@ -67,6 +67,7 @@ freeVarsClause (Conj  q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
 freeVarsClause (Disj  q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
 freeVarsClause (Impl  q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
 freeVarsClause (Equiv e1 e2) = unionVarSets $ map freeVarsExpr [e1,e2]
+freeVarsClause CTrue         = emptyVarSet
 
 dropBinders :: Quantified -> Quantified
 dropBinders (Quantified bs cl) =
@@ -153,6 +154,7 @@ data Clause = Conj Quantified Quantified
             | Disj Quantified Quantified
             | Impl Quantified Quantified
             | Equiv CoreExpr CoreExpr
+            | CTrue -- the always true clause
 
 -- | A collection of named lemmas.
 type Lemmas = M.Map LemmaName Lemma
@@ -190,6 +192,7 @@ substQuantifiedSubst = go
           go1 subst (b:bs) bs' cl =
             let (subst',b') = substBndr subst b
             in go1 subst' bs (b':bs') cl
+          go2 _     CTrue        = CTrue
           go2 subst (Conj q1 q2) = Conj (go subst q1) (go subst q2)
           go2 subst (Disj q1 q2) = Disj (go subst q1) (go subst q2)
           go2 subst (Impl q1 q2) = Impl (go subst q1) (go subst q2)
@@ -238,6 +241,7 @@ instQuantified inScope p e = liftM fst . go []
                         return (replaceVars s bs (Quantified [] cl'), s)
                 in case cl of
                     Equiv{} -> fail "specified variable is not universally quantified."
+                    CTrue   -> fail "specified variable is not universally quantified."
                     Conj q1 q2 -> go2 Conj q1 q2
                     Disj q1 q2 -> go2 Disj q1 q2
                     Impl q1 q2 -> go2 Impl q1 q2

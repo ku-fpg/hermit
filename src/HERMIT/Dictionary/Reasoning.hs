@@ -46,6 +46,7 @@ module HERMIT.Dictionary.Reasoning
     , verifyEqualityCommonTargetT
     , verifyIsomorphismT
     , verifyRetractionT
+    , reflexivityR
     , retractionBR
     , unshadowQuantifiedR
     , instantiateDictsR
@@ -173,6 +174,8 @@ externals =
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
     , external "both" ((\t -> do (r,s) <- promoteQuantifiedT (bothT t); return (unlines [r,s])) :: TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to both sides of a quantified clause." ]
+    , external "reflexivity" (reflexivityR :: RewriteH LCore)
+        [ "Rewrite alpha-equivalence to true." ]
     ]
 
 ------------------------------------------------------------------------------
@@ -227,17 +230,17 @@ birewrite q = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEqual
 -- | Lift a transformation over 'LCoreTC' into a transformation over the left-hand side of a 'Quantified'.
 lhsT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
      => Transform c m LCore a -> Transform c m Quantified a
-lhsT t = quantifiedT successT (clauseT t successT (\_ l _ -> l)) (flip const)
+lhsT t = quantifiedT successT (clauseT t successT (\_ l _ -> l) (fail "applied to true.")) (flip const)
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over the right-hand side of a 'Quantified'.
 rhsT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
      => Transform c m LCore a -> Transform c m Quantified a
-rhsT t = quantifiedT successT (clauseT successT t (\_ _ r -> r)) (flip const)
+rhsT t = quantifiedT successT (clauseT successT t (\_ _ r -> r) (fail "applied to true.")) (flip const)
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over both sides of a 'Quantified'.
 bothT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
       => Transform c m LCore a -> Transform c m Quantified (a, a)
-bothT t = quantifiedT successT (clauseT t t (const (,))) (flip const)
+bothT t = quantifiedT successT (clauseT t t (const (,)) (fail "applied to true.")) (flip const)
 
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over the left-hand side of a 'Quantified'.
 lhsR :: (AddBindings c, Monad m, ReadPath c Crumb, ExtendPath c Crumb)
@@ -293,20 +296,17 @@ ppClauseT pp = do
                                         Conj {} -> parenify r1 r2 "^"
                                         Disj {} -> parenify r1 r2 "v"
                                         Impl {} -> parenify r1 r2 "=>"
-                                        Equiv {} -> (snd r1, snd r2, syntaxColor $ PP.text "="))
+                                        Equiv {} -> (snd r1, snd r2, syntaxColor $ PP.text "=")
+                                        CTrue   -> error "impossible case: applied to true")
+                                (return (syntaxColor (PP.text "true"), PP.empty, PP.empty))
     return $ PP.sep [d1,oper,d2]
 
 ------------------------------------------------------------------------------
 
 verifyQuantifiedT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m) => Transform c m Quantified ()
-verifyQuantifiedT = quantifiedT successT verifyClauseT (flip const)
-
-verifyClauseT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m) => Transform c m Clause ()
-verifyClauseT =
-    readerT (\case Conj  q1 q2 -> (return q1 >>> verifyQuantifiedT) >> (return q2 >>> verifyQuantifiedT)
-                   Disj  q1 q2 -> (return q1 >>> verifyQuantifiedT) <+ (return q2 >>> verifyQuantifiedT)
-                   Impl  _  _  -> fail "verifyClauseT: Impl TODO"
-                   Equiv e1 e2 -> guardMsg (exprAlphaEq e1 e2) "the two sides of the equality do not match.")
+verifyQuantifiedT = setFailMsg "verification failed: clause must be true (perhaps try reflexivity first)" $ do
+    Quantified _ CTrue <- idR
+    return ()
 
 verifyEquivalentT :: (HasLemmas m, MonadCatch m) => Used -> LemmaName -> Transform c m Quantified ()
 verifyEquivalentT used nm = prefixFailMsg "verification failed: " $ do
@@ -321,6 +321,15 @@ verifyOrCreateT u nm l = do
     if exists
     then return (lemmaQ l) >>> verifyEquivalentT u nm
     else insertLemmaT nm l
+
+reflexivityR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m LCore
+reflexivityR = promoteR (quantifiedR idR reflexivityClauseR) <+ promoteR reflexivityClauseR
+
+reflexivityClauseR :: Monad m => Rewrite c m Clause
+reflexivityClauseR = do
+    Equiv lhs rhs <- idR
+    guardMsg (exprAlphaEq lhs rhs) "the two sides are not alpha-equivalent."
+    return CTrue
 
 ------------------------------------------------------------------------------
 
@@ -524,6 +533,7 @@ unshadowQuantified q = go emptySubst (mapUniqSet fs (freeVarsQuantified q)) q
             let e1' = substExpr (text "unshadowQuantified e1") subst e1
                 e2' = substExpr (text "unshadowQuantified e2") subst e2
             in return $ Equiv e1' e2'
+          go2 _ _ CTrue = return CTrue
 
 inventNames :: UniqSet FastString -> FastString -> FastString
 inventNames s nm = head [ nm' | i :: Int <- [0..]
