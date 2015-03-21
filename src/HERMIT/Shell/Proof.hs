@@ -159,7 +159,7 @@ endProof reason expr = do
 -- can generate additional lemmas, and add to the version history.
 performProofShellCommand :: (MonadCatch m, CLMonad m)
                          => ProofShellCommand -> ExprH -> m ()
-performProofShellCommand cmd expr = go cmd
+performProofShellCommand cmd expr = go cmd >> ifM isRunningScript (return ()) (showWindow Nothing)
     where str = unparseExprH expr
           go (PCInduction idPred) = performInduction (Always str) idPred
           go (PCByCases idPred)   = proveByCases (Always str) idPred
