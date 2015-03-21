@@ -47,6 +47,7 @@ module HERMIT.Dictionary.Reasoning
     , verifyIsomorphismT
     , verifyRetractionT
     , reflexivityR
+    , simplifyQuantifiedR
     , retractionBR
     , unshadowQuantifiedR
     , instantiateDictsR
@@ -176,6 +177,8 @@ externals =
         [ "Apply a transformation to both sides of a quantified clause." ]
     , external "reflexivity" (reflexivityR :: RewriteH LCore)
         [ "Rewrite alpha-equivalence to true." ]
+    , external "simplify-proof" (simplifyQuantifiedR :: RewriteH LCore)
+        [ "Reduce a proof by applying reflexivity and logical operator identities." ]
     ]
 
 ------------------------------------------------------------------------------
@@ -330,6 +333,46 @@ reflexivityClauseR = do
     Equiv lhs rhs <- idR
     guardMsg (exprAlphaEq lhs rhs) "the two sides are not alpha-equivalent."
     return CTrue
+
+simplifyQuantifiedR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m)
+                    => Rewrite c m LCore
+simplifyQuantifiedR = anybuR (promoteR quantIdentitiesR <+ promoteR reflexivityClauseR)
+
+quantIdentitiesR :: MonadCatch m => Rewrite c m Quantified
+quantIdentitiesR =
+    trueConjLR <+ trueConjRR <+
+    trueDisjLR <+ trueDisjRR <+
+    trueImpliesR <+ impliesTrueR
+
+trueConjLR :: Monad m => Rewrite c m Quantified
+trueConjLR = do
+    Quantified bs (Conj (Quantified _ CTrue) (Quantified bs' cl)) <- idR
+    return $ Quantified (bs++bs') cl
+
+trueConjRR :: Monad m => Rewrite c m Quantified
+trueConjRR = do
+    Quantified bs (Conj (Quantified bs' cl) (Quantified _ CTrue)) <- idR
+    return $ Quantified (bs++bs') cl
+
+trueDisjLR :: Monad m => Rewrite c m Quantified
+trueDisjLR = do
+    Quantified _ (Disj (Quantified _ CTrue) _) <- idR
+    return $ Quantified [] CTrue
+
+trueDisjRR :: Monad m => Rewrite c m Quantified
+trueDisjRR = do
+    Quantified _ (Disj _ (Quantified _ CTrue)) <- idR
+    return $ Quantified [] CTrue
+
+trueImpliesR :: Monad m => Rewrite c m Quantified
+trueImpliesR = do
+    Quantified bs (Impl (Quantified _ CTrue) (Quantified bs' cl)) <- idR
+    return $ Quantified (bs++bs') cl
+
+impliesTrueR :: Monad m => Rewrite c m Quantified
+impliesTrueR = do
+    Quantified _ (Impl _ (Quantified _ CTrue)) <- idR
+    return $ Quantified [] CTrue
 
 ------------------------------------------------------------------------------
 
