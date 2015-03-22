@@ -32,6 +32,7 @@ To get started, you could try the following:
 
 Successfully proven: nub-assumption
 Successfully proven: nubStrict
+Successfully proven: nubStrict
 Successfully proven: filter-fusion
 Successfully proven: member-fusion
 [0m[1;34mrec[22m[0m[0m [0m[mabsN[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32mSet[0m[0m [0m[32mInt[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
@@ -111,8 +112,6 @@ nub-assumption (Assumed)
              [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInt[0m[0m [0m[0m[mx[0m[0m[0m [0m[31m([0m[0m[0m[0m[mnub[0m[0m[0m [0m[31m([0m[0m[0m[7;93mfilter[27m[0m[0m [0m[32mInt[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m/=[0m[0m[0m[31m)[0m[0m [0m[32mInt[0m[0m [0m[m$fEqInt[0m[0m [0m[0m[mds[0m[0m[0m [0m[0m[mx[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
 nub-fusion (Built In)
   [0m[7;93mrepN[27m[0m[0m [0m[31m([0m[0m[0m[7;93mabsN[27m[0m[0m [0m[7;93mworker[27m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[7;93mworker[27m[0m[0m
-nubStrict (Proven)
-  [0m[7;93mnub'[27m[0m[0m [0m[31m([0m[0m[0m[mundefined[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [31m=[0m [0m[mundefined[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
 remembered-origworker (Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[mxs[0m[0m [0m[ms[0m[0m[0m[31m.[0m[0m
   [0m[7;93mworker[27m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[0m[ms[0m[0m[0m

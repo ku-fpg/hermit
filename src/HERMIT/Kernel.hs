@@ -105,7 +105,7 @@ data KernelState = KernelState { ksLemmas  :: Lemmas
                                , _ksCommit :: Maybe String
                                }
 
-data KernelEnv = KernelEnv { kEnvChan :: DebugMessage -> HermitM () }
+data KernelEnv = KernelEnv { kEnvChan :: KEnvMessage -> HermitM () }
 
 -- | Internal API. The 'Kernel' object wraps these calls.
 data Msg where

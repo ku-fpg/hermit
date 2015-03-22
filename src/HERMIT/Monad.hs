@@ -26,8 +26,8 @@ module HERMIT.Monad
     , HasHscEnv(..)
       -- * Messages
     , HasDebugChan(..)
-    , DebugMessage(..)
-    , sendDebugMessage
+    , KEnvMessage(..)
+    , sendKEnvMessage
     ) where
 
 import Prelude hiding (lookup)
@@ -79,7 +79,7 @@ mkResult env = HermitMResult (hEnvChanged env) (hEnvLemmas env)
 -- and access to a debugging channel.
 newtype HermitM a = HermitM { runHermitM :: DebugChan -> HermitMEnv -> CoreM (KureM (HermitMResult a)) }
 
-type DebugChan = DebugMessage -> HermitM ()
+type DebugChan = KEnvMessage -> HermitM ()
 
 -- | Eliminator for 'HermitM'.
 runHM :: DebugChan                     -- debug chan
@@ -97,13 +97,13 @@ embedHermitM hm = do
     c <- liftCoreM $ liftIO newTChanIO -- we are careful to do IO within liftCoreM to avoid the MonadIO constraint
     r <- liftCoreM (runHermitM hm (liftIO . atomically . writeTChan c) env) >>= runKureM return fail
     chan <- getDebugChan
-    let relayDebugMessages = do
+    let relayKEnvMessages = do
             mm <- liftCoreM $ liftIO $ atomically $ tryReadTChan c
             case mm of
                 Nothing -> return ()
-                Just dm -> chan dm >> relayDebugMessages
+                Just dm -> chan dm >> relayKEnvMessages
 
-    relayDebugMessages
+    relayKEnvMessages
     forM_ (toList (hResLemmas r)) $ uncurry insertLemma -- TODO: fix
     return $ hResult r
 
@@ -182,13 +182,13 @@ getModGuts = liftM hEnvModGuts getHermitMEnv
 
 class HasDebugChan m where
     -- | Get the debugging channel
-    getDebugChan :: m (DebugMessage -> m ())
+    getDebugChan :: m (KEnvMessage -> m ())
 
 instance HasDebugChan HermitM where
     getDebugChan = HermitM $ \ chan env -> return $ return $ mkResult env chan
 
-sendDebugMessage :: (HasDebugChan m, Monad m) => DebugMessage -> m ()
-sendDebugMessage msg = getDebugChan >>= ($ msg)
+sendKEnvMessage :: (HasDebugChan m, Monad m) => KEnvMessage -> m ()
+sendKEnvMessage msg = getDebugChan >>= ($ msg)
 
 ----------------------------------------------------------------------------
 
@@ -242,9 +242,10 @@ instance LiftCoreM HermitM where
 ----------------------------------------------------------------------------
 
 -- | A message packet.
-data DebugMessage :: * where
-    DebugTick :: String -> DebugMessage
-    DebugCore :: (LemmaContext c, ReadBindings c, ReadPath c Crumb) => String -> c -> LCoreTC -> DebugMessage
+data KEnvMessage :: * where
+    DebugTick :: String -> KEnvMessage
+    DebugCore :: (LemmaContext c, ReadBindings c, ReadPath c Crumb) => String -> c -> LCoreTC -> KEnvMessage
+    AddObligation :: HermitC -> LemmaName -> Lemma -> KEnvMessage -- obligation that must be proven
 
 ----------------------------------------------------------------------------
 

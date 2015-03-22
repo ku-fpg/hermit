@@ -17,7 +17,7 @@ module HERMIT.Shell.Types where
 import Control.Applicative (Applicative)
 import Control.Arrow
 import Control.Concurrent.STM
-import Control.Monad (liftM, unless, when, forM_, forM)
+import Control.Monad (liftM, unless, when, forM_, forM, unless)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State (MonadState(..), StateT(..), gets, modify)
@@ -37,6 +37,7 @@ import qualified HERMIT.GHC as GHC
 import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Lemma
+import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
 
@@ -270,6 +271,7 @@ data CommandLineState = CommandLineState
     , cl_externals      :: [External]             -- ^ Currently visible externals
     , cl_running_script :: Maybe Script           -- ^ Nothing = no script running, otherwise the remaining script commands
     , cl_safety         :: Safety                 -- ^ which level of safety we are running in
+    , cl_templemmas     :: TVar [(HermitC,LemmaName,Lemma)] -- ^ updated by kernel env with temporary obligations
     } deriving (Typeable)
 
 type PathStack = ([LocalPathH], LocalPathH)
@@ -282,6 +284,7 @@ data ProofTodo = Unproven
                     }
 
 data Safety = StrictSafety | NormalSafety | NoSafety
+    deriving (Read, Show, Eq, Typeable)
 
 filterSafety :: Safety -> [External] -> [External]
 filterSafety NoSafety     = id
@@ -321,7 +324,13 @@ cl_kernel :: CommandLineState -> Kernel
 cl_kernel = ps_kernel . cl_pstate
 
 cl_kernel_env :: CommandLineState -> KernelEnv
-cl_kernel_env = mkKernelEnv . cl_pstate
+cl_kernel_env s = do
+    let KernelEnv f = mkKernelEnv (cl_pstate s)
+    KernelEnv $ \ msg ->
+        case msg of
+            AddObligation c nm l@(Lemma _ NotProven Obligation) | cl_safety s /= NoSafety ->
+                liftIO $ atomically $ modifyTVar' (cl_templemmas s) ((c,nm,l):)
+            _ -> f msg
 
 cl_pretty :: CommandLineState -> PrettyPrinter
 cl_pretty = ps_pretty . cl_pstate
@@ -344,6 +353,7 @@ mkCLS :: PluginM CommandLineState
 mkCLS = do
     ps <- get
     (w,h) <- liftIO getTermDimensions
+    tlv <- liftIO (newTVarIO [])
     let st = CommandLineState { cl_pstate         = ps
                               , cl_height         = h
                               , cl_scripts        = []
@@ -355,6 +365,7 @@ mkCLS = do
                               , cl_externals      = [] -- Note, empty dictionary.
                               , cl_running_script = Nothing
                               , cl_safety         = NormalSafety
+                              , cl_templemmas     = tlv
                               }
     return $ setPrettyOpts st $ (cl_pretty_opts st) { po_width = w }
 

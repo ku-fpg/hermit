@@ -22,15 +22,20 @@ module HERMIT.Shell.Proof
     ) where
 
 import Control.Arrow hiding (loop, (<+>))
-import Control.Monad (forM_)
+import Control.Concurrent.STM
+import Control.Monad (forM_,unless)
 import Control.Monad.Error.Class (MonadError(..))
-import Control.Monad.State (MonadState, modify, gets)
+import Control.Monad.IO.Class
+import Control.Monad.State (MonadState(get), modify, gets)
 
 import Data.Dynamic
+import Data.Function (on)
+import Data.List (nubBy)
 import Data.Monoid
 
 import HERMIT.Context
 import HERMIT.External
+import HERMIT.GHC
 import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Lemma
@@ -93,17 +98,20 @@ withProofExternals comp = do
 
 forceProofs :: (MonadCatch m, CLMonad m) => m ()
 forceProofs = do
-    (c,nls) <- queryInFocus (contextT &&& getObligationNotProvenT :: TransformH Core (HermitC, [NamedLemma])) Never
-    todos <- getProofStackEmpty
-    let already = map ptName todos
-        nls' = [ nl | nl@(nm,_) <- nls, not (nm `elem` already) ]
-    if null nls'
-    then return ()
-    else do
-        c' <- case todos of
-                todo : _ -> queryInFocus (inProofFocusT todo contextT) Never
-                _        -> return c
-        forM_ nls' $ \ (nm,l) -> pushProofStack (Unproven nm l c' mempty)
+    st <- get
+    ls <- liftIO $ atomically $ swapTVar (cl_templemmas st) []
+    let snd3 (_,y,_) = y
+        nls = nubBy ((==) `on` snd3) ls
+    unless (null nls) $ do
+        (_,topc) <- queryK (cl_kernel st) (arr topLevelHermitC) Never (cl_kernel_env st) (cl_cursor st)
+        let chooseC c q = if all (inScope topc) (varSetElems (freeVarsQuantified q)) then (True,topc) else (False,c)
+            nls' = [ (chooseC c (lemmaQ l), nm, l) | (c,nm,l) <- nls ]
+            nonTemp = [ (nm,l) | ((True,_),nm,l) <- nls' ]
+        unless (null nonTemp) $
+            queryInFocus (insertLemmasT nonTemp :: TransformH LCore ())
+                         (Always $ "-- recording obligations as lemmas : " ++ unwords (map (show.fst) (reverse nonTemp)))
+        forM_ nls' $ \ ((_,c),nm,l) -> do
+            pushProofStack (Unproven nm l c mempty)
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, CLMonad m) => ProofReason -> ExprH -> m ()

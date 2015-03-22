@@ -11,6 +11,7 @@ module HERMIT.Context
       -- ** The Standard Context
     , HermitC
     , topLevelHermitC
+    , toHermitC
       -- ** Bindings
     , HermitBindingSite(..)
     , BindingDepth
@@ -259,6 +260,16 @@ data HermitC = HermitC
     , hermitC_specRules :: [CoreRule]            -- ^ In-scope GHC RULES found in IdInfos.
     , hermitC_lemmas    :: Lemmas                -- ^ Local lemmas as we pass implications in a proof.
     }
+
+-- | Build a HermitC out of any context that has the capabilities.
+toHermitC :: (HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb) => c -> HermitC
+toHermitC c =
+    HermitC { hermitC_bindings = hermitBindings c
+            , hermitC_depth = hermitDepth c
+            , hermitC_path = absPath c
+            , hermitC_specRules = hermitCoreRules c
+            , hermitC_lemmas = getAntecedents c
+            }
 
 ------------------------------------------------------------------------
 

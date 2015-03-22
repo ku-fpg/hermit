@@ -95,30 +95,34 @@ instance Extern [RuleName] where
     unbox (RuleNameListBox l) = l
 
 -- | Lookup a rule by name, attempt to apply it left-to-right. If successful, record it as an unproven lemma.
-foldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-               , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+foldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c
+             , ReadPath c Crumb, HasDebugChan m, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
+             , MonadIO m, MonadThings m, MonadUnique m )
             => Used -> RuleName -> Rewrite c m CoreExpr
 foldRuleR u nm = do
     q <- ruleNameToQuantifiedT nm
     backwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) q >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
-foldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-              , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+foldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c
+              , ReadPath c Crumb, HasDebugChan m, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
+              , MonadIO m, MonadThings m, MonadUnique m )
            => Used -> [RuleName] -> Rewrite c m CoreExpr
 foldRulesR u = orR . map (foldRuleR u)
 
 -- | Lookup a rule by name, attempt to apply it left-to-right. If successful, record it as an unproven lemma.
-unfoldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-               , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+unfoldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c
+               , ReadPath c Crumb, HasDebugChan m, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
+               , MonadIO m, MonadThings m, MonadUnique m )
             => Used -> RuleName -> Rewrite c m CoreExpr
 unfoldRuleR u nm = do
     q <- ruleNameToQuantifiedT nm
     forwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) q >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
-unfoldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-                , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+unfoldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c
+                , ReadPath c Crumb, HasDebugChan m, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
+                , MonadIO m, MonadThings m, MonadUnique m )
              => Used -> [RuleName] -> Rewrite c m CoreExpr
 unfoldRulesR u = orR . map (unfoldRuleR u)
 

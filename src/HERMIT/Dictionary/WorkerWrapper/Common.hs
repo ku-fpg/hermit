@@ -1,4 +1,7 @@
-{-# LANGUAGE CPP, DeriveDataTypeable, TypeFamilies #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 module HERMIT.Dictionary.WorkerWrapper.Common
     ( externals
     , WWAssumptionTag(..)
@@ -137,8 +140,8 @@ wwFusionQuantifiedT absE repE fixgE = prefixFailMsg "Building worker/wrapper fus
 
 -- Perform the worker/wrapper split using condition 1-beta, introducing
 -- an unproven lemma for assumption C, and an appropriate w/w fusion lemma.
-split1BetaR :: ( BoundVars c, LemmaContext c, HasHermitMEnv m, HasHscEnv m, HasLemmas m
-               , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+split1BetaR :: ( HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb, HasDebugChan m, HasHermitMEnv m
+               , HasHscEnv m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
             => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
 split1BetaR u nm absE repE = do
     (_fixId, [_tyA, f]) <- callNameT $ fromString "Data.Function.fix"
@@ -161,8 +164,8 @@ split1BetaR u nm absE repE = do
 
     return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
 
-split2BetaR :: ( BoundVars c, LemmaContext c, HasHermitMEnv m, HasHscEnv m, HasLemmas m
-               , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+split2BetaR :: ( HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb, HasDebugChan m, HasHermitMEnv m
+               , HasHscEnv m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
             => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
 split2BetaR u nm absE repE = do
     (_fixId, [_tyA, f]) <- callNameT $ fromString "Data.Function.fix"

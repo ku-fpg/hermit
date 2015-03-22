@@ -98,3 +98,4 @@ mkKernelEnv st =
                         out $ "[" ++ msg' ++ "]"
                         doc :: DocH <- applyT (ppLCoreTCT pp) (liftPrettyC (pOptions pp) cxt) qc
                         liftIO $ ps_render st stdout (pOptions pp) (Right doc)
+                AddObligation _ nm l -> insertLemma nm l

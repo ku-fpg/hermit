@@ -37,11 +37,11 @@ observeFailureR str m = m <+ observeR str
 -- | Print out the 'Core', with a message.
 observeR :: (Injection a LCoreTC, LemmaContext c, ReadBindings c, ReadPath c Crumb, HasDebugChan m, Monad m)
          => String -> Rewrite c m a
-observeR msg = extractR $ sideEffectR $ \ cxt -> sendDebugMessage . DebugCore msg cxt
+observeR msg = extractR $ sideEffectR $ \ cxt -> sendKEnvMessage . DebugCore msg cxt
 
 -- | Just say something, every time the rewrite is done.
 traceR :: (HasDebugChan m, Monad m) => String -> Rewrite c m a
-traceR msg = sideEffectR $ \ _ _ -> sendDebugMessage $ DebugTick msg
+traceR msg = sideEffectR $ \ _ _ -> sendKEnvMessage $ DebugTick msg
 
 -- | Show before and after a rewrite.
 bracketR :: (Injection a LCoreTC, LemmaContext c, ReadBindings c, ReadPath c Crumb, HasDebugChan m, MonadCatch m)

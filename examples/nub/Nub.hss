@@ -19,13 +19,16 @@ one-td (unfold 'filter)
 one-td (case-float-arg-lemma nubStrict)
 
 -- prove strictness condition
-lhs (unfold >>> undefined-expr)
-end-proof
+lhs unfold ; smash ; end-proof
 
 one-td (unfold 'nub')
 simplify
 
 one-td (case-float-arg-lemma nubStrict)
+
+-- prove strictness condition
+lhs unfold ; smash ; end-proof
+
 { consider case ; consider case ; case-alt 1 ; alt-rhs
   unfold ; simplify
   one-td (unfold-rule "filter-fusion") ; assume

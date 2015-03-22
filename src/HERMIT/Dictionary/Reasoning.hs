@@ -19,7 +19,6 @@ module HERMIT.Dictionary.Reasoning
     , extensionalityR
     , getLemmasT
     , getLemmaByNameT
-    , getObligationNotProvenT
     , insertLemmaT
     , insertLemmasT
     , lemmaBiR
@@ -327,13 +326,14 @@ lemmaR used nm = prefixFailMsg "verification failed: " $ do
     markLemmaUsedT nm used
     return CTrue
 
-verifyOrCreateT :: (LemmaContext c, HasLemmas m, MonadCatch m) => Used -> LemmaName -> Quantified -> Transform c m a ()
+verifyOrCreateT :: ( HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+                   , HasDebugChan m, HasLemmas m, MonadCatch m )
+                => Used -> LemmaName -> Quantified -> Transform c m a ()
 verifyOrCreateT u nm q@(Quantified _ cl)  = do
     exists <- testM $ getLemmaByNameT nm
     if exists
-    then do CTrue <- return cl >>> lemmaR u nm
-            return ()
-    else insertLemmaT nm $ Lemma q NotProven u
+    then do CTrue <- return cl >>> lemmaR u nm ; return ()
+    else contextonlyT $ \ c -> sendKEnvMessage $ AddObligation (toHermitC c) nm $ Lemma q NotProven u
 
 reflexivityR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m LCore
 reflexivityR = promoteR (quantifiedR idR reflexivityClauseR) <+ promoteR reflexivityClauseR
@@ -642,11 +642,6 @@ getLemmasT = contextonlyT $ \ c -> liftM (Map.union (getAntecedents c)) getLemma
 getLemmaByNameT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> Transform c m x Lemma
 getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm) return . Map.lookup nm
 
-getObligationNotProvenT :: (LemmaContext c, HasLemmas m, Monad m) => Transform c m x [NamedLemma]
-getObligationNotProvenT = do
-    ls <- getLemmasT
-    return [ (nm,l) | (nm, l@(Lemma _ NotProven Obligation)) <- Map.toList ls ]
-
 ------------------------------------------------------------------------------
 
 lemmaBiR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
@@ -671,8 +666,9 @@ lemmaConsequentR u nm = prefixFailMsg "lemma-consequent failed:" $
     markLemmaUsedT nm u
     return q'
 
-lemmaConsequentBiR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c
-                                  , ReadPath c Crumb, HasLemmas m, MonadCatch m, MonadUnique m)
+lemmaConsequentBiR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c
+                                  , ReadBindings c, ReadPath c Crumb, HasDebugChan m, HasLemmas m, MonadCatch m
+                                  , MonadUnique m)
                    => Used -> LemmaName -> BiRewrite c m CoreExpr
 lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)) (markLemmaUsedT nm u >> idR)
     where go :: Quantified -> BiRewrite c m CoreExpr
