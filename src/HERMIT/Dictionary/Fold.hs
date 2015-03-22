@@ -411,12 +411,11 @@ sameExpr :: CoreExpr -> CoreExpr -> Maybe ()
 sameExpr e1 e2 = snd <$> soleElement (findFold e2 m)
     where m = insertFold emptyAlphaEnv [] e1 () EMEmpty
 
--- | Determine if the left Quantified 'proves' the right one.
--- Here, 'proves' means that the right Quantified is a substitution
--- of the left one, where only the top-level binders of the left
--- Quantified can be substituted.
-proves :: Quantified -> Quantified -> Bool
-proves (Quantified bs cl1) (Quantified _ cl2) = maybe False (const True) $ soleElement (findFold cl2 m)
+-- | Determine if the given Quantified 'proves' the given Clause.
+-- Here, 'proves' means that the clause is a substitution instance
+-- of the left one, where the top-level binders of the Quantified are the holes.
+proves :: Quantified -> Clause -> Bool
+proves (Quantified bs cl1) cl2 = maybe False (const True) $ soleElement (findFold cl2 m)
     where m = insertFold emptyAlphaEnv bs cl1 () CLMEmpty
 
 -- | Determine if the right Quantified is a substitution

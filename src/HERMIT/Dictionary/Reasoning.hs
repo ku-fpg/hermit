@@ -40,7 +40,7 @@ module HERMIT.Dictionary.Reasoning
     , rhsR
     , bothR
     , verifyQuantifiedT
-    , verifyEquivalentT
+    , lemmaR
     , verifyOrCreateT
     , verifyEqualityLeftToRightT
     , verifyEqualityCommonTargetT
@@ -63,6 +63,7 @@ import           Data.Either (partitionEithers)
 import           Data.List (isInfixOf, nubBy)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
+import           Data.Monoid
 
 import           HERMIT.Context
 import           HERMIT.Core
@@ -178,6 +179,12 @@ externals =
         [ "Rewrite alpha-equivalence to true." ]
     , external "simplify-proof" (simplifyQuantifiedR :: RewriteH LCore)
         [ "Reduce a proof by applying reflexivity and logical operator identities." ]
+    , external "split-antecedent" (promoteClauseR splitAntecedentR :: RewriteH LCore)
+        [ "Split an implication of the form (q1 ^ q2) => q3 into q1 => (q2 => q3)" ]
+    , external "lemma" (promoteClauseR . lemmaR Obligation :: LemmaName -> RewriteH LCore)
+        [ "Rewrite clause to true using given lemma." ]
+    , external "lemma-unsafe" (promoteClauseR . lemmaR UnsafeUsed :: LemmaName -> RewriteH LCore)
+        [ "Rewrite clause to true using given lemma." ] .+ Unsafe
     ]
 
 ------------------------------------------------------------------------------
@@ -273,7 +280,7 @@ showLemmaT nm pp = getLemmaByNameT nm >>> ppLemmaT pp nm
 
 ppLemmaT :: PrettyPrinter -> LemmaName -> PrettyH Lemma
 ppLemmaT pp nm = do
-    Lemma q p _u _t <- idR
+    Lemma q p _u <- idR
     qDoc <- return q >>> ppQuantifiedT pp
     let hDoc = PP.text (show nm) PP.<+> PP.text ("(" ++ show p ++ ")")
     return $ hDoc PP.$+$ PP.nest 2 qDoc
@@ -310,19 +317,21 @@ verifyQuantifiedT = setFailMsg "verification failed: clause must be true (perhap
     Quantified _ CTrue <- idR
     return ()
 
-verifyEquivalentT :: (LemmaContext c, HasLemmas m, MonadCatch m) => Used -> LemmaName -> Transform c m Quantified ()
-verifyEquivalentT used nm = prefixFailMsg "verification failed: " $ do
-    Lemma q _ _ _ <- getLemmaByNameT nm
+lemmaR :: (LemmaContext c, HasLemmas m, MonadCatch m) => Used -> LemmaName -> Rewrite c m Clause
+lemmaR used nm = prefixFailMsg "verification failed: " $ do
+    Lemma q _ _ <- getLemmaByNameT nm
     eq <- arr (q `proves`)
     guardMsg eq "lemmas are not equivalent."
     markLemmaUsedT nm used
+    return CTrue
 
-verifyOrCreateT :: (LemmaContext c, HasLemmas m, MonadCatch m) => Used -> LemmaName -> Lemma -> Transform c m a ()
-verifyOrCreateT u nm l = do
+verifyOrCreateT :: (LemmaContext c, HasLemmas m, MonadCatch m) => Used -> LemmaName -> Quantified -> Transform c m a ()
+verifyOrCreateT u nm q@(Quantified _ cl)  = do
     exists <- testM $ getLemmaByNameT nm
     if exists
-    then return (lemmaQ l) >>> verifyEquivalentT u nm
-    else insertLemmaT nm l
+    then do CTrue <- return cl >>> lemmaR u nm
+            return ()
+    else insertLemmaT nm $ Lemma q NotProven u
 
 reflexivityR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m LCore
 reflexivityR = promoteR (quantifiedR idR reflexivityClauseR) <+ promoteR reflexivityClauseR
@@ -372,6 +381,14 @@ impliesTrueR :: Monad m => Rewrite c m Quantified
 impliesTrueR = do
     Quantified _ (Impl _ _ (Quantified _ CTrue)) <- idR
     return $ Quantified [] CTrue
+
+splitAntecedentR :: MonadCatch m => Rewrite c m Clause
+splitAntecedentR = prefixFailMsg "antecedent split failed: " $
+                   withPatFailMsg (wrongExprForm "(ante1 ^ ante2) => con") $ do
+    Impl nm (Quantified bs (Conj (Quantified abs1 c1) (Quantified abs2 c2))) con <- idR
+    return $ Impl (nm <> "0") (Quantified (bs++abs1) c1)
+                              (Quantified [] (Impl (nm <> "1") (Quantified (bs++abs2) c2) con))
+
 
 ------------------------------------------------------------------------------
 
@@ -477,21 +494,21 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
 
 conjunctLemmasT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 conjunctLemmasT new lhs rhs = do
-    Lemma ql pl _ tl <- getLemmaByNameT lhs
-    Lemma qr pr _ tr <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Conj ql qr)) (pl `andP` pr) NotUsed (tl || tr)
+    Lemma ql pl _ <- getLemmaByNameT lhs
+    Lemma qr pr _ <- getLemmaByNameT rhs
+    insertLemmaT new $ Lemma (Quantified [] (Conj ql qr)) (pl `andP` pr) NotUsed
 
 disjunctLemmasT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 disjunctLemmasT new lhs rhs = do
-    Lemma ql pl _ tl <- getLemmaByNameT lhs
-    Lemma qr pr _ tr <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Disj ql qr)) (pl `orP` pr) NotUsed (tl || tr)
+    Lemma ql pl _ <- getLemmaByNameT lhs
+    Lemma qr pr _ <- getLemmaByNameT rhs
+    insertLemmaT new $ Lemma (Quantified [] (Disj ql qr)) (pl `orP` pr) NotUsed
 
 implyLemmasT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 implyLemmasT new lhs rhs = do
-    Lemma ql _  _ tl <- getLemmaByNameT lhs
-    Lemma qr pr _ tr <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Impl lhs ql qr)) pr NotUsed (tl || tr)
+    Lemma ql _  _ <- getLemmaByNameT lhs
+    Lemma qr pr _ <- getLemmaByNameT rhs
+    insertLemmaT new $ Lemma (Quantified [] (Impl lhs ql qr)) pr NotUsed
 
 ------------------------------------------------------------------------------
 
@@ -626,7 +643,7 @@ getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm)
 getObligationNotProvenT :: (LemmaContext c, HasLemmas m, Monad m) => Transform c m x [NamedLemma]
 getObligationNotProvenT = do
     ls <- getLemmasT
-    return [ (nm,l) | (nm, l@(Lemma _ NotProven Obligation _)) <- Map.toList ls ]
+    return [ (nm,l) | (nm, l@(Lemma _ NotProven Obligation)) <- Map.toList ls ]
 
 ------------------------------------------------------------------------------
 
@@ -659,19 +676,20 @@ lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)
     where go :: Quantified -> BiRewrite c m CoreExpr
           go (Quantified bs (Impl anteNm ante (Quantified bs' cl))) = do
             let eqs = toEqualities $ Quantified (bs++bs') cl -- consequent
-                foldUnfold side f =
-                    transform $ \ c e -> do
-                        let cf = compileFold $ map f eqs
-                        (e',hs) <- maybeM ("expression did not match "++side++"-hand side") $ runFoldMatches cf c e
-                        let matches = [ case lookupVarEnv hs b of
-                                            Nothing -> Left b
-                                            Just arg -> Right (b,arg)
-                                      | b <- bs ]
-                            (unmatched, subs) = partitionEithers matches
-                            Quantified aBs acl = substQuantifieds subs ante
-                            q = Quantified (unmatched++aBs) acl
-                        insertLemma anteNm $ Lemma q NotProven u True
-                        return e'
+                foldUnfold side f = do
+                    (q,e) <- transform $ \ c e -> do
+                                let cf = compileFold $ map f eqs
+                                (e',hs) <- maybeM ("expression did not match "++side++"-hand side") $ runFoldMatches cf c e
+                                let matches = [ case lookupVarEnv hs b of
+                                                    Nothing -> Left b
+                                                    Just arg -> Right (b,arg)
+                                              | b <- bs ]
+                                    (unmatched, subs) = partitionEithers matches
+                                    Quantified aBs acl = substQuantifieds subs ante
+                                    q = Quantified (unmatched++aBs) acl
+                                return (q,e')
+                    verifyOrCreateT u anteNm q
+                    return e
             bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)
           go _ = let t = fail $ show nm ++ " is not an implication."
                  in bidirectional t t
@@ -692,9 +710,9 @@ modifyLemmaT :: (LemmaContext c, HasLemmas m, Monad m)
              -> (Used -> Used)           -- ^ modify used status
              -> Transform c m a ()
 modifyLemmaT nm nFn rr pFn uFn = do
-    Lemma q p u t <- getLemmaByNameT nm
+    Lemma q p u <- getLemmaByNameT nm
     q' <- rr <<< return q
-    constT $ insertLemma (nFn nm) $ Lemma q' (pFn p) (uFn u) t
+    constT $ insertLemma (nFn nm) $ Lemma q' (pFn p) (uFn u)
 
 markLemmaUsedT :: (LemmaContext c, HasLemmas m, MonadCatch m) => LemmaName -> Used -> Transform c m a ()
 markLemmaUsedT nm u = ifM (lemmaExistsT nm) (modifyLemmaT nm id idR id (const u)) (return ())

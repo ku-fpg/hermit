@@ -83,7 +83,7 @@ getFragment True ast = do
     modify $ setCursor ast
     ps <- getProofStackEmpty
     doc <- case ps of
-            Unproven _ (Lemma q _ _ _) _ p : _ -> do
+            Unproven _ (Lemma q _ _) _ p : _ -> do
                 as <- queryInContext ((liftPrettyH opts $ do
                                         m <- getAntecedents <$> contextT
                                         ds <- forM (M.toList m) $ \(n',l') ->

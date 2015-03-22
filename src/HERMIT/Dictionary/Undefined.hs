@@ -222,6 +222,6 @@ buildStrictnessLemmaT :: (BoundVars c, LemmaContext c, HasDynFlags m, HasHscEnv 
 buildStrictnessLemmaT u nm f = do
     (tvs, lhs) <- liftM collectTyBinders $ applyToUndefinedT f
     rhs <- mkUndefinedValT (exprType lhs)
-    verifyOrCreateT u nm $ Lemma (mkQuantified tvs lhs rhs) NotProven u False
+    verifyOrCreateT u nm (mkQuantified tvs lhs rhs)
 
 ------------------------------------------------------------------------

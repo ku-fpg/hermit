@@ -34,7 +34,6 @@ import HERMIT.External
 import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Lemma
-import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.Syntax
 
@@ -55,11 +54,7 @@ externals = map (.+ Proof)
 -- | Externals that are added to the dictionary only when in interactive proof mode.
 proof_externals :: [External]
 proof_externals = map (.+ Proof)
-    [ external "lemma" (PCEnd . LemmaProof Obligation)
-        [ "Prove lemma by asserting it is alpha-equivalent to an already proven lemma." ]
-    , external "lemma-unsafe" (PCEnd . LemmaProof UnsafeUsed)
-        [ "Prove lemma by asserting it is alpha-equivalent to an already proven lemma." ] .+ Unsafe
-    , external "end-proof" (PCEnd Reflexivity)
+    [ external "end-proof" (PCEnd Reflexivity)
         [ "check for alpha-equality, marking the lemma as proven" ]
     , external "end-case" (PCEnd Reflexivity)
         [ "check for alpha-equality, marking the proof case as proven" ]
@@ -113,16 +108,14 @@ forceProofs = do
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, CLMonad m) => ProofReason -> ExprH -> m ()
 endProof reason expr = do
-    Unproven nm (Lemma q _ _ temp) c _ : _ <- getProofStack
+    Unproven nm (Lemma q _ _) c _ : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
-        deleteOr tr = if temp then constT (deleteLemma nm) else tr
         t = case reason of
-                UserAssume -> deleteOr (markLemmaProvenT nm Assumed)
+                UserAssume -> markLemmaProvenT nm Assumed
                 Reflexivity -> setFailMsg msg (do tryR (extractR simplifyQuantifiedR) >>> verifyQuantifiedT
-                                                  deleteOr (markLemmaProvenT nm Proven))
-                LemmaProof u nm' -> verifyEquivalentT u nm' >> deleteOr (markLemmaProvenT nm Proven)
+                                                  markLemmaProvenT nm Proven)
                 UserProof up -> let UserProofTechnique tr = up
-                                in extractT tr >> deleteOr (markLemmaProvenT nm Proven)
+                                in extractT tr >> markLemmaProvenT nm Proven
     queryInFocus (constT (applyT t c q) :: TransformH Core ())
                  (Always $ unparseExprH expr ++ " -- proven " ++ quoteShow nm)
     _ <- popProofStack
@@ -144,7 +137,6 @@ data ProofShellCommand
 data ProofReason = UserProof UserProofTechnique -- ^ Run the technique, mark Proven if succeeds
                  | UserAssume                   -- ^ Assume
                  | Reflexivity                  -- ^ Check for alpha-equivalence first
-                 | LemmaProof Used LemmaName    -- ^ Used should be 'UnsafeUsed' or 'Obligation'
 
 -- keep abstract to avoid breaking things if we modify this later
 newtype UserProofTechnique = UserProofTechnique (TransformH LCoreTC ())

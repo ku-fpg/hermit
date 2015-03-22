@@ -244,7 +244,7 @@ wwGenerateFusionT mAss =
     do Def w e@(App unwrap (App f (App wrap (Var w')))) <- projectT
        guardMsg (w == w') wrongForm
        whenJust (verifyWWAss wrap unwrap f) mAss
-       insertLemmaT workLabel $ Lemma (Quantified [] (Equiv (varToCoreExpr w) e)) Proven NotUsed False
+       insertLemmaT workLabel $ Lemma (Quantified [] (Equiv (varToCoreExpr w) e)) Proven NotUsed
   where
     wrongForm = "definition does not have the form: work = unwrap (f (wrap work))"
 

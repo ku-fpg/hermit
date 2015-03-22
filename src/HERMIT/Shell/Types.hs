@@ -448,7 +448,7 @@ modifyLocalPath f expr = do
     ps <- getProofStackEmpty
     (k,(kEnv,ast)) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor)
     case ps of
-        todo@(Unproven _ (Lemma q _ _ _) c _) : todos -> do
+        todo@(Unproven _ (Lemma q _ _) c _) : todos -> do
             let (base, rel) = ptPath todo
                 rel' = f rel
             requireDifferent rel rel'
@@ -499,18 +499,18 @@ announceUnprovens = do
     sf <- gets cl_safety
     case sf of
         StrictSafety -> do
-            let ls = [ nl | nl@(_,Lemma _ p u _) <- M.toList m, p `elem` [NotProven, Assumed], u /= NotUsed ]
+            let ls = [ nl | nl@(_,Lemma _ p u) <- M.toList m, p `elem` [NotProven, Assumed], u /= NotUsed ]
             forM_ ls $ \ nl@(nm,_) -> do
                 cl_putStrLn $ "Fatal: Lemma " ++ show nm ++ " has not been proven, but was used."
                 printLemma stdout c mempty nl
             unless (null ls) abort -- don't finish if this happens
         NormalSafety -> do
-            let np = [ nl | nl@(_,Lemma _ NotProven u _) <- M.toList m, u /= NotUsed ]
+            let np = [ nl | nl@(_,Lemma _ NotProven u) <- M.toList m, u /= NotUsed ]
             forM_ np $ \ nl@(nm,_) -> do
                 cl_putStrLn $ "Fatal: Lemma " ++ show nm ++ " has not been proven, but was used."
                 printLemma stdout c mempty nl
             unless (null np) abort -- don't finish if this happens
-            let as = [ nl | nl@(_,Lemma _ Assumed u _) <- M.toList m, u /= NotUsed ]
+            let as = [ nl | nl@(_,Lemma _ Assumed u) <- M.toList m, u /= NotUsed ]
             forM_ as $ \ nl@(nm,_) -> do
                 cl_putStrLn $ "Warning: Lemma " ++ show nm ++ " was assumed but not proven."
                 printLemma stdout c mempty nl
@@ -569,7 +569,7 @@ showWindow mbh = do
 
 printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
            => Handle -> HermitC -> PathStack -> (LemmaName,Lemma) -> m ()
-printLemma h c p (nm,Lemma q _ _ _) = do -- TODO
+printLemma h c p (nm,Lemma q _ _) = do -- TODO
     (pp,opts) <- gets (cl_pretty &&& cl_pretty_opts)
     as <- queryInContext ((liftPrettyH opts $ do
                             m <- getAntecedents <$> contextT
@@ -596,11 +596,11 @@ queryInFocus t msg = do
 
 -- meant to be used inside queryInFocus
 inProofFocusT :: ProofTodo -> TransformH LCoreTC b -> TransformH Core b
-inProofFocusT (Unproven _ (Lemma q _ _ _) c ps) t =
+inProofFocusT (Unproven _ (Lemma q _ _) c ps) t =
     contextfreeT $ applyT (return q >>> extractT (pathT (pathStack2Path ps) t)) c
 
 inProofFocusR :: ProofTodo -> RewriteH LCoreTC -> TransformH Core Quantified
-inProofFocusR (Unproven _ (Lemma q _ _ _) c ps) rr =
+inProofFocusR (Unproven _ (Lemma q _ _) c ps) rr =
     contextfreeT $ applyT (return q >>> extractR (pathR (pathStack2Path ps) rr)) c
 
 -- TODO: better name

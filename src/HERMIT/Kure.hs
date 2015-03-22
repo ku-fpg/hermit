@@ -1323,7 +1323,7 @@ disjAllR r1 r2 = disjT r1 r2 Disj
 implT :: (ExtendPath c Crumb, LemmaContext c, Monad m)
       => Transform c m Quantified a1 -> Transform c m Quantified a2 -> (LemmaName -> a1 -> a2 -> b) -> Transform c m Clause b
 implT t1 t2 f = transform $ \ c -> \case
-                                     Impl nm q1 q2 -> let l = Lemma q1 BuiltIn NotUsed True
+                                     Impl nm q1 q2 -> let l = Lemma q1 BuiltIn NotUsed
                                                       in f nm <$> applyT t1 (c @@ Impl_Lhs) q1
                                                               <*> applyT t2 (addAntecedent nm l c @@ Impl_Rhs) q2
                                      _          -> fail "not an implication."

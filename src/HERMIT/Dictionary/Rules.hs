@@ -100,7 +100,7 @@ foldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContex
             => Used -> RuleName -> Rewrite c m CoreExpr
 foldRuleR u nm = do
     q <- ruleNameToQuantifiedT nm
-    backwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) (Lemma q NotProven u False) >> idR)
+    backwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) q >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
 foldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
@@ -114,7 +114,7 @@ unfoldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyCont
             => Used -> RuleName -> Rewrite c m CoreExpr
 unfoldRuleR u nm = do
     q <- ruleNameToQuantifiedT nm
-    forwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) (Lemma q NotProven u False) >> idR)
+    forwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) q >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
 unfoldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
@@ -187,7 +187,7 @@ ruleToLemmaT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitMEnv m, H
              => RuleName -> Transform c m a ()
 ruleToLemmaT nm = do
     q <- ruleNameToQuantifiedT nm
-    insertLemmaT (fromString (show nm)) $ Lemma q NotProven NotUsed False
+    insertLemmaT (fromString (show nm)) $ Lemma q NotProven NotUsed
 
 ------------------------------------------------------------------------
 

@@ -175,7 +175,10 @@ rhs unfold
 
 extensionality 'zs
 simplify
-lemma "myAppend-assoc"
+{ forall-body
+  lemma "myAppend-assoc"
+}
+end-proof
 
 -- module main:Main where
 --   absR :: forall a . ([a] -> H a) -> [a] -> [a]

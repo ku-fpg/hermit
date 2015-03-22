@@ -99,7 +99,6 @@ instance Show LemmaName where show (LemmaName s) = s
 data Lemma = Lemma { lemmaQ :: Quantified
                    , lemmaP :: Proven     -- whether lemma has been proven
                    , lemmaU :: Used       -- whether lemma has been used
-                   , lemmaT :: Bool       -- whether lemma is temporary
                    }
 
 data Proven = Proven

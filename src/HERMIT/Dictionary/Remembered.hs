@@ -59,7 +59,7 @@ rememberR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasLemmas m, 
           => LemmaName -> Transform c m Core ()
 rememberR nm = prefixFailMsg "remember failed: " $ do
     Def v e <- setFailMsg "not applied to a binding." $ defOrNonRecT idR idR Def
-    insertLemmaT (prefixRemembered nm) $ Lemma (mkQuantified [] (varToCoreExpr v) e) Proven NotUsed False
+    insertLemmaT (prefixRemembered nm) $ Lemma (mkQuantified [] (varToCoreExpr v) e) Proven NotUsed
 
 -- | Unfold a remembered definition (like unfoldR, but looks in stash instead of context).
 unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
