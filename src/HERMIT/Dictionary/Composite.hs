@@ -32,6 +32,7 @@ import HERMIT.Dictionary.Debug hiding (externals)
 import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.Local hiding (externals)
+import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Undefined hiding (externals)
 import HERMIT.Dictionary.Unfold hiding (externals)
 
@@ -243,4 +244,8 @@ smashComponents2 :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadB
                  => [(Rewrite c m LCore, String)]
 smashComponents2 =
     [ (promoteExprR caseElimMergeAltsR, "case-elim-merge-alts") -- do this last, lest it prevent other simplifications
+      -- neither of these will create interesting new terms for the stuff in smashComponents1
+      -- so might as well have them here so they are run at the end
+    , (promoteQuantifiedR quantIdentitiesR, "quant-indentities")
+    , (promoteClauseR reflexivityClauseR, "reflexivity")
     ]

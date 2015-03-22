@@ -41,6 +41,8 @@ module HERMIT.Dictionary.Reasoning
     , bothR
     , verifyQuantifiedT
     , lemmaR
+    , quantIdentitiesR
+    , reflexivityClauseR
     , verifyOrCreateT
     , verifyEqualityLeftToRightT
     , verifyEqualityCommonTargetT
