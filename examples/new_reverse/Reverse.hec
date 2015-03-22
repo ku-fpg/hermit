@@ -31,9 +31,8 @@ induction 'xs
 any-bu (unfold 'myAppend >>> undefined-expr)
 any-bu (unfold 'myAppend >>> case-reduce)
 simplify-proof
-forall-body
-prove-consequent
-one-td (lemma-forward "++ []-antecedent")
+forall-body ; consequent
+one-td (lemma-forward ind-hyp-0)
 end-case
 
 rule-to-lemma "myAppend-assoc"
@@ -50,15 +49,14 @@ induction 'xs
       reflexivity
     }
     { conj-rhs
-      forall-body
-      prove-consequent
+      forall-body ; consequent
       any-bu (unfold 'myAppend)
       smash
       rhs (one-td (fold 'myAppend))
-      one-td (lemma-forward myAppend-assoc-antecedent)
+      one-td (lemma-forward ind-hyp-0)
       reflexivity
---    }
--- } -- prove-consequent is BAAAAD
+    }
+}
 end-proof
 
 rule-to-lemma "repH []"

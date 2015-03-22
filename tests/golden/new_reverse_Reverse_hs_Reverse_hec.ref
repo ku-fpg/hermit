@@ -41,10 +41,11 @@ To get started, you could try the following:
 ++ [] (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mxs[0m[0m[0m[31m.[0m[0m [0m[31m([0m[0m[0m[m++[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[31m([0m[0m[0m[m[][0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[0m[mxs[0m[0m[0m[0m
 Successfully proven: appendFix
-Successfully proven: ++ []-induction-case-undefined
-Successfully proven: ++ []-induction-case-[]
-Successfully proven: ++ []-induction-case-:
 Successfully proven: ++ []
+myAppend-assoc (Not Proven)
+  [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mxs[0m[0m [0m[mys[0m[0m [0m[mzs[0m[0m[0m[31m.[0m[0m
+  [0m[mmyAppend[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[mmyAppend[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[0m[mys[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mzs[0m[0m[0m [31m=[0m [0m[mmyAppend[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[31m([0m[0m[0m[mmyAppend[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mys[0m[0m[0m [0m[0m[mzs[0m[0m[0m[0m[31m)[0m[0m[0m
+Successfully proven: myAppend-assoc
 repH [] (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m[0m[31m.[0m[0m [0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[m[][0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[mid[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m[0m
 Successfully proven: repH []
@@ -55,9 +56,6 @@ Successfully proven: repH (:)
 repH ++ (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mxs[0m[0m [0m[mys[0m[0m[0m[31m.[0m[0m
   [0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[31m([0m[0m[0m[m++[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[0m[mys[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[31m([0m[0m[0m[m.[0m[0m[0m[31m)[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[31m([0m[0m[0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mys[0m[0m[0m[0m[31m)[0m[0m[0m
-Successfully proven: repH ++-induction-case-undefined
-Successfully proven: repH ++-induction-case-[]
-Successfully proven: repH ++-induction-case-:
 Successfully proven: repH ++
 Successfully proven: rev-assumption
 Successfully proven: repHstrict
@@ -86,6 +84,9 @@ Successfully proven: repH-absH-fusion
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mxs[0m[0m[0m[31m.[0m[0m [0m[31m([0m[0m[0m[m++[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[31m([0m[0m[0m[m[][0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[0m[mxs[0m[0m[0m
 appendFix (Assumed)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m[0m[31m.[0m[0m [0m[31m([0m[0m[0m[m++[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [31m=[0m [0m[mmyAppend[0m[0m [0m[0m[32ma[0m[0m[0m
+myAppend-assoc (Proven)
+  [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mxs[0m[0m [0m[mys[0m[0m [0m[mzs[0m[0m[0m[31m.[0m[0m
+  [0m[mmyAppend[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[mmyAppend[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[0m[mys[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mzs[0m[0m[0m [31m=[0m [0m[mmyAppend[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[31m([0m[0m[0m[mmyAppend[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mys[0m[0m[0m [0m[0m[mzs[0m[0m[0m[0m[31m)[0m[0m
 repH (:) (Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mx[0m[0m [0m[mxs[0m[0m[0m[31m.[0m[0m
   [0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mx[0m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[31m([0m[0m[0m[m.[0m[0m[0m[31m)[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mx[0m[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m

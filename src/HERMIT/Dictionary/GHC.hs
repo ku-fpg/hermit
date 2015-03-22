@@ -160,7 +160,7 @@ dezombifyR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
 dezombifyR = varR (acceptR isDeadBinder >>^ zapVarOccInfo)
 
 -- | Apply 'occurAnalyseExprR' to all sub-expressions.
-occurAnalyseR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c u, Injection CoreExpr u) => Rewrite c m u
+occurAnalyseR :: (Injection CoreExpr u, Walker c u, MonadCatch m) => Rewrite c m u
 occurAnalyseR = let r  = promoteExprR (arr occurAnalyseExpr_NoBinderSwap) -- See Note [No Binder Swap]
                     go = r <+ anyR go
                  in tryR go -- always succeed
@@ -180,7 +180,7 @@ occurAnalyseExprChangedR :: MonadCatch m => Rewrite c m CoreExpr
 occurAnalyseExprChangedR = changedByR exprSyntaxEq (arr occurAnalyseExpr_NoBinderSwap) -- See Note [No Binder Swap]
 
 -- | Occurrence analyse all sub-expressions, failing if the result is syntactically equal to the initial expression.
-occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Rewrite c m LCore
+occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, MonadCatch m) => Rewrite c m LCore
 occurAnalyseChangedR = changedByR lcoreSyntaxEq occurAnalyseR
 
 -- | Run GHC's occurrence analyser, and also eliminate any zombies.
@@ -229,15 +229,15 @@ buildDictionaryT = prefixFailMsg "buildDictionaryT failed: " $ contextfreeT $ \ 
 
 ----------------------------------------------------------------------
 
-lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
+lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, LemmaContext c, HasDynFlags m, MonadCatch m)
                 => Transform c m Quantified String
 lintQuantifiedT = lintQuantifiedWorkT []
 
-lintQuantifiedWorkT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
+lintQuantifiedWorkT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, LemmaContext c, HasDynFlags m, MonadCatch m)
                     => [Var] -> Transform c m Quantified String
 lintQuantifiedWorkT bs = readerT $ \ (Quantified bs' _) -> quantifiedT successT (lintClauseT (bs++bs')) (flip const)
 
-lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, HasDynFlags m, MonadCatch m)
+lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, LemmaContext c, HasDynFlags m, MonadCatch m)
             => [Var] -> Transform c m Clause String
 lintClauseT bs = do
     t <- readerT $ \case Equiv {} -> return $ promoteT ({- arr (mkCoreLams bs) >>> -} lintExprT) -- TODO: why does this break core lint?!

@@ -25,7 +25,7 @@ import Control.Exception hiding (catch)
 import Data.Dynamic
 import qualified Data.Map as M
 
-import HERMIT.Context(LocalPathH)
+import HERMIT.Context (LocalPathH, getAntecedents)
 import HERMIT.External
 import HERMIT.Kernel
 import HERMIT.Kure
@@ -82,18 +82,16 @@ getFragment True ast = do
     (now,opts) <- gets (cl_cursor &&& cl_pretty_opts)
     modify $ setCursor ast
     ps <- getProofStackEmpty
-    let discardProvens [] = []
-        discardProvens r@(Unproven{} : _) = r
-        discardProvens (_:r) = discardProvens r
-    doc <- case discardProvens ps of
-            Unproven _ (Lemma q _ _ _) _ ls p : _ -> do
-                as <- case ls of
-                        [] -> return []
-                        _  -> liftM (PP.text "Assumed lemmas: " :) $
-                                queryInFocus ((liftPrettyH opts $
-                                                forM ls $ \(n',l') ->
-                                                    return l' >>> ppLemmaT Clean.pretty n'
-                                              ) :: TransformH Core [DocH]) Never
+    doc <- case ps of
+            Unproven _ (Lemma q _ _ _) _ p : _ -> do
+                as <- queryInContext ((liftPrettyH opts $ do
+                                        m <- getAntecedents <$> contextT
+                                        ds <- forM (M.toList m) $ \(n',l') ->
+                                                return l' >>> ppLemmaT Clean.pretty n'
+                                        if M.null m
+                                        then return []
+                                        else return $ PP.text "Assumed lemmas: " : ds
+                                      ) :: TransformH LCoreTC [DocH]) Never
                 d <- queryInFocus (liftPrettyH opts $
                                     return q >>> extractT (pathT (pathStack2Path p) (ppLCoreTCT Clean.pretty)) :: TransformH Core DocH) Never
                 return $ PP.vcat $ as ++ [PP.text "Goal:", d]

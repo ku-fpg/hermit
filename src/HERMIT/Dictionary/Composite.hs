@@ -73,7 +73,7 @@ unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $ orR (map
     where f nm = voidM (callNameT nm) >> voidM callSaturatedT >> unfoldR
           voidM = liftM (const ()) -- can't wait for AMP
 
-simplifyR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+simplifyR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
              , MonadCatch m, MonadUnique m )
           => Rewrite c m LCore
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
@@ -93,13 +93,13 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
 -- basic combinators. See 'bashComponents' for a list of rewrites performed.
 -- Bash also performs occurrence analysis and de-zombification on the result, to update
 -- IdInfo attributes relied-upon by GHC.
-bashR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+bashR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
          , MonadCatch m, MonadUnique m )
       => Rewrite c m LCore
 bashR = bashExtendedWithR []
 
 -- | An extensible bash. Given rewrites are performed before normal bash rewrites.
-bashExtendedWithR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+bashExtendedWithR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                      , MonadCatch m, MonadUnique m )
                   => [Rewrite c m LCore] -> Rewrite c m LCore
 bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
@@ -109,14 +109,14 @@ bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 -- If core lint fails, shows core fragment before and after the sub-rewrite which introduced the problem.
 -- Note: core fragment which fails linting is still returned! Otherwise would behave differently than bashR.
 -- Useful for debugging the bash command itself.
-bashDebugR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+bashDebugR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
               , HasDebugChan m, HasDynFlags m, MonadCatch m, MonadUnique m )
            => Rewrite c m LCore
 bashDebugR = bashUsingR [ bracketR nm r >>> catchM (promoteT lintExprT >> idR) traceR
                         | (r,nm) <- bashComponents ]
 
 -- | Perform the 'bash' algorithm with a given list of rewrites.
-bashUsingR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m)
+bashUsingR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, MonadCatch m)
            => [Rewrite c m LCore] -> Rewrite c m LCore
 bashUsingR rs = setFailMsg "bash failed: nothing to do." $
     repeatR (occurAnalyseR >>> onetdR (catchesT rs)) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
@@ -178,18 +178,18 @@ bashComponents =
 -- | Smash is a more powerful but less efficient version of bash.
 -- Unlike bash, smash is not concerned with whether it duplicates work,
 -- and is intended for use during proving tasks.
-smashR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+smashR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
           , MonadCatch m, MonadUnique m )
        => Rewrite c m LCore
 smashR = smashExtendedWithR []
 
-smashExtendedWithR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+smashExtendedWithR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                       , MonadCatch m, MonadUnique m )
                    => [Rewrite c m LCore] -> Rewrite c m LCore
 smashExtendedWithR rs = smashUsingR (rs ++ map fst smashComponents1) (map fst smashComponents2)
 
 
-smashUsingR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => [Rewrite c m LCore] -> [Rewrite c m LCore] -> Rewrite c m LCore
+smashUsingR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, LemmaContext c, MonadCatch m) => [Rewrite c m LCore] -> [Rewrite c m LCore] -> Rewrite c m LCore
 smashUsingR rs1 rs2 =
     setFailMsg "smash failed: nothing to do." $
     repeatR (occurAnalyseR >>> (onetdR (catchesT rs1) <+ onetdR (catchesT rs2))) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR

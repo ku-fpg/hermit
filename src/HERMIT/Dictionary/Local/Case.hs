@@ -205,7 +205,7 @@ caseFloatArgR mf mstrict = prefixFailMsg "Case floating from App argument failed
 
 -- | @f (case s of alt1 -> e1; alt2 -> e2)@ ==> @case s of alt1 -> f e1; alt2 -> f e2@
 --   Only safe if @f@ is strict, so introduces a lemma to prove.
-caseFloatArgLemmaR :: ( AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, HasHermitMEnv m
+caseFloatArgLemmaR :: ( AddBindings c, BoundVars c, ExtendPath c Crumb, LemmaContext c, ReadPath c Crumb, HasHermitMEnv m
                       , HasHscEnv m, HasDynFlags m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
                    => Used -> LemmaName -> Rewrite c m CoreExpr
 caseFloatArgLemmaR u nm = prefixFailMsg "Case floating from application argument failed: " $

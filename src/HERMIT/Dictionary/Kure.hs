@@ -160,7 +160,7 @@ anyCallR rr = prefixFailMsg "any-call failed: " $
                            _                 -> anyR (anyCallR rr)
 
 -- | Top-down traversal tuned to matching function calls.
-anyCallR_LCore :: forall c m. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m)
+anyCallR_LCore :: forall c m. (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, LemmaContext c, MonadCatch m)
          => Rewrite c m LCore -> Rewrite c m LCore
 anyCallR_LCore rr = prefixFailMsg "any-call failed: " $
               readerT $ \case

@@ -136,10 +136,9 @@ commandLine opts exts = do
     let -- Main proof input loop
         loop :: Bool -> InputT m ()
         loop firstInput = do
-            el <- lift $ do tryM () announceProven
-                            tryM () forceProofs
-                            attemptM currentLemma
-            let prompt = either (const "hermit") (const "proof") el
+            ps <- lift $ do tryM () forceProofs
+                            getProofStackEmpty
+            let prompt = if null ps then "hermit" else "proof"
             mExpr <- lift popScriptLine
             case mExpr of
                 Nothing -> do -- no script running

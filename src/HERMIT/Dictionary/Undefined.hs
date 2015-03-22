@@ -217,7 +217,7 @@ applyToUndefinedT f = do
 
 -- | Add a lemma for the strictness of a function.
 -- Note: assumes added lemma has been used
-buildStrictnessLemmaT :: (BoundVars c, HasDynFlags m, HasHscEnv m, HasHermitMEnv m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m)
+buildStrictnessLemmaT :: (BoundVars c, LemmaContext c, HasDynFlags m, HasHscEnv m, HasHermitMEnv m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m)
                       => Used -> LemmaName -> CoreExpr -> Transform c m x ()
 buildStrictnessLemmaT u nm f = do
     (tvs, lhs) <- liftM collectTyBinders $ applyToUndefinedT f

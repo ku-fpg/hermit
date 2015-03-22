@@ -63,7 +63,6 @@ import           Data.Either (partitionEithers)
 import           Data.List (isInfixOf, nubBy)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
-import           Data.Monoid
 
 import           HERMIT.Context
 import           HERMIT.Core
@@ -231,32 +230,32 @@ birewrite q = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEqual
 -- We should be using "childR crumb", really.
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over the left-hand side of a 'Quantified'.
-lhsT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
+lhsT :: (AddBindings c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
      => Transform c m LCore a -> Transform c m Quantified a
 lhsT t = quantifiedT successT (clauseT t successT (\_ l _ -> l) (fail "applied to true.")) (flip const)
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over the right-hand side of a 'Quantified'.
-rhsT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
+rhsT :: (AddBindings c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
      => Transform c m LCore a -> Transform c m Quantified a
 rhsT t = quantifiedT successT (clauseT successT t (\_ _ r -> r) (fail "applied to true.")) (flip const)
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over both sides of a 'Quantified'.
-bothT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
+bothT :: (AddBindings c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
       => Transform c m LCore a -> Transform c m Quantified (a, a)
 bothT t = quantifiedT successT (clauseT t t (const (,)) (fail "applied to true.")) (flip const)
 
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over the left-hand side of a 'Quantified'.
-lhsR :: (AddBindings c, Monad m, ReadPath c Crumb, ExtendPath c Crumb)
+lhsR :: (AddBindings c, Monad m, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb)
      => Rewrite c m LCore -> Rewrite c m Quantified
 lhsR r = quantifiedR idR (clauseR r idR)
 
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over the right-hand side of a 'Quantified'.
-rhsR :: (AddBindings c, Monad m, ReadPath c Crumb, ExtendPath c Crumb)
+rhsR :: (AddBindings c, Monad m, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb)
      => Rewrite c m LCore -> Rewrite c m Quantified
 rhsR r = quantifiedR idR (clauseR idR r)
 
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over both sides of a 'Quantified'.
-bothR :: (AddBindings c, MonadCatch m, ReadPath c Crumb, ExtendPath c Crumb)
+bothR :: (AddBindings c, MonadCatch m, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb)
       => Rewrite c m LCore -> Rewrite c m Quantified
 bothR r = lhsR r >+> rhsR r
 
@@ -311,14 +310,14 @@ verifyQuantifiedT = setFailMsg "verification failed: clause must be true (perhap
     Quantified _ CTrue <- idR
     return ()
 
-verifyEquivalentT :: (HasLemmas m, MonadCatch m) => Used -> LemmaName -> Transform c m Quantified ()
+verifyEquivalentT :: (LemmaContext c, HasLemmas m, MonadCatch m) => Used -> LemmaName -> Transform c m Quantified ()
 verifyEquivalentT used nm = prefixFailMsg "verification failed: " $ do
     Lemma q _ _ _ <- getLemmaByNameT nm
     eq <- arr (q `proves`)
     guardMsg eq "lemmas are not equivalent."
     markLemmaUsedT nm used
 
-verifyOrCreateT :: (HasLemmas m, MonadCatch m) => Used -> LemmaName -> Lemma -> Transform c m a ()
+verifyOrCreateT :: (LemmaContext c, HasLemmas m, MonadCatch m) => Used -> LemmaName -> Lemma -> Transform c m a ()
 verifyOrCreateT u nm l = do
     exists <- testM $ getLemmaByNameT nm
     if exists
@@ -334,7 +333,7 @@ reflexivityClauseR = do
     guardMsg (exprAlphaEq lhs rhs) "the two sides are not alpha-equivalent."
     return CTrue
 
-simplifyQuantifiedR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m)
+simplifyQuantifiedR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, MonadCatch m)
                     => Rewrite c m LCore
 simplifyQuantifiedR = anybuR (promoteR quantIdentitiesR <+ promoteR reflexivityClauseR)
 
@@ -366,12 +365,12 @@ trueDisjRR = do
 
 trueImpliesR :: Monad m => Rewrite c m Quantified
 trueImpliesR = do
-    Quantified bs (Impl (Quantified _ CTrue) (Quantified bs' cl)) <- idR
+    Quantified bs (Impl _ (Quantified _ CTrue) (Quantified bs' cl)) <- idR
     return $ Quantified (bs++bs') cl
 
 impliesTrueR :: Monad m => Rewrite c m Quantified
 impliesTrueR = do
-    Quantified _ (Impl _ (Quantified _ CTrue)) <- idR
+    Quantified _ (Impl _ _ (Quantified _ CTrue)) <- idR
     return $ Quantified [] CTrue
 
 ------------------------------------------------------------------------------
@@ -476,23 +475,23 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
 
 ------------------------------------------------------------------------------
 
-conjunctLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
+conjunctLemmasT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 conjunctLemmasT new lhs rhs = do
     Lemma ql pl _ tl <- getLemmaByNameT lhs
     Lemma qr pr _ tr <- getLemmaByNameT rhs
     insertLemmaT new $ Lemma (Quantified [] (Conj ql qr)) (pl `andP` pr) NotUsed (tl || tr)
 
-disjunctLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
+disjunctLemmasT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 disjunctLemmasT new lhs rhs = do
     Lemma ql pl _ tl <- getLemmaByNameT lhs
     Lemma qr pr _ tr <- getLemmaByNameT rhs
     insertLemmaT new $ Lemma (Quantified [] (Disj ql qr)) (pl `orP` pr) NotUsed (tl || tr)
 
-implyLemmasT :: (HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
+implyLemmasT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 implyLemmasT new lhs rhs = do
     Lemma ql _  _ tl <- getLemmaByNameT lhs
     Lemma qr pr _ tr <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Impl ql qr)) pr NotUsed (tl || tr)
+    insertLemmaT new $ Lemma (Quantified [] (Impl lhs ql qr)) pr NotUsed (tl || tr)
 
 ------------------------------------------------------------------------------
 
@@ -504,7 +503,7 @@ mergeQuantifiers pl pr (Quantified bs cl) = prefixFailMsg "merge-quantifiers fai
     (con,lq@(Quantified bsl cll),rq@(Quantified bsr clr)) <- case cl of
         Conj q1 q2 -> return (Conj,q1,q2)
         Disj q1 q2 -> return (Disj,q1,q2)
-        Impl q1 q2 -> return (Impl,q1,q2)
+        Impl nm q1 q2 -> return (Impl nm,q1,q2)
         _ -> fail "no quantifiers on either side."
 
     let (lBefore,lbs) = break pl bsl
@@ -568,10 +567,10 @@ unshadowQuantified q = go emptySubst (mapUniqSet fs (freeVarsQuantified q)) q
             q1' <- go subst seen q1
             q2' <- go subst seen q2
             return $ Disj q1' q2'
-          go2 subst seen (Impl q1 q2) = do
+          go2 subst seen (Impl nm q1 q2) = do
             q1' <- go subst seen q1
             q2' <- go subst seen q2
-            return $ Impl q1' q2'
+            return $ Impl nm q1' q2'
           go2 subst _ (Equiv e1 e2) =
             let e1' = substExpr (text "unshadowQuantified e1") subst e1
                 e2' = substExpr (text "unshadowQuantified e2") subst e2
@@ -601,7 +600,7 @@ instantiateQuantifiedVarR p cs = prefixFailMsg "instantiation failed: " $ do
 -- | Replace all occurrences of the given expression with a new quantified variable.
 abstractQuantifiedR :: forall c m.
                        ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-                       , HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadUnique m )
+                       , LemmaContext c, HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadUnique m )
                     => String -> Transform c m Quantified CoreExpr -> Rewrite c m Quantified
 abstractQuantifiedR nm tr = prefixFailMsg "abstraction failed: " $ do
     e <- tr
@@ -618,30 +617,30 @@ csInQBodyT cs = do
 
 ------------------------------------------------------------------------------
 
-getLemmasT :: HasLemmas m => Transform c m x Lemmas
-getLemmasT = constT getLemmas
+getLemmasT :: (LemmaContext c, HasLemmas m, Monad m) => Transform c m x Lemmas
+getLemmasT = contextonlyT $ \ c -> liftM (Map.union (getAntecedents c)) getLemmas
 
-getLemmaByNameT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Lemma
+getLemmaByNameT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> Transform c m x Lemma
 getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm) return . Map.lookup nm
 
-getObligationNotProvenT :: (HasLemmas m, Monad m) => Transform c m x [NamedLemma]
+getObligationNotProvenT :: (LemmaContext c, HasLemmas m, Monad m) => Transform c m x [NamedLemma]
 getObligationNotProvenT = do
     ls <- getLemmasT
     return [ (nm,l) | (nm, l@(Lemma _ NotProven Obligation _)) <- Map.toList ls ]
 
 ------------------------------------------------------------------------------
 
-lemmaBiR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+lemmaBiR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
             , HasLemmas m, MonadCatch m, MonadUnique m)
          => Used -> LemmaName -> BiRewrite c m CoreExpr
 lemmaBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaQ)) (markLemmaUsedT nm u >> idR)
 
-lemmaConsequentR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
+lemmaConsequentR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c
                                 , ReadPath c Crumb, HasLemmas m, MonadCatch m, MonadUnique m)
                  => Used -> LemmaName -> Rewrite c m Quantified
 lemmaConsequentR u nm = prefixFailMsg "lemma-consequent failed:" $
                         withPatFailMsg "lemma is not an implication." $ do
-    Quantified hs (Impl ante con) <- lemmaQ <$> getLemmaByNameT nm
+    Quantified hs (Impl _ ante con) <- lemmaQ <$> getLemmaByNameT nm
     q' <- transform $ \ c q -> do
         m <- maybeM ("consequent did not match.") $ lemmaMatch hs con q
         subs <- maybeM ("some quantifiers not instantiated.") $
@@ -653,12 +652,12 @@ lemmaConsequentR u nm = prefixFailMsg "lemma-consequent failed:" $
     markLemmaUsedT nm u
     return q'
 
-lemmaConsequentBiR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
+lemmaConsequentBiR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c
                                   , ReadPath c Crumb, HasLemmas m, MonadCatch m, MonadUnique m)
                    => Used -> LemmaName -> BiRewrite c m CoreExpr
 lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)) (markLemmaUsedT nm u >> idR)
     where go :: Quantified -> BiRewrite c m CoreExpr
-          go (Quantified bs (Impl ante (Quantified bs' cl))) = do
+          go (Quantified bs (Impl anteNm ante (Quantified bs' cl))) = do
             let eqs = toEqualities $ Quantified (bs++bs') cl -- consequent
                 foldUnfold side f =
                     transform $ \ c e -> do
@@ -671,7 +670,7 @@ lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)
                             (unmatched, subs) = partitionEithers matches
                             Quantified aBs acl = substQuantifieds subs ante
                             q = Quantified (unmatched++aBs) acl
-                        insertLemma (nm <> "-antecedent") $ Lemma q NotProven u True
+                        insertLemma anteNm $ Lemma q NotProven u True
                         return e'
             bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)
           go _ = let t = fail $ show nm ++ " is not an implication."
@@ -685,7 +684,7 @@ insertLemmaT nm l = constT $ insertLemma nm l
 insertLemmasT :: (HasLemmas m, Monad m) => [NamedLemma] -> Transform c m a ()
 insertLemmasT = constT . mapM_ (uncurry insertLemma)
 
-modifyLemmaT :: (HasLemmas m, Monad m)
+modifyLemmaT :: (LemmaContext c, HasLemmas m, Monad m)
              => LemmaName
              -> (LemmaName -> LemmaName) -- ^ modify lemma name
              -> Rewrite c m Quantified   -- ^ rewrite the quantified clause
@@ -697,15 +696,18 @@ modifyLemmaT nm nFn rr pFn uFn = do
     q' <- rr <<< return q
     constT $ insertLemma (nFn nm) $ Lemma q' (pFn p) (uFn u) t
 
-markLemmaUsedT :: (HasLemmas m, Monad m) => LemmaName -> Used -> Transform c m a ()
-markLemmaUsedT nm u = modifyLemmaT nm id idR id (const u)
+markLemmaUsedT :: (LemmaContext c, HasLemmas m, MonadCatch m) => LemmaName -> Used -> Transform c m a ()
+markLemmaUsedT nm u = ifM (lemmaExistsT nm) (modifyLemmaT nm id idR id (const u)) (return ())
 
-markLemmaProvenT :: (HasLemmas m, Monad m) => LemmaName -> Proven -> Transform c m a ()
-markLemmaProvenT nm p = modifyLemmaT nm id idR (const p) id
+markLemmaProvenT :: (LemmaContext c, HasLemmas m, MonadCatch m) => LemmaName -> Proven -> Transform c m a ()
+markLemmaProvenT nm p = ifM (lemmaExistsT nm) (modifyLemmaT nm id idR (const p) id) (return ())
+
+lemmaExistsT :: (LemmaContext c, HasLemmas m, MonadCatch m) => LemmaName -> Transform c m a Bool
+lemmaExistsT nm = constT $ Map.member nm <$> getLemmas
 
 ------------------------------------------------------------------------------
 
-lemmaNameToQuantifiedT :: (HasLemmas m, Monad m) => LemmaName -> Transform c m x Quantified
+lemmaNameToQuantifiedT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> Transform c m x Quantified
 lemmaNameToQuantifiedT nm = liftM lemmaQ $ getLemmaByNameT nm
 
 -- | @e@ ==> @let v = lhs in e@  (also works in a similar manner at Program nodes)

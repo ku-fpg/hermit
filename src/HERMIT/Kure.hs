@@ -238,7 +238,7 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c TyCo 
 ---------------------------------------------------------------------
 
 -- | Walking over modules, programs, binding groups, definitions, expressions, case alternatives, lemma quantifiers and lemma clauses.
-instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb) => Walker c LCore where
+instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb) => Walker c LCore where
 
     allR :: forall m. MonadCatch m => Rewrite c m LCore -> Rewrite c m LCore
     allR r = prefixFailMsg "allR failed: " $
@@ -263,7 +263,7 @@ instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb
 ---------------------------------------------------------------------
 
 -- | Walking over modules, programs, binding groups, definitions, expressions, case alternatives, types, coercions, lemma quantifiers and lemma clauses.
-instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb) => Walker c LCoreTC where
+instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb) => Walker c LCoreTC where
 
     allR :: forall m. MonadCatch m => Rewrite c m LCoreTC -> Rewrite c m LCoreTC
     allR r = prefixFailMsg "allR failed: " $
@@ -1319,15 +1319,19 @@ disjAllR r1 r2 = disjT r1 r2 Disj
 {-# INLINE disjAllR #-}
 
 
--- | Transform a clause of the form: @Impl@ 'Quantified' 'Quantified'
-implT :: (ExtendPath c Crumb, Monad m) => Transform c m Quantified a1 -> Transform c m Quantified a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+-- | Transform a clause of the form: @Impl@ 'LemmaName' 'Quantified' 'Quantified'
+implT :: (ExtendPath c Crumb, LemmaContext c, Monad m)
+      => Transform c m Quantified a1 -> Transform c m Quantified a2 -> (LemmaName -> a1 -> a2 -> b) -> Transform c m Clause b
 implT t1 t2 f = transform $ \ c -> \case
-                                     Impl q1 q2 -> f <$> applyT t1 (c @@ Impl_Lhs) q1 <*> applyT t2 (c @@ Impl_Rhs) q2
+                                     Impl nm q1 q2 -> let l = Lemma q1 BuiltIn NotUsed True
+                                                      in f nm <$> applyT t1 (c @@ Impl_Lhs) q1
+                                                              <*> applyT t2 (addAntecedent nm l c @@ Impl_Rhs) q2
                                      _          -> fail "not an implication."
 {-# INLINE implT #-}
 
 -- | Rewrite all children of a clause of the form: : @Impl@ 'Quantified' 'Quantified'
-implAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Quantified -> Rewrite c m Quantified -> Rewrite c m Clause
+implAllR :: (ExtendPath c Crumb, LemmaContext c, Monad m)
+         => Rewrite c m Quantified -> Rewrite c m Quantified -> Rewrite c m Clause
 implAllR r1 r2 = implT r1 r2 Impl
 {-# INLINE implAllR #-}
 
@@ -1364,17 +1368,17 @@ instance HasDynFlags m => HasDynFlags (Transform c m a) where
 ---------------------------------------------------------------------
 
 -- | Original clause passed to function so it can decide how to handle connective.
-clauseT :: (Monad m, ExtendPath c Crumb)
+clauseT :: (Monad m, ExtendPath c Crumb, LemmaContext c)
         => Transform c m LCore a -> Transform c m LCore b
         -> (Clause -> a -> b -> d) -> m d -> Transform c m Clause d
 clauseT t1 t2 f tr = readerT $ \ cl -> case cl of
                                           Conj{}  -> conjT  (extractT t1) (extractT t2) (f cl)
                                           Disj{}  -> disjT  (extractT t1) (extractT t2) (f cl)
-                                          Impl{}  -> implT  (extractT t1) (extractT t2) (f cl)
+                                          Impl{}  -> implT  (extractT t1) (extractT t2) (const (f cl))
                                           Equiv{} -> equivT (extractT t1) (extractT t2) (f cl)
                                           CTrue   -> constT tr
 
-clauseR :: (Monad m, ExtendPath c Crumb) => Rewrite c m LCore -> Rewrite c m LCore -> Rewrite c m Clause
+clauseR :: (Monad m, ExtendPath c Crumb, LemmaContext c) => Rewrite c m LCore -> Rewrite c m LCore -> Rewrite c m Clause
 clauseR r1 r2 = readerT $ \case
                              Conj{}  -> conjAllR (extractR r1) (extractR r2)
                              Disj{}  -> disjAllR (extractR r1) (extractR r2)

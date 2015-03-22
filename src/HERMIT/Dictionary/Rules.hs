@@ -95,7 +95,7 @@ instance Extern [RuleName] where
     unbox (RuleNameListBox l) = l
 
 -- | Lookup a rule by name, attempt to apply it left-to-right. If successful, record it as an unproven lemma.
-foldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+foldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
             => Used -> RuleName -> Rewrite c m CoreExpr
 foldRuleR u nm = do
@@ -103,13 +103,13 @@ foldRuleR u nm = do
     backwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) (Lemma q NotProven u False) >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
-foldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+foldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
               , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
            => Used -> [RuleName] -> Rewrite c m CoreExpr
 foldRulesR u = orR . map (foldRuleR u)
 
 -- | Lookup a rule by name, attempt to apply it left-to-right. If successful, record it as an unproven lemma.
-unfoldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+unfoldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
             => Used -> RuleName -> Rewrite c m CoreExpr
 unfoldRuleR u nm = do
@@ -117,7 +117,7 @@ unfoldRuleR u nm = do
     forwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) (Lemma q NotProven u False) >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
-unfoldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+unfoldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                 , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
              => Used -> [RuleName] -> Rewrite c m CoreExpr
 unfoldRulesR u = orR . map (unfoldRuleR u)
@@ -164,7 +164,7 @@ rulesHelpListT = do
     return (intercalate "\n" $ reverse $ map (show.fst) rulesEnv)
 
 -- | Print a named CoreRule using the quantified printer.
-ruleHelpT :: (HasCoreRules c, ReadBindings c, ReadPath c Crumb) => PrettyPrinter -> RuleName -> Transform c HermitM a DocH
+ruleHelpT :: (HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb) => PrettyPrinter -> RuleName -> Transform c HermitM a DocH
 ruleHelpT pp nm = ruleNameToQuantifiedT nm >>> liftPrettyH (pOptions pp) (ppQuantifiedT pp)
 
 -- | Build an Quantified from a named GHC rewrite rule.

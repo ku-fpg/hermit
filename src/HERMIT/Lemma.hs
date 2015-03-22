@@ -65,7 +65,7 @@ freeVarsQuantified (Quantified bs cl) = delVarSetList (freeVarsClause cl) bs
 freeVarsClause :: Clause -> VarSet
 freeVarsClause (Conj  q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
 freeVarsClause (Disj  q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
-freeVarsClause (Impl  q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
+freeVarsClause (Impl _ q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
 freeVarsClause (Equiv e1 e2) = unionVarSets $ map freeVarsExpr [e1,e2]
 freeVarsClause CTrue         = emptyVarSet
 
@@ -81,7 +81,7 @@ dropBinders (Quantified bs cl) =
 dropBindersClause :: Clause -> Clause
 dropBindersClause (Conj q1 q2) = Conj (dropBinders q1) (dropBinders q2)
 dropBindersClause (Disj q1 q2) = Disj (dropBinders q1) (dropBinders q2)
-dropBindersClause (Impl q1 q2) = Impl (dropBinders q1) (dropBinders q2)
+dropBindersClause (Impl nm q1 q2) = Impl nm (dropBinders q1) (dropBinders q2)
 dropBindersClause equiv        = equiv
 
 
@@ -152,7 +152,7 @@ data Quantified = Quantified [CoreBndr] Clause
 
 data Clause = Conj Quantified Quantified
             | Disj Quantified Quantified
-            | Impl Quantified Quantified
+            | Impl LemmaName Quantified Quantified -- ^ name for the antecedent when it is in scope
             | Equiv CoreExpr CoreExpr
             | CTrue -- the always true clause
 
@@ -195,7 +195,7 @@ substQuantifiedSubst = go
           go2 _     CTrue        = CTrue
           go2 subst (Conj q1 q2) = Conj (go subst q1) (go subst q2)
           go2 subst (Disj q1 q2) = Disj (go subst q1) (go subst q2)
-          go2 subst (Impl q1 q2) = Impl (go subst q1) (go subst q2)
+          go2 subst (Impl nm q1 q2) = Impl nm (go subst q1) (go subst q2)
           go2 subst (Equiv e1 e2) =
             let e1' = substExpr (text "substQuantified e1") subst e1
                 e2' = substExpr (text "substQuantified e2") subst e2
@@ -244,7 +244,7 @@ instQuantified inScope p e = liftM fst . go []
                     CTrue   -> fail "specified variable is not universally quantified."
                     Conj q1 q2 -> go2 Conj q1 q2
                     Disj q1 q2 -> go2 Disj q1 q2
-                    Impl q1 q2 -> go2 Impl q1 q2
+                    Impl nm q1 q2 -> go2 (Impl nm) q1 q2
 
             | otherwise = do -- quantified here, so do substitution and start bubbling up
                 let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
@@ -298,11 +298,11 @@ instsQuantified inScope = flip (foldM (\ q (v,e) -> instQuantified inScope (==v)
 
 -- | Syntactic Equality of clauses.
 clauseSyntaxEq :: Clause -> Clause -> Bool
-clauseSyntaxEq (Conj q1 q2)  (Conj p1 p2)    = quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
-clauseSyntaxEq (Disj q1 q2)  (Disj p1 p2)    = quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
-clauseSyntaxEq (Impl q1 q2)  (Impl p1 p2)    = quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
-clauseSyntaxEq (Equiv e1 e2) (Equiv e1' e2') = exprSyntaxEq e1 e1'      && exprSyntaxEq e2 e2'
-clauseSyntaxEq _             _               = False
+clauseSyntaxEq (Conj q1 q2)    (Conj p1 p2)    = quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
+clauseSyntaxEq (Disj q1 q2)    (Disj p1 p2)    = quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
+clauseSyntaxEq (Impl n1 q1 q2) (Impl n2 p1 p2) = n1 == n2 && quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
+clauseSyntaxEq (Equiv e1 e2)   (Equiv e1' e2') = exprSyntaxEq e1 e1'      && exprSyntaxEq e2 e2'
+clauseSyntaxEq _               _               = False
 
 -- | Syntactic Equality of quantifiers.
 quantifiedSyntaxEq :: Quantified -> Quantified -> Bool

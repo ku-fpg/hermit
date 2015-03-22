@@ -1,4 +1,10 @@
-{-# LANGUAGE CPP, MultiParamTypeClasses, FlexibleInstances, TypeFamilies, DeriveDataTypeable, FlexibleContexts, InstanceSigs #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module HERMIT.PrettyPrinter.Common
     ( -- * Documents
@@ -60,6 +66,7 @@ import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC hiding (($$), (<>), (<+>), char)
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Monad
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
@@ -170,6 +177,7 @@ instance Extern (TransformH LCoreTC DocH) where
 data PrettyC = PrettyC { prettyC_path    :: AbsolutePathH
                        , prettyC_vars    :: M.Map Var AbsolutePathH
                        , prettyC_options :: PrettyOptions
+                       , prettyC_lemmas  :: Lemmas
                        }
 
 markBindingSite :: Var -> PrettyC -> DocH -> DocH
@@ -203,21 +211,28 @@ instance HasEmptyContext PrettyC where
   setEmptyContext c = c { prettyC_path = mempty
                         , prettyC_vars = M.empty}
 
+instance LemmaContext PrettyC where
+    addAntecedent nm l c = c { prettyC_lemmas = M.insert nm l (prettyC_lemmas c) }
+    getAntecedents = prettyC_lemmas
+
 ------------------------------------------------------------------------
 
-liftPrettyH :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> Transform PrettyC HermitM a b -> Transform c HermitM a b
+liftPrettyH :: (LemmaContext c, ReadBindings c, ReadPath c Crumb) => PrettyOptions -> Transform PrettyC HermitM a b -> Transform c HermitM a b
 liftPrettyH = liftContext . liftPrettyC
 
-liftPrettyC :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> c -> PrettyC
+liftPrettyC :: (LemmaContext c, ReadBindings c, ReadPath c Crumb) => PrettyOptions -> c -> PrettyC
 liftPrettyC opts c = PrettyC { prettyC_path    = absPath c
                              , prettyC_vars    = M.fromList [ (i,hbPath b) | (i,b) <- M.toList (hermitBindings c) ]
-                             , prettyC_options = opts}
+                             , prettyC_options = opts
+                             , prettyC_lemmas  = getAntecedents c
+                             }
 
 initPrettyC :: PrettyOptions -> PrettyC
 initPrettyC opts = PrettyC
                       { prettyC_path    = mempty
                       , prettyC_vars    = M.empty
                       , prettyC_options = opts
+                      , prettyC_lemmas  = M.empty
                       }
 
 -- These are *recommendations* to the pretty printer.

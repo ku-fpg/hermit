@@ -163,7 +163,7 @@ coercionConstructor = \case
 --------------------------------------------------------
 
 -- | Compare the core fragments at the end of the specified 'LocalPathH's.
-compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC ()
+compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, ReadPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC ()
 compareCoreAtT p1T p2T =
   do p1 <- p1T
      p2 <- p2T

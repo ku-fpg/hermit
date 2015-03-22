@@ -14,10 +14,10 @@
 {-# LANGUAGE TypeFamilies #-}
 module HERMIT.Shell.Types where
 
-import Control.Applicative
+import Control.Applicative (Applicative)
 import Control.Arrow
 import Control.Concurrent.STM
-import Control.Monad (liftM, unless, when, forM_)
+import Control.Monad (liftM, unless, when, forM_, forM)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State (MonadState(..), StateT(..), gets, modify)
@@ -25,11 +25,9 @@ import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
 
 import Data.Dynamic
-import Data.List (intercalate)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isJust)
-import Data.Monoid (mempty, (<>))
-import Data.String (fromString)
+import Data.Monoid (mempty)
 
 import HERMIT.Context
 import HERMIT.Core
@@ -39,10 +37,8 @@ import qualified HERMIT.GHC as GHC
 import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Lemma
-import HERMIT.Monad
 import HERMIT.Parser
 import HERMIT.PrettyPrinter.Common
-import HERMIT.Syntax
 
 import HERMIT.Plugin.Display
 import HERMIT.Plugin.Renderer
@@ -282,10 +278,8 @@ data ProofTodo = Unproven
                     { ptName    :: LemmaName    -- ^ lemma we are proving
                     , ptLemma   :: Lemma
                     , ptContext :: HermitC      -- ^ context in which lemma is being proved
-                    , ptAssumed :: [NamedLemma] -- ^ temporary lemmas in scope
                     , ptPath    :: PathStack    -- ^ path into lemma to focus on
                     }
-               | MarkProven { ptName :: LemmaName, ptTemp :: Bool } -- ^ lemma successfully proven, temporary status
 
 data Safety = StrictSafety | NormalSafety | NoSafety
 
@@ -454,7 +448,7 @@ modifyLocalPath f expr = do
     ps <- getProofStackEmpty
     (k,(kEnv,ast)) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor)
     case ps of
-        todo@(Unproven _ (Lemma q _ _ _) c _ _) : todos -> do
+        todo@(Unproven _ (Lemma q _ _ _) c _) : todos -> do
             let (base, rel) = ptPath todo
                 rel' = f rel
             requireDifferent rel rel'
@@ -498,30 +492,6 @@ popProofStack = do
     t : ts <- getProofStack
     modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) ts (cl_proofstack st) }
     return t
-
-currentLemma :: CLMonad m => m (LemmaName, Lemma, HermitC, [NamedLemma], PathStack)
-currentLemma = do
-    todo : _ <- getProofStack
-
-    case todo of
-        Unproven nm l c ls p -> return (nm, l, c, ls, p)
-        _ -> fail "currentLemma: unproven lemma not on top of stack!"
-
-announceProven :: (MonadCatch m, CLMonad m) => m ()
-announceProven = getProofStackEmpty >>= go []
-    where go ps (MarkProven nm temp : r) = do
-            let t = if temp then constT (deleteLemma nm) else modifyLemmaT nm id idR (const Proven) id
-            go ((nm,t):ps) r
-          go ps r = case ps of
-                        [] -> return ()
-                        _  -> do -- adjust the stack for the existing AST, because we don't want
-                                 -- to replay these after a 'goto'!
-                                 let (nms, ts) = unzip $ reverse ps
-                                     commaNames f = intercalate ", " (map f nms)
-                                 modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) r (cl_proofstack st) }
-                                 queryInFocus (sequence_ ts :: TransformH Core ())
-                                              (Always $ "-- proven " ++ commaNames quoteShow)
-                                 cl_putStrLn ("Successfully proven: " ++ commaNames show)
 
 announceUnprovens :: (MonadCatch m, CLMonad m) => m ()
 announceUnprovens = do
@@ -579,13 +549,7 @@ showWindow mbh = do
     let h = fromMaybe stdout mbh
         pStr = render h (pOptions pp) . Left
     case M.lookup ast ps of
-        Just (Unproven _ l c ls p : _)  -> do
-            unless (null ls) $ do
-                liftIO $ pStr "Assumed lemmas:\n"
-                mapM_ (printLemma h c mempty)
-                      [ (fromString (show i) <> ": " <> n, lem)
-                      | (i::Int,(n,lem)) <- zip [0..] ls ]
-            printLemma h c p ("Goal:",l)
+        Just (Unproven _ l c p : _)  -> printLemma h c p ("Goal:",l)
         _ -> do st <- get
                 if cl_diffonly st
                 then do
@@ -606,9 +570,16 @@ showWindow mbh = do
 printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
            => Handle -> HermitC -> PathStack -> (LemmaName,Lemma) -> m ()
 printLemma h c p (nm,Lemma q _ _ _) = do -- TODO
-    pp <- gets cl_pretty
+    (pp,opts) <- gets (cl_pretty &&& cl_pretty_opts)
+    as <- queryInContext ((liftPrettyH opts $ do
+                            m <- getAntecedents <$> contextT
+                            ds <- forM (M.toList m) $ \(n',l') -> return l' >>> ppLemmaT pp n'
+                            if M.null m
+                            then return []
+                            else return $ PP.text "Assumed lemmas: " : ds
+                          ) :: TransformH LCoreTC [DocH]) Never
     doc <- queryInFocus ((constT $ applyT (extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (ppLCoreTCT pp)))) c q) :: TransformH Core DocH) Never
-    let doc' = PP.text (show nm) PP.$+$ PP.nest 2 doc
+    let doc' = PP.vcat $ as ++ [PP.text (show nm) PP.$+$ PP.nest 2 doc]
     st <- get
     liftIO $ cl_render st h (cl_pretty_opts st) (Right doc')
 
@@ -625,17 +596,12 @@ queryInFocus t msg = do
 
 -- meant to be used inside queryInFocus
 inProofFocusT :: ProofTodo -> TransformH LCoreTC b -> TransformH Core b
-inProofFocusT (Unproven _ (Lemma q _ _ _) c ls ps) t =
-    contextfreeT $ withLemmas (M.fromList ls) . applyT (return q >>> extractT (pathT (pathStack2Path ps) t)) c
-inProofFocusT _ _ = fail "no proof in progress."
+inProofFocusT (Unproven _ (Lemma q _ _ _) c ps) t =
+    contextfreeT $ applyT (return q >>> extractT (pathT (pathStack2Path ps) t)) c
 
 inProofFocusR :: ProofTodo -> RewriteH LCoreTC -> TransformH Core Quantified
-inProofFocusR (Unproven _ (Lemma q _ _ _) c ls ps) rr =
-    contextfreeT $ withLemmas (M.fromList ls) . applyT (return q >>> extractR (pathR (pathStack2Path ps) rr)) c
-inProofFocusR _ _ = fail "no proof in progress."
-
-withLemmasInScope :: HasLemmas m => [(LemmaName,Lemma)] -> Transform c m a b -> Transform c m a b
-withLemmasInScope ls t = transform $ \ c -> withLemmas (M.fromList ls) . applyT t c
+inProofFocusR (Unproven _ (Lemma q _ _ _) c ps) rr =
+    contextfreeT $ applyT (return q >>> extractR (pathR (pathStack2Path ps) rr)) c
 
 -- TODO: better name
 queryInContext :: forall b m. (MonadCatch m, CLMonad m) => TransformH LCoreTC b -> CommitMsg -> m b

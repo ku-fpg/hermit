@@ -62,26 +62,26 @@ rememberR nm = prefixFailMsg "remember failed: " $ do
     insertLemmaT (prefixRemembered nm) $ Lemma (mkQuantified [] (varToCoreExpr v) e) Proven NotUsed False
 
 -- | Unfold a remembered definition (like unfoldR, but looks in stash instead of context).
-unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                      , HasLemmas m, MonadCatch m, MonadUnique m)
                   => Used -> LemmaName -> Rewrite c m CoreExpr
 unfoldRememberedR u = prefixFailMsg "Unfolding remembered definition failed: " . forwardT . lemmaBiR u . prefixRemembered
 
 -- | Fold a remembered definition (like foldR, but looks in stash instead of context).
-foldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+foldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                    , HasLemmas m, MonadCatch m, MonadUnique m)
                 => Used -> LemmaName -> Rewrite c m CoreExpr
 foldRememberedR u = prefixFailMsg "Folding remembered definition failed: " . backwardT . lemmaBiR u . prefixRemembered
 
 -- | Fold any of the remembered definitions.
-foldAnyRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+foldAnyRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                       , HasLemmas m, MonadCatch m, MonadUnique m)
                    => Rewrite c m CoreExpr
 foldAnyRememberedR = setFailMsg "Fold failed: no definitions could be folded."
                    $ compileRememberedT >>= runFoldR
 
 -- | Compile all remembered definitions into something that can be run with `runFoldR`
-compileRememberedT :: (HasLemmas m, Monad m) => Transform c m x CompiledFold
+compileRememberedT :: (LemmaContext c, HasLemmas m, Monad m) => Transform c m x CompiledFold
 compileRememberedT = do
     qs <- liftM (map lemmaQ . Map.elems . Map.filterWithKey (\ k _ -> "remembered-" `isPrefixOf` show k)) getLemmasT
     return $ compileFold $ concatMap (map flipEquality . toEqualities) qs -- fold rhs to lhs

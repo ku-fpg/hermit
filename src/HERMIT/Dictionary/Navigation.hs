@@ -84,7 +84,7 @@ parentOfT t = withPatFailMsg "Path points to origin, there is no parent." $
 -----------------------------------------------------------------------
 
 -- | Find the path to the RHS of a binding.
-rhsOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => (Var -> Bool) -> Transform c m LCoreTC LocalPathH
+rhsOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => (Var -> Bool) -> Transform c m LCoreTC LocalPathH
 rhsOfT p = prefixFailMsg ("rhs-of failed: ") $
            do lp <- onePathToT (arr $ bindingOf p . inject)
               case lastCrumb lp of
@@ -96,23 +96,23 @@ rhsOfT p = prefixFailMsg ("rhs-of failed: ") $
                 Nothing -> promoteCoreT (defOrNonRecT successT lastCrumbT (\ () cr -> mempty @@ cr))
 
 -- | Find the path to the binding group of a variable.
-bindingGroupOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => (Var -> Bool) -> Transform c m LCoreTC LocalPathH
+bindingGroupOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => (Var -> Bool) -> Transform c m LCoreTC LocalPathH
 bindingGroupOfT p = prefixFailMsg ("binding-group-of failed: ") $
                     oneNonEmptyPathToT (promoteBindT $ arr $ bindingGroupOf p)
 
 -- | Find the path to the binding of a variable.
-bindingOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => (Var -> Bool) -> Transform c m LCoreTC LocalPathH
+bindingOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => (Var -> Bool) -> Transform c m LCoreTC LocalPathH
 bindingOfT p = prefixFailMsg ("binding-of failed: ") $
                oneNonEmptyPathToT (arr $ bindingOf p)
 
 -- | Find the path to the first occurrence of a variable.
-occurrenceOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m)
+occurrenceOfT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m)
               => (Var -> Bool) -> Transform c m LCoreTC LocalPathH
 occurrenceOfT p = prefixFailMsg ("occurrence-of failed: ") $
                   oneNonEmptyPathToT (arr $ occurrenceOf p)
 
 -- | Find the path to an application of a given function.
-applicationOfT :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, MonadCatch m, ReadPath c Crumb)
+applicationOfT :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, MonadCatch m, LemmaContext c, ReadPath c Crumb)
                => (Var -> Bool) -> Transform c m LCoreTC LocalPathH
 applicationOfT p = prefixFailMsg "application-of failed:" $ oneNonEmptyPathToT go
     where go = promoteExprT (appT (extractT go) successT const) <+ arr (occurrenceOf p)
@@ -188,19 +188,19 @@ varOccurrenceCoercion _           = Nothing
 -----------------------------------------------------------------------
 
 -- | Find all possible targets of 'occurrenceOfT'.
-occurrenceOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Transform c m LCoreTC VarSet
+occurrenceOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m LCoreTC VarSet
 occurrenceOfTargetsT = allT $ crushbuT (arr varOccurrence >>> projectT >>^ unitVarSet)
 
 -- | Find all possible targets of 'bindingOfT'.
-bindingOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Transform c m LCoreTC VarSet
+bindingOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m LCoreTC VarSet
 bindingOfTargetsT = allT $ crushbuT (arr binders)
 
 -- | Find all possible targets of 'bindingGroupOfT'.
-bindingGroupOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Transform c m LCoreTC VarSet
+bindingGroupOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m LCoreTC VarSet
 bindingGroupOfTargetsT = allT $ crushbuT (promoteBindT $ arr (mkVarSet . bindVars))
 
 -- | Find all possible targets of 'rhsOfT'.
-rhsOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, MonadCatch m) => Transform c m LCoreTC VarSet
+rhsOfTargetsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m LCoreTC VarSet
 rhsOfTargetsT = crushbuT (promoteBindT (arr binderBind) <+ promoteDefT (arr binderDef))
 
 -----------------------------------------------------------------------
@@ -235,7 +235,7 @@ considerables =   [ ("bind",Binding)
                   ]
 
 -- | Find the path to the first matching construct.
-considerConstructT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Considerable -> Transform c m LCore LocalPathH
+considerConstructT :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Considerable -> Transform c m LCore LocalPathH
 considerConstructT con = oneNonEmptyPathToT (arr $ underConsiderationLCore con)
 
 string2considerable :: String -> Maybe Considerable
@@ -280,22 +280,22 @@ instance HasEmptyContext c => HasEmptyContext (ExtendContext c (LocalPath Crumb)
   setEmptyContext ec = ec { baseContext = setEmptyContext (baseContext ec)
                           , extraContext = mempty }
 
-exhaustRepeatCrumbT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, Walker c LCoreTC, MonadCatch m) => Crumb -> Transform c m LCoreTC LocalPathH
+exhaustRepeatCrumbT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Crumb -> Transform c m LCoreTC LocalPathH
 exhaustRepeatCrumbT cr = let l = exhaustPathL (repeat cr)
                           in withLocalPathT (focusT l exposeLocalPathT)
 
 -- | Construct a path to the body of a sequence of lambdas.
-lamsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, Walker c LCoreTC, MonadCatch m) => Transform c m CoreExpr LocalPathH
+lamsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Transform c m CoreExpr LocalPathH
 lamsBodyT = extractT (exhaustRepeatCrumbT Lam_Body)
 
 -- | Construct a path to the body of a sequence of let bindings.
-letsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, Walker c LCoreTC, MonadCatch m) => Transform c m CoreExpr LocalPathH
+letsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Transform c m CoreExpr LocalPathH
 letsBodyT = extractT (exhaustRepeatCrumbT Let_Body)
 
 -- | Construct a path to end of a program.
-progEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, Walker c LCoreTC, MonadCatch m) => Transform c m CoreProg LocalPathH
+progEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Transform c m CoreProg LocalPathH
 progEndT = extractT (exhaustRepeatCrumbT ProgCons_Tail)
 
 -- | Construct a path to the end of a program, starting at the 'ModGuts'.
-gutsProgEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, Walker c LCoreTC, MonadCatch m) => Transform c m ModGuts LocalPathH
+gutsProgEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Transform c m ModGuts LocalPathH
 gutsProgEndT = modGutsT progEndT (\ _ p -> (mempty @@ ModGuts_Prog) <> p)

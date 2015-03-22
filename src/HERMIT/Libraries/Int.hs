@@ -50,7 +50,7 @@ lemmas = do
         appNM e = mkCoreApps e [n,m]
         mkEL l r = mkL (Equiv l r)
         mkL cl = Lemma (Quantified [mId,nId] cl) BuiltIn NotUsed False
-        mkIL al ar cl cr = mkL (Impl (Quantified [] $ Equiv al ar) (Quantified [] $ Equiv cl cr))
+        mkIL nm al ar cl cr = mkL (Impl nm (Quantified [] $ Equiv al ar) (Quantified [] $ Equiv cl cr))
 
     eqE <- findIdT "Data.Eq.==" >>= appToInt >>= appToDict
 
@@ -69,8 +69,8 @@ lemmas = do
                 , ("LtGtInt", mkEL (appMN ltE) (appNM gtE))
                 , ("LteGteInt", mkEL (appMN lteE) (appNM gteE))
                 , ("GteLtInt", mkEL (appMN gteE) (appNM ltE))
-                , ("LteFalseImpliesEqFalseInt", mkIL (appMN lteE) falseE (appMN eqE) falseE)
-                , ("EqTrueImpliesLteTrueInt", mkIL (appMN eqE) trueE (appMN lteE) trueE)
+                , ("LteFalseImpliesEqFalseInt", mkIL "LteFalse" (appMN lteE) falseE (appMN eqE) falseE)
+                , ("EqTrueImpliesLteTrueInt", mkIL "EqTrue" (appMN eqE) trueE (appMN lteE) trueE)
                 , ("MinCommutativeInt", mkEL (appMN minE) (appNM minE))
                 , ("MaxCommutativeInt", mkEL (appMN maxE) (appNM maxE))
                 , ("MinLteInt", mkEL (mkCoreApps lteE [appNM minE, n]) trueE)

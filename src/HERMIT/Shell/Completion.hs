@@ -96,7 +96,7 @@ filterUnknowns :: [CompletionType] -> [CompletionType]
 filterUnknowns l = if null l' then l else l'
     where l' = filter (\case UnknownC _ -> False ; _ -> True) l
 
-completionQuery :: (MonadIO m, MonadState CommandLineState m) => CompletionType -> m (TransformH LCoreTC [String])
+completionQuery :: (MonadIO m, CLMonad m) => CompletionType -> m (TransformH LCoreTC [String])
 completionQuery ConsiderC       = return $ pure $ map fst considerables
 completionQuery OccurrenceOfC   = return $ occurrenceOfTargetsT   >>^ GHC.varSetToStrings >>^ map ('\'':)
 completionQuery BindingOfC      = return $ bindingOfTargetsT      >>^ GHC.varSetToStrings >>^ map ('\'':)
@@ -104,13 +104,7 @@ completionQuery BindingGroupOfC = return $ bindingGroupOfTargetsT >>^ GHC.varSet
 completionQuery RhsOfC          = return $ rhsOfTargetsT          >>^ GHC.varSetToStrings >>^ map ('\'':)
 completionQuery InlineC         = return $ promoteLCoreT inlineTargetsT >>^                   map ('\'':)
 completionQuery InScopeC        = return $ pure ["'"] -- TODO
-completionQuery LemmaC          = do
-    let findTemps [] = []
-        findTemps (pt@(Unproven {}) : _) = map (show . fst) (ptAssumed pt)
-        findTemps (_ : r) = findTemps r
-    cur <- gets cl_cursor
-    tempLemmas <- gets (findTemps . fromMaybe [] . M.lookup cur . cl_proofstack)
-    return $ liftM ((tempLemmas ++) . map show . M.keys) $ getLemmasT
+completionQuery LemmaC          = return $ liftM (map show . M.keys) $ getLemmasT
 completionQuery NothingC        = return $ pure []
 completionQuery RuleC           = return $ liftM (map (show . fst)) $ getHermitRulesT
 completionQuery StringC         = return $ pure ["\""]

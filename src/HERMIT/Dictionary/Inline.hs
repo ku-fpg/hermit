@@ -214,7 +214,7 @@ alt2Exp tys (DataAlt dc, vs) = return $ mkDataConApp tys dc vs
 
 -- | Get list of possible inline targets. Used by shell for completion.
 inlineTargetsT :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-                  , ReadBindings c, HasEmptyContext c, MonadCatch m )
+                  , HasEmptyContext c, LemmaContext c, ReadBindings c, MonadCatch m )
                => Transform c m LCore [String]
 inlineTargetsT = collectT $ promoteT $ whenM (testM inlineR) (varT $ arr unqualifiedName)
 

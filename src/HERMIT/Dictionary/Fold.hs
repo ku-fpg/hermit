@@ -511,7 +511,7 @@ instance Fold QMap where
 data CLMap a = CLMEmpty
              | CLM { clmConj  :: QMap (QMap a)
                    , clmDisj  :: QMap (QMap a)
-                   , clmImpl  :: QMap (QMap a)
+                   , clmImpl  :: QMap (QMap a) -- note we do not care about the name
                    , clmEquiv :: EMap (EMap a)
                    , clmTrue  :: Maybe a
                    }
@@ -530,7 +530,7 @@ instance Fold CLMap where
     fAlter env vs cl f m@(CLM{}) = go cl
         where go (Conj  q1 q2) = m { clmConj  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmConj  m) }
               go (Disj  q1 q2) = m { clmDisj  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmDisj  m) }
-              go (Impl  q1 q2) = m { clmImpl  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmImpl  m) }
+              go (Impl _ q1 q2) = m { clmImpl  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmImpl  m) }
               go (Equiv e1 e2) = m { clmEquiv = fAlter env vs e1 (toA (fAlter env vs e2 f)) (clmEquiv m) }
               go CTrue         = m { clmTrue  = f (clmTrue m) }
 
@@ -543,7 +543,7 @@ instance Fold CLMap where
               go (Disj q1 q2) = do
                 (hs', m') <- fFold hs env q1 (clmDisj m)
                 fFold hs' env q2 m'
-              go (Impl q1 q2) = do
+              go (Impl _ q1 q2) = do
                 (hs', m') <- fFold hs env q1 (clmImpl m)
                 fFold hs' env q2 m'
               go (Equiv e1 e2) = do
