@@ -28,7 +28,7 @@ import HERMIT.Dictionary.Undefined hiding (externals)
 
 externals :: [External]
 externals =
-    [ external "induction-on" (promoteQuantifiedR . inductionOnR . cmpHN2Var :: HermitName -> RewriteH LCore)
+    [ external "induction" (promoteQuantifiedR . inductionOnR . cmpHN2Var :: HermitName -> RewriteH LCore)
         [ "Induct on specified value quantifier." ]
     ]
 

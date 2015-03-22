@@ -20,3 +20,4 @@ main = print $ rev [1..10]
 
 -- useful auxilliary lemma for proving the w/w assumption
 {-# RULES "++ []" [~] forall xs. xs ++ [] = xs #-}
+{-# RULES "myAppend-assoc" [~] forall xs ys zs. myAppend (myAppend xs ys) zs = myAppend xs (myAppend ys zs) #-}

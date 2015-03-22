@@ -28,80 +28,39 @@ induction 'xs
 -- Goal:
 -- forall *. myAppend * (undefined *) ([] *) = undefined *
 
-lhs unfold
+any-bu (unfold 'myAppend >>> undefined-expr)
+any-bu (unfold 'myAppend >>> case-reduce)
+simplify-proof
+forall-body
+prove-consequent
+one-td (lemma-forward "++ []-antecedent")
+end-case
 
--- Goal:
--- forall *.
--- case undefined * of wild *
---   [] -> [] *
---   (:) x xs -> (:) * x (myAppend * xs ([] *))
--- =
--- undefined *
+rule-to-lemma "myAppend-assoc"
+prove-lemma "myAppend-assoc"
+induction 'xs
+{ forall-body
+    { conj-lhs
+      any-bu ((unfold 'myAppend) >>> undefined-case)
+      reflexivity
+    }
+    [ conj-rhs, forall-body ]
+    { conj-lhs
+      any-bu ((unfold 'myAppend) >>> case-reduce)
+      reflexivity
+    }
+    { conj-rhs
+      forall-body
+      prove-consequent
+      any-bu (unfold 'myAppend)
+      smash
+      rhs (one-td (fold 'myAppend))
+      one-td (lemma-forward myAppend-assoc-antecedent)
+      reflexivity
+--    }
+-- } -- prove-consequent is BAAAAD
+end-proof
 
-lhs undefined-expr
-
--- Goal:
--- forall *. undefined * = undefined *
-
-end-case -- proven "++ []-induction-case-undefined"
-
--- Goal:
--- forall *. myAppend * ([] *) ([] *) = [] *
-
-lhs unfold
-
--- Goal:
--- forall *.
--- case [] * of wild *
---   [] -> [] *
---   (:) x xs -> (:) * x (myAppend * xs ([] *))
--- =
--- [] *
-
-lhs simplify
-
--- Goal:
--- forall *. [] * = [] *
-
-end-case -- proven "++ []-induction-case-[]"
-
--- Assumed lemmas:
--- ind-hyp-0 (Assumed)
---   myAppend * b ([] *) = b
--- Goal:
--- forall * a b. myAppend * ((:) * a b) ([] *) = (:) * a b
-
-lhs unfold
-
--- Assumed lemmas:
--- ind-hyp-0 (Assumed)
---   myAppend * b ([] *) = b
--- Goal:
--- forall * a b.
--- case (:) * a b of wild *
---   [] -> [] *
---   (:) x xs -> (:) * x (myAppend * xs ([] *))
--- =
--- (:) * a b
-
-lhs simplify
-
--- Assumed lemmas:
--- ind-hyp-0 (Assumed)
---   myAppend * b ([] *) = b
--- Goal:
--- forall * a b. (:) * a (myAppend * b ([] *)) = (:) * a b
-
-lhs (one-td (lemma-forward ind-hyp-0))
-
--- Assumed lemmas:
--- ind-hyp-0 (Assumed)
---   myAppend * b ([] *) = b
--- Goal:
--- forall * a b. (:) * a b = (:) * a b
-
-end-case -- proven "++ []-induction-case-:"
--- proven "++ []"
 rule-to-lemma "repH []"
 
 -- module main:Main where
@@ -216,192 +175,9 @@ rhs unfold
 -- Goal:
 -- forall * xs ys. \ x -> myAppend * (myAppend * xs ys) x = \ x -> myAppend * xs (myAppend * ys x)
 
-induction 'xs
-
--- Goal:
--- forall * ys x. myAppend * (myAppend * (undefined *) ys) x = myAppend * (undefined *) (myAppend * ys x)
-
-both (replicate 2 (any-call (unfold 'myAppend)))
-
--- Goal:
--- forall * ys x.
--- case case undefined * of wild *
---        [] -> ys
---        (:) x xs -> (:) * x (myAppend * xs ys)
---  of wild *
---   [] -> x
---   (:) x xs ->
---     (:) * x
---         (case xs of wild *
---            [] -> x
---            (:) x xs -> (:) * x (myAppend * xs x))
--- =
--- case undefined * of wild *
---   [] ->
---     case ys of wild *
---       [] -> x
---       (:) x xs ->
---         (:) * x
---             (case xs of wild *
---                [] -> x
---                (:) x xs -> (:) * x (myAppend * xs x))
---   (:) x xs ->
---     (:) * x
---         (case xs of wild *
---            [] ->
---              case ys of wild *
---                [] -> x
---                (:) x xs ->
---                  (:) * x
---                      (case xs of wild *
---                         [] -> x
---                         (:) x xs -> (:) * x (myAppend * xs x))
---            (:) x xs ->
---              (:) * x
---                  (myAppend * xs
---                            (case ys of wild *
---                               [] -> x
---                               (:) x xs ->
---                                 (:) * x
---                                     (case xs of wild *
---                                        [] -> x
---                                        (:) x xs -> (:) * x (myAppend * xs x)))))
-
-both (innermost undefined-expr)
-
--- Goal:
--- forall * ys x. undefined * = undefined *
-
-end-case -- proven "repH ++-induction-case-undefined"
-
--- Goal:
--- forall * ys x. myAppend * (myAppend * ([] *) ys) x = myAppend * ([] *) (myAppend * ys x)
-
-both (replicate 2 (any-call (unfold 'myAppend)))
-
--- Goal:
--- forall * ys x.
--- case case [] * of wild *
---        [] -> ys
---        (:) x xs -> (:) * x (myAppend * xs ys)
---  of wild *
---   [] -> x
---   (:) x xs ->
---     (:) * x
---         (case xs of wild *
---            [] -> x
---            (:) x xs -> (:) * x (myAppend * xs x))
--- =
--- case [] * of wild *
---   [] ->
---     case ys of wild *
---       [] -> x
---       (:) x xs ->
---         (:) * x
---             (case xs of wild *
---                [] -> x
---                (:) x xs -> (:) * x (myAppend * xs x))
---   (:) x xs ->
---     (:) * x
---         (case xs of wild *
---            [] ->
---              case ys of wild *
---                [] -> x
---                (:) x xs ->
---                  (:) * x
---                      (case xs of wild *
---                         [] -> x
---                         (:) x xs -> (:) * x (myAppend * xs x))
---            (:) x xs ->
---              (:) * x
---                  (myAppend * xs
---                            (case ys of wild *
---                               [] -> x
---                               (:) x xs ->
---                                 (:) * x
---                                     (case xs of wild *
---                                        [] -> x
---                                        (:) x xs -> (:) * x (myAppend * xs x)))))
-
-both smash
-
--- Goal:
--- forall * ys x.
--- case ys of wild *
---   [] -> x
---   (:) x xs ->
---     (:) * x
---         (case xs of wild *
---            [] -> x
---            (:) x xs -> (:) * x (myAppend * xs x))
--- =
--- case ys of wild *
---   [] -> x
---   (:) x xs ->
---     (:) * x
---         (case xs of wild *
---            [] -> x
---            (:) x xs -> (:) * x (myAppend * xs x))
-
-end-case -- proven "repH ++-induction-case-[]"
-
--- Assumed lemmas:
--- ind-hyp-0 (Assumed)
---   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
--- Goal:
--- forall * ys a b x. myAppend * (myAppend * ((:) * a b) ys) x = myAppend * ((:) * a b) (myAppend * ys x)
-
-both (one-td unfold)
-
--- Assumed lemmas:
--- ind-hyp-0 (Assumed)
---   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
--- Goal:
--- forall * ys a b x.
--- case myAppend * ((:) * a b) ys of wild *
---   [] -> x
---   (:) x xs -> (:) * x (myAppend * xs x)
--- =
--- case (:) * a b of wild *
---   [] -> myAppend * ys x
---   (:) x xs -> (:) * x (myAppend * xs (myAppend * ys x))
-
-lhs (one-td unfold)
-
--- Assumed lemmas:
--- ind-hyp-0 (Assumed)
---   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
--- Goal:
--- forall * ys a b x.
--- case case (:) * a b of wild *
---        [] -> ys
---        (:) x xs -> (:) * x (myAppend * xs ys)
---  of wild *
---   [] -> x
---   (:) x xs -> (:) * x (myAppend * xs x)
--- =
--- case (:) * a b of wild *
---   [] -> myAppend * ys x
---   (:) x xs -> (:) * x (myAppend * xs (myAppend * ys x))
-
-both smash
-
--- Assumed lemmas:
--- ind-hyp-0 (Assumed)
---   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
--- Goal:
--- forall * ys a b x. (:) * a (myAppend * (myAppend * b ys) x) = (:) * a (myAppend * b (myAppend * ys x))
-
-rhs (one-td (lemma-backward ind-hyp-0))
-
--- Assumed lemmas:
--- ind-hyp-0 (Assumed)
---   \ x -> myAppend * (myAppend * b ys) x = \ x -> myAppend * b (myAppend * ys x)
--- Goal:
--- forall * ys a b x. (:) * a (myAppend * (myAppend * b ys) x) = (:) * a (myAppend * (myAppend * b ys) x)
-
-end-case -- proven "repH ++-induction-case-:"
--- proven "repH ++"
+extensionality 'zs
+simplify
+lemma "myAppend-assoc"
 
 -- module main:Main where
 --   absR :: forall a . ([a] -> H a) -> [a] -> [a]

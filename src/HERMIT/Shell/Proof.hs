@@ -22,12 +22,11 @@ module HERMIT.Shell.Proof
     ) where
 
 import Control.Arrow hiding (loop, (<+>))
-import Control.Monad (forM, forM_, liftM)
+import Control.Monad (forM_, liftM)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.State (MonadState, modify, gets)
 
 import Data.Dynamic
-import Data.List (delete, zipWith4)
 import qualified Data.Map as M
 import Data.Monoid
 import Data.String (fromString)
@@ -43,9 +42,7 @@ import HERMIT.Monad
 import HERMIT.Name
 import HERMIT.Parser
 import HERMIT.Syntax
-import HERMIT.Utilities
 
-import HERMIT.Dictionary.Induction hiding (externals)
 import HERMIT.Dictionary.Local.Case hiding (externals)
 import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Undefined hiding (externals)
@@ -69,18 +66,12 @@ proof_externals = map (.+ Proof)
         [ "Prove lemma by asserting it is alpha-equivalent to an already proven lemma." ]
     , external "lemma-unsafe" (PCEnd . LemmaProof UnsafeUsed)
         [ "Prove lemma by asserting it is alpha-equivalent to an already proven lemma." ] .+ Unsafe
-    , external "induction" (PCInduction . cmpString2Var :: String -> ProofShellCommand)
-        [ "Perform induction on given universally quantified variable."
-        , "Each constructor case will generate a new lemma to be proven."
-        ]
     , external "prove-by-cases" (PCByCases . cmpString2Var :: String -> ProofShellCommand)
         [ "Case split on given universally quantified variable."
         , "Each constructor case will generate a new lemma to be proven."
         ]
     , external "prove-consequent" PCConsequent
         [ "Prove the consequent of an implication by assuming the antecedent." ]
-    , external "prove-conjunction" PCConjunction
-        [ "Prove a conjunction by proving both sides of it." ]
     , external "inst-assumed" (\ i nm cs -> PCInstAssumed i (cmpHN2Var nm) cs)
         [ "Split an assumed lemma which is a conjunction/disjunction." ]
     , external "split-assumed" PCSplitAssumed
@@ -162,10 +153,8 @@ performProofShellCommand :: (MonadCatch m, CLMonad m)
                          => ProofShellCommand -> ExprH -> m ()
 performProofShellCommand cmd expr = go cmd >> ifM isRunningScript (return ()) (showWindow Nothing)
     where str = unparseExprH expr
-          go (PCInduction idPred) = performInduction (Always str) idPred
           go (PCByCases idPred)   = proveByCases (Always str) idPred
           go PCConsequent         = proveConsequent str
-          go PCConjunction        = proveConjunction str
           go (PCInstAssumed i v cs) = instAssumed i v cs str
           go (PCSplitAssumed i)   = splitAssumed i str
           go (PCEnd why)          = endProof why expr
@@ -182,19 +171,6 @@ proveConsequent expr = do
     _ <- popProofStack
     pushProofStack $ MarkProven nm (lemmaT (ptLemma todo)) -- proving the consequent proves the lemma
     pushProofStack $ Unproven (nm <> "-consequent") (Lemma con NotProven Obligation True) c ls mempty
-
-proveConjunction :: (MonadCatch m, CLMonad m) => String -> m ()
-proveConjunction expr = do
-    Unproven nm (Lemma (Quantified bs cl) p u t) c ls _ : _ <- getProofStack
-    case cl of
-        Conj (Quantified lbs lcl) (Quantified rbs rcl) -> do
-            (k,ast) <- gets (cl_kernel &&& cl_cursor)
-            addAST =<< tellK k expr ast
-            _ <- popProofStack
-            pushProofStack $ MarkProven nm t
-            pushProofStack $ Unproven (nm <> "-r") (Lemma (Quantified (bs++rbs) rcl) p u True) c ls mempty
-            pushProofStack $ Unproven (nm <> "-l") (Lemma (Quantified (bs++lbs) lcl) p u True) c ls mempty
-        _ -> fail "not a conjunction."
 
 splitAssumed :: (MonadCatch m, CLMonad m) => Int -> String -> m ()
 splitAssumed i expr = do
@@ -236,39 +212,6 @@ splitQuantified (Quantified bs cl) = do
             return [Quantified (bs++lbs) lcl, Quantified (bs++rbs) rcl]
         _ -> fail "equalities cannot be split!"
 
-performInduction :: (MonadCatch m, CLMonad m)
-                 => CommitMsg -> (Id -> Bool) -> m ()
-performInduction cm idPred = do
-    (nm, Lemma q@(Quantified bs (Equiv lhs rhs)) _ _ temp, ctxt, ls, _) <- currentLemma
-    i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $
-         soleElement (filter idPred bs)
-
-    -- Why do a query? We want to do our proof in the current context of the shell, whatever that is.
-    cases <- queryInContext
-                (inductionCaseSplit bs i lhs rhs :: TransformH LCoreTC [(Maybe DataCon, [Var], CoreExpr, CoreExpr)])
-                cm
-
-    -- replace the current lemma with the three subcases
-    -- proving them will prove this case automatically
-    _ <- popProofStack
-    pushProofStack $ MarkProven nm temp
-    forM_ (reverse cases) $ \ (mdc,vs,lhsE,rhsE) -> do
-
-        let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
-            caseName = maybe "undefined" unqualifiedName mdc
-
-        -- Generate list of specialized induction hypotheses for the recursive cases.
-        qs <- forM vs_matching_i_type $ \ i' -> do
-                liftM discardUniVars $ instQuantified (boundVars ctxt) (==i) (Var i') q
-                -- TODO rethink the discardUniVars
-
-        let nms = [ fromString ("ind-hyp-" ++ show n) | n :: Int <- [0..] ]
-            hypLemmas = zip nms $ zipWith4 Lemma qs (repeat BuiltIn) (repeat NotUsed) (repeat True)
-            lemmaName = fromString $ show nm ++ "-induction-case-" ++ caseName
-            caseLemma = Lemma (mkQuantified (delete i bs ++ vs) lhsE rhsE) NotProven Obligation True
-
-        pushProofStack $ Unproven lemmaName caseLemma ctxt (hypLemmas ++ ls) mempty
-
 proveByCases :: (MonadCatch m, CLMonad m)
              => CommitMsg -> (Id -> Bool) -> m ()
 proveByCases cm idPred = do
@@ -294,10 +237,8 @@ proveByCases cm idPred = do
         pushProofStack $ Unproven lemmaName caseLemma ctxt ls mempty
 
 data ProofShellCommand
-    = PCInduction (Id -> Bool)
-    | PCByCases (Id -> Bool)
+    = PCByCases (Id -> Bool)
     | PCConsequent
-    | PCConjunction
     | PCSplitAssumed Int
     | PCInstAssumed Int (Var -> Bool) CoreString
     | PCEnd ProofReason
