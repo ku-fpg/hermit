@@ -217,12 +217,13 @@ applyToUndefinedT f = do
 
 -- | Add a lemma for the strictness of a function.
 -- Note: assumes added lemma has been used
-buildStrictnessLemmaT :: ( HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb, HasDebugChan m, HasDynFlags m
-                         , HasHscEnv m, HasHermitMEnv m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m)
+buildStrictnessLemmaT :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, LemmaContext c, ReadBindings c
+                         , ReadPath c Crumb, HasDebugChan m, HasDynFlags m, HasHscEnv m, HasHermitMEnv m, HasLemmas m
+                         , MonadCatch m, MonadIO m, MonadThings m)
                       => Used -> LemmaName -> CoreExpr -> Transform c m x ()
 buildStrictnessLemmaT u nm f = do
     (tvs, lhs) <- liftM collectTyBinders $ applyToUndefinedT f
     rhs <- mkUndefinedValT (exprType lhs)
-    verifyOrCreateT u nm (mkQuantified tvs lhs rhs)
+    verifyOrCreateT u nm (mkClause tvs lhs rhs)
 
 ------------------------------------------------------------------------

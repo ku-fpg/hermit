@@ -466,7 +466,7 @@ modifyLocalPath f expr = do
             (ast',()) <- queryK k (constT
                                     (applyT
                                       (setFailMsg "invalid path."
-                                        (focusT (pathStackToLens base rel' :: LensH Quantified LCoreTC) successT))
+                                        (focusT (pathStackToLens base rel' :: LensH Clause LCoreTC) successT))
                                       c q))
                                   (Always $ unparseExprH expr) kEnv ast
             addAST ast'
@@ -610,7 +610,7 @@ inProofFocusT :: ProofTodo -> TransformH LCoreTC b -> TransformH Core b
 inProofFocusT (Unproven _ (Lemma q _ _) c ps) t =
     contextfreeT $ applyT (return q >>> extractT (pathT (pathStack2Path ps) t)) c
 
-inProofFocusR :: ProofTodo -> RewriteH LCoreTC -> TransformH Core Quantified
+inProofFocusR :: ProofTodo -> RewriteH LCoreTC -> TransformH Core Clause
 inProofFocusR (Unproven _ (Lemma q _ _) c ps) rr =
     contextfreeT $ applyT (return q >>> extractR (pathR (pathStack2Path ps) rr)) c
 

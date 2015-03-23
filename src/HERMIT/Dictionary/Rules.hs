@@ -10,8 +10,8 @@ module HERMIT.Dictionary.Rules
     , unfoldRuleR
     , unfoldRulesR
     , compileRulesT
-    , ruleToQuantifiedT
-    , ruleNameToQuantifiedT
+    , ruleToClauseT
+    , ruleNameToClauseT
     , getHermitRuleT
     , getHermitRulesT
       -- ** Specialisation
@@ -100,7 +100,7 @@ foldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContex
              , MonadIO m, MonadThings m, MonadUnique m )
             => Used -> RuleName -> Rewrite c m CoreExpr
 foldRuleR u nm = do
-    q <- ruleNameToQuantifiedT nm
+    q <- ruleNameToClauseT nm
     backwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) q >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
@@ -116,7 +116,7 @@ unfoldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyCont
                , MonadIO m, MonadThings m, MonadUnique m )
             => Used -> RuleName -> Rewrite c m CoreExpr
 unfoldRuleR u nm = do
-    q <- ruleNameToQuantifiedT nm
+    q <- ruleNameToClauseT nm
     forwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) q >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
@@ -138,7 +138,7 @@ compileRulesT nms = do
     case filter ((`elem` nms) . fst) allRules of
         [] -> fail (failMsg nms)
         rs -> liftM (compileFold . concatMap toEqualities)
-                $ forM (map snd rs) $ \ r -> return r >>> ruleToQuantifiedT
+                $ forM (map snd rs) $ \ r -> return r >>> ruleToClauseT
 
 
 -- | Return all in-scope CoreRules (including specialization RULES on binders), with their names.
@@ -169,28 +169,28 @@ rulesHelpListT = do
 
 -- | Print a named CoreRule using the quantified printer.
 ruleHelpT :: (HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb) => PrettyPrinter -> RuleName -> Transform c HermitM a DocH
-ruleHelpT pp nm = ruleNameToQuantifiedT nm >>> liftPrettyH (pOptions pp) (ppQuantifiedT pp)
+ruleHelpT pp nm = ruleNameToClauseT nm >>> liftPrettyH (pOptions pp) (ppClauseT pp)
 
--- | Build an Quantified from a named GHC rewrite rule.
-ruleNameToQuantifiedT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitMEnv m
+-- | Build an Clause from a named GHC rewrite rule.
+ruleNameToClauseT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitMEnv m
                        , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
-                    => RuleName -> Transform c m a Quantified
-ruleNameToQuantifiedT name = getHermitRuleT name >>> ruleToQuantifiedT
+                  => RuleName -> Transform c m a Clause
+ruleNameToClauseT name = getHermitRuleT name >>> ruleToClauseT
 
--- | Transform GHC's CoreRule into an Quantified.
-ruleToQuantifiedT :: (BoundVars c, HasHermitMEnv m, MonadThings m, MonadCatch m)
-                => Transform c m CoreRule Quantified
-ruleToQuantifiedT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $ do
+-- | Transform GHC's CoreRule into an Clause.
+ruleToClauseT :: (BoundVars c, HasHermitMEnv m, MonadThings m, MonadCatch m)
+              => Transform c m CoreRule Clause
+ruleToClauseT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $ do
     r@Rule{} <- idR -- other possibility is "BuiltinRule"
     f <- lookupId $ ru_fn r
     let lhs = mkCoreApps (varToCoreExpr f) (ru_args r)
-    return $ mkQuantified (ru_bndrs r) lhs (ru_rhs r)
+    return $ mkClause (ru_bndrs r) lhs (ru_rhs r)
 
 ruleToLemmaT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitMEnv m, HasLemmas m
                 , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
              => RuleName -> Transform c m a ()
 ruleToLemmaT nm = do
-    q <- ruleNameToQuantifiedT nm
+    q <- ruleNameToClauseT nm
     insertLemmaT (fromString (show nm)) $ Lemma q NotProven NotUsed
 
 ------------------------------------------------------------------------
@@ -249,6 +249,6 @@ specRules = crushtdT $ promoteBindT bindSpecRules
 rulesToRewrite :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                   , HasDynFlags m, HasHermitMEnv m, MonadCatch m, MonadThings m, MonadUnique m )
                => [CoreRule] -> Rewrite c m CoreExpr
-rulesToRewrite rs = catchesM [ (return r >>> ruleToQuantifiedT) >>= forwardT . birewrite | r <- rs ]
+rulesToRewrite rs = catchesM [ (return r >>> ruleToClauseT) >>= forwardT . birewrite | r <- rs ]
 
 ------------------------------------------------------------------------

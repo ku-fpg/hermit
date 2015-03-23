@@ -246,6 +246,6 @@ smashComponents2 =
     [ (promoteExprR caseElimMergeAltsR, "case-elim-merge-alts") -- do this last, lest it prevent other simplifications
       -- neither of these will create interesting new terms for the stuff in smashComponents1
       -- so might as well have them here so they are run at the end
-    , (promoteQuantifiedR quantIdentitiesR, "quant-indentities")
-    , (promoteClauseR reflexivityClauseR, "reflexivity")
+    , (promoteClauseR quantIdentitiesR, "quant-indentities")
+    , (promoteClauseR reflexivityR, "reflexivity")
     ]

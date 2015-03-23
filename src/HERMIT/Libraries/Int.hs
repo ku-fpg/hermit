@@ -49,8 +49,8 @@ lemmas = do
         appMN e = mkCoreApps e [m,n]
         appNM e = mkCoreApps e [n,m]
         mkEL l r = mkL (Equiv l r)
-        mkL cl = Lemma (Quantified [mId,nId] cl) BuiltIn NotUsed
-        mkIL nm al ar cl cr = mkL (Impl nm (Quantified [] $ Equiv al ar) (Quantified [] $ Equiv cl cr))
+        mkL cl = Lemma (mkForall [mId,nId] cl) BuiltIn NotUsed
+        mkIL nm al ar cl cr = mkL (Impl nm (Equiv al ar) (Equiv cl cr))
 
     eqE <- findIdT "Data.Eq.==" >>= appToInt >>= appToDict
 

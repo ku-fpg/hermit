@@ -43,7 +43,7 @@ induction 'xs
       any-bu ((unfold 'myAppend) >>> undefined-case)
       reflexivity
     }
-    [ conj-rhs, forall-body ]
+    conj-rhs
     { conj-lhs
       any-bu ((unfold 'myAppend) >>> case-reduce)
       reflexivity

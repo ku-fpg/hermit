@@ -59,7 +59,7 @@ rememberR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasLemmas m, 
           => LemmaName -> Transform c m Core ()
 rememberR nm = prefixFailMsg "remember failed: " $ do
     Def v e <- setFailMsg "not applied to a binding." $ defOrNonRecT idR idR Def
-    insertLemmaT (prefixRemembered nm) $ Lemma (mkQuantified [] (varToCoreExpr v) e) Proven NotUsed
+    insertLemmaT (prefixRemembered nm) $ Lemma (mkClause [] (varToCoreExpr v) e) Proven NotUsed
 
 -- | Unfold a remembered definition (like unfoldR, but looks in stash instead of context).
 unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
@@ -83,5 +83,5 @@ foldAnyRememberedR = setFailMsg "Fold failed: no definitions could be folded."
 -- | Compile all remembered definitions into something that can be run with `runFoldR`
 compileRememberedT :: (LemmaContext c, HasLemmas m, Monad m) => Transform c m x CompiledFold
 compileRememberedT = do
-    qs <- liftM (map lemmaQ . Map.elems . Map.filterWithKey (\ k _ -> "remembered-" `isPrefixOf` show k)) getLemmasT
+    qs <- liftM (map lemmaC . Map.elems . Map.filterWithKey (\ k _ -> "remembered-" `isPrefixOf` show k)) getLemmasT
     return $ compileFold $ concatMap (map flipEquality . toEqualities) qs -- fold rhs to lhs

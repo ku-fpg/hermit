@@ -36,7 +36,6 @@ module HERMIT.Kure.Universes
     , promoteAltT
     , promoteTypeT
     , promoteCoercionT
-    , promoteQuantifiedT
     , promoteClauseT
     , promoteCoreT
     , promoteLCoreT
@@ -50,7 +49,6 @@ module HERMIT.Kure.Universes
     , promoteAltR
     , promoteTypeR
     , promoteCoercionR
-    , promoteQuantifiedR
     , promoteClauseR
     , promoteCoreR
     , promoteLCoreR
@@ -90,9 +88,8 @@ data CoreTC = Core Core
 
 -- | LCore is a KURE universe for traversing HERMIT lemmas and the Core expressions they contain.
 --   Types and coercions are not traversed (for that, use 'LCoreTC').
---   LCore = Core + Quantified + Clause
-data LCore = LQuantified Quantified
-           | LClause     Clause
+--   LCore = Core + Clause
+data LCore = LClause     Clause
            | LCore       Core
 
 -- | LCoreTC is a KURE universe for traversing HERMIT lemmas and the Core expressions they contain.
@@ -155,7 +152,6 @@ coreTCSyntaxEq _          _          = False
 lcoreSyntaxEq :: LCore -> LCore -> Bool
 lcoreSyntaxEq (LCore c1)       (LCore c2)       = coreSyntaxEq c1 c2
 lcoreSyntaxEq (LClause cl1)    (LClause cl2)    = clauseSyntaxEq cl1 cl2
-lcoreSyntaxEq (LQuantified q1) (LQuantified q2) = quantifiedSyntaxEq q1 q2
 lcoreSyntaxEq _                _                = False
 
 -- | Syntactic equality of 'LCoreTC' fragments.
@@ -312,17 +308,6 @@ instance Injection Clause LCore where
   {-# INLINE project #-}
 
 
-instance Injection Quantified LCore where
-
-  inject :: Quantified -> LCore
-  inject = LQuantified
-  {-# INLINE inject #-}
-
-  project :: LCore -> Maybe Quantified
-  project (LQuantified q) = Just q
-  project _               = Nothing
-  {-# INLINE project #-}
-
 ---------------------------------------------------------------------
 
 instance Injection LCore LCoreTC where
@@ -413,17 +398,6 @@ instance Injection CoreAlt LCore where
   {-# INLINE project #-}
 
 ---------------------------------------------------------------------
-
-instance Injection Quantified LCoreTC where
-
-  inject :: Quantified -> LCoreTC
-  inject = LTCCore . inject
-  {-# INLINE inject #-}
-
-  project :: LCoreTC -> Maybe Quantified
-  project (LTCCore lc) = project lc
-  project _            = Nothing
-  {-# INLINE project #-}
 
 instance Injection Clause LCoreTC where
 
@@ -711,11 +685,6 @@ promoteCoercionT :: (Monad m, Injection Coercion g) => Transform c m Coercion b 
 promoteCoercionT = promoteWithFailMsgT "This translate can only succeed at coercion nodes."
 {-# INLINE promoteCoercionT #-}
 
--- | Promote a translate on 'Quantified'.
-promoteQuantifiedT :: (Monad m, Injection Quantified g) => Transform c m Quantified b -> Transform c m g b
-promoteQuantifiedT = promoteWithFailMsgT "This translate can only succeed at quantified nodes."
-{-# INLINE promoteQuantifiedT #-}
-
 -- | Promote a translate on 'Clause'.
 promoteClauseT :: (Monad m, Injection Clause g) => Transform c m Clause b -> Transform c m g b
 promoteClauseT = promoteWithFailMsgT "This translate can only succeed at clause nodes."
@@ -777,11 +746,6 @@ promoteTypeR = promoteWithFailMsgR "This rewrite can only succeed at type nodes.
 promoteCoercionR :: (Monad m, Injection Coercion g) => Rewrite c m Coercion -> Rewrite c m g
 promoteCoercionR = promoteWithFailMsgR "This rewrite can only succeed at coercion nodes."
 {-# INLINE promoteCoercionR #-}
-
--- | Promote a rewrite on 'Quantified'.
-promoteQuantifiedR :: (Monad m, Injection Quantified g) => Rewrite c m Quantified -> Rewrite c m g
-promoteQuantifiedR = promoteWithFailMsgR "This rewrite can only succeed at quantified nodes."
-{-# INLINE promoteQuantifiedR #-}
 
 -- | Promote a rewrite on 'Clause'.
 promoteClauseR :: (Monad m, Injection Clause g) => Rewrite c m Clause -> Rewrite c m g

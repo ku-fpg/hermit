@@ -29,31 +29,30 @@ module HERMIT.Dictionary.Reasoning
     , showLemmaT
     , showLemmasT
     , ppLemmaT
-    , ppQuantifiedT
+    , ppClauseT
     , ppLCoreTCT
-      -- ** Lifting transformations over 'Quantified'
+      -- ** Lifting transformations over 'Clause'
     , lhsT
     , rhsT
     , bothT
     , lhsR
     , rhsR
     , bothR
-    , verifyQuantifiedT
+    , verifyClauseT
     , lemmaR
     , quantIdentitiesR
-    , reflexivityClauseR
     , verifyOrCreateT
     , verifyEqualityLeftToRightT
     , verifyEqualityCommonTargetT
     , verifyIsomorphismT
     , verifyRetractionT
     , reflexivityR
-    , simplifyQuantifiedR
+    , simplifyClauseR
     , retractionBR
-    , unshadowQuantifiedR
+    , unshadowClauseR
     , instantiateDictsR
-    , instantiateQuantifiedVarR
-    , abstractQuantifiedR
+    , instantiateClauseVarR
+    , abstractClauseR
     , discardUniVars
     ) where
 
@@ -77,7 +76,6 @@ import           HERMIT.Name
 import           HERMIT.ParserCore
 import           HERMIT.ParserType
 import           HERMIT.PrettyPrinter.Common
-import           HERMIT.PrettyPrinter.Clean (symbol) -- this should be in Common
 import           HERMIT.Utilities
 
 import           HERMIT.Dictionary.Common
@@ -100,7 +98,7 @@ externals =
         , "f (g y) <==> y."
         , "Note that the precondition (f (g y) == y) is expected to hold."
         ] .+ Shallow .+ PreCondition
-    , external "unshadow-quantified" (promoteQuantifiedR unshadowQuantifiedR :: RewriteH LCoreTC)
+    , external "unshadow-quantified" (promoteClauseR unshadowClauseR :: RewriteH LCoreTC)
         [ "Unshadow a quantified clause." ]
     , external "merge-quantifiers" (\n1 n2 -> promoteR (mergeQuantifiersR (cmpHN2Var n1) (cmpHN2Var n2)) :: RewriteH LCore)
         [ "Merge quantifiers from two clauses if they have the same type."
@@ -125,7 +123,7 @@ externals =
         [ "Generate a rewrite from a lemma, left-to-right." ]
     , external "lemma-backward" (backwardT . promoteExprBiR . lemmaBiR Obligation :: LemmaName -> RewriteH LCore)
         [ "Generate a rewrite from a lemma, right-to-left." ]
-    , external "lemma-consequent" (promoteQuantifiedR . lemmaConsequentR Obligation :: LemmaName -> RewriteH LCore)
+    , external "lemma-consequent" (promoteClauseR . lemmaConsequentR Obligation :: LemmaName -> RewriteH LCore)
         [ "Match the current lemma with the consequent of an implication lemma."
         , "Upon success, replaces with antecedent of the implication, properly instantiated." ]
     , external "lemma-consequent-birewrite" (promoteExprBiR . lemmaConsequentBiR Obligation :: LemmaName -> BiRewriteH LCore)
@@ -137,21 +135,21 @@ externals =
     , external "lemma-rhs-intro" (promoteCoreR . lemmaRhsIntroR :: LemmaName -> RewriteH LCore)
         [ "Introduce the RHS of a lemma as a non-recursive binding, in either an expression or a program."
         , "body ==> let v = rhs in body" ] .+ Introduce .+ Shallow
-    , external "inst-lemma" (\ nm v cs -> modifyLemmaT nm id (instantiateQuantifiedVarR (cmpHN2Var v) cs) id id :: TransformH LCore ())
+    , external "inst-lemma" (\ nm v cs -> modifyLemmaT nm id (instantiateClauseVarR (cmpHN2Var v) cs) id id :: TransformH LCore ())
         [ "Instantiate one of the universally quantified variables of the given lemma,"
         , "with the given Core expression, creating a new lemma. Instantiating an"
         , "already proven lemma will result in the new lemma being considered proven." ]
-    , external "inst-dictionaries" (promoteQuantifiedR instantiateDictsR :: RewriteH LCore)
+    , external "inst-dictionaries" (promoteClauseR instantiateDictsR :: RewriteH LCore)
         [ "Instantiate all of the universally quantified dictionaries of the given lemma." ]
-    , external "abstract" ((\nm -> promoteQuantifiedR . abstractQuantifiedR nm . csInQBodyT) :: String -> CoreString -> RewriteH LCore)
+    , external "abstract" ((\nm -> promoteClauseR . abstractClauseR nm . csInQBodyT) :: String -> CoreString -> RewriteH LCore)
         [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
-    , external "abstract" ((\nm rr -> promoteQuantifiedR $ abstractQuantifiedR nm $ extractT rr >>> setFailMsg "path must focus on an expression" projectT) :: String -> RewriteH LCore -> RewriteH LCore)
+    , external "abstract" ((\nm rr -> promoteClauseR $ abstractClauseR nm $ extractT rr >>> setFailMsg "path must focus on an expression" projectT) :: String -> RewriteH LCore -> RewriteH LCore)
         [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
     , external "copy-lemma" (\ nm newName -> modifyLemmaT nm (const newName) idR id id :: TransformH LCore ())
         [ "Copy a given lemma, with a new name." ]
     , external "modify-lemma" ((\ nm rr -> modifyLemmaT nm id (extractR rr) (const NotProven) (const NotUsed)) :: LemmaName -> RewriteH LCore -> TransformH LCore ())
         [ "Modify a given lemma. Resets proven status to Not Proven and used status to Not Used." ]
-    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaQ >>> extractT t) :: LemmaName -> TransformH LCore String -> TransformH LCore String)
+    , external "query-lemma" ((\ nm t -> getLemmaByNameT nm >>> arr lemmaC >>> extractT t) :: LemmaName -> TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to a lemma, returning the result." ]
     , external "show-lemma" ((\pp n -> showLemmaT n pp) :: PrettyPrinter -> LemmaName -> PrettyH LCore)
         [ "Display a lemma." ]
@@ -164,21 +162,21 @@ externals =
         , "f == g  ==>  forall x.  f x == g x" ]
     , external "extensionality" (promoteR (extensionalityR Nothing) :: RewriteH LCore)
         [ "f == g  ==>  forall x.  f x == g x" ]
-    , external "lhs" (promoteQuantifiedR . lhsR :: RewriteH LCore -> RewriteH LCore)
-        [ "Apply a rewrite to the LHS of a quantified clause." ]
-    , external "lhs" (promoteQuantifiedT . lhsT :: TransformH LCore String -> TransformH LCore String)
+    , external "lhs" (promoteClauseT . lhsT :: TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to the LHS of a quantified clause." ]
-    , external "rhs" (promoteQuantifiedR . rhsR :: RewriteH LCore -> RewriteH LCore)
-        [ "Apply a rewrite to the RHS of a quantified clause." ]
-    , external "rhs" (promoteQuantifiedT . rhsT :: TransformH LCore String -> TransformH LCore String)
+    , external "lhs" (promoteClauseR . lhsR :: RewriteH LCore -> RewriteH LCore)
+        [ "Apply a rewrite to the LHS of a quantified clause." ]
+    , external "rhs" (promoteClauseT . rhsT :: TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to the RHS of a quantified clause." ]
-    , external "both" (promoteQuantifiedR . bothR :: RewriteH LCore -> RewriteH LCore)
+    , external "rhs" (promoteClauseR . rhsR :: RewriteH LCore -> RewriteH LCore)
+        [ "Apply a rewrite to the RHS of a quantified clause." ]
+    , external "both" (promoteClauseR . bothR :: RewriteH LCore -> RewriteH LCore)
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
-    , external "both" ((\t -> do (r,s) <- promoteQuantifiedT (bothT t); return (unlines [r,s])) :: TransformH LCore String -> TransformH LCore String)
+    , external "both" ((\t -> do (r,s) <- promoteClauseT (bothT t); return (unlines [r,s])) :: TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to both sides of a quantified clause." ]
-    , external "reflexivity" (reflexivityR :: RewriteH LCore)
+    , external "reflexivity" (promoteClauseR (forallR idR reflexivityR <+ reflexivityR) :: RewriteH LCore)
         [ "Rewrite alpha-equivalence to true." ]
-    , external "simplify-proof" (simplifyQuantifiedR :: RewriteH LCore)
+    , external "simplify-proof" (simplifyClauseR :: RewriteH LCore)
         [ "Reduce a proof by applying reflexivity and logical operator identities." ]
     , external "split-antecedent" (promoteClauseR splitAntecedentR :: RewriteH LCore)
         [ "Split an implication of the form (q1 ^ q2) => q3 into q1 => (q2 => q3)" ]
@@ -193,9 +191,9 @@ externals =
 type EqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
 
 -- | f == g  ==>  forall x.  f x == g x
-extensionalityR :: Maybe String -> Rewrite c HermitM Quantified
+extensionalityR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb) => Maybe String -> Rewrite c HermitM Clause
 extensionalityR mn = prefixFailMsg "extensionality failed: " $
-  do Quantified vs (Equiv lhs rhs) <- idR
+  do (vs,(lhs,rhs)) <- forallT idR (equivT idR idR (,)) (,) <+ equivT idR idR (\l r -> ([],(l,r)))
 
      let tyL = exprKindOrType lhs
          tyR = exprKindOrType rhs
@@ -207,64 +205,68 @@ extensionalityR mn = prefixFailMsg "extensionality failed: " $
 
      let x = varToCoreExpr v
 
-     return $ Quantified (vs ++ [v]) $ Equiv (mkCoreApp lhs x) (mkCoreApp rhs x)
+     return $ Forall (vs ++ [v]) $ Equiv (mkCoreApp lhs x) (mkCoreApp rhs x)
 
 ------------------------------------------------------------------------------
 
 -- | @e@ ==> @let v = lhs in e@
-eqLhsIntroR :: Quantified -> Rewrite c HermitM Core
-eqLhsIntroR (Quantified bs (Equiv lhs _)) = nonRecIntroR "lhs" (mkCoreLams bs lhs)
-eqLhsIntroR _                             = fail "compound lemmas not supported."
+eqLhsIntroR :: Clause -> Rewrite c HermitM Core
+eqLhsIntroR (Forall bs (Equiv lhs _)) = nonRecIntroR "lhs" (mkCoreLams bs lhs)
+eqLhsIntroR _                         = fail "compound lemmas not supported."
 
 -- | @e@ ==> @let v = rhs in e@
-eqRhsIntroR :: Quantified -> Rewrite c HermitM Core
-eqRhsIntroR (Quantified bs (Equiv _ rhs)) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
-eqRhsIntroR _                             = fail "compound lemmas not supported."
+eqRhsIntroR :: Clause -> Rewrite c HermitM Core
+eqRhsIntroR (Forall bs (Equiv _ rhs)) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
+eqRhsIntroR _                         = fail "compound lemmas not supported."
 
 ------------------------------------------------------------------------------
 
--- | Create a 'BiRewrite' from a 'Quantified'.
+-- | Create a 'BiRewrite' from a 'Clause'.
 birewrite :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
              , ReadPath c Crumb, MonadCatch m, MonadUnique m )
-          => Quantified -> BiRewrite c m CoreExpr
-birewrite q = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)
+          => Clause -> BiRewrite c m CoreExpr
+birewrite cl = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)
     where foldUnfold side f = transform $ \ c ->
                                 maybeM ("expression did not match "++side++"-hand side")
-                                . fold (map f (toEqualities q)) c
+                                . fold (map f (toEqualities cl)) c
 
 ------------------------------------------------------------------------------
 -- TODO: deprecate these?
 -- Yes, but later.  They're in the paper now.
 -- We should be using "childR crumb", really.
 
--- | Lift a transformation over 'LCoreTC' into a transformation over the left-hand side of a 'Quantified'.
-lhsT :: (AddBindings c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
-     => Transform c m LCore a -> Transform c m Quantified a
-lhsT t = quantifiedT successT (clauseT t successT (\_ l _ -> l) (fail "applied to true.")) (flip const)
+-- | Lift a transformation over 'LCoreTC' into a transformation over the left-hand side of a 'Clause'.
+lhsT :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
+     => Transform c m LCore a -> Transform c m Clause a
+lhsT t = extractT $ catchesT [ f (childT cr t) | cr <- [Conj_Lhs, Disj_Lhs, Impl_Lhs, Eq_Lhs]
+                                               , f <- [childT Forall_Body, id] ]
 
--- | Lift a transformation over 'LCoreTC' into a transformation over the right-hand side of a 'Quantified'.
-rhsT :: (AddBindings c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
-     => Transform c m LCore a -> Transform c m Quantified a
-rhsT t = quantifiedT successT (clauseT successT t (\_ _ r -> r) (fail "applied to true.")) (flip const)
+-- | Lift a transformation over 'LCoreTC' into a transformation over the right-hand side of a 'Clause'.
+rhsT :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
+     => Transform c m LCore a -> Transform c m Clause a
+rhsT t = extractT $ catchesT [ f (childT cr t) | cr <- [Conj_Rhs, Disj_Rhs, Impl_Rhs, Eq_Rhs]
+                                               , f <- [childT Forall_Body, id] ]
 
--- | Lift a transformation over 'LCoreTC' into a transformation over both sides of a 'Quantified'.
-bothT :: (AddBindings c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, Monad m)
-      => Transform c m LCore a -> Transform c m Quantified (a, a)
-bothT t = quantifiedT successT (clauseT t t (const (,)) (fail "applied to true.")) (flip const)
+-- | Lift a transformation over 'LCoreTC' into a transformation over both sides of a 'Clause'.
+bothT :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
+      => Transform c m LCore a -> Transform c m Clause (a, a)
+bothT t = (,) <$> lhsT t <*> rhsT t
 
--- | Lift a rewrite over 'LCoreTC' into a rewrite over the left-hand side of a 'Quantified'.
-lhsR :: (AddBindings c, Monad m, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb)
-     => Rewrite c m LCore -> Rewrite c m Quantified
-lhsR r = quantifiedR idR (clauseR r idR)
+-- | Lift a rewrite over 'LCoreTC' into a rewrite over the left-hand side of a 'Clause'.
+lhsR :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
+     => Rewrite c m LCore -> Rewrite c m Clause
+lhsR r = extractR $ catchesT [ f (childR cr r) | cr <- [Conj_Lhs, Disj_Lhs, Impl_Lhs, Eq_Lhs]
+                                               , f <- [childR Forall_Body, id] ]
 
--- | Lift a rewrite over 'LCoreTC' into a rewrite over the right-hand side of a 'Quantified'.
-rhsR :: (AddBindings c, Monad m, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb)
-     => Rewrite c m LCore -> Rewrite c m Quantified
-rhsR r = quantifiedR idR (clauseR idR r)
+-- | Lift a rewrite over 'LCoreTC' into a rewrite over the right-hand side of a 'Clause'.
+rhsR :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
+     => Rewrite c m LCore -> Rewrite c m Clause
+rhsR r = extractR $ catchesT [ f (childR cr r) | cr <- [Conj_Rhs, Disj_Rhs, Impl_Rhs, Eq_Rhs]
+                                               , f <- [childR Forall_Body, id] ]
 
--- | Lift a rewrite over 'LCoreTC' into a rewrite over both sides of a 'Quantified'.
-bothR :: (AddBindings c, MonadCatch m, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb)
-      => Rewrite c m LCore -> Rewrite c m Quantified
+-- | Lift a rewrite over 'LCoreTC' into a rewrite over both sides of a 'Clause'.
+bothR :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
+      => Rewrite c m LCore -> Rewrite c m Clause
 bothR r = lhsR r >+> rhsR r
 
 ------------------------------------------------------------------------------
@@ -282,115 +284,103 @@ showLemmaT nm pp = getLemmaByNameT nm >>> ppLemmaT pp nm
 ppLemmaT :: PrettyPrinter -> LemmaName -> PrettyH Lemma
 ppLemmaT pp nm = do
     Lemma q p _u <- idR
-    qDoc <- return q >>> ppQuantifiedT pp
+    qDoc <- return q >>> ppClauseT pp
     let hDoc = PP.text (show nm) PP.<+> PP.text ("(" ++ show p ++ ")")
     return $ hDoc PP.$+$ PP.nest 2 qDoc
 
 ppLCoreTCT :: PrettyPrinter -> PrettyH LCoreTC
-ppLCoreTCT pp = promoteT (ppQuantifiedT pp) <+ promoteT (ppClauseT pp) <+ promoteT (pCoreTC pp)
-
-ppQuantifiedT :: PrettyPrinter -> PrettyH Quantified
-ppQuantifiedT pp = do
-    (d1,d2) <- quantifiedT (pForall pp) (ppClauseT pp) (,)
-    return $ PP.sep [d1,d2]
+ppLCoreTCT pp = promoteT (ppClauseT pp) <+ promoteT (pCoreTC pp)
 
 ppClauseT :: PrettyPrinter -> PrettyH Clause
-ppClauseT pp = do
-    let t = absPathT &&& (promoteT (ppQuantifiedT pp) <+ promoteT (extractT (pCoreTC pp) :: PrettyH Core)) -- TODO: temporary hack, need to think about what's going on here and fix it
-        parenify (p1,d1) (p2,d2) o = ( symbol p1 '(' PP.<> d1 PP.<> symbol p1 ')'
-                                     , symbol p2 '(' PP.<> d2 PP.<> symbol p2 ')'
-                                     , syntaxColor (PP.text o)
-                                     )
-    (d1,d2,oper) <- clauseT t t (\ cl r1 r2 ->
-                                    case cl of
-                                        Conj {} -> parenify r1 r2 "^"
-                                        Disj {} -> parenify r1 r2 "v"
-                                        Impl {} -> parenify r1 r2 "=>"
-                                        Equiv {} -> (snd r1, snd r2, syntaxColor $ PP.text "=")
-                                        CTrue   -> error "impossible case: applied to true")
-                                (return (syntaxColor (PP.text "true"), PP.empty, PP.empty))
-    return $ PP.sep [d1,oper,d2]
+ppClauseT pp = forallT (pForall pp) (ppClauseT pp) (\ d1 d2 -> PP.sep [d1,d2])
+            <+ conjT parenify parenify (\ d1 d2 -> PP.sep [d1,syntaxColor (PP.text "^"),d2])
+            <+ disjT parenify parenify (\ d1 d2 -> PP.sep [d1,syntaxColor (PP.text "v"),d2])
+            <+ implT parenify parenify (\ _nm d1 d2 -> PP.sep [d1,syntaxColor (PP.text "=>"),d2])
+            <+ equivT (extractT $ pCoreTC pp) (extractT $ pCoreTC pp) (\ d1 d2 -> PP.sep [d1,syntaxColor (PP.text "="),d2])
+            <+ return (syntaxColor $ PP.text "true")
+    where parenify = ppClauseT pp >>^ \ d -> syntaxColor (PP.text "(") PP.<> d PP.<> syntaxColor (PP.text ")")
 
 ------------------------------------------------------------------------------
 
-verifyQuantifiedT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m) => Transform c m Quantified ()
-verifyQuantifiedT = setFailMsg "verification failed: clause must be true (perhaps try reflexivity first)" $ do
-    Quantified _ CTrue <- idR
+verifyClauseT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m) => Transform c m Clause ()
+verifyClauseT = setFailMsg "verification failed: clause must be true (perhaps try reflexivity first)" $ do
+    CTrue <- idR
     return ()
 
 lemmaR :: (LemmaContext c, HasLemmas m, MonadCatch m) => Used -> LemmaName -> Rewrite c m Clause
 lemmaR used nm = prefixFailMsg "verification failed: " $ do
-    Lemma q _ _ <- getLemmaByNameT nm
-    eq <- arr (q `proves`)
+    Lemma cl _ _ <- getLemmaByNameT nm
+    eq <- arr (cl `proves`)
     guardMsg eq "lemmas are not equivalent."
     markLemmaUsedT nm used
     return CTrue
 
-verifyOrCreateT :: ( HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+verifyOrCreateT :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                    , HasDebugChan m, HasLemmas m, MonadCatch m )
-                => Used -> LemmaName -> Quantified -> Transform c m a ()
-verifyOrCreateT u nm q@(Quantified _ cl)  = do
+                => Used -> LemmaName -> Clause -> Transform c m a ()
+verifyOrCreateT u nm cl = do
     exists <- testM $ getLemmaByNameT nm
     if exists
-    then do CTrue <- return cl >>> lemmaR u nm ; return ()
-    else contextonlyT $ \ c -> sendKEnvMessage $ AddObligation (toHermitC c) nm $ Lemma q NotProven u
+    then return cl >>> lemmaR u nm >>> verifyClauseT
+    else contextonlyT $ \ c -> sendKEnvMessage $ AddObligation (toHermitC c) nm $ Lemma cl NotProven u
 
-reflexivityR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m LCore
-reflexivityR = promoteR (quantifiedR idR reflexivityClauseR) <+ promoteR reflexivityClauseR
-
-reflexivityClauseR :: Monad m => Rewrite c m Clause
-reflexivityClauseR = do
+reflexivityR :: Monad m => Rewrite c m Clause
+reflexivityR = do
     Equiv lhs rhs <- idR
     guardMsg (exprAlphaEq lhs rhs) "the two sides are not alpha-equivalent."
     return CTrue
 
-simplifyQuantifiedR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, MonadCatch m)
-                    => Rewrite c m LCore
-simplifyQuantifiedR = anybuR (promoteR quantIdentitiesR <+ promoteR reflexivityClauseR)
+simplifyClauseR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, MonadCatch m)
+                => Rewrite c m LCore
+simplifyClauseR = anybuR (promoteR quantIdentitiesR <+ promoteR reflexivityR)
 
-quantIdentitiesR :: MonadCatch m => Rewrite c m Quantified
+quantIdentitiesR :: MonadCatch m => Rewrite c m Clause
 quantIdentitiesR =
     trueConjLR <+ trueConjRR <+
     trueDisjLR <+ trueDisjRR <+
-    trueImpliesR <+ impliesTrueR
+    trueImpliesR <+ impliesTrueR <+
+    forallTrueR
 
-trueConjLR :: Monad m => Rewrite c m Quantified
+trueConjLR :: Monad m => Rewrite c m Clause
 trueConjLR = do
-    Quantified bs (Conj (Quantified _ CTrue) (Quantified bs' cl)) <- idR
-    return $ Quantified (bs++bs') cl
+    Conj CTrue cl <- idR
+    return cl
 
-trueConjRR :: Monad m => Rewrite c m Quantified
+trueConjRR :: Monad m => Rewrite c m Clause
 trueConjRR = do
-    Quantified bs (Conj (Quantified bs' cl) (Quantified _ CTrue)) <- idR
-    return $ Quantified (bs++bs') cl
+    Conj cl CTrue <- idR
+    return cl
 
-trueDisjLR :: Monad m => Rewrite c m Quantified
+trueDisjLR :: Monad m => Rewrite c m Clause
 trueDisjLR = do
-    Quantified _ (Disj (Quantified _ CTrue) _) <- idR
-    return $ Quantified [] CTrue
+    Disj CTrue _ <- idR
+    return CTrue
 
-trueDisjRR :: Monad m => Rewrite c m Quantified
+trueDisjRR :: Monad m => Rewrite c m Clause
 trueDisjRR = do
-    Quantified _ (Disj _ (Quantified _ CTrue)) <- idR
-    return $ Quantified [] CTrue
+    Disj _ CTrue <- idR
+    return CTrue
 
-trueImpliesR :: Monad m => Rewrite c m Quantified
+trueImpliesR :: Monad m => Rewrite c m Clause
 trueImpliesR = do
-    Quantified bs (Impl _ (Quantified _ CTrue) (Quantified bs' cl)) <- idR
-    return $ Quantified (bs++bs') cl
+    Impl _ CTrue cl <- idR
+    return cl
 
-impliesTrueR :: Monad m => Rewrite c m Quantified
+impliesTrueR :: Monad m => Rewrite c m Clause
 impliesTrueR = do
-    Quantified _ (Impl _ _ (Quantified _ CTrue)) <- idR
-    return $ Quantified [] CTrue
+    Impl _ _ CTrue <- idR
+    return CTrue
+
+forallTrueR :: Monad m => Rewrite c m Clause
+forallTrueR = do
+    Forall _ CTrue <- idR
+    return CTrue
 
 splitAntecedentR :: MonadCatch m => Rewrite c m Clause
 splitAntecedentR = prefixFailMsg "antecedent split failed: " $
                    withPatFailMsg (wrongExprForm "(ante1 ^ ante2) => con") $ do
-    Impl nm (Quantified bs (Conj (Quantified abs1 c1) (Quantified abs2 c2))) con <- idR
-    return $ Impl (nm <> "0") (Quantified (bs++abs1) c1)
-                              (Quantified [] (Impl (nm <> "1") (Quantified (bs++abs2) c2) con))
-
+    Impl nm (Conj c1 c2) con <- idR
+    return $ Impl (nm <> "0") c1 $ Impl (nm <> "1") c2 con
 
 ------------------------------------------------------------------------------
 
@@ -466,9 +456,9 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 ------------------------------------------------------------------------------
 
 -- TODO: revisit this for binder re-ordering issue
-instantiateDictsR :: RewriteH Quantified
+instantiateDictsR :: RewriteH Clause
 instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
-    bs <- forallVarsT idR
+    bs <- forallT idR successT const
     let dArgs = filter (\b -> isId b && isDictTy (varType b)) bs
         uniqDs = nubBy (\ b1 b2 -> eqType (varType b1) (varType b2)) dArgs
     guardMsg (not (null uniqDs)) "no universally quantified dictionaries can be instantiated."
@@ -490,7 +480,7 @@ instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
                 if b `elem` uniqDs
                 then return $ lookup2 b ds
                 else buildSubst b
-    transform (\ c -> instsQuantified (boundVars c) allDs) >>> arr redundantDicts
+    transform (\ c -> instsClause (boundVars c) allDs) >>> arr redundantDicts
 
 ------------------------------------------------------------------------------
 
@@ -498,28 +488,28 @@ conjunctLemmasT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> LemmaN
 conjunctLemmasT new lhs rhs = do
     Lemma ql pl _ <- getLemmaByNameT lhs
     Lemma qr pr _ <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Conj ql qr)) (pl `andP` pr) NotUsed
+    insertLemmaT new $ Lemma (Conj ql qr) (pl `andP` pr) NotUsed
 
 disjunctLemmasT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 disjunctLemmasT new lhs rhs = do
     Lemma ql pl _ <- getLemmaByNameT lhs
     Lemma qr pr _ <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Disj ql qr)) (pl `orP` pr) NotUsed
+    insertLemmaT new $ Lemma (Disj ql qr) (pl `orP` pr) NotUsed
 
 implyLemmasT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> LemmaName -> LemmaName -> Transform c m a ()
 implyLemmasT new lhs rhs = do
     Lemma ql _  _ <- getLemmaByNameT lhs
     Lemma qr pr _ <- getLemmaByNameT rhs
-    insertLemmaT new $ Lemma (Quantified [] (Impl lhs ql qr)) pr NotUsed
+    insertLemmaT new $ Lemma (Impl lhs ql qr) pr NotUsed
 
 ------------------------------------------------------------------------------
 
-mergeQuantifiersR :: MonadCatch m => (Var -> Bool) -> (Var -> Bool) -> Rewrite c m Quantified
+mergeQuantifiersR :: MonadCatch m => (Var -> Bool) -> (Var -> Bool) -> Rewrite c m Clause
 mergeQuantifiersR pl pr = contextfreeT $ mergeQuantifiers pl pr
 
-mergeQuantifiers :: MonadCatch m => (Var -> Bool) -> (Var -> Bool) -> Quantified -> m Quantified
-mergeQuantifiers pl pr (Quantified bs cl) = prefixFailMsg "merge-quantifiers failed: " $ do
-    (con,lq@(Quantified bsl cll),rq@(Quantified bsr clr)) <- case cl of
+mergeQuantifiers :: MonadCatch m => (Var -> Bool) -> (Var -> Bool) -> Clause -> m Clause
+mergeQuantifiers pl pr cl = prefixFailMsg "merge-quantifiers failed: " $ do
+    (con,lq@(Forall bsl cll),rq@(Forall bsr clr)) <- case cl of
         Conj q1 q2 -> return (Conj,q1,q2)
         Disj q1 q2 -> return (Disj,q1,q2)
         Impl nm q1 q2 -> return (Impl nm,q1,q2)
@@ -527,7 +517,7 @@ mergeQuantifiers pl pr (Quantified bs cl) = prefixFailMsg "merge-quantifiers fai
 
     let (lBefore,lbs) = break pl bsl
         (rBefore,rbs) = break pr bsr
-        check b q l r = guardMsg (not (b `elemVarSet` freeVarsQuantified q)) $
+        check b q l r = guardMsg (not (b `elemVarSet` freeVarsClause q)) $
                                  "specified "++l++" binder would capture in "++r++"-hand clause."
         checkUB v vs = let fvs = freeVarsVar v
                        in guardMsg (not (any (`elemVarSet` fvs) vs)) $ "binder " ++ getOccString v ++
@@ -538,11 +528,11 @@ mergeQuantifiers pl pr (Quantified bs cl) = prefixFailMsg "merge-quantifiers fai
         ([],rb:rAfter) -> do
             check rb lq "right" "left"
             checkUB rb rBefore
-            return $ Quantified (bs++[rb]) $ con lq (Quantified (rBefore++rAfter) clr)
+            return $ mkForall [rb] $ con lq (mkForall (rBefore++rAfter) clr)
         (lb:lAfter,[]) -> do
             check lb rq "left" "right"
             checkUB lb lBefore
-            return $ Quantified (bs++[lb]) $ con (Quantified (lBefore++lAfter) cll) rq
+            return $ mkForall [lb] $ con (mkForall (lBefore++lAfter) cll) rq
         (lb:lAfter,rb:rAfter) -> do
             guardMsg (eqType (varType lb) (varType rb)) "specified quantifiers have differing types."
             check lb rq "left" "right"
@@ -550,26 +540,43 @@ mergeQuantifiers pl pr (Quantified bs cl) = prefixFailMsg "merge-quantifiers fai
             checkUB lb lBefore
             checkUB rb rBefore
 
-            let Quantified partial clr' = substQuantified rb (varToCoreExpr lb) $ Quantified rAfter clr
-                rq' = Quantified (rBefore ++ partial) clr'
-                lq' = Quantified (lBefore ++ lAfter) cll
+            let clr' = substClause rb (varToCoreExpr lb) $ mkForall rAfter clr
+                rq' = mkForall rBefore clr'
+                lq' = mkForall (lBefore ++ lAfter) cll
 
-            return $ Quantified (bs++[lb]) (con lq' rq')
+            return $ mkForall [lb] (con lq' rq')
 
 ------------------------------------------------------------------------------
 
-unshadowQuantifiedR :: MonadUnique m => Rewrite c m Quantified
-unshadowQuantifiedR = contextfreeT unshadowQuantified
+unshadowClauseR :: MonadUnique m => Rewrite c m Clause
+unshadowClauseR = contextfreeT unshadowClause
 
-unshadowQuantified :: MonadUnique m => Quantified -> m Quantified
-unshadowQuantified q = go emptySubst (mapUniqSet fs (freeVarsQuantified q)) q
+unshadowClause :: MonadUnique m => Clause -> m Clause
+unshadowClause c = go emptySubst (mapUniqSet fs (freeVarsClause c)) c
     where fs = occNameFS . getOccName
 
-          go subst seen (Quantified bs cl) = go1 subst seen bs [] cl
+          go subst seen (Forall bs cl) = go1 subst seen bs [] cl
+          go subst seen (Conj q1 q2) = do
+            q1' <- go subst seen q1
+            q2' <- go subst seen q2
+            return $ Conj q1' q2'
+          go subst seen (Disj q1 q2) = do
+            q1' <- go subst seen q1
+            q2' <- go subst seen q2
+            return $ Disj q1' q2'
+          go subst seen (Impl nm q1 q2) = do
+            q1' <- go subst seen q1
+            q2' <- go subst seen q2
+            return $ Impl nm q1' q2'
+          go subst _ (Equiv e1 e2) =
+            let e1' = substExpr (text "unshadowClause e1") subst e1
+                e2' = substExpr (text "unshadowClause e2") subst e2
+            in return $ Equiv e1' e2'
+          go _ _ CTrue = return CTrue
 
           go1 subst seen []     bs' cl = do
-            cl' <- go2 subst seen cl
-            return $ Quantified (reverse bs') cl'
+            cl' <- go subst seen cl
+            return $ mkForall (reverse bs') cl'
           go1 subst seen (b:bs) bs' cl
             | fsb `elementOfUniqSet` seen = do
                 b'' <- cloneVarFSH (inventNames seen) b'
@@ -578,23 +585,6 @@ unshadowQuantified q = go emptySubst (mapUniqSet fs (freeVarsQuantified q)) q
                 where fsb = fs b'
                       (subst', b') = substBndr subst b
 
-          go2 subst seen (Conj q1 q2) = do
-            q1' <- go subst seen q1
-            q2' <- go subst seen q2
-            return $ Conj q1' q2'
-          go2 subst seen (Disj q1 q2) = do
-            q1' <- go subst seen q1
-            q2' <- go subst seen q2
-            return $ Disj q1' q2'
-          go2 subst seen (Impl nm q1 q2) = do
-            q1' <- go subst seen q1
-            q2' <- go subst seen q2
-            return $ Impl nm q1' q2'
-          go2 subst _ (Equiv e1 e2) =
-            let e1' = substExpr (text "unshadowQuantified e1") subst e1
-                e2' = substExpr (text "unshadowQuantified e2") subst e2
-            in return $ Equiv e1' e2'
-          go2 _ _ CTrue = return CTrue
 
 inventNames :: UniqSet FastString -> FastString -> FastString
 inventNames s nm = head [ nm' | i :: Int <- [0..]
@@ -603,36 +593,34 @@ inventNames s nm = head [ nm' | i :: Int <- [0..]
 
 ------------------------------------------------------------------------------
 
-instantiateQuantifiedVarR :: (Var -> Bool) -> CoreString -> RewriteH Quantified
-instantiateQuantifiedVarR p cs = prefixFailMsg "instantiation failed: " $ do
-    bs <- forallVarsT idR
+instantiateClauseVarR :: (Var -> Bool) -> CoreString -> RewriteH Clause
+instantiateClauseVarR p cs = prefixFailMsg "instantiation failed: " $ do
+    bs <- forallT idR successT const
     e <- case filter p bs of
                 [] -> fail "no universally quantified variables match predicate."
                 (b:_) | isId b    -> let (before,_) = break (==b) bs
                                      in withVarsInScope before $ parseCoreExprT cs
                       | otherwise -> let (before,_) = break (==b) bs
                                      in liftM (Type . fst) $ withVarsInScope before $ parseTypeWithHolesT cs
-    transform (\ c -> instQuantified (boundVars c) p e) >>> (lintQuantifiedT >> idR) -- lint for sanity
+    transform (\ c -> instClause (boundVars c) p e) >>> (lintClauseT >> idR) -- lint for sanity
 
 ------------------------------------------------------------------------------
 
 -- | Replace all occurrences of the given expression with a new quantified variable.
-abstractQuantifiedR :: forall c m.
+abstractClauseR :: forall c m.
                        ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                        , LemmaContext c, HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadUnique m )
-                    => String -> Transform c m Quantified CoreExpr -> Rewrite c m Quantified
-abstractQuantifiedR nm tr = prefixFailMsg "abstraction failed: " $ do
+                    => String -> Transform c m Clause CoreExpr -> Rewrite c m Clause
+abstractClauseR nm tr = prefixFailMsg "abstraction failed: " $ do
     e <- tr
-    Quantified bs cl <- idR
+    cl <- idR
     b <- constT $ newVarH nm (exprKindOrType e)
     let f = compileFold [Equality [] e (varToCoreExpr b)] -- we don't use mkEquality on purpose, so we can abstract lambdas
-    liftM dropBinders $ return (Quantified (bs++[b]) cl) >>>
+    liftM dropBinders $ return (mkForall [b] cl) >>>
                             extractR (anytdR $ promoteExprR $ runFoldR f :: Rewrite c m LCoreTC)
 
-csInQBodyT :: ( AddBindings c, ReadBindings c, ReadPath c Crumb, HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m ) => CoreString -> Transform c m Quantified CoreExpr
-csInQBodyT cs = do
-    Quantified bs _ <- idR
-    withVarsInScope bs $ parseCoreExprT cs
+csInQBodyT :: ( AddBindings c, ExtendPath c Crumb, ReadBindings c, ReadPath c Crumb, HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m ) => CoreString -> Transform c m Clause CoreExpr
+csInQBodyT cs = forallT successT (parseCoreExprT cs) (flip const)
 
 ------------------------------------------------------------------------------
 
@@ -647,35 +635,39 @@ getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm)
 lemmaBiR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
             , HasLemmas m, MonadCatch m, MonadUnique m)
          => Used -> LemmaName -> BiRewrite c m CoreExpr
-lemmaBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaQ)) (markLemmaUsedT nm u >> idR)
+lemmaBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaC)) (markLemmaUsedT nm u >> idR)
 
 lemmaConsequentR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c
                                 , ReadPath c Crumb, HasLemmas m, MonadCatch m, MonadUnique m)
-                 => Used -> LemmaName -> Rewrite c m Quantified
+                 => Used -> LemmaName -> Rewrite c m Clause
 lemmaConsequentR u nm = prefixFailMsg "lemma-consequent failed:" $
                         withPatFailMsg "lemma is not an implication." $ do
-    Quantified hs (Impl _ ante con) <- lemmaQ <$> getLemmaByNameT nm
-    q' <- transform $ \ c q -> do
-        m <- maybeM ("consequent did not match.") $ lemmaMatch hs con q
+    (hs,ante,pat) <- (getLemmaByNameT nm >>^ lemmaC) >>= \case Forall bs (Impl _ ante con) -> return (bs,ante,con)
+                                                               Impl _ ante con             -> return ([],ante,con)
+    cl' <- transform $ \ c cl -> do
+        m <- maybeM ("consequent did not match.") $ lemmaMatch hs pat cl
         subs <- maybeM ("some quantifiers not instantiated.") $
                 mapM (\h -> (h,) <$> lookupVarEnv m h) hs
-        let q' = substQuantifieds subs ante
-        guardMsg (all (inScope c) $ varSetElems (freeVarsQuantified q'))
+        let cl' = substClauses subs ante
+        guardMsg (all (inScope c) $ varSetElems (freeVarsClause cl'))
                  "some variables in result would be out of scope."
-        return q'
+        return cl'
     markLemmaUsedT nm u
-    return q'
+    return cl'
 
 lemmaConsequentBiR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c
                                   , ReadBindings c, ReadPath c Crumb, HasDebugChan m, HasLemmas m, MonadCatch m
                                   , MonadUnique m)
                    => Used -> LemmaName -> BiRewrite c m CoreExpr
-lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)) (markLemmaUsedT nm u >> idR)
-    where go :: Quantified -> BiRewrite c m CoreExpr
-          go (Quantified bs (Impl anteNm ante (Quantified bs' cl))) = do
-            let eqs = toEqualities $ Quantified (bs++bs') cl -- consequent
+lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go [] . lemmaC)) (markLemmaUsedT nm u >> idR)
+    where go :: [CoreBndr] -> Clause -> BiRewrite c m CoreExpr
+          go bbs (Forall bs cl) = go (bbs++bs) cl
+          go bbs (Impl anteNm ante con) = do
+            let con' = mkForall bbs con
+                bs = forallQs con'
+                eqs = toEqualities con'
                 foldUnfold side f = do
-                    (q,e) <- transform $ \ c e -> do
+                    (cl,e) <- transform $ \ c e -> do
                                 let cf = compileFold $ map f eqs
                                 (e',hs) <- maybeM ("expression did not match "++side++"-hand side") $ runFoldMatches cf c e
                                 let matches = [ case lookupVarEnv hs b of
@@ -683,14 +675,14 @@ lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go . lemmaQ)
                                                     Just arg -> Right (b,arg)
                                               | b <- bs ]
                                     (unmatched, subs) = partitionEithers matches
-                                    Quantified aBs acl = substQuantifieds subs ante
-                                    q = Quantified (unmatched++aBs) acl
-                                return (q,e')
-                    verifyOrCreateT u anteNm q
+                                    acl = substClauses subs ante
+                                    cl = mkForall unmatched acl
+                                return (cl,e')
+                    verifyOrCreateT u anteNm cl
                     return e
             bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)
-          go _ = let t = fail $ show nm ++ " is not an implication."
-                 in bidirectional t t
+          go _ _ = let t = fail $ show nm ++ " is not an implication."
+                   in bidirectional t t
 
 ------------------------------------------------------------------------------
 
@@ -703,14 +695,14 @@ insertLemmasT = constT . mapM_ (uncurry insertLemma)
 modifyLemmaT :: (LemmaContext c, HasLemmas m, Monad m)
              => LemmaName
              -> (LemmaName -> LemmaName) -- ^ modify lemma name
-             -> Rewrite c m Quantified   -- ^ rewrite the quantified clause
+             -> Rewrite c m Clause       -- ^ rewrite the quantified clause
              -> (Proven -> Proven)       -- ^ modify proven status
              -> (Used -> Used)           -- ^ modify used status
              -> Transform c m a ()
 modifyLemmaT nm nFn rr pFn uFn = do
-    Lemma q p u <- getLemmaByNameT nm
-    q' <- rr <<< return q
-    constT $ insertLemma (nFn nm) $ Lemma q' (pFn p) (uFn u)
+    Lemma cl p u <- getLemmaByNameT nm
+    cl' <- rr <<< return cl
+    constT $ insertLemma (nFn nm) $ Lemma cl' (pFn p) (uFn u)
 
 markLemmaUsedT :: (LemmaContext c, HasLemmas m, MonadCatch m) => LemmaName -> Used -> Transform c m a ()
 markLemmaUsedT nm u = ifM (lemmaExistsT nm) (modifyLemmaT nm id idR id (const u)) (return ())
@@ -723,15 +715,15 @@ lemmaExistsT nm = constT $ Map.member nm <$> getLemmas
 
 ------------------------------------------------------------------------------
 
-lemmaNameToQuantifiedT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> Transform c m x Quantified
-lemmaNameToQuantifiedT nm = liftM lemmaQ $ getLemmaByNameT nm
+lemmaNameToClauseT :: (LemmaContext c, HasLemmas m, Monad m) => LemmaName -> Transform c m x Clause
+lemmaNameToClauseT nm = liftM lemmaC $ getLemmaByNameT nm
 
 -- | @e@ ==> @let v = lhs in e@  (also works in a similar manner at Program nodes)
 lemmaLhsIntroR :: LemmaName -> RewriteH Core
-lemmaLhsIntroR = lemmaNameToQuantifiedT >=> eqLhsIntroR
+lemmaLhsIntroR = lemmaNameToClauseT >=> eqLhsIntroR
 
 -- | @e@ ==> @let v = rhs in e@  (also works in a similar manner at Program nodes)
 lemmaRhsIntroR :: LemmaName -> RewriteH Core
-lemmaRhsIntroR = lemmaNameToQuantifiedT >=> eqRhsIntroR
+lemmaRhsIntroR = lemmaNameToClauseT >=> eqRhsIntroR
 
 ------------------------------------------------------------------------------

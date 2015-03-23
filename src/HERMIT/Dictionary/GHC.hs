@@ -1,6 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module HERMIT.Dictionary.GHC
     ( -- * GHC-based Transformations
       -- | This module contains transformations that are reflections of GHC functions, or derived from GHC functions.
@@ -17,7 +19,6 @@ module HERMIT.Dictionary.GHC
       -- A zombie is an identifer that has 'OccInfo' 'IAmDead', but still has occurrences.
     , lintExprT
     , lintModuleT
-    , lintQuantifiedT
     , lintClauseT
     , occurAnalyseR
     , occurAnalyseChangedR
@@ -38,7 +39,7 @@ import           Control.Monad.IO.Class
 
 import           Data.Char (isSpace)
 import           Data.Either (partitionEithers)
-import           Data.List (mapAccumL)
+import           Data.List (mapAccumL, nub)
 import qualified Data.Map as M
 import           Data.String
 
@@ -70,8 +71,8 @@ externals =
         , "will catch that however."] .+ Deep .+ Debug .+ Query
     , external "lint-module" (promoteModGutsT lintModuleT :: TransformH LCoreTC String)
         [ "Runs GHC's Core Lint, which typechecks the current module."] .+ Deep .+ Debug .+ Query
-    , external "lint" (promoteT lintQuantifiedT :: TransformH LCoreTC String)
-        [ "Lint check a quantified clause." ]
+    , external "lint" (promoteT lintClauseT :: TransformH LCoreTC String)
+        [ "Lint check a clause." ]
     , external "load-lemma-library" (flip loadLemmaLibraryT Nothing :: HermitName -> TransformH LCore String)
         [ "Dynamically load a library of lemmas." ]
     , external "load-lemma-library" ((\nm -> loadLemmaLibraryT nm . Just) :: HermitName -> LemmaName -> TransformH LCore String)
@@ -229,24 +230,15 @@ buildDictionaryT = prefixFailMsg "buildDictionaryT failed: " $ contextfreeT $ \ 
 
 ----------------------------------------------------------------------
 
-lintQuantifiedT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, LemmaContext c, HasDynFlags m, MonadCatch m)
-                => Transform c m Quantified String
-lintQuantifiedT = lintQuantifiedWorkT []
-
-lintQuantifiedWorkT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, LemmaContext c, HasDynFlags m, MonadCatch m)
-                    => [Var] -> Transform c m Quantified String
-lintQuantifiedWorkT bs = readerT $ \ (Quantified bs' _) -> quantifiedT successT (lintClauseT (bs++bs')) (flip const)
-
-lintClauseT :: (AddBindings c, BoundVars c, ReadPath c Crumb, ExtendPath c Crumb, LemmaContext c, HasDynFlags m, MonadCatch m)
-            => [Var] -> Transform c m Clause String
-lintClauseT bs = do
-    t <- readerT $ \case Equiv {} -> return $ promoteT ({- arr (mkCoreLams bs) >>> -} lintExprT) -- TODO: why does this break core lint?!
-                         _        -> return $ promoteT (lintQuantifiedWorkT bs)
-    let f s1 s2 | null s1 || null s2 = s1 ++ s2
-                | s1 == s2 = s1
-                | otherwise = s1 ++ "\n" ++ s2
-    str <- clauseT t t (const f) (return "")
-    return str
+lintClauseT :: forall c m.
+               ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb
+               , HasDynFlags m, MonadCatch m )
+            => Transform c m Clause String
+lintClauseT = do
+    strs <- extractT (collectPruneT (promoteExprT $ lintExprT `catchM` return) :: Transform c m LCore [String])
+    let strs' = nub $ filter notNull strs
+    guardMsg (null strs' || (strs' == ["Core Lint Passed"])) $ unlines strs'
+    return "Core Lint Passed"
 
 ----------------------------------------------------------------------
 
@@ -268,7 +260,7 @@ loadLemmaLibraryT nm mblnm = prefixFailMsg "Loading lemma library failed: " $
                                     (M.lookup lnm ls))
                      mblnm
         r <- forM nls $ \ nl@(n, l) -> do
-                    er <- attemptM $ applyT lintQuantifiedT c $ lemmaQ l
+                    er <- attemptM $ applyT lintClauseT c $ lemmaC l
                     case er of
                         Left msg -> return $ Left $ "Not adding lemma " ++ show n ++ " because lint failed.\n" ++ msg
                         Right _  -> return $ Right nl

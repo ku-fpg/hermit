@@ -54,8 +54,8 @@ applyRewrite rr expr = do
     let str = unparseExprH expr
     case ps of
         todo@(Unproven {}) : todos -> do
-            q' <- queryInFocus (inProofFocusR todo (promoteR rr) >>> (contextfreeT (applyT lintQuantifiedT (ptContext todo)) >> idR) :: TransformH Core Quantified) (Always str)
-            let todo' = todo { ptLemma = (ptLemma todo) { lemmaQ = q' } }
+            cl' <- queryInFocus (inProofFocusR todo (promoteR rr) >>> (contextfreeT (applyT lintClauseT (ptContext todo)) >> idR) :: TransformH Core Clause) (Always str)
+            let todo' = todo { ptLemma = (ptLemma todo) { lemmaC = cl' } }
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo':todos) (cl_proofstack st) }
         _ -> do
             (k,(kEnv,(ast,cl))) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor &&& cl_corelint)

@@ -36,7 +36,7 @@ import HERMIT.Context
 import HERMIT.External
 import HERMIT.GHC hiding ((<>))
 import HERMIT.Kure
-import HERMIT.Lemma(Quantified(..))
+import HERMIT.Lemma(Clause(..))
 import HERMIT.Name
 
 import HERMIT.Dictionary.Navigation.Crumbs
@@ -127,13 +127,12 @@ bindingGroupOf p = any p . bindVars
 bindingOf :: (Var -> Bool) -> LCoreTC -> Bool
 bindingOf p = any p . varSetElems . binders
 
--- TODO: check this is correct, written in a hurry
 binders :: LCoreTC -> VarSet
-binders (LTCCore (LQuantified (Quantified bs _)))  = mkVarSet bs
-binders (LTCCore (LClause _))                      = emptyVarSet
-binders (LTCCore (LCore core))                     = bindersCore core
-binders (LTCTyCo (TypeCore ty))                    = binderType ty
-binders (LTCTyCo (CoercionCore co))                = binderCoercion co
+binders (LTCCore (LClause (Forall bs _))) = mkVarSet bs
+binders (LTCCore (LClause _))             = emptyVarSet
+binders (LTCCore (LCore core))            = bindersCore core
+binders (LTCTyCo (TypeCore ty))           = binderType ty
+binders (LTCTyCo (CoercionCore co))       = binderCoercion co
 
 bindersCore :: Core -> VarSet
 bindersCore (BindCore bnd)  = binderBind bnd

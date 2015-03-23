@@ -2,18 +2,18 @@
 {-# LANGUAGE InstanceSigs #-}
 
 module HERMIT.Lemma
-    ( -- * Quantified
-      Quantified(..)
-    , mkQuantified
-    , Clause(..)
-    , instQuantified
-    , instsQuantified
+    ( -- * Clause
+      Clause(..)
+    , mkClause
+    , mkForall
+    , forallQs
+    , instClause
+    , instsClause
     , discardUniVars
-    , freeVarsQuantified
+    , freeVarsClause
     , clauseSyntaxEq
-    , quantifiedSyntaxEq
-    , substQuantified
-    , substQuantifieds
+    , substClause
+    , substClauses
     , dropBinders
     , redundantDicts
       -- * Lemmas
@@ -41,15 +41,15 @@ import Language.KURE.MonadCatch
 
 ----------------------------------------------------------------------------
 
--- | Build a Quantified from a list of universally quantified binders and two expressions.
+-- | Build a Clause from a list of universally quantified binders and two expressions.
 -- If the head of either expression is a lambda expression, it's binder will become a universally quantified binder
 -- over both sides. It is assumed the two expressions have the same type.
 --
--- Ex.    mkQuantified [] (\x. foo x) bar === forall x. foo x = bar x
---        mkQuantified [] (baz y z) (\x. foo x x) === forall x. baz y z x = foo x x
---        mkQuantified [] (\x. foo x) (\y. bar y) === forall x. foo x = bar x
-mkQuantified :: [CoreBndr] -> CoreExpr -> CoreExpr -> Quantified
-mkQuantified vs lhs rhs = redundantDicts $ dropBinders $ Quantified (tvs++vs++lbs++rbs) (Equiv lhs' rbody)
+-- Ex.    mkClause [] (\x. foo x) bar === forall x. foo x = bar x
+--        mkClause [] (baz y z) (\x. foo x x) === forall x. baz y z x = foo x x
+--        mkClause [] (\x. foo x) (\y. bar y) === forall x. foo x = bar x
+mkClause :: [CoreBndr] -> CoreExpr -> CoreExpr -> Clause
+mkClause vs lhs rhs = redundantDicts $ dropBinders $ Forall (tvs++vs++lbs++rbs) (Equiv lhs' rbody)
     where (lbs, lbody) = collectBinders lhs
           rhs' = uncurry mkCoreApps $ betaReduceAll rhs $ map varToCoreExpr lbs
           (rbs, rbody) = collectBinders rhs'
@@ -59,31 +59,37 @@ mkQuantified vs lhs rhs = redundantDicts $ dropBinders $ Quantified (tvs++vs++lb
               $ filterVarSet isTyVar
               $ delVarSetList (unionVarSets $ map freeVarsExpr [lhs',rbody]) (vs++lbs++rbs)
 
-freeVarsQuantified :: Quantified -> VarSet
-freeVarsQuantified (Quantified bs cl) = delVarSetList (freeVarsClause cl) bs
-
 freeVarsClause :: Clause -> VarSet
-freeVarsClause (Conj  q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
-freeVarsClause (Disj  q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
-freeVarsClause (Impl _ q1 q2) = unionVarSets $ map freeVarsQuantified [q1,q2]
-freeVarsClause (Equiv e1 e2) = unionVarSets $ map freeVarsExpr [e1,e2]
-freeVarsClause CTrue         = emptyVarSet
+freeVarsClause (Forall bs cl) = delVarSetList (freeVarsClause cl) bs
+freeVarsClause (Conj  q1 q2)  = unionVarSets $ map freeVarsClause [q1,q2]
+freeVarsClause (Disj  q1 q2)  = unionVarSets $ map freeVarsClause [q1,q2]
+freeVarsClause (Impl _ q1 q2) = unionVarSets $ map freeVarsClause [q1,q2]
+freeVarsClause (Equiv e1 e2)  = unionVarSets $ map freeVarsExpr [e1,e2]
+freeVarsClause CTrue          = emptyVarSet
 
-dropBinders :: Quantified -> Quantified
-dropBinders (Quantified bs cl) =
+dropBinders :: Clause -> Clause
+dropBinders (Forall bs cl)  =
     case bs of
-        []      -> Quantified [] (dropBindersClause cl)
-        (b:bs') -> case dropBinders (Quantified bs' cl) of
-                    q@(Quantified bs'' cl')
-                        | b `elemVarSet` freeVarsQuantified q -> Quantified (b:bs'') cl'
-                        | otherwise -> q
+        []      -> dropBinders cl
+        (b:bs') -> let c = dropBinders (mkForall bs' cl)
+                   in if b `elemVarSet` freeVarsClause c
+                      then addBinder b c
+                      else c
+dropBinders (Conj q1 q2)    = Conj (dropBinders q1) (dropBinders q2)
+dropBinders (Disj q1 q2)    = Disj (dropBinders q1) (dropBinders q2)
+dropBinders (Impl nm q1 q2) = Impl nm (dropBinders q1) (dropBinders q2)
+dropBinders other           = other
 
-dropBindersClause :: Clause -> Clause
-dropBindersClause (Conj q1 q2) = Conj (dropBinders q1) (dropBinders q2)
-dropBindersClause (Disj q1 q2) = Disj (dropBinders q1) (dropBinders q2)
-dropBindersClause (Impl nm q1 q2) = Impl nm (dropBinders q1) (dropBinders q2)
-dropBindersClause equiv        = equiv
+addBinder :: CoreBndr -> Clause -> Clause
+addBinder b = mkForall [b]
 
+mkForall :: [CoreBndr] -> Clause -> Clause
+mkForall bs (Forall bs' cl) = Forall (bs++bs') cl
+mkForall bs cl              = Forall bs cl
+
+forallQs :: Clause -> [CoreBndr]
+forallQs (Forall bs _) = bs
+forallQs _             = []
 
 -- | A name for lemmas. Use a newtype so we can tab-complete in shell.
 newtype LemmaName = LemmaName String deriving (Eq, Ord, Typeable)
@@ -96,7 +102,7 @@ instance IsString LemmaName where fromString = LemmaName
 instance Show LemmaName where show (LemmaName s) = s
 
 -- | An equality with a proven/used status.
-data Lemma = Lemma { lemmaQ :: Quantified
+data Lemma = Lemma { lemmaC :: Clause
                    , lemmaP :: Proven     -- whether lemma has been proven
                    , lemmaU :: Used       -- whether lemma has been used
                    }
@@ -139,7 +145,7 @@ orP = max
 
 data Used = Obligation -- ^ this MUST be proven immediately
           | UnsafeUsed -- ^ used, but can be proven later (only introduced in unsafe shell)
-          | NotUsed    -- ^ not used
+          | NotUsed
     deriving (Eq, Typeable)
 
 instance Show Used where
@@ -147,11 +153,10 @@ instance Show Used where
     show UnsafeUsed = "Used"
     show NotUsed    = "Not Used"
 
-data Quantified = Quantified [CoreBndr] Clause
-
-data Clause = Conj Quantified Quantified
-            | Disj Quantified Quantified
-            | Impl LemmaName Quantified Quantified -- ^ name for the antecedent when it is in scope
+data Clause = Forall [CoreBndr] Clause
+            | Conj Clause Clause
+            | Disj Clause Clause
+            | Impl LemmaName Clause Clause -- ^ name for the antecedent when it is in scope
             | Equiv CoreExpr CoreExpr
             | CTrue -- the always true clause
 
@@ -163,70 +168,73 @@ type NamedLemma = (LemmaName, Lemma)
 
 ------------------------------------------------------------------------------
 
-discardUniVars :: Quantified -> Quantified
-discardUniVars (Quantified _ cl) = Quantified [] cl
+discardUniVars :: Clause -> Clause
+discardUniVars (Forall _ cl) = cl
+discardUniVars cl            = cl
 
 ------------------------------------------------------------------------------
 
--- | Assumes Var is free in Quantified. If not, no substitution will happen, though uniques might be freshened.
-substQuantified :: Var -> CoreArg -> Quantified -> Quantified
-substQuantified v e = substQuantifieds [(v,e)]
+-- | Assumes Var is free in Clause. If not, no substitution will happen, though uniques might be freshened.
+substClause :: Var -> CoreArg -> Clause -> Clause
+substClause v e = substClauses [(v,e)]
 
-substQuantifieds :: [(Var,CoreArg)] -> Quantified -> Quantified
-substQuantifieds ps q = substQuantifiedSubst (extendSubstList sub ps) q
+substClauses :: [(Var,CoreArg)] -> Clause -> Clause
+substClauses ps cl = substClauseSubst (extendSubstList sub ps) cl
     where (vs,es) = unzip ps
           sub = mkEmptySubst
               $ mkInScopeSet
-              $ delVarSetList (unionVarSets $ freeVarsQuantified q : map freeVarsExpr es) vs
+              $ delVarSetList (unionVarSets $ freeVarsClause cl : map freeVarsExpr es) vs
 
 -- | Note: Subst must be properly set up with an InScopeSet that includes all vars
 -- in scope in the *range* of the substitution.
-substQuantifiedSubst :: Subst -> Quantified -> Quantified
-substQuantifiedSubst = go
-    where go sub (Quantified bs cl) =
+substClauseSubst :: Subst -> Clause -> Clause
+substClauseSubst = go
+    where go sub (Forall bs cl) =
             let (bs', cl') = go1 sub bs [] cl
-            in Quantified bs' cl'
+            in mkForall bs' cl'
+          go _     CTrue           = CTrue
+          go subst (Conj q1 q2)    = Conj    (go subst q1) (go subst q2)
+          go subst (Disj q1 q2)    = Disj    (go subst q1) (go subst q2)
+          go subst (Impl nm q1 q2) = Impl nm (go subst q1) (go subst q2)
+          go subst (Equiv e1 e2)   =
+            let e1' = substExpr (text "substClauseSubst e1") subst e1
+                e2' = substExpr (text "substClauseSubst e2") subst e2
+            in Equiv e1' e2'
 
-          go1 subst [] bs' cl = (reverse bs', go2 subst cl)
+          go1 subst [] bs' cl = (reverse bs', go subst cl)
           go1 subst (b:bs) bs' cl =
             let (subst',b') = substBndr subst b
             in go1 subst' bs (b':bs') cl
-          go2 _     CTrue        = CTrue
-          go2 subst (Conj q1 q2) = Conj (go subst q1) (go subst q2)
-          go2 subst (Disj q1 q2) = Disj (go subst q1) (go subst q2)
-          go2 subst (Impl nm q1 q2) = Impl nm (go subst q1) (go subst q2)
-          go2 subst (Equiv e1 e2) =
-            let e1' = substExpr (text "substQuantified e1") subst e1
-                e2' = substExpr (text "substQuantified e2") subst e2
-            in Equiv e1' e2'
 
 ------------------------------------------------------------------------------
 
-redundantDicts :: Quantified -> Quantified
-redundantDicts (Quantified bs cl) = go [] [] cl bs
-    where go bnds _   c [] = Quantified (reverse bnds) c
+redundantDicts :: Clause -> Clause
+redundantDicts (Forall bs cl) = go [] [] cl bs
+    where go []   _   c [] = c
+          go bnds _   c [] = mkForall (reverse bnds) c
           go bnds tys c (b:bs')
               | isDictTy bTy = -- is a dictionary binder
                 let match = [ varToCoreExpr pb | (pb,ty) <- tys , eqType bTy ty ]
                 in if null match
                    then go (b:bnds) ((b,bTy):tys) c bs' -- not seen before
-                   else let Quantified bs'' c' = substQuantified b (head match) $ Quantified bs' c
+                   else let Forall bs'' c' = substClause b (head match) $ mkForall bs' c
                         in go bnds tys c' bs'' -- seen
               | otherwise = go (b:bnds) tys c bs'
             where bTy = varType b
+redundantDicts cl             = cl
 
 ------------------------------------------------------------------------------
 
--- | Instantiate one of the universally quantified variables in a 'Quantified'.
+-- | Instantiate one of the universally quantified variables in a 'Clause'.
 -- Note: assumes implicit ordering of variables, such that substitution happens to the right
 -- as it does in case alternatives. Only first variable that matches predicate is
 -- instantiated.
-instQuantified :: MonadCatch m => VarSet        -- vars in scope
-                               -> (Var -> Bool) -- predicate to select var
-                               -> CoreExpr      -- expression to instantiate with
-                               -> Quantified -> m Quantified
-instQuantified inScope p e = liftM fst . go []
-    where go bbs (Quantified bs cl)
+instClause :: MonadCatch m => VarSet        -- vars in scope
+                           -> (Var -> Bool) -- predicate to select var
+                           -> CoreExpr      -- expression to instantiate with
+                           -> Clause -> m Clause
+instClause inScope p e = prefixFailMsg "clause instantiation failed: " . liftM fst . go []
+    where go bbs (Forall bs cl)
             | not (any p bs) = -- not quantified at this level, so try further down
                 let go2 con q1 q2 = do
                         er <- attemptM $ go (bs++bbs) q1
@@ -237,13 +245,14 @@ instQuantified inScope p e = liftM fst . go []
                                 case er' of
                                     Right (q2',s) -> return (con q1 q2', s)
                                     Left msg -> fail msg
-                        return (replaceVars s bs (Quantified [] cl'), s)
+                        return (replaceVars s bs cl', s)
                 in case cl of
                     Equiv{} -> fail "specified variable is not universally quantified."
                     CTrue   -> fail "specified variable is not universally quantified."
                     Conj q1 q2 -> go2 Conj q1 q2
                     Disj q1 q2 -> go2 Disj q1 q2
                     Impl nm q1 q2 -> go2 (Impl nm) q1 q2
+                    Forall _ _ -> fail "impossible case!"
 
             | otherwise = do -- quantified here, so do substitution and start bubbling up
                 let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
@@ -263,31 +272,30 @@ instQuantified inScope p e = liftM fst . go []
                 let newBs = varSetElems
                           $ filterVarSet (\v -> not (isId v) || isLocalId v)
                           $ delVarSetList (minusVarSet (freeVarsExpr e') inScope) bsInScope
-                    q' = substQuantified i e' $ Quantified vs cl
+                    cl' = substClause i e' $ mkForall vs cl
 
-                return (replaceVars sub (bs' ++ newBs) q', sub)
+                return (replaceVars sub (bs' ++ newBs) cl', sub)
+          go _ _ = fail "only applies to clauses with quantifiers."
 
 -- | The function which 'bubbles up' after the instantiation takes place,
 -- replacing any type variables that were instantiated as a result of specialization.
-replaceVars :: TvSubst -> [Var] -> Quantified -> Quantified
+replaceVars :: TvSubst -> [Var] -> Clause -> Clause
 replaceVars sub vs = go (reverse vs)
-    where addB b (Quantified bs cl) = Quantified (b:bs) cl
-
-          go [] q = q
-          go (b:bs) q
+    where go [] cl = cl
+          go (b:bs) cl
             | isTyVar b = case lookupTyVar sub b of
-                            Nothing -> go bs (addB b q)
+                            Nothing -> go bs (addBinder b cl)
                             Just ty -> let new = varSetElems (freeVarsType ty)
-                                       in go (new++bs) (substQuantified b (Type ty) q)
-            | otherwise = go bs (addB b q)
+                                       in go (new++bs) (substClause b (Type ty) cl)
+            | otherwise = go bs (addBinder b cl)
 
 -- tvSubstToSubst :: TvSubst -> Subst
 -- tvSubstToSubst (TvSubst inS tEnv) = mkSubst inS tEnv emptyVarEnv emptyVarEnv
 
--- | Instantiate a set of universally quantified variables in a 'Quantified'.
+-- | Instantiate a set of universally quantified variables in a 'Clause'.
 -- It is important that all type variables appear before any value-level variables in the first argument.
-instsQuantified :: MonadCatch m => VarSet -> [(Var,CoreExpr)] -> Quantified -> m Quantified
-instsQuantified inScope = flip (foldM (\ q (v,e) -> instQuantified inScope (==v) e q)) . reverse
+instsClause :: MonadCatch m => VarSet -> [(Var,CoreExpr)] -> Clause -> m Clause
+instsClause inScope = flip (foldM (\ q (v,e) -> instClause inScope (==v) e q)) . reverse
 -- foldM is a left-to-right fold, so the reverse is important to do substitutions in reverse order
 -- which is what we want (all value variables should be instantiated before type variables).
 
@@ -297,14 +305,11 @@ instsQuantified inScope = flip (foldM (\ q (v,e) -> instQuantified inScope (==v)
 
 -- | Syntactic Equality of clauses.
 clauseSyntaxEq :: Clause -> Clause -> Bool
-clauseSyntaxEq (Conj q1 q2)    (Conj p1 p2)    = quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
-clauseSyntaxEq (Disj q1 q2)    (Disj p1 p2)    = quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
-clauseSyntaxEq (Impl n1 q1 q2) (Impl n2 p1 p2) = n1 == n2 && quantifiedSyntaxEq q1 p1 && quantifiedSyntaxEq q2 p2
-clauseSyntaxEq (Equiv e1 e2)   (Equiv e1' e2') = exprSyntaxEq e1 e1'      && exprSyntaxEq e2 e2'
-clauseSyntaxEq _               _               = False
-
--- | Syntactic Equality of quantifiers.
-quantifiedSyntaxEq :: Quantified -> Quantified -> Bool
-quantifiedSyntaxEq (Quantified bs1 cl1) (Quantified bs2 cl2) = (bs1 == bs2) && clauseSyntaxEq cl1 cl2
+clauseSyntaxEq (Forall bs1 c1)  (Forall bs2 c2) = (bs1 == bs2) && clauseSyntaxEq c1 c2
+clauseSyntaxEq (Conj q1 q2)     (Conj p1 p2)    = clauseSyntaxEq q1 p1 && clauseSyntaxEq q2 p2
+clauseSyntaxEq (Disj q1 q2)     (Disj p1 p2)    = clauseSyntaxEq q1 p1 && clauseSyntaxEq q2 p2
+clauseSyntaxEq (Impl n1 q1 q2)  (Impl n2 p1 p2) = n1 == n2 && clauseSyntaxEq q1 p1 && clauseSyntaxEq q2 p2
+clauseSyntaxEq (Equiv e1 e2)    (Equiv e1' e2') = exprSyntaxEq e1 e1'      && exprSyntaxEq e2 e2'
+clauseSyntaxEq _                _               = False
 
 ------------------------------------------------------------------------------

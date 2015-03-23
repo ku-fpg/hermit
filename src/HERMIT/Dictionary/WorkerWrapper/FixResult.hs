@@ -224,13 +224,13 @@ wwResultFusionBR :: BiRewriteH CoreExpr
 wwResultFusionBR =
     beforeBiR (prefixFailMsg "worker/wrapper fusion failed: " $
                withPatFailMsg "malformed WW Fusion rule." $
-               do Quantified _ (Equiv w
+               do Equiv w
                         (Lam x1 (App rep
                                      (App (App _ (Lam x2 (App abs (App w' (Var x2')))))
                                           (Var x1')
                                      )
                                 )
-                        )) <- constT (lemmaQ <$> findLemma workLabel)
+                        ) <- constT (lemmaC <$> findLemma workLabel)
                   guardMsg (exprSyntaxEq w w' && x1 == x1' && x2 == x2') "malformed WW Fusion rule."
                   return (abs,rep,w)
               )
@@ -276,7 +276,7 @@ wwResultGenerateFusionT mAss =
                ) <- projectT
        guardMsg (w == w' && x1 == x1' && x2 == x2') wrongForm
        whenJust (verifyWWAss abs rep f) mAss
-       insertLemmaT workLabel $ Lemma (Quantified [] (Equiv (varToCoreExpr w) e)) Proven NotUsed
+       insertLemmaT workLabel $ Lemma (Equiv (varToCoreExpr w) e) Proven NotUsed
   where
     wrongForm = "definition does not have the form: work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)"
 

@@ -104,8 +104,8 @@ forceProofs = do
         nls = nubBy ((==) `on` snd3) ls
     unless (null nls) $ do
         (_,topc) <- queryK (cl_kernel st) (arr topLevelHermitC) Never (cl_kernel_env st) (cl_cursor st)
-        let chooseC c q = if all (inScope topc) (varSetElems (freeVarsQuantified q)) then (True,topc) else (False,c)
-            nls' = [ (chooseC c (lemmaQ l), nm, l) | (c,nm,l) <- nls ]
+        let chooseC c cl = if all (inScope topc) (varSetElems (freeVarsClause cl)) then (True,topc) else (False,c)
+            nls' = [ (chooseC c (lemmaC l), nm, l) | (c,nm,l) <- nls ]
             nonTemp = [ (nm,l) | ((True,_),nm,l) <- nls' ]
         unless (null nonTemp) $
             queryInFocus (insertLemmasT nonTemp :: TransformH LCore ())
@@ -120,7 +120,7 @@ endProof reason expr = do
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
         t = case reason of
                 UserAssume -> markLemmaProvenT nm Assumed
-                Reflexivity -> setFailMsg msg (do tryR (extractR simplifyQuantifiedR) >>> verifyQuantifiedT
+                Reflexivity -> setFailMsg msg (do tryR (extractR simplifyClauseR) >>> verifyClauseT
                                                   markLemmaProvenT nm Proven)
                 UserProof up -> let UserProofTechnique tr = up
                                 in extractT tr >> markLemmaProvenT nm Proven
