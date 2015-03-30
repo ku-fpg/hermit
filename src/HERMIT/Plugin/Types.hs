@@ -61,7 +61,6 @@ data PluginState = PluginState
     , ps_tick           :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
     , ps_corelint       :: Bool                                     -- ^ if true, run Core Lint on module after each rewrite
     , ps_diffonly       :: Bool                                     -- ^ if true, show diffs rather than pp full code (TODO: move into pretty opts)
-    , ps_failhard       :: Bool                                     -- ^ if true, abort on *any* failure
     -- this should be in a reader
     , ps_kernel         :: Kernel
     , ps_pass           :: PassInfo

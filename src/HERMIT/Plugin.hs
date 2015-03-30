@@ -76,7 +76,6 @@ defPS initAST kernel passInfo = do
                 , ps_tick           = emptyTick
                 , ps_corelint       = False
                 , ps_diffonly       = False
-                , ps_failhard       = False
                 , ps_kernel         = kernel
                 , ps_pass           = passInfo
                 }

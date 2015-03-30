@@ -272,6 +272,7 @@ data CommandLineState = CommandLineState
     , cl_running_script :: Maybe Script           -- ^ Nothing = no script running, otherwise the remaining script commands
     , cl_safety         :: Safety                 -- ^ which level of safety we are running in
     , cl_templemmas     :: TVar [(HermitC,LemmaName,Lemma)] -- ^ updated by kernel env with temporary obligations
+    , cl_failhard       :: Bool                   -- ^ Any exception will cause an abort.
     } deriving (Typeable)
 
 type PathStack = ([LocalPathH], LocalPathH)
@@ -313,12 +314,6 @@ cl_diffonly = ps_diffonly . cl_pstate
 
 setDiffOnly :: CommandLineState -> Bool -> CommandLineState
 setDiffOnly st b = st { cl_pstate = (cl_pstate st) { ps_diffonly = b } }
-
-cl_failhard :: CommandLineState -> Bool
-cl_failhard = ps_failhard . cl_pstate
-
-setFailHard :: CommandLineState -> Bool -> CommandLineState
-setFailHard st b = st { cl_pstate = (cl_pstate st) { ps_failhard = b } }
 
 cl_kernel :: CommandLineState -> Kernel
 cl_kernel = ps_kernel . cl_pstate
@@ -366,6 +361,7 @@ mkCLS = do
                               , cl_running_script = Nothing
                               , cl_safety         = NormalSafety
                               , cl_templemmas     = tlv
+                              , cl_failhard       = False
                               }
     return $ setPrettyOpts st $ (cl_pretty_opts st) { po_width = w }
 

@@ -77,7 +77,7 @@ shell_externals = map (.+ Shell)
         , "print diffs rather than full code after a rewrite" ]
     , external "set-fail-hard"   (\ bStr -> CLSModify $ \ st ->
         case reads bStr of
-            [(b,"")] -> return $ Right $ setFailHard st b
+            [(b,"")] -> return $ Right $ st { cl_failhard = b }
             _        -> return $ Left $ CLError "valid arguments are True and False" )
         [ "set-fail-hard <True|False>; False by default"
         , "any rewrite failure causes compilation to abort" ]
