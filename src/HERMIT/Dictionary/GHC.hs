@@ -140,8 +140,10 @@ lintModuleT =
 lintExprT :: (BoundVars c, Monad m, HasDynFlags m) => Transform c m CoreExpr String
 lintExprT = transform $ \ c e -> do
     dflags <- getDynFlags
-    maybe (return "Core Lint Passed") (fail . showSDoc dflags)
-                 $ CoreLint.lintExpr (varSetElems $ boundVars c) e
+    case e of
+        Type _ -> fail "cannot core lint types."
+        _ -> maybe (return "Core Lint Passed") (fail . showSDoc dflags)
+                   (CoreLint.lintExpr (varSetElems $ boundVars c) e)
 
 -------------------------------------------
 
