@@ -53,7 +53,6 @@ module HERMIT.Dictionary.Reasoning
     , instantiateDictsR
     , instantiateClauseVarR
     , abstractClauseR
-    , discardUniVars
     ) where
 
 import           Control.Arrow hiding ((<+>))
