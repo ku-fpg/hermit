@@ -18,6 +18,7 @@ module HERMIT.Shell.ShellEffect
 
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Reader (ask)
 import Control.Monad.State (MonadState(..), gets)
 
 import Data.Typeable
@@ -37,8 +38,7 @@ import System.IO
 
 data ShellEffect :: * where
     Abort             :: ShellEffect
-    CLSModify         :: (CommandLineState -> IO (Either CLException CommandLineState)) -> ShellEffect
-    CLSModifyAndShow  :: (CommandLineState -> IO (Either CLException CommandLineState)) -> ShellEffect
+    CLSModify         :: CLT IO () -> ShellEffect
     PluginComp        :: PluginM () -> ShellEffect
     Continue          :: ShellEffect
     Resume            :: ShellEffect
@@ -56,11 +56,7 @@ performShellEffect Abort  = abort
 performShellEffect Resume = announceUnprovens >> gets cl_cursor >>= resume
 performShellEffect Continue = announceUnprovens >> get >>= continue
 
-performShellEffect (CLSModify f) = get >>= liftAndCatchIO . f >>= either throwError put
-
-performShellEffect (CLSModifyAndShow f) = do
-    get >>= liftAndCatchIO . f >>= either throwError put
-    ifM isRunningScript (return ()) (showWindow Nothing)
+performShellEffect (CLSModify m) = clm2clt m
 
 performShellEffect (PluginComp m) = pluginM m
 
@@ -73,13 +69,15 @@ dumpT fileName pp renderer width = do
                                hClose h
       _ -> fail "dump: bad renderer option"
 
-dump :: FilePath -> PrettyPrinter -> String -> Int -> CommandLineState -> IO (Either CLException CommandLineState)
-dump fileName pp renderer width st = do
+dump :: FilePath -> PrettyPrinter -> String -> Int -> CLT IO ()
+dump fileName pp renderer width = do
+    st <- get
+    env <- ask
     let st' = setPrettyOpts (setPretty st pp) $ (cl_pretty_opts st) { po_width = width }
-    (r, _st'') <- runCLT st' $ do
+    (er, _st'') <- runCLT env st' $ do
         pluginM (changeRenderer renderer)
         h <- liftIO $ openFile fileName WriteMode
-        showWindow (Just h)
+        showWindowAlways (Just h)
         liftIO $ hClose h
-    return $ fmap (const st) r
+    either throwError return er
 

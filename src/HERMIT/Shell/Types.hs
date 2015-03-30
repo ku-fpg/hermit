@@ -20,6 +20,7 @@ import Control.Concurrent.STM
 import Control.Monad (liftM, unless, when, forM_, forM, unless)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
 import Control.Monad.State (MonadState(..), StateT(..), gets, modify)
 import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
@@ -63,12 +64,12 @@ data QueryFun :: * where
    QueryDocH    :: Injection a LCoreTC => TransformH a DocH         -> QueryFun
    QueryPrettyH :: Injection a LCoreTC => PrettyH a                 -> QueryFun
    Diff         :: AST -> AST                                       -> QueryFun
-   Inquiry      :: (CommandLineState -> IO String)                  -> QueryFun
+   Inquiry      :: (PluginReader -> CommandLineState -> IO String)  -> QueryFun
    QueryUnit    :: Injection a LCoreTC => TransformH a ()           -> QueryFun
    deriving Typeable
 
 message :: String -> QueryFun
-message str = Inquiry (const $ return str)
+message = Inquiry . const . const . return
 
 instance Extern QueryFun where
    type Box QueryFun = QueryFun
@@ -91,11 +92,12 @@ performQuery qf expr = go qf
             doc <- prefixFailMsg "Query failed: " $ queryInContext (liftPrettyH (pOptions (cl_pretty st)) $ promoteT q) cm
             liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
 
-          go (Inquiry f) = get >>= liftIO . f >>= putStrToConsole
+          go (Inquiry f) = ask >>= \env -> get >>= liftIO . f env >>= putStrToConsole
 
           go (Diff ast1 ast2) = do
+            k <- asks pr_kernel
             st <- get
-            all_asts <- listK (cl_kernel st)
+            all_asts <- listK k
 
             let getCmds ast
                     | ast == ast1 = []
@@ -125,7 +127,8 @@ performQuery qf expr = go qf
 ppWholeProgram :: (CLMonad m, MonadCatch m) => AST -> m DocH
 ppWholeProgram ast = do
     st <- get
-    d <- queryK (cl_kernel st)
+    k <- asks pr_kernel
+    d <- queryK k
                 (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ pCoreTC $ cl_pretty st)
                 Never
                 (cl_kernel_env st) ast
@@ -178,8 +181,8 @@ rethrowPE (PError msg)   = throwError (CLError msg)
 -- management in the command line code.
 --
 -- NB: an alternative to monad transformers, like Oleg's Extensible Effects, might be useful here.
-newtype CLT m a = CLT { unCLT :: ExceptT CLException (StateT CommandLineState m) a }
-    deriving (Functor, Applicative, MonadIO, MonadError CLException, MonadState CommandLineState)
+newtype CLT m a = CLT { unCLT :: ExceptT CLException (ReaderT PluginReader (StateT CommandLineState m)) a }
+    deriving (Functor, Applicative, MonadIO, MonadError CLException, MonadState CommandLineState, MonadReader PluginReader)
 
 -- Adapted from System.Console.Haskeline.MonadException, which hasn't provided an instance for ExceptT yet
 instance MonadException m => MonadException (ExceptT e m) where
@@ -198,11 +201,11 @@ instance MonadException m => MonadException (StateT s m) where
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
 
-type CLMonad m = (MonadIO m, MonadState CommandLineState m, MonadError CLException m)
+type CLMonad m = (MonadIO m, MonadState CommandLineState m, MonadReader PluginReader m, MonadError CLException m)
 
 instance MonadTrans CLT where
     -- lift :: Monad m => m a -> CLT m a
-    lift = CLT . lift . lift
+    lift = CLT . lift . lift . lift
 
 -- TODO: type CLM = CLT IO
 
@@ -214,41 +217,45 @@ instance Monad m => Monad (CLT m) where
     fail = CLT . throwError . CLError
 
 -- | Run a CLT computation.
-runCLT :: CommandLineState -> CLT m a -> m (Either CLException a, CommandLineState)
-runCLT s = flip runStateT s . runExceptT . unCLT
+runCLT :: PluginReader -> CommandLineState -> CLT m a -> m (Either CLException a, CommandLineState)
+runCLT r s = flip runStateT s . flip runReaderT r . runExceptT . unCLT
 
--- | Lift a CLT IO computation into a CLT computation over an arbitrary MonadIO.
-clm2clt :: MonadIO m => CLT IO a -> CLT m a
+-- | Lift a CLT IO computation into a computation in an arbitrary CLMonad.
+clm2clt :: CLMonad m => CLT IO a -> m a
 clm2clt m = do
     st <- get
-    (ea, st') <- liftIO (runCLT st m)
+    env <- ask
+    (ea, st') <- liftIO (runCLT env st m)
     either throwError (\r -> put st' >> return r) ea
 
 -- | Lift a CLM computation into the PluginM monad.
 clm :: CLT IO a -> PluginM a
 clm m = do
     s <- mkCLS
-    (r,s') <- liftIO $ runCLT s m
-    case r of
+    env <- ask
+    (er,s') <- liftIO $ runCLT env s m
+    case er of
         Left err -> rethrowCLE err
-        Right r' -> put (cl_pstate s') >> return r'
+        Right r  -> put (cl_pstate s') >> return r
 
 -- | Lift a PluginM computation into the CLM monad.
 pluginM :: CLMonad m => PluginM a -> m a
 pluginM m = do
     s <- get
-    (r,ps) <- liftIO $ runPluginT (cl_pstate s) m
-    case r of
+    env <- ask
+    (er,ps) <- liftIO $ runPluginT env (cl_pstate s) m
+    case er of
         Left err -> rethrowPE err
-        Right r' -> put (s { cl_pstate = ps }) >> return r'
+        Right r -> put (s { cl_pstate = ps }) >> return r
 
 instance Monad m => MonadCatch (CLT m) where
     -- law: fail msg `catchM` f == f msg
     -- catchM :: m a -> (String -> m a) -> m a
     catchM m f = do
         st <- get
-        (r,st') <- lift $ runCLT st m
-        case r of
+        env <- ask
+        (er,st') <- lift $ runCLT env st m
+        case er of
             Left err -> case err of
                             CLError msg -> f msg
                             other -> throwError other -- rethrow abort/resume/continue
@@ -273,6 +280,7 @@ data CommandLineState = CommandLineState
     , cl_safety         :: Safety                 -- ^ which level of safety we are running in
     , cl_templemmas     :: TVar [(HermitC,LemmaName,Lemma)] -- ^ updated by kernel env with temporary obligations
     , cl_failhard       :: Bool                   -- ^ Any exception will cause an abort.
+    , cl_diffonly       :: Bool                   -- ^ Print diffs instead of full focus.
     } deriving (Typeable)
 
 type PathStack = ([LocalPathH], LocalPathH)
@@ -308,15 +316,6 @@ cl_cursor = ps_cursor . cl_pstate
 
 setCursor :: AST -> CommandLineState -> CommandLineState
 setCursor sast st = st { cl_pstate = (cl_pstate st) { ps_cursor = sast } }
-
-cl_diffonly :: CommandLineState -> Bool
-cl_diffonly = ps_diffonly . cl_pstate
-
-setDiffOnly :: CommandLineState -> Bool -> CommandLineState
-setDiffOnly st b = st { cl_pstate = (cl_pstate st) { ps_diffonly = b } }
-
-cl_kernel :: CommandLineState -> Kernel
-cl_kernel = ps_kernel . cl_pstate
 
 cl_kernel_env :: CommandLineState -> KernelEnv
 cl_kernel_env s = do
@@ -362,6 +361,7 @@ mkCLS = do
                               , cl_safety         = NormalSafety
                               , cl_templemmas     = tlv
                               , cl_failhard       = False
+                              , cl_diffonly       = False
                               }
     return $ setPrettyOpts st $ (cl_pretty_opts st) { po_width = w }
 
@@ -453,7 +453,8 @@ addAST ast = do
 modifyLocalPath :: (MonadCatch m, CLMonad m) => (LocalPathH -> LocalPathH) -> ExprH -> m ()
 modifyLocalPath f expr = do
     ps <- getProofStackEmpty
-    (k,(kEnv,ast)) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor)
+    k <- asks pr_kernel
+    (kEnv,ast) <- gets (cl_kernel_env &&& cl_cursor)
     case ps of
         todo@(Unproven _ (Lemma q _ _) c _) : todos -> do
             let (base, rel) = ptPath todo
@@ -550,8 +551,13 @@ fixWindow = do
        $ put $ st { cl_window = focusPath } -}
     modify $ \ st -> st { cl_window = focusPath  } -- TODO: temporary until we figure out a better highlight interface
 
+-- showWindow only calls display if a script is not running
 showWindow :: (MonadCatch m, CLMonad m) => Maybe Handle -> m ()
-showWindow mbh = do
+showWindow = ifM isRunningScript (return ()) . showWindowAlways
+
+-- always prints the current view
+showWindowAlways :: (MonadCatch m, CLMonad m) => Maybe Handle -> m ()
+showWindowAlways mbh = do
     (ps,(ast,(pp,render))) <- gets (cl_proofstack &&& cl_cursor &&& cl_pretty &&& (ps_render . cl_pstate))
     let h = fromMaybe stdout mbh
         pStr = render h (pOptions pp) . Left
@@ -560,7 +566,7 @@ showWindow mbh = do
         _ -> do st <- get
                 if cl_diffonly st
                 then do
-                    let k = cl_kernel st
+                    k <- asks pr_kernel
 
                     all_asts <- listK k
 
@@ -574,7 +580,7 @@ showWindow mbh = do
                     diffDocH pp doc1 doc2 >>= liftIO . pStr -- TODO
                 else fixWindow >> gets cl_window >>= pluginM . display mbh . Just --TODO
 
-printLemma :: (MonadCatch m, MonadError CLException m, MonadIO m, MonadState CommandLineState m)
+printLemma :: (MonadCatch m, CLMonad m)
            => Handle -> HermitC -> PathStack -> (LemmaName,Lemma) -> m ()
 printLemma h c p (nm,Lemma q _ _) = do -- TODO
     (pp,opts) <- gets (cl_pretty &&& cl_pretty_opts)
@@ -597,7 +603,8 @@ queryInFocus :: (Walker HermitC g, Injection GHC.ModGuts g, MonadCatch m, CLMona
 queryInFocus t msg = do
     q <- addFocusT t
     st <- get
-    (ast', r) <- queryK (cl_kernel st) q msg (cl_kernel_env st) (cl_cursor st)
+    k <- asks pr_kernel
+    (ast', r) <- queryK k q msg (cl_kernel_env st) (cl_cursor st)
     addAST ast'
     return r
 

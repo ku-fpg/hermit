@@ -142,7 +142,6 @@ Library
                  kure                >= 2.16.8,
                  marked-pretty       >= 0.1,
                  mtl                 >= 2.1.2,
-                 operational         >= 0.2.2.1,
                  process             >= 1.1.0.2,
                  stm                 >= 2.4,
                  temporary           >= 1.2.0.3,

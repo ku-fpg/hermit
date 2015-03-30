@@ -19,6 +19,7 @@ module HERMIT.Shell.ScriptToRewrite
 import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Reader (asks)
 import Control.Monad.State (MonadState, gets, modify)
 import Control.Exception hiding (catch)
 
@@ -32,6 +33,7 @@ import HERMIT.Kure
 import HERMIT.Lemma
 import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript, unparseScript)
 import HERMIT.Dictionary.Reasoning
+import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
 import qualified HERMIT.PrettyPrinter.Clean as Clean
 
@@ -119,7 +121,8 @@ performScriptEffect = go
 
           go (SaveFile verb fileName) = do
             putStrToConsole $ "[saving " ++ fileName ++ "]"
-            (k,cur) <- gets (cl_kernel &&& cl_cursor)
+            k <- asks pr_kernel
+            cur <- gets cl_cursor
             all_asts <- listK k
             let m = M.fromList [ (ast,(msg,p)) | (ast,msg,p) <- all_asts ]
                 follow ast

@@ -9,6 +9,7 @@ module HERMIT.Shell.KernelEffect
     ) where
 
 import Control.Arrow
+import Control.Monad.Reader
 import Control.Monad.State
 
 import qualified Data.Map as M
@@ -22,6 +23,7 @@ import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Lemma
 import HERMIT.Parser
+import HERMIT.Plugin.Types
 
 import HERMIT.Shell.Types
 
@@ -58,7 +60,8 @@ applyRewrite rr expr = do
             let todo' = todo { ptLemma = (ptLemma todo) { lemmaC = cl' } }
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo':todos) (cl_proofstack st) }
         _ -> do
-            (k,(kEnv,(ast,cl))) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor &&& cl_corelint)
+            k <- asks pr_kernel
+            (kEnv,(ast,cl)) <- gets (cl_kernel_env &&& cl_cursor &&& cl_corelint)
 
             rr' <- addFocusR (extractR rr :: RewriteH CoreTC)
             ast' <- prefixFailMsg "Rewrite failed:" $ applyK k rr' (Always str) kEnv ast
@@ -69,13 +72,13 @@ applyRewrite rr expr = do
                 putStrToConsole warns
 
             addAST ast'
-    ifM isRunningScript (return ()) (showWindow Nothing)
+    showWindow Nothing
 
 setPath :: (Injection a LCoreTC, MonadCatch m, CLMonad m) => TransformH a LocalPathH -> ExprH -> m ()
 setPath t expr = do
     p <- prefixFailMsg "Cannot find path: " $ queryInContext (promoteT t) Never
     modifyLocalPath (<> p) expr
-    ifM isRunningScript (return ()) (showWindow Nothing)
+    showWindow Nothing
 
 goUp :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
 goUp T expr = modifyLocalPath (const mempty) expr
@@ -87,13 +90,14 @@ goUp U expr = do
     case rel of
         SnocPath [] -> fail "cannot move up, at root of scope."
         SnocPath (_:cs) -> modifyLocalPath (const $ SnocPath cs) expr
-    ifM isRunningScript (return ()) (showWindow Nothing)
+    showWindow Nothing
 
 beginScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 beginScope expr = do
     ps <- getProofStackEmpty
     let logExpr = do
-            (k,ast) <- gets (cl_kernel &&& cl_cursor)
+            k <- asks pr_kernel
+            ast <- gets cl_cursor
             tellK k (unparseExprH expr) ast
     case ps of
         [] -> do
@@ -104,13 +108,14 @@ beginScope expr = do
             addAST =<< logExpr
             let todos' = Unproven nm l c (p : base, mempty) : todos
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
-    ifM isRunningScript (return ()) (showWindow Nothing)
+    showWindow Nothing
 
 endScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 endScope expr = do
     ps <- getProofStackEmpty
     let logExpr = do
-            (k,ast) <- gets (cl_kernel &&& cl_cursor)
+            k <- asks pr_kernel
+            ast <- gets cl_cursor
             tellK k (unparseExprH expr) ast
     case ps of
         [] -> do
@@ -127,9 +132,9 @@ endScope expr = do
                     addAST =<< logExpr
                     let todos' = Unproven nm l c (base', p) : todos
                     modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
-    ifM isRunningScript (return ()) (showWindow Nothing)
+    showWindow Nothing
 
 deleteAST :: (MonadCatch m, CLMonad m) => AST -> m ()
-deleteAST ast = gets cl_kernel >>= flip deleteK ast
+deleteAST ast = asks pr_kernel >>= flip deleteK ast
 
 -------------------------------------------------------------------------------

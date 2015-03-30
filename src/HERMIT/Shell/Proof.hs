@@ -26,6 +26,7 @@ import Control.Concurrent.STM
 import Control.Monad (forM_,unless)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class
+import Control.Monad.Reader (asks)
 import Control.Monad.State (MonadState(get), modify, gets)
 
 import Data.Dynamic
@@ -44,6 +45,7 @@ import HERMIT.Syntax
 
 import HERMIT.Dictionary.Reasoning hiding (externals)
 
+import HERMIT.Plugin.Types
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
@@ -52,7 +54,7 @@ import HERMIT.Shell.Types
 -- | Externals that get us into the prover shell.
 externals :: [External]
 externals = map (.+ Proof)
-    [ external "prove-lemma" (CLSModifyAndShow . interactiveProofIO)
+    [ external "prove-lemma" (\nm -> CLSModify $ interactiveProof nm >> showWindow Nothing)
         [ "Proof a lemma interactively." ]
     ]
 
@@ -70,18 +72,16 @@ proof_externals = map (.+ Proof)
 --------------------------------------------------------------------------------------------------------
 
 -- | Top level entry point!
-interactiveProofIO :: LemmaName -> CommandLineState -> IO (Either CLException CommandLineState)
-interactiveProofIO nm s = do
-    (r,st) <- runCLT s $ do
-                ps <- getProofStackEmpty
-                let t :: TransformH x (HermitC,Lemma)
-                    t = contextT &&& getLemmaByNameT nm
-                (c,l) <- case ps of
-                            [] -> queryInFocus (t :: TransformH Core (HermitC,Lemma))
-                                               (Always $ "prove-lemma " ++ quoteShow nm)
-                            todo : _ -> queryInFocus (inProofFocusT todo t) Never
-                pushProofStack $ Unproven nm l c mempty
-    return $ fmap (const st) r
+interactiveProof :: LemmaName -> CLT IO ()
+interactiveProof nm = do
+    ps <- getProofStackEmpty
+    let t :: TransformH x (HermitC,Lemma)
+        t = contextT &&& getLemmaByNameT nm
+    (c,l) <- case ps of
+                [] -> queryInFocus (t :: TransformH Core (HermitC,Lemma))
+                                   (Always $ "prove-lemma " ++ quoteShow nm)
+                todo : _ -> queryInFocus (inProofFocusT todo t) Never
+    pushProofStack $ Unproven nm l c mempty
 
 withProofExternals :: (MonadError CLException m, MonadState CommandLineState m) => m a -> m a
 withProofExternals comp = do
@@ -98,12 +98,13 @@ withProofExternals comp = do
 
 forceProofs :: (MonadCatch m, CLMonad m) => m ()
 forceProofs = do
+    k <- asks pr_kernel
     st <- get
     ls <- liftIO $ atomically $ swapTVar (cl_templemmas st) []
     let snd3 (_,y,_) = y
         nls = nubBy ((==) `on` snd3) ls
     unless (null nls) $ do
-        (_,topc) <- queryK (cl_kernel st) (arr topLevelHermitC) Never (cl_kernel_env st) (cl_cursor st)
+        (_,topc) <- queryK k (arr topLevelHermitC) Never (cl_kernel_env st) (cl_cursor st)
         let chooseC c cl = if all (inScope topc) (varSetElems (freeVarsClause cl)) then (True,topc) else (False,c)
             nls' = [ (chooseC c (lemmaC l), nm, l) | (c,nm,l) <- nls ]
             nonTemp = [ (nm,l) | ((True,_),nm,l) <- nls' ]
@@ -135,7 +136,7 @@ endProof reason expr = do
 -- can generate additional lemmas, and add to the version history.
 performProofShellCommand :: (MonadCatch m, CLMonad m)
                          => ProofShellCommand -> ExprH -> m ()
-performProofShellCommand cmd expr = go cmd >> ifM isRunningScript (return ()) (showWindow Nothing)
+performProofShellCommand cmd expr = go cmd >> showWindow Nothing
     where go (PCEnd why)          = endProof why expr
 
 data ProofShellCommand

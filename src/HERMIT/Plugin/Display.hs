@@ -5,6 +5,7 @@ module HERMIT.Plugin.Display
     , ps_putStrLn
     ) where
 
+import Control.Monad.Reader
 import Control.Monad.State
 
 import Data.Maybe (fromMaybe)
@@ -19,9 +20,9 @@ import System.IO
 
 display :: Maybe Handle -> Maybe PathH -> PluginM ()
 display mbh window = do
+    k <- asks pr_kernel
     st <- get
-    let k = ps_kernel st
-        ast = ps_cursor st
+    let ast = ps_cursor st
         ppOpts = pOptions $ ps_pretty st
         h = fromMaybe stdout mbh
     d <- queryK k (extractT $ pathT (fromMaybe mempty window) $ liftPrettyH ppOpts $ pCoreTC $ ps_pretty st)

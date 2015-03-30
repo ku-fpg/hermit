@@ -7,6 +7,7 @@ import Control.Applicative
 import Control.Concurrent.STM
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Reader (MonadReader(..), ReaderT(..))
 import Control.Monad.State (MonadState(..), StateT(..))
 import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
@@ -14,7 +15,6 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Data.Dynamic
 import qualified Data.Map as M
 
-import HERMIT.Core (Crumb)
 import HERMIT.Kure
 import HERMIT.External
 import HERMIT.Kernel
@@ -26,11 +26,11 @@ import HERMIT.Dictionary.Reasoning
 import System.IO
 
 type PluginM = PluginT IO
-newtype PluginT m a = PluginT { unPluginT :: ExceptT PException (StateT PluginState m) a }
-    deriving (Functor, Applicative, MonadIO, MonadError PException, MonadState PluginState)
+newtype PluginT m a = PluginT { unPluginT :: ExceptT PException (ReaderT PluginReader (StateT PluginState m)) a }
+    deriving (Functor, Applicative, MonadIO, MonadError PException, MonadState PluginState, MonadReader PluginReader)
 
-runPluginT :: PluginState -> PluginT m a -> m (Either PException a, PluginState)
-runPluginT ps = flip runStateT ps . runExceptT . unPluginT
+runPluginT :: PluginReader -> PluginState -> PluginT m a -> m (Either PException a, PluginState)
+runPluginT pr ps = flip runStateT ps . flip runReaderT pr . runExceptT . unPluginT
 
 instance Monad m => Monad (PluginT m) where
     return = PluginT . return
@@ -38,32 +38,33 @@ instance Monad m => Monad (PluginT m) where
     fail = PluginT . throwError . PError
 
 instance MonadTrans PluginT where
-    lift = PluginT . lift . lift
+    lift = PluginT . lift . lift . lift
 
 instance Monad m => MonadCatch (PluginT m) where
     -- law: fail msg `catchM` f == f msg
     -- catchM :: m a -> (String -> m a) -> m a
     catchM m f = do
         st <- get
-        (r,st') <- lift $ runPluginT st m
-        case r of
+        r <- ask
+        (er,st') <- lift $ runPluginT r st m
+        case er of
             Left err -> case err of
                             PError msg -> f msg
                             other -> throwError other -- rethrow abort/resume
             Right v  -> put st' >> return v
 
--- Session-local issues; things that are never saved.
+-- Treat current AST as state, allow pretty-printer to be modified, core lint to be auto-run
 data PluginState = PluginState
     { ps_cursor         :: AST                                      -- ^ the current AST
-    , ps_focus          :: AbsolutePath Crumb                       -- ^ current focused path
     , ps_pretty         :: PrettyPrinter                            -- ^ which pretty printer to use
     , ps_render         :: Handle -> PrettyOptions -> Either String DocH -> IO () -- ^ the way of outputing to the screen
     , ps_tick           :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
     , ps_corelint       :: Bool                                     -- ^ if true, run Core Lint on module after each rewrite
-    , ps_diffonly       :: Bool                                     -- ^ if true, show diffs rather than pp full code (TODO: move into pretty opts)
-    -- this should be in a reader
-    , ps_kernel         :: Kernel
-    , ps_pass           :: PassInfo
+    } deriving (Typeable)
+
+data PluginReader = PluginReader
+    { pr_kernel         :: Kernel
+    , pr_pass           :: PassInfo
     } deriving (Typeable)
 
 data PException = PAbort | PResume AST | PError String

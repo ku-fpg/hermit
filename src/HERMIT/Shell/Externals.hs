@@ -4,6 +4,8 @@ module HERMIT.Shell.Externals where
 
 import Control.Arrow
 import Control.Monad (liftM)
+import Control.Monad.Reader (asks)
+import Control.Monad.State (gets, modify)
 
 import Data.Dynamic (fromDynamic)
 import Data.List (intercalate)
@@ -17,6 +19,7 @@ import HERMIT.Kure
 import HERMIT.Lemma
 import HERMIT.Parser
 import HERMIT.Plugin.Renderer
+import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
 
 import HERMIT.Dictionary.Reasoning
@@ -40,57 +43,57 @@ shell_externals = map (.+ Shell)
         [ "exits shell; resumes HERMIT" ]
     , external "gc"              Delete
         [ "garbage-collect a given AST" ]
-    , external "gc"              (CLSModify $ liftM Right . gc)
+    , external "gc"              (CLSModify gc)
         [ "garbage-collect all ASTs except for the initial and current AST" ]
-    , external "display"         (CLSModify $ \ st -> do (er,st') <- runCLT st (showWindow Nothing)
-                                                         return $ fmap (const st') er)
+    , external "display"         (CLSModify $ showWindowAlways Nothing)
         [ "redisplays current state" ]
     , external "up"              (Direction U)
         [ "move to the parent node"]
-    , external "navigate"        (CLSModify $ \ st -> return $ Right $ st { cl_nav = True })
+    , external "navigate"        (CLSModify $ modify $ \ st -> st { cl_nav = True })
         [ "switch to navigate mode" ]
-    , external "command-line"    (CLSModify $ \ st -> return $ Right $ st { cl_nav = False })
+    , external "command-line"    (CLSModify $ modify $ \ st -> st { cl_nav = False })
         [ "switch to command line mode" ]
-    , external "set-window"      (CLSModifyAndShow setWindow)
+    , external "set-window"      (CLSModify $ setWindow >> showWindow Nothing)
         [ "fix the window to the current focus" ]
     , external "top"             (Direction T)
         [ "move to root of current scope" ]
     , external "log"             (Inquiry showDerivationTree)
         [ "go back in the derivation" ]                                          .+ VersionControl
-    , external "back"            (CLSModifyAndShow $ versionCmd Back)
+    , external "back"            (CLSModify $ versionCmd Back)
         [ "go back in the derivation" ]                                          .+ VersionControl
-    , external "step"            (CLSModifyAndShow $ versionCmd Step)
+    , external "step"            (CLSModify $ versionCmd Step)
         [ "step forward in the derivation" ]                                     .+ VersionControl
-    , external "goto"            (CLSModifyAndShow . versionCmd . Goto)
+    , external "goto"            (CLSModify . versionCmd . Goto)
         [ "goto a specific step in the derivation" ]                             .+ VersionControl
-    , external "goto"            (CLSModifyAndShow . versionCmd . GotoTag)
+    , external "goto"            (CLSModify . versionCmd . GotoTag)
         [ "goto a specific step in the derivation by tag name" ]                 .+ VersionControl
     , external "tag"             (CLSModify . versionCmd . Tag)
         [ "name the current step in the derivation" ]                            .+ VersionControl
     , external "diff"            Diff
         [ "show diff of two ASTs" ]                                              .+ VersionControl
-    , external "set-pp-diffonly" (\ bStr -> CLSModifyAndShow $ \ st ->
+    , external "set-pp-diffonly" (\ bStr -> CLSModify $
         case reads bStr of
-            [(b,"")] -> return $ Right $ setDiffOnly st b
-            _        -> return $ Left $ CLError "valid arguments are True and False" )
+            [(b,"")] -> modify (\st -> st { cl_diffonly = b }) >> showWindow Nothing
+            _        -> fail "valid arguments are True and False" )
         [ "set-pp-diffonly <True|False>; False by default"
         , "print diffs rather than full code after a rewrite" ]
-    , external "set-fail-hard"   (\ bStr -> CLSModify $ \ st ->
+    , external "set-fail-hard"   (\ bStr -> CLSModify $
         case reads bStr of
-            [(b,"")] -> return $ Right $ st { cl_failhard = b }
-            _        -> return $ Left $ CLError "valid arguments are True and False" )
+            [(b,"")] -> modify $ \ st -> st { cl_failhard = b }
+            _        -> fail "valid arguments are True and False" )
         [ "set-fail-hard <True|False>; False by default"
         , "any rewrite failure causes compilation to abort" ]
-    , external "set-auto-corelint" (\ bStr -> CLSModify $ \ st ->
+    , external "set-auto-corelint" (\ bStr -> CLSModify $
         case reads bStr of
-            [(b,"")] -> return $ Right $ setCoreLint st b
-            _        -> return $ Left $ CLError "valid arguments are True and False" )
+            [(b,"")] -> modify $ flip setCoreLint b
+            _        -> fail "valid arguments are True and False" )
         [ "set-auto-corelint <True|False>; False by default"
         , "run core lint type-checker after every rewrite, reverting on failure" ]
-    , external "set-pp"          (\ name -> CLSModifyAndShow $ \ st ->
+    , external "set-pp"          (\ name -> CLSModify $
         case M.lookup name pp_dictionary of
-            Nothing -> return $ Left $ CLError $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
-            Just pp -> return $ Right $ flip setPrettyOpts (cl_pretty_opts st) $ setPretty st pp) -- careful to preserve the current options
+            Nothing -> fail $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
+            Just pp -> do modify $ \ st -> setPrettyOpts (setPretty st pp) (cl_pretty_opts st) -- careful to preserve the current options
+                          showWindow Nothing)
         [ "set the pretty printer"
         , "use 'set-pp ls' to list available pretty printers" ]
     , external "set-pp-renderer"    (PluginComp . changeRenderer)
@@ -108,23 +111,27 @@ shell_externals = map (.+ Shell)
     , external "dump-lemma" ((\pp nm fp r w -> getLemmaByNameT nm >>> liftPrettyH (pOptions pp) (ppLemmaT pp nm) >>> dumpT fp pp r w) :: PrettyPrinter -> LemmaName -> FilePath -> String -> Int -> TransformH LCoreTC ())
         [ "Dump named lemma to a file."
         , "dump-lemma <lemma-name> <filename> <pretty-printer> <renderer> <width>" ]
-    , external "set-pp-width" (\ w -> CLSModifyAndShow $ \ st ->
-            return $ Right $ setPrettyOpts st (updateWidthOption w (cl_pretty_opts st)))
+    , external "set-pp-width" (\ w -> CLSModify $ do
+            modify $ \ st -> setPrettyOpts st (updateWidthOption w (cl_pretty_opts st))
+            showWindow Nothing)
         ["set the width of the screen"]
-    , external "set-pp-type" (\ str -> CLSModifyAndShow $ \ st ->
+    , external "set-pp-type" (\ str -> CLSModify $
         case reads str :: [(ShowOption,String)] of
-            [(opt,"")] -> return $ Right $ setPrettyOpts st (updateTypeShowOption opt (cl_pretty_opts st))
-            _          -> return $ Left $ CLError "valid arguments are Show, Abstract, and Omit")
+            [(opt,"")] -> do modify $ \ st -> setPrettyOpts st (updateTypeShowOption opt (cl_pretty_opts st))
+                             showWindow Nothing
+            _          -> fail "valid arguments are Show, Abstract, and Omit")
         ["set how to show expression-level types (Show|Abstact|Omit)"]
-    , external "set-pp-coercion" (\ str -> CLSModifyAndShow $ \ st ->
+    , external "set-pp-coercion" (\ str -> CLSModify $
         case reads str :: [(ShowOption,String)] of
-            [(opt,"")] -> return $ Right $ setPrettyOpts st (updateCoShowOption opt (cl_pretty_opts st))
-            _          -> return $ Left $ CLError "valid arguments are Show, Abstract, and Omit")
+            [(opt,"")] -> do modify $ \ st -> setPrettyOpts st (updateCoShowOption opt (cl_pretty_opts st))
+                             showWindow Nothing
+            _          -> fail "valid arguments are Show, Abstract, and Omit")
         ["set how to show coercions (Show|Abstact|Omit)"]
-    , external "set-pp-uniques" (\ str -> CLSModifyAndShow $ \ st ->
+    , external "set-pp-uniques" (\ str -> CLSModify $
         case reads str of
-            [(b,"")] -> return $ Right $ setPrettyOpts st ((cl_pretty_opts st) { po_showUniques = b } )
-            _        -> return $ Left $ CLError "valid arguments are True and False")
+            [(b,"")] -> do modify $ \ st -> setPrettyOpts st ((cl_pretty_opts st) { po_showUniques = b })
+                           showWindow Nothing
+            _        -> fail "valid arguments are True and False")
         ["set whether uniques are printed with variable names"]
     , external "{"   BeginScope
         ["push current lens onto a stack"]       -- tag as internal
@@ -160,7 +167,7 @@ shell_externals = map (.+ Shell)
         ,"Note that any names in the script will not be resolved until the script is *run*." ]
     , external "display-scripts" displayScripts
         ["Display all loaded scripts."]
-    , external "stop-script" (CLSModify $ \st -> return $ Right $ st { cl_running_script = Nothing })
+    , external "stop-script" (CLSModify $ setRunningScript Nothing)
         [ "Stop running the current script." ]
     --, external "test-rewrites" (testRewrites :: [(ExternalName,RewriteH Core)] -> TransformH Core String)
     --  ["Test a given set of rewrites to see if they succeed"] .+ Experiment
@@ -169,65 +176,73 @@ shell_externals = map (.+ Shell)
     -- TODO: maybe add a "list-scripts" as well that just lists the names of loaded scripts?
     ] ++ Proof.externals
 
-gc :: CommandLineState -> IO CommandLineState
-gc st = do
-    let k = cl_kernel st
-        cursor = cl_cursor st
+gc :: CLT IO ()
+gc = do
+    k <- asks pr_kernel
+    cursor <- gets cl_cursor
     asts <- listK k
     mapM_ (deleteK k) [ ast | (ast,_,_) <- asts, ast `notElem` [cursor, firstAST] ]
-    return st
 
 ----------------------------------------------------------------------------------
 
-setWindow :: CommandLineState -> IO (Either CLException CommandLineState)
-setWindow st = do
+setWindow :: CLT IO ()
+setWindow = modify $ \ st ->
     let ps = fromMaybe ([],mempty) (M.lookup (cl_cursor st) (cl_foci st))
-    return $ Right $ st { cl_window = pathStack2Path ps }
+    in st { cl_window = pathStack2Path ps }
 
 showRenderers :: QueryFun
 showRenderers = message $ "set-renderer " ++ show (map fst shellRenderers)
 
 --------------------------------------------------------
 
-versionCmd :: VersionCmd -> CommandLineState -> IO (Either CLException CommandLineState)
-versionCmd whereTo st = do
-    all_asts <- listK (cl_kernel st)
+versionCmd :: VersionCmd -> CLT IO ()
+versionCmd whereTo = do
+    k <- asks pr_kernel
+    all_asts <- listK k
     case whereTo of
         Goto ast ->
             if ast `elem` [ ast' | (ast',_,_) <- all_asts ]
-                then return $ Right $ setCursor ast st
-                else return $ Left $ CLError $ "Cannot find AST #" ++ show ast ++ "."
-        GotoTag nm ->
-            case [ ast | (ast,nms) <- M.toList (cl_tags st), nm `elem` nms ] of
-                [] -> return $ Left $ CLError $ "No tag named: " ++ nm
-                (ast:_) -> return $ Right $ setCursor ast st
-        Tag nm ->
-            return $ Right $ st { cl_tags = M.insertWith (++) (cl_cursor st) [nm] (cl_tags st) }
+                then modify (setCursor ast) >> showWindow Nothing
+                else fail $ "Cannot find AST #" ++ show ast ++ "."
+        GotoTag nm -> do
+            tags <- gets cl_tags
+            case [ ast | (ast,nms) <- M.toList tags, nm `elem` nms ] of
+                [] -> fail $ "No tag named: " ++ nm
+                (ast:_) -> modify (setCursor ast) >> showWindow Nothing
+        Tag nm -> do
+            modify $ \st -> st { cl_tags = M.insertWith (++) (cl_cursor st) [nm] (cl_tags st) }
+            cl_putStrLn $ "Tag: " ++ nm ++ " added."
         Step -> do
-            let ns = [ (fromMaybe "unknown" msg, ast) | (ast,msg,Just p) <- all_asts, p == cl_cursor st ]
+            cursor <- gets cl_cursor
+            let ns = [ (fromMaybe "unknown" msg, ast) | (ast,msg,Just p) <- all_asts, p == cursor ]
             case ns of
-                [] -> return $ Left $ CLError "Cannot step forward (no more steps)."
+                [] -> fail "Cannot step forward (no more steps)."
                 [(cmd,ast)] -> do
-                    putStrLn $ "step : " ++ cmd
-                    return $ Right $ setCursor ast st
-                _ -> return $ Left $ CLError $ "Cannot step forward (multiple choices), use goto {"
-                                                ++ intercalate "," (map (show.snd) ns) ++ "}"
+                    cl_putStrLn $ "step : " ++ cmd
+                    modify $ setCursor ast
+                    showWindow Nothing
+                _ -> fail $ "Cannot step forward (multiple choices), use goto {"
+                                ++ intercalate "," (map (show.snd) ns) ++ "}"
         Back -> do
-            let ns = [ (fromMaybe "unknown" msg, p) | (ast,msg,Just p) <- all_asts, ast == cl_cursor st ]
+            cursor <- gets cl_cursor
+            let ns = [ (fromMaybe "unknown" msg, p) | (ast,msg,Just p) <- all_asts, ast == cursor ]
             case ns of
-                [] -> return $ Left $ CLError "Cannot step backwards (no more steps)."
+                [] -> fail "Cannot step backwards (no more steps)."
                 [(cmd,ast)] -> do
-                    putStrLn $ "back, unstepping : " ++ cmd
-                    return $ Right $ setCursor ast st
-                _ -> return $ Left $ CLError "Cannot step backwards (multiple choices, impossible!)."
+                    cl_putStrLn $ "back, unstepping : " ++ cmd
+                    modify $ setCursor ast
+                    showWindow Nothing
+                _ -> fail "Cannot step backwards (multiple choices, impossible!)."
 
 -------------------------------------------------------------------------------
 
-showDerivationTree :: CommandLineState -> IO String
-showDerivationTree st = do
-    all_asts <- listK (cl_kernel st)
+showDerivationTree :: PluginReader -> CommandLineState -> IO String
+showDerivationTree r s = do
+    let k = pr_kernel r
+        cursor = cl_cursor s
+    all_asts <- listK k
     let graph = [ (a,[fromMaybe "-- command missing!" b],c) | (c,b,Just a) <- all_asts ]
-    return $ unlines $ showRefactorTrail graph firstAST (cl_cursor st)
+    return $ unlines $ showRefactorTrail graph firstAST cursor
 
 showRefactorTrail :: (Eq a, Show a) => [(a,[String],a)] -> a -> a -> [String]
 showRefactorTrail db a me =
@@ -250,7 +265,7 @@ showRefactorTrail db a me =
 -------------------------------------------------------------------------------
 
 displayScripts :: QueryFun
-displayScripts = Inquiry (return . showScripts . cl_scripts)
+displayScripts = Inquiry (const (return . showScripts . cl_scripts))
 
 showScripts :: [(ScriptName,Script)] -> String
 showScripts = concatMap (\ (name,script) -> name ++ ": " ++ unparseScript script ++ "\n\n")
