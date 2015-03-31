@@ -110,17 +110,17 @@ abort = throwError PAbort
 resume :: PluginM a
 resume = gets ps_cursor >>= throwError . PResume
 
-apply :: (Injection GHC.ModGuts g, Walker HermitC g) => RewriteH g -> PluginM ()
-apply rr = do
+apply :: (Injection GHC.ModGuts g, Walker HermitC g) => CommitMsg -> RewriteH g -> PluginM ()
+apply cm rr = do
     kernel <- asks pr_kernel
     env <- gets mkKernelEnv
-    runA (applyK kernel (extractR rr) Never env)
+    runA (applyK kernel (extractR rr) cm env)
 
-query :: (Injection GHC.ModGuts g, Walker HermitC g) => TransformH g a -> PluginM a
-query tr = do
+query :: (Injection GHC.ModGuts g, Walker HermitC g) => CommitMsg -> TransformH g a -> PluginM a
+query cm tr = do
     kernel <- asks pr_kernel
     env <- gets mkKernelEnv
-    runQ (queryK kernel (extractT tr) Never env)
+    runQ (queryK kernel (extractT tr) cm env)
 
 list :: PluginM [(AST,Maybe String, Maybe AST)]
 list = asks pr_kernel >>= listK
