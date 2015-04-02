@@ -86,7 +86,8 @@ completionType s = fromMaybe (UnknownC s) (lookup s m)
               , ("IntBox"        , NothingC)
               , ("LemmaName"     , LemmaC)
               , ("OccurrenceName", OccurrenceOfC)
-              , ("RewriteCoreBox", CommandC) -- be more specific than CommandC?
+              , ("RewriteLCoreBox", CommandC) -- be more specific than CommandC?
+              , ("RewriteLCoreTCBox", CommandC) -- be more specific than CommandC?
               , ("RhsOfName"     , RhsOfC)
               , ("RuleName"      , RuleC)
               , ("StringBox"     , StringC)
