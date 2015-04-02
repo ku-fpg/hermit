@@ -421,7 +421,7 @@ ppKindOrTypeR = absPathT >>= ppKindOrTypePR
 ppForallQuantification :: PrettyH [Var]
 ppForallQuantification =
   do vs <- mapT ppBinderMode
-     if null vs
+     if null $ filter (not . isEmpty) vs
      then return empty
      else return $ specialSymbol mempty ForallSymbol <+> sep vs <> symbol mempty '.'
 
