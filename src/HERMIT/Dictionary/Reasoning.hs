@@ -338,7 +338,7 @@ quantIdentitiesR =
     trueConjLR <+ trueConjRR <+
     trueDisjLR <+ trueDisjRR <+
     trueImpliesR <+ impliesTrueR <+
-    forallTrueR
+    aImpliesAR <+ forallTrueR
 
 trueConjLR :: Monad m => Rewrite c m Clause
 trueConjLR = do
@@ -373,6 +373,12 @@ impliesTrueR = do
 forallTrueR :: Monad m => Rewrite c m Clause
 forallTrueR = do
     Forall _ CTrue <- idR
+    return CTrue
+
+aImpliesAR :: Monad m => Rewrite c m Clause
+aImpliesAR = do
+    Impl _ a c <- idR
+    guardMsg (a `proves` c) "antecedent does not prove consequent."
     return CTrue
 
 splitAntecedentR :: MonadCatch m => Rewrite c m Clause
