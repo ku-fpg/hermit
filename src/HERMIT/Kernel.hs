@@ -161,8 +161,7 @@ hermitKernel store lastPass callback modGuts = do
                             withAST ast $ \ (KernelState lemmas guts _ _) -> do
                                 let handleS hRes = return $ return
                                                    (Just (KernelState (hResLemmas hRes) (hResult hRes) (Just ast) (msg cm)), ())
-                                runHM (kEnvChan kEnv)
-                                      (mkEnv guts lemmas)
+                                runHM (mkEnv (kEnvChan kEnv) guts lemmas)
                                       handleS
                                       (return . fail)
                                       (applyT rr (topLevelHermitC guts) guts)
@@ -175,8 +174,7 @@ hermitKernel store lastPass callback modGuts = do
                                         | otherwise        = f (Nothing, r) -- pure query, not recorded in AST store
                                         where r = hResult hRes
                                               f = return . return
-                                runHM (kEnvChan kEnv)
-                                      (mkEnv guts lemmas)
+                                runHM (mkEnv (kEnvChan kEnv) guts lemmas)
                                       handleS
                                       (return . fail)
                                       (applyT t (topLevelHermitC guts) guts)

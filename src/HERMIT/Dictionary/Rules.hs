@@ -96,7 +96,7 @@ instance Extern [RuleName] where
 
 -- | Lookup a rule by name, attempt to apply it left-to-right. If successful, record it as an unproven lemma.
 foldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c
-             , ReadPath c Crumb, HasDebugChan m, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
+             , ReadPath c Crumb, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
              , MonadIO m, MonadThings m, MonadUnique m )
             => Used -> RuleName -> Rewrite c m CoreExpr
 foldRuleR u nm = do
@@ -105,14 +105,14 @@ foldRuleR u nm = do
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
 foldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c
-              , ReadPath c Crumb, HasDebugChan m, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
+              , ReadPath c Crumb, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
               , MonadIO m, MonadThings m, MonadUnique m )
            => Used -> [RuleName] -> Rewrite c m CoreExpr
 foldRulesR u = orR . map (foldRuleR u)
 
 -- | Lookup a rule by name, attempt to apply it left-to-right. If successful, record it as an unproven lemma.
 unfoldRuleR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c
-               , ReadPath c Crumb, HasDebugChan m, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
+               , ReadPath c Crumb, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
                , MonadIO m, MonadThings m, MonadUnique m )
             => Used -> RuleName -> Rewrite c m CoreExpr
 unfoldRuleR u nm = do
@@ -121,7 +121,7 @@ unfoldRuleR u nm = do
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
 unfoldRulesR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c, ReadBindings c
-                , ReadPath c Crumb, HasDebugChan m, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
+                , ReadPath c Crumb, HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
                 , MonadIO m, MonadThings m, MonadUnique m )
              => Used -> [RuleName] -> Rewrite c m CoreExpr
 unfoldRulesR u = orR . map (unfoldRuleR u)
@@ -146,7 +146,7 @@ getHermitRulesT :: (HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadIO m) => 
 getHermitRulesT = contextonlyT $ \ c -> do
     rb      <- liftCoreM getRuleBase
     mgRules <- liftM mg_rules getModGuts
-    hscEnv  <- liftCoreM getHscEnv
+    hscEnv  <- getHscEnv
     rb'     <- liftM eps_rule_base $ liftIO $ runIOEnv () $ readMutVar (hsc_EPS hscEnv)
     let allRules = hermitCoreRules c ++ mgRules ++ concat (nameEnvElts rb) ++ concat (nameEnvElts rb')
     return [ (fromString (unpackFS (ruleName r)), r) | r <- allRules ]

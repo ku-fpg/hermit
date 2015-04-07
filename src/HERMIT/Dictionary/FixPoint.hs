@@ -83,12 +83,12 @@ externals =
 --------------------------------------------------------------------------------------------------
 
 fixIntroR :: ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-             , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+             , HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
           => Rewrite c m Core
 fixIntroR = promoteR fixIntroRecR <+ promoteR fixIntroNonRecR
 
 fixIntroNonRecR :: ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-                   , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+                   , HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
                 => Rewrite c m CoreBind
 fixIntroNonRecR = prefixFailMsg "fix introduction failed: " $ do
     NonRec f rhs <- idR
@@ -97,7 +97,7 @@ fixIntroNonRecR = prefixFailMsg "fix introduction failed: " $ do
 
 -- |  @f = e@   ==\>   @f = fix (\\ f -> e)@
 fixIntroRecR :: ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-                , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+                , HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
              => Rewrite c m CoreDef
 fixIntroRecR = prefixFailMsg "fix introduction failed: " $ do
     Def f rhs <- idR
@@ -108,7 +108,7 @@ fixIntroRecR = prefixFailMsg "fix introduction failed: " $ do
 -- Meant to be applied to RHS of function.
 polyFixT :: forall c m.
             ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-            , HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+            , HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
          => Id -> Rewrite c m CoreExpr
 polyFixT f = do
     (tvs, body) <- arr collectTyBinders

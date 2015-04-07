@@ -71,7 +71,7 @@ externals =
 
 ------------------------------------------------------------------------
 
-foldR :: (ReadBindings c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m)
+foldR :: (ReadBindings c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m)
       => HermitName -> Rewrite c m CoreExpr
 foldR nm = prefixFailMsg "Fold failed: " $ findIdT nm >>= foldVarR Nothing
 

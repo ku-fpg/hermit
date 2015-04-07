@@ -113,7 +113,7 @@ bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 -- Note: core fragment which fails linting is still returned! Otherwise would behave differently than bashR.
 -- Useful for debugging the bash command itself.
 bashDebugR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-              , HasDebugChan m, HasDynFlags m, MonadCatch m, MonadUnique m )
+              , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadUnique m )
            => Rewrite c m LCore
 bashDebugR = bashUsingR [ bracketR nm r >>> catchM (promoteT lintExprT >> idR) traceR
                         | (r,nm) <- bashComponents ]
@@ -182,12 +182,12 @@ bashComponents =
 -- Unlike bash, smash is not concerned with whether it duplicates work,
 -- and is intended for use during proving tasks.
 smashR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-          , HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+          , HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
        => Rewrite c m LCore
 smashR = smashExtendedWithR []
 
 smashExtendedWithR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-                      , HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+                      , HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
                    => [Rewrite c m LCore] -> Rewrite c m LCore
 smashExtendedWithR rs = smashUsingR (rs ++ map fst smashComponents1) (map fst smashComponents2)
 
@@ -206,7 +206,7 @@ smashHelp = "A more powerful but less efficient version of \"bash\", intended fo
 
 -- | As bash, but with "let-nonrec-subst" instead of "let-nonrec-subst-safe".
 smashComponents1 :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-                    , HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+                    , HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
                  => [(Rewrite c m LCore, String)]
 smashComponents1 =
   [ -- (promoteExprR occurAnalyseExprChangedR, "occur-analyse-expr")    -- ??

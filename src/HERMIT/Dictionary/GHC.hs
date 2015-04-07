@@ -196,7 +196,7 @@ occurrenceAnalysisR = occurAnalyseAndDezombifyR
 ----------------------------------------------------------------------
 
 -- TODO: this is mostly an example, move somewhere?
-buildTypeable :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => Type -> m (Id, [CoreBind])
+buildTypeable :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Type -> m (Id, [CoreBind])
 buildTypeable ty = do
     evar <- runTcM $ do
         cls <- tcLookupClass typeableClassName
@@ -205,7 +205,7 @@ buildTypeable ty = do
     buildDictionary evar
 
 -- | Build a dictionary for the given
-buildDictionary :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => Id -> m (Id, [CoreBind])
+buildDictionary :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Id -> m (Id, [CoreBind])
 buildDictionary evar = do
     (i, bs) <- runTcM $ do
         loc <- getCtLoc $ GivenOrigin UnkSkol
@@ -219,7 +219,7 @@ buildDictionary evar = do
     bnds <- runDsM $ dsEvBinds bs
     return (i,bnds)
 
-buildDictionaryT :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadUnique m)
+buildDictionaryT :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadUnique m)
                  => Transform c m Type CoreExpr
 buildDictionaryT = prefixFailMsg "buildDictionaryT failed: " $ contextfreeT $ \ ty -> do
     dflags <- getDynFlags

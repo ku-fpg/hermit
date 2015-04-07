@@ -189,16 +189,16 @@ parseCore (CoreString s) c =
 -- These should probably go somewhere else.
 
 -- | Parse a 'CoreString' to a 'CoreExpr', using the current context.
-parseCoreExprT :: (ReadBindings c, HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m)
+parseCoreExprT :: (ReadBindings c, HasHermitMEnv m, HasLemmas m, LiftCoreM m)
                => CoreString -> Transform c m a CoreExpr
 parseCoreExprT cs = contextonlyT $ embedHermitM . parseCore cs
 
-parse2BeforeT :: (ReadBindings c, HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m)
+parse2BeforeT :: (ReadBindings c, HasHermitMEnv m, HasLemmas m, LiftCoreM m)
               => (CoreExpr -> CoreExpr -> Translate c m a b)
               -> CoreString -> CoreString -> Translate c m a b
 parse2BeforeT f s1 s2 = parseCoreExprT s1 &&& parseCoreExprT s2 >>= uncurry f
 
-parse3BeforeT :: (ReadBindings c, HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m)
+parse3BeforeT :: (ReadBindings c, HasHermitMEnv m, HasLemmas m, LiftCoreM m)
               => (CoreExpr -> CoreExpr -> CoreExpr -> Translate c m a b)
               -> CoreString -> CoreString -> CoreString -> Translate c m a b
 parse3BeforeT f s1 s2 s3 = (parseCoreExprT s1 &&& parseCoreExprT s2) &&& parseCoreExprT s3 >>= (uncurry . uncurry $ f)

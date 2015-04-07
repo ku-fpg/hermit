@@ -97,8 +97,7 @@ workLabel = fromString "recursive-definition-of-work-for-use-by-ww-fusion"
 --------------------------------------------------------------------------------------------------
 
 -- Given abs and rep expressions, build "abs . rep = id"
-assumptionAClauseT :: ( BoundVars c, HasHermitMEnv m, HasHscEnv m
-                        , MonadCatch m, MonadIO m, MonadThings m )
+assumptionAClauseT :: ( BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
                      => CoreExpr -> CoreExpr -> Transform c m x Clause
 assumptionAClauseT absE repE = prefixFailMsg "Building assumption A failed: " $ do
     comp <- buildCompositionT absE repE
@@ -108,8 +107,7 @@ assumptionAClauseT absE repE = prefixFailMsg "Building assumption A failed: " $ 
     return $ Forall tvs (Equiv compBody idE)
 
 -- Given abs, rep, and f expressions, build "abs . rep . f = f"
-assumptionBClauseT :: ( BoundVars c, HasHermitMEnv m, HasHscEnv m
-                        , MonadCatch m, MonadIO m, MonadThings m)
+assumptionBClauseT :: ( BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
                      => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Clause
 assumptionBClauseT absE repE fE = prefixFailMsg "Building assumption B failed: " $ do
     repAfterF <- buildCompositionT repE fE
@@ -119,7 +117,7 @@ assumptionBClauseT absE repE fE = prefixFailMsg "Building assumption B failed: "
     return $ Forall tvs (Equiv lhs rhs)
 
 -- Given abs, rep, and f expressions, build "fix (abs . rep . f) = fix f"
-assumptionCClauseT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+assumptionCClauseT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
                      => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Clause
 assumptionCClauseT absE repE fE = prefixFailMsg "Building assumption C failed: " $ do
     Forall vs (Equiv lhs rhs) <- assumptionBClauseT absE repE fE
@@ -141,7 +139,7 @@ wwFusionClauseT absE repE fixgE = prefixFailMsg "Building worker/wrapper fusion 
 -- Perform the worker/wrapper split using condition 1-beta, introducing
 -- an unproven lemma for assumption C, and an appropriate w/w fusion lemma.
 split1BetaR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-               , HasDebugChan m, HasHermitMEnv m, HasHscEnv m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m
+               , HasHermitMEnv m, LiftCoreM m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m
                , MonadUnique m )
             => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
 split1BetaR u nm absE repE = do
@@ -166,7 +164,7 @@ split1BetaR u nm absE repE = do
     return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
 
 split2BetaR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-               , HasDebugChan m, HasHermitMEnv m, HasHscEnv m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m
+               , HasHermitMEnv m, LiftCoreM m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m
                , MonadUnique m )
             => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
 split2BetaR u nm absE repE = do

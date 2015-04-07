@@ -194,22 +194,22 @@ findBoundVarT p = do
 --------------------------------------------------------------------------------------------------
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findIdT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findIdT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
         => HermitName -> Transform c m a Id
 findIdT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findId nm)
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findVarT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findVarT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
          => HermitName -> Transform c m a Var
 findVarT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findVar nm)
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findTyConT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findTyConT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
            => HermitName -> Transform c m a TyCon
 findTyConT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findTyCon nm)
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findTypeT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findTypeT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
           => HermitName -> Transform c m a Type
 findTypeT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findType nm)
 

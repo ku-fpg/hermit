@@ -132,7 +132,7 @@ appArgM n e | n < 0     = fail "appArgM: arg must be non-negative"
                              else return $ l !! n
 
 -- | Build composition of two functions.
-buildCompositionT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+buildCompositionT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
                   => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
 buildCompositionT f g = do
     composeId <- findIdT $ fromString "Data.Function.."
@@ -162,7 +162,7 @@ buildAppM f x = do
     return $ mkCoreLams vs $ mkCoreApp f' x'
 
 -- | Given expression for f, build fix f.
-buildFixT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+buildFixT :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
           => CoreExpr -> Transform c m x CoreExpr
 buildFixT f = do
     (tvs, ty) <- endoFunExprTypeM f
@@ -171,7 +171,7 @@ buildFixT f = do
     return $ mkCoreLams tvs $ mkCoreApps (varToCoreExpr fixId) [Type ty, f']
 
 -- | Build an expression that is the monomorphic id function for given type.
-buildIdT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+buildIdT :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
          => Type -> Transform c m x CoreExpr
 buildIdT ty = do
     idId <- findIdT $ fromString "Data.Function.id"

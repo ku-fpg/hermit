@@ -181,7 +181,7 @@ caseFloatArg mfstr mstrictCore = let mstrict = extractR <$> mstrictCore
 -- | @f (case s of alt1 -> e1; alt2 -> e2)@ ==> @case s of alt1 -> f e1; alt2 -> f e2@
 --   Only safe if @f@ is strict.
 caseFloatArgR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c
-                 , HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
+                 , HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
               => Maybe CoreExpr -> Maybe (Rewrite c m CoreExpr) -- ^ Maybe the function to float past, and maybe a proof of its strictness.
               -> Rewrite c m CoreExpr
 caseFloatArgR mf mstrict = prefixFailMsg "Case floating from App argument failed: " $
@@ -206,7 +206,7 @@ caseFloatArgR mf mstrict = prefixFailMsg "Case floating from App argument failed
 -- | @f (case s of alt1 -> e1; alt2 -> e2)@ ==> @case s of alt1 -> f e1; alt2 -> f e2@
 --   Only safe if @f@ is strict, so introduces a lemma to prove.
 caseFloatArgLemmaR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-                      , HasHermitMEnv m, HasHscEnv m, HasDebugChan m, HasDynFlags m, HasLemmas m, MonadCatch m, MonadIO m
+                      , HasHermitMEnv m, LiftCoreM m, HasDynFlags m, HasLemmas m, MonadCatch m, MonadIO m
                       , MonadThings m, MonadUnique m )
                    => Used -> LemmaName -> Rewrite c m CoreExpr
 caseFloatArgLemmaR u nm = prefixFailMsg "Case floating from application argument failed: " $

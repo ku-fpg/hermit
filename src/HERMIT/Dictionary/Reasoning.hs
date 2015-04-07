@@ -315,7 +315,7 @@ lemmaR used nm = prefixFailMsg "verification failed: " $ do
     return CTrue
 
 verifyOrCreateT :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-                   , HasDebugChan m, HasLemmas m, MonadCatch m )
+                   , HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m )
                 => Used -> LemmaName -> Clause -> Transform c m a ()
 verifyOrCreateT u nm cl = do
     exists <- testM $ getLemmaByNameT nm
@@ -614,7 +614,7 @@ instantiateClauseVarR p cs = prefixFailMsg "instantiation failed: " $ do
 -- | Replace all occurrences of the given expression with a new quantified variable.
 abstractClauseR :: forall c m.
                        ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-                       , LemmaContext c, HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadUnique m )
+                       , LemmaContext c, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadUnique m )
                     => String -> Transform c m Clause CoreExpr -> Rewrite c m Clause
 abstractClauseR nm tr = prefixFailMsg "abstraction failed: " $ do
     e <- tr
@@ -624,7 +624,7 @@ abstractClauseR nm tr = prefixFailMsg "abstraction failed: " $ do
     liftM dropBinders $ return (mkForall [b] cl) >>>
                             extractR (anytdR $ promoteExprR $ runFoldR f :: Rewrite c m LCoreTC)
 
-csInQBodyT :: ( AddBindings c, ExtendPath c Crumb, ReadBindings c, ReadPath c Crumb, HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m ) => CoreString -> Transform c m Clause CoreExpr
+csInQBodyT :: ( AddBindings c, ExtendPath c Crumb, ReadBindings c, ReadPath c Crumb, HasHermitMEnv m, HasLemmas m, LiftCoreM m ) => CoreString -> Transform c m Clause CoreExpr
 csInQBodyT cs = forallT successT (parseCoreExprT cs) (flip const)
 
 ------------------------------------------------------------------------------
@@ -661,8 +661,8 @@ lemmaConsequentR u nm = prefixFailMsg "lemma-consequent failed:" $
     return cl'
 
 lemmaConsequentBiR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c
-                                  , ReadBindings c, ReadPath c Crumb, HasDebugChan m, HasLemmas m, MonadCatch m
-                                  , MonadUnique m)
+                                  , ReadBindings c, ReadPath c Crumb, HasHermitMEnv m, HasLemmas m, LiftCoreM m
+                                  , MonadCatch m, MonadUnique m)
                    => Used -> LemmaName -> BiRewrite c m CoreExpr
 lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go [] . lemmaC)) (markLemmaUsedT nm u >> idR)
     where go :: [CoreBndr] -> Clause -> BiRewrite c m CoreExpr

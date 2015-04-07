@@ -590,7 +590,7 @@ nonRecIntroR nm e = readerT $ \case
 
 -- | Introduce a local definition for a (possibly imported) identifier.
 -- Rewrites occurences of the identifier to point to this new local definiton.
-letIntroUnfoldingR :: ( BoundVars c, ReadBindings c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m
+letIntroUnfoldingR :: ( BoundVars c, ReadBindings c, HasDynFlags m, HasHermitMEnv m, LiftCoreM m
                       , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
                    => HermitName -> Rewrite c m CoreExpr
 letIntroUnfoldingR nm = do

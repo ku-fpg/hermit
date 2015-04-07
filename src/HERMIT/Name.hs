@@ -225,7 +225,7 @@ instance (MonadThings m, BoundVars c) => MonadThings (Transform c m a) where
 
 --------------------------------------------------------------------------------------------------
 
-findId :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findId :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
        => HermitName -> c -> m Id
 findId nm c = do
     nmd <- findInNameSpaces [varNS, dataConNS] nm c
@@ -234,7 +234,7 @@ findId nm c = do
         NamedDataCon dc -> return $ dataConWrapId dc
         other -> fail $ "findId: impossible Named returned: " ++ show other
 
-findVar :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findVar :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
        => HermitName -> c -> m Var
 findVar nm c = do
     nmd <- findInNameSpaces [varNS, tyVarNS, dataConNS] nm c
@@ -244,7 +244,7 @@ findVar nm c = do
         NamedDataCon dc -> return $ dataConWrapId dc
         other -> fail $ "findVar: impossible Named returned: " ++ show other
 
-findTyCon :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findTyCon :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
           => HermitName -> c -> m TyCon
 findTyCon nm c = do
     nmd <- findInNameSpace tyConClassNS nm c
@@ -252,7 +252,7 @@ findTyCon nm c = do
         NamedTyCon tc -> return tc
         other -> fail $ "findTyCon: impossible Named returned: " ++ show other
 
-findType :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findType :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
          => HermitName -> c -> m Type
 findType nm c = do
     nmd <- findInNameSpaces [tyVarNS, tyConClassNS] nm c
@@ -263,12 +263,12 @@ findType nm c = do
 
 --------------------------------------------------------------------------------------------------
 
-findInNameSpaces :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findInNameSpaces :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
                  => [NameSpace] -> HermitName -> c -> m Named
 findInNameSpaces nss nm c = setFailMsg "Variable not in scope." -- because catchesM clobbers failure messages.
                           $ catchesM [ findInNameSpace ns nm c | ns <- nss ]
 
-findInNameSpace :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
+findInNameSpace :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadIO m, MonadThings m)
                 => NameSpace -> HermitName -> c -> m Named
 findInNameSpace ns nm c =
     case varSetElems $ filterVarSet ((== ns) . occNameSpace . getOccName) $ findBoundVars (cmpHN2Var nm) c of
@@ -277,7 +277,7 @@ findInNameSpace ns nm c =
         []        -> findInNSModGuts ns nm
 
 -- | Looks for Named in current GlobalRdrEnv. If not present, calls 'findInNSPackageDB'.
-findInNSModGuts :: (HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
+findInNSModGuts :: (LiftCoreM m, HasHermitMEnv m, MonadIO m, MonadThings m)
                 => NameSpace -> HermitName -> m Named
 findInNSModGuts ns nm = do
     rdrEnv <- liftM mg_rdr_env getModGuts
@@ -287,7 +287,7 @@ findInNSModGuts ns nm = do
         _     -> fail "findInNSModGuts: multiple names returned"
 
 -- | Looks for Named in package database, or built-in packages.
-findInNSPackageDB :: (HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
+findInNSPackageDB :: (LiftCoreM m, HasHermitMEnv m, MonadIO m, MonadThings m)
                   => NameSpace -> HermitName -> m Named
 findInNSPackageDB ns nm = do
     mnm <- lookupName ns nm
@@ -296,7 +296,7 @@ findInNSPackageDB ns nm = do
         Just n  -> nameToNamed n
 
 -- | Helper to call lookupRdrNameInModule
-lookupName :: (HasHermitMEnv m, HasHscEnv m, MonadIO m) => NameSpace -> HermitName -> m (Maybe Name)
+lookupName :: (HasHermitMEnv m, LiftCoreM m, MonadIO m) => NameSpace -> HermitName -> m (Maybe Name)
 lookupName ns nm = case isQual_maybe rdrName of
                     Nothing    -> return Nothing -- we can't use lookupName on the current module
                     Just (m,_) -> do

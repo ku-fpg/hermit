@@ -11,6 +11,7 @@ module HERMIT.Monad
     , HermitMEnv
     , HermitMResult(..)
     , LiftCoreM(..)
+    , getHscEnv
     , runTcM
     , runDsM
       -- * Lemmas
@@ -23,9 +24,8 @@ module HERMIT.Monad
     , HasHermitMEnv(..)
     , mkEnv
     , getModGuts
-    , HasHscEnv(..)
       -- * Messages
-    , HasDebugChan(..)
+    , getDebugChan
     , KEnvMessage(..)
     , sendKEnvMessage
     ) where
@@ -33,7 +33,6 @@ module HERMIT.Monad
 import Prelude hiding (lookup)
 
 import Control.Applicative
-import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.IO.Class
 
@@ -52,12 +51,15 @@ import HERMIT.Lemma
 
 -- | The HermitM environment.
 data HermitMEnv = HermitMEnv { hEnvChanged   :: Bool -- ^ Whether Lemmas have changed
+                             , hEnvDebug     :: DebugChan
                              , hEnvModGuts   :: ModGuts -- ^ Note: this is a snapshot of the ModGuts from
                                                         --         before the current transformation.
                              , hEnvLemmas    :: Lemmas
                              }
 
-mkEnv :: ModGuts -> Lemmas -> HermitMEnv
+type DebugChan = KEnvMessage -> HermitM ()
+
+mkEnv :: DebugChan -> ModGuts -> Lemmas -> HermitMEnv
 mkEnv = HermitMEnv False
 
 -- | The HermitM result record.
@@ -77,34 +79,22 @@ mkResult env = HermitMResult (hEnvChanged env) (hEnvLemmas env)
 --
 -- It provides a reader for ModGuts, state for Lemmas,
 -- and access to a debugging channel.
-newtype HermitM a = HermitM { runHermitM :: DebugChan -> HermitMEnv -> CoreM (KureM (HermitMResult a)) }
-
-type DebugChan = KEnvMessage -> HermitM ()
+newtype HermitM a = HermitM { runHermitM :: HermitMEnv -> CoreM (KureM (HermitMResult a)) }
 
 -- | Eliminator for 'HermitM'.
-runHM :: DebugChan                     -- debug chan
-      -> HermitMEnv                    -- env
+runHM :: HermitMEnv                    -- env
       -> (HermitMResult a -> CoreM b)  -- success
       -> (String -> CoreM b)           -- failure
       -> HermitM a                     -- ma
       -> CoreM b
-runHM chan env success failure ma = runHermitM ma chan env >>= runKureM success failure
+runHM env success failure ma = runHermitM ma env >>= runKureM success failure
 
 -- | Allow HermitM to be embedded in another monad with proper capabilities.
-embedHermitM :: (HasDebugChan m, HasHermitMEnv m, HasLemmas m, LiftCoreM m) => HermitM a -> m a
+embedHermitM :: (HasHermitMEnv m, HasLemmas m, LiftCoreM m) => HermitM a -> m a
 embedHermitM hm = do
     env <- getHermitMEnv
-    c <- liftCoreM $ liftIO newTChanIO -- we are careful to do IO within liftCoreM to avoid the MonadIO constraint
-    r <- liftCoreM (runHermitM hm (liftIO . atomically . writeTChan c) env) >>= runKureM return fail
-    chan <- getDebugChan
-    let relayKEnvMessages = do
-            mm <- liftCoreM $ liftIO $ atomically $ tryReadTChan c
-            case mm of
-                Nothing -> return ()
-                Just dm -> chan dm >> relayKEnvMessages
-
-    relayKEnvMessages
-    forM_ (toList (hResLemmas r)) $ uncurry insertLemma -- TODO: fix
+    r <- liftCoreM (runHermitM hm env) >>= runKureM return fail
+    when (hResChanged r) $ forM_ (toList (hResLemmas r)) $ uncurry insertLemma
     return $ hResult r
 
 instance Functor HermitM where
@@ -120,22 +110,22 @@ instance Applicative HermitM where
 
 instance Monad HermitM where
   return :: a -> HermitM a
-  return a = HermitM $ \ _ env -> return (return (mkResult env a))
+  return a = HermitM $ \ env -> return (return (mkResult env a))
 
   (>>=) :: HermitM a -> (a -> HermitM b) -> HermitM b
   (HermitM gcm) >>= f =
-        HermitM $ \ chan env -> gcm chan env >>= runKureM (\ (HermitMResult c ls a) ->
-                                                            let env' = env { hEnvChanged = c, hEnvLemmas = ls }
-                                                            in  runHermitM (f a) chan env')
-                                                          (return . fail)
+        HermitM $ \ env -> gcm env >>= runKureM (\ (HermitMResult c ls a) ->
+                                                        let env' = env { hEnvChanged = c, hEnvLemmas = ls }
+                                                        in  runHermitM (f a) env')
+                                                (return . fail)
 
   fail :: String -> HermitM a
-  fail msg = HermitM $ \ _ _ -> return (fail msg)
+  fail msg = HermitM $ const $ return $ fail msg
 
 instance MonadCatch HermitM where
   catchM :: HermitM a -> (String -> HermitM a) -> HermitM a
-  (HermitM gcm) `catchM` f = HermitM $ \ chan env -> gcm chan env >>= runKureM (return.return)
-                                                                               (\ msg -> runHermitM (f msg) chan env)
+  (HermitM gcm) `catchM` f = HermitM $ \ env -> gcm env >>= runKureM (return.return)
+                                                                     (\ msg -> runHermitM (f msg) env)
 
 instance MonadIO HermitM where
   liftIO :: IO a -> HermitM a
@@ -173,33 +163,18 @@ class HasHermitMEnv m where
     getHermitMEnv :: m HermitMEnv
 
 instance HasHermitMEnv HermitM where
-    getHermitMEnv = HermitM $ \ _ env -> return $ return $ mkResult env env
+    getHermitMEnv = HermitM $ \ env -> return $ return $ mkResult env env
 
 getModGuts :: (HasHermitMEnv m, Monad m) => m ModGuts
 getModGuts = liftM hEnvModGuts getHermitMEnv
 
 ----------------------------------------------------------------------------
 
-class HasDebugChan m where
-    -- | Get the debugging channel
-    getDebugChan :: m (KEnvMessage -> m ())
+getDebugChan :: (HasHermitMEnv m, Monad m) => m DebugChan
+getDebugChan = liftM hEnvDebug getHermitMEnv
 
-instance HasDebugChan HermitM where
-    getDebugChan = HermitM $ \ chan env -> return $ return $ mkResult env chan
-
-sendKEnvMessage :: (HasDebugChan m, Monad m) => KEnvMessage -> m ()
-sendKEnvMessage msg = getDebugChan >>= ($ msg)
-
-----------------------------------------------------------------------------
-
-class HasHscEnv m where
-    getHscEnv :: m HscEnv
-
-instance HasHscEnv CoreM where
-    getHscEnv = getHscEnvCoreM
-
-instance HasHscEnv HermitM where
-    getHscEnv = liftCoreM getHscEnv
+sendKEnvMessage :: (HasHermitMEnv m, HasLemmas m, LiftCoreM m) => KEnvMessage -> m ()
+sendKEnvMessage msg = getDebugChan >>= embedHermitM . ($ msg)
 
 ----------------------------------------------------------------------------
 
@@ -208,8 +183,8 @@ class HasLemmas m where
     putLemmas :: Lemmas -> m ()
 
 instance HasLemmas HermitM where
-    getLemmas = HermitM $ \ _ env -> return $ return $ mkResult env (hEnvLemmas env)
-    putLemmas m = HermitM $ \ _ _ -> return $ return $ changedResult m ()
+    getLemmas = HermitM $ \ env -> return $ return $ mkResult env (hEnvLemmas env)
+    putLemmas m = HermitM $ \ _ -> return $ return $ changedResult m ()
 
 -- | Insert or replace a lemma.
 insertLemma :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> m ()
@@ -237,7 +212,10 @@ class Monad m => LiftCoreM m where
     liftCoreM :: CoreM a -> m a
 
 instance LiftCoreM HermitM where
-    liftCoreM coreM = HermitM $ \ _ env -> coreM >>= return . return . mkResult env
+    liftCoreM coreM = HermitM $ \ env -> coreM >>= return . return . mkResult env
+
+getHscEnv :: LiftCoreM m => m HscEnv
+getHscEnv = liftCoreM getHscEnvCoreM
 
 ----------------------------------------------------------------------------
 
@@ -249,7 +227,7 @@ data KEnvMessage :: * where
 
 ----------------------------------------------------------------------------
 
-runTcM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => TcM a -> m a
+runTcM :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => TcM a -> m a
 runTcM m = do
     env <- getHscEnv
     dflags <- getDynFlags
@@ -262,5 +240,5 @@ runTcM m = do
                                                    ++ text "Warnings:" : pprErrMsgBag warns
     maybe (fail $ showMsgs msgs) return mr
 
-runDsM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => DsM a -> m a
+runDsM :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => DsM a -> m a
 runDsM = runTcM . initDsTc
