@@ -37,6 +37,7 @@ module HERMIT.GHC
     , eqExprX
     , loadSysInterface
     , lookupRdrNameInModule
+    , injectDependency
     , reportAllUnsolved
     , zEncodeString
 #ifdef mingw32_HOST_OS
@@ -331,3 +332,20 @@ throwCmdLineErrorS dflags = throwCmdLineError . showSDoc dflags
 
 throwCmdLineError :: String -> IO a
 throwCmdLineError = throwGhcExceptionIO . CmdLineError
+
+-- | Populate the EPS with a module, as if it were imported in the target program.
+injectDependency :: HscEnv -> ModGuts -> ModuleName -> IO ()
+injectDependency hsc_env guts mod_name = do
+    -- First find the package the module resides in by searching exposed packages and home modules
+    found_module <- findImportedModule hsc_env mod_name Nothing
+    case found_module of
+        Found _ mod -> do
+            -- Populate the EPS
+            _ <- initTcFromModGuts hsc_env guts HsSrcFile False $
+                 initIfaceTcRn $
+                 loadSysInterface doc mod
+            return ()
+        err -> throwCmdLineErrorS dflags $ cannotFindModule dflags mod_name err
+  where
+    dflags = hsc_dflags hsc_env
+    doc = ptext (sLit "dependency injection requested by HERMIT")

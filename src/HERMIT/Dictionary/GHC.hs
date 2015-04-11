@@ -10,6 +10,7 @@ module HERMIT.Dictionary.GHC
       -- ** Dynamic Loading
     , loadLemmaLibraryT
     , LemmaLibrary
+    , injectDependencyT
       -- ** Substitution
     , substR
       -- ** Utilities
@@ -77,6 +78,8 @@ externals =
         [ "Dynamically load a library of lemmas." ]
     , external "load-lemma-library" ((\nm -> loadLemmaLibraryT nm . Just) :: HermitName -> LemmaName -> TransformH LCore String)
         [ "Dynamically load a specific lemma from a library of lemmas." ]
+    , external "inject-dependency" (promoteModGutsT . injectDependencyT . mkModuleName :: String -> TransformH LCore ())
+        [ "Inject a dependency on the given module." ]
     ]
 
 ------------------------------------------------------------------------
@@ -295,3 +298,8 @@ lookupHermitNameForPlugins hscEnv ns hnm = do
             , ptext (sLit "did not export the name")
             , ppr rdrName ])
           return mbName
+
+injectDependencyT :: (LiftCoreM m, MonadIO m) => ModuleName -> Transform c m ModGuts ()
+injectDependencyT mn = contextfreeT $ \ guts -> do
+    env <- getHscEnv
+    liftIO $ injectDependency env guts mn
