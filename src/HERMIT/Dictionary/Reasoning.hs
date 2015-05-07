@@ -140,9 +140,9 @@ externals =
         , "already proven lemma will result in the new lemma being considered proven." ]
     , external "inst-dictionaries" (promoteClauseR instantiateDictsR :: RewriteH LCore)
         [ "Instantiate all of the universally quantified dictionaries of the given lemma." ]
-    , external "abstract" ((\nm -> promoteClauseR . abstractClauseR nm . csInQBodyT) :: String -> CoreString -> RewriteH LCore)
+    , external "abstract-forall" ((\nm -> promoteClauseR . abstractClauseR nm . csInQBodyT) :: String -> CoreString -> RewriteH LCore)
         [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
-    , external "abstract" ((\nm rr -> promoteClauseR $ abstractClauseR nm $ extractT rr >>> setFailMsg "path must focus on an expression" projectT) :: String -> RewriteH LCore -> RewriteH LCore)
+    , external "abstract-forall" ((\nm rr -> promoteClauseR $ abstractClauseR nm $ extractT rr >>> setFailMsg "path must focus on an expression" projectT) :: String -> RewriteH LCore -> RewriteH LCore)
         [ "Weaken a lemma by abstracting an expression to a new quantifier." ]
     , external "copy-lemma" (\ nm newName -> modifyLemmaT nm (const newName) idR id id :: TransformH LCore ())
         [ "Copy a given lemma, with a new name." ]
