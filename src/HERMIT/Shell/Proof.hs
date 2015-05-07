@@ -112,7 +112,9 @@ forceProofs = do
             queryInFocus (insertLemmasT nonTemp :: TransformH LCore ())
                          (Always $ "-- recording obligations as lemmas : " ++ unwords (map (show.fst) (reverse nonTemp)))
         forM_ nls' $ \ ((_,c),nm,l) -> do
+            cl_putStrLn $ "Forcing obligation: " ++ show nm
             pushProofStack (Unproven nm l c mempty)
+        showWindow Nothing
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, CLMonad m) => ProofReason -> ExprH -> m ()
