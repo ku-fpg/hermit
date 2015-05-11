@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE InstanceSigs #-}
 
@@ -33,7 +34,9 @@ import Control.Monad
 import Data.Dynamic (Typeable)
 import Data.String (IsString(..))
 import qualified Data.Map as M
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
+#endif
 
 import HERMIT.Core
 import HERMIT.GHC hiding ((<>))

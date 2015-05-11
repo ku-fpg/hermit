@@ -50,7 +50,11 @@ module HERMIT.GHC
     , module ErrUtils
     , module PrelNames
     , module TcEnv
+#if __GLASGOW_HASKELL__ < 710
     , module TcMType
+#else
+    , module TcSMonad
+#endif
     , module TcRnMonad
     , module TcRnTypes
     , module TcSimplify
@@ -87,9 +91,17 @@ import           StaticFlags
 #endif
 import           TcEnv (tcLookupClass)
 import           TcErrors (reportAllUnsolved)
+#if __GLASGOW_HASKELL__ < 710
 import           TcMType (newWantedEvVar)
+#else
+import           TcSMonad (newWantedEvVar)
+#endif
 import           TcRnMonad (getCtLoc, initIfaceTcRn)
+#if __GLASGOW_HASKELL__ < 710
 import           TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
+#else
+import           TcRnTypes (TcM, mkNonCanonical, mkSimpleWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
+#endif
 import           TcSimplify (solveWantedsTcM)
 import           TcType (mkPhiTy, mkSigmaTy)
 import           TypeRep (Type(..),TyLit(..))
@@ -165,13 +177,13 @@ ppIdInfo v info
     , (has_strictness, ptext (sLit "Str=") <> pprStrictness str_info)
     , (has_unf,        ptext (sLit "Unf=") <> ppr unf_info)
     , (notNull rules,  ptext (sLit "RULES:") <+> vcat (map ppr rules))
-    ]	-- Inline pragma, occ, demand, lbvar info
-	-- printed out with all binders (when debug is on);
-	-- see PprCore.pprIdBndr
+    ] -- Inline pragma, occ, demand, lbvar info
+      -- printed out with all binders (when debug is on);
+      -- see PprCore.pprIdBndr
   where
     pp_scope | isGlobalId v   = ptext (sLit "GblId")
-    	     | isExportedId v = ptext (sLit "LclIdX")
-    	     | otherwise      = ptext (sLit "LclId")
+             | isExportedId v = ptext (sLit "LclIdX")
+             | otherwise      = ptext (sLit "LclId")
 
     arity = arityInfo info
     has_arity = arity /= 0

@@ -86,10 +86,11 @@ module HERMIT.Kure
     , implT, implAllR
     , equivT, equivAllR
     , forallT, forallR
+#if __GLASGOW_HASKELL__ < 710
       -- * Applicative
-      -- | Remove in 7.10
     , (<$>)
     , (<*>)
+#endif
     ) where
 
 import Language.KURE
@@ -105,7 +106,9 @@ import HERMIT.Kure.Universes
 import HERMIT.Lemma
 import HERMIT.Monad
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Monad
+#endif
 
 ---------------------------------------------------------------------
 
@@ -115,8 +118,9 @@ type BiRewriteH a   = BiRewrite HermitC HermitM a
 type LensH a b      = Lens      HermitC HermitM a b
 type PathH          = Path Crumb
 
--- I find it annoying that Applicative is not a superclass of Monad.
--- This causes a warning now, and will need to be CPP'd for 7.10
+#if __GLASGOW_HASKELL__ < 710
+-- It is annoying that Applicative is not a superclass of Monad in 7.8.
+-- This causes a warning which we ignore.
 (<$>) :: Monad m => (a -> b) -> m a -> m b
 (<$>) = liftM
 {-# INLINE (<$>) #-}
@@ -124,6 +128,7 @@ type PathH          = Path Crumb
 (<*>) :: Monad m => m (a -> b) -> m a -> m b
 (<*>) = ap
 {-# INLINE (<*>) #-}
+#endif
 
 ---------------------------------------------------------------------
 

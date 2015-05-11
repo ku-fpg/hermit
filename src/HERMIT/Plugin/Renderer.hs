@@ -1,11 +1,15 @@
-{-# LANGUAGE CPP, FlexibleContexts #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module HERMIT.Plugin.Renderer where
 
 import Control.Arrow
 import Control.Monad.State
 
 import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
+#endif
 
 import HERMIT.Dictionary (traceR)
 import HERMIT.Kure

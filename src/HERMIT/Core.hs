@@ -193,7 +193,11 @@ coercionSyntaxEq (ForAllCo v1 co1)       (ForAllCo v2 co2)       = v1 == v2 && c
 coercionSyntaxEq (CoVarCo v1)            (CoVarCo v2)            = v1 == v2
 coercionSyntaxEq (AxiomInstCo con1 ind1 cos1) (AxiomInstCo con2 ind2 cos2) = con1 == con2 && ind1 == ind2 && all2 coercionSyntaxEq cos1 cos2
 coercionSyntaxEq (LRCo lr1 co1)          (LRCo lr2 co2)          = lr1 == lr2 && coercionSyntaxEq co1 co2
+#if __GLASGOW_HASKELL__ < 710
 coercionSyntaxEq (UnivCo role1 ty11 ty12) (UnivCo role2 ty21 ty22) = role1 == role2 && typeSyntaxEq ty11 ty21 && typeSyntaxEq ty12 ty22
+#else
+coercionSyntaxEq (UnivCo fs1 role1 ty11 ty12) (UnivCo fs2 role2 ty21 ty22) = fs1 == fs2 && role1 == role2 && typeSyntaxEq ty11 ty21 && typeSyntaxEq ty12 ty22
+#endif
 coercionSyntaxEq (SubCo co1)             (SubCo co2)             = coercionSyntaxEq co1 co2
 coercionSyntaxEq (SymCo co1)             (SymCo co2)             = coercionSyntaxEq co1 co2
 coercionSyntaxEq (TransCo co11 co12)     (TransCo co21 co22)     = coercionSyntaxEq co11 co21 && coercionSyntaxEq co12 co22

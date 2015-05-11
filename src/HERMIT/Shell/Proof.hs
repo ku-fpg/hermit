@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -32,7 +33,9 @@ import Control.Monad.State (MonadState(get), modify, gets)
 import Data.Dynamic
 import Data.Function (on)
 import Data.List (nubBy)
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
+#endif
 
 import HERMIT.Context
 import HERMIT.External

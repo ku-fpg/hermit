@@ -1,7 +1,8 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module HERMIT.Context
     ( -- * HERMIT Contexts
@@ -52,7 +53,9 @@ import Prelude hiding (lookup)
 
 import Control.Monad (liftM)
 
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid (mempty)
+#endif
 import Data.Map hiding (map, foldr, filter)
 
 import Language.KURE

@@ -27,7 +27,9 @@ import Control.Monad.State
 import Data.Char
 import Data.List (isPrefixOf, partition)
 import Data.Maybe
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
+#endif
 
 import HERMIT.Context
 import HERMIT.External

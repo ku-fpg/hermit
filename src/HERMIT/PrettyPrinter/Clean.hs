@@ -1,4 +1,6 @@
-{-# LANGUAGE CPP, LambdaCase, MultiWayIf #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 
 module HERMIT.PrettyPrinter.Clean
     ( -- * HERMIT's Clean Pretty-Printer for GHC Core
@@ -20,7 +22,9 @@ import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
 import Data.Default.Class
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid (mempty)
+#endif
 
 import HERMIT.Context
 import HERMIT.Core

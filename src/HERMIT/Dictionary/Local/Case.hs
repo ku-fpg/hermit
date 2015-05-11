@@ -1,4 +1,9 @@
-{-# LANGUAGE CPP, MultiWayIf, LambdaCase, ScopedTypeVariables, FlexibleContexts, TupleSections #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 
 module HERMIT.Dictionary.Local.Case
     ( -- * Rewrites on Case Expressions
@@ -37,7 +42,9 @@ import Control.Monad
 import Control.Monad.IO.Class
 
 import Data.List
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
+#endif
 
 import HERMIT.Core
 import HERMIT.Context

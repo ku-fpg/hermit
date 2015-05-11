@@ -57,7 +57,9 @@ module HERMIT.PrettyPrinter.Common
 
 import Data.Char
 import Data.Default.Class
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid hiding ((<>))
+#endif
 import qualified Data.Map as M
 import Data.Typeable
 

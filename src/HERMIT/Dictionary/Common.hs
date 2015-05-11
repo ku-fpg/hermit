@@ -1,4 +1,7 @@
-{-# LANGUAGE CPP, ScopedTypeVariables, FlexibleContexts, LambdaCase #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 -- | Note: this module should NOT export externals. It is for common
 --   transformations needed by the other primitive modules.
@@ -44,7 +47,9 @@ module HERMIT.Dictionary.Common
 where
 
 import Data.List
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
+#endif
 
 import Control.Arrow
 import Control.Monad.IO.Class

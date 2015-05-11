@@ -1,4 +1,9 @@
-{-# LANGUAGE GADTs, TypeFamilies, FlexibleContexts, FlexibleInstances, DeriveDataTypeable #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.External
     ( -- * Externals
@@ -262,7 +267,11 @@ splitFunTyArgs tr = case splitFunTyMaybe tr of
                                          in (a:as, r')
 
 splitFunTyMaybe :: TypeRep -> Maybe (TypeRep, TypeRep)
+#if __GLASGOW_HASKELL__ < 710
 splitFunTyMaybe (TypeRep _ tc [a,r]) | tc == funTc = Just (a,r)
+#else
+splitFunTyMaybe (TypeRep _ tc _krs [a,r]) | tc == funTc = Just (a,r)
+#endif
 splitFunTyMaybe _ = Nothing
 
 -----------------------------------------------------------------

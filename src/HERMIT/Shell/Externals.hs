@@ -1,4 +1,6 @@
-{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module HERMIT.Shell.Externals where
 
@@ -11,7 +13,9 @@ import Data.Dynamic (fromDynamic)
 import Data.List (intercalate)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid (mempty)
+#endif
 
 import HERMIT.External
 import HERMIT.Kernel

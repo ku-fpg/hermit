@@ -12,9 +12,12 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+
 module HERMIT.Shell.Types where
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative)
+#endif
 import Control.Arrow
 import Control.Concurrent.STM
 import Control.Monad (liftM, unless, when, forM_, forM, unless)
@@ -28,7 +31,9 @@ import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
 import Data.Dynamic
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isJust)
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid (mempty)
+#endif
 
 import HERMIT.Context
 import HERMIT.Core

@@ -28,7 +28,9 @@ module HERMIT.Dictionary.GHC
     , dezombifyR
     , buildDictionary
     , buildDictionaryT
+#if __GLASGOW_HASKELL__ < 710
     , buildTypeable
+#endif
     ) where
 
 import qualified Bag
@@ -130,7 +132,13 @@ lintModuleT :: TransformH ModGuts String
 lintModuleT =
   do dynFlags <- dynFlagsT
      bnds     <- arr mg_binds
+#if __GLASGOW_HASKELL__ < 710
      let (warns, errs)    = CoreLint.lintCoreBindings [] bnds -- [] are vars to treat as in scope, used by GHCi
+#else
+     -- [] are vars to treat as in scope, used by GHCi
+     -- 'CoreDesugar' so we check for global ids, but not INLINE loop breakers, see notes in GHC's CoreLint module.
+     let (warns, errs)    = CoreLint.lintCoreBindings CoreDesugar [] bnds
+#endif
          dumpSDocs endMsg = Bag.foldBag (\ d r -> d ++ ('\n':r)) (showSDoc dynFlags) endMsg
      if Bag.isEmptyBag errs
        then return $ dumpSDocs "Core Lint Passed" warns
@@ -198,6 +206,7 @@ occurrenceAnalysisR = occurAnalyseAndDezombifyR
 
 ----------------------------------------------------------------------
 
+#if __GLASGOW_HASKELL__ < 710
 -- TODO: this is mostly an example, move somewhere?
 buildTypeable :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Type -> m (Id, [CoreBind])
 buildTypeable ty = do
@@ -206,6 +215,7 @@ buildTypeable ty = do
         let predTy = mkClassPred cls [typeKind ty, ty] -- recall that Typeable is now poly-kinded
         newWantedEvVar predTy
     buildDictionary evar
+#endif
 
 -- | Build a dictionary for the given
 buildDictionary :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Id -> m (Id, [CoreBind])
@@ -214,9 +224,13 @@ buildDictionary evar = do
         loc <- getCtLoc $ GivenOrigin UnkSkol
         let predTy = varType evar
             nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
+#if __GLASGOW_HASKELL__ < 710
             wCs = mkFlatWC [nonC]
-        (wCs', bnds) <- solveWantedsTcM wCs
-        -- reportAllUnsolved wCs' -- this is causing a panic with dictionary instantiation
+#else
+            wCs = mkSimpleWC [nonC]
+#endif
+        (_wCs', bnds) <- solveWantedsTcM wCs
+        -- reportAllUnsolved _wCs' -- this is causing a panic with dictionary instantiation
                                   -- revist and fix!
         return (evar, bnds)
     bnds <- runDsM $ dsEvBinds bs
