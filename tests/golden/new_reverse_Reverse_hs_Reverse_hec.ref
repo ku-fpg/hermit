@@ -40,6 +40,7 @@ To get started, you could try the following:
 
 ++ [] (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mxs[0m[0m[0m[31m.[0m[0m [0m[31m([0m[0m[0m[m++[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[31m([0m[0m[0m[m[][0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[0m[mxs[0m[0m[0m[0m
+Forcing obligation: appendFix
 Successfully proven: appendFix
 Successfully proven: ++ []
 myAppend-assoc (Not Proven)
@@ -57,8 +58,11 @@ repH ++ (Not Proven)
   [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[mxs[0m[0m [0m[mys[0m[0m[0m[31m.[0m[0m
   [0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[31m([0m[0m[0m[m++[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[0m[mys[0m[0m[0m[0m[31m)[0m[0m [31m=[0m [0m[31m([0m[0m[0m[m.[0m[0m[0m[31m)[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[31m([0m[0m[0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mrepH[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mys[0m[0m[0m[0m[31m)[0m[0m[0m
 Successfully proven: repH ++
+Forcing obligation: rev-assumption
 Successfully proven: rev-assumption
+Forcing obligation: repHstrict
 Successfully proven: repHstrict
+Forcing obligation: repH-absH-fusion
 Successfully proven: repH-absH-fusion
 [0m[1;34mrec[22m[0m[0m [0m[mabsR[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[31m.[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32mH[0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m
     [0m[mabsR[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[32ma[0m[0m [0m[meta[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mg[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m.[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[32mH[0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[31m([0m[0m[0m[mabsH[0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mg[0m[0m[0m[0m[31m)[0m[0m [0m[0m[meta[0m[0m[0m
