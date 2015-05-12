@@ -33,6 +33,7 @@ module HERMIT.Plugin
       -- ** Knobs and Dials
     , getPassInfo
     , getKernel
+    , defPS
     ) where
 
 import Control.Concurrent.STM
