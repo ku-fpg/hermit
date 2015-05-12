@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 module HERMIT.Plugin.Display
     ( display
@@ -9,7 +10,9 @@ import Control.Monad.Reader
 import Control.Monad.State
 
 import Data.Maybe (fromMaybe)
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
+#endif
 
 import HERMIT.Kernel (queryK, CommitMsg(..))
 import HERMIT.Kure
