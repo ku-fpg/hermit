@@ -56,7 +56,7 @@ module HERMIT.Dictionary.Reasoning
     ) where
 
 import           Control.Arrow hiding ((<+>))
-import           Control.Monad
+import           Control.Monad ((>=>), forM, liftM)
 
 import           Data.Either (partitionEithers)
 import           Data.List (isInfixOf, nubBy)
@@ -68,7 +68,7 @@ import           HERMIT.Context
 import           HERMIT.Core
 import           HERMIT.External
 import           HERMIT.GHC hiding ((<>), (<+>), nest, ($+$))
-import           HERMIT.Kure hiding ((<$>), (<*>))
+import           HERMIT.Kure
 import           HERMIT.Lemma
 import           HERMIT.Monad
 import           HERMIT.Name
@@ -82,7 +82,7 @@ import           HERMIT.Dictionary.Fold hiding (externals)
 import           HERMIT.Dictionary.GHC hiding (externals)
 import           HERMIT.Dictionary.Local.Let (nonRecIntroR)
 
-import           Prelude.Compat
+import           Prelude.Compat hiding ((<$>), (<*>))
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 

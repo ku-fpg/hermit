@@ -23,7 +23,7 @@ module HERMIT.Shell.ScriptToRewrite
     ) where
 
 import Control.Arrow
-import Control.Monad
+import Control.Monad (forM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
 import Control.Monad.State (MonadState, gets, modify)
@@ -35,7 +35,7 @@ import qualified Data.Map as M
 import HERMIT.Context (LocalPathH, getAntecedents)
 import HERMIT.External
 import HERMIT.Kernel
-import HERMIT.Kure hiding ((<$>))
+import HERMIT.Kure
 import HERMIT.Lemma
 import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript, unparseScript)
 import HERMIT.Dictionary.Reasoning
@@ -48,7 +48,7 @@ import HERMIT.Shell.Interpreter
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
-import Prelude.Compat
+import Prelude.Compat hiding ((<$>))
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 ------------------------------------

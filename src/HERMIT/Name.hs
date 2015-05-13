@@ -58,10 +58,10 @@ import Data.String (IsString(..))
 import HERMIT.Context
 import HERMIT.External
 import HERMIT.GHC
-import HERMIT.Kure hiding ((<$>), (<*>))
+import HERMIT.Kure
 import HERMIT.Monad
 
-import Prelude.Compat
+import Prelude.Compat hiding ((<$>), (<*>))
 
 -- | Possible results from name lookup.
 -- Invariant: One constructor for each NameSpace.
