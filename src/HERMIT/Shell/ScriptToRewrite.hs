@@ -1,5 +1,11 @@
-{-# LANGUAGE ConstraintKinds, DeriveDataTypeable, FlexibleContexts, LambdaCase,
-             MultiParamTypeClasses, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.Shell.ScriptToRewrite
     ( -- * Converting Scripts to Rewrites
@@ -29,7 +35,7 @@ import qualified Data.Map as M
 import HERMIT.Context (LocalPathH, getAntecedents)
 import HERMIT.External
 import HERMIT.Kernel
-import HERMIT.Kure
+import HERMIT.Kure hiding ((<$>))
 import HERMIT.Lemma
 import HERMIT.Parser(Script, ExprH, unparseExprH, parseScript, unparseScript)
 import HERMIT.Dictionary.Reasoning
@@ -41,6 +47,8 @@ import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
+
+import Prelude.Compat
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 ------------------------------------

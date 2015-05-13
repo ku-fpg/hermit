@@ -27,12 +27,12 @@ import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC hiding ((<+>), (<>), ($$), ($+$), cat, sep, fsep, hsep, empty, nest, vcat, char, text, keyword, hang)
-import HERMIT.Kure
+import HERMIT.Kure hiding ((<$>))
 import HERMIT.Monad
 import HERMIT.PrettyPrinter.Common
 import HERMIT.Syntax
 
-import Prelude.Compat hiding ((<$>))
+import Prelude.Compat
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 

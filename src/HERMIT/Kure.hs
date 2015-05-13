@@ -1,9 +1,9 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -87,12 +87,12 @@ module HERMIT.Kure
     , implT, implAllR
     , equivT, equivAllR
     , forallT, forallR
-#if __GLASGOW_HASKELL__ < 710
       -- * Applicative
     , (<$>)
     , (<*>)
-#endif
     ) where
+
+import Control.Monad (ap, liftM)
 
 import Language.KURE
 import Language.KURE.BiTransform
@@ -107,9 +107,7 @@ import HERMIT.Kure.Universes
 import HERMIT.Lemma
 import HERMIT.Monad
 
-#if __GLASGOW_HASKELL__ < 710
-import Control.Monad
-#endif
+import Prelude.Compat hiding ((<$>), (<*>))
 
 ---------------------------------------------------------------------
 
@@ -119,7 +117,6 @@ type BiRewriteH a   = BiRewrite HermitC HermitM a
 type LensH a b      = Lens      HermitC HermitM a b
 type PathH          = Path Crumb
 
-#if __GLASGOW_HASKELL__ < 710
 -- It is annoying that Applicative is not a superclass of Monad in 7.8.
 -- This causes a warning which we ignore.
 (<$>) :: Monad m => (a -> b) -> m a -> m b
@@ -129,7 +126,6 @@ type PathH          = Path Crumb
 (<*>) :: Monad m => m (a -> b) -> m a -> m b
 (<*>) = ap
 {-# INLINE (<*>) #-}
-#endif
 
 ---------------------------------------------------------------------
 

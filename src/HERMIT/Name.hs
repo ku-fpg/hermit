@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -57,8 +58,10 @@ import Data.String (IsString(..))
 import HERMIT.Context
 import HERMIT.External
 import HERMIT.GHC
-import HERMIT.Kure
+import HERMIT.Kure hiding ((<$>), (<*>))
 import HERMIT.Monad
+
+import Prelude.Compat
 
 -- | Possible results from name lookup.
 -- Invariant: One constructor for each NameSpace.

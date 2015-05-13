@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
@@ -240,10 +239,8 @@ letNonRecSubstSafeR =
 
          extractT occurrencesT >>^ (getSum >>> (< 2))
 
-#if __GLASGOW_HASKELL__ < 710
 (<$) :: Monad m => a -> m b -> m a
 a <$ mb = mb >> return a
-#endif
 
 -------------------------------------------------------------------------------------------
 

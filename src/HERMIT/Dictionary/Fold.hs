@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -37,7 +38,7 @@ import HERMIT.Core
 import HERMIT.Context
 import HERMIT.External
 import HERMIT.GHC
-import HERMIT.Kure
+import HERMIT.Kure hiding ((<$>))
 import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.Name
@@ -49,7 +50,7 @@ import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.PrettyPrinter.Common
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
-import Prelude hiding (exp)
+import Prelude.Compat hiding (exp)
 
 ------------------------------------------------------------------------
 

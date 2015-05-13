@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -67,7 +68,7 @@ import           HERMIT.Context
 import           HERMIT.Core
 import           HERMIT.External
 import           HERMIT.GHC hiding ((<>), (<+>), nest, ($+$))
-import           HERMIT.Kure
+import           HERMIT.Kure hiding ((<$>), (<*>))
 import           HERMIT.Lemma
 import           HERMIT.Monad
 import           HERMIT.Name
@@ -80,6 +81,8 @@ import           HERMIT.Dictionary.Common
 import           HERMIT.Dictionary.Fold hiding (externals)
 import           HERMIT.Dictionary.GHC hiding (externals)
 import           HERMIT.Dictionary.Local.Let (nonRecIntroR)
+
+import           Prelude.Compat
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
