@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module HERMIT.Dictionary.Local.Let
@@ -46,10 +47,10 @@ module HERMIT.Dictionary.Local.Let
     ) where
 
 import Control.Arrow
-import Control.Monad
+import Control.Monad (ap, liftM, when)
 import Control.Monad.IO.Class
 
-import Data.List
+import Data.List (intersect, partition)
 import Data.Monoid
 
 import HERMIT.Core
@@ -67,6 +68,8 @@ import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.AlphaConversion hiding (externals)
 
 import HERMIT.Dictionary.Local.Bind hiding (externals)
+
+import Prelude.Compat hiding ((<$))
 
 ------------------------------------------------------------------------------
 

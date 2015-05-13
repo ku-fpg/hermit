@@ -1,10 +1,10 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -33,9 +33,6 @@ import Control.Monad.State (MonadState(get), modify, gets)
 import Data.Dynamic
 import Data.Function (on)
 import Data.List (nubBy)
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid
-#endif
 
 import HERMIT.Context
 import HERMIT.External
@@ -51,6 +48,8 @@ import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Plugin.Types
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
+
+import Prelude.Compat
 
 --------------------------------------------------------------------------------------------------------
 

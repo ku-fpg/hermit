@@ -1,4 +1,6 @@
-{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module HERMIT.Dictionary.AlphaConversion
     ( -- * Alpha-Renaming and Shadowing
       externals

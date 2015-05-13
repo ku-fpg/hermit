@@ -1,8 +1,8 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module HERMIT.Monad
     ( -- * The HERMIT Monad
@@ -31,11 +31,8 @@ module HERMIT.Monad
     , sendKEnvMessage
     ) where
 
-import Prelude hiding (lookup)
+import Prelude.Compat hiding (lookup)
 
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative
-#endif
 import Control.Monad
 import Control.Monad.IO.Class
 

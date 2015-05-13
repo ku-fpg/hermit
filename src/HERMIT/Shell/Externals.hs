@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module HERMIT.Shell.Externals where
@@ -13,9 +13,6 @@ import Data.Dynamic (fromDynamic)
 import Data.List (intercalate)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid (mempty)
-#endif
 
 import HERMIT.External
 import HERMIT.Kernel
@@ -34,6 +31,8 @@ import HERMIT.Shell.Proof as Proof
 import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
+
+import Prelude.Compat
 
 ----------------------------------------------------------------------------------
 

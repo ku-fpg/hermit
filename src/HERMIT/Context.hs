@@ -1,8 +1,9 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module HERMIT.Context
     ( -- * HERMIT Contexts
@@ -49,13 +50,10 @@ module HERMIT.Context
     , HasEmptyContext(..)
     ) where
 
-import Prelude hiding (lookup)
+import Prelude.Compat hiding (lookup)
 
 import Control.Monad (liftM)
 
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid (mempty)
-#endif
 import Data.Map hiding (map, foldr, filter)
 
 import Language.KURE

@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP, LambdaCase, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 module HERMIT.Dictionary.Query
     ( -- * Queries and Predicates

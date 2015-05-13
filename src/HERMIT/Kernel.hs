@@ -45,21 +45,21 @@ import HERMIT.Monad
 -- | A 'Kernel' is a repository for complete Core syntax trees ('ModGuts') and Lemmas.
 data Kernel = Kernel
   { -- | Halt the 'Kernel' and return control to GHC, which compiles the specified 'AST'.
-    resumeK :: MonadIO m =>                                   AST -> m ()
+    resumeK :: forall m. MonadIO m =>                                   AST -> m ()
     -- | Halt the 'Kernel' and abort GHC without compiling.
-  , abortK  :: MonadIO m =>                                          m ()
+  , abortK  :: forall m. MonadIO m =>                                          m ()
     -- | Apply a 'Rewrite' to the specified 'AST' and return a handle to the resulting 'AST'.
-  , applyK  :: (MonadIO m, MonadCatch m)
-            => RewriteH ModGuts     -> CommitMsg -> KernelEnv -> AST -> m AST
+  , applyK  :: forall m. (MonadIO m, MonadCatch m)
+            => RewriteH ModGuts     -> CommitMsg -> KernelEnv ->        AST -> m AST
     -- | Apply a 'TransformH' to the 'AST', return the resulting value, and potentially a new 'AST'.
-  , queryK  :: (MonadIO m, MonadCatch m)
-            => TransformH ModGuts a -> CommitMsg -> KernelEnv -> AST -> m (AST,a)
+  , queryK  :: forall m a. (MonadIO m, MonadCatch m)
+            => TransformH ModGuts a -> CommitMsg -> KernelEnv ->        AST -> m (AST,a)
     -- | Delete the internal record of the specified 'AST'.
-  , deleteK :: MonadIO m =>                                   AST -> m ()
+  , deleteK :: forall m. MonadIO m =>                                   AST -> m ()
     -- | List all the 'AST's tracked by the 'Kernel', including version data.
-  , listK   :: MonadIO m =>                                          m [(AST,Maybe String, Maybe AST)]
+  , listK   :: forall m. MonadIO m =>                                          m [(AST,Maybe String, Maybe AST)]
     -- | Log a new AST with same Lemmas/ModGuts as given AST.
-  , tellK   :: (MonadIO m, MonadCatch m) => String         -> AST -> m AST
+  , tellK   :: forall m. (MonadIO m, MonadCatch m) => String         -> AST -> m AST
   }
 
 data CommitMsg = Always String | Changed String | Never

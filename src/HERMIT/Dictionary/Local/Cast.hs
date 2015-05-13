@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module HERMIT.Dictionary.Local.Cast
     ( -- * Rewrites on Case Expressions

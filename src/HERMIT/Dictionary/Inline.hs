@@ -1,4 +1,7 @@
-{-# LANGUAGE CPP, TupleSections, FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
+
 module HERMIT.Dictionary.Inline
     ( -- * Inlining
       externals

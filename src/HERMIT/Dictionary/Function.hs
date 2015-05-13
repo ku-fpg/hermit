@@ -1,4 +1,7 @@
-{-# LANGUAGE CPP, FlexibleContexts, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module HERMIT.Dictionary.Function
     ( externals
     , appArgM

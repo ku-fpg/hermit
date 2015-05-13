@@ -1,4 +1,6 @@
-{-# LANGUAGE CPP, RankNTypes #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes #-}
+
 module HERMIT.GHC.Typechecker
     (
       initTcFromModGuts

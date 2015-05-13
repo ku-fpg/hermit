@@ -1,6 +1,6 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -38,13 +38,10 @@ module HERMIT.Dictionary.Local.Case
     ) where
 
 import Control.Arrow
-import Control.Monad
+import Control.Monad ((>=>), forM, liftM)
 import Control.Monad.IO.Class
 
-import Data.List
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid
-#endif
+import Data.List (intersect, transpose)
 
 import HERMIT.Core
 import HERMIT.Context
@@ -63,6 +60,8 @@ import HERMIT.Dictionary.Fold hiding (externals)
 import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.Undefined (verifyStrictT, buildStrictnessLemmaT)
 import HERMIT.Dictionary.Unfold (unfoldR)
+
+import Prelude.Compat hiding ((<$>))
 
 ------------------------------------------------------------------------------
 

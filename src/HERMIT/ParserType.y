@@ -1,5 +1,4 @@
 {
-{-# LANGUAGE CPP #-}
 module HERMIT.ParserType
     ( parseType
     , parseTypeT
