@@ -20,6 +20,8 @@ module HERMIT.Shell.Command
     , cl_kernel_env
     , getFocusPath
     , evalScript
+    , performTypedEffectH
+    , TypedEffectH(..)
     ) where
 
 import Control.Monad.State
