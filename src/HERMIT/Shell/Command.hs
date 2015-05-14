@@ -50,6 +50,10 @@ import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
+import HERMIT.Shell.Effector
+import HERMIT.Shell.Rewriter
+import HERMIT.Shell.Transformer
+
 #ifdef mingw32_HOST_OS
 import HERMIT.Win32.Console
 #endif
@@ -58,6 +62,12 @@ import System.IO
 
 -- import System.Console.ANSI
 import System.Console.Haskeline hiding (catch, display)
+
+data TypedEffectH :: * where
+  EffectH                :: Effector  e   => e                   -> TypedEffectH
+  RewriteLCoreTC         :: Rewriter  rr  => rr LCoreTC          -> TypedEffectH
+  RewriteLCore           :: Rewriter  rr  => rr LCore            -> TypedEffectH
+  TransformLCorePathBoxH :: Transformer t => t LCore LocalPathH -> TypedEffectH
 
 -------------------------------------------------------------------------------
 
@@ -181,6 +191,9 @@ runExprH :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
     ps <- getProofStackEmpty
     (if null ps then id else withProofExternals) $ interpExprH interpShell expr
+
+performTypedEffectH :: (MonadCatch m, CLMonad m) => TypedEffectH -> m ()
+performTypedEffectH (EffectH effect) = toEffectH effect
 
 -- | Interpret a boxed thing as one of the four possible shell command types.
 interpShell :: (MonadCatch m, CLMonad m) => [Interp m ()]

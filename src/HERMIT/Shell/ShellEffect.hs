@@ -30,6 +30,7 @@ import HERMIT.PrettyPrinter.Common
 import HERMIT.Plugin.Renderer
 import HERMIT.Plugin.Types
 
+import HERMIT.Shell.Effector
 import HERMIT.Shell.Types
 
 import System.IO
@@ -48,6 +49,9 @@ instance Extern ShellEffect where
     type Box ShellEffect = ShellEffect
     box i = i
     unbox i = i
+
+instance Effector ShellEffect where
+   toEffectH = performShellEffect
 
 ----------------------------------------------------------------------------------
 

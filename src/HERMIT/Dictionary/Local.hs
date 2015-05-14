@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, KindSignatures, GADTs #-}
 
 module HERMIT.Dictionary.Local
     ( -- * Local Structural Manipulations
@@ -43,9 +43,19 @@ import qualified HERMIT.Dictionary.Local.Cast as Cast
 import HERMIT.Dictionary.Local.Let hiding (externals)
 import qualified HERMIT.Dictionary.Local.Let as Let
 
+import HERMIT.Shell.Rewriter
+
 import Control.Arrow
 
 ------------------------------------------------------------------------------
+
+data LocalRewrite :: * -> * where
+  BetaReduce ::          LocalRewrite LCore
+  EtaExpand :: String -> LocalRewrite LCore
+
+instance Rewriter LocalRewrite where
+   toRewriteH BetaReduce    = promoteExprR betaReduceR
+   toRewriteH (EtaExpand n) = promoteExprR (etaExpandR n)
 
 -- | Externals for local structural manipulations.
 --   (Many taken from Chapter 3 of Andre Santos' dissertation.)
