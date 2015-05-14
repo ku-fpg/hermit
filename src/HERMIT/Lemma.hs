@@ -1,6 +1,6 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module HERMIT.Lemma
     ( -- * Clause
@@ -27,16 +27,13 @@ module HERMIT.Lemma
     , NamedLemma
     ) where
 
-import Prelude hiding (lookup)
+import Prelude.Compat hiding (lookup)
 
 import Control.Monad
 
 import Data.Dynamic (Typeable)
 import Data.String (IsString(..))
 import qualified Data.Map as M
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid
-#endif
 
 import HERMIT.Core
 import HERMIT.GHC hiding ((<>))

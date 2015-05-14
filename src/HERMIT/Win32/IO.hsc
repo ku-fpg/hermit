@@ -1,5 +1,5 @@
 -- | Adapted from circular-ruin's StackOverflow answer at <http://stackoverflow.com/a/10779150>
-{-# LANGUAGE ForeignFunctionInterface, CPP, NoImplicitPrelude #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
 module HERMIT.Win32.IO (
     HERMIT.Win32.IO.putChar
   , HERMIT.Win32.IO.putStr

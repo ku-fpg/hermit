@@ -1,10 +1,10 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.PrettyPrinter.Common
     ( -- * Documents
@@ -60,9 +60,6 @@ module HERMIT.PrettyPrinter.Common
 
 import Data.Char
 import Data.Default.Class
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid hiding ((<>))
-#endif
 import qualified Data.Map as M
 import Data.Typeable
 
@@ -73,6 +70,8 @@ import HERMIT.GHC hiding (($$), (<>), (<+>), char, text, keyword)
 import HERMIT.Kure
 import HERMIT.Lemma
 import HERMIT.Monad
+
+import Prelude.Compat
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 

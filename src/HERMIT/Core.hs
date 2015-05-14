@@ -1,4 +1,6 @@
-{-# LANGUAGE CPP, LambdaCase #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE LambdaCase #-}
+
 module HERMIT.Core
     ( -- * Generic Data Type
       CoreProg(..)

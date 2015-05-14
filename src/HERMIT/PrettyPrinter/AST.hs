@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
 module HERMIT.PrettyPrinter.AST
   ( -- * HERMIT's AST Pretty-Printer for GHC Core

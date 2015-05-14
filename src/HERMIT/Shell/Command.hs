@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -24,14 +25,14 @@ module HERMIT.Shell.Command
     , TypedEffectH(..)
     ) where
 
-import Control.Monad.State
+import Control.Monad ((>=>), when)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.State (get, gets, modify)
 
 import Data.Char
 import Data.List (isPrefixOf, partition)
 import Data.Maybe
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid
-#endif
 
 import HERMIT.Context
 import HERMIT.External
@@ -59,6 +60,8 @@ import HERMIT.Shell.Transformer
 #ifdef mingw32_HOST_OS
 import HERMIT.Win32.Console
 #endif
+
+import Prelude.Compat
 
 import System.IO
 

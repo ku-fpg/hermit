@@ -1,6 +1,6 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module HERMIT.PrettyPrinter.Clean
     ( -- * HERMIT's Clean Pretty-Printer for GHC Core
@@ -21,18 +21,17 @@ import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
 import Data.Default.Class
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid (mempty)
-#endif
 
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC hiding ((<+>), (<>), ($$), ($+$), cat, sep, fsep, hsep, empty, nest, vcat, char, text, keyword, hang)
-import HERMIT.Kure
+import HERMIT.Kure hiding ((<$>))
 import HERMIT.Monad
 import HERMIT.PrettyPrinter.Common
 import HERMIT.Syntax
+
+import Prelude.Compat
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 

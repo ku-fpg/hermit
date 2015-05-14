@@ -1,5 +1,6 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+
 module HERMIT.Plugin.Display
     ( display
     , ps_putStr
@@ -10,14 +11,13 @@ import Control.Monad.Reader
 import Control.Monad.State
 
 import Data.Maybe (fromMaybe)
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid
-#endif
 
 import HERMIT.Kernel (queryK, CommitMsg(..))
 import HERMIT.Kure
 import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
+
+import Prelude.Compat
 
 import System.IO
 

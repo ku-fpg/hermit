@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module HERMIT.Plugin.Renderer where
 
@@ -7,9 +8,6 @@ import Control.Arrow
 import Control.Monad.State
 
 import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid
-#endif
 
 import HERMIT.Dictionary (traceR)
 import HERMIT.Kure
@@ -18,6 +16,8 @@ import HERMIT.PrettyPrinter.Common
 #ifdef mingw32_HOST_OS
 import HERMIT.Win32.IO (hPutStr, hPutStrLn)
 #endif
+
+import Prelude.Compat
 
 import System.Console.ANSI
 #ifdef mingw32_HOST_OS

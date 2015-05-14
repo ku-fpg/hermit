@@ -1,4 +1,6 @@
-{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module HERMIT.Dictionary.FixPoint
     ( -- * Operations on the Fixed Point Operator (fix)
@@ -23,7 +25,7 @@ import Data.String (fromString)
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.Monad
-import HERMIT.Kure
+import HERMIT.Kure hiding ((<$>))
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Name
@@ -36,6 +38,8 @@ import HERMIT.Dictionary.Kure
 import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Undefined
 import HERMIT.Dictionary.Unfold
+
+import Prelude.Compat
 
 --------------------------------------------------------------------------------------------------
 

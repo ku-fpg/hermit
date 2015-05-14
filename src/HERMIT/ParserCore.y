@@ -1,5 +1,4 @@
 {
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE TupleSections #-}
 module HERMIT.ParserCore
     ( parseCore

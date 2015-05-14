@@ -1,4 +1,7 @@
-{-# LANGUAGE CPP, InstanceSigs, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 -- Above shadowing disabled because the eqExprX function has lots of shadowing
 module HERMIT.GHC
@@ -86,7 +89,7 @@ import           OccurAnal (occurAnalyseExpr_NoBinderSwap)
 import           Pair (Pair(..))
 import           Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
 import           PrelNames (typeableClassName)
-#if mingw32_HOST_OS
+#ifdef mingw32_HOST_OS
 import           StaticFlags
 #endif
 import           TcEnv (tcLookupClass)

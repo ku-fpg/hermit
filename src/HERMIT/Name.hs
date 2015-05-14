@@ -1,4 +1,9 @@
-{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleInstances, TypeFamilies #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module HERMIT.Name
     ( HermitName
     , cmpHN2Name
@@ -55,6 +60,8 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
+
+import Prelude.Compat hiding ((<$>), (<*>))
 
 -- | Possible results from name lookup.
 -- Invariant: One constructor for each NameSpace.

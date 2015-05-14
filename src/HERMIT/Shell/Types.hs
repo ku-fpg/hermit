@@ -8,16 +8,15 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module HERMIT.Shell.Types where
 
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative (Applicative)
-#endif
 import Control.Arrow
 import Control.Concurrent.STM
 import Control.Monad (liftM, unless, when, forM_, forM, unless)
@@ -31,9 +30,6 @@ import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
 import Data.Dynamic
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isJust)
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid (mempty)
-#endif
 
 import HERMIT.Context
 import HERMIT.Core
@@ -50,6 +46,8 @@ import HERMIT.PrettyPrinter.Common
 import HERMIT.Plugin.Display
 import HERMIT.Plugin.Renderer
 import HERMIT.Plugin.Types
+
+import Prelude.Compat hiding ((<$>))
 
 import System.Console.Haskeline hiding (catch, display)
 import System.IO (Handle, stdout)

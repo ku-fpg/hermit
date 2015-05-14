@@ -1,9 +1,9 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -56,7 +56,7 @@ module HERMIT.Dictionary.Reasoning
     ) where
 
 import           Control.Arrow hiding ((<+>))
-import           Control.Monad
+import           Control.Monad ((>=>), forM, liftM)
 
 import           Data.Either (partitionEithers)
 import           Data.List (isInfixOf, nubBy)
@@ -81,6 +81,8 @@ import           HERMIT.Dictionary.Common
 import           HERMIT.Dictionary.Fold hiding (externals)
 import           HERMIT.Dictionary.GHC hiding (externals)
 import           HERMIT.Dictionary.Local.Let (nonRecIntroR)
+
+import           Prelude.Compat hiding ((<$>), (<*>))
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
