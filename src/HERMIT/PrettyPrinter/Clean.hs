@@ -15,7 +15,6 @@ module HERMIT.PrettyPrinter.Clean
     , ppKindOrType
     , ppCoercion
     , ppForallQuantification
-    , symbol -- should be in Common
     ) where
 
 import Control.Arrow hiding ((<+>))
@@ -141,15 +140,6 @@ parenExprExceptApp = do p <- absPathT
                         arr (normalParensExceptApp p)
 
 ------------------------------------------------------------------------------------------------
-
-specialSymbol :: AbsolutePathH -> SpecialSymbol -> DocH
-specialSymbol p = attrP p . markColor SyntaxColor . specialFont . char . renderSpecial
-
-symbol :: AbsolutePathH -> Char -> DocH
-symbol p = attrP p . markColor SyntaxColor . char
-
-keyword :: AbsolutePathH -> String -> DocH
-keyword p = attrP p . markColor KeywordColor . text
 
 idText :: AbsolutePathH -> String -> DocH
 idText p = attrP p . text

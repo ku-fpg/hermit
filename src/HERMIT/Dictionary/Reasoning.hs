@@ -291,13 +291,15 @@ ppLCoreTCT :: PrettyPrinter -> PrettyH LCoreTC
 ppLCoreTCT pp = promoteT (ppClauseT pp) <+ promoteT (pCoreTC pp)
 
 ppClauseT :: PrettyPrinter -> PrettyH Clause
-ppClauseT pp = forallT (pForall pp) (ppClauseT pp) (\ d1 d2 -> PP.sep [d1,d2])
-            <+ conjT parenify parenify (\ d1 d2 -> PP.sep [d1,syntaxColor (PP.text "^"),d2])
-            <+ disjT parenify parenify (\ d1 d2 -> PP.sep [d1,syntaxColor (PP.text "v"),d2])
-            <+ implT parenify parenify (\ _nm d1 d2 -> PP.sep [d1,syntaxColor (PP.text "=>"),d2])
-            <+ equivT (extractT $ pCoreTC pp) (extractT $ pCoreTC pp) (\ d1 d2 -> PP.sep [d1,syntaxColor (PP.text "="),d2])
-            <+ return (syntaxColor $ PP.text "true")
-    where parenify = ppClauseT pp >>^ \ d -> syntaxColor (PP.text "(") PP.<> d PP.<> syntaxColor (PP.text ")")
+ppClauseT pp = do
+    p <- absPathT
+    let parenify = ppClauseT pp >>^ \ d -> syntaxColor (PP.text "(") PP.<> d PP.<> syntaxColor (PP.text ")")
+    (forallT (pForall pp) (ppClauseT pp) (\ d1 d2 -> PP.sep [d1,d2])
+        <+ conjT parenify parenify (\ d1 d2 -> PP.sep [d1,syntaxColor (specialSymbol p ConjSymbol),d2])
+        <+ disjT parenify parenify (\ d1 d2 -> PP.sep [d1,syntaxColor (specialSymbol p DisjSymbol),d2])
+        <+ implT parenify parenify (\ _nm d1 d2 -> PP.sep [d1,syntaxColor (specialSymbol p ImplSymbol),d2])
+        <+ equivT (extractT $ pCoreTC pp) (extractT $ pCoreTC pp) (\ d1 d2 -> PP.sep [d1,specialSymbol p EquivSymbol,d2])
+        <+ return (syntaxColor $ PP.text "true"))
 
 ------------------------------------------------------------------------------
 

@@ -25,6 +25,9 @@ module HERMIT.PrettyPrinter.Common
     , specialFont
     , SpecialSymbol(..)
     , SyntaxForColor(..)
+    , specialSymbol
+    , symbol
+    , keyword
       -- * Renderers
     , coreRenders
     , renderCode
@@ -66,7 +69,7 @@ import Data.Typeable
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
-import HERMIT.GHC hiding (($$), (<>), (<+>), char)
+import HERMIT.GHC hiding (($$), (<>), (<+>), char, text, keyword)
 import HERMIT.Kure
 import HERMIT.Lemma
 import HERMIT.Monad
@@ -130,6 +133,15 @@ markColor = attr . Color
 
 specialFont :: DocH -> DocH
 specialFont = attr SpecialFont
+
+specialSymbol :: AbsolutePathH -> SpecialSymbol -> DocH
+specialSymbol p = attrP p . markColor SyntaxColor . specialFont . char . renderSpecial
+
+symbol :: AbsolutePathH -> Char -> DocH
+symbol p = attrP p . markColor SyntaxColor . char
+
+keyword :: AbsolutePathH -> String -> DocH
+keyword p = attrP p . markColor KeywordColor . text
 
 data PrettyPrinter = PP { pForall  :: PrettyH [Var]
                         , pCoreTC  :: PrettyH CoreTC
@@ -293,6 +305,10 @@ data SpecialSymbol
         | TypeSymbol
         | TypeBindSymbol
         | ForallSymbol
+        | ConjSymbol
+        | DisjSymbol
+        | ImplSymbol
+        | EquivSymbol
         deriving (Show, Eq, Ord, Bounded, Enum)
 
 class RenderSpecial a where
@@ -312,6 +328,10 @@ instance RenderSpecial Char where
         renderSpecial TypeSymbol          = 'T'   -- <<type>>>
         renderSpecial TypeBindSymbol      = 't'   -- <<type binding>>
         renderSpecial ForallSymbol        = 'F'   -- forall
+        renderSpecial ConjSymbol          = '^'   -- conjunction
+        renderSpecial DisjSymbol          = 'v'   -- disjunction
+        renderSpecial ImplSymbol          = '?'   -- implication (we can't use >, because it is used for ->)
+        renderSpecial EquivSymbol         = '='   -- equivalence
 
 newtype ASCII = ASCII String
 
@@ -329,6 +349,10 @@ instance RenderSpecial ASCII where
         renderSpecial TypeSymbol          = ASCII "*"    -- <<type>>>
         renderSpecial TypeBindSymbol      = ASCII "*"    -- <<type binding>>>
         renderSpecial ForallSymbol        = ASCII "forall"
+        renderSpecial ConjSymbol          = ASCII "^"    -- conjunction
+        renderSpecial DisjSymbol          = ASCII "v"    -- disjunction
+        renderSpecial ImplSymbol          = ASCII "=>"   -- implication
+        renderSpecial EquivSymbol         = ASCII "="    -- equivalence
 
 newtype Unicode = Unicode Char
 
@@ -342,6 +366,10 @@ instance RenderSpecial Unicode where
         renderSpecial TypeSymbol          = Unicode '\x25b2'
         renderSpecial TypeBindSymbol      = Unicode '\x25b3'
         renderSpecial ForallSymbol        = Unicode '\x2200'
+        renderSpecial ConjSymbol          = Unicode '\x2227'
+        renderSpecial DisjSymbol          = Unicode '\x2228'
+        renderSpecial ImplSymbol          = Unicode '\x21D2'
+        renderSpecial EquivSymbol         = Unicode '\x2261'
 
 newtype LaTeX = LaTeX String
 
@@ -359,6 +387,10 @@ instance RenderSpecial LaTeX where
         renderSpecial TypeSymbol          = LaTeX "\\ensuremath{\\blacktriangle}"
         renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\vartriangle}"
         renderSpecial ForallSymbol        = LaTeX "\\ensuremath{\\forall}"
+        renderSpecial ConjSymbol          = LaTeX "\\ensuremath{\\wedge}"
+        renderSpecial DisjSymbol          = LaTeX "\\ensuremath{\\lor}"
+        renderSpecial ImplSymbol          = LaTeX "\\ensuremath{\\Rightarrow}"
+        renderSpecial EquivSymbol         = LaTeX "\\ensuremath{\\equiv}"
 
 
 newtype HTML = HTML String
@@ -377,7 +409,10 @@ instance RenderSpecial HTML where
         renderSpecial TypeSymbol          = HTML "&#9650;"
         renderSpecial TypeBindSymbol      = HTML "&#9651;"
         renderSpecial ForallSymbol        = HTML "&#8704;"
-
+        renderSpecial ConjSymbol          = HTML "&and;"
+        renderSpecial DisjSymbol          = HTML "&or;"
+        renderSpecial ImplSymbol          = HTML "&rArr;"
+        renderSpecial EquivSymbol         = HTML "&equiv;"
 
 renderSpecialFont :: RenderSpecial a => Char -> Maybe a
 renderSpecialFont = fmap renderSpecial . flip M.lookup specialFontMap
