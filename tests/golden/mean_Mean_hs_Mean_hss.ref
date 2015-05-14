@@ -50,4 +50,4 @@ To get started, you could try the following:
 [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
 [0m[mmain[0m[0m [0m[31m=[0m[0m [0m[mrunMainIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m [0m[0m[mmain[0m[0m[0m[0m
 remembered-sumlen (Proven)
-  [0m[31m[31m∀[31m[0m[0m [0m[mxs[0m[0m[0m[31m.[0m[0m [0m[7;93msumlength[27m[0m[0m [0m[0m[mxs[0m[0m[0m [31m=[0m [0m[m(,)[0m[0m [0m[32mInt[0m[0m [0m[32mInt[0m[0m [0m[31m([0m[0m[0m[7;93msum[27m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[7;93mlength[27m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m[0m
+  [0m[31m[31m∀[31m[0m[0m [0m[mxs[0m[0m[0m[31m.[0m[0m [0m[7;93msumlength[27m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[31m[31m≡[31m[0m[0m [0m[m(,)[0m[0m [0m[32mInt[0m[0m [0m[32mInt[0m[0m [0m[31m([0m[0m[0m[7;93msum[27m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[7;93mlength[27m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m[0m
