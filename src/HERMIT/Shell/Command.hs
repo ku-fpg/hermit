@@ -53,10 +53,6 @@ import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
-import HERMIT.Shell.Effector
-import HERMIT.Shell.Rewriter
-import HERMIT.Shell.Transformer
-
 #ifdef mingw32_HOST_OS
 import HERMIT.Win32.Console
 #endif
@@ -68,11 +64,6 @@ import System.IO
 -- import System.Console.ANSI
 import System.Console.Haskeline hiding (catch, display)
 
-data TypedEffectH :: * where
-  EffectH                :: Effector  e   => e                   -> TypedEffectH
-  RewriteLCoreTC         :: Rewriter  rr  => rr LCoreTC          -> TypedEffectH
-  RewriteLCore           :: Rewriter  rr  => rr LCore            -> TypedEffectH
-  TransformLCorePathBoxH :: Transformer t => t LCore LocalPathH -> TypedEffectH
 
 -------------------------------------------------------------------------------
 
@@ -197,9 +188,6 @@ runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "
     ps <- getProofStackEmpty
     (if null ps then id else withProofExternals) $ interpExprH interpShell expr
 
-performTypedEffectH :: (MonadCatch m, CLMonad m) => TypedEffectH -> m ()
-performTypedEffectH (EffectH effect) = toEffectH effect
-
 -- | Interpret a boxed thing as one of the four possible shell command types.
 interpShell :: (MonadCatch m, CLMonad m) => [Interp m ()]
 interpShell =
@@ -207,7 +195,7 @@ interpShell =
   , interpEM $ \ (PathBox p)                    -> setPath (return p :: TransformH LCoreTC LocalPathH)
   , interpEM $ \ (StringBox str)                -> performQuery (message str)
   , interpEM $ \ (effect :: KernelEffect)       -> flip performKernelEffect effect
-  , interpM  $ \ (effect :: ShellEffect)        -> performShellEffect effect
+  , interpM  $ \ (effect :: ShellEffect)        -> performShellEffect effect                            -- **
   , interpM  $ \ (effect :: ScriptEffect)       -> performScriptEffect effect
   , interpEM $ \ (query :: QueryFun)            -> performQuery query
   , interpEM $ \ (t :: UserProofTechnique)      -> performProofShellCommand $ PCEnd $ UserProof t
@@ -216,17 +204,37 @@ interpShell =
   , interpEM $ \ (TransformLCoreTCStringBox tt) -> performQuery (QueryString tt)
   , interpEM $ \ (TransformLCoreUnitBox tt)     -> performQuery (QueryUnit tt)
   , interpEM $ \ (TransformLCoreTCUnitBox tt)   -> performQuery (QueryUnit tt)
-  , interpEM $ \ (TransformLCorePathBox tt)     -> setPath tt
+  , interpEM $ \ (TransformLCorePathBox tt)     -> setPath tt                                           -- **
   , interpEM $ \ (TransformLCoreTCPathBox tt)   -> setPath tt
   , interpEM $ \ (TransformLCoreDocHBox t)      -> performQuery (QueryDocH t)
   , interpEM $ \ (TransformLCoreTCDocHBox t)      -> performQuery (QueryDocH t)
-  , interpEM $ \ (RewriteLCoreBox rr)           -> applyRewrite $ promoteLCoreR rr
-  , interpEM $ \ (RewriteLCoreTCBox rr)         -> applyRewrite rr
+  , interpEM $ \ (RewriteLCoreBox rr)           -> applyRewrite $ promoteLCoreR rr                      -- **
+  , interpEM $ \ (RewriteLCoreTCBox rr)         -> applyRewrite rr                                      -- **
   , interpEM $ \ (BiRewriteLCoreBox br)         -> applyRewrite $ promoteLCoreR $ whicheverR br
   , interpEM $ \ (BiRewriteLCoreTCBox br)       -> applyRewrite $ whicheverR br
   , interpEM $ \ (PrettyHLCoreBox t)            -> performQuery (QueryPrettyH t)
   , interpEM $ \ (PrettyHLCoreTCBox t)          -> performQuery (QueryPrettyH t)
   ]
+
+-------------------------------------------------------------------------------
+
+-- New Shell entry point
+
+data TypedEffectH :: * -> * where
+  ShellEffectH           :: ShellEffect                         -> TypedEffectH ()
+  RewriteLCoreH          :: RewriteH LCore                      -> TypedEffectH ()
+  RewriteLCoreTCH        :: RewriteH LCoreTC                    -> TypedEffectH ()
+  TransformLCorePathH    :: TransformH LCore LocalPathH         -> TypedEffectH ()
+
+performTypedEffectH :: (MonadCatch m, CLMonad m) => String -> TypedEffectH a -> m a
+performTypedEffectH _   (ShellEffectH          effect) = performShellEffect effect 
+performTypedEffectH err (RewriteLCoreH         rr    ) = applyRewrite (promoteLCoreR rr) (stubExprH err)
+performTypedEffectH err (RewriteLCoreTCH       rr    ) = applyRewrite rr                 (stubExprH err)
+performTypedEffectH err (TransformLCorePathH   tt    ) = setPath tt                      (stubExprH err)
+
+-- Hacky stub until we replace the ExprH for error messages
+stubExprH :: String -> ExprH
+stubExprH = SrcName 
 
 -------------------------------------------------------------------------------
 

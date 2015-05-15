@@ -224,15 +224,12 @@ Library
        HERMIT.Shell.Command
        HERMIT.Shell.Completion
        HERMIT.Shell.Dictionary
-       HERMIT.Shell.Effector
        HERMIT.Shell.Interpreter
        HERMIT.Shell.Externals
        HERMIT.Shell.KernelEffect
-       HERMIT.Shell.Rewriter
        HERMIT.Shell.ScriptToRewrite
        HERMIT.Shell.ShellEffect
        HERMIT.Shell.Proof
-       HERMIT.Shell.Transformer
        HERMIT.Shell.Types
 
        HERMIT.Utilities
