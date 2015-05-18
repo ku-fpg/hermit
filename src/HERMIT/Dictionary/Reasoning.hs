@@ -177,7 +177,7 @@ externals =
         [ "Apply a transformation to both sides of a quantified clause." ]
     , external "reflexivity" (promoteClauseR (forallR idR reflexivityR <+ reflexivityR) :: RewriteH LCore)
         [ "Rewrite alpha-equivalence to true." ]
-    , external "simplify-proof" (simplifyClauseR :: RewriteH LCore)
+    , external "simplify-lemma" (simplifyClauseR :: RewriteH LCore)
         [ "Reduce a proof by applying reflexivity and logical operator identities." ]
     , external "split-antecedent" (promoteClauseR splitAntecedentR :: RewriteH LCore)
         [ "Split an implication of the form (q1 ^ q2) => q3 into q1 => (q2 => q3)" ]
