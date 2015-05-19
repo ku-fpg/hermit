@@ -30,7 +30,7 @@ induction 'xs
 
 any-bu (unfold 'myAppend >>> undefined-expr)
 any-bu (unfold 'myAppend >>> case-reduce)
-simplify-proof
+simplify-lemma
 forall-body ; consequent
 one-td (lemma-forward ind-hyp-0)
 end-case

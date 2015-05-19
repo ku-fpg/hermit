@@ -53,6 +53,15 @@ module HERMIT.Dictionary.Reasoning
     , instantiateDictsR
     , instantiateClauseVarR
     , abstractClauseR
+      -- * Constructing Composite Lemmas
+    , ($$)
+    , ($$$)
+    , (==>)
+    , (-->)
+    , (===)
+    , (/\)
+    , (\/)
+    , ToCoreExpr(..)
     ) where
 
 import           Control.Arrow hiding ((<+>))
@@ -67,7 +76,7 @@ import           Data.Monoid
 import           HERMIT.Context
 import           HERMIT.Core
 import           HERMIT.External
-import           HERMIT.GHC hiding ((<>), (<+>), nest, ($+$))
+import           HERMIT.GHC hiding ((<>), (<+>), nest, ($+$), ($$))
 import           HERMIT.Kure
 import           HERMIT.Lemma
 import           HERMIT.Monad
@@ -79,6 +88,7 @@ import           HERMIT.Utilities
 
 import           HERMIT.Dictionary.Common
 import           HERMIT.Dictionary.Fold hiding (externals)
+import           HERMIT.Dictionary.Function hiding (externals)
 import           HERMIT.Dictionary.GHC hiding (externals)
 import           HERMIT.Dictionary.Local.Let (nonRecIntroR)
 
@@ -736,3 +746,47 @@ lemmaRhsIntroR :: LemmaName -> RewriteH Core
 lemmaRhsIntroR = lemmaNameToClauseT >=> eqRhsIntroR
 
 ------------------------------------------------------------------------------
+
+-- Little DSL for building composite lemmas
+
+infixr 5 -->
+
+(-->) :: Type -> Type -> Type
+(-->) = mkFunTy
+
+infixr 3 ==>
+
+(==>) :: (LemmaName, Clause) -> Clause -> Clause
+(==>) = uncurry Impl
+
+infixr 5 /\
+
+(/\) :: Clause -> Clause -> Clause
+(/\) = Conj
+
+infixr 4 \/
+
+(\/) :: Clause -> Clause -> Clause
+(\/) = Disj
+
+infix 8 ===
+
+(===) :: (ToCoreExpr a, ToCoreExpr b) => a -> b -> Clause
+lhs === rhs = Equiv (toCE lhs) (toCE rhs)
+
+infixl 9 $$
+
+($$) :: (ToCoreExpr a, ToCoreExpr b, MonadCatch m) => a -> b -> m CoreExpr
+f $$ e = buildAppM (toCE f) (toCE e)
+
+($$$) :: (ToCoreExpr a, ToCoreExpr b, MonadCatch m) => a -> [b] -> m CoreExpr
+f $$$ es = buildAppsM (toCE f) (map toCE es)
+
+class ToCoreExpr a where
+    toCE :: a -> CoreExpr
+
+instance ToCoreExpr CoreExpr where toCE = id
+
+instance ToCoreExpr Var where toCE = varToCoreExpr
+
+instance ToCoreExpr Type where toCE = Type
