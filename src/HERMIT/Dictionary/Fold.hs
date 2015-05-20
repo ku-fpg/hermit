@@ -25,7 +25,7 @@ module HERMIT.Dictionary.Fold
     ) where
 
 import Control.Arrow
-import Control.Monad (liftM)
+import Control.Monad.Compat (liftM)
 import Control.Monad.IO.Class
 
 import Data.List (delete, (\\), intersect)

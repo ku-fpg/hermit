@@ -52,7 +52,7 @@ module HERMIT.Context
 
 import Prelude.Compat hiding (lookup)
 
-import Control.Monad (liftM)
+import Control.Monad.Compat (liftM)
 
 import Data.Map hiding (map, foldr, filter)
 

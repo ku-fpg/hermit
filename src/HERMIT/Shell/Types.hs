@@ -19,7 +19,7 @@ module HERMIT.Shell.Types where
 
 import Control.Arrow
 import Control.Concurrent.STM
-import Control.Monad (liftM, unless, when, forM_, forM, unless)
+import Control.Monad.Compat
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)

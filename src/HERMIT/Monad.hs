@@ -33,7 +33,7 @@ module HERMIT.Monad
 
 import Prelude.Compat hiding (lookup)
 
-import Control.Monad
+import Control.Monad.Compat
 import Control.Monad.IO.Class
 
 import Data.Map

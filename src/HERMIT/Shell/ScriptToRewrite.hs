@@ -23,7 +23,7 @@ module HERMIT.Shell.ScriptToRewrite
     ) where
 
 import Control.Arrow
-import Control.Monad (forM)
+import Control.Monad.Compat (forM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
 import Control.Monad.State (MonadState, gets, modify)

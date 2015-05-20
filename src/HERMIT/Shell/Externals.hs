@@ -5,12 +5,12 @@
 module HERMIT.Shell.Externals where
 
 import Control.Arrow
-import Control.Monad (liftM)
+import Control.Monad.Compat (liftM)
 import Control.Monad.Reader (asks)
 import Control.Monad.State (gets, modify)
 
 import Data.Dynamic (fromDynamic)
-import Data.List (intercalate)
+import Data.List.Compat (intercalate)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 

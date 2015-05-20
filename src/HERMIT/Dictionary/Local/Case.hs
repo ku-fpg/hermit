@@ -38,7 +38,7 @@ module HERMIT.Dictionary.Local.Case
     ) where
 
 import Control.Arrow
-import Control.Monad ((>=>), forM, liftM)
+import Control.Monad.Compat
 import Control.Monad.IO.Class
 
 import Data.List (intersect, transpose)

@@ -7,7 +7,7 @@ module HERMIT.Plugin.Renderer where
 import Control.Arrow
 import Control.Monad.State
 
-import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
+import Data.List.Compat (isInfixOf, isPrefixOf, isSuffixOf)
 
 import HERMIT.Dictionary (traceR)
 import HERMIT.Kure

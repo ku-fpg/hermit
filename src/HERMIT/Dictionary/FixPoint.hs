@@ -17,7 +17,7 @@ module HERMIT.Dictionary.FixPoint
     ) where
 
 import Control.Arrow
-import Control.Monad
+import Control.Monad.Compat
 import Control.Monad.IO.Class
 
 import Data.String (fromString)

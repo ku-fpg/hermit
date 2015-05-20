@@ -48,10 +48,10 @@ module HERMIT.Name
     , findInNameSpaces
     ) where
 
-import Control.Monad
+import Control.Monad.Compat
 import Control.Monad.IO.Class
 
-import Data.List (intercalate)
+import Data.List.Compat (intercalate)
 import Data.Dynamic (Typeable)
 import Data.String (IsString(..))
 

@@ -25,13 +25,13 @@ module HERMIT.Shell.Command
     , TypedEffectH(..)
     ) where
 
-import Control.Monad ((>=>), when)
+import Control.Monad.Compat
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.State (get, gets, modify)
 
 import Data.Char
-import Data.List (isPrefixOf, partition)
+import Data.List.Compat (isPrefixOf, partition)
 import Data.Maybe
 
 import HERMIT.Context

@@ -46,7 +46,7 @@ module HERMIT.Dictionary.Local.Let
     ) where
 
 import Control.Arrow
-import Control.Monad (ap, liftM, when)
+import Control.Monad.Compat
 import Control.Monad.IO.Class
 
 import Data.List (intersect, partition)

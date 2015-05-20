@@ -29,7 +29,7 @@ module HERMIT.Lemma
 
 import Prelude.Compat hiding (lookup)
 
-import Control.Monad
+import Control.Monad.Compat
 
 import Data.Dynamic (Typeable)
 import Data.String (IsString(..))

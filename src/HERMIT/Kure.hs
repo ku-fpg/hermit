@@ -92,7 +92,7 @@ module HERMIT.Kure
     , (<*>)
     ) where
 
-import Control.Monad (ap, liftM)
+import Control.Monad.Compat (ap, liftM)
 
 import Language.KURE
 import Language.KURE.BiTransform

@@ -24,7 +24,7 @@ module HERMIT.Shell.Proof
 
 import Control.Arrow hiding (loop, (<+>))
 import Control.Concurrent.STM
-import Control.Monad (forM_,unless)
+import Control.Monad.Compat (forM_, unless)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class
 import Control.Monad.Reader (asks)
@@ -32,7 +32,7 @@ import Control.Monad.State (MonadState(get), modify, gets)
 
 import Data.Dynamic
 import Data.Function (on)
-import Data.List (nubBy)
+import Data.List.Compat (nubBy)
 
 import HERMIT.Context
 import HERMIT.External

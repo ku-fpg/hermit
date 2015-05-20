@@ -6,12 +6,12 @@
 module HERMIT.Shell.Completion (completer) where
 
 import Control.Arrow
-import Control.Monad (forM, liftM)
+import Control.Monad.Compat (forM, liftM)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State (gets)
 
 import Data.Dynamic
-import Data.List (isPrefixOf, nub)
+import Data.List.Compat (isPrefixOf, nub)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 

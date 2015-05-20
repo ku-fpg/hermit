@@ -65,7 +65,7 @@ module HERMIT.Dictionary.Reasoning
     ) where
 
 import           Control.Arrow hiding ((<+>))
-import           Control.Monad ((>=>), forM, liftM)
+import           Control.Monad.Compat
 
 import           Data.Either (partitionEithers)
 import           Data.List (isInfixOf, nubBy)

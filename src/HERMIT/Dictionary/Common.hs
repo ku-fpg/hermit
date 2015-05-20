@@ -46,7 +46,7 @@ module HERMIT.Dictionary.Common
 
 where
 
-import Data.List (nub)
+import Data.List.Compat (nub)
 
 import Control.Arrow
 import Control.Monad.IO.Class
