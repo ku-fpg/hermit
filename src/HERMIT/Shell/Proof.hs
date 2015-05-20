@@ -24,7 +24,8 @@ module HERMIT.Shell.Proof
 
 import Control.Arrow hiding (loop, (<+>))
 import Control.Concurrent.STM
-import Control.Monad.Compat (forM_, unless)
+import Control.Monad (unless) -- requires Monad context on GHC 7.8
+import Control.Monad.Compat hiding (unless)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class
 import Control.Monad.Reader (asks)

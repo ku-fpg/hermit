@@ -46,7 +46,8 @@ module HERMIT.Dictionary.Local.Let
     ) where
 
 import Control.Arrow
-import Control.Monad.Compat
+import Control.Monad (when) -- Needs to have Monad context on GHC 7.8
+import Control.Monad.Compat hiding (when)
 import Control.Monad.IO.Class
 
 import Data.List (intersect, partition)

@@ -33,7 +33,8 @@ module HERMIT.Monad
 
 import Prelude.Compat hiding (lookup)
 
-import Control.Monad.Compat
+import Control.Monad (when) -- Needs to have Monad context on GHC 7.8
+import Control.Monad.Compat hiding (when)
 import Control.Monad.IO.Class
 
 import Data.Map

@@ -19,7 +19,8 @@ module HERMIT.Shell.Types where
 
 import Control.Arrow
 import Control.Concurrent.STM
-import Control.Monad.Compat
+import Control.Monad (unless, when) -- requires Monad context on GHC 7.8
+import Control.Monad.Compat hiding (unless, when)
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
