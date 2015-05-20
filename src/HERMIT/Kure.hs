@@ -25,6 +25,8 @@ module HERMIT.Kure
     , BiRewriteH
     , LensH
     , PathH
+      -- * Utilities
+    , inContextM
 
       -- * Congruence combinators
       -- ** Modguts
@@ -1363,3 +1365,8 @@ instance HasDynFlags m => HasDynFlags (Transform c m a) where
     getDynFlags = constT getDynFlags
 
 ---------------------------------------------------------------------
+
+-- Useful for utilities which are Transforms for a reason, but don't use their input.
+inContextM :: c -> Transform c m () a -> m a
+inContextM c t = applyT t c ()
+

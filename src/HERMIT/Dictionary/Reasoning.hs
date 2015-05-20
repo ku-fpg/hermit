@@ -62,6 +62,7 @@ module HERMIT.Dictionary.Reasoning
     , (/\)
     , (\/)
     , ToCoreExpr(..)
+    , newLemma
     ) where
 
 import           Control.Arrow hiding ((<+>))
@@ -790,3 +791,7 @@ instance ToCoreExpr CoreExpr where toCE = id
 instance ToCoreExpr Var where toCE = varToCoreExpr
 
 instance ToCoreExpr Type where toCE = Type
+
+-- Create new lemma library with single unproven lemma.
+newLemma :: LemmaName -> Clause -> Map.Map LemmaName Lemma
+newLemma nm cl = Map.singleton nm (Lemma cl NotProven NotUsed)
