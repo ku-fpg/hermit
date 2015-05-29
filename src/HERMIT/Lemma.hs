@@ -105,7 +105,7 @@ instance Show LemmaName where show (LemmaName s) = s
 data Lemma = Lemma { lemmaC :: Clause
                    , lemmaP :: Proven     -- whether lemma has been proven
                    , lemmaU :: Used       -- whether lemma has been used
-                   }
+                   } deriving Typeable
 
 data Proven = Proven
             | Assumed -- ^ Assumed by user
@@ -159,6 +159,7 @@ data Clause = Forall [CoreBndr] Clause
             | Impl LemmaName Clause Clause -- ^ name for the antecedent when it is in scope
             | Equiv CoreExpr CoreExpr
             | CTrue -- the always true clause
+  deriving Typeable
 
 -- | A collection of named lemmas.
 type Lemmas = M.Map LemmaName Lemma

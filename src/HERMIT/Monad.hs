@@ -1,8 +1,10 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module HERMIT.Monad
     ( -- * The HERMIT Monad
@@ -38,6 +40,7 @@ import Control.Monad.Compat hiding (when)
 import Control.Monad.IO.Class
 
 import Data.Map
+import Data.Typeable
 
 import Language.KURE
 
@@ -56,7 +59,7 @@ data HermitMEnv = HermitMEnv { hEnvChanged   :: Bool -- ^ Whether Lemmas have ch
                              , hEnvModGuts   :: ModGuts -- ^ Note: this is a snapshot of the ModGuts from
                                                         --         before the current transformation.
                              , hEnvLemmas    :: Lemmas
-                             }
+                             } deriving Typeable
 
 type DebugChan = KEnvMessage -> HermitM ()
 
@@ -67,7 +70,7 @@ mkEnv = HermitMEnv False
 data HermitMResult a = HermitMResult { hResChanged :: Bool -- ^ Whether Lemmas have changed
                                      , hResLemmas :: Lemmas
                                      , hResult    :: a
-                                     }
+                                     } deriving Typeable
 
 changedResult :: Lemmas -> a -> HermitMResult a
 changedResult = HermitMResult True
@@ -81,6 +84,7 @@ mkResult env = HermitMResult (hEnvChanged env) (hEnvLemmas env)
 -- It provides a reader for ModGuts, state for Lemmas,
 -- and access to a debugging channel.
 newtype HermitM a = HermitM { runHermitM :: HermitMEnv -> CoreM (KureM (HermitMResult a)) }
+  deriving Typeable
 
 -- | Eliminator for 'HermitM'.
 runHM :: HermitMEnv                    -- env
@@ -163,6 +167,8 @@ class HasHermitMEnv m where
     -- | Get the HermitMEnv
     getHermitMEnv :: m HermitMEnv
 
+deriving instance Typeable HasHermitMEnv
+
 instance HasHermitMEnv HermitM where
     getHermitMEnv = HermitM $ \ env -> return $ return $ mkResult env env
 
@@ -182,6 +188,8 @@ sendKEnvMessage msg = getDebugChan >>= embedHermitM . ($ msg)
 class HasLemmas m where
     getLemmas :: m Lemmas
     putLemmas :: Lemmas -> m ()
+
+deriving instance Typeable HasLemmas
 
 instance HasLemmas HermitM where
     getLemmas = HermitM $ \ env -> return $ return $ mkResult env (hEnvLemmas env)
@@ -212,6 +220,8 @@ class Monad m => LiftCoreM m where
     -- | 'CoreM' can be lifted to this monad.
     liftCoreM :: CoreM a -> m a
 
+deriving instance Typeable LiftCoreM
+
 instance LiftCoreM HermitM where
     liftCoreM coreM = HermitM $ \ env -> coreM >>= return . return . mkResult env
 
@@ -225,6 +235,7 @@ data KEnvMessage :: * where
     DebugTick :: String -> KEnvMessage
     DebugCore :: (LemmaContext c, ReadBindings c, ReadPath c Crumb) => String -> c -> LCoreTC -> KEnvMessage
     AddObligation :: HermitC -> LemmaName -> Lemma -> KEnvMessage -- obligation that must be proven
+  deriving Typeable
 
 ----------------------------------------------------------------------------
 

@@ -97,7 +97,7 @@ runFoldR compiled = transform $ \c -> maybeM "no match." . runFold compiled c
 
 ------------------------------------------------------------------------
 
-newtype CompiledFold = CompiledFold (EMap ([Var], CoreExpr))
+newtype CompiledFold = CompiledFold (EMap ([Var], CoreExpr)) deriving Typeable
 
 -- | Attempt to apply a list of Equalitys to the given expression, folding the
 -- left-hand side into an application of the right-hand side. This
@@ -540,7 +540,7 @@ instance Fold CLMap where
 ----------------------------------------------------------------------------
 
 -- | An equality is represented as a set of universally quantified binders, and the LHS and RHS of the equality.
-data Equality = Equality [CoreBndr] CoreExpr CoreExpr
+data Equality = Equality [CoreBndr] CoreExpr CoreExpr deriving Typeable
 
 -- | Build an equality from a list of universally quantified binders and two expressions.
 -- If the head of either expression is a lambda expression, it's binder will become a universally quantified binder

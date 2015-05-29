@@ -60,9 +60,9 @@ data Kernel = Kernel
   , listK   :: forall m. MonadIO m =>                                          m [(AST,Maybe String, Maybe AST)]
     -- | Log a new AST with same Lemmas/ModGuts as given AST.
   , tellK   :: forall m. (MonadIO m, MonadCatch m) => String         -> AST -> m AST
-  }
+  } deriving Typeable
 
-data CommitMsg = Always String | Changed String | Never
+data CommitMsg = Always String | Changed String | Never deriving Typeable
 
 msg :: CommitMsg -> Maybe String
 msg Never = Nothing
@@ -94,7 +94,7 @@ instance Extern AST where
 
 data ASTMap = ASTMap { astNext :: AST
                      , astMap  :: Map AST KernelState
-                     }
+                     } deriving Typeable
 
 emptyASTMap :: ASTMap
 emptyASTMap = ASTMap firstAST empty
@@ -105,7 +105,7 @@ data KernelState = KernelState { ksLemmas  :: Lemmas
                                , _ksCommit :: Maybe String
                                }
 
-data KernelEnv = KernelEnv { kEnvChan :: KEnvMessage -> HermitM () }
+data KernelEnv = KernelEnv { kEnvChan :: KEnvMessage -> HermitM () } deriving Typeable
 
 -- | Internal API. The 'Kernel' object wraps these calls.
 data Msg where

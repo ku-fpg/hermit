@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.External
@@ -106,7 +107,7 @@ data CmdTag = Shell          -- ^ Shell-specific command.
             | Experiment     -- ^ Things we are trying out.
             | Deprecated     -- ^ A command that will be removed in a future release;
                              --   it has probably been renamed or subsumed by another command.
-    deriving (Eq, Show, Read, Bounded, Enum)
+    deriving (Eq, Show, Read, Bounded, Enum, Typeable)
 
 -- | Lists all the tags paired with a short description of what they're about.
 dictionaryOfTags :: [(CmdTag,String)]
@@ -151,6 +152,7 @@ data TagE :: * where
     NotTag :: TagE -> TagE
     AndTag :: TagE -> TagE -> TagE
     OrTag  :: TagE -> TagE -> TagE
+  deriving Typeable
 
 -- | Tags are meta-data that we add to 'External's to make them sortable and searchable.
 class Tag a where
@@ -164,6 +166,8 @@ class Tag a where
 
     -- | Check if an 'External' has the specified 'Tag'.
     tagMatch :: a -> External -> Bool
+
+deriving instance Typeable Tag
 
 instance Tag TagE where
     toTagE = id
@@ -288,6 +292,8 @@ class Typeable (Box a) => Extern a where
 
     -- | Unwrap a value from a 'Box'.
     unbox :: Box a -> a
+
+deriving instance Typeable Extern
 
 -----------------------------------------------------------------
 

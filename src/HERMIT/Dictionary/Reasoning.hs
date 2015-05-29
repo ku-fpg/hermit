@@ -6,6 +6,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -73,6 +74,7 @@ import           Data.List (isInfixOf, nubBy)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
 import           Data.Monoid
+import           Data.Typeable (Typeable)
 
 import           HERMIT.Context
 import           HERMIT.Core
@@ -785,6 +787,8 @@ f $$$ es = buildAppsM (toCE f) (map toCE es)
 
 class ToCoreExpr a where
     toCE :: a -> CoreExpr
+
+deriving instance Typeable ToCoreExpr
 
 instance ToCoreExpr CoreExpr where toCE = id
 

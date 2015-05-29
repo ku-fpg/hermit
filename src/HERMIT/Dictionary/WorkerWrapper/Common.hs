@@ -81,7 +81,7 @@ instance Extern WWAssumptionTag where
     box i = i
     unbox i = i
 
-data WWAssumption = WWAssumption WWAssumptionTag (RewriteH CoreExpr)
+data WWAssumption = WWAssumption WWAssumptionTag (RewriteH CoreExpr) deriving Typeable
 
 --------------------------------------------------------------------------------------------------
 

@@ -69,6 +69,7 @@ data Named = NamedId Id
            | NamedDataCon DataCon
            | NamedTyCon TyCon
            | NamedTyVar Var
+  deriving Typeable
 
 instance Show Named where
     show (NamedId _) = "NamedId"

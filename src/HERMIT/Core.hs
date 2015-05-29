@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase #-}
 
 module HERMIT.Core
@@ -81,13 +82,14 @@ module HERMIT.Core
 
 import Control.Monad ((>=>))
 
+import Data.List (intercalate)
+import Data.Typeable (Typeable)
+
 import Language.KURE.Combinators.Monad
 import Language.KURE.MonadCatch
 
 import HERMIT.GHC
 import HERMIT.Utilities
-
-import Data.List (intercalate)
 
 -----------------------------------------------------------------------
 
@@ -102,6 +104,7 @@ type CoreTickish = Tickish Id
 --   This data type is isomorphic.
 data CoreProg = ProgNil                     -- ^ An empty program.
               | ProgCons CoreBind CoreProg  -- ^ A binding group and the program it scopes over.
+  deriving Typeable
 
 infixr 5 `ProgCons`
 
@@ -126,7 +129,7 @@ bindToVarExprs (Rec bds)    = bds
 -- | A (potentially recursive) definition is an identifier and an expression.
 --   In GHC Core, recursive definitions are encoded as ('Id', 'CoreExpr') pairs.
 --   This data type is isomorphic.
-data CoreDef = Def Id CoreExpr
+data CoreDef = Def Id CoreExpr deriving Typeable
 
 -- | Convert a definition to an identifier/expression pair.
 defToIdExpr :: CoreDef -> (Id,CoreExpr)
@@ -477,7 +480,7 @@ data Crumb =
            | Disj_Lhs | Disj_Rhs
            | Impl_Lhs | Impl_Rhs
            | Eq_Lhs | Eq_Rhs
-           deriving (Eq,Read,Show)
+           deriving (Eq, Read, Show, Typeable)
 
 showCrumbs :: [Crumb] -> String
 showCrumbs crs = "[" ++ intercalate ", " (map showCrumb crs) ++ "]"
