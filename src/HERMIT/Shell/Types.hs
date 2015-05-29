@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -17,47 +16,42 @@
 
 module HERMIT.Shell.Types where
 
-import Control.Arrow
-import Control.Concurrent.STM
-import Control.Monad (unless, when) -- requires Monad context on GHC 7.8
-import Control.Monad.Compat hiding (unless, when)
-import Control.Monad.Error.Class (MonadError(..))
-import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
-import Control.Monad.State (MonadState(..), StateT(..), gets, modify)
-import Control.Monad.Trans.Class (MonadTrans(..))
-import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
+import           Control.Arrow
+import           Control.Concurrent.STM
+import           Control.Monad (unless, when) -- requires Monad context on GHC 7.8
+import           Control.Monad.Compat hiding (unless, when)
+import           Control.Monad.Error.Class (MonadError(..))
+import           Control.Monad.IO.Class (MonadIO(..))
+import           Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
+import           Control.Monad.State (MonadState(..), StateT(..), gets, modify)
+import           Control.Monad.Trans.Class (MonadTrans(..))
+import           Control.Monad.Trans.Except (ExceptT(..), runExceptT)
 
-import Data.Dynamic
+import           Data.Dynamic
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe, isJust)
+import           Data.Maybe (fromMaybe, isJust)
 
-import HERMIT.Context
-import HERMIT.Core
-import HERMIT.Dictionary.Reasoning hiding (externals)
-import HERMIT.External
+import           HERMIT.Context
+import           HERMIT.Core
+import           HERMIT.Dictionary.Reasoning hiding (externals)
+import           HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Kernel
-import HERMIT.Kure
-import HERMIT.Lemma
-import HERMIT.Monad
-import HERMIT.Parser
-import HERMIT.PrettyPrinter.Common
+import           HERMIT.Kernel
+import           HERMIT.Kure
+import           HERMIT.Lemma
+import           HERMIT.Monad
+import           HERMIT.Parser
+import           HERMIT.PrettyPrinter.Common
 
-import HERMIT.Plugin.Display
-import HERMIT.Plugin.Renderer
-import HERMIT.Plugin.Types
+import           HERMIT.Plugin.Display
+import           HERMIT.Plugin.Renderer
+import           HERMIT.Plugin.Types
 
-import Prelude.Compat hiding ((<$>))
+import           Prelude.Compat hiding ((<$>))
 
-import System.Console.Haskeline hiding (catch, display)
-import System.IO (Handle, stdout)
-
-#ifdef mingw32_HOST_OS
-import HERMIT.Win32.Console
-#else
-import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns, termLines)
-#endif
+import           System.Console.Haskeline hiding (catch, display)
+import           System.Console.Terminal.Size (Window(..), size)
+import           System.IO (Handle, stdout)
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
@@ -369,17 +363,12 @@ mkCLS = do
                               }
     return $ setPrettyOpts st $ (cl_pretty_opts st) { po_width = w }
 
+-- | Returns the (width, height) of the terminal HERMIT is running in.
+-- If it can't figure it out, it uses a default of (80, 25).
 getTermDimensions :: IO (Int, Int)
 getTermDimensions = do
-#ifdef mingw32_HOST_OS
-    consoleSz <- getConsoleWindowSize
-    return $ fromMaybe (80,25) consoleSz
-#else
-    term <- setupTermFromEnv
-    let w = fromMaybe 80 $ getCapability term termColumns
-        h = fromMaybe 25 $ getCapability term termLines
-    return (w,h)
-#endif
+    Window h w <- fromMaybe (Window 25 80) <$> size
+    return (w, h)
 
 newtype CLSBox = CLSBox CommandLineState deriving Typeable
 instance Extern CommandLineState where
