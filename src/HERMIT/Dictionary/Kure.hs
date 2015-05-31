@@ -5,6 +5,7 @@ module HERMIT.Dictionary.Kure
       externals
     , anyCallR
     , betweenR
+    , anyCallR_LCore
     ) where
 
 import Control.Arrow
