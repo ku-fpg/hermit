@@ -193,44 +193,52 @@ interpShell :: (MonadCatch m, CLMonad m) => [Interp m ()]
 interpShell =
   [ interpEM $ \ (CrumbBox cr)                  -> setPath (return (mempty @@ cr) :: TransformH LCoreTC LocalPathH)
   , interpEM $ \ (PathBox p)                    -> setPath (return p :: TransformH LCoreTC LocalPathH)
-  , interpEM $ \ (StringBox str)                -> performQuery (message str)
+  , interpEM $ \ (StringBox str)                -> performQuery (message str)                           -- QueryH
   , interpEM $ \ (effect :: KernelEffect)       -> flip performKernelEffect effect
-  , interpM  $ \ (effect :: ShellEffect)        -> performShellEffect effect                            -- **
+  , interpM  $ \ (effect :: ShellEffect)        -> performShellEffect effect                            -- ShellEffectH
   , interpM  $ \ (effect :: ScriptEffect)       -> performScriptEffect effect
-  , interpEM $ \ (query :: QueryFun)            -> performQuery query
+  , interpEM $ \ (query :: QueryFun)            -> performQuery query                                   -- QueryH
   , interpEM $ \ (t :: UserProofTechnique)      -> performProofShellCommand $ PCEnd $ UserProof t
   , interpEM $ \ (cmd :: ProofShellCommand)     -> performProofShellCommand cmd
-  , interpEM $ \ (TransformLCoreStringBox tt)   -> performQuery (QueryString tt)
-  , interpEM $ \ (TransformLCoreTCStringBox tt) -> performQuery (QueryString tt)
-  , interpEM $ \ (TransformLCoreUnitBox tt)     -> performQuery (QueryUnit tt)
-  , interpEM $ \ (TransformLCoreTCUnitBox tt)   -> performQuery (QueryUnit tt)
-  , interpEM $ \ (TransformLCorePathBox tt)     -> setPath tt                                           -- **
-  , interpEM $ \ (TransformLCoreTCPathBox tt)   -> setPath tt
-  , interpEM $ \ (TransformLCoreDocHBox t)      -> performQuery (QueryDocH t)
-  , interpEM $ \ (TransformLCoreTCDocHBox t)      -> performQuery (QueryDocH t)
-  , interpEM $ \ (RewriteLCoreBox rr)           -> applyRewrite $ promoteLCoreR rr                      -- **
-  , interpEM $ \ (RewriteLCoreTCBox rr)         -> applyRewrite rr                                      -- **
+  , interpEM $ \ (TransformLCoreStringBox tt)   -> performQuery (QueryString tt)                        -- QueryH
+  , interpEM $ \ (TransformLCoreTCStringBox tt) -> performQuery (QueryString tt)                        -- QueryH
+  , interpEM $ \ (TransformLCoreUnitBox tt)     -> performQuery (QueryUnit tt)                          -- QueryH
+  , interpEM $ \ (TransformLCoreTCUnitBox tt)   -> performQuery (QueryUnit tt)                          -- QueryH
+  , interpEM $ \ (TransformLCorePathBox tt)     -> setPath tt                                           -- SetPathH
+  , interpEM $ \ (TransformLCoreTCPathBox tt)   -> setPath tt                                           -- SetPathH
+  , interpEM $ \ (TransformLCoreDocHBox t)      -> performQuery (QueryDocH t)                           -- QueryH
+  , interpEM $ \ (TransformLCoreTCDocHBox t)    -> performQuery (QueryDocH t)                           -- QueryH
+  , interpEM $ \ (RewriteLCoreBox rr)           -> applyRewrite $ promoteLCoreR rr                      -- RewriteLCoreH
+  , interpEM $ \ (RewriteLCoreTCBox rr)         -> applyRewrite rr                                      -- RewriteLCoreTCH
   , interpEM $ \ (BiRewriteLCoreBox br)         -> applyRewrite $ promoteLCoreR $ whicheverR br
   , interpEM $ \ (BiRewriteLCoreTCBox br)       -> applyRewrite $ whicheverR br
-  , interpEM $ \ (PrettyHLCoreBox t)            -> performQuery (QueryPrettyH t)
-  , interpEM $ \ (PrettyHLCoreTCBox t)          -> performQuery (QueryPrettyH t)
+  , interpEM $ \ (PrettyHLCoreBox t)            -> performQuery (QueryPrettyH t)                        -- QueryH
+  , interpEM $ \ (PrettyHLCoreTCBox t)          -> performQuery (QueryPrettyH t)                        -- QueryH
   ]
 
 -------------------------------------------------------------------------------
 
--- New Shell entry point
+-- Wish: New Shell entry point
+--   * (Wish) This shell returns LocalPathH instead of using setPath. This means *all* the (not Rewrite) Transformations
+--     have no effect, and only have a return value.
 
 data TypedEffectH :: * -> * where
   ShellEffectH           :: ShellEffect                         -> TypedEffectH ()
   RewriteLCoreH          :: RewriteH LCore                      -> TypedEffectH ()
   RewriteLCoreTCH        :: RewriteH LCoreTC                    -> TypedEffectH ()
-  TransformLCorePathH    :: TransformH LCore LocalPathH         -> TypedEffectH ()
+  SetPathH               :: (Injection a LCoreTC) 
+                         => TransformH a LocalPathH             -> TypedEffectH ()
+  QueryH                 :: QueryFun                            -> TypedEffectH ()
+  EvalH                  :: String                              -> TypedEffectH ()
 
 performTypedEffectH :: (MonadCatch m, CLMonad m) => String -> TypedEffectH a -> m a
 performTypedEffectH _   (ShellEffectH          effect) = performShellEffect effect 
 performTypedEffectH err (RewriteLCoreH         rr    ) = applyRewrite (promoteLCoreR rr) (stubExprH err)
 performTypedEffectH err (RewriteLCoreTCH       rr    ) = applyRewrite rr                 (stubExprH err)
-performTypedEffectH err (TransformLCorePathH   tt    ) = setPath tt                      (stubExprH err)
+performTypedEffectH err (SetPathH              tt    ) = setPath tt                      (stubExprH err)
+performTypedEffectH err (QueryH                q     ) = performQuery q                  (stubExprH err)
+performTypedEffectH err (EvalH                 e     ) = evalScript e
+
 
 -- Hacky stub until we replace the ExprH for error messages
 stubExprH :: String -> ExprH
