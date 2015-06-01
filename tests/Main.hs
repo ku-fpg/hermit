@@ -106,4 +106,8 @@ mkHermitTest (dir, hs, hss, extraFlags) =
             fh <- openFile dfile WriteMode
             -- putStrLn cmd
             (_,_,_,rHermit) <- createProcess $ (shell cmd) { std_out = UseHandle fh, std_err = UseHandle fh }
-            void $ waitForProcess rHermit
+            _ <- waitForProcess rHermit
+
+            -- Ensure that the golden file exists prior to calling diff
+            goldenExists <- doesFileExist gfile
+            unless goldenExists $ copyFile dfile gfile

@@ -6,5 +6,5 @@ If you're using `cabal-install-1.20` or later, you can see the tests run live wi
 
     cabal test --show-details=streaming
 
-To update the 'golden' output, copy a file from the dump/ directory to the golden/ directory,
-changing the file extension appropriately, and commit.
+To update a golden file, delete it from the `golden/` directory, re-run the tests,
+and commit.
