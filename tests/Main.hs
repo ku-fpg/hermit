@@ -87,11 +87,26 @@ mkHermitTest (dir, hs, hss, extraFlags) =
     hermitOutput :: IO ()
     hermitOutput = do
         pwd <- getCurrentDirectory
+        sandboxCfgPath <- readProcess "cabal" [ "exec"
+                                              , "runhaskell"
+                                              , rootDir </> "CabalSandboxConfig.hs"
+                                              ] ""
+
         withTempFile pwd "Test.hss" $ \ fp h -> do
             mkTestScript h hss
 
             let cmd :: String
-                cmd = unwords $    [ "(", "cd", pathp, ";", "ghc" , hs ]
+                cmd = unwords $    [ "("
+                                   , "cd"
+                                   , pathp
+                                   , ";"
+                                   , "cabal"
+                                   , sandboxCfgPath
+                                   , "exec"
+                                   , "--"
+                                   , "ghc"
+                                   , hs
+                                   ]
                                 ++ ghcFlags
                                 ++ [ "-fplugin=HERMIT"
                                    , "-fplugin-opt=HERMIT:Main:" ++ fp -- made by mkTestScript
