@@ -1,39 +1,41 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE PackageImports #-}
-module Main where
+module Main (main) where
 
 import Control.Monad
 
 import HERMIT.Driver
-#ifdef mingw32_HOST_OS
-import HERMIT.Win32.IO (hPutStrLn)
-#endif
 
 import System.Directory
-import System.Exit
 import System.FilePath as F
-#ifdef mingw32_HOST_OS
-import System.IO (Handle, hGetContents, hClose, openFile, IOMode(WriteMode))
-#else
-import System.IO (Handle, hGetContents, hPutStrLn, hClose, openFile, IOMode(WriteMode))
-#endif
-import "temporary-rc" System.IO.Temp (withTempFile)
-import System.Process hiding (runCommand)
+import System.IO
+import System.IO.Temp (withTempFile)
+import System.Process
 
-type Test = (FilePath, FilePath, FilePath, [String])
+import Test.Tasty (TestTree, TestName, defaultMain, testGroup)
+import Test.Tasty.Golden (goldenVsFileDiff)
+
+type HermitTestArgs = (FilePath, FilePath, FilePath, [String])
+
+main :: IO ()
+main = defaultMain hermitTests
+
+hermitTests :: TestTree
+hermitTests = testGroup "HERMIT tests" $ map mkHermitTest testArgs
 
 -- subdirectory names
-golden, dump :: String
-golden = "golden"
-dump = "dump"
+golden, dump, rootDir, examples :: FilePath
+golden   = "golden"
+dump     = "dump"
+rootDir  = "tests"
+examples = "examples"
 
-tests :: [Test]
-tests = [ ("concatVanishes", "Flatten.hs", "Flatten.hss", ["-safety=unsafe"])
+testArgs :: [HermitTestArgs]
+testArgs = [ ("concatVanishes", "Flatten.hs", "Flatten.hss", ["-safety=unsafe"])
         , ("concatVanishes", "QSort.hs"  , "QSort.hss"  , ["-safety=unsafe"])
         , ("concatVanishes", "Rev.hs"    , "Rev.hss"    , ["-safety=unsafe"])
         , ("evaluation"    , "Eval.hs"   , "Eval.hss"   , [])
 #if __GLASGOW_HASKELL__ < 710
-        -- broken on GHC 7.10 due to not satisfying the let/app invariant. I should fix this.
+        -- broken on GHC 7.10 due to not satisfying the let/app invariant. I should probably fix this.
         , ("factorial"     , "Fac.hs"    , "Fac.hss"    , [])
 #endif
         -- broken due to Core Parser: , ("fib-stream"    , "Fib.hs"    , "Fib.hss"    )
@@ -66,32 +68,37 @@ mkTestScript h hss = do
                   , "resume" ]
     hClose h
 
-main :: IO ()
-main = do
-    pwd <- getCurrentDirectory
+mkHermitTest :: HermitTestArgs -> TestTree
+mkHermitTest (dir, hs, hss, extraFlags) =
+    goldenVsFileDiff testName diff gfile dfile hermitOutput
+  where
+    testName :: TestName
+    testName = "Running " ++ dir </> hs
 
-    forM_ tests $ \ (dir, hs, hss, extraFlags) -> do
+    fixed, gfile, dfile, pathp :: FilePath
+    fixed = fixName (concat [dir, "_", hs, "_", hss])
+    gfile = rootDir  </> golden </> fixed <.> "ref"
+    dfile = rootDir  </> dump   </> fixed <.> "dump"
+    pathp = examples </> dir
+
+    diff :: FilePath -> FilePath -> [String]
+    diff ref new = ["diff", "-b", "-U 5", ref, new]
+
+    hermitOutput :: IO ()
+    hermitOutput = do
+        pwd <- getCurrentDirectory
         withTempFile pwd "Test.hss" $ \ fp h -> do
-            putStr $ "Running " ++ dir </> hs ++ " - "
-
-            let fixed = fixName (concat [dir, "_", hs, "_", hss])
-                gfile = pwd </> golden </> fixed <.> "ref"
-                desired = pwd </> dump </> fixed <.> "dump"
-                pathp = ".." </> "examples" </> dir
-
-            b <- doesFileExist gfile
-            dfile <- if not b
-                     then do putStrLn $ "Reference file (" ++ gfile ++ ") does not exist. Creating!"
-                             return gfile
-                     else return desired
-
             mkTestScript h hss
 
-            let cmd = unwords $ [ "(", "cd", pathp, ";", "ghc" , hs ] ++ ghcFlags ++
-                                [ "-fplugin=HERMIT"
-                                , "-fplugin-opt=HERMIT:Main:" ++ fp -- made by mkTestScript
-                                , "-v0"] ++ [ "-fplugin-opt=HERMIT:Main:" ++ f | f <- extraFlags] ++ [ ")" ]
-                diff = unwords [ "diff", "-b", "-U 5", gfile, dfile ]
+            let cmd :: String
+                cmd = unwords $    [ "(", "cd", pathp, ";", "ghc" , hs ]
+                                ++ ghcFlags
+                                ++ [ "-fplugin=HERMIT"
+                                   , "-fplugin-opt=HERMIT:Main:" ++ fp -- made by mkTestScript
+                                   , "-v0"
+                                   ]
+                                ++ [ "-fplugin-opt=HERMIT:Main:" ++ f | f <- extraFlags]
+                                ++ [ ")" ]
 
             -- Adding a &> dfile redirect in cmd causes the call to GHC to not block
             -- until the compiler is finished (on Linux, not OSX). So we do the Haskell
@@ -99,22 +106,4 @@ main = do
             fh <- openFile dfile WriteMode
             -- putStrLn cmd
             (_,_,_,rHermit) <- createProcess $ (shell cmd) { std_out = UseHandle fh, std_err = UseHandle fh }
-            exHermit <- waitForProcess rHermit
-            hClose fh
-
-            case exHermit of
-                ExitFailure i -> putStrLn $ "HERMIT failed with code: " ++ show i
-                ExitSuccess   -> return ()
-
-            -- putStrLn diff
-            (_,mbStdoutH,_,rDiff) <- createProcess $ (shell diff) { std_out = CreatePipe }
-            exDiff <- waitForProcess rDiff
-            case exDiff of
-                ExitFailure i | i > 1 -> putStrLn $ "diff failed with code: " ++ show i
-                _ -> maybe (putStrLn "error: no stdout!")
-                           (\hDiff -> do output <- hGetContents hDiff
-                                         if null output
-                                         then putStrLn "passed."
-                                         else do putStrLn "failed:"
-                                                 putStrLn output)
-                           mbStdoutH
+            void $ waitForProcess rHermit

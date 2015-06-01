@@ -13,4 +13,4 @@ ghci:
 	cabal repl
 
 test:
-	( cd tests ; runghc Main.hs )
+	cabal test --show-details=streaming
