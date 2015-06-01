@@ -35,7 +35,8 @@ import System.IO
 
 type PluginM = PluginT IO
 newtype PluginT m a = PluginT { unPluginT :: ExceptT PException (ReaderT PluginReader (StateT PluginState m)) a }
-    deriving (Functor, Applicative, MonadIO, MonadError PException, MonadState PluginState, MonadReader PluginReader)
+    deriving (Functor, Applicative, MonadIO, MonadError PException,
+              MonadState PluginState, MonadReader PluginReader, Typeable)
 
 runPluginT :: PluginReader -> PluginState -> PluginT m a -> m (Either PException a, PluginState)
 runPluginT pr ps = flip runStateT ps . flip runReaderT pr . runExceptT . unPluginT
@@ -75,7 +76,7 @@ data PluginReader = PluginReader
     , pr_pass           :: PassInfo
     } deriving (Typeable)
 
-data PException = PAbort | PResume AST | PError String
+data PException = PAbort | PResume AST | PError String deriving Typeable
 
 newtype PSBox = PSBox PluginState deriving Typeable
 instance Extern PluginState where

@@ -140,7 +140,7 @@ data VersionCmd = Back            -- back (up) the derivation tree
                 | Goto AST        -- goto a specific AST
                 | GotoTag TagName -- goto a specific AST, by tag name
                 | Tag TagName     -- tag the current AST with a name
-        deriving Show
+        deriving (Show, Typeable)
 
 ----------------------------------------------------------------------------------
 
@@ -148,6 +148,7 @@ data CLException = CLAbort
                  | CLResume AST
                  | CLContinue CommandLineState -- TODO: needed?
                  | CLError String
+  deriving Typeable
 
 abort :: MonadError CLException m => m a
 abort = throwError CLAbort
@@ -180,7 +181,8 @@ rethrowPE (PError msg)   = throwError (CLError msg)
 --
 -- NB: an alternative to monad transformers, like Oleg's Extensible Effects, might be useful here.
 newtype CLT m a = CLT { unCLT :: ExceptT CLException (ReaderT PluginReader (StateT CommandLineState m)) a }
-    deriving (Functor, Applicative, MonadIO, MonadError CLException, MonadState CommandLineState, MonadReader PluginReader)
+    deriving (Functor, Applicative, MonadIO, MonadError CLException,
+              MonadState CommandLineState, MonadReader PluginReader, Typeable)
 
 -- Adapted from System.Console.Haskeline.MonadException, which hasn't provided an instance for ExceptT yet
 instance MonadException m => MonadException (ExceptT e m) where
@@ -288,7 +290,7 @@ data ProofTodo = Unproven
                     , ptLemma   :: Lemma
                     , ptContext :: HermitC      -- ^ context in which lemma is being proved
                     , ptPath    :: PathStack    -- ^ path into lemma to focus on
-                    }
+                    } deriving Typeable
 
 data Safety = StrictSafety | NormalSafety | NoSafety
     deriving (Read, Show, Eq, Typeable)
@@ -412,7 +414,7 @@ pathStack2Path (ps,p) = concat $ reverse (map snocPathToPath (p:ps))
 -- | A primitive means of denoting navigation of a tree (within a local scope).
 data Direction = U -- ^ Up
                | T -- ^ Top
-               deriving (Eq,Show)
+               deriving (Eq, Show, Typeable)
 
 pathStackToLens :: (Injection a g, Walker HermitC g) => [LocalPathH] -> LocalPathH -> LensH a g
 pathStackToLens ps p = injectL >>> pathL (pathStack2Path (ps,p))

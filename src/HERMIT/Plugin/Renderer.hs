@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -8,6 +9,7 @@ import Control.Arrow
 import Control.Monad.State
 
 import Data.List.Compat (isInfixOf, isPrefixOf, isSuffixOf)
+import Data.Typeable
 
 import HERMIT.Dictionary (traceR)
 import HERMIT.Kure
@@ -40,7 +42,7 @@ shellRenderers = [ ("unicode-terminal", unicodeConsole) ]
 
 -------------------------------------------------------------------------------
 
-newtype UnicodeTerminal = UnicodeTerminal (Handle -> Maybe PathH -> IO ())
+newtype UnicodeTerminal = UnicodeTerminal (Handle -> Maybe PathH -> IO ()) deriving Typeable
 
 instance RenderSpecial UnicodeTerminal where
         renderSpecial sym = UnicodeTerminal $ \ h _ -> hPutStr h [ch]

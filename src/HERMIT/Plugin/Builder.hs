@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module HERMIT.Plugin.Builder
     ( -- * The HERMIT Plugin
@@ -13,6 +14,7 @@ module HERMIT.Plugin.Builder
 
 import Data.IORef
 import Data.List
+import Data.Typeable
 
 import HERMIT.GHC
 import HERMIT.Kernel
@@ -111,7 +113,7 @@ data CorePass = CSE
               | PluginPass String
               | NoOp
               | Unknown
-    deriving (Read, Show, Eq)
+    deriving (Read, Show, Eq, Typeable)
 
 -- The following are not allowed yet because they required options.
 -- CoreDoSimplify {- The core-to-core simplifier. -} Int {- Max iterations -} SimplifierMode
@@ -176,7 +178,7 @@ data PassInfo =
              , passesDone :: [CorePass]
              , passesLeft :: [CorePass]
              }
-    deriving (Read, Show, Eq)
+    deriving (Read, Show, Eq, Typeable)
 
 -- | If HERMIT user specifies the -pN flag, get the N
 -- TODO: as written will discard other flags that start with -p

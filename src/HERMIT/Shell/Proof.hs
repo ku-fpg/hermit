@@ -151,6 +151,7 @@ data ProofShellCommand
 data ProofReason = UserProof UserProofTechnique -- ^ Run the technique, mark Proven if succeeds
                  | UserAssume                   -- ^ Assume
                  | Reflexivity                  -- ^ Check for alpha-equivalence first
+  deriving Typeable
 
 -- keep abstract to avoid breaking things if we modify this later
 newtype UserProofTechnique = UserProofTechnique (TransformH LCoreTC ())

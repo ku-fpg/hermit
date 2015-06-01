@@ -1,5 +1,6 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
@@ -33,6 +34,7 @@ import Control.Monad.State (get, gets, modify)
 import Data.Char
 import Data.List.Compat (isPrefixOf, partition)
 import Data.Maybe
+import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.External
@@ -223,13 +225,14 @@ interpShell =
 --     have no effect, and only have a return value.
 
 data TypedEffectH :: * -> * where
-  ShellEffectH           :: ShellEffect                         -> TypedEffectH ()
-  RewriteLCoreH          :: RewriteH LCore                      -> TypedEffectH ()
-  RewriteLCoreTCH        :: RewriteH LCoreTC                    -> TypedEffectH ()
-  SetPathH               :: (Injection a LCoreTC) 
-                         => TransformH a LocalPathH             -> TypedEffectH ()
-  QueryH                 :: QueryFun                            -> TypedEffectH ()
-  EvalH                  :: String                              -> TypedEffectH ()
+    ShellEffectH           :: ShellEffect             -> TypedEffectH ()
+    RewriteLCoreH          :: RewriteH LCore          -> TypedEffectH ()
+    RewriteLCoreTCH        :: RewriteH LCoreTC        -> TypedEffectH ()
+    SetPathH               :: (Injection a LCoreTC) 
+                           => TransformH a LocalPathH -> TypedEffectH ()
+    QueryH                 :: QueryFun                -> TypedEffectH ()
+    EvalH                  :: String                  -> TypedEffectH ()
+  deriving Typeable
 
 performTypedEffectH :: (MonadCatch m, CLMonad m) => String -> TypedEffectH a -> m a
 performTypedEffectH _   (ShellEffectH          effect) = performShellEffect effect 
@@ -237,7 +240,7 @@ performTypedEffectH err (RewriteLCoreH         rr    ) = applyRewrite (promoteLC
 performTypedEffectH err (RewriteLCoreTCH       rr    ) = applyRewrite rr                 (stubExprH err)
 performTypedEffectH err (SetPathH              tt    ) = setPath tt                      (stubExprH err)
 performTypedEffectH err (QueryH                q     ) = performQuery q                  (stubExprH err)
-performTypedEffectH err (EvalH                 e     ) = evalScript e
+performTypedEffectH _   (EvalH                 e     ) = evalScript e
 
 
 -- Hacky stub until we replace the ExprH for error messages

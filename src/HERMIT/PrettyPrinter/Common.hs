@@ -4,6 +4,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.PrettyPrinter.Common
@@ -94,7 +95,7 @@ data Attr = BndrAttr AbsolutePathH -- path to binding of a variable
           | Color SyntaxForColor
           | PathAttr AbsolutePathH -- path to this spot
           | SpecialFont
-    deriving (Eq, Show)
+    deriving (Eq, Show, Typeable)
 
 data SyntaxForColor             -- (suggestion)
         = KeywordColor          -- bold
@@ -104,7 +105,7 @@ data SyntaxForColor             -- (suggestion)
         | TypeColor
         | LitColor
         | WarningColor          -- highlight problems like unbound variables
-    deriving (Eq, Show)
+    deriving (Eq, Show, Typeable)
 
 attr :: Attr -> DocH -> DocH
 attr a p = mark (PushAttr a) <> p <> mark PopAttr
@@ -191,7 +192,7 @@ data PrettyC = PrettyC { prettyC_path    :: AbsolutePathH
                        , prettyC_vars    :: M.Map Var AbsolutePathH
                        , prettyC_options :: PrettyOptions
                        , prettyC_lemmas  :: Lemmas
-                       }
+                       } deriving Typeable
 
 markBindingSite :: Var -> PrettyC -> DocH -> DocH
 markBindingSite i c d = case M.lookup i (prettyC_vars c) of
@@ -261,9 +262,9 @@ data PrettyOptions = PrettyOptions
         , po_notes           :: Bool            -- ^ notes might be added to output
         , po_ribbon          :: Float
         , po_width           :: Int
-        } deriving Show
+        } deriving (Show, Typeable)
 
-data ShowOption = Show | Abstract | Detailed | Omit | Kind deriving (Eq, Ord, Show, Read)
+data ShowOption = Show | Abstract | Detailed | Omit | Kind deriving (Eq, Ord, Show, Read, Typeable)
 
 -- Types don't have a Kind showing option.
 updateTypeShowOption :: ShowOption -> PrettyOptions -> PrettyOptions
@@ -308,11 +309,12 @@ data SpecialSymbol
         | DisjSymbol
         | ImplSymbol
         | EquivSymbol
-        deriving (Show, Eq, Ord, Bounded, Enum)
+        deriving (Show, Eq, Ord, Bounded, Enum, Typeable)
 
 class RenderSpecial a where
         renderSpecial :: SpecialSymbol -> a
 
+deriving instance Typeable RenderSpecial
 
 -- This instance is special.  It is used as an index, forming an association list.
 -- Thus all of the rhs must be distinct characters.
@@ -332,7 +334,7 @@ instance RenderSpecial Char where
         renderSpecial ImplSymbol          = '?'   -- implication (we can't use >, because it is used for ->)
         renderSpecial EquivSymbol         = '='   -- equivalence
 
-newtype ASCII = ASCII String
+newtype ASCII = ASCII String deriving Typeable
 
 instance Monoid ASCII where
         mempty = ASCII ""
@@ -353,7 +355,7 @@ instance RenderSpecial ASCII where
         renderSpecial ImplSymbol          = ASCII "=>"   -- implication
         renderSpecial EquivSymbol         = ASCII "="    -- equivalence
 
-newtype Unicode = Unicode Char
+newtype Unicode = Unicode Char deriving Typeable
 
 instance RenderSpecial Unicode where
         renderSpecial LambdaSymbol        = Unicode '\x03BB'
@@ -392,7 +394,7 @@ instance RenderSpecial LaTeX where
         renderSpecial EquivSymbol         = LaTeX "\\ensuremath{\\equiv}"
 
 
-newtype HTML = HTML String
+newtype HTML = HTML String deriving Typeable
 
 instance Monoid HTML where
         mempty = HTML ""
@@ -435,6 +437,8 @@ class (RenderSpecial a, Monoid a) => RenderCode a where
                  -> a
 
     rPutStr      :: String -> a
+
+deriving instance Typeable RenderCode
 
 renderCode :: RenderCode a => PrettyOptions -> DocH -> a
 renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\ _ -> rEnd) doc []
