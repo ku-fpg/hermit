@@ -4,10 +4,12 @@ module HERMIT.Dictionary.Composite
     ( externals
     , unfoldBasicCombinatorR
     , simplifyR
+    , bashHelp
     , bashUsingR
     , bashR
     , bashExtendedWithR
     , bashDebugR
+    , smashHelp
     , smashR
     , smashUsingR
     , smashExtendedWithR
