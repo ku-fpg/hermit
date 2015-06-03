@@ -14,6 +14,7 @@ module HERMIT.Dictionary.FixPoint
     , fixFusionRuleBR
       -- ** Utilities
     , isFixExprT
+    , fixFusionRule
     ) where
 
 import Control.Arrow
