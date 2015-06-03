@@ -25,6 +25,8 @@ module HERMIT.Dictionary.GHC
     , occurAnalyseChangedR
     , occurAnalyseExprChangedR
     , occurAnalyseAndDezombifyR
+    , occurrenceAnalysisR
+    , deShadowProgR
     , dezombifyR
     , buildDictionary
     , buildDictionaryT
