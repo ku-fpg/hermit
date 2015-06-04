@@ -9,6 +9,7 @@ module HERMIT.Dictionary.Local.Case
     ( -- * Rewrites on Case Expressions
       externals
     , caseFloatAppR
+    , caseFloatArg
     , caseFloatArgR
     , caseFloatArgLemmaR
     , caseFloatCaseR
@@ -18,6 +19,7 @@ module HERMIT.Dictionary.Local.Case
     , caseFloatInR
     , caseFloatInAppR
     , caseFloatInArgsR
+    , caseFoldBinderR
     , caseReduceR
     , caseReduceDataconR
     , caseReduceLiteralR
