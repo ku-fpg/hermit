@@ -10,6 +10,7 @@ module HERMIT.Dictionary.Undefined
     , isUndefinedValT
     , replaceCurrentExprWithUndefinedR
     , replaceIdWithUndefinedR
+    , replaceIdWithUndefined 
     , errorToUndefinedR
     , undefinedExprR
     , undefinedAppR
