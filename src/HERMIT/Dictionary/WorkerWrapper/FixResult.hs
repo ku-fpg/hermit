@@ -15,6 +15,8 @@ module HERMIT.Dictionary.WorkerWrapper.FixResult
     , wwResultAssB
     , wwResultAssC
     , wwA
+    , wwB
+    , wwC
     ) where
 
 import Prelude.Compat hiding (abs)
