@@ -13,6 +13,7 @@ module HERMIT.Dictionary.Local
     , module HERMIT.Dictionary.Local.Let
       -- ** Miscellaneous
     , abstractR
+    , push
     , pushR
     , betaReduceR
     , betaExpandR
