@@ -6,6 +6,7 @@ module HERMIT.Dictionary.Kure
     , anyCallR
     , betweenR
     , anyCallR_LCore
+    , testQuery
     ) where
 
 import Control.Arrow
