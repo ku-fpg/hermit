@@ -3,11 +3,13 @@
 module HERMIT.Dictionary.Local.Cast
     ( -- * Rewrites on Case Expressions
       externals
+    , castElimR
     , castElimReflR
     , castElimSymR
     , castFloatAppR
     , castFloatLamR
     , castElimSymPlusR -- TODO: revisit
+    , castElimUnsafeR
     )
 where
 
