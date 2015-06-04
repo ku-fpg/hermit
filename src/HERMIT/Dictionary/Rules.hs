@@ -18,6 +18,9 @@ module HERMIT.Dictionary.Rules
     , ruleNameToClauseT
     , getHermitRuleT
     , getHermitRulesT
+    , rulesHelpListT
+    , ruleHelpT
+    , ruleToLemmaT
       -- ** Specialisation
     , specConstrR
     , specialiseR
