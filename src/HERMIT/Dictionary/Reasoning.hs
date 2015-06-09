@@ -135,9 +135,9 @@ externals =
     , external "float-right" (\n1 -> promoteR (mergeQuantifiersR (const False) (cmpHN2Var n1)) :: RewriteH LCore)
         [ "Float quantifier out of right-hand side." ]
     , external "conjunct" (\n1 n2 n3 -> conjunctLemmasT n1 n2 n3 :: TransformH LCore ())
-        [ "conjunt new-name lhs-name rhs-name" ]
+        [ "conjunct new-name lhs-name rhs-name" ]
     , external "disjunct" (\n1 n2 n3 -> disjunctLemmasT n1 n2 n3 :: TransformH LCore ())
-        [ "disjunt new-name lhs-name rhs-name" ]
+        [ "disjunct new-name lhs-name rhs-name" ]
     , external "imply" (\n1 n2 n3 -> implyLemmasT n1 n2 n3 :: TransformH LCore ())
         [ "imply new-name antecedent-name consequent-name" ]
     , external "lemma-birewrite" (promoteExprBiR . lemmaBiR Obligation :: LemmaName -> BiRewriteH LCore)
