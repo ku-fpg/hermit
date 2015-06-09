@@ -7,6 +7,7 @@ module HERMIT.Dictionary.Query
     , infoT
     , compareCoreAtT
     , compareBoundIdsT
+    , compareBoundIds
     ) where
 
 import Control.Arrow
