@@ -32,6 +32,15 @@ module HERMIT.Dictionary.Reasoning
     , ppLemmaT
     , ppClauseT
     , ppLCoreTCT
+    , retraction
+    , mergeQuantifiersR
+    , conjunctLemmasT
+    , disjunctLemmasT
+    , implyLemmasT
+    , lemmaConsequentBiR
+    , lemmaLhsIntroR
+    , lemmaRhsIntroR
+    , splitAntecedentR
       -- ** Lifting transformations over 'Clause'
     , lhsT
     , rhsT
