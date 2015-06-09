@@ -24,6 +24,12 @@ module HERMIT.Dictionary.Navigation
     , considerConstructT
     , nthArgPath
     , string2considerable
+    , lamsBodyT
+    , letsBodyT
+    , gutsProgEndT
+    , progEndT
+    , applicationOfT
+    , recognizedConsiderables
     ) where
 
 import Control.Arrow
