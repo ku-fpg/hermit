@@ -88,7 +88,7 @@ type DocH = MDoc HermitMark
 data HermitMark
         = PushAttr Attr
         | PopAttr
-    deriving Show
+    deriving (Show, Typeable)
 
 -- These are the attributes
 data Attr = BndrAttr AbsolutePathH -- path to binding of a variable
