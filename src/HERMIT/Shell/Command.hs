@@ -24,6 +24,9 @@ module HERMIT.Shell.Command
     , evalScript
     , performTypedEffectH
     , TypedEffectH(..)
+
+    -- ** Exported for hermit-shell
+    , stubExprH
     ) where
 
 import Control.Monad.Compat
