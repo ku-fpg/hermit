@@ -13,13 +13,13 @@
 
 module HERMIT.Shell.Proof
     ( externals
-    , UserProofTechnique(..)
+    , UserProofTechnique
     , userProofTechnique
     , withProofExternals
     , performProofShellCommand
     , forceProofs
     , ProofShellCommand(PCEnd)
-    , ProofReason(UserProof)
+    , ProofReason(UserProof, UserAssume, Reflexivity)
     ) where
 
 import Control.Arrow hiding (loop, (<+>))
