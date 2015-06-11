@@ -13,7 +13,7 @@
 
 module HERMIT.Shell.Proof
     ( externals
-    , UserProofTechnique
+    , UserProofTechnique(..)
     , userProofTechnique
     , withProofExternals
     , performProofShellCommand
