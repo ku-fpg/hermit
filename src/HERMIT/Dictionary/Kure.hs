@@ -7,6 +7,8 @@ module HERMIT.Dictionary.Kure
     , betweenR
     , anyCallR_LCore
     , testQuery
+    , hfocusR
+    , hfocusT
     ) where
 
 import Control.Arrow
