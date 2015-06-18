@@ -20,6 +20,9 @@ module HERMIT.Shell.Proof
     , forceProofs
     , ProofShellCommand(PCEnd)
     , ProofReason(UserProof, UserAssume, Reflexivity)
+
+      -- ** Exposed for hermit-shell:
+    , interactiveProof
     ) where
 
 import Control.Arrow hiding (loop, (<+>))
