@@ -15,6 +15,7 @@ module HERMIT.Dictionary.WorkerWrapper.Fix
     , wwAssAimpliesAssB
     , wwAssBimpliesAssC
     , wwAssAimpliesAssC
+    , wwSplit
     ) where
 
 import Control.Arrow

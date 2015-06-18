@@ -9,7 +9,6 @@ module HERMIT.Dictionary.WorkerWrapper.FixResult
     , wwResultSplitR
     , wwResultSplitStaticArg
     , wwResultGenerateFusionT
-    , wwSplit
     , wwResultFusionBR
     , wwResultAssA
     , wwResultAssB
