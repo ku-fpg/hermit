@@ -20,6 +20,8 @@ module HERMIT.Dictionary.WorkerWrapper.FixResult
     , wwResultAssBimpliesAssC
     , wwResultAssAimpliesAssC
     , wwFusion
+    -- ** Exported for hermit-shell:
+    , wwResultSplit
     ) where
 
 import Prelude.Compat hiding (abs)
@@ -69,7 +71,7 @@ externals =
                   "fix (X->A) f  ==>  \\ x1 -> abs (fix (X->B) (\\ h x2 -> rep (f (\\ x3 -> abs (h x3)) x2)) x1",
                   "Note: the pre-condition \"fix (X -> A) (\\ h x -> abs (rep (f h x))) == fix (X->A) f\" is expected to hold."
                 ] .+ Introduce .+ Context .+ PreCondition
-         , external "ww-result-split" ((\ abs rep assC -> promoteDefR $ wwSplit (mkWWAssC assC) abs rep)
+         , external "ww-result-split" ((\ abs rep assC -> promoteDefR $ wwResultSplit (mkWWAssC assC) abs rep)
                                   :: CoreString -> CoreString -> RewriteH LCore -> RewriteH LCore)
                 [ "Worker/Wrapper Split (Result Variant)",
                   "For any \"prog :: X -> A\", and given \"abs :: B -> A\" and \"rep :: A -> B\" as arguments,",
@@ -78,7 +80,7 @@ externals =
                   "                          in let work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1)",
                   "                              in \\ x0 -> abs (work x0)"
                 ] .+ Introduce .+ Context
-         , external "ww-result-split-unsafe" ((\ abs rep -> promoteDefR $ wwSplit Nothing abs rep)
+         , external "ww-result-split-unsafe" ((\ abs rep -> promoteDefR $ wwResultSplit Nothing abs rep)
                                        :: CoreString -> CoreString -> RewriteH LCore)
                 [ "Unsafe Worker/Wrapper Split (Result Variant)",
                   "For any \"prog :: X -> A\", and given \"abs :: B -> A\" and \"rep :: A -> B\" as arguments, then",
@@ -315,13 +317,13 @@ wwResultSplitR mAss abs rep =
                       )
 
 -- | \\ abs rep -> (@prog = expr@  ==>  @prog = let f = \\ prog -> expr in let work = \\ x1 -> rep (f (\\ x2 -> abs (work x2)) x1) in \\ x0 -> abs (work x0))@
-wwSplit :: Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
-wwSplit mAss absS repS = (parseCoreExprT absS &&& parseCoreExprT repS) >>= uncurry (wwResultSplitR mAss)
+wwResultSplit :: Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
+wwResultSplit mAss absS repS = (parseCoreExprT absS &&& parseCoreExprT repS) >>= uncurry (wwResultSplitR mAss)
 
--- | As 'wwSplit' but performs the static-argument transformation for @n@ static arguments first, and optionally provides some of those arguments (specified by index) to all calls of abs and rep.
+-- | As 'wwResultSplit' but performs the static-argument transformation for @n@ static arguments first, and optionally provides some of those arguments (specified by index) to all calls of abs and rep.
 --   This is useful if, for example, the expression, and abs and rep, all have a @forall@ type.
 wwResultSplitStaticArg :: Int -> [Int] -> Maybe WWAssumption -> CoreString -> CoreString -> RewriteH CoreDef
-wwResultSplitStaticArg 0 _  = wwSplit
+wwResultSplitStaticArg 0 _  = wwResultSplit
 wwResultSplitStaticArg n is = \ mAss absS repS ->
                             prefixFailMsg "worker/wrapper split (static argument variant) failed: " $
                             do guardMsg (all (< n) is) "arguments for abs and rep must be chosen from the statically transformed arguments."
