@@ -5,6 +5,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module HERMIT.Dictionary.Navigation
@@ -47,6 +48,10 @@ import HERMIT.Lemma(Clause(..))
 import HERMIT.Name
 
 import HERMIT.Dictionary.Navigation.Crumbs
+
+import Data.Aeson
+import Data.Aeson.Types (defaultOptions)
+import GHC.Generics (Generic)
 
 ---------------------------------------------------------------------------------------
 
@@ -213,7 +218,13 @@ rhsOfTargetsT = crushbuT (promoteBindT (arr binderBind) <+ promoteDefT (arr bind
 
 -- | Language constructs that can be zoomed to.
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetExpr | CaseOf | Casty | Ticky | TypeExpr | CoercionExpr
-    deriving Typeable
+    deriving (Generic, Typeable)
+
+instance FromJSON Considerable where
+  parseJSON = genericParseJSON defaultOptions
+
+instance ToJSON Considerable where
+  toJSON = genericToJSON defaultOptions
 
 instance Extern Considerable where
     type Box Considerable = Considerable

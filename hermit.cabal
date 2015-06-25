@@ -132,6 +132,7 @@ extra-source-files:
 library
   ghc-options:         -Wall
   build-depends:       base                >= 4.7 && < 5,
+                       aeson               >= 0.9,
                        ansi-terminal       >= 0.5.5,
                        array,
                        base-compat         >= 0.8.1,

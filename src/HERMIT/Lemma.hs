@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module HERMIT.Lemma
     ( -- * Clause
@@ -38,6 +39,10 @@ import qualified Data.Map as M
 import HERMIT.Core
 import HERMIT.GHC hiding ((<>))
 import Language.KURE.MonadCatch
+
+import Data.Aeson
+import Data.Aeson.Types (defaultOptions)
+import GHC.Generics (Generic)
 
 ----------------------------------------------------------------------------
 
@@ -146,7 +151,13 @@ orP = max
 data Used = Obligation -- ^ this MUST be proven immediately
           | UnsafeUsed -- ^ used, but can be proven later (only introduced in unsafe shell)
           | NotUsed
-    deriving (Eq, Typeable)
+    deriving (Eq, Generic, Typeable)
+
+instance FromJSON Used where
+  parseJSON = genericParseJSON defaultOptions
+
+instance ToJSON Used where
+  toJSON = genericToJSON defaultOptions
 
 instance Show Used where
     show Obligation = "Obligation"
