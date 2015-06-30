@@ -14,24 +14,24 @@ rule-to-lemma "concat-of-toList"
 
 -- first do the proof interactively
 --
--- rule-lhs-intro "concat-of-toList"
--- consider lam ; lams-body
--- case-split-inline 'xs
--- {case-alt 0
---     one-bu (inline 'map);  smash
---     one-bu (inline 'concat);  smash
--- }
--- {case-alt 1
---     one-bu (inline 'map);  smash
---     one-bu (inline 'concat);  smash
---     one-bu (inline 'toList);  smash
---     one-bu (inline '++);  smash
---     one-bu (inline '++);  smash
---     one-bu (forward ind-hyp-0)
--- }
+ prove-lemma "concat-of-toList"
+ consider lam ; lams-body
+ case-split-inline 'xs
+ {case-alt 0
+     one-bu (inline 'map);  smash
+     one-bu (inline 'concat);  smash
+ }
+ {case-alt 1
+     one-bu (inline 'map);  smash
+     one-bu (inline 'concat);  smash
+     one-bu (inline 'toList);  smash
+     one-bu (inline '++);  smash
+     one-bu (inline '++);  smash
+     one-bu (forward ind-hyp-0)
+ }
 
 -- then encode the proof as a rewrite or script
-define-script "concat-of-toList-nil" "any-bu (inline 'map <+ inline 'concat); smash"
-define-script "concat-of-toList-cons" "any-bu (inline 'map <+ inline 'concat); smash; any-bu (forward ind-hyp-0); repeat (any-bu (unfold 'toList <+ unfold '++ <+ smash))"
-
-verify-lemma "concat-of-toList" (inductive-proof 'xs [ '"[]" , ': ] [ concat-of-toList-nil , concat-of-toList-cons ] )
+--define-script "concat-of-toList-nil" "any-bu (inline 'map <+ inline 'concat); smash"
+--define-script "concat-of-toList-cons" "any-bu (inline 'map <+ inline 'concat); smash; any-bu (forward ind-hyp-0); repeat (any-bu (unfold 'toList <+ unfold '++ <+ smash))"
+--
+--verify-lemma "concat-of-toList" (inductive-proof 'xs [ '"[]" , ': ] [ concat-of-toList-nil , concat-of-toList-cons ] )

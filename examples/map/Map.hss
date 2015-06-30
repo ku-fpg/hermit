@@ -1,5 +1,7 @@
 flatten-module
-consider 'mapPlus1Int
+-- consider 'mapPlus1Int
+binding-of 'mapPlus1Int
+consider def
 {load-and-run "WWSplitTactic.hss"
   consider 'work
 

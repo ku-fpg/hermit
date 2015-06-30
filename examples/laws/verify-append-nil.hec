@@ -29,4 +29,25 @@ rule-to-lemma "append-nil"
 define-script "append-nil-nil" "one-bu (inline '++); smash"
 define-script "append-nil-cons" "one-bu (inline '++); smash; one-bu (forward ind-hyp-0)"
 
-verify-lemma "append-nil" (inductive-proof 'xs [ '"[]" , ': ] [ append-nil-nil , append-nil-cons ] )
+--verify-lemma "append-nil" (inductive-proof 'xs [ '"[]" , ': ] [ append-nil-nil , append-nil-cons ] )
+
+prove-lemma "append-nil"
+induction 'xs
+forall-body
+{ conj-lhs                                      -- undefined case
+  one-bu (inline '++) ; smash
+}
+
+{ [conj-rhs, conj-lhs]                          -- nil case
+  one-bu (inline '++) ; smash
+}
+
+{ [conj-rhs, conj-rhs, forall-body, consequent] -- cons case
+  -- XXX: Is it ok that we don't need to do anything with the antecedent here?
+  
+  one-bu (inline '++) ; smash
+  one-bu (lemma-forward ind-hyp-0)
+  reflexivity
+}
+end-proof
+
