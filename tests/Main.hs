@@ -73,7 +73,7 @@ mkHermitTest (dir, hs, hss, extraFlags) =
     goldenVsFileDiff testName diff gfile dfile hermitOutput
   where
     testName :: TestName
-    testName = "Running " ++ dir </> hs
+    testName = dir </> hs
 
     fixed, gfile, dfile, pathp :: FilePath
     fixed = fixName (concat [dir, "_", hs, "_", hss])
