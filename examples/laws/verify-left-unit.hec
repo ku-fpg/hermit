@@ -24,7 +24,11 @@ rule-to-lemma "left-unit"
 --   }
 
 -- then encode the proof as a rewrite or script
-define-script "left-unit-proof" "any-bu (inline [ 'bind, 'retur ]) ; smash"
+define-rewrite "left-unit-proof" "any-bu (inline [ 'bind, 'retur ]) ; smash"
 
-verify-lemma "left-unit" (script-to-proof left-unit-proof)
+-- verify-lemma "left-unit" (script-to-proof left-unit-proof)
+
+prove-lemma "left-unit"
+left-unit-proof
+--end-proof
 

@@ -22,7 +22,8 @@ binding-of 'hanoi
       any-call (unfold 'f)
       simplify
       any-call (unfold-rule "[] ++")
-      any-call (unfold-rule "++ []")
+--      any-call (unfold-rule "++ []")
+      assume
     }
     { case-alt 1 ; any-call (unfold 'f) ; simplify
 
@@ -49,7 +50,7 @@ binding-of 'hanoi
         try (reorder-lets ['u,'v,'w])
         any-call (fold 'u)
         any-call (fold 'v)
-        any-call (fold 'w)
+--        any-call (fold 'w)
         let-tuple 'uvw
         any-call (fold 'unwrap)
         any-call (fold-remembered origwork)
@@ -57,4 +58,5 @@ binding-of 'hanoi
     }
   }
 }
-innermost let-elim
+--innermost let-elim
+innermost let-subst
