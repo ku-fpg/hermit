@@ -198,7 +198,7 @@ externals =
         [ "Apply a rewrite to both sides of an equality, succeeding if either succeed." ]
     , external "both" ((\t -> do (r,s) <- promoteClauseT (bothT t); return (unlines [r,s])) :: TransformH LCore String -> TransformH LCore String)
         [ "Apply a transformation to both sides of a quantified clause." ]
-    , external "reflexivity" (promoteClauseR (forallR idR reflexivityR <+ reflexivityR) :: RewriteH LCore)
+    , external "reflexivity" (promoteClauseR (reflexivityR <+ forallR idR reflexivityR) :: RewriteH LCore)
         [ "Rewrite alpha-equivalence to true." ]
     , external "simplify-lemma" (simplifyClauseR :: RewriteH LCore)
         [ "Reduce a proof by applying reflexivity and logical operator identities." ]
@@ -350,8 +350,8 @@ verifyOrCreateT u nm cl = do
     then return cl >>> lemmaR u nm >>> verifyClauseT
     else contextonlyT $ \ c -> sendKEnvMessage $ AddObligation (toHermitC c) nm $ Lemma cl NotProven u
 
-reflexivityR :: Monad m => Rewrite c m Clause
-reflexivityR = do
+reflexivityR :: MonadCatch m => Rewrite c m Clause
+reflexivityR = withPatFailMsg "reflexivity may only be applied to equivalence lemmas" $ do
     Equiv lhs rhs <- idR
     guardMsg (exprAlphaEq lhs rhs) "the two sides are not alpha-equivalent."
     return CTrue
