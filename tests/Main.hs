@@ -84,8 +84,23 @@ mkHermitTest (dir, hs, hss, extraFlags) =
     diff :: FilePath -> FilePath -> [String]
     diff ref new = ["diff", "-b", "-U 5", ref, new]
 
+    -- For some incredibly bizarre reason, HERMIT's output can be have different
+    -- line orderings depending on if it's been run once before. As far as I can
+    -- tell, this is due to the presence of object (.o) and interface (.hi) files.
+    -- Wat.
+    --
+    -- Luckily, removing any object or interface before running HERMIT seems to
+    -- provide a guarantee that HERMIT's output will be the same on subsequent runs.
+    cleanObjectFiles :: IO ()
+    cleanObjectFiles = do
+        files <- getDirectoryContents pathp
+        forM_ files $ \file ->
+            when (takeExtension file `elem` [".o", ".hi"]) $
+               removeFile $ pathp </> file
+
     hermitOutput :: IO ()
     hermitOutput = do
+        cleanObjectFiles
         pwd <- getCurrentDirectory
         sandboxCfgPath <- readProcess "cabal" [ "exec"
                                               , "runhaskell"
