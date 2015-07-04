@@ -233,8 +233,8 @@ interpScriptR =
                                                 BeginScope -> ScriptBeginScope
                                                 EndScope   -> ScriptEndScope
                                                 _          -> ScriptUnsupported "Kernel effect" )
-  , interp (\ (_ :: ShellEffect)            -> ScriptUnsupported "shell effect")
-  , interp (\ (_ :: QueryFun)               -> ScriptUnsupported "query")
+  , interp (\ (ShellEffectBox _)            -> ScriptUnsupported "shell effect")
+  , interp (\ (QueryFunBox _)               -> ScriptUnsupported "query")
   , interp (\ (TransformLCoreStringBox _)   -> ScriptUnsupported "query")
   , interp (\ (TransformLCoreTCStringBox _) -> ScriptUnsupported "query")
   , interp (\ (TransformLCoreUnitBox _)     -> ScriptUnsupported "predicate")

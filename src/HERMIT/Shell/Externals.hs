@@ -193,7 +193,7 @@ setWindow = modify $ \ st ->
     let ps = fromMaybe ([],mempty) (M.lookup (cl_cursor st) (cl_foci st))
     in st { cl_window = pathStack2Path ps }
 
-showRenderers :: QueryFun
+showRenderers :: QueryFun ()
 showRenderers = message $ "set-renderer " ++ show (map fst shellRenderers)
 
 --------------------------------------------------------
@@ -267,7 +267,7 @@ showRefactorTrail db a me =
 
 -------------------------------------------------------------------------------
 
-displayScripts :: QueryFun
+displayScripts :: QueryFun ()
 displayScripts = Inquiry (const (return . showScripts . cl_scripts))
 
 showScripts :: [(ScriptName,Script)] -> String

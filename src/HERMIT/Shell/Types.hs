@@ -57,28 +57,37 @@ import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 ----------------------------------------------------------------------------------
 
-data QueryFun :: * where
-   QueryString  :: Injection a LCoreTC => TransformH a String       -> QueryFun
-   QueryDocH    :: Injection a LCoreTC => TransformH a DocH         -> QueryFun
-   QueryPrettyH :: Injection a LCoreTC => PrettyH a                 -> QueryFun
-   Diff         :: AST -> AST                                       -> QueryFun
-   Inquiry      :: (PluginReader -> CommandLineState -> IO String)  -> QueryFun
-   QueryUnit    :: Injection a LCoreTC => TransformH a ()           -> QueryFun
+data QueryFun :: * -> * where
+   QueryString  :: Injection a LCoreTC => TransformH a String       -> QueryFun String
+   QueryDocH    :: Injection a LCoreTC => TransformH a DocH         -> QueryFun ()
+   QueryPrettyH :: Injection a LCoreTC => PrettyH a                 -> QueryFun ()
+   Diff         :: AST -> AST                                       -> QueryFun ()
+   Inquiry      :: (PluginReader -> CommandLineState -> IO String)  -> QueryFun ()
+   QueryUnit    :: Injection a LCoreTC => TransformH a ()           -> QueryFun ()
    deriving Typeable
 
-message :: String -> QueryFun
+message :: String -> QueryFun ()
 message = Inquiry . const . const . return
 
-instance Extern QueryFun where
-   type Box QueryFun = QueryFun
-   box i = i
-   unbox i = i
+data QueryFunBox = forall a. Typeable a => QueryFunBox (QueryFun a)
+  deriving Typeable
 
-performQuery :: (MonadCatch m, CLMonad m) => QueryFun -> ExprH -> m ()
+instance Typeable a => Extern (QueryFun a) where
+   type Box (QueryFun a) = QueryFunBox
+   box = QueryFunBox
+   unbox (QueryFunBox i) =
+       case cast i of
+         Just res -> res
+         Nothing -> error "Extern -- unbox: casting of query function failed."
+
+performQuery :: (MonadCatch m, CLMonad m) => QueryFun a -> ExprH -> m a
 performQuery qf expr = go qf
     where cm = Changed $ unparseExprH expr
           go (QueryString q) =
-            putStrToConsole =<< prefixFailMsg "Query failed: " (queryInContext (promoteT q) cm)
+            do str <- prefixFailMsg "Query failed: " (queryInContext (promoteT q) cm)
+               putStrToConsole str
+               return str
+               
 
           go (QueryDocH q) = do
             doc <- prefixFailMsg "Query failed: " $ queryInContext (promoteT q) cm

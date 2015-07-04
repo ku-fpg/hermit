@@ -11,6 +11,7 @@
 
 module HERMIT.Shell.ShellEffect
     ( ShellEffect(..)
+    , ShellEffectBox(..)
     , performShellEffect
     , dumpT
     , dump
@@ -36,22 +37,28 @@ import System.IO
 
 ----------------------------------------------------------------------------------
 
-data ShellEffect :: * where
-    Abort             :: ShellEffect
-    CLSModify         :: CLT IO () -> ShellEffect
-    PluginComp        :: PluginM () -> ShellEffect
-    Continue          :: ShellEffect
-    Resume            :: ShellEffect
+data ShellEffect :: * -> * where
+    Abort             :: ShellEffect ()
+    CLSModify         :: CLT IO () -> ShellEffect ()
+    PluginComp        :: PluginM () -> ShellEffect ()
+    Continue          :: ShellEffect ()
+    Resume            :: ShellEffect ()
     deriving Typeable
 
-instance Extern ShellEffect where
-    type Box ShellEffect = ShellEffect
-    box i = i
-    unbox i = i
+data ShellEffectBox = forall a. Typeable a => ShellEffectBox (ShellEffect a) 
+  deriving Typeable
+
+instance Typeable a => Extern (ShellEffect a) where
+    type Box (ShellEffect a) = ShellEffectBox
+    box = ShellEffectBox
+    unbox (ShellEffectBox i) = 
+        case cast i of
+          Just res -> res
+          Nothing -> error "Extern -- unbox: casting of shell effect failed."
 
 ----------------------------------------------------------------------------------
 
-performShellEffect :: (MonadCatch m, CLMonad m) => ShellEffect -> m ()
+performShellEffect :: (MonadCatch m, CLMonad m) => ShellEffect a -> m a
 performShellEffect Abort  = abort
 performShellEffect Resume = announceUnprovens >> gets cl_cursor >>= resume
 performShellEffect Continue = announceUnprovens >> get >>= continue
