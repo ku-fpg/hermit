@@ -45,7 +45,8 @@ data ShellEffect :: * -> * where
     Resume            :: ShellEffect ()
     deriving Typeable
 
-data ShellEffectBox = forall a. Typeable a => ShellEffectBox (ShellEffect a) 
+data ShellEffectBox where
+    ShellEffectBox :: Typeable a => ShellEffect a -> ShellEffectBox
   deriving Typeable
 
 instance Typeable a => Extern (ShellEffect a) where

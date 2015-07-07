@@ -54,6 +54,7 @@ import           System.Console.Terminal.Size (Window(..), size)
 import           System.IO (Handle, stdout)
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
+import Data.Aeson (ToJSON)
 
 ----------------------------------------------------------------------------------
 
@@ -64,15 +65,18 @@ data QueryFun :: * -> * where
    Diff         :: AST -> AST                                       -> QueryFun ()
    Inquiry      :: (PluginReader -> CommandLineState -> IO String)  -> QueryFun ()
    QueryUnit    :: Injection a LCoreTC => TransformH a ()           -> QueryFun ()
+   QueryA :: (Typeable a, ToJSON a, Injection c LCoreTC) 
+          => TransformH c a -> QueryFun a
    deriving Typeable
 
 message :: String -> QueryFun ()
 message = Inquiry . const . const . return
 
-data QueryFunBox = forall a. Typeable a => QueryFunBox (QueryFun a)
+data QueryFunBox where
+    QueryFunBox :: (Typeable a, ToJSON a) => QueryFun a -> QueryFunBox
   deriving Typeable
 
-instance Typeable a => Extern (QueryFun a) where
+instance (Typeable a, ToJSON a) => Extern (QueryFun a) where
    type Box (QueryFun a) = QueryFunBox
    box = QueryFunBox
    unbox (QueryFunBox i) =
@@ -130,6 +134,13 @@ performQuery qf expr = go qf
             let str = unparseExprH expr
             modFailMsg (\ err -> str ++ " [exception: " ++ err ++ "]") $ queryInContext (promoteT q) cm
             putStrToConsole $ str ++ " [correct]"
+
+          go (QueryA q) = do
+            let str = unparseExprH expr
+            res <- modFailMsg (\ err -> str ++ " [exception: " ++ err ++ "]") $
+                     queryInContext (promoteT q) cm
+            putStrToConsole $ str ++ " [correct]"
+            return res
 
 ppWholeProgram :: (CLMonad m, MonadCatch m) => AST -> m DocH
 ppWholeProgram ast = do

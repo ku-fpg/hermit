@@ -27,6 +27,8 @@ module HERMIT.Shell.Command
 
     -- ** Exported for hermit-shell
     , stubExprH
+    , TypedEffectBox(..)
+    , performBoxedEffect
     ) where
 
 import Control.Monad.Compat
@@ -42,7 +44,7 @@ import Data.Typeable
 import HERMIT.Context
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Kure
+import HERMIT.Kure hiding ((<$>))
 import HERMIT.Parser
 
 import HERMIT.Plugin.Renderer
@@ -69,6 +71,7 @@ import System.IO
 -- import System.Console.ANSI
 import System.Console.Haskeline hiding (catch, display)
 
+import qualified Data.Aeson as Aeson (ToJSON(..), Value)
 
 -------------------------------------------------------------------------------
 
@@ -239,7 +242,12 @@ data TypedEffectH :: * -> * where
     EvalH                  :: String                  -> TypedEffectH ()
   deriving Typeable
 
-performTypedEffectH :: (MonadCatch m, CLMonad m) => String -> TypedEffectH a -> m a
+data TypedEffectBox where
+    TypedEffectBox :: Aeson.ToJSON a => TypedEffectH a -> TypedEffectBox
+  deriving Typeable
+
+performTypedEffectH :: (Aeson.ToJSON a, MonadCatch m, CLMonad m) 
+                    => String -> TypedEffectH a -> m a
 performTypedEffectH _   (ShellEffectH          effect) = performShellEffect effect 
 performTypedEffectH err (RewriteLCoreH         rr    ) = applyRewrite (promoteLCoreR rr) (stubExprH err)
 performTypedEffectH err (RewriteLCoreTCH       rr    ) = applyRewrite rr                 (stubExprH err)
@@ -247,6 +255,11 @@ performTypedEffectH err (SetPathH              tt    ) = setPath tt             
 performTypedEffectH err (QueryH                q     ) = performQuery q                  (stubExprH err)
 performTypedEffectH _   (EvalH                 e     ) = evalScript e
 
+
+performBoxedEffect :: (MonadCatch m, CLMonad m) => String -> TypedEffectBox 
+                   -> m Aeson.Value
+performBoxedEffect str (TypedEffectBox x) =
+    Aeson.toJSON <$> performTypedEffectH str x
 
 -- Hacky stub until we replace the ExprH for error messages
 stubExprH :: String -> ExprH
