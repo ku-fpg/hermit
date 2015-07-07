@@ -200,28 +200,28 @@ interpShell =
   , interpEM $ \ (PathBox p)                    -> setPath (return p :: TransformH LCoreTC LocalPathH)
   , interpEM $ \ (StringBox str)                -> performQuery (message str)                           -- QueryH
   , interpEM $ \ (effect :: KernelEffect)       -> flip performKernelEffect effect
-  , interpM  $ \ (ShellEffectBox effect)        -> void $ performShellEffect effect                            -- ShellEffectH
+  , interpM  $ \ (ShellEffectBox effect)        -> performShellEffect effect >> return ()               -- ShellEffectH
   , interpM  $ \ (effect :: ScriptEffect)       -> performScriptEffect effect
-  , interpEM $ \ (QueryFunBox query)            -> performQuery' query                                   -- QueryH
+  , interpEM $ \ (QueryFunBox query)            -> performQuery' query                                  -- QueryH
   , interpEM $ \ (t :: UserProofTechnique)      -> performProofShellCommand $ PCEnd $ UserProof t
   , interpEM $ \ (cmd :: ProofShellCommand)     -> performProofShellCommand cmd
-  , interpEM $ \ (TransformLCoreStringBox tt)   -> performQuery' (QueryString tt)                        -- QueryH
-  , interpEM $ \ (TransformLCoreTCStringBox tt) -> performQuery' (QueryString tt)                        -- QueryH
-  , interpEM $ \ (TransformLCoreUnitBox tt)     -> performQuery' (QueryUnit tt)                          -- QueryH
-  , interpEM $ \ (TransformLCoreTCUnitBox tt)   -> performQuery' (QueryUnit tt)                          -- QueryH
+  , interpEM $ \ (TransformLCoreStringBox tt)   -> performQuery' (QueryString tt)                       -- QueryH
+  , interpEM $ \ (TransformLCoreTCStringBox tt) -> performQuery' (QueryString tt)                       -- QueryH
+  , interpEM $ \ (TransformLCoreUnitBox tt)     -> performQuery' (QueryUnit tt)                         -- QueryH
+  , interpEM $ \ (TransformLCoreTCUnitBox tt)   -> performQuery' (QueryUnit tt)                         -- QueryH
   , interpEM $ \ (TransformLCorePathBox tt)     -> setPath tt                                           -- SetPathH
   , interpEM $ \ (TransformLCoreTCPathBox tt)   -> setPath tt                                           -- SetPathH
-  , interpEM $ \ (TransformLCoreDocHBox t)      -> performQuery' (QueryDocH t)                           -- QueryH
-  , interpEM $ \ (TransformLCoreTCDocHBox t)    -> performQuery' (QueryDocH t)                           -- QueryH
+  , interpEM $ \ (TransformLCoreDocHBox t)      -> performQuery' (QueryDocH t)                          -- QueryH
+  , interpEM $ \ (TransformLCoreTCDocHBox t)    -> performQuery' (QueryDocH t)                          -- QueryH
   , interpEM $ \ (RewriteLCoreBox rr)           -> applyRewrite $ promoteLCoreR rr                      -- RewriteLCoreH
   , interpEM $ \ (RewriteLCoreTCBox rr)         -> applyRewrite rr                                      -- RewriteLCoreTCH
   , interpEM $ \ (BiRewriteLCoreBox br)         -> applyRewrite $ promoteLCoreR $ whicheverR br
   , interpEM $ \ (BiRewriteLCoreTCBox br)       -> applyRewrite $ whicheverR br
-  , interpEM $ \ (PrettyHLCoreBox t)            -> performQuery' (QueryPrettyH t)                        -- QueryH
-  , interpEM $ \ (PrettyHLCoreTCBox t)          -> performQuery' (QueryPrettyH t)                        -- QueryH
+  , interpEM $ \ (PrettyHLCoreBox t)            -> performQuery' (QueryPrettyH t)                       -- QueryH
+  , interpEM $ \ (PrettyHLCoreTCBox t)          -> performQuery' (QueryPrettyH t)                       -- QueryH
   ]
   where performQuery' :: (MonadCatch m, CLMonad m) => QueryFun a -> ExprH -> m ()
-        performQuery' x y = void $ performQuery x y
+        performQuery' x y = performQuery x y >> return () -- TODO: Replace with void once GHC 7.8 is dropped
 
 -------------------------------------------------------------------------------
 
