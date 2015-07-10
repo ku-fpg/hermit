@@ -38,11 +38,9 @@ externals =
 ------------------------------------------------------------------------------
 
 caseSplitOnR :: Bool -> (Id -> Bool) -> RewriteH Clause
-caseSplitOnR induction idPred = do
+caseSplitOnR induction idPred = withPatFailMsg "induction can only be performed on universally quantified terms." $ do
     let p b = idPred b && isId b
-    tm <- idR
-    guardMsg (isForall tm) "induction can only be performed on universally quantified terms."
-    let (Forall bs cl) = tm
+    (Forall bs cl) <- idR
     guardMsg (any p bs) "specified identifier is not universally quantified in this lemma. (Induction cannot be performed on type quantifiers.)"
     let (as,b:bs') = break p bs -- safe because above guard
     guardMsg (not (any p bs')) "multiple matching quantifiers."
@@ -72,6 +70,3 @@ caseSplitOnR induction idPred = do
     qs <- go cases
 
     return $ mkForall newBs $ foldr1 Conj qs
-  where isForall :: Clause -> Bool
-        isForall Forall{} = True
-        isForall _ = False
