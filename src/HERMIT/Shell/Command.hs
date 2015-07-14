@@ -44,7 +44,7 @@ import Data.Typeable
 import HERMIT.Context
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Kure hiding ((<$>))
+import HERMIT.Kure
 import HERMIT.Parser
 
 import HERMIT.Plugin.Renderer
@@ -64,7 +64,7 @@ import HERMIT.Shell.Types
 import HERMIT.Win32.Console
 #endif
 
-import Prelude.Compat
+import Prelude.Compat hiding ((<$>))
 
 import System.IO
 
