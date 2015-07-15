@@ -1,14 +1,21 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 module Main (main) where
 
-import Control.Monad
+import Control.Monad.Compat
+
+import Data.Char (isSpace)
+import Data.List.Compat (isPrefixOf)
+import Data.Maybe (fromMaybe, listToMaybe)
 
 import HERMIT.Driver
+
+import Prelude.Compat
 
 import System.Directory
 import System.FilePath as F
 import System.IO
-import System.IO.Temp (withTempFile)
+import System.IO.Temp (withSystemTempFile)
 import System.Process
 
 import Test.Tasty (TestTree, TestName, defaultMain, testGroup)
@@ -68,6 +75,21 @@ mkTestScript h hss = do
                   , "resume" ]
     hClose h
 
+-- | Get the path to the sandbox database if any
+-- Taken from the hoogle-index package by Ben Gamari (BSD3)
+getSandboxPath :: IO (Maybe FilePath)
+getSandboxPath = do
+  dir <- getCurrentDirectory
+  let f = dir </> "cabal.sandbox.config"
+  ex <- doesFileExist f
+  if ex
+    then
+      (listToMaybe .
+       map (dropWhile isSpace . tail . dropWhile (/= ':')) .
+       filter (isPrefixOf "  prefix:") .
+       lines) <$> readFile f
+    else return Nothing
+
 mkHermitTest :: HermitTestArgs -> TestTree
 mkHermitTest (dir, hs, hss, extraFlags) =
     goldenVsFileDiff testName diff gfile dfile hermitOutput
@@ -101,13 +123,9 @@ mkHermitTest (dir, hs, hss, extraFlags) =
     hermitOutput :: IO ()
     hermitOutput = do
         cleanObjectFiles
-        pwd <- getCurrentDirectory
-        sandboxCfgPath <- readProcess "cabal" [ "exec"
-                                              , "runhaskell"
-                                              , rootDir </> "CabalSandboxConfig.hs"
-                                              ] ""
+        sandboxCfgPath <- fromMaybe "" <$> getSandboxPath
 
-        withTempFile pwd "Test.hss" $ \ fp h -> do
+        withSystemTempFile "Test.hss" $ \ fp h -> do
             mkTestScript h hss
 
             let cmd :: String

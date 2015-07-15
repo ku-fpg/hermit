@@ -258,6 +258,7 @@ executable hermit
 test-suite hermit-tests
     type:              exitcode-stdio-1.0
     build-depends:     base         >= 4.7 && < 5,
+                       base-compat  >= 0.8.1,
                        directory    >= 1.2,
                        filepath,
                        hermit,
