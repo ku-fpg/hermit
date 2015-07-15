@@ -256,7 +256,8 @@ performTypedEffectH err (QueryH                q     ) = performQuery q         
 performTypedEffectH _   (EvalH                 e     ) = evalScript e
 
 
-performBoxedEffect :: (MonadCatch m, CLMonad m) => String -> TypedEffectBox 
+performBoxedEffect :: (Functor m, -- TODO: RM when 7.10
+                       MonadCatch m, CLMonad m) => String -> TypedEffectBox 
                    -> m Aeson.Value
 performBoxedEffect str (TypedEffectBox x) =
     Aeson.toJSON <$> performTypedEffectH str x
