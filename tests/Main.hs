@@ -105,8 +105,15 @@ mkHermitTest (dir, hs, hss, extraFlags) =
     hermitOutput = do
         cleanObjectFiles
         pwd <- getCurrentDirectory
+
         let sandboxCfgPath :: FilePath
-            sandboxCfgPath = "--sandbox-config-file=" ++ pwd </> "cabal.sandbox.config"
+            sandboxCfgPath = pwd </> "cabal.sandbox.config"
+
+        sandboxExists <- doesFileExist sandboxCfgPath
+
+        let sandboxFlag :: String
+            sandboxFlag | sandboxExists = "--sandbox-config-file=" ++ sandboxCfgPath
+                        | otherwise     = ""
 
         withSystemTempFile "Test.hss" $ \ fp h -> do
             mkTestScript h hss
@@ -117,7 +124,7 @@ mkHermitTest (dir, hs, hss, extraFlags) =
                                    , pathp
                                    , ";"
                                    , "cabal"
-                                   , sandboxCfgPath
+                                   , sandboxFlag
                                    , "exec"
                                    , "--"
                                    , "ghc"
