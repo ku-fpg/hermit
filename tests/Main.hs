@@ -4,10 +4,6 @@ module Main (main) where
 
 import Control.Monad.Compat
 
-import Data.Char (isSpace)
-import Data.List.Compat (isPrefixOf)
-import Data.Maybe (fromMaybe, listToMaybe)
-
 import HERMIT.Driver
 
 import Prelude.Compat
@@ -75,21 +71,6 @@ mkTestScript h hss = do
                   , "resume" ]
     hClose h
 
--- | Get the path to the sandbox database if any
--- Taken from the hoogle-index package by Ben Gamari (BSD3)
-getSandboxPath :: IO (Maybe FilePath)
-getSandboxPath = do
-  dir <- getCurrentDirectory
-  let f = dir </> "cabal.sandbox.config"
-  ex <- doesFileExist f
-  if ex
-    then
-      (listToMaybe .
-       map (dropWhile isSpace . tail . dropWhile (/= ':')) .
-       filter (isPrefixOf "  prefix:") .
-       lines) <$> readFile f
-    else return Nothing
-
 mkHermitTest :: HermitTestArgs -> TestTree
 mkHermitTest (dir, hs, hss, extraFlags) =
     goldenVsFileDiff testName diff gfile dfile hermitOutput
@@ -123,7 +104,9 @@ mkHermitTest (dir, hs, hss, extraFlags) =
     hermitOutput :: IO ()
     hermitOutput = do
         cleanObjectFiles
-        sandboxCfgPath <- fromMaybe "" <$> getSandboxPath
+        pwd <- getCurrentDirectory
+        let sandboxCfgPath :: FilePath
+            sandboxCfgPath = "--sandbox-config-file=" ++ pwd </> "cabal.sandbox.config"
 
         withSystemTempFile "Test.hss" $ \ fp h -> do
             mkTestScript h hss
