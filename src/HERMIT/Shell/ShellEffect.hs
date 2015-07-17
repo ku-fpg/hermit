@@ -39,7 +39,7 @@ import System.IO
 
 data ShellEffect :: * -> * where
     Abort             :: ShellEffect ()
-    CLSModify         :: CLT IO () -> ShellEffect ()
+    CLSModify         :: CLT IO a -> ShellEffect a
     PluginComp        :: PluginM () -> ShellEffect ()
     Continue          :: ShellEffect ()
     Resume            :: ShellEffect ()
