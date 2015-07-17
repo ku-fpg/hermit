@@ -76,13 +76,13 @@ applyRewrite rr expr = do
                 putStrToConsole warns
 
             addAST ast'
-    showWindow Nothing
+    printWindow Nothing
 
 setPath :: (Injection a LCoreTC, MonadCatch m, CLMonad m) => TransformH a LocalPathH -> ExprH -> m ()
 setPath t expr = do
     p <- prefixFailMsg "Cannot find path: " $ queryInContext (promoteT t) Never
     modifyLocalPath (<> p) expr
-    showWindow Nothing
+    printWindow Nothing
 
 goUp :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
 goUp T expr = modifyLocalPath (const mempty) expr
@@ -94,7 +94,7 @@ goUp U expr = do
     case rel of
         SnocPath [] -> fail "cannot move up, at root of scope."
         SnocPath (_:cs) -> modifyLocalPath (const $ SnocPath cs) expr
-    showWindow Nothing
+    printWindow Nothing
 
 beginScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 beginScope expr = do
@@ -112,7 +112,7 @@ beginScope expr = do
             addAST =<< logExpr
             let todos' = Unproven nm l c (p : base, mempty) : todos
             modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
-    showWindow Nothing
+    printWindow Nothing
 
 endScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 endScope expr = do
@@ -136,7 +136,7 @@ endScope expr = do
                     addAST =<< logExpr
                     let todos' = Unproven nm l c (base', p) : todos
                     modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
-    showWindow Nothing
+    printWindow Nothing
 
 deleteAST :: (MonadCatch m, CLMonad m) => AST -> m ()
 deleteAST ast = asks pr_kernel >>= flip deleteK ast

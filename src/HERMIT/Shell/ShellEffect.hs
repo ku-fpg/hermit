@@ -85,7 +85,7 @@ dump fileName pp renderer width = do
     (er, _st'') <- runCLT env st' $ do
         pluginM (changeRenderer renderer)
         h <- liftIO $ openFile fileName WriteMode
-        showWindowAlways (Just h)
+        printWindowAlways (Just h)
         liftIO $ hClose h
     either throwError return er
 

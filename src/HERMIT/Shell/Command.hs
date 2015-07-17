@@ -158,7 +158,7 @@ commandLine opts exts = do
             mExpr <- lift popScriptLine
             case mExpr of
                 Nothing -> do -- no script running
-                    when firstInput $ lift $ showWindowAlways Nothing
+                    when firstInput $ lift $ printWindowAlways Nothing
                     st <- lift get
                     mLine <- if cl_nav st
                              then liftIO getNavCmd

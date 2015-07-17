@@ -566,13 +566,23 @@ fixWindow = do
        $ put $ st { cl_window = focusPath } -}
     modify $ \ st -> st { cl_window = focusPath  } -- TODO: temporary until we figure out a better highlight interface
 
--- showWindow only calls display if a script is not running
-showWindow :: (MonadCatch m, CLMonad m) => Maybe Handle -> m ()
-showWindow = ifM isRunningScript (return ()) . showWindowAlways
+{-
+getWindow :: (MonadCatch m, CLMonad m) => m DocH
+getWindow = do
+        render <- gets (ps_render . cl_pstate)
+        printWindowAlways Nothing
+        -- restore the state
+        modify (\ s -> s { cl_pstate = (cl_pstate s) { ps_render = render }})
+        return undefined
+-}
 
--- always prints the current view
-showWindowAlways :: (MonadCatch m, CLMonad m) => Maybe Handle -> m ()
-showWindowAlways mbh = do
+-- printWindow only calls display if a script is not running
+printWindow :: (MonadCatch m, CLMonad m) => Maybe Handle -> m ()
+printWindow = ifM isRunningScript (return ()) . printWindowAlways
+
+-- always prints the current view. This a wrapper around 'display'.
+printWindowAlways :: (MonadCatch m, CLMonad m) => Maybe Handle -> m ()
+printWindowAlways mbh = do
     (ps,(ast,(pp,render))) <- gets (cl_proofstack &&& cl_cursor &&& cl_pretty &&& (ps_render . cl_pstate))
     let h = fromMaybe stdout mbh
         pStr = render h (pOptions pp) . Left
@@ -610,6 +620,20 @@ printLemma h c p (nm,Lemma q _ _) = do -- TODO
     let doc' = PP.vcat $ as ++ [PP.text (show nm) PP.$+$ PP.nest 2 doc]
     st <- get
     liftIO $ cl_render st h (cl_pretty_opts st) (Right doc')
+
+showLemma :: (MonadCatch m, CLMonad m)
+           => Handle -> HermitC -> PathStack -> (LemmaName,Lemma) -> m DocH
+showLemma h c p (nm,Lemma q _ _) = do -- TODO
+    (pp,opts) <- gets (cl_pretty &&& cl_pretty_opts)
+    as <- queryInContext ((liftPrettyH opts $ do
+                            m <- getAntecedents <$> contextT
+                            ds <- forM (M.toList m) $ \(n',l') -> return l' >>> ppLemmaT pp n'
+                            if M.null m
+                            then return []
+                            else return $ PP.text "Assumed lemmas: " : ds
+                          ) :: TransformH LCoreTC [DocH]) Never
+    doc <- queryInFocus ((constT $ applyT (extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (ppLCoreTCT pp)))) c q) :: TransformH Core DocH) Never
+    return $ PP.vcat $ as ++ [PP.text (show nm) PP.$+$ PP.nest 2 doc]
 
 ------------------------------------------------------------------------------
 

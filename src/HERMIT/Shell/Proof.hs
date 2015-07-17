@@ -60,7 +60,7 @@ import Prelude.Compat
 -- | Externals that get us into the prover shell.
 externals :: [External]
 externals = map (.+ Proof)
-    [ external "prove-lemma" (\nm -> CLSModify $ interactiveProof nm >> showWindow Nothing)
+    [ external "prove-lemma" (\nm -> CLSModify $ interactiveProof nm >> printWindow Nothing)
         [ "Proof a lemma interactively." ]
     ]
 
@@ -120,7 +120,7 @@ forceProofs = do
         forM_ nls' $ \ ((_,c),nm,l) -> do
             cl_putStrLn $ "Forcing obligation: " ++ show nm
             pushProofStack (Unproven nm l c mempty)
-        showWindow Nothing
+        printWindow Nothing
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
 endProof :: (MonadCatch m, CLMonad m) => ProofReason -> ExprH -> m ()
@@ -144,7 +144,7 @@ endProof reason expr = do
 -- can generate additional lemmas, and add to the version history.
 performProofShellCommand :: (MonadCatch m, CLMonad m)
                          => ProofShellCommand -> ExprH -> m ()
-performProofShellCommand cmd expr = go cmd >> showWindow Nothing
+performProofShellCommand cmd expr = go cmd >> printWindow Nothing
     where go (PCEnd why)          = endProof why expr
 
 data ProofShellCommand

@@ -48,7 +48,7 @@ shell_externals = map (.+ Shell)
         [ "garbage-collect a given AST" ]
     , external "gc"              (CLSModify gc)
         [ "garbage-collect all ASTs except for the initial and current AST" ]
-    , external "display"         (CLSModify $ showWindowAlways Nothing)
+    , external "display"         (CLSModify $ printWindowAlways Nothing)
         [ "redisplays current state" ]
     , external "up"              (Direction U)
         [ "move to the parent node"]
@@ -56,7 +56,7 @@ shell_externals = map (.+ Shell)
         [ "switch to navigate mode" ]
     , external "command-line"    (CLSModify $ modify $ \ st -> st { cl_nav = False })
         [ "switch to command line mode" ]
-    , external "set-window"      (CLSModify $ setWindow >> showWindow Nothing)
+    , external "set-window"      (CLSModify $ setWindow >> printWindow Nothing)
         [ "fix the window to the current focus" ]
     , external "top"             (Direction T)
         [ "move to root of current scope" ]
@@ -76,7 +76,7 @@ shell_externals = map (.+ Shell)
         [ "show diff of two ASTs" ]                                              .+ VersionControl
     , external "set-pp-diffonly" (\ bStr -> CLSModify $
         case reads bStr of
-            [(b,"")] -> modify (\st -> st { cl_diffonly = b }) >> showWindow Nothing
+            [(b,"")] -> modify (\st -> st { cl_diffonly = b }) >> printWindow Nothing
             _        -> fail "valid arguments are True and False" )
         [ "set-pp-diffonly <True|False>; False by default"
         , "print diffs rather than full code after a rewrite" ]
@@ -96,7 +96,7 @@ shell_externals = map (.+ Shell)
         case M.lookup name pp_dictionary of
             Nothing -> fail $ "List of Pretty Printers: " ++ intercalate ", " (M.keys pp_dictionary)
             Just pp -> do modify $ \ st -> setPrettyOpts (setPretty st pp) (cl_pretty_opts st) -- careful to preserve the current options
-                          showWindow Nothing)
+                          printWindow Nothing)
         [ "set the pretty printer"
         , "use 'set-pp ls' to list available pretty printers" ]
     , external "set-pp-renderer"    (PluginComp . changeRenderer)
@@ -116,24 +116,24 @@ shell_externals = map (.+ Shell)
         , "dump-lemma <lemma-name> <filename> <pretty-printer> <renderer> <width>" ]
     , external "set-pp-width" (\ w -> CLSModify $ do
             modify $ \ st -> setPrettyOpts st (updateWidthOption w (cl_pretty_opts st))
-            showWindow Nothing)
+            printWindow Nothing)
         ["set the width of the screen"]
     , external "set-pp-type" (\ str -> CLSModify $
         case reads str :: [(ShowOption,String)] of
             [(opt,"")] -> do modify $ \ st -> setPrettyOpts st (updateTypeShowOption opt (cl_pretty_opts st))
-                             showWindow Nothing
+                             printWindow Nothing
             _          -> fail "valid arguments are Show, Abstract, and Omit")
         ["set how to show expression-level types (Show|Abstact|Omit)"]
     , external "set-pp-coercion" (\ str -> CLSModify $
         case reads str :: [(ShowOption,String)] of
             [(opt,"")] -> do modify $ \ st -> setPrettyOpts st (updateCoShowOption opt (cl_pretty_opts st))
-                             showWindow Nothing
+                             printWindow Nothing
             _          -> fail "valid arguments are Show, Abstract, and Omit")
         ["set how to show coercions (Show|Abstact|Omit)"]
     , external "set-pp-uniques" (\ str -> CLSModify $
         case reads str of
             [(b,"")] -> do modify $ \ st -> setPrettyOpts st ((cl_pretty_opts st) { po_showUniques = b })
-                           showWindow Nothing
+                           printWindow Nothing
             _        -> fail "valid arguments are True and False")
         ["set whether uniques are printed with variable names"]
     , external "{"   BeginScope
@@ -205,13 +205,13 @@ versionCmd whereTo = do
     case whereTo of
         Goto ast ->
             if ast `elem` [ ast' | (ast',_,_) <- all_asts ]
-                then modify (setCursor ast) >> showWindow Nothing
+                then modify (setCursor ast) >> printWindow Nothing
                 else fail $ "Cannot find AST #" ++ show ast ++ "."
         GotoTag nm -> do
             tags <- gets cl_tags
             case [ ast | (ast,nms) <- M.toList tags, nm `elem` nms ] of
                 [] -> fail $ "No tag named: " ++ nm
-                (ast:_) -> modify (setCursor ast) >> showWindow Nothing
+                (ast:_) -> modify (setCursor ast) >> printWindow Nothing
         Tag nm -> do
             modify $ \st -> st { cl_tags = M.insertWith (++) (cl_cursor st) [nm] (cl_tags st) }
             cl_putStrLn $ "Tag: " ++ nm ++ " added."
@@ -223,7 +223,7 @@ versionCmd whereTo = do
                 [(cmd,ast)] -> do
                     cl_putStrLn $ "step : " ++ cmd
                     modify $ setCursor ast
-                    showWindow Nothing
+                    printWindow Nothing
                 _ -> fail $ "Cannot step forward (multiple choices), use goto {"
                                 ++ intercalate "," (map (show.snd) ns) ++ "}"
         Back -> do
@@ -234,7 +234,7 @@ versionCmd whereTo = do
                 [(cmd,ast)] -> do
                     cl_putStrLn $ "back, unstepping : " ++ cmd
                     modify $ setCursor ast
-                    showWindow Nothing
+                    printWindow Nothing
                 _ -> fail "Cannot step backwards (multiple choices, impossible!)."
 
 -------------------------------------------------------------------------------
