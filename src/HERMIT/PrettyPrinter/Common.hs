@@ -6,6 +6,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module HERMIT.PrettyPrinter.Common
     ( -- * Documents
@@ -56,13 +57,16 @@ module HERMIT.PrettyPrinter.Common
     , pad
     , hlist
     , vlist
-    , showRole
+    , showRole -- AJG: why is this here
+    , HermitMark(..) -- AJG: for now
     ) where
 
 import Data.Char
 import Data.Default.Class
 import qualified Data.Map as M
 import Data.Typeable
+
+import GHC.Generics
 
 import HERMIT.Context
 import HERMIT.Core
@@ -88,14 +92,14 @@ type DocH = MDoc HermitMark
 data HermitMark
         = PushAttr Attr
         | PopAttr
-    deriving (Show, Typeable)
+    deriving (Show, Typeable, Generic)
 
 -- These are the attributes
 data Attr = BndrAttr AbsolutePathH -- path to binding of a variable
           | Color SyntaxForColor
           | PathAttr AbsolutePathH -- path to this spot
           | SpecialFont
-    deriving (Eq, Show, Typeable)
+    deriving (Eq, Show, Typeable, Generic)
 
 data SyntaxForColor             -- (suggestion)
         = KeywordColor          -- bold
@@ -105,7 +109,7 @@ data SyntaxForColor             -- (suggestion)
         | TypeColor
         | LitColor
         | WarningColor          -- highlight problems like unbound variables
-    deriving (Eq, Show, Typeable)
+    deriving (Eq, Show, Typeable, Generic)
 
 attr :: Attr -> DocH -> DocH
 attr a p = mark (PushAttr a) <> p <> mark PopAttr
