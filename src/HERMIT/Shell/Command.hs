@@ -202,12 +202,12 @@ interpShell =
   [ interpEM $ \ (CrumbBox cr)                  -> setPath (return (mempty @@ cr) :: TransformH LCoreTC LocalPathH)
   , interpEM $ \ (PathBox p)                    -> setPath (return p :: TransformH LCoreTC LocalPathH)
   , interpEM $ \ (StringBox str)                -> performQuery (message str)                           -- QueryH
-  , interpEM $ \ (effect :: KernelEffect)       -> flip performKernelEffect effect
+  , interpEM $ \ (effect :: KernelEffect)       -> flip performKernelEffect effect                      -- KernelEffectH
   , interpM  $ \ (ShellEffectBox effect)        -> performShellEffect effect >> return ()               -- ShellEffectH
-  , interpM  $ \ (effect :: ScriptEffect)       -> performScriptEffect effect
+  , interpM  $ \ (effect :: ScriptEffect)       -> performScriptEffect effect                           
   , interpEM $ \ (QueryFunBox query)            -> performQuery' query                                  -- QueryH
   , interpEM $ \ (t :: UserProofTechnique)      -> performProofShellCommand $ PCEnd $ UserProof t
-  , interpEM $ \ (cmd :: ProofShellCommand)     -> performProofShellCommand cmd
+  , interpEM $ \ (cmd :: ProofShellCommand)     -> performProofShellCommand cmd                         -- ProofShellCommandHH
   , interpEM $ \ (TransformLCoreStringBox tt)   -> performQuery' (QueryString tt)                       -- QueryH
   , interpEM $ \ (TransformLCoreTCStringBox tt) -> performQuery' (QueryString tt)                       -- QueryH
   , interpEM $ \ (TransformLCoreUnitBox tt)     -> performQuery' (QueryUnit tt)                         -- QueryH
@@ -239,7 +239,9 @@ data TypedEffectH :: * -> * where
     SetPathH               :: (Injection a LCoreTC) 
                            => TransformH a LocalPathH -> TypedEffectH ()
     QueryH                 :: QueryFun a              -> TypedEffectH a
-    EvalH                  :: String                  -> TypedEffectH ()
+    ProofShellCommandH     :: ProofShellCommand       -> TypedEffectH ()
+    KernelEffectH          :: KernelEffect            -> TypedEffectH ()
+    EvalH                  :: String                  -> TypedEffectH () -- TODO: rm with the old shell
     FmapTypedEffectH       :: (a -> b) 
                            -> TypedEffectH a          -> TypedEffectH b
   deriving Typeable
@@ -258,6 +260,8 @@ performTypedEffectH err (RewriteLCoreH         rr    ) = applyRewrite (promoteLC
 performTypedEffectH err (RewriteLCoreTCH       rr    ) = applyRewrite rr                 (stubExprH err)
 performTypedEffectH err (SetPathH              tt    ) = setPath tt                      (stubExprH err)
 performTypedEffectH err (QueryH                q     ) = performQuery q                  (stubExprH err)
+performTypedEffectH err (ProofShellCommandH    ps    ) = performProofShellCommand ps     (stubExprH err)
+performTypedEffectH err (KernelEffectH         k     ) = performKernelEffect (stubExprH err) k 
 performTypedEffectH _   (EvalH                 e     ) = evalScript e
 performTypedEffectH err (FmapTypedEffectH f    e     ) = performTypedEffectH err e >>= return . f
 
