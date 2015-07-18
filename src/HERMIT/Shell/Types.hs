@@ -605,16 +605,24 @@ printWindowAlways mbh = do
                     diffDocH pp doc1 doc2 >>= liftIO . pStr -- TODO
                 else fixWindow >> gets cl_window >>= pluginM . printDisplay mbh . Just --TODO
 
+-- always prints the current view. This a wrapper around 'display'.
+showWindow :: (MonadCatch m, CLMonad m) => m DocH
+showWindow = do
+    (ps,(ast,(pp,render))) <- gets (cl_proofstack &&& cl_cursor &&& cl_pretty &&& (ps_render . cl_pstate))
+    case M.lookup ast ps of
+        Just (Unproven _ l c p : _)  -> showLemma c p ("Goal:",l)
+        _ -> fixWindow >> gets cl_window >>= pluginM . showDisplay . Just --TODO
+
 printLemma :: (MonadCatch m, CLMonad m)
            => Handle -> HermitC -> PathStack -> (LemmaName,Lemma) -> m ()
 printLemma h c p (nm,lm) = do -- TODO
-    doc' <- showLemma h c p (nm,lm)
+    doc' <- showLemma c p (nm,lm)
     st <- get
     liftIO $ cl_render st h (cl_pretty_opts st) (Right doc')
 
 showLemma :: (MonadCatch m, CLMonad m)
-           => Handle -> HermitC -> PathStack -> (LemmaName,Lemma) -> m DocH
-showLemma h c p (nm,Lemma q _ _) = do -- TODO
+           => HermitC -> PathStack -> (LemmaName,Lemma) -> m DocH
+showLemma c p (nm,Lemma q _ _) = do -- TODO
     (pp,opts) <- gets (cl_pretty &&& cl_pretty_opts)
     as <- queryInContext ((liftPrettyH opts $ do
                             m <- getAntecedents <$> contextT
