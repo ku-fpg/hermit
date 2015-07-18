@@ -603,21 +603,12 @@ printWindowAlways mbh = do
                     (_,doc1) <- queryK k q Never kEnv ast
                     (_,doc2) <- queryK k q Never kEnv ast'
                     diffDocH pp doc1 doc2 >>= liftIO . pStr -- TODO
-                else fixWindow >> gets cl_window >>= pluginM . display mbh . Just --TODO
+                else fixWindow >> gets cl_window >>= pluginM . printDisplay mbh . Just --TODO
 
 printLemma :: (MonadCatch m, CLMonad m)
            => Handle -> HermitC -> PathStack -> (LemmaName,Lemma) -> m ()
-printLemma h c p (nm,Lemma q _ _) = do -- TODO
-    (pp,opts) <- gets (cl_pretty &&& cl_pretty_opts)
-    as <- queryInContext ((liftPrettyH opts $ do
-                            m <- getAntecedents <$> contextT
-                            ds <- forM (M.toList m) $ \(n',l') -> return l' >>> ppLemmaT pp n'
-                            if M.null m
-                            then return []
-                            else return $ PP.text "Assumed lemmas: " : ds
-                          ) :: TransformH LCoreTC [DocH]) Never
-    doc <- queryInFocus ((constT $ applyT (extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (ppLCoreTCT pp)))) c q) :: TransformH Core DocH) Never
-    let doc' = PP.vcat $ as ++ [PP.text (show nm) PP.$+$ PP.nest 2 doc]
+printLemma h c p (nm,lm) = do -- TODO
+    doc' <- showLemma h c p (nm,lm)
     st <- get
     liftIO $ cl_render st h (cl_pretty_opts st) (Right doc')
 

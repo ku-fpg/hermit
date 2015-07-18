@@ -195,7 +195,7 @@ getPassInfo :: PluginM PassInfo
 getPassInfo = asks pr_pass
 
 display :: PluginM ()
-display = Display.display Nothing Nothing
+display = Display.printDisplay Nothing Nothing
 
 setPretty :: PrettyPrinter -> PluginM ()
 setPretty pp = modify $ \s -> s { ps_pretty = pp }

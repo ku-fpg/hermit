@@ -254,6 +254,7 @@ initPrettyC opts = PrettyC
                       }
 
 -- These are *recommendations* to the pretty printer.
+-- AJG: These seem to be in two places, the PrettyC context, and inside PrettyPrinter. 
 
 data PrettyOptions = PrettyOptions
         { po_fullyQualified  :: Bool            -- ^ Do you show fully qualified names?
