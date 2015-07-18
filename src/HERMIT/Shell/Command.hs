@@ -240,13 +240,18 @@ data TypedEffectH :: * -> * where
                            => TransformH a LocalPathH -> TypedEffectH ()
     QueryH                 :: QueryFun a              -> TypedEffectH a
     EvalH                  :: String                  -> TypedEffectH ()
+    FmapTypedEffectH       :: (a -> b) 
+                           -> TypedEffectH a          -> TypedEffectH b
   deriving Typeable
+
+instance Functor TypedEffectH where
+  fmap f e = FmapTypedEffectH f e
 
 data TypedEffectBox where
     TypedEffectBox :: Aeson.ToJSON a => TypedEffectH a -> TypedEffectBox
   deriving Typeable
 
-performTypedEffectH :: (Aeson.ToJSON a, MonadCatch m, CLMonad m) 
+performTypedEffectH :: (MonadCatch m, CLMonad m) 
                     => String -> TypedEffectH a -> m a
 performTypedEffectH _   (ShellEffectH          effect) = performShellEffect effect 
 performTypedEffectH err (RewriteLCoreH         rr    ) = applyRewrite (promoteLCoreR rr) (stubExprH err)
@@ -254,6 +259,7 @@ performTypedEffectH err (RewriteLCoreTCH       rr    ) = applyRewrite rr        
 performTypedEffectH err (SetPathH              tt    ) = setPath tt                      (stubExprH err)
 performTypedEffectH err (QueryH                q     ) = performQuery q                  (stubExprH err)
 performTypedEffectH _   (EvalH                 e     ) = evalScript e
+performTypedEffectH err (FmapTypedEffectH f    e     ) = performTypedEffectH err e >>= return . f
 
 
 performBoxedEffect :: (Functor m, -- TODO: RM when 7.10
