@@ -112,7 +112,7 @@ cygwinWarning = unlines
 #endif
 
 -- | The first argument includes a list of files to load.
-commandLine :: forall m. (MonadCatch m, MonadException m, CLMonad m)
+commandLine :: forall m. (Functor m, MonadCatch m, MonadException m, CLMonad m)
             => [GHC.CommandLineOption] -> [External] -> m ()
 commandLine opts exts = do
     let (flags, filesToLoad) = partition (isPrefixOf "-") opts
@@ -179,7 +179,7 @@ commandLine opts exts = do
     runInputT settings (loop True)
 
 -- | Like 'catchM', but checks the 'cl_failhard' setting and does so if needed.
-catchFailHard :: (MonadCatch m, CLMonad m) => m () -> (String -> m ()) -> m ()
+catchFailHard :: (Functor m, MonadCatch m, CLMonad m) => m () -> (String -> m ()) -> m ()
 catchFailHard m failure =
     catchM m $ \ msg -> ifM (gets cl_failhard)
                             (do pp <- gets cl_pretty
@@ -188,16 +188,16 @@ catchFailHard m failure =
                                 abort)
                             (failure msg)
 
-evalScript :: (MonadCatch m, CLMonad m) => String -> m ()
+evalScript :: (Functor m, MonadCatch m, CLMonad m) => String -> m ()
 evalScript = parseScriptCLT >=> mapM_ runExprH
 
-runExprH :: (MonadCatch m, CLMonad m) => ExprH -> m ()
+runExprH :: (Functor m, MonadCatch m, CLMonad m) => ExprH -> m ()
 runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
     ps <- getProofStackEmpty
     (if null ps then id else withProofExternals) $ interpExprH interpShell expr
 
 -- | Interpret a boxed thing as one of the four possible shell command types.
-interpShell :: (MonadCatch m, CLMonad m) => [Interp m ()]
+interpShell :: (Functor m, MonadCatch m, CLMonad m) => [Interp m ()]
 interpShell =
   [ interpEM $ \ (CrumbBox cr)                  -> setPath (return (mempty @@ cr) :: TransformH LCoreTC LocalPathH)
   , interpEM $ \ (PathBox p)                    -> setPath (return p :: TransformH LCoreTC LocalPathH)
@@ -253,7 +253,8 @@ data TypedEffectBox where
     TypedEffectBox :: Aeson.ToJSON a => TypedEffectH a -> TypedEffectBox
   deriving Typeable
 
-performTypedEffectH :: (MonadCatch m, CLMonad m) 
+performTypedEffectH :: (Functor m,  -- TODO: remove at 7.10
+                        MonadCatch m, CLMonad m) 
                     => String -> TypedEffectH a -> m a
 performTypedEffectH _   (ShellEffectH          effect) = performShellEffect effect 
 performTypedEffectH err (RewriteLCoreH         rr    ) = applyRewrite (promoteLCoreR rr) (stubExprH err)

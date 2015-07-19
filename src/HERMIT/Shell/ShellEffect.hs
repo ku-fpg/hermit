@@ -43,7 +43,11 @@ data ShellEffect :: * -> * where
     PluginComp        :: PluginM () -> ShellEffect ()
     Continue          :: ShellEffect ()
     Resume            :: ShellEffect ()
+    FmapShellEffect   :: (a -> b) -> ShellEffect a -> ShellEffect b
     deriving Typeable
+
+instance Functor ShellEffect where
+  fmap = FmapShellEffect       
 
 data ShellEffectBox where
     ShellEffectBox :: Typeable a => ShellEffect a -> ShellEffectBox
@@ -59,7 +63,8 @@ instance Typeable a => Extern (ShellEffect a) where
 
 ----------------------------------------------------------------------------------
 
-performShellEffect :: (MonadCatch m, CLMonad m) => ShellEffect a -> m a
+performShellEffect :: (Functor m,  -- TODO: RM when at 7.10
+                     MonadCatch m, CLMonad m) => ShellEffect a -> m a
 performShellEffect Abort  = abort
 performShellEffect Resume = announceUnprovens >> gets cl_cursor >>= resume
 performShellEffect Continue = announceUnprovens >> get >>= continue
@@ -67,6 +72,7 @@ performShellEffect Continue = announceUnprovens >> get >>= continue
 performShellEffect (CLSModify m) = clm2clt m
 
 performShellEffect (PluginComp m) = pluginM m
+performShellEffect (FmapShellEffect f s) = fmap f (performShellEffect s)
 
 dumpT :: FilePath -> PrettyPrinter -> String -> Int -> TransformH DocH ()
 dumpT fileName pp renderer width = do
