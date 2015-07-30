@@ -148,7 +148,11 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
              } ;
              lcl_env = TcLclEnv {
                 tcl_errs       = errs_var,
+#if __GLASGOW_HASKELL__ >= 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ >= 2
+                tcl_loc        = realSrcLocSpan $ mkRealSrcLoc (fsLit "Top level") 1 1,
+#else
                 tcl_loc        = mkGeneralSrcSpan (fsLit "Top level"),
+#endif
                 tcl_ctxt       = [],
                 tcl_rdr        = emptyLocalRdrEnv,
                 tcl_th_ctxt    = topStage,
