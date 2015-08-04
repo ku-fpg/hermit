@@ -152,6 +152,7 @@ mkHermitTest (dir, hs, hss, extraFlags) =
                                    , ghc
                                    , dbFlags
                                    , hs
+                                   , "-w" -- Disable all warnings
                                    ]
                                 ++ ghcFlags
                                 ++ [ "-fplugin=HERMIT"

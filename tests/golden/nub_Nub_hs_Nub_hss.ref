@@ -1,12 +1,3 @@
-
-Nub.hs:26:11: Warning:
-    Rule "filter-fusion" may never fire
-      because ‘filter’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘filter’
-
-Nub.hs:27:11: Warning:
-    Rule "member-fusion" may never fire because ‘&&’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘&&’
 ===================== Welcome to HERMIT ======================
 HERMIT is a toolkit for the interactive transformation of GHC
 core language programs. Documentation on HERMIT can be found
