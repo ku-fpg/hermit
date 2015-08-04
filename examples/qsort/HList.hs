@@ -6,22 +6,22 @@ module HList
 
 type H a = [a] -> [a]
 
-{-# INLINE repH #-}
+-- {-# INLINE repH #-}
 repH :: [a] -> H a
 repH xs = (xs ++)
 
-{-# INLINE absH #-}
+-- {-# INLINE absH #-}
 absH :: H a -> [a]
 absH f = f []
 
--- Should be in a "List" module
-{-# RULES "++ []"  forall xs .  xs ++ [] = xs #-}
-{-# RULES "++ strict"           (++) undefined = undefined #-}
+-- -- Should be in a "List" module
+-- {-# RULES "++ []"  forall xs .  xs ++ [] = xs #-}
+-- {-# RULES "++ strict"           (++) undefined = undefined #-}
 
--- The "Algebra" for repH
-{-# RULES "repH ++" forall xs ys   . repH (xs ++ ys) = repH xs . repH ys #-}
-{-# RULES "repH []"                  repH [] = id                        #-}
-{-# RULES "repH (:)" forall x xs   . repH (x:xs) = ((:) x) . repH xs     #-}
+-- -- The "Algebra" for repH
+-- {-# RULES "repH ++" forall xs ys   . repH (xs ++ ys) = repH xs . repH ys #-}
+-- {-# RULES "repH []"                  repH [] = id                        #-}
+-- {-# RULES "repH (:)" forall x xs   . repH (x:xs) = ((:) x) . repH xs     #-}
 
--- Needed because the fusion rule we generate isn't too useful yet.
-{-# RULES "repH-absH-fusion" [~] forall h. repH (absH h) = h #-}
+-- -- Needed because the fusion rule we generate isn't too useful yet.
+-- {-# RULES "repH-absH-fusion" [~] forall h. repH (absH h) = h #-}
