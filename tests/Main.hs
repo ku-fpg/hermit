@@ -1,8 +1,15 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ViewPatterns #-}
 module Main (main) where
 
 import Control.Monad.Compat
+
+import Data.Char (isSpace)
+import Data.List.Compat
+import Data.Maybe (listToMaybe)
+
+import GHC.Paths (ghc)
 
 import HERMIT.Driver
 
@@ -10,6 +17,7 @@ import Prelude.Compat
 
 import System.Directory
 import System.FilePath as F
+import System.Info (arch, os)
 import System.IO
 import System.IO.Temp (withSystemTempFile)
 import System.Process
@@ -71,6 +79,28 @@ mkTestScript h hss = do
                   , "resume" ]
     hClose h
 
+-- | Get the path to the sandbox database if any
+-- Taken from hoogle-index (by Ben Gamari, under BSD3)
+getSandboxDb :: IO (Maybe FilePath)
+getSandboxDb = do
+  dir <- getCurrentDirectory
+  let f = dir </> "cabal.sandbox.config"
+  ex <- doesFileExist f
+  if ex
+    then
+      (listToMaybe .
+       map ((</> archOSCompilerConf) .
+            dropFileName .
+            dropWhile isSpace .
+            tail .
+            dropWhile (/= ':')) .
+       filter (isPrefixOf "package-db") .
+       lines) <$> readFile f
+    else return Nothing
+  where
+    archOSCompilerConf :: String
+    archOSCompilerConf = intercalate "-" [arch, os, takeFileName ghc, "packages.conf.d"]
+
 mkHermitTest :: HermitTestArgs -> TestTree
 mkHermitTest (dir, hs, hss, extraFlags) =
     goldenVsFileDiff testName diff gfile dfile hermitOutput
@@ -104,16 +134,12 @@ mkHermitTest (dir, hs, hss, extraFlags) =
     hermitOutput :: IO ()
     hermitOutput = do
         cleanObjectFiles
-        pwd <- getCurrentDirectory
+        mbDb <- getSandboxDb
 
-        let sandboxCfgPath :: FilePath
-            sandboxCfgPath = pwd </> "cabal.sandbox.config"
-
-        sandboxExists <- doesFileExist sandboxCfgPath
-
-        let sandboxFlag :: String
-            sandboxFlag | sandboxExists = "--sandbox-config-file=" ++ sandboxCfgPath
-                        | otherwise     = ""
+        let dbFlags :: String
+            dbFlags | Just db <- mbDb
+                    = unwords ["-no-user-package-db", "-package-db", db]
+                    | otherwise = ""
 
         withSystemTempFile "Test.hss" $ \ fp h -> do
             mkTestScript h hss
@@ -123,11 +149,8 @@ mkHermitTest (dir, hs, hss, extraFlags) =
                                    , "cd"
                                    , pathp
                                    , ";"
-                                   , "cabal"
-                                   , sandboxFlag
-                                   , "exec"
-                                   , "--"
-                                   , "ghc"
+                                   , ghc
+                                   , dbFlags
                                    , hs
                                    ]
                                 ++ ghcFlags

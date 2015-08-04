@@ -261,6 +261,7 @@ test-suite hermit-tests
                        base-compat  >= 0.8.1,
                        directory    >= 1.2,
                        filepath,
+                       ghc-paths,
                        hermit,
                        process      >= 1.1.0.2,
                        tasty        >= 0.8,
