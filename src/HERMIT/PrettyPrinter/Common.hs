@@ -266,7 +266,7 @@ data PrettyOptions = PrettyOptions
         , po_depth           :: Maybe Int       -- ^ below this depth are ..., Nothing => infinite
         , po_notes           :: Bool            -- ^ notes might be added to output
         , po_ribbon          :: Float
-        , po_width           :: Int
+        , po_width           :: Int             -- AJG: The width is not a pretty option, but rather a render option (?)
         } deriving (Show, Typeable)
 
 data ShowOption = Show | Abstract | Detailed | Omit | Kind deriving (Eq, Ord, Show, Read, Typeable)
