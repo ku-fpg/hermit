@@ -99,7 +99,15 @@ getSandboxDb = do
     else return Nothing
   where
     archOSCompilerConf :: String
-    archOSCompilerConf = intercalate "-" [arch, os, takeFileName ghc, "packages.conf.d"]
+    archOSCompilerConf = intercalate "-" [arch, theOS, takeFileName ghc, "packages.conf.d"]
+
+    theOS :: String
+#if defined(darwin_HOST_OS)
+    theOS = "osx" -- System.Info.os gives "darwin", which isn't what is actually
+                  -- used, for some silly reason
+#else
+    theOS = os
+#endif
 
 mkHermitTest :: HermitTestArgs -> TestTree
 mkHermitTest (dir, hs, hss, extraFlags) =
