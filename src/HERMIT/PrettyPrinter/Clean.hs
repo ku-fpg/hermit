@@ -44,6 +44,7 @@ pretty :: PrettyPrinter
 pretty = PP { pForall = ppForallQuantification
             , pCoreTC = ppCoreTC
             , pOptions = def
+            , pTag = "clean"
             }
 
 data RetExpr

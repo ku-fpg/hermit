@@ -60,7 +60,7 @@ import Data.Aeson (ToJSON)
 
 data QueryFun :: * -> * where
    QueryString  :: Injection a LCoreTC => TransformH a String       -> QueryFun String
-   QueryDocH    :: Injection a LCoreTC => TransformH a DocH         -> QueryFun ()
+   QueryDocH    :: Injection a LCoreTC => TransformH a DocH         -> QueryFun DocH
    QueryPrettyH :: Injection a LCoreTC => PrettyH a                 -> QueryFun ()
    Diff         :: AST -> AST                                       -> QueryFun ()
    Inquiry      :: (PluginReader -> CommandLineState -> IO String)  -> QueryFun ()
@@ -97,6 +97,7 @@ performQuery qf expr = go qf
             doc <- prefixFailMsg "Query failed: " $ queryInContext (promoteT q) cm
             st <- get
             liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
+            return doc
 
           go (QueryPrettyH q) = do
             st <- get

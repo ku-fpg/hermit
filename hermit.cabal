@@ -215,6 +215,7 @@ library
                        HERMIT.Plugin.Renderer
                        HERMIT.Plugin.Types
 
+                       HERMIT.PrettyPrinter
                        HERMIT.PrettyPrinter.AST
                        HERMIT.PrettyPrinter.Clean
                        HERMIT.PrettyPrinter.Common

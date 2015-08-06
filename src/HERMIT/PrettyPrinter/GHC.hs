@@ -38,6 +38,7 @@ pretty :: PrettyPrinter
 pretty = PP { pForall = ppForallQuantification
             , pCoreTC = ppCoreTC
             , pOptions = def
+            , pTag = "ghc"
             }
 
 -- | This pretty printer is just a reflection of GHC's standard pretty printer.

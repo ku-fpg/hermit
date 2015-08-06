@@ -66,6 +66,9 @@ import Data.Default.Class
 import qualified Data.Map as M
 import Data.Typeable
 
+import Data.Aeson
+import Data.Aeson.Types
+
 import GHC.Generics
 
 import HERMIT.Context
@@ -150,8 +153,10 @@ keyword p = attrP p . markColor KeywordColor . text
 data PrettyPrinter = PP { pForall  :: PrettyH [Var]
                         , pCoreTC  :: PrettyH CoreTC
                         , pOptions :: PrettyOptions
+                        , pTag     :: String
                         }
     deriving Typeable
+          
 
 instance Extern PrettyPrinter where
     type Box PrettyPrinter = PrettyPrinter
@@ -267,9 +272,21 @@ data PrettyOptions = PrettyOptions
         , po_notes           :: Bool            -- ^ notes might be added to output
         , po_ribbon          :: Float
         , po_width           :: Int             -- AJG: The width is not a pretty option, but rather a render option (?)
-        } deriving (Show, Typeable)
+        } deriving (Generic, Show, Typeable)
 
-data ShowOption = Show | Abstract | Detailed | Omit | Kind deriving (Eq, Ord, Show, Read, Typeable)
+data ShowOption = Show | Abstract | Detailed | Omit | Kind deriving (Eq, Generic, Ord, Show, Read, Typeable)
+
+instance ToJSON ShowOption where
+    toJSON = genericToJSON defaultOptions
+    
+instance FromJSON ShowOption where
+    parseJSON = genericParseJSON defaultOptions
+
+instance ToJSON PrettyOptions where
+    toJSON = genericToJSON defaultOptions
+    
+instance FromJSON PrettyOptions where
+    parseJSON = genericParseJSON defaultOptions
 
 -- Types don't have a Kind showing option.
 updateTypeShowOption :: ShowOption -> PrettyOptions -> PrettyOptions

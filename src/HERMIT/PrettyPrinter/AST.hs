@@ -46,6 +46,7 @@ pretty :: PrettyPrinter
 pretty = PP { pForall = ppForallQuantification
             , pCoreTC = ppCoreTC
             , pOptions = def
+            , pTag = "ast"
             }
 
 -- | Pretty print a fragment of GHC Core using HERMIT's \"AST\" pretty printer.
