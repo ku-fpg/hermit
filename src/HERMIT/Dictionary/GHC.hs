@@ -30,9 +30,7 @@ module HERMIT.Dictionary.GHC
     , dezombifyR
     , buildDictionary
     , buildDictionaryT
-#if __GLASGOW_HASKELL__ < 710
     , buildTypeable
-#endif
     ) where
 
 import qualified Bag
@@ -208,16 +206,18 @@ occurrenceAnalysisR = occurAnalyseAndDezombifyR
 
 ----------------------------------------------------------------------
 
-#if __GLASGOW_HASKELL__ < 710
 -- TODO: this is mostly an example, move somewhere?
 buildTypeable :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Type -> m (Id, [CoreBind])
 buildTypeable ty = do
     evar <- runTcM $ do
         cls <- tcLookupClass typeableClassName
         let predTy = mkClassPred cls [typeKind ty, ty] -- recall that Typeable is now poly-kinded
+#if __GLASGOW_HASKELL__ < 710
         newWantedEvVar predTy
-    buildDictionary evar
+#else
+        newEvVar predTy
 #endif
+    buildDictionary evar
 
 -- | Build a dictionary for the given
 buildDictionary :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Id -> m (Id, [CoreBind])

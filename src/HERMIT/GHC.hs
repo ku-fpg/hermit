@@ -53,11 +53,7 @@ module HERMIT.GHC
     , module ErrUtils
     , module PrelNames
     , module TcEnv
-#if __GLASGOW_HASKELL__ < 710
     , module TcMType
-#else
-    , module TcSMonad
-#endif
     , module TcRnMonad
     , module TcRnTypes
     , module TcSimplify
@@ -97,7 +93,7 @@ import           TcErrors (reportAllUnsolved)
 #if __GLASGOW_HASKELL__ < 710
 import           TcMType (newWantedEvVar)
 #else
-import           TcSMonad (newWantedEvVar)
+import           TcMType (newEvVar)
 #endif
 import           TcRnMonad (getCtLoc, initIfaceTcRn)
 #if __GLASGOW_HASKELL__ < 710
