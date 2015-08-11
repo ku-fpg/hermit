@@ -54,7 +54,6 @@ import           System.Console.Terminal.Size (Window(..), size)
 import           System.IO (Handle, stdout)
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
-import Data.Aeson (ToJSON)
 
 ----------------------------------------------------------------------------------
 
@@ -65,18 +64,18 @@ data QueryFun :: * -> * where
    Diff         :: AST -> AST                                       -> QueryFun ()
    Inquiry      :: (PluginReader -> CommandLineState -> IO String)  -> QueryFun ()
    QueryUnit    :: Injection a LCoreTC => TransformH a ()           -> QueryFun ()
-   QueryA :: (Typeable a, ToJSON a, Injection c LCoreTC) 
-          => TransformH c a -> QueryFun a
+   QueryA       :: (Typeable a, Injection c LCoreTC) 
+                => TransformH c a                                   -> QueryFun a
    deriving Typeable
 
 message :: String -> QueryFun ()
 message = Inquiry . const . const . return
 
 data QueryFunBox where
-    QueryFunBox :: (Typeable a, ToJSON a) => QueryFun a -> QueryFunBox
+    QueryFunBox :: Typeable a => QueryFun a -> QueryFunBox
   deriving Typeable
 
-instance (Typeable a, ToJSON a) => Extern (QueryFun a) where
+instance Typeable a => Extern (QueryFun a) where
    type Box (QueryFun a) = QueryFunBox
    box = QueryFunBox
    unbox (QueryFunBox i) =
@@ -609,7 +608,7 @@ printWindowAlways mbh = do
 -- always prints the current view. This a wrapper around 'display'.
 showWindow :: (MonadCatch m, CLMonad m) => m DocH
 showWindow = do
-    (ps,(ast,(pp,render))) <- gets (cl_proofstack &&& cl_cursor &&& cl_pretty &&& (ps_render . cl_pstate))
+    (ps,(ast,_)) <- gets (cl_proofstack &&& cl_cursor &&& cl_pretty &&& (ps_render . cl_pstate))
     case M.lookup ast ps of
         Just (Unproven _ l c p : _)  -> showLemma c p ("Goal:",l)
         _ -> fixWindow >> gets cl_window >>= pluginM . showDisplay . Just --TODO

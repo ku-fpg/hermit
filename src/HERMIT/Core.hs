@@ -85,9 +85,6 @@ import Control.Monad ((>=>))
 import Data.List (intercalate)
 import Data.Typeable (Typeable)
 
-import Data.Aeson
-import Data.Aeson.Types
-
 import GHC.Generics
 
 import Language.KURE.Combinators.Monad
@@ -487,12 +484,6 @@ data Crumb =
            | Eq_Lhs | Eq_Rhs
            deriving (Eq, Generic, Read, Show, Typeable)
 
-instance ToJSON Crumb where
-    toJSON = genericToJSON defaultOptions
-    
-instance FromJSON Crumb where
-    parseJSON = genericParseJSON defaultOptions
-    
 showCrumbs :: [Crumb] -> String
 showCrumbs crs = "[" ++ intercalate ", " (map showCrumb crs) ++ "]"
 

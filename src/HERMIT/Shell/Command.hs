@@ -27,8 +27,6 @@ module HERMIT.Shell.Command
 
     -- ** Exported for hermit-shell
     , stubExprH
-    , TypedEffectBox(..)
-    , performBoxedEffect
     ) where
 
 import Control.Monad.Compat
@@ -70,8 +68,6 @@ import System.IO
 
 -- import System.Console.ANSI
 import System.Console.Haskeline hiding (catch, display)
-
-import qualified Data.Aeson as Aeson (ToJSON(..), Value)
 
 -------------------------------------------------------------------------------
 
@@ -250,7 +246,7 @@ instance Functor TypedEffectH where
   fmap f e = FmapTypedEffectH f e
 
 data TypedEffectBox where
-    TypedEffectBox :: Aeson.ToJSON a => TypedEffectH a -> TypedEffectBox
+    TypedEffectBox :: TypedEffectH a -> TypedEffectBox
   deriving Typeable
 
 performTypedEffectH :: (Functor m,  -- TODO: remove at 7.10
@@ -265,13 +261,6 @@ performTypedEffectH err (ProofShellCommandH    ps    ) = performProofShellComman
 performTypedEffectH err (KernelEffectH         k     ) = performKernelEffect (stubExprH err) k 
 performTypedEffectH _   (EvalH                 e     ) = evalScript e
 performTypedEffectH err (FmapTypedEffectH f    e     ) = performTypedEffectH err e >>= return . f
-
-
-performBoxedEffect :: (Functor m, -- TODO: RM when 7.10
-                       MonadCatch m, CLMonad m) => String -> TypedEffectBox 
-                   -> m Aeson.Value
-performBoxedEffect str (TypedEffectBox x) =
-    Aeson.toJSON <$> performTypedEffectH str x
 
 -- Hacky stub until we replace the ExprH for error messages
 stubExprH :: String -> ExprH

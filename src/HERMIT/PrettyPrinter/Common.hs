@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -6,7 +7,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DeriveGeneric #-}
 
 module HERMIT.PrettyPrinter.Common
     ( -- * Documents
@@ -65,9 +65,6 @@ import Data.Char
 import Data.Default.Class
 import qualified Data.Map as M
 import Data.Typeable
-
-import Data.Aeson
-import Data.Aeson.Types
 
 import GHC.Generics
 
@@ -274,19 +271,8 @@ data PrettyOptions = PrettyOptions
         , po_width           :: Int             -- AJG: The width is not a pretty option, but rather a render option (?)
         } deriving (Generic, Show, Typeable)
 
-data ShowOption = Show | Abstract | Detailed | Omit | Kind deriving (Eq, Generic, Ord, Show, Read, Typeable)
-
-instance ToJSON ShowOption where
-    toJSON = genericToJSON defaultOptions
-    
-instance FromJSON ShowOption where
-    parseJSON = genericParseJSON defaultOptions
-
-instance ToJSON PrettyOptions where
-    toJSON = genericToJSON defaultOptions
-    
-instance FromJSON PrettyOptions where
-    parseJSON = genericParseJSON defaultOptions
+data ShowOption = Show | Abstract | Detailed | Omit | Kind 
+  deriving (Eq, Generic, Ord, Show, Read, Typeable)
 
 -- Types don't have a Kind showing option.
 updateTypeShowOption :: ShowOption -> PrettyOptions -> PrettyOptions
