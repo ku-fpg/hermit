@@ -93,6 +93,10 @@ import           StaticFlags
 #endif
 import           TcEnv (tcLookupClass)
 import           TcErrors (reportAllUnsolved)
+#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
+import           ErrUtils (pprErrMsgBag)
+import           TcRnMonad (getCtLoc, initIfaceTcRn)
+#endif
 #if __GLASGOW_HASKELL__ < 710
 import           TcMType (newWantedEvVar)
 #else
@@ -315,7 +319,7 @@ lookupRdrNameInModule hsc_env guts mod_name rdr_name = do
     -- First find the package the module resides in by searching exposed packages and home modules
     found_module <- findImportedModule hsc_env mod_name Nothing
     case found_module of
-#if __GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2
+#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
         Found _ mod -> do
 #else
         FoundModule (FoundHs _ mod) -> do
@@ -330,7 +334,7 @@ lookupRdrNameInModule hsc_env guts mod_name rdr_name = do
                     -- Try and find the required name in the exports
                     let decl_spec = ImpDeclSpec { is_mod = mod_name, is_as = mod_name
                                                 , is_qual = False, is_dloc = noSrcSpan }
-#if __GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2
+#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
                         provenance = Imported [ImpSpec decl_spec ImpAll]
 #else
                         provenance = Just $ ImpSpec decl_spec ImpAll
@@ -360,7 +364,7 @@ injectDependency hsc_env guts mod_name = do
     -- First find the package the module resides in by searching exposed packages and home modules
     found_module <- findImportedModule hsc_env mod_name Nothing
     case found_module of
-#if __GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2
+#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
         Found _ mod -> do
 #else
         FoundModule (FoundHs _ mod) -> do
