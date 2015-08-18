@@ -73,13 +73,16 @@ import           DsBinds (dsEvBinds)
 import           DsMonad (DsM, initDsTc)
 import           DynamicLoading (forceLoadTyCon, getValueSafely, lookupRdrNameInModuleForPlugins)
 import           Encoding (zEncodeString)
-import           ErrUtils (pprErrMsgBag)
 import           Finder (findImportedModule, cannotFindModule)
 -- we hide these so that they don't get inadvertently used.
 -- several are redefined in Core.hs and elsewhere
 import           GhcPlugins hiding (exprSomeFreeVars, exprFreeVars, exprFreeIds, bindFreeVars, getHscEnv, RuleName)
 import           Kind (isKind,isLiftedTypeKindCon)
 import           LoadIface (loadSysInterface)
+#if __GLASGOW_HASKELL__ >= 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ > 2)
+import           TcRnMonad (initIfaceTcRn)
+import           ErrUtils (pprErrMsgBagWithLoc)
+#endif
 import qualified OccName -- for varName
 import           OccurAnal (occurAnalyseExpr_NoBinderSwap)
 import           Pair (Pair(..))
@@ -95,7 +98,6 @@ import           TcMType (newWantedEvVar)
 #else
 import           TcMType (newEvVar)
 #endif
-import           TcRnMonad (getCtLoc, initIfaceTcRn)
 #if __GLASGOW_HASKELL__ < 710
 import           TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
 #else
@@ -313,7 +315,11 @@ lookupRdrNameInModule hsc_env guts mod_name rdr_name = do
     -- First find the package the module resides in by searching exposed packages and home modules
     found_module <- findImportedModule hsc_env mod_name Nothing
     case found_module of
+#if __GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2
         Found _ mod -> do
+#else
+        FoundModule (FoundHs _ mod) -> do
+#endif
             -- Find the exports of the module
             (_, mb_iface) <- initTcFromModGuts hsc_env guts HsSrcFile False $
                              initIfaceTcRn $
@@ -324,7 +330,11 @@ lookupRdrNameInModule hsc_env guts mod_name rdr_name = do
                     -- Try and find the required name in the exports
                     let decl_spec = ImpDeclSpec { is_mod = mod_name, is_as = mod_name
                                                 , is_qual = False, is_dloc = noSrcSpan }
+#if __GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2
                         provenance = Imported [ImpSpec decl_spec ImpAll]
+#else
+                        provenance = Just $ ImpSpec decl_spec ImpAll
+#endif
                         env = mkGlobalRdrEnv (gresFromAvails provenance (mi_exports iface))
                     case lookupGRE_RdrName rdr_name env of
                         [gre] -> return (Just (gre_name gre))
@@ -350,7 +360,11 @@ injectDependency hsc_env guts mod_name = do
     -- First find the package the module resides in by searching exposed packages and home modules
     found_module <- findImportedModule hsc_env mod_name Nothing
     case found_module of
+#if __GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2
         Found _ mod -> do
+#else
+        FoundModule (FoundHs _ mod) -> do
+#endif
             -- Populate the EPS
             _ <- initTcFromModGuts hsc_env guts HsSrcFile False $
                  initIfaceTcRn $
