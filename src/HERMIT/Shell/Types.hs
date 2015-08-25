@@ -95,9 +95,10 @@ performQuery qf expr = go qf
 
           go (QueryGlyphs q) = do
             res@(Glyphs gs) <- prefixFailMsg "Query failed: " $ queryInContext (promoteT q) cm
-            sequence_ [ liftIO $ withNoStyle sty txt
+            sequence_ [ liftIO $ withStyle sty txt
                       | Glyph txt sty <- gs
                       ]
+            liftIO $ putStr "\n"
             return res
 
           go (QueryPrettyH q) = do

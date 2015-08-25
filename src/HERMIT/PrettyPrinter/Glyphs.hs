@@ -58,7 +58,16 @@ instance RenderSpecial Glyphs where
 
 instance Monoid Glyphs where
     mempty = Glyphs mempty
-    mappend (Glyphs rs1) (Glyphs rs2) = Glyphs . mergeGlyphs $ rs1 ++ rs2
+    mappend (Glyphs rs1) (Glyphs rs2) = 
+        Glyphs . flattenGlyphs . mergeGlyphs $ rs1 ++ rs2
+
+flattenGlyphs :: [Glyph] -> [Glyph]
+flattenGlyphs = go Nothing
+    where go :: Maybe SyntaxForColor -> [Glyph] -> [Glyph]
+          go _ [] = []
+          go s (Glyph str Nothing:r) = Glyph str s : go s r
+          go _ (Glyph [] s@Just{}:r) = go s r
+          go s (g:r) = g : go s r
 
 mergeGlyphs :: [Glyph] -> [Glyph]
 mergeGlyphs [] = []
@@ -68,14 +77,13 @@ mergeGlyphs (g:h:r) = case merge g h of
                         Right (g',h') -> g' : mergeGlyphs (h':r)
     where merge (Glyph s1 Nothing)  (Glyph s2 Nothing) = 
               Left $ Glyph (s1 ++ s2) Nothing
-          merge (Glyph [] sty1@Just{}) (Glyph s2 _) = Left $ Glyph s2 sty1
+          merge (Glyph [] Just{}) g2@(Glyph [] Just{}) = Left g2
           merge g1 g2 = Right (g1,g2)
 
 instance RenderCode Glyphs where
-    -- Markup IdColor resets the colors
-    rPutStr txt = Glyphs [ Glyph txt (Just IdColor) ] 
+    rPutStr txt = Glyphs [ Glyph txt Nothing, Glyph [] (Just IdColor) ] 
     rDoHighlight _ [] = mempty
-    rDoHighlight _ (Color col:_) = Glyphs [Glyph "" (Just col)]
+    rDoHighlight _ (Color col:_) = Glyphs [Glyph [] (Just col)]
     rDoHighlight o (_:rest) = rDoHighlight o rest
 
 -- External Instances
