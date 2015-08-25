@@ -39,4 +39,5 @@ tests/dump/*.dump
 *.dump-prep
 .cabal-sandbox
 cabal.sandbox.config
+tags
 

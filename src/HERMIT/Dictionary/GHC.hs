@@ -35,6 +35,11 @@ module HERMIT.Dictionary.GHC
 
 import qualified Bag
 import qualified CoreLint
+#if __GLASGOW_HASKELL__ > 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ > 2)
+import           TcRnMonad (getCtLocM)
+import           TcRnTypes (cc_ev)
+import           TcSimplify (solveWanteds, runTcS)
+#endif
 
 import           Control.Arrow
 import           Control.Monad
@@ -134,10 +139,12 @@ lintModuleT =
      bnds     <- arr mg_binds
 #if __GLASGOW_HASKELL__ < 710
      let (warns, errs)    = CoreLint.lintCoreBindings [] bnds -- [] are vars to treat as in scope, used by GHCi
-#else
+#elif __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2
      -- [] are vars to treat as in scope, used by GHCi
      -- 'CoreDesugar' so we check for global ids, but not INLINE loop breakers, see notes in GHC's CoreLint module.
      let (warns, errs)    = CoreLint.lintCoreBindings CoreDesugar [] bnds
+#else
+     let (warns, errs)    = CoreLint.lintCoreBindings dynFlags CoreDesugar [] bnds
 #endif
          dumpSDocs endMsg = Bag.foldBag (\ d r -> d ++ ('\n':r)) (showSDoc dynFlags) endMsg
      if Bag.isEmptyBag errs
@@ -154,7 +161,11 @@ lintExprT = transform $ \ c e -> do
     case e of
         Type _ -> fail "cannot core lint types."
         _ -> maybe (return "Core Lint Passed") (fail . showSDoc dflags)
+#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_PATCHLEVEL1__ <= 2)
                    (CoreLint.lintExpr (varSetElems $ boundVars c) e)
+#else
+                   (CoreLint.lintExpr dflags (varSetElems $ boundVars c) e)
+#endif
 
 -------------------------------------------
 
@@ -223,15 +234,25 @@ buildTypeable ty = do
 buildDictionary :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Id -> m (Id, [CoreBind])
 buildDictionary evar = do
     (i, bs) <- runTcM $ do
+#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
         loc <- getCtLoc $ GivenOrigin UnkSkol
+#else
+        loc <- getCtLocM $ GivenOrigin UnkSkol
+#endif
         let predTy = varType evar
             nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
 #if __GLASGOW_HASKELL__ < 710
             wCs = mkFlatWC [nonC]
-#else
+#elif __GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2
             wCs = mkSimpleWC [nonC]
+#else
+            wCs = mkSimpleWC [cc_ev nonC]
 #endif
+#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
         (_wCs', bnds) <- solveWantedsTcM wCs
+#else
+        (_wCs', bnds) <- runTcS $ solveWanteds wCs  -- TODO: Make sure this is the right function to call.
+#endif
         -- reportAllUnsolved _wCs' -- this is causing a panic with dictionary instantiation
                                   -- revist and fix!
         return (evar, bnds)
