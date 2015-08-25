@@ -1,4 +1,4 @@
-{-# LANGUAGE ConstraintKinds #-}
+        {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -42,6 +42,7 @@ import           HERMIT.Lemma
 import           HERMIT.Monad
 import           HERMIT.Parser
 import           HERMIT.PrettyPrinter.Common
+import           HERMIT.PrettyPrinter.Glyphs
 
 import           HERMIT.Plugin.Display
 import           HERMIT.Plugin.Renderer
@@ -59,7 +60,7 @@ import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 data QueryFun :: * -> * where
    QueryString  :: Injection a LCoreTC => TransformH a String       -> QueryFun String
-   QueryDocH    :: Injection a LCoreTC => TransformH a DocH         -> QueryFun DocH
+   QueryGlyphs    :: Injection a LCoreTC => TransformH a Glyphs     -> QueryFun Glyphs
    QueryPrettyH :: Injection a LCoreTC => PrettyH a                 -> QueryFun ()
    Diff         :: AST -> AST                                       -> QueryFun ()
    Inquiry      :: (PluginReader -> CommandLineState -> IO String)  -> QueryFun ()
@@ -92,11 +93,12 @@ performQuery qf expr = go qf
                return str
                
 
-          go (QueryDocH q) = do
-            doc <- prefixFailMsg "Query failed: " $ queryInContext (promoteT q) cm
-            st <- get
-            liftIO $ cl_render st stdout (cl_pretty_opts st) (Right doc)
-            return doc
+          go (QueryGlyphs q) = do
+            res@(Glyphs gs) <- prefixFailMsg "Query failed: " $ queryInContext (promoteT q) cm
+            sequence_ [ liftIO $ withNoStyle sty txt
+                      | Glyph txt sty <- gs
+                      ]
+            return res
 
           go (QueryPrettyH q) = do
             st <- get

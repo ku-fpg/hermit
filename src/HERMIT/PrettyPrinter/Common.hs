@@ -12,7 +12,6 @@ module HERMIT.PrettyPrinter.Common
     ( -- * Documents
       DocH
     , Attr(..)
-    , attrP
     , HTML(..)
     , ASCII(..)
       -- ** Colors
@@ -20,7 +19,6 @@ module HERMIT.PrettyPrinter.Common
     , idColor
     , keywordColor
     , syntaxColor
-    , markBindingSite
     , markColor
     , typeColor
     , ShowOption(..)
@@ -42,8 +40,6 @@ module HERMIT.PrettyPrinter.Common
     , PrettyH
     , PrettyHLCoreBox(..)
     , PrettyHLCoreTCBox(..)
-    , TransformLCoreDocHBox(..)
-    , TransformLCoreTCDocHBox(..)
     , liftPrettyH
     , PrettyC(..)
     , initPrettyC
@@ -95,9 +91,7 @@ data HermitMark
     deriving (Show, Typeable, Generic)
 
 -- These are the attributes
-data Attr = BndrAttr AbsolutePathH -- path to binding of a variable
-          | Color SyntaxForColor
-          | PathAttr AbsolutePathH -- path to this spot
+data Attr = Color SyntaxForColor
           | SpecialFont
     deriving (Eq, Show, Typeable, Generic)
 
@@ -113,9 +107,6 @@ data SyntaxForColor             -- (suggestion)
 
 attr :: Attr -> DocH -> DocH
 attr a p = mark (PushAttr a) <> p <> mark PopAttr
-
-attrP :: AbsolutePathH -> DocH -> DocH
-attrP = attr . PathAttr
 
 idColor :: DocH -> DocH
 idColor = markColor IdColor
@@ -138,14 +129,14 @@ markColor = attr . Color
 specialFont :: DocH -> DocH
 specialFont = attr SpecialFont
 
-specialSymbol :: AbsolutePathH -> SpecialSymbol -> DocH
-specialSymbol p = attrP p . markColor SyntaxColor . specialFont . char . renderSpecial
+specialSymbol :: SpecialSymbol -> DocH
+specialSymbol = markColor SyntaxColor . specialFont . char . renderSpecial
 
-symbol :: AbsolutePathH -> Char -> DocH
-symbol p = attrP p . markColor SyntaxColor . char
+symbol :: Char -> DocH
+symbol = markColor SyntaxColor . char
 
-keyword :: AbsolutePathH -> String -> DocH
-keyword p = attrP p . markColor KeywordColor . text
+keyword :: String -> DocH
+keyword = markColor KeywordColor . text
 
 data PrettyPrinter = PP { pForall  :: PrettyH [Var]
                         , pCoreTC  :: PrettyH CoreTC
@@ -170,26 +161,12 @@ instance Extern (PrettyH LCore) where
     box = PrettyHLCoreBox
     unbox (PrettyHLCoreBox i) = i
 
-data TransformLCoreDocHBox = TransformLCoreDocHBox (TransformH LCore DocH) deriving Typeable
-
-instance Extern (TransformH LCore DocH) where
-    type Box (TransformH LCore DocH) = TransformLCoreDocHBox
-    box = TransformLCoreDocHBox
-    unbox (TransformLCoreDocHBox i) = i
-
 data PrettyHLCoreTCBox = PrettyHLCoreTCBox (PrettyH LCoreTC) deriving Typeable
 
 instance Extern (PrettyH LCoreTC) where
     type Box (PrettyH LCoreTC) = PrettyHLCoreTCBox
     box = PrettyHLCoreTCBox
     unbox (PrettyHLCoreTCBox i) = i
-
-data TransformLCoreTCDocHBox = TransformLCoreTCDocHBox (TransformH LCoreTC DocH) deriving Typeable
-
-instance Extern (TransformH LCoreTC DocH) where
-    type Box (TransformH LCoreTC DocH) = TransformLCoreTCDocHBox
-    box = TransformLCoreTCDocHBox
-    unbox (TransformLCoreTCDocHBox i) = i
 
 -------------------------------------------------------------------------------
 
@@ -199,11 +176,6 @@ data PrettyC = PrettyC { prettyC_path    :: AbsolutePathH
                        , prettyC_options :: PrettyOptions
                        , prettyC_lemmas  :: Lemmas
                        } deriving Typeable
-
-markBindingSite :: Var -> PrettyC -> DocH -> DocH
-markBindingSite i c d = case M.lookup i (prettyC_vars c) of
-                            Nothing -> d
-                            Just p -> attr (BndrAttr p) d
 
 ------------------------------------------------------------------------
 
@@ -225,11 +197,11 @@ instance AddBindings PrettyC where
 instance BoundVars PrettyC where
   boundVars :: PrettyC -> VarSet
   boundVars = mkVarSet . M.keys . prettyC_vars
-
+                            
 instance HasEmptyContext PrettyC where
   setEmptyContext :: PrettyC -> PrettyC
   setEmptyContext c = c { prettyC_path = mempty
-                        , prettyC_vars = M.empty}
+                        , prettyC_vars = M.empty }
 
 instance LemmaContext PrettyC where
     addAntecedent nm l c = c { prettyC_lemmas = M.insert nm l (prettyC_lemmas c) }

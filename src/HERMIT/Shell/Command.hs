@@ -1,4 +1,4 @@
-{-# LANGUAGE ConstraintKinds #-}
+        {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -48,6 +48,7 @@ import HERMIT.Parser
 import HERMIT.Plugin.Renderer
 
 import HERMIT.PrettyPrinter.Common
+import HERMIT.PrettyPrinter.Glyphs
 
 import HERMIT.Shell.Completion
 import HERMIT.Shell.Externals
@@ -210,8 +211,8 @@ interpShell =
   , interpEM $ \ (TransformLCoreTCUnitBox tt)   -> performQuery' (QueryUnit tt)                         -- QueryH
   , interpEM $ \ (TransformLCorePathBox tt)     -> setPath tt                                           -- SetPathH
   , interpEM $ \ (TransformLCoreTCPathBox tt)   -> setPath tt                                           -- SetPathH
-  , interpEM $ \ (TransformLCoreDocHBox t)      -> performQuery' (QueryDocH t)                          -- QueryH
-  , interpEM $ \ (TransformLCoreTCDocHBox t)    -> performQuery' (QueryDocH t)                          -- QueryH
+  , interpEM $ \ (TransformLCoreGlyphsBox t)      -> performQuery' (QueryGlyphs t)                          -- QueryH
+  , interpEM $ \ (TransformLCoreTCGlyphsBox t)    -> performQuery' (QueryGlyphs t)                          -- QueryH
   , interpEM $ \ (RewriteLCoreBox rr)           -> applyRewrite $ promoteLCoreR rr                      -- RewriteLCoreH
   , interpEM $ \ (RewriteLCoreTCBox rr)         -> applyRewrite rr                                      -- RewriteLCoreTCH
   , interpEM $ \ (BiRewriteLCoreBox br)         -> applyRewrite $ promoteLCoreR $ whicheverR br
@@ -244,10 +245,6 @@ data TypedEffectH :: * -> * where
 
 instance Functor TypedEffectH where
   fmap f e = FmapTypedEffectH f e
-
-data TypedEffectBox where
-    TypedEffectBox :: TypedEffectH a -> TypedEffectBox
-  deriving Typeable
 
 performTypedEffectH :: (Functor m,  -- TODO: remove at 7.10
                         MonadCatch m, CLMonad m) 

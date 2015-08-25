@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+        {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -20,6 +20,7 @@ module HERMIT.Dictionary.Rules
     , getHermitRulesT
     , rulesHelpListT
     , ruleHelpT
+    , lemmaHelpT
     , ruleToLemmaT
       -- ** Specialisation
     , specConstrR
@@ -50,6 +51,7 @@ import HERMIT.Dictionary.Kure (anyCallR)
 import HERMIT.Dictionary.Reasoning hiding (externals)
 
 import HERMIT.PrettyPrinter.Common
+import HERMIT.PrettyPrinter.Glyphs
 
 import IOEnv hiding (liftIO)
 
@@ -60,7 +62,7 @@ externals :: [External]
 externals =
     [ external "show-rules" (rulesHelpListT :: TransformH LCoreTC String)
         [ "List all the rules in scope." ] .+ Query
-    , external "show-rule" (ruleHelpT :: PrettyPrinter -> RuleName -> TransformH LCoreTC DocH)
+    , external "show-rule" (ruleHelpT :: PrettyPrinter -> RuleName -> TransformH LCoreTC Glyphs)
         [ "Display details on the named rule." ] .+ Query
     , external "fold-rule" (promoteExprR . foldRuleR Obligation :: RuleName -> RewriteH LCore)
         [ "Apply a named GHC rule right-to-left." ] .+ Shallow
@@ -74,7 +76,7 @@ externals =
         [ "Apply named GHC rules left-to-right, succeed if any of the rules succeed" ] .+ Shallow
     , external "unfold-rules-unsafe" (promoteExprR . unfoldRulesR UnsafeUsed :: [RuleName] -> RewriteH LCore)
         [ "Apply named GHC rules left-to-right, succeed if any of the rules succeed" ] .+ Shallow .+ Unsafe
-    , external "rule-to-lemma" ((\pp nm -> ruleToLemmaT nm >> liftPrettyH (pOptions pp) (showLemmaT (fromString (show nm)) pp)) :: PrettyPrinter -> RuleName -> TransformH LCore DocH)
+    , external "rule-to-lemma" (lemmaHelpT :: PrettyPrinter -> RuleName -> TransformH LCore Glyphs)
         [ "Create a lemma from a GHC RULE." ]
     , external "spec-constr" (promoteModGutsR specConstrR :: RewriteH LCore)
         [ "Run GHC's SpecConstr pass, which performs call pattern specialization."] .+ Deep
@@ -175,8 +177,15 @@ rulesHelpListT = do
     return (intercalate "\n" $ reverse $ map (show.fst) rulesEnv)
 
 -- | Print a named CoreRule using the quantified printer.
-ruleHelpT :: (HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb) => PrettyPrinter -> RuleName -> Transform c HermitM a DocH
-ruleHelpT pp nm = ruleNameToClauseT nm >>> liftPrettyH (pOptions pp) (ppClauseT pp)
+ruleHelpT :: (HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb) => PrettyPrinter -> RuleName -> Transform c HermitM a Glyphs
+ruleHelpT pp nm = 
+  do doc <- ruleNameToClauseT nm >>> liftPrettyH (pOptions pp) (ppClauseT pp)
+     return $! renderCode (pOptions pp) doc
+
+lemmaHelpT :: PrettyPrinter -> RuleName -> TransformH LCore Glyphs
+lemmaHelpT pp nm =
+  do doc <- ruleToLemmaT nm >> liftPrettyH (pOptions pp) (showLemmaT (fromString (show nm)) pp)
+     return $! renderCode (pOptions pp) doc
 
 -- | Build an Clause from a named GHC rewrite rule.
 ruleNameToClauseT :: ( BoundVars c, HasCoreRules c, HasDynFlags m, HasHermitMEnv m

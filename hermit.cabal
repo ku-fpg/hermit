@@ -218,6 +218,7 @@ library
                        HERMIT.PrettyPrinter.Clean
                        HERMIT.PrettyPrinter.Common
                        HERMIT.PrettyPrinter.GHC
+                       HERMIT.PrettyPrinter.Glyphs
 
                        HERMIT.Shell.Command
                        HERMIT.Shell.Completion
