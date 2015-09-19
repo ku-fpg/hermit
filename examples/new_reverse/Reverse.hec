@@ -31,14 +31,14 @@ induction 'xs
 any-bu (unfold 'myAppend >>> undefined-expr)
 any-bu (unfold 'myAppend >>> case-reduce)
 simplify-lemma
-forall-body ; consequent
+foralls-body ; consequent
 one-td (lemma-forward ind-hyp-0)
 end-case
 
 rule-to-lemma "myAppend-assoc"
 prove-lemma "myAppend-assoc"
 induction 'xs
-{ forall-body
+{ foralls-body
     { conj-lhs
       any-bu ((unfold 'myAppend) >>> undefined-case)
       reflexivity
@@ -49,7 +49,7 @@ induction 'xs
       reflexivity
     }
     { conj-rhs
-      forall-body ; consequent
+      foralls-body ; consequent
       any-bu (unfold 'myAppend)
       smash
       rhs (one-td (fold 'myAppend))

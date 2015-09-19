@@ -27,7 +27,6 @@ import HERMIT.Kernel
 import HERMIT.Monad
 import HERMIT.Plugin.Builder
 import HERMIT.PrettyPrinter.Common
-import HERMIT.Dictionary.Reasoning
 
 import Prelude.Compat
 
@@ -105,6 +104,6 @@ mkKernelEnv st =
                         out $ "<" ++ show c ++ "> " ++ msg'
                 DebugCore  msg' cxt qc -> do
                         out $ "[" ++ msg' ++ "]"
-                        doc :: DocH <- applyT (ppLCoreTCT pp) (liftPrettyC (pOptions pp) cxt) qc
+                        doc :: DocH <- applyT (pLCoreTC pp) (liftPrettyC (pOptions pp) cxt) qc
                         liftIO $ ps_render st stdout (pOptions pp) (Right doc)
                 AddObligation _ nm l -> insertLemma nm l

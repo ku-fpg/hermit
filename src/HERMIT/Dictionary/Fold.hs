@@ -21,7 +21,6 @@ module HERMIT.Dictionary.Fold
     , toEqualities
     , flipEquality
     , freeVarsEquality
-    , ppEqualityT
     ) where
 
 import Control.Arrow
@@ -46,9 +45,6 @@ import HERMIT.Utilities
 
 import HERMIT.Dictionary.Common (varBindingDepthT,findIdT)
 import HERMIT.Dictionary.Inline hiding (externals)
-
-import HERMIT.PrettyPrinter.Common
-import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
 import Prelude.Compat hiding (exp)
 
@@ -418,9 +414,7 @@ sameExpr e1 e2 = snd <$> soleElement (findFold e2 m)
 proves :: Clause -> Clause -> Bool
 proves cl1 cl2 = maybe False (const True) $ soleElement (findFold (discardUniVars cl2) m)
     where m = insertFold emptyAlphaEnv hs pat () CLMEmpty
-          (hs,pat) = hsOf cl1
-          hsOf (Forall bs cl) = (bs,cl)
-          hsOf cl             = ([],cl)
+          (hs,pat) = collectQs cl1
 
 -- | Determine if the right Clause is a substitution
 -- instance of the left Clause (which is a pattern
@@ -489,7 +483,7 @@ instance Fold AMap where
 ----------------------------------------------------------------------------
 
 data CLMap a = CLMEmpty
-             | CLM { clmForall :: CLMap (ListMap BMap a)
+             | CLM { clmForall :: CLMap (BMap a)
                    , clmConj   :: CLMap (CLMap a)
                    , clmDisj   :: CLMap (CLMap a)
                    , clmImpl   :: CLMap (CLMap a) -- note we do not care about the name
@@ -509,8 +503,8 @@ instance Fold CLMap where
     fAlter :: AlphaEnv -> [Var] -> Key CLMap -> A a -> CLMap a -> CLMap a
     fAlter env vs cl f CLMEmpty = fAlter env vs cl f emptyCLMapWrapper
     fAlter env vs cl f m@(CLM{}) = go cl
-        where go (Forall bs cl') = m { clmForall = fAlter (foldr extendAlphaEnv env bs) (vs \\ bs) cl'
-                                                          (toA (fAlter env vs (map varType bs) f)) (clmForall m) }
+        where go (Forall b cl') = m { clmForall = fAlter (extendAlphaEnv b env) (delete b vs) cl'
+                                                         (toA (fAlter env vs (varType b) f)) (clmForall m) }
               go (Conj  q1 q2) = m { clmConj  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmConj  m) }
               go (Disj  q1 q2) = m { clmDisj  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmDisj  m) }
               go (Impl _ q1 q2) = m { clmImpl  = fAlter env vs q1 (toA (fAlter env vs q2 f)) (clmImpl  m) }
@@ -520,9 +514,9 @@ instance Fold CLMap where
     fFold :: VarEnv CoreExpr -> AlphaEnv -> Key CLMap -> CLMap a -> [(VarEnv CoreExpr, a)]
     fFold _  _   _  CLMEmpty = []
     fFold hs env cl m@CLM{}  = go cl
-        where go (Forall bs cl') = do
-                (hs', m') <- fFold hs (foldr extendAlphaEnv env bs) cl' (clmForall m)
-                fFold hs' env (map varType bs) m'
+        where go (Forall b cl') = do
+                (hs', m') <- fFold hs (extendAlphaEnv b env) cl' (clmForall m)
+                fFold hs' env (varType b) m'
               go (Conj q1 q2) = do
                 (hs', m') <- fFold hs env q1 (clmConj m)
                 fFold hs' env q2 m'
@@ -550,24 +544,15 @@ data Equality = Equality [CoreBndr] CoreExpr CoreExpr deriving Typeable
 --        mkEquality [] (baz y z) (\x. foo x x) === forall x. baz y z x = foo x x
 --        mkEquality [] (\x. foo x) (\y. bar y) === forall x. foo x = bar x
 mkEquality :: [CoreBndr] -> CoreExpr -> CoreExpr -> Equality
-mkEquality vs lhs rhs = case mkClause vs lhs rhs of
-                            Forall vs' (Equiv lhs' rhs') -> Equality vs' lhs' rhs'
-                            Equiv lhs' rhs' -> Equality [] lhs' rhs'
+mkEquality vs lhs rhs = Equality vs' lhs' rhs'
+    where (vs', Equiv lhs' rhs') = collectQs $ mkClause vs lhs rhs
 
 toEqualities :: Clause -> [Equality]
 toEqualities = go []
-    where go qs (Forall vs cl) = go (qs++vs) cl
-          go qs (Equiv e1 e2) = [mkEquality qs e1 e2]
+    where go qs (Forall b cl) = go (b:qs) cl
+          go qs (Equiv e1 e2) = [mkEquality (reverse qs) e1 e2]
           go qs (Conj q1 q2)  = go qs q1 ++ go qs q2
           go _  _             = []
-
-ppEqualityT :: PrettyPrinter -> PrettyH Equality
-ppEqualityT pp = do
-    Equality bs lhs rhs <- idR
-    dfa <- return bs >>> pForall pp
-    d1 <- return lhs >>> extractT (pCoreTC pp)
-    d2 <- return rhs >>> extractT (pCoreTC pp)
-    return $ PP.sep [dfa,d1,PP.text "=",d2]
 
 ------------------------------------------------------------------------------
 

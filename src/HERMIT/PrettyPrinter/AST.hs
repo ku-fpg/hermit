@@ -43,8 +43,7 @@ externals :: [External]
 externals = [ external "ast" pretty ["AST pretty printer."] ]
 
 pretty :: PrettyPrinter
-pretty = PP { pForall = ppForallQuantification
-            , pCoreTC = ppCoreTC
+pretty = PP { pLCoreTC = promoteT ppCoreTC -- TODO
             , pOptions = def
             , pTag = "ast"
             }

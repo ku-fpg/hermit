@@ -177,9 +177,10 @@ rulesHelpListT = do
     return (intercalate "\n" $ reverse $ map (show.fst) rulesEnv)
 
 -- | Print a named CoreRule using the quantified printer.
-ruleHelpT :: (HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb) => PrettyPrinter -> RuleName -> Transform c HermitM a Glyphs
-ruleHelpT pp nm = 
-  do doc <- ruleNameToClauseT nm >>> liftPrettyH (pOptions pp) (ppClauseT pp)
+ruleHelpT :: (HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb)
+          => PrettyPrinter -> RuleName -> Transform c HermitM a Glyphs
+ruleHelpT pp nm =
+  do doc <- ruleNameToClauseT nm >>> liftPrettyH (pOptions pp) (extractT $ pLCoreTC pp)
      return $! renderCode (pOptions pp) doc
 
 lemmaHelpT :: PrettyPrinter -> RuleName -> TransformH LCore Glyphs

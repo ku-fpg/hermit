@@ -138,13 +138,12 @@ symbol = markColor SyntaxColor . char
 keyword :: String -> DocH
 keyword = markColor KeywordColor . text
 
-data PrettyPrinter = PP { pForall  :: PrettyH [Var]
-                        , pCoreTC  :: PrettyH CoreTC
+data PrettyPrinter = PP { pLCoreTC :: PrettyH LCoreTC
                         , pOptions :: PrettyOptions
                         , pTag     :: String
                         }
     deriving Typeable
-          
+
 
 instance Extern PrettyPrinter where
     type Box PrettyPrinter = PrettyPrinter
@@ -228,7 +227,7 @@ initPrettyC opts = PrettyC
                       }
 
 -- These are *recommendations* to the pretty printer.
--- AJG: These seem to be in two places, the PrettyC context, and inside PrettyPrinter. 
+-- AJG: These seem to be in two places, the PrettyC context, and inside PrettyPrinter.
 
 data PrettyOptions = PrettyOptions
         { po_fullyQualified  :: Bool            -- ^ Do you show fully qualified names?
@@ -243,7 +242,7 @@ data PrettyOptions = PrettyOptions
         , po_width           :: Int             -- AJG: The width is not a pretty option, but rather a render option (?)
         } deriving (Generic, Show, Typeable)
 
-data ShowOption = Show | Abstract | Detailed | Omit | Kind 
+data ShowOption = Show | Abstract | Detailed | Omit | Kind
   deriving (Eq, Generic, Ord, Show, Read, Typeable)
 
 -- Types don't have a Kind showing option.

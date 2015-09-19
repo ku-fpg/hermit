@@ -28,14 +28,14 @@ showDisplay window = do
     st <- get
     let ast = ps_cursor st
         ppOpts = pOptions $ ps_pretty st
-    d <- queryK k (extractT $ pathT (fromMaybe mempty window) $ liftPrettyH ppOpts $ pCoreTC $ ps_pretty st)
+    d <- queryK k (extractT $ pathT (fromMaybe mempty window) $ liftPrettyH ppOpts $ pLCoreTC $ ps_pretty st)
                 Never (mkKernelEnv st) ast
     return $ snd d -- discard new AST, assuming pretty printer won't create one
 
 -- TODO: rm
 printDisplay :: Maybe Handle -> Maybe PathH -> PluginM ()
 printDisplay mbh window = do
-    doc <- showDisplay window 
+    doc <- showDisplay window
     st <- get
     let ppOpts = pOptions $ ps_pretty st
         h = fromMaybe stdout mbh

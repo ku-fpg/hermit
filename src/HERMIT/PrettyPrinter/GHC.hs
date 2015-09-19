@@ -11,7 +11,6 @@ module HERMIT.PrettyPrinter.GHC
   , ppCoreAlt
   , ppKindOrType
   , ppCoercion
-  , ppForallQuantification
   )
 where
 
@@ -35,8 +34,7 @@ externals :: [External]
 externals = [ external "ghc" pretty ["GHC pretty printer."] ]
 
 pretty :: PrettyPrinter
-pretty = PP { pForall = ppForallQuantification
-            , pCoreTC = ppCoreTC
+pretty = PP { pLCoreTC = promoteT ppCoreTC -- TODO
             , pOptions = def
             , pTag = "ghc"
             }

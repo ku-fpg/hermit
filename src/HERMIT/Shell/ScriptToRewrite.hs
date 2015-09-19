@@ -103,9 +103,9 @@ getFragment True ast = do
                                         else return $ PP.text "Assumed lemmas: " : ds
                                       ) :: TransformH LCoreTC [DocH]) Never
                 d <- queryInFocus (liftPrettyH opts $
-                                    return q >>> extractT (pathT (pathStack2Path p) (ppLCoreTCT Clean.pretty)) :: TransformH Core DocH) Never
+                                    return q >>> extractT (pathT (pathStack2Path p) (pLCoreTC Clean.pretty)) :: TransformH Core DocH) Never
                 return $ PP.vcat $ as ++ [PP.text "Goal:", d]
-            _                             -> queryInFocus (liftPrettyH opts $ pCoreTC Clean.pretty) Never
+            _                             -> queryInFocus (liftPrettyH opts $ pLCoreTC Clean.pretty) Never
     let ASCII str = renderCode opts doc
         str' = unlines $ ("" :) $ map ("-- " ++) $ lines str
     modify $ setCursor now

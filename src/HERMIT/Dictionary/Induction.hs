@@ -10,6 +10,7 @@ module HERMIT.Dictionary.Induction
   )
 where
 
+import Control.Arrow
 import Control.Monad
 import Data.String
 
@@ -37,10 +38,11 @@ externals =
 
 ------------------------------------------------------------------------------
 
+-- TODO: revisit design here to make one level
 caseSplitOnR :: Bool -> (Id -> Bool) -> RewriteH Clause
 caseSplitOnR induction idPred = withPatFailMsg "induction can only be performed on universally quantified terms." $ do
     let p b = idPred b && isId b
-    (Forall bs cl) <- idR
+    (bs, cl) <- arr collectQs
     guardMsg (any p bs) "specified identifier is not universally quantified in this lemma. (Induction cannot be performed on type quantifiers.)"
     let (as,b:bs') = break p bs -- safe because above guard
     guardMsg (not (any p bs')) "multiple matching quantifiers."

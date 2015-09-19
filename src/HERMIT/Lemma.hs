@@ -8,7 +8,8 @@ module HERMIT.Lemma
       Clause(..)
     , mkClause
     , mkForall
-    , forallQs
+    , addBinder
+    , collectQs
     , instClause
     , instsClause
     , discardUniVars
@@ -52,7 +53,7 @@ import Language.KURE.MonadCatch
 --        mkClause [] (baz y z) (\x. foo x x) === forall x. baz y z x = foo x x
 --        mkClause [] (\x. foo x) (\y. bar y) === forall x. foo x = bar x
 mkClause :: [CoreBndr] -> CoreExpr -> CoreExpr -> Clause
-mkClause vs lhs rhs = redundantDicts $ dropBinders $ Forall (tvs++vs++lbs++rbs) (Equiv lhs' rbody)
+mkClause vs lhs rhs = redundantDicts $ dropBinders $ mkForall (tvs++vs++lbs++rbs) (Equiv lhs' rbody)
     where (lbs, lbody) = collectBinders lhs
           rhs' = uncurry mkCoreApps $ betaReduceAll rhs $ map varToCoreExpr lbs
           (rbs, rbody) = collectBinders rhs'
@@ -63,7 +64,7 @@ mkClause vs lhs rhs = redundantDicts $ dropBinders $ Forall (tvs++vs++lbs++rbs) 
               $ delVarSetList (unionVarSets $ map freeVarsExpr [lhs',rbody]) (vs++lbs++rbs)
 
 freeVarsClause :: Clause -> VarSet
-freeVarsClause (Forall bs cl) = delVarSetList (freeVarsClause cl) bs
+freeVarsClause (Forall b cl)  = delVarSet (freeVarsClause cl) b
 freeVarsClause (Conj  q1 q2)  = unionVarSets $ map freeVarsClause [q1,q2]
 freeVarsClause (Disj  q1 q2)  = unionVarSets $ map freeVarsClause [q1,q2]
 freeVarsClause (Impl _ q1 q2) = unionVarSets $ map freeVarsClause [q1,q2]
@@ -71,28 +72,26 @@ freeVarsClause (Equiv e1 e2)  = unionVarSets $ map freeVarsExpr [e1,e2]
 freeVarsClause CTrue          = emptyVarSet
 
 dropBinders :: Clause -> Clause
-dropBinders (Forall bs cl)  =
-    case bs of
-        []      -> dropBinders cl
-        (b:bs') -> let c = dropBinders (mkForall bs' cl)
-                   in if b `elemVarSet` freeVarsClause c
-                      then addBinder b c
-                      else c
+dropBinders (Forall b cl)  =
+    let cl' = dropBinders cl
+    in if b `elemVarSet` freeVarsClause cl'
+       then addBinder b cl'
+       else cl'
 dropBinders (Conj q1 q2)    = Conj (dropBinders q1) (dropBinders q2)
 dropBinders (Disj q1 q2)    = Disj (dropBinders q1) (dropBinders q2)
 dropBinders (Impl nm q1 q2) = Impl nm (dropBinders q1) (dropBinders q2)
 dropBinders other           = other
 
 addBinder :: CoreBndr -> Clause -> Clause
-addBinder b = mkForall [b]
+addBinder = Forall
 
 mkForall :: [CoreBndr] -> Clause -> Clause
-mkForall bs (Forall bs' cl) = Forall (bs++bs') cl
-mkForall bs cl              = Forall bs cl
+mkForall = flip (foldr Forall)
 
-forallQs :: Clause -> [CoreBndr]
-forallQs (Forall bs _) = bs
-forallQs _             = []
+collectQs :: Clause -> ([CoreBndr], Clause)
+collectQs (Forall b cl) = (b:bs, cl')
+    where (bs, cl') = collectQs cl
+collectQs cl            = ([],cl)
 
 -- | A name for lemmas. Use a newtype so we can tab-complete in shell.
 newtype LemmaName = LemmaName String deriving (Eq, Ord, Typeable)
@@ -156,7 +155,7 @@ instance Show Used where
     show UnsafeUsed = "Used"
     show NotUsed    = "Not Used"
 
-data Clause = Forall [CoreBndr] Clause
+data Clause = Forall CoreBndr Clause
             | Conj Clause Clause
             | Disj Clause Clause
             | Impl LemmaName Clause Clause -- ^ name for the antecedent when it is in scope
@@ -173,7 +172,7 @@ type NamedLemma = (LemmaName, Lemma)
 ------------------------------------------------------------------------------
 
 discardUniVars :: Clause -> Clause
-discardUniVars (Forall _ cl) = cl
+discardUniVars (Forall _ cl) = discardUniVars cl
 discardUniVars cl            = cl
 
 ------------------------------------------------------------------------------
@@ -193,9 +192,9 @@ substClauses ps cl = substClauseSubst (extendSubstList sub ps) cl
 -- in scope in the *range* of the substitution.
 substClauseSubst :: Subst -> Clause -> Clause
 substClauseSubst = go
-    where go sub (Forall bs cl) =
-            let (bs', cl') = go1 sub bs [] cl
-            in mkForall bs' cl'
+    where go subst (Forall b cl)   =
+            let (subst',b') = substBndr subst b
+            in addBinder b' (go subst' cl)
           go _     CTrue           = CTrue
           go subst (Conj q1 q2)    = Conj    (go subst q1) (go subst q2)
           go subst (Disj q1 q2)    = Disj    (go subst q1) (go subst q2)
@@ -205,27 +204,18 @@ substClauseSubst = go
                 e2' = substExpr (text "substClauseSubst e2") subst e2
             in Equiv e1' e2'
 
-          go1 subst [] bs' cl = (reverse bs', go subst cl)
-          go1 subst (b:bs) bs' cl =
-            let (subst',b') = substBndr subst b
-            in go1 subst' bs (b':bs') cl
-
 ------------------------------------------------------------------------------
 
 redundantDicts :: Clause -> Clause
-redundantDicts (Forall bs cl) = go [] [] cl bs
-    where go []   _   c [] = c
-          go bnds _   c [] = mkForall (reverse bnds) c
-          go bnds tys c (b:bs')
-              | isDictTy bTy = -- is a dictionary binder
-                let match = [ varToCoreExpr pb | (pb,ty) <- tys , eqType bTy ty ]
-                in if null match
-                   then go (b:bnds) ((b,bTy):tys) c bs' -- not seen before
-                   else let Forall bs'' c' = substClause b (head match) $ mkForall bs' c
-                        in go bnds tys c' bs'' -- seen
-              | otherwise = go (b:bnds) tys c bs'
+redundantDicts = go []
+    where go tys (Forall b cl)
+            | isDictTy bTy =
+                case [ varToCoreExpr pb | (pb,ty) <- tys, eqType bTy ty ] of
+                    []     -> addBinder b $ go ((b,bTy):tys) cl -- not seen before
+                    (b':_) -> substClause b b' cl               -- seen
+            | otherwise = addBinder b (go tys cl)
             where bTy = varType b
-redundantDicts cl             = cl
+          go _ cl = cl
 
 ------------------------------------------------------------------------------
 
@@ -238,51 +228,48 @@ instClause :: MonadCatch m => VarSet        -- vars in scope
                            -> CoreExpr      -- expression to instantiate with
                            -> Clause -> m Clause
 instClause inScope p e = prefixFailMsg "clause instantiation failed: " . liftM fst . go []
-    where go bbs (Forall bs cl)
-            | not (any p bs) = -- not quantified at this level, so try further down
-                let go2 con q1 q2 = do
-                        er <- attemptM $ go (bs++bbs) q1
-                        (cl',s) <- case er of
-                            Right (q1',s) -> return (con q1' q2, s)
-                            Left _ -> do
-                                er' <- attemptM $ go (bs++bbs) q2
-                                case er' of
-                                    Right (q2',s) -> return (con q1 q2', s)
-                                    Left msg -> fail msg
-                        return (replaceVars s bs cl', s)
-                in case cl of
-                    Equiv{} -> fail "specified variable is not universally quantified."
-                    CTrue   -> fail "specified variable is not universally quantified."
-                    Conj q1 q2 -> go2 Conj q1 q2
-                    Disj q1 q2 -> go2 Disj q1 q2
-                    Impl nm q1 q2 -> go2 (Impl nm) q1 q2
-                    Forall _ _ -> fail "impossible case!"
-
-            | otherwise = do -- quantified here, so do substitution and start bubbling up
-                let (bs',i:vs) = break p bs -- this is safe because we know i is in bs
-                    (eTvs, eTy) = splitForAllTys $ exprKindOrType e
-                    bsInScope = bs'++bbs
-                    tyVars = eTvs ++ filter isTyVar bsInScope
+    where go bs (Forall b cl)
+            | p b = do -- quantified here, so do substitution and start bubbling up
+                let (eTvs, eTy) = splitForAllTys $ exprKindOrType e
+                    tyVars = eTvs ++ filter isTyVar bs
                     failMsg = fail "type of provided expression differs from selected binder."
 
                     bindFn v = if v `elem` tyVars then BindMe else Skolem
 
-                sub <- maybe failMsg return $ tcUnifyTys bindFn [varType i] [eTy]
+                sub <- maybe failMsg return $ tcUnifyTys bindFn [varType b] [eTy]
 
-                    -- if i is a tyvar, we know e is a type, so free vars will be tyvars
+                    -- if b is a tyvar, we know e is a type, so free vars will be tyvars
                 let e' = mkCoreApps e [ case lookupTyVar sub v of
                                             Nothing -> Type (mkTyVarTy v)
-                                            Just ty -> Type ty | v <- eTvs ]
-                let newBs = varSetElems
+                                            Just ty -> Type ty
+                                      | v <- eTvs ]
+                    cl' = substClause b e' cl
+                    newBs = varSetElems
                           $ filterVarSet (\v -> not (isId v) || isLocalId v)
-                          $ delVarSetList (minusVarSet (freeVarsExpr e') inScope) bsInScope
-                    cl' = substClause i e' $ mkForall vs cl
+                          $ delVarSetList (minusVarSet (freeVarsExpr e') inScope) bs
 
-                return (replaceVars sub (bs' ++ newBs) cl', sub)
-          go _ _ = fail "only applies to clauses with quantifiers."
+                return (replaceVars sub newBs cl', sub)
+            | otherwise = do
+                (cl', sub) <- go (b:bs) cl
+                return (replaceVars sub [b] cl', sub)
+          go bs (Conj    q1 q2) = go2 bs Conj      q1 q2
+          go bs (Disj    q1 q2) = go2 bs Disj      q1 q2
+          go bs (Impl nm q1 q2) = go2 bs (Impl nm) q1 q2
+          go _ _ = fail "specified variable is not universally quantified."
+
+          go2 bs con q1 q2 = do
+            er <- attemptM $ go bs q1
+            case er of
+                Right (q1',s) -> return (con q1' q2, s)
+                Left _ -> do
+                    er' <- attemptM $ go bs q2
+                    case er' of
+                        Right (q2',s) -> return (con q1 q2', s)
+                        Left msg -> fail msg
 
 -- | The function which 'bubbles up' after the instantiation takes place,
--- replacing any type variables that were instantiated as a result of specialization.
+-- replacing any type variables that were instantiated as a result of specialization
+-- and rebuilding the foralls.
 replaceVars :: TvSubst -> [Var] -> Clause -> Clause
 replaceVars sub vs = go (reverse vs)
     where go [] cl = cl
@@ -309,7 +296,7 @@ instsClause inScope = flip (foldM (\ q (v,e) -> instClause inScope (==v) e q)) .
 
 -- | Syntactic Equality of clauses.
 clauseSyntaxEq :: Clause -> Clause -> Bool
-clauseSyntaxEq (Forall bs1 c1)  (Forall bs2 c2) = (bs1 == bs2) && clauseSyntaxEq c1 c2
+clauseSyntaxEq (Forall b1 c1)   (Forall b2 c2)  = (b1 == b2) && clauseSyntaxEq c1 c2
 clauseSyntaxEq (Conj q1 q2)     (Conj p1 p2)    = clauseSyntaxEq q1 p1 && clauseSyntaxEq q2 p2
 clauseSyntaxEq (Disj q1 q2)     (Disj p1 p2)    = clauseSyntaxEq q1 p1 && clauseSyntaxEq q2 p2
 clauseSyntaxEq (Impl n1 q1 q2)  (Impl n2 p1 p2) = n1 == n2 && clauseSyntaxEq q1 p1 && clauseSyntaxEq q2 p2

@@ -88,7 +88,7 @@ module HERMIT.Kure
     , disjT, disjAllR
     , implT, implAllR
     , equivT, equivAllR
-    , forallT, forallR
+    , forallT, forallR, forallsT, forallsR
       -- * Applicative
     , (<$>)
     , (<*>)
@@ -1344,20 +1344,36 @@ equivAllR r1 r2 = equivT r1 r2 Equiv
 
 ---------------------------------------------------------------------
 
--- | Transform a clause of the form: @Forall@ '[CoreBndr]' 'Clause'
+-- | Transform a clause of the form: @Forall@ 'CoreBndr' 'Clause'
 forallT :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, Monad m)
-        => Transform c m [CoreBndr] a1 -> Transform c m Clause a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+        => Transform c m CoreBndr a1 -> Transform c m Clause a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
 forallT t1 t2 f = transform $ \ c -> \case
-                                        Forall bs cl -> let c' = foldl (flip addLambdaBinding) c bs
-                                                        in f <$> applyT t1 c bs <*> applyT t2 (c' @@ Forall_Body) cl
-                                        _            -> fail "not a quantified clause."
+                                        Forall b cl -> let c' = addLambdaBinding b c
+                                                       in f <$> applyT t1 c b <*> applyT t2 (c' @@ Forall_Body) cl
+                                        _           -> fail "not a quantified clause."
 {-# INLINE forallT #-}
 
--- | Rewrite the a clause of the form: @Forall@ '[CoreBndr]' 'Clause'
+-- | Rewrite the a clause of the form: @Forall@ 'CoreBndr' 'Clause'
 forallR :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, Monad m)
-        => Rewrite c m [CoreBndr] -> Rewrite c m Clause -> Rewrite c m Clause
-forallR r1 r2 = forallT r1 r2 mkForall
+        => Rewrite c m CoreBndr -> Rewrite c m Clause -> Rewrite c m Clause
+forallR r1 r2 = forallT r1 r2 Forall
 {-# INLINE forallR #-}
+
+-- | Transform a clause with nested forall quantifiers.
+forallsT :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, Monad m)
+         => Transform c m [CoreBndr] a1 -> Transform c m Clause a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+forallsT t1 t2 f = transform $ \ c e -> case collectQs e of
+                                            (bs@(_:_),cl) ->
+                                                let c' = foldl (\ctxt b -> addLambdaBinding b ctxt @@ Forall_Body) c bs
+                                                in f <$> applyT t1 c bs <*> applyT t2 c' cl
+                                            _             -> fail "not a quantified clause."
+{-# INLINE forallsT #-}
+
+-- | Rewrite the a clause with nested forall quantifiers.
+forallsR :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, Monad m)
+         => Rewrite c m [CoreBndr] -> Rewrite c m Clause -> Rewrite c m Clause
+forallsR r1 r2 = forallsT r1 r2 mkForall
+{-# INLINE forallsR #-}
 
 ---------------------------------------------------------------------
 

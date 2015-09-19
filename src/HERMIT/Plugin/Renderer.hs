@@ -117,9 +117,9 @@ diffDocH pp doc1 doc2 =
                                                          , not ("@@" `isPrefixOf` l && "@@" `isSuffixOf` l) ]
 
 -- TODO: again this should be elsewhere, but is here because diffDocH is here.
-diffR :: Injection a CoreTC => PrettyPrinter -> String -> RewriteH a -> RewriteH a
+diffR :: Injection a LCoreTC => PrettyPrinter -> String -> RewriteH a -> RewriteH a
 diffR pp msg rr = do
-    let ppT = extractT $ liftPrettyH (pOptions pp) (pCoreTC pp)
+    let ppT = extractT $ liftPrettyH (pOptions pp) (pLCoreTC pp)
         runDiff b a = do
             doc1 <- return b >>> ppT
             doc2 <- return a >>> ppT

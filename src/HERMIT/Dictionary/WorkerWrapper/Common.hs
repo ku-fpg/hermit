@@ -14,6 +14,7 @@ module HERMIT.Dictionary.WorkerWrapper.Common
     , workLabel
     ) where
 
+import Control.Arrow
 import Control.Monad.IO.Class
 
 import Data.String (fromString)
@@ -104,7 +105,7 @@ assumptionAClauseT absE repE = prefixFailMsg "Building assumption A failed: " $ 
     let (_,compBody) = collectTyBinders comp
     (tvs, xTy, _) <- splitFunTypeM (exprType comp)
     idE <- buildIdT xTy
-    return $ Forall tvs (Equiv compBody idE)
+    return $ mkForall tvs (Equiv compBody idE)
 
 -- Given abs, rep, and f expressions, build "abs . rep . f = f"
 assumptionBClauseT :: ( BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
@@ -114,16 +115,16 @@ assumptionBClauseT absE repE fE = prefixFailMsg "Building assumption B failed: "
     comp <- buildCompositionT absE repAfterF
     let (tvs,lhs) = collectTyBinders comp
     rhs <- appArgM 5 lhs >>= appArgM 5 -- get f with proper tvs applied
-    return $ Forall tvs (Equiv lhs rhs)
+    return $ mkForall tvs (Equiv lhs rhs)
 
 -- Given abs, rep, and f expressions, build "fix (abs . rep . f) = fix f"
 assumptionCClauseT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
                      => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Clause
 assumptionCClauseT absE repE fE = prefixFailMsg "Building assumption C failed: " $ do
-    Forall vs (Equiv lhs rhs) <- assumptionBClauseT absE repE fE
+    (vs, Equiv lhs rhs) <- collectQs ^<< assumptionBClauseT absE repE fE
     lhs' <- buildFixT lhs
     rhs' <- buildFixT rhs
-    return $ Forall vs (Equiv lhs' rhs')
+    return $ mkForall vs (Equiv lhs' rhs')
 
 -- Given abs, rep, and 'fix g' expressions, build "rep (abs (fix g)) = fix g"
 wwFusionClauseT :: MonadCatch m => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Clause
@@ -134,7 +135,7 @@ wwFusionClauseT absE repE fixgE = prefixFailMsg "Building worker/wrapper fusion 
     rhs <- case lhs of
             (App _ (App _ rhs)) -> return rhs
             _                   -> fail "lhs malformed"
-    return $ Forall tvs (Equiv lhs rhs)
+    return $ mkForall tvs (Equiv lhs rhs)
 
 -- Perform the worker/wrapper split using condition 1-beta, introducing
 -- an unproven lemma for assumption C, and an appropriate w/w fusion lemma.

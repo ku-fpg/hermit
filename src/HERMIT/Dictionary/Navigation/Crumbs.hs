@@ -61,7 +61,7 @@ crumbExternals = map (.+ Navigation)
         [ "Descend into the domain of a function type." ]
     , external "fun-cod" FunTy_CoDom
         [ "Descend into the codomain of a function type." ]
-    , external "forall-body" ForAllTy_Body
+    , external "forall-ty-body" ForAllTy_Body
         [ "Descend into the body of a forall type." ]
     , external "refl-type" Refl_Type
         [ "Descend into the (n-1)th argument of a type constructor coercion." ]
@@ -94,7 +94,7 @@ crumbExternals = map (.+ Navigation)
     , external "lr-co" LRCo_Co
         [ "Descend into the coercion within a left/right projection coercion." ]
     , external "forall-body" Forall_Body
-        [ "Descend into the clause of a quantified clause." ]
+        [ "Descend into the body of a quantified clause." ]
     , external "conj-lhs" Conj_Lhs
         [ "Descend into left-hand side of a conjunction." ]
     , external "conj-rhs" Conj_Rhs

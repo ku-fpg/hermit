@@ -65,7 +65,7 @@ data QueryFun :: * -> * where
    Diff         :: AST -> AST                                       -> QueryFun ()
    Inquiry      :: (PluginReader -> CommandLineState -> IO String)  -> QueryFun ()
    QueryUnit    :: Injection a LCoreTC => TransformH a ()           -> QueryFun ()
-   QueryA       :: (Typeable a, Injection c LCoreTC) 
+   QueryA       :: (Typeable a, Injection c LCoreTC)
                 => TransformH c a                                   -> QueryFun a
    deriving Typeable
 
@@ -91,7 +91,7 @@ performQuery qf expr = go qf
             do str <- prefixFailMsg "Query failed: " (queryInContext (promoteT q) cm)
                putStrToConsole str
                return str
-               
+
 
           go (QueryGlyphs q) = do
             res@(Glyphs gs) <- prefixFailMsg "Query failed: " $ queryInContext (promoteT q) cm
@@ -150,7 +150,7 @@ ppWholeProgram ast = do
     st <- get
     k <- asks pr_kernel
     d <- queryK k
-                (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ pCoreTC $ cl_pretty st)
+                (extractT $ pathT [ModGuts_Prog] $ liftPrettyH (cl_pretty_opts st) $ pLCoreTC $ cl_pretty st)
                 Never
                 (cl_kernel_env st) ast
     return $ snd d -- discard new AST, assuming pp won't create one
@@ -602,7 +602,7 @@ printWindowAlways mbh = do
                         ast' = head $ [ cur | (cur, _, Just p) <- all_asts, p == ast ] ++ [ast]
                         ppOpts = cl_pretty_opts st
 
-                    q <- addFocusT $ liftPrettyH ppOpts $ pCoreTC pp
+                    q <- addFocusT $ liftPrettyH ppOpts $ pLCoreTC pp
                     (_,doc1) <- queryK k q Never kEnv ast
                     (_,doc2) <- queryK k q Never kEnv ast'
                     diffDocH pp doc1 doc2 >>= liftIO . pStr -- TODO
@@ -634,7 +634,7 @@ showLemma c p (nm,Lemma q _ _) = do -- TODO
                             then return []
                             else return $ PP.text "Assumed lemmas: " : ds
                           ) :: TransformH LCoreTC [DocH]) Never
-    doc <- queryInFocus ((constT $ applyT (extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (ppLCoreTCT pp)))) c q) :: TransformH Core DocH) Never
+    doc <- queryInFocus ((constT $ applyT (extractT (liftPrettyH (pOptions pp) (pathT (pathStack2Path p) (pLCoreTC pp)))) c q) :: TransformH Core DocH) Never
     return $ PP.vcat $ as ++ [PP.text (show nm) PP.$+$ PP.nest 2 doc]
 
 ------------------------------------------------------------------------------

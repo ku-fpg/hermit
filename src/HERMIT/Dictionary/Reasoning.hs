@@ -30,8 +30,6 @@ module HERMIT.Dictionary.Reasoning
     , showLemmaT
     , showLemmasT
     , ppLemmaT
-    , ppClauseT
-    , ppLCoreTCT
     , retraction
     , mergeQuantifiersR
     , conjunctLemmasT
@@ -61,7 +59,6 @@ module HERMIT.Dictionary.Reasoning
     , retractionBR
     , unshadowClauseR
     , instantiateDictsR
-    , instantiateClauseVarR
     , abstractClauseR
     , csInQBodyT
       -- * Constructing Composite Lemmas
@@ -96,7 +93,6 @@ import           HERMIT.Monad
 import           HERMIT.Name
 import           HERMIT.ParserCore
 import           HERMIT.ParserType
-import           HERMIT.PrettyPrinter.Common
 import           HERMIT.Utilities
 
 import           HERMIT.Dictionary.Common
@@ -104,6 +100,8 @@ import           HERMIT.Dictionary.Fold hiding (externals)
 import           HERMIT.Dictionary.Function hiding (externals)
 import           HERMIT.Dictionary.GHC hiding (externals)
 import           HERMIT.Dictionary.Local.Let (nonRecIntroR)
+
+import           HERMIT.PrettyPrinter.Common
 
 import           Prelude.Compat hiding ((<$>), (<*>))
 
@@ -216,32 +214,34 @@ type EqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
 
 -- | f == g  ==>  forall x.  f x == g x
 extensionalityR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb) => Maybe String -> Rewrite c HermitM Clause
-extensionalityR mn = prefixFailMsg "extensionality failed: " $
-  do (vs,(lhs,rhs)) <- forallT idR (equivT idR idR (,)) (,) <+ equivT idR idR (\l r -> ([],(l,r)))
+extensionalityR mn = prefixFailMsg "extensionality failed: " $ do
+    (vs, Equiv lhs rhs) <- arr collectQs
 
-     let tyL = exprKindOrType lhs
-         tyR = exprKindOrType rhs
-     guardMsg (tyL `typeAlphaEq` tyR) "type mismatch between sides of equality.  This shouldn't happen, so is probably a bug."
+    let tyL = exprKindOrType lhs
+        tyR = exprKindOrType rhs
+    guardMsg (tyL `typeAlphaEq` tyR) "type mismatch between sides of equality.  This shouldn't happen, so is probably a bug."
 
-     -- TODO: use the fresh-name-generator in AlphaConversion to avoid shadowing.
-     (_,argTy,_) <- splitFunTypeM tyL
-     v <- constT $ newVarH (fromMaybe "x" mn) argTy
+    -- TODO: use the fresh-name-generator in AlphaConversion to avoid shadowing.
+    (_,argTy,_) <- splitFunTypeM tyL
+    v <- constT $ newVarH (fromMaybe "x" mn) argTy
 
-     let x = varToCoreExpr v
+    let x = varToCoreExpr v
 
-     return $ Forall (vs ++ [v]) $ Equiv (mkCoreApp lhs x) (mkCoreApp rhs x)
+    return $ mkForall vs $ Forall v $ Equiv (mkCoreApp lhs x) (mkCoreApp rhs x)
 
 ------------------------------------------------------------------------------
 
 -- | @e@ ==> @let v = lhs in e@
 eqLhsIntroR :: Clause -> Rewrite c HermitM Core
-eqLhsIntroR (Forall bs (Equiv lhs _)) = nonRecIntroR "lhs" (mkCoreLams bs lhs)
-eqLhsIntroR _                         = fail "compound lemmas not supported."
+eqLhsIntroR cl | (bs, Equiv lhs _) <- collectQs cl
+    = nonRecIntroR "lhs" (mkCoreLams bs lhs)
+eqLhsIntroR _ = fail "compound lemmas not supported."
 
 -- | @e@ ==> @let v = rhs in e@
 eqRhsIntroR :: Clause -> Rewrite c HermitM Core
-eqRhsIntroR (Forall bs (Equiv _ rhs)) = nonRecIntroR "rhs" (mkCoreLams bs rhs)
-eqRhsIntroR _                         = fail "compound lemmas not supported."
+eqRhsIntroR cl | (bs, Equiv _ rhs) <- collectQs cl
+    = nonRecIntroR "rhs" (mkCoreLams bs rhs)
+eqRhsIntroR _ = fail "compound lemmas not supported."
 
 ------------------------------------------------------------------------------
 
@@ -262,14 +262,16 @@ birewrite cl = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEqua
 -- | Lift a transformation over 'LCoreTC' into a transformation over the left-hand side of a 'Clause'.
 lhsT :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
      => Transform c m LCore a -> Transform c m Clause a
-lhsT t = extractT $ catchesT [ f (childT cr t) | cr <- [Conj_Lhs, Disj_Lhs, Impl_Lhs, Eq_Lhs]
-                                               , f <- [childT Forall_Body, id] ]
+lhsT t = extractT
+       $ catchesT
+       $ childT Forall_Body (promoteT $ lhsT t) : [ childT cr t | cr <- [Conj_Lhs, Disj_Lhs, Impl_Lhs, Eq_Lhs] ]
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over the right-hand side of a 'Clause'.
 rhsT :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
      => Transform c m LCore a -> Transform c m Clause a
-rhsT t = extractT $ catchesT [ f (childT cr t) | cr <- [Conj_Rhs, Disj_Rhs, Impl_Rhs, Eq_Rhs]
-                                               , f <- [childT Forall_Body, id] ]
+rhsT t = extractT
+       $ catchesT
+       $ childT Forall_Body (promoteT $ rhsT t) : [ childT cr t | cr <- [Conj_Rhs, Disj_Rhs, Impl_Rhs, Eq_Rhs] ]
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over both sides of a 'Clause'.
 bothT :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
@@ -279,14 +281,16 @@ bothT t = (,) <$> lhsT t <*> rhsT t
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over the left-hand side of a 'Clause'.
 lhsR :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
      => Rewrite c m LCore -> Rewrite c m Clause
-lhsR r = extractR $ catchesT [ f (childR cr r) | cr <- [Conj_Lhs, Disj_Lhs, Impl_Lhs, Eq_Lhs]
-                                               , f <- [childR Forall_Body, id] ]
+lhsR r = extractR
+       $ catchesT
+       $ childR Forall_Body (promoteR $ lhsR r) : [ childR cr r | cr <- [Conj_Lhs, Disj_Lhs, Impl_Lhs, Eq_Lhs] ]
 
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over the right-hand side of a 'Clause'.
 rhsR :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
      => Rewrite c m LCore -> Rewrite c m Clause
-rhsR r = extractR $ catchesT [ f (childR cr r) | cr <- [Conj_Rhs, Disj_Rhs, Impl_Rhs, Eq_Rhs]
-                                               , f <- [childR Forall_Body, id] ]
+rhsR r = extractR
+       $ catchesT
+       $ childR Forall_Body (promoteR $ rhsR r) : [ childR cr r | cr <- [Conj_Rhs, Disj_Rhs, Impl_Rhs, Eq_Rhs] ]
 
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over both sides of a 'Clause'.
 bothR :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
@@ -308,21 +312,9 @@ showLemmaT nm pp = getLemmaByNameT nm >>> ppLemmaT pp nm
 ppLemmaT :: PrettyPrinter -> LemmaName -> PrettyH Lemma
 ppLemmaT pp nm = do
     Lemma q p _u <- idR
-    qDoc <- return q >>> ppClauseT pp
+    qDoc <- return q >>> extractT (pLCoreTC pp)
     let hDoc = PP.text (show nm) PP.<+> PP.text ("(" ++ show p ++ ")")
     return $ hDoc PP.$+$ PP.nest 2 qDoc
-
-ppLCoreTCT :: PrettyPrinter -> PrettyH LCoreTC
-ppLCoreTCT pp = promoteT (ppClauseT pp) <+ promoteT (pCoreTC pp)
-
-ppClauseT :: PrettyPrinter -> PrettyH Clause
-ppClauseT pp = let parenify = ppClauseT pp >>^ \ d -> syntaxColor (PP.text "(") PP.<> d PP.<> syntaxColor (PP.text ")") in
-    forallT (pForall pp) (ppClauseT pp) (\ d1 d2 -> PP.sep [d1,d2])
-       <+ conjT parenify parenify (\ d1 d2 -> PP.sep [d1,syntaxColor (specialSymbol ConjSymbol),d2])
-       <+ disjT parenify parenify (\ d1 d2 -> PP.sep [d1,syntaxColor (specialSymbol DisjSymbol),d2])
-       <+ implT parenify parenify (\ _nm d1 d2 -> PP.sep [d1,syntaxColor (specialSymbol ImplSymbol),d2])
-       <+ equivT (extractT $ pCoreTC pp) (extractT $ pCoreTC pp) (\ d1 d2 -> PP.sep [d1,specialSymbol EquivSymbol,d2])
-       <+ return (syntaxColor $ PP.text "true")
 
 ------------------------------------------------------------------------------
 
@@ -485,10 +477,10 @@ retraction mr = parse2beforeBiR (retractionBR (extractR <$> mr))
 
 ------------------------------------------------------------------------------
 
--- TODO: revisit this for binder re-ordering issue
+-- TODO: revisit this and rewrite to act only on current quantifer? (more KURE-like)
 instantiateDictsR :: RewriteH Clause
 instantiateDictsR = prefixFailMsg "Dictionary instantiation failed: " $ do
-    bs <- forallT idR successT const
+    (bs,_) <- arr collectQs
     let dArgs = filter (\b -> isId b && isDictTy (varType b)) bs
         uniqDs = nubBy (\ b1 b2 -> eqType (varType b1) (varType b2)) dArgs
     guardMsg (not (null uniqDs)) "no universally quantified dictionaries can be instantiated."
@@ -539,13 +531,15 @@ mergeQuantifiersR pl pr = contextfreeT $ mergeQuantifiers pl pr
 
 mergeQuantifiers :: MonadCatch m => (Var -> Bool) -> (Var -> Bool) -> Clause -> m Clause
 mergeQuantifiers pl pr cl = prefixFailMsg "merge-quantifiers failed: " $ do
-    (con,lq@(Forall bsl cll),rq@(Forall bsr clr)) <- case cl of
+    (con,lq,rq) <- case cl of
         Conj q1 q2 -> return (Conj,q1,q2)
         Disj q1 q2 -> return (Disj,q1,q2)
         Impl nm q1 q2 -> return (Impl nm,q1,q2)
         _ -> fail "no quantifiers on either side."
 
-    let (lBefore,lbs) = break pl bsl
+    let (bsl, cll) = collectQs lq
+        (bsr, clr) = collectQs rq
+        (lBefore,lbs) = break pl bsl
         (rBefore,rbs) = break pr bsr
         check b q l r = guardMsg (not (b `elemVarSet` freeVarsClause q)) $
                                  "specified "++l++" binder would capture in "++r++"-hand clause."
@@ -585,7 +579,16 @@ unshadowClause :: MonadUnique m => Clause -> m Clause
 unshadowClause c = go emptySubst (mapUniqSet fs (freeVarsClause c)) c
     where fs = occNameFS . getOccName
 
-          go subst seen (Forall bs cl) = go1 subst seen bs [] cl
+          go subst seen (Forall b cl)
+            | fsb `elementOfUniqSet` seen = do
+                b'' <- cloneVarFSH (inventNames seen) b'
+                cl' <- go (extendSubst subst' b' (varToCoreExpr b'')) (addOneToUniqSet seen (fs b'')) cl
+                return $ addBinder b'' cl'
+            | otherwise = do
+                cl' <- go subst' (addOneToUniqSet seen fsb) cl
+                return $ addBinder b' cl'
+              where fsb = fs b'
+                    (subst', b') = substBndr subst b
           go subst seen (Conj q1 q2) = do
             q1' <- go subst seen q1
             q2' <- go subst seen q2
@@ -604,18 +607,6 @@ unshadowClause c = go emptySubst (mapUniqSet fs (freeVarsClause c)) c
             in return $ Equiv e1' e2'
           go _ _ CTrue = return CTrue
 
-          go1 subst seen []     bs' cl = do
-            cl' <- go subst seen cl
-            return $ mkForall (reverse bs') cl'
-          go1 subst seen (b:bs) bs' cl
-            | fsb `elementOfUniqSet` seen = do
-                b'' <- cloneVarFSH (inventNames seen) b'
-                go1 (extendSubst subst' b' (varToCoreExpr b'')) (addOneToUniqSet seen (fs b'')) bs (b'':bs') cl
-            | otherwise = go1 subst' (addOneToUniqSet seen fsb) bs (b':bs') cl
-                where fsb = fs b'
-                      (subst', b') = substBndr subst b
-
-
 inventNames :: UniqSet FastString -> FastString -> FastString
 inventNames s nm = head [ nm' | i :: Int <- [0..]
                               , let nm' = nm `appendFS` (mkFastString (show i))
@@ -623,15 +614,18 @@ inventNames s nm = head [ nm' | i :: Int <- [0..]
 
 ------------------------------------------------------------------------------
 
+-- TODO: revisit design of this, it's ugly
 instantiateClauseVarR :: (Var -> Bool) -> CoreString -> RewriteH Clause
-instantiateClauseVarR p cs = prefixFailMsg "instantiation failed: " $ do
-    bs <- forallT idR successT const
-    e <- case filter p bs of
-                [] -> fail "no universally quantified variables match predicate."
-                (b:_) | isId b    -> let (before,_) = break (==b) bs
-                                     in withVarsInScope before $ parseCoreExprT cs
-                      | otherwise -> let (before,_) = break (==b) bs
-                                     in liftM (Type . fst) $ withVarsInScope before $ parseTypeWithHolesT cs
+instantiateClauseVarR p cs = setFailMsg "instantiation failed: no quantifier matches"
+                           $ extractR (onetdR (promoteClauseR $ instantiateForallVarR p cs) :: RewriteH LCore)
+
+instantiateForallVarR :: (Var -> Bool) -> CoreString -> RewriteH Clause
+instantiateForallVarR p cs = prefixFailMsg "instantiation failed: " $ do
+    Forall b _ <- idR
+    guardMsg (p b) "universally quantified variable does not match predicate."
+    e <- if isId b
+         then parseCoreExprT cs
+         else liftM (Type . fst) $ parseTypeWithHolesT cs
     transform (\ c -> instClause (boundVars c) p e) >>> (lintClauseT >> idR) -- lint for sanity
 
 ------------------------------------------------------------------------------
@@ -672,8 +666,7 @@ lemmaConsequentR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyCon
                  => Used -> LemmaName -> Rewrite c m Clause
 lemmaConsequentR u nm = prefixFailMsg "lemma-consequent failed:" $
                         withPatFailMsg "lemma is not an implication." $ do
-    (hs,ante,pat) <- (getLemmaByNameT nm >>^ lemmaC) >>= \case Forall bs (Impl _ ante con) -> return (bs,ante,con)
-                                                               Impl _ ante con             -> return ([],ante,con)
+    (hs, Impl _ ante pat) <- getLemmaByNameT nm >>^ (collectQs . lemmaC)
     cl' <- transform $ \ c cl -> do
         m <- maybeM ("consequent did not match.") $ lemmaMatch hs pat cl
         subs <- maybeM ("some quantifiers not instantiated.") $
@@ -691,10 +684,10 @@ lemmaConsequentBiR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasCoreRu
                    => Used -> LemmaName -> BiRewrite c m CoreExpr
 lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go [] . lemmaC)) (markLemmaUsedT nm u >> idR)
     where go :: [CoreBndr] -> Clause -> BiRewrite c m CoreExpr
-          go bbs (Forall bs cl) = go (bbs++bs) cl
-          go bbs (Impl anteNm ante con) = do
-            let con' = mkForall bbs con
-                bs = forallQs con'
+          go bs (Forall b cl) = go (b:bs) cl
+          go bs (Impl anteNm ante con) = do
+            let con' = mkForall (reverse bs) con
+                (bs',_) = collectQs con'
                 eqs = toEqualities con'
                 foldUnfold side f = do
                     (cl,e) <- transform $ \ c e -> do
@@ -703,11 +696,10 @@ lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go [] . lemm
                                 let matches = [ case lookupVarEnv hs b of
                                                     Nothing -> Left b
                                                     Just arg -> Right (b,arg)
-                                              | b <- bs ]
+                                              | b <- bs' ]
                                     (unmatched, subs) = partitionEithers matches
                                     acl = substClauses subs ante
-                                    cl = mkForall unmatched acl
-                                return (cl,e')
+                                return (mkForall unmatched acl, e')
                     verifyOrCreateT u anteNm cl
                     return e
             bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)

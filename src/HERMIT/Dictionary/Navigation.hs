@@ -71,6 +71,8 @@ externals = crumbExternals
             [ "consider <c> focuses on the first construct <c>.", recognizedConsiderables ]
         , external "arg" (promoteExprT . nthArgPath :: Int -> TransformH LCore LocalPathH)
             [ "arg n focuses on the (n-1)th argument of a nested application." ]
+        , external "foralls-body" (promoteClauseT forallsBodyT :: TransformH LCore LocalPathH)
+            [ "Descend into the body after a sequence of foralls." ]
         , external "lams-body" (promoteExprT lamsBodyT :: TransformH LCore LocalPathH)
             [ "Descend into the body after a sequence of lambdas." ]
         , external "lets-body" (promoteExprT letsBodyT :: TransformH LCore LocalPathH)
@@ -138,11 +140,11 @@ bindingOf :: (Var -> Bool) -> LCoreTC -> Bool
 bindingOf p = any p . varSetElems . binders
 
 binders :: LCoreTC -> VarSet
-binders (LTCCore (LClause (Forall bs _))) = mkVarSet bs
-binders (LTCCore (LClause _))             = emptyVarSet
-binders (LTCCore (LCore core))            = bindersCore core
-binders (LTCTyCo (TypeCore ty))           = binderType ty
-binders (LTCTyCo (CoercionCore co))       = binderCoercion co
+binders (LTCCore (LClause (Forall b _))) = unitVarSet b
+binders (LTCCore (LClause _))            = emptyVarSet
+binders (LTCCore (LCore core))           = bindersCore core
+binders (LTCTyCo (TypeCore ty))          = binderType ty
+binders (LTCTyCo (CoercionCore co))      = binderCoercion co
 
 bindersCore :: Core -> VarSet
 bindersCore (BindCore bnd)  = binderBind bnd
@@ -292,6 +294,10 @@ instance HasEmptyContext c => HasEmptyContext (ExtendContext c (LocalPath Crumb)
 exhaustRepeatCrumbT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Crumb -> Transform c m LCoreTC LocalPathH
 exhaustRepeatCrumbT cr = let l = exhaustPathL (repeat cr)
                           in withLocalPathT (focusT l exposeLocalPathT)
+
+-- | Construct a path to the body of a sequence of foralls.
+forallsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Transform c m Clause LocalPathH
+forallsBodyT = extractT (exhaustRepeatCrumbT Forall_Body)
 
 -- | Construct a path to the body of a sequence of lambdas.
 lamsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Transform c m CoreExpr LocalPathH

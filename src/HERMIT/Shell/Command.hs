@@ -180,7 +180,7 @@ catchFailHard :: (Functor m, MonadCatch m, CLMonad m) => m () -> (String -> m ()
 catchFailHard m failure =
     catchM m $ \ msg -> ifM (gets cl_failhard)
                             (do pp <- gets cl_pretty
-                                performQuery (QueryPrettyH $ pCoreTC pp) (CmdName "display")
+                                performQuery (QueryPrettyH $ pLCoreTC pp) (CmdName "display")
                                 cl_putStrLn msg
                                 abort)
                             (failure msg)
@@ -201,7 +201,7 @@ interpShell =
   , interpEM $ \ (StringBox str)                -> performQuery (message str)                           -- QueryH
   , interpEM $ \ (effect :: KernelEffect)       -> flip performKernelEffect effect                      -- KernelEffectH
   , interpM  $ \ (ShellEffectBox effect)        -> performShellEffect effect >> return ()               -- ShellEffectH
-  , interpM  $ \ (effect :: ScriptEffect)       -> performScriptEffect effect                           
+  , interpM  $ \ (effect :: ScriptEffect)       -> performScriptEffect effect
   , interpEM $ \ (QueryFunBox query)            -> performQuery' query                                  -- QueryH
   , interpEM $ \ (t :: UserProofTechnique)      -> performProofShellCommand $ PCEnd $ UserProof t
   , interpEM $ \ (cmd :: ProofShellCommand)     -> performProofShellCommand cmd                         -- ProofShellCommandHH
@@ -233,13 +233,13 @@ data TypedEffectH :: * -> * where
     ShellEffectH           :: ShellEffect a           -> TypedEffectH a
     RewriteLCoreH          :: RewriteH LCore          -> TypedEffectH ()
     RewriteLCoreTCH        :: RewriteH LCoreTC        -> TypedEffectH ()
-    SetPathH               :: (Injection a LCoreTC) 
+    SetPathH               :: (Injection a LCoreTC)
                            => TransformH a LocalPathH -> TypedEffectH ()
     QueryH                 :: QueryFun a              -> TypedEffectH a
     ProofShellCommandH     :: ProofShellCommand       -> TypedEffectH ()
     KernelEffectH          :: KernelEffect            -> TypedEffectH ()
     EvalH                  :: String                  -> TypedEffectH () -- TODO: rm with the old shell
-    FmapTypedEffectH       :: (a -> b) 
+    FmapTypedEffectH       :: (a -> b)
                            -> TypedEffectH a          -> TypedEffectH b
   deriving Typeable
 
@@ -247,21 +247,21 @@ instance Functor TypedEffectH where
   fmap f e = FmapTypedEffectH f e
 
 performTypedEffectH :: (Functor m,  -- TODO: remove at 7.10
-                        MonadCatch m, CLMonad m) 
+                        MonadCatch m, CLMonad m)
                     => String -> TypedEffectH a -> m a
-performTypedEffectH _   (ShellEffectH          effect) = performShellEffect effect 
+performTypedEffectH _   (ShellEffectH          effect) = performShellEffect effect
 performTypedEffectH err (RewriteLCoreH         rr    ) = applyRewrite (promoteLCoreR rr) (stubExprH err)
 performTypedEffectH err (RewriteLCoreTCH       rr    ) = applyRewrite rr                 (stubExprH err)
 performTypedEffectH err (SetPathH              tt    ) = setPath tt                      (stubExprH err)
 performTypedEffectH err (QueryH                q     ) = performQuery q                  (stubExprH err)
 performTypedEffectH err (ProofShellCommandH    ps    ) = performProofShellCommand ps     (stubExprH err)
-performTypedEffectH err (KernelEffectH         k     ) = performKernelEffect (stubExprH err) k 
+performTypedEffectH err (KernelEffectH         k     ) = performKernelEffect (stubExprH err) k
 performTypedEffectH _   (EvalH                 e     ) = evalScript e
 performTypedEffectH err (FmapTypedEffectH f    e     ) = performTypedEffectH err e >>= return . f
 
 -- Hacky stub until we replace the ExprH for error messages
 stubExprH :: String -> ExprH
-stubExprH = SrcName 
+stubExprH = SrcName
 
 -------------------------------------------------------------------------------
 

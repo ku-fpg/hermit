@@ -14,7 +14,6 @@ module HERMIT.PrettyPrinter.Clean
     , ppCoreAlt
     , ppKindOrType
     , ppCoercion
-    , ppForallQuantification
     ) where
 
 import Control.Arrow hiding ((<+>))
@@ -27,6 +26,7 @@ import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC hiding ((<+>), (<>), ($$), ($+$), cat, sep, fsep, hsep, empty, nest, vcat, char, text, keyword, hang)
 import HERMIT.Kure hiding ((<$>))
+import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.PrettyPrinter.Common
 import HERMIT.Syntax
@@ -41,8 +41,7 @@ externals :: [External]
 externals = [ external "clean" pretty ["Clean pretty printer."] ]
 
 pretty :: PrettyPrinter
-pretty = PP { pForall = ppForallQuantification
-            , pCoreTC = ppCoreTC
+pretty = PP { pLCoreTC = promoteT ppClauseT <+ promoteT ppCoreTC
             , pOptions = def
             , pTag = "clean"
             }
@@ -191,6 +190,23 @@ typeArrow = tySymbol RightArrowSymbol
 
 ------------------------------------------------------------------------------------------------
 
+ppForallT :: PrettyH [Var]
+ppForallT = do
+    vs <- mapT ppBinderMode
+    if null $ filter (not . isEmpty) vs
+    then return empty
+    else return $ specialSymbol ForallSymbol <+> sep vs <> symbol '.'
+
+ppClauseT :: PrettyH Clause
+ppClauseT =
+    let parenify = ppClauseT >>^ \ d -> syntaxColor (PP.text "(") PP.<> d PP.<> syntaxColor (PP.text ")")
+    in (forallsT ppForallT ppClauseT (\ d1 d2 -> PP.sep [d1,d2])
+        <+ conjT parenify parenify (\ d1 d2 -> PP.sep [d1,syntaxColor (specialSymbol ConjSymbol),d2])
+        <+ disjT parenify parenify (\ d1 d2 -> PP.sep [d1,syntaxColor (specialSymbol DisjSymbol),d2])
+        <+ implT parenify parenify (\ _nm d1 d2 -> PP.sep [d1,syntaxColor (specialSymbol ImplSymbol),d2])
+        <+ equivT (extractT ppCoreTC) (extractT ppCoreTC) (\ d1 d2 -> PP.sep [d1,specialSymbol EquivSymbol,d2])
+        <+ return (syntaxColor $ PP.text "true"))
+
 -- | Pretty print a fragment of GHC Core using HERMIT's \"Clean\" pretty printer.
 ppCoreTC :: PrettyH CoreTC
 ppCoreTC =
@@ -259,25 +275,26 @@ ppDetailedVar = do
 -- binders are vars that is bound by lambda or case, etc.
 -- depending on the mode, they might not be displayed
 ppBinderMode :: PrettyH Var
-ppBinderMode = do v    <- idR
-                  opts <- prettyC_options ^<< contextT
-                  if
-                     | isTyVar v -> case po_exprTypes opts of
-                                                           Omit     -> return empty
-                                                           Abstract -> return typeBindSymbol
-                                                           Detailed -> ppDetailedVar
-                                                           _        -> ppVar
-                     | isCoVar v -> case po_coercions opts of
-                                                           Omit     -> return empty
-                                                           Abstract -> return coercionBindSymbol
-                                                           Detailed -> ppDetailedVar
-                                                           Show     -> ppVar
-                                                           Kind     -> do pCoKind <- ppCoKind <<^ CoVarCo
-                                                                          return $ cleanParens (coercionBindSymbol <+> typeOfSymbol <+> pCoKind)
-                                                          -- TODO: refactor this to be more systematic.  It should be possible to request type sigs for all type bindings.
-                     | otherwise -> case po_exprTypes opts of
-                                        Detailed -> ppDetailedVar
-                                        _        -> ppVar
+ppBinderMode = do
+    v    <- idR
+    opts <- prettyC_options ^<< contextT
+    if | isTyVar v -> case po_exprTypes opts of
+                        Omit     -> return empty
+                        Abstract -> return typeBindSymbol
+                        Detailed -> ppDetailedVar
+                        _        -> ppVar
+       | isCoVar v -> case po_coercions opts of
+                        Omit     -> return empty
+                        Abstract -> return coercionBindSymbol
+                        Detailed -> ppDetailedVar
+                        Show     -> ppVar
+                        Kind     -> do pCoKind <- ppCoKind <<^ CoVarCo
+                                       return $ cleanParens (coercionBindSymbol <+> typeOfSymbol <+> pCoKind)
+                                       -- TODO: refactor this to be more systematic.
+                                       -- It should be possible to request type sigs for all type bindings.
+       | otherwise -> case po_exprTypes opts of
+                        Detailed -> ppDetailedVar
+                        _        -> ppVar
 
 ppModGuts :: PrettyH ModGuts
 ppModGuts = do name <- ppSDoc <<^ mg_module
@@ -385,15 +402,6 @@ ppKindOrTypeR =
                                         | isLiftedTypeKindCon tyCon -> RetAtom $ tyChar '*'
                                         | otherwise                 -> retApps pCon tys
               )
-
-
--- A bit hacky, currently only used to pretty-print Lemmas.
-ppForallQuantification :: PrettyH [Var]
-ppForallQuantification =
-  do vs <- mapT ppBinderMode
-     if null $ filter (not . isEmpty) vs
-     then return empty
-     else return $ specialSymbol ForallSymbol <+> sep vs <> symbol '.'
 
 --------------------------------------------------------------------
 
