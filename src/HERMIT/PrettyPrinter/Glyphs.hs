@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -5,6 +6,9 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 module HERMIT.PrettyPrinter.Glyphs where
 
+#if __GLASGOW_HASKELL__ < 710
+import Data.Monoid
+#endif
 import Data.Typeable
 
 import HERMIT.Kure
@@ -58,7 +62,7 @@ instance RenderSpecial Glyphs where
 
 instance Monoid Glyphs where
     mempty = Glyphs mempty
-    mappend (Glyphs rs1) (Glyphs rs2) = 
+    mappend (Glyphs rs1) (Glyphs rs2) =
         Glyphs . flattenGlyphs . mergeGlyphs $ rs1 ++ rs2
 
 flattenGlyphs :: [Glyph] -> [Glyph]
@@ -75,13 +79,13 @@ mergeGlyphs [r] = [r]
 mergeGlyphs (g:h:r) = case merge g h of
                         Left g' -> mergeGlyphs (g':r)
                         Right (g',h') -> g' : mergeGlyphs (h':r)
-    where merge (Glyph s1 Nothing)  (Glyph s2 Nothing) = 
+    where merge (Glyph s1 Nothing)  (Glyph s2 Nothing) =
               Left $ Glyph (s1 ++ s2) Nothing
           merge (Glyph [] Just{}) g2@(Glyph [] Just{}) = Left g2
           merge g1 g2 = Right (g1,g2)
 
 instance RenderCode Glyphs where
-    rPutStr txt = Glyphs [ Glyph txt Nothing, Glyph [] (Just IdColor) ] 
+    rPutStr txt = Glyphs [ Glyph txt Nothing, Glyph [] (Just IdColor) ]
     rDoHighlight _ [] = mempty
     rDoHighlight _ (Color col:_) = Glyphs [Glyph [] (Just col)]
     rDoHighlight o (_:rest) = rDoHighlight o rest
