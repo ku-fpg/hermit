@@ -61,6 +61,7 @@ module HERMIT.Dictionary.Reasoning
     , instantiateDictsR
     , abstractClauseR
     , csInQBodyT
+    , instantiateClauseVarR
       -- * Constructing Composite Lemmas
     , ($$)
     , ($$$)
