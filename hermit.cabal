@@ -234,6 +234,7 @@ library
                        HERMIT.Utilities
 
                        HERMIT.Libraries.Int
+                       HERMIT.Libraries.WW
 
   other-modules:       HERMIT.Syntax
 
