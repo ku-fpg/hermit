@@ -1304,7 +1304,7 @@ conjAllR r1 r2 = conjT r1 r2 Conj
 -- | Transform a clause of the form: @Disj@ 'Clause' 'Clause'
 disjT :: (ExtendPath c Crumb, Monad m) => Transform c m Clause a1 -> Transform c m Clause a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
 disjT t1 t2 f = transform $ \ c -> \case
-                                     Conj q1 q2 -> f <$> applyT t1 (c @@ Disj_Lhs) q1 <*> applyT t2 (c @@ Disj_Rhs) q2
+                                     Disj q1 q2 -> f <$> applyT t1 (c @@ Disj_Lhs) q1 <*> applyT t2 (c @@ Disj_Rhs) q2
                                      _          -> fail "not a disjunction."
 {-# INLINE disjT #-}
 
