@@ -60,6 +60,10 @@ import           HERMIT.Lemma
 import           HERMIT.Monad
 import           HERMIT.Name
 
+import           HERMIT.PrettyPrinter.Common
+import           HERMIT.PrettyPrinter.Glyphs
+import qualified HERMIT.PrettyPrinter.Clean as Clean
+
 ------------------------------------------------------------------------
 
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
@@ -301,15 +305,22 @@ loadLemmaLibraryT nm mblnm = prefixFailMsg "Loading lemma library failed: " $
                                     (\ l -> return [(lnm,l)])
                                     (M.lookup lnm ls))
                      mblnm
-        r <- forM nls $ \ nl@(n, l) -> do
+        nls' <- flip filterM nls $ \ nl@(n, l) -> do
                     er <- attemptM $ applyT lintClauseT c $ lemmaC l
                     case er of
-                        Left msg -> return $ Left $ "Not adding lemma " ++ show n ++ " because lint failed.\n" ++ msg
-                        Right _  -> return $ Right nl
-        let (fs,nls') = partitionEithers r
+                        Left msg -> do
+                            let pp = Clean.pretty { pOptions = (pOptions Clean.pretty) { po_exprTypes = Detailed } }
+                            d <- applyT (liftPrettyH (pOptions pp) $ pLCoreTC pp) c $ inject $ lemmaC l
+                            let Glyphs gs = renderCode (pOptions pp) d
+                            liftIO $ do
+                                putStr "\n" >> sequence_ [ withStyle s t | Glyph t s <- gs ] >> putStr "\n"
+                                putStrLn $ "Not adding lemma " ++ show n ++ " because lint failed.\n" ++ msg
+                            return False
+                        Right _  -> return True
+        guardMsg (not (null nls')) "no lemmas to load."
         m <- getLemmas
         putLemmas $ (M.fromList nls') `M.union` m
-        return $ unlines (fs ++ ["Successfully loaded library " ++ show nm])
+        return $ "Successfully loaded library " ++ show nm
 
 loadLemmaLibrary :: HscEnv -> HermitName -> IO LemmaLibrary
 loadLemmaLibrary hscEnv hnm = do
