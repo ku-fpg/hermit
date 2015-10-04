@@ -97,6 +97,7 @@ import           HERMIT.ParserType
 import           HERMIT.Utilities
 
 import           HERMIT.Dictionary.Common
+import           HERMIT.Dictionary.Debug hiding (externals)
 import           HERMIT.Dictionary.Fold hiding (externals)
 import           HERMIT.Dictionary.Function hiding (externals)
 import           HERMIT.Dictionary.GHC hiding (externals)
@@ -623,11 +624,13 @@ instantiateClauseVarR p cs = setFailMsg "instantiation failed: no quantifier mat
 instantiateForallVarR :: (Var -> Bool) -> CoreString -> RewriteH Clause
 instantiateForallVarR p cs = prefixFailMsg "instantiation failed: " $ do
     Forall b _ <- idR
+    observeR "got here"
     guardMsg (p b) "universally quantified variable does not match predicate."
+    traceR "got here2"
     e <- if isId b
          then parseCoreExprT cs
          else liftM (Type . fst) $ parseTypeWithHolesT cs
-    transform (\ c -> instClause (boundVars c) p e) >>> (lintClauseT >> idR) -- lint for sanity
+    transform (\ c -> instClause (boundVars c) p e) >>> (observeR "before-lint" >> lintClauseT >> idR) -- lint for sanity
 
 ------------------------------------------------------------------------------
 
