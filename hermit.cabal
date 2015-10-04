@@ -130,130 +130,130 @@ extra-source-files:
     examples/new_reverse/Reverse.hec
 
 library
-  ghc-options:         -Wall
-  build-depends:       base                >= 4.7 && < 5,
-                       ansi-terminal       >= 0.5.5,
-                       array,
-                       base-compat         >= 0.8.1,
-                       containers          >= 0.5.0.0,
-                       data-default-class  >= 0.0.1,
-                       directory           >= 1.2.0.0,
-                       ghc                 >= 7.8 && <= 7.12,
-                       haskeline           >= 0.7.0.3,
-                       kure                >= 2.16.8 && < 3.0,
-                       marked-pretty       >= 0.1,
-                       mtl                 >= 2.1.2,
-                       process             >= 1.1.0.2,
-                       stm                 >= 2.4,
-                       temporary-rc        >= 1.2.0.3,
-                       terminal-size       >= 0.3.2,
-                       transformers        >= 0.2,
-                       transformers-compat >= 0.4
+  ghc-options:      -Wall
+  build-depends:    base                >= 4.7 && < 5,
+                    ansi-terminal       >= 0.5.5,
+                    array,
+                    base-compat         >= 0.8.1,
+                    containers          >= 0.5.0.0,
+                    data-default-class  >= 0.0.1,
+                    directory           >= 1.2.0.0,
+                    ghc                 >= 7.10.2 && < 8,
+                    haskeline           >= 0.7.0.3,
+                    kure                >= 2.16.8 && < 3.0,
+                    marked-pretty       >= 0.1,
+                    mtl                 >= 2.1.2,
+                    process             >= 1.1.0.2,
+                    stm                 >= 2.4,
+                    temporary-rc        >= 1.2.0.3,
+                    terminal-size       >= 0.3.2,
+                    transformers        >= 0.2,
+                    transformers-compat >= 0.4
 
   if os(windows)
-    build-depends:     Win32
+    build-depends:  Win32
 
-  build-tools:         alex  >= 3.1.3,
-                       happy >= 1.19.3
+  build-tools:      alex  >= 3.1.3,
+                    happy >= 1.19.3
 
-  default-language:    Haskell2010
+  default-language: Haskell2010
 
-  exposed-modules:     HERMIT
+  exposed-modules:  HERMIT
 
-                       HERMIT.Context
-                       HERMIT.Core
-                       HERMIT.Dictionary
-                       HERMIT.Driver
+                    HERMIT.Context
+                    HERMIT.Core
+                    HERMIT.Dictionary
+                    HERMIT.Driver
 
-                       HERMIT.Dictionary.AlphaConversion
-                       HERMIT.Dictionary.Common
-                       HERMIT.Dictionary.Composite
-                       HERMIT.Dictionary.Debug
-                       HERMIT.Dictionary.FixPoint
-                       HERMIT.Dictionary.Fold
-                       HERMIT.Dictionary.Function
-                       HERMIT.Dictionary.GHC
-                       HERMIT.Dictionary.Induction
-                       HERMIT.Dictionary.Inline
-                       HERMIT.Dictionary.Kure
-                       HERMIT.Dictionary.Local
-                       HERMIT.Dictionary.Local.Bind
-                       HERMIT.Dictionary.Local.Case
-                       HERMIT.Dictionary.Local.Cast
-                       HERMIT.Dictionary.Local.Let
-                       HERMIT.Dictionary.Navigation
-                       HERMIT.Dictionary.Navigation.Crumbs
-                       HERMIT.Dictionary.New
-                       HERMIT.Dictionary.Query
-                       HERMIT.Dictionary.Reasoning
-                       HERMIT.Dictionary.Remembered
-                       HERMIT.Dictionary.Rules
-                       HERMIT.Dictionary.Undefined
-                       HERMIT.Dictionary.Unfold
-                       HERMIT.Dictionary.Unsafe
-                       HERMIT.Dictionary.WorkerWrapper.Common
-                       HERMIT.Dictionary.WorkerWrapper.Fix
-                       HERMIT.Dictionary.WorkerWrapper.FixResult
+                    HERMIT.Dictionary.AlphaConversion
+                    HERMIT.Dictionary.Common
+                    HERMIT.Dictionary.Composite
+                    HERMIT.Dictionary.Debug
+                    HERMIT.Dictionary.FixPoint
+                    HERMIT.Dictionary.Fold
+                    HERMIT.Dictionary.Function
+                    HERMIT.Dictionary.GHC
+                    HERMIT.Dictionary.Induction
+                    HERMIT.Dictionary.Inline
+                    HERMIT.Dictionary.Kure
+                    HERMIT.Dictionary.Local
+                    HERMIT.Dictionary.Local.Bind
+                    HERMIT.Dictionary.Local.Case
+                    HERMIT.Dictionary.Local.Cast
+                    HERMIT.Dictionary.Local.Let
+                    HERMIT.Dictionary.Navigation
+                    HERMIT.Dictionary.Navigation.Crumbs
+                    HERMIT.Dictionary.New
+                    HERMIT.Dictionary.Query
+                    HERMIT.Dictionary.Reasoning
+                    HERMIT.Dictionary.Remembered
+                    HERMIT.Dictionary.Rules
+                    HERMIT.Dictionary.Undefined
+                    HERMIT.Dictionary.Unfold
+                    HERMIT.Dictionary.Unsafe
+                    HERMIT.Dictionary.WorkerWrapper.Common
+                    HERMIT.Dictionary.WorkerWrapper.Fix
+                    HERMIT.Dictionary.WorkerWrapper.FixResult
 
-                       HERMIT.External
-                       HERMIT.GHC
-                       HERMIT.GHC.Typechecker
-                       HERMIT.Kernel
-                       HERMIT.Kure
-                       HERMIT.Kure.Universes
-                       HERMIT.Lemma
-                       HERMIT.Monad
-                       HERMIT.Name
-                       HERMIT.Parser
-                       HERMIT.ParserCore
-                       HERMIT.ParserType
+                    HERMIT.External
+                    HERMIT.GHC
+                    HERMIT.GHC.Typechecker
+                    HERMIT.Kernel
+                    HERMIT.Kure
+                    HERMIT.Kure.Universes
+                    HERMIT.Lemma
+                    HERMIT.Monad
+                    HERMIT.Name
+                    HERMIT.Parser
+                    HERMIT.ParserCore
+                    HERMIT.ParserType
 
-                       HERMIT.Plugin
-                       HERMIT.Plugin.Builder
-                       HERMIT.Plugin.Display
-                       HERMIT.Plugin.Renderer
-                       HERMIT.Plugin.Types
+                    HERMIT.Plugin
+                    HERMIT.Plugin.Builder
+                    HERMIT.Plugin.Display
+                    HERMIT.Plugin.Renderer
+                    HERMIT.Plugin.Types
 
-                       HERMIT.PrettyPrinter.AST
-                       HERMIT.PrettyPrinter.Clean
-                       HERMIT.PrettyPrinter.Common
-                       HERMIT.PrettyPrinter.GHC
-                       HERMIT.PrettyPrinter.Glyphs
+                    HERMIT.PrettyPrinter.AST
+                    HERMIT.PrettyPrinter.Clean
+                    HERMIT.PrettyPrinter.Common
+                    HERMIT.PrettyPrinter.GHC
+                    HERMIT.PrettyPrinter.Glyphs
 
-                       HERMIT.Shell.Command
-                       HERMIT.Shell.Completion
-                       HERMIT.Shell.Dictionary
-                       HERMIT.Shell.Interpreter
-                       HERMIT.Shell.Externals
-                       HERMIT.Shell.KernelEffect
-                       HERMIT.Shell.ScriptToRewrite
-                       HERMIT.Shell.ShellEffect
-                       HERMIT.Shell.Proof
-                       HERMIT.Shell.Types
+                    HERMIT.Shell.Command
+                    HERMIT.Shell.Completion
+                    HERMIT.Shell.Dictionary
+                    HERMIT.Shell.Interpreter
+                    HERMIT.Shell.Externals
+                    HERMIT.Shell.KernelEffect
+                    HERMIT.Shell.ScriptToRewrite
+                    HERMIT.Shell.ShellEffect
+                    HERMIT.Shell.Proof
+                    HERMIT.Shell.Types
 
-                       HERMIT.Utilities
+                    HERMIT.Utilities
 
-                       HERMIT.Libraries.Int
-                       HERMIT.Libraries.WW
+                    HERMIT.Libraries.Int
+                    HERMIT.Libraries.WW
 
-  other-modules:       HERMIT.Syntax
+  other-modules:    HERMIT.Syntax
 
-                       Paths_hermit
+                    Paths_hermit
 
   if os(windows)
-    other-modules:     HERMIT.Win32.Console
-                       HERMIT.Win32.IO
+    other-modules:  HERMIT.Win32.Console
+                    HERMIT.Win32.IO
 
-  hs-source-dirs:      src
+  hs-source-dirs:   src
 
 executable hermit
-    build-depends:     base >= 4.7 && < 5,
-                       hermit
+  build-depends:  base >= 4.7 && < 5,
+                  hermit
 
-    default-language:  Haskell2010
-    main-is:           Main.hs
-    hs-source-dirs:    driver
-    ghc-options:       -Wall
+  default-language:  Haskell2010
+  main-is:           Main.hs
+  hs-source-dirs:    driver
+  ghc-options:       -Wall
 
 
 test-suite hermit-tests
