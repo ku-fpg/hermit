@@ -4,11 +4,6 @@ flatten-module
 
 binding-of 'nub
 fix-intro ; def-rhs
-
-load-lemma-library 'HERMIT.Libraries.WW.lemmas ww-split-2B
-inst-lemma ww-split-2B 'abs [| absN |]
-inst-lemma ww-split-2B 'rep [| repN |]
-stop-script
 split-2-beta nub [| absN |] [| repN |] ; assume
 
 -- this bit to essentially undo the fix-intro
