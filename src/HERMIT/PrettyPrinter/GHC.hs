@@ -82,12 +82,13 @@ ppKindOrType = ppSDoc
 ppCoercion :: PrettyH Coercion
 ppCoercion = ppSDoc
 
--- A bit hacky, currently only used to pretty-print Lemmas.
+{- TODO: lemma pp for GHC-style
 ppForallQuantification :: PrettyH [Var]
 ppForallQuantification =
   do vs <- mapT ppSDoc
      if null vs
      then return empty
      else return $ text "forall" <+> hsep vs <> text "."
+-}
 
 ---------------------------------------------------------------------------

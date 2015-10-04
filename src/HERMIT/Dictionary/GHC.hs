@@ -46,7 +46,6 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 
 import           Data.Char (isSpace)
-import           Data.Either (partitionEithers)
 import           Data.List (mapAccumL, nub)
 import qualified Data.Map as M
 import           Data.String
@@ -305,7 +304,7 @@ loadLemmaLibraryT nm mblnm = prefixFailMsg "Loading lemma library failed: " $
                                     (\ l -> return [(lnm,l)])
                                     (M.lookup lnm ls))
                      mblnm
-        nls' <- flip filterM nls $ \ nl@(n, l) -> do
+        nls' <- flip filterM nls $ \ (n, l) -> do
                     er <- attemptM $ applyT lintClauseT c $ lemmaC l
                     case er of
                         Left msg -> do

@@ -95,7 +95,7 @@ import           TcEnv (tcLookupClass)
 import           TcErrors (reportAllUnsolved)
 #if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
 import           ErrUtils (pprErrMsgBag)
-import           TcRnMonad (getCtLoc, initIfaceTcRn)
+import           TcRnMonad (getCtLoc)
 #endif
 #if __GLASGOW_HASKELL__ < 710
 import           TcMType (newWantedEvVar)
