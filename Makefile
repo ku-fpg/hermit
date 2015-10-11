@@ -1,7 +1,6 @@
 boot:
-	cabal configure
 	cabal build # because newer cabal doesn't show build output with install
-	cabal install --force-reinstalls --disable-documentation
+	cabal install --enable-tests --force-reinstalls --disable-documentation
 
 install:
 	cabal install --force-reinstalls --disable-documentation
