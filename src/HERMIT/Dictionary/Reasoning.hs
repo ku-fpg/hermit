@@ -264,14 +264,14 @@ birewrite cl = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEqua
 lhsT :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
      => Transform c m LCore a -> Transform c m Clause a
 lhsT t = extractT
-       $ catchesT
+       $ catchesM
        $ childT Forall_Body (promoteT $ lhsT t) : [ childT cr t | cr <- [Conj_Lhs, Disj_Lhs, Impl_Lhs, Eq_Lhs] ]
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over the right-hand side of a 'Clause'.
 rhsT :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
      => Transform c m LCore a -> Transform c m Clause a
 rhsT t = extractT
-       $ catchesT
+       $ catchesM
        $ childT Forall_Body (promoteT $ rhsT t) : [ childT cr t | cr <- [Conj_Rhs, Disj_Rhs, Impl_Rhs, Eq_Rhs] ]
 
 -- | Lift a transformation over 'LCoreTC' into a transformation over both sides of a 'Clause'.
@@ -283,14 +283,14 @@ bothT t = (,) <$> lhsT t <*> rhsT t
 lhsR :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
      => Rewrite c m LCore -> Rewrite c m Clause
 lhsR r = extractR
-       $ catchesT
+       $ catchesM
        $ childR Forall_Body (promoteR $ lhsR r) : [ childR cr r | cr <- [Conj_Lhs, Disj_Lhs, Impl_Lhs, Eq_Lhs] ]
 
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over the right-hand side of a 'Clause'.
 rhsR :: (AddBindings c, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m)
      => Rewrite c m LCore -> Rewrite c m Clause
 rhsR r = extractR
-       $ catchesT
+       $ catchesM
        $ childR Forall_Body (promoteR $ rhsR r) : [ childR cr r | cr <- [Conj_Rhs, Disj_Rhs, Impl_Rhs, Eq_Rhs] ]
 
 -- | Lift a rewrite over 'LCoreTC' into a rewrite over both sides of a 'Clause'.

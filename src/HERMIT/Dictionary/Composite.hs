@@ -124,7 +124,7 @@ bashDebugR = bashUsingR [ bracketR nm r >>> catchM (promoteT lintExprT >> idR) t
 bashUsingR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, MonadCatch m)
            => [Rewrite c m LCore] -> Rewrite c m LCore
 bashUsingR rs = setFailMsg "bash failed: nothing to do." $
-    repeatR (occurAnalyseR >>> onetdR (catchesT rs)) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
+    repeatR (occurAnalyseR >>> onetdR (catchesM rs)) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
 
 {-
 Occurrence Analysis updates meta-data, as well as performing some basic simplifications.
@@ -197,7 +197,7 @@ smashExtendedWithR rs = smashUsingR (rs ++ map fst smashComponents1) (map fst sm
 smashUsingR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, LemmaContext c, MonadCatch m) => [Rewrite c m LCore] -> [Rewrite c m LCore] -> Rewrite c m LCore
 smashUsingR rs1 rs2 =
     setFailMsg "smash failed: nothing to do." $
-    repeatR (occurAnalyseR >>> (onetdR (catchesT rs1) <+ onetdR (catchesT rs2))) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
+    repeatR (occurAnalyseR >>> (onetdR (catchesM rs1) <+ onetdR (catchesM rs2))) >+> anytdR (promoteExprR dezombifyR) >+> occurAnalyseChangedR
 
 
 smashHelp :: [String]
