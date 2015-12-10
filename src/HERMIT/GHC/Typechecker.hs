@@ -60,7 +60,7 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
         used_rdr_var <- newIORef Set.empty ;
         th_var       <- newIORef False ;
         th_splice_var<- newIORef False ;
-#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
+#if __GLASGOW_HASKELL__ <= 710 
         infer_var    <- newIORef True ;
 #else
         infer_var    <- newIORef (True, emptyBag) ;
@@ -111,7 +111,7 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
                 tcg_inst_env       = mg_inst_env guts,
                 tcg_fam_inst_env   = mg_fam_inst_env guts,
                 tcg_ann_env        = emptyAnnEnv,
-#if __GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2
+#if __GLASGOW_HASKELL__ <= 710 
                 tcg_visible_orphan_mods = mkModuleSet [mod],
 #endif
                 tcg_dfun_n         = dfun_n_var,
@@ -148,7 +148,7 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
                 tcg_rn_imports     = [],
                 tcg_rn_exports     = maybe_rn_syntax [],
                 tcg_keep           = keep_var,
-#if __GLASGOW_HASKELL__ >= 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ > 2
+#if __GLASGOW_HASKELL__ > 710 
                 tcg_self_boot  = NoSelfBoot, -- Assume there are no hsboot files
 #endif
                 tcg_th_splice_used = th_splice_var

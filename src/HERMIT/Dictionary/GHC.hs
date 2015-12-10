@@ -35,10 +35,12 @@ module HERMIT.Dictionary.GHC
 
 import qualified Bag
 import qualified CoreLint
-#if __GLASGOW_HASKELL__ > 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ > 2)
+#if __GLASGOW_HASKELL__ > 710 
 import           TcRnMonad (getCtLocM)
 import           TcRnTypes (cc_ev)
 import           TcSimplify (solveWanteds, runTcS)
+#else
+import           TcRnMonad (getCtLoc)
 #endif
 
 import           Control.Arrow
@@ -142,7 +144,7 @@ lintModuleT =
      bnds     <- arr mg_binds
 #if __GLASGOW_HASKELL__ < 710
      let (warns, errs)    = CoreLint.lintCoreBindings [] bnds -- [] are vars to treat as in scope, used by GHCi
-#elif __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2
+#elif __GLASGOW_HASKELL__ <= 710
      -- [] are vars to treat as in scope, used by GHCi
      -- 'CoreDesugar' so we check for global ids, but not INLINE loop breakers, see notes in GHC's CoreLint module.
      let (warns, errs)    = CoreLint.lintCoreBindings CoreDesugar [] bnds
@@ -237,7 +239,7 @@ buildTypeable ty = do
 buildDictionary :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Id -> m (Id, [CoreBind])
 buildDictionary evar = do
     (i, bs) <- runTcM $ do
-#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
+#if __GLASGOW_HASKELL__ <= 710 
         loc <- getCtLoc $ GivenOrigin UnkSkol
 #else
         loc <- getCtLocM $ GivenOrigin UnkSkol
@@ -246,12 +248,12 @@ buildDictionary evar = do
             nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
 #if __GLASGOW_HASKELL__ < 710
             wCs = mkFlatWC [nonC]
-#elif __GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2
+#elif __GLASGOW_HASKELL__ <= 710 
             wCs = mkSimpleWC [nonC]
 #else
             wCs = mkSimpleWC [cc_ev nonC]
 #endif
-#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
+#if __GLASGOW_HASKELL__ <= 710 
         (_wCs', bnds) <- solveWantedsTcM wCs
 #else
         (_wCs', bnds) <- runTcS $ solveWanteds wCs  -- TODO: Make sure this is the right function to call.
