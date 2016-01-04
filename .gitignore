@@ -8,6 +8,7 @@ dist/
 *.exe
 BEFORE.HERMIT.*
 AFTER.HERMIT.*
+\#*
 # example binaries
 examples/casereduce/Main
 examples/concatVanishes/Flatten
