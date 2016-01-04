@@ -138,7 +138,7 @@ library
                     containers          >= 0.5.0.0,
                     data-default-class  >= 0.0.1,
                     directory           >= 1.2.0.0,
-                    ghc                 == 7.10.3,
+                    ghc                 >= 7.10.3,
                     haskeline           >= 0.7.0.3,
                     kure                >= 2.16.8 && < 3.0,
                     marked-pretty       >= 0.1,
