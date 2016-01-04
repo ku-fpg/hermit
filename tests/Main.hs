@@ -35,10 +35,14 @@ hermitTests = testGroup "HERMIT tests" $ map mkHermitTest testArgs
 
 -- subdirectory names
 golden, dump, rootDir, examples :: FilePath
-#if __GLASGOW_HASKELL__ > 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ > 3)
+#if __GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ >= 3
+golden   = "golden-ghc-7.10.3"
+#endif
+
+#if __GLASGOW_HASKELL__ > 710 
 golden   = "golden-ghc-7.11"
 #else
-golden   = "golden"
+
 #endif
 dump     = "dump"
 rootDir  = "tests"
