@@ -9,6 +9,6 @@ bash
   lam-body
   eta-expand 'acc
   lam-body
-  bash-extended-with [push 'repH StrictRepH, forward ww-result-fusion, apply-rules ["repH ++", "repH (:)", "repH []"] ]
+  bash-extended-with [push 'repH StrictRepH, forward ww-result-fusion, unfold-rules-unsafe ["repH ++", "repH (:)", "repH []"] ]
 }
 one-td (unfold 'absH)

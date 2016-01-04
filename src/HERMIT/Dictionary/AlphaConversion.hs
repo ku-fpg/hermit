@@ -1,4 +1,6 @@
-{-# LANGUAGE FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module HERMIT.Dictionary.AlphaConversion
     ( -- * Alpha-Renaming and Shadowing
       externals
@@ -54,33 +56,33 @@ import Prelude hiding (exp)
 -- | Externals for alpha-renaming.
 externals :: [External]
 externals = map (.+ Deep)
-         [  external "alpha" (alphaR :: RewriteH Core)
+         [  external "alpha" (promoteCoreR alphaR :: RewriteH LCore)
                [ "Renames the bound variables at the current node."]
-         ,  external "alpha-lam" (promoteExprR . alphaLamR . Just :: String -> RewriteH Core)
+         ,  external "alpha-lam" (promoteExprR . alphaLamR . Just :: String -> RewriteH LCore)
                [ "Renames the bound variable in a Lambda expression to the given name."]
-         ,  external "alpha-lam" (promoteExprR  (alphaLamR Nothing) :: RewriteH Core)
+         ,  external "alpha-lam" (promoteExprR  (alphaLamR Nothing) :: RewriteH LCore)
                [ "Renames the bound variable in a Lambda expression."]
-         ,  external "alpha-case-binder" (promoteExprR . alphaCaseBinderR . Just :: String -> RewriteH Core)
+         ,  external "alpha-case-binder" (promoteExprR . alphaCaseBinderR . Just :: String -> RewriteH LCore)
                [ "Renames the binder in a Case expression to the given name."]
-         ,  external "alpha-case-binder" (promoteExprR (alphaCaseBinderR Nothing) :: RewriteH Core)
+         ,  external "alpha-case-binder" (promoteExprR (alphaCaseBinderR Nothing) :: RewriteH LCore)
                [ "Renames the binder in a Case expression."]
-         ,  external "alpha-alt" (promoteAltR alphaAltR :: RewriteH Core)
+         ,  external "alpha-alt" (promoteAltR alphaAltR :: RewriteH LCore)
                [ "Renames all binders in a Case alternative."]
-         ,  external "alpha-alt" (promoteAltR . alphaAltWithR :: [String] -> RewriteH Core)
+         ,  external "alpha-alt" (promoteAltR . alphaAltWithR :: [String] -> RewriteH LCore)
                [ "Renames all binders in a Case alternative using the user-provided list of new names."]
-         ,  external "alpha-case" (promoteExprR alphaCaseR :: RewriteH Core)
+         ,  external "alpha-case" (promoteExprR alphaCaseR :: RewriteH LCore)
                [ "Renames all binders in a Case alternative."]
-         ,  external "alpha-let" (promoteExprR . alphaLetWithR :: [String] -> RewriteH Core)
+         ,  external "alpha-let" (promoteExprR . alphaLetWithR :: [String] -> RewriteH LCore)
                [ "Renames the bound variables in a Let expression using a list of suggested names."]
-         ,  external "alpha-let" (promoteExprR alphaLetR :: RewriteH Core)
+         ,  external "alpha-let" (promoteExprR alphaLetR :: RewriteH LCore)
                [ "Renames the bound variables in a Let expression."]
-         ,  external "alpha-top" (promoteProgR . alphaProgConsWithR :: [String] -> RewriteH Core)
+         ,  external "alpha-top" (promoteProgR . alphaProgConsWithR :: [String] -> RewriteH LCore)
                [ "Renames the bound identifiers in the top-level binding group at the head of the program using a list of suggested names."]
-         ,  external "alpha-top" (promoteProgR alphaProgConsR :: RewriteH Core)
+         ,  external "alpha-top" (promoteProgR alphaProgConsR :: RewriteH LCore)
                [ "Renames the bound identifiers in the top-level binding at the head of the program."]
-         ,  external "alpha-prog" (promoteProgR alphaProgR :: RewriteH Core)
+         ,  external "alpha-prog" (promoteProgR alphaProgR :: RewriteH LCore)
                [ "Rename all top-level identifiers in the program."]
-         ,  external "unshadow" (unshadowR :: RewriteH Core)
+         ,  external "unshadow" (promoteCoreR unshadowR :: RewriteH LCore)
                 [ "Rename local variables with manifestly unique names (x, x0, x1, ...)."]
          ]
 
@@ -99,7 +101,8 @@ externals = map (.+ Deep)
 
 -- | Collect all visible variables (in the expression or the context).
 visibleVarsT :: (BoundVars c, Monad m) => Transform c m CoreTC VarSet
-visibleVarsT = liftM2 unionVarSet boundVarsT (arr freeVarsCoreTC)
+visibleVarsT = -- TODO: implement freeVarsLCoreTC
+               liftM2 unionVarSet boundVarsT (promoteT $ arr freeVarsCoreTC)
 
 -- | If a name is provided, use that as the name of the new variable.
 --   Otherwise modify the variable name making sure to /not/ clash with the given variables or any visible variables.
@@ -403,6 +406,8 @@ alphaR = setFailMsg "Cannot alpha-rename here." $
 --       Though really, we first need to improve KURE to have a version of (<+) that maintains the existing error message in the case of non-matching constructors henceforth.
 
 -- TODO 2: Also, we should be able to rename inside types and coercions.
+
+-- TODO 3: Also, we should be able to rename lemma quantifiers
 
 -----------------------------------------------------------------------
 

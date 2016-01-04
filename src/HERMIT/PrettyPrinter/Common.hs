@@ -1,23 +1,33 @@
-{-# LANGUAGE CPP, MultiParamTypeClasses, FlexibleInstances, TypeFamilies, DeriveDataTypeable, FlexibleContexts, InstanceSigs #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.PrettyPrinter.Common
     ( -- * Documents
       DocH
     , Attr(..)
-    , attrP
     , HTML(..)
+    , ASCII(..)
       -- ** Colors
     , coercionColor
     , idColor
     , keywordColor
     , syntaxColor
-    , markBindingSite
     , markColor
     , typeColor
     , ShowOption(..)
     , specialFont
     , SpecialSymbol(..)
     , SyntaxForColor(..)
+    , specialSymbol
+    , symbol
+    , keyword
       -- * Renderers
     , coreRenders
     , renderCode
@@ -28,12 +38,12 @@ module HERMIT.PrettyPrinter.Common
       -- * Pretty Printer Traversals
     , PrettyPrinter(..)
     , PrettyH
+    , PrettyHLCoreBox(..)
+    , PrettyHLCoreTCBox(..)
     , liftPrettyH
     , PrettyC(..)
     , initPrettyC
     , liftPrettyC
-    , TransformDocH(..)
-    , TransformCoreTCDocHBox(..)
       -- * Pretty Printer Options
     , PrettyOptions(..)
     , updateCoShowOption
@@ -43,21 +53,26 @@ module HERMIT.PrettyPrinter.Common
     , pad
     , hlist
     , vlist
-    , showRole
+    , showRole -- AJG: why is this here
+    , HermitMark(..) -- AJG: for now
     ) where
 
 import Data.Char
-import Data.Default
-import Data.Monoid hiding ((<>))
+import Data.Default.Class
 import qualified Data.Map as M
 import Data.Typeable
+
+import GHC.Generics
 
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
-import HERMIT.GHC hiding (($$), (<>), (<+>), char)
+import HERMIT.GHC hiding (($$), (<>), (<+>), char, text, keyword)
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Monad
+
+import Prelude.Compat
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
@@ -69,28 +84,16 @@ showRole Phantom          = "P"
 -- A HERMIT document
 type DocH = MDoc HermitMark
 
--- newtype wrapper for proper instance selection
-newtype TransformDocH a = TransformDocH { unTransformDocH :: PrettyC -> PrettyH a -> TransformH a DocH }
-
-data TransformCoreTCDocHBox = TransformCoreTCDocHBox (TransformDocH CoreTC) deriving Typeable
-
-instance Extern (TransformDocH CoreTC) where
-    type Box (TransformDocH CoreTC) = TransformCoreTCDocHBox
-    box = TransformCoreTCDocHBox
-    unbox (TransformCoreTCDocHBox i) = i
-
 -- These are the zero-width marks on the document
 data HermitMark
         = PushAttr Attr
         | PopAttr
-    deriving Show
+    deriving (Show, Typeable, Generic)
 
 -- These are the attributes
-data Attr = BndrAttr AbsolutePathH -- path to binding of a variable
-          | Color SyntaxForColor
-          | PathAttr AbsolutePathH -- path to this spot
+data Attr = Color SyntaxForColor
           | SpecialFont
-    deriving (Eq, Show)
+    deriving (Eq, Show, Typeable, Generic)
 
 data SyntaxForColor             -- (suggestion)
         = KeywordColor          -- bold
@@ -100,13 +103,10 @@ data SyntaxForColor             -- (suggestion)
         | TypeColor
         | LitColor
         | WarningColor          -- highlight problems like unbound variables
-    deriving (Eq, Show)
+    deriving (Eq, Show, Typeable, Generic)
 
 attr :: Attr -> DocH -> DocH
 attr a p = mark (PushAttr a) <> p <> mark PopAttr
-
-attrP :: AbsolutePathH -> DocH -> DocH
-attrP = attr . PathAttr
 
 idColor :: DocH -> DocH
 idColor = markColor IdColor
@@ -129,24 +129,52 @@ markColor = attr . Color
 specialFont :: DocH -> DocH
 specialFont = attr SpecialFont
 
-data PrettyPrinter = PP { pForall  :: PrettyH [Var]
-                        , pCoreTC  :: PrettyH CoreTC
+specialSymbol :: SpecialSymbol -> DocH
+specialSymbol = markColor SyntaxColor . specialFont . char . renderSpecial
+
+symbol :: Char -> DocH
+symbol = markColor SyntaxColor . char
+
+keyword :: String -> DocH
+keyword = markColor KeywordColor . text
+
+data PrettyPrinter = PP { pLCoreTC :: PrettyH LCoreTC
                         , pOptions :: PrettyOptions
+                        , pTag     :: String
                         }
+    deriving Typeable
+
+
+instance Extern PrettyPrinter where
+    type Box PrettyPrinter = PrettyPrinter
+    box i = i
+    unbox i = i
 
 type PrettyH a = Transform PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?
+
+data PrettyHLCoreBox = PrettyHLCoreBox (PrettyH LCore) deriving Typeable
+
+instance Extern (PrettyH LCore) where
+    type Box (PrettyH LCore) = PrettyHLCoreBox
+    box = PrettyHLCoreBox
+    unbox (PrettyHLCoreBox i) = i
+
+data PrettyHLCoreTCBox = PrettyHLCoreTCBox (PrettyH LCoreTC) deriving Typeable
+
+instance Extern (PrettyH LCoreTC) where
+    type Box (PrettyH LCoreTC) = PrettyHLCoreTCBox
+    box = PrettyHLCoreTCBox
+    unbox (PrettyHLCoreTCBox i) = i
+
+-------------------------------------------------------------------------------
 
 -- | Context for PrettyH translations.
 data PrettyC = PrettyC { prettyC_path    :: AbsolutePathH
                        , prettyC_vars    :: M.Map Var AbsolutePathH
                        , prettyC_options :: PrettyOptions
-                       }
-
-markBindingSite :: Var -> PrettyC -> DocH -> DocH
-markBindingSite i c d = case M.lookup i (prettyC_vars c) of
-                            Nothing -> d
-                            Just p -> attr (BndrAttr p) d
+                       , prettyC_lemmas  :: Lemmas
+                       } deriving Typeable
 
 ------------------------------------------------------------------------
 
@@ -168,30 +196,38 @@ instance AddBindings PrettyC where
 instance BoundVars PrettyC where
   boundVars :: PrettyC -> VarSet
   boundVars = mkVarSet . M.keys . prettyC_vars
-
+                            
 instance HasEmptyContext PrettyC where
   setEmptyContext :: PrettyC -> PrettyC
   setEmptyContext c = c { prettyC_path = mempty
-                        , prettyC_vars = M.empty}
+                        , prettyC_vars = M.empty }
+
+instance LemmaContext PrettyC where
+    addAntecedent nm l c = c { prettyC_lemmas = M.insert nm l (prettyC_lemmas c) }
+    getAntecedents = prettyC_lemmas
 
 ------------------------------------------------------------------------
 
-liftPrettyH :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> PrettyH a -> Transform c HermitM a DocH
+liftPrettyH :: (LemmaContext c, ReadBindings c, ReadPath c Crumb) => PrettyOptions -> Transform PrettyC HermitM a b -> Transform c HermitM a b
 liftPrettyH = liftContext . liftPrettyC
 
-liftPrettyC :: (ReadBindings c, ReadPath c Crumb) => PrettyOptions -> c -> PrettyC
+liftPrettyC :: (LemmaContext c, ReadBindings c, ReadPath c Crumb) => PrettyOptions -> c -> PrettyC
 liftPrettyC opts c = PrettyC { prettyC_path    = absPath c
                              , prettyC_vars    = M.fromList [ (i,hbPath b) | (i,b) <- M.toList (hermitBindings c) ]
-                             , prettyC_options = opts}
+                             , prettyC_options = opts
+                             , prettyC_lemmas  = getAntecedents c
+                             }
 
 initPrettyC :: PrettyOptions -> PrettyC
 initPrettyC opts = PrettyC
                       { prettyC_path    = mempty
                       , prettyC_vars    = M.empty
                       , prettyC_options = opts
+                      , prettyC_lemmas  = M.empty
                       }
 
 -- These are *recommendations* to the pretty printer.
+-- AJG: These seem to be in two places, the PrettyC context, and inside PrettyPrinter.
 
 data PrettyOptions = PrettyOptions
         { po_fullyQualified  :: Bool            -- ^ Do you show fully qualified names?
@@ -203,10 +239,11 @@ data PrettyOptions = PrettyOptions
         , po_depth           :: Maybe Int       -- ^ below this depth are ..., Nothing => infinite
         , po_notes           :: Bool            -- ^ notes might be added to output
         , po_ribbon          :: Float
-        , po_width           :: Int
-        } deriving Show
+        , po_width           :: Int             -- AJG: The width is not a pretty option, but rather a render option (?)
+        } deriving (Generic, Show, Typeable)
 
-data ShowOption = Show | Abstract | Omit | Kind deriving (Eq, Ord, Show, Read)
+data ShowOption = Show | Abstract | Detailed | Omit | Kind
+  deriving (Eq, Generic, Ord, Show, Read, Typeable)
 
 -- Types don't have a Kind showing option.
 updateTypeShowOption :: ShowOption -> PrettyOptions -> PrettyOptions
@@ -247,11 +284,16 @@ data SpecialSymbol
         | TypeSymbol
         | TypeBindSymbol
         | ForallSymbol
-        deriving (Show, Eq, Ord, Bounded, Enum)
+        | ConjSymbol
+        | DisjSymbol
+        | ImplSymbol
+        | EquivSymbol
+        deriving (Show, Eq, Ord, Bounded, Enum, Typeable)
 
 class RenderSpecial a where
         renderSpecial :: SpecialSymbol -> a
 
+deriving instance Typeable RenderSpecial
 
 -- This instance is special.  It is used as an index, forming an association list.
 -- Thus all of the rhs must be distinct characters.
@@ -266,8 +308,12 @@ instance RenderSpecial Char where
         renderSpecial TypeSymbol          = 'T'   -- <<type>>>
         renderSpecial TypeBindSymbol      = 't'   -- <<type binding>>
         renderSpecial ForallSymbol        = 'F'   -- forall
+        renderSpecial ConjSymbol          = '^'   -- conjunction
+        renderSpecial DisjSymbol          = 'v'   -- disjunction
+        renderSpecial ImplSymbol          = '?'   -- implication (we can't use >, because it is used for ->)
+        renderSpecial EquivSymbol         = '='   -- equivalence
 
-newtype ASCII = ASCII String
+newtype ASCII = ASCII String deriving Typeable
 
 instance Monoid ASCII where
         mempty = ASCII ""
@@ -282,9 +328,13 @@ instance RenderSpecial ASCII where
         renderSpecial CoercionBindSymbol  = ASCII "~#"   -- <<coercion binding>>>
         renderSpecial TypeSymbol          = ASCII "*"    -- <<type>>>
         renderSpecial TypeBindSymbol      = ASCII "*"    -- <<type binding>>>
-        renderSpecial ForallSymbol        = ASCII "\\/"
+        renderSpecial ForallSymbol        = ASCII "forall"
+        renderSpecial ConjSymbol          = ASCII "^"    -- conjunction
+        renderSpecial DisjSymbol          = ASCII "v"    -- disjunction
+        renderSpecial ImplSymbol          = ASCII "=>"   -- implication
+        renderSpecial EquivSymbol         = ASCII "="    -- equivalence
 
-newtype Unicode = Unicode Char
+newtype Unicode = Unicode Char deriving Typeable
 
 instance RenderSpecial Unicode where
         renderSpecial LambdaSymbol        = Unicode '\x03BB'
@@ -296,6 +346,10 @@ instance RenderSpecial Unicode where
         renderSpecial TypeSymbol          = Unicode '\x25b2'
         renderSpecial TypeBindSymbol      = Unicode '\x25b3'
         renderSpecial ForallSymbol        = Unicode '\x2200'
+        renderSpecial ConjSymbol          = Unicode '\x2227'
+        renderSpecial DisjSymbol          = Unicode '\x2228'
+        renderSpecial ImplSymbol          = Unicode '\x21D2'
+        renderSpecial EquivSymbol         = Unicode '\x2261'
 
 newtype LaTeX = LaTeX String
 
@@ -313,9 +367,13 @@ instance RenderSpecial LaTeX where
         renderSpecial TypeSymbol          = LaTeX "\\ensuremath{\\blacktriangle}"
         renderSpecial TypeBindSymbol      = LaTeX "\\ensuremath{\\vartriangle}"
         renderSpecial ForallSymbol        = LaTeX "\\ensuremath{\\forall}"
+        renderSpecial ConjSymbol          = LaTeX "\\ensuremath{\\wedge}"
+        renderSpecial DisjSymbol          = LaTeX "\\ensuremath{\\lor}"
+        renderSpecial ImplSymbol          = LaTeX "\\ensuremath{\\Rightarrow}"
+        renderSpecial EquivSymbol         = LaTeX "\\ensuremath{\\equiv}"
 
 
-newtype HTML = HTML String
+newtype HTML = HTML String deriving Typeable
 
 instance Monoid HTML where
         mempty = HTML ""
@@ -331,7 +389,10 @@ instance RenderSpecial HTML where
         renderSpecial TypeSymbol          = HTML "&#9650;"
         renderSpecial TypeBindSymbol      = HTML "&#9651;"
         renderSpecial ForallSymbol        = HTML "&#8704;"
-
+        renderSpecial ConjSymbol          = HTML "&and;"
+        renderSpecial DisjSymbol          = HTML "&or;"
+        renderSpecial ImplSymbol          = HTML "&rArr;"
+        renderSpecial EquivSymbol         = HTML "&equiv;"
 
 renderSpecialFont :: RenderSpecial a => Char -> Maybe a
 renderSpecialFont = fmap renderSpecial . flip M.lookup specialFontMap
@@ -355,6 +416,8 @@ class (RenderSpecial a, Monoid a) => RenderCode a where
                  -> a
 
     rPutStr      :: String -> a
+
+deriving instance Typeable RenderCode
 
 renderCode :: RenderCode a => PrettyOptions -> DocH -> a
 renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\ _ -> rEnd) doc []

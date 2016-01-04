@@ -1,6 +1,0 @@
-Run examples en masse with:
-
-    runghc Test.hs
-
-To update the 'golden' output, copy a file from the dump/ directory to the golden/ directory,
-changing the file extension appropriately, and commit.

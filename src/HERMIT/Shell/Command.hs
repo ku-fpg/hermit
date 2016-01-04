@@ -1,9 +1,19 @@
-{-# LANGUAGE ConstraintKinds, CPP, FlexibleContexts, GADTs, LambdaCase, ScopedTypeVariables, TypeFamilies #-}
+        {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.Shell.Command
     ( -- * The HERMIT Command-line Shell
       commandLine
-    , interpShellCommand
+    , interpShell
     , unicodeConsole
     , diffDocH
     , diffR
@@ -11,28 +21,34 @@ module HERMIT.Shell.Command
     , performQuery
     , cl_kernel_env
     , getFocusPath
-    , shellComplete
     , evalScript
+    , performTypedEffectH
+    , TypedEffectH(..)
+
+    -- ** Exported for hermit-shell
+    , stubExprH
     ) where
 
-import Control.Monad.State
+import Control.Monad.Compat
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.State (get, gets, modify)
 
 import Data.Char
-import Data.List (isPrefixOf, partition)
+import Data.List.Compat (isPrefixOf, partition)
 import Data.Maybe
-import Data.Monoid
+import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Kernel.Scoped hiding (abortS, resumeS)
 import HERMIT.Kure
 import HERMIT.Parser
 
-import HERMIT.Plugin.Display
 import HERMIT.Plugin.Renderer
 
 import HERMIT.PrettyPrinter.Common
+import HERMIT.PrettyPrinter.Glyphs
 
 import HERMIT.Shell.Completion
 import HERMIT.Shell.Externals
@@ -46,6 +62,8 @@ import HERMIT.Shell.Types
 #ifdef mingw32_HOST_OS
 import HERMIT.Win32.Console
 #endif
+
+import Prelude.Compat hiding ((<$>))
 
 import System.IO
 
@@ -91,28 +109,20 @@ cygwinWarning = unlines
 #endif
 
 -- | The first argument includes a list of files to load.
-commandLine :: forall m. (MonadCatch m, MonadException m, CLMonad m)
-            => [Interp m ()] -> [GHC.CommandLineOption] -> [External] -> m ()
-commandLine intp opts exts = do
+commandLine :: forall m. (Functor m, MonadCatch m, MonadException m, CLMonad m)
+            => [GHC.CommandLineOption] -> [External] -> m ()
+commandLine opts exts = do
     let (flags, filesToLoad) = partition (isPrefixOf "-") opts
-        ws_complete = " ()"
+        ws_complete = " ()" -- treated as 'whitespace' by completer
+        safeMode = "-safety=strict" `elem` flags
+        unsafeMode = "-safety=unsafe" `elem` flags
+        safetyMode = if | unsafeMode -> NoSafety
+                        | safeMode   -> StrictSafety
+                        | otherwise  -> NormalSafety
 
-    modify $ \ st -> st { cl_externals = shell_externals ++ exts }
-
-    let loop :: InputT m ()
-        loop = do
-            st <- lift get
-            let SAST n = cl_cursor st
-            mLine <- if cl_nav st
-                     then liftIO getNavCmd
-                     else getInputLine $ "hermit<" ++ show n ++ "> "
-
-            case mLine of
-                Nothing          -> lift $ performShellEffect Resume
-                Just ('-':'-':_) -> loop
-                Just line        -> if all isSpace line
-                                    then loop
-                                    else lift (evalScript intp line `catchFailHard` cl_putStrLn) >> loop
+    modify $ \ st -> st { cl_externals = filterSafety safetyMode $ shell_externals ++ exts
+                        , cl_safety = safetyMode
+                        }
 
     -- Display the banner
     if any (`elem` ["-v0", "-v1"]) flags
@@ -127,59 +137,131 @@ commandLine intp opts exts = do
 #endif
 
     -- Load and run any scripts
-    setRunningScript $ Just []
+    setRunningScript $ Just [] -- suppress all output until after first scripts run
     sequence_ [ case fileName of
-                 "abort"  -> performShellEffect Abort
-                 "resume" -> performShellEffect Resume
-                 _        -> performScriptEffect (runExprH intp) $ loadAndRun fileName
+                 "abort"  -> parseScriptCLT "abort" >>= pushScript
+                 "resume" -> parseScriptCLT "resume" >>= pushScript
+                 _        -> fileToScript fileName >>= pushScript
               | fileName <- reverse filesToLoad
               , not (null fileName)
               ] `catchFailHard` \ msg -> cl_putStrLn $ "Booting Failure: " ++ msg
-    setRunningScript Nothing
+
+    let -- Main proof input loop
+        loop :: Bool -> InputT m ()
+        loop firstInput = do
+            ps <- lift $ do tryM () forceProofs
+                            getProofStackEmpty
+            let prompt = if null ps then "hermit" else "proof"
+            mExpr <- lift popScriptLine
+            case mExpr of
+                Nothing -> do -- no script running
+                    when firstInput $ lift $ printWindowAlways Nothing
+                    st <- lift get
+                    mLine <- if cl_nav st
+                             then liftIO getNavCmd
+                             else getInputLine $ prompt ++ "<" ++ show (cl_cursor st) ++ "> "
+
+                    case mLine of
+                        Nothing          -> lift $ performShellEffect Resume
+                        Just ('-':'-':_) -> loop False
+                        Just line        -> if all isSpace line
+                                            then loop False
+                                            else lift (evalScript line `catchFailHard` cl_putStrLn) >> loop False
+                Just e -> do
+                    lift (runExprH e `catchFailHard` (\ msg -> setRunningScript Nothing >> cl_putStrLn msg))
+                    loop True
 
     -- Start the CLI
-    showWindow
-    let settings = setComplete (completeWordWithPrev Nothing ws_complete shellComplete) defaultSettings
-    runInputT settings loop
+    let settings = setComplete (completeWordWithPrev Nothing ws_complete completer) defaultSettings
+    runInputT settings (loop True)
 
 -- | Like 'catchM', but checks the 'cl_failhard' setting and does so if needed.
-catchFailHard :: (MonadCatch m, CLMonad m) => m () -> (String -> m ()) -> m ()
-catchFailHard m failure = catchM m $ \ msg -> ifM (gets cl_failhard) (performQuery Display (CmdName "display") >> cl_putStrLn msg >> abort) (failure msg)
+catchFailHard :: (Functor m, MonadCatch m, CLMonad m) => m () -> (String -> m ()) -> m ()
+catchFailHard m failure =
+    catchM m $ \ msg -> ifM (gets cl_failhard)
+                            (do pp <- gets cl_pretty
+                                performQuery (QueryPrettyH $ pLCoreTC pp) (CmdName "display")
+                                cl_putStrLn msg
+                                abort)
+                            (failure msg)
 
-evalScript :: (MonadCatch m, CLMonad m) => [Interp m ()] -> String -> m ()
-evalScript intp = parseScriptCLT >=> mapM_ (runExprH intp)
+evalScript :: (Functor m, MonadCatch m, CLMonad m) => String -> m ()
+evalScript = parseScriptCLT >=> mapM_ runExprH
 
-runExprH :: (MonadCatch m, CLMonad m) => [Interp m ()] -> ExprH -> m ()
-runExprH intp expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ interpExprH intp expr
+runExprH :: (Functor m, MonadCatch m, CLMonad m) => ExprH -> m ()
+runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
+    ps <- getProofStackEmpty
+    (if null ps then id else withProofExternals) $ interpExprH interpShell expr
 
 -- | Interpret a boxed thing as one of the four possible shell command types.
-interpShellCommand :: (MonadCatch m, MonadException m, CLMonad m) => [Interp m ()]
-interpShellCommand =
-  [ interpEM $ \ (RewriteCoreBox rr)           -> applyRewrite rr
-  , interpEM $ \ (RewriteCoreTCBox rr)         -> applyRewrite rr
-  , interpEM $ \ (BiRewriteCoreBox br)         -> applyRewrite $ whicheverR br
-  , interpEM $ \ (CrumbBox cr)                 -> setPath (return (mempty @@ cr) :: TransformH CoreTC LocalPathH)
-  , interpEM $ \ (PathBox p)                   -> setPath (return p :: TransformH CoreTC LocalPathH)
-  , interpEM $ \ (TransformCorePathBox tt)     -> setPath tt
-  , interpEM $ \ (TransformCoreTCPathBox tt)   -> setPath tt
-  , interpEM $ \ (StringBox str)               -> performQuery (message str)
-  , interpEM $ \ (TransformCoreStringBox tt)   -> performQuery (QueryString tt)
-  , interpEM $ \ (TransformCoreTCStringBox tt) -> performQuery (QueryString tt)
-  , interpEM $ \ (TransformCoreTCDocHBox tt)   -> performQuery (QueryDocH $ unTransformDocH tt)
-  , interpEM $ \ (TransformCoreCheckBox tt)    -> performQuery (CorrectnessCritera tt)
-  , interpEM $ \ (TransformCoreTCCheckBox tt)  -> performQuery (CorrectnessCritera tt)
-  , interpEM $ \ (effect :: KernelEffect)      -> flip performKernelEffect effect
-  , interpM  $ \ (effect :: ShellEffect)       -> performShellEffect effect
-  , interpM  $ \ (effect :: ScriptEffect)      -> performScriptEffect (runExprH interpShellCommand) effect
-  , interpEM $ \ (query :: QueryFun)           -> performQuery query
-  , interpM  $ \ (cmd :: ProofCommand)         -> performProofCommand cmd
+interpShell :: (Functor m, MonadCatch m, CLMonad m) => [Interp m ()]
+interpShell =
+  [ interpEM $ \ (CrumbBox cr)                  -> setPath (return (mempty @@ cr) :: TransformH LCoreTC LocalPathH)
+  , interpEM $ \ (PathBox p)                    -> setPath (return p :: TransformH LCoreTC LocalPathH)
+  , interpEM $ \ (StringBox str)                -> performQuery (message str)                           -- QueryH
+  , interpEM $ \ (effect :: KernelEffect)       -> flip performKernelEffect effect                      -- KernelEffectH
+  , interpM  $ \ (ShellEffectBox effect)        -> performShellEffect effect >> return ()               -- ShellEffectH
+  , interpM  $ \ (effect :: ScriptEffect)       -> performScriptEffect effect
+  , interpEM $ \ (QueryFunBox query)            -> performQuery' query                                  -- QueryH
+  , interpEM $ \ (t :: UserProofTechnique)      -> performProofShellCommand $ PCEnd $ UserProof t
+  , interpEM $ \ (cmd :: ProofShellCommand)     -> performProofShellCommand cmd                         -- ProofShellCommandHH
+  , interpEM $ \ (TransformLCoreStringBox tt)   -> performQuery' (QueryString tt)                       -- QueryH
+  , interpEM $ \ (TransformLCoreTCStringBox tt) -> performQuery' (QueryString tt)                       -- QueryH
+  , interpEM $ \ (TransformLCoreUnitBox tt)     -> performQuery' (QueryUnit tt)                         -- QueryH
+  , interpEM $ \ (TransformLCoreTCUnitBox tt)   -> performQuery' (QueryUnit tt)                         -- QueryH
+  , interpEM $ \ (TransformLCorePathBox tt)     -> setPath tt                                           -- SetPathH
+  , interpEM $ \ (TransformLCoreTCPathBox tt)   -> setPath tt                                           -- SetPathH
+  , interpEM $ \ (TransformLCoreGlyphsBox t)      -> performQuery' (QueryGlyphs t)                          -- QueryH
+  , interpEM $ \ (TransformLCoreTCGlyphsBox t)    -> performQuery' (QueryGlyphs t)                          -- QueryH
+  , interpEM $ \ (RewriteLCoreBox rr)           -> applyRewrite $ promoteLCoreR rr                      -- RewriteLCoreH
+  , interpEM $ \ (RewriteLCoreTCBox rr)         -> applyRewrite rr                                      -- RewriteLCoreTCH
+  , interpEM $ \ (BiRewriteLCoreBox br)         -> applyRewrite $ promoteLCoreR $ whicheverR br
+  , interpEM $ \ (BiRewriteLCoreTCBox br)       -> applyRewrite $ whicheverR br
+  , interpEM $ \ (PrettyHLCoreBox t)            -> performQuery' (QueryPrettyH t)                       -- QueryH
+  , interpEM $ \ (PrettyHLCoreTCBox t)          -> performQuery' (QueryPrettyH t)                       -- QueryH
   ]
+  where performQuery' :: (MonadCatch m, CLMonad m) => QueryFun a -> ExprH -> m ()
+        performQuery' x y = performQuery x y >> return () -- TODO: Replace with void once GHC 7.8 is dropped
 
 -------------------------------------------------------------------------------
 
--- TODO: This can be refactored. We always showWindow. Also, Perhaps return a modifier, not ()
---   UPDATE: Not true.  We don't always showWindow.
--- TODO: All of these should through an exception if they fail to execute the command as given.
+-- Wish: New Shell entry point
+--   * (Wish) This shell returns LocalPathH instead of using setPath. This means *all* the (not Rewrite) Transformations
+--     have no effect, and only have a return value.
+
+data TypedEffectH :: * -> * where
+    ShellEffectH           :: ShellEffect a           -> TypedEffectH a
+    RewriteLCoreH          :: RewriteH LCore          -> TypedEffectH ()
+    RewriteLCoreTCH        :: RewriteH LCoreTC        -> TypedEffectH ()
+    SetPathH               :: (Injection a LCoreTC)
+                           => TransformH a LocalPathH -> TypedEffectH ()
+    QueryH                 :: QueryFun a              -> TypedEffectH a
+    ProofShellCommandH     :: ProofShellCommand       -> TypedEffectH ()
+    KernelEffectH          :: KernelEffect            -> TypedEffectH ()
+    EvalH                  :: String                  -> TypedEffectH () -- TODO: rm with the old shell
+    FmapTypedEffectH       :: (a -> b)
+                           -> TypedEffectH a          -> TypedEffectH b
+  deriving Typeable
+
+instance Functor TypedEffectH where
+  fmap f e = FmapTypedEffectH f e
+
+performTypedEffectH :: (Functor m,  -- TODO: remove at 7.10
+                        MonadCatch m, CLMonad m)
+                    => String -> TypedEffectH a -> m a
+performTypedEffectH _   (ShellEffectH          effect) = performShellEffect effect
+performTypedEffectH err (RewriteLCoreH         rr    ) = applyRewrite (promoteLCoreR rr) (stubExprH err)
+performTypedEffectH err (RewriteLCoreTCH       rr    ) = applyRewrite rr                 (stubExprH err)
+performTypedEffectH err (SetPathH              tt    ) = setPath tt                      (stubExprH err)
+performTypedEffectH err (QueryH                q     ) = performQuery q                  (stubExprH err)
+performTypedEffectH err (ProofShellCommandH    ps    ) = performProofShellCommand ps     (stubExprH err)
+performTypedEffectH err (KernelEffectH         k     ) = performKernelEffect (stubExprH err) k
+performTypedEffectH _   (EvalH                 e     ) = evalScript e
+performTypedEffectH err (FmapTypedEffectH f    e     ) = performTypedEffectH err e >>= return . f
+
+-- Hacky stub until we replace the ExprH for error messages
+stubExprH :: String -> ExprH
+stubExprH = SrcName
 
 -------------------------------------------------------------------------------
 

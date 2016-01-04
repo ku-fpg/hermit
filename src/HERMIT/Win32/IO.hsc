@@ -1,5 +1,5 @@
 -- | Adapted from circular-ruin's StackOverflow answer at <http://stackoverflow.com/a/10779150>
-{-# LANGUAGE ForeignFunctionInterface, CPP, NoImplicitPrelude #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
 module HERMIT.Win32.IO (
     HERMIT.Win32.IO.putChar
   , HERMIT.Win32.IO.putStr
@@ -25,11 +25,7 @@ import Control.Exception (bracket)
 import Data.Char (ord)
 import Data.Typeable
 
-#if MIN_VERSION_base(4,7,0)
 import Foreign
-#else
-import Foreign hiding (unsafePerformIO)
-#endif
 import Foreign.C.Types
 
 import GHC.IO.FD (FD(..)) -- A wrapper around an Int32

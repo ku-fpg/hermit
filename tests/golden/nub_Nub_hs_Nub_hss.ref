@@ -1,12 +1,3 @@
-
-Nub.hs:26:11: Warning:
-    Rule "filter-fusion" may never fire
-      because ‘filter’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘filter’
-
-Nub.hs:27:11: Warning:
-    Rule "member-fusion" may never fire because ‘&&’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘&&’
 ===================== Welcome to HERMIT ======================
 HERMIT is a toolkit for the interactive transformation of GHC
 core language programs. Documentation on HERMIT can be found
@@ -30,53 +21,124 @@ To get started, you could try the following:
   - type "log" to display an activity log.
 ==============================================================
 
+Forcing obligation: nub-assumption
+Successfully proven: nub-assumption
+Forcing obligation: nubStrict
 Successfully proven: nubStrict
-[0m[1;34mrec[22m[0m[0m [0m[mabsN[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32mSet[0m[0m [0m[32mInt[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
-    [0m[mabsN[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[mh[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m
-      [0m[1;34mcase[22m[0m[0m [0m[0m[mds[0m[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
-        [0m[m[][0m[0m [0m[31m[31m→[31m[0m[0m [0m[m[][0m[0m [0m[32mInt[0m[0m
-        [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[mx[0m[0m [0m[mxs[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInt[0m[0m [0m[0m[mx[0m[0m[0m [0m[31m([0m[0m[0m[0m[mh[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[31m([0m[0m[0m[msingleton[0m[0m [0m[32mInt[0m[0m [0m[0m[mx[0m[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
-    [0m[mfilter[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[31m.[0m[0m [0m[31m([0m[0m[0m[0m[32ma[0m[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32mBool[0m[0m[0m[31m)[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m
-    [0m[mfilter[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[32ma[0m[0m [0m[mds[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m
-      [0m[1;34mcase[22m[0m[0m [0m[0m[mds[0m[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m
-        [0m[m[][0m[0m [0m[31m[31m→[31m[0m[0m [0m[m[][0m[0m [0m[0m[32ma[0m[0m[0m
-        [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[mx[0m[0m [0m[mxs[0m[0m [0m[31m[31m→[31m[0m[0m
-          [0m[1;34mcase[22m[0m[0m [0m[0m[mds[0m[0m[0m [0m[0m[mx[0m[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m
-            [0m[mFalse[0m[0m [0m[31m[31m→[31m[0m[0m [0m[0m[mfilter[0m[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mds[0m[0m[0m [0m[0m[mxs[0m[0m[0m
-            [0m[mTrue[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mx[0m[0m[0m [0m[31m([0m[0m[0m[0m[mfilter[0m[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[mds[0m[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m
-    [0m[mrepN[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m([0m[0m[0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m[0m[31m)[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32mSet[0m[0m [0m[32mInt[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
-    [0m[mrepN[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[mh[0m[0m [0m[mxs[0m[0m [0m[ms[0m[0m [0m[31m[31m→[31m[0m[0m
-      [0m[0m[mh[0m[0m[0m [0m[31m([0m[0m[0m[0m[mfilter[0m[0m[0m [0m[32mInt[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m [0m[mnotMember[0m[0m [0m[32mInt[0m[0m [0m[m$fOrdInt[0m[0m [0m[0m[mds[0m[0m[0m [0m[0m[ms[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m
-    [0m[m$dShow[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mShow[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
-    [0m[m$dShow[0m[0m [0m[31m=[0m[0m [0m[m$fShow[][0m[0m [0m[32mInt[0m[0m [0m[m$fShowInt[0m[0m
-    [0m[mnub[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
-    [0m[mnub[0m[0m [0m[31m=[0m[0m
-      [0m[1;34mlet[22m[0m[0m [0m[1;34mrec[22m[0m[0m [0m[mnub'[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
-              [0m[mnub'[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m
-                [0m[1;34mcase[22m[0m[0m [0m[0m[mds[0m[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
-                  [0m[m[][0m[0m [0m[31m[31m→[31m[0m[0m [0m[m[][0m[0m [0m[32mInt[0m[0m
-                  [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[mx[0m[0m [0m[mxs[0m[0m [0m[31m[31m→[31m[0m[0m
-                    [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInt[0m[0m [0m[0m[mx[0m[0m[0m
-                        [0m[31m([0m[0m[0m[0m[mnub'[0m[0m[0m [0m[31m([0m[0m[0m[0m[mfilter[0m[0m[0m [0m[32mInt[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m/=[0m[0m[0m[31m)[0m[0m [0m[32mInt[0m[0m [0m[m$fEqInt[0m[0m [0m[0m[mds[0m[0m[0m [0m[0m[mx[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mxs[0m[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
-          [0m[1;34mrec[22m[0m[0m [0m[mworker[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32mSet[0m[0m [0m[32mInt[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
-              [0m[mworker[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[mxs[0m[0m [0m[ms[0m[0m [0m[31m[31m→[31m[0m[0m
-                [0m[1;34mcase[22m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
-                  [0m[m[][0m[0m [0m[31m[31m→[31m[0m[0m [0m[m[][0m[0m [0m[32mInt[0m[0m
-                  [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[mx[0m[0m [0m[mxs[0m[0m [0m[31m[31m→[31m[0m[0m
-                    [0m[1;34mcase[22m[0m[0m [0m[mnotMember[0m[0m [0m[32mInt[0m[0m [0m[m$fOrdInt[0m[0m [0m[0m[mx[0m[0m[0m [0m[0m[ms[0m[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m
-                      [0m[mFalse[0m[0m [0m[31m[31m→[31m[0m[0m [0m[0m[mworker[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[0m[ms[0m[0m[0m
-                      [0m[mTrue[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInt[0m[0m [0m[0m[mx[0m[0m[0m [0m[31m([0m[0m[0m[0m[mworker[0m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[31m([0m[0m[0m[minsert[0m[0m [0m[32mInt[0m[0m [0m[m$fOrdInt[0m[0m [0m[0m[mx[0m[0m[0m [0m[0m[ms[0m[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
-      [0m[1;34min[22m[0m[0m [0m[0m[mabsN[0m[0m[0m [0m[0m[mworker[0m[0m[0m
-    [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
-    [0m[mmain[0m[0m [0m[31m=[0m[0m
-      [0m[mprint[0m[0m [0m[32m[[0m[0m[0m[32mInt[0m[0m[0m[32m][0m[0m [0m[0m[m$dShow[0m[0m[0m
-            [0m[31m([0m[0m[0m[0m[mnub[0m[0m[0m [0m[31m([0m[0m[0m[mbuild[0m[0m [0m[32mInt[0m[0m
-                        [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[32ma[0m[0m [0m[mc[0m[0m [0m[mn[0m[0m [0m[31m[31m→[31m[0m[0m
-                           [0m[mfoldr[0m[0m [0m[32mInt[0m[0m [0m[0m[32ma[0m[0m[0m
-                                 [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mds[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m
-                                    [0m[mfoldr[0m[0m [0m[32mInt[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mds[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m [0m[0m[mc[0m[0m[0m [0m[0m[mds[0m[0m[0m [0m[0m[mds[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mds[0m[0m[0m
-                                          [0m[31m([0m[0m[0m[menumFromTo[0m[0m [0m[32mInt[0m[0m [0m[m$fEnumInt[0m[0m [0m[31m([0m[0m[0m[mI#[0m[0m [0m1[0m[0m[31m)[0m[0m [0m[0m[mds[0m[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
-                                 [0m[0m[mn[0m[0m[0m
-                                 [0m[31m([0m[0m[0m[menumFromTo[0m[0m [0m[32mInt[0m[0m [0m[m$fEnumInt[0m[0m [0m[31m([0m[0m[0m[mI#[0m[0m [0m1[0m[0m[31m)[0m[0m [0m[31m([0m[0m[0m[mI#[0m[0m [0m1000[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
-    [0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
-    [0m[mmain[0m[0m [0m[31m=[0m[0m [0m[mrunMainIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m [0m[0m[mmain[0m[0m[0m[0m
+Forcing obligation: nubStrict
+Successfully proven: nubStrict
+Forcing obligation: filter-fusion
+Successfully proven: filter-fusion
+Forcing obligation: member-fusion
+Successfully proven: member-fusion
+[1;34mrec[22m[0m [mabsN[0m [32m[32m∷[32m[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32mSet[0m [32mInt[0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m
+    [mabsN[0m [31m=[0m [31m[31mλ[31m[0m [mh[0m [mds[0m [31m[31m→[31m[0m
+      [1;34mcase[22m[0m [mds[0m [1;34mof[22m[0m [mwild[0m [32m[[0m[32mInt[0m[32m][0m
+        [m[][0m [31m[31m→[31m[0m [m[][0m [32mInt[0m
+        [31m([0m[m:[0m[31m)[0m [mx[0m [mxs[0m [31m[31m→[31m[0m [31m([0m[m:[0m[31m)[0m [32mInt[0m [mx[0m [31m([0m[mh[0m [mxs[0m [31m([0m[msingleton[0m [32mInt[0m [mx[0m[31m)[0m[31m)[0m
+    [mfilter[0m [32m[32m∷[32m[0m [31m[31m∀[31m[0m [32ma[0m [31m.[0m [31m([0m[32ma[0m [32m[32m→[32m[0m [32mBool[0m[31m)[0m [32m[32m→[32m[0m [32m[[0m[32ma[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32ma[0m[32m][0m
+    [mfilter[0m [31m=[0m [31m[31mλ[31m[0m [32ma[0m [mds[0m [mds[0m [31m[31m→[31m[0m
+      [1;34mcase[22m[0m [mds[0m [1;34mof[22m[0m [mwild[0m [32m[[0m[32ma[0m[32m][0m
+        [m[][0m [31m[31m→[31m[0m [m[][0m [32ma[0m
+        [31m([0m[m:[0m[31m)[0m [mx[0m [mxs[0m [31m[31m→[31m[0m
+          [1;34mcase[22m[0m [mds[0m [mx[0m [1;34mof[22m[0m [mwild[0m [32m[[0m[32ma[0m[32m][0m
+            [mFalse[0m [31m[31m→[31m[0m [mfilter[0m [32ma[0m [mds[0m [mxs[0m
+            [mTrue[0m [31m[31m→[31m[0m [31m([0m[m:[0m[31m)[0m [32ma[0m [mx[0m [31m([0m[mfilter[0m [32ma[0m [mds[0m [mxs[0m[31m)[0m
+    [mrepN[0m [32m[32m∷[32m[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32mSet[0m [32mInt[0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m
+    [mrepN[0m [31m=[0m [31m[31mλ[31m[0m [mh[0m [mxs[0m [ms[0m [31m[31m→[31m[0m
+      [mh[0m [31m([0m[mfilter[0m [32mInt[0m [31m([0m[31m[31mλ[31m[0m [mds[0m [31m[31m→[31m[0m [mnotMember[0m [32mInt[0m [m$fOrdInt[0m [mds[0m [ms[0m[31m)[0m [mxs[0m[31m)[0m
+    [m$dShow[0m [32m[32m∷[32m[0m [32mShow[0m [32m[[0m[32mInt[0m[32m][0m
+    [m$dShow[0m [31m=[0m [m$fShow[][0m [32mInt[0m [m$fShowInt[0m
+    [mnub[0m [32m[32m∷[32m[0m [32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m
+    [mnub[0m [31m=[0m
+      [1;34mlet[22m[0m [1;34mrec[22m[0m [mnub'[0m [32m[32m∷[32m[0m [32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m
+              [mnub'[0m [31m=[0m [31m[31mλ[31m[0m [mds[0m [31m[31m→[31m[0m
+                [1;34mcase[22m[0m [mds[0m [1;34mof[22m[0m [mwild[0m [32m[[0m[32mInt[0m[32m][0m
+                  [m[][0m [31m[31m→[31m[0m [m[][0m [32mInt[0m
+                  [31m([0m[m:[0m[31m)[0m [mx[0m [mxs[0m [31m[31m→[31m[0m
+                    [31m([0m[m:[0m[31m)[0m [32mInt[0m [mx[0m
+                        [31m([0m[mnub'[0m [31m([0m[mfilter[0m [32mInt[0m [31m([0m[31m[31mλ[31m[0m [mds[0m [31m[31m→[31m[0m [31m([0m[m/=[0m[31m)[0m [32mInt[0m [m$fEqInt[0m [mds[0m [mx[0m[31m)[0m [mxs[0m[31m)[0m[31m)[0m
+          [1;34mrec[22m[0m [mworker[0m [32m[32m∷[32m[0m [32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32mSet[0m [32mInt[0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m
+              [mworker[0m [31m=[0m [31m[31mλ[31m[0m [mxs[0m [ms[0m [31m[31m→[31m[0m
+                [1;34mcase[22m[0m [mxs[0m [1;34mof[22m[0m [mwild[0m [32m[[0m[32mInt[0m[32m][0m
+                  [m[][0m [31m[31m→[31m[0m [m[][0m [32mInt[0m
+                  [31m([0m[m:[0m[31m)[0m [mx[0m [mxs[0m [31m[31m→[31m[0m
+                    [1;34mcase[22m[0m [mnotMember[0m [32mInt[0m [m$fOrdInt[0m [mx[0m [ms[0m [1;34mof[22m[0m [mwild[0m [32m[[0m[32mInt[0m[32m][0m
+                      [mFalse[0m [31m[31m→[31m[0m [mworker[0m [mxs[0m [ms[0m
+                      [mTrue[0m [31m[31m→[31m[0m [31m([0m[m:[0m[31m)[0m [32mInt[0m [mx[0m [31m([0m[mworker[0m [mxs[0m [31m([0m[minsert[0m [32mInt[0m [m$fOrdInt[0m [mx[0m [ms[0m[31m)[0m[31m)[0m
+      [1;34min[22m[0m [mabsN[0m [mworker[0m
+    [mmain[0m [32m[32m∷[32m[0m [32mIO[0m [32m([0m[32m)[0m
+    [mmain[0m [31m=[0m
+      [mprint[0m [32m[[0m[32mInt[0m[32m][0m [m$dShow[0m
+            [31m([0m[mnub[0m [31m([0m[mbuild[0m [32mInt[0m
+                        [31m([0m[31m[31mλ[31m[0m [32ma[0m [mc[0m [mn[0m [31m[31m→[31m[0m
+                           [mfoldr[0m [32mInt[0m [32ma[0m
+                                 [31m([0m[31m[31mλ[31m[0m [mds[0m [mds[0m [31m[31m→[31m[0m
+                                    [mfoldr[0m [32mInt[0m [32ma[0m [31m([0m[31m[31mλ[31m[0m [mds[0m [mds[0m [31m[31m→[31m[0m [mc[0m [mds[0m [mds[0m[31m)[0m [mds[0m
+                                          [31m([0m[menumFromTo[0m [32mInt[0m [m$fEnumInt[0m [31m([0m[mI#[0m 1[31m)[0m [mds[0m[31m)[0m[31m)[0m
+                                 [mn[0m
+                                 [31m([0m[menumFromTo[0m [32mInt[0m [m$fEnumInt[0m [31m([0m[mI#[0m 1[31m)[0m [31m([0m[mI#[0m 1000[31m)[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m
+    [mmain[0m [32m[32m∷[32m[0m [32mIO[0m [32m([0m[32m)[0m
+    [mmain[0m [31m=[0m [mrunMainIO[0m [32m([0m[32m)[0m [mmain[0m[0m
+filter-fusion (Assumed)
+  [31m[31m∀[31m[0m [32ma[0m [mp[0m [mq[0m [mys[0m[31m.[0m
+  [7;93mfilter[27m[0m [32ma[0m [mp[0m [31m([0m[7;93mfilter[27m[0m [32ma[0m [mq[0m [mys[0m[31m)[0m [31m[31m≡[31m[0m [7;93mfilter[27m[0m [32ma[0m [31m([0m[31m[31mλ[31m[0m [my[0m [31m[31m→[31m[0m [31m([0m[m&&[0m[31m)[0m [31m([0m[mp[0m [my[0m[31m)[0m [31m([0m[mq[0m [my[0m[31m)[0m[31m)[0m [mys[0m
+member-fusion (Assumed)
+  [31m[31m∀[31m[0m [32ma[0m [m$dEq[0m [m$dOrd[0m [my[0m [mx[0m [ms[0m[31m.[0m
+  [31m([0m[m&&[0m[31m)[0m [31m([0m[31m([0m[m/=[0m[31m)[0m [32ma[0m [m$dEq[0m [my[0m [mx[0m[31m)[0m [31m([0m[mnotMember[0m [32ma[0m [m$dOrd[0m [my[0m [ms[0m[31m)[0m
+  [31m[31m≡[31m[0m
+  [mnotMember[0m [32ma[0m [m$dOrd[0m [my[0m [31m([0m[minsert[0m [32ma[0m [m$dOrd[0m [mx[0m [ms[0m[31m)[0m
+nub-assumption (Assumed)
+  [mfix[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m
+      [31m([0m[31m([0m[m.[0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32mSet[0m [32mInt[0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [7;93mabsN[27m[0m
+           [31m([0m[31m([0m[m.[0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32mSet[0m [32mInt[0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [7;93mrepN[27m[0m
+                [31m([0m[31m[31mλ[31m[0m [mnub[0m [mds[0m [31m[31m→[31m[0m
+                   [1;34mcase[22m[0m [mds[0m [1;34mof[22m[0m [mwild[0m [32m[[0m[32mInt[0m[32m][0m
+                     [m[][0m [31m[31m→[31m[0m [m[][0m [32mInt[0m
+                     [31m([0m[m:[0m[31m)[0m [mx[0m [mxs[0m [31m[31m→[31m[0m
+                       [31m([0m[m:[0m[31m)[0m [32mInt[0m [mx[0m
+                           [31m([0m[mnub[0m [31m([0m[7;93mfilter[27m[0m [32mInt[0m [31m([0m[31m[31mλ[31m[0m [mds[0m [31m[31m→[31m[0m [31m([0m[m/=[0m[31m)[0m [32mInt[0m [m$fEqInt[0m [mds[0m [mx[0m[31m)[0m
+                                        [mxs[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m
+  [31m[31m≡[31m[0m
+  [mfix[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m
+      [31m([0m[31m[31mλ[31m[0m [mnub[0m [mds[0m [31m[31m→[31m[0m
+         [1;34mcase[22m[0m [mds[0m [1;34mof[22m[0m [mwild[0m [32m[[0m[32mInt[0m[32m][0m
+           [m[][0m [31m[31m→[31m[0m [m[][0m [32mInt[0m
+           [31m([0m[m:[0m[31m)[0m [mx[0m [mxs[0m [31m[31m→[31m[0m
+             [31m([0m[m:[0m[31m)[0m [32mInt[0m [mx[0m [31m([0m[mnub[0m [31m([0m[7;93mfilter[27m[0m [32mInt[0m [31m([0m[31m[31mλ[31m[0m [mds[0m [31m[31m→[31m[0m [31m([0m[m/=[0m[31m)[0m [32mInt[0m [m$fEqInt[0m [mds[0m [mx[0m[31m)[0m [mxs[0m[31m)[0m[31m)[0m[31m)[0m
+nub-fusion (Built In)
+  [7;93mrepN[27m[0m [31m([0m[7;93mabsN[27m[0m [7;93mworker[27m[0m[31m)[0m [31m[31m≡[31m[0m [7;93mworker[27m[0m
+remembered-origworker (Proven)
+  [31m[31m∀[31m[0m [mxs[0m [ms[0m[31m.[0m
+  [7;93mworker[27m[0m [mxs[0m [ms[0m
+  [31m[31m≡[31m[0m
+  [7;93mnub'[27m[0m [31m([0m[7;93mfilter[27m[0m [32mInt[0m [31m([0m[31m[31mλ[31m[0m [mds[0m [31m[31m→[31m[0m [mnotMember[0m [32mInt[0m [m$fOrdInt[0m [mds[0m [ms[0m[31m)[0m [mxs[0m[31m)[0m[0m
+Warning: Lemma filter-fusion was assumed but not proven.
+filter-fusion
+  [31m[31m∀[31m[0m [32ma[0m [mp[0m [mq[0m [mys[0m[31m.[0m
+  [7;93mfilter[27m[0m [32ma[0m [mp[0m [31m([0m[7;93mfilter[27m[0m [32ma[0m [mq[0m [mys[0m[31m)[0m [31m[31m≡[31m[0m [7;93mfilter[27m[0m [32ma[0m [31m([0m[31m[31mλ[31m[0m [my[0m [31m[31m→[31m[0m [31m([0m[m&&[0m[31m)[0m [31m([0m[mp[0m [my[0m[31m)[0m [31m([0m[mq[0m [my[0m[31m)[0m[31m)[0m [mys[0m[0m
+Warning: Lemma member-fusion was assumed but not proven.
+member-fusion
+  [31m[31m∀[31m[0m [32ma[0m [m$dEq[0m [m$dOrd[0m [my[0m [mx[0m [ms[0m[31m.[0m
+  [31m([0m[m&&[0m[31m)[0m [31m([0m[31m([0m[m/=[0m[31m)[0m [32ma[0m [m$dEq[0m [my[0m [mx[0m[31m)[0m [31m([0m[mnotMember[0m [32ma[0m [m$dOrd[0m [my[0m [ms[0m[31m)[0m
+  [31m[31m≡[31m[0m
+  [mnotMember[0m [32ma[0m [m$dOrd[0m [my[0m [31m([0m[minsert[0m [32ma[0m [m$dOrd[0m [mx[0m [ms[0m[31m)[0m[0m
+Warning: Lemma nub-assumption was assumed but not proven.
+nub-assumption
+  [mfix[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m
+      [31m([0m[31m([0m[m.[0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32mSet[0m [32mInt[0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [7;93mabsN[27m[0m
+           [31m([0m[31m([0m[m.[0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32mSet[0m [32mInt[0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m [7;93mrepN[27m[0m
+                [31m([0m[31m[31mλ[31m[0m [mnub[0m [mds[0m [31m[31m→[31m[0m
+                   [1;34mcase[22m[0m [mds[0m [1;34mof[22m[0m [mwild[0m [32m[[0m[32mInt[0m[32m][0m
+                     [m[][0m [31m[31m→[31m[0m [m[][0m [32mInt[0m
+                     [31m([0m[m:[0m[31m)[0m [mx[0m [mxs[0m [31m[31m→[31m[0m
+                       [31m([0m[m:[0m[31m)[0m [32mInt[0m [mx[0m
+                           [31m([0m[mnub[0m [31m([0m[7;93mfilter[27m[0m [32mInt[0m [31m([0m[31m[31mλ[31m[0m [mds[0m [31m[31m→[31m[0m [31m([0m[m/=[0m[31m)[0m [32mInt[0m [m$fEqInt[0m [mds[0m [mx[0m[31m)[0m
+                                        [mxs[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m
+  [31m[31m≡[31m[0m
+  [mfix[0m [31m([0m[32m[[0m[32mInt[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32mInt[0m[32m][0m[31m)[0m
+      [31m([0m[31m[31mλ[31m[0m [mnub[0m [mds[0m [31m[31m→[31m[0m
+         [1;34mcase[22m[0m [mds[0m [1;34mof[22m[0m [mwild[0m [32m[[0m[32mInt[0m[32m][0m
+           [m[][0m [31m[31m→[31m[0m [m[][0m [32mInt[0m
+           [31m([0m[m:[0m[31m)[0m [mx[0m [mxs[0m [31m[31m→[31m[0m
+             [31m([0m[m:[0m[31m)[0m [32mInt[0m [mx[0m [31m([0m[mnub[0m [31m([0m[7;93mfilter[27m[0m [32mInt[0m [31m([0m[31m[31mλ[31m[0m [mds[0m [31m[31m→[31m[0m [31m([0m[m/=[0m[31m)[0m [32mInt[0m [m$fEqInt[0m [mds[0m [mx[0m[31m)[0m [mxs[0m[31m)[0m[31m)[0m[31m)[0m[0m

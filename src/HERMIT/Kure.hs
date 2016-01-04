@@ -1,84 +1,100 @@
-{-# LANGUAGE CPP, LambdaCase, FlexibleInstances, MultiParamTypeClasses, FlexibleContexts, UndecidableInstances, ScopedTypeVariables, InstanceSigs #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module HERMIT.Kure
-       (
-       -- * KURE
+    ( -- * KURE
 
-       -- | All the required functionality of KURE is exported here, so other modules do not need to import KURE directly.
-         module Language.KURE
-       , module Language.KURE.BiTransform
-       , module Language.KURE.Lens
-       , module Language.KURE.ExtendableContext
-       , module Language.KURE.Pathfinder
-       -- * Sub-Modules
-       , module HERMIT.Kure.SumTypes
-       -- * Synonyms
-       , TransformH
-       , RewriteH
-       , BiRewriteH
-       , LensH
-       , PathH
+      -- | All the required functionality of KURE is exported here, so other modules do not need to import KURE directly.
+      module Language.KURE
+    , module Language.KURE.BiTransform
+    , module Language.KURE.Lens
+    , module Language.KURE.ExtendableContext
+    , module Language.KURE.Pathfinder
+      -- * Sub-Modules
+    , module HERMIT.Kure.Universes
+      -- * Synonyms
+    , TransformH
+    , RewriteH
+    , BiRewriteH
+    , LensH
+    , PathH
+      -- * Utilities
+    , inContextM
 
-       -- * Congruence combinators
-       -- ** Modguts
-       , modGutsT, modGutsR
-       -- ** Program
-       , progNilT
-       , progConsT, progConsAllR, progConsAnyR, progConsOneR
-       -- ** Binding Groups
-       , nonRecT, nonRecAllR, nonRecAnyR, nonRecOneR
-       , recT, recAllR, recAnyR, recOneR
-       -- ** Recursive Definitions
-       , defT, defAllR, defAnyR, defOneR
-       -- ** Case Alternatives
-       , altT, altAllR, altAnyR, altOneR
-       -- ** Expressions
-       , varT, varR
-       , litT, litR
-       , appT, appAllR, appAnyR, appOneR
-       , lamT, lamAllR, lamAnyR, lamOneR
-       , letT, letAllR, letAnyR, letOneR
-       , caseT, caseAllR, caseAnyR, caseOneR
-       , castT, castAllR, castAnyR, castOneR
-       , tickT, tickAllR, tickAnyR, tickOneR
-       , typeT, typeR
-       , coercionT, coercionR
-       -- ** Composite Congruence Combinators
-       , defOrNonRecT, defOrNonRecAllR, defOrNonRecAnyR, defOrNonRecOneR
-       , recDefT, recDefAllR, recDefAnyR, recDefOneR
-       , letNonRecT, letNonRecAllR, letNonRecAnyR, letNonRecOneR
-       , letRecT, letRecAllR, letRecAnyR, letRecOneR
-       , letRecDefT, letRecDefAllR, letRecDefAnyR, letRecDefOneR
-       , consNonRecT, consNonRecAllR, consNonRecAnyR, consNonRecOneR
-       , consRecT, consRecAllR, consRecAnyR, consRecOneR
-       , consRecDefT, consRecDefAllR, consRecDefAnyR, consRecDefOneR
-       , caseAltT, caseAltAllR, caseAltAnyR, caseAltOneR
-       -- ** Recursive Composite Congruence Combinators
-       , progBindsT, progBindsAllR, progBindsAnyR, progBindsOneR
-       -- ** Types
-       , tyVarT, tyVarR
-       , litTyT, litTyR
-       , appTyT, appTyAllR, appTyAnyR, appTyOneR
-       , funTyT, funTyAllR, funTyAnyR, funTyOneR
-       , forAllTyT, forAllTyAllR, forAllTyAnyR, forAllTyOneR
-       , tyConAppT, tyConAppAllR, tyConAppAnyR, tyConAppOneR
-       -- ** Coercions
-       , reflT, reflR
-       , tyConAppCoT, tyConAppCoAllR, tyConAppCoAnyR, tyConAppCoOneR
-       , appCoT, appCoAllR, appCoAnyR, appCoOneR
-       , forAllCoT, forAllCoAllR, forAllCoAnyR, forAllCoOneR
-       , coVarCoT, coVarCoR
-       , axiomInstCoT, axiomInstCoAllR, axiomInstCoAnyR, axiomInstCoOneR
-       , symCoT, symCoR
-       , transCoT, transCoAllR, transCoAnyR, transCoOneR
-       , nthCoT, nthCoAllR, nthCoAnyR, nthCoOneR
-       , instCoT, instCoAllR, instCoAnyR, instCoOneR
-       , lrCoT, lrCoAllR, lrCoAnyR, lrCoOneR
-       -- * Conversion to deprecated Int representation
-       , deprecatedIntToCrumbT
-       , deprecatedIntToPathT
-       )
-where
+      -- * Congruence combinators
+      -- ** Modguts
+    , modGutsT, modGutsR
+      -- ** Program
+    , progNilT
+    , progConsT, progConsAllR, progConsAnyR, progConsOneR
+      -- ** Binding Groups
+    , nonRecT, nonRecAllR, nonRecAnyR, nonRecOneR
+    , recT, recAllR, recAnyR, recOneR
+      -- ** Recursive Definitions
+    , defT, defAllR, defAnyR, defOneR
+      -- ** Case Alternatives
+    , altT, altAllR, altAnyR, altOneR
+      -- ** Expressions
+    , varT, varR
+    , litT, litR
+    , appT, appAllR, appAnyR, appOneR
+    , lamT, lamAllR, lamAnyR, lamOneR
+    , letT, letAllR, letAnyR, letOneR
+    , caseT, caseAllR, caseAnyR, caseOneR
+    , castT, castAllR, castAnyR, castOneR
+    , tickT, tickAllR, tickAnyR, tickOneR
+    , typeT, typeR
+    , coercionT, coercionR
+      -- ** Composite Congruence Combinators
+    , defOrNonRecT, defOrNonRecAllR, defOrNonRecAnyR, defOrNonRecOneR
+    , recDefT, recDefAllR, recDefAnyR, recDefOneR
+    , letNonRecT, letNonRecAllR, letNonRecAnyR, letNonRecOneR
+    , letRecT, letRecAllR, letRecAnyR, letRecOneR
+    , letRecDefT, letRecDefAllR, letRecDefAnyR, letRecDefOneR
+    , consNonRecT, consNonRecAllR, consNonRecAnyR, consNonRecOneR
+    , consRecT, consRecAllR, consRecAnyR, consRecOneR
+    , consRecDefT, consRecDefAllR, consRecDefAnyR, consRecDefOneR
+    , caseAltT, caseAltAllR, caseAltAnyR, caseAltOneR
+      -- ** Recursive Composite Congruence Combinators
+    , progBindsT, progBindsAllR, progBindsAnyR, progBindsOneR
+      -- ** Types
+    , tyVarT, tyVarR
+    , litTyT, litTyR
+    , appTyT, appTyAllR, appTyAnyR, appTyOneR
+    , funTyT, funTyAllR, funTyAnyR, funTyOneR
+    , forAllTyT, forAllTyAllR, forAllTyAnyR, forAllTyOneR
+    , tyConAppT, tyConAppAllR, tyConAppAnyR, tyConAppOneR
+      -- ** Coercions
+    , reflT, reflR
+    , tyConAppCoT, tyConAppCoAllR, tyConAppCoAnyR, tyConAppCoOneR
+    , appCoT, appCoAllR, appCoAnyR, appCoOneR
+    , forAllCoT, forAllCoAllR, forAllCoAnyR, forAllCoOneR
+    , coVarCoT, coVarCoR
+    , axiomInstCoT, axiomInstCoAllR, axiomInstCoAnyR, axiomInstCoOneR
+    , symCoT, symCoR
+    , transCoT, transCoAllR, transCoAnyR, transCoOneR
+    , nthCoT, nthCoAllR, nthCoAnyR, nthCoOneR
+    , instCoT, instCoAllR, instCoAnyR, instCoOneR
+    , lrCoT, lrCoAllR, lrCoAnyR, lrCoOneR
+      -- ** Lemmas
+    , conjT, conjAllR
+    , disjT, disjAllR
+    , implT, implAllR
+    , equivT, equivAllR
+    , forallT, forallR, forallsT, forallsR
+      -- * Applicative
+    , (<$>)
+    , (<*>)
+    ) where
+
+import Control.Monad.Compat (ap, liftM)
 
 import Language.KURE
 import Language.KURE.BiTransform
@@ -89,12 +105,11 @@ import Language.KURE.Pathfinder
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.GHC
+import HERMIT.Kure.Universes
+import HERMIT.Lemma
 import HERMIT.Monad
-import HERMIT.Kure.SumTypes
 
-import Control.Monad
-
-import Data.Monoid (mempty)
+import Prelude.Compat hiding ((<$>), (<*>))
 
 ---------------------------------------------------------------------
 
@@ -104,8 +119,8 @@ type BiRewriteH a   = BiRewrite HermitC HermitM a
 type LensH a b      = Lens      HermitC HermitM a b
 type PathH          = Path Crumb
 
--- I find it annoying that Applicative is not a superclass of Monad.
--- This causes a warning now, and will need to be CPP'd for 7.10
+-- It is annoying that Applicative is not a superclass of Monad in 7.8.
+-- This causes a warning which we ignore.
 (<$>) :: Monad m => (a -> b) -> m a -> m b
 (<$>) = liftM
 {-# INLINE (<$>) #-}
@@ -163,9 +178,6 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c
                               Tick{}  -> tickAllR idR (extractR r) -- we don't descend into the Tickish
                               _       -> idR
       {-# INLINE allRexpr #-}
-
--- NOTE: I tried telling GHC to inline allR and compilation hit the (default) simplifier tick limit.
--- TODO: Investigate whether that was achieving useful optimisations.
 
 ---------------------------------------------------------------------
 
@@ -228,7 +240,50 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c TyCo 
 
 ---------------------------------------------------------------------
 
--- | Walking over modules, programs, binding groups, definitions, expressions and case alternatives.
+-- | Walking over modules, programs, binding groups, definitions, expressions, case alternatives, lemma quantifiers and lemma clauses.
+instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb) => Walker c LCore where
+
+    allR :: forall m. MonadCatch m => Rewrite c m LCore -> Rewrite c m LCore
+    allR r = prefixFailMsg "allR failed: " $
+                rewrite $ \ c -> \case
+                    LClause cl     -> inject <$> applyT allRclause c cl
+                    LCore core     -> inject <$> applyT (allR $ extractR r) c core -- exploiting the fact that clause does not appear within Core
+        where
+            allRclause :: MonadCatch m => Rewrite c m Clause
+            allRclause = readerT $ \case
+                                Forall{} -> forallR idR (extractR r) -- we don't descend into the binders
+                                Conj{}   -> conjAllR  (extractR r) (extractR r)
+                                Disj{}   -> disjAllR  (extractR r) (extractR r)
+                                Impl{}   -> implAllR  (extractR r) (extractR r)
+                                Equiv{}  -> equivAllR (extractR r) (extractR r)
+                                CTrue    -> return CTrue
+            {-# INLINE allRclause #-}
+
+---------------------------------------------------------------------
+
+-- | Walking over modules, programs, binding groups, definitions, expressions, case alternatives, types, coercions, lemma quantifiers and lemma clauses.
+instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb) => Walker c LCoreTC where
+
+    allR :: forall m. MonadCatch m => Rewrite c m LCoreTC -> Rewrite c m LCoreTC
+    allR r = prefixFailMsg "allR failed: " $
+                rewrite $ \ c -> \case
+                    LTCCore (LClause cl)     -> inject <$> applyT allRclause c cl
+                    LTCCore (LCore core)     -> inject <$> applyT (allR (extractR r :: Rewrite c m CoreTC)) c (Core core) -- convert to CoreTC, and exploit the fact that quantifiers and clauses will not appear in Core/CoreTC
+                    LTCTyCo tyCo             -> inject <$> applyT (allR $ extractR r) c tyCo -- exploiting the fact that only types and coercions appear within types and coercions
+        where
+            allRclause :: MonadCatch m => Rewrite c m Clause
+            allRclause = readerT $ \case
+                                Forall{} -> forallR idR (extractR r) -- we don't descend into the binders
+                                Conj{}   -> conjAllR (extractR r) (extractR r)
+                                Disj{}   -> disjAllR (extractR r) (extractR r)
+                                Impl{}   -> implAllR  (extractR r) (extractR r)
+                                Equiv{}  -> equivAllR (extractR r) (extractR r)
+                                CTrue    -> return CTrue
+            {-# INLINE allRclause #-}
+
+---------------------------------------------------------------------
+
+-- | Walking over modules, programs, binding groups, definitions, expressions, case alternatives, types and coercions.
 instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c) => Walker c CoreTC where
 
   allR :: forall m. MonadCatch m => Rewrite c m CoreTC -> Rewrite c m CoreTC
@@ -1232,38 +1287,102 @@ instCoOneR r1 r2 = unwrapOneR $ instCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE instCoOneR #-}
 
 ---------------------------------------------------------------------
+
+-- | Transform a clause of the form: @Conj@ 'Clause' 'Clause'
+conjT :: (ExtendPath c Crumb, Monad m) => Transform c m Clause a1 -> Transform c m Clause a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+conjT t1 t2 f = transform $ \ c -> \case
+                                     Conj q1 q2 -> f <$> applyT t1 (c @@ Conj_Lhs) q1 <*> applyT t2 (c @@ Conj_Rhs) q2
+                                     _          -> fail "not a conjunction."
+{-# INLINE conjT #-}
+
+-- | Rewrite all children of a clause of the form: : @Conj@ 'Clause' 'Clause'
+conjAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Clause -> Rewrite c m Clause -> Rewrite c m Clause
+conjAllR r1 r2 = conjT r1 r2 Conj
+{-# INLINE conjAllR #-}
+
+
+-- | Transform a clause of the form: @Disj@ 'Clause' 'Clause'
+disjT :: (ExtendPath c Crumb, Monad m) => Transform c m Clause a1 -> Transform c m Clause a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+disjT t1 t2 f = transform $ \ c -> \case
+                                     Disj q1 q2 -> f <$> applyT t1 (c @@ Disj_Lhs) q1 <*> applyT t2 (c @@ Disj_Rhs) q2
+                                     _          -> fail "not a disjunction."
+{-# INLINE disjT #-}
+
+-- | Rewrite all children of a clause of the form: : @Disj@ 'Clause' 'Clause'
+disjAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Clause -> Rewrite c m Clause -> Rewrite c m Clause
+disjAllR r1 r2 = disjT r1 r2 Disj
+{-# INLINE disjAllR #-}
+
+
+-- | Transform a clause of the form: @Impl@ 'LemmaName' 'Clause' 'Clause'
+implT :: (ExtendPath c Crumb, LemmaContext c, Monad m)
+      => Transform c m Clause a1 -> Transform c m Clause a2 -> (LemmaName -> a1 -> a2 -> b) -> Transform c m Clause b
+implT t1 t2 f = transform $ \ c -> \case
+                                     Impl nm q1 q2 -> let l = Lemma q1 BuiltIn NotUsed
+                                                      in f nm <$> applyT t1 (c @@ Impl_Lhs) q1
+                                                              <*> applyT t2 (addAntecedent nm l c @@ Impl_Rhs) q2
+                                     _          -> fail "not an implication."
+{-# INLINE implT #-}
+
+-- | Rewrite all children of a clause of the form: : @Impl@ 'Clause' 'Clause'
+implAllR :: (ExtendPath c Crumb, LemmaContext c, Monad m)
+         => Rewrite c m Clause -> Rewrite c m Clause -> Rewrite c m Clause
+implAllR r1 r2 = implT r1 r2 Impl
+{-# INLINE implAllR #-}
+
+-- | Transform a clause of the form: @Equiv@ 'CoreExpr' 'CoreExpr'
+equivT :: (ExtendPath c Crumb, Monad m) => Transform c m CoreExpr a1 -> Transform c m CoreExpr a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+equivT t1 t2 f = transform $ \ c -> \case
+                                     Equiv e1 e2 -> f <$> applyT t1 (c @@ Eq_Lhs) e1 <*> applyT t2 (c @@ Eq_Rhs) e2
+                                     _           -> fail "not an equivalence."
+{-# INLINE equivT #-}
+
+-- | Rewrite all children of a clause of the form: : @Equiv@ 'CoreExpr' 'CoreExpr'
+equivAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr -> Rewrite c m CoreExpr -> Rewrite c m Clause
+equivAllR r1 r2 = equivT r1 r2 Equiv
+{-# INLINE equivAllR #-}
+
 ---------------------------------------------------------------------
 
--- | Earlier versions of HERMIT used 'Int' as the crumb type.
---   This translation maps an 'Int' to the corresponding 'Crumb', for backwards compatibility purposes.
-deprecatedIntToCrumbT :: Monad m => Int -> Transform c m Core Crumb
-deprecatedIntToCrumbT n = contextfreeT $ \case
-                                            GutsCore _                 | n == 0                        -> return ModGuts_Prog
-                                            AltCore _                  | n == 0                        -> return Alt_RHS
-                                            DefCore _                  | n == 0                        -> return Def_RHS
-                                            ProgCore (ProgCons _ _)    | n == 0                        -> return ProgCons_Head
-                                                                       | n == 1                        -> return ProgCons_Tail
-                                            BindCore (NonRec _ _)      | n == 0                        -> return NonRec_RHS
-                                            BindCore (Rec bds)         | (n >= 0) && (n < length bds)  -> return (Rec_Def n)
-                                            ExprCore (App _ _)         | n == 0                        -> return App_Fun
-                                                                       | n == 1                        -> return App_Arg
-                                            ExprCore (Lam _ _)         | n == 0                        -> return Lam_Body
-                                            ExprCore (Let _ _)         | n == 0                        -> return Let_Bind
-                                                                       | n == 1                        -> return Let_Body
-                                            ExprCore (Case _ _ _ alts) | n == 0                        -> return Case_Scrutinee
-                                                                       | (n > 0) && (n <= length alts) -> return (Case_Alt (n-1))
-                                            ExprCore (Cast _ _)        | n == 0                        -> return Cast_Expr
-                                            ExprCore (Tick _ _)        | n == 0                        -> return Tick_Expr
-                                            _                                                          -> fail ("Child " ++ show n ++ " does not exist.")
-{-# INLINE deprecatedIntToCrumbT #-}
+-- | Transform a clause of the form: @Forall@ 'CoreBndr' 'Clause'
+forallT :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, Monad m)
+        => Transform c m CoreBndr a1 -> Transform c m Clause a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+forallT t1 t2 f = transform $ \ c -> \case
+                                        Forall b cl -> let c' = addLambdaBinding b c
+                                                       in f <$> applyT t1 c b <*> applyT t2 (c' @@ Forall_Body) cl
+                                        _           -> fail "not a quantified clause."
+{-# INLINE forallT #-}
 
--- | Builds a path to the first child, based on the old numbering system.
-deprecatedIntToPathT :: Monad m => Int -> Transform c m Core LocalPathH
-deprecatedIntToPathT =  liftM (mempty @@) . deprecatedIntToCrumbT
-{-# INLINE deprecatedIntToPathT #-}
+-- | Rewrite the a clause of the form: @Forall@ 'CoreBndr' 'Clause'
+forallR :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, Monad m)
+        => Rewrite c m CoreBndr -> Rewrite c m Clause -> Rewrite c m Clause
+forallR r1 r2 = forallT r1 r2 Forall
+{-# INLINE forallR #-}
 
----------------------------------------------------------------------
+-- | Transform a clause with nested forall quantifiers.
+forallsT :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, Monad m)
+         => Transform c m [CoreBndr] a1 -> Transform c m Clause a2 -> (a1 -> a2 -> b) -> Transform c m Clause b
+forallsT t1 t2 f = transform $ \ c e -> case collectQs e of
+                                            (bs@(_:_),cl) ->
+                                                let c' = foldl (\ctxt b -> addLambdaBinding b ctxt @@ Forall_Body) c bs
+                                                in f <$> applyT t1 c bs <*> applyT t2 c' cl
+                                            _             -> fail "not a quantified clause."
+{-# INLINE forallsT #-}
+
+-- | Rewrite the a clause with nested forall quantifiers.
+forallsR :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, Monad m)
+         => Rewrite c m [CoreBndr] -> Rewrite c m Clause -> Rewrite c m Clause
+forallsR r1 r2 = forallsT r1 r2 mkForall
+{-# INLINE forallsR #-}
+
 ---------------------------------------------------------------------
 
 instance HasDynFlags m => HasDynFlags (Transform c m a) where
     getDynFlags = constT getDynFlags
+
+---------------------------------------------------------------------
+
+-- Useful for utilities which are Transforms for a reason, but don't use their input.
+inContextM :: c -> Transform c m () a -> m a
+inContextM c t = applyT t c ()
+

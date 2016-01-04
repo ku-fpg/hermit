@@ -1,5 +1,5 @@
 {
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE TupleSections #-}
 module HERMIT.ParserCore
     ( parseCore
     , parseCoreExprT
@@ -17,6 +17,7 @@ module HERMIT.ParserCore
 import Control.Arrow
 import Control.Monad.Reader
 import Data.Char (isSpace, isDigit)
+import qualified Data.Map as M
 
 import HERMIT.Context
 import HERMIT.External
@@ -168,27 +169,35 @@ lexer s            = Left $ "lexer: no match on " ++ s
 
 ---------------------------------------------
 
-parseCore :: BoundVars c => CoreString -> c -> HermitM CoreExpr
+parseCore :: ReadBindings c => CoreString -> c -> HermitM CoreExpr
 parseCore (CoreString s) c =
     case lexer s of
         Left msg -> fail msg
-        Right tokens -> runReaderT (parser tokens) (boundVars c)
+        Right tokens ->
+            -- Since we are comparing occurrence names, only take the
+            -- most recently defined (deepest) when variables shadow each other.
+            let comb v1@(_,d1) v2@(_,d2) = if d1 > d2 then v1 else v2
+                vars = mkVarSet . map fst . M.elems
+                     $ M.mapKeysWith comb getOccString
+                     $ M.mapWithKey (\k -> (k,) . hbDepth)
+                     $ hermitBindings c
+            in runReaderT (parser tokens) vars
 
 ---------------------------------------------
 
 -- These should probably go somewhere else.
 
 -- | Parse a 'CoreString' to a 'CoreExpr', using the current context.
-parseCoreExprT :: (BoundVars c, HasDebugChan m, HasHermitMEnv m, HasLemmas m, HasStash m, LiftCoreM m)
+parseCoreExprT :: (ReadBindings c, HasHermitMEnv m, HasLemmas m, LiftCoreM m)
                => CoreString -> Transform c m a CoreExpr
 parseCoreExprT cs = contextonlyT $ embedHermitM . parseCore cs
 
-parse2BeforeT :: (BoundVars c, HasDebugChan m, HasHermitMEnv m, HasLemmas m, HasStash m, LiftCoreM m)
+parse2BeforeT :: (ReadBindings c, HasHermitMEnv m, HasLemmas m, LiftCoreM m)
               => (CoreExpr -> CoreExpr -> Translate c m a b)
               -> CoreString -> CoreString -> Translate c m a b
 parse2BeforeT f s1 s2 = parseCoreExprT s1 &&& parseCoreExprT s2 >>= uncurry f
 
-parse3BeforeT :: (BoundVars c, HasDebugChan m, HasHermitMEnv m, HasLemmas m, HasStash m, LiftCoreM m)
+parse3BeforeT :: (ReadBindings c, HasHermitMEnv m, HasLemmas m, LiftCoreM m)
               => (CoreExpr -> CoreExpr -> CoreExpr -> Translate c m a b)
               -> CoreString -> CoreString -> CoreString -> Translate c m a b
 parse3BeforeT f s1 s2 s3 = (parseCoreExprT s1 &&& parseCoreExprT s2) &&& parseCoreExprT s3 >>= (uncurry . uncurry $ f)

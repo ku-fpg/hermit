@@ -1,16 +1,20 @@
-{-# LANGUAGE CPP, DeriveDataTypeable, TypeFamilies #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
+
 module HERMIT.Dictionary.WorkerWrapper.Common
     ( externals
     , WWAssumptionTag(..)
     , WWAssumption(..)
-    , assumptionAEqualityT
-    , assumptionBEqualityT
-    , assumptionCEqualityT
+    , assumptionAClauseT
+    , assumptionBClauseT
+    , assumptionCClauseT
     , split1BetaR
     , split2BetaR
     , workLabel
     ) where
 
+import Control.Arrow
 import Control.Monad.IO.Class
 
 import Data.String (fromString)
@@ -21,6 +25,7 @@ import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.ParserCore
 
@@ -36,30 +41,30 @@ externals :: [External]
 externals = map (.+ Proof)
     [ external "intro-ww-assumption-A"
         (\nm absC repC -> do
-            eq <- parse2BeforeT assumptionAEqualityT absC repC
-            insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
+            q <- parse2BeforeT assumptionAClauseT absC repC
+            insertLemmaT nm $ Lemma q NotProven NotUsed :: TransformH LCore ())
         [ "Introduce a lemma for worker/wrapper assumption A"
         , "using given abs and rep functions." ]
     , external "intro-ww-assumption-B"
         (\nm absC repC bodyC -> do
-            eq <- parse3BeforeT assumptionBEqualityT absC repC bodyC
-            insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
+            q <- parse3BeforeT assumptionBClauseT absC repC bodyC
+            insertLemmaT nm $ Lemma q NotProven NotUsed :: TransformH LCore ())
         [ "Introduce a lemma for worker/wrapper assumption B"
         , "using given abs, rep, and body functions." ]
     , external "intro-ww-assumption-C"
         (\nm absC repC bodyC -> do
-            eq <- parse3BeforeT assumptionCEqualityT absC repC bodyC
-            insertLemmaR nm $ Lemma eq False False :: RewriteH Core)
+            q <- parse3BeforeT assumptionCClauseT absC repC bodyC
+            insertLemmaT nm $ Lemma q NotProven NotUsed :: TransformH LCore ())
         [ "Introduce a lemma for worker/wrapper assumption C"
         , "using given abs, rep, and body functions." ]
-    , external "split-1-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split1BetaR nm) absC :: CoreString -> RewriteH Core)
+    , external "split-1-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split1BetaR Obligation nm) absC :: CoreString -> RewriteH LCore)
         [ "split-1-beta <name> <abs expression> <rep expression>"
         , "Perform worker/wrapper split with condition 1-beta."
         , "Given lemma name argument is used as prefix to two introduced lemmas."
         , "  <name>-assumption: unproven lemma for w/w assumption C."
         , "  <name>-fusion: assumed lemma for w/w fusion."
         ]
-    , external "split-2-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split2BetaR nm) absC :: CoreString -> RewriteH Core)
+    , external "split-2-beta" (\ nm absC -> promoteExprR . parse2BeforeT (split2BetaR Obligation nm) absC :: CoreString -> RewriteH LCore)
         [ "split-2-beta <name> <abs expression> <rep expression>"
         , "Perform worker/wrapper split with condition 2-beta."
         , "Given lemma name argument is used as prefix to two introduced lemmas."
@@ -77,7 +82,7 @@ instance Extern WWAssumptionTag where
     box i = i
     unbox i = i
 
-data WWAssumption = WWAssumption WWAssumptionTag (RewriteH CoreExpr)
+data WWAssumption = WWAssumption WWAssumptionTag (RewriteH CoreExpr) deriving Typeable
 
 --------------------------------------------------------------------------------------------------
 
@@ -87,94 +92,95 @@ data WWAssumption = WWAssumption WWAssumptionTag (RewriteH CoreExpr)
 -- That would have to exist at the Shell level though.
 
 -- This isn't entirely safe, as a malicious the user could define a label with this name.
-workLabel :: RememberedName
+workLabel :: LemmaName
 workLabel = fromString "recursive-definition-of-work-for-use-by-ww-fusion"
 
 --------------------------------------------------------------------------------------------------
 
 -- Given abs and rep expressions, build "abs . rep = id"
-assumptionAEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m
-                        , MonadCatch m, MonadIO m, MonadThings m )
-                     => CoreExpr -> CoreExpr -> Transform c m x Equality
-assumptionAEqualityT absE repE = prefixFailMsg "Building assumption A failed: " $ do
+assumptionAClauseT :: ( BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
+                     => CoreExpr -> CoreExpr -> Transform c m x Clause
+assumptionAClauseT absE repE = prefixFailMsg "Building assumption A failed: " $ do
     comp <- buildCompositionT absE repE
     let (_,compBody) = collectTyBinders comp
     (tvs, xTy, _) <- splitFunTypeM (exprType comp)
     idE <- buildIdT xTy
-    return $ Equality tvs compBody idE
+    return $ mkForall tvs (Equiv compBody idE)
 
 -- Given abs, rep, and f expressions, build "abs . rep . f = f"
-assumptionBEqualityT :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m
-                        , MonadCatch m, MonadIO m, MonadThings m)
-                     => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Equality
-assumptionBEqualityT absE repE fE = prefixFailMsg "Building assumption B failed: " $ do
+assumptionBClauseT :: ( BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
+                     => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Clause
+assumptionBClauseT absE repE fE = prefixFailMsg "Building assumption B failed: " $ do
     repAfterF <- buildCompositionT repE fE
     comp <- buildCompositionT absE repAfterF
     let (tvs,lhs) = collectTyBinders comp
     rhs <- appArgM 5 lhs >>= appArgM 5 -- get f with proper tvs applied
-    return $ Equality tvs lhs rhs
+    return $ mkForall tvs (Equiv lhs rhs)
 
 -- Given abs, rep, and f expressions, build "fix (abs . rep . f) = fix f"
-assumptionCEqualityT :: (BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
-                     => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Equality
-assumptionCEqualityT absE repE fE = prefixFailMsg "Building assumption C failed: " $ do
-    Equality vs lhs rhs <- assumptionBEqualityT absE repE fE
+assumptionCClauseT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
+                     => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Clause
+assumptionCClauseT absE repE fE = prefixFailMsg "Building assumption C failed: " $ do
+    (vs, Equiv lhs rhs) <- collectQs ^<< assumptionBClauseT absE repE fE
     lhs' <- buildFixT lhs
     rhs' <- buildFixT rhs
-    return $ Equality vs lhs' rhs'
+    return $ mkForall vs (Equiv lhs' rhs')
 
 -- Given abs, rep, and 'fix g' expressions, build "rep (abs (fix g)) = fix g"
-wwFusionEqualityT :: (HasDynFlags m, MonadCatch m, MonadIO m)
-                  => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Equality
-wwFusionEqualityT absE repE fixgE = prefixFailMsg "Building worker/wrapper fusion lemma failed: " $ do
-    protoLhs <- buildApplicationM repE =<< buildApplicationM absE fixgE
+wwFusionClauseT :: MonadCatch m => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Clause
+wwFusionClauseT absE repE fixgE = prefixFailMsg "Building worker/wrapper fusion lemma failed: " $ do
+    protoLhs <- buildAppM repE =<< buildAppM absE fixgE
     let (tvs, lhs) = collectTyBinders protoLhs
     -- This way, the rhs is applied to the proper type variables.
     rhs <- case lhs of
             (App _ (App _ rhs)) -> return rhs
             _                   -> fail "lhs malformed"
-    return $ Equality tvs lhs rhs
+    return $ mkForall tvs (Equiv lhs rhs)
 
 -- Perform the worker/wrapper split using condition 1-beta, introducing
 -- an unproven lemma for assumption C, and an appropriate w/w fusion lemma.
-split1BetaR :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m
-               , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-            => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
-split1BetaR nm absE repE = do
+split1BetaR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+               , HasHermitMEnv m, LiftCoreM m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m
+               , MonadUnique m )
+            => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
+split1BetaR u nm absE repE = do
     (_fixId, [_tyA, f]) <- callNameT $ fromString "Data.Function.fix"
 
-    g <- buildCompositionT repE =<< buildCompositionT f absE
+    g <- prefixFailMsg "building (rep . f . abs) failed: "
+       $ buildCompositionT repE =<< buildCompositionT f absE
     gId <- constT $ newIdH "g" $ exprType g
 
     workRhs <- buildFixT $ varToCoreExpr gId
     workId <- constT $ newIdH "worker" $ exprType workRhs
 
-    newRhs <- buildApplicationM absE (varToCoreExpr workId)
+    newRhs <- prefixFailMsg "building (abs work) failed: "
+            $ buildAppM absE (varToCoreExpr workId)
 
-    assumptionEq <- assumptionCEqualityT absE repE f
-    _ <- insertLemmaR (fromString (show nm ++ "-assumption")) $ Lemma assumptionEq False True -- unproven, used
+    assumptionQ <- assumptionCClauseT absE repE f
+    verifyOrCreateT u (fromString (show nm ++ "-assumption")) assumptionQ
 
-    wwFusionEq <- wwFusionEqualityT absE repE workRhs
-    _ <- insertLemmaR (fromString (show nm ++ "-fusion")) $ Lemma wwFusionEq True False -- proven (assumed), unused
+    wwFusionQ <- wwFusionClauseT absE repE workRhs
+    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionQ BuiltIn NotUsed
 
     return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
 
-split2BetaR :: ( BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, HasLemmas m
-               , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
-            => LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
-split2BetaR nm absE repE = do
+split2BetaR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+               , HasHermitMEnv m, LiftCoreM m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m
+               , MonadUnique m )
+            => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
+split2BetaR u nm absE repE = do
     (_fixId, [_tyA, f]) <- callNameT $ fromString "Data.Function.fix"
     fixfE <- idR
 
-    repFixFE <- buildApplicationM repE fixfE
+    repFixFE <- buildAppM repE fixfE
     workId <- constT $ newIdH "worker" $ exprType repFixFE
 
-    newRhs <- buildApplicationM absE (varToCoreExpr workId)
+    newRhs <- buildAppM absE (varToCoreExpr workId)
 
-    assumptionEq <- assumptionCEqualityT absE repE f
-    _ <- insertLemmaR (fromString (show nm ++ "-assumption")) $ Lemma assumptionEq False True -- unproven, used
+    assumptionQ <- assumptionCClauseT absE repE f
+    verifyOrCreateT u (fromString (show nm ++ "-assumption")) assumptionQ
 
-    wwFusionEq <- wwFusionEqualityT absE repE (varToCoreExpr workId)
-    _ <- insertLemmaR (fromString (show nm ++ "-fusion")) $ Lemma wwFusionEq True False -- proven (assumed), unused
+    wwFusionQ <- wwFusionClauseT absE repE (varToCoreExpr workId)
+    insertLemmaT (fromString (show nm ++ "-fusion")) $ Lemma wwFusionQ BuiltIn NotUsed
 
     return $ mkCoreLets [NonRec workId repFixFE] newRhs

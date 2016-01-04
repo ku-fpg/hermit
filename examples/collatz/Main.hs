@@ -2,7 +2,7 @@
 
 collatz :: Integer -> Integer
 collatz n | even n = n `div` 2
-	  | odd n  = 3 * n + 1
+          | odd n  = 3 * n + 1
 
 chop :: [Integer] -> [Integer]
 chop (x:xs) = x : if x == 1 then [] else chop xs

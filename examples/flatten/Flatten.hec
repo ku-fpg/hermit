@@ -1,0 +1,102 @@
+load-as-rewrite "WWA" "WW-Ass-A.hss"
+define-rewrite "WWC" "ww-result-AssA-to-AssC WWA"
+load-as-rewrite "StrictRepH" "StrictRepH.hss"
+
+-- module main:Main where
+--   flatten :: forall a . Tree a -> [a]
+--   $dShow :: Show [Char]
+--   main :: IO ()
+--   main :: IO ()
+
+binding-of 'flatten
+
+-- flatten = \ * ds ->
+--   case ds of wild *
+--     Node l r -> (++) * (flatten * l) (flatten * r)
+--     Leaf a -> (:) * a ([] *)
+
+ww-result-split-static-arg 1 [0] [| absH |] [| repH |] WWC
+
+-- flatten = \ * ds ->
+--   (let f = \ flatten' ds ->
+--          case ds of wild *
+--            Node l r -> (++) * (flatten' l) (flatten' r)
+--            Leaf a -> (:) * a ([] *)
+--        rec work = \ x1 -> repH * (f (\ x2 -> absH * (work x2)) x1)
+--    in \ x0 -> absH * (work x0)) ds
+
+bash
+{
+
+-- flatten = \ * ->
+--   let rec work = \ x1 ->
+--             repH *
+--                  (case x1 of wild *
+--                     Node l r -> (++) * (absH * (work l)) (absH * (work r))
+--                     Leaf a -> (:) * a ([] *))
+--   in \ x0 -> absH * (work x0)
+
+rhs-of 'work
+
+-- \ x1 ->
+--   repH *
+--        (case x1 of wild *
+--           Node l r -> (++) * (absH * (work l)) (absH * (work r))
+--           Leaf a -> (:) * a ([] *))
+
+alpha-lam 'tree
+
+-- \ tree ->
+--   repH *
+--        (case tree of wild *
+--           Node l r -> (++) * (absH * (work l)) (absH * (work r))
+--           Leaf a -> (:) * a ([] *))
+
+lam-body
+
+-- repH *
+--      (case tree of wild *
+--         Node l r -> (++) * (absH * (work l)) (absH * (work r))
+--         Leaf a -> (:) * a ([] *))
+
+eta-expand 'acc
+
+-- \ acc ->
+--   repH *
+--        (case tree of wild *
+--           Node l r -> (++) * (absH * (work l)) (absH * (work r))
+--           Leaf a -> (:) * a ([] *))
+--        acc
+
+lam-body
+
+-- repH *
+--      (case tree of wild *
+--         Node l r -> (++) * (absH * (work l)) (absH * (work r))
+--         Leaf a -> (:) * a ([] *))
+--      acc
+
+bash-extended-with [push 'repH StrictRepH,forward ww-result-fusion,unfold-rules-unsafe ["repH ++","repH (:)","repH []"]]
+
+-- case tree of wild *
+--   Node l r -> work l (work r acc)
+--   Leaf a -> (:) * a acc
+
+ }
+
+-- flatten = \ * ->
+--   let rec work = \ tree acc ->
+--             case tree of wild *
+--               Node l r -> work l (work r acc)
+--               Leaf a -> (:) * a acc
+--   in \ x0 -> absH * (work x0)
+
+one-td (unfold 'absH)
+
+-- flatten = \ * ->
+--   let rec work = \ tree acc ->
+--             case tree of wild *
+--               Node l r -> work l (work r acc)
+--               Leaf a -> (:) * a acc
+--   in \ x0 -> work x0 ([] *)
+

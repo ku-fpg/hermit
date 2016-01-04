@@ -1,89 +1,97 @@
-{-# LANGUAGE CPP, LambdaCase #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable, DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
+
 module HERMIT.Core
-          (
-          -- * Generic Data Type
-            CoreProg(..)
-          , CoreDef(..)
-          , CoreTickish
-          -- * Equality
-          -- | We define both syntactic equality and alpha equality.
+    ( -- * Generic Data Type
+      CoreProg(..)
+    , CoreDef(..)
+    , CoreTickish
+      -- * Equality
+      -- | We define both syntactic equality and alpha equality.
 
-          -- ** Syntactic Equality
-          , progSyntaxEq
-          , bindSyntaxEq
-          , defSyntaxEq
-          , exprSyntaxEq
-          , altSyntaxEq
-          , typeSyntaxEq
-          , coercionSyntaxEq
+      -- ** Syntactic Equality
+    , progSyntaxEq
+    , bindSyntaxEq
+    , defSyntaxEq
+    , exprSyntaxEq
+    , altSyntaxEq
+    , typeSyntaxEq
+    , coercionSyntaxEq
 
-          -- ** Alpha Equality
-          , progAlphaEq
-          , bindAlphaEq
-          , defAlphaEq
-          , exprAlphaEq
-          , altAlphaEq
-          , typeAlphaEq
-          , coercionAlphaEq
+      -- ** Alpha Equality
+    , progAlphaEq
+    , bindAlphaEq
+    , defAlphaEq
+    , exprAlphaEq
+    , altAlphaEq
+    , typeAlphaEq
+    , coercionAlphaEq
 
-          -- * Conversions to/from 'Core'
-          , defsToRecBind
-          , defToIdExpr
-          , progToBinds
-          , bindsToProg
-          , bindToVarExprs
+      -- * Conversions to/from 'Core'
+    , defsToRecBind
+    , defToIdExpr
+    , progToBinds
+    , bindsToProg
+    , bindToVarExprs
 
-          -- * Collecting variable bindings
-          , progIds
-          , bindVars
-          , defId
-          , altVars
+      -- * Collecting variable bindings
+    , progIds
+    , bindVars
+    , defId
+    , altVars
 
-          -- * Collecting free variables
-          -- $freeVarsNote
-          , freeVarsProg
-          , freeVarsBind
-          , freeVarsDef
-          , freeVarsExpr
-          , freeVarsAlt
-          , freeVarsVar
-          , localFreeVarsAlt
-          , freeVarsType
-          , freeVarsCoercion
-          , localFreeVarsExpr
-          , freeIdsExpr
-          , localFreeIdsExpr
+      -- * Collecting free variables
+      -- $freeVarsNote
+    , freeVarsProg
+    , freeVarsBind
+    , freeVarsDef
+    , freeVarsExpr
+    , freeVarsAlt
+    , freeVarsVar
+    , localFreeVarsAlt
+    , freeVarsType
+    , freeVarsCoercion
+    , localFreeVarsExpr
+    , freeIdsExpr
+    , localFreeIdsExpr
 
-          -- * Utilities
-          , isCoArg
-          , exprKindOrType
-          , exprTypeM
-          , endoFunTypeM
-          , splitTyConAppM
-          , splitFunTypeM
-          , endoFunExprTypeM
-          , funExprArgResTypesM
-          , funExprsWithInverseTypes
-          , appCount
-          , mapAlts
+      -- * Utilities
+    , isCoArg
+    , exprKindOrType
+    , exprTypeM
+    , endoFunTypeM
+    , splitTyConAppM
+    , splitFunTypeM
+    , endoFunExprTypeM
+    , funExprArgResTypesM
+    , funExprsWithInverseTypes
+    , appCount
+    , mapAlts
+    , substCoreAlt
+    , substCoreExpr
+    , betaReduceAll
+    , mkDataConApp
 
-          -- * Crumbs
-          , Crumb(..)
-          , showCrumbs
---          , crumbToDeprecatedInt
-          , deprecatedLeftSibling
-          , deprecatedRightSibling
-) where
+      -- * Crumbs
+    , Crumb(..)
+    , showCrumbs
+    , leftSibling
+    , rightSibling
+    ) where
 
 import Control.Monad ((>=>))
+
+import Data.List (intercalate)
+import Data.Typeable (Typeable)
+
+import GHC.Generics
 
 import Language.KURE.Combinators.Monad
 import Language.KURE.MonadCatch
 
 import HERMIT.GHC
 import HERMIT.Utilities
-
-import Data.List (intercalate)
 
 -----------------------------------------------------------------------
 
@@ -98,6 +106,7 @@ type CoreTickish = Tickish Id
 --   This data type is isomorphic.
 data CoreProg = ProgNil                     -- ^ An empty program.
               | ProgCons CoreBind CoreProg  -- ^ A binding group and the program it scopes over.
+  deriving Typeable
 
 infixr 5 `ProgCons`
 
@@ -122,7 +131,7 @@ bindToVarExprs (Rec bds)    = bds
 -- | A (potentially recursive) definition is an identifier and an expression.
 --   In GHC Core, recursive definitions are encoded as ('Id', 'CoreExpr') pairs.
 --   This data type is isomorphic.
-data CoreDef = Def Id CoreExpr
+data CoreDef = Def Id CoreExpr deriving Typeable
 
 -- | Convert a definition to an identifier/expression pair.
 defToIdExpr :: CoreDef -> (Id,CoreExpr)
@@ -191,7 +200,11 @@ coercionSyntaxEq (ForAllCo v1 co1)       (ForAllCo v2 co2)       = v1 == v2 && c
 coercionSyntaxEq (CoVarCo v1)            (CoVarCo v2)            = v1 == v2
 coercionSyntaxEq (AxiomInstCo con1 ind1 cos1) (AxiomInstCo con2 ind2 cos2) = con1 == con2 && ind1 == ind2 && all2 coercionSyntaxEq cos1 cos2
 coercionSyntaxEq (LRCo lr1 co1)          (LRCo lr2 co2)          = lr1 == lr2 && coercionSyntaxEq co1 co2
+#if __GLASGOW_HASKELL__ < 710
 coercionSyntaxEq (UnivCo role1 ty11 ty12) (UnivCo role2 ty21 ty22) = role1 == role2 && typeSyntaxEq ty11 ty21 && typeSyntaxEq ty12 ty22
+#else
+coercionSyntaxEq (UnivCo fs1 role1 ty11 ty12) (UnivCo fs2 role2 ty21 ty22) = fs1 == fs2 && role1 == role2 && typeSyntaxEq ty11 ty21 && typeSyntaxEq ty12 ty22
+#endif
 coercionSyntaxEq (SubCo co1)             (SubCo co2)             = coercionSyntaxEq co1 co2
 coercionSyntaxEq (SymCo co1)             (SymCo co2)             = coercionSyntaxEq co1 co2
 coercionSyntaxEq (TransCo co11 co12)     (TransCo co21 co22)     = coercionSyntaxEq co11 co21 && coercionSyntaxEq co12 co22
@@ -277,23 +290,38 @@ altVars (_,vs,_) = vs
 -- The GHC Function exprFreeVars defined in "CoreFVs" only returns *locally-defined* free variables.
 -- In HERMIT, this is typically not what we want, so we define our own functions.
 -- We reuse some of the functionality in "CoreFVs", but alas much of it is not exposed, so we have to reimplement some of it.
-
--- | Find all free variables in an expression.
-freeVarsExpr :: CoreExpr -> VarSet
-freeVarsExpr = exprSomeFreeVars (const True)
+-- We do not use GHC's exprSomeFreeVars because it does not return the full set of free vars for a Var.
+-- It only returns the Var itself, rather than extendVarSet (freeVarsVar v) v like it should.
 
 -- | Find all free identifiers in an expression.
 freeIdsExpr :: CoreExpr -> IdSet
-freeIdsExpr = exprSomeFreeVars isId
+freeIdsExpr = filterVarSet isId . freeVarsExpr
 
 -- | Find all locally defined free variables in an expression.
 localFreeVarsExpr :: CoreExpr -> VarSet
-localFreeVarsExpr = exprSomeFreeVars isLocalVar
+localFreeVarsExpr = filterVarSet isLocalVar . freeVarsExpr
 
 -- | Find all locally defined free identifiers in an expression.
 localFreeIdsExpr :: CoreExpr -> VarSet
-localFreeIdsExpr = exprSomeFreeVars isLocalId
+localFreeIdsExpr = filterVarSet isLocalId . freeVarsExpr
 
+-- | Find all free variables in an expression.
+freeVarsExpr :: CoreExpr -> VarSet
+freeVarsExpr (Var v) = extendVarSet (freeVarsVar v) v
+freeVarsExpr (Lit {}) = emptyVarSet
+freeVarsExpr (App e1 e2) = freeVarsExpr e1 `unionVarSet` freeVarsExpr e2
+freeVarsExpr (Lam b e) = delVarSet (freeVarsExpr e) b
+freeVarsExpr (Let b e) = freeVarsBind b `unionVarSet` delVarSetList (freeVarsExpr e) (bindersOf b)
+freeVarsExpr (Case s b ty alts) = let altFVs = delVarSet (unionVarSets $ map freeVarsAlt alts) b
+                                  in unionVarSets [freeVarsExpr s, freeVarsType ty, altFVs]
+freeVarsExpr (Cast e co) = freeVarsExpr e `unionVarSet` freeVarsCoercion co
+freeVarsExpr (Tick t e) = freeVarsTick t `unionVarSet` freeVarsExpr e
+freeVarsExpr (Type ty) = freeVarsType ty
+freeVarsExpr (Coercion co) = freeVarsCoercion co
+
+freeVarsTick :: Tickish Id -> VarSet
+freeVarsTick (Breakpoint _ ids) = mkVarSet ids
+freeVarsTick _ = emptyVarSet
 
 -- | Find all free identifiers in a binding group, which excludes any variables bound in the group.
 freeVarsBind :: CoreBind -> VarSet
@@ -448,9 +476,13 @@ data Crumb =
            | NthCo_Int | NthCo_Co
            | InstCo_Co | InstCo_Type
            | LRCo_LR | LRCo_Co
-           deriving (Eq,Read,Show)
-           -- TODO: Write a prettier Show instance
-
+           -- Quantified
+           | Forall_Body
+           | Conj_Lhs | Conj_Rhs
+           | Disj_Lhs | Disj_Rhs
+           | Impl_Lhs | Impl_Rhs
+           | Eq_Lhs | Eq_Rhs
+           deriving (Eq, Generic, Read, Show, Typeable)
 
 showCrumbs :: [Crumb] -> String
 showCrumbs crs = "[" ++ intercalate ", " (map showCrumb crs) ++ "]"
@@ -501,65 +533,70 @@ showCrumb = \case
                InstCo_Co         -> "inst-co"
                InstCo_Type       -> "inst-type"
                LRCo_Co           -> "lr-co"
+               -- Quantified
+               Forall_Body -> "forall-body"
+               Conj_Lhs    -> "conj-lhs"
+               Conj_Rhs    -> "conj-rhs"
+               Disj_Lhs    -> "disj-lhs"
+               Disj_Rhs    -> "disj-rhs"
+               Impl_Lhs    -> "antecedent"
+               Impl_Rhs    -> "consequent"
+               Eq_Lhs      -> "eq-lhs"
+               Eq_Rhs      -> "eq-rhs"
+               _ -> "Warning: Crumb should not be in use!  This is probably Neil's fault."
 
-               _              -> "Warning: Crumb should not be in use!  This is probably Neil's fault."
-
-{-
--- | Earlier versions of HERMIT used 'Int' as the crumb type.
---   This function maps a 'Crumb' back to that corresponding 'Int', for backwards compatibility purposes.
-crumbToDeprecatedInt :: Crumb -> Maybe Int
-crumbToDeprecatedInt = \case
-                          ModGuts_Prog   -> Just 0
-                          ProgCons_Bind  -> Just 0
-                          ProgCons_Tail  -> Just 1
-                          NonRec_RHS     -> Just 0
-                          NonRec_Var     -> Nothing
-                          Rec_Def n      -> Just n
-                          Def_Id         -> Nothing
-                          Def_RHS        -> Just 0
-                          App_Fun        -> Just 0
-                          App_Arg        -> Just 1
-                          Lam_Var        -> Nothing
-                          Lam_Body       -> Just 0
-                          Let_Bind       -> Just 0
-                          Let_Body       -> Just 1
-                          Case_Scrutinee -> Just 0
-                          Case_Binder    -> Nothing
-                          Case_Type      -> Nothing
-                          Case_Alt n     -> Just (n + 1)
-                          Cast_Expr      -> Just 0
-                          Cast_Co        -> Nothing
-                          Tick_Tick      -> Nothing
-                          Tick_Expr      -> Just 0
-                          Type_Type      -> Nothing
-                          Co_Co          -> Nothing
-                          Alt_Con        -> Nothing
-                          Alt_Var _      -> Nothing
-                          Alt_RHS        -> Just 0
--}
 -- | Converts a 'Crumb' into the 'Crumb' pointing to its left-sibling, if a such a 'Crumb' exists.
---   This is for backwards compatibility purposes with the old Int representation.
-deprecatedLeftSibling :: Crumb -> Maybe Crumb
-deprecatedLeftSibling = \case
-                           ProgCons_Tail       -> Just ProgCons_Head
-                           Rec_Def n | n > 0   -> Just (Rec_Def (n-1))
-                           App_Arg             -> Just App_Fun
-                           Let_Body            -> Just Let_Bind
-                           Case_Alt n | n == 0 -> Just Case_Scrutinee
-                                      | n >  0 -> Just (Case_Alt (n-1))
-                           _                   -> Nothing
+--   This is used for moving 'left' in the shell.
+leftSibling :: Crumb -> Maybe Crumb
+leftSibling = \case
+                   ProgCons_Tail       -> Just ProgCons_Head
+                   Rec_Def n | n > 0   -> Just (Rec_Def (n-1))
+                   App_Arg             -> Just App_Fun
+                   Let_Body            -> Just Let_Bind
+                   Case_Alt n | n == 0 -> Just Case_Scrutinee
+                              | n >  0 -> Just (Case_Alt (n-1))
+                   _                   -> Nothing
 
 -- | Converts a 'Crumb' into the 'Crumb' pointing to its right-sibling, if a such a 'Crumb' exists.
---   This is for backwards compatibility purposes with the old Int representation.
-deprecatedRightSibling :: Crumb -> Maybe Crumb
-deprecatedRightSibling = \case
-                           ProgCons_Head       -> Just ProgCons_Tail
-                           Rec_Def n           -> Just (Rec_Def (n+1))
-                           App_Fun             -> Just App_Arg
-                           Let_Bind            -> Just Let_Body
-                           Case_Scrutinee      -> Just (Case_Alt 0)
-                           Case_Alt n          -> Just (Case_Alt (n+1))
-                           _                   -> Nothing
-
+--   This is used for moving 'right' in the shell.
+rightSibling :: Crumb -> Maybe Crumb
+rightSibling = \case
+                   ProgCons_Head       -> Just ProgCons_Tail
+                   Rec_Def n           -> Just (Rec_Def (n+1))
+                   App_Fun             -> Just App_Arg
+                   Let_Bind            -> Just Let_Body
+                   Case_Scrutinee      -> Just (Case_Alt 0)
+                   Case_Alt n          -> Just (Case_Alt (n+1))
+                   _                   -> Nothing
 
 -----------------------------------------------------------------------
+
+-- | Substitute all occurrences of a variable with an expression, in an expression.
+substCoreExpr :: Var -> CoreExpr -> (CoreExpr -> CoreExpr)
+substCoreExpr v e expr = substExpr (text "substCoreExpr") (extendSubst emptySub v e) expr
+    where emptySub = mkEmptySubst (mkInScopeSet (localFreeVarsExpr (Let (NonRec v e) expr)))
+
+-- | Substitute all occurrences of a variable with an expression, in a case alternative.
+substCoreAlt :: Var -> CoreExpr -> CoreAlt -> CoreAlt
+substCoreAlt v e alt = let (con, vs, rhs) = alt
+                           inS            = (flip delVarSet v . unionVarSet (localFreeVarsExpr e) . localFreeVarsAlt) alt
+                           subst          = extendSubst (mkEmptySubst (mkInScopeSet inS)) v e
+                           (subst', vs')  = substBndrs subst vs
+                        in (con, vs', substExpr (text "alt-rhs") subst' rhs)
+
+-- | Beta-reduce as many lambda-binders as possible.
+betaReduceAll :: CoreExpr -> [CoreExpr] -> (CoreExpr, [CoreExpr])
+betaReduceAll (Lam v body) (a:as) = betaReduceAll (substCoreExpr v a body) as
+betaReduceAll e            as     = (e,as)
+
+-- | Build a constructor application.
+--   Accepts a list of types to which the type constructor is instantiated. Ex.
+--
+-- > data T a b = C a b Int
+--
+-- Pseudocode:
+--
+-- > mkDataConApp [a',b'] C [x,y,z] ==> C a' b' (x::a') (y::b') (z::Int) :: T a' b'
+--
+mkDataConApp :: [Type] -> DataCon -> [Var] -> CoreExpr
+mkDataConApp tys dc vs = mkCoreConApps dc (map Type tys ++ map (varToCoreExpr . zapVarOccInfo) vs)

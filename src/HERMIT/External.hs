@@ -1,4 +1,10 @@
-{-# LANGUAGE GADTs, TypeFamilies, FlexibleContexts, FlexibleInstances, DeriveDataTypeable #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.External
     ( -- * Externals
@@ -26,26 +32,29 @@ module HERMIT.External
     , dictionaryOfTags
       -- * Boxes
       -- | Boxes are used by the 'Extern' class.
-    , BiRewriteCoreBox(..)
     , CoreString(..)
     , CrumbBox(..)
     , IntBox(..)
     , IntListBox(..)
     , PathBox(..)
-    , RewriteCoreBox(..)
-    , RewriteCoreListBox(..)
-    , RewriteCoreTCBox(..)
-    , RewriteEqualityBox(..)
     , StringBox(..)
     , StringListBox(..)
     , TagBox(..)
-    , TransformCoreCheckBox(..)
-    , TransformCorePathBox(..)
-    , TransformCoreStringBox(..)
-    , TransformCoreTCCheckBox(..)
-    , TransformCoreTCPathBox(..)
-    , TransformCoreTCStringBox(..)
-    , TransformEqualityStringBox(..)
+      -- ** LCore Boxes
+    , TransformLCoreStringBox(..)
+    , TransformLCoreUnitBox(..)
+    , TransformLCorePathBox(..)
+    , RewriteLCoreBox(..)
+    , BiRewriteLCoreBox(..)
+    , RewriteLCoreListBox(..)
+      -- ** LCoreTC Boxes
+    , TransformLCoreTCStringBox(..)
+    , TransformLCoreTCUnitBox(..)
+    , TransformLCoreTCLCoreBox(..)
+    , TransformLCoreTCPathBox(..)
+    , RewriteLCoreTCBox(..)
+    , BiRewriteLCoreTCBox(..)
+    , RewriteLCoreTCListBox(..)
     ) where
 
 import Data.Map hiding (map)
@@ -56,7 +65,7 @@ import Data.Typeable.Internal (TypeRep(..), funTc)
 import HERMIT.Core
 import HERMIT.Context (LocalPathH)
 import HERMIT.Kure
-import HERMIT.Monad
+import HERMIT.Lemma
 
 -----------------------------------------------------------------
 
@@ -90,13 +99,15 @@ data CmdTag = Shell          -- ^ Shell-specific command.
             | Context        -- ^ A command that uses its context, such as inlining.
             | Unsafe         -- ^ Commands that are not type safe (may cause Core Lint to fail),
                              --   or may otherwise change the semantics of the program.
+                             --   Only available in unsafe mode!
+            | Safe           -- ^ Include in Strict Safety mode (currently unused)
             | Proof          -- ^ Commands related to proving lemmas.
 
             | TODO           -- ^ An incomplete or potentially buggy command.
             | Experiment     -- ^ Things we are trying out.
             | Deprecated     -- ^ A command that will be removed in a future release;
                              --   it has probably been renamed or subsumed by another command.
-    deriving (Eq, Show, Read, Bounded, Enum)
+    deriving (Eq, Show, Read, Bounded, Enum, Typeable)
 
 -- | Lists all the tags paired with a short description of what they're about.
 dictionaryOfTags :: [(CmdTag,String)]
@@ -141,6 +152,7 @@ data TagE :: * where
     NotTag :: TagE -> TagE
     AndTag :: TagE -> TagE -> TagE
     OrTag  :: TagE -> TagE -> TagE
+  deriving Typeable
 
 -- | Tags are meta-data that we add to 'External's to make them sortable and searchable.
 class Tag a where
@@ -154,6 +166,8 @@ class Tag a where
 
     -- | Check if an 'External' has the specified 'Tag'.
     tagMatch :: a -> External -> Bool
+
+deriving instance Typeable Tag
 
 instance Tag TagE where
     toTagE = id
@@ -235,12 +249,13 @@ externTypeString = deBoxify . show . dynTypeRep . externDyn
 
 -- | Remove the word 'Box' from a string.
 deBoxify :: String -> String
-deBoxify xs
-    | "CLSBox -> " `isPrefixOf` xs = deBoxify (drop 10 xs)
-deBoxify xs
-    | "Box" `isPrefixOf` xs        = deBoxify (drop 3 xs)
-deBoxify (x:xs)                    = x : deBoxify xs
-deBoxify []                        = []
+deBoxify s | "CLSBox -> "        `isPrefixOf` s = go (drop 10 s)
+           | "PrettyPrinter -> " `isPrefixOf` s = go (drop 17 s)
+           | otherwise = go s
+    where go xs
+            | "Box" `isPrefixOf` xs = go (drop 3 xs)
+          go (x:xs)                 = x : go xs
+          go []                     = []
 
 externTypeArgResString :: External -> ([String], String)
 externTypeArgResString e = (map (deBoxify . show) aTys, deBoxify (show rTy))
@@ -256,7 +271,11 @@ splitFunTyArgs tr = case splitFunTyMaybe tr of
                                          in (a:as, r')
 
 splitFunTyMaybe :: TypeRep -> Maybe (TypeRep, TypeRep)
+#if __GLASGOW_HASKELL__ < 710
 splitFunTyMaybe (TypeRep _ tc [a,r]) | tc == funTc = Just (a,r)
+#else
+splitFunTyMaybe (TypeRep _ tc _krs [a,r]) | tc == funTc = Just (a,r)
+#endif
 splitFunTyMaybe _ = Nothing
 
 -----------------------------------------------------------------
@@ -273,6 +292,8 @@ class Typeable (Box a) => Extern a where
 
     -- | Unwrap a value from a 'Box'.
     unbox :: Box a -> a
+
+deriving instance Typeable Extern
 
 -----------------------------------------------------------------
 
@@ -301,73 +322,7 @@ instance Extern Int where
 
 -----------------------------------------------------------------
 
-data RewriteCoreBox = RewriteCoreBox (RewriteH Core) deriving Typeable
-
-instance Extern (RewriteH Core) where
-    type Box (RewriteH Core) = RewriteCoreBox
-    box = RewriteCoreBox
-    unbox (RewriteCoreBox r) = r
-
------------------------------------------------------------------
-
-data RewriteCoreTCBox = RewriteCoreTCBox (RewriteH CoreTC) deriving Typeable
-
-instance Extern (RewriteH CoreTC) where
-    type Box (RewriteH CoreTC) = RewriteCoreTCBox
-    box = RewriteCoreTCBox
-    unbox (RewriteCoreTCBox r) = r
-
------------------------------------------------------------------
-
-data BiRewriteCoreBox = BiRewriteCoreBox (BiRewriteH Core) deriving Typeable
-
-instance Extern (BiRewriteH Core) where
-    type Box (BiRewriteH Core) = BiRewriteCoreBox
-    box = BiRewriteCoreBox
-    unbox (BiRewriteCoreBox b) = b
-
------------------------------------------------------------------
-
-data TransformCoreTCStringBox = TransformCoreTCStringBox (TransformH CoreTC String) deriving Typeable
-
-instance Extern (TransformH CoreTC String) where
-    type Box (TransformH CoreTC String) = TransformCoreTCStringBox
-    box = TransformCoreTCStringBox
-    unbox (TransformCoreTCStringBox t) = t
-
------------------------------------------------------------------
-
-data TransformCoreStringBox = TransformCoreStringBox (TransformH Core String) deriving Typeable
-
-instance Extern (TransformH Core String) where
-    type Box (TransformH Core String) = TransformCoreStringBox
-    box = TransformCoreStringBox
-    unbox (TransformCoreStringBox t) = t
-
------------------------------------------------------------------
-
-data TransformCoreTCCheckBox = TransformCoreTCCheckBox (TransformH CoreTC ()) deriving Typeable
-
-instance Extern (TransformH CoreTC ()) where
-    type Box (TransformH CoreTC ()) = TransformCoreTCCheckBox
-    box = TransformCoreTCCheckBox
-    unbox (TransformCoreTCCheckBox t) = t
-
------------------------------------------------------------------
-
-data TransformCoreCheckBox = TransformCoreCheckBox (TransformH Core ()) deriving Typeable
-
-instance Extern (TransformH Core ()) where
-    type Box (TransformH Core ()) = TransformCoreCheckBox
-    box = TransformCoreCheckBox
-    unbox (TransformCoreCheckBox t) = t
-
------------------------------------------------------------------
-
--- TODO: We now have CrumbBoc, PathBox and TransformCorePathBox.
---       Ints are interpreted as a TransformCorePathBox.
---       This all needs cleaning up.
-
+-- TODO: Considering unifying CrumbBox and PathBox under TransformLCoreTCPathBox.
 data CrumbBox = CrumbBox Crumb deriving Typeable
 
 instance Extern Crumb where
@@ -383,24 +338,6 @@ instance Extern LocalPathH where
     type Box LocalPathH = PathBox
     box = PathBox
     unbox (PathBox p) = p
-
------------------------------------------------------------------
-
-data TransformCorePathBox = TransformCorePathBox (TransformH Core LocalPathH) deriving Typeable
-
-instance Extern (TransformH Core LocalPathH) where
-    type Box (TransformH Core LocalPathH) = TransformCorePathBox
-    box = TransformCorePathBox
-    unbox (TransformCorePathBox t) = t
-
------------------------------------------------------------------
-
-data TransformCoreTCPathBox = TransformCoreTCPathBox (TransformH CoreTC LocalPathH) deriving Typeable
-
-instance Extern (TransformH CoreTC LocalPathH) where
-    type Box (TransformH CoreTC LocalPathH) = TransformCoreTCPathBox
-    box = TransformCoreTCPathBox
-    unbox (TransformCoreTCPathBox t) = t
 
 -----------------------------------------------------------------
 
@@ -440,22 +377,6 @@ instance Extern [Int] where
 
 -----------------------------------------------------------------
 
-data RewriteCoreListBox = RewriteCoreListBox [RewriteH Core] deriving Typeable
-
-instance Extern [RewriteH Core] where
-    type Box [RewriteH Core] = RewriteCoreListBox
-    box = RewriteCoreListBox
-    unbox (RewriteCoreListBox l) = l
-
------------------------------------------------------------------
-
-instance Extern RememberedName where
-    type Box RememberedName = RememberedName
-    box = id
-    unbox = id
-
------------------------------------------------------------------
-
 instance Extern LemmaName where
     type Box LemmaName = LemmaName
     box = id
@@ -463,20 +384,119 @@ instance Extern LemmaName where
 
 -----------------------------------------------------------------
 
-data RewriteEqualityBox = RewriteEqualityBox (RewriteH Equality) deriving Typeable
+data RewriteLCoreBox = RewriteLCoreBox (RewriteH LCore) deriving Typeable
 
-instance Extern (RewriteH Equality) where
-    type Box (RewriteH Equality) = RewriteEqualityBox
-    box = RewriteEqualityBox
-    unbox (RewriteEqualityBox r) = r
+instance Extern (RewriteH LCore) where
+    type Box (RewriteH LCore) = RewriteLCoreBox
+    box = RewriteLCoreBox
+    unbox (RewriteLCoreBox r) = r
 
 -----------------------------------------------------------------
 
-data TransformEqualityStringBox = TransformEqualityStringBox (TransformH Equality String) deriving Typeable
+data TransformLCoreStringBox = TransformLCoreStringBox (TransformH LCore String) deriving Typeable
 
-instance Extern (TransformH Equality String) where
-    type Box (TransformH Equality String) = TransformEqualityStringBox
-    box = TransformEqualityStringBox
-    unbox (TransformEqualityStringBox t) = t
+instance Extern (TransformH LCore String) where
+    type Box (TransformH LCore String) = TransformLCoreStringBox
+    box = TransformLCoreStringBox
+    unbox (TransformLCoreStringBox t) = t
+
+-----------------------------------------------------------------
+
+data TransformLCoreUnitBox = TransformLCoreUnitBox (TransformH LCore ()) deriving Typeable
+
+instance Extern (TransformH LCore ()) where
+    type Box (TransformH LCore ()) = TransformLCoreUnitBox
+    box = TransformLCoreUnitBox
+    unbox (TransformLCoreUnitBox t) = t
+
+-----------------------------------------------------------------
+
+data TransformLCorePathBox = TransformLCorePathBox (TransformH LCore LocalPathH) deriving Typeable
+
+instance Extern (TransformH LCore LocalPathH) where
+    type Box (TransformH LCore LocalPathH) = TransformLCorePathBox
+    box = TransformLCorePathBox
+    unbox (TransformLCorePathBox t) = t
+
+-----------------------------------------------------------------
+
+data BiRewriteLCoreBox = BiRewriteLCoreBox (BiRewriteH LCore) deriving Typeable
+
+instance Extern (BiRewriteH LCore) where
+    type Box (BiRewriteH LCore) = BiRewriteLCoreBox
+    box = BiRewriteLCoreBox
+    unbox (BiRewriteLCoreBox b) = b
+
+-----------------------------------------------------------------
+
+data RewriteLCoreListBox = RewriteLCoreListBox [RewriteH LCore] deriving Typeable
+
+instance Extern [RewriteH LCore] where
+    type Box [RewriteH LCore] = RewriteLCoreListBox
+    box = RewriteLCoreListBox
+    unbox (RewriteLCoreListBox l) = l
+
+-----------------------------------------------------------------
+
+data RewriteLCoreTCBox = RewriteLCoreTCBox (RewriteH LCoreTC) deriving Typeable
+
+instance Extern (RewriteH LCoreTC) where
+    type Box (RewriteH LCoreTC) = RewriteLCoreTCBox
+    box = RewriteLCoreTCBox
+    unbox (RewriteLCoreTCBox r) = r
+
+-----------------------------------------------------------------
+
+data TransformLCoreTCStringBox = TransformLCoreTCStringBox (TransformH LCoreTC String) deriving Typeable
+
+instance Extern (TransformH LCoreTC String) where
+    type Box (TransformH LCoreTC String) = TransformLCoreTCStringBox
+    box = TransformLCoreTCStringBox
+    unbox (TransformLCoreTCStringBox t) = t
+
+-----------------------------------------------------------------
+
+data TransformLCoreTCUnitBox = TransformLCoreTCUnitBox (TransformH LCoreTC ()) deriving Typeable
+
+instance Extern (TransformH LCoreTC ()) where
+    type Box (TransformH LCoreTC ()) = TransformLCoreTCUnitBox
+    box = TransformLCoreTCUnitBox
+    unbox (TransformLCoreTCUnitBox t) = t
+
+-----------------------------------------------------------------
+
+data TransformLCoreTCLCoreBox = TransformLCoreTCLCoreBox (TransformH LCoreTC LCore) deriving Typeable
+
+instance Extern (TransformH LCoreTC LCore) where
+    type Box (TransformH LCoreTC LCore) = TransformLCoreTCLCoreBox
+    box = TransformLCoreTCLCoreBox
+    unbox (TransformLCoreTCLCoreBox t) = t
+
+-----------------------------------------------------------------
+
+data TransformLCoreTCPathBox = TransformLCoreTCPathBox (TransformH LCoreTC LocalPathH) deriving Typeable
+
+instance Extern (TransformH LCoreTC LocalPathH) where
+    type Box (TransformH LCoreTC LocalPathH) = TransformLCoreTCPathBox
+    box = TransformLCoreTCPathBox
+    unbox (TransformLCoreTCPathBox t) = t
+
+-----------------------------------------------------------------
+
+data BiRewriteLCoreTCBox = BiRewriteLCoreTCBox (BiRewriteH LCoreTC) deriving Typeable
+
+instance Extern (BiRewriteH LCoreTC) where
+    type Box (BiRewriteH LCoreTC) = BiRewriteLCoreTCBox
+    box = BiRewriteLCoreTCBox
+    unbox (BiRewriteLCoreTCBox b) = b
+
+-----------------------------------------------------------------
+
+data RewriteLCoreTCListBox = RewriteLCoreTCListBox [RewriteH LCoreTC] deriving Typeable
+
+instance Extern [RewriteH LCoreTC] where
+    type Box [RewriteH LCoreTC] = RewriteLCoreTCListBox
+    box = RewriteLCoreTCListBox
+    unbox (RewriteLCoreTCListBox l) = l
 
 -----------------------------------------------------------------

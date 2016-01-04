@@ -1,4 +1,7 @@
-{-# LANGUAGE CPP, InstanceSigs, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 -- Above shadowing disabled because the eqExprX function has lots of shadowing
 module HERMIT.GHC
@@ -19,6 +22,7 @@ module HERMIT.GHC
     , TyLit(..)
     , GhcException(..)
     , throwGhcException
+    , throwCmdLineErrorS
     , exprArity
     , occurAnalyseExpr_NoBinderSwap
     , isKind
@@ -36,6 +40,7 @@ module HERMIT.GHC
     , eqExprX
     , loadSysInterface
     , lookupRdrNameInModule
+    , injectDependency
     , reportAllUnsolved
     , zEncodeString
 #ifdef mingw32_HOST_OS
@@ -44,6 +49,7 @@ module HERMIT.GHC
     , module Class
     , module DsBinds
     , module DsMonad
+    , module DynamicLoading
     , module ErrUtils
     , module PrelNames
     , module TcEnv
@@ -65,27 +71,42 @@ import           CoreArity
 import qualified CoreMonad -- for getHscEnv
 import           DsBinds (dsEvBinds)
 import           DsMonad (DsM, initDsTc)
+import           DynamicLoading (forceLoadTyCon, getValueSafely, lookupRdrNameInModuleForPlugins)
 import           Encoding (zEncodeString)
-import           ErrUtils (pprErrMsgBag)
 import           Finder (findImportedModule, cannotFindModule)
 -- we hide these so that they don't get inadvertently used.
 -- several are redefined in Core.hs and elsewhere
-import           GhcPlugins hiding (exprFreeVars, exprFreeIds, bindFreeVars, PluginPass, getHscEnv, RuleName)
+import           GhcPlugins hiding (exprSomeFreeVars, exprFreeVars, exprFreeIds, bindFreeVars, getHscEnv, RuleName)
 import           Kind (isKind,isLiftedTypeKindCon)
 import           LoadIface (loadSysInterface)
+#if __GLASGOW_HASKELL__ >= 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ > 2)
+import           TcRnMonad (initIfaceTcRn)
+import           ErrUtils (pprErrMsgBagWithLoc)
+#endif
 import qualified OccName -- for varName
 import           OccurAnal (occurAnalyseExpr_NoBinderSwap)
 import           Pair (Pair(..))
 import           Panic (throwGhcException, throwGhcExceptionIO, GhcException(..))
 import           PrelNames (typeableClassName)
-#if mingw32_HOST_OS
+#ifdef mingw32_HOST_OS
 import           StaticFlags
 #endif
 import           TcEnv (tcLookupClass)
 import           TcErrors (reportAllUnsolved)
+#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
+import           ErrUtils (pprErrMsgBag)
+import           TcRnMonad (getCtLoc)
+#endif
+#if __GLASGOW_HASKELL__ < 710
 import           TcMType (newWantedEvVar)
-import           TcRnMonad (getCtLoc, initIfaceTcRn)
+#else
+import           TcMType (newEvVar)
+#endif
+#if __GLASGOW_HASKELL__ < 710
 import           TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
+#else
+import           TcRnTypes (TcM, mkNonCanonical, mkSimpleWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
+#endif
 import           TcSimplify (solveWantedsTcM)
 import           TcType (mkPhiTy, mkSigmaTy)
 import           TypeRep (Type(..),TyLit(..))
@@ -161,13 +182,13 @@ ppIdInfo v info
     , (has_strictness, ptext (sLit "Str=") <> pprStrictness str_info)
     , (has_unf,        ptext (sLit "Unf=") <> ppr unf_info)
     , (notNull rules,  ptext (sLit "RULES:") <+> vcat (map ppr rules))
-    ]	-- Inline pragma, occ, demand, lbvar info
-	-- printed out with all binders (when debug is on);
-	-- see PprCore.pprIdBndr
+    ] -- Inline pragma, occ, demand, lbvar info
+      -- printed out with all binders (when debug is on);
+      -- see PprCore.pprIdBndr
   where
     pp_scope | isGlobalId v   = ptext (sLit "GblId")
-    	     | isExportedId v = ptext (sLit "LclIdX")
-    	     | otherwise      = ptext (sLit "LclId")
+             | isExportedId v = ptext (sLit "LclIdX")
+             | otherwise      = ptext (sLit "LclId")
 
     arity = arityInfo info
     has_arity = arity /= 0
@@ -298,7 +319,11 @@ lookupRdrNameInModule hsc_env guts mod_name rdr_name = do
     -- First find the package the module resides in by searching exposed packages and home modules
     found_module <- findImportedModule hsc_env mod_name Nothing
     case found_module of
+#if __GLASGOW_HASKELL__ <= 710 
         Found _ mod -> do
+#else
+        FoundModule (FoundHs _ mod) -> do
+#endif
             -- Find the exports of the module
             (_, mb_iface) <- initTcFromModGuts hsc_env guts HsSrcFile False $
                              initIfaceTcRn $
@@ -309,7 +334,11 @@ lookupRdrNameInModule hsc_env guts mod_name rdr_name = do
                     -- Try and find the required name in the exports
                     let decl_spec = ImpDeclSpec { is_mod = mod_name, is_as = mod_name
                                                 , is_qual = False, is_dloc = noSrcSpan }
+#if __GLASGOW_HASKELL__ <= 710 
                         provenance = Imported [ImpSpec decl_spec ImpAll]
+#else
+                        provenance = Just $ ImpSpec decl_spec ImpAll
+#endif
                         env = mkGlobalRdrEnv (gresFromAvails provenance (mi_exports iface))
                     case lookupGRE_RdrName rdr_name env of
                         [gre] -> return (Just (gre_name gre))
@@ -328,3 +357,24 @@ throwCmdLineErrorS dflags = throwCmdLineError . showSDoc dflags
 
 throwCmdLineError :: String -> IO a
 throwCmdLineError = throwGhcExceptionIO . CmdLineError
+
+-- | Populate the EPS with a module, as if it were imported in the target program.
+injectDependency :: HscEnv -> ModGuts -> ModuleName -> IO ()
+injectDependency hsc_env guts mod_name = do
+    -- First find the package the module resides in by searching exposed packages and home modules
+    found_module <- findImportedModule hsc_env mod_name Nothing
+    case found_module of
+#if __GLASGOW_HASKELL__ <= 710 
+        Found _ mod -> do
+#else
+        FoundModule (FoundHs _ mod) -> do
+#endif
+            -- Populate the EPS
+            _ <- initTcFromModGuts hsc_env guts HsSrcFile False $
+                 initIfaceTcRn $
+                 loadSysInterface doc mod
+            return ()
+        err -> throwCmdLineErrorS dflags $ cannotFindModule dflags mod_name err
+  where
+    dflags = hsc_dflags hsc_env
+    doc = ptext (sLit "dependency injection requested by HERMIT")

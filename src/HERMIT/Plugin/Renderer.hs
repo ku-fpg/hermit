@@ -1,11 +1,15 @@
-{-# LANGUAGE CPP, FlexibleContexts #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+
 module HERMIT.Plugin.Renderer where
 
 import Control.Arrow
 import Control.Monad.State
 
-import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
-import Data.Monoid
+import Data.List.Compat (isInfixOf, isPrefixOf, isSuffixOf)
+import Data.Typeable
 
 import HERMIT.Dictionary (traceR)
 import HERMIT.Kure
@@ -14,6 +18,8 @@ import HERMIT.PrettyPrinter.Common
 #ifdef mingw32_HOST_OS
 import HERMIT.Win32.IO (hPutStr, hPutStrLn)
 #endif
+
+import Prelude.Compat
 
 import System.Console.ANSI
 #ifdef mingw32_HOST_OS
@@ -25,10 +31,10 @@ import System.IO.Temp
 import System.Process
 
 changeRenderer :: String -> PluginM ()
-changeRenderer renderer = modify $ \ st ->
-        case lookup renderer shellRenderers of
-          Nothing -> st          -- TODO: should fail with message
-          Just r  -> st { ps_render = r }
+changeRenderer renderer =
+    case lookup renderer shellRenderers of
+        Nothing -> fail "bad renderer option."
+        Just r  -> modify $ \ st -> st { ps_render = r }
 
 shellRenderers :: [(String,Handle -> PrettyOptions -> Either String DocH -> IO ())]
 shellRenderers = [ ("unicode-terminal", unicodeConsole) ]
@@ -36,7 +42,7 @@ shellRenderers = [ ("unicode-terminal", unicodeConsole) ]
 
 -------------------------------------------------------------------------------
 
-newtype UnicodeTerminal = UnicodeTerminal (Handle -> Maybe PathH -> IO ())
+newtype UnicodeTerminal = UnicodeTerminal (Handle -> Maybe PathH -> IO ()) deriving Typeable
 
 instance RenderSpecial UnicodeTerminal where
         renderSpecial sym = UnicodeTerminal $ \ h _ -> hPutStr h [ch]
@@ -111,9 +117,9 @@ diffDocH pp doc1 doc2 =
                                                          , not ("@@" `isPrefixOf` l && "@@" `isSuffixOf` l) ]
 
 -- TODO: again this should be elsewhere, but is here because diffDocH is here.
-diffR :: Injection a CoreTC => PrettyPrinter -> String -> RewriteH a -> RewriteH a
+diffR :: Injection a LCoreTC => PrettyPrinter -> String -> RewriteH a -> RewriteH a
 diffR pp msg rr = do
-    let ppT = extractT $ liftPrettyH (pOptions pp) (pCoreTC pp)
+    let ppT = extractT $ liftPrettyH (pOptions pp) (pLCoreTC pp)
         runDiff b a = do
             doc1 <- return b >>> ppT
             doc2 <- return a >>> ppT

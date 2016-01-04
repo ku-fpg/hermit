@@ -1,144 +1,106 @@
-{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleContexts, GADTs, InstanceSigs, KindSignatures #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE CPP #-}
 
 module HERMIT.Monad
     ( -- * The HERMIT Monad
       HermitM
     , runHM
     , embedHermitM
-    , HermitMEnv(..)
+    , HermitMEnv
     , HermitMResult(..)
     , LiftCoreM(..)
+    , getHscEnv
     , runTcM
     , runDsM
-      -- * Saving Definitions
-    , RememberedName(..)
-    , DefStash
-    , saveDef
-    , lookupDef
-    , HasStash(..)
       -- * Lemmas
-    , Equality(..)
-    , LemmaName(..)
-    , Lemma(..)
-    , Lemmas
+    , HasLemmas(..)
     , addLemma
+    , findLemma
+    , insertLemma
+    , deleteLemma
       -- * Reader Information
     , HasHermitMEnv(..)
     , mkEnv
     , getModGuts
-    , HasHscEnv(..)
-      -- * Writer Information
-    , HasLemmas(..)
       -- * Messages
-    , HasDebugChan(..)
-    , DebugMessage(..)
-    , sendDebugMessage
+    , getDebugChan
+    , KEnvMessage(..)
+    , sendKEnvMessage
     ) where
 
-import Prelude hiding (lookup)
+import Prelude.Compat hiding (lookup)
 
-import Data.Dynamic (Typeable)
-import Data.Map
-import Data.String (IsString(..))
-
-import Control.Applicative
-import Control.Arrow
-import Control.Concurrent.STM
-import Control.Monad
+import Control.Monad (when) -- Needs to have Monad context on GHC 7.8
+import Control.Monad.Compat hiding (when)
 import Control.Monad.IO.Class
+
+import Data.Map
+import Data.Typeable
 
 import Language.KURE
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Kure.SumTypes
 import HERMIT.GHC
 import HERMIT.GHC.Typechecker
+import HERMIT.Kure.Universes
+import HERMIT.Lemma
 
 ----------------------------------------------------------------------------
 
--- | A label for individual definitions. Use a newtype so we can tab-complete in shell.
-newtype RememberedName = RememberedName String deriving (Eq, Ord, Typeable)
-
-instance IsString RememberedName where fromString = RememberedName
-instance Show RememberedName where show (RememberedName s) = s
-
--- | A store of saved definitions.
-type DefStash = Map RememberedName CoreDef
-
--- | An equality is represented as a set of universally quantified binders, and the LHS and RHS of the equality.
-data Equality = Equality [CoreBndr] CoreExpr CoreExpr
-
--- | A name for lemmas. Use a newtype so we can tab-complete in shell.
-newtype LemmaName = LemmaName String deriving (Eq, Ord, Typeable)
-
-instance IsString LemmaName where fromString = LemmaName
-instance Show LemmaName where show (LemmaName s) = s
-
--- | An equality with a proven status.
-data Lemma = Lemma { lemmaEq :: Equality
-                   , lemmaP  :: Bool     -- whether lemma has been proven
-                   , lemmaU  :: Bool     -- whether lemma has been used
-                   }
-
--- | A collectin of named lemmas.
-type Lemmas = Map LemmaName Lemma
-
--- | The HermitM reader environment.
-data HermitMEnv = HermitMEnv { hEnvModGuts   :: ModGuts -- ^ Note: this is a snapshot of the ModGuts from
+-- | The HermitM environment.
+data HermitMEnv = HermitMEnv { hEnvChanged   :: Bool -- ^ Whether Lemmas have changed
+                             , hEnvDebug     :: DebugChan
+                             , hEnvModGuts   :: ModGuts -- ^ Note: this is a snapshot of the ModGuts from
                                                         --         before the current transformation.
-                             , hEnvStash     :: DefStash
                              , hEnvLemmas    :: Lemmas
-                             }
+                             } deriving Typeable
 
-mkEnv :: ModGuts -> DefStash -> Lemmas -> HermitMEnv
-mkEnv = HermitMEnv
+type DebugChan = KEnvMessage -> HermitM ()
+
+mkEnv :: DebugChan -> ModGuts -> Lemmas -> HermitMEnv
+mkEnv = HermitMEnv False
 
 -- | The HermitM result record.
-data HermitMResult a = HermitMResult { hResStash  :: DefStash
+data HermitMResult a = HermitMResult { hResChanged :: Bool -- ^ Whether Lemmas have changed
                                      , hResLemmas :: Lemmas
                                      , hResult    :: a
-                                     }
+                                     } deriving Typeable
 
-mkResult :: DefStash -> Lemmas -> a -> HermitMResult a
-mkResult = HermitMResult
+changedResult :: Lemmas -> a -> HermitMResult a
+changedResult = HermitMResult True
 
-mkResultEnv :: HermitMEnv -> a -> HermitMResult a
-mkResultEnv env = mkResult (hEnvStash env) (hEnvLemmas env)
+-- Does not change the Changed status of Lemmas
+mkResult :: HermitMEnv -> a -> HermitMResult a
+mkResult env = HermitMResult (hEnvChanged env) (hEnvLemmas env)
 
 -- | The HERMIT monad is kept abstract.
 --
--- It provides a reader for ModGuts, state for DefStash and Lemmas,
+-- It provides a reader for ModGuts, state for Lemmas,
 -- and access to a debugging channel.
-newtype HermitM a = HermitM { runHermitM :: DebugChan -> HermitMEnv -> CoreM (KureM (HermitMResult a)) }
-
-type DebugChan = DebugMessage -> HermitM ()
+newtype HermitM a = HermitM { runHermitM :: HermitMEnv -> CoreM (KureM (HermitMResult a)) }
+  deriving Typeable
 
 -- | Eliminator for 'HermitM'.
-runHM :: DebugChan                     -- debug chan
-      -> HermitMEnv                    -- env
+runHM :: HermitMEnv                    -- env
       -> (HermitMResult a -> CoreM b)  -- success
       -> (String -> CoreM b)           -- failure
       -> HermitM a                     -- ma
       -> CoreM b
-runHM chan env success failure ma = runHermitM ma chan env >>= runKureM success failure
+runHM env success failure ma = runHermitM ma env >>= runKureM success failure
 
 -- | Allow HermitM to be embedded in another monad with proper capabilities.
-embedHermitM :: (HasDebugChan m, HasHermitMEnv m, HasLemmas m, HasStash m, LiftCoreM m) => HermitM a -> m a
+embedHermitM :: (HasHermitMEnv m, HasLemmas m, LiftCoreM m) => HermitM a -> m a
 embedHermitM hm = do
     env <- getHermitMEnv
-    c <- liftCoreM $ liftIO newTChanIO -- we are careful to do IO within liftCoreM to avoid the MonadIO constraint
-    r <- liftCoreM (runHermitM hm (liftIO . atomically . writeTChan c) env) >>= runKureM return fail
-    chan <- getDebugChan
-    let relayDebugMessages = do
-            mm <- liftCoreM $ liftIO $ atomically $ tryReadTChan c
-            case mm of
-                Nothing -> return ()
-                Just dm -> chan dm >> relayDebugMessages
-
-    relayDebugMessages
-    putStash $ hResStash r
-    forM_ (toList (hResLemmas r)) $ uncurry insertLemma
+    r <- liftCoreM (runHermitM hm env) >>= runKureM return fail
+    when (hResChanged r) $ forM_ (toList (hResLemmas r)) $ uncurry insertLemma
     return $ hResult r
 
 instance Functor HermitM where
@@ -154,22 +116,22 @@ instance Applicative HermitM where
 
 instance Monad HermitM where
   return :: a -> HermitM a
-  return a = HermitM $ \ _ env -> return (return (mkResultEnv env a))
+  return a = HermitM $ \ env -> return (return (mkResult env a))
 
   (>>=) :: HermitM a -> (a -> HermitM b) -> HermitM b
   (HermitM gcm) >>= f =
-        HermitM $ \ chan env -> gcm chan env >>= runKureM (\ (HermitMResult s ls a) ->
-                                                            let env' = env { hEnvStash = s, hEnvLemmas = ls }
-                                                            in  runHermitM (f a) chan env')
-                                                          (return . fail)
+        HermitM $ \ env -> gcm env >>= runKureM (\ (HermitMResult c ls a) ->
+                                                        let env' = env { hEnvChanged = c, hEnvLemmas = ls }
+                                                        in  runHermitM (f a) env')
+                                                (return . fail)
 
   fail :: String -> HermitM a
-  fail msg = HermitM $ \ _ _ -> return (fail msg)
+  fail msg = HermitM $ const $ return $ fail msg
 
 instance MonadCatch HermitM where
   catchM :: HermitM a -> (String -> HermitM a) -> HermitM a
-  (HermitM gcm) `catchM` f = HermitM $ \ chan env -> gcm chan env >>= runKureM (return.return)
-                                                                               (\ msg -> runHermitM (f msg) chan env)
+  (HermitM gcm) `catchM` f = HermitM $ \ env -> gcm env >>= runKureM (return.return)
+                                                                     (\ msg -> runHermitM (f msg) env)
 
 instance MonadIO HermitM where
   liftIO :: IO a -> HermitM a
@@ -202,73 +164,41 @@ instance HasDynFlags HermitM where
 
 ----------------------------------------------------------------------------
 
-class HasStash m where
-    -- | Get the stash of saved definitions.
-    getStash :: m DefStash
-
-    -- | Replace the stash of saved definitions.
-    putStash :: DefStash -> m ()
-
-instance HasStash HermitM where
-    getStash = HermitM $ \ _ env -> return $ return $ mkResultEnv env $ hEnvStash env
-
-    putStash s = HermitM $ \ _ env -> return $ return $ mkResult s (hEnvLemmas env) ()
-
--- | Save a definition for future use.
-saveDef :: (HasStash m, Monad m) => RememberedName -> CoreDef -> m ()
-saveDef l d = getStash >>= (insert l d >>> putStash)
-
--- | Lookup a previously saved definition.
-lookupDef :: (HasStash m, Monad m) => RememberedName -> m CoreDef
-lookupDef l = getStash >>= (lookup l >>> maybe (fail "Definition not found.") return)
-
-----------------------------------------------------------------------------
-
 class HasHermitMEnv m where
     -- | Get the HermitMEnv
     getHermitMEnv :: m HermitMEnv
 
+deriving instance Typeable HasHermitMEnv
+
 instance HasHermitMEnv HermitM where
-    getHermitMEnv = HermitM $ \ _ env -> return $ return $ mkResultEnv env env
+    getHermitMEnv = HermitM $ \ env -> return $ return $ mkResult env env
 
 getModGuts :: (HasHermitMEnv m, Monad m) => m ModGuts
 getModGuts = liftM hEnvModGuts getHermitMEnv
 
 ----------------------------------------------------------------------------
 
-class HasDebugChan m where
-    -- | Get the debugging channel
-    getDebugChan :: m (DebugMessage -> m ())
+getDebugChan :: (HasHermitMEnv m, Monad m) => m DebugChan
+getDebugChan = liftM hEnvDebug getHermitMEnv
 
-instance HasDebugChan HermitM where
-    getDebugChan = HermitM $ \ chan env -> return $ return $ mkResultEnv env chan
-
-sendDebugMessage :: (HasDebugChan m, Monad m) => DebugMessage -> m ()
-sendDebugMessage msg = getDebugChan >>= ($ msg)
-
-----------------------------------------------------------------------------
-
-class HasHscEnv m where
-    getHscEnv :: m HscEnv
-
-instance HasHscEnv CoreM where
-    getHscEnv = getHscEnvCoreM
-
-instance HasHscEnv HermitM where
-    getHscEnv = liftCoreM getHscEnv
+sendKEnvMessage :: (HasHermitMEnv m, HasLemmas m, LiftCoreM m) => KEnvMessage -> m ()
+sendKEnvMessage msg = getDebugChan >>= embedHermitM . ($ msg)
 
 ----------------------------------------------------------------------------
 
 class HasLemmas m where
-    -- | Add (or replace) a named lemma.
-    insertLemma :: LemmaName -> Lemma -> m ()
-
     getLemmas :: m Lemmas
+    putLemmas :: Lemmas -> m ()
+
+deriving instance Typeable HasLemmas
 
 instance HasLemmas HermitM where
-    insertLemma nm l = HermitM $ \ _ env -> return $ return $ mkResult (hEnvStash env) (insert nm l $ hEnvLemmas env) ()
+    getLemmas = HermitM $ \ env -> return $ return $ mkResult env (hEnvLemmas env)
+    putLemmas m = HermitM $ \ _ -> return $ return $ changedResult m ()
 
-    getLemmas = HermitM $ \ _ env -> return $ return $ mkResultEnv env (hEnvLemmas env)
+-- | Insert or replace a lemma.
+insertLemma :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> m ()
+insertLemma nm l = getLemmas >>= putLemmas . insert nm l
 
 -- | Only adds a lemma if doesn't already exist.
 addLemma :: (HasLemmas m, Monad m) => LemmaName -> Lemma -> m ()
@@ -276,25 +206,41 @@ addLemma nm l = do
     ls <- getLemmas
     maybe (insertLemma nm l) (\ _ -> return ()) (lookup nm ls)
 
+-- | Find a lemma by name. Fails if lemma does not exist.
+findLemma :: (HasLemmas m, Monad m) => LemmaName -> m Lemma
+findLemma nm = do
+    r <- liftM (lookup nm) getLemmas
+    maybe (fail $ "lemma does not exist: " ++ show nm) return r
+
+deleteLemma :: (HasLemmas m, Monad m) => LemmaName -> m ()
+deleteLemma nm = getLemmas >>= putLemmas . delete nm
+
 ----------------------------------------------------------------------------
 
 class Monad m => LiftCoreM m where
     -- | 'CoreM' can be lifted to this monad.
     liftCoreM :: CoreM a -> m a
 
+deriving instance Typeable LiftCoreM
+
 instance LiftCoreM HermitM where
-    liftCoreM coreM = HermitM $ \ _ env -> coreM >>= return . return . mkResultEnv env
+    liftCoreM coreM = HermitM $ \ env -> coreM >>= return . return . mkResult env
+
+getHscEnv :: LiftCoreM m => m HscEnv
+getHscEnv = liftCoreM getHscEnvCoreM
 
 ----------------------------------------------------------------------------
 
 -- | A message packet.
-data DebugMessage :: * where
-    DebugTick ::                                       String                -> DebugMessage
-    DebugCore :: (ReadBindings c, ReadPath c Crumb) => String -> c -> CoreTC -> DebugMessage
+data KEnvMessage :: * where
+    DebugTick :: String -> KEnvMessage
+    DebugCore :: (LemmaContext c, ReadBindings c, ReadPath c Crumb) => String -> c -> LCoreTC -> KEnvMessage
+    AddObligation :: HermitC -> LemmaName -> Lemma -> KEnvMessage -- obligation that must be proven
+  deriving Typeable
 
 ----------------------------------------------------------------------------
 
-runTcM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => TcM a -> m a
+runTcM :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => TcM a -> m a
 runTcM m = do
     env <- getHscEnv
     dflags <- getDynFlags
@@ -306,6 +252,10 @@ runTcM m = do
                                                  $    text "Errors:" : pprErrMsgBag errs
                                                    ++ text "Warnings:" : pprErrMsgBag warns
     maybe (fail $ showMsgs msgs) return mr
+#if __GLASGOW_HASKELL__ > 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ > 2)
+   where
+     pprErrMsgBag = pprErrMsgBagWithLoc
+#endif
 
-runDsM :: (HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadIO m) => DsM a -> m a
+runDsM :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => DsM a -> m a
 runDsM = runTcM . initDsTc

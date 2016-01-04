@@ -1,0 +1,173 @@
+-- fmap-id
+copy-lemma fmap-id fmap-id-tree
+inst-lemma fmap-id-tree 'f [| Tree |]
+inst-lemma-dictionaries fmap-id-tree
+prove-lemma fmap-id-tree
+extensionality 'n
+lhs (unfold >>> one-td case-reduce-id >>> unfold)
+induction 'n
+lhs undefined-expr
+rhs smash ; end-case
+stop-script
+extensionality 'xs
+rule-to-lemma map-fix
+lhs (unfold >>> smash >>> one-td (forward (lemma-unsafe map-fix))) -- find a better way
+induction 'xs
+both (unfold >+> smash) ; lhs undefined-expr ; end-case
+both (unfold >+> smash) ; end-case
+both (unfold >+> smash) ; lhs (one-td (forward (lemma ind-hyp-0))) ; both smash ; end-case
+
+-- fmap-distrib
+copy-lemma fmap-distrib fmap-distrib-tree
+inst-lemma fmap-distrib-tree 'f [| [] |]
+inst-lemma-dictionaries fmap-distrib-tree
+prove-lemma fmap-distrib-tree
+extensionality 'xs
+both (repeat (one-td unfold <+ smash))
+both (any-bu (forward (lemma-unsafe map-fix)))
+induction 'xs
+both (unfold >+> smash) ; rhs (one-td unfold) ; both (innermost undefined-expr) ; end-case
+both unfold ; rhs (one-td unfold) ; both smash ; end-case
+both unfold ; lhs simplify ; lhs (one-td (forward (lemma ind-hyp-0)))
+rhs (one-td unfold) ; both smash ; end-case
+
+-- pure-singleton
+rule-to-lemma pure-singleton
+inst-lemma-dictionaries pure-singleton
+prove-lemma pure-singleton
+lhs (repeat (simplify <+ one-td unfold))
+end-proof
+
+-- fmap-pure -- do first, as useful later
+copy-lemma fmap-pure fmap-pure-tree
+inst-lemma fmap-pure-tree 'f [| [] |]
+inst-lemma-dictionaries fmap-pure-tree
+prove-lemma fmap-pure-tree
+both (replicate 3 (one-td unfold))
+both simplify
+lhs (one-td (forward (lemma pure-singleton)))
+rhs (any-bu (forward (lemma-unsafe map-fix)))
+lhs unfold ; lhs (replicate 2 (one-td (unfold 'go)))
+lhs (simplify >>> one-td (forward (lemma append-right)))
+induction 'x
+-- undefined
+both (one-td unfold >>> innermost undefined-expr) ; end-case
+-- []
+both (one-td unfold >>> smash) ; end-case
+-- (:)
+rhs (unfold >>> simplify)
+rhs (one-td (backward (lemma ind-hyp-0)))
+lhs (one-td (unfold 'go1)) ; both smash
+lhs (any-bu (forward (lemma-unsafe append-fix)))
+lhs (one-td (backward (lemma-unsafe append-fix)))
+lhs (replicate 2 (one-td unfold >>> simplify))
+end-case
+
+-- identity
+copy-lemma identity identity-tree
+inst-lemma identity-tree 'f [| [] |]
+inst-lemma-dictionaries identity-tree
+prove-lemma identity-tree
+lhs (one-td (forward (lemma fmap-pure-tree)))
+lhs (one-td (unfold '$p1Applicative) >>> one-td case-reduce-id)
+lhs (one-td (forward (lemma fmap-id-tree)) >>> smash)
+end-proof
+
+-- homomorphism
+copy-lemma homomorphism homomorphism-tree
+inst-lemma homomorphism-tree 'f [| [] |]
+inst-lemma-dictionaries homomorphism-tree
+prove-lemma homomorphism-tree
+lhs (one-td (forward (lemma fmap-pure-tree)))
+both (repeat (simplify <+ one-td unfold))
+lhs (one-td (forward (lemma-unsafe map-fix)))
+lhs (repeat (simplify <+ one-td unfold))
+end-proof
+
+-- all of these Applicative proofs suffer from
+-- a lot of simplification steps necessary.
+-- This is because unfolding <*> leads to a pair
+-- of mutually recursive go functions, which are
+-- hard to work with. Maybe prove some aux lemmas
+-- to put <*> in terms of >>= and return, then
+-- finish the proofs.
+
+-- interchange
+copy-lemma interchange interchange-tree
+inst-lemma interchange-tree 'f [| [] |]
+inst-lemma-dictionaries interchange-tree
+prove-lemma interchange-tree
+rhs (one-td (forward (lemma fmap-pure-tree)))
+rhs (repeat (simplify <+ one-td unfold))
+rhs (one-td (forward (lemma-unsafe map-fix)) >>> unfold)
+lhs (one-td (forward (lemma pure-singleton)))
+lhs (replicate 2 (one-td unfold) >>> smash)
+lhs (one-td unfold >>> one-td (unfold 'go))
+lhs (replicate 2 (any-bu (unfold 'go1)) >>> smash)
+lhs (any-bu (forward (lemma append-right)))
+lhs (any-td (forward (lemma append-single-left)))
+induction 'u
+both (innermost undefined-expr) ; end-case
+both smash ; end-case
+both smash ; rhs (one-td unfold >>> one-td (backward (lemma ind-hyp-0)))
+rhs (smash >>> one-td (fold 'go)) ; end-case
+
+-- composition
+-- copy-lemma composition composition-tree
+-- inst-lemma composition-tree 'f [| [] |]
+-- inst-lemma-dictionaries composition-tree
+-- prove-lemma composition-tree
+-- rhs (one-td (forward (lemma fmap-pure-tree)))
+-- both (repeat (one-td (unfold ["<*>", "$fApplicative[]", "$p1Applicative", "$fApplicative[]_$c<*>", "fmap"] <+ simplify)))
+-- both (repeat (one-td (forward (lemma append-single-left))))
+-- both (any-bu (forward (lemma-unsafe map-fix)))
+-- both smash
+-- both (one-td (unfold 'go))
+-- both (one-td (unfold 'go0))
+-- both (one-td (unfold 'myMap))
+-- induction 'u
+-- both (innermost undefined-expr) ; end-case
+-- both smash ; end-case
+-- TODO: finish this proof
+
+-- return-left
+copy-lemma return-left return-left-tree
+inst-lemma return-left-tree 'm [| [] |]
+inst-lemma-dictionaries return-left-tree
+prove-lemma return-left-tree
+lhs (any-call (unfold 'return) >>> smash)
+lhs (any-call (unfold '"$fMonad[]_$creturn"))
+lhs (one-td (forward (lemma bind-left-cons)))
+lhs (one-td (forward (lemma bind-left-nil)))
+lhs (one-td (forward (lemma append-right)))
+end-proof
+
+-- return-right
+copy-lemma return-right return-right-tree
+inst-lemma return-right-tree 'm [| [] |]
+inst-lemma-dictionaries return-right-tree
+prove-lemma return-right-tree
+both (repeat (one-td (unfold [">>=", "return", "$fMonad[]", "$fMonad[]_$c>>=", "$fMonad[]_$creturn"]) <+ smash))
+induction 'k
+lhs (one-td (unfold 'go) >>> innermost undefined-expr) ; end-case
+lhs (one-td (unfold 'go) >>> smash) ; end-case
+rhs (one-td (backward (lemma ind-hyp-0)) >>> innermost let-float)
+lhs (one-td (unfold 'go) >>> simplify)
+both (any-bu (forward (lemma append-single-left))) ; end-case
+
+-- bind-assoc
+copy-lemma bind-assoc bind-assoc-tree
+inst-lemma bind-assoc-tree 'm [| [] |]
+inst-lemma-dictionaries bind-assoc-tree
+prove-lemma bind-assoc-tree
+induction 'j
+-- undefined
+both (repeat (one-td (unfold [">>=", "return", "$fMonad[]", "$fMonad[]_$c>>=", "$fMonad[]_$creturn"]) <+ smash))
+both (extract (focus [let-body] (promote (any-call (unfold 'go)))))
+both (smash >+> innermost undefined-expr) ; end-case
+-- []
+both (any-bu (forward (lemma bind-left-nil))) ; end-case
+-- (:)
+both (any-bu (forward (lemma bind-left-cons)) >+> smash)
+rhs (one-td (backward (lemma ind-hyp-0)))
+rhs (one-td (forward (lemma-unsafe bind-append))) ; end-case -- TODO: finish bind-append proof

@@ -1,7 +1,8 @@
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
 module HERMIT.PrettyPrinter.GHC
   ( -- * GHC's standard Pretty-Printer for GHC Core
-    pretty
+    externals
+  , pretty
   , ppCoreTC
   , ppModGuts
   , ppCoreProg
@@ -10,28 +11,32 @@ module HERMIT.PrettyPrinter.GHC
   , ppCoreAlt
   , ppKindOrType
   , ppCoercion
-  , ppForallQuantification
   )
 where
 
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
-import Data.Default
+import Data.Default.Class
 
-import HERMIT.Kure
 import HERMIT.Core
+import HERMIT.External
 import HERMIT.GHC hiding ((<+>), (<>), char, text, parens, hsep, empty)
+import HERMIT.Kure
+
 import HERMIT.PrettyPrinter.Common
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 
 ---------------------------------------------------------------------------
 
+externals :: [External]
+externals = [ external "ghc" pretty ["GHC pretty printer."] ]
+
 pretty :: PrettyPrinter
-pretty = PP { pForall = ppForallQuantification
-            , pCoreTC = ppCoreTC
+pretty = PP { pLCoreTC = promoteT ppCoreTC -- TODO
             , pOptions = def
+            , pTag = "ghc"
             }
 
 -- | This pretty printer is just a reflection of GHC's standard pretty printer.
@@ -77,12 +82,13 @@ ppKindOrType = ppSDoc
 ppCoercion :: PrettyH Coercion
 ppCoercion = ppSDoc
 
--- A bit hacky, currently only used to pretty-print Lemmas.
+{- TODO: lemma pp for GHC-style
 ppForallQuantification :: PrettyH [Var]
 ppForallQuantification =
   do vs <- mapT ppSDoc
      if null vs
      then return empty
      else return $ text "forall" <+> hsep vs <> text "."
+-}
 
 ---------------------------------------------------------------------------

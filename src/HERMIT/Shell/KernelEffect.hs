@@ -1,43 +1,43 @@
-{-# LANGUAGE ConstraintKinds, DeriveDataTypeable, FlexibleContexts, LambdaCase, TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.Shell.KernelEffect
     ( KernelEffect(..)
     , performKernelEffect
     , applyRewrite
     , setPath
-    , goDirection
-    , beginScope
-    , endScope
-    , deleteSAST
     ) where
 
+import Control.Arrow
+import Control.Monad.Reader
 import Control.Monad.State
 
+import qualified Data.Map as M
 import Data.Monoid
 import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.Dictionary
 import HERMIT.External
-import qualified HERMIT.GHC as GHC
-import HERMIT.Kernel (queryK)
-import HERMIT.Kernel.Scoped hiding (abortS, resumeS)
+import HERMIT.Kernel
 import HERMIT.Kure
+import HERMIT.Lemma
 import HERMIT.Parser
-
-import HERMIT.Plugin.Renderer
-
-import HERMIT.PrettyPrinter.Common
+import HERMIT.Plugin.Types
 
 import HERMIT.Shell.Types
 
 -------------------------------------------------------------------------------
 
 -- | KernelEffects are things that affect the state of the Kernel
-data KernelEffect = Direction  Direction -- Change the currect location using directions.
-                  | BeginScope           -- Begin scope.
-                  | EndScope             -- End scope.
-                  | Delete     SAST      -- Delete an AST
+data KernelEffect = Direction Direction -- Move up or top.
+                  | BeginScope          -- Begin scope.
+                  | EndScope            -- End scope.
+                  | Delete AST          -- Delete an AST
    deriving Typeable
 
 instance Extern KernelEffect where
@@ -47,71 +47,98 @@ instance Extern KernelEffect where
 
 performKernelEffect :: (MonadCatch m, CLMonad m) => ExprH -> KernelEffect -> m ()
 performKernelEffect e = \case
-                            Direction dir -> goDirection dir e
-                            BeginScope    -> beginScope e
-                            EndScope      -> endScope e
-                            Delete sast   -> deleteSAST sast
+                            Direction d -> goUp d e
+                            BeginScope  -> beginScope e
+                            EndScope    -> endScope e
+                            Delete sast -> deleteAST sast
 
 -------------------------------------------------------------------------------
 
-applyRewrite :: (Injection GHC.ModGuts g, Walker HermitC g, MonadCatch m, CLMonad m)
-             => RewriteH g -> ExprH -> m ()
+applyRewrite :: (MonadCatch m, CLMonad m) => RewriteH LCoreTC -> ExprH -> m ()
 applyRewrite rr expr = do
-    st <- get
+    ps <- getProofStackEmpty
+    let str = unparseExprH expr
+    case ps of
+        todo@(Unproven {}) : todos -> do
+            cl' <- queryInFocus (inProofFocusR todo (promoteR rr) >>> (contextfreeT (applyT lintClauseT (ptContext todo)) >> idR) :: TransformH Core Clause) (Always str)
+            let todo' = todo { ptLemma = (ptLemma todo) { lemmaC = cl' } }
+            modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) (todo':todos) (cl_proofstack st) }
+        _ -> do
+            k <- asks pr_kernel
+            (kEnv,(ast,cl)) <- gets (cl_kernel_env &&& cl_cursor &&& cl_corelint)
 
-    let sk = cl_kernel st
-        kEnv = cl_kernel_env st
-        sast = cl_cursor st
-        ppOpts = cl_pretty_opts st
-        pp = pCoreTC $ cl_pretty st
+            rr' <- addFocusR (extractR rr :: RewriteH CoreTC)
+            ast' <- prefixFailMsg "Rewrite failed:" $ applyK k rr' (Always str) kEnv ast
 
-    sast' <- prefixFailMsg "Rewrite failed: " $ applyS sk rr kEnv sast
+            when cl $ do
+                warns <- liftM snd (queryK k lintModuleT Never kEnv ast')
+                            `catchM` (\ errs -> deleteK k ast' >> fail errs)
+                putStrToConsole warns
 
-    let commit = put (newSAST expr sast' st) >> showResult
-        showResult = if cl_diffonly st then showDiff else showWindow
-        showDiff = do doc1 <- queryS sk (liftPrettyH ppOpts pp) kEnv sast
-                      doc2 <- queryS sk (liftPrettyH ppOpts pp) kEnv sast'
-                      diffDocH (cl_pretty st) doc1 doc2 >>= cl_putStr
+            addAST ast'
+    printWindow Nothing
 
-    if cl_corelint st
-        then do ast' <- toASTS sk sast'
-                liftIO (queryK (kernelS sk) ast' lintModuleT kEnv)
-                >>= runKureM (\ warns -> putStrToConsole warns >> commit)
-                             (\ errs  -> liftIO (deleteS sk sast') >> fail errs)
-        else commit
-
-setPath :: (Injection GHC.ModGuts g, Walker HermitC g, MonadCatch m, CLMonad m)
-        => TransformH g LocalPathH -> ExprH -> m ()
+setPath :: (Injection a LCoreTC, MonadCatch m, CLMonad m) => TransformH a LocalPathH -> ExprH -> m ()
 setPath t expr = do
-    st <- get
-    -- An extension to the Path
-    p <- prefixFailMsg "Cannot find path: " $ queryS (cl_kernel st) t (cl_kernel_env st) (cl_cursor st)
-    ast <- prefixFailMsg "Path is invalid: " $ modPathS (cl_kernel st) (<> p) (cl_kernel_env st) (cl_cursor st)
-    put $ newSAST expr ast st
-    showWindow
+    p <- prefixFailMsg "Cannot find path: " $ queryInContext (promoteT t) Never
+    modifyLocalPath (<> p) expr
+    printWindow Nothing
 
-goDirection :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
-goDirection dir expr = do
-    st <- get
-    ast <- prefixFailMsg "Invalid move: " $ modPathS (cl_kernel st) (moveLocally dir) (cl_kernel_env st) (cl_cursor st)
-    put $ newSAST expr ast st
-    showWindow
+goUp :: (MonadCatch m, CLMonad m) => Direction -> ExprH -> m ()
+goUp T expr = modifyLocalPath (const mempty) expr
+goUp U expr = do
+    ps <- getProofStackEmpty
+    (_,rel) <- case ps of
+                [] -> getPathStack
+                todo:_ -> return $ ptPath todo
+    case rel of
+        SnocPath [] -> fail "cannot move up, at root of scope."
+        SnocPath (_:cs) -> modifyLocalPath (const $ SnocPath cs) expr
+    printWindow Nothing
 
 beginScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 beginScope expr = do
-    st <- get
-    ast <- beginScopeS (cl_kernel st) (cl_cursor st)
-    put $ newSAST expr ast st
-    showWindow
+    ps <- getProofStackEmpty
+    let logExpr = do
+            k <- asks pr_kernel
+            ast <- gets cl_cursor
+            tellK k (unparseExprH expr) ast
+    case ps of
+        [] -> do
+            (base, rel) <- getPathStack
+            addAST =<< logExpr
+            modify $ \ st -> st { cl_foci = M.insert (cl_cursor st) (rel : base, mempty) (cl_foci st) }
+        Unproven nm l c (base,p) : todos -> do
+            addAST =<< logExpr
+            let todos' = Unproven nm l c (p : base, mempty) : todos
+            modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
+    printWindow Nothing
 
 endScope :: (MonadCatch m, CLMonad m) => ExprH -> m ()
 endScope expr = do
-    st <- get
-    ast <- endScopeS (cl_kernel st) (cl_cursor st)
-    put $ newSAST expr ast st
-    showWindow
+    ps <- getProofStackEmpty
+    let logExpr = do
+            k <- asks pr_kernel
+            ast <- gets cl_cursor
+            tellK k (unparseExprH expr) ast
+    case ps of
+        [] -> do
+            (base, _) <- getPathStack
+            case base of
+                [] -> fail "no scope to end."
+                (rel:base') -> do
+                    addAST =<< logExpr
+                    modify $ \ st -> st { cl_foci = M.insert (cl_cursor st) (base', rel) (cl_foci st) }
+        Unproven nm l c (base,_) : todos -> do
+            case base of
+                [] -> fail "no scope to end."
+                (p:base') -> do
+                    addAST =<< logExpr
+                    let todos' = Unproven nm l c (base', p) : todos
+                    modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) todos' (cl_proofstack st) }
+    printWindow Nothing
 
-deleteSAST :: (MonadCatch m, CLMonad m) => SAST -> m ()
-deleteSAST sast = gets cl_kernel >>= flip deleteS sast
+deleteAST :: (MonadCatch m, CLMonad m) => AST -> m ()
+deleteAST ast = asks pr_kernel >>= flip deleteK ast
 
 -------------------------------------------------------------------------------

@@ -1,4 +1,9 @@
-{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleInstances, TypeFamilies #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module HERMIT.Name
     ( HermitName
     , cmpHN2Name
@@ -33,6 +38,7 @@ module HERMIT.Name
     , newCoVarH
     , newVarH
     , cloneVarH
+    , cloneVarFSH
       -- * Name Lookup
     , findId
     , findVar
@@ -42,10 +48,10 @@ module HERMIT.Name
     , findInNameSpaces
     ) where
 
-import Control.Monad
+import Control.Monad.Compat
 import Control.Monad.IO.Class
 
-import Data.List (intercalate)
+import Data.List.Compat (intercalate)
 import Data.Dynamic (Typeable)
 import Data.String (IsString(..))
 
@@ -55,12 +61,15 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 
+import Prelude.Compat hiding ((<$>), (<*>))
+
 -- | Possible results from name lookup.
 -- Invariant: One constructor for each NameSpace.
 data Named = NamedId Id
            | NamedDataCon DataCon
            | NamedTyCon TyCon
            | NamedTyVar Var
+  deriving Typeable
 
 instance Show Named where
     show (NamedId _) = "NamedId"
@@ -99,7 +108,7 @@ allNameSpaces = [varNS, dataConNS, tyConClassNS, tyVarNS]
 -- like GHC's 'RdrName', but without specifying which 'NameSpace'
 -- the name is found in.
 data HermitName = HermitName { hnModuleName  :: Maybe ModuleName
-                             , hnUnqualified :: String
+                             , hnUnqualified :: FastString
                              }
     deriving (Eq, Typeable)
 
@@ -123,16 +132,16 @@ cmpHN2Name (HermitName hm nm) n
     | Just mn <- hm
     , Just m  <- nameModule_maybe n = (mn == moduleName m) && sameOccName
     | otherwise     = sameOccName
-    where sameOccName = nm == unqualifiedName n
+    where sameOccName = nm == occNameFS (getOccName n)
 
 -- | Make a qualified HermitName from a String representing the module name
 -- and a String representing the occurrence name.
 mkQualified :: String -> String -> HermitName
-mkQualified mnm nm = HermitName (Just $ mkModuleName mnm) nm
+mkQualified mnm = HermitName (Just $ mkModuleName mnm) . mkFastString
 
 -- | Make an unqualified HermitName from a String.
 mkUnqualified :: String -> HermitName
-mkUnqualified = HermitName Nothing
+mkUnqualified = HermitName Nothing . mkFastString
 
 -- | Parse a HermitName from a String.
 parseName :: String -> HermitName
@@ -149,18 +158,18 @@ parseQualified s = mkQualified mnm nm
 
 -- | Turn a HermitName into a (possibly fully-qualified) String.
 showName :: HermitName -> String
-showName (HermitName mnm nm) = maybe id (\ m n -> moduleNameString m ++ ('.' : n)) mnm nm
+showName (HermitName mnm nm) = maybe id (\ m n -> moduleNameString m ++ ('.' : n)) mnm $ unpackFS nm
 
 -- | Make a HermitName from a RdrName
 fromRdrName :: RdrName -> HermitName
 fromRdrName nm = case isQual_maybe nm of
-                    Nothing         -> HermitName Nothing    (occNameString $ rdrNameOcc nm)
-                    Just (mnm, onm) -> HermitName (Just mnm) (occNameString onm)
+                    Nothing         -> HermitName Nothing    (occNameFS $ rdrNameOcc nm)
+                    Just (mnm, onm) -> HermitName (Just mnm) (occNameFS onm)
 
 -- | Make a RdrName for the given NameSpace and HermitName
 toRdrName :: NameSpace -> HermitName -> RdrName
 toRdrName ns (HermitName mnm nm) = maybe (mkRdrUnqual onm) (flip mkRdrQual onm) mnm
-    where onm = mkOccName ns nm
+    where onm = mkOccNameFS ns nm
 
 -- | Make a RdrName for each given NameSpace.
 toRdrNames :: [NameSpace] -> HermitName -> [RdrName]
@@ -224,7 +233,7 @@ instance (MonadThings m, BoundVars c) => MonadThings (Transform c m a) where
 
 --------------------------------------------------------------------------------------------------
 
-findId :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findId :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
        => HermitName -> c -> m Id
 findId nm c = do
     nmd <- findInNameSpaces [varNS, dataConNS] nm c
@@ -233,7 +242,7 @@ findId nm c = do
         NamedDataCon dc -> return $ dataConWrapId dc
         other -> fail $ "findId: impossible Named returned: " ++ show other
 
-findVar :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findVar :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
        => HermitName -> c -> m Var
 findVar nm c = do
     nmd <- findInNameSpaces [varNS, tyVarNS, dataConNS] nm c
@@ -243,7 +252,7 @@ findVar nm c = do
         NamedDataCon dc -> return $ dataConWrapId dc
         other -> fail $ "findVar: impossible Named returned: " ++ show other
 
-findTyCon :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findTyCon :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
           => HermitName -> c -> m TyCon
 findTyCon nm c = do
     nmd <- findInNameSpace tyConClassNS nm c
@@ -251,7 +260,7 @@ findTyCon nm c = do
         NamedTyCon tc -> return tc
         other -> fail $ "findTyCon: impossible Named returned: " ++ show other
 
-findType :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findType :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
          => HermitName -> c -> m Type
 findType nm c = do
     nmd <- findInNameSpaces [tyVarNS, tyConClassNS] nm c
@@ -262,12 +271,12 @@ findType nm c = do
 
 --------------------------------------------------------------------------------------------------
 
-findInNameSpaces :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findInNameSpaces :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
                  => [NameSpace] -> HermitName -> c -> m Named
 findInNameSpaces nss nm c = setFailMsg "Variable not in scope." -- because catchesM clobbers failure messages.
                           $ catchesM [ findInNameSpace ns nm c | ns <- nss ]
 
-findInNameSpace :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
+findInNameSpace :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadIO m, MonadThings m)
                 => NameSpace -> HermitName -> c -> m Named
 findInNameSpace ns nm c =
     case varSetElems $ filterVarSet ((== ns) . occNameSpace . getOccName) $ findBoundVars (cmpHN2Var nm) c of
@@ -276,7 +285,7 @@ findInNameSpace ns nm c =
         []        -> findInNSModGuts ns nm
 
 -- | Looks for Named in current GlobalRdrEnv. If not present, calls 'findInNSPackageDB'.
-findInNSModGuts :: (HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
+findInNSModGuts :: (LiftCoreM m, HasHermitMEnv m, MonadIO m, MonadThings m)
                 => NameSpace -> HermitName -> m Named
 findInNSModGuts ns nm = do
     rdrEnv <- liftM mg_rdr_env getModGuts
@@ -286,7 +295,7 @@ findInNSModGuts ns nm = do
         _     -> fail "findInNSModGuts: multiple names returned"
 
 -- | Looks for Named in package database, or built-in packages.
-findInNSPackageDB :: (HasHscEnv m, HasHermitMEnv m, MonadIO m, MonadThings m)
+findInNSPackageDB :: (LiftCoreM m, HasHermitMEnv m, MonadIO m, MonadThings m)
                   => NameSpace -> HermitName -> m Named
 findInNSPackageDB ns nm = do
     mnm <- lookupName ns nm
@@ -295,7 +304,7 @@ findInNSPackageDB ns nm = do
         Just n  -> nameToNamed n
 
 -- | Helper to call lookupRdrNameInModule
-lookupName :: (HasHermitMEnv m, HasHscEnv m, MonadIO m) => NameSpace -> HermitName -> m (Maybe Name)
+lookupName :: (HasHermitMEnv m, LiftCoreM m, MonadIO m) => NameSpace -> HermitName -> m (Maybe Name)
 lookupName ns nm = case isQual_maybe rdrName of
                     Nothing    -> return Nothing -- we can't use lookupName on the current module
                     Just (m,_) -> do
@@ -327,33 +336,25 @@ nameToNamed n | isVarName n     = liftM NamedId $ lookupId n
               | isTyVarName n   = fail "nameToNamed: impossible, TyVars are not exported and cannot be looked up."
               | otherwise       = fail "nameToNamed: unknown name type"
 
--- Someday, when Applicative is a superclass of monad, we can uncomment the
--- nicer applicative definitions. For now, we don't want the extra constraint.
-
 -- | Make a 'Name' from a string.
 newName :: MonadUnique m => String -> m Name
-newName nm = getUniqueM >>= return . flip mkSystemVarName (mkFastString nm)
--- newName nm = mkSystemVarName <$> getUniqueM <*> pure (mkFastString nm)
+newName nm = mkSystemVarName <$> getUniqueM <*> return (mkFastString nm)
 
 -- | Make a unique global identifier for a specified type, using a provided name.
 newGlobalIdH :: MonadUnique m => String -> Type -> m Id
-newGlobalIdH nm ty = newName nm >>= return . flip mkVanillaGlobal ty
--- newGlobalIdH nm ty = mkVanillaGlobal <$> newName nm <*> pure ty
+newGlobalIdH nm ty = mkVanillaGlobal <$> newName nm <*> return ty
 
 -- | Make a unique identifier for a specified type, using a provided name.
 newIdH :: MonadUnique m => String -> Type -> m Id
-newIdH nm ty = newName nm >>= return . flip mkLocalId ty
--- newIdH nm ty = mkLocalId <$> newName nm <*> pure ty
+newIdH nm ty = mkLocalId <$> newName nm <*> return ty
 
 -- | Make a unique type variable for a specified kind, using a provided name.
 newTyVarH :: MonadUnique m => String -> Kind -> m TyVar
-newTyVarH nm k = newName nm >>= return . flip mkTyVar k
--- newTyVarH nm k = mkTyVar <$> newName nm <*> pure k
+newTyVarH nm k = mkTyVar <$> newName nm <*> return k
 
 -- | Make a unique coercion variable for a specified type, using a provided name.
 newCoVarH :: MonadUnique m => String -> Type -> m TyVar
-newCoVarH nm ty = newName nm >>= return . flip mkCoVar ty
--- newCoVarH nm ty = mkCoVar <$> newName nm <*> pure ty
+newCoVarH nm ty = mkCoVar <$> newName nm <*> return ty
 
 -- TODO: not sure if the predicates are correct.
 -- | Experimental, use at your own risk.
@@ -370,4 +371,14 @@ cloneVarH nameMod v | isTyVar v = newTyVarH name ty
                     | otherwise = fail "If this variable isn't a type, coercion or identifier, then what is it?"
   where
     name = nameMod (unqualifiedName v)
+    ty   = varType v
+
+-- | Make a new variable of the same type, with a modified textual name.
+cloneVarFSH :: MonadUnique m => (FastString -> FastString) -> Var -> m Var
+cloneVarFSH nameMod v | isTyVar v = newTyVarH name ty
+                      | isCoVar v = newCoVarH name ty
+                      | isId v    = newIdH name ty
+                      | otherwise = fail "If this variable isn't a type, coercion or identifier, then what is it?"
+  where
+    name = unpackFS $ nameMod $ occNameFS $ getOccName v
     ty   = varType v

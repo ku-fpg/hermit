@@ -15,3 +15,11 @@ qsort (a:as) = qsort bs ++ [a] ++ qsort cs
 main :: IO ()
 main = print (qsort [8,3,5,7,2,9,4,6,3,2])
 
+-- Should be in the "List" module
+{-# RULES "++ []"  forall xs .  xs ++ [] = xs #-}
+{-# RULES "++ strict"           (++) undefined = undefined #-}
+
+-- The "Algebra" for repH
+{-# RULES "repH ++" forall xs ys .     repH (xs ++ ys) = repH xs . repH ys #-}
+{-# RULES "repH []"                    repH [] = id                        #-}
+{-# RULES "repH (:)" forall x xs .     repH (x:xs) = ((:) x) . repH xs     #-}

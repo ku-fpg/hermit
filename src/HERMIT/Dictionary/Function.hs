@@ -1,8 +1,12 @@
-{-# LANGUAGE CPP, FlexibleContexts, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module HERMIT.Dictionary.Function
     ( externals
     , appArgM
-    , buildApplicationM
+    , buildAppM
+    , buildAppsM
     , buildCompositionT
     , buildFixT
     , buildIdT
@@ -13,6 +17,7 @@ module HERMIT.Dictionary.Function
     ) where
 
 import Control.Arrow
+import Control.Monad
 import Control.Monad.IO.Class
 
 import Data.List (nub, intercalate, intersect, partition, transpose)
@@ -28,15 +33,14 @@ import HERMIT.Monad
 import HERMIT.Name
 
 import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.GHC hiding (externals)
 
 externals ::  [External]
 externals =
-    [ external "static-arg" (promoteDefR staticArgR :: RewriteH Core)
+    [ external "static-arg" (promoteDefR staticArgR :: RewriteH LCore)
         [ "perform the static argument transformation on a recursive function." ]
-    , external "static-arg-types" (promoteDefR staticArgTypesR :: RewriteH Core)
+    , external "static-arg-types" (promoteDefR staticArgTypesR :: RewriteH LCore)
         [ "perform the static argument transformation on a recursive function, only transforming type arguments." ]
-    , external "static-arg-pos" (promoteDefR . staticArgPosR :: [Int] -> RewriteH Core)
+    , external "static-arg-pos" (promoteDefR . staticArgPosR :: [Int] -> RewriteH LCore)
         [ "perform the static argument transformation on a recursive function, only transforming the arguments specified (by index)." ]
     ]
 
@@ -131,29 +135,25 @@ appArgM n e | n < 0     = fail "appArgM: arg must be non-negative"
                              else return $ l !! n
 
 -- | Build composition of two functions.
-buildCompositionT :: (BoundVars c, HasDynFlags m, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+buildCompositionT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
                   => CoreExpr -> CoreExpr -> Transform c m x CoreExpr
 buildCompositionT f g = do
     composeId <- findIdT $ fromString "Data.Function.."
-    fDot <- buildApplicationM (varToCoreExpr composeId) f
-    buildApplicationM fDot g
+    fDot <- prefixFailMsg "building (.) f failed:" $ buildAppM (varToCoreExpr composeId) f
+    prefixFailMsg "building f . g failed:" $ buildAppM fDot g
+
+buildAppsM :: MonadCatch m => CoreExpr -> [CoreExpr] -> m CoreExpr
+buildAppsM = foldM buildAppM
 
 -- | Given expression for f and for x, build f x, figuring out the type arguments.
-buildApplicationM :: (HasDynFlags m, MonadCatch m, MonadIO m) => CoreExpr -> CoreExpr -> m CoreExpr
-buildApplicationM f x = do
+buildAppM :: MonadCatch m => CoreExpr -> CoreExpr -> m CoreExpr
+buildAppM f x = do
     (vsF, domF, _) <- splitFunTypeM (exprType f)
     let (vsX, xTy) = splitForAllTys (exprType x)
         allTvs = vsF ++ vsX
         bindFn v = if v `elem` allTvs then BindMe else Skolem
 
-    sub <- maybe (do d <- getDynFlags
-                     liftIO $ putStrLn $ "f: " ++ showPpr d f
-                     liftIO $ putStrLn $ "x: " ++ showPpr d x
-                     liftIO $ putStrLn $ "vsF: " ++ showPpr d vsF
-                     liftIO $ putStrLn $ "domF: " ++ showPpr d domF
-                     liftIO $ putStrLn $ "vsX: " ++ showPpr d vsX
-                     liftIO $ putStrLn $ "xTy: " ++ showPpr d xTy
-                     fail "buildApplicationM - domain of f and type of x do not unify")
+    sub <- maybe (fail "buildAppM - domain of f and type of x do not unify")
                  return
                  (tcUnifyTys bindFn [domF] [xTy])
 
@@ -165,7 +165,7 @@ buildApplicationM f x = do
     return $ mkCoreLams vs $ mkCoreApp f' x'
 
 -- | Given expression for f, build fix f.
-buildFixT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+buildFixT :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
           => CoreExpr -> Transform c m x CoreExpr
 buildFixT f = do
     (tvs, ty) <- endoFunExprTypeM f
@@ -174,7 +174,7 @@ buildFixT f = do
     return $ mkCoreLams tvs $ mkCoreApps (varToCoreExpr fixId) [Type ty, f']
 
 -- | Build an expression that is the monomorphic id function for given type.
-buildIdT :: (BoundVars c, HasHscEnv m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+buildIdT :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
          => Type -> Transform c m x CoreExpr
 buildIdT ty = do
     idId <- findIdT $ fromString "Data.Function.id"

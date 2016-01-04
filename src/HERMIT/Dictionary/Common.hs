@@ -1,4 +1,7 @@
-{-# LANGUAGE CPP, ScopedTypeVariables, FlexibleContexts, LambdaCase #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Note: this module should NOT export externals. It is for common
 --   transformations needed by the other primitive modules.
@@ -36,7 +39,6 @@ module HERMIT.Dictionary.Common
     , varBindingDepthT
     , varIsOccurrenceOfT
     , exprIsOccurrenceOfT
-    , inScope
     , withVarsInScope
       -- Miscellaneous
     , wrongExprForm
@@ -44,8 +46,7 @@ module HERMIT.Dictionary.Common
 
 where
 
-import Data.List
-import Data.Monoid
+import Data.List.Compat (nub)
 
 import Control.Arrow
 import Control.Monad.IO.Class
@@ -56,6 +57,8 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Name
+
+import Prelude.Compat
 
 ------------------------------------------------------------------------------
 
@@ -91,9 +94,9 @@ callNameT nm = prefixFailMsg ("callNameT failed: not a call to '" ++ show nm ++ 
 
 -- | Succeeds if we are looking at a fully saturated function call.
 callSaturatedT :: Monad m => Transform c m CoreExpr (CoreExpr, [CoreExpr])
-callSaturatedT = callPredT (\ i args -> idArity i == length args)
--- TODO: probably better to calculate arity based on Id's type, as
---       idArity is conservatively set to zero by default.
+callSaturatedT = callPredT (\ i args -> let (tvs, ty) = splitForAllTys (varType i)
+                                            (bs,_) = splitFunTys ty
+                                        in (length tvs + length bs) == length args)
 
 -- | Succeeds if we are looking at an application of given function
 callNameG :: MonadCatch m => HermitName -> Transform c m CoreExpr ()
@@ -195,37 +198,24 @@ findBoundVarT p = do
 --------------------------------------------------------------------------------------------------
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findIdT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findIdT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
         => HermitName -> Transform c m a Id
 findIdT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findId nm)
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findVarT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findVarT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
          => HermitName -> Transform c m a Var
 findVarT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findVar nm)
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findTyConT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findTyConT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
            => HermitName -> Transform c m a TyCon
 findTyConT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findTyCon nm)
 
 -- | Lookup the name in the context first, then, failing that, in GHC's global reader environment.
-findTypeT :: (BoundVars c, HasHermitMEnv m, HasHscEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findTypeT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
           => HermitName -> Transform c m a Type
 findTypeT nm = prefixFailMsg ("Cannot resolve name " ++ show nm ++ ", ") $ contextonlyT (findType nm)
-
--- TODO: "inScope" was defined elsewhere, but I've moved it here.  Should it be combined with the above functions?
--- Used in Dictionary.Inline to check if variables an in scope.
--- Used in Dictionary.Fold
-
--- | Determine whether a variable is in scope.
-inScope :: ReadBindings c => c -> Var -> Bool
-inScope c v = (v `boundIn` c) ||                 -- defined in this module
-              (isId v &&                         -- idInfo panics on TyVars
-               case unfoldingInfo (idInfo v) of
-                CoreUnfolding {} -> True         -- defined elsewhere
-                DFunUnfolding {} -> True
-                _                -> False)
 
 -- | Modify transformation to apply to current expression as if it were the body of a lambda binding the given variables.
 withVarsInScope :: (AddBindings c, ReadPath c Crumb) => [Var] -> Transform c m a b -> Transform c m a b

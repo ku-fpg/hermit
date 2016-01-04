@@ -1,4 +1,5 @@
-{-# LANGUAGE CPP, LambdaCase, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 module HERMIT.Dictionary.Query
     ( -- * Queries and Predicates
@@ -6,6 +7,7 @@ module HERMIT.Dictionary.Query
     , infoT
     , compareCoreAtT
     , compareBoundIdsT
+    , compareBoundIds
     ) where
 
 import Control.Arrow
@@ -31,16 +33,17 @@ import HERMIT.Dictionary.Inline hiding (externals)
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
 externals :: [External]
 externals =
-    [ external "info" (infoT :: TransformH CoreTC String)
+    [ external "info" (promoteCoreTCT infoT :: TransformH LCoreTC String)
         [ "Display information about the current node." ] .+ Query
-    , external "compare-bound-ids" (compareBoundIds :: HermitName -> HermitName -> TransformH CoreTC ())
+    , external "compare-bound-ids" (compareBoundIds :: HermitName -> HermitName -> TransformH LCoreTC ())
         [ "Compare the definitions of two in-scope identifiers for alpha equality."] .+ Query .+ Predicate
-    , external "compare-core-at" (compareCoreAtT ::  TransformH Core LocalPathH -> TransformH Core LocalPathH -> TransformH Core ())
+    , external "compare-core-at" (compareCoreAtT ::  TransformH LCoreTC LocalPathH -> TransformH LCoreTC LocalPathH -> TransformH LCoreTC ())
         [ "Compare the core fragments at the end of the given paths for alpha-equality."] .+ Query .+ Predicate
     ]
 
 --------------------------------------------------------
 
+-- TODO: update this to cope with lemmas
 infoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, BoundVars c, HasEmptyContext c, HasDynFlags m, MonadCatch m) => Transform c m CoreTC String
 infoT =
   do crumbs <- childrenT
@@ -162,12 +165,13 @@ coercionConstructor = \case
 --------------------------------------------------------
 
 -- | Compare the core fragments at the end of the specified 'LocalPathH's.
-compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, ReadPath c Crumb, HasEmptyContext c, MonadCatch m) => Transform c m Core LocalPathH -> Transform c m Core LocalPathH -> Transform c m Core ()
+compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, ReadPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC ()
 compareCoreAtT p1T p2T =
   do p1 <- p1T
      p2 <- p2T
-     core1 <- localPathT p1 idR
-     core2 <- localPathT p2 idR
+     -- TODO: temproary hack.  Need to properly check whether the paths point to COre or not, and report a decent error message
+     LTCCore (LCore core1) <- localPathT p1 idR
+     LTCCore (LCore core2) <- localPathT p2 idR
      guardMsg (core1 `coreAlphaEq` core2) "core fragments are not alpha-equivalent."
 
 -- | Compare the definitions of two identifiers for alpha-equality.

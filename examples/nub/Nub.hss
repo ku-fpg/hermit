@@ -3,8 +3,8 @@ set-pp-type Show
 flatten-module
 
 binding-of 'nub
-fix-intro ; down
-split-2-beta nub [| absN |] [| repN |]
+fix-intro ; def-rhs
+split-2-beta nub [| absN |] [| repN |] ; assume
 
 -- this bit to essentially undo the fix-intro
 { application-of 'repN ; app-arg ; let-intro 'nub ; one-td (unfold 'fix) ; simplify }
@@ -17,19 +17,24 @@ one-td (unfold 'repN)
 remember origworker
 one-td (unfold 'filter)
 one-td (case-float-arg-lemma nubStrict)
+
+-- prove strictness condition
+lhs unfold ; smash ; end-proof
+
 one-td (unfold 'nub')
 simplify
 
 one-td (case-float-arg-lemma nubStrict)
+
+-- prove strictness condition
+lhs unfold ; smash ; end-proof
+
 { consider case ; consider case ; case-alt 1 ; alt-rhs
   unfold ; simplify
-  one-td (unfold-rule "filter-fusion") ; simplify
-  one-td (unfold-rule "member-fusion")
+  one-td (unfold-rule "filter-fusion") ; assume
+  simplify
+  one-td (unfold-rule "member-fusion") ; assume
 }
 nonrec-to-rec
 any-td (fold-remembered origworker)
 
--- prove strictness condition
-prove-lemma nubStrict
-lhs (unfold >>> undefined-expr)
-end-proof

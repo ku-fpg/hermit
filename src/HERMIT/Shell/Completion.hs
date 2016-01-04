@@ -1,20 +1,25 @@
-{-# LANGUAGE FlexibleContexts, LambdaCase #-}
-module HERMIT.Shell.Completion (shellComplete) where
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-import Control.Applicative
+module HERMIT.Shell.Completion (completer) where
+
 import Control.Arrow
-import Control.Monad.State
+import Control.Monad.Compat (forM, liftM)
+import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.State (gets)
 
 import Data.Dynamic
-import Data.List (isPrefixOf, nub)
-import Data.Map (keys)
+import Data.List.Compat (isPrefixOf, nub)
+import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 
 import HERMIT.Kure
 import HERMIT.External
 import qualified HERMIT.GHC as GHC
-import HERMIT.Kernel.Scoped
-import HERMIT.Monad
+import HERMIT.Kernel
 import HERMIT.Parser
 
 import HERMIT.Dictionary.Inline
@@ -23,13 +28,23 @@ import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Rules
 
 import HERMIT.Shell.Interpreter
+import HERMIT.Shell.Proof
 import HERMIT.Shell.Types
+
+import Prelude.Compat
 
 import System.Console.Haskeline hiding (catch, display)
 
 ----------------------------------------------------------------------------------
 
-shellComplete :: (MonadCatch m, MonadIO m, MonadState CommandLineState m) => String -> String -> m [Completion]
+completer :: (MonadCatch m, CLMonad m) => String -> String -> m [Completion]
+completer rPrev so_far = do
+    ps <- getProofStackEmpty
+    case ps of
+        [] -> shellComplete rPrev so_far
+        _  -> withProofExternals $ shellComplete rPrev so_far
+
+shellComplete :: (MonadCatch m, CLMonad m) => String -> String -> m [Completion]
 shellComplete rPrev so_far = do
     let (partial, _) = toUnmatched rPrev
     if null partial
@@ -46,15 +61,14 @@ shellComplete rPrev so_far = do
                                              , not (null args) ]
                         completionsFor so_far $ filterUnknowns $ map (completionType.show) ts
 
-completionsFor :: (MonadCatch m, MonadIO m, MonadState CommandLineState m)
+completionsFor :: (MonadCatch m, CLMonad m)
                => String -> [CompletionType] -> m [Completion]
 completionsFor so_far cts = do
     qs <- mapM completionQuery cts
-    (k,(env,sast)) <- gets (cl_kernel &&& cl_kernel_env &&& cl_cursor)
-    cls <- forM qs $ \ q -> catchM (queryS k q env sast) (\_ -> return [])
+    cls <- forM qs $ \ q -> queryInContext q Never `catchM` (\_ -> return [])
     return $ map simpleCompletion $ nub $ filter (so_far `isPrefixOf`) $ concat cls
 
-data CompletionType = ConsiderC       -- considerable constructs and (deprecated) bindingOfT
+data CompletionType = ConsiderC       -- considerable constructs
                     | BindingOfC      -- bindingOfT
                     | BindingGroupOfC -- bindingGroupOfT
                     | RhsOfC          -- rhsOfT
@@ -66,9 +80,9 @@ data CompletionType = ConsiderC       -- considerable constructs and (deprecated
                     | CoreC           -- complete with opening Core fragment bracket [|
                     | NothingC        -- no completion
                     | RuleC           -- complete with GHC rewrite rule name
-                    | StashC          -- complete with remembered labels
                     | StringC         -- complete with open quotes
                     | UnknownC String -- unknown Extern instance (empty completion)
+  deriving Typeable
 
 completionType :: String -> CompletionType
 completionType s = fromMaybe (UnknownC s) (lookup s m)
@@ -79,8 +93,8 @@ completionType s = fromMaybe (UnknownC s) (lookup s m)
               , ("IntBox"        , NothingC)
               , ("LemmaName"     , LemmaC)
               , ("OccurrenceName", OccurrenceOfC)
-              , ("RememberedName", StashC)
-              , ("RewriteCoreBox", CommandC) -- be more specific than CommandC?
+              , ("RewriteLCoreBox", CommandC) -- be more specific than CommandC?
+              , ("RewriteLCoreTCBox", CommandC) -- be more specific than CommandC?
               , ("RhsOfName"     , RhsOfC)
               , ("RuleName"      , RuleC)
               , ("StringBox"     , StringC)
@@ -90,18 +104,17 @@ filterUnknowns :: [CompletionType] -> [CompletionType]
 filterUnknowns l = if null l' then l else l'
     where l' = filter (\case UnknownC _ -> False ; _ -> True) l
 
-completionQuery :: (MonadIO m, MonadState CommandLineState m) => CompletionType -> m (TransformH CoreTC [String])
+completionQuery :: (MonadIO m, CLMonad m) => CompletionType -> m (TransformH LCoreTC [String])
 completionQuery ConsiderC       = return $ pure $ map fst considerables
-completionQuery OccurrenceOfC   = return $ occurrenceOfTargetsT    >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery BindingOfC      = return $ bindingOfTargetsT       >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery BindingGroupOfC = return $ bindingGroupOfTargetsT  >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery RhsOfC          = return $ rhsOfTargetsT           >>^ GHC.varSetToStrings >>^ map ('\'':)
-completionQuery InlineC         = return $ promoteT inlineTargetsT >>^                         map ('\'':)
+completionQuery OccurrenceOfC   = return $ occurrenceOfTargetsT   >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery BindingOfC      = return $ bindingOfTargetsT      >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery BindingGroupOfC = return $ bindingGroupOfTargetsT >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery RhsOfC          = return $ rhsOfTargetsT          >>^ GHC.varSetToStrings >>^ map ('\'':)
+completionQuery InlineC         = return $ promoteLCoreT inlineTargetsT >>^                   map ('\'':)
 completionQuery InScopeC        = return $ pure ["'"] -- TODO
-completionQuery LemmaC          = return $ liftM (map show . keys) $ getLemmasT
+completionQuery LemmaC          = return $ liftM (map show . M.keys) $ getLemmasT
 completionQuery NothingC        = return $ pure []
 completionQuery RuleC           = return $ liftM (map (show . fst)) $ getHermitRulesT
-completionQuery StashC          = return $ liftM (map show . keys) $ constT getStash
 completionQuery StringC         = return $ pure ["\""]
 completionQuery CommandC        = gets cl_externals >>= return . pure . map externName
 completionQuery CoreC           = return $ pure ["[|"]
@@ -124,4 +137,3 @@ toUnmatched = go 0 ""
           go n acc (')':cs) = go (n+1) (')':acc) cs
           go n acc (c:cs)   = go n     (c:acc)   cs
           go _ acc []       = (acc, [])
-

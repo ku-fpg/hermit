@@ -1,5 +1,10 @@
-{-# LANGUAGE ConstraintKinds, KindSignatures, GADTs, InstanceSigs,
-             FlexibleContexts, ScopedTypeVariables, CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module HERMIT.Shell.Interpreter
     ( -- * The HERMIT Interpreter
@@ -11,20 +16,17 @@ module HERMIT.Shell.Interpreter
     , exprToDyns
     ) where
 
-#if MIN_VERSION_mtl(2,2,1)
-import Control.Monad.Except
-#else
-import Control.Monad.Error
-#endif
-import Control.Monad.State
+import Control.Monad (liftM, liftM2)
+import Control.Monad.State (MonadState(get), gets)
 
 import Data.Char
 import Data.Dynamic
 import qualified Data.Map as M
 
 import HERMIT.External
+import HERMIT.Kernel (AST)
 import HERMIT.Kure
-import HERMIT.Monad
+import HERMIT.Lemma
 import HERMIT.Name
 import HERMIT.Parser
 
@@ -36,7 +38,8 @@ import HERMIT.Shell.Types
 
 -- | An 'Interp' @cmd@ is a /possible/ means of converting a 'Typeable' value to a value of type @cmd@.
 data Interp :: (* -> *) -> * -> * where
-   Interp :: Typeable b => (b -> ExprH -> m a) -> Interp m a
+    Interp :: Typeable b => (b -> ExprH -> m a) -> Interp m a
+  deriving Typeable
 
 -- | An 'Interp' with no effects.
 interp :: (Monad m, Typeable b) => (b -> a) -> Interp m a
@@ -87,19 +90,18 @@ exprToDyns' _   (ListH exprs) = do
     return $    toBoxedList dyns StringListBox
              ++ toBoxedList dyns (PathBox . pathToSnocPath)
                 -- ugly hack.  The whole dynamic stuff could do with overhauling.
-             ++ toBoxedList dyns (TransformCorePathBox . return . pathToSnocPath)
+             ++ toBoxedList dyns (TransformLCorePathBox . return . pathToSnocPath)
              ++ toBoxedList dyns IntListBox
              ++ toBoxedList dyns OccurrenceNameListBox
-             ++ toBoxedList dyns RewriteCoreListBox
              ++ toBoxedList dyns RuleNameListBox
+             ++ toBoxedList dyns RewriteLCoreListBox
 
 exprToDyns' rhs (CmdName str)
     | all isDigit str = do
         let i = read str
-        return [ -- An Int is either a Path, or will be interpreted specially later.
+        return [ -- An Int is either an AST, or will be interpreted specially later.
                  toDyn $ IntBox i
-                 -- TODO: Find a better long-term solution.
-               , toDyn $ TransformCorePathBox (deprecatedIntToPathT i)
+               , toDyn $ (read str :: AST)
                ]
     | otherwise = do
         dict <- gets (mkDictionary . cl_externals)
@@ -112,20 +114,21 @@ exprToDyns' rhs (CmdName str)
             Nothing | rhs       -> let f = maybe id ((:) . toDyn) $ string2considerable str
                                    in return $ f [ toDyn $ StringBox str
                                                  , toDyn $ LemmaName str
-                                                 , toDyn $ RememberedName str
                                                  , toDyn $ RuleName str]
                     | otherwise -> fail $ "User error, unrecognised HERMIT command: " ++ show str
 exprToDyns' _ (AppH e1 e2) = liftM2 dynCrossApply (exprToDyns' False e1) (exprToDyns' True e2)
 
--- We treat externals of the type 'CommandLineState -> b' specially,
--- providing them the shell state here, so they don't need a monadic return type
+-- We treat externals of the type 'CommandLineState -> b' and 'PrettyPrinter -> b' specially,
+-- providing their arguments from the shell state here, so they don't need a monadic return type
 -- in order to access it themselves.
 provideState :: MonadState CommandLineState m => Dynamic -> m Dynamic
 provideState dyn = do
     st <- get
     case dynApply dyn (toDyn $ box st) of
         Just d  -> return d
-        Nothing -> return dyn
+        Nothing -> case dynApply dyn (toDyn $ box $ cl_pretty st) of
+                    Just d' -> return d'
+                    Nothing -> return dyn
 
 -- Cross product of possible applications.
 dynCrossApply :: [Dynamic] -> [Dynamic] -> [Dynamic]

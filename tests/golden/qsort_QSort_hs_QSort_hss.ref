@@ -1,15 +1,3 @@
-
-HList.hs:22:11: Warning:
-    Rule "repH ++" may never fire because ‘repH’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘repH’
-
-HList.hs:23:11: Warning:
-    Rule "repH []" may never fire because ‘repH’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘repH’
-
-HList.hs:24:11: Warning:
-    Rule "repH (:)" may never fire because ‘repH’ might inline first
-    Probable fix: add an INLINE[n] or NOINLINE[n] pragma on ‘repH’
 ===================== Welcome to HERMIT ======================
 HERMIT is a toolkit for the interactive transformation of GHC
 core language programs. Documentation on HERMIT can be found
@@ -33,34 +21,88 @@ To get started, you could try the following:
   - type "log" to display an activity log.
 ==============================================================
 
-[0m[1;34mrec[22m[0m[0m [0m[mqsort[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[31m[31m∀[31m[0m[0m [0m[32ma[0m[0m [0m[31m.[0m[0m [0m[32mOrd[0m[0m [0m[0m[32ma[0m[0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m
-    [0m[mqsort[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[32ma[0m[0m [0m[m$dOrd[0m[0m [0m[31m[31m→[31m[0m[0m
-      [0m[1;34mlet[22m[0m[0m [0m[1;34mrec[22m[0m[0m [0m[mwork[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m [0m[32m[32m→[32m[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m
-              [0m[mwork[0m[0m [0m[31m=[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[mxs[0m[0m [0m[macc[0m[0m [0m[31m[31m→[31m[0m[0m
-                [0m[1;34mcase[22m[0m[0m [0m[0m[mxs[0m[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m
-                  [0m[m[][0m[0m [0m[31m[31m→[31m[0m[0m [0m[0m[macc[0m[0m[0m
-                  [0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[ma[0m[0m [0m[mas[0m[0m [0m[31m[31m→[31m[0m[0m
-                    [0m[1;34mcase[22m[0m[0m [0m[mpartition[0m[0m [0m[0m[32ma[0m[0m[0m [0m[31m([0m[0m[0m[31m[31mλ[31m[0m[0m [0m[mds[0m[0m [0m[31m[31m→[31m[0m[0m [0m[31m([0m[0m[0m[m<[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[m$dOrd[0m[0m[0m [0m[0m[mds[0m[0m[0m [0m[0m[ma[0m[0m[0m[0m[31m)[0m[0m [0m[0m[mas[0m[0m[0m [0m[1;34mof[22m[0m[0m [0m[mwild[0m[0m [0m[32m[[0m[0m[0m[0m[32ma[0m[0m[0m[0m[32m][0m[0m
-                      [0m[m(,)[0m[0m [0m[mbs[0m[0m [0m[mcs[0m[0m [0m[31m[31m→[31m[0m[0m [0m[0m[mwork[0m[0m[0m [0m[0m[mbs[0m[0m[0m [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[0m[32ma[0m[0m[0m [0m[0m[ma[0m[0m[0m [0m[31m([0m[0m[0m[0m[mwork[0m[0m[0m [0m[0m[mcs[0m[0m[0m [0m[0m[macc[0m[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
-      [0m[1;34min[22m[0m[0m [0m[31m[31mλ[31m[0m[0m [0m[mx0[0m[0m [0m[31m[31m→[31m[0m[0m [0m[0m[mwork[0m[0m[0m [0m[0m[mx0[0m[0m[0m [0m[31m([0m[0m[0m[m[][0m[0m [0m[0m[32ma[0m[0m[0m[0m[31m)[0m[0m
-[0m[m$dShow[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mShow[0m[0m [0m[32m[[0m[0m[0m[32mInteger[0m[0m[0m[32m][0m[0m
-[0m[m$dShow[0m[0m [0m[31m=[0m[0m [0m[m$fShow[][0m[0m [0m[32mInteger[0m[0m [0m[m$fShowInteger[0m[0m
-[0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
-[0m[mmain[0m[0m [0m[31m=[0m[0m
-  [0m[mprint[0m[0m [0m[32m[[0m[0m[0m[32mInteger[0m[0m[0m[32m][0m[0m [0m[0m[m$dShow[0m[0m[0m
-        [0m[31m([0m[0m[0m[0m[mqsort[0m[0m[0m [0m[32mInteger[0m[0m [0m[m$fOrdInteger[0m[0m
-               [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInteger[0m[0m [0m[31m([0m[0m[0m__integer 8[0m[0m[31m)[0m[0m
-                    [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInteger[0m[0m [0m[31m([0m[0m[0m__integer 3[0m[0m[31m)[0m[0m
-                         [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInteger[0m[0m [0m[31m([0m[0m[0m__integer 5[0m[0m[31m)[0m[0m
-                              [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInteger[0m[0m [0m[31m([0m[0m[0m__integer 7[0m[0m[31m)[0m[0m
-                                   [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInteger[0m[0m [0m[31m([0m[0m[0m__integer 2[0m[0m[31m)[0m[0m
-                                        [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInteger[0m[0m [0m[31m([0m[0m[0m__integer 9[0m[0m[31m)[0m[0m
-                                             [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInteger[0m[0m [0m[31m([0m[0m[0m__integer 4[0m[0m[31m)[0m[0m
-                                                  [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInteger[0m[0m [0m[31m([0m[0m[0m__integer 6[0m[0m[31m)[0m[0m
-                                                       [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInteger[0m[0m
-                                                            [0m[31m([0m[0m[0m__integer 3[0m[0m[31m)[0m[0m
-                                                            [0m[31m([0m[0m[0m[31m([0m[0m[0m[m:[0m[0m[0m[31m)[0m[0m [0m[32mInteger[0m[0m
-                                                                 [0m[31m([0m[0m[0m__integer 2[0m[0m[31m)[0m[0m
-                                                                 [0m[31m([0m[0m[0m[m[][0m[0m [0m[32mInteger[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m[0m[31m)[0m[0m
-[0m[mmain[0m[0m [0m[32m[32m∷[32m[0m[0m [0m[32mIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m
-[0m[mmain[0m[0m [0m[31m=[0m[0m [0m[mrunMainIO[0m[0m [0m[32m([0m[0m[0m[32m)[0m[0m [0m[0m[mmain[0m[0m[0m[0m
+Forcing obligation: qsort-assumption
+Successfully proven: qsort-assumption
+Forcing obligation: repHstrict
+Successfully proven: repHstrict
+Forcing obligation: repH ++
+Successfully proven: repH ++
+Forcing obligation: repH-absH-fusion
+Successfully proven: repH-absH-fusion
+Forcing obligation: repH []
+Forcing obligation: repH (:)
+Successfully proven: repH (:)
+Successfully proven: repH []
+[1;34mrec[22m[0m [mqsort[0m [32m[32m∷[32m[0m [31m[31m∀[31m[0m [32ma[0m [31m.[0m [32mOrd[0m [32ma[0m [32m[32m→[32m[0m [32m[[0m[32ma[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32ma[0m[32m][0m
+    [mqsort[0m [31m=[0m [31m[31mλ[31m[0m [32ma[0m [m$dOrd[0m [31m[31m→[31m[0m
+      [1;34mlet[22m[0m [1;34mrec[22m[0m [mworker[0m [32m[32m∷[32m[0m [32m[[0m[32ma[0m[32m][0m [32m[32m→[32m[0m [32mH[0m [32ma[0m
+              [mworker[0m [31m=[0m [31m[31mλ[31m[0m [mx0[0m [31m[31m→[31m[0m
+                [1;34mcase[22m[0m [mx0[0m [1;34mof[22m[0m [mwild[0m [31m([0m[32mH[0m [32ma[0m[31m)[0m
+                  [m[][0m [31m[31m→[31m[0m [mid[0m [32m[[0m[32ma[0m[32m][0m
+                  [31m([0m[m:[0m[31m)[0m [ma0[0m [mas[0m [31m[31m→[31m[0m
+                    [1;34mlet[22m[0m [mds0[0m [32m[32m∷[32m[0m [32m([0m[32m[[0m[32ma[0m[32m][0m[32m,[0m [32m[[0m[32ma[0m[32m][0m[32m)[0m
+                        [mds0[0m [31m=[0m [mpartition[0m [32ma[0m [31m([0m[31m[31mλ[31m[0m [mds0[0m [31m[31m→[31m[0m [31m([0m[m<[0m[31m)[0m [32ma[0m [m$dOrd[0m [mds0[0m [ma0[0m[31m)[0m [mas[0m
+                    [1;34min[22m[0m [31m[31mλ[31m[0m [mx[0m [31m[31m→[31m[0m
+                         [mworker[0m [31m([0m[1;34mcase[22m[0m [mds0[0m [1;34mof[22m[0m [mwild0[0m [32m[[0m[32ma[0m[32m][0m
+                                   [m(,)[0m [mbs[0m [mcs[0m [31m[31m→[31m[0m [mbs[0m[31m)[0m
+                                [31m([0m[31m([0m[m:[0m[31m)[0m [32ma[0m [ma0[0m
+                                     [31m([0m[mworker[0m [31m([0m[1;34mcase[22m[0m [mds0[0m [1;34mof[22m[0m [mwild0[0m [32m[[0m[32ma[0m[32m][0m
+                                                [m(,)[0m [mbs[0m [mcs[0m [31m[31m→[31m[0m [mcs[0m[31m)[0m
+                                             [mx[0m[31m)[0m[31m)[0m
+      [1;34min[22m[0m [31m[31mλ[31m[0m [mx[0m [31m[31m→[31m[0m [mworker[0m [mx[0m [31m([0m[m[][0m [32ma[0m[31m)[0m
+    [mabsR[0m [32m[32m∷[32m[0m [31m[31m∀[31m[0m [32ma[0m [31m.[0m [31m([0m[32m[[0m[32ma[0m[32m][0m [32m[32m→[32m[0m [32mH[0m [32ma[0m[31m)[0m [32m[32m→[32m[0m [32m[[0m[32ma[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32ma[0m[32m][0m
+    [mabsR[0m [31m=[0m [31m[31mλ[31m[0m [32ma[0m [meta[0m [31m[31m→[31m[0m [31m([0m[31m[31mλ[31m[0m [mg[0m [31m[31m→[31m[0m [31m([0m[m.[0m[31m)[0m [31m([0m[32mH[0m [32ma[0m[31m)[0m [32m[[0m[32ma[0m[32m][0m [32m[[0m[32ma[0m[32m][0m [31m([0m[mabsH[0m [32ma[0m[31m)[0m [mg[0m[31m)[0m [meta[0m
+    [mrepR[0m [32m[32m∷[32m[0m [31m[31m∀[31m[0m [32ma[0m [31m.[0m [31m([0m[32m[[0m[32ma[0m[32m][0m [32m[32m→[32m[0m [32m[[0m[32ma[0m[32m][0m[31m)[0m [32m[32m→[32m[0m [32m[[0m[32ma[0m[32m][0m [32m[32m→[32m[0m [32mH[0m [32ma[0m
+    [mrepR[0m [31m=[0m [31m[31mλ[31m[0m [32ma[0m [meta[0m [31m[31m→[31m[0m [31m([0m[31m[31mλ[31m[0m [mf[0m [31m[31m→[31m[0m [31m([0m[m.[0m[31m)[0m [32m[[0m[32ma[0m[32m][0m [31m([0m[32mH[0m [32ma[0m[31m)[0m [32m[[0m[32ma[0m[32m][0m [31m([0m[mrepH[0m [32ma[0m[31m)[0m [mf[0m[31m)[0m [meta[0m
+    [m$dShow[0m [32m[32m∷[32m[0m [32mShow[0m [32m[[0m[32mInteger[0m[32m][0m
+    [m$dShow[0m [31m=[0m [m$fShow[][0m [32mInteger[0m [m$fShowInteger[0m
+    [mmain[0m [32m[32m∷[32m[0m [32mIO[0m [32m([0m[32m)[0m
+    [mmain[0m [31m=[0m
+      [mprint[0m [32m[[0m[32mInteger[0m[32m][0m [m$dShow[0m
+            [31m([0m[mqsort[0m [32mInteger[0m [m$fOrdInteger[0m
+                   [31m([0m[31m([0m[m:[0m[31m)[0m [32mInteger[0m [31m([0m__integer 8[31m)[0m
+                        [31m([0m[31m([0m[m:[0m[31m)[0m [32mInteger[0m [31m([0m__integer 3[31m)[0m
+                             [31m([0m[31m([0m[m:[0m[31m)[0m [32mInteger[0m [31m([0m__integer 5[31m)[0m
+                                  [31m([0m[31m([0m[m:[0m[31m)[0m [32mInteger[0m [31m([0m__integer 7[31m)[0m
+                                       [31m([0m[31m([0m[m:[0m[31m)[0m [32mInteger[0m [31m([0m__integer 2[31m)[0m
+                                            [31m([0m[31m([0m[m:[0m[31m)[0m [32mInteger[0m [31m([0m__integer 9[31m)[0m
+                                                 [31m([0m[31m([0m[m:[0m[31m)[0m [32mInteger[0m [31m([0m__integer 4[31m)[0m
+                                                      [31m([0m[31m([0m[m:[0m[31m)[0m [32mInteger[0m [31m([0m__integer 6[31m)[0m
+                                                           [31m([0m[31m([0m[m:[0m[31m)[0m [32mInteger[0m
+                                                                [31m([0m__integer 3[31m)[0m
+                                                                [31m([0m[31m([0m[m:[0m[31m)[0m [32mInteger[0m
+                                                                     [31m([0m__integer 2[31m)[0m
+                                                                     [31m([0m[m[][0m [32mInteger[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m[31m)[0m
+    [mmain[0m [32m[32m∷[32m[0m [32mIO[0m [32m([0m[32m)[0m
+    [mmain[0m [31m=[0m [mrunMainIO[0m [32m([0m[32m)[0m [mmain[0m[0m
+qsort-fusion (Built In)
+  [7;93mrepR[27m[0m [32ma[0m [31m([0m[7;93mabsR[27m[0m [32ma[0m [31m([0m[mfix[0m [31m([0m[32m[[0m[32ma[0m[32m][0m [32m[32m→[32m[0m [32mH[0m [32ma[0m[31m)[0m [7;93mg[27m[0m[31m)[0m[31m)[0m [31m[31m≡[31m[0m [mfix[0m [31m([0m[32m[[0m[32ma[0m[32m][0m [32m[32m→[32m[0m [32mH[0m [32ma[0m[31m)[0m [7;93mg[27m[0m
+repH (:) (Assumed)
+  [31m[31m∀[31m[0m [32ma[0m [mx[0m [mxs[0m[31m.[0m
+  [mrepH[0m [32ma[0m [31m([0m[31m([0m[m:[0m[31m)[0m [32ma[0m [mx[0m [mxs[0m[31m)[0m [31m[31m≡[31m[0m [31m([0m[m.[0m[31m)[0m [32m[[0m[32ma[0m[32m][0m [32m[[0m[32ma[0m[32m][0m [32m[[0m[32ma[0m[32m][0m [31m([0m[31m([0m[m:[0m[31m)[0m [32ma[0m [mx[0m[31m)[0m [31m([0m[mrepH[0m [32ma[0m [mxs[0m[31m)[0m
+repH ++ (Assumed)
+  [31m[31m∀[31m[0m [32ma[0m [mxs[0m [mys[0m[31m.[0m
+  [mrepH[0m [32ma[0m [31m([0m[31m([0m[m++[0m[31m)[0m [32ma[0m [mxs[0m [mys[0m[31m)[0m [31m[31m≡[31m[0m [31m([0m[m.[0m[31m)[0m [32m[[0m[32ma[0m[32m][0m [32m[[0m[32ma[0m[32m][0m [32m[[0m[32ma[0m[32m][0m [31m([0m[mrepH[0m [32ma[0m [mxs[0m[31m)[0m [31m([0m[mrepH[0m [32ma[0m [mys[0m[31m)[0m
+repH [] (Assumed)
+  [31m[31m∀[31m[0m [32ma[0m[31m.[0m [mrepH[0m [32ma[0m [31m([0m[m[][0m [32ma[0m[31m)[0m [31m[31m≡[31m[0m [mid[0m [32m[[0m[32ma[0m[32m][0m
+repH-absH-fusion (Assumed)
+  [31m[31m∀[31m[0m [32ma[0m [mh[0m[31m.[0m [mrepH[0m [32ma[0m [31m([0m[mabsH[0m [32ma[0m [mh[0m[31m)[0m [31m[31m≡[31m[0m [mh[0m
+repHstrict (Assumed)
+  [31m[31m∀[31m[0m [32ma[0m[31m.[0m [mrepH[0m [32ma[0m [31m([0m[mundefined[0m [32m[[0m[32ma[0m[32m][0m[31m)[0m [31m[31m≡[31m[0m [mundefined[0m [31m([0m[32mH[0m [32ma[0m[31m)[0m[0m
+Warning: Lemma repH (:) was assumed but not proven.
+repH (:)
+  [31m[31m∀[31m[0m [32ma[0m [mx[0m [mxs[0m[31m.[0m
+  [mrepH[0m [32ma[0m [31m([0m[31m([0m[m:[0m[31m)[0m [32ma[0m [mx[0m [mxs[0m[31m)[0m [31m[31m≡[31m[0m [31m([0m[m.[0m[31m)[0m [32m[[0m[32ma[0m[32m][0m [32m[[0m[32ma[0m[32m][0m [32m[[0m[32ma[0m[32m][0m [31m([0m[31m([0m[m:[0m[31m)[0m [32ma[0m [mx[0m[31m)[0m [31m([0m[mrepH[0m [32ma[0m [mxs[0m[31m)[0m[0m
+Warning: Lemma repH ++ was assumed but not proven.
+repH ++
+  [31m[31m∀[31m[0m [32ma[0m [mxs[0m [mys[0m[31m.[0m
+  [mrepH[0m [32ma[0m [31m([0m[31m([0m[m++[0m[31m)[0m [32ma[0m [mxs[0m [mys[0m[31m)[0m [31m[31m≡[31m[0m [31m([0m[m.[0m[31m)[0m [32m[[0m[32ma[0m[32m][0m [32m[[0m[32ma[0m[32m][0m [32m[[0m[32ma[0m[32m][0m [31m([0m[mrepH[0m [32ma[0m [mxs[0m[31m)[0m [31m([0m[mrepH[0m [32ma[0m [mys[0m[31m)[0m[0m
+Warning: Lemma repH [] was assumed but not proven.
+repH []
+  [31m[31m∀[31m[0m [32ma[0m[31m.[0m [mrepH[0m [32ma[0m [31m([0m[m[][0m [32ma[0m[31m)[0m [31m[31m≡[31m[0m [mid[0m [32m[[0m[32ma[0m[32m][0m[0m
+Warning: Lemma repH-absH-fusion was assumed but not proven.
+repH-absH-fusion
+  [31m[31m∀[31m[0m [32ma[0m [mh[0m[31m.[0m [mrepH[0m [32ma[0m [31m([0m[mabsH[0m [32ma[0m [mh[0m[31m)[0m [31m[31m≡[31m[0m [mh[0m[0m
+Warning: Lemma repHstrict was assumed but not proven.
+repHstrict
+  [31m[31m∀[31m[0m [32ma[0m[31m.[0m [mrepH[0m [32ma[0m [31m([0m[mundefined[0m [32m[[0m[32ma[0m[32m][0m[31m)[0m [31m[31m≡[31m[0m [mundefined[0m [31m([0m[32mH[0m [32ma[0m[31m)[0m[0m

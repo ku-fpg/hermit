@@ -37,3 +37,7 @@ src/HERMIT/ParserType.hs
 tests/dump/*.dump
 *.dump-simpl
 *.dump-prep
+.cabal-sandbox
+cabal.sandbox.config
+tags
+

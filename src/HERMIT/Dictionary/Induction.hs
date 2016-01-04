@@ -1,105 +1,74 @@
-{-# LANGUAGE FlexibleContexts, ScopedTypeVariables, MultiWayIf #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 
 module HERMIT.Dictionary.Induction
   ( -- * Induction
-    inductionCaseSplit
---  , inductionOnT
---  , listInductionOnT
+    externals
+  , caseSplitOnR
   )
 where
 
 import Control.Arrow
-
--- import Data.List (delete)
+import Control.Monad
+import Data.String
 
 import HERMIT.Context
 import HERMIT.Core
+import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
-import HERMIT.Monad
+import HERMIT.Lemma
 import HERMIT.Name
--- import HERMIT.Utilities (soleElement)
 
 import HERMIT.Dictionary.Common
-import HERMIT.Dictionary.Local.Case (caseSplitInlineR)
--- import HERMIT.Dictionary.Reasoning
-import HERMIT.Dictionary.Undefined
+import HERMIT.Dictionary.Local.Case hiding (externals)
+import HERMIT.Dictionary.Undefined hiding (externals)
 
 ------------------------------------------------------------------------------
 
--- TODO: Warning, this is very experimental
+externals :: [External]
+externals =
+    [ external "induction" (promoteClauseR . caseSplitOnR True . cmpHN2Var :: HermitName -> RewriteH LCore)
+        [ "Induct on specified value quantifier." ]
+    , external "prove-by-cases" (promoteClauseR . caseSplitOnR False . cmpHN2Var :: HermitName -> RewriteH LCore)
+        [ "Case split on specified value quantifier." ]
+    ]
 
 ------------------------------------------------------------------------------
 
-inductionCaseSplit :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb)
-                   => [Var] -> Id -> CoreExpr -> CoreExpr -> Transform c HermitM x [(Maybe DataCon,[Var],CoreExpr,CoreExpr)]
-inductionCaseSplit vs i lhsE rhsE =
-    do -- first construct an expression containing both the LHS and the RHS
-       il <- constT $ newIdH "dummyL" (exprKindOrType lhsE)
-       ir <- constT $ newIdH "dummyR" (exprKindOrType rhsE)
-       let contrivedExpr = Let (NonRec il lhsE)
-                               (Let (NonRec ir rhsE)
-                                    (Var i)
-                               )
+-- TODO: revisit design here to make one level
+caseSplitOnR :: Bool -> (Id -> Bool) -> RewriteH Clause
+caseSplitOnR induction idPred = withPatFailMsg "induction can only be performed on universally quantified terms." $ do
+    let p b = idPred b && isId b
+    (bs, cl) <- arr collectQs
+    guardMsg (any p bs) "specified identifier is not universally quantified in this lemma. (Induction cannot be performed on type quantifiers.)"
+    let (as,b:bs') = break p bs -- safe because above guard
+    guardMsg (not (any p bs')) "multiple matching quantifiers."
 
-       -- then case split on the identifier, inlining the pattern
-       -- we consider the other universally quantified variables to be in scope while doing so
-       Case _ _ _ alts <- withVarsInScope vs (caseSplitInlineR (==i)) <<< return contrivedExpr
-       let dataConCases = map compressAlts alts
+    ue <- mkUndefinedValT (varType b) -- undefined case
+    cases <- liftM (ue:) $ constT $ caseExprsForM $ varToCoreExpr b
 
-       lhsUndefined <- extractR (replaceIdWithUndefinedR i) <<< return lhsE
-       rhsUndefined <- extractR (replaceIdWithUndefinedR i) <<< return rhsE
+    let newBs = as ++ bs'
+        substructural = filter (typeAlphaEq (varType b) . varType)
 
-       let undefinedCase = (Nothing,[],lhsUndefined,rhsUndefined)
+        go [] = return []
+        go (e:es) = do
+            let cl' = substClause b e cl
+                fvs = varSetElems $ delVarSetList (localFreeVarsExpr e) newBs
 
-       return (undefinedCase : dataConCases)
+            -- Generate induction hypotheses for the recursive cases.
+            antes <- if induction
+                     then forM (zip [(0::Int)..] $ substructural fvs) $ \ (i,b') ->
+                            withVarsInScope fvs $ transform $ \ c q ->
+                                let nm = fromString $ "ind-hyp-" ++ show i
+                                in liftM ((nm,) . discardUniVars) $ instClause (boundVars c) (==b) (Var b') q
+                     else return []
 
-  where
-    compressAlts :: CoreAlt -> (Maybe DataCon,[Var],CoreExpr,CoreExpr)
-    compressAlts (DataAlt con,bs,Let (NonRec _ lhsE') (Let (NonRec _ rhsE') _)) = (Just con,bs,lhsE',rhsE')
-    compressAlts _ = error "Bug in inductionCaseSplit"
+            rs <- go es
+            return $ mkForall fvs (foldr (uncurry Impl) cl' antes) : rs
 
+    qs <- go cases
 
--- NOTE: Most of the Induction infrastructure has moved to HERMIT/Shell/Proof.hs
-
-
--- -- | A general induction principle.  TODO: Is this valid for infinite data types?  Probably not.
--- inductionOnT :: forall c. (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
---                     => (Id -> Bool) -> (DataCon -> [BiRewrite c HermitM CoreExpr] -> CoreExprEqualityProof c HermitM) -> Transform c HermitM CoreExprEquality ()
--- inductionOnT idPred genCaseAltProofs = prefixFailMsg "Induction failed: " $
---     do eq@(CoreExprEquality bs lhs rhs) <- idR
-
---        i <- setFailMsg "specified identifier is not universally quantified in this equality lemma." $ soleElement (filter idPred bs)
-
---        cases <- inductionCaseSplit bs i lhs rhs
-
---        -- TODO: will this work if vs contains TyVars or CoVars?  Maybe we need to sort the Vars in order: TyVars; CoVars; Ids.
---        let verifyInductiveCaseT :: (DataCon,[Var],CoreExpr,CoreExpr) -> Transform c HermitM x ()
---            verifyInductiveCaseT (con,vs,lhsE,rhsE) =
---                 let vs_matching_i_type = filter (typeAlphaEq (varType i) . varType) vs
---                     eqs = [ discardUniVars (instantiateCoreExprEq [(i,Var i')] eq) | i' <- vs_matching_i_type ]
---                     brs = map birewrite eqs -- These eqs now have no universally quantified variables.
---                                             -- Thus they can only be used on variables in the induction hypothesis.
---                                             -- TODO: consider whether this is unneccassarily restrictive
---                     caseEq = CoreExprEquality (delete i bs ++ vs) lhsE rhsE
---                 in return caseEq >>> verifyCoreExprEqualityT (genCaseAltProofs con brs)
-
---        mapM_ verifyInductiveCaseT cases
-
--- -- | An induction principle for lists.
--- listInductionOnT :: (AddBindings c, ReadBindings c, ReadPath c Crumb, ExtendPath c Crumb, Walker c Core)
---                 => (Id -> Bool) -- Id to case split on
---                 -> CoreExprEqualityProof c HermitM -- proof for [] case
---                 -> (BiRewrite c HermitM CoreExpr -> CoreExprEqualityProof c HermitM) -- proof for (:) case, given smaller proof
---                 -> Transform c HermitM CoreExprEquality ()
--- listInductionOnT idPred nilCaseProof consCaseProof = inductionOnT idPred $ \ con brs ->
---                                                                 if | con == nilDataCon   -> case brs of
---                                                                                                   [] -> nilCaseProof
---                                                                                                   _  -> error "Bug!"
---                                                                    | con == consDataCon  -> case brs of
---                                                                                                   [br] -> consCaseProof br
---                                                                                                   _    -> error "Bug!"
---                                                                    | otherwise           -> let msg = "Mystery constructor, this is a bug."
---                                                                                              in (fail msg, fail msg)
-
-------------------------------------------------------------------------------
+    return $ mkForall newBs $ foldr1 Conj qs

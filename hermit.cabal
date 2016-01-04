@@ -1,22 +1,9 @@
-Name:                hermit
-Version:             0.5.0.1
-Synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
-Description:
-  HERMIT uses Haskell to express semi-formal models,
-  efficient implementations, and provide a bridging DSL
-  to describe via stepwise refinement the connection between
-  these models and implementations. The key transformation
-  in the bridging DSL is the worker/wrapper transformation.
-  .
-  This is an alpha `please give feedback' release.
-  Shortcomings/gotchas include:
-  .
-    * Command line completion is ad hoc at the moment.
-  .
-    * log command prints linearly, even if command history is a tree.
-  .
-    * A number of rewrites don't enforce preconditions. eg: cast elimination
-      always works, even if the cast is necessary
+name:                hermit
+version:             1.0.0.1
+synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
+description:
+  HERMIT is a Haskell-specific toolkit designed to mechanize
+  equational reasoning and program transformation during compilation in GHC.
   .
   Examples can be found in the examples sub-directory.
   .
@@ -28,12 +15,12 @@ Description:
   .
   @
    $ hermit Reverse.hs Reverse.hss resume
-   [starting HERMIT v0.5.0.0 on Reverse.hs]
+   [starting HERMIT v1.0.0.0 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fexpose-all-unfoldings -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:Main:Reverse.hss -fplugin-opt=HERMIT:Main:resume
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.5.0.0 ... linking ... done.
+   Loading package hermit-1.0.0.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    Linking Reverse ...
    $ ./Reverse
@@ -44,12 +31,12 @@ Description:
   .
   @
    $ hermit Reverse.hs
-   [starting HERMIT v0.5.0.0 on Reverse.hs]
+   [starting HERMIT v1.0.0.0 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fexpose-all-unfoldings -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:*:
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-0.5.0.0 ... linking ... done.
+   Loading package hermit-1.0.0.0 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    ===================== Welcome to HERMIT =====================
    HERMIT is a toolkit for the interactive transformation of GHC
@@ -91,16 +78,17 @@ Description:
    $
   @
 
-Category:            Language, Formal Methods, Optimization, Transformation, Refactoring, Reflection
-License:             BSD3
-License-file:        LICENSE
-Author:              Andrew Farmer, Andy Gill, Ed Komp, Neil Sculthorpe
-Maintainer:          Andy Gill <andygill@ku.edu>
-Stability:           alpha
+category:            Language, Formal Methods, Optimization, Transformation, Refactoring, Reflection
+license:             BSD3
+license-file:        LICENSE
+author:              Andrew Farmer, Andy Gill, Ed Komp, Neil Sculthorpe
+maintainer:          Andrew Farmer <afarmer@ittc.ku.edu>
+stability:           beta
 build-type:          Simple
-Cabal-Version:       >= 1.14
+cabal-version:       >= 1.14
 
 extra-source-files:
+    README.md
     examples/concatVanishes/ConcatVanishes.hss
     examples/concatVanishes/Flatten.hs
     examples/concatVanishes/Flatten.hss
@@ -121,144 +109,171 @@ extra-source-files:
     examples/fib-tuple/Fib.hss
     examples/flatten/HList.hs
     examples/flatten/Flatten.hs
-    examples/flatten/Flatten.hss
+    examples/flatten/Flatten.hec
     examples/hanoi/Hanoi.hs
     examples/hanoi/Hanoi.hss
     examples/last/Last.hs
     examples/last/Last.hss
+    examples/last/NewLast.hss
     examples/mean/Mean.hs
     examples/mean/Mean.hss
+    examples/nub/Nub.hs
+    examples/nub/Nub.hss
     examples/qsort/HList.hs
     examples/qsort/QSort.hs
     examples/qsort/QSort.hss
     examples/reverse/HList.hs
     examples/reverse/Reverse.hs
     examples/reverse/Reverse.hss
+    examples/new_reverse/HList.hs
+    examples/new_reverse/Reverse.hs
+    examples/new_reverse/Reverse.hec
 
-Library
-  ghc-options: -Wall -fno-warn-orphans
-  Build-Depends: base >= 4 && < 5,
-                 ansi-terminal >= 0.5.5,
-                 array,
-                 containers >= 0.5.0.0,
-                 data-default >= 0.5.0,
-                 directory >= 1.2.0.0,
-                 ghc >= 7.8,
-                 haskeline >= 0.7.0.3,
-                 kure >= 2.16.2,
-                 marked-pretty >= 0.1,
-                 mtl >= 2.1.2,
-                 operational >= 0.2.2.1,
-                 process >= 1.1.0.2,
-                 stm >= 2.4,
-                 temporary >= 1.2.0.3,
-                 transformers
+library
+  ghc-options:      -Wall
+  build-depends:    base                >= 4.7 && < 5,
+                    ansi-terminal       >= 0.5.5,
+                    array,
+                    base-compat         >= 0.8.1,
+                    containers          >= 0.5.0.0,
+                    data-default-class  >= 0.0.1,
+                    directory           >= 1.2.0.0,
+                    ghc                 == 7.10.3,
+                    haskeline           >= 0.7.0.3,
+                    kure                >= 2.16.8 && < 3.0,
+                    marked-pretty       >= 0.1,
+                    mtl                 >= 2.1.2,
+                    process             >= 1.1.0.2,
+                    stm                 >= 2.4,
+                    temporary           >= 1.2.0.3,
+                    terminal-size       >= 0.3.2,
+                    transformers        >= 0.2,
+                    transformers-compat >= 0.4
 
   if os(windows)
-    build-depends: Win32
-  else
-    build-depends: terminfo >= 0.3.2.5
+    build-depends:  Win32
 
-  build-tools:   alex >= 3.1.3,
-                 happy >= 1.19.3
+  build-tools:      alex  >= 3.1.3,
+                    happy >= 1.19.3
 
   default-language: Haskell2010
 
-  Exposed-modules:
-       HERMIT
+  exposed-modules:  HERMIT
 
-       HERMIT.Context
-       HERMIT.Core
-       HERMIT.Dictionary
-       HERMIT.Driver
+                    HERMIT.Context
+                    HERMIT.Core
+                    HERMIT.Dictionary
+                    HERMIT.Driver
 
-       HERMIT.Dictionary.AlphaConversion
-       HERMIT.Dictionary.Common
-       HERMIT.Dictionary.Composite
-       HERMIT.Dictionary.Debug
-       HERMIT.Dictionary.FixPoint
-       HERMIT.Dictionary.Fold
-       HERMIT.Dictionary.Function
-       HERMIT.Dictionary.GHC
-       HERMIT.Dictionary.Induction
-       HERMIT.Dictionary.Inline
-       HERMIT.Dictionary.Kure
-       HERMIT.Dictionary.Local
-       HERMIT.Dictionary.Local.Bind
-       HERMIT.Dictionary.Local.Case
-       HERMIT.Dictionary.Local.Cast
-       HERMIT.Dictionary.Local.Let
-       HERMIT.Dictionary.Navigation
-       HERMIT.Dictionary.Navigation.Crumbs
-       HERMIT.Dictionary.New
-       HERMIT.Dictionary.Query
-       HERMIT.Dictionary.Reasoning
-       HERMIT.Dictionary.Rules
-       HERMIT.Dictionary.Undefined
-       HERMIT.Dictionary.Unfold
-       HERMIT.Dictionary.Unsafe
-       HERMIT.Dictionary.WorkerWrapper.Common
-       HERMIT.Dictionary.WorkerWrapper.Fix
-       HERMIT.Dictionary.WorkerWrapper.FixResult
+                    HERMIT.Dictionary.AlphaConversion
+                    HERMIT.Dictionary.Common
+                    HERMIT.Dictionary.Composite
+                    HERMIT.Dictionary.Debug
+                    HERMIT.Dictionary.FixPoint
+                    HERMIT.Dictionary.Fold
+                    HERMIT.Dictionary.Function
+                    HERMIT.Dictionary.GHC
+                    HERMIT.Dictionary.Induction
+                    HERMIT.Dictionary.Inline
+                    HERMIT.Dictionary.Kure
+                    HERMIT.Dictionary.Local
+                    HERMIT.Dictionary.Local.Bind
+                    HERMIT.Dictionary.Local.Case
+                    HERMIT.Dictionary.Local.Cast
+                    HERMIT.Dictionary.Local.Let
+                    HERMIT.Dictionary.Navigation
+                    HERMIT.Dictionary.Navigation.Crumbs
+                    HERMIT.Dictionary.New
+                    HERMIT.Dictionary.Query
+                    HERMIT.Dictionary.Reasoning
+                    HERMIT.Dictionary.Remembered
+                    HERMIT.Dictionary.Rules
+                    HERMIT.Dictionary.Undefined
+                    HERMIT.Dictionary.Unfold
+                    HERMIT.Dictionary.Unsafe
+                    HERMIT.Dictionary.WorkerWrapper.Common
+                    HERMIT.Dictionary.WorkerWrapper.Fix
+                    HERMIT.Dictionary.WorkerWrapper.FixResult
 
-       HERMIT.External
-       HERMIT.GHC
-       HERMIT.GHC.Typechecker
-       HERMIT.Kernel
-       HERMIT.Kernel.Scoped
-       HERMIT.Kure
-       HERMIT.Kure.SumTypes
-       HERMIT.Monad
-       HERMIT.Name
-       HERMIT.Parser
-       HERMIT.ParserCore
-       HERMIT.ParserType
+                    HERMIT.External
+                    HERMIT.GHC
+                    HERMIT.GHC.Typechecker
+                    HERMIT.Kernel
+                    HERMIT.Kure
+                    HERMIT.Kure.Universes
+                    HERMIT.Lemma
+                    HERMIT.Monad
+                    HERMIT.Name
+                    HERMIT.Parser
+                    HERMIT.ParserCore
+                    HERMIT.ParserType
 
-       HERMIT.Plugin
-       HERMIT.Plugin.Builder
-       HERMIT.Plugin.Display
-       HERMIT.Plugin.Renderer
-       HERMIT.Plugin.Types
+                    HERMIT.Plugin
+                    HERMIT.Plugin.Builder
+                    HERMIT.Plugin.Display
+                    HERMIT.Plugin.Renderer
+                    HERMIT.Plugin.Types
 
-       HERMIT.PrettyPrinter.AST
-       HERMIT.PrettyPrinter.Clean
-       HERMIT.PrettyPrinter.Common
-       HERMIT.PrettyPrinter.GHC
+                    HERMIT.PrettyPrinter.AST
+                    HERMIT.PrettyPrinter.Clean
+                    HERMIT.PrettyPrinter.Common
+                    HERMIT.PrettyPrinter.GHC
+                    HERMIT.PrettyPrinter.Glyphs
 
-       HERMIT.Shell.Command
-       HERMIT.Shell.Completion
-       HERMIT.Shell.Dictionary
-       HERMIT.Shell.Interpreter
-       HERMIT.Shell.Externals
-       HERMIT.Shell.KernelEffect
-       HERMIT.Shell.ScriptToRewrite
-       HERMIT.Shell.ShellEffect
-       HERMIT.Shell.Proof
-       HERMIT.Shell.Types
+                    HERMIT.Shell.Command
+                    HERMIT.Shell.Completion
+                    HERMIT.Shell.Dictionary
+                    HERMIT.Shell.Interpreter
+                    HERMIT.Shell.Externals
+                    HERMIT.Shell.KernelEffect
+                    HERMIT.Shell.ScriptToRewrite
+                    HERMIT.Shell.ShellEffect
+                    HERMIT.Shell.Proof
+                    HERMIT.Shell.Types
 
-       HERMIT.Utilities
+                    HERMIT.Utilities
 
-  Other-modules:
-       HERMIT.Syntax
+                    HERMIT.Libraries.Int
+                    HERMIT.Libraries.WW
 
-       Paths_hermit
+  other-modules:    HERMIT.Syntax
+
+                    Paths_hermit
 
   if os(windows)
-    Other-modules:
-        HERMIT.Win32.Console
-        HERMIT.Win32.IO
+    other-modules:  HERMIT.Win32.Console
+                    HERMIT.Win32.IO
 
-  Hs-Source-Dirs: src
+  hs-source-dirs:   src
 
-Executable hermit
-    Build-Depends: base >= 4 && < 5,
-                   hermit
+executable hermit
+  build-depends:  base >= 4.7 && < 5,
+                  hermit
 
-    default-language: Haskell2010
-    Main-Is: Main.hs
-    Hs-Source-Dirs: driver
-    Ghc-Options:
+  default-language:  Haskell2010
+  main-is:           Main.hs
+  hs-source-dirs:    driver
+  ghc-options:       -Wall
+
+
+test-suite hermit-tests
+    type:              exitcode-stdio-1.0
+    build-depends:     base         >= 4.7 && < 5,
+                       base-compat  >= 0.8.1,
+                       directory    >= 1.2,
+                       filepath,
+                       ghc-paths,
+                       hermit,
+                       process      >= 1.1.0.2,
+                       tasty        >= 0.8,
+                       tasty-golden >= 2.3,
+                       temporary    >= 1.2.0.3
+
+    default-language:  Haskell2010
+    main-is:           Main.hs
+    hs-source-dirs:    tests
+    ghc-options:       -Wall
 
 source-repository head
-    type:     git
-    location: git://github.com/ku-fpg/hermit.git
+    type:              git
+    location:          https://github.com/ku-fpg/hermit

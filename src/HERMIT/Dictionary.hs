@@ -9,6 +9,7 @@ module HERMIT.Dictionary
     , module HERMIT.Dictionary.Fold
     , module HERMIT.Dictionary.Function
     , module HERMIT.Dictionary.GHC
+    , module HERMIT.Dictionary.Induction
     , module HERMIT.Dictionary.Inline
     , module HERMIT.Dictionary.Kure
     , module HERMIT.Dictionary.Local
@@ -16,6 +17,7 @@ module HERMIT.Dictionary
     , module HERMIT.Dictionary.New
     , module HERMIT.Dictionary.Query
     , module HERMIT.Dictionary.Reasoning
+    , module HERMIT.Dictionary.Remembered
     , module HERMIT.Dictionary.Rules
     , module HERMIT.Dictionary.Undefined
     , module HERMIT.Dictionary.Unfold
@@ -43,6 +45,8 @@ import           HERMIT.Dictionary.Function hiding (externals)
 import qualified HERMIT.Dictionary.Function as Function
 import           HERMIT.Dictionary.GHC hiding (externals)
 import qualified HERMIT.Dictionary.GHC as GHC
+import           HERMIT.Dictionary.Induction hiding (externals)
+import qualified HERMIT.Dictionary.Induction as Induction
 import           HERMIT.Dictionary.Inline hiding (externals)
 import qualified HERMIT.Dictionary.Inline as Inline
 import           HERMIT.Dictionary.Kure hiding (externals)
@@ -57,6 +61,8 @@ import           HERMIT.Dictionary.Query hiding (externals)
 import qualified HERMIT.Dictionary.Query as Query
 import           HERMIT.Dictionary.Reasoning hiding (externals)
 import qualified HERMIT.Dictionary.Reasoning as Reasoning
+import           HERMIT.Dictionary.Remembered hiding (externals)
+import qualified HERMIT.Dictionary.Remembered as Remembered
 import           HERMIT.Dictionary.Rules hiding (externals)
 import qualified HERMIT.Dictionary.Rules as Rules
 import           HERMIT.Dictionary.Undefined hiding (externals)
@@ -71,6 +77,11 @@ import           HERMIT.Dictionary.WorkerWrapper.Fix hiding (externals)
 import qualified HERMIT.Dictionary.WorkerWrapper.Fix as WorkerWrapperFix
 import           HERMIT.Dictionary.WorkerWrapper.FixResult hiding (externals)
 import qualified HERMIT.Dictionary.WorkerWrapper.FixResult as WorkerWrapperFixResult
+--------------------------------------------------------------------------
+
+import qualified HERMIT.PrettyPrinter.AST as AST
+import qualified HERMIT.PrettyPrinter.Clean as Clean
+import qualified HERMIT.PrettyPrinter.GHC as GHCPP
 
 --------------------------------------------------------------------------
 
@@ -84,6 +95,7 @@ externals =
     ++ Fold.externals
     ++ Function.externals
     ++ GHC.externals
+    ++ Induction.externals
     ++ Inline.externals
     ++ Kure.externals
     ++ Local.externals
@@ -91,6 +103,7 @@ externals =
     ++ New.externals
     ++ Query.externals
     ++ Reasoning.externals
+    ++ Remembered.externals
     ++ Rules.externals
     ++ Undefined.externals
     ++ Unfold.externals
@@ -98,5 +111,8 @@ externals =
     ++ WorkerWrapperCommon.externals
     ++ WorkerWrapperFix.externals
     ++ WorkerWrapperFixResult.externals
+    ++ AST.externals
+    ++ Clean.externals
+    ++ GHCPP.externals
 
 --------------------------------------------------------------------------

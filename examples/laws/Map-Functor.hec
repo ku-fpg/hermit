@@ -1,0 +1,45 @@
+set-pp-type Show
+
+-- fmap-id
+rule-to-lemma fmap-id
+inst-lemma fmap-id 'f [| Map k |]
+inst-lemma-dictionaries fmap-id
+prove-lemma fmap-id
+extensionality 'm
+lhs (replicate 2 (one-td unfold))
+both smash
+lhs (replicate 2 (one-td unfold) >>> smash)
+induction 'm
+lhs undefined-case ; end-case
+lhs simplify
+rhs (one-td (backward (lemma ind-hyp-0)))
+rhs (one-td (backward (lemma ind-hyp-1)))
+lhs (any-bu (unfold 'map))
+both smash ; end-case
+lhs simplify ; end-case
+
+-- fmap-distrib
+rule-to-lemma fmap-distrib
+inst-lemma fmap-distrib 'f [| Map k |]
+inst-lemma-dictionaries fmap-distrib
+prove-lemma fmap-distrib
+extensionality 'm
+both smash
+lhs (unfold >>> smash >>> unfold)
+both (unfold >>> smash)
+rhs (replicate 3 (one-td unfold))
+both smash
+rhs (replicate 2 (one-td unfold))
+both smash
+induction 'm
+-- undefined
+both undefined-case ; end-case
+-- Bin
+lhs (any-bu (unfold 'map))
+lhs smash
+lhs (one-td (forward (lemma ind-hyp-0)))
+lhs (one-td (forward (lemma ind-hyp-1)))
+rhs (any-bu (unfold 'map))
+both smash ; end-case
+-- Tip
+both smash ; end-case

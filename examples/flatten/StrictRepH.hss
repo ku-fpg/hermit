@@ -4,5 +4,5 @@
 --  repH ty (undefined [ty])
                              { unfold 'repH }
 --  (++) ty (undefined [ty])
-                             { unfold-rule "++ strict" }
+                             { unfold-rule-unsafe "++ strict" }
 --  undefined ([ty] -> [ty])

@@ -1,7 +1,34 @@
-load "BaseCase" "BaseCase.her"
-load "InductiveStep" "InductiveStep.her"
+--load "BaseCase" "BaseCase.her"
+--load "InductiveStep" "InductiveStep.her"
+load-as-rewrite "BaseCase" "BaseCase.her"
+load-as-rewrite "InductiveStep" "InductiveStep.her"
 
 { prog-end
   rule-to-lemma "++ []"
-  verify-lemma "++ []" (inductive-proof 'xs [ '"[]" , ': ] [ BaseCase , InductiveStep ])
+--  verify-lemma "++ []" (inductive-proof 'xs [ '"[]" , ': ] [ BaseCase , InductiveStep ])
+  prove-lemma "++ []"
+  induction 'xs
+  forall-body
+     -- undefined case
+  { conj-lhs
+    BaseCase
+  }
+
+    -- nil case
+  { [conj-rhs, conj-lhs]
+    BaseCase
+  }
+
+    -- cons case
+  { [conj-rhs, conj-rhs, forall-body, consequent]
+    { eq-lhs
+      InductiveStep
+      { [app-arg]
+        lemma-forward ind-hyp-0
+      }
+    }
+    reflexivity
+  }
+  end-proof
 }
+

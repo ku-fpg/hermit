@@ -6,4 +6,4 @@
 unfold '++
 smash
 app-arg
-ind-hyp-0
+--ind-hyp-0

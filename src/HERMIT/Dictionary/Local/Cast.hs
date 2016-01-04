@@ -1,12 +1,15 @@
-{-# LANGUAGE CPP, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module HERMIT.Dictionary.Local.Cast
     ( -- * Rewrites on Case Expressions
       externals
+    , castElimR
     , castElimReflR
     , castElimSymR
     , castFloatAppR
+    , castFloatLamR
     , castElimSymPlusR -- TODO: revisit
+    , castElimUnsafeR
     )
 where
 
@@ -17,9 +20,9 @@ import Control.Monad
 
 import HERMIT.Core
 import HERMIT.Context
-import HERMIT.Kure
 import HERMIT.External
 import HERMIT.GHC
+import HERMIT.Kure
 
 import HERMIT.Dictionary.Common
 
@@ -28,17 +31,19 @@ import HERMIT.Dictionary.Common
 -- | Externals relating to Case expressions.
 externals :: [External]
 externals =
-    [ external "cast-elim" (promoteExprR castElimR :: RewriteH Core)
+    [ external "cast-elim" (promoteExprR castElimR :: RewriteH LCore)
         [ "cast-elim-refl <+ cast-elim-sym" ] .+ Shallow -- don't include in "Bash", as sub-rewrites are tagged "Bash" already.
-    , external "cast-elim-refl" (promoteExprR castElimReflR :: RewriteH Core)
+    , external "cast-elim-refl" (promoteExprR castElimReflR :: RewriteH LCore)
         [ "cast e co ==> e ; if co is a reflexive coercion" ] .+ Shallow
-    , external "cast-elim-sym" (promoteExprR castElimSymR :: RewriteH Core)
+    , external "cast-elim-sym" (promoteExprR castElimSymR :: RewriteH LCore)
         [ "removes pairs of symmetric casts" ]                .+ Shallow
-    , external "cast-elim-sym-plus" (promoteExprR castElimSymPlusR :: RewriteH Core)
+    , external "cast-elim-sym-plus" (promoteExprR castElimSymPlusR :: RewriteH LCore)
         [ "removes pairs of symmetric casts possibly separated by let or case forms" ] .+ Deep .+ TODO
-    , external "cast-float-app" (promoteExprR castFloatAppR :: RewriteH Core)
+    , external "cast-float-app" (promoteExprR castFloatAppR :: RewriteH LCore)
         [ "(cast e (c1 -> c2)) x ==> cast (e (cast x (sym c1))) c2" ] .+ Shallow
-    , external "cast-elim-unsafe" (promoteExprR castElimUnsafeR :: RewriteH Core)
+    , external "cast-float-lam" (promoteExprR castFloatLamR :: RewriteH LCore)
+        [ "\\ x::a -> cast x (a -> b) ==> cast (\\x::a -> x) ((a -> a) -> (a -> b))" ] .+ Shallow
+    , external "cast-elim-unsafe" (promoteExprR castElimUnsafeR :: RewriteH LCore)
         [ "removes casts regardless of whether it is safe to do so" ] .+ Shallow .+ Experiment .+ Unsafe .+ TODO
     ]
 
@@ -77,6 +82,16 @@ castFloatAppR = prefixFailMsg "Cast float from application failed: " $
                 Type x' <- return e2
                 return (Cast (App e1 e2) (Coercion.substCo (Coercion.extendTvSubst emptyCvSubst t x') c2))
             _ -> fail "castFloatApp"
+
+-- (\ x::a -> cast e (b -> c)) :: a -> c
+-- cast (\x::a -> e) ((a -> b) -> (a -> c))
+castFloatLamR :: MonadCatch m => Rewrite c m CoreExpr
+castFloatLamR = prefixFailMsg "Cast float from lambda failed: " $
+                withPatFailMsg (wrongExprForm "Lam b (Cast e co)") $ do
+    Lam b (Cast e co) <- idR
+    let r = coercionRole co
+        aTy = varType b
+    return (Cast (Lam b e) (mkFunCo r (mkReflCo r aTy) co))
 
 -- | Attempts to tease a coercion apart into a type constructor and the application
 -- of a number of coercion arguments to that constructor
@@ -124,4 +139,3 @@ castElimSymPlusR = castT idR idR (flip go) >>> joinT
 
 castElimUnsafeR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
 castElimUnsafeR = castT idR idR const
-

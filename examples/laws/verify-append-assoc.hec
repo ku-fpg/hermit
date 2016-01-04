@@ -50,9 +50,69 @@ load-and-run "verify-nil-append.hec"
 -- }
 --
 ---- then encode the proof as a rewrite or script
-define-script "append-assoc-nil"  "any-bu (forward (lemma nil-append))"
-define-script "append-assoc-cons-left"  "one-bu (inline '++) ; smash ; one-bu  (forward ind-hyp-0)"
+define-script "append-assoc-nil"  "any-bu (lemma-forward nil-append)"
+define-script "append-assoc-cons-left"  "one-bu (inline '++) ; smash ; one-bu (lemma-forward ind-hyp-0)"
 
 define-script "append-assoc-cons-right" "one-bu (inline '++) ; smash ; one-bu (inline '++) ; smash "
 
-verify-lemma "append-assoc" (inductive-proof-both-sides 'x [ '"[]" , ': ] [ append-assoc-nil , append-assoc-cons-left ] [ append-assoc-nil , append-assoc-cons-right ] )
+--verify-lemma "append-assoc" (inductive-proof-both-sides 'x [ '"[]" , ': ] [ append-assoc-nil , append-assoc-cons-left ] [ append-assoc-nil , append-assoc-cons-right ] )
+
+script-to-rewrite append-assoc-nil "append-assoc-nil"
+script-to-rewrite append-assoc-cons-left "append-assoc-cons-left"
+
+prove-lemma "append-assoc"
+induction 'x
+
+{ [forall-body]
+
+  -- undefined case
+  { [conj-lhs]
+    { [forall-body]
+      { [eq-lhs]
+        one-bu (inline '++)
+      }
+      { [eq-rhs]
+        one-bu (inline '++)
+      }
+      smash
+      { [eq-rhs]
+        one-td (inline '++)
+      }
+      smash
+    }
+  }
+
+    -- nil case
+  { [conj-rhs, conj-lhs]
+    { [forall-body]
+      { [eq-lhs]
+        one-bu (inline '++)
+      }
+      smash
+      { [eq-rhs, app-fun, app-arg]
+        lemma-forward nil-append
+      }
+      reflexivity
+    }
+  }
+
+    -- cons case
+  { [conj-rhs, conj-rhs, forall-body, consequent]
+    one-td (inline '++)
+    smash
+    one-bu (lemma-forward ind-hyp-0)
+
+      -- Float (:) call out:
+    { [eq-rhs]
+      one-bu (inline '++)
+      smash
+      one-bu (inline '++)
+      smash
+    }
+
+    reflexivity
+  }
+  smash  -- 'a => true' is true
+}
+end-proof
+

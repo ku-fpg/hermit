@@ -1,0 +1,9 @@
+-- set-pp-type Show
+
+rule-to-lemma fmap-id
+inst-lemma fmap-id 'f [| Identity |]
+inst-lemma-dictionaries fmap-id
+prove-lemma fmap-id
+lhs unfold
+both smash
+lhs unfold

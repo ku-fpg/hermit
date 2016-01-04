@@ -1,64 +1,75 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleContexts, FlexibleInstances, InstanceSigs #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module HERMIT.Context
-       ( -- * HERMIT Contexts
-         -- ** Path Synonyms
-         AbsolutePathH
-       , LocalPathH
-         -- ** The Standard Context
-       , HermitC
-       , topLevelHermitC
-         -- ** Bindings
-       , HermitBindingSite(..)
-       , BindingDepth
-       , HermitBinding
-       , hbDepth
-       , hbSite
-       , hbPath
-       , hermitBindingSiteExpr
-       , hermitBindingSummary
-       , hermitBindingExpr
-         -- ** Adding bindings to contexts
-       , AddBindings(..)
-       , addBindingGroup
-       , addDefBinding
-       , addDefBindingsExcept
-       , addLambdaBinding
-       , addAltBindings
-       , addCaseBinderBinding
-       , addForallBinding
-         -- ** Reading bindings from the context
-       , BoundVars(..)
-       , boundIn
-       , findBoundVars
-       , ReadBindings(..)
-       , lookupHermitBinding
-       , lookupHermitBindingDepth
-       , lookupHermitBindingSite
-         -- ** Accessing GHC rewrite rules from the context
-       , HasCoreRules(..)
-         -- ** An empty Context
-       , HasEmptyContext(..)
-) where
+    ( -- * HERMIT Contexts
+      -- ** Path Synonyms
+      AbsolutePathH
+    , LocalPathH
+      -- ** The Standard Context
+    , HermitC
+    , topLevelHermitC
+    , toHermitC
+      -- ** Bindings
+    , HermitBindingSite(..)
+    , BindingDepth
+    , HermitBinding
+    , hbDepth
+    , hbSite
+    , hbPath
+    , hermitBindingSiteExpr
+    , hermitBindingSummary
+    , hermitBindingExpr
+      -- ** Adding bindings to contexts
+    , AddBindings(..)
+    , addBindingGroup
+    , addDefBinding
+    , addDefBindingsExcept
+    , addLambdaBinding
+    , addAltBindings
+    , addCaseBinderBinding
+    , addForallBinding
+      -- ** Reading bindings from the context
+    , BoundVars(..)
+    , boundIn
+    , findBoundVars
+    , ReadBindings(..)
+    , lookupHermitBinding
+    , lookupHermitBindingDepth
+    , lookupHermitBindingSite
+    , inScope
+      -- ** Accessing GHC rewrite rules from the context
+    , HasCoreRules(..)
+      -- ** Accessing temporary lemmas in scope
+    , LemmaContext(..)
+      -- ** An empty Context
+    , HasEmptyContext(..)
+    ) where
 
-import Prelude hiding (lookup)
+import Prelude.Compat hiding (lookup)
 
-import Control.Monad (liftM)
+import Control.Monad.Compat (liftM)
 
-import Data.Monoid (mempty)
 import Data.Map hiding (map, foldr, filter)
+import Data.Typeable
 
 import Language.KURE
 import Language.KURE.ExtendableContext
 
 import HERMIT.Core
 import HERMIT.GHC hiding (empty)
+import HERMIT.Lemma
 
 ------------------------------------------------------------------------
 
 -- | The depth of a binding.  Used, for example, to detect shadowing when inlining.
 type BindingDepth = Int
-
 
 -- | HERMIT\'s representation of variable bindings.
 --   Bound expressions cannot be inlined without checking for shadowing issues (using the depth information).
@@ -71,11 +82,12 @@ data HermitBindingSite = LAM                                -- ^ A lambda-bound 
                        | CASEBINDER CoreExpr (AltCon,[Var]) -- ^ A case binder.  We store both the scrutinised expression, and the case alternative 'AltCon' and variables.
                        | FORALL                             -- ^ A universally quantified type variable.
                        | TOPLEVEL CoreExpr                  -- ^ A special case.  When we're focussed on ModGuts, we treat all top-level bindings as being in scope at depth 0.
+  deriving Typeable
 
 data HermitBinding = HB { hbDepth :: BindingDepth
                         , hbSite :: HermitBindingSite
                         , hbPath :: AbsolutePathH
-                        }
+                        } deriving Typeable
 
 -- | Retrieve the expression in a 'HermitBindingSite', if there is one.
 hermitBindingSiteExpr :: HermitBindingSite -> KureM CoreExpr
@@ -115,6 +127,8 @@ class AddBindings c where
   --   This can also be used for solitary bindings (e.g. lambdas).
   --   Bindings are added in parallel sets to help with shadowing issues.
   addHermitBindings :: [(Var,HermitBindingSite,AbsolutePathH)] -> c -> c
+
+deriving instance Typeable AddBindings
 
 -- | The bindings are just discarded.
 instance AddBindings (SnocPath crumb) where
@@ -174,6 +188,8 @@ addForallBinding v c = addHermitBindings [(v,FORALL,absPath c @@ ForAllTy_Var)] 
 class BoundVars c where
   boundVars :: c -> VarSet
 
+deriving instance Typeable BoundVars
+
 instance BoundVars VarSet where
   boundVars :: VarSet -> VarSet
   boundVars = id
@@ -187,9 +203,16 @@ class BoundVars c => ReadBindings c where
   hermitDepth    :: c -> BindingDepth
   hermitBindings :: c -> Map Var HermitBinding
 
+deriving instance Typeable ReadBindings
+
 -- | Determine if a variable is bound in a context.
 boundIn :: ReadBindings c => Var -> c -> Bool
 boundIn i c = i `member` hermitBindings c
+
+-- | Determine whether a variable is in scope.
+inScope :: BoundVars c => c -> Var -> Bool
+inScope c v = not (isDeadBinder v || (isLocalVar v && (v `notElemVarSet` boundVars c)))
+-- Used in Dictionary.Inline and Dictionary.Fold to check if variables are in scope.
 
 -- | Lookup the binding for a variable in a context.
 lookupHermitBinding :: (ReadBindings c, Monad m) => Var -> c -> m HermitBinding
@@ -211,6 +234,8 @@ lookupHermitBindingSite v depth c = do HB d bnd _ <- lookupHermitBinding v c
 class HasCoreRules c where
     hermitCoreRules :: c -> [CoreRule]
 
+deriving instance Typeable HasCoreRules
+
 instance HasCoreRules [CoreRule] where
     hermitCoreRules :: [CoreRule] -> [CoreRule]
     hermitCoreRules = id
@@ -220,6 +245,22 @@ instance HasCoreRules [CoreRule] where
 -- | A class of contexts that provide an empty context.
 class HasEmptyContext c where
   setEmptyContext :: c -> c
+
+deriving instance Typeable HasEmptyContext
+
+------------------------------------------------------------------------
+
+-- | A class of contexts that can store local Lemmas as we descend past implications.
+class LemmaContext c where
+    addAntecedent :: LemmaName -> Lemma -> c -> c
+    getAntecedents :: c -> Lemmas
+
+deriving instance Typeable LemmaContext
+
+instance LemmaContext c => LemmaContext (ExtendContext c e) where
+    addAntecedent nm l ec = extendContext (extraContext ec)
+                                          (addAntecedent nm l $ baseContext ec)
+    getAntecedents = getAntecedents . baseContext
 
 ------------------------------------------------------------------------
 
@@ -234,7 +275,18 @@ data HermitC = HermitC
     , hermitC_depth     :: BindingDepth          -- ^ The depth of the most recent bindings.
     , hermitC_path      :: AbsolutePathH         -- ^ The 'AbsolutePath' to the current node from the root.
     , hermitC_specRules :: [CoreRule]            -- ^ In-scope GHC RULES found in IdInfos.
-    }
+    , hermitC_lemmas    :: Lemmas                -- ^ Local lemmas as we pass implications in a proof.
+    } deriving Typeable
+
+-- | Build a HermitC out of any context that has the capabilities.
+toHermitC :: (HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb) => c -> HermitC
+toHermitC c =
+    HermitC { hermitC_bindings = hermitBindings c
+            , hermitC_depth = hermitDepth c
+            , hermitC_path = absPath c
+            , hermitC_specRules = hermitCoreRules c
+            , hermitC_lemmas = getAntecedents c
+            }
 
 ------------------------------------------------------------------------
 
@@ -246,6 +298,7 @@ instance HasEmptyContext HermitC where
                  , hermitC_depth         = 0
                  , hermitC_path          = mempty
                  , hermitC_specRules     = []
+                 , hermitC_lemmas        = empty
                  }
 
 -- | A special HERMIT context intended for use only when focussed on ModGuts.
@@ -257,6 +310,7 @@ topLevelHermitC mg = let ies = concatMap bindToVarExprs (mg_binds mg)
                        , hermitC_depth         = 0
                        , hermitC_path          = mempty
                        , hermitC_specRules     = concatMap (idCoreRules . fst) ies
+                       , hermitC_lemmas        = empty
                        }
 
 ------------------------------------------------------------------------
@@ -303,3 +357,10 @@ instance HasCoreRules HermitC where
   hermitCoreRules = hermitC_specRules
 
 ------------------------------------------------------------------------
+
+instance LemmaContext HermitC where
+    addAntecedent :: LemmaName -> Lemma -> HermitC -> HermitC
+    addAntecedent nm l c = c { hermitC_lemmas = insert nm l (hermitC_lemmas c) }
+
+    getAntecedents :: HermitC -> Lemmas
+    getAntecedents = hermitC_lemmas

@@ -17,10 +17,10 @@ import HERMIT.Dictionary.Common
 -- | Externals for manipulating binding groups.
 externals :: [External]
 externals =
-    [ external "nonrec-to-rec" (promoteBindR nonrecToRecR :: RewriteH Core)
+    [ external "nonrec-to-rec" (promoteBindR nonrecToRecR :: RewriteH LCore)
         [ "Convert a non-recursive binding into a recursive binding group with a single definition."
         , "NonRec v e ==> Rec [Def v e]" ]                           .+ Shallow
-    , external "rec-to-nonrec" (promoteBindR recToNonrecR :: RewriteH Core)
+    , external "rec-to-nonrec" (promoteBindR recToNonrecR :: RewriteH LCore)
         [ "Convert a singleton recursive binding into a non-recursive binding group."
         , "Rec [Def v e] ==> NonRec v e,  (v not free in e)" ]
     ]

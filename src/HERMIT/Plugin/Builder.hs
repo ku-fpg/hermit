@@ -1,8 +1,9 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module HERMIT.Plugin.Builder
     ( -- * The HERMIT Plugin
-      PluginPass
+      HERMITPass
     , buildPlugin
     , CorePass(..)
     , getCorePass
@@ -11,16 +12,20 @@ module HERMIT.Plugin.Builder
     , getPassFlag
     )  where
 
+import Data.IORef
 import Data.List
-import System.IO
+import Data.Typeable
 
 import HERMIT.GHC
+import HERMIT.Kernel
+
+import System.IO
 
 -- | Given a list of 'CommandLineOption's, produce the 'ModGuts' to 'ModGuts' function required to build a plugin.
-type PluginPass = PassInfo -> [CommandLineOption] -> ModGuts -> CoreM ModGuts
+type HERMITPass = IORef (Maybe (AST, ASTMap)) -> PassInfo -> [CommandLineOption] -> ModGuts -> CoreM ModGuts
 
 -- | Build a plugin. This mainly handles the per-module options.
-buildPlugin :: PluginPass -> Plugin
+buildPlugin :: HERMITPass -> Plugin
 buildPlugin hp = defaultPlugin { installCoreToDos = install }
     where
         install :: [CommandLineOption] -> [CoreToDo] -> CoreM [CoreToDo]
@@ -36,60 +41,79 @@ buildPlugin hp = defaultPlugin { installCoreToDos = install }
             liftIO initStaticOpts
 #endif
 
+            store <- liftIO $ newIORef (Nothing :: Maybe (ModuleName, IORef (Maybe (AST, ASTMap))))
             let todos' = flattenTodos todos
                 passes = map getCorePass todos'
                 allPasses = foldr (\ (n,p,seen,notyet) r -> mkPass n seen notyet : p : r)
                                   [mkPass (length todos') passes []]
                                   (zip4 [0..] todos' (inits passes) (tails passes))
-                mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n) $ modFilter hp (PassInfo n ps ps') opts
+                mkPass n ps ps' = CoreDoPluginPass ("HERMIT" ++ show n)
+                                $ modFilter store hp (PassInfo n ps ps') opts
 
             return allPasses
 
--- | Determine whether to act on this module, choose plugin pass.
+-- | Determine whether to act on this module, selecting global store.
 -- NB: we have the ability to stick module info in the pass info here
-modFilter :: PluginPass -> PluginPass
-modFilter hp pInfo opts guts
+modFilter :: IORef (Maybe (ModuleName, IORef (Maybe (AST, ASTMap)))) -- global store
+          -> HERMITPass
+          -> PassInfo
+          -> [CommandLineOption]
+          -> ModGuts -> CoreM ModGuts
+modFilter store hp pInfo opts guts
     | null modOpts && notNull opts = return guts -- don't process this module
-    | otherwise                    = hp pInfo (h_opts ++ filter notNull modOpts) guts
-    where modOpts = filterOpts m_opts guts
+    | otherwise                    = do mb <- liftIO $ readIORef store
+                                        modStore <- case mb of
+                                                        Just (nm,ref) | nm == modName -> return ref
+                                                        _ -> liftIO $ do
+                                                            ref <- newIORef Nothing
+                                                            writeIORef store $ Just (modName, ref)
+                                                            return ref
+                                        hp modStore pInfo (h_opts ++ filter notNull modOpts) guts
+    where modOpts = filterOpts m_opts modName
           (m_opts, h_opts) = partition (isInfixOf ":") opts
+          modName = moduleName $ mg_module guts
 
 -- | Filter options to those pertaining to this module, stripping module prefix.
-filterOpts :: [CommandLineOption] -> ModGuts -> [CommandLineOption]
-filterOpts opts guts = [ opt | nm <- opts
-                             , let mopt = if modName `isPrefixOf` nm
-                                          then Just (drop len nm)
-                                          else if "*:" `isPrefixOf` nm
-                                               then Just (drop 2 nm)
-                                               else Nothing
-                             , Just opt <- [mopt]
-                             ]
-    where modName = moduleNameString $ moduleName $ mg_module guts
-          len = length modName + 1 -- for the colon
+filterOpts :: [CommandLineOption] -> ModuleName -> [CommandLineOption]
+filterOpts opts mname = [ opt | nm <- opts
+                              , let mopt = if modName `isPrefixOf` nm
+                                           then Just (drop len nm)
+                                           else if "*:" `isPrefixOf` nm
+                                                then Just (drop 2 nm)
+                                                else Nothing
+                              , Just opt <- [mopt]
+                              ]
+    where modName = moduleNameString mname
+          len = lengthFS (moduleNameFS mname) + 1 -- for the colon
 
 -- | An enumeration type for GHC's passes.
-data CorePass = FloatInwards
-              | LiberateCase
-              | PrintCore
-              | StaticArgs
-              | Strictness
-              | WorkerWrapper
-              | Specialising
-              | SpecConstr
+#if __GLASGOW_HASKELL__ >= 710
+data CorePass = CallArity
               | CSE
-              | Vectorisation
+#else
+data CorePass = CSE
+#endif
               | Desugar
               | DesugarOpt
-              | Tidy
-              | Prep
-              | Simplify
+              | FloatInwards
               | FloatOutwards
+              | LiberateCase
+              | Prep
+              | PrintCore
               | RuleCheck
+              | Simplify
+              | SpecConstr
+              | Specialising
+              | StaticArgs
+              | Strictness
+              | Tidy
+              | Vectorisation
+              | WorkerWrapper
               | Passes -- these should be flattened out in practice
               | PluginPass String
               | NoOp
               | Unknown
-    deriving (Read, Show, Eq)
+    deriving (Read, Show, Eq, Typeable)
 
 -- The following are not allowed yet because they required options.
 -- CoreDoSimplify {- The core-to-core simplifier. -} Int {- Max iterations -} SimplifierMode
@@ -109,6 +133,9 @@ ghcPasses = [ (FloatInwards , CoreDoFloatInwards)
             , (Vectorisation, CoreDoVectorisation)
             , (Desugar      , CoreDesugar)    -- Right after desugaring, no simple optimisation yet!
             , (DesugarOpt   , CoreDesugarOpt) -- CoreDesugarXXX: Not strictly a core-to-core pass, but produces
+#if __GLASGOW_HASKELL__ >= 710
+            , (CallArity    , CoreDoCallArity)
+#endif
             , (Tidy         , CoreTidy)
             , (Prep         , CorePrep)
             , (NoOp         , CoreDoNothing)
@@ -135,6 +162,9 @@ getCorePass (CoreDoRuleCheck {})     = RuleCheck
 getCorePass (CoreDoPasses {})        = Passes -- these should be flattened out in practice
 getCorePass (CoreDoPluginPass nm _)  = PluginPass nm
 getCorePass CoreDoNothing            = NoOp
+#if __GLASGOW_HASKELL__ >= 710
+getCorePass CoreDoCallArity          = CallArity
+#endif
 -- getCorePass _                   = Unknown
 
 flattenTodos :: [CoreToDo] -> [CoreToDo]
@@ -148,7 +178,7 @@ data PassInfo =
              , passesDone :: [CorePass]
              , passesLeft :: [CorePass]
              }
-    deriving (Read, Show, Eq)
+    deriving (Read, Show, Eq, Typeable)
 
 -- | If HERMIT user specifies the -pN flag, get the N
 -- TODO: as written will discard other flags that start with -p
