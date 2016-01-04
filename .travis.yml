@@ -18,7 +18,7 @@ install:
  - cabal --version
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - travis_retry cabal update
- - cabal install -j --only-dependencies --enable-tests --allow-newer=base --allow-newer=process
+ - cabal install -j --only-dependencies --enable-tests --allow-newer
 
 script:
  - if [ -f configure.ac ]; then autoreconf -i; fi
