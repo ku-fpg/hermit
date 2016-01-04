@@ -8,6 +8,8 @@ module HERMIT.Name
     ( HermitName
     , cmpHN2Name
     , cmpHN2Var
+    , mkQualified
+    , mkUnqualified
     , fromRdrName
     , toRdrName
     , toRdrNames
