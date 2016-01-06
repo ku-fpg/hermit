@@ -102,7 +102,7 @@ callSaturatedT = callPredT (\ i args -> let (tvs, ty) = splitForAllTys (varType 
 callNameG :: MonadCatch m => HermitName -> Transform c m CoreExpr ()
 callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >> return ()
 
--- | Succeeds if we are looking at an application of a data constructor.
+-- | Succeeds if we are looking at a saturated application of a data constructor.
 callDataConT :: MonadCatch m => Transform c m CoreExpr (DataCon, [Type], [CoreExpr])
 callDataConT = prefixFailMsg "callDataConT failed:" $
     do mb <- contextfreeT $ \ e -> let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (localFreeVarsExpr e) ])
