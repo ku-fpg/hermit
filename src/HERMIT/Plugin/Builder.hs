@@ -87,12 +87,8 @@ filterOpts opts mname = [ opt | nm <- opts
           len = lengthFS (moduleNameFS mname) + 1 -- for the colon
 
 -- | An enumeration type for GHC's passes.
-#if __GLASGOW_HASKELL__ >= 710
 data CorePass = CallArity
               | CSE
-#else
-data CorePass = CSE
-#endif
               | Desugar
               | DesugarOpt
               | FloatInwards
@@ -133,9 +129,7 @@ ghcPasses = [ (FloatInwards , CoreDoFloatInwards)
             , (Vectorisation, CoreDoVectorisation)
             , (Desugar      , CoreDesugar)    -- Right after desugaring, no simple optimisation yet!
             , (DesugarOpt   , CoreDesugarOpt) -- CoreDesugarXXX: Not strictly a core-to-core pass, but produces
-#if __GLASGOW_HASKELL__ >= 710
             , (CallArity    , CoreDoCallArity)
-#endif
             , (Tidy         , CoreTidy)
             , (Prep         , CorePrep)
             , (NoOp         , CoreDoNothing)
@@ -162,10 +156,7 @@ getCorePass (CoreDoRuleCheck {})     = RuleCheck
 getCorePass (CoreDoPasses {})        = Passes -- these should be flattened out in practice
 getCorePass (CoreDoPluginPass nm _)  = PluginPass nm
 getCorePass CoreDoNothing            = NoOp
-#if __GLASGOW_HASKELL__ >= 710
 getCorePass CoreDoCallArity          = CallArity
-#endif
--- getCorePass _                   = Unknown
 
 flattenTodos :: [CoreToDo] -> [CoreToDo]
 flattenTodos = concatMap f

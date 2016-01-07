@@ -3,6 +3,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module Main (main) where
 
+import Constants (hiVersion)
 import Control.Monad.Compat
 
 import Data.Char (isSpace)
@@ -35,15 +36,7 @@ hermitTests = testGroup "HERMIT tests" $ map mkHermitTest testArgs
 
 -- subdirectory names
 golden, dump, rootDir, examples :: FilePath
-#if __GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ >= 3
-golden   = "golden-ghc-7.10.3"
-#endif
-
-#if __GLASGOW_HASKELL__ > 710 
-golden   = "golden-ghc-7.11"
-#else
-
-#endif
+golden   = "golden" </> "golden-ghc-" ++ show hiVersion
 dump     = "dump"
 rootDir  = "tests"
 examples = "examples"
@@ -151,6 +144,7 @@ mkHermitTest (dir, hs, hss, extraFlags) =
     hermitOutput = do
         cleanObjectFiles
         mbDb <- getSandboxDb
+        createDirectoryIfMissing True (dropFileName gfile)
 
         let dbFlags :: String
             dbFlags | Just db <- mbDb

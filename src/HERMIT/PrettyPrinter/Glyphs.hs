@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -6,9 +5,6 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 module HERMIT.PrettyPrinter.Glyphs where
 
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid
-#endif
 import Data.Typeable
 
 import HERMIT.Kure

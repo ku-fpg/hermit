@@ -81,10 +81,8 @@ import           GhcPlugins hiding (exprSomeFreeVars, exprFreeVars, exprFreeIds,
 import           Kind (isKind,isLiftedTypeKindCon)
 import           LoadIface (loadSysInterface)
 import           MkId (mkDictSelRhs)
-#if __GLASGOW_HASKELL__ >= 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ > 2)
 import           TcRnMonad (initIfaceTcRn)
 import           ErrUtils (pprErrMsgBagWithLoc)
-#endif
 import qualified OccName -- for varName
 import           OccurAnal (occurAnalyseExpr_NoBinderSwap)
 import           Pair (Pair(..))
@@ -95,20 +93,8 @@ import           StaticFlags
 #endif
 import           TcEnv (tcLookupClass)
 import           TcErrors (reportAllUnsolved)
-#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ <= 2)
-import           ErrUtils (pprErrMsgBag)
-import           TcRnMonad (getCtLoc)
-#endif
-#if __GLASGOW_HASKELL__ < 710
-import           TcMType (newWantedEvVar)
-#else
 import           TcMType (newEvVar)
-#endif
-#if __GLASGOW_HASKELL__ < 710
-import           TcRnTypes (TcM, mkNonCanonical, mkFlatWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
-#else
 import           TcRnTypes (TcM, mkNonCanonical, mkSimpleWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
-#endif
 import           TcSimplify (solveWantedsTcM)
 import           TcType (mkPhiTy, mkSigmaTy)
 import           TypeRep (Type(..),TyLit(..))

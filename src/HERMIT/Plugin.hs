@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -50,11 +49,7 @@ import HERMIT.External
 import HERMIT.Kernel
 import HERMIT.Context
 import HERMIT.Kure hiding (apply)
-#if __GLASGOW_HASKELL__ < 710
-import HERMIT.GHC hiding (singleton, liftIO, display)
-#else
 import HERMIT.GHC hiding (singleton, liftIO)
-#endif
 import qualified HERMIT.GHC as GHC
 
 import HERMIT.Plugin.Builder

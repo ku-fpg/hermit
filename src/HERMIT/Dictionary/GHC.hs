@@ -142,9 +142,7 @@ lintModuleT :: TransformH ModGuts String
 lintModuleT =
   do dynFlags <- dynFlagsT
      bnds     <- arr mg_binds
-#if __GLASGOW_HASKELL__ < 710
-     let (warns, errs)    = CoreLint.lintCoreBindings [] bnds -- [] are vars to treat as in scope, used by GHCi
-#elif __GLASGOW_HASKELL__ <= 710
+#if __GLASGOW_HASKELL__ <= 710
      -- [] are vars to treat as in scope, used by GHCi
      -- 'CoreDesugar' so we check for global ids, but not INLINE loop breakers, see notes in GHC's CoreLint module.
      let (warns, errs)    = CoreLint.lintCoreBindings CoreDesugar [] bnds
@@ -166,7 +164,7 @@ lintExprT = transform $ \ c e -> do
     case e of
         Type _ -> fail "cannot core lint types."
         _ -> maybe (return "Core Lint Passed") (fail . showSDoc dflags)
-#if __GLASGOW_HASKELL__ < 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_PATCHLEVEL1__ <= 2)
+#if __GLASGOW_HASKELL__ <= 710 
                    (CoreLint.lintExpr (varSetElems $ boundVars c) e)
 #else
                    (CoreLint.lintExpr dflags (varSetElems $ boundVars c) e)
@@ -228,11 +226,7 @@ buildTypeable ty = do
     evar <- runTcM $ do
         cls <- tcLookupClass typeableClassName
         let predTy = mkClassPred cls [typeKind ty, ty] -- recall that Typeable is now poly-kinded
-#if __GLASGOW_HASKELL__ < 710
-        newWantedEvVar predTy
-#else
         newEvVar predTy
-#endif
     buildDictionary evar
 
 -- | Build a dictionary for the given
@@ -246,9 +240,7 @@ buildDictionary evar = do
 #endif
         let predTy = varType evar
             nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
-#if __GLASGOW_HASKELL__ < 710
-            wCs = mkFlatWC [nonC]
-#elif __GLASGOW_HASKELL__ <= 710 
+#if __GLASGOW_HASKELL__ <= 710 
             wCs = mkSimpleWC [nonC]
 #else
             wCs = mkSimpleWC [cc_ev nonC]

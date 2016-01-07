@@ -5,7 +5,6 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE CPP #-}
 
 module HERMIT.Monad
     ( -- * The HERMIT Monad
@@ -249,13 +248,9 @@ runTcM m = do
     -- What should the boolean flag be set to?
     (msgs, mr) <- liftIO $ initTcFromModGuts env guts HsSrcFile False m
     let showMsgs (warns, errs) = showSDoc dflags $ vcat
-                                                 $    text "Errors:" : pprErrMsgBag errs
-                                                   ++ text "Warnings:" : pprErrMsgBag warns
+                                                 $    text "Errors:" : pprErrMsgBagWithLoc errs
+                                                   ++ text "Warnings:" : pprErrMsgBagWithLoc warns
     maybe (fail $ showMsgs msgs) return mr
-#if __GLASGOW_HASKELL__ > 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ > 2)
-   where
-     pprErrMsgBag = pprErrMsgBagWithLoc
-#endif
 
 runDsM :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => DsM a -> m a
 runDsM = runTcM . initDsTc
