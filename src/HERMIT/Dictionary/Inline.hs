@@ -169,7 +169,13 @@ getUnfoldingsT config = transform $ \ c i ->
                     case unfoldingInfo (idInfo i) of
                       CoreUnfolding { uf_tmpl = uft } -> single (uft, uncaptured)
                       dunf@(DFunUnfolding {})         -> single . (,uncaptured) =<< dFunExpr dunf
-                      _                               -> fail $ "cannot find unfolding in Env or IdInfo."
+                      _ -> case idDetails i of
+                            ClassOpId cls -> do
+                              let selectors = zip [ idName s | s <- classAllSelIds cls] [0..]
+                                  msg = getOccString i ++ " is not a method of " ++ getOccString cls ++ "."
+                              idx <- maybe (fail msg) return $ lookup (idName i) selectors
+                              single (mkDictSelRhs cls idx, uncaptured)
+                            _             -> fail "cannot find unfolding in Env or IdInfo."
       Just b -> let depth = hbDepth b
                 in case hbSite b of
                           CASEBINDER s alt -> let tys             = tyConAppArgs (idType i)

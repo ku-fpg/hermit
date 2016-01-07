@@ -51,6 +51,7 @@ module HERMIT.GHC
     , module DsMonad
     , module DynamicLoading
     , module ErrUtils
+    , module MkId
     , module PrelNames
     , module TcEnv
     , module TcMType
@@ -64,7 +65,7 @@ module HERMIT.GHC
 
 -- Imports from GHC.
 import qualified Bag
-import           Class (classTyCon)
+import           Class (classAllSelIds, classTyCon)
 import qualified CoAxiom -- for coAxiomName
 import           Convert (thRdrNameGuesses)
 import           CoreArity
@@ -79,6 +80,7 @@ import           Finder (findImportedModule, cannotFindModule)
 import           GhcPlugins hiding (exprSomeFreeVars, exprFreeVars, exprFreeIds, bindFreeVars, getHscEnv, RuleName)
 import           Kind (isKind,isLiftedTypeKindCon)
 import           LoadIface (loadSysInterface)
+import           MkId (mkDictSelRhs)
 #if __GLASGOW_HASKELL__ >= 710 || (__GLASGOW_HASKELL__ == 710 && __GLASGOW_HASKELL_PATCHLEVEL1__ > 2)
 import           TcRnMonad (initIfaceTcRn)
 import           ErrUtils (pprErrMsgBagWithLoc)
