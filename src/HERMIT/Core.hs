@@ -473,6 +473,7 @@ data Crumb =
            | NthCo_Int | NthCo_Co
            | InstCo_Co | InstCo_Type
            | LRCo_LR | LRCo_Co
+           | UnivCo_Dom | UnivCo_Ran
            -- Quantified
            | Forall_Body
            | Conj_Lhs | Conj_Rhs
@@ -531,6 +532,8 @@ showCrumb = \case
                InstCo_Co         -> "inst-co"
                InstCo_Type       -> "inst-type"
                LRCo_Co           -> "lr-co"
+               UnivCo_Dom        -> "univ-dom"
+               UnivCo_Ran        -> "univ-ran"
                -- Quantified
                Forall_Body -> "forall-body"
                Conj_Lhs    -> "conj-lhs"

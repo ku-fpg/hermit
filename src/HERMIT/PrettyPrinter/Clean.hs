@@ -438,7 +438,11 @@ ppCoercionR =
                                      else retApps (coText (showRole r ++ ":") <> ptc) cs)
  <+ axiomInstCoT (coAxiomName ^>> ppName CoercionColor) ppSDoc (\ _ -> ppCoercionR >>> parenExpr) (\ ax idx coes -> RetExpr (coText "axiomInst" <+> ax <+> idx <+> sep coes))
  <+ lrCoT ppSDoc (ppCoercionR >>> parenExpr) (\ lr co -> RetExpr (coercionColor lr <+> co))
- -- TODO: UnivCo and SubCo
+ 
+ <+ univCoT ppTypeModeR ppTypeModeR
+            (\ s r dom ran -> retApps (coKeyword "univ" <+> coText (show s) <+> coText (showRole r)) [dom,ran])
+
+
  <+ constT (return . RetAtom $ text "Unsupported Coercion Constructor")
 
 ppCoKind :: PrettyH Coercion
