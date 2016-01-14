@@ -468,6 +468,7 @@ data Crumb =
            | AxiomInstCo_Axiom | AxiomInstCo_Index | AxiomInstCo_Arg Int
            | UnsafeCo_Left | UnsafeCo_Right
            | SymCo_Co
+           | SubCo_Co
            | TransCo_Left | TransCo_Right
            | NthCo_Int | NthCo_Co
            | InstCo_Co | InstCo_Type
@@ -523,6 +524,7 @@ showCrumb = \case
                UnsafeCo_Left     -> "unsafe-left"
                UnsafeCo_Right    -> "unsafe-right"
                SymCo_Co          -> "sym-co"
+               SubCo_Co          -> "sub-co"
                TransCo_Left      -> "trans-left"
                TransCo_Right     -> "trans-right"
                NthCo_Co          -> "nth-co"
