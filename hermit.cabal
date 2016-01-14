@@ -146,8 +146,7 @@ library
                     stm                 >= 2.4,
                     temporary           >= 1.2.0.3,
                     terminal-size       >= 0.3.2,
-                    transformers        >= 0.2,
-                    transformers-compat >= 0.4
+                    transformers        >= 0.4
 
   if os(windows)
     build-depends:  Win32
