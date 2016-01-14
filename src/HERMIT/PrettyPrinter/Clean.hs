@@ -420,6 +420,7 @@ ppCoercionR :: Transform PrettyC HermitM Coercion RetExpr
 ppCoercionR =
     coVarCoT (RetAtom <$> ppVarOcc)
  <+ symCoT (ppCoercionR >>> parenExpr >>^ \ co -> RetExpr (coKeyword "sym" <+> co))
+ <+ subCoT (ppCoercionR >>> parenExpr >>^ \ co -> RetExpr (coKeyword "sub" <+> co))
  <+ forAllCoT ppBinderMode ppCoercionR retForAll
  <+ transCoT (ppCoercionR >>> parenExprExceptApp) (ppCoercionR >>> parenExprExceptApp) (\ co1 co2 -> RetExpr (co1 <+> coChar ';' <+> co2))
  <+ nthCoT (arr show) (ppCoercionR >>> parenExpr) (\ n co -> RetExpr (coKeyword "nth" <+> coText n <+> co))

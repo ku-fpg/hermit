@@ -83,6 +83,7 @@ module HERMIT.Kure
     , nthCoT, nthCoAllR, nthCoAnyR, nthCoOneR
     , instCoT, instCoAllR, instCoAnyR, instCoOneR
     , lrCoT, lrCoAllR, lrCoAnyR, lrCoOneR
+    , subCoT, subCoR
       -- ** Lemmas
     , conjT, conjAllR
     , disjT, disjAllR
@@ -205,6 +206,7 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c Coerc
                         AppCo{}       -> appCoAllR r r
                         ForAllCo{}    -> forAllCoAllR idR r
                         SymCo{}       -> symCoR r
+                        SubCo{}       -> subCoR r
                         TransCo{}     -> transCoAllR r r
                         NthCo{}       -> nthCoAllR idR r
                         InstCo{}      -> instCoAllR r idR
@@ -230,6 +232,7 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c TyCo 
                               AppCo{}       -> appCoAllR (extractR r) (extractR r)
                               ForAllCo{}    -> forAllCoAllR idR (extractR r) -- we don't descend into the TyVar
                               SymCo{}       -> symCoR (extractR r)
+                              SubCo{}       -> subCoR (extractR r)
                               TransCo{}     -> transCoAllR (extractR r) (extractR r)
                               InstCo{}      -> instCoAllR (extractR r) (extractR r)
                               NthCo{}       -> nthCoAllR idR (extractR r) -- we don't descend into the Int
@@ -1285,6 +1288,18 @@ instCoAnyR r1 r2 = unwrapAnyR $ instCoAllR (wrapAnyR r1) (wrapAnyR r2)
 instCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewrite c m Type -> Rewrite c m Coercion
 instCoOneR r1 r2 = unwrapOneR $ instCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE instCoOneR #-}
+
+-- | Transform a coercion of the form: @SubCo@ 'Coercion'
+subCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion b -> Transform c m Coercion b
+subCoT t = transform $ \ c -> \case
+                                   SubCo co -> applyT t (c @@ SubCo_Co) co
+                                   _        -> fail "not a sub coercion."
+{-# INLINE subCoT #-}
+
+-- | Rewrite the 'Coercion' child of a coercion of the form: @SubCo@ 'Coercion'
+subCoR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Coercion -> Rewrite c m Coercion
+subCoR r = subCoT (SubCo <$> r)
+{-# INLINE subCoR #-}
 
 ---------------------------------------------------------------------
 

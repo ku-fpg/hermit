@@ -111,6 +111,7 @@ ppKindOrType =
 ppCoercion :: PrettyH Coercion
 ppCoercion =  coVarCoT (ppVar >>^ \ v -> coText "CoVarCo" <+> v)
            <+ symCoT (ppCoercion >>^ \ co -> coText "SymCo" $$ nest 2 (parens co))
+           <+ subCoT (ppCoercion >>^ \ co -> coText "SubCo" $$ nest 2 (parens co))
            <+ appCoT ppCoercion ppCoercion (\ co1 co2 -> coText "AppCo" $$ nest 2 (cat [parens co1, parens co2]))
            <+ forAllCoT ppVar ppCoercion (\ v co -> coText "ForAllCo" <+> v $$ nest 2 (parens co))
            <+ transCoT ppCoercion ppCoercion (\ co1 co2 -> coText "TransCo" $$ nest 2 (cat [parens co1, parens co2]))
@@ -121,7 +122,7 @@ ppCoercion =  coVarCoT (ppVar >>^ \ v -> coText "CoVarCo" <+> v)
            <+ axiomInstCoT ppSDoc ppSDoc (const ppCoercion) (\ ax idx coes -> coText "AxiomInstCo" <+> ax <+> idx $$ nest 2 (vlist $ map parens coes))
            <+ lrCoT ppSDoc ppCoercion (\ lr co -> coText "LRCo" <+> lr $$ nest 2 (parens co))
            <+ tyConAppCoT ppSDoc (const ppCoercion) (\ r con coes -> coText "TyConAppCo" <+> coText (showRole r) <+> con $$ nest 2 (vlist $ map parens coes))
-           -- TODO: add UnivCo and SubCo
+           -- TODO: add UnivCo
 
 ppVar :: PrettyH Var
 ppVar = readerT $ \ v -> ppSDoc >>^ modCol v

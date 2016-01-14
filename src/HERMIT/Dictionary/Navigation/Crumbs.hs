@@ -81,6 +81,8 @@ crumbExternals = map (.+ Navigation)
         [ "Descend into the right-hand type of an unsafe coercion." ]
     , external "sym-co" SymCo_Co
         [ "Descend into the coercion within a symmetric coercion." ]
+    , external "sub-co" SubCo_Co
+        [ "Descend into the coercion within a sub coercion." ]
     , external "trans-left" TransCo_Left
         [ "Descend into the left-hand type of a transitive coercion." ]
     , external "trans-right" TransCo_Right
