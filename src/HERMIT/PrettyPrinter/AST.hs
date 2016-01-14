@@ -122,7 +122,8 @@ ppCoercion =  coVarCoT (ppVar >>^ \ v -> coText "CoVarCo" <+> v)
            <+ axiomInstCoT ppSDoc ppSDoc (const ppCoercion) (\ ax idx coes -> coText "AxiomInstCo" <+> ax <+> idx $$ nest 2 (vlist $ map parens coes))
            <+ lrCoT ppSDoc ppCoercion (\ lr co -> coText "LRCo" <+> lr $$ nest 2 (parens co))
            <+ tyConAppCoT ppSDoc (const ppCoercion) (\ r con coes -> coText "TyConAppCo" <+> coText (showRole r) <+> con $$ nest 2 (vlist $ map parens coes))
-           -- TODO: add UnivCo
+           <+ univCoT ppKindOrType ppKindOrType (\ s r dom ran -> coText "UnivCo" <+> coText (show s) <+> coText (showRole r) $$ nest 2 (cat [parens dom, parens ran]))
+           -- Should there be a catch-all here?
 
 ppVar :: PrettyH Var
 ppVar = readerT $ \ v -> ppSDoc >>^ modCol v

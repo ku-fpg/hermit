@@ -84,6 +84,7 @@ module HERMIT.Kure
     , instCoT, instCoAllR, instCoAnyR, instCoOneR
     , lrCoT, lrCoAllR, lrCoAnyR, lrCoOneR
     , subCoT, subCoR
+    , univCoT, univCoAllR, univCoAnyR, univCoOneR
       -- ** Lemmas
     , conjT, conjAllR
     , disjT, disjAllR
@@ -238,6 +239,7 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c TyCo 
                               NthCo{}       -> nthCoAllR idR (extractR r) -- we don't descend into the Int
                               LRCo{}        -> lrCoAllR idR (extractR r)
                               AxiomInstCo{} -> axiomInstCoAllR idR idR (const $ extractR r) -- we don't descend into the axiom or index
+                              UnivCo{}      -> univCoAllR (extractR r) (extractR r) -- we don't descend into the provenance (FastString) or role
                               _             -> idR
       {-# INLINE allRcoercion #-}
 
@@ -1300,6 +1302,28 @@ subCoT t = transform $ \ c -> \case
 subCoR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Coercion -> Rewrite c m Coercion
 subCoR r = subCoT (SubCo <$> r)
 {-# INLINE subCoR #-}
+
+-- | Transform a coercion of the form: @UnivCo@ 'FastString' 'Role' 'Type' 'Type'
+univCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> Transform c m Type a2 -> (FastString -> Role -> a1 -> a2 -> b) -> Transform c m Coercion b
+univCoT t1 t2 f = transform $ \ c -> \case
+                                     UnivCo s r dom ran -> f s r <$> applyT t1 (c @@ UnivCo_Dom) dom <*> applyT t2 (c @@ UnivCo_Ran) ran
+                                     _         -> fail "not a universal coercion."
+{-# INLINE univCoT #-}
+
+-- | Rewrite all children of a coercion of the form: @UnivCo@ 'FastString' 'Role' 'Type' 'Type'
+univCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Type -> Rewrite c m Type -> Rewrite c m Coercion
+univCoAllR r1 r2 = univCoT r1 r2 UnivCo
+{-# INLINE univCoAllR #-}
+
+-- | Rewrite any children of a coercion of the form: @UnivCo@ 'FastString' 'Role' 'Type' 'Type'
+univCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Type -> Rewrite c m Type -> Rewrite c m Coercion
+univCoAnyR r1 r2 = unwrapAnyR $ univCoAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE univCoAnyR #-}
+
+-- | Rewrite one child of a coercion of the form: @UnivCo@ 'FastString' 'Role' 'Type' 'Type'
+univCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Type -> Rewrite c m Type -> Rewrite c m Coercion
+univCoOneR r1 r2 = unwrapOneR $ univCoAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE univCoOneR #-}
 
 ---------------------------------------------------------------------
 

@@ -95,6 +95,10 @@ crumbExternals = map (.+ Navigation)
         [ "Descend into the type within a coercion instantiation." ]
     , external "lr-co" LRCo_Co
         [ "Descend into the coercion within a left/right projection coercion." ]
+    , external "univ-dom" UnivCo_Dom
+        [ "Descend into the domain type within a universal coercion." ]
+    , external "univ-ran" UnivCo_Ran
+        [ "Descend into the range type within a universal coercion." ]
     , external "forall-body" Forall_Body
         [ "Descend into the body of a quantified clause." ]
     , external "conj-lhs" Conj_Lhs
