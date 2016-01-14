@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 
 module HERMIT.Plugin.Display
     ( showDisplay
@@ -17,8 +16,6 @@ import HERMIT.Kernel (queryK, CommitMsg(..))
 import HERMIT.Kure
 import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
-
-import Prelude.Compat
 
 import System.IO
 

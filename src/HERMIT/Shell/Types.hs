@@ -1,4 +1,4 @@
-        {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -7,7 +7,6 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -18,8 +17,7 @@ module HERMIT.Shell.Types where
 
 import           Control.Arrow
 import           Control.Concurrent.STM
-import           Control.Monad (unless, when) -- requires Monad context on GHC 7.8
-import           Control.Monad.Compat hiding (unless, when)
+import           Control.Monad 
 import           Control.Monad.Error.Class (MonadError(..))
 import           Control.Monad.IO.Class (MonadIO(..))
 import           Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
@@ -47,8 +45,6 @@ import           HERMIT.PrettyPrinter.Glyphs
 import           HERMIT.Plugin.Display
 import           HERMIT.Plugin.Renderer
 import           HERMIT.Plugin.Types
-
-import           Prelude.Compat hiding ((<$>))
 
 import           System.Console.Haskeline hiding (catch, display)
 import           System.Console.Terminal.Size (Window(..), size)

@@ -4,7 +4,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -27,8 +26,6 @@ import HERMIT.Kernel
 import HERMIT.Monad
 import HERMIT.Plugin.Builder
 import HERMIT.PrettyPrinter.Common
-
-import Prelude.Compat
 
 import System.IO
 

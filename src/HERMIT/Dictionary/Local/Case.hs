@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -40,7 +39,7 @@ module HERMIT.Dictionary.Local.Case
     ) where
 
 import Control.Arrow
-import Control.Monad.Compat
+import Control.Monad
 import Control.Monad.IO.Class
 
 import Data.List (intersect, transpose)
@@ -62,8 +61,6 @@ import HERMIT.Dictionary.Fold hiding (externals)
 import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.Undefined (verifyStrictT, buildStrictnessLemmaT)
 import HERMIT.Dictionary.Unfold (unfoldR)
-
-import Prelude.Compat hiding ((<$>))
 
 ------------------------------------------------------------------------------
 

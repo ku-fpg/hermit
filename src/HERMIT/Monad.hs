@@ -3,7 +3,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 module HERMIT.Monad
@@ -33,10 +32,9 @@ module HERMIT.Monad
     , sendKEnvMessage
     ) where
 
-import Prelude.Compat hiding (lookup)
+import Prelude hiding (lookup)
 
-import Control.Monad (when) -- Needs to have Monad context on GHC 7.8
-import Control.Monad.Compat hiding (when)
+import Control.Monad 
 import Control.Monad.IO.Class
 
 import Data.Map

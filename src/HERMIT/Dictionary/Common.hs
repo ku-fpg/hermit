@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Note: this module should NOT export externals. It is for common
@@ -46,7 +45,7 @@ module HERMIT.Dictionary.Common
 
 where
 
-import Data.List.Compat (nub)
+import Data.List (nub)
 
 import Control.Arrow
 import Control.Monad.IO.Class
@@ -57,8 +56,6 @@ import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Name
-
-import Prelude.Compat
 
 ------------------------------------------------------------------------------
 

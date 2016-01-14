@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module HERMIT.Dictionary.FixPoint
@@ -18,7 +17,7 @@ module HERMIT.Dictionary.FixPoint
     ) where
 
 import Control.Arrow
-import Control.Monad.Compat
+import Control.Monad
 import Control.Monad.IO.Class
 
 import Data.String (fromString)
@@ -26,7 +25,7 @@ import Data.String (fromString)
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.Monad
-import HERMIT.Kure hiding ((<$>))
+import HERMIT.Kure 
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Name
@@ -39,8 +38,6 @@ import HERMIT.Dictionary.Kure
 import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Undefined
 import HERMIT.Dictionary.Unfold
-
-import Prelude.Compat
 
 --------------------------------------------------------------------------------------------------
 

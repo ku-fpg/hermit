@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module HERMIT.Dictionary.Local.Let
@@ -46,8 +45,7 @@ module HERMIT.Dictionary.Local.Let
     ) where
 
 import Control.Arrow
-import Control.Monad (when) -- Needs to have Monad context on GHC 7.8
-import Control.Monad.Compat hiding (when)
+import Control.Monad 
 import Control.Monad.IO.Class
 
 import Data.List (intersect, partition)
@@ -68,8 +66,6 @@ import HERMIT.Dictionary.Inline hiding (externals)
 import HERMIT.Dictionary.AlphaConversion hiding (externals)
 
 import HERMIT.Dictionary.Local.Bind hiding (externals)
-
-import Prelude.Compat hiding ((<$))
 
 ------------------------------------------------------------------------------
 
@@ -239,9 +235,6 @@ letNonRecSubstSafeR =
              occurrencesT = prunetdT (promoteExprT lamOccurrenceT <+ (Sum 1 <$ occursHereT))
 
          extractT occurrencesT >>^ (getSum >>> (< 2))
-
-(<$) :: Monad m => a -> m b -> m a
-a <$ mb = mb >> return a
 
 -------------------------------------------------------------------------------------------
 

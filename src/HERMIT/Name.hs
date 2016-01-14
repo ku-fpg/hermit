@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -50,10 +49,10 @@ module HERMIT.Name
     , findInNameSpaces
     ) where
 
-import Control.Monad.Compat
+import Control.Monad
 import Control.Monad.IO.Class
 
-import Data.List.Compat (intercalate)
+import Data.List (intercalate)
 import Data.Dynamic (Typeable)
 import Data.String (IsString(..))
 
@@ -62,8 +61,6 @@ import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
 import HERMIT.Monad
-
-import Prelude.Compat hiding ((<$>), (<*>))
 
 -- | Possible results from name lookup.
 -- Invariant: One constructor for each NameSpace.

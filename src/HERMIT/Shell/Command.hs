@@ -1,11 +1,10 @@
-        {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -29,13 +28,13 @@ module HERMIT.Shell.Command
     , stubExprH
     ) where
 
-import Control.Monad.Compat
+import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.State (get, gets, modify)
 
 import Data.Char
-import Data.List.Compat (isPrefixOf, partition)
+import Data.List (isPrefixOf, partition)
 import Data.Maybe
 import Data.Typeable
 
@@ -62,8 +61,6 @@ import HERMIT.Shell.Types
 #ifdef mingw32_HOST_OS
 import HERMIT.Win32.Console
 #endif
-
-import Prelude.Compat hiding ((<$>))
 
 import System.IO
 

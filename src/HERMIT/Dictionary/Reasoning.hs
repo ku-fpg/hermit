@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -75,7 +74,7 @@ module HERMIT.Dictionary.Reasoning
     ) where
 
 import           Control.Arrow hiding ((<+>))
-import           Control.Monad.Compat
+import           Control.Monad
 
 import           Data.Either (partitionEithers)
 import           Data.List (isInfixOf, nubBy)
@@ -103,8 +102,6 @@ import           HERMIT.Dictionary.GHC hiding (externals)
 import           HERMIT.Dictionary.Local.Let (nonRecIntroR)
 
 import           HERMIT.PrettyPrinter.Common
-
-import           Prelude.Compat hiding ((<$>), (<*>))
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 

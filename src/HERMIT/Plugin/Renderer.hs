@@ -1,14 +1,13 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 
 module HERMIT.Plugin.Renderer where
 
 import Control.Arrow
 import Control.Monad.State
 
-import Data.List.Compat (isInfixOf, isPrefixOf, isSuffixOf)
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
 import Data.Typeable
 
 import HERMIT.Dictionary (traceR)
@@ -18,8 +17,6 @@ import HERMIT.PrettyPrinter.Common
 #ifdef mingw32_HOST_OS
 import HERMIT.Win32.IO (hPutStr, hPutStrLn)
 #endif
-
-import Prelude.Compat
 
 import System.Console.ANSI
 #ifdef mingw32_HOST_OS

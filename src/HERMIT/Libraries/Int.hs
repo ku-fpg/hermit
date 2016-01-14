@@ -1,4 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module HERMIT.Libraries.Int where
@@ -8,13 +7,11 @@ import Control.Arrow
 import qualified Data.Map as M
 
 import HERMIT.GHC hiding (intTy)
-import HERMIT.Kure hiding ((<$>))
+import HERMIT.Kure 
 import HERMIT.Lemma
 import HERMIT.Name
 import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.GHC
-
-import Prelude.Compat
 
 {-
 Defines the following lemmas:

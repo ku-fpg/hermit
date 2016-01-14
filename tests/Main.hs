@@ -1,24 +1,25 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ViewPatterns #-}
 module Main (main) where
 
 import Constants (hiVersion)
-import Control.Monad.Compat
+import Control.Monad
 
 import Data.Char (isSpace)
-import Data.List.Compat
+import Data.List
 import Data.Maybe (listToMaybe)
 
 import GHC.Paths (ghc)
 
 import HERMIT.Driver
 
-import Prelude.Compat
-
 import System.Directory
 import System.FilePath as F
+#if defined(darwin_HOST_OS)
+import System.Info (arch)
+#else
 import System.Info (arch, os)
+#endif
 import System.IO
 import System.IO.Temp (withSystemTempFile)
 import System.Process

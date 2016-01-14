@@ -1,4 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TupleSections #-}
 
 module HERMIT.Dictionary.WorkerWrapper.FixResult
@@ -24,7 +23,7 @@ module HERMIT.Dictionary.WorkerWrapper.FixResult
     , wwResultSplit
     ) where
 
-import Prelude.Compat hiding (abs)
+import Prelude hiding (abs)
 
 import Control.Arrow
 
@@ -33,7 +32,7 @@ import Data.String (fromString)
 import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
-import HERMIT.Kure hiding ((<$>))
+import HERMIT.Kure 
 import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.Name

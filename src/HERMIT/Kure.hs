@@ -3,7 +3,6 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -91,12 +90,7 @@ module HERMIT.Kure
     , implT, implAllR
     , equivT, equivAllR
     , forallT, forallR, forallsT, forallsR
-      -- * Applicative
-    , (<$>)
-    , (<*>)
     ) where
-
-import Control.Monad.Compat (ap, liftM)
 
 import Language.KURE
 import Language.KURE.BiTransform
@@ -111,8 +105,6 @@ import HERMIT.Kure.Universes
 import HERMIT.Lemma
 import HERMIT.Monad
 
-import Prelude.Compat hiding ((<$>), (<*>))
-
 ---------------------------------------------------------------------
 
 type TransformH a b = Transform HermitC HermitM a b
@@ -120,16 +112,6 @@ type RewriteH a     = Rewrite   HermitC HermitM a
 type BiRewriteH a   = BiRewrite HermitC HermitM a
 type LensH a b      = Lens      HermitC HermitM a b
 type PathH          = Path Crumb
-
--- It is annoying that Applicative is not a superclass of Monad in 7.8.
--- This causes a warning which we ignore.
-(<$>) :: Monad m => (a -> b) -> m a -> m b
-(<$>) = liftM
-{-# INLINE (<$>) #-}
-
-(<*>) :: Monad m => m (a -> b) -> m a -> m b
-(<*>) = ap
-{-# INLINE (<*>) #-}
 
 ---------------------------------------------------------------------
 

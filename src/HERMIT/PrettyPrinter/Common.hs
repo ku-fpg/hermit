@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -71,8 +70,6 @@ import HERMIT.GHC hiding (($$), (<>), (<+>), char, text, keyword)
 import HERMIT.Kure
 import HERMIT.Lemma
 import HERMIT.Monad
-
-import Prelude.Compat
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
 

@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -23,7 +22,7 @@ module HERMIT.Shell.ScriptToRewrite
     ) where
 
 import Control.Arrow
-import Control.Monad.Compat (forM)
+import Control.Monad (forM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (asks)
 import Control.Monad.State (MonadState, gets, modify)
@@ -47,8 +46,6 @@ import HERMIT.Shell.KernelEffect
 import HERMIT.Shell.Interpreter
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
-
-import Prelude.Compat hiding ((<$>))
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 ------------------------------------

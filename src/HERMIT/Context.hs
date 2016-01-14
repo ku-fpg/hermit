@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -52,9 +51,9 @@ module HERMIT.Context
     , HasEmptyContext(..)
     ) where
 
-import Prelude.Compat hiding (lookup)
+import Prelude hiding (lookup)
 
-import Control.Monad.Compat (liftM)
+import Control.Monad
 
 import Data.Map hiding (map, foldr, filter)
 import Data.Typeable

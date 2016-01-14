@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -24,7 +23,7 @@ module HERMIT.Dictionary.Fold
     ) where
 
 import Control.Arrow
-import Control.Monad.Compat (liftM)
+import Control.Monad (liftM)
 import Control.Monad.IO.Class
 
 import Data.List (delete, (\\), intersect)
@@ -37,7 +36,7 @@ import HERMIT.Core
 import HERMIT.Context
 import HERMIT.External
 import HERMIT.GHC
-import HERMIT.Kure hiding ((<$>))
+import HERMIT.Kure 
 import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.Name
@@ -46,7 +45,7 @@ import HERMIT.Utilities
 import HERMIT.Dictionary.Common (varBindingDepthT,findIdT)
 import HERMIT.Dictionary.Inline hiding (externals)
 
-import Prelude.Compat hiding (exp)
+import Prelude hiding (exp)
 
 ------------------------------------------------------------------------
 

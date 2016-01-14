@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 
 module HERMIT.Lemma
     ( -- * Clause
@@ -29,9 +28,9 @@ module HERMIT.Lemma
     , NamedLemma
     ) where
 
-import Prelude.Compat hiding (lookup)
+import Prelude hiding (lookup)
 
-import Control.Monad.Compat
+import Control.Monad
 
 import Data.Dynamic (Typeable)
 import Data.String (IsString(..))

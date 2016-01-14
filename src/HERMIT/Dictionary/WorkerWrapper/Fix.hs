@@ -1,5 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-
 module HERMIT.Dictionary.WorkerWrapper.Fix
     ( -- * The Worker/Wrapper Transformation
       -- | Note that many of these operations require 'Data.Function.fix' to be in scope.
@@ -25,7 +23,7 @@ import Data.String (fromString)
 import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC
-import HERMIT.Kure hiding ((<$>))
+import HERMIT.Kure 
 import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.Name
@@ -42,8 +40,6 @@ import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Unfold
 
 import HERMIT.Dictionary.WorkerWrapper.Common
-
-import Prelude.Compat
 
 --------------------------------------------------------------------------------------------------
 

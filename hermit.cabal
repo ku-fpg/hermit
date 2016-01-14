@@ -134,7 +134,6 @@ library
   build-depends:    base                >= 4.7 && < 5,
                     ansi-terminal       >= 0.5.5,
                     array,
-                    base-compat         >= 0.8.1,
                     containers          >= 0.5.0.0,
                     data-default-class  >= 0.0.1,
                     directory           >= 1.2.0.0,
@@ -259,7 +258,6 @@ executable hermit
 test-suite hermit-tests
     type:              exitcode-stdio-1.0
     build-depends:     base         >= 4.7 && < 5,
-                       base-compat  >= 0.8.1,
                        directory    >= 1.2,
                        filepath,
                        ghc,
