@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -269,7 +270,11 @@ instClause inScope p e = prefixFailMsg "clause instantiation failed: " . liftM f
 -- | The function which 'bubbles up' after the instantiation takes place,
 -- replacing any type variables that were instantiated as a result of specialization
 -- and rebuilding the foralls.
+#if __GLASGOW_HASKELL__ > 710
+replaceVars :: TCvSubst -> [Var] -> Clause -> Clause
+#else
 replaceVars :: TvSubst -> [Var] -> Clause -> Clause
+#endif
 replaceVars sub vs = go (reverse vs)
     where go [] cl = cl
           go (b:bs) cl

@@ -47,7 +47,6 @@ import qualified Data.Map as M
 import HERMIT.Dictionary
 import HERMIT.External
 import HERMIT.Kernel
-import HERMIT.Context
 import HERMIT.Kure hiding (apply)
 import HERMIT.GHC hiding (singleton, liftIO)
 import qualified HERMIT.GHC as GHC
@@ -116,13 +115,13 @@ abort = throwError PAbort
 resume :: PluginM a
 resume = gets ps_cursor >>= throwError . PResume
 
-apply :: (Injection GHC.ModGuts g, Walker HermitC g) => CommitMsg -> RewriteH g -> PluginM ()
+apply :: (Injection GHC.ModGuts g) => CommitMsg -> RewriteH g -> PluginM ()
 apply cm rr = do
     kernel <- asks pr_kernel
     env <- gets mkKernelEnv
     runA (applyK kernel (extractR rr) cm env)
 
-query :: (Injection GHC.ModGuts g, Walker HermitC g) => CommitMsg -> TransformH g a -> PluginM a
+query :: (Injection GHC.ModGuts g) => CommitMsg -> TransformH g a -> PluginM a
 query cm tr = do
     kernel <- asks pr_kernel
     env <- gets mkKernelEnv

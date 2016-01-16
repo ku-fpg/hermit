@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module HERMIT.Libraries.Int where
@@ -39,12 +40,20 @@ lemmas = do
 
     let n = varToCoreExpr nId
         m = varToCoreExpr mId
+#if __GLASGOW_HASKELL__ > 710
+        appTo i e = return $ mkCoreApp (text "appTo") (varToCoreExpr i) e
+#else
         appTo i e = return $ mkCoreApp (varToCoreExpr i) e
+#endif
         appToInt i = appTo i (Type intTy)
         appToDict e = do
             let (aTys, _) = splitFunTys (exprType e)
             case aTys of
+#if __GLASGOW_HASKELL__ > 710
+                (ty:_) | isDictTy ty -> return ty >>> buildDictionaryT >>> arr (mkCoreApp (text "appToDict") e)
+#else
                 (ty:_) | isDictTy ty -> return ty >>> buildDictionaryT >>> arr (mkCoreApp e)
+#endif
                 _ -> fail "first argument is not a dictionary."
 
         appMN e = mkCoreApps e [m,n]

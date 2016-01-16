@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
@@ -186,27 +187,61 @@ typeSyntaxEq :: Type -> Type -> Bool
 typeSyntaxEq (TyVarTy v1)      (TyVarTy v2)         = v1 == v2
 typeSyntaxEq (LitTy l1)        (LitTy l2)           = l1 == l2
 typeSyntaxEq (AppTy t1 ty1)    (AppTy t2 ty2)       = typeSyntaxEq t1 t2 && typeSyntaxEq ty1 ty2
+#if __GLASGOW_HASKELL__ > 710
+typeSyntaxEq (ForAllTy b1 ty1) (ForAllTy b2 ty2)    = tyBinderSyntaxEq b1 b2 && typeSyntaxEq ty1 ty2
+#else
 typeSyntaxEq (FunTy t1 ty1)    (FunTy t2 ty2)       = typeSyntaxEq t1 t2 && typeSyntaxEq ty1 ty2
 typeSyntaxEq (ForAllTy v1 ty1) (ForAllTy v2 ty2)    = v1 == v2 && typeSyntaxEq ty1 ty2
+#endif
 typeSyntaxEq (TyConApp c1 ts1) (TyConApp c2 ts2)    = c1 == c2 && all2 typeSyntaxEq ts1 ts2
 typeSyntaxEq _                 _                    = False
+
+#if __GLASGOW_HASKELL__ > 710
+tyBinderSyntaxEq :: TyBinder -> TyBinder -> Bool
+tyBinderSyntaxEq (Named v1 f1) (Named v2 f2) = v1 == v2 && f1 == f2
+tyBinderSyntaxEq (Anon t1)     (Anon t2)     = typeSyntaxEq t1 t2
+tyBinderSyntaxEq _             _             = False
+#endif
 
 -- | Syntactic Equality of 'Coercion's.
 coercionSyntaxEq :: Coercion -> Coercion -> Bool
 coercionSyntaxEq (Refl role1 ty1)        (Refl role2 ty2)        = role1 == role2 && typeSyntaxEq ty1 ty2
 coercionSyntaxEq (TyConAppCo role1 tc1 cos1) (TyConAppCo role2 tc2 cos2) = role1 == role2 && tc1 == tc2 && all2 coercionSyntaxEq cos1 cos2
 coercionSyntaxEq (AppCo co11 co12)       (AppCo co21 co22)       = coercionSyntaxEq co11 co21 && coercionSyntaxEq co12 co22
+#if __GLASGOW_HASKELL__ > 710
+coercionSyntaxEq (ForAllCo v1 c1k c1)    (ForAllCo v2 c2k c2)    = v1 == v2 && coercionSyntaxEq c1k c2k && coercionSyntaxEq c1 c2
+#else
 coercionSyntaxEq (ForAllCo v1 co1)       (ForAllCo v2 co2)       = v1 == v2 && coercionSyntaxEq co1 co2
+#endif
 coercionSyntaxEq (CoVarCo v1)            (CoVarCo v2)            = v1 == v2
 coercionSyntaxEq (AxiomInstCo con1 ind1 cos1) (AxiomInstCo con2 ind2 cos2) = con1 == con2 && ind1 == ind2 && all2 coercionSyntaxEq cos1 cos2
 coercionSyntaxEq (LRCo lr1 co1)          (LRCo lr2 co2)          = lr1 == lr2 && coercionSyntaxEq co1 co2
+#if __GLASGOW_HASKELL__ > 710
+coercionSyntaxEq (UnivCo p1 role1 ty11 ty12) (UnivCo p2 role2 ty21 ty22) = ucpSyntaxEq p1 p2 && role1 == role2 && typeSyntaxEq ty11 ty21 && typeSyntaxEq ty12 ty22
+#else
 coercionSyntaxEq (UnivCo fs1 role1 ty11 ty12) (UnivCo fs2 role2 ty21 ty22) = fs1 == fs2 && role1 == role2 && typeSyntaxEq ty11 ty21 && typeSyntaxEq ty12 ty22
+#endif
 coercionSyntaxEq (SubCo co1)             (SubCo co2)             = coercionSyntaxEq co1 co2
 coercionSyntaxEq (SymCo co1)             (SymCo co2)             = coercionSyntaxEq co1 co2
 coercionSyntaxEq (TransCo co11 co12)     (TransCo co21 co22)     = coercionSyntaxEq co11 co21 && coercionSyntaxEq co12 co22
 coercionSyntaxEq (NthCo n1 co1)          (NthCo n2 co2)          = n1 == n2 && coercionSyntaxEq co1 co2
+#if __GLASGOW_HASKELL__ > 710
+coercionSyntaxEq (InstCo c11 c12)        (InstCo c21 c22)        = coercionSyntaxEq c11 c21 && coercionSyntaxEq c12 c22
+#else
 coercionSyntaxEq (InstCo co1 ty1)        (InstCo co2 ty2)        = coercionSyntaxEq co1 co2 && typeSyntaxEq ty1 ty2
+#endif
 coercionSyntaxEq _                       _                       = False
+
+#if __GLASGOW_HASKELL__ > 710
+ucpSyntaxEq :: UnivCoProvenance -> UnivCoProvenance -> Bool
+ucpSyntaxEq UnsafeCoerceProv    UnsafeCoerceProv    = True
+ucpSyntaxEq (PhantomProv c1)    (PhantomProv c2)    = coercionSyntaxEq c1 c2
+ucpSyntaxEq (PluginProv s1)     (PluginProv s2)     = s1 == s2
+ucpSyntaxEq (ProofIrrelProv c1) (ProofIrrelProv c2) = coercionSyntaxEq c1 c2
+ucpSyntaxEq (HoleProv _)        _                   = error "ucpSyntaxEq: impossible HoleProv"
+ucpSyntaxEq _                   (HoleProv _)        = error "ucpSyntaxEq: impossible HoleProv"
+ucpSyntaxEq _                   _                   = False
+#endif
 
 -----------------------------------------------------------------------
 
@@ -256,7 +291,12 @@ typeAlphaEq = eqType
 
 -- | Alpha equality of coercions.
 coercionAlphaEq :: Coercion -> Coercion -> Bool
+#if __GLASGOW_HASKELL__ > 710
+coercionAlphaEq c1 c2 = eqCoercionX env c1 c2
+  where env = mkRnEnv2 (mkInScopeSet (tyCoVarsOfCo c1 `unionVarSet` tyCoVarsOfCo c2))
+#else
 coercionAlphaEq = coreEqCoercion
+#endif
 
 -----------------------------------------------------------------------
 
@@ -327,7 +367,11 @@ freeVarsBind (Rec defs)   = let (bs,es) = unzip defs
 
 -- | Find all free variables on a binder. Equivalent to idFreeVars, but safe to call on type bindings.
 freeVarsVar :: Var -> VarSet
+#if __GLASGOW_HASKELL__ > 710
+freeVarsVar v = varTypeTyCoVars v `unionVarSet` bndrRuleAndUnfoldingVars v
+#else
 freeVarsVar v = varTypeTyVars v `unionVarSet` bndrRuleAndUnfoldingVars v
+#endif
 
 -- | Find all free variables in a recursive definition, which excludes the bound variable.
 freeVarsDef :: CoreDef -> VarSet
@@ -349,7 +393,11 @@ freeVarsProg = \case
 
 -- | Find all free variables in a type.
 freeVarsType :: Type -> TyVarSet
+#if __GLASGOW_HASKELL__ > 710
+freeVarsType = tyCoVarsOfType
+#else
 freeVarsType = tyVarsOfType
+#endif
 
 -- | Find all free variables in a coercion.
 freeVarsCoercion :: Coercion -> VarSet
@@ -459,11 +507,20 @@ data Crumb =
            | TyConApp_TyCon | TyConApp_Arg Int
            | FunTy_Dom | FunTy_CoDom
            | ForAllTy_Var | ForAllTy_Body
+#if __GLASGOW_HASKELL__ > 710
+           | CastTy_Ty | CastTy_Co
+           | CoercionTy_Co
+#endif
            -- Coercion
            | Refl_Type
            | TyConAppCo_TyCon | TyConAppCo_Arg Int
            | AppCo_Fun | AppCo_Arg
-           | ForAllCo_TyVar | ForAllCo_Body
+           | ForAllCo_TyVar 
+#if __GLASGOW_HASKELL__ > 710
+           | ForAllCo_KindCo | ForAllCo_Co
+#else
+           | ForAllCo_Body
+#endif
            | CoVarCo_CoVar
            | AxiomInstCo_Axiom | AxiomInstCo_Index | AxiomInstCo_Arg Int
            | UnsafeCo_Left | UnsafeCo_Right
@@ -471,7 +528,11 @@ data Crumb =
            | SubCo_Co
            | TransCo_Left | TransCo_Right
            | NthCo_Int | NthCo_Co
+#if __GLASGOW_HASKELL__ > 710
+           | InstCo_Left | InstCo_Right
+#else
            | InstCo_Co | InstCo_Type
+#endif
            | LRCo_LR | LRCo_Co
            | UnivCo_Dom | UnivCo_Ran
            -- Quantified
@@ -515,12 +576,22 @@ showCrumb = \case
                FunTy_Dom      -> "fun-dom"
                FunTy_CoDom    -> "fun-cod"
                ForAllTy_Body  -> "forall-body"
+#if __GLASGOW_HASKELL__ > 710
+               CastTy_Ty      -> "castTy-ty"
+               CastTy_Co      -> "castTy-co"
+               CoercionTy_Co  -> "coercionTy-co"
+#endif
                -- Coercions
                Refl_Type         -> "refl-type"
                TyConAppCo_Arg n  -> "coCon-arg " ++ show n
                AppCo_Fun         -> "appCo-fun"
                AppCo_Arg         -> "appCo-arg"
+#if __GLASGOW_HASKELL__ > 710
+               ForAllCo_KindCo   -> "coForall-kindco"
+               ForAllCo_Co       -> "coForall-co"
+#else
                ForAllCo_Body     -> "coForall-body"
+#endif
                AxiomInstCo_Arg n -> "axiom-inst " ++ show n
                UnsafeCo_Left     -> "unsafe-left"
                UnsafeCo_Right    -> "unsafe-right"
@@ -529,8 +600,13 @@ showCrumb = \case
                TransCo_Left      -> "trans-left"
                TransCo_Right     -> "trans-right"
                NthCo_Co          -> "nth-co"
+#if __GLASGOW_HASKELL__ > 710
+               InstCo_Left       -> "inst-left"
+               InstCo_Right      -> "inst-right"
+#else
                InstCo_Co         -> "inst-co"
                InstCo_Type       -> "inst-type"
+#endif
                LRCo_Co           -> "lr-co"
                UnivCo_Dom        -> "univ-dom"
                UnivCo_Ran        -> "univ-ran"

@@ -25,13 +25,19 @@ import Data.IORef ( newIORef, readIORef )
 
 import TcEnv ( tcLookupGlobal )
 import DynFlags ( getSigOf )
+#if __GLASGOW_HASKELL__ > 710
+import Module   ( moduleName )
+#else
 import Module   ( mkModuleSet, moduleName )
+#endif
 import TcType   ( topTcLevel )
 
 import FastString
 import Bag
 
+#if __GLASGOW_HASKELL__ <= 710 
 import qualified Data.Set as Set
+#endif
 import qualified Data.Map as Map
 
 import Prelude hiding (mod)
@@ -53,13 +59,17 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
         errs_var     <- newIORef (emptyBag, emptyBag) ;
         tvs_var      <- newIORef emptyVarSet ;
         keep_var     <- newIORef emptyNameSet ;
+#if __GLASGOW_HASKELL__ > 710 
+        used_gre_var <- newIORef [] ;
+#else
         used_rdr_var <- newIORef Set.empty ;
+#endif
         th_var       <- newIORef False ;
         th_splice_var<- newIORef False ;
-#if __GLASGOW_HASKELL__ <= 710 
-        infer_var    <- newIORef True ;
-#else
+#if __GLASGOW_HASKELL__ > 710 
         infer_var    <- newIORef (True, emptyBag) ;
+#else
+        infer_var    <- newIORef True ;
 #endif
         lie_var      <- newIORef emptyWC ;
         dfun_n_var   <- newIORef (mk_dfun_n guts) ;
@@ -72,6 +82,9 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
         th_topnames_var      <- newIORef emptyNameSet ;
         th_modfinalizers_var <- newIORef [] ;
         th_state_var         <- newIORef Map.empty ;
+#if __GLASGOW_HASKELL__ > 710 
+        th_remote_state_var  <- newIORef Nothing ;
+#endif
 
         let {
              dflags = hsc_dflags hsc_env ;
@@ -134,12 +147,17 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
                 tcg_sigs           = emptyNameSet,
                 tcg_imp_specs      = [],
                 tcg_rn_decls       = maybe_rn_syntax emptyRnGroup,
+#if __GLASGOW_HASKELL__ <= 710 
                 tcg_used_rdrnames  = used_rdr_var,
+#endif
                 tcg_rn_imports     = [],
                 tcg_rn_exports     = maybe_rn_syntax [],
                 tcg_keep           = keep_var,
 #if __GLASGOW_HASKELL__ > 710 
-                tcg_self_boot  = NoSelfBoot, -- Assume there are no hsboot files
+                tcg_self_boot      = NoSelfBoot, -- Assume there are no hsboot files
+                tcg_used_gres       = used_gre_var,
+                tcg_th_remote_state = th_remote_state_var,
+                tcg_tr_module       = Nothing,
 #endif
                 tcg_th_splice_used = th_splice_var
              } ;
@@ -189,7 +207,11 @@ mk_type_env guts = typeEnvFromEntities (bindersOfBinds (mg_binds guts))
                                            (mg_fam_insts guts)
 mk_field_env :: ModGuts -> RecFieldEnv
 -- TODO
+#if __GLASGOW_HASKELL__ > 710
+mk_field_env _ = emptyNameEnv 
+#else
 mk_field_env _ = RecFields emptyNameEnv emptyNameSet
+#endif
 
 mk_dfun_n :: ModGuts -> OccSet
 -- TODO

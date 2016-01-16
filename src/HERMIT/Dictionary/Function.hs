@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -105,7 +106,11 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
         let (chosenBinds, dynBinds) = partition ((`elem` chosen) . fst) allBinds
             (ps, dbnds) = unzip dynBinds
             unboundTys = concat [ [ (i,i') | (i',b') <- dynBinds, i' < i , b' `elem` fvs ]
+#if __GLASGOW_HASKELL__ > 710
+                                | (i,b) <- chosenBinds, let fvs = varSetElems (varTypeTyCoVars b) ]
+#else
                                 | (i,b) <- chosenBinds, let fvs = varSetElems (varTypeTyVars b) ]
+#endif
 
         guardMsg (null unboundTys)
             $ "type variables in args " ++ commas (nub $ map fst unboundTys) ++ " would become unbound unless args "
@@ -113,7 +118,7 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
 
         wkr <- newIdH (unqualifiedName f ++ "'") (exprType (mkCoreLams dbnds body))
 
-        let replaceCall :: Monad m => Rewrite c m CoreExpr
+        let replaceCall :: Rewrite c m CoreExpr
             replaceCall = do
                 (_,exprs) <- callPredT (const . (== f))
                 return $ mkApps (Var wkr) [ e | (p,e) <- zip [0..] exprs, (p::Int) `elem` ps ]
@@ -162,7 +167,11 @@ buildAppM f x = do
     let vs = [ v | v <- vsF ++ vsX, isNothing $ lookupTyVar sub v ]  -- things we should stick back on as foralls
     -- TODO: make sure vsX don't capture anything in f'
     --       and vsF' doesn't capture anything in x'
+#if __GLASGOW_HASKELL__ > 710
+    return $ mkCoreLams vs $ mkCoreApp (text "buildAppM") f' x'
+#else
     return $ mkCoreLams vs $ mkCoreApp f' x'
+#endif
 
 -- | Given expression for f, build fix f.
 buildFixT :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
@@ -178,7 +187,11 @@ buildIdT :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m,
          => Type -> Transform c m x CoreExpr
 buildIdT ty = do
     idId <- findIdT $ fromString "Data.Function.id"
+#if __GLASGOW_HASKELL__ > 710
+    return $ mkCoreApp (text "buildIdT") (varToCoreExpr idId) (Type ty)
+#else
     return $ mkCoreApp (varToCoreExpr idId) (Type ty)
+#endif
 
 ------------------------------------------------------------------------------
 

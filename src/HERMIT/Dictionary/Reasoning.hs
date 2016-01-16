@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -211,7 +212,7 @@ externals =
 type EqualityProof c m = (Rewrite c m CoreExpr, Rewrite c m CoreExpr)
 
 -- | f == g  ==>  forall x.  f x == g x
-extensionalityR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb) => Maybe String -> Rewrite c HermitM Clause
+extensionalityR :: Maybe String -> Rewrite c HermitM Clause
 extensionalityR mn = prefixFailMsg "extensionality failed: " $ do
     (vs, Equiv lhs rhs) <- arr collectQs
 
@@ -221,11 +222,16 @@ extensionalityR mn = prefixFailMsg "extensionality failed: " $ do
 
     -- TODO: use the fresh-name-generator in AlphaConversion to avoid shadowing.
     (_,argTy,_) <- splitFunTypeM tyL
-    v <- constT $ newVarH (fromMaybe "x" mn) argTy
+    v <- constT $ newIdH (fromMaybe "x" mn) argTy
 
     let x = varToCoreExpr v
 
+#if __GLASGOW_HASKELL__ > 710
+    return $ mkForall vs $ Forall v $ Equiv (mkCoreApp (text "extensionalityR-lhs") lhs x) 
+                                            (mkCoreApp (text "extensionalityR-rhs") rhs x)
+#else
     return $ mkForall vs $ Forall v $ Equiv (mkCoreApp lhs x) (mkCoreApp rhs x)
+#endif
 
 ------------------------------------------------------------------------------
 
@@ -244,9 +250,7 @@ eqRhsIntroR _ = fail "compound lemmas not supported."
 ------------------------------------------------------------------------------
 
 -- | Create a 'BiRewrite' from a 'Clause'.
-birewrite :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c
-             , ReadPath c Crumb, MonadCatch m, MonadUnique m )
-          => Clause -> BiRewrite c m CoreExpr
+birewrite :: (ReadBindings c, MonadCatch m) => Clause -> BiRewrite c m CoreExpr
 birewrite cl = bidirectional (foldUnfold "left" id) (foldUnfold "right" flipEquality)
     where foldUnfold side f = transform $ \ c ->
                                 maybeM ("expression did not match "++side++"-hand side")
@@ -316,7 +320,7 @@ ppLemmaT pp nm = do
 
 ------------------------------------------------------------------------------
 
-verifyClauseT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, MonadCatch m) => Transform c m Clause ()
+verifyClauseT :: MonadCatch m => Transform c m Clause ()
 verifyClauseT = setFailMsg "verification failed: clause must be true (perhaps try reflexivity first)" $ do
     CTrue <- idR
     return ()
@@ -329,7 +333,7 @@ lemmaR used nm = prefixFailMsg "verification failed: " $ do
     markLemmaUsedT nm used
     return CTrue
 
-verifyOrCreateT :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+verifyOrCreateT :: ( HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                    , HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m )
                 => Used -> LemmaName -> Clause -> Transform c m a ()
 verifyOrCreateT u nm cl = do
@@ -630,13 +634,15 @@ instantiateForallVarR p cs = prefixFailMsg "instantiation failed: " $ do
 
 -- | Replace all occurrences of the given expression with a new quantified variable.
 abstractClauseR :: forall c m.
-                       ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
-                       , LemmaContext c, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadUnique m )
+                       ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+                       , LemmaContext c, LiftCoreM m, MonadCatch m, MonadUnique m )
                     => String -> Transform c m Clause CoreExpr -> Rewrite c m Clause
 abstractClauseR nm tr = prefixFailMsg "abstraction failed: " $ do
     e <- tr
     cl <- idR
-    b <- constT $ newVarH nm (exprKindOrType e)
+    b <- constT $ case e of
+                    Type _ -> newTyVarH nm (exprKindOrType e)
+                    _      -> newIdH nm (exprKindOrType e)
     let f = compileFold [Equality [] e (varToCoreExpr b)] -- we don't use mkEquality on purpose, so we can abstract lambdas
     liftM dropBinders $ return (mkForall [b] cl) >>>
                             extractR (anytdR $ promoteExprR $ runFoldR f :: Rewrite c m LCoreTC)
@@ -654,13 +660,11 @@ getLemmaByNameT nm = getLemmasT >>= maybe (fail $ "No lemma named: " ++ show nm)
 
 ------------------------------------------------------------------------------
 
-lemmaBiR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-            , HasLemmas m, MonadCatch m, MonadUnique m)
+lemmaBiR :: (LemmaContext c, ReadBindings c, HasLemmas m, MonadCatch m)
          => Used -> LemmaName -> BiRewrite c m CoreExpr
 lemmaBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaC)) (markLemmaUsedT nm u >> idR)
 
-lemmaConsequentR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c
-                                , ReadPath c Crumb, HasLemmas m, MonadCatch m, MonadUnique m)
+lemmaConsequentR :: forall c m. (LemmaContext c, ReadBindings c, HasLemmas m, MonadCatch m)
                  => Used -> LemmaName -> Rewrite c m Clause
 lemmaConsequentR u nm = prefixFailMsg "lemma-consequent failed:" $
                         withPatFailMsg "lemma is not an implication." $ do
@@ -676,9 +680,9 @@ lemmaConsequentR u nm = prefixFailMsg "lemma-consequent failed:" $
     markLemmaUsedT nm u
     return cl'
 
-lemmaConsequentBiR :: forall c m. ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, HasEmptyContext c, LemmaContext c
+lemmaConsequentBiR :: forall c m. ( HasCoreRules c, LemmaContext c
                                   , ReadBindings c, ReadPath c Crumb, HasHermitMEnv m, HasLemmas m, LiftCoreM m
-                                  , MonadCatch m, MonadUnique m)
+                                  , MonadCatch m)
                    => Used -> LemmaName -> BiRewrite c m CoreExpr
 lemmaConsequentBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (go [] . lemmaC)) (markLemmaUsedT nm u >> idR)
     where go :: [CoreBndr] -> Clause -> BiRewrite c m CoreExpr
@@ -730,7 +734,7 @@ markLemmaUsedT nm u = ifM (lemmaExistsT nm) (modifyLemmaT nm id idR id (const u)
 markLemmaProvenT :: (LemmaContext c, HasLemmas m, MonadCatch m) => LemmaName -> Proven -> Transform c m a ()
 markLemmaProvenT nm p = ifM (lemmaExistsT nm) (modifyLemmaT nm id idR (const p) id) (return ())
 
-lemmaExistsT :: (LemmaContext c, HasLemmas m, MonadCatch m) => LemmaName -> Transform c m a Bool
+lemmaExistsT :: (HasLemmas m, MonadCatch m) => LemmaName -> Transform c m a Bool
 lemmaExistsT nm = constT $ Map.member nm <$> getLemmas
 
 ------------------------------------------------------------------------------
@@ -760,7 +764,7 @@ infixr 3 ==>
 (==>) :: (LemmaName, Clause) -> Clause -> Clause
 (==>) = uncurry Impl
 
-infixr 5 /\
+infixr 5 /\ -- this comment is required to avoid a CPP issue with backslash
 
 (/\) :: Clause -> Clause -> Clause
 (/\) = Conj

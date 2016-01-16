@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module HERMIT.Dictionary.Navigation.Crumbs
     ( -- * Navigating Using Crumbs
       crumbExternals
@@ -71,8 +72,15 @@ crumbExternals = map (.+ Navigation)
         [ "Descend into the coercion function in a coercion application." ]
     , external "appCo-arg" AppCo_Arg
         [ "Descend into the coercion argument in a coercion application." ]
+#if __GLASGOW_HASKELL__ > 710
+    , external "coForall-kindco" ForAllCo_KindCo
+        [ "Descend into the kind coercion of a forall coercion." ]
+    , external "coForall-co" ForAllCo_Co
+        [ "Descend into the body of a forall coercion." ]
+#else
     , external "coForall-body" ForAllCo_Body
         [ "Descend into the body of a forall coercion." ]
+#endif
     , external "axiom-inst" AxiomInstCo_Arg
         [ "Descend into the (n-1)th argument of a coercion axiom instantiation." ]
     , external "unsafe-left" UnsafeCo_Left
@@ -89,10 +97,17 @@ crumbExternals = map (.+ Navigation)
         [ "Descend into the right-hand type of a transitive coercion." ]
     , external "nth-co" NthCo_Co
         [ "Descend into the coercion within an nth projection coercion." ]
+#if __GLASGOW_HASKELL__ > 710
+    , external "inst-left" InstCo_Left
+        [ "Descend into the left coercion of a coercion instantiation." ]
+    , external "inst-right" InstCo_Right
+        [ "Descend into the right coercion of a coercion instantiation." ]
+#else
     , external "inst-co" InstCo_Co
         [ "Descend into the coercion within a coercion instantiation." ]
     , external "inst-type" InstCo_Type
         [ "Descend into the type within a coercion instantiation." ]
+#endif
     , external "lr-co" LRCo_Co
         [ "Descend into the coercion within a left/right projection coercion." ]
     , external "univ-dom" UnivCo_Dom

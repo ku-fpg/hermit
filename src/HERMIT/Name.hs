@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -37,7 +38,6 @@ module HERMIT.Name
     , newIdH
     , newTyVarH
     , newCoVarH
-    , newVarH
     , cloneVarH
     , cloneVarFSH
       -- * Name Lookup
@@ -251,7 +251,7 @@ findVar nm c = do
         NamedDataCon dc -> return $ dataConWrapId dc
         other -> fail $ "findVar: impossible Named returned: " ++ show other
 
-findTyCon :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadCatch m, MonadIO m, MonadThings m)
+findTyCon :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadIO m, MonadThings m)
           => HermitName -> c -> m TyCon
 findTyCon nm c = do
     nmd <- findInNameSpace tyConClassNS nm c
@@ -354,13 +354,6 @@ newTyVarH nm k = mkTyVar <$> newName nm <*> return k
 -- | Make a unique coercion variable for a specified type, using a provided name.
 newCoVarH :: MonadUnique m => String -> Type -> m TyVar
 newCoVarH nm ty = mkCoVar <$> newName nm <*> return ty
-
--- TODO: not sure if the predicates are correct.
--- | Experimental, use at your own risk.
-newVarH :: MonadUnique m => String -> KindOrType -> m Var
-newVarH name tk | isCoVarType tk = newCoVarH name tk
-                | isKind tk      = newTyVarH name tk
-                | otherwise      = newIdH name tk
 
 -- | Make a new variable of the same type, with a modified textual name.
 cloneVarH :: MonadUnique m => (String -> String) -> Var -> m Var

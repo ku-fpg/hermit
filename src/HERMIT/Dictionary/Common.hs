@@ -170,7 +170,7 @@ varBindingDepthT :: (ReadBindings c, Monad m) => Var -> Transform c m g BindingD
 varBindingDepthT v = contextT >>= lookupHermitBindingDepth v
 
 -- | Determine if the current variable matches the given variable, and is bound at the specified depth (helpful to detect shadowing).
-varIsOccurrenceOfT :: (ExtendPath c Crumb, ReadBindings c, Monad m) => Var -> BindingDepth -> Transform c m Var Bool
+varIsOccurrenceOfT :: (ReadBindings c, Monad m) => Var -> BindingDepth -> Transform c m Var Bool
 varIsOccurrenceOfT v d = readerT $ \ v' -> if v == v'
                                              then varBindingDepthT v >>^ (== d)
                                              else return False

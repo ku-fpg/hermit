@@ -1,3 +1,6 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE LambdaCase #-}
+
 -- | Output the raw Expr constructors. Helpful for writing pattern matching rewrites.
 module HERMIT.PrettyPrinter.AST
   ( -- * HERMIT's AST Pretty-Printer for GHC Core
@@ -100,30 +103,78 @@ ppCoreDef :: PrettyH CoreDef
 ppCoreDef = defT ppVar ppCoreExpr (\ i e -> text "Def" <+> i $$ nest 2 (parens e))
 
 ppKindOrType :: PrettyH Type
-ppKindOrType =
-          tyVarT (ppVar >>^ \ v -> tyText "TyVarTy" <+> v)
-       <+ litTyT (ppSDoc >>^ \ l -> tyText "LitTy" <+> l)
-       <+ appTyT ppKindOrType ppKindOrType (\ ty1 ty2 -> tyText "AppTy" $$ nest 2 (cat [parens ty1, parens ty2]))
-       <+ funTyT ppKindOrType ppKindOrType (\ ty1 ty2 -> tyText "FunTy" $$ nest 2 (cat [parens ty1, parens ty2]))
-       <+ forAllTyT ppVar ppKindOrType (\ v ty -> tyText "ForAllTy" <+> v $$ nest 2 (parens ty))
-       <+ tyConAppT ppSDoc (const ppKindOrType) (\ con tys -> tyText "TyConApp" <+> con $$ nest 2 (vlist $ map parens tys))
+ppKindOrType = readerT $ \case
+  TyVarTy{}  -> tyVarT (ppVar >>^ \ v -> tyText "TyVarTy" <+> v)
+  AppTy{}    -> appTyT ppKindOrType ppKindOrType (\ ty1 ty2 -> tyText "AppTy" $$ nest 2 (cat [parens ty1, parens ty2]))
+  TyConApp{} -> tyConAppT ppSDoc (const ppKindOrType) $ \ con tys -> 
+                  tyText "TyConApp" <+> con $$ nest 2 (vlist $ map parens tys)
+#if __GLASGOW_HASKELL__ > 710
+  CastTy{}   -> castTyT ppKindOrType ppCoercion (\ ty co -> tyText "CastTy" $$ nest 2 (cat [parens ty, parens co]))
+  CoercionTy{} -> coercionTyT ppCoercion >>= \ co -> return (tyText "CoercionTy" $$ nest 2 (parens co))
+  ForAllTy{} -> forAllTyT ppTyBinder ppKindOrType (\ tb ty -> tyText "ForAllTy" <+> tb $$ nest 2 (parens ty))
+#else
+  FunTy{}    -> funTyT ppKindOrType ppKindOrType (\ ty1 ty2 -> tyText "FunTy" $$ nest 2 (cat [parens ty1, parens ty2]))
+  ForAllTy{} -> forAllTyT ppVar ppKindOrType (\ v ty -> tyText "ForAllTy" <+> v $$ nest 2 (parens ty))
+#endif
+  LitTy{}    -> litTyT (ppSDoc >>^ \ l -> tyText "LitTy" <+> l)
+
+#if __GLASGOW_HASKELL__ > 710
+ppTyBinder :: PrettyH TyBinder
+ppTyBinder = readerT $ \case
+  Named tv v -> do
+    d <- return tv >>> ppVar
+    return $ tyText "Named" <+> d <+> tyText (showVis v)
+  Anon ty -> do
+    d <- return ty >>> ppKindOrType
+    return $ tyText "Anon" <+> d
+
+ppUnivCoProvenance :: PrettyH UnivCoProvenance
+ppUnivCoProvenance = readerT $ \case
+  UnsafeCoerceProv -> return $ coText "UnsafeCoerceProv"
+  PhantomProv co -> do
+    d <- return co >>> ppCoercion
+    return $ coText "PhantomProv" <+> parens d
+  ProofIrrelProv co -> do
+    d <- return co >>> ppCoercion
+    return $ coText "ProofIrrelProv" <+> parens d
+  PluginProv s -> return $ coText "PluginProv" <+> coText s
+  HoleProv _ -> return $ coText "HoleProv - IMPOSSIBLE!"
+#endif
 
 ppCoercion :: PrettyH Coercion
-ppCoercion =  coVarCoT (ppVar >>^ \ v -> coText "CoVarCo" <+> v)
-           <+ symCoT (ppCoercion >>^ \ co -> coText "SymCo" $$ nest 2 (parens co))
-           <+ subCoT (ppCoercion >>^ \ co -> coText "SubCo" $$ nest 2 (parens co))
-           <+ appCoT ppCoercion ppCoercion (\ co1 co2 -> coText "AppCo" $$ nest 2 (cat [parens co1, parens co2]))
-           <+ forAllCoT ppVar ppCoercion (\ v co -> coText "ForAllCo" <+> v $$ nest 2 (parens co))
-           <+ transCoT ppCoercion ppCoercion (\ co1 co2 -> coText "TransCo" $$ nest 2 (cat [parens co1, parens co2]))
-           <+ nthCoT (arr $ coText . show) ppCoercion (\ n co -> coText "NthCo" <+> n $$ parens co)
-           <+ instCoT ppCoercion ppKindOrType (\ co ty -> coText "InstCo" $$ nest 2 (cat [parens co, parens ty]))
--- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
-           <+ reflT ppKindOrType (\ r ty -> coText "Refl" <+> coText (showRole r) $$ nest 2 (parens ty))
-           <+ axiomInstCoT ppSDoc ppSDoc (const ppCoercion) (\ ax idx coes -> coText "AxiomInstCo" <+> ax <+> idx $$ nest 2 (vlist $ map parens coes))
-           <+ lrCoT ppSDoc ppCoercion (\ lr co -> coText "LRCo" <+> lr $$ nest 2 (parens co))
-           <+ tyConAppCoT ppSDoc (const ppCoercion) (\ r con coes -> coText "TyConAppCo" <+> coText (showRole r) <+> con $$ nest 2 (vlist $ map parens coes))
-           <+ univCoT ppKindOrType ppKindOrType (\ s r dom ran -> coText "UnivCo" <+> coText (show s) <+> coText (showRole r) $$ nest 2 (cat [parens dom, parens ran]))
-           -- Should there be a catch-all here?
+ppCoercion = readerT $ \case
+  Refl{}        -> reflT ppKindOrType (\ r ty -> coText "Refl" <+> coText (showRole r) $$ nest 2 (parens ty))
+  TyConAppCo{}  -> tyConAppCoT ppSDoc (const ppCoercion) $ \ r con coes -> 
+                    coText "TyConAppCo" <+> coText (showRole r) <+> con $$ nest 2 (vlist $ map parens coes)
+  AppCo{}       -> appCoT ppCoercion ppCoercion (\ co1 co2 -> coText "AppCo" $$ nest 2 (cat [parens co1, parens co2]))
+#if __GLASGOW_HASKELL__ > 710
+  ForAllCo{}    -> forAllCoT ppVar ppCoercion ppCoercion $ \ v c1 c2 -> 
+                    coText "ForAllCo" <+> v $$ nest 2 (cat [parens c1, parens c2])
+#else
+  ForAllCo{}    -> forAllCoT ppVar ppCoercion (\ v co -> coText "ForAllCo" <+> v $$ nest 2 (parens co))
+#endif
+  CoVarCo{}     -> coVarCoT (ppVar >>^ \ v -> coText "CoVarCo" <+> v)
+  AxiomInstCo{} -> axiomInstCoT ppSDoc ppSDoc (const ppCoercion) $ \ ax idx coes -> 
+                    coText "AxiomInstCo" <+> ax <+> idx $$ nest 2 (vlist $ map parens coes)
+#if __GLASGOW_HASKELL__ > 710
+  UnivCo p _ _ _ -> do
+    pd <- return p >>> ppUnivCoProvenance
+    univCoT ppKindOrType ppKindOrType $ \ _ r dom ran -> 
+      coText "UnivCo" <+> pd <+> coText (showRole r) $$ nest 2 (cat [parens dom, parens ran])
+#else
+  UnivCo{}      -> univCoT ppKindOrType ppKindOrType $ \ s r dom ran -> 
+                    coText "UnivCo" <+> coText (show s) <+> coText (showRole r) $$ nest 2 (cat [parens dom, parens ran])
+#endif
+  SymCo{}       -> symCoT (ppCoercion >>^ \ co -> coText "SymCo" $$ nest 2 (parens co))
+  TransCo{}     -> transCoT ppCoercion ppCoercion (\ co1 co2 -> coText "TransCo" $$ nest 2 (cat [parens co1, parens co2]))
+  NthCo{}       -> nthCoT (arr $ coText . show) ppCoercion (\ n co -> coText "NthCo" <+> n $$ parens co)
+  LRCo{}        -> lrCoT ppSDoc ppCoercion (\ lr co -> coText "LRCo" <+> lr $$ nest 2 (parens co))
+#if __GLASGOW_HASKELL__ > 710
+  InstCo{}      -> instCoT ppCoercion ppCoercion (\ c1 c2 -> coText "InstCo" $$ nest 2 (cat [parens c1, parens c2]))
+#else
+  InstCo{}      -> instCoT ppCoercion ppKindOrType (\ co ty -> coText "InstCo" $$ nest 2 (cat [parens co, parens ty]))
+#endif
+  SubCo{}       -> subCoT (ppCoercion >>^ \ co -> coText "SubCo" $$ nest 2 (parens co))
 
 ppVar :: PrettyH Var
 ppVar = readerT $ \ v -> ppSDoc >>^ modCol v

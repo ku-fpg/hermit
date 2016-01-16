@@ -38,7 +38,6 @@ import qualified CoreLint
 #if __GLASGOW_HASKELL__ > 710 
 import           TcRnMonad (getCtLocM)
 import           TcRnTypes (cc_ev)
-import           TcSimplify (solveWanteds, runTcS)
 #else
 import           TcRnMonad (getCtLoc)
 #endif
@@ -212,10 +211,10 @@ occurAnalyseChangedR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, L
 occurAnalyseChangedR = changedByR lcoreSyntaxEq occurAnalyseR
 
 -- | Run GHC's occurrence analyser, and also eliminate any zombies.
-occurAnalyseAndDezombifyR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c u, Injection CoreExpr u) => Rewrite c m u
+occurAnalyseAndDezombifyR :: (ExtendPath c Crumb, MonadCatch m, Walker c u, Injection CoreExpr u) => Rewrite c m u
 occurAnalyseAndDezombifyR = allbuR (tryR $ promoteExprR dezombifyR) >>> occurAnalyseR
 
-occurrenceAnalysisR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, HasEmptyContext c, MonadCatch m, Walker c LCore) => Rewrite c m LCore
+occurrenceAnalysisR :: (ExtendPath c Crumb, MonadCatch m, Walker c LCore) => Rewrite c m LCore
 occurrenceAnalysisR = occurAnalyseAndDezombifyR
 
 ----------------------------------------------------------------------
@@ -233,22 +232,21 @@ buildTypeable ty = do
 buildDictionary :: (HasDynFlags m, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Id -> m (Id, [CoreBind])
 buildDictionary evar = do
     (i, bs) <- runTcM $ do
-#if __GLASGOW_HASKELL__ <= 710 
-        loc <- getCtLoc $ GivenOrigin UnkSkol
+#if __GLASGOW_HASKELL__ > 710 
+        loc <- getCtLocM (GivenOrigin UnkSkol) Nothing
 #else
-        loc <- getCtLocM $ GivenOrigin UnkSkol
+        loc <- getCtLoc $ GivenOrigin UnkSkol
 #endif
         let predTy = varType evar
-            nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
-#if __GLASGOW_HASKELL__ <= 710 
-            wCs = mkSimpleWC [nonC]
-#else
+#if __GLASGOW_HASKELL__ > 710 
+            nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_dest = EvVarDest evar, ctev_loc = loc }
             wCs = mkSimpleWC [cc_ev nonC]
-#endif
-#if __GLASGOW_HASKELL__ <= 710 
-        (_wCs', bnds) <- solveWantedsTcM wCs
+        -- TODO: Make sure solveWanteds is the right function to call.
+        (_wCs', bnds) <- second evBindMapBinds <$> runTcS (solveWanteds wCs)
 #else
-        (_wCs', bnds) <- runTcS $ solveWanteds wCs  -- TODO: Make sure this is the right function to call.
+            nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
+            wCs = mkSimpleWC [nonC]
+        (_wCs', bnds) <- solveWantedsTcM wCs
 #endif
         -- reportAllUnsolved _wCs' -- this is causing a panic with dictionary instantiation
                                   -- revist and fix!

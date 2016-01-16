@@ -46,11 +46,11 @@ interp :: (Monad m, Typeable b) => (b -> a) -> Interp m a
 interp f = Interp (const . return . f)
 
 -- | An 'Interp' which can affect the shell.
-interpM :: (CLMonad m, Typeable b) => (b -> m a) -> Interp m a
+interpM :: Typeable b => (b -> m a) -> Interp m a
 interpM f = Interp (const . f)
 
 -- | Like 'InterpM', but with access to the original expression.
-interpEM :: (CLMonad m, Typeable b) => (b -> ExprH -> m a) -> Interp m a
+interpEM :: Typeable b => (b -> ExprH -> m a) -> Interp m a
 interpEM = Interp
 
 instance Monad m => Functor (Interp m) where

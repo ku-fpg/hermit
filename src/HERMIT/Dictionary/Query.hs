@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -44,7 +45,7 @@ externals =
 --------------------------------------------------------
 
 -- TODO: update this to cope with lemmas
-infoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, BoundVars c, HasEmptyContext c, HasDynFlags m, MonadCatch m) => Transform c m CoreTC String
+infoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c, HasDynFlags m, MonadCatch m) => Transform c m CoreTC String
 infoT =
   do crumbs <- childrenT
      fvs    <- arr freeVarsCoreTC
@@ -69,7 +70,11 @@ infoT =
                                                            modName i = case nameModule_maybe (getName i) of
                                                                         Nothing -> "no module name."
                                                                         Just m -> moduleNameString (moduleName m)
+#if __GLASGOW_HASKELL__ > 710
+                                                        in ["Type/Kind:        " ++ showPpr dynFlags tyK] ++
+#else
                                                         in [(if isKind tyK then "Kind:        " else "Type:        ") ++ showPpr dynFlags tyK] ++
+#endif
                                                            case e of
                                                              Var i -> [ ""
                                                                       , "OccName:                  " ++ getOccString i
@@ -141,7 +146,12 @@ typeConstructor = \case
                      TyVarTy{}    -> "TyVarTy"
                      AppTy{}      -> "AppTy"
                      TyConApp{}   -> "TyConApp"
+#if __GLASGOW_HASKELL__ > 710
+                     CastTy{}     -> "CastTy"
+                     CoercionTy{} -> "CoercionTy"
+#else
                      FunTy{}      -> "FunTy"
+#endif
                      ForAllTy{}   -> "ForAllTy"
                      LitTy{}      -> "LitTy"
 
@@ -161,11 +171,15 @@ coercionConstructor = \case
                          LRCo{}        -> "LRCo"
                          SubCo{}       -> "SubCo"
                          UnivCo{}      -> "UnivCo"
+#if __GLASGOW_HASKELL__ > 710
+                         KindCo{}      -> "KindCo"
+                         CoherenceCo{} -> "CoherenceCo"
+#endif
 
 --------------------------------------------------------
 
 -- | Compare the core fragments at the end of the specified 'LocalPathH's.
-compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadBindings c, ReadPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC ()
+compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC ()
 compareCoreAtT p1T p2T =
   do p1 <- p1T
      p2 <- p2T
@@ -175,7 +189,7 @@ compareCoreAtT p1T p2T =
      guardMsg (core1 `coreAlphaEq` core2) "core fragments are not alpha-equivalent."
 
 -- | Compare the definitions of two identifiers for alpha-equality.
-compareBoundIdsT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c) => Id -> Id -> Transform c HermitM x ()
+compareBoundIdsT :: ReadBindings c => Id -> Id -> Transform c HermitM x ()
 compareBoundIdsT i1 i2 =
   do e1 <-                       fst ^<< getUnfoldingT AllBinders <<< return i1
      e2 <- replaceVarR i2 i1 <<< fst ^<< getUnfoldingT AllBinders <<< return i2
@@ -183,8 +197,7 @@ compareBoundIdsT i1 i2 =
      guardMsg (e1 `exprAlphaEq` e2) "bindings are not alpha-equivalent."
 
 -- | Compare the definitions of the two named identifiers for alpha-equality.
-compareBoundIds :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c)
-                => HermitName -> HermitName -> Transform c HermitM x ()
+compareBoundIds :: ReadBindings c => HermitName -> HermitName -> Transform c HermitM x ()
 compareBoundIds nm1 nm2 = do i1 <- findIdT nm1
                              i2 <- findIdT nm2
                              compareBoundIdsT i1 i2

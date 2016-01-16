@@ -73,7 +73,7 @@ data QueryFunBox where
   deriving Typeable
 
 instance Typeable a => Extern (QueryFun a) where
-   type Box (QueryFun a) = QueryFunBox
+   type Box (QueryFun _a) = QueryFunBox
    box = QueryFunBox
    unbox (QueryFunBox i) =
        case cast i of

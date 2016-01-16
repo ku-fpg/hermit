@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -143,7 +144,7 @@ binders :: LCoreTC -> VarSet
 binders (LTCCore (LClause (Forall b _))) = unitVarSet b
 binders (LTCCore (LClause _))            = emptyVarSet
 binders (LTCCore (LCore core))           = bindersCore core
-binders (LTCTyCo (TypeCore ty))          = binderType ty
+binders (LTCTyCo (TypeCore ty))          = bindersType ty
 binders (LTCTyCo (CoercionCore co))      = binderCoercion co
 
 bindersCore :: Core -> VarSet
@@ -165,13 +166,21 @@ binderExpr (Lam v _)      = unitVarSet v
 binderExpr (Case _ w _ _) = unitVarSet w
 binderExpr _              = emptyVarSet
 
-binderType :: Type -> VarSet
-binderType (ForAllTy v _) = unitVarSet v
-binderType _              = emptyVarSet
+bindersType :: Type -> VarSet
+#if __GLASGOW_HASKELL__ > 710
+bindersType (ForAllTy (Named v _) _) = unitVarSet v
+#else
+bindersType (ForAllTy v _)           = unitVarSet v
+#endif
+bindersType _                        = emptyVarSet
 
 binderCoercion :: Coercion -> VarSet
-binderCoercion (ForAllCo v _) = unitVarSet v
-binderCoercion _              = emptyVarSet
+#if __GLASGOW_HASKELL__ > 710
+binderCoercion (ForAllCo v _ _) = unitVarSet v
+#else
+binderCoercion (ForAllCo v _)   = unitVarSet v
+#endif
+binderCoercion _                = emptyVarSet
 
 -----------------------------------------------------------------------
 
@@ -291,26 +300,26 @@ instance HasEmptyContext c => HasEmptyContext (ExtendContext c (LocalPath Crumb)
   setEmptyContext ec = ec { baseContext = setEmptyContext (baseContext ec)
                           , extraContext = mempty }
 
-exhaustRepeatCrumbT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Crumb -> Transform c m LCoreTC LocalPathH
+exhaustRepeatCrumbT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Crumb -> Transform c m LCoreTC LocalPathH
 exhaustRepeatCrumbT cr = let l = exhaustPathL (repeat cr)
                           in withLocalPathT (focusT l exposeLocalPathT)
 
 -- | Construct a path to the body of a sequence of foralls.
-forallsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Transform c m Clause LocalPathH
+forallsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m Clause LocalPathH
 forallsBodyT = extractT (exhaustRepeatCrumbT Forall_Body)
 
 -- | Construct a path to the body of a sequence of lambdas.
-lamsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Transform c m CoreExpr LocalPathH
+lamsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m CoreExpr LocalPathH
 lamsBodyT = extractT (exhaustRepeatCrumbT Lam_Body)
 
 -- | Construct a path to the body of a sequence of let bindings.
-letsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Transform c m CoreExpr LocalPathH
+letsBodyT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m CoreExpr LocalPathH
 letsBodyT = extractT (exhaustRepeatCrumbT Let_Body)
 
 -- | Construct a path to end of a program.
-progEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Transform c m CoreProg LocalPathH
+progEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m CoreProg LocalPathH
 progEndT = extractT (exhaustRepeatCrumbT ProgCons_Tail)
 
 -- | Construct a path to the end of a program, starting at the 'ModGuts'.
-gutsProgEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, Walker c LCoreTC, MonadCatch m) => Transform c m ModGuts LocalPathH
+gutsProgEndT :: (AddBindings c, ReadPath c Crumb, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m ModGuts LocalPathH
 gutsProgEndT = modGutsT progEndT (\ _ p -> (mempty @@ ModGuts_Prog) <> p)

@@ -204,7 +204,7 @@ unscopedToScopedScriptR = parse
                                                       (ScriptScope rs :) <$> parse zs
                      (_, ScriptEndScope)        -> fail "unmatched end-of-scope."
 
-    parseUntilEndScope :: Monad m => [(ExprH, UnscopedScriptR)] -> m ([ScopedScriptR], [(ExprH, UnscopedScriptR)])
+    parseUntilEndScope :: [(ExprH, UnscopedScriptR)] -> m ([ScopedScriptR], [(ExprH, UnscopedScriptR)])
     parseUntilEndScope []     = fail "missing end-of-scope."
     parseUntilEndScope (y:ys) = case y of
                                   (_, ScriptEndScope)        -> return ([],ys)

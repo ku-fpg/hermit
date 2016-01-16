@@ -38,7 +38,7 @@ import Data.List (nubBy)
 
 import HERMIT.Context
 import HERMIT.External
-import HERMIT.GHC
+import HERMIT.GHC hiding (snd3)
 import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Lemma

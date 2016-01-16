@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 module HERMIT.Dictionary.Local.Cast
@@ -13,13 +14,10 @@ module HERMIT.Dictionary.Local.Cast
     )
 where
 
-import qualified Coercion (substCo, extendTvSubst)
-
 import Control.Arrow
 import Control.Monad
 
 import HERMIT.Core
-import HERMIT.Context
 import HERMIT.External
 import HERMIT.GHC
 import HERMIT.Kure
@@ -78,9 +76,13 @@ castFloatAppR = prefixFailMsg "Cast float from application failed: " $
             TyConAppCo _r t [c1, c2] -> do
                 True <- return (isFunTyCon t)
                 return $ Cast (App e1 (Cast e2 (SymCo c1))) c2
+#if __GLASGOW_HASKELL__ > 710
+            ForAllCo{} -> fail "castFloatAppR: ForAllCo TODO"
+#else
             ForAllCo t c2 -> do
                 Type x' <- return e2
-                return (Cast (App e1 e2) (Coercion.substCo (Coercion.extendTvSubst emptyCvSubst t x') c2))
+                return (Cast (App e1 e2) (substCo (extendTvSubst emptySubst t x') c2))
+#endif
             _ -> fail "castFloatApp"
 
 -- (\ x::a -> cast e (b -> c)) :: a -> c
@@ -93,15 +95,17 @@ castFloatLamR = prefixFailMsg "Cast float from lambda failed: " $
         aTy = varType b
     return (Cast (Lam b e) (mkFunCo r (mkReflCo r aTy) co))
 
+#if __GLASGOW_HASKELL__ <= 710
 -- | Attempts to tease a coercion apart into a type constructor and the application
 -- of a number of coercion arguments to that constructor
 splitTyConAppCo_maybe :: Coercion -> Maybe (TyCon, [Coercion])
 splitTyConAppCo_maybe (Refl ro ty)          = (fmap . second . map) (Refl ro) (splitTyConApp_maybe ty)
 splitTyConAppCo_maybe (TyConAppCo _r tc cs) = Just (tc, cs)
 splitTyConAppCo_maybe _                     = Nothing
+#endif
 
 -- TODO: revisit
-castElimSymPlusR :: (ExtendPath c Crumb, AddBindings c, Monad m) => Rewrite c m CoreExpr
+castElimSymPlusR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
 castElimSymPlusR = castT idR idR (flip go) >>> joinT
   where
       go :: Monad m => Coercion -> CoreExpr -> m CoreExpr

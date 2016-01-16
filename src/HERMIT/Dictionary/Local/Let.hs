@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
@@ -238,7 +239,7 @@ letNonRecSubstSafeR =
 
 -------------------------------------------------------------------------------------------
 
-letElimR :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letElimR :: MonadCatch m => Rewrite c m CoreExpr
 letElimR = prefixFailMsg "Let elimination failed: " $
           withPatFailMsg (wrongExprForm "Let binds expr") $
           do Let bg _ <- idR
@@ -468,7 +469,11 @@ letFloatInCaseR = prefixFailMsg "Let floating in to case failed: " $
      let bs = bindVars bnds
          captured = bs `intersect` (w : concatMap altVars alts)
      guardMsg (null captured) "let bindings would capture case pattern bindings."
+#if __GLASGOW_HASKELL__ > 710
+     let unbound = mkVarSet bs `intersectVarSet` (tyCoVarsOfType ty `unionVarSet` freeVarsVar w)
+#else
      let unbound = mkVarSet bs `intersectVarSet` (tyVarsOfType ty `unionVarSet` freeVarsVar w)
+#endif
      guardMsg (isEmptyVarSet unbound) "type variables in case signature would become unbound."
      return (Case (Let bnds s) w ty alts) >>> caseAllR idR idR idR (\_ -> altAllR idR (\_ -> idR) (arr (Let bnds) >>> alphaLetR))
 
@@ -568,7 +573,9 @@ letIntroR nm = do e <- idR
 -- | @body@ ==> @let v = e in body@
 letNonRecIntroR :: (MonadCatch m, MonadUnique m) => String -> CoreExpr -> Rewrite c m CoreExpr
 letNonRecIntroR nm e = prefixFailMsg "Let-introduction failed: " $
-     contextfreeT $ \ body -> do v <- newVarH nm $ exprKindOrType e
+     contextfreeT $ \ body -> do v <- case e of
+                                        Type _ -> newTyVarH nm $ exprKindOrType e
+                                        _      -> newIdH nm $ exprKindOrType e
                                  return $ Let (NonRec v e) body
 
 
@@ -590,7 +597,7 @@ nonRecIntroR nm e = readerT $ \case
 
 -- | Introduce a local definition for a (possibly imported) identifier.
 -- Rewrites occurences of the identifier to point to this new local definiton.
-letIntroUnfoldingR :: ( BoundVars c, ReadBindings c, HasDynFlags m, HasHermitMEnv m, LiftCoreM m
+letIntroUnfoldingR :: ( ReadBindings c, HasHermitMEnv m, LiftCoreM m
                       , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
                    => HermitName -> Rewrite c m CoreExpr
 letIntroUnfoldingR nm = do

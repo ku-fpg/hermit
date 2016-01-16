@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -183,7 +184,11 @@ freeVarsCore = \case
 -- | Find all free variables in a 'TyCo' node.
 freeVarsTyCo :: TyCo -> VarSet
 freeVarsTyCo = \case
+#if __GLASGOW_HASKELL__ > 710
+                  TypeCore ty     -> tyCoVarsOfType ty
+#else
                   TypeCore ty     -> tyVarsOfType ty
+#endif
                   CoercionCore co -> tyCoVarsOfCo co
 
 -- | Find all free variables in a 'CoreTC' node.

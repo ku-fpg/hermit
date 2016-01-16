@@ -18,15 +18,11 @@ module HERMIT.GHC
     , qualifiedName
     , unqualifiedName
     , alphaTyVars
-    , Type(..)
-    , TyLit(..)
     , GhcException(..)
     , throwGhcException
     , throwCmdLineErrorS
     , exprArity
     , occurAnalyseExpr_NoBinderSwap
-    , isKind
-    , isLiftedTypeKindCon
     , notElemVarSet
     , varSetToStrings
     , showVarSet
@@ -43,6 +39,7 @@ module HERMIT.GHC
     , injectDependency
     , reportAllUnsolved
     , zEncodeString
+    , collectTyBinders
 #ifdef mingw32_HOST_OS
     , initStaticOpts
 #endif
@@ -51,14 +48,26 @@ module HERMIT.GHC
     , module DsMonad
     , module DynamicLoading
     , module ErrUtils
+    , module Kind
     , module MkId
     , module PrelNames
     , module TcEnv
+#if __GLASGOW_HASKELL__ > 710
+    , module TcEvidence
+#endif
     , module TcMType
     , module TcRnMonad
     , module TcRnTypes
     , module TcSimplify
+#if __GLASGOW_HASKELL__ > 710
+    , module TcSMonad
+#endif
     , module TcType
+#if __GLASGOW_HASKELL__ > 710
+    , module TyCoRep
+#else
+    , module TypeRep
+#endif
     , module Unify
     , getHscEnvCoreM
     ) where
@@ -77,8 +86,12 @@ import           Encoding (zEncodeString)
 import           Finder (findImportedModule, cannotFindModule)
 -- we hide these so that they don't get inadvertently used.
 -- several are redefined in Core.hs and elsewhere
-import           GhcPlugins hiding (exprSomeFreeVars, exprFreeVars, exprFreeIds, bindFreeVars, getHscEnv, RuleName)
+import           GhcPlugins hiding (exprSomeFreeVars, exprFreeVars, exprFreeIds, bindFreeVars, getHscEnv, RuleName, collectTyBinders)
+#if __GLASGOW_HASKELL__ > 710
+import           Kind (classifiesTypeWithValues,isStarKind)
+#else
 import           Kind (isKind,isLiftedTypeKindCon)
+#endif
 import           LoadIface (loadSysInterface)
 import           MkId (mkDictSelRhs)
 import           TcRnMonad (initIfaceTcRn)
@@ -93,11 +106,24 @@ import           StaticFlags
 #endif
 import           TcEnv (tcLookupClass)
 import           TcErrors (reportAllUnsolved)
+#if __GLASGOW_HASKELL__ > 710
+import           TcEvidence (evBindMapBinds)
+#endif
 import           TcMType (newEvVar)
+#if __GLASGOW_HASKELL__ > 710
+import           TcRnTypes (TcM, mkNonCanonical, mkSimpleWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..), TcEvDest(..))
+import           TcSimplify (solveWanteds)
+import           TcSMonad (runTcS)
+#else
 import           TcRnTypes (TcM, mkNonCanonical, mkSimpleWC, CtEvidence(..), SkolemInfo(..), CtOrigin(..))
 import           TcSimplify (solveWantedsTcM)
+#endif
 import           TcType (mkPhiTy, mkSigmaTy)
-import           TypeRep (Type(..),TyLit(..))
+#if __GLASGOW_HASKELL__ > 710
+import           TyCoRep (Type(..), TyBinder(..), TyLit(..), Coercion(..), UnivCoProvenance(..))
+#else
+import           TypeRep (Type(..), TyLit(..))
+#endif
 import           TysPrim (alphaTyVars)
 import           Unify (tcUnifyTys, BindFlag(..))
 
@@ -190,7 +216,11 @@ ppIdInfo v info
     unf_info = unfoldingInfo info
     has_unf = hasSomeUnfolding unf_info
 
+#if __GLASGOW_HASKELL__ > 710
+    RuleInfo rules _rulefvs = ruleInfo info
+#else
     rules = specInfoRules (specInfo info)
+#endif
 
 showAttributes :: [(Bool,SDoc)] -> SDoc
 showAttributes stuff
@@ -222,6 +252,15 @@ bndrRuleAndUnfoldingVars v | isTyVar v = emptyVarSet
 
 --------------------------------------------------------------------------
 
+-- | Collect as many type bindings as possible from the front of a nested lambda
+collectTyBinders :: CoreExpr -> ([TyVar], CoreExpr)
+collectTyBinders expr = go [] expr
+  where
+    go tvs (Lam b e) | isTyVar b = go (b:tvs) e
+    go tvs e                     = (reverse tvs, e)
+
+--------------------------------------------------------------------------
+
 -- This function used to be in GHC itself, but was removed.
 -- It compares core for equality modulo alpha.
 eqExprX :: IdUnfoldingFun -> RnEnv2 -> CoreExpr -> CoreExpr -> Bool
@@ -247,8 +286,13 @@ eqExprX id_unfolding_fun env e1 e2
 
     go _   (Lit lit1)    (Lit lit2)      = lit1 == lit2
     go env (Type t1)    (Type t2)        = eqTypeX env t1 t2
+#if __GLASGOW_HASKELL__ > 710
+    go env (Coercion co1) (Coercion co2) = eqCoercionX env co1 co2
+    go env (Cast e1 co1) (Cast e2 co2) = eqCoercionX env co1 co2 && go env e1 e2
+#else
     go env (Coercion co1) (Coercion co2) = coreEqCoercion2 env co1 co2
     go env (Cast e1 co1) (Cast e2 co2) = coreEqCoercion2 env co1 co2 && go env e1 e2
+#endif
     go env (App f1 a1)   (App f2 a2)   = go env f1 f2 && go env a1 a2
     go env (Tick n1 e1)  (Tick n2 e2)  = go_tickish n1 n2 && go env e1 e2
 
@@ -307,11 +351,7 @@ lookupRdrNameInModule hsc_env guts mod_name rdr_name = do
     -- First find the package the module resides in by searching exposed packages and home modules
     found_module <- findImportedModule hsc_env mod_name Nothing
     case found_module of
-#if __GLASGOW_HASKELL__ <= 710 
         Found _ mod -> do
-#else
-        FoundModule (FoundHs _ mod) -> do
-#endif
             -- Find the exports of the module
             (_, mb_iface) <- initTcFromModGuts hsc_env guts HsSrcFile False $
                              initIfaceTcRn $
@@ -352,11 +392,7 @@ injectDependency hsc_env guts mod_name = do
     -- First find the package the module resides in by searching exposed packages and home modules
     found_module <- findImportedModule hsc_env mod_name Nothing
     case found_module of
-#if __GLASGOW_HASKELL__ <= 710 
         Found _ mod -> do
-#else
-        FoundModule (FoundHs _ mod) -> do
-#endif
             -- Populate the EPS
             _ <- initTcFromModGuts hsc_env guts HsSrcFile False $
                  initIfaceTcRn $

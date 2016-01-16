@@ -161,7 +161,7 @@ unshadowExprR = do
     ss  <- detectShadowsM bs fvs
     alphaLamR Nothing <+ alphaLetVarsR (varSetElems ss) <+ alphaCaseBinderR Nothing
 
-unshadowAltR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+unshadowAltR :: (BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreAlt
 unshadowAltR = do
     bs  <- arr altVars
@@ -235,7 +235,7 @@ alphaCaseBinderR mn = setFailMsg (wrongFormForAlpha "Case e i ty alts") $
 -----------------------------------------------------------------------
 
 -- | Rename the specified variable in a case alternative.  Optionally takes a suggested new name.
-alphaAltVarR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaAltVarR :: (BoundVars c, MonadCatch m, MonadUnique m)
              => Maybe String -> Var -> Rewrite c m CoreAlt
 alphaAltVarR mn v = do
     (con, vs, rhs) <- idR
@@ -253,26 +253,26 @@ alphaAltVarR mn v = do
 
 -- | Rename the specified variables in a case alternative, using the suggested names where provided.
 -- Suggested names *must* be provided in left-to-right order matching the order of the alt binders.
-alphaAltVarsWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaAltVarsWithR :: (BoundVars c, MonadCatch m, MonadUnique m)
                   => [(Maybe String,Var)] -> Rewrite c m CoreAlt
 alphaAltVarsWithR = andR . map (uncurry alphaAltVarR) . reverse -- note: right-to-left so type subst aren't undone
 
 -- | Rename the variables bound in a case alternative with the given list of suggested names.
-alphaAltWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaAltWithR :: (BoundVars c, MonadCatch m, MonadUnique m)
               => [String] -> Rewrite c m CoreAlt
 alphaAltWithR ns =
   do vs <- arr altVars
      alphaAltVarsWithR $ zip (map Just ns) vs
 
 -- | Rename the specified variables in a case alternative.
-alphaAltVarsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaAltVarsR :: (BoundVars c, MonadCatch m, MonadUnique m)
               => [Var] -> Rewrite c m CoreAlt
 alphaAltVarsR vs =
   do bs <- arr altVars
      alphaAltVarsWithR (zip (repeat Nothing) (bs `intersect` vs))
 
 -- | Rename all identifiers bound in a case alternative.
-alphaAltR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaAltR :: (BoundVars c, MonadCatch m, MonadUnique m)
           => Rewrite c m CoreAlt
 alphaAltR = arr altVars >>= alphaAltVarsR
 

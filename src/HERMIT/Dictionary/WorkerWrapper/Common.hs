@@ -139,7 +139,7 @@ wwFusionClauseT absE repE fixgE = prefixFailMsg "Building worker/wrapper fusion 
 
 -- Perform the worker/wrapper split using condition 1-beta, introducing
 -- an unproven lemma for assumption C, and an appropriate w/w fusion lemma.
-split1BetaR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+split1BetaR :: ( HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                , HasHermitMEnv m, LiftCoreM m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m
                , MonadUnique m )
             => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
@@ -164,7 +164,7 @@ split1BetaR u nm absE repE = do
 
     return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
 
-split2BetaR :: ( AddBindings c, ExtendPath c Crumb, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+split2BetaR :: ( HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                , HasHermitMEnv m, LiftCoreM m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m
                , MonadUnique m )
             => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr

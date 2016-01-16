@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -67,7 +68,12 @@ module HERMIT.Kure
     , tyVarT, tyVarR
     , litTyT, litTyR
     , appTyT, appTyAllR, appTyAnyR, appTyOneR
+#if __GLASGOW_HASKELL__ > 710
+    , castTyT, castTyAllR, castTyAnyR, castTyOneR
+    , coercionTyT, coercionTyR
+#else
     , funTyT, funTyAllR, funTyAnyR, funTyOneR
+#endif
     , forAllTyT, forAllTyAllR, forAllTyAnyR, forAllTyOneR
     , tyConAppT, tyConAppAllR, tyConAppAnyR, tyConAppOneR
       -- ** Coercions
@@ -128,31 +134,31 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c
              AltCore alt    -> inject <$> applyT allRalt c alt
              ExprCore e     -> inject <$> applyT allRexpr c e
     where
-      allRmodguts :: MonadCatch m => Rewrite c m ModGuts
+      allRmodguts :: Rewrite c m ModGuts
       allRmodguts = modGutsR (extractR r)
       {-# INLINE allRmodguts #-}
 
-      allRprog :: MonadCatch m => Rewrite c m CoreProg
+      allRprog :: Rewrite c m CoreProg
       allRprog = readerT $ \case
                               ProgCons{}  -> progConsAllR (extractR r) (extractR r)
                               _           -> idR
       {-# INLINE allRprog #-}
 
-      allRbind :: MonadCatch m => Rewrite c m CoreBind
+      allRbind :: Rewrite c m CoreBind
       allRbind = readerT $ \case
                               NonRec{}  -> nonRecAllR idR (extractR r) -- we don't descend into the Var
                               Rec _     -> recAllR (const $ extractR r)
       {-# INLINE allRbind #-}
 
-      allRdef :: MonadCatch m => Rewrite c m CoreDef
+      allRdef :: Rewrite c m CoreDef
       allRdef = defAllR idR (extractR r) -- we don't descend into the Id
       {-# INLINE allRdef #-}
 
-      allRalt :: MonadCatch m => Rewrite c m CoreAlt
+      allRalt :: Rewrite c m CoreAlt
       allRalt = altAllR idR (const idR) (extractR r) -- we don't descend into the AltCon or Vars
       {-# INLINE allRalt #-}
 
-      allRexpr :: MonadCatch m => Rewrite c m CoreExpr
+      allRexpr :: Rewrite c m CoreExpr
       allRexpr = readerT $ \case
                               App{}   -> appAllR (extractR r) (extractR r)
                               Lam{}   -> lamAllR idR (extractR r) -- we don't descend into the Var
@@ -172,7 +178,9 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c Type 
   allR r = prefixFailMsg "allR failed: " $
            readerT $ \case
                         AppTy{}     -> appTyAllR r r
+#if __GLASGOW_HASKELL__ <= 710
                         FunTy{}     -> funTyAllR r r
+#endif
                         ForAllTy{}  -> forAllTyAllR idR r
                         TyConApp{}  -> tyConAppAllR idR (const r)
                         _           -> idR
@@ -187,7 +195,11 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c Coerc
            readerT $ \case
                         TyConAppCo{}  -> tyConAppCoAllR idR (const r)
                         AppCo{}       -> appCoAllR r r
+#if __GLASGOW_HASKELL__ > 710
+                        ForAllCo{}    -> forAllCoAllR idR r r
+#else
                         ForAllCo{}    -> forAllCoAllR idR r
+#endif
                         SymCo{}       -> symCoR r
                         SubCo{}       -> subCoR r
                         TransCo{}     -> transCoAllR r r
@@ -208,12 +220,16 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c TyCo 
              TypeCore ty     -> inject <$> applyT (allR $ extractR r) c ty -- exploiting the fact that types do not contain coercions
              CoercionCore co -> inject <$> applyT allRcoercion c co
     where
-      allRcoercion :: MonadCatch m => Rewrite c m Coercion
+      allRcoercion :: Rewrite c m Coercion
       allRcoercion = readerT $ \case
                               Refl{}        -> reflR (extractR r)
                               TyConAppCo{}  -> tyConAppCoAllR idR (const $ extractR r) -- we don't descend into the TyCon
                               AppCo{}       -> appCoAllR (extractR r) (extractR r)
+#if __GLASGOW_HASKELL__ > 710
+                              ForAllCo{}    -> forAllCoAllR idR (extractR r) (extractR r) -- we don't descend into the TyVar
+#else
                               ForAllCo{}    -> forAllCoAllR idR (extractR r) -- we don't descend into the TyVar
+#endif
                               SymCo{}       -> symCoR (extractR r)
                               SubCo{}       -> subCoR (extractR r)
                               TransCo{}     -> transCoAllR (extractR r) (extractR r)
@@ -236,7 +252,7 @@ instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, 
                     LClause cl     -> inject <$> applyT allRclause c cl
                     LCore core     -> inject <$> applyT (allR $ extractR r) c core -- exploiting the fact that clause does not appear within Core
         where
-            allRclause :: MonadCatch m => Rewrite c m Clause
+            allRclause :: Rewrite c m Clause
             allRclause = readerT $ \case
                                 Forall{} -> forallR idR (extractR r) -- we don't descend into the binders
                                 Conj{}   -> conjAllR  (extractR r) (extractR r)
@@ -258,7 +274,7 @@ instance (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, 
                     LTCCore (LCore core)     -> inject <$> applyT (allR (extractR r :: Rewrite c m CoreTC)) c (Core core) -- convert to CoreTC, and exploit the fact that quantifiers and clauses will not appear in Core/CoreTC
                     LTCTyCo tyCo             -> inject <$> applyT (allR $ extractR r) c tyCo -- exploiting the fact that only types and coercions appear within types and coercions
         where
-            allRclause :: MonadCatch m => Rewrite c m Clause
+            allRclause :: Rewrite c m Clause
             allRclause = readerT $ \case
                                 Forall{} -> forallR idR (extractR r) -- we don't descend into the binders
                                 Conj{}   -> conjAllR (extractR r) (extractR r)
@@ -284,31 +300,31 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c
              Core (ExprCore e)     -> inject <$> applyT allRexpr c e
              TyCo tyCo             -> inject <$> applyT (allR $ extractR r) c tyCo -- exploiting the fact that only types and coercions appear within types and coercions
     where
-      allRmodguts :: MonadCatch m => Rewrite c m ModGuts
+      allRmodguts :: Rewrite c m ModGuts
       allRmodguts = modGutsR (extractR r)
       {-# INLINE allRmodguts #-}
 
-      allRprog :: MonadCatch m => Rewrite c m CoreProg
+      allRprog :: Rewrite c m CoreProg
       allRprog = readerT $ \case
                               ProgCons{}  -> progConsAllR (extractR r) (extractR r)
                               _           -> idR
       {-# INLINE allRprog #-}
 
-      allRbind :: MonadCatch m => Rewrite c m CoreBind
+      allRbind :: Rewrite c m CoreBind
       allRbind = readerT $ \case
                               NonRec{}  -> nonRecAllR idR (extractR r) -- we don't descend into the Var
                               Rec _     -> recAllR (const $ extractR r)
       {-# INLINE allRbind #-}
 
-      allRdef :: MonadCatch m => Rewrite c m CoreDef
+      allRdef :: Rewrite c m CoreDef
       allRdef = defAllR idR (extractR r) -- we don't descend into the Id
       {-# INLINE allRdef #-}
 
-      allRalt :: MonadCatch m => Rewrite c m CoreAlt
+      allRalt :: Rewrite c m CoreAlt
       allRalt = altAllR idR (const idR) (extractR r) -- we don't descend into the AltCon or Vars
       {-# INLINE allRalt #-}
 
-      allRexpr :: MonadCatch m => Rewrite c m CoreExpr
+      allRexpr :: Rewrite c m CoreExpr
       allRexpr = readerT $ \case
                               App{}      -> appAllR (extractR r) (extractR r)
                               Lam{}      -> lamAllR idR (extractR r) -- we don't descend into the Var
@@ -978,7 +994,41 @@ appTyOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Type -> Rewrite c
 appTyOneR r1 r2 = unwrapOneR $ appTyAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE appTyOneR #-}
 
+#if __GLASGOW_HASKELL__ > 710
+-- | Transform a type of the form: @CastTy@ 'Type' 'Coercion'
+castTyT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Type b
+castTyT t1 t2 f = transform $ \ c -> \case
+                                      CastTy ty co -> f <$> applyT t1 (c @@ CastTy_Ty) ty <*> applyT t2 (c @@ CastTy_Co) co
+                                      _            -> fail "not a cast type."
+{-# INLINE castTyT #-}
 
+-- | Rewrite all children of a type of the form: @CastTy@ 'Type' 'Coercion'
+castTyAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Type -> Rewrite c m Coercion -> Rewrite c m Type
+castTyAllR r1 r2 = castTyT r1 r2 CastTy
+{-# INLINE castTyAllR #-}
+
+-- | Rewrite any children of a type of the form: @CastTy@ 'Type' 'Coercion'
+castTyAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Type -> Rewrite c m Coercion -> Rewrite c m Type
+castTyAnyR r1 r2 = unwrapAnyR $ castTyAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE castTyAnyR #-}
+
+-- | Rewrite one child of a type of the form: @CastTy@ 'Type' 'Coercion'
+castTyOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Type -> Rewrite c m Coercion -> Rewrite c m Type
+castTyOneR r1 r2 = unwrapOneR $ castTyAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE castTyOneR #-}
+
+-- | Transform a type of the form: @CoercionTy@ 'Coercion'
+coercionTyT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion a -> Transform c m Type a
+coercionTyT t = transform $ \ c -> \case
+                                      CoercionTy co -> applyT t (c @@ CoercionTy_Co) co 
+                                      _             -> fail "not a coercion type."
+{-# INLINE coercionTyT #-}
+
+-- | Rewrite the 'Coercion' child of a type of the form: @CoercionTy@ 'Coercion'
+coercionTyR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Coercion -> Rewrite c m Type
+coercionTyR r = coercionTyT (CoercionTy <$> r)
+{-# INLINE coercionTyR #-}
+#else
 -- | Transform a type of the form: @FunTy@ 'Type' 'Type'
 funTyT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Type b
 funTyT t1 t2 f = transform $ \ c -> \case
@@ -1000,8 +1050,39 @@ funTyAnyR r1 r2 = unwrapAnyR $ funTyAllR (wrapAnyR r1) (wrapAnyR r2)
 funTyOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Type -> Rewrite c m Type -> Rewrite c m Type
 funTyOneR r1 r2 = unwrapOneR $ funTyAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE funTyOneR #-}
+#endif
 
+#if __GLASGOW_HASKELL__ > 710
+-- | Transform a type of the form: @ForAllTy@ 'TyBinder' 'Type'
+forAllTyT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) 
+          => Transform c m TyBinder a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Type b
+forAllTyT t1 t2 f = transform $ \ c -> \case -- TODO: think about the crumbs here
+                                          ForAllTy b@(Named v _vis) ty -> 
+                                            f <$> applyT t1 (c @@ ForAllTy_Var) b
+                                              <*> applyT t2 (addForallBinding v c @@ ForAllTy_Body) ty
+                                          ForAllTy b@(Anon _) ty ->
+                                            f <$> applyT t1 (c @@ FunTy_Dom) b <*> applyT t2 (c @@ FunTy_CoDom) ty
+                                          _             -> fail "not a forall type."
+{-# INLINE forAllTyT #-}
 
+-- | Rewrite all children of a type of the form: @ForAllTy@ 'TyBinder' 'Type'
+forAllTyAllR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) 
+             => Rewrite c m TyBinder -> Rewrite c m Type -> Rewrite c m Type
+forAllTyAllR r1 r2 = forAllTyT r1 r2 ForAllTy
+{-# INLINE forAllTyAllR #-}
+
+-- | Rewrite any children of a type of the form: @ForAllTy@ 'TyBinder' 'Type'
+forAllTyAnyR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) 
+             => Rewrite c m TyBinder -> Rewrite c m Type -> Rewrite c m Type
+forAllTyAnyR r1 r2 = unwrapAnyR $ forAllTyAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE forAllTyAnyR #-}
+
+-- | Rewrite one child of a type of the form: @ForAllTy@ 'TyBinder' 'Type'
+forAllTyOneR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) 
+             => Rewrite c m TyBinder -> Rewrite c m Type -> Rewrite c m Type
+forAllTyOneR r1 r2 = unwrapOneR $ forAllTyAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE forAllTyOneR #-}
+#else
 -- | Transform a type of the form: @ForAllTy@ 'Var' 'Type'
 forAllTyT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m Var a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Type b
 forAllTyT t1 t2 f = transform $ \ c -> \case
@@ -1023,7 +1104,7 @@ forAllTyAnyR r1 r2 = unwrapAnyR $ forAllTyAllR (wrapAnyR r1) (wrapAnyR r2)
 forAllTyOneR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m Var -> Rewrite c m Type -> Rewrite c m Type
 forAllTyOneR r1 r2 = unwrapOneR $ forAllTyAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE forAllTyOneR #-}
-
+#endif
 
 -- | Transform a type of the form: @TyConApp@ 'TyCon' ['KindOrType']
 tyConAppT :: (ExtendPath c Crumb, Monad m) => Transform c m TyCon a1 -> (Int -> Transform c m KindOrType a2) -> (a1 -> [a2] -> b) -> Transform c m Type b
@@ -1110,7 +1191,39 @@ appCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewri
 appCoOneR r1 r2 = unwrapOneR $ appCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE appCoOneR #-}
 
+#if __GLASGOW_HASKELL__ > 710
+-- | Transform a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion' 'Coercion'
+forAllCoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) 
+          => Transform c m TyVar a1 
+          -> Transform c m Coercion a2 
+          -> Transform c m Coercion a3
+          -> (a1 -> a2 -> a3 -> b) -> Transform c m Coercion b
+forAllCoT t1 t2 t3 f = transform $ \ c -> \case
+                                            ForAllCo v c1 c2 -> 
+                                              f <$> applyT t1 (c @@ ForAllCo_TyVar) v 
+                                                <*> applyT t2 (c @@ ForAllCo_KindCo) c1 
+                                                <*> applyT t3 (addForallBinding v c @@ ForAllCo_Co) c2
+                                            _                -> fail "not a forall coercion."
+{-# INLINE forAllCoT #-}
 
+-- | Rewrite all children of a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion' 'Coercion'
+forAllCoAllR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) 
+             => Rewrite c m TyVar -> Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+forAllCoAllR r1 r2 r3 = forAllCoT r1 r2 r3 ForAllCo
+{-# INLINE forAllCoAllR #-}
+
+-- | Rewrite any children of a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion' 'Coercion'
+forAllCoAnyR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) 
+             => Rewrite c m TyVar -> Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+forAllCoAnyR r1 r2 r3 = unwrapAnyR $ forAllCoAllR (wrapAnyR r1) (wrapAnyR r2) (wrapAnyR r3)
+{-# INLINE forAllCoAnyR #-}
+
+-- | Rewrite one child of a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion' 'Coercion'
+forAllCoOneR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) 
+             => Rewrite c m TyVar -> Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+forAllCoOneR r1 r2 r3 = unwrapOneR $ forAllCoAllR (wrapOneR r1) (wrapOneR r2) (wrapOneR r3)
+{-# INLINE forAllCoOneR #-}
+#else
 -- | Transform a coercion of the form: @ForAllCo@ 'TyVar' 'Coercion'
 forAllCoT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) => Transform c m TyVar a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
 forAllCoT t1 t2 f = transform $ \ c -> \case
@@ -1132,7 +1245,7 @@ forAllCoAnyR r1 r2 = unwrapAnyR $ forAllCoAllR (wrapAnyR r1) (wrapAnyR r2)
 forAllCoOneR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m TyVar -> Rewrite c m Coercion -> Rewrite c m Coercion
 forAllCoOneR r1 r2 = unwrapOneR $ forAllCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE forAllCoOneR #-}
-
+#endif
 
 -- | Transform a coercion of the form: @CoVarCo@ 'CoVar'
 coVarCoT :: (ExtendPath c Crumb, Monad m) => Transform c m CoVar b -> Transform c m Coercion b
@@ -1250,7 +1363,29 @@ lrCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m LeftOrRight -> Rew
 lrCoOneR r1 r2 = unwrapOneR $ lrCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE lrCoOneR #-}
 
+#if __GLASGOW_HASKELL__ > 710
+-- | Transform a coercion of the form: @InstCo@ 'Coercion' 'Coercion'
+instCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
+instCoT t1 t2 f = transform $ \ c -> \case
+                                          InstCo c1 c2 -> f <$> applyT t1 (c @@ InstCo_Left) c1 <*> applyT t2 (c @@ InstCo_Right) c2
+                                          _            -> fail "not a coercion instantiation."
+{-# INLINE instCoT #-}
 
+-- | Rewrite all children of a coercion of the form: @InstCo@ 'Coercion' 'Coercion'
+instCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+instCoAllR r1 r2 = instCoT r1 r2 InstCo
+{-# INLINE instCoAllR #-}
+
+-- | Rewrite any children of a coercion of the form: @InstCo@ 'Coercion' 'Coercion'
+instCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+instCoAnyR r1 r2 = unwrapAnyR $ instCoAllR (wrapAnyR r1) (wrapAnyR r2)
+{-# INLINE instCoAnyR #-}
+
+-- | Rewrite one child of a coercion of the form: @InstCo@ 'Coercion' 'Coercion'
+instCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+instCoOneR r1 r2 = unwrapOneR $ instCoAllR (wrapOneR r1) (wrapOneR r2)
+{-# INLINE instCoOneR #-}
+#else
 -- | Transform a coercion of the form: @InstCo@ 'Coercion' 'Type'
 instCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
 instCoT t1 t2 f = transform $ \ c -> \case
@@ -1272,6 +1407,7 @@ instCoAnyR r1 r2 = unwrapAnyR $ instCoAllR (wrapAnyR r1) (wrapAnyR r2)
 instCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Coercion -> Rewrite c m Type -> Rewrite c m Coercion
 instCoOneR r1 r2 = unwrapOneR $ instCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE instCoOneR #-}
+#endif
 
 -- | Transform a coercion of the form: @SubCo@ 'Coercion'
 subCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Coercion b -> Transform c m Coercion b
@@ -1286,7 +1422,15 @@ subCoR r = subCoT (SubCo <$> r)
 {-# INLINE subCoR #-}
 
 -- | Transform a coercion of the form: @UnivCo@ 'FastString' 'Role' 'Type' 'Type'
-univCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> Transform c m Type a2 -> (FastString -> Role -> a1 -> a2 -> b) -> Transform c m Coercion b
+univCoT :: (ExtendPath c Crumb, Monad m) 
+        => Transform c m Type a1 
+        -> Transform c m Type a2 
+#if __GLASGOW_HASKELL__ > 710
+        -> (UnivCoProvenance -> Role -> a1 -> a2 -> b) 
+#else
+        -> (FastString -> Role -> a1 -> a2 -> b) 
+#endif
+        -> Transform c m Coercion b
 univCoT t1 t2 f = transform $ \ c -> \case
                                      UnivCo s r dom ran -> f s r <$> applyT t1 (c @@ UnivCo_Dom) dom <*> applyT t2 (c @@ UnivCo_Ran) ran
                                      _         -> fail "not a universal coercion."

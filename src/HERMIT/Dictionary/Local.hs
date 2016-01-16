@@ -1,4 +1,7 @@
-{-# LANGUAGE FlexibleContexts, KindSignatures, GADTs #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
 
 module HERMIT.Dictionary.Local
     ( -- * Local Structural Manipulations
@@ -159,7 +162,11 @@ abstractR p = prefixFailMsg "abstraction failed: " $
       v' <- constT (cloneVarH id v) -- currently uses the same visible name (via "id").
                                     -- We could do something else here, e.g. add a prime suffix.
       e  <- arr (substCoreExpr v (varToCoreExpr v'))
+#if __GLASGOW_HASKELL__ > 710
+      return $ mkCoreApp (text "abstractR") (Lam v' e) (varToCoreExpr v)
+#else
       return $ mkCoreApp (Lam v' e) (varToCoreExpr v)
+#endif
 
 ------------------------------------------------------------------------------------------------------
 

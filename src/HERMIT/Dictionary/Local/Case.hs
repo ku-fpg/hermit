@@ -389,7 +389,7 @@ caseSplitR :: forall c m. ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasE
 caseSplitR s = prefixFailMsg "case-split failed: " $ do
     c <- contextT
     guardMsg (all (inScope c) $ varSetElems $ freeVarsExpr s) "variables in desired scrutinee are unbound."
-    w <- constT $ newVarH "w" (exprType s)
+    w <- constT $ newIdH "w" (exprType s)
     let f = compileFold [Equality [] s (varToCoreExpr w)]
     e' <- tryR $ withVarsInScope [w] $ extractR (anytdR (promoteR $ runFoldR f) :: Rewrite c m Core)
     constT $ do
@@ -447,7 +447,7 @@ caseSplitInlineR s = caseSplitR s >>> caseInlineAlternativeR
 ------------------------------------------------------------------------------
 
 caseInlineBinderR :: forall c m. ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-                                 , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                                 , ReadBindings c, HasEmptyContext c, MonadCatch m )
                   => CaseBinderInlineOption -> Rewrite c m CoreExpr
 caseInlineBinderR opt =
   do w <- caseBinderIdT
@@ -457,14 +457,14 @@ caseInlineBinderR opt =
 
 -- | Inline the case binder as the case scrutinee everywhere in the case alternatives.
 caseInlineScrutineeR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-                        , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                        , ReadBindings c, HasEmptyContext c, MonadCatch m )
                      => Rewrite c m CoreExpr
 caseInlineScrutineeR = prefixFailMsg "case-inline-scrutinee failed: " $
                        caseInlineBinderR Scrutinee
 
 -- | Inline the case binder as the case-alternative pattern everywhere in the case alternatives.
 caseInlineAlternativeR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-                          , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                          , ReadBindings c, HasEmptyContext c, MonadCatch m )
                        => Rewrite c m CoreExpr
 caseInlineAlternativeR = prefixFailMsg "case-inline-alternative failed: " $
                          caseInlineBinderR Alternative
@@ -486,7 +486,7 @@ caseMergeAltsR = prefixFailMsg "merge-case-alts failed: " $
 
 -- | In the case alternatives, fold any occurrences of the case alt patterns to the case binder.
 caseFoldBinderR :: forall c m. ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-                               , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                               , ReadBindings c, HasEmptyContext c, MonadCatch m )
                 => Rewrite c m CoreExpr
 caseFoldBinderR = prefixFailMsg "case-fold-binder failed: " $
     -- ensure the case binder is not dead, or else fold will fail
@@ -497,7 +497,7 @@ caseFoldBinderR = prefixFailMsg "case-fold-binder failed: " $
 
 -- | A cleverer version of 'mergeCaseAlts' that first attempts to abstract out any occurrences of the alternative pattern using the case binder.
 caseMergeAltsWithBinderR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
-                            , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
+                            , ReadBindings c, HasEmptyContext c, MonadCatch m )
                          => Rewrite c m CoreExpr
 caseMergeAltsWithBinderR =
     prefixFailMsg "merge-case-alts-with-binder failed: " $

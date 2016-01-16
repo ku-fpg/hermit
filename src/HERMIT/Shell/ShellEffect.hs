@@ -54,7 +54,7 @@ data ShellEffectBox where
   deriving Typeable
 
 instance Typeable a => Extern (ShellEffect a) where
-    type Box (ShellEffect a) = ShellEffectBox
+    type Box (ShellEffect _a) = ShellEffectBox
     box = ShellEffectBox
     unbox (ShellEffectBox i) = 
         case cast i of
@@ -63,8 +63,7 @@ instance Typeable a => Extern (ShellEffect a) where
 
 ----------------------------------------------------------------------------------
 
-performShellEffect :: (Functor m,  -- TODO: RM when at 7.10
-                     MonadCatch m, CLMonad m) => ShellEffect a -> m a
+performShellEffect :: (MonadCatch m, CLMonad m) => ShellEffect a -> m a
 performShellEffect Abort  = abort
 performShellEffect Resume = announceUnprovens >> gets cl_cursor >>= resume
 performShellEffect Continue = announceUnprovens >> get >>= continue

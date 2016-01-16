@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -52,7 +53,10 @@ module HERMIT.PrettyPrinter.Common
     , pad
     , hlist
     , vlist
-    , showRole -- AJG: why is this here
+    , showRole 
+#if __GLASGOW_HASKELL__ > 710
+    , showVis
+#endif
     , HermitMark(..) -- AJG: for now
     ) where
 
@@ -77,6 +81,13 @@ showRole :: Role -> String
 showRole Nominal          = "N"
 showRole Representational = "R"
 showRole Phantom          = "P"
+
+#if __GLASGOW_HASKELL__ > 710
+showVis :: VisibilityFlag -> String
+showVis Visible   = "Visible"
+showVis Specified = "Specified"
+showVis Invisible = "Invisible"
+#endif
 
 -- A HERMIT document
 type DocH = MDoc HermitMark

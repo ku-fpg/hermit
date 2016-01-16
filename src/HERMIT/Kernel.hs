@@ -135,7 +135,7 @@ hermitKernel store lastPass callback modGuts = do
 
     msgMV :: MVar Msg <- liftIO newEmptyMVar
 
-    let withAST :: (MonadIO m, MonadCatch m)
+    let withAST :: MonadIO m
                 => AST -> (KernelState -> CoreM (KureM (Maybe KernelState, a))) -> m (AST, a)
         withAST ast k = do
             r <- liftIO $ do

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TupleSections #-}
 
 module HERMIT.Dictionary.WorkerWrapper.FixResult
@@ -185,7 +186,11 @@ wwResultFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
     wwL tyA tyB = prefixFailMsg "worker/wrapper factorisation failed: " $
                   do (tyXA,f)  <- isFixExprT
                      (_,tyX,tA)  <- constT (splitFunTypeM tyXA)
+#if __GLASGOW_HASKELL__ > 710
+                     let tyXB  =  ForAllTy (Anon tyX) tyB
+#else
                      let tyXB  =  FunTy tyX tyB
+#endif
                      h         <- constT (newIdH "h" tyXB)
                      guardMsg (eqType tyA tA) ("abs/rep types do not match fix body type.")
                      x0        <- constT (newIdH "x0" tyX)

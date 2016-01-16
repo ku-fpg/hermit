@@ -62,20 +62,17 @@ rememberR nm = prefixFailMsg "remember failed: " $ do
     insertLemmaT (prefixRemembered nm) $ Lemma (mkClause [] (varToCoreExpr v) e) Proven NotUsed
 
 -- | Unfold a remembered definition (like unfoldR, but looks in stash instead of context).
-unfoldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-                     , HasLemmas m, MonadCatch m, MonadUnique m)
+unfoldRememberedR :: (LemmaContext c, ReadBindings c, HasLemmas m, MonadCatch m)
                   => Used -> LemmaName -> Rewrite c m CoreExpr
 unfoldRememberedR u = prefixFailMsg "Unfolding remembered definition failed: " . forwardT . lemmaBiR u . prefixRemembered
 
 -- | Fold a remembered definition (like foldR, but looks in stash instead of context).
-foldRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-                   , HasLemmas m, MonadCatch m, MonadUnique m)
+foldRememberedR :: (LemmaContext c, ReadBindings c, HasLemmas m, MonadCatch m)
                 => Used -> LemmaName -> Rewrite c m CoreExpr
 foldRememberedR u = prefixFailMsg "Folding remembered definition failed: " . backwardT . lemmaBiR u . prefixRemembered
 
 -- | Fold any of the remembered definitions.
-foldAnyRememberedR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
-                      , HasLemmas m, MonadCatch m, MonadUnique m)
+foldAnyRememberedR :: (LemmaContext c, ReadBindings c, HasLemmas m, MonadCatch m)
                    => Rewrite c m CoreExpr
 foldAnyRememberedR = setFailMsg "Fold failed: no definitions could be folded."
                    $ compileRememberedT >>= runFoldR

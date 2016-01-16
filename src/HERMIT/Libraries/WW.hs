@@ -1,4 +1,6 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 module HERMIT.Libraries.WW (lemmas) where
 
 import HERMIT.Lemma
@@ -39,13 +41,17 @@ workerWrapperLemmaT = do
 
         let [aTy, bTy] = map mkTyVarTy [aTv, bTv]
 
-        abs <- newVarH "abs" (bTy --> aTy)
-        rep <- newVarH "rep" (aTy --> bTy)
-        f <- newVarH "f" (aTy --> aTy)
+        abs <- newIdH "abs" (bTy --> aTy)
+        rep <- newIdH "rep" (aTy --> bTy)
+        f <- newIdH "f" (aTy --> aTy)
 
         -- abs . rep = id
         lhsA <- inContextM c $ buildCompositionT (toCE abs) (toCE rep)
+#if __GLASGOW_HASKELL__ > 710
+        let preA = lhsA === mkCoreApp (text "workerWrapperLemmaT") (toCE idId) (toCE aTv)
+#else
         let preA = lhsA === mkCoreApp (toCE idId) (toCE aTv)
+#endif
 
         -- abs . rep . f = f
         repAfterF <- inContextM c $ buildCompositionT (toCE rep) (toCE f)
@@ -79,6 +85,6 @@ workerWrapperLemmaT = do
 -------------------------------------------------
 
 newTyVar :: MonadUnique m => String -> m TyVar
-newTyVar nm = newVarH nm liftedTypeKind
+newTyVar nm = newTyVarH nm liftedTypeKind
 
 -------------------------------------------------

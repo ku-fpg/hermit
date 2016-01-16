@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 
@@ -23,7 +24,8 @@ import Data.Default.Class
 import HERMIT.Context
 import HERMIT.Core
 import HERMIT.External
-import HERMIT.GHC hiding ((<+>), (<>), ($$), ($+$), cat, sep, fsep, hsep, empty, nest, vcat, char, text, keyword, hang)
+import HERMIT.GHC hiding 
+  ((<+>), (<>), ($$), ($+$), cat, sep, fsep, hsep, empty, isEmpty, nest, vcat, char, text, keyword, hang, parens)
 import HERMIT.Kure 
 import HERMIT.Lemma
 import HERMIT.Monad
@@ -380,25 +382,64 @@ ppTypeModeR =
        _        -> ppKindOrTypeR
 
 ppKindOrTypeR :: Transform PrettyC HermitM KindOrType RetExpr
-ppKindOrTypeR =
-    tyVarT (RetAtom <$> ppVarOcc)
- <+ litTyT (RetAtom <$> ppLitTy)
- <+ appTyT ppKindOrTypeR ppKindOrTypeR retApp
- <+ funTyT ppKindOrTypeR ppKindOrTypeR (retArrowType ATType)
- <+ forAllTyT ppVar ppKindOrTypeR retForAll
- <+ tyConAppT (forkFirst ppTyCon) (\ _ -> ppKindOrTypeR)
-              (\ (pCon,tyCon) tys -> if | isFunTyCon tyCon && length tys == 2 -> let [ty1,ty2] = tys in retArrowType ATType ty1 ty2
-                                        | tyCon == listTyCon -> RetAtom $ tyChar '[' <> (case tys of
-                                                                                           []  -> empty
-                                                                                           t:_ -> normalExpr t) <> tyChar ']'
-                                        | isTupleTyCon tyCon -> RetAtom $ tyChar '(' <> (if null tys
-                                                                                         then empty
-                                                                                         else foldr1 (\ ty r -> ty <> tyChar ',' <+> r) (map normalExpr tys)
-                                                                                        )
-                                                                                     <> tyChar ')'
-                                        | isLiftedTypeKindCon tyCon -> RetAtom $ tyChar '*'
-                                        | otherwise                 -> retApps pCon tys
-              )
+ppKindOrTypeR = readerT $ \case
+  TyVarTy{}  -> tyVarT (RetAtom <$> ppVarOcc)
+  AppTy{}    -> appTyT ppKindOrTypeR ppKindOrTypeR retApp
+  TyConApp{} -> do
+    ty <- idR 
+    tyConAppT (forkFirst ppTyCon) (\ _ -> ppKindOrTypeR)
+              (\ (pCon,tyCon) tys -> 
+                if | isFunTyCon tyCon && length tys == 2 -> let [ty1,ty2] = tys in retArrowType ATType ty1 ty2
+                   | tyCon == listTyCon -> RetAtom $ tyChar '[' <> (case tys of
+                                                                      []  -> empty
+                                                                      t:_ -> normalExpr t) <> tyChar ']'
+                   | isTupleTyCon tyCon -> RetAtom $ tyChar '(' <> (if null tys
+                                                                    then empty
+                                                                    else foldr1 (\ t r -> t <> tyChar ',' <+> r) (map normalExpr tys)
+                                                                   )
+                                                                <> tyChar ')'
+#if __GLASGOW_HASKELL__ > 710
+                   | isStarKind ty      -> RetAtom $ tyChar '*'
+#else
+                   | isLiftedTypeKindCon tyCon -> RetAtom $ tyChar '*'
+#endif
+                   | otherwise          -> retApps pCon tys
+                )
+#if __GLASGOW_HASKELL__ > 710
+  -- TODO: these are in AST format... FIXME
+  CastTy{}   -> castTyT ppKindOrType ppCoercion (\ ty co -> RetExpr $ tyText "CastTy" $$ nest 2 (cat [parens ty, parens co]))
+  CoercionTy{} -> coercionTyT ppCoercion >>= \ co -> return (RetExpr $ tyText "CoercionTy" $$ nest 2 (parens co))
+  ForAllTy{} -> forAllTyT ppTyBinder ppKindOrType (\ tb ty -> RetExpr $ tyText "ForAllTy" <+> tb $$ nest 2 (parens ty))
+#else
+  FunTy{}    -> funTyT ppKindOrTypeR ppKindOrTypeR (retArrowType ATType)
+  ForAllTy{} -> forAllTyT ppVar ppKindOrTypeR retForAll
+#endif
+  LitTy{}    -> litTyT (RetAtom <$> ppLitTy)
+
+#if __GLASGOW_HASKELL__ > 710
+-- TODO: these are in AST format... FIXME
+ppTyBinder :: PrettyH TyBinder
+ppTyBinder = readerT $ \case
+  Named tv v -> do
+    d <- return tv >>> ppVar
+    return $ tyText "Named" <+> d <+> tyText (showVis v)
+  Anon ty -> do
+    d <- return ty >>> ppKindOrType
+    return $ tyText "Anon" <+> d
+
+-- TODO: these are in AST format... FIXME
+ppUnivCoProvenance :: PrettyH UnivCoProvenance
+ppUnivCoProvenance = readerT $ \case
+  UnsafeCoerceProv -> return $ coText "UnsafeCoerceProv"
+  PhantomProv co -> do
+    d <- return co >>> ppCoercion
+    return $ coText "PhantomProv" <+> parens d
+  ProofIrrelProv co -> do
+    d <- return co >>> ppCoercion
+    return $ coText "ProofIrrelProv" <+> parens d
+  PluginProv s -> return $ coText "PluginProv" <+> coText s
+  HoleProv _ -> return $ coText "HoleProv - IMPOSSIBLE!"
+#endif
 
 --------------------------------------------------------------------
 
@@ -414,33 +455,57 @@ ppCoercionModeR = do opts <- prettyC_options ^<< contextT
                        _        -> ppCoercionR
 
 ppCoercionR :: Transform PrettyC HermitM Coercion RetExpr
-ppCoercionR =
-    coVarCoT (RetAtom <$> ppVarOcc)
- <+ symCoT (ppCoercionR >>> parenExpr >>^ \ co -> RetExpr (coKeyword "sym" <+> co))
- <+ subCoT (ppCoercionR >>> parenExpr >>^ \ co -> RetExpr (coKeyword "sub" <+> co))
- <+ forAllCoT ppBinderMode ppCoercionR retForAll
- <+ transCoT (ppCoercionR >>> parenExprExceptApp) (ppCoercionR >>> parenExprExceptApp) (\ co1 co2 -> RetExpr (co1 <+> coChar ';' <+> co2))
- <+ nthCoT (arr show) (ppCoercionR >>> parenExpr) (\ n co -> RetExpr (coKeyword "nth" <+> coText n <+> co))
- <+ instCoT (ppCoercionR >>> parenExpr &&& parenExprExceptApp) (ppTypeModeR >>> parenExprExceptApp) (\ (cop1,cop2) ty -> if isEmpty ty
-                                                                                                                         then RetExpr (coText "inst" <+> cop1)
-                                                                                                                         else RetExpr (cop2 <+> coChar '@' <+> ty)
-                                                                                                    )
- <+ appCoT ppCoercionR ppCoercionR retApp
- -- TODO: Figure out how to properly pp new branched Axioms and Left/Right Coercions
- <+ reflT (ppTypeModeR >>^ normalExpr) (\ r ty -> RetAtom $ if isEmpty ty then coText "refl" else coChar '<' <> coText (showRole r ++ ":") <> ty <> coChar '>')
- <+ tyConAppCoT (forkFirst ppTyConCo) (const ppCoercionR)
+ppCoercionR = readerT $ \case
+  Refl{}        -> reflT (ppTypeModeR >>^ normalExpr) (\ r ty -> RetAtom $ if isEmpty ty then coText "refl" else coChar '<' <> coText (showRole r ++ ":") <> ty <> coChar '>')
+  TyConAppCo{}  -> 
+    tyConAppCoT (forkFirst ppTyConCo) (const ppCoercionR)
                 (\ r (ptc, tc) cs -> if isFunTyCon tc && (length cs == 2)
                                      then let [c1,c2] = cs
                                             in retArrowType ATCoercion c1 c2
                                      else retApps (coText (showRole r ++ ":") <> ptc) cs)
- <+ axiomInstCoT (coAxiomName ^>> ppName CoercionColor) ppSDoc (\ _ -> ppCoercionR >>> parenExpr) (\ ax idx coes -> RetExpr (coText "axiomInst" <+> ax <+> idx <+> sep coes))
- <+ lrCoT ppSDoc (ppCoercionR >>> parenExpr) (\ lr co -> RetExpr (coercionColor lr <+> co))
+  AppCo{}       -> appCoT ppCoercionR ppCoercionR retApp
+#if __GLASGOW_HASKELL__ > 710
+  -- TODO: these are in AST format... FIXME
+  ForAllCo{}    -> forAllCoT ppVar ppCoercion ppCoercion $ \ v c1 c2 ->
+                    RetExpr $ coText "ForAllCo" <+> v $$ nest 2 (cat [parens c1, parens c2])
+#else
+  ForAllCo{}    -> forAllCoT ppBinderMode ppCoercionR retForAll
+#endif
+  CoVarCo{}     -> coVarCoT (RetAtom <$> ppVarOcc)
+  AxiomInstCo{} -> axiomInstCoT (coAxiomName ^>> ppName CoercionColor) ppSDoc 
+                                (\ _ -> ppCoercionR >>> parenExpr) 
+                                (\ ax idx coes -> RetExpr (coText "axiomInst" <+> ax <+> idx <+> sep coes))
+#if __GLASGOW_HASKELL__ > 710
+  -- TODO: these are in AST format... FIXME
+  UnivCo p _ _ _ -> do
+    pd <- return p >>> ppUnivCoProvenance
+    univCoT ppKindOrType ppKindOrType $ \ _ r dom ran ->
+      RetExpr $ coText "UnivCo" <+> pd <+> coText (showRole r) $$ nest 2 (cat [parens dom, parens ran])
+#else
+  UnivCo{}      -> univCoT ppTypeModeR ppTypeModeR
+                           (\ s r dom ran -> retApps (coKeyword "univ" <+> coText (show s) <+> coText (showRole r)) [dom,ran])
+#endif
+  SymCo{}       -> symCoT (ppCoercionR >>> parenExpr >>^ \ co -> RetExpr (coKeyword "sym" <+> co))
+  TransCo{}     -> transCoT (ppCoercionR >>> parenExprExceptApp) 
+                            (ppCoercionR >>> parenExprExceptApp) 
+                            (\ co1 co2 -> RetExpr (co1 <+> coChar ';' <+> co2))
+  NthCo{}       -> nthCoT (arr show) (ppCoercionR >>> parenExpr) (\ n co -> RetExpr (coKeyword "nth" <+> coText n <+> co))
+  LRCo{}        -> lrCoT ppSDoc (ppCoercionR >>> parenExpr) (\ lr co -> RetExpr (coercionColor lr <+> co))
  
- <+ univCoT ppTypeModeR ppTypeModeR
-            (\ s r dom ran -> retApps (coKeyword "univ" <+> coText (show s) <+> coText (showRole r)) [dom,ran])
-
-
- <+ constT (return . RetAtom $ text "Unsupported Coercion Constructor")
+#if __GLASGOW_HASKELL__ > 710
+  -- TODO: these are in AST format... FIXME
+  InstCo{}      -> instCoT ppCoercion ppCoercion (\ c1 c2 -> RetExpr $ coText "InstCo" $$ nest 2 (cat [parens c1, parens c2]))
+#else
+  InstCo{}      -> instCoT (ppCoercionR >>> parenExpr &&& parenExprExceptApp) 
+                           (ppTypeModeR >>> parenExprExceptApp) 
+                           (\ (cop1,cop2) ty -> if isEmpty ty
+                                                then RetExpr (coText "inst" <+> cop1)
+                                                else RetExpr (cop2 <+> coChar '@' <+> ty)
+                           )
+#endif
+  SubCo{}       -> subCoT (ppCoercionR >>> parenExpr >>^ \ co -> RetExpr (coKeyword "sub" <+> co))
+  -- TODO: comment this out and add missing cases
+  -- _             -> constT (return . RetAtom $ text "Unsupported Coercion Constructor")
 
 ppCoKind :: PrettyH Coercion
 ppCoKind = do

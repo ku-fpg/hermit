@@ -128,13 +128,13 @@ externals = map (.+ KURE)
 
 ------------------------------------------------------------------------------------
 
-hfocusR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, Walker c u, MonadCatch m)
+hfocusR :: (ReadPath c Crumb, Walker c u, MonadCatch m)
         => Transform c m u LocalPathH -> Rewrite c m u -> Rewrite c m u
 hfocusR tp r = do lp <- tp
                   localPathR lp r
 {-# INLINE hfocusR #-}
 
-hfocusT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, HasEmptyContext c, Walker c u, MonadCatch m)
+hfocusT :: (ReadPath c Crumb, Walker c u, MonadCatch m)
         => Transform c m u LocalPathH -> Transform c m u b -> Transform c m u b
 hfocusT tp t = do lp <- tp
                   localPathT lp t

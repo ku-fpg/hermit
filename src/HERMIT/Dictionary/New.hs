@@ -3,7 +3,6 @@ module HERMIT.Dictionary.New where
 
 import Control.Arrow
 
-import HERMIT.Context
 import HERMIT.Core
 import HERMIT.Kure
 import HERMIT.External
@@ -49,7 +48,7 @@ externals = map ((.+ Experiment) . (.+ TODO))
 -- TODO: there might be a better module for this
 
 -- | Test if the current expression is an identifier matching the given name.
-isVar :: (ExtendPath c Crumb, AddBindings c, MonadCatch m) => String -> Transform c m CoreExpr ()
+isVar :: (ExtendPath c Crumb, MonadCatch m) => String -> Transform c m CoreExpr ()
 isVar nm = varT (arr $ cmpString2Var nm) >>= guardM
 
 ------------------------------------------------------------------------------------------------------
