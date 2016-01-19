@@ -596,7 +596,7 @@ nonRecIntroR nm e = readerT $ \case
                       _          -> fail "can only introduce non-recursive bindings at Program or Expression nodes."
 
 -- | Introduce a local definition for a (possibly imported) identifier.
--- Rewrites occurences of the identifier to point to this new local definiton.
+-- Rewrites occurrences of the identifier to point to this new local definiton.
 letIntroUnfoldingR :: ( ReadBindings c, HasHermitMEnv m, LiftCoreM m
                       , MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
                    => HermitName -> Rewrite c m CoreExpr
