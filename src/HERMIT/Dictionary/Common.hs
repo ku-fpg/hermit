@@ -72,7 +72,7 @@ callT :: Monad m => Transform c m CoreExpr (CoreExpr, [CoreExpr])
 callT = contextfreeT $ \ e -> case e of
                                 Var {} -> return (e, [])
                                 App {} -> return (collectArgs e)
-                                _      -> fail "not an application or variable occurence."
+                                _      -> fail "not an application or variable occurrence."
 
 -- | Succeeds if we are looking at an application matching the given predicate.
 callPredT :: Monad m => (Id -> [CoreExpr] -> Bool) -> Transform c m CoreExpr (CoreExpr, [CoreExpr])

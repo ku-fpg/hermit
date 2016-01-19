@@ -231,7 +231,7 @@ ppSDoc = do dynFlags <- constT getDynFlags
 ppVar :: PrettyH Var
 ppVar = readerT $ \ v -> varName ^>> ppName (varColor v)
 
--- For var occurences (in CoreExpr)
+-- For var occurrences (in CoreExpr)
 ppVarOcc :: PrettyH Var
 ppVarOcc = do
     (c,i) <- exposeT
