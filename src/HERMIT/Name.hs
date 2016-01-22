@@ -47,6 +47,7 @@ module HERMIT.Name
     , findType
     , findInNameSpace
     , findInNameSpaces
+    , findInNSModGuts
     ) where
 
 import Control.Monad
