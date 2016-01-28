@@ -79,7 +79,4 @@ script:
  - cabal check
  - cabal sdist
 
-after_script:
- - hpc-coveralls --exclude-dir=test spec
-
 # EOF
