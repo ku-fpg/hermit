@@ -34,6 +34,7 @@ import Prelude hiding (lookup)
 import Control.Monad
 
 import Data.Dynamic (Typeable)
+import Data.Semigroup (Semigroup(..))
 import Data.String (IsString(..))
 import qualified Data.Map as M
 
@@ -98,7 +99,10 @@ newtype LemmaName = LemmaName String deriving (Eq, Ord, Typeable)
 
 instance Monoid LemmaName where
     mempty = LemmaName mempty
-    mappend (LemmaName n1) (LemmaName n2) = LemmaName (mappend n1 n2)
+    mappend = (<>)
+
+instance Semigroup LemmaName where
+    LemmaName n1 <> LemmaName n2 = LemmaName (n1 <> n2)
 
 instance IsString LemmaName where fromString = LemmaName
 instance Show LemmaName where show (LemmaName s) = s

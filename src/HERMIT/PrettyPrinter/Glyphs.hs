@@ -5,6 +5,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 module HERMIT.PrettyPrinter.Glyphs where
 
+import Data.Semigroup (Semigroup(..))
 import Data.Typeable
 
 import HERMIT.Kure
@@ -58,7 +59,10 @@ instance RenderSpecial Glyphs where
 
 instance Monoid Glyphs where
     mempty = Glyphs mempty
-    mappend (Glyphs rs1) (Glyphs rs2) =
+    mappend = (<>)
+
+instance Semigroup Glyphs where
+    Glyphs rs1 <> Glyphs rs2 =
         Glyphs . flattenGlyphs . mergeGlyphs $ rs1 ++ rs2
 
 flattenGlyphs :: [Glyph] -> [Glyph]

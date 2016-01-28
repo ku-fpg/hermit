@@ -17,8 +17,9 @@ module HERMIT.Shell.Types where
 
 import           Control.Arrow
 import           Control.Concurrent.STM
-import           Control.Monad 
+import           Control.Monad
 import           Control.Monad.Error.Class (MonadError(..))
+import qualified Control.Monad.Fail as Fail (MonadFail(..))
 import           Control.Monad.IO.Class (MonadIO(..))
 import           Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
 import           Control.Monad.State (MonadState(..), StateT(..), gets, modify)
@@ -233,6 +234,9 @@ instance MonadTrans CLT where
 instance Monad m => Monad (CLT m) where
     return = CLT . return
     (CLT m) >>= k = CLT (m >>= unCLT . k)
+    fail = Fail.fail
+
+instance Monad m => Fail.MonadFail (CLT m) where
     fail = CLT . throwError . CLError
 
 -- | Run a CLT computation.

@@ -34,7 +34,8 @@ module HERMIT.Monad
 
 import Prelude hiding (lookup)
 
-import Control.Monad 
+import Control.Monad
+import qualified Control.Monad.Fail as Fail
 import Control.Monad.IO.Class
 
 import Data.Map
@@ -122,6 +123,10 @@ instance Monad HermitM where
                                                         in  runHermitM (f a) env')
                                                 (return . fail)
 
+  fail :: String -> HermitM a
+  fail = Fail.fail
+
+instance Fail.MonadFail HermitM where
   fail :: String -> HermitM a
   fail msg = HermitM $ const $ return $ fail msg
 

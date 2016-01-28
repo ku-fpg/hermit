@@ -11,6 +11,7 @@ module HERMIT.Plugin.Types where
 
 import Control.Concurrent.STM
 import Control.Monad.Error.Class (MonadError(..))
+import qualified Control.Monad.Fail as Fail (MonadFail(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Reader (MonadReader(..), ReaderT(..))
 import Control.Monad.State (MonadState(..), StateT(..))
@@ -40,6 +41,9 @@ runPluginT pr ps = flip runStateT ps . flip runReaderT pr . runExceptT . unPlugi
 instance Monad m => Monad (PluginT m) where
     return = PluginT . return
     PluginT m >>= k = PluginT (m >>= unPluginT . k)
+    fail = Fail.fail
+
+instance Monad m => Fail.MonadFail (PluginT m) where
     fail = PluginT . throwError . PError
 
 instance MonadTrans PluginT where

@@ -53,7 +53,7 @@ module HERMIT.PrettyPrinter.Common
     , pad
     , hlist
     , vlist
-    , showRole 
+    , showRole
 #if __GLASGOW_HASKELL__ > 710
     , showVis
 #endif
@@ -63,6 +63,7 @@ module HERMIT.PrettyPrinter.Common
 import Data.Char
 import Data.Default.Class
 import qualified Data.Map as M
+import qualified Data.Semigroup as Semigroup
 import Data.Typeable
 
 import GHC.Generics
@@ -204,7 +205,7 @@ instance AddBindings PrettyC where
 instance BoundVars PrettyC where
   boundVars :: PrettyC -> VarSet
   boundVars = mkVarSet . M.keys . prettyC_vars
-                            
+
 instance HasEmptyContext PrettyC where
   setEmptyContext :: PrettyC -> PrettyC
   setEmptyContext c = c { prettyC_path = mempty
@@ -325,7 +326,10 @@ newtype ASCII = ASCII String deriving Typeable
 
 instance Monoid ASCII where
         mempty = ASCII ""
-        mappend (ASCII xs) (ASCII ys) = ASCII (xs ++ ys)
+        mappend = (Semigroup.<>)
+
+instance Semigroup.Semigroup ASCII where
+        ASCII xs <> ASCII ys = ASCII (xs ++ ys)
 
 instance RenderSpecial ASCII where
         renderSpecial LambdaSymbol        = ASCII "\\"   -- lambda
@@ -363,7 +367,10 @@ newtype LaTeX = LaTeX String
 
 instance Monoid LaTeX where
         mempty = LaTeX ""
-        mappend (LaTeX xs) (LaTeX ys) = LaTeX (xs ++ ys)
+        mappend = (Semigroup.<>)
+
+instance Semigroup.Semigroup LaTeX where
+        LaTeX xs <> LaTeX ys = LaTeX (xs ++ ys)
 
 instance RenderSpecial LaTeX where
         renderSpecial LambdaSymbol        = LaTeX "\\ensuremath{\\lambda}"
@@ -385,7 +392,10 @@ newtype HTML = HTML String deriving Typeable
 
 instance Monoid HTML where
         mempty = HTML ""
-        mappend (HTML xs) (HTML ys) = HTML (xs ++ ys)
+        mappend = (Semigroup.<>)
+
+instance Semigroup.Semigroup HTML where
+        HTML xs <> HTML ys = HTML (xs ++ ys)
 
 instance RenderSpecial HTML where
         renderSpecial LambdaSymbol        = HTML "&#955;"
@@ -535,7 +545,10 @@ instance RenderSpecial DebugPretty where
 
 instance Monoid DebugPretty where
         mempty = DebugPretty ""
-        mappend (DebugPretty xs) (DebugPretty ys) = DebugPretty $ xs ++ ys
+        mappend = (Semigroup.<>)
+
+instance Semigroup.Semigroup DebugPretty where
+        DebugPretty xs <> DebugPretty ys = DebugPretty $ xs ++ ys
 
 instance RenderCode DebugPretty where
         rStart = DebugPretty "(START)\n"

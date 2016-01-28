@@ -8,6 +8,7 @@ import Control.Arrow
 import Control.Monad.State
 
 import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
+import Data.Semigroup (Semigroup(..))
 import Data.Typeable
 
 import HERMIT.Dictionary (traceR)
@@ -47,7 +48,10 @@ instance RenderSpecial UnicodeTerminal where
 
 instance Monoid UnicodeTerminal where
         mempty = UnicodeTerminal $ \ _ _ -> return ()
-        mappend (UnicodeTerminal f1) (UnicodeTerminal f2) = UnicodeTerminal $ \ h p -> f1 h p >> f2 h p
+        mappend = (<>)
+
+instance Semigroup UnicodeTerminal where
+        UnicodeTerminal f1 <> UnicodeTerminal f2 = UnicodeTerminal $ \ h p -> f1 h p >> f2 h p
 
 unicodeConsole :: Handle -> PrettyOptions -> Either String DocH -> IO ()
 unicodeConsole h _    (Left str)  = hPutStr h str
