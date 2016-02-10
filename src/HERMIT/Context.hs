@@ -231,13 +231,16 @@ lookupHermitBindingSite v depth c = do HB d bnd _ <- lookupHermitBinding v c
 
 -- | A class of contexts that store GHC rewrite rules.
 class HasCoreRules c where
-    hermitCoreRules :: c -> [CoreRule]
+    hermitCoreRules    :: c -> [CoreRule]
+    addHermitCoreRules :: [CoreRule] -> c -> c
 
 deriving instance Typeable HasCoreRules
 
 instance HasCoreRules [CoreRule] where
     hermitCoreRules :: [CoreRule] -> [CoreRule]
     hermitCoreRules = id
+    addHermitCoreRules :: [CoreRule] -> [CoreRule] -> [CoreRule]
+    addHermitCoreRules = (++)
 
 ------------------------------------------------------------------------
 
@@ -354,6 +357,8 @@ instance ReadBindings HermitC where
 instance HasCoreRules HermitC where
   hermitCoreRules :: HermitC -> [CoreRule]
   hermitCoreRules = hermitC_specRules
+  addHermitCoreRules :: [CoreRule] -> HermitC -> HermitC
+  addHermitCoreRules rules c = c { hermitC_specRules = rules ++ hermitC_specRules c }
 
 ------------------------------------------------------------------------
 
