@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE TupleSections #-}
@@ -31,13 +30,12 @@ import Data.List (delete, (\\), intersect)
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, fromMaybe, maybeToList)
 import qualified Data.IntMap.Lazy as I
-import Data.Typeable
 
 import HERMIT.Core
 import HERMIT.Context
 import HERMIT.External
 import HERMIT.GHC
-import HERMIT.Kure 
+import HERMIT.Kure
 import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.Name
@@ -93,7 +91,7 @@ runFoldR compiled = transform $ \c -> maybeM "no match." . runFold compiled c
 
 ------------------------------------------------------------------------
 
-newtype CompiledFold = CompiledFold (EMap ([Var], CoreExpr)) deriving Typeable
+newtype CompiledFold = CompiledFold (EMap ([Var], CoreExpr))
 
 -- | Attempt to apply a list of Equalitys to the given expression, folding the
 -- left-hand side into an application of the right-hand side. This
@@ -233,7 +231,7 @@ instance Fold TyMap where
     fEmpty = TyMEmpty
 
     fAlter :: AlphaEnv -> [Var] -> Key TyMap -> A a -> TyMap a -> TyMap a
-    fAlter env vs ty f TyMEmpty = 
+    fAlter env vs ty f TyMEmpty =
 #if __GLASGOW_HASKELL__ > 710
       fAlter env vs ty f (TyM fEmpty fEmpty fEmpty fEmpty fEmpty fEmpty emptyNameEnv fEmpty)
 #else
@@ -295,7 +293,7 @@ tyBinderVars :: TyBinder -> [TyVar]
 tyBinderVars (Named tv _) = [tv]
 tyBinderVars (Anon _ty) = []
 
-data TyBinderMap a = 
+data TyBinderMap a =
   TBM { tbmNamed :: BMap (VisMap a)
       , tbmAnon :: TyMap a
       }
@@ -326,7 +324,7 @@ data VisMap a =
 
 instance Fold VisMap where
   type Key VisMap = VisibilityFlag
-  
+
   fEmpty :: VisMap a
   fEmpty = VisMap Nothing Nothing Nothing
 
@@ -618,7 +616,7 @@ instance Fold CLMap where
 ----------------------------------------------------------------------------
 
 -- | An equality is represented as a set of universally quantified binders, and the LHS and RHS of the equality.
-data Equality = Equality [CoreBndr] CoreExpr CoreExpr deriving Typeable
+data Equality = Equality [CoreBndr] CoreExpr CoreExpr
 
 -- | Build an equality from a list of universally quantified binders and two expressions.
 -- If the head of either expression is a lambda expression, it's binder will become a universally quantified binder
@@ -678,7 +676,7 @@ freeVarsEquality (Equality bs lhs rhs) =
 
 ------------------------------------------------------------------------------
 
-data RewriteEqualityBox = RewriteEqualityBox (RewriteH Equality) deriving Typeable
+data RewriteEqualityBox = RewriteEqualityBox (RewriteH Equality)
 
 instance Extern (RewriteH Equality) where
     type Box (RewriteH Equality) = RewriteEqualityBox
@@ -687,7 +685,7 @@ instance Extern (RewriteH Equality) where
 
 -----------------------------------------------------------------
 
-data TransformEqualityStringBox = TransformEqualityStringBox (TransformH Equality String) deriving Typeable
+data TransformEqualityStringBox = TransformEqualityStringBox (TransformH Equality String)
 
 instance Extern (TransformH Equality String) where
     type Box (TransformH Equality String) = TransformEqualityStringBox
@@ -696,7 +694,7 @@ instance Extern (TransformH Equality String) where
 
 -----------------------------------------------------------------
 
-data TransformEqualityUnitBox = TransformEqualityUnitBox (TransformH Equality ()) deriving Typeable
+data TransformEqualityUnitBox = TransformEqualityUnitBox (TransformH Equality ())
 
 instance Extern (TransformH Equality ()) where
     type Box (TransformH Equality ()) = TransformEqualityUnitBox

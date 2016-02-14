@@ -1,9 +1,7 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module HERMIT.Context
@@ -56,7 +54,6 @@ import Prelude hiding (lookup)
 import Control.Monad
 
 import Data.Map hiding (map, foldr, filter)
-import Data.Typeable
 
 import Language.KURE
 import Language.KURE.ExtendableContext
@@ -81,12 +78,11 @@ data HermitBindingSite = LAM                                -- ^ A lambda-bound 
                        | CASEBINDER CoreExpr (AltCon,[Var]) -- ^ A case binder.  We store both the scrutinised expression, and the case alternative 'AltCon' and variables.
                        | FORALL                             -- ^ A universally quantified type variable.
                        | TOPLEVEL CoreExpr                  -- ^ A special case.  When we're focussed on ModGuts, we treat all top-level bindings as being in scope at depth 0.
-  deriving Typeable
 
 data HermitBinding = HB { hbDepth :: BindingDepth
                         , hbSite :: HermitBindingSite
                         , hbPath :: AbsolutePathH
-                        } deriving Typeable
+                        }
 
 -- | Retrieve the expression in a 'HermitBindingSite', if there is one.
 hermitBindingSiteExpr :: HermitBindingSite -> KureM CoreExpr
@@ -126,8 +122,6 @@ class AddBindings c where
   --   This can also be used for solitary bindings (e.g. lambdas).
   --   Bindings are added in parallel sets to help with shadowing issues.
   addHermitBindings :: [(Var,HermitBindingSite,AbsolutePathH)] -> c -> c
-
-deriving instance Typeable AddBindings
 
 -- | The bindings are just discarded.
 instance AddBindings (SnocPath crumb) where
@@ -187,8 +181,6 @@ addForallBinding v c = addHermitBindings [(v,FORALL,absPath c @@ ForAllTy_Var)] 
 class BoundVars c where
   boundVars :: c -> VarSet
 
-deriving instance Typeable BoundVars
-
 instance BoundVars VarSet where
   boundVars :: VarSet -> VarSet
   boundVars = id
@@ -201,8 +193,6 @@ findBoundVars p = filterVarSet p . boundVars
 class BoundVars c => ReadBindings c where
   hermitDepth    :: c -> BindingDepth
   hermitBindings :: c -> Map Var HermitBinding
-
-deriving instance Typeable ReadBindings
 
 -- | Determine if a variable is bound in a context.
 boundIn :: ReadBindings c => Var -> c -> Bool
@@ -233,8 +223,6 @@ lookupHermitBindingSite v depth c = do HB d bnd _ <- lookupHermitBinding v c
 class HasCoreRules c where
     hermitCoreRules :: c -> [CoreRule]
 
-deriving instance Typeable HasCoreRules
-
 instance HasCoreRules [CoreRule] where
     hermitCoreRules :: [CoreRule] -> [CoreRule]
     hermitCoreRules = id
@@ -245,16 +233,12 @@ instance HasCoreRules [CoreRule] where
 class HasEmptyContext c where
   setEmptyContext :: c -> c
 
-deriving instance Typeable HasEmptyContext
-
 ------------------------------------------------------------------------
 
 -- | A class of contexts that can store local Lemmas as we descend past implications.
 class LemmaContext c where
     addAntecedent :: LemmaName -> Lemma -> c -> c
     getAntecedents :: c -> Lemmas
-
-deriving instance Typeable LemmaContext
 
 instance LemmaContext c => LemmaContext (ExtendContext c e) where
     addAntecedent nm l ec = extendContext (extraContext ec)
@@ -275,7 +259,7 @@ data HermitC = HermitC
     , hermitC_path      :: AbsolutePathH         -- ^ The 'AbsolutePath' to the current node from the root.
     , hermitC_specRules :: [CoreRule]            -- ^ In-scope GHC RULES found in IdInfos.
     , hermitC_lemmas    :: Lemmas                -- ^ Local lemmas as we pass implications in a proof.
-    } deriving Typeable
+    }
 
 -- | Build a HermitC out of any context that has the capabilities.
 toHermitC :: (HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb) => c -> HermitC

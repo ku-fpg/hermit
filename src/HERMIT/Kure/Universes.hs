@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -59,8 +58,6 @@ module HERMIT.Kure.Universes
     , promoteExprBiR
     ) where
 
-import Data.Typeable
-
 import Language.KURE.Transform
 import Language.KURE.Injection
 import Language.KURE.BiTransform
@@ -79,33 +76,28 @@ data Core = GutsCore  ModGuts            -- ^ The module.
           | DefCore   CoreDef            -- ^ A recursive definition.
           | ExprCore  CoreExpr           -- ^ An expression.
           | AltCore   CoreAlt            -- ^ A case alternative.
-  deriving Typeable
 
 -- | TyCo is a KURE universe for traversing types and coercions.
 --   TyCo = Type + Coercion
 data TyCo = TypeCore Type                -- ^ A type.
           | CoercionCore Coercion        -- ^ A coercion.
-  deriving Typeable
 
 -- | Core is a KURE universe for traversing GHC Core, including types and coercions.
 --   CoreTC = Core + TyCo
 data CoreTC = Core Core
             | TyCo TyCo
-  deriving Typeable
 
 -- | LCore is a KURE universe for traversing HERMIT lemmas and the Core expressions they contain.
 --   Types and coercions are not traversed (for that, use 'LCoreTC').
 --   LCore = Core + Clause
 data LCore = LClause     Clause
            | LCore       Core
-  deriving Typeable
 
 -- | LCoreTC is a KURE universe for traversing HERMIT lemmas and the Core expressions they contain.
 --   Unlike 'LCore', types and coercions are also traversed.
 --   LCore = LCore + TyCo
 data LCoreTC = LTCCore LCore
              | LTCTyCo TyCo
-  deriving Typeable
 
 ---------------------------------------------------------------------
 

@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -54,7 +53,6 @@ import Control.Monad
 import Control.Monad.IO.Class
 
 import Data.List (intercalate)
-import Data.Dynamic (Typeable)
 import Data.String (IsString(..))
 
 import HERMIT.Context
@@ -69,7 +67,6 @@ data Named = NamedId Id
            | NamedDataCon DataCon
            | NamedTyCon TyCon
            | NamedTyVar Var
-  deriving Typeable
 
 instance Show Named where
     show (NamedId _) = "NamedId"
@@ -110,7 +107,7 @@ allNameSpaces = [varNS, dataConNS, tyConClassNS, tyVarNS]
 data HermitName = HermitName { hnModuleName  :: Maybe ModuleName
                              , hnUnqualified :: FastString
                              }
-    deriving (Eq, Typeable)
+    deriving Eq
 
 instance Extern HermitName where
     type Box HermitName = HermitName
@@ -179,7 +176,7 @@ toRdrNames nss hnm = [ toRdrName ns hnm | ns <- nss ]
 
 -- Newtype wrappers used for type-based command completion
 
-newtype BindingName = BindingName { unBindingName :: HermitName } deriving Typeable
+newtype BindingName = BindingName { unBindingName :: HermitName }
 
 instance Extern BindingName where
     type Box BindingName = BindingName
@@ -189,7 +186,7 @@ instance Extern BindingName where
 mkBindingPred :: BindingName -> Var -> Bool
 mkBindingPred (BindingName hnm) = cmpHN2Var hnm
 
-newtype OccurrenceName = OccurrenceName { unOccurrenceName :: HermitName } deriving Typeable
+newtype OccurrenceName = OccurrenceName { unOccurrenceName :: HermitName }
 
 instance Extern OccurrenceName where
     type Box OccurrenceName = OccurrenceName
@@ -199,14 +196,14 @@ instance Extern OccurrenceName where
 mkOccPred :: OccurrenceName -> Var -> Bool
 mkOccPred (OccurrenceName hnm) = cmpHN2Var hnm
 
-newtype OccurrenceNameListBox = OccurrenceNameListBox [OccurrenceName] deriving Typeable
+newtype OccurrenceNameListBox = OccurrenceNameListBox [OccurrenceName]
 
 instance Extern [OccurrenceName] where
     type Box [OccurrenceName] = OccurrenceNameListBox
     box = OccurrenceNameListBox
     unbox (OccurrenceNameListBox l) = l
 
-newtype RhsOfName = RhsOfName { unRhsOfName :: HermitName } deriving Typeable
+newtype RhsOfName = RhsOfName { unRhsOfName :: HermitName }
 
 instance Extern RhsOfName where
     type Box RhsOfName = RhsOfName

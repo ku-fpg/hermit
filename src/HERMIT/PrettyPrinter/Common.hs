@@ -1,11 +1,9 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.PrettyPrinter.Common
@@ -64,7 +62,6 @@ import Data.Char
 import Data.Default.Class
 import qualified Data.Map as M
 import qualified Data.Semigroup as Semigroup
-import Data.Typeable
 
 import GHC.Generics
 
@@ -97,12 +94,12 @@ type DocH = MDoc HermitMark
 data HermitMark
         = PushAttr Attr
         | PopAttr
-    deriving (Show, Typeable, Generic)
+    deriving (Show, Generic)
 
 -- These are the attributes
 data Attr = Color SyntaxForColor
           | SpecialFont
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 
 data SyntaxForColor             -- (suggestion)
         = KeywordColor          -- bold
@@ -112,7 +109,7 @@ data SyntaxForColor             -- (suggestion)
         | TypeColor
         | LitColor
         | WarningColor          -- highlight problems like unbound variables
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Generic)
 
 attr :: Attr -> DocH -> DocH
 attr a p = mark (PushAttr a) <> p <> mark PopAttr
@@ -151,8 +148,6 @@ data PrettyPrinter = PP { pLCoreTC :: PrettyH LCoreTC
                         , pOptions :: PrettyOptions
                         , pTag     :: String
                         }
-    deriving Typeable
-
 
 instance Extern PrettyPrinter where
     type Box PrettyPrinter = PrettyPrinter
@@ -162,14 +157,14 @@ instance Extern PrettyPrinter where
 type PrettyH a = Transform PrettyC HermitM a DocH
 -- TODO: change monads to something more restricted?
 
-data PrettyHLCoreBox = PrettyHLCoreBox (PrettyH LCore) deriving Typeable
+data PrettyHLCoreBox = PrettyHLCoreBox (PrettyH LCore)
 
 instance Extern (PrettyH LCore) where
     type Box (PrettyH LCore) = PrettyHLCoreBox
     box = PrettyHLCoreBox
     unbox (PrettyHLCoreBox i) = i
 
-data PrettyHLCoreTCBox = PrettyHLCoreTCBox (PrettyH LCoreTC) deriving Typeable
+data PrettyHLCoreTCBox = PrettyHLCoreTCBox (PrettyH LCoreTC)
 
 instance Extern (PrettyH LCoreTC) where
     type Box (PrettyH LCoreTC) = PrettyHLCoreTCBox
@@ -183,7 +178,7 @@ data PrettyC = PrettyC { prettyC_path    :: AbsolutePathH
                        , prettyC_vars    :: M.Map Var AbsolutePathH
                        , prettyC_options :: PrettyOptions
                        , prettyC_lemmas  :: Lemmas
-                       } deriving Typeable
+                       }
 
 ------------------------------------------------------------------------
 
@@ -249,10 +244,10 @@ data PrettyOptions = PrettyOptions
         , po_notes           :: Bool            -- ^ notes might be added to output
         , po_ribbon          :: Float
         , po_width           :: Int             -- AJG: The width is not a pretty option, but rather a render option (?)
-        } deriving (Generic, Show, Typeable)
+        } deriving (Generic, Show)
 
 data ShowOption = Show | Abstract | Detailed | Omit | Kind
-  deriving (Eq, Generic, Ord, Show, Read, Typeable)
+  deriving (Eq, Generic, Ord, Show, Read)
 
 -- Types don't have a Kind showing option.
 updateTypeShowOption :: ShowOption -> PrettyOptions -> PrettyOptions
@@ -297,12 +292,10 @@ data SpecialSymbol
         | DisjSymbol
         | ImplSymbol
         | EquivSymbol
-        deriving (Show, Eq, Ord, Bounded, Enum, Typeable)
+        deriving (Show, Eq, Ord, Bounded, Enum)
 
 class RenderSpecial a where
         renderSpecial :: SpecialSymbol -> a
-
-deriving instance Typeable RenderSpecial
 
 -- This instance is special.  It is used as an index, forming an association list.
 -- Thus all of the rhs must be distinct characters.
@@ -322,7 +315,7 @@ instance RenderSpecial Char where
         renderSpecial ImplSymbol          = '?'   -- implication (we can't use >, because it is used for ->)
         renderSpecial EquivSymbol         = '='   -- equivalence
 
-newtype ASCII = ASCII String deriving Typeable
+newtype ASCII = ASCII String
 
 instance Monoid ASCII where
         mempty = ASCII ""
@@ -346,7 +339,7 @@ instance RenderSpecial ASCII where
         renderSpecial ImplSymbol          = ASCII "=>"   -- implication
         renderSpecial EquivSymbol         = ASCII "="    -- equivalence
 
-newtype Unicode = Unicode Char deriving Typeable
+newtype Unicode = Unicode Char
 
 instance RenderSpecial Unicode where
         renderSpecial LambdaSymbol        = Unicode '\x03BB'
@@ -388,7 +381,7 @@ instance RenderSpecial LaTeX where
         renderSpecial EquivSymbol         = LaTeX "\\ensuremath{\\equiv}"
 
 
-newtype HTML = HTML String deriving Typeable
+newtype HTML = HTML String
 
 instance Monoid HTML where
         mempty = HTML ""
@@ -434,8 +427,6 @@ class (RenderSpecial a, Monoid a) => RenderCode a where
                  -> a
 
     rPutStr      :: String -> a
-
-deriving instance Typeable RenderCode
 
 renderCode :: RenderCode a => PrettyOptions -> DocH -> a
 renderCode opts doc = rStart `mappend` PP.fullRender PP.PageMode w rib marker (\ _ -> rEnd) doc []

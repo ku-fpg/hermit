@@ -1,8 +1,6 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module HERMIT.External
@@ -106,7 +104,7 @@ data CmdTag = Shell          -- ^ Shell-specific command.
             | Experiment     -- ^ Things we are trying out.
             | Deprecated     -- ^ A command that will be removed in a future release;
                              --   it has probably been renamed or subsumed by another command.
-    deriving (Eq, Show, Read, Bounded, Enum, Typeable)
+    deriving (Eq, Show, Read, Bounded, Enum)
 
 -- | Lists all the tags paired with a short description of what they're about.
 dictionaryOfTags :: [(CmdTag,String)]
@@ -151,7 +149,6 @@ data TagE :: * where
     NotTag :: TagE -> TagE
     AndTag :: TagE -> TagE -> TagE
     OrTag  :: TagE -> TagE -> TagE
-  deriving Typeable
 
 -- | Tags are meta-data that we add to 'External's to make them sortable and searchable.
 class Tag a where
@@ -165,8 +162,6 @@ class Tag a where
 
     -- | Check if an 'External' has the specified 'Tag'.
     tagMatch :: a -> External -> Bool
-
-deriving instance Typeable Tag
 
 instance Tag TagE where
     toTagE = id
@@ -288,8 +283,6 @@ class Typeable (Box a) => Extern a where
     -- | Unwrap a value from a 'Box'.
     unbox :: Box a -> a
 
-deriving instance Typeable Extern
-
 -----------------------------------------------------------------
 
 instance (Extern a, Extern b) => Extern (a -> b) where
@@ -299,7 +292,7 @@ instance (Extern a, Extern b) => Extern (a -> b) where
 
 -----------------------------------------------------------------
 
-data TagBox = TagBox TagE deriving Typeable
+data TagBox = TagBox TagE
 
 instance Extern TagE where
     type Box TagE = TagBox
@@ -308,7 +301,7 @@ instance Extern TagE where
 
 -----------------------------------------------------------------
 
-data IntBox = IntBox Int deriving Typeable
+data IntBox = IntBox Int
 
 instance Extern Int where
     type Box Int = IntBox
@@ -318,7 +311,7 @@ instance Extern Int where
 -----------------------------------------------------------------
 
 -- TODO: Considering unifying CrumbBox and PathBox under TransformLCoreTCPathBox.
-data CrumbBox = CrumbBox Crumb deriving Typeable
+data CrumbBox = CrumbBox Crumb
 
 instance Extern Crumb where
     type Box Crumb = CrumbBox
@@ -327,7 +320,7 @@ instance Extern Crumb where
 
 -----------------------------------------------------------------
 
-data PathBox = PathBox LocalPathH deriving Typeable
+data PathBox = PathBox LocalPathH
 
 instance Extern LocalPathH where
     type Box LocalPathH = PathBox
@@ -336,7 +329,7 @@ instance Extern LocalPathH where
 
 -----------------------------------------------------------------
 
-newtype CoreString = CoreString { unCoreString :: String } deriving Typeable
+newtype CoreString = CoreString { unCoreString :: String }
 
 instance Extern CoreString where
     type Box CoreString = CoreString
@@ -345,7 +338,7 @@ instance Extern CoreString where
 
 -----------------------------------------------------------------
 
-data StringBox = StringBox String deriving Typeable
+data StringBox = StringBox String
 
 instance Extern String where
     type Box String = StringBox
@@ -354,7 +347,7 @@ instance Extern String where
 
 -----------------------------------------------------------------
 
-data StringListBox = StringListBox [String] deriving Typeable
+data StringListBox = StringListBox [String]
 
 instance Extern [String] where
     type Box [String] = StringListBox
@@ -363,7 +356,7 @@ instance Extern [String] where
 
 -----------------------------------------------------------------
 
-data IntListBox = IntListBox [Int] deriving Typeable
+data IntListBox = IntListBox [Int]
 
 instance Extern [Int] where
     type Box [Int] = IntListBox
@@ -379,7 +372,7 @@ instance Extern LemmaName where
 
 -----------------------------------------------------------------
 
-data RewriteLCoreBox = RewriteLCoreBox (RewriteH LCore) deriving Typeable
+data RewriteLCoreBox = RewriteLCoreBox (RewriteH LCore)
 
 instance Extern (RewriteH LCore) where
     type Box (RewriteH LCore) = RewriteLCoreBox
@@ -388,7 +381,7 @@ instance Extern (RewriteH LCore) where
 
 -----------------------------------------------------------------
 
-data TransformLCoreStringBox = TransformLCoreStringBox (TransformH LCore String) deriving Typeable
+data TransformLCoreStringBox = TransformLCoreStringBox (TransformH LCore String)
 
 instance Extern (TransformH LCore String) where
     type Box (TransformH LCore String) = TransformLCoreStringBox
@@ -397,7 +390,7 @@ instance Extern (TransformH LCore String) where
 
 -----------------------------------------------------------------
 
-data TransformLCoreUnitBox = TransformLCoreUnitBox (TransformH LCore ()) deriving Typeable
+data TransformLCoreUnitBox = TransformLCoreUnitBox (TransformH LCore ())
 
 instance Extern (TransformH LCore ()) where
     type Box (TransformH LCore ()) = TransformLCoreUnitBox
@@ -406,7 +399,7 @@ instance Extern (TransformH LCore ()) where
 
 -----------------------------------------------------------------
 
-data TransformLCorePathBox = TransformLCorePathBox (TransformH LCore LocalPathH) deriving Typeable
+data TransformLCorePathBox = TransformLCorePathBox (TransformH LCore LocalPathH)
 
 instance Extern (TransformH LCore LocalPathH) where
     type Box (TransformH LCore LocalPathH) = TransformLCorePathBox
@@ -415,7 +408,7 @@ instance Extern (TransformH LCore LocalPathH) where
 
 -----------------------------------------------------------------
 
-data BiRewriteLCoreBox = BiRewriteLCoreBox (BiRewriteH LCore) deriving Typeable
+data BiRewriteLCoreBox = BiRewriteLCoreBox (BiRewriteH LCore)
 
 instance Extern (BiRewriteH LCore) where
     type Box (BiRewriteH LCore) = BiRewriteLCoreBox
@@ -424,7 +417,7 @@ instance Extern (BiRewriteH LCore) where
 
 -----------------------------------------------------------------
 
-data RewriteLCoreListBox = RewriteLCoreListBox [RewriteH LCore] deriving Typeable
+data RewriteLCoreListBox = RewriteLCoreListBox [RewriteH LCore]
 
 instance Extern [RewriteH LCore] where
     type Box [RewriteH LCore] = RewriteLCoreListBox
@@ -433,7 +426,7 @@ instance Extern [RewriteH LCore] where
 
 -----------------------------------------------------------------
 
-data RewriteLCoreTCBox = RewriteLCoreTCBox (RewriteH LCoreTC) deriving Typeable
+data RewriteLCoreTCBox = RewriteLCoreTCBox (RewriteH LCoreTC)
 
 instance Extern (RewriteH LCoreTC) where
     type Box (RewriteH LCoreTC) = RewriteLCoreTCBox
@@ -442,7 +435,7 @@ instance Extern (RewriteH LCoreTC) where
 
 -----------------------------------------------------------------
 
-data TransformLCoreTCStringBox = TransformLCoreTCStringBox (TransformH LCoreTC String) deriving Typeable
+data TransformLCoreTCStringBox = TransformLCoreTCStringBox (TransformH LCoreTC String)
 
 instance Extern (TransformH LCoreTC String) where
     type Box (TransformH LCoreTC String) = TransformLCoreTCStringBox
@@ -451,7 +444,7 @@ instance Extern (TransformH LCoreTC String) where
 
 -----------------------------------------------------------------
 
-data TransformLCoreTCUnitBox = TransformLCoreTCUnitBox (TransformH LCoreTC ()) deriving Typeable
+data TransformLCoreTCUnitBox = TransformLCoreTCUnitBox (TransformH LCoreTC ())
 
 instance Extern (TransformH LCoreTC ()) where
     type Box (TransformH LCoreTC ()) = TransformLCoreTCUnitBox
@@ -460,7 +453,7 @@ instance Extern (TransformH LCoreTC ()) where
 
 -----------------------------------------------------------------
 
-data TransformLCoreTCLCoreBox = TransformLCoreTCLCoreBox (TransformH LCoreTC LCore) deriving Typeable
+data TransformLCoreTCLCoreBox = TransformLCoreTCLCoreBox (TransformH LCoreTC LCore)
 
 instance Extern (TransformH LCoreTC LCore) where
     type Box (TransformH LCoreTC LCore) = TransformLCoreTCLCoreBox
@@ -469,7 +462,7 @@ instance Extern (TransformH LCoreTC LCore) where
 
 -----------------------------------------------------------------
 
-data TransformLCoreTCPathBox = TransformLCoreTCPathBox (TransformH LCoreTC LocalPathH) deriving Typeable
+data TransformLCoreTCPathBox = TransformLCoreTCPathBox (TransformH LCoreTC LocalPathH)
 
 instance Extern (TransformH LCoreTC LocalPathH) where
     type Box (TransformH LCoreTC LocalPathH) = TransformLCoreTCPathBox
@@ -478,7 +471,7 @@ instance Extern (TransformH LCoreTC LocalPathH) where
 
 -----------------------------------------------------------------
 
-data BiRewriteLCoreTCBox = BiRewriteLCoreTCBox (BiRewriteH LCoreTC) deriving Typeable
+data BiRewriteLCoreTCBox = BiRewriteLCoreTCBox (BiRewriteH LCoreTC)
 
 instance Extern (BiRewriteH LCoreTC) where
     type Box (BiRewriteH LCoreTC) = BiRewriteLCoreTCBox
@@ -487,7 +480,7 @@ instance Extern (BiRewriteH LCoreTC) where
 
 -----------------------------------------------------------------
 
-data RewriteLCoreTCListBox = RewriteLCoreTCListBox [RewriteH LCoreTC] deriving Typeable
+data RewriteLCoreTCListBox = RewriteLCoreTCListBox [RewriteH LCoreTC]
 
 instance Extern [RewriteH LCoreTC] where
     type Box [RewriteH LCoreTC] = RewriteLCoreTCListBox

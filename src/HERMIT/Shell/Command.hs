@@ -1,6 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
@@ -36,7 +35,6 @@ import Control.Monad.State (get, gets, modify)
 import Data.Char
 import Data.List (isPrefixOf, partition)
 import Data.Maybe
-import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.External
@@ -238,7 +236,6 @@ data TypedEffectH :: * -> * where
     EvalH                  :: String                  -> TypedEffectH () -- TODO: rm with the old shell
     FmapTypedEffectH       :: (a -> b)
                            -> TypedEffectH a          -> TypedEffectH b
-  deriving Typeable
 
 instance Functor TypedEffectH where
   fmap f e = FmapTypedEffectH f e

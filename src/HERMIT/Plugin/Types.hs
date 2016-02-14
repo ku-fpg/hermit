@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -18,7 +17,6 @@ import Control.Monad.State (MonadState(..), StateT(..))
 import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 
-import Data.Dynamic
 import qualified Data.Map as M
 
 import HERMIT.Kure
@@ -33,7 +31,7 @@ import System.IO
 type PluginM = PluginT IO
 newtype PluginT m a = PluginT { unPluginT :: ExceptT PException (ReaderT PluginReader (StateT PluginState m)) a }
     deriving (Functor, Applicative, MonadIO, MonadError PException,
-              MonadState PluginState, MonadReader PluginReader, Typeable)
+              MonadState PluginState, MonadReader PluginReader)
 
 runPluginT :: PluginReader -> PluginState -> PluginT m a -> m (Either PException a, PluginState)
 runPluginT pr ps = flip runStateT ps . flip runReaderT pr . runExceptT . unPluginT
@@ -69,16 +67,16 @@ data PluginState = PluginState
     , ps_render         :: Handle -> PrettyOptions -> Either String DocH -> IO () -- ^ the way of outputing to the screen
     , ps_tick           :: TVar (M.Map String Int)                  -- ^ the list of ticked messages
     , ps_corelint       :: Bool                                     -- ^ if true, run Core Lint on module after each rewrite
-    } deriving (Typeable)
+    }
 
 data PluginReader = PluginReader
     { pr_kernel         :: Kernel
     , pr_pass           :: PassInfo
-    } deriving (Typeable)
+    }
 
-data PException = PAbort | PResume AST | PError String deriving Typeable
+data PException = PAbort | PResume AST | PError String
 
-newtype PSBox = PSBox PluginState deriving Typeable
+newtype PSBox = PSBox PluginState
 instance Extern PluginState where
     type Box PluginState = PSBox
     unbox (PSBox st) = st

@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
@@ -26,19 +25,18 @@ module HERMIT.Shell.Proof
 
 import Control.Arrow hiding (loop, (<+>))
 import Control.Concurrent.STM
-import Control.Monad 
+import Control.Monad
 import Control.Monad.Error.Class (MonadError(..))
 import Control.Monad.IO.Class
 import Control.Monad.Reader (asks)
 import Control.Monad.State (MonadState(get), modify, gets)
 
-import Data.Dynamic
 import Data.Function (on)
 import Data.List (nubBy)
 
 import HERMIT.Context
 import HERMIT.External
-import HERMIT.GHC hiding (snd3)
+import HERMIT.GHC
 import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Lemma
@@ -145,16 +143,13 @@ performProofShellCommand cmd expr = go cmd >> printWindow Nothing
 
 data ProofShellCommand
     = PCEnd ProofReason
-    deriving Typeable
 
 data ProofReason = UserProof UserProofTechnique -- ^ Run the technique, mark Proven if succeeds
                  | UserAssume                   -- ^ Assume
                  | Reflexivity                  -- ^ Check for alpha-equivalence first
-  deriving Typeable
 
 -- keep abstract to avoid breaking things if we modify this later
 newtype UserProofTechnique = UserProofTechnique (TransformH LCoreTC ())
-    deriving Typeable
 
 userProofTechnique :: TransformH LCoreTC () -> UserProofTechnique
 userProofTechnique = UserProofTechnique

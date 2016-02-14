@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
@@ -33,7 +32,6 @@ import Control.Monad.IO.Class
 
 import Data.IORef
 import Data.Map
-import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.External
@@ -60,9 +58,9 @@ data Kernel = Kernel
   , listK   :: forall m. MonadIO m =>                                          m [(AST,Maybe String, Maybe AST)]
     -- | Log a new AST with same Lemmas/ModGuts as given AST.
   , tellK   :: forall m. (MonadIO m, MonadCatch m) => String         -> AST -> m AST
-  } deriving Typeable
+  }
 
-data CommitMsg = Always String | Changed String | Never deriving Typeable
+data CommitMsg = Always String | Changed String | Never
 
 msg :: CommitMsg -> Maybe String
 msg Never = Nothing
@@ -71,7 +69,7 @@ msg (Changed s) = Just s
 
 -- | A /handle/ for a specific version of the 'ModGuts'.
 newtype AST = AST Int -- ^ Currently 'AST's are identified by an 'Int' label.
-    deriving (Eq, Ord, Typeable)
+    deriving (Eq, Ord)
 
 firstAST :: AST
 firstAST = AST 0
@@ -94,7 +92,7 @@ instance Extern AST where
 
 data ASTMap = ASTMap { astNext :: AST
                      , astMap  :: Map AST KernelState
-                     } deriving Typeable
+                     }
 
 emptyASTMap :: ASTMap
 emptyASTMap = ASTMap firstAST empty
@@ -105,7 +103,7 @@ data KernelState = KernelState { ksLemmas  :: Lemmas
                                , _ksCommit :: Maybe String
                                }
 
-data KernelEnv = KernelEnv { kEnvChan :: KEnvMessage -> HermitM () } deriving Typeable
+data KernelEnv = KernelEnv { kEnvChan :: KEnvMessage -> HermitM () }
 
 -- | Internal API. The 'Kernel' object wraps these calls.
 data Msg where

@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -79,7 +78,6 @@ data CompletionType = ConsiderC       -- considerable constructs
                     | RuleC           -- complete with GHC rewrite rule name
                     | StringC         -- complete with open quotes
                     | UnknownC String -- unknown Extern instance (empty completion)
-  deriving Typeable
 
 completionType :: String -> CompletionType
 completionType s = fromMaybe (UnknownC s) (lookup s m)

@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
 
@@ -33,7 +32,6 @@ import Prelude hiding (lookup)
 
 import Control.Monad
 
-import Data.Dynamic (Typeable)
 import Data.Semigroup (Semigroup(..))
 import Data.String (IsString(..))
 import qualified Data.Map as M
@@ -95,7 +93,7 @@ collectQs (Forall b cl) = (b:bs, cl')
 collectQs cl            = ([],cl)
 
 -- | A name for lemmas. Use a newtype so we can tab-complete in shell.
-newtype LemmaName = LemmaName String deriving (Eq, Ord, Typeable)
+newtype LemmaName = LemmaName String deriving (Eq, Ord)
 
 instance Monoid LemmaName where
     mempty = LemmaName mempty
@@ -111,13 +109,13 @@ instance Show LemmaName where show (LemmaName s) = s
 data Lemma = Lemma { lemmaC :: Clause
                    , lemmaP :: Proven     -- whether lemma has been proven
                    , lemmaU :: Used       -- whether lemma has been used
-                   } deriving Typeable
+                   }
 
 data Proven = Proven
             | Assumed -- ^ Assumed by user
             | BuiltIn -- ^ Assumed by library/HERMIT
             | NotProven
-    deriving (Eq, Typeable)
+    deriving Eq
 
 instance Show Proven where
     show Proven = "Proven"
@@ -152,7 +150,7 @@ orP = max
 data Used = Obligation -- ^ this MUST be proven immediately
           | UnsafeUsed -- ^ used, but can be proven later (only introduced in unsafe shell)
           | NotUsed
-    deriving (Eq, Generic, Typeable)
+    deriving (Eq, Generic)
 
 instance Show Used where
     show Obligation = "Obligation"
@@ -165,7 +163,6 @@ data Clause = Forall CoreBndr Clause
             | Impl LemmaName Clause Clause -- ^ name for the antecedent when it is in scope
             | Equiv CoreExpr CoreExpr
             | CTrue -- the always true clause
-  deriving Typeable
 
 -- | A collection of named lemmas.
 type Lemmas = M.Map LemmaName Lemma

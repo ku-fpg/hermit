@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -28,7 +27,6 @@ import Control.Monad.Reader (asks)
 import Control.Monad.State (MonadState, gets, modify)
 import Control.Exception hiding (catch)
 
-import Data.Dynamic
 import qualified Data.Map as M
 
 import HERMIT.Context (LocalPathH, getAntecedents)
@@ -60,7 +58,6 @@ data ScriptEffect
     | SaveScript FilePath ScriptName
     | ScriptToRewrite RewriteName ScriptName
     | SeqMeta [ScriptEffect]
-    deriving Typeable
 
 instance Extern ScriptEffect where
     type Box ScriptEffect = ScriptEffect

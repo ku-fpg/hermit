@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -33,7 +32,6 @@ import qualified Specialise
 import Control.Arrow
 import Control.Monad
 
-import Data.Dynamic (Typeable)
 import Data.Function (on)
 import Data.List (deleteFirstsBy,intercalate)
 import Data.String (IsString(..))
@@ -86,7 +84,7 @@ externals =
 
 ------------------------------------------------------------------------
 
-newtype RuleName = RuleName String deriving (Eq, Typeable)
+newtype RuleName = RuleName String deriving Eq
 
 instance Extern RuleName where
     type Box RuleName = RuleName
@@ -96,7 +94,7 @@ instance Extern RuleName where
 instance IsString RuleName where fromString = RuleName
 instance Show RuleName where show (RuleName s) = s
 
-newtype RuleNameListBox = RuleNameListBox [RuleName] deriving Typeable
+newtype RuleNameListBox = RuleNameListBox [RuleName]
 
 instance Extern [RuleName] where
     type Box [RuleName] = RuleNameListBox

@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 module HERMIT.Plugin.Renderer where
@@ -9,7 +8,6 @@ import Control.Monad.State
 
 import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
 import Data.Semigroup (Semigroup(..))
-import Data.Typeable
 
 import HERMIT.Dictionary (traceR)
 import HERMIT.Kure
@@ -40,7 +38,7 @@ shellRenderers = [ ("unicode-terminal", unicodeConsole) ]
 
 -------------------------------------------------------------------------------
 
-newtype UnicodeTerminal = UnicodeTerminal (Handle -> Maybe PathH -> IO ()) deriving Typeable
+newtype UnicodeTerminal = UnicodeTerminal (Handle -> Maybe PathH -> IO ())
 
 instance RenderSpecial UnicodeTerminal where
         renderSpecial sym = UnicodeTerminal $ \ h _ -> hPutStr h [ch]

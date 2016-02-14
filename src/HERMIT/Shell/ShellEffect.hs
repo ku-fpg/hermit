@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -44,19 +43,17 @@ data ShellEffect :: * -> * where
     Continue          :: ShellEffect ()
     Resume            :: ShellEffect ()
     FmapShellEffect   :: (a -> b) -> ShellEffect a -> ShellEffect b
-    deriving Typeable
 
 instance Functor ShellEffect where
-  fmap = FmapShellEffect       
+  fmap = FmapShellEffect
 
 data ShellEffectBox where
     ShellEffectBox :: Typeable a => ShellEffect a -> ShellEffectBox
-  deriving Typeable
 
 instance Typeable a => Extern (ShellEffect a) where
     type Box (ShellEffect _a) = ShellEffectBox
     box = ShellEffectBox
-    unbox (ShellEffectBox i) = 
+    unbox (ShellEffectBox i) =
         case cast i of
           Just res -> res
           Nothing -> error "Extern -- unbox: casting of shell effect failed."

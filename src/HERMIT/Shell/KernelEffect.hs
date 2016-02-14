@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -18,7 +17,6 @@ import Control.Monad.State
 
 import qualified Data.Map as M
 import Data.Monoid
-import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.Dictionary
@@ -38,7 +36,6 @@ data KernelEffect = Direction Direction -- Move up or top.
                   | BeginScope          -- Begin scope.
                   | EndScope            -- End scope.
                   | Delete AST          -- Delete an AST
-   deriving Typeable
 
 instance Extern KernelEffect where
    type Box KernelEffect = KernelEffect
