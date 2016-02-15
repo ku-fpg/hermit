@@ -116,10 +116,10 @@ externals =
         , "e ==> case expr of C1 vs -> e; C2 vs -> e"] .+ Deep .+ Strictness
     , external "case-split-inline" ((\nm -> findVarT (unOccurrenceName nm) >>= promoteExprR . caseSplitInlineR . varToCoreExpr) :: OccurrenceName -> RewriteH LCore)
         [ "Like case-split, but additionally inlines the matched constructor "
-        , "applications for all occurances of the named variable." ] .+ Deep .+ Strictness
+        , "applications for all occurrences of the named variable." ] .+ Deep .+ Strictness
     , external "case-split-inline" (parseCoreExprT >=> promoteExprR . caseSplitInlineR :: CoreString -> RewriteH LCore)
         [ "Like case-split, but additionally inlines the matched constructor "
-        , "applications for all occurances of the case binder." ] .+ Deep .+ Strictness
+        , "applications for all occurrences of the case binder." ] .+ Deep .+ Strictness
     , external "case-intro-seq" (promoteExprR . caseIntroSeqR . cmpString2Var :: String -> RewriteH LCore)
         [ "Force evaluation of a variable by introducing a case."
         , "case-intro-seq 'v is is equivalent to adding @(seq v)@ in the source code." ] .+ Shallow .+ Introduce .+ Strictness
@@ -436,7 +436,7 @@ matchingFreeIdT idPred = do
     is    -> fail ("provided name matches " ++ show (length is) ++ " free identifiers.")
 
 -- | Like caseSplit, but additionally inlines the constructor applications
--- for each occurance of the named variable.
+-- for each occurrence of the named variable.
 --
 -- > caseSplitInline idPred = caseSplit idPred >>> caseInlineAlternativeR
 caseSplitInlineR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
