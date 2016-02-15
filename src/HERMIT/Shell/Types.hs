@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
@@ -64,14 +63,12 @@ data QueryFun :: * -> * where
    QueryUnit    :: Injection a LCoreTC => TransformH a ()           -> QueryFun ()
    QueryA       :: (Typeable a, Injection c LCoreTC)
                 => TransformH c a                                   -> QueryFun a
-   deriving Typeable
 
 message :: String -> QueryFun ()
 message = Inquiry . const . const . return
 
 data QueryFunBox where
     QueryFunBox :: Typeable a => QueryFun a -> QueryFunBox
-  deriving Typeable
 
 instance Typeable a => Extern (QueryFun a) where
    type Box (QueryFun _a) = QueryFunBox
@@ -160,7 +157,7 @@ data VersionCmd = Back            -- back (up) the derivation tree
                 | Goto AST        -- goto a specific AST
                 | GotoTag TagName -- goto a specific AST, by tag name
                 | Tag TagName     -- tag the current AST with a name
-        deriving (Show, Typeable)
+        deriving Show
 
 ----------------------------------------------------------------------------------
 
@@ -168,7 +165,6 @@ data CLException = CLAbort
                  | CLResume AST
                  | CLContinue CommandLineState -- TODO: needed?
                  | CLError String
-  deriving Typeable
 
 abort :: MonadError CLException m => m a
 abort = throwError CLAbort
@@ -202,7 +198,7 @@ rethrowPE (PError msg)   = throwError (CLError msg)
 -- NB: an alternative to monad transformers, like Oleg's Extensible Effects, might be useful here.
 newtype CLT m a = CLT { unCLT :: ExceptT CLException (ReaderT PluginReader (StateT CommandLineState m)) a }
     deriving (Functor, Applicative, MonadIO, MonadError CLException,
-              MonadState CommandLineState, MonadReader PluginReader, Typeable)
+              MonadState CommandLineState, MonadReader PluginReader)
 
 -- Adapted from System.Console.Haskeline.MonadException, which hasn't provided an instance for ExceptT yet
 instance MonadException m => MonadException (ExceptT e m) where
@@ -304,7 +300,7 @@ data CommandLineState = CommandLineState
     , cl_templemmas     :: TVar [(HermitC,LemmaName,Lemma)] -- ^ updated by kernel env with temporary obligations
     , cl_failhard       :: Bool                   -- ^ Any exception will cause an abort.
     , cl_diffonly       :: Bool                   -- ^ Print diffs instead of full focus.
-    } deriving (Typeable)
+    }
 
 type PathStack = ([LocalPathH], LocalPathH)
 
@@ -313,10 +309,10 @@ data ProofTodo = Unproven
                     , ptLemma   :: Lemma
                     , ptContext :: HermitC      -- ^ context in which lemma is being proved
                     , ptPath    :: PathStack    -- ^ path into lemma to focus on
-                    } deriving Typeable
+                    }
 
 data Safety = StrictSafety | NormalSafety | NoSafety
-    deriving (Read, Show, Eq, Typeable)
+    deriving (Read, Show, Eq)
 
 filterSafety :: Safety -> [External] -> [External]
 filterSafety NoSafety     = id
@@ -395,7 +391,7 @@ getTermDimensions = do
     Window h w <- fromMaybe (Window 25 80) <$> size
     return (w, h)
 
-newtype CLSBox = CLSBox CommandLineState deriving Typeable
+newtype CLSBox = CLSBox CommandLineState
 instance Extern CommandLineState where
     type Box CommandLineState = CLSBox
     unbox (CLSBox st) = st
@@ -437,7 +433,7 @@ pathStack2Path (ps,p) = concat $ reverse (map snocPathToPath (p:ps))
 -- | A primitive means of denoting navigation of a tree (within a local scope).
 data Direction = U -- ^ Up
                | T -- ^ Top
-               deriving (Eq, Show, Typeable)
+               deriving (Eq, Show)
 
 pathStackToLens :: (Injection a g, Walker HermitC g) => [LocalPathH] -> LocalPathH -> LensH a g
 pathStackToLens ps p = injectL >>> pathL (pathStack2Path (ps,p))

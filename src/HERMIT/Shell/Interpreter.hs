@@ -1,5 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -39,7 +38,6 @@ import HERMIT.Shell.Types
 -- | An 'Interp' @cmd@ is a /possible/ means of converting a 'Typeable' value to a value of type @cmd@.
 data Interp :: (* -> *) -> * -> * where
     Interp :: Typeable b => (b -> ExprH -> m a) -> Interp m a
-  deriving Typeable
 
 -- | An 'Interp' with no effects.
 interp :: (Monad m, Typeable b) => (b -> a) -> Interp m a

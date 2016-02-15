@@ -1,12 +1,10 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -82,7 +80,6 @@ import           Data.List (isInfixOf, nubBy)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
 import           Data.Monoid
-import           Data.Typeable (Typeable)
 
 import           HERMIT.Context
 import           HERMIT.Core
@@ -227,7 +224,7 @@ extensionalityR mn = prefixFailMsg "extensionality failed: " $ do
     let x = varToCoreExpr v
 
 #if __GLASGOW_HASKELL__ > 710
-    return $ mkForall vs $ Forall v $ Equiv (mkCoreApp (text "extensionalityR-lhs") lhs x) 
+    return $ mkForall vs $ Forall v $ Equiv (mkCoreApp (text "extensionalityR-lhs") lhs x)
                                             (mkCoreApp (text "extensionalityR-rhs") rhs x)
 #else
     return $ mkForall vs $ Forall v $ Equiv (mkCoreApp lhs x) (mkCoreApp rhs x)
@@ -789,8 +786,6 @@ f $$$ es = buildAppsM (toCE f) (map toCE es)
 
 class ToCoreExpr a where
     toCE :: a -> CoreExpr
-
-deriving instance Typeable ToCoreExpr
 
 instance ToCoreExpr CoreExpr where toCE = id
 

@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -37,7 +36,6 @@ module HERMIT.Dictionary.Navigation
 import Control.Arrow
 import Control.Monad
 
-import Data.Dynamic (Typeable)
 import Data.Monoid
 
 import GHC.Generics
@@ -227,7 +225,7 @@ rhsOfTargetsT = crushbuT (promoteBindT (arr binderBind) <+ promoteDefT (arr bind
 
 -- | Language constructs that can be zoomed to.
 data Considerable = Binding | Definition | CaseAlt | Variable | Literal | Application | Lambda | LetExpr | CaseOf | Casty | Ticky | TypeExpr | CoercionExpr
-    deriving (Generic, Typeable)
+    deriving Generic
 
 instance Extern Considerable where
     type Box Considerable = Considerable

@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 
 module HERMIT.Plugin.Builder
     ( -- * The HERMIT Plugin
@@ -14,7 +13,6 @@ module HERMIT.Plugin.Builder
 
 import Data.IORef
 import Data.List
-import Data.Typeable
 
 import HERMIT.GHC
 import HERMIT.Kernel
@@ -37,7 +35,7 @@ buildPlugin hp = defaultPlugin { installCoreToDos = install }
 #ifdef mingw32_HOST_OS
             liftIO $ hSetEncoding stdout utf8
             -- This is a hacky workaround of a bug in Windows GHC.
-            -- See https://ghc.haskell.org/trac/ghc/ticket/8276
+            -- See https://ghc.haskell.org/trac/ghc/ticket/10301
             liftIO initStaticOpts
 #endif
 
@@ -109,7 +107,7 @@ data CorePass = CallArity
               | PluginPass String
               | NoOp
               | Unknown
-    deriving (Read, Show, Eq, Typeable)
+    deriving (Read, Show, Eq)
 
 -- The following are not allowed yet because they required options.
 -- CoreDoSimplify {- The core-to-core simplifier. -} Int {- Max iterations -} SimplifierMode
@@ -169,7 +167,7 @@ data PassInfo =
              , passesDone :: [CorePass]
              , passesLeft :: [CorePass]
              }
-    deriving (Read, Show, Eq, Typeable)
+    deriving (Read, Show, Eq)
 
 -- | If HERMIT user specifies the -pN flag, get the N
 -- TODO: as written will discard other flags that start with -p

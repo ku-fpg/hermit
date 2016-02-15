@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -23,8 +22,6 @@ module HERMIT.Dictionary.Inline
 
 import Control.Arrow
 import Control.Monad
-
-import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.Core
@@ -55,8 +52,8 @@ externals =
 ------------------------------------------------------------------------
 
 -- extend these data types as needed if other inlining behaviour becomes desireable
-data CaseBinderInlineOption = Scrutinee | Alternative deriving (Eq, Show, Typeable)
-data InlineConfig           = CaseBinderOnly CaseBinderInlineOption | AllBinders deriving (Eq, Show, Typeable)
+data CaseBinderInlineOption = Scrutinee | Alternative deriving (Eq, Show)
+data InlineConfig           = CaseBinderOnly CaseBinderInlineOption | AllBinders deriving (Eq, Show)
 
 -- | If the current variable matches the given name, then inline it.
 inlineNameR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c

@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -18,7 +17,6 @@ import Control.Arrow
 import Control.Monad.IO.Class
 
 import Data.String (fromString)
-import Data.Typeable
 
 import HERMIT.Context
 import HERMIT.Core
@@ -75,14 +73,14 @@ externals = map (.+ Proof)
 
 --------------------------------------------------------------------------------------------------
 
-data WWAssumptionTag = A | B | C deriving (Eq,Ord,Show,Read,Typeable)
+data WWAssumptionTag = A | B | C deriving (Eq,Ord,Show,Read)
 
 instance Extern WWAssumptionTag where
     type Box WWAssumptionTag = WWAssumptionTag
     box i = i
     unbox i = i
 
-data WWAssumption = WWAssumption WWAssumptionTag (RewriteH CoreExpr) deriving Typeable
+data WWAssumption = WWAssumption WWAssumptionTag (RewriteH CoreExpr)
 
 --------------------------------------------------------------------------------------------------
 
