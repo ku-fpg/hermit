@@ -15,12 +15,12 @@ description:
   .
   @
    $ hermit Reverse.hs Reverse.hss resume
-   [starting HERMIT v1.0.0.0 on Reverse.hs]
+   [starting HERMIT v1.0.1 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fexpose-all-unfoldings -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:Main:Reverse.hss -fplugin-opt=HERMIT:Main:resume
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-1.0.0.0 ... linking ... done.
+   Loading package hermit-1.0.1 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    Linking Reverse ...
    $ ./Reverse
@@ -31,12 +31,12 @@ description:
   .
   @
    $ hermit Reverse.hs
-   [starting HERMIT v1.0.0.0 on Reverse.hs]
+   [starting HERMIT v1.0.1 on Reverse.hs]
    % ghc Reverse.hs -fforce-recomp -O2 -dcore-lint -fexpose-all-unfoldings -fsimple-list-literals -fplugin=HERMIT -fplugin-opt=HERMIT:*:
    [1 of 2] Compiling HList            ( HList.hs, HList.o )
    Loading package ghc-prim ... linking ... done.
    ...
-   Loading package hermit-1.0.0.0 ... linking ... done.
+   Loading package hermit-1.0.1 ... linking ... done.
    [2 of 2] Compiling Main             ( Reverse.hs, Reverse.o )
    ===================== Welcome to HERMIT =====================
    HERMIT is a toolkit for the interactive transformation of GHC
