@@ -1,5 +1,5 @@
 name:                hermit
-version:             1.0.0.1
+version:             1.0.1
 synopsis:            Haskell Equational Reasoning Model-to-Implementation Tunnel
 description:
   HERMIT is a Haskell-specific toolkit designed to mechanize
