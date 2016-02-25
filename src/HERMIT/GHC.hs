@@ -70,6 +70,7 @@ module HERMIT.GHC
 #endif
     , module Unify
     , getHscEnvCoreM
+    , funTc
     ) where
 
 -- Imports from GHC.
@@ -128,6 +129,7 @@ import           TysPrim (alphaTyVars)
 import           Unify (tcUnifyTys, BindFlag(..))
 
 import Data.List (intercalate)
+import qualified Data.Typeable.Internal
 
 import HERMIT.GHC.Typechecker
 
@@ -402,3 +404,10 @@ injectDependency hsc_env guts mod_name = do
   where
     dflags = hsc_dflags hsc_env
     doc = ptext (sLit "dependency injection requested by HERMIT")
+
+funTc :: Data.Typeable.Internal.TyCon
+#if __GLASGOW_HASKELL__ > 710 
+funTc = Data.Typeable.Internal.tcFun
+#else
+funTc = Data.Typeable.Internal.funTc
+#endif
