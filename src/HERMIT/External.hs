@@ -57,10 +57,11 @@ module HERMIT.External
 import Data.Map hiding (map)
 import Data.Dynamic
 import Data.List
-import Data.Typeable.Internal (TypeRep(..), funTc)
+import Data.Typeable.Internal (TypeRep(..))
 
 import HERMIT.Core
 import HERMIT.Context (LocalPathH)
+import HERMIT.GHC (tcFun)
 import HERMIT.Kure
 import HERMIT.Lemma
 
@@ -265,7 +266,7 @@ splitFunTyArgs tr = case splitFunTyMaybe tr of
                                          in (a:as, r')
 
 splitFunTyMaybe :: TypeRep -> Maybe (TypeRep, TypeRep)
-splitFunTyMaybe (TypeRep _ tc _krs [a,r]) | tc == funTc = Just (a,r)
+splitFunTyMaybe (TypeRep _ tc _krs [a,r]) | tc == tcFun = Just (a,r)
 splitFunTyMaybe _ = Nothing
 
 -----------------------------------------------------------------

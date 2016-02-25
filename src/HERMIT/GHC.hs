@@ -70,6 +70,7 @@ module HERMIT.GHC
 #endif
     , module Unify
     , getHscEnvCoreM
+    , tcFun
     ) where
 
 -- Imports from GHC.
@@ -127,6 +128,9 @@ import           TypeRep (Type(..), TyLit(..))
 import           TysPrim (alphaTyVars)
 import           Unify (tcUnifyTys, BindFlag(..))
 
+import Data.Typeable (typeRep,typeRepTyCon)
+import qualified Data.Typeable
+import Data.Proxy (Proxy(..))
 import Data.List (intercalate)
 
 import HERMIT.GHC.Typechecker
@@ -402,3 +406,6 @@ injectDependency hsc_env guts mod_name = do
   where
     dflags = hsc_dflags hsc_env
     doc = ptext (sLit "dependency injection requested by HERMIT")
+
+tcFun :: Data.Typeable.TyCon
+tcFun = typeRepTyCon (typeRep (Proxy :: Proxy (Int -> Int)))
