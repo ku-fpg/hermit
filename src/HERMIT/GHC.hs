@@ -129,7 +129,7 @@ import           TysPrim (alphaTyVars)
 import           Unify (tcUnifyTys, BindFlag(..))
 
 import Data.Typeable (typeRep,typeRepTyCon)
-import qualified Data.Typeable.Internal
+import qualified Data.Typeable
 import Data.Proxy (Proxy(..))
 import Data.List (intercalate)
 
@@ -407,5 +407,5 @@ injectDependency hsc_env guts mod_name = do
     dflags = hsc_dflags hsc_env
     doc = ptext (sLit "dependency injection requested by HERMIT")
 
-tcFun :: Data.Typeable.Internal.TyCon
+tcFun :: Data.Typeable.TyCon
 tcFun = typeRepTyCon (typeRep (Proxy :: Proxy (Int -> Int)))
