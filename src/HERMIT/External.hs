@@ -57,10 +57,11 @@ module HERMIT.External
 import Data.Map hiding (map)
 import Data.Dynamic
 import Data.List
-import Data.Typeable.Internal (TypeRep(..), funTc)
+import Data.Typeable.Internal (TypeRep(..))
 
 import HERMIT.Core
 import HERMIT.Context (LocalPathH)
+import HERMIT.GHC (funTc)
 import HERMIT.Kure
 import HERMIT.Lemma
 
