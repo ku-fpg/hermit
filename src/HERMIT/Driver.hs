@@ -1,4 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE CPP #-}
 module HERMIT.Driver
     ( hermitVersion
     , ghcFlags
@@ -22,7 +23,9 @@ ghcFlags :: [String]
 ghcFlags = [ "-fforce-recomp"
            , "-O2"
            , "-dcore-lint"
+#if __GLASGOW_HASKELL__ < 800
            , "-fsimple-list-literals"
+#endif
            , "-fexpose-all-unfoldings"
 --           , "-v0"
            ]
