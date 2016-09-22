@@ -135,18 +135,15 @@ unfoldRulesR u = orR . map (unfoldRuleR u)
 
 -- | Can be used with runFoldR. Note: currently doesn't create a lemma for the rule used.
 compileRulesT :: (BoundVars c, HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
-              => [RuleName] -> Transform c m a CompiledFold
-compileRulesT nms = do
+              => (RuleName -> Bool) -> Transform c m a CompiledFold
+compileRulesT p = do
     let suggestion = "If you think the rule exists, try running the flatten-module command at the top level."
-    let failMsg []   = "no rule names supplied."
-        failMsg [nm] = "failed to find rule: " ++ show nm ++ ". " ++ suggestion
-        failMsg _    = "failed to find any rules named " ++ intercalate ", " (map show nms) ++ ". " ++ suggestion
+        failMsg = "no rules matched desired name(s). " ++ suggestion
     allRules <- getHermitRulesT
-    case filter ((`elem` nms) . fst) allRules of
-        [] -> fail (failMsg nms)
+    case filter (p . fst) allRules of
+        [] -> fail failMsg 
         rs -> liftM (compileFold . concatMap toEqualities)
                 $ forM (map snd rs) $ \ r -> return r >>> ruleToClauseT
-
 
 -- | Return all in-scope CoreRules (including specialization RULES on binders), with their names.
 getHermitRulesT :: (HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadIO m) => Transform c m a [(RuleName, CoreRule)]
