@@ -56,12 +56,8 @@ import HERMIT.Shell.ScriptToRewrite
 import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
-#ifdef mingw32_HOST_OS
-import HERMIT.Win32.Console
-#endif
-
 import System.IO
-
+import System.IO.Echo.Internal (minTTY)
 -- import System.Console.ANSI
 import System.Console.Haskeline hiding (catch, display)
 
@@ -93,15 +89,13 @@ banner = unlines
     , "=============================================================="
     ]
 
-#ifdef mingw32_HOST_OS
-cygwinWarning :: String
-cygwinWarning = unlines
-    [ "WARNING: HERMIT invoked in a Unix-like shell such as Cygwin."
-    , "Cygwin does not handle Ctrl-C or tab completion well in some"
+minTTYWarning :: String
+minTTYWarning = unlines
+    [ "WARNING: HERMIT invoked in a MinTTY console such as Cygwin or MSYS."
+    , "MinTTY does not handle Ctrl-C or tab completion well in some"
     , "Haskell executables. It is recommended that you use a native"
     , "Windows console (such as cmd.exe or PowerShell) instead."
     ]
-#endif
 
 -- | The first argument includes a list of files to load.
 commandLine :: forall m. (MonadCatch m, MonadException m, CLMonad m)
@@ -124,12 +118,9 @@ commandLine opts exts = do
         then return ()
         else cl_putStrLn banner
 
-#ifdef mingw32_HOST_OS
-    isCyg <- liftIO isCygwinConsole
-    if isCyg
-        then cl_putStrLn cygwinWarning
-        else return ()
-#endif
+    if minTTY
+       then cl_putStrLn minTTYWarning
+       else return ()
 
     -- Load and run any scripts
     setRunningScript $ Just [] -- suppress all output until after first scripts run

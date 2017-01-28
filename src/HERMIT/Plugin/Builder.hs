@@ -33,7 +33,6 @@ buildPlugin hp = defaultPlugin { installCoreToDos = install }
             -- This is a bit of a hack; otherwise we lose what we've not seen
             liftIO $ hSetBuffering stdout NoBuffering
 #ifdef mingw32_HOST_OS
-            liftIO $ hSetEncoding stdout utf8
             -- This is a hacky workaround of a bug in Windows GHC.
             -- See https://ghc.haskell.org/trac/ghc/ticket/10301
             liftIO initStaticOpts
