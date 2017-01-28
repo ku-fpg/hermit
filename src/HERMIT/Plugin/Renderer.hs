@@ -13,16 +13,10 @@ import HERMIT.Dictionary (traceR)
 import HERMIT.Kure
 import HERMIT.Plugin.Types
 import HERMIT.PrettyPrinter.Common
-#ifdef mingw32_HOST_OS
-import HERMIT.Win32.IO (hPutStr, hPutStrLn)
-#endif
 
 import System.Console.ANSI
-#ifdef mingw32_HOST_OS
-import System.IO hiding (hPutStr, hPutStrLn)
-#else
 import System.IO
-#endif
+import System.IO.CodePage (withCP65001)
 import System.IO.Temp
 import System.Process
 
@@ -52,9 +46,12 @@ instance Semigroup UnicodeTerminal where
         UnicodeTerminal f1 <> UnicodeTerminal f2 = UnicodeTerminal $ \ h p -> f1 h p >> f2 h p
 
 unicodeConsole :: Handle -> PrettyOptions -> Either String DocH -> IO ()
-unicodeConsole h _    (Left str)  = hPutStr h str
-unicodeConsole h opts (Right doc) = let UnicodeTerminal r = renderCode opts doc
-                                     in r h $ po_focus opts
+unicodeConsole h opts = withCP65001 . go
+  where
+    go :: Either String DocH -> IO ()
+    go (Left str)  = hPutStr h str
+    go (Right doc) = let UnicodeTerminal r = renderCode opts doc
+                      in r h $ po_focus opts
 
 doSGR :: [SGR] -> UnicodeTerminal
 doSGR cmds = UnicodeTerminal $ \ h _ -> hSetSGR h cmds
