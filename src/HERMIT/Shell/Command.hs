@@ -57,9 +57,9 @@ import HERMIT.Shell.ShellEffect
 import HERMIT.Shell.Types
 
 import System.IO
-import System.IO.Echo.Internal (minTTY)
 -- import System.Console.ANSI
 import System.Console.Haskeline hiding (catch, display)
+import System.Console.MinTTY (isMinTTY)
 
 -------------------------------------------------------------------------------
 
@@ -118,9 +118,8 @@ commandLine opts exts = do
         then return ()
         else cl_putStrLn banner
 
-    if minTTY
-       then cl_putStrLn minTTYWarning
-       else return ()
+    mintty <- liftIO isMinTTY
+    when mintty $ cl_putStrLn minTTYWarning
 
     -- Load and run any scripts
     setRunningScript $ Just [] -- suppress all output until after first scripts run
