@@ -92,7 +92,7 @@ externals = crumbExternals
 -- | Discard the last crumb of a non-empty 'LocalPathH'.
 parentOfT :: (MonadFail m, MonadCatch m) => Transform c m g LocalPathH -> Transform c m g LocalPathH
 parentOfT t = --withPatFailMsg "Path points to origin, there is no parent." $
-  withPatFailExc (HException "Path points to origin, there is no parent.") $
+  withPatFailExc (strategyFailure "Path points to origin, there is no parent.") $
               do SnocPath (_:p) <- t
                  return (SnocPath p)
 

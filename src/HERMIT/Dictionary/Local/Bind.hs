@@ -34,7 +34,7 @@ externals =
 -- | @'NonRec' v e@ ==> @'Rec' [(v,e)]@
 nonrecToRecR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreBind
 nonrecToRecR = prefixFailMsg "Converting non-recursive binding to recursive binding failed: " $
-               withPatFailExc (HException (wrongExprForm "NonRec v e")) $
+               withPatFailExc (strategyFailure (wrongExprForm "NonRec v e")) $
   do NonRec v e <- idR
      guardMsg (isId v) "type variables cannot be defined recursively."
      return $ Rec [(v,e)]
@@ -42,7 +42,7 @@ nonrecToRecR = prefixFailMsg "Converting non-recursive binding to recursive bind
 -- | @'Rec' [(v,e)]@ ==> @'NonRec' v e@
 recToNonrecR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreBind
 recToNonrecR = prefixFailMsg "Converting singleton recursive binding to non-recursive binding failed: " $
-               withPatFailExc (HException (wrongExprForm "Rec [Def v e]")) $
+               withPatFailExc (strategyFailure (wrongExprForm "Rec [Def v e]")) $
   do Rec [(v,e)] <- idR
      guardMsg (v `notElemVarSet` freeIdsExpr e) ("'" ++ unqualifiedName v ++ " is recursively defined.")
      return (NonRec v e)

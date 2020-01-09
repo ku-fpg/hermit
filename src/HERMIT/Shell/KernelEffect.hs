@@ -29,7 +29,7 @@ import HERMIT.Plugin.Types
 
 import HERMIT.Shell.Types
 
-import HERMIT.Exception
+import Control.Exception (SomeException)
 
 -------------------------------------------------------------------------------
 
@@ -71,7 +71,7 @@ applyRewrite rr expr = do
 
             when cl $ do
                 warns <- liftM snd (queryK k lintModuleT Never kEnv ast')
-                            `catch` (\ (HException errs) -> deleteK k ast' >> fail errs)
+                            `catch` (\ (errs :: SomeException) -> deleteK k ast' >> fail (show errs))
                 putStrToConsole warns
 
             addAST ast'

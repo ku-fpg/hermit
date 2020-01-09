@@ -57,7 +57,7 @@ castElimR = setFailMsg "Cast elimination failed: " $
 
 castElimReflR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 castElimReflR = prefixFailMsg "Reflexive cast elimination failed: " $
-                withPatFailExc (HException (wrongExprForm "Cast e co")) $
+                withPatFailExc (strategyFailure (wrongExprForm "Cast e co")) $
     do Cast e co <- idR
        Pair a b <- return $ coercionKind co
        guardMsg (eqType a b) "not a reflexive coercion."
@@ -65,7 +65,7 @@ castElimReflR = prefixFailMsg "Reflexive cast elimination failed: " $
 
 castElimSymR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 castElimSymR = prefixFailMsg "Symmetric cast elimination failed: " $
-               withPatFailExc (HException (wrongExprForm "Cast (Cast e co1) co2")) $
+               withPatFailExc (strategyFailure (wrongExprForm "Cast (Cast e co1) co2")) $
     do Cast (Cast e co1) co2 <- idR
        let Pair a b   = coercionKind co1
            Pair b' a' = coercionKind co2
@@ -74,7 +74,7 @@ castElimSymR = prefixFailMsg "Symmetric cast elimination failed: " $
 
 castFloatAppR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 castFloatAppR = prefixFailMsg "Cast float from application failed: " $
-                withPatFailExc (HException (wrongExprForm "App (Cast e1 co) e2")) $
+                withPatFailExc (strategyFailure (wrongExprForm "App (Cast e1 co) e2")) $
     do App (Cast e1 co) e2 <- idR
        case co of
             TyConAppCo _r t [c1, c2] -> do
@@ -93,7 +93,7 @@ castFloatAppR = prefixFailMsg "Cast float from application failed: " $
 -- cast (\x::a -> e) ((a -> b) -> (a -> c))
 castFloatLamR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 castFloatLamR = prefixFailMsg "Cast float from lambda failed: " $
-                withPatFailExc (HException (wrongExprForm "Lam b (Cast e co)")) $ do
+                withPatFailExc (strategyFailure (wrongExprForm "Lam b (Cast e co)")) $ do
     Lam b (Cast e co) <- idR
     let r = coercionRole co
         aTy = varType b

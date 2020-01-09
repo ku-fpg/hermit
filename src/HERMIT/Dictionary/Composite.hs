@@ -42,6 +42,8 @@ import HERMIT.Exception
 
 import Control.Monad.Fail (MonadFail)
 
+import Control.Exception (SomeException)
+
 ------------------------------------------------------------------------------------------------------
 
 externals ::  [External]
@@ -121,7 +123,7 @@ bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 bashDebugR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
               , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadUnique m )
            => Rewrite c m LCore
-bashDebugR = bashUsingR [ bracketR nm r >>> catch (promoteT lintExprT >> idR) (traceR . (show :: HException -> String))
+bashDebugR = bashUsingR [ bracketR nm r >>> catch (promoteT lintExprT >> idR) (traceR . (show :: SomeException -> String))
                         | (r,nm) <- bashComponents ]
 
 -- | Perform the 'bash' algorithm with a given list of rewrites.

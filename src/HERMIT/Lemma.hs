@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module HERMIT.Lemma
     ( -- * Clause
@@ -42,6 +43,8 @@ import HERMIT.Core
 import HERMIT.GHC hiding ((<>))
 import HERMIT.Exception
 import Language.KURE.MonadCatch
+
+import Control.Exception
 
 ----------------------------------------------------------------------------
 
@@ -264,11 +267,11 @@ instClause inScope p e = prefixFailMsg "clause instantiation failed: " . liftM f
             er <- attemptM $ go bs q1
             case er of
                 Right (q1',s) -> return (con q1' q2, s)
-                Left (HException _) -> do
+                Left (_ :: SomeException) -> do
                     er' <- attemptM $ go bs q2
                     case er' of
                         Right (q2',s) -> return (con q1 q2', s)
-                        Left msg -> fail (unHException msg) --(show msg)
+                        Left (msg :: SomeException) -> fail (show msg) --(show msg)
 
 -- | The function which 'bubbles up' after the instantiation takes place,
 -- replacing any type variables that were instantiated as a result of specialization

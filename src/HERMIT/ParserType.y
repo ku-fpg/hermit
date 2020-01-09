@@ -23,6 +23,8 @@ import HERMIT.Syntax (isCoreInfixIdChar, isCoreIdFirstChar, isCoreIdChar)
 
 import HERMIT.Exception
 
+import Control.Exception
+
 import Language.KURE.MonadCatch (prefixFailMsg)
 }
 
@@ -88,7 +90,7 @@ tyvar : NAME               {% lookupName $1 }
 lookupName :: String -> TypeParseM Type
 lookupName nm = do
     c <- getContext
-    et <- lift $ (attemptM $ findType (parseName nm) c :: _ (Either HException _))
+    et <- lift $ (attemptM $ findType (parseName nm) c :: _ (Either SomeException _))
     either (const (addTyVar nm)) return et
 
 catchFrees :: Type -> TypeParseM ([TyVar], Type)

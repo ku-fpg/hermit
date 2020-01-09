@@ -111,7 +111,7 @@ betaExpandR = setFailMsg ("Beta-expansion failed: " ++ wrongExprForm "Let (NonRe
 -- | (\\ v -> f v) ==> f
 etaReduceR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 etaReduceR = prefixFailMsg "Eta-reduction failed: " $
-            withPatFailExc (HException (wrongExprForm "Lam v (App f (Var v))")) $
+            withPatFailExc (strategyFailure (wrongExprForm "Lam v (App f (Var v))")) $
             do Lam v1 (App f e) <- idR
                case e of
                   Var v2  -> guardMsg (v1 == v2) "the expression has the right form, but the variables are not equal."
@@ -186,7 +186,7 @@ pushR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c)
       -> (Id -> Bool)                       -- ^ a predicate to identify the function
       -> Rewrite c HermitM CoreExpr
 pushR mstrictf p = prefixFailMsg "push failed: " $
-                   withPatFailExc (HException (wrongExprForm "App f e")) $
+                   withPatFailExc (strategyFailure (wrongExprForm "App f e")) $
      do App f e <- idR
         case collectArgs f of
           (Var i,args) -> do

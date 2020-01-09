@@ -170,7 +170,7 @@ letSubstSafeR = letAllR (tryR recToNonrecR) idR >>> letNonRecSubstSafeR
 -- | @Let (NonRec v e) body@ ==> @body[e/v]@
 letNonRecSubstR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 letNonRecSubstR = prefixFailMsg "Let substitution failed: " $
-                  withPatFailExc (HException (wrongExprForm "Let (NonRec v rhs) body")) $
+                  withPatFailExc (strategyFailure (wrongExprForm "Let (NonRec v rhs) body")) $
     do Let (NonRec v rhs) body <- idR
        return (substCoreExpr v rhs body)
 
@@ -247,7 +247,7 @@ letNonRecSubstSafeR =
 
 letElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 letElimR = prefixFailMsg "Let elimination failed: " $
-          withPatFailExc (HException (wrongExprForm "Let binds expr")) $
+          withPatFailExc (strategyFailure (wrongExprForm "Let binds expr")) $
           do Let bg _ <- idR
              case bg of
                NonRec{} -> letNonRecElimR
@@ -256,14 +256,14 @@ letElimR = prefixFailMsg "Let elimination failed: " $
 -- | Remove an unused non-recursive let binding.
 --   @let v = E1 in E2@ ==> @E2@, if @v@ is not free in @E2@
 letNonRecElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
-letNonRecElimR = withPatFailExc (HException (wrongExprForm "Let (NonRec v e1) e2")) $
+letNonRecElimR = withPatFailExc (strategyFailure (wrongExprForm "Let (NonRec v e1) e2")) $
                 do Let (NonRec v _) e <- idR
                    guardMsg (v `notElemVarSet` freeVarsExpr e) "let-bound variable appears in the expression."
                    return e
 
 -- | Remove all unused recursive let bindings in the current group.
 letRecElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
-letRecElimR = withPatFailExc (HException (wrongExprForm "Let (Rec v e1) e2")) $
+letRecElimR = withPatFailExc (strategyFailure (wrongExprForm "Let (Rec v e1) e2")) $
     do Let (Rec bnds) body <- idR
        let bodyFrees   = freeIdsExpr body
            bsAndFrees  = map (second freeIdsExpr) bnds
@@ -280,7 +280,7 @@ progBindElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreProg
 progBindElimR = progBindNonRecElimR <+ progBindRecElimR
 
 progBindNonRecElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreProg
-progBindNonRecElimR = withPatFailExc (HException (wrongExprForm "ProgCons (NonRec v e1) e2")) $ do
+progBindNonRecElimR = withPatFailExc (strategyFailure (wrongExprForm "ProgCons (NonRec v e1) e2")) $ do
     ProgCons (NonRec v _) p <- idR
     guardMsg (v `notElemVarSet` freeVarsProg p) "variable appears in program body."
     guardMsg (not (isExportedId v)) "variable is exported."
@@ -288,7 +288,7 @@ progBindNonRecElimR = withPatFailExc (HException (wrongExprForm "ProgCons (NonRe
 
 -- | Remove all unused bindings at the top level.
 progBindRecElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreProg
-progBindRecElimR = withPatFailExc (HException (wrongExprForm "ProgCons (Rec v e1) e2")) $
+progBindRecElimR = withPatFailExc (strategyFailure (wrongExprForm "ProgCons (Rec v e1) e2")) $
     do ProgCons (Rec bnds) p <- idR
        let pFrees      = freeVarsProg p
            bsAndFrees  = map (second freeIdsExpr) bnds
@@ -312,7 +312,7 @@ chaseDependencies usedIds bsAndFrees = case partition ((`elemVarSet` usedIds) . 
 letToCaseR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m, MonadUnique m)
            => Rewrite c m CoreExpr
 letToCaseR = prefixFailMsg "Converting Let to Case failed: " $
-            withPatFailExc (HException (wrongExprForm "Let (NonRec v e1) e2")) $
+            withPatFailExc (strategyFailure (wrongExprForm "Let (NonRec v e1) e2")) $
   do Let (NonRec v ev) _ <- idR
      guardMsg (not $ isTyCoArg ev) "cannot case on a type or coercion."
      caseBndr <- extractT (cloneVarAvoidingT v Nothing [v])
@@ -324,7 +324,7 @@ letToCaseR = prefixFailMsg "Converting Let to Case failed: " $
 letFloatAppR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreExpr
 letFloatAppR = prefixFailMsg "Let floating from App function failed: " $
-               withPatFailExc (HException (wrongExprForm "App (Let bnds body) e")) $
+               withPatFailExc (strategyFailure (wrongExprForm "App (Let bnds body) e")) $
   do App (Let bnds body) e <- idR
      let vs = mkVarSet (bindVars bnds) `intersectVarSet` freeVarsExpr e
      if isEmptyVarSet vs
@@ -335,7 +335,7 @@ letFloatAppR = prefixFailMsg "Let floating from App function failed: " $
 letFloatArgR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreExpr
 letFloatArgR = prefixFailMsg "Let floating from App argument failed: " $
-               withPatFailExc (HException (wrongExprForm "App f (Let bnds body)")) $
+               withPatFailExc (strategyFailure (wrongExprForm "App f (Let bnds body)")) $
   do App f (Let bnds body) <- idR
      let vs = mkVarSet (bindVars bnds) `intersectVarSet` freeVarsExpr f
      if isEmptyVarSet vs
@@ -346,7 +346,7 @@ letFloatArgR = prefixFailMsg "Let floating from App argument failed: " $
 letFloatLetR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreExpr
 letFloatLetR = prefixFailMsg "Let floating from Let failed: " $
-               withPatFailExc (HException (wrongExprForm "Let (NonRec v (Let bds e1)) e2")) $
+               withPatFailExc (strategyFailure (wrongExprForm "Let (NonRec v (Let bds e1)) e2")) $
   do Let (NonRec v (Let bds e1)) e2 <- idR
      let vs = mkVarSet (bindVars bds) `intersectVarSet` freeVarsExpr e2
      if isEmptyVarSet vs
@@ -359,7 +359,7 @@ letFloatLetR = prefixFailMsg "Let floating from Let failed: " $
 letFloatLamR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreExpr
 letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
-               withPatFailExc (HException (wrongExprForm "Lam v1 (Let bds body)")) $
+               withPatFailExc (strategyFailure (wrongExprForm "Lam v1 (Let bds body)")) $
   do Lam v (Let binds body) <- idR
      let bs  = bindVars binds
          fvs = HERMIT.Core.freeVarsBind binds
@@ -373,7 +373,7 @@ letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
 letFloatCaseR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
               => Rewrite c m CoreExpr
 letFloatCaseR = prefixFailMsg "Let floating from Case failed: " $
-                withPatFailExc (HException (wrongExprForm "Case (Let bnds e) w ty alts")) $
+                withPatFailExc (strategyFailure (wrongExprForm "Case (Let bnds e) w ty alts")) $
   do Case (Let bnds e) w ty alts <- idR
      let captures = mkVarSet (bindVars bnds) `intersectVarSet` delVarSet (unionVarSets $ map freeVarsAlt alts) w
      if isEmptyVarSet captures
@@ -388,7 +388,7 @@ letFloatCaseR = prefixFailMsg "Let floating from Case failed: " $
 -- and where `w` is not rebound in `b`.
 letFloatCaseAltR :: (MonadFail m, MonadCatch m) => Maybe Int -> Rewrite c m CoreExpr
 letFloatCaseAltR maybeN = prefixFailMsg "Let float from case alternative failed: " $
-                          withPatFailExc (HException (wrongExprForm "Case s w ty alts")) $ do
+                          withPatFailExc (strategyFailure (wrongExprForm "Case s w ty alts")) $ do
         -- Perform the first safe let-floating out of a case alternative
     let letFloatOneAltM :: MonadCatch m => Id -> VarSet -> [CoreAlt] -> m (CoreBind,[CoreAlt])
         letFloatOneAltM w fvs = go
@@ -434,7 +434,7 @@ letFloatCaseAltR maybeN = prefixFailMsg "Let float from case alternative failed:
 -- | @cast (let bnds in e) co@ ==> @let bnds in cast e co@
 letFloatCastR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 letFloatCastR = prefixFailMsg "Let floating from Cast failed: " $
-                withPatFailExc (HException (wrongExprForm "Cast (Let bnds e) co")) $
+                withPatFailExc (strategyFailure (wrongExprForm "Cast (Let bnds e) co")) $
   do Cast (Let bnds e) co <- idR
      return $ Let bnds (Cast e co)
 
@@ -449,7 +449,7 @@ letFloatExprR = setFailMsg "Unsuitable expression for Let floating."
 letFloatTopR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreProg
 letFloatTopR = prefixFailMsg "Let floating to top level failed: " $
-               withPatFailExc (HException (wrongExprForm "NonRec v (Let bds e) `ProgCons` p")) $
+               withPatFailExc (strategyFailure (wrongExprForm "NonRec v (Let bds e) `ProgCons` p")) $
                do ProgCons (NonRec v (Let bds e)) p <- idR
                   let bs = bindVars bds
                   guardMsg (all isId bs) "type and coercion bindings are not allowed at the top level."
@@ -470,7 +470,7 @@ letFloatInR = letFloatInCaseR <+ letFloatInAppR <+ letFloatInLamR
 letFloatInCaseR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
                 => Rewrite c m CoreExpr
 letFloatInCaseR = prefixFailMsg "Let floating in to case failed: " $
-                  withPatFailExc (HException (wrongExprForm "Let bnds (Case s w ty alts)")) $
+                  withPatFailExc (strategyFailure (wrongExprForm "Let bnds (Case s w ty alts)")) $
   do Let bnds (Case s w ty alts) <- idR
      let bs = bindVars bnds
          captured = bs `intersect` (w : concatMap altVars alts)
@@ -487,7 +487,7 @@ letFloatInCaseR = prefixFailMsg "Let floating in to case failed: " $
 letFloatInAppR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
                => Rewrite c m CoreExpr
 letFloatInAppR = prefixFailMsg "Let floating in to app failed: " $
-                withPatFailExc (HException (wrongExprForm "Let bnds (App e1 e2)")) $
+                withPatFailExc (strategyFailure (wrongExprForm "Let bnds (App e1 e2)")) $
   do Let bnds (App e1 e2) <- idR
      lhs <- return (Let bnds e1) >>> alphaLetR
      return $ App lhs (Let bnds e2)
@@ -496,7 +496,7 @@ letFloatInAppR = prefixFailMsg "Let floating in to app failed: " $
 --   if @v@ does not shadow @x@
 letFloatInLamR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
 letFloatInLamR = prefixFailMsg "Let floating in to lambda failed: " $
-                withPatFailExc (HException (wrongExprForm "Let bnds (Lam v e)")) $
+                withPatFailExc (strategyFailure (wrongExprForm "Let bnds (Lam v e)")) $
   do Let bnds (Lam v e) <- idR
      safe <- letT (arr bindVars) lamVarT $ flip notElem
      guardMsg safe "let bindings would capture lambda binding."

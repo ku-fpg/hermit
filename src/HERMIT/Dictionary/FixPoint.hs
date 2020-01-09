@@ -152,7 +152,7 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
   where
     rollingRuleL :: RewriteH CoreExpr
     rollingRuleL = prefixFailMsg "rolling rule failed: " $
-                   withPatFailExc (HException wrongFixBody) $
+                   withPatFailExc (strategyFailure wrongFixBody) $
                    do (tyA, Lam a (App f (App g (Var a')))) <- isFixExprT
                       guardMsg (a == a') wrongFixBody
                       (tyA',tyB) <- funExprsWithInverseTypes g f
@@ -162,9 +162,9 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
 
     rollingRuleR :: RewriteH CoreExpr
     rollingRuleR = prefixFailMsg "(reversed) rolling rule failed: " $
-                   withPatFailExc (HException "not an application.") $
+                   withPatFailExc (strategyFailure "not an application.") $
                    do App f fx <- idR
-                      withPatFailExc (HException wrongFixBody) $
+                      withPatFailExc (strategyFailure wrongFixBody) $
                         do (tyB, Lam b (App g (App f' (Var b')))) <- isFixExprT <<< constant fx
                            guardMsg (b == b') wrongFixBody
                            guardMsg (exprAlphaEq f f') "external function does not match internal expression"
@@ -207,7 +207,7 @@ fixFusionRuleBR meq mfstrict f g h = beforeBiR
      where
        fixFusionL :: RewriteH CoreExpr
        fixFusionL = prefixFailMsg "fixed-point fusion failed: " $
-                    withPatFailExc (HException (wrongExprForm "App f (fix g)")) $
+                    withPatFailExc (strategyFailure (wrongExprForm "App f (fix g)")) $
                     do App f' fixg <- idR
                        guardMsg (exprAlphaEq f f') "first argument function does not match."
                        (_,g') <- isFixExprT <<< return fixg
@@ -228,7 +228,7 @@ fixFusionRule meq mfstrict = parse3beforeBiR $ fixFusionRuleBR ((extractR *** ex
 
 -- | Check that the expression has the form "fix t (f :: t -> t)", returning "t" and "f".
 isFixExprT :: TransformH CoreExpr (Type,CoreExpr)
-isFixExprT = withPatFailExc (HException (wrongExprForm "fix t f")) $ -- fix :: forall a. (a -> a) -> a
+isFixExprT = withPatFailExc (strategyFailure (wrongExprForm "fix t f")) $ -- fix :: forall a. (a -> a) -> a
   do (Var fixId, [Type ty, f]) <- callT
      fixId' <- findIdT fixLocation
      guardMsg (fixId == fixId') (unqualifiedName fixId ++ " does not match " ++ show fixLocation)

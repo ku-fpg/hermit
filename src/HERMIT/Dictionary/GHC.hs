@@ -66,6 +66,8 @@ import qualified HERMIT.PrettyPrinter.Clean as Clean
 
 import           HERMIT.Exception
 
+import           Control.Exception hiding (catch)
+
 import           TcRnTypes (ShadowInfo (..))
 
 ------------------------------------------------------------------------
@@ -276,7 +278,7 @@ lintClauseT :: forall c m.
                , HasDynFlags m, MonadCatch m )
             => Transform c m Clause String
 lintClauseT = do
-    strs <- extractT (collectPruneT (promoteExprT $ lintExprT `catch` (return . (show :: HException -> String))) :: Transform c m LCore [String])
+    strs <- extractT (collectPruneT (promoteExprT $ lintExprT `catch` (return . (show :: SomeException -> String))) :: Transform c m LCore [String])
     let strs' = nub $ filter notNull strs
     guardMsg (null strs' || (strs' == ["Core Lint Passed"])) $ unlines strs'
     return "Core Lint Passed"
@@ -301,7 +303,7 @@ loadLemmaLibraryT nm mblnm = prefixFailMsg "Loading lemma library failed: " $
                                     (M.lookup lnm ls))
                      mblnm
         nls' <- flip filterM nls $ \ (n, l) -> do
-                    er <- attemptM $ applyT lintClauseT c $ lemmaC l :: HermitM (Either HException String)
+                    er <- attemptM $ applyT lintClauseT c $ lemmaC l :: HermitM (Either SomeException String)
                     case er of
                         Left msg0 -> do
                             let msg = show msg0

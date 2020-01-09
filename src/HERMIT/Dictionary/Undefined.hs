@@ -99,7 +99,7 @@ findUndefinedIdT = findIdT undefinedLocation
 -- | Check if the current expression is an undefined value.
 isUndefinedValT :: (MonadFail m, BoundVars c, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Transform c m CoreExpr ()
 isUndefinedValT = prefixFailMsg "not an undefined value: " $
-                  withPatFailExc (HException (wrongExprForm "App (Var undefined) (Type ty)")) $
+                  withPatFailExc (strategyFailure (wrongExprForm "App (Var undefined) (Type ty)")) $
                   do App (Var un) (Type _) <- idR
                      un' <- findUndefinedIdT
                      guardMsg (un == un') ("identifier is not " ++ show undefinedLocation)
@@ -115,7 +115,7 @@ findErrorIdT = findIdT errorLocation
 -- | Check if the current expression is an undefined value.
 isErrorValT :: (MonadFail m, BoundVars c, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Transform c m CoreExpr ()
 isErrorValT = prefixFailMsg "not an error value: " $
-              withPatFailExc (HException (wrongExprForm "App (App (Var error) (Type ty)) string")) $
+              withPatFailExc (strategyFailure (wrongExprForm "App (App (Var error) (Type ty)) string")) $
               do App (App (Var er) (Type _)) _ <- idR
                  er' <- findErrorIdT
                  guardMsg (er == er') ("identifier is not " ++ show errorLocation)

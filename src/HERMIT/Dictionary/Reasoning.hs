@@ -344,7 +344,7 @@ verifyOrCreateT u nm cl = do
     else contextonlyT $ \ c -> sendKEnvMessage $ AddObligation (toHermitC c) nm $ Lemma cl NotProven u
 
 reflexivityR :: (MonadFail m, MonadCatch m) => Rewrite c m Clause
-reflexivityR = withPatFailExc (HException "reflexivity may only be applied to equivalence lemmas") $ do
+reflexivityR = withPatFailExc (strategyFailure "reflexivity may only be applied to equivalence lemmas") $ do
     Equiv lhs rhs <- idR
     guardMsg (exprAlphaEq lhs rhs) "the two sides are not alpha-equivalent."
     return CTrue
@@ -403,7 +403,7 @@ aImpliesAR = do
 
 splitAntecedentR :: (MonadFail m, MonadCatch m) => Rewrite c m Clause
 splitAntecedentR = prefixFailMsg "antecedent split failed: " $
-                   withPatFailExc (HException (wrongExprForm "(ante1 ^ ante2) => con")) $ do
+                   withPatFailExc (strategyFailure (wrongExprForm "(ante1 ^ ante2) => con")) $ do
     Impl nm (Conj c1 c2) con <- idR
     return $ Impl (nm <> "0") c1 $ Impl (nm <> "1") c2 con
 
@@ -469,7 +469,7 @@ retractionBR mr f g = beforeBiR
   where
     retractionL :: Rewrite c HermitM CoreExpr
     retractionL =  prefixFailMsg "Retraction failed: " $
-                   withPatFailExc (HException (wrongExprForm "App f (App g y)")) $
+                   withPatFailExc (strategyFailure (wrongExprForm "App f (App g y)")) $
       do App f' (App g' y) <- idR
          guardMsg (exprAlphaEq f f' && exprAlphaEq g g') "given retraction components do not match current expression."
          return y
@@ -668,7 +668,7 @@ lemmaBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaC)) (
 lemmaConsequentR :: forall c m. (MonadFail m, LemmaContext c, ReadBindings c, HasLemmas m, MonadCatch m)
                  => Used -> LemmaName -> Rewrite c m Clause
 lemmaConsequentR u nm = prefixFailMsg "lemma-consequent failed:" $
-                        withPatFailExc (HException "lemma is not an implication.") $ do
+                        withPatFailExc (strategyFailure "lemma is not an implication.") $ do
     (hs, Impl _ ante pat) <- getLemmaByNameT nm >>^ (collectQs . lemmaC)
     cl' <- transform $ \ c cl -> do
         m <- maybeM ("consequent did not match.") $ lemmaMatch hs pat cl

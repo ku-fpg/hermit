@@ -157,7 +157,7 @@ externals =
 -- | case s of w; C vs -> e ==> e if w and vs are not free in e
 caseElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 caseElimR = prefixFailMsg "Case elimination failed: " $
-            withPatFailExc (HException (wrongExprForm "Case s bnd ty alts")) $
+            withPatFailExc (strategyFailure (wrongExprForm "Case s bnd ty alts")) $
  do Case _ bnd _ alts <- idR
     case alts of
         [(_, vs, e)] -> do let fvs = freeVarsExpr e
@@ -195,7 +195,7 @@ caseFloatArgR :: ( MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBinding
               => Maybe CoreExpr -> Maybe (Rewrite c m CoreExpr) -- ^ Maybe the function to float past, and maybe a proof of its strictness.
               -> Rewrite c m CoreExpr
 caseFloatArgR mf mstrict = prefixFailMsg "Case floating from App argument failed: " $
-                           withPatFailExc (HException "App f (Case s w ty alts)") $
+                           withPatFailExc (strategyFailure "App f (Case s w ty alts)") $
   do App f (Case s w _ alts) <- idR
 
      whenJust (\ f' -> guardMsg (exprAlphaEq f f') "given function does not match current application.") mf
@@ -220,7 +220,7 @@ caseFloatArgLemmaR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasCoreR
                       , MonadThings m, MonadUnique m )
                    => Used -> LemmaName -> Rewrite c m CoreExpr
 caseFloatArgLemmaR u nm = prefixFailMsg "Case floating from application argument failed: " $
-                          withPatFailExc (HException "App f (Case s w ty alts)") $ do
+                          withPatFailExc (strategyFailure "App f (Case s w ty alts)") $ do
     App f (Case s w _ alts) <- idR
 
     let fvs         = freeVarsExpr f
@@ -271,7 +271,7 @@ caseFloatLetR = prefixFailMsg "Case floating from Let failed: " $
 -- | cast (case s of p -> e) co ==> case s of p -> cast e co
 caseFloatCastR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 caseFloatCastR = prefixFailMsg "Case float from cast failed: " $
-                withPatFailExc (HException (wrongExprForm "Cast (Case s bnd ty alts) co")) $
+                withPatFailExc (strategyFailure (wrongExprForm "Cast (Case s bnd ty alts) co")) $
     do Cast (Case s bnd _ alts) co <- idR
        let alts' = mapAlts (flip Cast co) alts
        return $ Case s bnd (coreAltsType alts') alts'
@@ -296,7 +296,7 @@ caseFloatInAppR = fail "caseFloatInApp: TODO"
 
 caseFloatInArgsR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
 caseFloatInArgsR = prefixFailMsg "Case floating into arguments failed: " $
-                   withPatFailExc (HException (wrongExprForm "Case s v t alts")) $
+                   withPatFailExc (strategyFailure (wrongExprForm "Case s v t alts")) $
     do Case s bndr _ty alts <- idR
        (vss, fs, argss) <- caseT mempty mempty mempty (\ _ -> altT mempty (\ _ -> idR) callT $ \ () vs (fn, args) -> (vs, fn, args))
                                                       (\ () () () alts' -> unzip3 [ (bndr:vs, fn, args) | (vs,fn,args) <- alts' ])
@@ -338,7 +338,7 @@ caseReduceR subst =
 caseReduceLiteralR :: (MonadFail m, MonadCatch m) => Bool -> Rewrite c m CoreExpr
 caseReduceLiteralR subst =
     prefixFailMsg "Case reduction failed: " $
-    withPatFailExc (HException (wrongExprForm "Case (Lit l) v t alts")) $ do
+    withPatFailExc (strategyFailure (wrongExprForm "Case (Lit l) v t alts")) $ do
         Case s bndr _ alts <- idR
         let in_scope = mkInScopeSet (localFreeVarsExpr s)
         case exprIsLiteral_maybe (in_scope, idUnfolding) s of
@@ -357,7 +357,7 @@ caseReduceDataconR :: forall c m. ( MonadFail m, ExtendPath c Crumb, ReadPath c 
                                   , ReadBindings c, MonadCatch m, MonadUnique m )
                    => Bool -> Rewrite c m CoreExpr
 caseReduceDataconR subst = prefixFailMsg "Case reduction failed: " $
-                           withPatFailExc (HException (wrongExprForm "Case e v t alts")) go
+                           withPatFailExc (strategyFailure (wrongExprForm "Case e v t alts")) go
     where
         go :: Rewrite c m CoreExpr
         go = do
@@ -481,7 +481,7 @@ caseInlineAlternativeR = prefixFailMsg "case-inline-alternative failed: " $
 --   @case s of {pat1 -> e ; pat2 -> e ; ... ; patn -> e}@ ==> @case s of {_ -> e}@
 caseMergeAltsR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 caseMergeAltsR = prefixFailMsg "merge-case-alts failed: " $
-                 withPatFailExc (HException (wrongExprForm "Case e w ty alts")) $
+                 withPatFailExc (strategyFailure (wrongExprForm "Case e w ty alts")) $
                  do Case e w ty alts <- idR
                     guardMsg (notNull alts) "zero alternatives cannot be merged."
                     let rhss = [ rhs | (_,_,rhs) <- alts ]
@@ -506,7 +506,7 @@ caseMergeAltsWithBinderR :: ( MonadFail m, ExtendPath c Crumb, ReadPath c Crumb,
                          => Rewrite c m CoreExpr
 caseMergeAltsWithBinderR =
     prefixFailMsg "merge-case-alts-with-binder failed: " $
-    withPatFailExc (HException (wrongExprForm "Case e w ty alts")) $
+    withPatFailExc (strategyFailure (wrongExprForm "Case e w ty alts")) $
     tryR caseFoldBinderR >>> caseMergeAltsR
 
 -- | Eliminate a case, inlining any occurrences of the case binder as the scrutinee.
@@ -529,7 +529,7 @@ caseElimSeqR :: ( MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings
                 , ReadBindings c, HasEmptyContext c, MonadCatch m, MonadUnique m )
              => Rewrite c m CoreExpr
 caseElimSeqR = prefixFailMsg "case-elim-seq failed: " $
-               withPatFailExc (HException "not a seq case.") $
+               withPatFailExc (strategyFailure "not a seq case.") $
   do Case s w _ [(DEFAULT,[],rhs)] <- idR
 
      let is = case s of

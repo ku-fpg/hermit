@@ -74,7 +74,7 @@ hermitPlugin f = buildPlugin $ \ store passInfo opts -> do
                 else resumeK kernel ast
         either (\case PAbort      -> abortK kernel
                       PResume ast -> cleanup ast
-                      PError  err -> putStrLn (show err) >> abortK kernel)
+                      PError  err -> putStrLn err >> abortK kernel)
                (\ _ -> cleanup $ ps_cursor st) r
 
 defPS :: AST -> IO PluginState

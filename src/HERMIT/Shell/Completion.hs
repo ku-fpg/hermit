@@ -53,7 +53,7 @@ shellComplete rPrev so_far = do
             Right e  -> do
                 eds <- attemptM $ exprToDyns e
                 case eds of
-                    Left (HException msg) -> liftIO $ putStrLn ("\n" ++ msg) >> return []
+                    Left (exc :: SomeException) -> liftIO $ putStrLn ("\n" ++ show exc) >> return []
                     Right ds -> do
                         let ts = [ head args | d <- ds
                                              , let args = fst (splitFunTyArgs (dynTypeRep d))
@@ -64,7 +64,7 @@ completionsFor :: (MonadCatch m, CLMonad m)
                => String -> [CompletionType] -> m [Completion]
 completionsFor so_far cts = do
     qs <- mapM completionQuery cts
-    cls <- forM qs $ \ q -> queryInContext q Never `catch` (\ (_ :: HException) -> return [])
+    cls <- forM qs $ \ q -> queryInContext q Never `catch` (\ (_ :: SomeException) -> return [])
     return $ map simpleCompletion $ nub $ filter (so_far `isPrefixOf`) $ concat cls
 
 data CompletionType = ConsiderC       -- considerable constructs

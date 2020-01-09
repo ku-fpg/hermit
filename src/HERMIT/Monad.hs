@@ -47,7 +47,7 @@ import HERMIT.GHC.Typechecker
 import HERMIT.Kure.Universes
 import HERMIT.Lemma
 
-import Control.Exception
+import Control.Exception hiding (catch)
 import Data.Maybe (fromJust)
 
 ----------------------------------------------------------------------------
@@ -132,12 +132,48 @@ instance Fail.MonadFail HermitM where
 instance MonadThrow HermitM where
   throwM = fail . show
 
+-- instance MonadThrow CoreM where
+--   throwM e = liftIO $ throwM e
+
+-- instance MonadCatch CoreM where
+--   catch m f = do
+--     hscEnv <- getHscEnv
+--     ruleBase <- getRuleBase
+--     uniqSupply <- getUniqueSupplyM
+--     mod <- getModule
+--     printUnqualified <- getPrintUnqualified
+--     srcSpan <- getSrcSpanM
+
+--     let runCoreM' x = fmap fst $ runCoreM hscEnv ruleBase uniqSupply mod emptyModuleSet printUnqualified srcSpan x
+
+--     liftIO $ catch (runCoreM' m) (runCoreM' . f)
+
 instance MonadCatch HermitM where
   catch :: Exception e => HermitM a -> (e -> HermitM a) -> HermitM a
-  (HermitM gcm) `catch` f = HermitM $ \ env -> gcm env >>= runKureM (return.return)
-                                                                     (\ msg ->
-                                                                        let Just e = fromException msg
-                                                                        in runHermitM (f e) env)
+  -- (HermitM gcm) `catch` f = do
+  --   HermitM $ \env -> catch (gcm env) ((`runHermitM` env) . f)
+
+  (HermitM gcm) `catch` f = HermitM $ \ env -> gcm env >>=
+    runKureM (return.return)
+             (\ msg ->
+                let Just e = fromException msg
+                in runHermitM (f e) env)
+
+  -- (HermitM gcm) `catch` f = HermitM $ \ env -> do
+  --   m <- gcm env
+  --   return $ catch m (liftCoreM . _)
+    -- runKureM (return.return)
+    --          (\ msg -> do
+    --             -- let go :: HermitM a -> KureM (HermitMResult a)
+    --             --     go (HermitM h) =
+    --             --       let h' = h env
+    --             --       in
+    --             --         catch _ _
+    --             return $ catch m _)
+    --           m
+    --             -- return $ catch _ (_ . f))
+    --             -- let Just e = fromException msg
+    --             -- in runHermitM (Language.KURE.catch _ (_ . f)) env)
 
 instance MonadIO HermitM where
   liftIO :: IO a -> HermitM a
@@ -222,6 +258,9 @@ deleteLemma nm = getLemmas >>= putLemmas . delete nm
 class Monad m => LiftCoreM m where
     -- | 'CoreM' can be lifted to this monad.
     liftCoreM :: CoreM a -> m a
+
+instance LiftCoreM CoreM where
+    liftCoreM = id
 
 instance LiftCoreM HermitM where
     liftCoreM coreM = HermitM $ \ env -> coreM >>= return . return . mkResult env

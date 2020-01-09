@@ -5,16 +5,18 @@ import           Control.Exception hiding (catch)
 
 import           Language.KURE.MonadCatch
 
-newtype HException = HException {unHException :: String}
+-- newtype HException = HException {unHException :: String}
 
-instance Show HException where
-  show = unHException
+-- newtype HException = HException {unHException :: SomeException}
 
-instance Exception HException
+-- instance Show HException where
+--   show = unHException
 
-modMsgException :: (String -> String) -> HException -> HException
-modMsgException f (HException str) = HException (f str)
+-- instance Exception HException
 
-modFailMsg :: MonadCatch m => (String -> String) -> m a -> m a
-modFailMsg f ma = ma `catch` \me@HException{} -> throwM (modMsgException f me)
+-- modMsgException :: (String -> String) -> HException -> HException
+-- modMsgException f (HException str) = HException (f str)
+
+-- modFailMsg :: MonadCatch m => (String -> String) -> m a -> m a
+-- modFailMsg f ma = ma `catch` \me@HException{} -> throwM (modMsgException f me)
 

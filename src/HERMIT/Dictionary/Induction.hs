@@ -42,7 +42,7 @@ externals =
 
 -- TODO: revisit design here to make one level
 caseSplitOnR :: Bool -> (Id -> Bool) -> RewriteH Clause
-caseSplitOnR induction idPred = withPatFailExc (HException "induction can only be performed on universally quantified terms.") $ do
+caseSplitOnR induction idPred = withPatFailExc (strategyFailure "induction can only be performed on universally quantified terms.") $ do
     let p b = idPred b && isId b
     (bs, cl) <- arr collectQs
     guardMsg (any p bs) "specified identifier is not universally quantified in this lemma. (Induction cannot be performed on type quantifiers.)"

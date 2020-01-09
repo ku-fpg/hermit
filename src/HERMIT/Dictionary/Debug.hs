@@ -19,6 +19,8 @@ import HERMIT.Monad
 
 import HERMIT.Exception
 
+import Control.Exception hiding (catch)
+
 -- | Exposed debugging 'External's.
 externals :: [External]
 externals = map (.+ Debug)
@@ -54,7 +56,7 @@ bracketR :: ( Injection a LCoreTC, LemmaContext c, ReadBindings c, ReadPath c Cr
          => String -> Rewrite c m a -> Rewrite c m a
 bracketR msg rr = do
     -- Be careful to only run the rr once, in case it has side effects.
-    (e,r) <- idR &&& (attemptM rr :: _ (Either HException _))
+    (e,r) <- idR &&& (attemptM rr :: _ (Either SomeException _))
     either fail (\ e' -> do _ <- return e >>> observeR before
                             return e' >>> observeR after) (left show r)
     where before = msg ++ " (before)"

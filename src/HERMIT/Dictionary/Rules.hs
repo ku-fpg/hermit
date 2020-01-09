@@ -196,7 +196,7 @@ ruleNameToClauseT name = getHermitRuleT name >>> ruleToClauseT
 -- | Transform GHC's CoreRule into an Clause.
 ruleToClauseT :: (MonadFail m, BoundVars c, MonadThings m, MonadCatch m)
               => Transform c m CoreRule Clause
-ruleToClauseT = withPatFailExc (HException "HERMIT cannot handle built-in rules yet.") $ do
+ruleToClauseT = withPatFailExc (strategyFailure "HERMIT cannot handle built-in rules yet.") $ do
     r@Rule{} <- idR -- other possibility is "BuiltinRule"
     f <- lookupId $ ru_fn r
     let lhs = mkCoreApps (varToCoreExpr f) (ru_args r)

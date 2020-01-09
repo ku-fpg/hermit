@@ -167,12 +167,12 @@ commandLine opts exts = do
 -- | Like 'catchM', but checks the 'cl_failhard' setting and does so if needed.
 catchFailHard :: (MonadCatch m, CLMonad m) => m () -> (String -> m ()) -> m ()
 catchFailHard m failure =
-    catch m $ \ (HException msg) -> ifM (gets cl_failhard)
+    catch m $ \ (exc :: SomeException) -> ifM (gets cl_failhard)
                             (do pp <- gets cl_pretty
                                 performQuery (QueryPrettyH $ pLCoreTC pp) (CmdName "display")
-                                cl_putStrLn msg
+                                cl_putStrLn (show exc)
                                 abort)
-                            (failure msg)
+                            (failure (show exc))
 
 evalScript :: (MonadFail m, MonadCatch m, CLMonad m) => String -> m ()
 evalScript = parseScriptCLT >=> mapM_ runExprH

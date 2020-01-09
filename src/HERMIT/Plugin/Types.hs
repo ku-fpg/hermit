@@ -16,6 +16,7 @@ import Control.Monad.Reader (MonadReader(..), ReaderT(..))
 import Control.Monad.State (MonadState(..), StateT(..))
 import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
+import Control.Monad.Except
 
 import qualified Data.Map as M
 
@@ -31,6 +32,7 @@ import System.IO
 import HERMIT.Exception
 import Control.Exception
 
+
 type PluginM = PluginT IO
 newtype PluginT m a = PluginT { unPluginT :: ExceptT PException (ReaderT PluginReader (StateT PluginState m)) a }
     deriving (Functor, Applicative, MonadIO, MonadError PException,
@@ -45,7 +47,7 @@ instance Monad m => Monad (PluginT m) where
     fail = Fail.fail
 
 instance Monad m => Fail.MonadFail (PluginT m) where
-    fail = PluginT . throwError . PError . SomeException . HException
+    fail = PluginT . throwError . PError
 
 instance MonadTrans PluginT where
     lift = PluginT . lift . lift . lift
@@ -53,7 +55,7 @@ instance MonadTrans PluginT where
 instance Monad m => MonadThrow (PluginT m) where
   throwM = fail . show
 
-instance Monad m => MonadCatch (PluginT m) where
+instance (MonadCatch m, Monad m) => MonadCatch (PluginT m) where
     -- law: fail msg `catchM` f == f msg
     -- catchM :: m a -> (String -> m a) -> m a
     catch m f = do
@@ -62,9 +64,9 @@ instance Monad m => MonadCatch (PluginT m) where
         (er,st') <- lift $ runPluginT r st m
         case er of
             Left err -> case err of
-                            PError msg ->
-                              let Just e = fromException msg
-                              in f e
+                            pexc@(PError _) ->
+                              PluginT $ HERMIT.Kure.catch (liftEither (Left pexc)) (unPluginT . f)
+                              -- f (SomeException (fail msg))
                             other -> throwError other -- rethrow abort/resume
             Right v  -> put st' >> return v
 
@@ -82,7 +84,7 @@ data PluginReader = PluginReader
     , pr_pass           :: PassInfo
     }
 
-data PException = PAbort | PResume AST | PError SomeException
+data PException = PAbort | PResume AST | PError String
 
 newtype PSBox = PSBox PluginState
 instance Extern PluginState where

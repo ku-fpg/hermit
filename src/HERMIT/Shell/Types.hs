@@ -58,6 +58,8 @@ import           HERMIT.Exception
 
 import           Control.Exception
 
+import           Control.Monad.Except
+
 ----------------------------------------------------------------------------------
 
 data QueryFun :: * -> * where
@@ -135,12 +137,12 @@ performQuery qf expr = go qf
           go (QueryUnit q) = do
             -- TODO: Again, we may want a quiet version of the kernel_env
             let str = unparseExprH expr
-            modFailMsg (\ err -> str ++ " [exception: " ++ err ++ "]") $ queryInContext (promoteT q) cm
+            prefixFailMsg (str ++ " [exception]: " ) $ queryInContext (promoteT q) cm
             putStrToConsole $ str ++ " [correct]"
 
           go (QueryA q) = do
             let str = unparseExprH expr
-            res <- modFailMsg (\ err -> str ++ " [exception: " ++ err ++ "]") $
+            res <- prefixFailMsg (str ++ " [exception]: ") $
                      queryInContext (promoteT q) cm
             putStrToConsole $ str ++ " [correct]"
             return res
@@ -170,7 +172,7 @@ data VersionCmd = Back            -- back (up) the derivation tree
 data CLException = CLAbort
                  | CLResume AST
                  | CLContinue CommandLineState -- TODO: needed?
-                 | CLError SomeException
+                 | CLError String
 
 abort :: MonadError CLException m => m a
 abort = throwError CLAbort
@@ -239,7 +241,7 @@ instance Monad m => Monad (CLT m) where
     fail = Fail.fail
 
 instance Monad m => Fail.MonadFail (CLT m) where
-    fail = CLT . throwError . CLError . SomeException . HException
+    fail = CLT . throwError . CLError
 
 -- | Run a CLT computation.
 runCLT :: PluginReader -> CommandLineState -> CLT m a -> m (Either CLException a, CommandLineState)
@@ -276,7 +278,7 @@ pluginM m = do
 instance Monad m => MonadThrow (CLT m) where
   throwM = fail . show
 
-instance Monad m => MonadCatch (CLT m) where
+instance (MonadCatch m, Monad m) => MonadCatch (CLT m) where
     -- law: fail msg `catchM` f == f msg
     -- catchM :: m a -> (String -> m a) -> m a
     catch m f = do
@@ -285,9 +287,9 @@ instance Monad m => MonadCatch (CLT m) where
         (er,st') <- lift $ runCLT env st m
         case er of
             Left err -> case err of
-                            CLError msg ->
-                              let Just e = fromException msg
-                              in f e
+                            CLError msg -> CLT $ HERMIT.Kure.catch (liftEither (Left err)) (unCLT . f)
+                              -- let Just e = fromException msg
+                              -- in f e
                             other -> throwError other -- rethrow abort/resume/continue
             Right v  -> put st' >> return v
 
