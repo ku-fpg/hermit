@@ -57,7 +57,6 @@ import           Data.Typeable
 import           HERMIT.Exception
 
 import           Control.Exception
-import           Data.Maybe (fromJust)
 
 ----------------------------------------------------------------------------------
 
@@ -286,7 +285,9 @@ instance Monad m => MonadCatch (CLT m) where
         (er,st') <- lift $ runCLT env st m
         case er of
             Left err -> case err of
-                            CLError msg -> f (fromJust $ fromException msg)
+                            CLError msg ->
+                              let Just e = fromException msg
+                              in f e
                             other -> throwError other -- rethrow abort/resume/continue
             Right v  -> put st' >> return v
 

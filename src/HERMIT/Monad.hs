@@ -135,7 +135,9 @@ instance MonadThrow HermitM where
 instance MonadCatch HermitM where
   catch :: Exception e => HermitM a -> (e -> HermitM a) -> HermitM a
   (HermitM gcm) `catch` f = HermitM $ \ env -> gcm env >>= runKureM (return.return)
-                                                                     (\ msg -> runHermitM (f (fromJust . fromException $ msg)) env)
+                                                                     (\ msg ->
+                                                                        let Just e = fromException msg
+                                                                        in runHermitM (f e) env)
 
 instance MonadIO HermitM where
   liftIO :: IO a -> HermitM a

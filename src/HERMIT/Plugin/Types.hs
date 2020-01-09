@@ -30,7 +30,6 @@ import System.IO
 
 import HERMIT.Exception
 import Control.Exception
-import Data.Maybe
 
 type PluginM = PluginT IO
 newtype PluginT m a = PluginT { unPluginT :: ExceptT PException (ReaderT PluginReader (StateT PluginState m)) a }
@@ -63,7 +62,9 @@ instance Monad m => MonadCatch (PluginT m) where
         (er,st') <- lift $ runPluginT r st m
         case er of
             Left err -> case err of
-                            PError msg -> f (fromJust (fromException msg))
+                            PError msg ->
+                              let Just e = fromException msg
+                              in f e
                             other -> throwError other -- rethrow abort/resume
             Right v  -> put st' >> return v
 
