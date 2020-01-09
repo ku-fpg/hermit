@@ -61,6 +61,10 @@ import System.IO
 import System.Console.Haskeline hiding (catch, display)
 import System.Console.MinTTY (isMinTTY)
 
+import HERMIT.Exception
+
+import Control.Monad.Fail (MonadFail)
+
 -------------------------------------------------------------------------------
 
 banner :: String
@@ -98,7 +102,7 @@ minTTYWarning = unlines
     ]
 
 -- | The first argument includes a list of files to load.
-commandLine :: forall m. (MonadCatch m, MonadException m, CLMonad m)
+commandLine :: forall m. (MonadFail m, MonadCatch m, MonadException m, CLMonad m)
             => [GHC.CommandLineOption] -> [External] -> m ()
 commandLine opts exts = do
     let (flags, filesToLoad) = partition (isPrefixOf "-") opts
@@ -163,23 +167,23 @@ commandLine opts exts = do
 -- | Like 'catchM', but checks the 'cl_failhard' setting and does so if needed.
 catchFailHard :: (MonadCatch m, CLMonad m) => m () -> (String -> m ()) -> m ()
 catchFailHard m failure =
-    catchM m $ \ msg -> ifM (gets cl_failhard)
+    catch m $ \ (HException msg) -> ifM (gets cl_failhard)
                             (do pp <- gets cl_pretty
                                 performQuery (QueryPrettyH $ pLCoreTC pp) (CmdName "display")
                                 cl_putStrLn msg
                                 abort)
                             (failure msg)
 
-evalScript :: (MonadCatch m, CLMonad m) => String -> m ()
+evalScript :: (MonadFail m, MonadCatch m, CLMonad m) => String -> m ()
 evalScript = parseScriptCLT >=> mapM_ runExprH
 
-runExprH :: (MonadCatch m, CLMonad m) => ExprH -> m ()
+runExprH :: (MonadFail m, MonadCatch m, CLMonad m) => ExprH -> m ()
 runExprH expr = prefixFailMsg ("Error in expression: " ++ unparseExprH expr ++ "\n") $ do
     ps <- getProofStackEmpty
     (if null ps then id else withProofExternals) $ interpExprH interpShell expr
 
 -- | Interpret a boxed thing as one of the four possible shell command types.
-interpShell :: (MonadCatch m, CLMonad m) => [Interp m ()]
+interpShell :: (MonadFail m, MonadCatch m, CLMonad m) => [Interp m ()]
 interpShell =
   [ interpEM $ \ (CrumbBox cr)                  -> setPath (return (mempty @@ cr) :: TransformH LCoreTC LocalPathH)
   , interpEM $ \ (PathBox p)                    -> setPath (return p :: TransformH LCoreTC LocalPathH)
@@ -230,7 +234,7 @@ data TypedEffectH :: * -> * where
 instance Functor TypedEffectH where
   fmap f e = FmapTypedEffectH f e
 
-performTypedEffectH :: (MonadCatch m, CLMonad m)
+performTypedEffectH :: (MonadFail m, MonadCatch m, CLMonad m)
                     => String -> TypedEffectH a -> m a
 performTypedEffectH _   (ShellEffectH          effect) = performShellEffect effect
 performTypedEffectH err (RewriteLCoreH         rr    ) = applyRewrite (promoteLCoreR rr) (stubExprH err)

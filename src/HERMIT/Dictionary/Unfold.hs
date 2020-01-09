@@ -30,6 +30,8 @@ import HERMIT.Name
 
 import Prelude hiding (exp)
 
+import Control.Monad.Fail (MonadFail)
+
 ------------------------------------------------------------------------
 
 externals :: [External]
@@ -70,17 +72,17 @@ unfoldR = prefixFailMsg "unfold failed: " (go >>> tryR betaReducePlusR)
     where go :: Rewrite c m CoreExpr
           go = appAllR go idR <+ inlineR -- this order gives better error messages
 
-unfoldPredR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+unfoldPredR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                , MonadCatch m )
             => (Id -> [CoreExpr] -> Bool) -> Rewrite c m CoreExpr
 unfoldPredR p = callPredT p >> unfoldR
 
-unfoldNameR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
+unfoldNameR :: ( MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
                , MonadCatch m )
             => HermitName -> Rewrite c m CoreExpr
 unfoldNameR nm = prefixFailMsg ("unfold '" ++ show nm ++ " failed: ") (callNameT nm >> unfoldR)
 
-unfoldNamesR :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
+unfoldNamesR :: ( MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
                 , MonadCatch m )
              => [HermitName] -> Rewrite c m CoreExpr
 unfoldNamesR []  = fail "unfold-names failed: no names given."

@@ -35,6 +35,8 @@ import HERMIT.Name
 
 import HERMIT.Dictionary.Common
 
+import Control.Monad.Fail (MonadFail)
+
 externals ::  [External]
 externals =
     [ external "static-arg" (promoteDefR staticArgR :: RewriteH LCore)
@@ -48,17 +50,17 @@ externals =
 ------------------------------------------------------------------------------------------------------
 
 -- | Traditional Static Argument Transformation
-staticArgR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+staticArgR :: (MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m, MonadUnique m)
            => Rewrite c m CoreDef
 staticArgR = staticArgPredR (return . map fst)
 
 -- | Static Argument Transformation that only considers type arguments to be static.
-staticArgTypesR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+staticArgTypesR :: (MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m, MonadUnique m)
                 => Rewrite c m CoreDef
 staticArgTypesR = staticArgPredR (return . map fst . filter (isTyVar . snd))
 
 -- | Static Argument Transformations which requires that arguments in the given position are static.
-staticArgPosR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+staticArgPosR :: (MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb, MonadCatch m, MonadUnique m)
               => [Int] -> Rewrite c m CoreDef
 staticArgPosR is' = staticArgPredR $ \ss' -> let is = nub is'
                                                  ss = map fst ss'
@@ -67,7 +69,7 @@ staticArgPosR is' = staticArgPredR $ \ss' -> let is = nub is'
                                                else fail $ "args " ++ commas (filter (`notElem` ss) is) ++ " are not static."
 
 -- | Generalized Static Argument Transformation, which allows static arguments to be filtered.
-staticArgPredR :: forall c m. (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb
+staticArgPredR :: forall c m. (MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadPath c Crumb
                               , MonadCatch m, MonadUnique m)
                => ([(Int, Var)] -> m [Int]) -- ^ given list of static args and positions, decided which to transform
                -> Rewrite c m CoreDef
@@ -107,7 +109,7 @@ staticArgPredR decide = prefixFailMsg "static-arg failed: " $ do
             (ps, dbnds) = unzip dynBinds
             unboundTys = concat [ [ (i,i') | (i',b') <- dynBinds, i' < i , b' `elem` fvs ]
 #if __GLASGOW_HASKELL__ > 710
-                                | (i,b) <- chosenBinds, let fvs = varSetElems (varTypeTyCoVars b) ]
+                                | (i,b) <- chosenBinds, let fvs = nonDetEltsUniqSet (varTypeTyCoVars b) ]
 #else
                                 | (i,b) <- chosenBinds, let fvs = varSetElems (varTypeTyVars b) ]
 #endif

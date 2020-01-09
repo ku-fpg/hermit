@@ -31,12 +31,14 @@ import Control.Monad.IO.Class
 import Control.Monad.Reader (asks)
 import Control.Monad.State (MonadState(get), modify, gets)
 
+import Control.Monad.Fail (MonadFail)
+
 import Data.Function (on)
 import Data.List (nubBy)
 
 import HERMIT.Context
 import HERMIT.External
-import HERMIT.GHC
+import HERMIT.GHC hiding (Always, Never)
 import HERMIT.Kernel
 import HERMIT.Kure
 import HERMIT.Lemma
@@ -105,7 +107,7 @@ forceProofs = do
         nls = nubBy ((==) `on` snd3) ls
     unless (null nls) $ do
         (_,topc) <- queryK k (arr topLevelHermitC) Never (cl_kernel_env st) (cl_cursor st)
-        let chooseC c cl = if all (inScope topc) (varSetElems (freeVarsClause cl)) then (True,topc) else (False,c)
+        let chooseC c cl = if all (inScope topc) (nonDetEltsUniqSet (freeVarsClause cl)) then (True,topc) else (False,c)
             nls' = [ (chooseC c (lemmaC l), nm, l) | (c,nm,l) <- nls ]
             nonTemp = [ (nm,l) | ((True,_),nm,l) <- nls' ]
         unless (null nonTemp) $
@@ -117,7 +119,7 @@ forceProofs = do
         printWindow Nothing
 
 -- | Verify that the lemma has been proven. Throws an exception if it has not.
-endProof :: (MonadCatch m, CLMonad m) => ProofReason -> ExprH -> m ()
+endProof :: (MonadFail m, MonadCatch m, CLMonad m) => ProofReason -> ExprH -> m ()
 endProof reason expr = do
     Unproven nm (Lemma q _ _) c _ : _ <- getProofStack
     let msg = "The two sides of " ++ quoteShow nm ++ " are not alpha-equivalent."
@@ -136,7 +138,7 @@ endProof reason expr = do
 -- We want to do our proof in the current context of the shell, whatever that is,
 -- so we run them using queryInFocus below. This has the benefit that proof commands
 -- can generate additional lemmas, and add to the version history.
-performProofShellCommand :: (MonadCatch m, CLMonad m)
+performProofShellCommand :: (MonadFail m, MonadCatch m, CLMonad m)
                          => ProofShellCommand -> ExprH -> m ()
 performProofShellCommand cmd expr = go cmd >> printWindow Nothing
     where go (PCEnd why)          = endProof why expr

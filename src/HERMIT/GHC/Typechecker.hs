@@ -24,7 +24,7 @@ import Outputable
 import Data.IORef ( newIORef, readIORef )
 
 import TcEnv ( tcLookupGlobal )
-import DynFlags ( getSigOf )
+-- import DynFlags ( getSigOf )
 #if __GLASGOW_HASKELL__ > 710
 import Module   ( moduleName )
 #else
@@ -35,13 +35,15 @@ import TcType   ( topTcLevel )
 import FastString
 import Bag
 
-#if __GLASGOW_HASKELL__ <= 710 
+-- #if __GLASGOW_HASKELL__ <= 710 
 import qualified Data.Set as Set
-#endif
+-- #endif
 import qualified Data.Map as Map
 
 import Prelude hiding (mod)
 import VarSet (emptyVarSet)
+
+import CostCentreState
 
 -- Note: the contents of this module should eventually be folded into GHC proper.
 
@@ -86,9 +88,24 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
         th_remote_state_var  <- newIORef Nothing ;
 #endif
 
+
+        th_top_level_locs_var <- newIORef (Set.fromList []) ;
+        th_foreign_files_var <- newIORef [] ;
+        th_coreplugins_var <- newIORef [] ;
+
+{- TODO: Verify implementations are correct for:
+           tcg_semantic_mod,
+           tcg_th_top_level_locs, tcg_merged, tcg_th_foreign_files,
+           tcg_th_coreplugins, tcg_top_loc, tcg_complete_matches,
+           tcg_cc_st
+ -}
+
+        costCentreState_var <- newIORef newCostCentreState ;
+
         let {
              dflags = hsc_dflags hsc_env ;
              mod = mg_module guts ;
+             realSrcLoc = realSrcLocSpan $ mkRealSrcLoc (fsLit "Top level") 1 1 ;
 
              maybe_rn_syntax :: forall a. a -> Maybe a ;
              maybe_rn_syntax empty_val
@@ -96,6 +113,16 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
                 | otherwise      = Nothing ;
 
              gbl_env = TcGblEnv {
+                tcg_semantic_mod = mod, -- TODO: Is this ok?
+
+                tcg_th_top_level_locs = th_top_level_locs_var,
+                tcg_merged = [],
+                tcg_th_foreign_files = th_foreign_files_var,
+                tcg_th_coreplugins = th_coreplugins_var,
+                tcg_top_loc = realSrcLoc,
+                tcg_complete_matches = [],
+                tcg_cc_st = costCentreState_var,
+
                 -- these first four are CPP'd in GHC itself, but we include them here
                 tcg_th_topdecls      = th_topdecls_var,
                 tcg_th_topnames      = th_topnames_var,
@@ -105,8 +132,8 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
                 -- queried during tcrnif
                 tcg_mod            = mod,
                 tcg_src            = hsc_src,
-                tcg_sig_of         = getSigOf dflags (moduleName mod),
-                tcg_impl_rdr_env   = Nothing,
+                -- tcg_sig_of         = getSigOf dflags (moduleName mod),
+                -- tcg_impl_rdr_env   = Nothing,
                 tcg_rdr_env        = mg_rdr_env guts,
                 tcg_default        = Nothing,
                 tcg_fix_env        = mg_fix_env guts,
@@ -137,7 +164,7 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
                 tcg_dus            = emptyDUs,
                 tcg_ev_binds       = emptyBag,
                 tcg_fords          = [],
-                tcg_vects          = [],
+                -- tcg_vects          = [],
                 tcg_patsyns        = [],
                 tcg_doc_hdr        = Nothing,
                 tcg_hpc            = False,
@@ -163,7 +190,7 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
              } ;
              lcl_env = TcLclEnv {
                 tcl_errs       = errs_var,
-                tcl_loc        = realSrcLocSpan $ mkRealSrcLoc (fsLit "Top level") 1 1,
+                tcl_loc        = realSrcLoc,
                 tcl_ctxt       = [],
                 tcl_rdr        = emptyLocalRdrEnv,
                 tcl_th_ctxt    = topStage,
@@ -171,7 +198,7 @@ initTcFromModGuts hsc_env guts hsc_src keep_rn_syntax do_this
                 tcl_arrow_ctxt = NoArrowCtxt,
                 tcl_env        = emptyNameEnv,
                 tcl_bndrs      = [],
-                tcl_tidy       = emptyTidyEnv,
+                -- tcl_tidy       = emptyTidyEnv,
                 tcl_tyvars     = tvs_var,
                 tcl_lie        = lie_var,
                 tcl_tclvl      = topTcLevel

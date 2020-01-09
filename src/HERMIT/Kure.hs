@@ -74,6 +74,7 @@ module HERMIT.Kure
 #else
     , funTyT, funTyAllR, funTyAnyR, funTyOneR
 #endif
+    , funTyT, funTyAllR, funTyAnyR, funTyOneR
     , forAllTyT, forAllTyAllR, forAllTyAnyR, forAllTyOneR
     , tyConAppT, tyConAppAllR, tyConAppAnyR, tyConAppOneR
       -- ** Coercions
@@ -90,6 +91,7 @@ module HERMIT.Kure
     , lrCoT, lrCoAllR, lrCoAnyR, lrCoOneR
     , subCoT, subCoR
     , univCoT, univCoAllR, univCoAnyR, univCoOneR
+    , funCoT
       -- ** Lemmas
     , conjT, conjAllR
     , disjT, disjAllR
@@ -203,7 +205,7 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c Coerc
                         SymCo{}       -> symCoR r
                         SubCo{}       -> subCoR r
                         TransCo{}     -> transCoAllR r r
-                        NthCo{}       -> nthCoAllR idR r
+                        NthCo{}       -> nthCoAllR idR idR r
                         InstCo{}      -> instCoAllR r idR
                         LRCo{}        -> lrCoAllR idR r
                         AxiomInstCo{} -> axiomInstCoAllR idR idR (const r)
@@ -234,7 +236,7 @@ instance (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c) => Walker c TyCo 
                               SubCo{}       -> subCoR (extractR r)
                               TransCo{}     -> transCoAllR (extractR r) (extractR r)
                               InstCo{}      -> instCoAllR (extractR r) (extractR r)
-                              NthCo{}       -> nthCoAllR idR (extractR r) -- we don't descend into the Int
+                              NthCo{}       -> nthCoAllR idR idR (extractR r) -- we don't descend into the Role or the Int
                               LRCo{}        -> lrCoAllR idR (extractR r)
                               AxiomInstCo{} -> axiomInstCoAllR idR idR (const $ extractR r) -- we don't descend into the axiom or index
                               UnivCo{}      -> univCoAllR (extractR r) (extractR r) -- we don't descend into the provenance (FastString) or role
@@ -1028,7 +1030,7 @@ coercionTyT t = transform $ \ c -> \case
 coercionTyR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Coercion -> Rewrite c m Type
 coercionTyR r = coercionTyT (CoercionTy <$> r)
 {-# INLINE coercionTyR #-}
-#else
+-- #else
 -- | Transform a type of the form: @FunTy@ 'Type' 'Type'
 funTyT :: (ExtendPath c Crumb, Monad m) => Transform c m Type a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Type b
 funTyT t1 t2 f = transform $ \ c -> \case
@@ -1057,18 +1059,18 @@ funTyOneR r1 r2 = unwrapOneR $ funTyAllR (wrapOneR r1) (wrapOneR r2)
 forAllTyT :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) 
           => Transform c m TyBinder a1 -> Transform c m Type a2 -> (a1 -> a2 -> b) -> Transform c m Type b
 forAllTyT t1 t2 f = transform $ \ c -> \case -- TODO: think about the crumbs here
-                                          ForAllTy b@(Named v _vis) ty -> 
-                                            f <$> applyT t1 (c @@ ForAllTy_Var) b
-                                              <*> applyT t2 (addForallBinding v c @@ ForAllTy_Body) ty
-                                          ForAllTy b@(Anon _) ty ->
-                                            f <$> applyT t1 (c @@ FunTy_Dom) b <*> applyT t2 (c @@ FunTy_CoDom) ty
-                                          _             -> fail "not a forall type."
+                                          ForAllTy b ty ->
+                                            f <$> applyT t1 (c @@ ForAllTy_Var) (Named b)
+                                              <*> applyT t2 (addForallBinding (binderVar b) c @@ ForAllTy_Body) ty
+                                          -- ForAllTy b@(Anon _) ty ->
+                                          --   f <$> applyT t1 (c @@ FunTy_Dom) b <*> applyT t2 (c @@ FunTy_CoDom) ty
+                                          -- _             -> fail "not a forall type."
 {-# INLINE forAllTyT #-}
 
 -- | Rewrite all children of a type of the form: @ForAllTy@ 'TyBinder' 'Type'
 forAllTyAllR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, Monad m) 
              => Rewrite c m TyBinder -> Rewrite c m Type -> Rewrite c m Type
-forAllTyAllR r1 r2 = forAllTyT r1 r2 ForAllTy
+forAllTyAllR r1 r2 = forAllTyT r1 r2 (ForAllTy . \(Named n) -> n)
 {-# INLINE forAllTyAllR #-}
 
 -- | Rewrite any children of a type of the form: @ForAllTy@ 'TyBinder' 'Type'
@@ -1318,26 +1320,26 @@ transCoOneR r1 r2 = unwrapOneR $ transCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE transCoOneR #-}
 
 
--- | Transform a coercion of the form: @NthCo@ 'Int' 'Coercion'
-nthCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Int a1 -> Transform c m Coercion a2 -> (a1 -> a2 -> b) -> Transform c m Coercion b
-nthCoT t1 t2 f = transform $ \ c -> \case
-                                          NthCo n co -> f <$> applyT t1 (c @@ NthCo_Int) n <*> applyT t2 (c @@ NthCo_Co) co
+-- | Transform a coercion of the form: @NthCo@ 'Role' 'Int' 'Coercion'
+nthCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Role a1 -> Transform c m Int a2 -> Transform c m Coercion a3 -> (a1 -> a2 -> a3 -> b) -> Transform c m Coercion b
+nthCoT t1 t2 t3 f = transform $ \ c -> \case
+                                          NthCo r n co -> f <$> applyT t1 (c @@ NthCo_Role) r <*> applyT t2 (c @@ NthCo_Int) n <*> applyT t3 (c @@ NthCo_Co) co
                                           _          -> fail "not an Nth coercion."
 {-# INLINE nthCoT #-}
 
--- | Rewrite all children of a coercion of the form: @NthCo@ 'Int' 'Coercion'
-nthCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Int -> Rewrite c m Coercion -> Rewrite c m Coercion
-nthCoAllR r1 r2 = nthCoT r1 r2 NthCo
+-- | Rewrite all children of a coercion of the form: @NthCo@ 'Role' 'Int' 'Coercion'
+nthCoAllR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Role -> Rewrite c m Int -> Rewrite c m Coercion -> Rewrite c m Coercion
+nthCoAllR r1 r2 r3 = nthCoT r1 r2 r3 NthCo
 {-# INLINE nthCoAllR #-}
 
--- | Rewrite any children of a coercion of the form: @NthCo@ 'Int' 'Coercion'
-nthCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Int -> Rewrite c m Coercion -> Rewrite c m Coercion
-nthCoAnyR r1 r2 = unwrapAnyR $ nthCoAllR (wrapAnyR r1) (wrapAnyR r2)
+-- | Rewrite any children of a coercion of the form: @NthCo@ 'Role' 'Int' 'Coercion'
+nthCoAnyR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Role -> Rewrite c m Int -> Rewrite c m Coercion -> Rewrite c m Coercion
+nthCoAnyR r1 r2 r3 = unwrapAnyR $ nthCoAllR (wrapAnyR r1) (wrapAnyR r2) (wrapAnyR r3)
 {-# INLINE nthCoAnyR #-}
 
--- | Rewrite one child of a coercion of the form: @NthCo@ 'Int' 'Coercion'
-nthCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Int -> Rewrite c m Coercion -> Rewrite c m Coercion
-nthCoOneR r1 r2 = unwrapOneR $ nthCoAllR (wrapOneR r1) (wrapOneR r2)
+-- | Rewrite one child of a coercion of the form: @NthCo@ 'Role' 'Int' 'Coercion'
+nthCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Role -> Rewrite c m Int -> Rewrite c m Coercion -> Rewrite c m Coercion
+nthCoOneR r1 r2 r3 = unwrapOneR $ nthCoAllR (wrapOneR r1) (wrapOneR r2) (wrapOneR r3)
 {-# INLINE nthCoOneR #-}
 
 
@@ -1450,6 +1452,16 @@ univCoAnyR r1 r2 = unwrapAnyR $ univCoAllR (wrapAnyR r1) (wrapAnyR r2)
 univCoOneR :: (ExtendPath c Crumb, MonadCatch m) => Rewrite c m Type -> Rewrite c m Type -> Rewrite c m Coercion
 univCoOneR r1 r2 = unwrapOneR $ univCoAllR (wrapOneR r1) (wrapOneR r2)
 {-# INLINE univCoOneR #-}
+
+-- | Transform @FunCo@ 'Role' 'Coercion' 'Coercion'
+funCoT :: (ExtendPath c Crumb, Monad m) => Transform c m Role a1 -> Transform c m Coercion a2 -> Transform c m Coercion a3 ->
+  (a1 -> a2 -> a3 -> b) -> Transform c m Coercion b
+funCoT t1 t2 t3 f = transform $ \ c -> \case
+                              FunCo role co1 co2 -> f <$> applyT t1 (c @@ FunCo_Role) role <*> applyT t2 (c @@ FunCo_Co_Left) co1 <*> applyT t3 (c @@ FunCo_Co_Right) co2
+                              _ -> fail "not FunCo"
+
+-- funCoR :: (ExtendPath c Crumb, Monad m) => Rewrite c m Role -> Rewrite c m Coercion -> Rewrite c m Coercion -> Rewrite c m Coercion
+-- funCoR r1 r2 r3 = 
 
 ---------------------------------------------------------------------
 

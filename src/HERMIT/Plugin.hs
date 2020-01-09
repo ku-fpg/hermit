@@ -48,7 +48,7 @@ import HERMIT.Dictionary
 import HERMIT.External
 import HERMIT.Kernel
 import HERMIT.Kure hiding (apply)
-import HERMIT.GHC hiding (singleton, liftIO)
+import HERMIT.GHC hiding (singleton, liftIO, Always, Never)
 import qualified HERMIT.GHC as GHC
 
 import HERMIT.Plugin.Builder
@@ -74,7 +74,7 @@ hermitPlugin f = buildPlugin $ \ store passInfo opts -> do
                 else resumeK kernel ast
         either (\case PAbort      -> abortK kernel
                       PResume ast -> cleanup ast
-                      PError  err -> putStrLn err >> abortK kernel)
+                      PError  err -> putStrLn (show err) >> abortK kernel)
                (\ _ -> cleanup $ ps_cursor st) r
 
 defPS :: AST -> IO PluginState

@@ -222,7 +222,7 @@ mkRhsOfPred (RhsOfName hnm) = cmpHN2Var hnm
 -- TODO: add function for this, or modify GHC's 'TyThing'?
 instance (MonadThings m, BoundVars c) => MonadThings (Transform c m a) where
     lookupThing nm = contextonlyT $ \ c ->
-                        case varSetElems $ filterVarSet ((== nm) . varName) (boundVars c) of
+                        case nonDetEltsUniqSet $ filterVarSet ((== nm) . varName) (boundVars c) of
                             (i:_) | isVarName nm -> return $ AnId i
                                   | isTyVarName nm -> fail "lookupThing cannot be used with TyVars."
                                   | otherwise -> fail "MonadThings instance for Transform: impossible namespace."
@@ -276,7 +276,7 @@ findInNameSpaces nss nm c = setFailMsg "Variable not in scope." -- because catch
 findInNameSpace :: (BoundVars c, LiftCoreM m, HasHermitMEnv m, MonadIO m, MonadThings m)
                 => NameSpace -> HermitName -> c -> m Named
 findInNameSpace ns nm c =
-    case varSetElems $ filterVarSet ((== ns) . occNameSpace . getOccName) $ findBoundVars (cmpHN2Var nm) c of
+    case nonDetEltsUniqSet $ filterVarSet ((== ns) . occNameSpace . getOccName) $ findBoundVars (cmpHN2Var nm) c of
         _ : _ : _ -> fail "multiple matching variables in scope."
         [v]       -> return $ varToNamed v
         []        -> findInNSModGuts ns nm

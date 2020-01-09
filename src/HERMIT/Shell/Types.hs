@@ -52,6 +52,13 @@ import           System.IO (Handle, stdout)
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
+import           Data.Typeable
+
+import           HERMIT.Exception
+
+import           Control.Exception
+import           Data.Maybe (fromJust)
+
 ----------------------------------------------------------------------------------
 
 data QueryFun :: * -> * where
@@ -71,7 +78,7 @@ data QueryFunBox where
     QueryFunBox :: Typeable a => QueryFun a -> QueryFunBox
 
 instance Typeable a => Extern (QueryFun a) where
-   type Box (QueryFun _a) = QueryFunBox
+   type Box (QueryFun a) = QueryFunBox
    box = QueryFunBox
    unbox (QueryFunBox i) =
        case cast i of
@@ -164,7 +171,7 @@ data VersionCmd = Back            -- back (up) the derivation tree
 data CLException = CLAbort
                  | CLResume AST
                  | CLContinue CommandLineState -- TODO: needed?
-                 | CLError String
+                 | CLError SomeException
 
 abort :: MonadError CLException m => m a
 abort = throwError CLAbort
@@ -233,7 +240,7 @@ instance Monad m => Monad (CLT m) where
     fail = Fail.fail
 
 instance Monad m => Fail.MonadFail (CLT m) where
-    fail = CLT . throwError . CLError
+    fail = CLT . throwError . CLError . SomeException . HException
 
 -- | Run a CLT computation.
 runCLT :: PluginReader -> CommandLineState -> CLT m a -> m (Either CLException a, CommandLineState)
@@ -267,16 +274,19 @@ pluginM m = do
         Left err -> rethrowPE err
         Right r -> put (s { cl_pstate = ps }) >> return r
 
+instance Monad m => MonadThrow (CLT m) where
+  throwM = fail . show
+
 instance Monad m => MonadCatch (CLT m) where
     -- law: fail msg `catchM` f == f msg
     -- catchM :: m a -> (String -> m a) -> m a
-    catchM m f = do
+    catch m f = do
         st <- get
         env <- ask
         (er,st') <- lift $ runCLT env st m
         case er of
             Left err -> case err of
-                            CLError msg -> f msg
+                            CLError msg -> f (fromJust $ fromException msg)
                             other -> throwError other -- rethrow abort/resume/continue
             Right v  -> put st' >> return v
 
@@ -509,7 +519,7 @@ copyProofStack ast = modify $ \ st -> let newStack = fromMaybe [] $ M.lookup (cl
 pushProofStack :: CLMonad m => ProofTodo -> m ()
 pushProofStack todo = modify $ \ st -> st { cl_proofstack = M.insertWith (++) (cl_cursor st) [todo] (cl_proofstack st) }
 
-popProofStack :: CLMonad m => m ProofTodo
+popProofStack :: (Fail.MonadFail m, CLMonad m) => m ProofTodo
 popProofStack = do
     t : ts <- getProofStack
     modify $ \ st -> st { cl_proofstack = M.insert (cl_cursor st) ts (cl_proofstack st) }

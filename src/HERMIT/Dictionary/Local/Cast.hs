@@ -24,6 +24,10 @@ import HERMIT.Kure
 
 import HERMIT.Dictionary.Common
 
+import HERMIT.Exception
+
+import Control.Monad.Fail (MonadFail)
+
 ------------------------------------------------------------------------------
 
 -- | Externals relating to Case expressions.
@@ -47,30 +51,30 @@ externals =
 
 ------------------------------------------------------------------------------
 
-castElimR :: MonadCatch m => Rewrite c m CoreExpr
+castElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 castElimR = setFailMsg "Cast elimination failed: " $
             castElimReflR <+ castElimSymR
 
-castElimReflR :: MonadCatch m => Rewrite c m CoreExpr
+castElimReflR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 castElimReflR = prefixFailMsg "Reflexive cast elimination failed: " $
-                withPatFailMsg (wrongExprForm "Cast e co") $
+                withPatFailExc (HException (wrongExprForm "Cast e co")) $
     do Cast e co <- idR
        Pair a b <- return $ coercionKind co
        guardMsg (eqType a b) "not a reflexive coercion."
        return e
 
-castElimSymR :: MonadCatch m => Rewrite c m CoreExpr
+castElimSymR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 castElimSymR = prefixFailMsg "Symmetric cast elimination failed: " $
-               withPatFailMsg (wrongExprForm "Cast (Cast e co1) co2") $
+               withPatFailExc (HException (wrongExprForm "Cast (Cast e co1) co2")) $
     do Cast (Cast e co1) co2 <- idR
        let Pair a b   = coercionKind co1
            Pair b' a' = coercionKind co2
        guardMsg (eqType a a' && eqType b b') "coercions are not symmetric."
        return e
 
-castFloatAppR :: MonadCatch m => Rewrite c m CoreExpr
+castFloatAppR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 castFloatAppR = prefixFailMsg "Cast float from application failed: " $
-                withPatFailMsg (wrongExprForm "App (Cast e1 co) e2") $
+                withPatFailExc (HException (wrongExprForm "App (Cast e1 co) e2")) $
     do App (Cast e1 co) e2 <- idR
        case co of
             TyConAppCo _r t [c1, c2] -> do
@@ -87,9 +91,9 @@ castFloatAppR = prefixFailMsg "Cast float from application failed: " $
 
 -- (\ x::a -> cast e (b -> c)) :: a -> c
 -- cast (\x::a -> e) ((a -> b) -> (a -> c))
-castFloatLamR :: MonadCatch m => Rewrite c m CoreExpr
+castFloatLamR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 castFloatLamR = prefixFailMsg "Cast float from lambda failed: " $
-                withPatFailMsg (wrongExprForm "Lam b (Cast e co)") $ do
+                withPatFailExc (HException (wrongExprForm "Lam b (Cast e co)")) $ do
     Lam b (Cast e co) <- idR
     let r = coercionRole co
         aTy = varType b

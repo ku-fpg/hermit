@@ -47,7 +47,11 @@ import qualified HERMIT.Dictionary.Local.Cast as Cast
 import HERMIT.Dictionary.Local.Let hiding (externals)
 import qualified HERMIT.Dictionary.Local.Let as Let
 
+import HERMIT.Exception
+
 import Control.Arrow
+
+import Control.Monad.Fail (MonadFail)
 
 ------------------------------------------------------------------------------
 
@@ -91,13 +95,13 @@ externals =
 -- | @((\\ v -> e1) e2)@ ==> @(let v = e2 in e1)@
 --   This form of beta-reduction is safe if e2 is an arbitrary
 --   expression (won't duplicate work).
-betaReduceR :: MonadCatch m => Rewrite c m CoreExpr
+betaReduceR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 betaReduceR = setFailMsg ("Beta-reduction failed: " ++ wrongExprForm "App (Lam v e1) e2") $
     do App (Lam v e1) e2 <- idR
        return $ Let (NonRec v e2) e1
 
 -- | (let v = e1 in e2) ==> (\\ v -> e2) e1
-betaExpandR :: MonadCatch m => Rewrite c m CoreExpr
+betaExpandR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 betaExpandR = setFailMsg ("Beta-expansion failed: " ++ wrongExprForm "Let (NonRec v e1) e2") $
     do Let (NonRec v e1) e2 <- idR
        return $ App (Lam v e2) e1
@@ -105,9 +109,9 @@ betaExpandR = setFailMsg ("Beta-expansion failed: " ++ wrongExprForm "Let (NonRe
 ------------------------------------------------------------------------------
 
 -- | (\\ v -> f v) ==> f
-etaReduceR :: MonadCatch m => Rewrite c m CoreExpr
+etaReduceR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 etaReduceR = prefixFailMsg "Eta-reduction failed: " $
-            withPatFailMsg (wrongExprForm "Lam v (App f (Var v))") $
+            withPatFailExc (HException (wrongExprForm "Lam v (App f (Var v))")) $
             do Lam v1 (App f e) <- idR
                case e of
                   Var v2  -> guardMsg (v1 == v2) "the expression has the right form, but the variables are not equal."
@@ -182,7 +186,7 @@ pushR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c)
       -> (Id -> Bool)                       -- ^ a predicate to identify the function
       -> Rewrite c HermitM CoreExpr
 pushR mstrictf p = prefixFailMsg "push failed: " $
-                   withPatFailMsg (wrongExprForm "App f e") $
+                   withPatFailExc (HException (wrongExprForm "App f e")) $
      do App f e <- idR
         case collectArgs f of
           (Var i,args) -> do

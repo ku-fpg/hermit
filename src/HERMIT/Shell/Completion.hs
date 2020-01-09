@@ -1,6 +1,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module HERMIT.Shell.Completion (completer) where
 
@@ -31,6 +32,8 @@ import HERMIT.Shell.Types
 
 import System.Console.Haskeline hiding (catch, display)
 
+import HERMIT.Exception
+
 ----------------------------------------------------------------------------------
 
 completer :: (MonadCatch m, CLMonad m) => String -> String -> m [Completion]
@@ -50,7 +53,7 @@ shellComplete rPrev so_far = do
             Right e  -> do
                 eds <- attemptM $ exprToDyns e
                 case eds of
-                    Left msg -> liftIO $ putStrLn ("\n" ++ msg) >> return []
+                    Left (HException msg) -> liftIO $ putStrLn ("\n" ++ msg) >> return []
                     Right ds -> do
                         let ts = [ head args | d <- ds
                                              , let args = fst (splitFunTyArgs (dynTypeRep d))
@@ -61,7 +64,7 @@ completionsFor :: (MonadCatch m, CLMonad m)
                => String -> [CompletionType] -> m [Completion]
 completionsFor so_far cts = do
     qs <- mapM completionQuery cts
-    cls <- forM qs $ \ q -> queryInContext q Never `catchM` (\_ -> return [])
+    cls <- forM qs $ \ q -> queryInContext q Never `catch` (\ (_ :: HException) -> return [])
     return $ map simpleCompletion $ nub $ filter (so_far `isPrefixOf`) $ concat cls
 
 data CompletionType = ConsiderC       -- considerable constructs

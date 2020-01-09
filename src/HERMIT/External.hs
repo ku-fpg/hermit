@@ -54,10 +54,12 @@ module HERMIT.External
     , RewriteLCoreTCListBox(..)
     ) where
 
-import Data.Map hiding (map)
+import Data.Map hiding (map, drop)
 import Data.Dynamic
 import Data.List
-import Data.Typeable.Internal (TypeRep(..))
+import Data.Typeable hiding (TypeRep) --(TypeRep(..))
+-- import Data.Typeable.Internal
+import Type.Reflection
 
 import HERMIT.Core
 import HERMIT.Context (LocalPathH)
@@ -256,18 +258,19 @@ externTypeArgResString :: External -> ([String], String)
 externTypeArgResString e = (map (deBoxify . show) aTys, deBoxify (show rTy))
     where (aTys, rTy) = splitExternFunType e
 
-splitExternFunType :: External -> ([TypeRep], TypeRep)
+splitExternFunType :: External -> ([SomeTypeRep], SomeTypeRep)
 splitExternFunType = splitFunTyArgs . dynTypeRep . externDyn
 
-splitFunTyArgs :: TypeRep -> ([TypeRep], TypeRep)
+splitFunTyArgs :: SomeTypeRep -> ([SomeTypeRep], SomeTypeRep)
 splitFunTyArgs tr = case splitFunTyMaybe tr of
                         Nothing -> ([], tr)
                         Just (a, r) -> let (as, r') = splitFunTyArgs r
                                          in (a:as, r')
 
-splitFunTyMaybe :: TypeRep -> Maybe (TypeRep, TypeRep)
-splitFunTyMaybe (TypeRep _ tc _krs [a,r]) | tc == tcFun = Just (a,r)
-splitFunTyMaybe _ = Nothing
+splitFunTyMaybe :: SomeTypeRep -> Maybe (SomeTypeRep, SomeTypeRep)
+splitFunTyMaybe (SomeTypeRep (Fun a r)) = Just (SomeTypeRep a,SomeTypeRep r)
+-- splitFunTyMaybe (TypeRep _ tc _krs [a,r]) | tc == tcFun = Just (a,r)
+-- splitFunTyMaybe _ = Nothing
 
 -----------------------------------------------------------------
 

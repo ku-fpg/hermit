@@ -35,7 +35,7 @@ import Data.Map
 
 import HERMIT.Context
 import HERMIT.External
-import HERMIT.GHC hiding (singleton, empty)
+import HERMIT.GHC hiding (singleton, empty, Always, Never)
 import HERMIT.Kure
 import HERMIT.Lemma
 import HERMIT.Monad
@@ -140,13 +140,13 @@ hermitKernel store lastPass callback modGuts = do
                     resVar <- newEmptyMVar
                     putMVar msgMV $ Apply ast k resVar
                     takeMVar resVar
-            runKureM return fail r
+            runKureM return (fail . show) r
 
         readOnly :: MonadIO m => (Map AST KernelState -> KureM a) -> m (KureM a)
         readOnly f = liftIO $ do
             resVar <- newEmptyMVar
             putMVar msgMV (Read (runKureM (putMVar resVar . return)
-                                          (putMVar resVar . fail) . f))
+                                          (putMVar resVar . fail . show) . f))
             takeMVar resVar
 
     let kernel :: Kernel
@@ -180,7 +180,7 @@ hermitKernel store lastPass callback modGuts = do
             , deleteK = liftIO . putMVar msgMV . Delete
 
             , listK = readOnly (\m -> return [ (ast,cm,p) | (ast,KernelState _ _ p cm) <- toList m ])
-                        >>= runKureM return fail
+                        >>= runKureM return (fail . show)
 
             , tellK = \ str ast -> liftM fst $
                             withAST ast $ \ (KernelState lemmas guts _ _) ->
@@ -199,7 +199,7 @@ hermitKernel store lastPass callback modGuts = do
                             Just ks -> let (ast', m') = insertAST ks m in
                                        liftIO (putMVar resVar (return (ast',r))) >> loop m'
                     handleF str = liftIO (putMVar resVar $ fail str) >> loop m
-                runKureM handleS handleF kr
+                runKureM handleS (handleF . show) kr
               Read fn -> liftIO (fn (astMap m)) >> loop m
               Delete ast -> loop $ ASTMap (astNext m) $ delete ast (astMap m)
               Done mbAST ->

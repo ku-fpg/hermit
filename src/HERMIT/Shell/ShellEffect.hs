@@ -51,7 +51,7 @@ data ShellEffectBox where
     ShellEffectBox :: Typeable a => ShellEffect a -> ShellEffectBox
 
 instance Typeable a => Extern (ShellEffect a) where
-    type Box (ShellEffect _a) = ShellEffectBox
+    type Box (ShellEffect a) = ShellEffectBox
     box = ShellEffectBox
     unbox (ShellEffectBox i) =
         case cast i of

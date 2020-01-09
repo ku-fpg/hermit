@@ -20,6 +20,8 @@ import System.IO.CodePage (withCP65001)
 import System.IO.Temp
 import System.Process
 
+import HERMIT.Exception
+
 changeRenderer :: String -> PluginM ()
 changeRenderer renderer =
     case lookup renderer shellRenderers of
@@ -124,6 +126,6 @@ diffR pp msg rr = do
 
     -- Be careful to only run the rr once, in case it has side effects.
     (e,r) <- idR &&& attemptM rr
-    either fail (runDiff e) r
+    either (fail . (show :: HException -> String)) (runDiff e) r
 
 

@@ -39,6 +39,10 @@ import HERMIT.Dictionary.Reasoning
 import HERMIT.Dictionary.Undefined
 import HERMIT.Dictionary.Unfold
 
+import HERMIT.Exception
+
+import Control.Monad.Fail (MonadFail)
+
 --------------------------------------------------------------------------------------------------
 
 -- | Externals for manipulating fixed points.
@@ -84,12 +88,12 @@ externals =
 
 --------------------------------------------------------------------------------------------------
 
-fixIntroR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+fixIntroR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
              , HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
           => Rewrite c m Core
 fixIntroR = promoteR fixIntroRecR <+ promoteR fixIntroNonRecR
 
-fixIntroNonRecR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+fixIntroNonRecR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                    , HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
                 => Rewrite c m CoreBind
 fixIntroNonRecR = prefixFailMsg "fix introduction failed: " $ do
@@ -98,7 +102,7 @@ fixIntroNonRecR = prefixFailMsg "fix introduction failed: " $ do
     return $ NonRec f rhs'
 
 -- |  @f = e@   ==\>   @f = fix (\\ f -> e)@
-fixIntroRecR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+fixIntroRecR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                 , HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
              => Rewrite c m CoreDef
 fixIntroRecR = prefixFailMsg "fix introduction failed: " $ do
@@ -109,7 +113,7 @@ fixIntroRecR = prefixFailMsg "fix introduction failed: " $ do
 -- | Helper for fixIntroNonRecR and fixIntroRecR. Argument is function name.
 -- Meant to be applied to RHS of function.
 polyFixT :: forall c m.
-            ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+            ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
             , HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
          => Id -> Rewrite c m CoreExpr
 polyFixT f = do
@@ -148,7 +152,7 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
   where
     rollingRuleL :: RewriteH CoreExpr
     rollingRuleL = prefixFailMsg "rolling rule failed: " $
-                   withPatFailMsg wrongFixBody $
+                   withPatFailExc (HException wrongFixBody) $
                    do (tyA, Lam a (App f (App g (Var a')))) <- isFixExprT
                       guardMsg (a == a') wrongFixBody
                       (tyA',tyB) <- funExprsWithInverseTypes g f
@@ -158,9 +162,9 @@ fixRollingRuleBR = bidirectional rollingRuleL rollingRuleR
 
     rollingRuleR :: RewriteH CoreExpr
     rollingRuleR = prefixFailMsg "(reversed) rolling rule failed: " $
-                   withPatFailMsg "not an application." $
+                   withPatFailExc (HException "not an application.") $
                    do App f fx <- idR
-                      withPatFailMsg wrongFixBody $
+                      withPatFailExc (HException wrongFixBody) $
                         do (tyB, Lam b (App g (App f' (Var b')))) <- isFixExprT <<< constant fx
                            guardMsg (b == b') wrongFixBody
                            guardMsg (exprAlphaEq f f') "external function does not match internal expression"
@@ -203,7 +207,7 @@ fixFusionRuleBR meq mfstrict f g h = beforeBiR
      where
        fixFusionL :: RewriteH CoreExpr
        fixFusionL = prefixFailMsg "fixed-point fusion failed: " $
-                    withPatFailMsg (wrongExprForm "App f (fix g)") $
+                    withPatFailExc (HException (wrongExprForm "App f (fix g)")) $
                     do App f' fixg <- idR
                        guardMsg (exprAlphaEq f f') "first argument function does not match."
                        (_,g') <- isFixExprT <<< return fixg
@@ -224,7 +228,7 @@ fixFusionRule meq mfstrict = parse3beforeBiR $ fixFusionRuleBR ((extractR *** ex
 
 -- | Check that the expression has the form "fix t (f :: t -> t)", returning "t" and "f".
 isFixExprT :: TransformH CoreExpr (Type,CoreExpr)
-isFixExprT = withPatFailMsg (wrongExprForm "fix t f") $ -- fix :: forall a. (a -> a) -> a
+isFixExprT = withPatFailExc (HException (wrongExprForm "fix t f")) $ -- fix :: forall a. (a -> a) -> a
   do (Var fixId, [Type ty, f]) <- callT
      fixId' <- findIdT fixLocation
      guardMsg (fixId == fixId') (unqualifiedName fixId ++ " does not match " ++ show fixLocation)

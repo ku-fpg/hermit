@@ -29,6 +29,8 @@ import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.GHC hiding (externals)
 import HERMIT.Dictionary.Inline hiding (externals)
 
+import Control.Monad.Fail (MonadFail)
+
 --------------------------------------------------------
 
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
@@ -81,7 +83,7 @@ infoT =
                                                                       , if isLocalVar i then "Local" else "Global: " ++ modName i
                                                                       , "Unique:                   " ++ show (getUnique i)
                                                                       , "Identifier arity:         " ++ show (arityOf c i)
-                                                                      , "Identifier binding depth: " ++ runKureM show id (lookupHermitBindingDepth i c)
+                                                                      , "Identifier binding depth: " ++ runKureM show show (lookupHermitBindingDepth i c)
                                                                       ] ++ if isId i then let inf = idInfo i
                                                                                           in [ "Unfolding:                " ++ showPpr dynFlags (unfoldingInfo inf)
                                                                                              , "Occurrence Info:          " ++ showPpr dynFlags (occInfo inf)
@@ -152,6 +154,7 @@ typeConstructor = \case
 #else
                      FunTy{}      -> "FunTy"
 #endif
+                     FunTy{}      -> "FunTy"
                      ForAllTy{}   -> "ForAllTy"
                      LitTy{}      -> "LitTy"
 
@@ -175,11 +178,13 @@ coercionConstructor = \case
                          KindCo{}      -> "KindCo"
                          CoherenceCo{} -> "CoherenceCo"
 #endif
+                         FunCo{}       -> "FunCo"
+                         HoleCo{}      -> "HoleCo"
 
 --------------------------------------------------------
 
 -- | Compare the core fragments at the end of the specified 'LocalPathH's.
-compareCoreAtT :: (ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC ()
+compareCoreAtT :: (MonadFail m, ExtendPath c Crumb, AddBindings c, ReadPath c Crumb, HasEmptyContext c, LemmaContext c, MonadCatch m) => Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC LocalPathH -> Transform c m LCoreTC ()
 compareCoreAtT p1T p2T =
   do p1 <- p1T
      p2 <- p2T

@@ -105,7 +105,7 @@ fold = runFold . compileFold
 compileFold :: [Equality] -> CompiledFold
 compileFold = CompiledFold . foldr addFold fEmpty
     where addFold (Equality vs lhs rhs) =
-            let hs = vs `intersect` varSetElems (freeVarsExpr lhs)
+            let hs = vs `intersect` nonDetEltsUniqSet (freeVarsExpr lhs)
             in insertFold emptyAlphaEnv vs lhs (hs, rhs)
 
 -- | Attempt to fold an expression using a matcher in a given context.
@@ -220,6 +220,7 @@ data TyMap a = TyMEmpty
                    , tmFun        :: TyMap (TyMap a)
                    , tmForall     :: TyMap (BMap a)
 #endif
+                   , tmFun        :: TyMap (TyMap a)
                    , tmTcApp      :: NameEnv (ListMap TyMap a)
                    , tmTyLit      :: TyLitMap a
                    }
@@ -233,7 +234,7 @@ instance Fold TyMap where
     fAlter :: AlphaEnv -> [Var] -> Key TyMap -> A a -> TyMap a -> TyMap a
     fAlter env vs ty f TyMEmpty =
 #if __GLASGOW_HASKELL__ > 710
-      fAlter env vs ty f (TyM fEmpty fEmpty fEmpty fEmpty fEmpty fEmpty emptyNameEnv fEmpty)
+      fAlter env vs ty f (TyM fEmpty fEmpty fEmpty fEmpty fEmpty fEmpty fEmpty emptyNameEnv fEmpty)
 #else
       fAlter env vs ty f (TyM fEmpty fEmpty fEmpty fEmpty fEmpty emptyNameEnv fEmpty)
 #endif
@@ -245,14 +246,15 @@ instance Fold TyMap where
 #if __GLASGOW_HASKELL__ > 710
               go (CastTy t co) = m { tmCastTy = fAlter env vs t (toA (fAlter env vs (coercionType co) f)) (tmCastTy m) }
               go (CoercionTy co) = m { tmCoercionTy = fAlter env vs (coercionType co) f (tmCoercionTy m) }
-              go (ForAllTy tb t) = let bs = tyBinderVars tb
+              go (ForAllTy tb t) = let bs = tyBinderVars (Named tb)
                                        env' = foldr extendAlphaEnv env bs
-                                   in m { tmForall = fAlter env' (vs \\ bs) t (toA (fAlter env vs tb f)) (tmForall m) }
+                                   in m { tmForall = fAlter env' (vs \\ bs) t (toA (fAlter env vs (Named tb) f)) (tmForall m) }
 #else
               go (FunTy t1 t2) = m { tmFun = fAlter env vs t1 (toA (fAlter env vs t2 f)) (tmFun m) }
               go (ForAllTy tv t) = m { tmForall = fAlter (extendAlphaEnv tv env) (delete tv vs) t
                                                          (toA (fAlter env vs (varType tv) f)) (tmForall m) }
 #endif
+              go (FunTy t1 t2) = m { tmFun = fAlter env vs t1 (toA (fAlter env vs t2 f)) (tmFun m) }
               go (TyConApp tc tys) = m { tmTcApp = alterNameEnv (toA (fAlter env vs tys f)) (tmTcApp m) (getName tc) }
               go (LitTy l)     = m { tmTyLit = fAlter env vs l f (tmTyLit m) }
 
@@ -273,8 +275,8 @@ instance Fold TyMap where
                 fFold hs' env (coercionType co) m'
               go (CoercionTy co) = fFold hs env (coercionType co) m
               go (ForAllTy tb t) = do
-                (hs', m') <- fFold hs (foldr extendAlphaEnv env (tyBinderVars tb)) t (tmForall m)
-                fFold hs' env tb m'
+                (hs', m') <- fFold hs (foldr extendAlphaEnv env (tyBinderVars (Named tb))) t (tmForall m)
+                fFold hs' env (Named tb) m'
 #else
               go (FunTy t1 t2) = do
                 (hs', m') <- fFold hs env t1 (tmFun m)
@@ -283,6 +285,9 @@ instance Fold TyMap where
                 (hs', m') <- fFold hs (extendAlphaEnv tv env) t (tmForall m)
                 fFold hs' env (varType tv) m'
 #endif
+              go (FunTy t1 t2) = do
+                (hs', m') <- fFold hs env t1 (tmFun m)
+                fFold hs' env t2 m'
               go (TyConApp tc tys) = maybeToList (lookupNameEnv (tmTcApp m) (getName tc)) >>= fFold hs env tys
               go (LitTy l) = fFold hs env l (tmTyLit m)
 
@@ -290,7 +295,7 @@ instance Fold TyMap where
 
 #if __GLASGOW_HASKELL__ > 710
 tyBinderVars :: TyBinder -> [TyVar]
-tyBinderVars (Named tv _) = [tv]
+tyBinderVars (Named (TvBndr tv _)) = [tv]
 tyBinderVars (Anon _ty) = []
 
 data TyBinderMap a =
@@ -306,12 +311,12 @@ instance Fold TyBinderMap where
 
   fAlter :: AlphaEnv -> [Var] -> Key TyBinderMap -> A a -> TyBinderMap a -> TyBinderMap a
   fAlter env vs tb f m@TBM{} = go tb
-    where go (Named tv v) = m { tbmNamed = fAlter env vs (varType tv) (toA (fAlter env vs v f)) (tbmNamed m) }
+    where go (Named (TvBndr tv v)) = m { tbmNamed = fAlter env vs (varType tv) (toA (fAlter env vs v f)) (tbmNamed m) }
           go (Anon ty)    = m { tbmAnon = fAlter env vs ty f (tbmAnon m) }
 
   fFold :: VarEnv CoreExpr -> AlphaEnv -> Key TyBinderMap -> TyBinderMap a -> [(VarEnv CoreExpr, a)]
   fFold hs env tb m@TBM{} = go tb
-    where go (Named tv v) = do
+    where go (Named (TvBndr tv v)) = do
             (hs', m') <- fFold hs env (varType tv) (tbmNamed m)
             fFold hs' env v m'
           go (Anon ty) = fFold hs env ty (tbmAnon m)
@@ -323,22 +328,22 @@ data VisMap a =
          }
 
 instance Fold VisMap where
-  type Key VisMap = VisibilityFlag
+  type Key VisMap = ArgFlag
 
   fEmpty :: VisMap a
   fEmpty = VisMap Nothing Nothing Nothing
 
   fAlter :: AlphaEnv -> [Var] -> Key VisMap -> A a -> VisMap a -> VisMap a
   fAlter _ _ v f m@VisMap{} = go v
-    where go Visible   = m { vmVisible = f (vmVisible m) }
+    where go Required   = m { vmVisible = f (vmVisible m) }
           go Specified = m { vmSpecified = f (vmSpecified m) }
-          go Invisible = m { vmInvisible = f (vmInvisible m) }
+          go Inferred = m { vmInvisible = f (vmInvisible m) }
 
   fFold :: VarEnv CoreExpr -> AlphaEnv -> Key VisMap -> VisMap a -> [(VarEnv CoreExpr, a)]
   fFold hs _ v m@VisMap{} = go v
-    where go Visible   = (hs,) <$> maybeToList (vmVisible m)
+    where go Required   = (hs,) <$> maybeToList (vmVisible m)
           go Specified = (hs,) <$> maybeToList (vmSpecified m)
-          go Invisible = (hs,) <$> maybeToList (vmInvisible m)
+          go Inferred = (hs,) <$> maybeToList (vmInvisible m)
 #endif
 
 ------------------------------------------------------------------------

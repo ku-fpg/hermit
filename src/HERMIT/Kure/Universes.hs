@@ -65,6 +65,7 @@ import Language.KURE.BiTransform
 import HERMIT.Core
 import HERMIT.GHC
 import HERMIT.Lemma
+import Control.Monad.Catch
 
 ---------------------------------------------------------------------
 
@@ -168,7 +169,7 @@ freeVarsCore :: Core -> VarSet
 freeVarsCore = \case
                   GutsCore g -> freeVarsProg (bindsToProg $ mg_binds g)
                   ProgCore p -> freeVarsProg p
-                  BindCore b -> freeVarsBind b
+                  BindCore b -> HERMIT.Core.freeVarsBind b
                   DefCore d  -> freeVarsDef d
                   ExprCore e -> freeVarsExpr e
                   AltCore a  -> freeVarsAlt a
@@ -651,131 +652,131 @@ instance Injection CoreTC LCoreTC where
 ---------------------------------------------------------------------
 
 -- | Promote a translate on 'ModGuts'.
-promoteModGutsT :: (Monad m, Injection ModGuts g) => Transform c m ModGuts b -> Transform c m g b
+promoteModGutsT :: (MonadThrow m, Monad m, Injection ModGuts g) => Transform c m ModGuts b -> Transform c m g b
 promoteModGutsT = promoteWithFailMsgT "This translate can only succeed at the module level."
 {-# INLINE promoteModGutsT #-}
 
 -- | Promote a translate on 'CoreProg'.
-promoteProgT :: (Monad m, Injection CoreProg g) => Transform c m CoreProg b -> Transform c m g b
+promoteProgT :: (MonadThrow m, Monad m, Injection CoreProg g) => Transform c m CoreProg b -> Transform c m g b
 promoteProgT = promoteWithFailMsgT "This translate can only succeed at program nodes (the top-level)."
 {-# INLINE promoteProgT #-}
 
 -- | Promote a translate on 'CoreBind'.
-promoteBindT :: (Monad m, Injection CoreBind g) => Transform c m CoreBind b -> Transform c m g b
+promoteBindT :: (MonadThrow m, Monad m, Injection CoreBind g) => Transform c m CoreBind b -> Transform c m g b
 promoteBindT = promoteWithFailMsgT "This translate can only succeed at binding group nodes."
 {-# INLINE promoteBindT #-}
 
 -- | Promote a translate on 'CoreDef'.
-promoteDefT :: (Monad m, Injection CoreDef g) => Transform c m CoreDef b -> Transform c m g b
+promoteDefT :: (MonadThrow m, Monad m, Injection CoreDef g) => Transform c m CoreDef b -> Transform c m g b
 promoteDefT = promoteWithFailMsgT "This translate can only succeed at recursive definition nodes."
 {-# INLINE promoteDefT #-}
 
 -- | Promote a translate on 'CoreAlt'.
-promoteAltT :: (Monad m, Injection CoreAlt g) => Transform c m CoreAlt b -> Transform c m g b
+promoteAltT :: (MonadThrow m, Monad m, Injection CoreAlt g) => Transform c m CoreAlt b -> Transform c m g b
 promoteAltT = promoteWithFailMsgT "This translate can only succeed at case alternative nodes."
 {-# INLINE promoteAltT #-}
 
 -- | Promote a translate on 'CoreExpr'.
-promoteExprT :: (Monad m, Injection CoreExpr g) => Transform c m CoreExpr b -> Transform c m g b
+promoteExprT :: (MonadThrow m, Monad m, Injection CoreExpr g) => Transform c m CoreExpr b -> Transform c m g b
 promoteExprT = promoteWithFailMsgT "This translate can only succeed at expression nodes."
 {-# INLINE promoteExprT #-}
 
 -- | Promote a translate on 'Type'.
-promoteTypeT :: (Monad m, Injection Type g) => Transform c m Type b -> Transform c m g b
+promoteTypeT :: (MonadThrow m, Monad m, Injection Type g) => Transform c m Type b -> Transform c m g b
 promoteTypeT = promoteWithFailMsgT "This translate can only succeed at type nodes."
 {-# INLINE promoteTypeT #-}
 
 -- | Promote a translate on 'Coercion'.
-promoteCoercionT :: (Monad m, Injection Coercion g) => Transform c m Coercion b -> Transform c m g b
+promoteCoercionT :: (MonadThrow m, Monad m, Injection Coercion g) => Transform c m Coercion b -> Transform c m g b
 promoteCoercionT = promoteWithFailMsgT "This translate can only succeed at coercion nodes."
 {-# INLINE promoteCoercionT #-}
 
 -- | Promote a translate on 'Clause'.
-promoteClauseT :: (Monad m, Injection Clause g) => Transform c m Clause b -> Transform c m g b
+promoteClauseT :: (MonadThrow m, Monad m, Injection Clause g) => Transform c m Clause b -> Transform c m g b
 promoteClauseT = promoteWithFailMsgT "This translate can only succeed at clause nodes."
 {-# INLINE promoteClauseT #-}
 
 -- | Promote a translate on 'Core'.
-promoteCoreT :: (Monad m, Injection Core g) => Transform c m Core b -> Transform c m g b
+promoteCoreT :: (MonadThrow m, Monad m, Injection Core g) => Transform c m Core b -> Transform c m g b
 promoteCoreT = promoteWithFailMsgT "This translate can only succeed at core nodes."
 {-# INLINE promoteCoreT #-}
 
 -- | Promote a translate on 'LCore'.
-promoteLCoreT :: (Monad m, Injection LCore g) => Transform c m LCore b -> Transform c m g b
+promoteLCoreT :: (MonadThrow m, Monad m, Injection LCore g) => Transform c m LCore b -> Transform c m g b
 promoteLCoreT = promoteWithFailMsgT "This translate can only succeed at lemma or core nodes."
 {-# INLINE promoteLCoreT #-}
 
 -- | Promote a translate on 'CoreTC'.
-promoteCoreTCT :: (Monad m, Injection CoreTC g) => Transform c m CoreTC b -> Transform c m g b
+promoteCoreTCT :: (MonadThrow m, Monad m, Injection CoreTC g) => Transform c m CoreTC b -> Transform c m g b
 promoteCoreTCT = promoteWithFailMsgT "This translate can only succeed at core nodes."
 {-# INLINE promoteCoreTCT #-}
 
 ---------------------------------------------------------------------
 
 -- | Promote a rewrite on 'ModGuts'.
-promoteModGutsR :: (Monad m, Injection ModGuts g) => Rewrite c m ModGuts -> Rewrite c m g
+promoteModGutsR :: (MonadThrow m, Monad m, Injection ModGuts g) => Rewrite c m ModGuts -> Rewrite c m g
 promoteModGutsR = promoteWithFailMsgR "This rewrite can only succeed at the module level."
 {-# INLINE promoteModGutsR #-}
 
 -- | Promote a rewrite on 'CoreProg'.
-promoteProgR :: (Monad m, Injection CoreProg g) => Rewrite c m CoreProg -> Rewrite c m g
+promoteProgR :: (MonadThrow m, Monad m, Injection CoreProg g) => Rewrite c m CoreProg -> Rewrite c m g
 promoteProgR = promoteWithFailMsgR "This rewrite can only succeed at program nodes (the top-level)."
 {-# INLINE promoteProgR #-}
 
 -- | Promote a rewrite on 'CoreBind'.
-promoteBindR :: (Monad m, Injection CoreBind g) => Rewrite c m CoreBind -> Rewrite c m g
+promoteBindR :: (MonadThrow m, Monad m, Injection CoreBind g) => Rewrite c m CoreBind -> Rewrite c m g
 promoteBindR = promoteWithFailMsgR "This rewrite can only succeed at binding group nodes."
 {-# INLINE promoteBindR #-}
 
 -- | Promote a rewrite on 'CoreDef'.
-promoteDefR :: (Monad m, Injection CoreDef g) => Rewrite c m CoreDef -> Rewrite c m g
+promoteDefR :: (MonadThrow m, Monad m, Injection CoreDef g) => Rewrite c m CoreDef -> Rewrite c m g
 promoteDefR = promoteWithFailMsgR "This rewrite can only succeed at recursive definition nodes."
 {-# INLINE promoteDefR #-}
 
 -- | Promote a rewrite on 'CoreAlt'.
-promoteAltR :: (Monad m, Injection CoreAlt g) => Rewrite c m CoreAlt -> Rewrite c m g
+promoteAltR :: (MonadThrow m, Monad m, Injection CoreAlt g) => Rewrite c m CoreAlt -> Rewrite c m g
 promoteAltR = promoteWithFailMsgR "This rewrite can only succeed at case alternative nodes."
 {-# INLINE promoteAltR #-}
 
 -- | Promote a rewrite on 'CoreExpr'.
-promoteExprR :: (Monad m, Injection CoreExpr g) => Rewrite c m CoreExpr -> Rewrite c m g
+promoteExprR :: (MonadThrow m, Monad m, Injection CoreExpr g) => Rewrite c m CoreExpr -> Rewrite c m g
 promoteExprR = promoteWithFailMsgR "This rewrite can only succeed at expression nodes."
 {-# INLINE promoteExprR #-}
 
 -- | Promote a rewrite on 'Type'.
-promoteTypeR :: (Monad m, Injection Type g) => Rewrite c m Type -> Rewrite c m g
+promoteTypeR :: (MonadThrow m, Monad m, Injection Type g) => Rewrite c m Type -> Rewrite c m g
 promoteTypeR = promoteWithFailMsgR "This rewrite can only succeed at type nodes."
 {-# INLINE promoteTypeR #-}
 
 -- | Promote a rewrite on 'Coercion'.
-promoteCoercionR :: (Monad m, Injection Coercion g) => Rewrite c m Coercion -> Rewrite c m g
+promoteCoercionR :: (MonadThrow m, Monad m, Injection Coercion g) => Rewrite c m Coercion -> Rewrite c m g
 promoteCoercionR = promoteWithFailMsgR "This rewrite can only succeed at coercion nodes."
 {-# INLINE promoteCoercionR #-}
 
 -- | Promote a rewrite on 'Clause'.
-promoteClauseR :: (Monad m, Injection Clause g) => Rewrite c m Clause -> Rewrite c m g
+promoteClauseR :: (MonadThrow m, Monad m, Injection Clause g) => Rewrite c m Clause -> Rewrite c m g
 promoteClauseR = promoteWithFailMsgR "This rewrite can only succeed at quantified nodes."
 {-# INLINE promoteClauseR #-}
 
 -- | Promote a rewrite on 'Core'.
-promoteCoreR :: (Monad m, Injection Core g) => Rewrite c m Core -> Rewrite c m g
+promoteCoreR :: (MonadThrow m, Monad m, Injection Core g) => Rewrite c m Core -> Rewrite c m g
 promoteCoreR = promoteWithFailMsgR "This rewrite can only succeed at core nodes."
 {-# INLINE promoteCoreR #-}
 
 -- | Promote a rewrite on 'Core'.
-promoteLCoreR :: (Monad m, Injection LCore g) => Rewrite c m LCore -> Rewrite c m g
+promoteLCoreR :: (MonadThrow m, Monad m, Injection LCore g) => Rewrite c m LCore -> Rewrite c m g
 promoteLCoreR = promoteWithFailMsgR "This rewrite can only succeed at lemma or core nodes."
 {-# INLINE promoteLCoreR #-}
 
 -- | Promote a rewrite on 'CoreTC'.
-promoteCoreTCR :: (Monad m, Injection CoreTC g) => Rewrite c m CoreTC -> Rewrite c m g
+promoteCoreTCR :: (MonadThrow m, Monad m, Injection CoreTC g) => Rewrite c m CoreTC -> Rewrite c m g
 promoteCoreTCR = promoteWithFailMsgR "This rewrite can only succeed at core nodes."
 {-# INLINE promoteCoreTCR #-}
 
 ---------------------------------------------------------------------
 
 -- | Promote a bidirectional rewrite on 'CoreExpr'.
-promoteExprBiR :: (Monad m, Injection CoreExpr g) => BiRewrite c m CoreExpr -> BiRewrite c m g
+promoteExprBiR :: (MonadThrow m, Monad m, Injection CoreExpr g) => BiRewrite c m CoreExpr -> BiRewrite c m g
 promoteExprBiR = promoteWithFailMsgBiR "This rewrite can only succeed at expression nodes."
 {-# INLINE promoteExprBiR #-}
 

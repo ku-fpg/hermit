@@ -89,8 +89,9 @@ import GHC.Generics
 import Language.KURE.Combinators.Monad
 import Language.KURE.MonadCatch
 
-import HERMIT.GHC
+import HERMIT.GHC hiding (freeVarsBind)
 import HERMIT.Utilities
+import Control.Monad
 
 -----------------------------------------------------------------------
 
@@ -185,7 +186,7 @@ typeSyntaxEq (TyVarTy v1)      (TyVarTy v2)         = v1 == v2
 typeSyntaxEq (LitTy l1)        (LitTy l2)           = l1 == l2
 typeSyntaxEq (AppTy t1 ty1)    (AppTy t2 ty2)       = typeSyntaxEq t1 t2 && typeSyntaxEq ty1 ty2
 #if __GLASGOW_HASKELL__ > 710
-typeSyntaxEq (ForAllTy b1 ty1) (ForAllTy b2 ty2)    = tyBinderSyntaxEq b1 b2 && typeSyntaxEq ty1 ty2
+typeSyntaxEq (ForAllTy b1 ty1) (ForAllTy b2 ty2)    = tyBinderSyntaxEq (Named b1) (Named b2) && typeSyntaxEq ty1 ty2
 #else
 typeSyntaxEq (FunTy t1 ty1)    (FunTy t2 ty2)       = typeSyntaxEq t1 t2 && typeSyntaxEq ty1 ty2
 typeSyntaxEq (ForAllTy v1 ty1) (ForAllTy v2 ty2)    = v1 == v2 && typeSyntaxEq ty1 ty2
@@ -195,7 +196,7 @@ typeSyntaxEq _                 _                    = False
 
 #if __GLASGOW_HASKELL__ > 710
 tyBinderSyntaxEq :: TyBinder -> TyBinder -> Bool
-tyBinderSyntaxEq (Named v1 f1) (Named v2 f2) = v1 == v2 && f1 == f2
+tyBinderSyntaxEq (Named (TvBndr v1 a1)) (Named (TvBndr v2 a2)) = v1 == v2 && a1 == a2
 tyBinderSyntaxEq (Anon t1)     (Anon t2)     = typeSyntaxEq t1 t2
 tyBinderSyntaxEq _             _             = False
 #endif
@@ -221,7 +222,7 @@ coercionSyntaxEq (UnivCo fs1 role1 ty11 ty12) (UnivCo fs2 role2 ty21 ty22) = fs1
 coercionSyntaxEq (SubCo co1)             (SubCo co2)             = coercionSyntaxEq co1 co2
 coercionSyntaxEq (SymCo co1)             (SymCo co2)             = coercionSyntaxEq co1 co2
 coercionSyntaxEq (TransCo co11 co12)     (TransCo co21 co22)     = coercionSyntaxEq co11 co21 && coercionSyntaxEq co12 co22
-coercionSyntaxEq (NthCo n1 co1)          (NthCo n2 co2)          = n1 == n2 && coercionSyntaxEq co1 co2
+coercionSyntaxEq (NthCo r1 n1 co1)       (NthCo r2 n2 co2)       = r1 == r2 && n1 == n2 && coercionSyntaxEq co1 co2
 #if __GLASGOW_HASKELL__ > 710
 coercionSyntaxEq (InstCo c11 c12)        (InstCo c21 c22)        = coercionSyntaxEq c11 c21 && coercionSyntaxEq c12 c22
 #else
@@ -235,8 +236,8 @@ ucpSyntaxEq UnsafeCoerceProv    UnsafeCoerceProv    = True
 ucpSyntaxEq (PhantomProv c1)    (PhantomProv c2)    = coercionSyntaxEq c1 c2
 ucpSyntaxEq (PluginProv s1)     (PluginProv s2)     = s1 == s2
 ucpSyntaxEq (ProofIrrelProv c1) (ProofIrrelProv c2) = coercionSyntaxEq c1 c2
-ucpSyntaxEq (HoleProv _)        _                   = error "ucpSyntaxEq: impossible HoleProv"
-ucpSyntaxEq _                   (HoleProv _)        = error "ucpSyntaxEq: impossible HoleProv"
+-- ucpSyntaxEq (HoleProv _)        _                   = error "ucpSyntaxEq: impossible HoleProv"
+-- ucpSyntaxEq _                   (HoleProv _)        = error "ucpSyntaxEq: impossible HoleProv"
 ucpSyntaxEq _                   _                   = False
 #endif
 
@@ -344,7 +345,7 @@ freeVarsExpr (Var v) = extendVarSet (freeVarsVar v) v
 freeVarsExpr (Lit {}) = emptyVarSet
 freeVarsExpr (App e1 e2) = freeVarsExpr e1 `unionVarSet` freeVarsExpr e2
 freeVarsExpr (Lam b e) = delVarSet (freeVarsExpr e) b
-freeVarsExpr (Let b e) = freeVarsBind b `unionVarSet` delVarSetList (freeVarsExpr e) (bindersOf b)
+freeVarsExpr (Let b e) = HERMIT.Core.freeVarsBind b `unionVarSet` delVarSetList (freeVarsExpr e) (bindersOf b)
 freeVarsExpr (Case s b ty alts) = let altFVs = delVarSet (unionVarSets $ map freeVarsAlt alts) b
                                   in unionVarSets [freeVarsExpr s, freeVarsType ty, altFVs]
 freeVarsExpr (Cast e co) = freeVarsExpr e `unionVarSet` freeVarsCoercion co
@@ -386,7 +387,7 @@ localFreeVarsAlt (_,bs,e) = delVarSetList (localFreeVarsExpr e `unionVarSet` uni
 freeVarsProg :: CoreProg -> VarSet
 freeVarsProg = \case
                   ProgNil        -> emptyVarSet
-                  ProgCons bnd p -> freeVarsBind bnd `unionVarSet` delVarSetList (freeVarsProg p) (bindVars bnd)
+                  ProgCons bnd p -> HERMIT.Core.freeVarsBind bnd `unionVarSet` delVarSetList (freeVarsProg p) (bindVars bnd)
 
 -- | Find all free variables in a type.
 freeVarsType :: Type -> TyVarSet
@@ -523,8 +524,10 @@ data Crumb =
            | UnsafeCo_Left | UnsafeCo_Right
            | SymCo_Co
            | SubCo_Co
+           | FunCo_Role | FunCo_Co_Left | FunCo_Co_Right
+
            | TransCo_Left | TransCo_Right
-           | NthCo_Int | NthCo_Co
+           | NthCo_Role | NthCo_Int | NthCo_Co
 #if __GLASGOW_HASKELL__ > 710
            | InstCo_Left | InstCo_Right
 #else

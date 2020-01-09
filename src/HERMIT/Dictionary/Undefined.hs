@@ -43,6 +43,10 @@ import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.GHC (substR)
 import HERMIT.Dictionary.Reasoning hiding (externals)
 
+import HERMIT.Exception
+
+import Control.Monad.Fail (MonadFail)
+
 ------------------------------------------------------------------------
 
 externals :: [External]
@@ -93,9 +97,9 @@ findUndefinedIdT :: (BoundVars c, MonadCatch m, HasHermitMEnv m, LiftCoreM m, Mo
 findUndefinedIdT = findIdT undefinedLocation
 
 -- | Check if the current expression is an undefined value.
-isUndefinedValT :: (BoundVars c, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Transform c m CoreExpr ()
+isUndefinedValT :: (MonadFail m, BoundVars c, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Transform c m CoreExpr ()
 isUndefinedValT = prefixFailMsg "not an undefined value: " $
-                  withPatFailMsg (wrongExprForm "App (Var undefined) (Type ty)") $
+                  withPatFailExc (HException (wrongExprForm "App (Var undefined) (Type ty)")) $
                   do App (Var un) (Type _) <- idR
                      un' <- findUndefinedIdT
                      guardMsg (un == un') ("identifier is not " ++ show undefinedLocation)
@@ -109,9 +113,9 @@ findErrorIdT :: (BoundVars c, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadI
 findErrorIdT = findIdT errorLocation
 
 -- | Check if the current expression is an undefined value.
-isErrorValT :: (BoundVars c, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Transform c m CoreExpr ()
+isErrorValT :: (MonadFail m, BoundVars c, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Transform c m CoreExpr ()
 isErrorValT = prefixFailMsg "not an error value: " $
-              withPatFailMsg (wrongExprForm "App (App (Var error) (Type ty)) string") $
+              withPatFailExc (HException (wrongExprForm "App (App (Var error) (Type ty)) string")) $
               do App (App (Var er) (Type _)) _ <- idR
                  er' <- findErrorIdT
                  guardMsg (er == er') ("identifier is not " ++ show errorLocation)
@@ -119,7 +123,7 @@ isErrorValT = prefixFailMsg "not an error value: " $
 ------------------------------------------------------------------------
 
 -- | error ty string ==> undefined ty
-errorToUndefinedR :: (BoundVars c, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
+errorToUndefinedR :: (MonadFail m, BoundVars c, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
 errorToUndefinedR = prefixFailMsg "error-to-undefined failed: " (isErrorValT >> replaceCurrentExprWithUndefinedR)
 
 ------------------------------------------------------------------------
@@ -146,54 +150,54 @@ replaceIdWithUndefined = findIdT >=> replaceIdWithUndefinedR
 ------------------------------------------------------------------------------------------------------
 
 -- | undefinedExprR = undefinedAppR <+ undefinedLamR <+ undefinedLetR <+ undefinedCastR <+ undefinedTickR <+ undefinedCaseR
-undefinedExprR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
+undefinedExprR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
 undefinedExprR = setFailMsg "undefined-expr failed."
                    (undefinedAppR <+ undefinedLamR <+ undefinedLetR <+ undefinedCastR <+ undefinedTickR <+ undefinedCaseR)
 
 ------------------------------------------------------------------------------------------------------
 
 -- | @(undefined ty1) e@ ==> @undefined ty2@
-undefinedAppR :: (BoundVars c, ExtendPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
+undefinedAppR :: (MonadFail m, BoundVars c, ExtendPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
 undefinedAppR = prefixFailMsg "undefined-app failed: " $
                 do appT isUndefinedValT successT (<>)
                    replaceCurrentExprWithUndefinedR
 
 -- | @(\ v -> undefined ty1)@ ==> @undefined ty2@  (where v is not a 'TyVar')
-undefinedLamR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
+undefinedLamR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
 undefinedLamR = prefixFailMsg "undefined-lam failed: " $
                 do lamT successT isUndefinedValT (<>)
                    replaceCurrentExprWithUndefinedR
 
 -- | let bds in (undefined ty) ==> undefined ty
-undefinedLetR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
+undefinedLetR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
 undefinedLetR = prefixFailMsg "undefined-let failed: " $
                 do letT successT isUndefinedValT (<>)
                    replaceCurrentExprWithUndefinedR
 
 -- | Cast (undefined ty1) co ==> undefined ty2
-undefinedCastR :: (BoundVars c, ExtendPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
+undefinedCastR :: (MonadFail m, BoundVars c, ExtendPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
 undefinedCastR = prefixFailMsg "undefined-cast failed: " $
                 do castT isUndefinedValT successT (<>)
                    replaceCurrentExprWithUndefinedR
 
 -- | Tick tick (undefined ty1) ==> undefined ty1
-undefinedTickR :: (BoundVars c, ExtendPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
+undefinedTickR :: (MonadFail m, BoundVars c, ExtendPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
 undefinedTickR = prefixFailMsg "undefined-tick failed: " $
                 do tickT successT isUndefinedValT (<>)
                    replaceCurrentExprWithUndefinedR
 
 -- | undefinedCaseR = undefinedCaseScrutineeR <+ undefinedCaseAltsR
-undefinedCaseR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
+undefinedCaseR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
 undefinedCaseR = setFailMsg "undefined-case failed" (undefinedCaseScrutineeR <+ undefinedCaseAltsR)
 
 -- | case (undefined ty) of alts ==> undefined ty
-undefinedCaseScrutineeR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
+undefinedCaseScrutineeR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
 undefinedCaseScrutineeR = prefixFailMsg "undefined-case failed: " $
                  do caseT isUndefinedValT successT successT (const successT) (\ _ _ _ _ -> ())
                     replaceCurrentExprWithUndefinedR
 
 -- | case e of {pat_1 -> undefined ty ; pat_2 -> undefined ty ; ... ; pat_n -> undefined ty} ==> undefined ty
-undefinedCaseAltsR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
+undefinedCaseAltsR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, HasHermitMEnv m, LiftCoreM m, MonadIO m, MonadThings m) => Rewrite c m CoreExpr
 undefinedCaseAltsR = prefixFailMsg "undefined-case-alts failed: " $
                      do caseAltT successT successT successT (const (successT,const successT,isUndefinedValT)) (\ _ _ _ _ -> ())
                         replaceCurrentExprWithUndefinedR
@@ -224,7 +228,7 @@ applyToUndefinedT f = do
 
 -- | Add a lemma for the strictness of a function.
 -- Note: assumes added lemma has been used
-buildStrictnessLemmaT :: ( HasCoreRules c, LemmaContext c, ReadBindings c
+buildStrictnessLemmaT :: ( MonadFail m, HasCoreRules c, LemmaContext c, ReadBindings c
                          , ReadPath c Crumb, LiftCoreM m, HasHermitMEnv m, HasLemmas m
                          , MonadCatch m, MonadIO m, MonadThings m)
                       => Used -> LemmaName -> CoreExpr -> Transform c m x ()

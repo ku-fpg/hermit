@@ -20,6 +20,9 @@ import HERMIT.Name
 import HERMIT.ParserCore
 import HERMIT.Syntax (isCoreInfixIdChar, isCoreIdFirstChar, isCoreIdChar)
 
+
+import HERMIT.Exception
+
 import Language.KURE.MonadCatch (prefixFailMsg)
 }
 
@@ -85,13 +88,13 @@ tyvar : NAME               {% lookupName $1 }
 lookupName :: String -> TypeParseM Type
 lookupName nm = do
     c <- getContext
-    et <- lift $ attemptM $ findType (parseName nm) c
+    et <- lift $ (attemptM $ findType (parseName nm) c :: _ (Either HException _))
     either (const (addTyVar nm)) return et
 
 catchFrees :: Type -> TypeParseM ([TyVar], Type)
 catchFrees ty = do
     used <- gets tpUsed
-    let frees = varSetElems $ freeVarsType ty
+    let frees = nonDetEltsUniqSet $ freeVarsType ty
         quants = filter (`elem` used) frees
     modify $ \ st -> st { tpUsed = filter (`notElem` frees) (tpUsed st) }
     return (quants, ty)

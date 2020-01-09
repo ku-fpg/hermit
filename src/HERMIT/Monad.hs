@@ -47,6 +47,9 @@ import HERMIT.GHC.Typechecker
 import HERMIT.Kure.Universes
 import HERMIT.Lemma
 
+import Control.Exception
+import Data.Maybe (fromJust)
+
 ----------------------------------------------------------------------------
 
 -- | The HermitM environment.
@@ -87,13 +90,13 @@ runHM :: HermitMEnv                    -- env
       -> (String -> CoreM b)           -- failure
       -> HermitM a                     -- ma
       -> CoreM b
-runHM env success failure ma = runHermitM ma env >>= runKureM success failure
+runHM env success failure ma = runHermitM ma env >>= runKureM success (failure . show)
 
 -- | Allow HermitM to be embedded in another monad with proper capabilities.
 embedHermitM :: (HasHermitMEnv m, HasLemmas m, LiftCoreM m) => HermitM a -> m a
 embedHermitM hm = do
     env <- getHermitMEnv
-    r <- liftCoreM (runHermitM hm env) >>= runKureM return fail
+    r <- liftCoreM (runHermitM hm env) >>= runKureM return (fail . show)
     when (hResChanged r) $ forM_ (toList (hResLemmas r)) $ uncurry insertLemma
     return $ hResult r
 
@@ -117,7 +120,7 @@ instance Monad HermitM where
         HermitM $ \ env -> gcm env >>= runKureM (\ (HermitMResult c ls a) ->
                                                         let env' = env { hEnvChanged = c, hEnvLemmas = ls }
                                                         in  runHermitM (f a) env')
-                                                (return . fail)
+                                                (return . fail . show)
 
   fail :: String -> HermitM a
   fail = Fail.fail
@@ -126,10 +129,13 @@ instance Fail.MonadFail HermitM where
   fail :: String -> HermitM a
   fail msg = HermitM $ const $ return $ fail msg
 
+instance MonadThrow HermitM where
+  throwM = fail . show
+
 instance MonadCatch HermitM where
-  catchM :: HermitM a -> (String -> HermitM a) -> HermitM a
-  (HermitM gcm) `catchM` f = HermitM $ \ env -> gcm env >>= runKureM (return.return)
-                                                                     (\ msg -> runHermitM (f msg) env)
+  catch :: Exception e => HermitM a -> (e -> HermitM a) -> HermitM a
+  (HermitM gcm) `catch` f = HermitM $ \ env -> gcm env >>= runKureM (return.return)
+                                                                     (\ msg -> runHermitM (f (fromJust . fromException $ msg)) env)
 
 instance MonadIO HermitM where
   liftIO :: IO a -> HermitM a

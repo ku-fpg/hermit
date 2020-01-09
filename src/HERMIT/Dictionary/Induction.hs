@@ -26,6 +26,8 @@ import HERMIT.Dictionary.Common
 import HERMIT.Dictionary.Local.Case hiding (externals)
 import HERMIT.Dictionary.Undefined hiding (externals)
 
+import HERMIT.Exception
+
 ------------------------------------------------------------------------------
 
 externals :: [External]
@@ -40,7 +42,7 @@ externals =
 
 -- TODO: revisit design here to make one level
 caseSplitOnR :: Bool -> (Id -> Bool) -> RewriteH Clause
-caseSplitOnR induction idPred = withPatFailMsg "induction can only be performed on universally quantified terms." $ do
+caseSplitOnR induction idPred = withPatFailExc (HException "induction can only be performed on universally quantified terms.") $ do
     let p b = idPred b && isId b
     (bs, cl) <- arr collectQs
     guardMsg (any p bs) "specified identifier is not universally quantified in this lemma. (Induction cannot be performed on type quantifiers.)"
@@ -56,7 +58,7 @@ caseSplitOnR induction idPred = withPatFailMsg "induction can only be performed 
         go [] = return []
         go (e:es) = do
             let cl' = substClause b e cl
-                fvs = varSetElems $ delVarSetList (localFreeVarsExpr e) newBs
+                fvs = nonDetEltsUniqSet $ delVarSetList (localFreeVarsExpr e) newBs
 
             -- Generate induction hypotheses for the recursive cases.
             antes <- if induction

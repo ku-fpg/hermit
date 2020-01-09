@@ -29,6 +29,8 @@ import HERMIT.Plugin.Types
 
 import HERMIT.Shell.Types
 
+import HERMIT.Exception
+
 -------------------------------------------------------------------------------
 
 -- | KernelEffects are things that affect the state of the Kernel
@@ -69,7 +71,7 @@ applyRewrite rr expr = do
 
             when cl $ do
                 warns <- liftM snd (queryK k lintModuleT Never kEnv ast')
-                            `catchM` (\ errs -> deleteK k ast' >> fail errs)
+                            `catch` (\ (HException errs) -> deleteK k ast' >> fail errs)
                 putStrToConsole warns
 
             addAST ast'

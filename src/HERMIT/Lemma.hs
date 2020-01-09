@@ -40,6 +40,7 @@ import GHC.Generics
 
 import HERMIT.Core
 import HERMIT.GHC hiding ((<>))
+import HERMIT.Exception
 import Language.KURE.MonadCatch
 
 ----------------------------------------------------------------------------
@@ -58,7 +59,7 @@ mkClause vs lhs rhs = redundantDicts $ dropBinders $ mkForall (tvs++vs++lbs++rbs
           (rbs, rbody) = collectBinders rhs'
           lhs' = mkCoreApps lbody $ map varToCoreExpr rbs
           -- now quantify over the free type variables
-          tvs = varSetElems
+          tvs = nonDetEltsUniqSet -- varSetElems
               $ filterVarSet isTyVar
               $ delVarSetList (unionVarSets $ map freeVarsExpr [lhs',rbody]) (vs++lbs++rbs)
 
@@ -229,7 +230,8 @@ instClause :: MonadCatch m => VarSet        -- vars in scope
                            -> CoreExpr      -- expression to instantiate with
                            -> Clause -> m Clause
 instClause inScope p e = prefixFailMsg "clause instantiation failed: " . liftM fst . go []
-    where go bs (Forall b cl)
+    where
+          go bs (Forall b cl)
             | p b = do -- quantified here, so do substitution and start bubbling up
                 let (eTvs, eTy) = splitForAllTys $ exprKindOrType e
                     tyVars = eTvs ++ filter isTyVar bs
@@ -245,7 +247,7 @@ instClause inScope p e = prefixFailMsg "clause instantiation failed: " . liftM f
                                             Just ty -> Type ty
                                       | v <- eTvs ]
                     cl' = substClause b e' cl
-                    newBs = varSetElems
+                    newBs = nonDetEltsUniqSet --varSetElems
                           $ filterVarSet (\v -> not (isId v) || isLocalId v)
                           $ delVarSetList (minusVarSet (freeVarsExpr e') inScope) bs
 
@@ -262,11 +264,11 @@ instClause inScope p e = prefixFailMsg "clause instantiation failed: " . liftM f
             er <- attemptM $ go bs q1
             case er of
                 Right (q1',s) -> return (con q1' q2, s)
-                Left _ -> do
+                Left (HException _) -> do
                     er' <- attemptM $ go bs q2
                     case er' of
                         Right (q2',s) -> return (con q1 q2', s)
-                        Left msg -> fail msg
+                        Left msg -> fail (unHException msg) --(show msg)
 
 -- | The function which 'bubbles up' after the instantiation takes place,
 -- replacing any type variables that were instantiated as a result of specialization
@@ -281,7 +283,7 @@ replaceVars sub vs = go (reverse vs)
           go (b:bs) cl
             | isTyVar b = case lookupTyVar sub b of
                             Nothing -> go bs (addBinder b cl)
-                            Just ty -> let new = varSetElems (freeVarsType ty)
+                            Just ty -> let new = nonDetEltsUniqSet(freeVarsType ty)
                                        in go (new++bs) (substClause b (Type ty) cl)
             | otherwise = go bs (addBinder b cl)
 

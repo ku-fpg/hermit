@@ -51,6 +51,8 @@ import HERMIT.Dictionary.Common
 
 import Prelude hiding (exp)
 
+import Control.Monad.Fail (MonadFail)
+
 -----------------------------------------------------------------------
 
 -- | Externals for alpha-renaming.
@@ -100,13 +102,13 @@ externals = map (.+ Deep)
 -- 2.  Any bound variables in context.
 
 -- | Collect all visible variables (in the expression or the context).
-visibleVarsT :: (BoundVars c, Monad m) => Transform c m CoreTC VarSet
+visibleVarsT :: (MonadThrow m, BoundVars c, Monad m) => Transform c m CoreTC VarSet
 visibleVarsT = -- TODO: implement freeVarsLCoreTC
                liftM2 unionVarSet boundVarsT (promoteT $ arr freeVarsCoreTC)
 
 -- | If a name is provided, use that as the name of the new variable.
 --   Otherwise modify the variable name making sure to /not/ clash with the given variables or any visible variables.
-cloneVarAvoidingT :: (BoundVars c, MonadUnique m) => Var -> Maybe String -> [Var] -> Transform c m CoreTC Var
+cloneVarAvoidingT :: (MonadThrow m, BoundVars c, MonadUnique m) => Var -> Maybe String -> [Var] -> Transform c m CoreTC Var
 cloneVarAvoidingT v mn vs =
   do vvs <- visibleVarsT
      let nameModifier = freshNameGenAvoiding mn (extendVarSetList vvs vs)
@@ -147,19 +149,19 @@ detectShadowsM bs fvs = let ss = shadowedBy (mkVarSet bs) fvs `extendVarSetList`
 
 -- | Rename local variables with manifestly unique names (x, x0, x1, ...).
 --   Does not rename top-level definitions.
-unshadowR :: ( AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c
+unshadowR :: ( MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, HasEmptyContext c
              , ReadPath c Crumb, MonadCatch m, MonadUnique m )
           => Rewrite c m Core
 unshadowR = setFailMsg "No shadows to eliminate." $
     anytdR (promoteExprR unshadowExprR <+ promoteAltR unshadowAltR <+ promoteProgR unshadowProgR)
 
-unshadowExprR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+unshadowExprR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
               => Rewrite c m CoreExpr
 unshadowExprR = do
     bs  <- letVarsT <+ (liftM return (caseBinderIdT <+ lamVarT))
     fvs <- liftM2 unionVarSet boundVarsT (arr freeVarsExpr)
     ss  <- detectShadowsM bs fvs
-    alphaLamR Nothing <+ alphaLetVarsR (varSetElems ss) <+ alphaCaseBinderR Nothing
+    alphaLamR Nothing <+ alphaLetVarsR (nonDetEltsUniqSet ss) <+ alphaCaseBinderR Nothing
 
 unshadowAltR :: (BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreAlt
@@ -167,15 +169,15 @@ unshadowAltR = do
     bs  <- arr altVars
     fvs <- liftM2 unionVarSet boundVarsT (arr freeVarsAlt)
     ss  <- detectShadowsM bs fvs
-    alphaAltVarsR (varSetElems ss)
+    alphaAltVarsR (nonDetEltsUniqSet ss)
 
-unshadowProgR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+unshadowProgR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
               => Rewrite c m CoreProg
 unshadowProgR = do
     bs  <- progConsIdsT
     fvs <- liftM2 unionVarSet boundVarsT (arr freeVarsProg)
     ss  <- detectShadowsM bs fvs
-    alphaProgConsIdsR (varSetElems ss)
+    alphaProgConsIdsR (nonDetEltsUniqSet ss)
 
 dupVars :: [Var] -> [Var]
 dupVars = dupsBy ((==) `on` unqualifiedName)
@@ -190,7 +192,7 @@ replaceVarR :: (Injection a Core, MonadCatch m) => Var -> Var -> Rewrite c m a
 replaceVarR v v' = extractR $ tryR $ substR v $ varToCoreExpr v'
 
 -- TODO: Experimental
-replaceRecBindVarR :: Monad m => Id -> Id -> Rewrite c m CoreBind
+replaceRecBindVarR :: (MonadFail m, Monad m) => Id -> Id -> Rewrite c m CoreBind
 replaceRecBindVarR v v' =
    do Rec ies <- idR
       let (is,es) = unzip ies
@@ -302,7 +304,7 @@ alphaLetNonRecVarsR mn vs = whenM (liftM (`elem` vs) letNonRecVarT) (alphaLetNon
 -- TODO: Maybe it would be more efficient to rename all the Ids at once, rather than one by one?
 
 -- | Rename the specified identifiers in a recursive let, using the suggested names where provided.
-alphaLetRecIdsWithR :: forall c m. ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
+alphaLetRecIdsWithR :: forall c m. ( MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
                                    , BoundVars c, MonadCatch m, MonadUnique m )
                     => [(Maybe String,Id)] -> Rewrite c m CoreExpr
 alphaLetRecIdsWithR = andR . map (uncurry alphaLetRecIdR)
@@ -316,13 +318,13 @@ alphaLetRecIdsWithR = andR . map (uncurry alphaLetRecIdR)
 
 
 -- | Rename the identifiers bound in a Let with the given list of suggested names.
-alphaLetWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaLetWithR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
               => [String] -> Rewrite c m CoreExpr
 alphaLetWithR ns = alphaLetNonRecR (listToMaybe ns)
                   <+ (letRecIdsT >>= (alphaLetRecIdsWithR . zip (map Just ns)))
 
 -- | Rename the specified variables bound in a let.
-alphaLetVarsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaLetVarsR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
               => [Var] -> Rewrite c m CoreExpr
 alphaLetVarsR vs = alphaLetNonRecVarsR Nothing vs
                    <+ (do bs <- letT (arr bindVars) successT const
@@ -330,7 +332,7 @@ alphaLetVarsR vs = alphaLetNonRecVarsR Nothing vs
                       )
 
 -- | Rename all identifiers bound in a Let.
-alphaLetR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaLetR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
           => Rewrite c m CoreExpr
 alphaLetR = letVarsT >>= alphaLetVarsR
 
@@ -353,7 +355,7 @@ alphaProgConsNonRecIdsR mn is = whenM (liftM (`elem` is) progConsNonRecIdT) (alp
 -- TODO: Maybe it would be more efficient to rename all the Ids at once, rather than one by one?
 
 -- | Rename the specified identifiers in a recursive top-level binding at the head of a program, using the suggested names where provided.
-alphaProgConsRecIdsWithR :: forall c m. ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
+alphaProgConsRecIdsWithR :: forall c m. ( MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c
                                         , BoundVars c, MonadCatch m, MonadUnique m )
                          => [(Maybe String,Id)] -> Rewrite c m CoreProg
 alphaProgConsRecIdsWithR = andR . map (uncurry alphaProgConsRecIdR) . filter (not . isExportedId . snd)
@@ -367,13 +369,13 @@ alphaProgConsRecIdsWithR = andR . map (uncurry alphaProgConsRecIdR) . filter (no
 
 
 -- | Rename the identifiers bound in the top-level binding at the head of the program with the given list of suggested names.
-alphaProgConsWithR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaProgConsWithR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
                    => [String] -> Rewrite c m CoreProg
 alphaProgConsWithR ns = alphaProgConsNonRecR (listToMaybe ns)
                         <+ (progConsRecIdsT >>= (alphaProgConsRecIdsWithR . zip (map Just ns)))
 
 -- | Rename the specified variables bound in the top-level binding at the head of the program.
-alphaProgConsIdsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaProgConsIdsR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
                   => [Id] -> Rewrite c m CoreProg
 alphaProgConsIdsR vs = alphaProgConsNonRecIdsR Nothing vs
                        <+ (do bs <- progConsT (arr bindVars) successT const
@@ -381,21 +383,21 @@ alphaProgConsIdsR vs = alphaProgConsNonRecIdsR Nothing vs
                           )
 
 -- | Rename all identifiers bound in the top-level binding at the head of the program.
-alphaProgConsR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaProgConsR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
                => Rewrite c m CoreProg
 alphaProgConsR = progConsIdsT >>= alphaProgConsIdsR
 
 -----------------------------------------------------------------------
 
 -- | Rename all identifiers bound at the top-level.
-alphaProgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaProgR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
            => Rewrite c m CoreProg
 alphaProgR = alphaProgConsR >+> progConsAllR idR alphaProgR
 
 -----------------------------------------------------------------------
 
 -- | Alpha rename any bindings at this node.  Note: does not rename case alternatives unless invoked on the alternative.
-alphaR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+alphaR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
        => Rewrite c m Core
 alphaR = setFailMsg "Cannot alpha-rename here." $
            promoteExprR (alphaLamR Nothing <+ alphaCaseBinderR Nothing <+ alphaLetR)

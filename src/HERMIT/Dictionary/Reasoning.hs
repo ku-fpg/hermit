@@ -103,6 +103,10 @@ import           HERMIT.PrettyPrinter.Common
 
 import qualified Text.PrettyPrint.MarkedHughesPJ as PP
 
+import           HERMIT.Exception
+
+import           Control.Monad.Fail (MonadFail)
+
 ------------------------------------------------------------------------------
 
 externals :: [External]
@@ -317,7 +321,7 @@ ppLemmaT pp nm = do
 
 ------------------------------------------------------------------------------
 
-verifyClauseT :: MonadCatch m => Transform c m Clause ()
+verifyClauseT :: (MonadFail m, MonadCatch m) => Transform c m Clause ()
 verifyClauseT = setFailMsg "verification failed: clause must be true (perhaps try reflexivity first)" $ do
     CTrue <- idR
     return ()
@@ -330,7 +334,7 @@ lemmaR used nm = prefixFailMsg "verification failed: " $ do
     markLemmaUsedT nm used
     return CTrue
 
-verifyOrCreateT :: ( HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+verifyOrCreateT :: ( MonadFail m, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                    , HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m )
                 => Used -> LemmaName -> Clause -> Transform c m a ()
 verifyOrCreateT u nm cl = do
@@ -339,67 +343,67 @@ verifyOrCreateT u nm cl = do
     then return cl >>> lemmaR u nm >>> verifyClauseT
     else contextonlyT $ \ c -> sendKEnvMessage $ AddObligation (toHermitC c) nm $ Lemma cl NotProven u
 
-reflexivityR :: MonadCatch m => Rewrite c m Clause
-reflexivityR = withPatFailMsg "reflexivity may only be applied to equivalence lemmas" $ do
+reflexivityR :: (MonadFail m, MonadCatch m) => Rewrite c m Clause
+reflexivityR = withPatFailExc (HException "reflexivity may only be applied to equivalence lemmas") $ do
     Equiv lhs rhs <- idR
     guardMsg (exprAlphaEq lhs rhs) "the two sides are not alpha-equivalent."
     return CTrue
 
-simplifyClauseR :: (AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, MonadCatch m)
+simplifyClauseR :: (MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadPath c Crumb, MonadCatch m)
                 => Rewrite c m LCore
 simplifyClauseR = anybuR (promoteR quantIdentitiesR <+ promoteR reflexivityR)
 
-quantIdentitiesR :: MonadCatch m => Rewrite c m Clause
+quantIdentitiesR :: (MonadFail m, MonadCatch m) => Rewrite c m Clause
 quantIdentitiesR =
     trueConjLR <+ trueConjRR <+
     trueDisjLR <+ trueDisjRR <+
     trueImpliesR <+ impliesTrueR <+
     aImpliesAR <+ forallTrueR
 
-trueConjLR :: Monad m => Rewrite c m Clause
+trueConjLR :: (MonadFail m, Monad m) => Rewrite c m Clause
 trueConjLR = do
     Conj CTrue cl <- idR
     return cl
 
-trueConjRR :: Monad m => Rewrite c m Clause
+trueConjRR :: (MonadFail m, Monad m) => Rewrite c m Clause
 trueConjRR = do
     Conj cl CTrue <- idR
     return cl
 
-trueDisjLR :: Monad m => Rewrite c m Clause
+trueDisjLR :: (MonadFail m, Monad m) => Rewrite c m Clause
 trueDisjLR = do
     Disj CTrue _ <- idR
     return CTrue
 
-trueDisjRR :: Monad m => Rewrite c m Clause
+trueDisjRR :: (MonadFail m, Monad m) => Rewrite c m Clause
 trueDisjRR = do
     Disj _ CTrue <- idR
     return CTrue
 
-trueImpliesR :: Monad m => Rewrite c m Clause
+trueImpliesR :: (MonadFail m, Monad m) => Rewrite c m Clause
 trueImpliesR = do
     Impl _ CTrue cl <- idR
     return cl
 
-impliesTrueR :: Monad m => Rewrite c m Clause
+impliesTrueR :: (MonadFail m, Monad m) => Rewrite c m Clause
 impliesTrueR = do
     Impl _ _ CTrue <- idR
     return CTrue
 
-forallTrueR :: Monad m => Rewrite c m Clause
+forallTrueR :: (MonadFail m, Monad m) => Rewrite c m Clause
 forallTrueR = do
     Forall _ CTrue <- idR
     return CTrue
 
-aImpliesAR :: Monad m => Rewrite c m Clause
+aImpliesAR :: (MonadFail m, Monad m) => Rewrite c m Clause
 aImpliesAR = do
     Impl _ a c <- idR
     guardMsg (a `proves` c) "antecedent does not prove consequent."
     return CTrue
 
-splitAntecedentR :: MonadCatch m => Rewrite c m Clause
+splitAntecedentR :: (MonadFail m, MonadCatch m) => Rewrite c m Clause
 splitAntecedentR = prefixFailMsg "antecedent split failed: " $
-                   withPatFailMsg (wrongExprForm "(ante1 ^ ante2) => con") $ do
+                   withPatFailExc (HException (wrongExprForm "(ante1 ^ ante2) => con")) $ do
     Impl nm (Conj c1 c2) con <- idR
     return $ Impl (nm <> "0") c1 $ Impl (nm <> "1") c2 con
 
@@ -465,7 +469,7 @@ retractionBR mr f g = beforeBiR
   where
     retractionL :: Rewrite c HermitM CoreExpr
     retractionL =  prefixFailMsg "Retraction failed: " $
-                   withPatFailMsg (wrongExprForm "App f (App g y)") $
+                   withPatFailExc (HException (wrongExprForm "App f (App g y)")) $
       do App f' (App g' y) <- idR
          guardMsg (exprAlphaEq f f' && exprAlphaEq g g') "given retraction components do not match current expression."
          return y
@@ -661,23 +665,23 @@ lemmaBiR :: (LemmaContext c, ReadBindings c, HasLemmas m, MonadCatch m)
          => Used -> LemmaName -> BiRewrite c m CoreExpr
 lemmaBiR u nm = afterBiR (beforeBiR (getLemmaByNameT nm) (birewrite . lemmaC)) (markLemmaUsedT nm u >> idR)
 
-lemmaConsequentR :: forall c m. (LemmaContext c, ReadBindings c, HasLemmas m, MonadCatch m)
+lemmaConsequentR :: forall c m. (MonadFail m, LemmaContext c, ReadBindings c, HasLemmas m, MonadCatch m)
                  => Used -> LemmaName -> Rewrite c m Clause
 lemmaConsequentR u nm = prefixFailMsg "lemma-consequent failed:" $
-                        withPatFailMsg "lemma is not an implication." $ do
+                        withPatFailExc (HException "lemma is not an implication.") $ do
     (hs, Impl _ ante pat) <- getLemmaByNameT nm >>^ (collectQs . lemmaC)
     cl' <- transform $ \ c cl -> do
         m <- maybeM ("consequent did not match.") $ lemmaMatch hs pat cl
         subs <- maybeM ("some quantifiers not instantiated.") $
                 mapM (\h -> (h,) <$> lookupVarEnv m h) hs
         let cl' = substClauses subs ante
-        guardMsg (all (inScope c) $ varSetElems (freeVarsClause cl'))
+        guardMsg (all (inScope c) $ nonDetEltsUniqSet (freeVarsClause cl'))
                  "some variables in result would be out of scope."
         return cl'
     markLemmaUsedT nm u
     return cl'
 
-lemmaConsequentBiR :: forall c m. ( HasCoreRules c, LemmaContext c
+lemmaConsequentBiR :: forall c m. ( MonadFail m, HasCoreRules c, LemmaContext c
                                   , ReadBindings c, ReadPath c Crumb, HasHermitMEnv m, HasLemmas m, LiftCoreM m
                                   , MonadCatch m)
                    => Used -> LemmaName -> BiRewrite c m CoreExpr

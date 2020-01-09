@@ -35,6 +35,7 @@ module HERMIT.Dictionary.Navigation
 
 import Control.Arrow
 import Control.Monad
+import Control.Monad.Fail hiding (fail)
 
 import Data.Monoid
 
@@ -49,6 +50,8 @@ import HERMIT.Lemma(Clause(..))
 import HERMIT.Name
 
 import HERMIT.Dictionary.Navigation.Crumbs
+
+import HERMIT.Exception
 
 ---------------------------------------------------------------------------------------
 
@@ -87,8 +90,9 @@ externals = crumbExternals
 ---------------------------------------------------------------------------------------
 
 -- | Discard the last crumb of a non-empty 'LocalPathH'.
-parentOfT :: MonadCatch m => Transform c m g LocalPathH -> Transform c m g LocalPathH
-parentOfT t = withPatFailMsg "Path points to origin, there is no parent." $
+parentOfT :: (MonadFail m, MonadCatch m) => Transform c m g LocalPathH -> Transform c m g LocalPathH
+parentOfT t = --withPatFailMsg "Path points to origin, there is no parent." $
+  withPatFailExc (HException "Path points to origin, there is no parent.") $
               do SnocPath (_:p) <- t
                  return (SnocPath p)
 
@@ -136,7 +140,7 @@ bindingGroupOf p = any p . bindVars
 -----------------------------------------------------------------------
 
 bindingOf :: (Var -> Bool) -> LCoreTC -> Bool
-bindingOf p = any p . varSetElems . binders
+bindingOf p = any p . nonDetEltsUniqSet . binders
 
 binders :: LCoreTC -> VarSet
 binders (LTCCore (LClause (Forall b _))) = unitVarSet b
@@ -166,7 +170,7 @@ binderExpr _              = emptyVarSet
 
 bindersType :: Type -> VarSet
 #if __GLASGOW_HASKELL__ > 710
-bindersType (ForAllTy (Named v _) _) = unitVarSet v
+bindersType (ForAllTy (TvBndr v _) _) = unitVarSet v
 #else
 bindersType (ForAllTy v _)           = unitVarSet v
 #endif

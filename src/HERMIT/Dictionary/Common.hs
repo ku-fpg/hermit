@@ -57,6 +57,10 @@ import HERMIT.Kure
 import HERMIT.Monad
 import HERMIT.Name
 
+import Control.Monad.Fail (MonadFail)
+
+import CoreOpt
+
 ------------------------------------------------------------------------------
 
 -- | apply a transformation to a value in the current context.
@@ -75,7 +79,7 @@ callT = contextfreeT $ \ e -> case e of
                                 _      -> fail "not an application or variable occurrence."
 
 -- | Succeeds if we are looking at an application matching the given predicate.
-callPredT :: Monad m => (Id -> [CoreExpr] -> Bool) -> Transform c m CoreExpr (CoreExpr, [CoreExpr])
+callPredT :: (MonadFail m, Monad m) => (Id -> [CoreExpr] -> Bool) -> Transform c m CoreExpr (CoreExpr, [CoreExpr])
 callPredT p = do
     call@(Var i, args) <- callT
     guardMsg (p i args) "predicate failed."
@@ -85,24 +89,24 @@ callPredT p = do
 --   returning zero or more arguments to which it is applied.
 --
 -- Note: comparison is performed with cmpHN2Var.
-callNameT :: MonadCatch m => HermitName -> Transform c m CoreExpr (CoreExpr, [CoreExpr])
+callNameT :: (MonadFail m, MonadCatch m) => HermitName -> Transform c m CoreExpr (CoreExpr, [CoreExpr])
 callNameT nm = prefixFailMsg ("callNameT failed: not a call to '" ++ show nm ++ ".")
              $ callPredT (const . cmpHN2Var nm)
 
 -- | Succeeds if we are looking at a fully saturated function call.
-callSaturatedT :: Monad m => Transform c m CoreExpr (CoreExpr, [CoreExpr])
+callSaturatedT :: (MonadFail m, Monad m) => Transform c m CoreExpr (CoreExpr, [CoreExpr])
 callSaturatedT = callPredT (\ i args -> let (tvs, ty) = splitForAllTys (varType i)
                                             (bs,_) = splitFunTys ty
                                         in (length tvs + length bs) == length args)
 
 -- | Succeeds if we are looking at an application of given function
-callNameG :: MonadCatch m => HermitName -> Transform c m CoreExpr ()
+callNameG :: (MonadFail m, MonadCatch m) => HermitName -> Transform c m CoreExpr ()
 callNameG nm = prefixFailMsg "callNameG failed: " $ callNameT nm >> return ()
 
 -- | Succeeds if we are looking at a saturated application of a data constructor.
 callDataConT :: MonadCatch m => Transform c m CoreExpr (DataCon, [Type], [CoreExpr])
 callDataConT = prefixFailMsg "callDataConT failed:" $
-    do mb <- contextfreeT $ \ e -> let in_scope = mkInScopeSet (mkVarEnv [ (v,v) | v <- varSetElems (localFreeVarsExpr e) ])
+    do mb <- contextfreeT $ \ e -> let in_scope = mkInScopeSet (unsafeUFMToUniqSet (mkVarEnv [ (v,v) | v <- nonDetEltsUniqSet (localFreeVarsExpr e) ]))
                                    in return $ exprIsConApp_maybe (in_scope, idUnfolding) e
        maybe (fail "not a datacon application.") return mb
 
@@ -187,7 +191,7 @@ boundVarsT = contextonlyT (return . boundVars)
 findBoundVarT :: (BoundVars c, MonadCatch m) => (Var -> Bool) -> Transform c m a Var
 findBoundVarT p = do
     c <- contextT
-    case varSetElems (findBoundVars p c) of
+    case nonDetEltsUniqSet (findBoundVars p c) of
         []         -> fail "no matching variables in scope."
         [v]        -> return v
         _ : _ : _  -> fail "multiple matching variables in scope."

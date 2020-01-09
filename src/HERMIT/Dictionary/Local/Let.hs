@@ -68,6 +68,10 @@ import HERMIT.Dictionary.AlphaConversion hiding (externals)
 
 import HERMIT.Dictionary.Local.Bind hiding (externals)
 
+import HERMIT.Exception
+
+import Control.Monad.Fail (MonadFail)
+
 ------------------------------------------------------------------------------
 
 -- | Externals relating to 'Let' expressions.
@@ -156,17 +160,17 @@ externals =
 -------------------------------------------------------------------------------------------
 
 -- | (let x = e1 in e2) ==> (e2[e1/x]), (x must not be free in e1)
-letSubstR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr
+letSubstR :: (MonadFail m, AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m) => Rewrite c m CoreExpr
 letSubstR = letAllR (tryR recToNonrecR) idR >>> letNonRecSubstR
 
 -- | As 'letNonRecSubstSafeR', but attempting to convert a singleton recursive binding to a non-recursive binding first.
-letSubstSafeR :: (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, ReadBindings c, HasEmptyContext c, MonadCatch m) => Rewrite c m CoreExpr
+letSubstSafeR :: (MonadFail m, AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, ReadBindings c, HasEmptyContext c, MonadCatch m) => Rewrite c m CoreExpr
 letSubstSafeR = letAllR (tryR recToNonrecR) idR >>> letNonRecSubstSafeR
 
 -- | @Let (NonRec v e) body@ ==> @body[e/v]@
-letNonRecSubstR :: MonadCatch m => Rewrite c m CoreExpr
+letNonRecSubstR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 letNonRecSubstR = prefixFailMsg "Let substitution failed: " $
-                  withPatFailMsg (wrongExprForm "Let (NonRec v rhs) body") $
+                  withPatFailExc (HException (wrongExprForm "Let (NonRec v rhs) body")) $
     do Let (NonRec v rhs) body <- idR
        return (substCoreExpr v rhs body)
 
@@ -195,10 +199,12 @@ Substitution is safe if (A) OR (B) OR (C).
 
 -- | Currently we always substitute types and coercions, and use a heuristic to decide whether to substitute expressions.
 --   This may need revisiting.
-letNonRecSubstSafeR :: forall c m. (AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, ReadBindings c, HasEmptyContext c, MonadCatch m) => Rewrite c m CoreExpr
+letNonRecSubstSafeR :: forall c m. (MonadFail m, AddBindings c, ExtendPath c Crumb, ReadPath c Crumb, ReadBindings c, HasEmptyContext c, MonadCatch m) => Rewrite c m CoreExpr
 letNonRecSubstSafeR =
     do Let (NonRec v _) _ <- idR
-       when (isId v) $ guardMsgM (safeSubstT v) "safety criteria not met."
+       when (isId v) $ do
+         b <- safeSubstT v
+         guardMsg b "safety criteria not met."
        letNonRecSubstR
   where
     safeSubstT :: Id -> Transform c m CoreExpr Bool
@@ -239,9 +245,9 @@ letNonRecSubstSafeR =
 
 -------------------------------------------------------------------------------------------
 
-letElimR :: MonadCatch m => Rewrite c m CoreExpr
+letElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 letElimR = prefixFailMsg "Let elimination failed: " $
-          withPatFailMsg (wrongExprForm "Let binds expr") $
+          withPatFailExc (HException (wrongExprForm "Let binds expr")) $
           do Let bg _ <- idR
              case bg of
                NonRec{} -> letNonRecElimR
@@ -249,15 +255,15 @@ letElimR = prefixFailMsg "Let elimination failed: " $
 
 -- | Remove an unused non-recursive let binding.
 --   @let v = E1 in E2@ ==> @E2@, if @v@ is not free in @E2@
-letNonRecElimR :: MonadCatch m => Rewrite c m CoreExpr
-letNonRecElimR = withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
+letNonRecElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
+letNonRecElimR = withPatFailExc (HException (wrongExprForm "Let (NonRec v e1) e2")) $
                 do Let (NonRec v _) e <- idR
                    guardMsg (v `notElemVarSet` freeVarsExpr e) "let-bound variable appears in the expression."
                    return e
 
 -- | Remove all unused recursive let bindings in the current group.
-letRecElimR :: MonadCatch m => Rewrite c m CoreExpr
-letRecElimR = withPatFailMsg (wrongExprForm "Let (Rec v e1) e2") $
+letRecElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
+letRecElimR = withPatFailExc (HException (wrongExprForm "Let (Rec v e1) e2")) $
     do Let (Rec bnds) body <- idR
        let bodyFrees   = freeIdsExpr body
            bsAndFrees  = map (second freeIdsExpr) bnds
@@ -270,19 +276,19 @@ letRecElimR = withPatFailMsg (wrongExprForm "Let (Rec v e1) e2") $
                  then fail "no dead binders to eliminate."
                  else return $ Let (Rec $ filter ((`elemVarSet` liveBinders) . fst) bnds) body
 
-progBindElimR :: MonadCatch m => Rewrite c m CoreProg
+progBindElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreProg
 progBindElimR = progBindNonRecElimR <+ progBindRecElimR
 
-progBindNonRecElimR :: MonadCatch m => Rewrite c m CoreProg
-progBindNonRecElimR = withPatFailMsg (wrongExprForm "ProgCons (NonRec v e1) e2") $ do
+progBindNonRecElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreProg
+progBindNonRecElimR = withPatFailExc (HException (wrongExprForm "ProgCons (NonRec v e1) e2")) $ do
     ProgCons (NonRec v _) p <- idR
     guardMsg (v `notElemVarSet` freeVarsProg p) "variable appears in program body."
     guardMsg (not (isExportedId v)) "variable is exported."
     return p
 
 -- | Remove all unused bindings at the top level.
-progBindRecElimR :: MonadCatch m => Rewrite c m CoreProg
-progBindRecElimR = withPatFailMsg (wrongExprForm "ProgCons (Rec v e1) e2") $
+progBindRecElimR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreProg
+progBindRecElimR = withPatFailExc (HException (wrongExprForm "ProgCons (Rec v e1) e2")) $
     do ProgCons (Rec bnds) p <- idR
        let pFrees      = freeVarsProg p
            bsAndFrees  = map (second freeIdsExpr) bnds
@@ -303,10 +309,10 @@ chaseDependencies usedIds bsAndFrees = case partition ((`elemVarSet` usedIds) . 
 -------------------------------------------------------------------------------------------
 
 -- | @let v = ev in e@ ==> @case ev of v -> e@
-letToCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m, MonadUnique m)
+letToCaseR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, MonadCatch m, MonadUnique m)
            => Rewrite c m CoreExpr
 letToCaseR = prefixFailMsg "Converting Let to Case failed: " $
-            withPatFailMsg (wrongExprForm "Let (NonRec v e1) e2") $
+            withPatFailExc (HException (wrongExprForm "Let (NonRec v e1) e2")) $
   do Let (NonRec v ev) _ <- idR
      guardMsg (not $ isTyCoArg ev) "cannot case on a type or coercion."
      caseBndr <- extractT (cloneVarAvoidingT v Nothing [v])
@@ -315,48 +321,48 @@ letToCaseR = prefixFailMsg "Converting Let to Case failed: " $
 -------------------------------------------------------------------------------------------
 
 -- | @(let v = ev in e) x@ ==> @let v = ev in e x@
-letFloatAppR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+letFloatAppR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreExpr
 letFloatAppR = prefixFailMsg "Let floating from App function failed: " $
-               withPatFailMsg (wrongExprForm "App (Let bnds body) e") $
+               withPatFailExc (HException (wrongExprForm "App (Let bnds body) e")) $
   do App (Let bnds body) e <- idR
      let vs = mkVarSet (bindVars bnds) `intersectVarSet` freeVarsExpr e
      if isEmptyVarSet vs
         then return $ Let bnds (App body e)
-        else appAllR (alphaLetVarsR $ varSetElems vs) idR >>> letFloatAppR
+        else appAllR (alphaLetVarsR $ nonDetEltsUniqSet vs) idR >>> letFloatAppR
 
 -- | @f (let v = ev in e)@ ==> @let v = ev in f e@
-letFloatArgR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+letFloatArgR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreExpr
 letFloatArgR = prefixFailMsg "Let floating from App argument failed: " $
-               withPatFailMsg (wrongExprForm "App f (Let bnds body)") $
+               withPatFailExc (HException (wrongExprForm "App f (Let bnds body)")) $
   do App f (Let bnds body) <- idR
      let vs = mkVarSet (bindVars bnds) `intersectVarSet` freeVarsExpr f
      if isEmptyVarSet vs
         then return $ Let bnds (App f body)
-        else appAllR idR (alphaLetVarsR $ varSetElems vs) >>> letFloatArgR
+        else appAllR idR (alphaLetVarsR $ nonDetEltsUniqSet vs) >>> letFloatArgR
 
 -- | @let v = (let bds in e1) in e2@ ==> @let bds in let v = e1 in e2@
-letFloatLetR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+letFloatLetR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreExpr
 letFloatLetR = prefixFailMsg "Let floating from Let failed: " $
-               withPatFailMsg (wrongExprForm "Let (NonRec v (Let bds e1)) e2") $
+               withPatFailExc (HException (wrongExprForm "Let (NonRec v (Let bds e1)) e2")) $
   do Let (NonRec v (Let bds e1)) e2 <- idR
      let vs = mkVarSet (bindVars bds) `intersectVarSet` freeVarsExpr e2
      if isEmptyVarSet vs
        then return $ Let bds (Let (NonRec v e1) e2)
-       else letNonRecAllR idR (alphaLetVarsR $ varSetElems vs) idR >>> letFloatLetR
+       else letNonRecAllR idR (alphaLetVarsR $ nonDetEltsUniqSet vs) idR >>> letFloatLetR
 
 -- | @(\ v -> let binds in e2)@  ==>  @let binds in (\ v1 -> e2)@
 --   Fails if @v@ occurs in the RHS of @binds@.
 --   If @v@ is shadowed in binds, then @v@ will be alpha-renamed.
-letFloatLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+letFloatLamR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreExpr
 letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
-               withPatFailMsg (wrongExprForm "Lam v1 (Let bds body)") $
+               withPatFailExc (HException (wrongExprForm "Lam v1 (Let bds body)")) $
   do Lam v (Let binds body) <- idR
      let bs  = bindVars binds
-         fvs = freeVarsBind binds
+         fvs = HERMIT.Core.freeVarsBind binds
      guardMsg (v `notElemVarSet` fvs) (unqualifiedName v ++ " occurs in the RHS of the let-bindings.")
      if v `elem` bs
       then alphaLamR Nothing >>> letFloatLamR
@@ -364,15 +370,15 @@ letFloatLamR = prefixFailMsg "Let floating from Lam failed: " $
 
 -- | @case (let bnds in e) of bndr alts@ ==> @let bnds in (case e of bndr alts)@
 --   Fails if any variables bound in @bnds@ occurs in @alts@.
-letFloatCaseR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+letFloatCaseR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
               => Rewrite c m CoreExpr
 letFloatCaseR = prefixFailMsg "Let floating from Case failed: " $
-                withPatFailMsg (wrongExprForm "Case (Let bnds e) w ty alts") $
+                withPatFailExc (HException (wrongExprForm "Case (Let bnds e) w ty alts")) $
   do Case (Let bnds e) w ty alts <- idR
      let captures = mkVarSet (bindVars bnds) `intersectVarSet` delVarSet (unionVarSets $ map freeVarsAlt alts) w
      if isEmptyVarSet captures
        then return $ Let bnds (Case e w ty alts)
-       else caseAllR (alphaLetVarsR $ varSetElems captures) idR idR (const idR) >>> letFloatCaseR
+       else caseAllR (alphaLetVarsR $ nonDetEltsUniqSet captures) idR idR (const idR) >>> letFloatCaseR
 
 -- | case e of w { ... ; p -> let b = rhs in body ; ... }  ==>
 --   let b = rhs in case e of { ... ; p -> body ; ... }
@@ -380,9 +386,9 @@ letFloatCaseR = prefixFailMsg "Let floating from Case failed: " $
 -- where no variable in `p` or `w` occurs freely in `rhs`,
 -- and where `b` does not capture a free variable in the overall case,
 -- and where `w` is not rebound in `b`.
-letFloatCaseAltR :: MonadCatch m => Maybe Int -> Rewrite c m CoreExpr
+letFloatCaseAltR :: (MonadFail m, MonadCatch m) => Maybe Int -> Rewrite c m CoreExpr
 letFloatCaseAltR maybeN = prefixFailMsg "Let float from case alternative failed: " $
-                          withPatFailMsg (wrongExprForm "Case s w ty alts") $ do
+                          withPatFailExc (HException (wrongExprForm "Case s w ty alts")) $ do
         -- Perform the first safe let-floating out of a case alternative
     let letFloatOneAltM :: MonadCatch m => Id -> VarSet -> [CoreAlt] -> m (CoreBind,[CoreAlt])
         letFloatOneAltM w fvs = go
@@ -402,7 +408,7 @@ letFloatCaseAltR maybeN = prefixFailMsg "Let float from case alternative failed:
           guardMsg (not (w `elemVarSet` bSet)) "floating would allow case binder to capture variables."
 
           -- no free vars in 'rhs' are bound by 'p' or 'w'
-          guardMsg (isEmptyVarSet $ vSet `intersectVarSet` freeVarsBind bnds)
+          guardMsg (isEmptyVarSet $ vSet `intersectVarSet` HERMIT.Core.freeVarsBind bnds)
                    "floating would cause variables in rhs to become unbound."
 
           -- no free vars in overall case are bound by 'b'
@@ -426,45 +432,45 @@ letFloatCaseAltR maybeN = prefixFailMsg "Let float from case alternative failed:
             return $ Let bnds $ Case e w ty alts'
 
 -- | @cast (let bnds in e) co@ ==> @let bnds in cast e co@
-letFloatCastR :: MonadCatch m => Rewrite c m CoreExpr
+letFloatCastR :: (MonadFail m, MonadCatch m) => Rewrite c m CoreExpr
 letFloatCastR = prefixFailMsg "Let floating from Cast failed: " $
-                withPatFailMsg (wrongExprForm "Cast (Let bnds e) co") $
+                withPatFailExc (HException (wrongExprForm "Cast (Let bnds e) co")) $
   do Cast (Let bnds e) co <- idR
      return $ Let bnds (Cast e co)
 
 -- | Float a 'Let' through an expression, whatever the context.
-letFloatExprR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+letFloatExprR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
               => Rewrite c m CoreExpr
 letFloatExprR = setFailMsg "Unsuitable expression for Let floating."
               $ letFloatArgR <+ letFloatAppR <+ letFloatLetR <+ letFloatLamR
                   <+ letFloatCaseR <+ letFloatCaseAltR Nothing <+ letFloatCastR
 
 -- | @'ProgCons' ('NonRec' v ('Let' bds e)) p@ ==> @'ProgCons' bds ('ProgCons' ('NonRec' v e) p)@
-letFloatTopR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
+letFloatTopR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, BoundVars c, MonadCatch m, MonadUnique m)
              => Rewrite c m CoreProg
 letFloatTopR = prefixFailMsg "Let floating to top level failed: " $
-               withPatFailMsg (wrongExprForm "NonRec v (Let bds e) `ProgCons` p") $
+               withPatFailExc (HException (wrongExprForm "NonRec v (Let bds e) `ProgCons` p")) $
                do ProgCons (NonRec v (Let bds e)) p <- idR
                   let bs = bindVars bds
                   guardMsg (all isId bs) "type and coercion bindings are not allowed at the top level."
                   let vs = intersectVarSet (mkVarSet bs) (freeVarsProg p)
                   if isEmptyVarSet vs
                     then return $ ProgCons bds (ProgCons (NonRec v e) p)
-                    else consNonRecAllR idR (alphaLetVarsR $ varSetElems vs) idR >>> letFloatTopR
+                    else consNonRecAllR idR (alphaLetVarsR $ nonDetEltsUniqSet vs) idR >>> letFloatTopR
 
 -------------------------------------------------------------------------------------------
 
 -- | Float in a 'Let' if possible.
-letFloatInR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+letFloatInR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
             => Rewrite c m CoreExpr
 letFloatInR = letFloatInCaseR <+ letFloatInAppR <+ letFloatInLamR
 
 -- | @let v = ev in case s of p -> e@ ==> @case (let v = ev in s) of p -> let v = ev in e@,
 --   if @v@ does not shadow a pattern binder in @p@
-letFloatInCaseR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+letFloatInCaseR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
                 => Rewrite c m CoreExpr
 letFloatInCaseR = prefixFailMsg "Let floating in to case failed: " $
-                  withPatFailMsg (wrongExprForm "Let bnds (Case s w ty alts)") $
+                  withPatFailExc (HException (wrongExprForm "Let bnds (Case s w ty alts)")) $
   do Let bnds (Case s w ty alts) <- idR
      let bs = bindVars bnds
          captured = bs `intersect` (w : concatMap altVars alts)
@@ -478,19 +484,19 @@ letFloatInCaseR = prefixFailMsg "Let floating in to case failed: " $
      return (Case (Let bnds s) w ty alts) >>> caseAllR idR idR idR (\_ -> altAllR idR (\_ -> idR) (arr (Let bnds) >>> alphaLetR))
 
 -- | @let v = ev in f a@ ==> @(let v = ev in f) (let v = ev in a)@
-letFloatInAppR :: (AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
+letFloatInAppR :: (MonadFail m, AddBindings c, BoundVars c, ExtendPath c Crumb, ReadPath c Crumb, MonadCatch m, MonadUnique m)
                => Rewrite c m CoreExpr
 letFloatInAppR = prefixFailMsg "Let floating in to app failed: " $
-                withPatFailMsg (wrongExprForm "Let bnds (App e1 e2)") $
+                withPatFailExc (HException (wrongExprForm "Let bnds (App e1 e2)")) $
   do Let bnds (App e1 e2) <- idR
      lhs <- return (Let bnds e1) >>> alphaLetR
      return $ App lhs (Let bnds e2)
 
 -- | @let v = ev in \ x -> e@ ==> @\x -> let v = ev in e@
 --   if @v@ does not shadow @x@
-letFloatInLamR :: (ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
+letFloatInLamR :: (MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, MonadCatch m) => Rewrite c m CoreExpr
 letFloatInLamR = prefixFailMsg "Let floating in to lambda failed: " $
-                withPatFailMsg (wrongExprForm "Let bnds (Lam v e)") $
+                withPatFailExc (HException (wrongExprForm "Let bnds (Lam v e)")) $
   do Let bnds (Lam v e) <- idR
      safe <- letT (arr bindVars) lamVarT $ flip notElem
      guardMsg safe "let bindings would capture lambda binding."
@@ -565,7 +571,7 @@ letTupleR nm = prefixFailMsg "Let-tuple failed: " $
 -- This code could be factored better.
 
 -- | @e@ ==> @let v = e in v@
-letIntroR :: (MonadCatch m, MonadUnique m) => String -> Rewrite c m CoreExpr
+letIntroR :: (MonadFail m, MonadCatch m, MonadUnique m) => String -> Rewrite c m CoreExpr
 letIntroR nm = do e <- idR
                   Let (NonRec v e') _ <- letNonRecIntroR nm e
                   return $ Let (NonRec v e') (varToCoreExpr v)
@@ -606,7 +612,7 @@ letIntroUnfoldingR nm = do
     contextfreeT $ \ body -> do
         i' <- cloneVarH id i
         let subst = substCoreExpr i (varToCoreExpr i')
-            bnd = if i `elemUFM` freeVarsExpr rhs then Rec [(i', subst rhs)]
+            bnd = if i `elemUFM` getUniqSet (freeVarsExpr rhs) then Rec [(i', subst rhs)]
                                                   else NonRec i' rhs
             body' = subst body
         return $ mkCoreLet bnd body'

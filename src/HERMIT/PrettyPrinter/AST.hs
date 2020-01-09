@@ -18,6 +18,8 @@ module HERMIT.PrettyPrinter.AST
   )
 where
 
+import Prelude hiding ((<>))
+
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
@@ -26,7 +28,7 @@ import Data.Default.Class
 import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC hiding (($$), (<+>), (<>), ($+$), cat, nest, parens, text, empty, hsep)
-import HERMIT.Kure
+import HERMIT.Kure hiding ((<+>))
 
 import HERMIT.PrettyPrinter.Common
 
@@ -121,7 +123,7 @@ ppKindOrType = readerT $ \case
 #if __GLASGOW_HASKELL__ > 710
 ppTyBinder :: PrettyH TyBinder
 ppTyBinder = readerT $ \case
-  Named tv v -> do
+  Named (TvBndr tv v) -> do
     d <- return tv >>> ppVar
     return $ tyText "Named" <+> d <+> tyText (showVis v)
   Anon ty -> do
@@ -138,7 +140,7 @@ ppUnivCoProvenance = readerT $ \case
     d <- return co >>> ppCoercion
     return $ coText "ProofIrrelProv" <+> parens d
   PluginProv s -> return $ coText "PluginProv" <+> coText s
-  HoleProv _ -> return $ coText "HoleProv - IMPOSSIBLE!"
+  -- HoleProv _ -> return $ coText "HoleProv - IMPOSSIBLE!"
 #endif
 
 ppCoercion :: PrettyH Coercion
@@ -167,7 +169,7 @@ ppCoercion = readerT $ \case
 #endif
   SymCo{}       -> symCoT (ppCoercion >>^ \ co -> coText "SymCo" $$ nest 2 (parens co))
   TransCo{}     -> transCoT ppCoercion ppCoercion (\ co1 co2 -> coText "TransCo" $$ nest 2 (cat [parens co1, parens co2]))
-  NthCo{}       -> nthCoT (arr $ coText . show) ppCoercion (\ n co -> coText "NthCo" <+> n $$ parens co)
+  NthCo{}       -> nthCoT (arr showRole) (arr $ coText . show) ppCoercion (\ role n co -> coText "NthCo" <+> coText role <+> n $$ parens co)
   LRCo{}        -> lrCoT ppSDoc ppCoercion (\ lr co -> coText "LRCo" <+> lr $$ nest 2 (parens co))
 #if __GLASGOW_HASKELL__ > 710
   InstCo{}      -> instCoT ppCoercion ppCoercion (\ c1 c2 -> coText "InstCo" $$ nest 2 (cat [parens c1, parens c2]))

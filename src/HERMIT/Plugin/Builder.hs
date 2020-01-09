@@ -100,10 +100,12 @@ data CorePass = CallArity
               | StaticArgs
               | Strictness
               | Tidy
-              | Vectorisation
+              -- | Vectorisation
               | WorkerWrapper
               | Passes -- these should be flattened out in practice
               | PluginPass String
+              | Exitify
+              | OccurAnal
               | NoOp
               | Unknown
     deriving (Read, Show, Eq)
@@ -123,13 +125,15 @@ ghcPasses = [ (FloatInwards , CoreDoFloatInwards)
             , (Specialising , CoreDoSpecialising)
             , (SpecConstr   , CoreDoSpecConstr)
             , (CSE          , CoreCSE)
-            , (Vectorisation, CoreDoVectorisation)
+            -- , (Vectorisation, CoreDoVectorisation)
             , (Desugar      , CoreDesugar)    -- Right after desugaring, no simple optimisation yet!
             , (DesugarOpt   , CoreDesugarOpt) -- CoreDesugarXXX: Not strictly a core-to-core pass, but produces
             , (CallArity    , CoreDoCallArity)
             , (Tidy         , CoreTidy)
             , (Prep         , CorePrep)
             , (NoOp         , CoreDoNothing)
+            , (OccurAnal    , CoreOccurAnal)
+            , (Exitify      , CoreDoExitify)
             ]
 
 getCorePass :: CoreToDo -> CorePass
@@ -142,7 +146,7 @@ getCorePass CoreDoWorkerWrapper      = WorkerWrapper
 getCorePass CoreDoSpecialising       = Specialising
 getCorePass CoreDoSpecConstr         = SpecConstr
 getCorePass CoreCSE                  = CSE
-getCorePass CoreDoVectorisation      = Vectorisation
+-- getCorePass CoreDoVectorisation      = Vectorisation
 getCorePass CoreDesugar              = Desugar
 getCorePass CoreDesugarOpt           = DesugarOpt
 getCorePass CoreTidy                 = Tidy
@@ -154,6 +158,8 @@ getCorePass (CoreDoPasses {})        = Passes -- these should be flattened out i
 getCorePass (CoreDoPluginPass nm _)  = PluginPass nm
 getCorePass CoreDoNothing            = NoOp
 getCorePass CoreDoCallArity          = CallArity
+getCorePass CoreDoExitify            = Exitify
+getCorePass CoreOccurAnal            = OccurAnal
 
 flattenTodos :: [CoreToDo] -> [CoreToDo]
 flattenTodos = concatMap f

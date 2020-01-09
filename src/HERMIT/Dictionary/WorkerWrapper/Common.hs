@@ -32,6 +32,8 @@ import HERMIT.Dictionary.Function hiding (externals)
 import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Name
 
+import Control.Monad.Fail (MonadFail)
+
 --------------------------------------------------------------------------------------------------
 
 -- | New Worker/Wrapper-related externals.
@@ -116,7 +118,7 @@ assumptionBClauseT absE repE fE = prefixFailMsg "Building assumption B failed: "
     return $ mkForall tvs (Equiv lhs rhs)
 
 -- Given abs, rep, and f expressions, build "fix (abs . rep . f) = fix f"
-assumptionCClauseT :: (BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
+assumptionCClauseT :: (MonadFail m, BoundVars c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
                      => CoreExpr -> CoreExpr -> CoreExpr -> Transform c m x Clause
 assumptionCClauseT absE repE fE = prefixFailMsg "Building assumption C failed: " $ do
     (vs, Equiv lhs rhs) <- collectQs ^<< assumptionBClauseT absE repE fE
@@ -137,7 +139,7 @@ wwFusionClauseT absE repE fixgE = prefixFailMsg "Building worker/wrapper fusion 
 
 -- Perform the worker/wrapper split using condition 1-beta, introducing
 -- an unproven lemma for assumption C, and an appropriate w/w fusion lemma.
-split1BetaR :: ( HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+split1BetaR :: ( MonadFail m, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                , HasHermitMEnv m, LiftCoreM m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m
                , MonadUnique m )
             => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr
@@ -162,7 +164,7 @@ split1BetaR u nm absE repE = do
 
     return $ mkCoreLets [NonRec gId g, NonRec workId workRhs] newRhs
 
-split2BetaR :: ( HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+split2BetaR :: ( MonadFail m, HasCoreRules c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                , HasHermitMEnv m, LiftCoreM m, HasLemmas m, MonadCatch m, MonadIO m, MonadThings m
                , MonadUnique m )
             => Used -> LemmaName -> CoreExpr -> CoreExpr -> Rewrite c m CoreExpr

@@ -22,7 +22,7 @@ import Data.Default.Class
 import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC hiding ((<+>), (<>), char, text, parens, hsep, empty)
-import HERMIT.Kure
+import HERMIT.Kure hiding ((<+>))
 
 import HERMIT.PrettyPrinter.Common
 

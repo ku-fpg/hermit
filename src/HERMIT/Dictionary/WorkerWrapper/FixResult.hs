@@ -51,6 +51,8 @@ import HERMIT.Dictionary.Unfold
 
 import HERMIT.Dictionary.WorkerWrapper.Common
 
+import HERMIT.Exception
+
 --------------------------------------------------------------------------------------------------
 
 -- | Externals for manipulating fixed points, and for the worker/wrapper transformation.
@@ -187,7 +189,8 @@ wwResultFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
                   do (tyXA,f)  <- isFixExprT
                      (_,tyX,tA)  <- constT (splitFunTypeM tyXA)
 #if __GLASGOW_HASKELL__ > 710
-                     let tyXB  =  ForAllTy (Anon tyX) tyB
+                     -- let tyXB  =  ForAllTy (Anon tyX) tyB
+                     let tyXB  =  FunTy tyX tyB -- TODO: Does this work?
 #else
                      let tyXB  =  FunTy tyX tyB
 #endif
@@ -208,7 +211,7 @@ wwResultFacBR mAss abs rep = beforeBiR (absRepTypes abs rep)
 
     wwR :: RewriteH CoreExpr
     wwR  =    prefixFailMsg "(reverse) worker/wrapper factorisation failed: " $
-              withPatFailMsg wrongForm $
+              withPatFailExc (HException wrongForm) $
               do Lam x0 (App abs2 (App fx (Var x0'))) <- idR
                  guardMsg (x0 == x0') wrongForm
                  (_, Lam h (Lam x1 (App rep1
@@ -237,7 +240,7 @@ wwFac mAss = parse2beforeBiR (wwResultFacBR mAss)
 wwResultFusionBR :: BiRewriteH CoreExpr
 wwResultFusionBR =
     beforeBiR (prefixFailMsg "worker/wrapper fusion failed: " $
-               withPatFailMsg "malformed WW Fusion rule." $
+               withPatFailExc (HException "malformed WW Fusion rule.") $
                do Equiv w
                         (Lam x1 (App rep
                                      (App (App _ (Lam x2 (App abs (App w' (Var x2')))))
@@ -253,7 +256,7 @@ wwResultFusionBR =
     fusL :: CoreExpr -> CoreExpr -> CoreExpr -> RewriteH CoreExpr
     fusL abs rep work =
            prefixFailMsg "worker/wrapper fusion failed: " $
-           withPatFailMsg (wrongExprForm "rep (abs (work x))") $
+           withPatFailExc (HException (wrongExprForm "rep (abs (work x))")) $
            do App rep' (App abs' (App work' x)) <- idR
               guardMsg (exprAlphaEq abs abs') "abs does not match."
               guardMsg (exprAlphaEq rep rep') "rep does not match."
@@ -263,7 +266,7 @@ wwResultFusionBR =
     fusR :: CoreExpr -> CoreExpr -> CoreExpr -> RewriteH CoreExpr
     fusR abs rep work =
            prefixFailMsg "(reverse) worker/wrapper fusion failed: " $
-           withPatFailMsg (wrongExprForm "work x") $
+           withPatFailExc (HException (wrongExprForm "work x")) $
            do App work' x <- idR
               guardMsg (exprAlphaEq work work') "worker does not match."
               return $ App rep (App abs (App work x))
@@ -281,7 +284,7 @@ wwFusion = wwResultFusionBR
 wwResultGenerateFusionT :: Maybe WWAssumption -> TransformH LCore ()
 wwResultGenerateFusionT mAss =
     prefixFailMsg "generate WW fusion failed: " $
-    withPatFailMsg wrongForm $
+    withPatFailExc (HException wrongForm) $
     do Def w e@(Lam x1 (App rep
                           (App (App f (Lam x2 (App abs (App (Var w') (Var x2')))))
                                (Var x1')
@@ -372,7 +375,7 @@ wwResultAssA mr abs rep = beforeBiR
                       (\ (tyA,_) -> bidirectional wwAL (wwAR tyA))
   where
     wwAL :: RewriteH CoreExpr
-    wwAL = withPatFailMsg (wrongExprForm "abs (rep a)") $
+    wwAL = withPatFailExc (HException (wrongExprForm "abs (rep a)")) $
            do App abs' (App rep' a) <- idR
               guardMsg (exprAlphaEq abs abs') "given wrapper does not match wrapper in expression."
               guardMsg (exprAlphaEq rep rep') "given unwrapper does not match unwrapper in expression."
@@ -403,13 +406,13 @@ wwResultAssB mr abs rep f = beforeBiR (whenJust (verifyAssB abs rep f) mr)
     assA = wwResultAssA Nothing abs rep
 
     wwBL :: RewriteH CoreExpr
-    wwBL = withPatFailMsg (wrongExprForm "abs (rep (f h x))") $
+    wwBL = withPatFailExc (HException (wrongExprForm "abs (rep (f h x))")) $
            do App _ (App _ (App (App f' _) _)) <- idR
               guardMsg (exprAlphaEq f f') "given body function does not match expression."
               forwardT assA
 
     wwBR :: RewriteH CoreExpr
-    wwBR = withPatFailMsg (wrongExprForm "f h x") $
+    wwBR = withPatFailExc (HException (wrongExprForm "f h x")) $
            do App (App f' _) _ <- idR
               guardMsg (exprAlphaEq f f') "given body function does not match expression."
               backwardT assA

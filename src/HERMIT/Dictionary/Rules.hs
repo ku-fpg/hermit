@@ -53,6 +53,10 @@ import HERMIT.PrettyPrinter.Glyphs
 
 import IOEnv hiding (liftIO)
 
+import HERMIT.Exception
+
+import Control.Monad.Fail (MonadFail)
+
 ------------------------------------------------------------------------
 
 -- | Externals dealing with GHC rewrite rules.
@@ -102,7 +106,7 @@ instance Extern [RuleName] where
     unbox (RuleNameListBox l) = l
 
 -- | Lookup a rule by name, attempt to apply it left-to-right. If successful, record it as an unproven lemma.
-foldRuleR :: ( HasCoreRules c, LemmaContext c, ReadBindings c
+foldRuleR :: ( MonadFail m, HasCoreRules c, LemmaContext c, ReadBindings c
              , ReadPath c Crumb, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
              , MonadIO m, MonadThings m )
             => Used -> RuleName -> Rewrite c m CoreExpr
@@ -111,14 +115,14 @@ foldRuleR u nm = do
     backwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) q >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
-foldRulesR :: ( HasCoreRules c, LemmaContext c, ReadBindings c
+foldRulesR :: ( MonadFail m, HasCoreRules c, LemmaContext c, ReadBindings c
               , ReadPath c Crumb, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
               , MonadIO m, MonadThings m )
            => Used -> [RuleName] -> Rewrite c m CoreExpr
 foldRulesR u = orR . map (foldRuleR u)
 
 -- | Lookup a rule by name, attempt to apply it left-to-right. If successful, record it as an unproven lemma.
-unfoldRuleR :: ( HasCoreRules c, LemmaContext c, ReadBindings c
+unfoldRuleR :: ( MonadFail m, HasCoreRules c, LemmaContext c, ReadBindings c
                , ReadPath c Crumb, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
                , MonadIO m, MonadThings m )
             => Used -> RuleName -> Rewrite c m CoreExpr
@@ -127,14 +131,14 @@ unfoldRuleR u nm = do
     forwardT (birewrite q) >>> (verifyOrCreateT u (fromString (show nm)) q >> idR)
 
 -- | Lookup a set of rules by name, attempt to apply them left-to-right. Record an unproven lemma for the one that succeeds.
-unfoldRulesR :: ( HasCoreRules c, LemmaContext c, ReadBindings c
+unfoldRulesR :: ( MonadFail m, HasCoreRules c, LemmaContext c, ReadBindings c
                 , ReadPath c Crumb, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m
                 , MonadIO m, MonadThings m )
              => Used -> [RuleName] -> Rewrite c m CoreExpr
 unfoldRulesR u = orR . map (unfoldRuleR u)
 
 -- | Can be used with runFoldR. Note: currently doesn't create a lemma for the rule used.
-compileRulesT :: (BoundVars c, HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
+compileRulesT :: (MonadFail m, BoundVars c, HasCoreRules c, HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
               => (RuleName -> Bool) -> Transform c m a CompiledFold
 compileRulesT p = do
     let suggestion = "If you think the rule exists, try running the flatten-module command at the top level."
@@ -184,21 +188,21 @@ lemmaHelpT pp nm =
      return $! renderCode (pOptions pp) doc
 
 -- | Build an Clause from a named GHC rewrite rule.
-ruleNameToClauseT :: ( BoundVars c, HasCoreRules c, HasHermitMEnv m
+ruleNameToClauseT :: ( MonadFail m, BoundVars c, HasCoreRules c, HasHermitMEnv m
                      , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m )
                   => RuleName -> Transform c m a Clause
 ruleNameToClauseT name = getHermitRuleT name >>> ruleToClauseT
 
 -- | Transform GHC's CoreRule into an Clause.
-ruleToClauseT :: (BoundVars c, MonadThings m, MonadCatch m)
+ruleToClauseT :: (MonadFail m, BoundVars c, MonadThings m, MonadCatch m)
               => Transform c m CoreRule Clause
-ruleToClauseT = withPatFailMsg "HERMIT cannot handle built-in rules yet." $ do
+ruleToClauseT = withPatFailExc (HException "HERMIT cannot handle built-in rules yet.") $ do
     r@Rule{} <- idR -- other possibility is "BuiltinRule"
     f <- lookupId $ ru_fn r
     let lhs = mkCoreApps (varToCoreExpr f) (ru_args r)
     return $ mkClause (ru_bndrs r) lhs (ru_rhs r)
 
-ruleToLemmaT :: ( BoundVars c, HasCoreRules c, HasHermitMEnv m, HasLemmas m
+ruleToLemmaT :: ( MonadFail m, BoundVars c, HasCoreRules c, HasHermitMEnv m, HasLemmas m
                 , LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m)
              => RuleName -> Transform c m a ()
 ruleToLemmaT nm = do
@@ -243,7 +247,8 @@ specialiseR = prefixFailMsg "specialisation failed: " $ do
 --   These are created by SpecConstr and other GHC passes.
 idSpecRules :: TransformH Id [CoreRule]
 idSpecRules = do
-    guardMsgM (arr isId) "idSpecRules called on TyVar." -- idInfo panics on TyVars
+    b <- arr isId
+    guardMsg b "idSpecRules called on TyVar." -- idInfo panics on TyVars
     contextfreeT (return . idCoreRules)
 
 -- | Promote 'idSpecRules' to CoreBind.
@@ -258,7 +263,7 @@ specRules = crushtdT $ promoteBindT bindSpecRules
 -- | Turn a list of rules into a rewrite which succeeds on the first successful rule.
 -- Note: this should only be used for built-in and compiler-generated rules which we assume
 -- are correct, because it does not record a lemma obligation for the rules used.
-rulesToRewrite :: (ReadBindings c, MonadCatch m, MonadThings m)
+rulesToRewrite :: (MonadFail m, ReadBindings c, MonadCatch m, MonadThings m)
                => [CoreRule] -> Rewrite c m CoreExpr
 rulesToRewrite rs = catchesM [ (return r >>> ruleToClauseT) >>= forwardT . birewrite | r <- rs ]
 

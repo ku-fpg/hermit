@@ -58,6 +58,8 @@ module HERMIT.PrettyPrinter.Common
     , HermitMark(..) -- AJG: for now
     ) where
 
+import Prelude hiding ((<>))
+
 import Data.Char
 import Data.Default.Class
 import qualified Data.Map as M
@@ -81,10 +83,10 @@ showRole Representational = "R"
 showRole Phantom          = "P"
 
 #if __GLASGOW_HASKELL__ > 710
-showVis :: VisibilityFlag -> String
-showVis Visible   = "Visible"
+showVis :: ArgFlag -> String
+showVis Required  = "Required"
 showVis Specified = "Specified"
-showVis Invisible = "Invisible"
+showVis Inferred  = "Inferred"
 #endif
 
 -- A HERMIT document
@@ -560,7 +562,7 @@ listify op (d:ds) = op (PP.text "[ " <> d) (foldr (\e es -> op (PP.text ", " <> 
 -- | like vcat and hcat, only make the list syntax explicit
 vlist, hlist :: [MDoc a] -> MDoc a
 vlist = listify ($$)
-hlist = listify (<+>)
+hlist = listify (PP.<+>)
 
 -- | wrap a document in spaces
 pad :: MDoc a -> MDoc a

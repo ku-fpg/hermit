@@ -38,6 +38,10 @@ import HERMIT.Dictionary.Reasoning hiding (externals)
 import HERMIT.Dictionary.Undefined hiding (externals)
 import HERMIT.Dictionary.Unfold hiding (externals)
 
+import HERMIT.Exception
+
+import Control.Monad.Fail (MonadFail)
+
 ------------------------------------------------------------------------------------------------------
 
 externals ::  [External]
@@ -71,14 +75,14 @@ basicCombinators = map fromString ["$",".","id","flip","const","fst","snd","curr
 -- | Unfold the current expression if it is one of the basic combinators:
 -- ('$'), ('.'), 'id', 'flip', 'const', 'fst', 'snd', 'curry', and 'uncurry'.
 --   This is intended to be used as a component of simplification traversals such as 'simplifyR' or 'bashR'.
-unfoldBasicCombinatorR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+unfoldBasicCombinatorR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                           , MonadCatch m )
                        => Rewrite c m CoreExpr
 unfoldBasicCombinatorR = setFailMsg "unfold-basic-combinator failed." $ orR (map f basicCombinators)
     where f nm = voidM (callNameT nm) >> voidM callSaturatedT >> unfoldR
           voidM = liftM (const ()) -- can't wait for AMP
 
-simplifyR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+simplifyR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
              , MonadCatch m, MonadUnique m )
           => Rewrite c m LCore
 simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
@@ -98,13 +102,13 @@ simplifyR = setFailMsg "Simplify failed: nothing to simplify." $
 -- basic combinators. See 'bashComponents' for a list of rewrites performed.
 -- Bash also performs occurrence analysis and de-zombification on the result, to update
 -- IdInfo attributes relied-upon by GHC.
-bashR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+bashR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
          , MonadCatch m, MonadUnique m )
       => Rewrite c m LCore
 bashR = bashExtendedWithR []
 
 -- | An extensible bash. Given rewrites are performed before normal bash rewrites.
-bashExtendedWithR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+bashExtendedWithR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                      , MonadCatch m, MonadUnique m )
                   => [Rewrite c m LCore] -> Rewrite c m LCore
 bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
@@ -114,10 +118,10 @@ bashExtendedWithR rs = bashUsingR (rs ++ map fst bashComponents)
 -- If core lint fails, shows core fragment before and after the sub-rewrite which introduced the problem.
 -- Note: core fragment which fails linting is still returned! Otherwise would behave differently than bashR.
 -- Useful for debugging the bash command itself.
-bashDebugR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+bashDebugR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
               , HasDynFlags m, HasHermitMEnv m, HasLemmas m, LiftCoreM m, MonadCatch m, MonadUnique m )
            => Rewrite c m LCore
-bashDebugR = bashUsingR [ bracketR nm r >>> catchM (promoteT lintExprT >> idR) traceR
+bashDebugR = bashUsingR [ bracketR nm r >>> catch (promoteT lintExprT >> idR) (traceR . (show :: HException -> String))
                         | (r,nm) <- bashComponents ]
 
 -- | Perform the 'bash' algorithm with a given list of rewrites.
@@ -146,7 +150,7 @@ bashHelp = "Iteratively apply the following rewrites until nothing changes:"
          : map snd (bashComponents :: [(RewriteH LCore,String)] -- to resolve ambiguity
                                                                                        )
 -- TODO: Think about a good order for bash.
-bashComponents :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+bashComponents :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                   , MonadCatch m, MonadUnique m )
                => [(Rewrite c m LCore, String)]
 bashComponents =
@@ -183,12 +187,12 @@ bashComponents =
 -- | Smash is a more powerful but less efficient version of bash.
 -- Unlike bash, smash is not concerned with whether it duplicates work,
 -- and is intended for use during proving tasks.
-smashR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+smashR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
           , HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
        => Rewrite c m LCore
 smashR = smashExtendedWithR []
 
-smashExtendedWithR :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
+smashExtendedWithR :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, LemmaContext c, ReadBindings c, ReadPath c Crumb
                       , HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
                    => [Rewrite c m LCore] -> Rewrite c m LCore
 smashExtendedWithR rs = smashUsingR (rs ++ map fst smashComponents1) (map fst smashComponents2)
@@ -207,7 +211,7 @@ smashHelp = "A more powerful but less efficient version of \"bash\", intended fo
 
 
 -- | As bash, but with "let-nonrec-subst" instead of "let-nonrec-subst-safe".
-smashComponents1 :: ( AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
+smashComponents1 :: ( MonadFail m, AddBindings c, ExtendPath c Crumb, HasEmptyContext c, ReadBindings c, ReadPath c Crumb
                     , HasHermitMEnv m, LiftCoreM m, MonadCatch m, MonadIO m, MonadThings m, MonadUnique m )
                  => [(Rewrite c m LCore, String)]
 smashComponents1 =
@@ -241,7 +245,7 @@ smashComponents1 =
 --  , (promoteExprR dezombifyR, "dezombify")                           -- O(1) -- performed at the end
   ]
 
-smashComponents2 :: ( ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
+smashComponents2 :: ( MonadFail m, ExtendPath c Crumb, ReadPath c Crumb, AddBindings c, ReadBindings c, HasEmptyContext c
                     , MonadCatch m, MonadUnique m )
                  => [(Rewrite c m LCore, String)]
 smashComponents2 =

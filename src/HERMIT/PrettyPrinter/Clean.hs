@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE PackageImports #-}
 
 module HERMIT.PrettyPrinter.Clean
     ( -- * HERMIT's Clean Pretty-Printer for GHC Core
@@ -16,6 +17,8 @@ module HERMIT.PrettyPrinter.Clean
     , ppCoercion
     ) where
 
+import Prelude hiding ((<>))
+
 import Control.Arrow hiding ((<+>))
 
 import Data.Char (isSpace)
@@ -26,13 +29,16 @@ import HERMIT.Core
 import HERMIT.External
 import HERMIT.GHC hiding 
   ((<+>), (<>), ($$), ($+$), cat, sep, fsep, hsep, empty, isEmpty, nest, vcat, char, text, keyword, hang, parens)
-import HERMIT.Kure 
+import HERMIT.Kure hiding ((<+>))
 import HERMIT.Lemma
 import HERMIT.Monad
 import HERMIT.PrettyPrinter.Common
 import HERMIT.Syntax
 
 import Text.PrettyPrint.MarkedHughesPJ as PP
+
+import Kind
+import "ghc" Var
 
 ------------------------------------------------------------------------------------------------
 
@@ -44,6 +50,11 @@ pretty = PP { pLCoreTC = promoteT ppClauseT <+ promoteT ppCoreTC
             , pOptions = def
             , pTag = "clean"
             }
+
+-- showRole :: Role -> String
+-- showRole Nominal = "nominal"
+-- showRole Representational = "representational"
+-- showRole Phantom = "phantom"
 
 data RetExpr
         = RetLam [DocH] DocH
@@ -399,7 +410,7 @@ ppKindOrTypeR = readerT $ \case
                                                                    )
                                                                 <> tyChar ')'
 #if __GLASGOW_HASKELL__ > 710
-                   | isStarKind ty      -> RetAtom $ tyChar '*'
+                   | isLiftedTypeKind ty      -> RetAtom $ tyChar '*'
 #else
                    | isLiftedTypeKindCon tyCon -> RetAtom $ tyChar '*'
 #endif
@@ -416,11 +427,13 @@ ppKindOrTypeR = readerT $ \case
 #endif
   LitTy{}    -> litTyT (RetAtom <$> ppLitTy)
 
+  FunTy{}    -> funTyT ppKindOrTypeR ppKindOrTypeR (retArrowType ATType)
+
 #if __GLASGOW_HASKELL__ > 710
 -- TODO: these are in AST format... FIXME
 ppTyBinder :: PrettyH TyBinder
 ppTyBinder = readerT $ \case
-  Named tv v -> do
+  Named (TvBndr tv v) -> do
     d <- return tv >>> ppVar
     return $ tyText "Named" <+> d <+> tyText (showVis v)
   Anon ty -> do
@@ -438,7 +451,7 @@ ppUnivCoProvenance = readerT $ \case
     d <- return co >>> ppCoercion
     return $ coText "ProofIrrelProv" <+> parens d
   PluginProv s -> return $ coText "PluginProv" <+> coText s
-  HoleProv _ -> return $ coText "HoleProv - IMPOSSIBLE!"
+  -- HoleProv _ -> return $ coText "HoleProv - IMPOSSIBLE!"
 #endif
 
 --------------------------------------------------------------------
@@ -489,7 +502,7 @@ ppCoercionR = readerT $ \case
   TransCo{}     -> transCoT (ppCoercionR >>> parenExprExceptApp) 
                             (ppCoercionR >>> parenExprExceptApp) 
                             (\ co1 co2 -> RetExpr (co1 <+> coChar ';' <+> co2))
-  NthCo{}       -> nthCoT (arr show) (ppCoercionR >>> parenExpr) (\ n co -> RetExpr (coKeyword "nth" <+> coText n <+> co))
+  NthCo{}       -> nthCoT (arr showRole) (arr show) (ppCoercionR >>> parenExpr) (\ role n co -> RetExpr (coKeyword "nth" <+> coText role <+> coText n <+> co))
   LRCo{}        -> lrCoT ppSDoc (ppCoercionR >>> parenExpr) (\ lr co -> RetExpr (coercionColor lr <+> co))
  
 #if __GLASGOW_HASKELL__ > 710
@@ -504,6 +517,12 @@ ppCoercionR = readerT $ \case
                            )
 #endif
   SubCo{}       -> subCoT (ppCoercionR >>> parenExpr >>^ \ co -> RetExpr (coKeyword "sub" <+> co))
+  FunCo{}       -> funCoT (arr showRole) ppCoercion ppCoercion (\role co1 co2 -> RetExpr (coText "FunCo" <+> coText role <+> parens co1 <+> parens co2))
+  -- AxiomRuleCo _ _
+  -- CoherenceCo _ _
+  -- KindCo _
+  -- HoleCo _
+
   -- TODO: comment this out and add missing cases
   -- _             -> constT (return . RetAtom $ text "Unsupported Coercion Constructor")
 

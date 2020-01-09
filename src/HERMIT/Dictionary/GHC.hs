@@ -64,6 +64,10 @@ import           HERMIT.PrettyPrinter.Common
 import           HERMIT.PrettyPrinter.Glyphs
 import qualified HERMIT.PrettyPrinter.Clean as Clean
 
+import           HERMIT.Exception
+
+import           TcRnTypes (ShadowInfo (..))
+
 ------------------------------------------------------------------------
 
 -- | Externals that reflect GHC functions, or are derived from GHC functions.
@@ -164,9 +168,9 @@ lintExprT = transform $ \ c e -> do
         Type _ -> fail "cannot core lint types."
         _ -> maybe (return "Core Lint Passed") (fail . showSDoc dflags)
 #if __GLASGOW_HASKELL__ <= 710 
-                   (CoreLint.lintExpr (varSetElems $ boundVars c) e)
+                   (CoreLint.lintExpr (nonDetEltsUniqSet $ boundVars c) e)
 #else
-                   (CoreLint.lintExpr dflags (varSetElems $ boundVars c) e)
+                   (CoreLint.lintExpr dflags (nonDetEltsUniqSet $ boundVars c) e)
 #endif
 
 -------------------------------------------
@@ -183,7 +187,7 @@ dynFlagsT = constT getDynFlags
 --       This is tricky though, as it's not just the structure of the expression, but also the meta-data.
 
 -- | Zap the 'OccInfo' in a zombie identifier.
-dezombifyR :: (ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
+dezombifyR :: (MonadThrow m, ExtendPath c Crumb, Monad m) => Rewrite c m CoreExpr
 dezombifyR = varR (acceptR isDeadBinder >>^ zapVarOccInfo)
 
 -- | Apply 'occurAnalyseExprR' to all sub-expressions.
@@ -239,7 +243,7 @@ buildDictionary evar = do
 #endif
         let predTy = varType evar
 #if __GLASGOW_HASKELL__ > 710 
-            nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_dest = EvVarDest evar, ctev_loc = loc }
+            nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_dest = EvVarDest evar, ctev_loc = loc, ctev_nosh = WOnly }
             wCs = mkSimpleWC [cc_ev nonC]
         -- TODO: Make sure solveWanteds is the right function to call.
         (_wCs', bnds) <- second evBindMapBinds <$> runTcS (solveWanteds wCs)
@@ -272,7 +276,7 @@ lintClauseT :: forall c m.
                , HasDynFlags m, MonadCatch m )
             => Transform c m Clause String
 lintClauseT = do
-    strs <- extractT (collectPruneT (promoteExprT $ lintExprT `catchM` return) :: Transform c m LCore [String])
+    strs <- extractT (collectPruneT (promoteExprT $ lintExprT `catch` (return . (show :: HException -> String))) :: Transform c m LCore [String])
     let strs' = nub $ filter notNull strs
     guardMsg (null strs' || (strs' == ["Core Lint Passed"])) $ unlines strs'
     return "Core Lint Passed"
@@ -297,9 +301,10 @@ loadLemmaLibraryT nm mblnm = prefixFailMsg "Loading lemma library failed: " $
                                     (M.lookup lnm ls))
                      mblnm
         nls' <- flip filterM nls $ \ (n, l) -> do
-                    er <- attemptM $ applyT lintClauseT c $ lemmaC l
+                    er <- attemptM $ applyT lintClauseT c $ lemmaC l :: HermitM (Either HException String)
                     case er of
-                        Left msg -> do
+                        Left msg0 -> do
+                            let msg = show msg0
                             let pp = Clean.pretty { pOptions = (pOptions Clean.pretty) { po_exprTypes = Detailed } }
                             d <- applyT (liftPrettyH (pOptions pp) $ pLCoreTC pp) c $ inject $ lemmaC l
                             let Glyphs gs = renderCode (pOptions pp) d
@@ -331,12 +336,12 @@ lookupHermitNameForPlugins hscEnv ns hnm = do
     modName <- maybe (fail "name must be fully qualified with module name.") return (hnModuleName hnm)
     let dflags = hsc_dflags hscEnv
         rdrName = toRdrName ns hnm
-    mbName <- lookupRdrNameInModuleForPlugins hscEnv modName rdrName
+    mb <- lookupRdrNameInModuleForPlugins hscEnv modName rdrName
     maybe (fail $ showSDoc dflags $ hsep
             [ ptext (sLit "The module"), ppr modName
             , ptext (sLit "did not export the name")
             , ppr rdrName ])
-          return mbName
+          return (fmap fst mb)
 
 injectDependencyT :: (LiftCoreM m, MonadIO m) => ModuleName -> Transform c m ModGuts ()
 injectDependencyT mn = contextfreeT $ \ guts -> do

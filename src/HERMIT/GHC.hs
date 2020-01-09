@@ -73,6 +73,7 @@ module HERMIT.GHC
     , tcFun
     ) where
 
+import           Prelude hiding ((<>))
 -- Imports from GHC.
 import qualified Bag
 import           Class (classAllSelIds, classTyCon)
@@ -89,7 +90,7 @@ import           Finder (findImportedModule, cannotFindModule)
 -- several are redefined in Core.hs and elsewhere
 import           GhcPlugins hiding (exprSomeFreeVars, exprFreeVars, exprFreeIds, bindFreeVars, getHscEnv, RuleName, collectTyBinders)
 #if __GLASGOW_HASKELL__ > 710
-import           Kind (classifiesTypeWithValues,isStarKind)
+import           Kind (classifiesTypeWithValues)
 #else
 import           Kind (isKind,isLiftedTypeKindCon)
 #endif
@@ -148,7 +149,7 @@ getHscEnvCoreM = CoreMonad.getHscEnv
 
 -- | Convert a 'VarSet' to a list of user-readable strings.
 varSetToStrings :: VarSet -> [String]
-varSetToStrings = map unqualifiedName . varSetElems
+varSetToStrings = map unqualifiedName . nonDetEltsUniqSet --varSetElems
 
 -- | Show a human-readable version of a 'VarSet'.
 showVarSet :: VarSet -> String
@@ -252,7 +253,7 @@ notElemVarSet v vs = not (v `elemVarSet` vs)
 -- it's seeing an Id. This function tests first.
 bndrRuleAndUnfoldingVars :: Var -> VarSet
 bndrRuleAndUnfoldingVars v | isTyVar v = emptyVarSet
-                           | otherwise = idRuleAndUnfoldingVars v
+                           | otherwise = idUnfoldingVars v -- TODO: Does this work?        -- idRuleAndUnfoldingVars v
 
 --------------------------------------------------------------------------
 
