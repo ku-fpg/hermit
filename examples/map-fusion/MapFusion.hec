@@ -10,38 +10,50 @@ lhs (unfold '.)
 -- forall f g xs.  map f (map g xs) = map (f . g) xs
 induction 'xs
 
+
 -- Case undefined
    -- forall f g.  map f (map g undefined) = map (f . g) undefined
-   rhs (unfold 'map)
+   { foralls-body
+     { conj-lhs
+       rhs (unfold 'map)
 
-   -- forall f g.
-   --      map f (map g undefined)
-   --   =
-   --      case undefined of
-   --        []   -> []
-   --        a:as -> (f . g) a : map (f . g) as
-   rhs undefined-case
+       -- forall f g.
+       --      map f (map g undefined)
+       --   =
+       --      case undefined of
+       --        []   -> []
+       --        a:as -> (f . g) a : map (f . g) as
+       rhs undefined-case
 
-   -- forall f g.  map f (map g undefined) = undefined
-   lhs (any-bu (unfold 'map >>> undefined-case))
-   end-proof
 
--- Case []
-   -- forall f g.  map f (map g []) = map (f . g) []
-   both (any-bu (unfold 'map >>> case-reduce))
-   end-proof
+       -- forall f g.  map f (map g undefined) = undefined
+       lhs (any-bu (unfold 'map >>> undefined-case))
+       reflexivity
+     }
 
--- Case (:)
-   -- induction hypothesis: map f (map g ys) = map (f . g) ys
+     -- Case []
+     { conj-rhs
+       conj-lhs
+        -- forall f g.  map f (map g []) = map (f . g) []
 
-   -- forall f g.  map f (map g (y:ys)) = map (f . g) (y:ys)
-   both (any-bu (unfold 'map >>> case-reduce))
+        both (any-bu (unfold 'map >>> case-reduce))
+        reflexivity
+     }
 
-   -- forall f g.  f (g y) : map f (map g ys) = (f . g) y : map (f . g) ys
-   rhs (one-td (backward (lemma ind-hyp-0)))
+    -- Case (:)
+    { conj-rhs
+      conj-rhs
+      -- induction hypothesis: map f (map g ys) = map (f . g) ys
 
-   -- forall f g.  f (g y) : map f (map g ys) = (f . g) y : map f (map g ys)
-   rhs (one-td (unfold '.))
+      -- forall f g.  map f (map g (y:ys)) = map (f . g) (y:ys)
+      both (any-bu (unfold 'map >>> case-reduce))
+
+      -- forall f g.  f (g y) : map f (map g ys) = (f . g) y : map (f . g) ys
+      rhs (one-td (lemma-backward ind-hyp-0))
+
+      -- forall f g.  f (g y) : map f (map g ys) = (f . g) y : map f (map g ys)
+      rhs (one-td (unfold '.))
+   }
    end-proof
 
 -- Successfully proven
