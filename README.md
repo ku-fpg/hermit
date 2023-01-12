@@ -3,4 +3,4 @@
 The Haskell Equational Reasoning Model-to-Implementation Tunnel.
 
 ## Links
-* http://www.ittc.ku.edu/csdl/fpg/Tools/HERMIT
+* https://ku-fpg.github.io/software/hermit/
